@@ -190,7 +190,11 @@ class WorkflowTest(unittest.TestCase):
         wait = self.step("build", "Wait for Apple to finish processing")
         self.assertEqual("inputs.upload", wait["if"])
         self.assertIn('--build-version-number "$BUILD_NUMBER"', wait["run"])
-        self.assertIn("|| state=", wait["run"])
+        # A failed check is retried a few times, then fails the step with its error, never loops for the hour.
+        self.assertIn('state="no answer', wait["run"])
+        self.assertIn('if [ "$misses" -ge 8 ]', wait["run"])
+        # macOS runners have no GNU timeout (build 100's wait failed every call on it).
+        self.assertNotRegex(wait["run"], r"(^|[\s(])timeout ")
         # An hour of processing has to fit in the job.
         self.assertGreaterEqual(self.jobs["build"]["timeout-minutes"], 75)
 
