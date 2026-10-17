@@ -27,7 +27,11 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 - 2026-10-18: slice 0 done. TestFlight dry run green on the first try (run 39038017954: signed, IPA built and checked,
   not uploaded). At KaiC's request the pipeline was cut to one workflow and a local gate (`scripts/gate.py`, 12 s),
   and GitHub calls are kept to what's needed (6 per start, 1 per status).
-- Next: slice 1, the player core on the phone (the kill switch).
+- 2026-10-18: slice 1 built by seven agents in parallel against shared interfaces, merged, played end to end on
+  Windows (muted, logged out), reviewed (Swift and Dart), then one TestFlight run: build 100, green on the first
+  try (the Swift compiled first time). The processing wait looped on a missing `timeout` on macOS; fixed. Chinese
+  text uses bundled MiSans with the zh-Hans locale (KaiC's choice, as Kazumi). Waiting on KaiC's phone check.
+- Next: KaiC's slice-1 phone check (spec section 6), then slice 2 (engine parity).
 - Update this section when a slice finishes.
 
 ## Layout
