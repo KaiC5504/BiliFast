@@ -1,0 +1,43 @@
+import 'dart:async';
+
+import '../devlog/log_event.dart';
+import '../devlog/logger.dart';
+
+/// Carries the engine isolate's log events to the UI isolate, whose Logger.shared owns the file and network
+/// sinks. Batched, because the engine logs every piece; a warning or an error goes at once.
+final class ForwardingLogSink implements LogSink {
+  ForwardingLogSink(this._send, {this.interval = const Duration(milliseconds: 100), this.batchSize = 200});
+
+  final void Function(List<LogEvent> events) _send;
+  final Duration interval;
+  final int batchSize;
+  var _pending = <LogEvent>[];
+  Timer? _timer;
+
+  @override
+  void receive(LogEvent event) {
+    _pending.add(event);
+    if (event.level.index >= LogLevel.warn.index || _pending.length >= batchSize) {
+      flush();
+    } else {
+      _timer ??= Timer(interval, flush);
+    }
+  }
+
+  void flush() {
+    _timer?.cancel();
+    _timer = null;
+    if (_pending.isEmpty) return;
+    final events = _pending;
+    _pending = [];
+    _send(events);
+  }
+
+  /// Logs forwarded events again in this isolate, so they take its session and sequence numbers.
+  static void replay(List<LogEvent> events, [Logger? logger]) {
+    final target = logger ?? Logger.shared;
+    for (final event in events) {
+      target.log(event.level, event.cat, event.msg, event.f);
+    }
+  }
+}

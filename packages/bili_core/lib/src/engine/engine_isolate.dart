@@ -1,0 +1,496 @@
+import 'dart:async';
+import 'dart:isolate';
+
+import '../devlog/log_event.dart';
+import '../devlog/logger.dart';
+import '../local_http/local_server.dart';
+import '../local_http/playback_router.dart';
+import '../shared/clock.dart';
+import 'cancel.dart';
+import 'log_forwarding.dart';
+import 'node_catalog.dart';
+import 'playback_builder.dart';
+import 'playback_engine.dart';
+import 'ripper_config.dart';
+import 'ripper_session.dart';
+import 'transport.dart';
+
+final class EngineOptions {
+  const EngineOptions({
+    this.nodeMode = NodeMode.overseas,
+    this.policy = MediaURLPolicy.bilibili,
+    this.config = const RipperConfig(),
+    this.statsInterval = const Duration(seconds: 1),
+    this.directPrepareSeconds = 20,
+  });
+
+  /// The Swift app's default node setting; there is no setting yet.
+  final NodeMode nodeMode;
+  final MediaURLPolicy policy;
+  final RipperConfig config;
+  final Duration statsInterval;
+
+  /// The whole direct-mode header fetch (`PlaybackController.directPrepareSeconds`).
+  final double directPrepareSeconds;
+}
+
+/// [PlaybackEngine] over a background isolate that owns the transport, the sessions and the local server.
+final class IsolatePlaybackEngine implements PlaybackEngine {
+  IsolatePlaybackEngine._(this._events);
+
+  /// [transportFactory] runs inside the engine isolate. A second transport from it carries direct mode's
+  /// header requests, so they don't ride the engine's warm connections (as in Swift).
+  static Future<IsolatePlaybackEngine> start({
+    required RangeTransport Function() transportFactory,
+    EngineOptions options = const EngineOptions(),
+  }) async {
+    final engine = IsolatePlaybackEngine._(ReceivePort('engine'));
+    engine._events.listen(engine._receive);
+    try {
+      engine._isolate = await Isolate.spawn(
+        _engineMain,
+        _Boot(engine._events.sendPort, transportFactory, options),
+        debugName: 'engine',
+        errorsAreFatal: false,
+        onExit: engine._events.sendPort,
+        onError: engine._events.sendPort,
+      );
+      await engine._ready.future;
+    } catch (_) {
+      engine._shutdown();
+      rethrow;
+    }
+    return engine;
+  }
+
+  final ReceivePort _events;
+  Isolate? _isolate;
+  SendPort? _commands;
+  final _ready = Completer<void>();
+  final _pending = <int, Completer<Object?>>{};
+  int _nextId = 0;
+  bool _closed = false;
+  final _stats = StreamController<EngineSnapshot>.broadcast();
+
+  @override
+  Stream<EngineSnapshot> get stats => _stats.stream;
+
+  @override
+  Future<PreparedSource> prepare(PlaybackRequest request) async =>
+      await _call((id) => _Prepare(id, request)) as PreparedSource;
+
+  @override
+  Future<void> release(String token) => _call((id) => _Release(id, token));
+
+  @override
+  Future<void> replaceUrls(String token, TrackKind track, {required String primary, required List<String> backups}) =>
+      _call((id) => _ReplaceUrls(id, token, track, primary, backups));
+
+  @override
+  Future<void> networkChanged({required bool interfaceChanged}) =>
+      _call((id) => _NetworkChanged(id, interfaceChanged));
+
+  @override
+  Future<bool> ensureServing() async => await _call(_EnsureServing.new) as bool;
+
+  /// For tests and the developer menu: stops the local server's listener, as iOS does to a suspended app,
+  /// so [ensureServing] has something to repair.
+  Future<void> debugStopServer() => _call(_StopServer.new);
+
+  @override
+  Future<void> dispose() async {
+    if (_closed) return;
+    try {
+      await _call(_Dispose.new).timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // Shut down below either way.
+    }
+    _shutdown();
+  }
+
+  Future<Object?> _call(_Command Function(int id) make) {
+    final commands = _commands;
+    if (_closed || commands == null) return Future.error(const RipperError(RipperErrorKind.closed));
+    final id = _nextId++;
+    final completer = Completer<Object?>();
+    _pending[id] = completer;
+    commands.send(make(id));
+    return completer.future;
+  }
+
+  void _receive(Object? message) {
+    switch (message) {
+      case _Ready(:final commands):
+        _commands = commands;
+        if (!_ready.isCompleted) _ready.complete();
+      case _StartFailed(:final error, :final stack):
+        if (!_ready.isCompleted) _ready.completeError(error, StackTrace.fromString(stack));
+      case _Reply(:final id, :final value, :final error, :final stack):
+        final completer = _pending.remove(id);
+        if (completer == null) return;
+        if (error != null) {
+          completer.completeError(error, StackTrace.fromString(stack ?? ''));
+        } else {
+          completer.complete(value);
+        }
+      case _Stats(:final snapshot):
+        if (!_stats.isClosed) _stats.add(snapshot);
+      case _Logs(:final events):
+        ForwardingLogSink.replay(events);
+      case [final error, final stack]:
+        Logger.shared.error(LogCategory.engine, 'engine isolate error', {'error': '$error', 'stack': '$stack'});
+      case null:
+        if (!_closed) Logger.shared.error(LogCategory.engine, 'engine isolate exited');
+        if (!_ready.isCompleted) _ready.completeError(const RipperError(RipperErrorKind.closed));
+        _shutdown();
+    }
+  }
+
+  void _shutdown() {
+    _closed = true;
+    final pending = _pending.values.toList();
+    _pending.clear();
+    for (final completer in pending) {
+      completer.completeError(const RipperError(RipperErrorKind.closed));
+    }
+    _events.close();
+    _isolate?.kill(priority: Isolate.immediate);
+    _isolate = null;
+    if (!_stats.isClosed) _stats.close();
+  }
+}
+
+final class _Boot {
+  const _Boot(this.events, this.transportFactory, this.options);
+
+  final SendPort events;
+  final RangeTransport Function() transportFactory;
+  final EngineOptions options;
+}
+
+sealed class _Command {
+  const _Command(this.id);
+
+  final int id;
+}
+
+final class _Prepare extends _Command {
+  const _Prepare(super.id, this.request);
+
+  final PlaybackRequest request;
+}
+
+final class _Release extends _Command {
+  const _Release(super.id, this.token);
+
+  final String token;
+}
+
+final class _ReplaceUrls extends _Command {
+  const _ReplaceUrls(super.id, this.token, this.track, this.primary, this.backups);
+
+  final String token;
+  final TrackKind track;
+  final String primary;
+  final List<String> backups;
+}
+
+final class _NetworkChanged extends _Command {
+  const _NetworkChanged(super.id, this.interfaceChanged);
+
+  final bool interfaceChanged;
+}
+
+final class _EnsureServing extends _Command {
+  const _EnsureServing(super.id);
+}
+
+final class _StopServer extends _Command {
+  const _StopServer(super.id);
+}
+
+final class _Dispose extends _Command {
+  const _Dispose(super.id);
+}
+
+final class _Ready {
+  const _Ready(this.commands);
+
+  final SendPort commands;
+}
+
+final class _StartFailed {
+  const _StartFailed(this.error, this.stack);
+
+  final Object error;
+  final String stack;
+}
+
+final class _Reply {
+  const _Reply(this.id, {this.value, this.error, this.stack});
+
+  final int id;
+  final Object? value;
+  final Object? error;
+  final String? stack;
+}
+
+final class _Stats {
+  const _Stats(this.snapshot);
+
+  final EngineSnapshot snapshot;
+}
+
+final class _Logs {
+  const _Logs(this.events);
+
+  final List<LogEvent> events;
+}
+
+/// Errors go as themselves, so the caller can switch on PlaybackError and RipperError; one that can't cross
+/// isolates (it holds a native resource) goes as [fallback], a RemoteError with its text.
+void _sendOr(SendPort port, Object message, Object Function() fallback) {
+  try {
+    port.send(message);
+  } catch (_) {
+    port.send(fallback());
+  }
+}
+
+Future<void> _engineMain(_Boot boot) async {
+  final sink = ForwardingLogSink((events) => boot.events.send(_Logs(events)));
+  Logger.shared.add(sink);
+  final host = _EngineHost(boot, sink);
+  try {
+    await host.start();
+  } catch (error, stack) {
+    sink.flush();
+    Logger.shared.remove(sink);
+    _sendOr(boot.events, _StartFailed(error, '$stack'), () => _StartFailed(RemoteError('$error', '$stack'), '$stack'));
+    host.closeTransports();
+    return;
+  }
+  final commands = ReceivePort('engine commands');
+  host.onDisposed = commands.close;
+  commands.listen((message) {
+    if (message is _Command) unawaited(host.handle(message));
+  });
+  boot.events.send(_Ready(commands.sendPort));
+}
+
+final class _EngineHost {
+  _EngineHost(this._boot, this._sink);
+
+  final _Boot _boot;
+  final ForwardingLogSink _sink;
+  final _router = PlaybackRouter();
+  late final LocalServer _server;
+  late final RangeTransport _transport;
+  RangeTransport? _directTransport;
+  final _root = CancelToken();
+  final _sessions = <String, RipperSession>{};
+  final _directTokens = <String>{};
+  final _lastDelivered = <String, int>{};
+  String? _newest;
+  Timer? _statsTimer;
+  double _lastTickAt = 0;
+  bool _disposed = false;
+  void Function()? onDisposed;
+
+  EngineOptions get _options => _boot.options;
+
+  Future<void> start() async {
+    _transport = _boot.transportFactory();
+    _server = await LocalServer.start(_router);
+    Logger.shared.info(LogCategory.engine, 'engine started', {'transport': _transport.name, 'port': _server.port});
+  }
+
+  void closeTransports() {
+    try {
+      _transport.close();
+    } catch (_) {
+      // Never built.
+    }
+    _directTransport?.close();
+  }
+
+  Future<void> handle(_Command command) async {
+    final port = _boot.events;
+    try {
+      final value = await _run(command);
+      port.send(_Reply(command.id, value: value));
+    } catch (error, stack) {
+      _sendOr(port, _Reply(command.id, error: error, stack: '$stack'),
+          () => _Reply(command.id, error: RemoteError('$error', '$stack'), stack: '$stack'));
+    }
+    if (command is _Dispose) {
+      Logger.shared.remove(_sink);
+      onDisposed?.call();
+    }
+  }
+
+  Future<Object?> _run(_Command command) async {
+    if (_disposed) throw const RipperError(RipperErrorKind.closed);
+    switch (command) {
+      case _Prepare(:final request):
+        return request.mode == PlaybackMode.btr ? _prepareRipper(request) : _prepareDirect(request);
+      case _Release(:final token):
+        _release(token);
+      case _ReplaceUrls(:final token, :final track, :final primary, :final backups):
+        _sessions[token]?.replaceUrls(track, primary: primary, backups: backups);
+      case _NetworkChanged(:final interfaceChanged):
+        for (final session in _sessions.values) {
+          session.networkChanged(interfaceChanged: interfaceChanged);
+        }
+      case _EnsureServing():
+        return _ensureServing();
+      case _StopServer():
+        await _server.close();
+      case _Dispose():
+        await _dispose();
+    }
+    return null;
+  }
+
+  Future<PreparedSource> _prepareRipper(PlaybackRequest request) async {
+    final choice = request.choice;
+    final session = RipperSession(
+      sources: {
+        TrackKind.video: (primary: choice.video.baseURL, backups: choice.video.backupURLs),
+        TrackKind.audio: (primary: choice.audio.baseURL, backups: choice.audio.backupURLs),
+      },
+      mode: _options.nodeMode,
+      transport: _transport,
+      config: _options.config,
+      policy: _options.policy,
+    );
+    try {
+      final prepared = await PlaybackBuilder.prepare(choice, fetchHeaders: (kind, stream) async {
+        final headers = await session.loadHeaders(kind, through: stream.indexRange.end);
+        return (bytes: headers.bytes, total: headers.totalSize);
+      });
+      if (_disposed) throw const RipperError(RipperErrorKind.closed);
+      session
+        ..setSegments(TrackKind.video, prepared.video.segments)
+        ..setSegments(TrackKind.audio, prepared.audio.segments);
+      final token = _router.register(PlaybackBuilder.ripperAssets(prepared, read: session.read));
+      _sessions[token] = session;
+      _lastDelivered[token] = session.deliveredBytes;
+      _newest = token;
+      _startStats();
+      return PreparedSource(
+        token: token,
+        master: _server.url(token, 'master.m3u8'),
+        video: _server.url(token, 'v.mp4'),
+        audio: _server.url(token, 'a.mp4'),
+        mode: PlaybackMode.btr,
+        rewroteHEV1: prepared.rewroteHEV1,
+        sourceEntry: prepared.sourceEntry,
+        mediaHeaders: const {},
+      );
+    } catch (_) {
+      session.close();
+      rethrow;
+    }
+  }
+
+  Future<PreparedSource> _prepareDirect(PlaybackRequest request) async {
+    final transport = _directTransport ??= _boot.transportFactory();
+    final seconds = _options.directPrepareSeconds;
+    final PreparedPlayback prepared;
+    try {
+      prepared = await PlaybackBuilder.within(
+        seconds,
+        (cancel) => PlaybackBuilder.prepareDirect(request.choice, transport: transport, cancel: cancel),
+        cancel: _root,
+      );
+    } on CandidateTimeout {
+      Logger.shared.error(LogCategory.player, 'direct headers timed out', {'seconds': seconds});
+      throw const PlaybackError(PlaybackErrorKind.noSource);
+    }
+    if (_disposed) throw const RipperError(RipperErrorKind.closed);
+    final token = _router.register(PlaybackBuilder.directAssets(prepared));
+    _directTokens.add(token);
+    return PreparedSource(
+      token: token,
+      master: _server.url(token, 'master.m3u8'),
+      video: Uri.parse(prepared.video.mediaUrl),
+      audio: Uri.parse(prepared.audio.mediaUrl),
+      mode: PlaybackMode.direct,
+      rewroteHEV1: prepared.rewroteHEV1,
+      sourceEntry: prepared.sourceEntry,
+      mediaHeaders: request.mediaHeaders,
+    );
+  }
+
+  void _release(String token) {
+    _router.unregister(token);
+    _directTokens.remove(token);
+    _lastDelivered.remove(token);
+    _sessions.remove(token)?.close();
+    if (_sessions.isEmpty) _stopStats();
+  }
+
+  /// iOS can silently take a suspended app's listening socket; a server that no longer answers is bound again.
+  Future<bool> _ensureServing() async {
+    if (await _server.answers()) return false;
+    Logger.shared.warn(LogCategory.server, 'not answering, starting a new listener', {'port': _server.port});
+    try {
+      await _server.restart();
+    } catch (error) {
+      Logger.shared.error(LogCategory.server, 'restart failed', {'error': '$error'});
+      throw const PlaybackError(PlaybackErrorKind.serverDown);
+    }
+    Logger.shared.info(LogCategory.server, 'restarted', {'port': _server.port});
+    return true;
+  }
+
+  void _startStats() {
+    if (_statsTimer != null) return;
+    _lastTickAt = MonotonicClock.system.nowMs();
+    _statsTimer = Timer.periodic(_options.statsInterval, (_) => _tick());
+  }
+
+  void _stopStats() {
+    _statsTimer?.cancel();
+    _statsTimer = null;
+  }
+
+  /// Download speed counts the engine's delivered bytes, as the Swift overlay did.
+  void _tick() {
+    final newest = _sessions[_newest] ?? _sessions.values.lastOrNull;
+    if (newest == null) {
+      _stopStats();
+      return;
+    }
+    final now = MonotonicClock.system.nowMs();
+    var delta = 0;
+    for (final MapEntry(key: token, value: session) in _sessions.entries) {
+      final delivered = session.deliveredBytes;
+      delta += delivered - (_lastDelivered[token] ?? 0);
+      _lastDelivered[token] = delivered;
+    }
+    final seconds = (now - _lastTickAt) / 1000;
+    _lastTickAt = now;
+    final bps = seconds > 0 ? delta / seconds : 0.0;
+    _boot.events.send(_Stats(newest.stats(downloadBps: bps, transport: _transport.name)));
+  }
+
+  Future<void> _dispose() async {
+    _disposed = true;
+    _stopStats();
+    _root.cancel();
+    for (final token in [..._sessions.keys, ..._directTokens]) {
+      _router.unregister(token);
+    }
+    for (final session in _sessions.values) {
+      session.close();
+    }
+    _sessions.clear();
+    _directTokens.clear();
+    await _server.close();
+    closeTransports();
+    Logger.shared.info(LogCategory.engine, 'engine stopped');
+    _sink.flush();
+  }
+}
