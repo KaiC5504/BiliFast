@@ -84,7 +84,8 @@ Future<void> main() async {
     expect((to.seconds - from.seconds) / ((to.hostMs - from.hostMs) / 1000), closeTo(2, 0.3));
     expect(to.rate, 2);
     await until(tester, 'the end', () => seen.status == PlayerStatus.ended);
-    expect(seen.position, closeTo(3, 0.1));
+    // Readings come every 100 ms, which is 0.2 s of media at rate 2.
+    expect(seen.position, closeTo(3, 0.25));
 
     await player.seek(1);
     await until(tester, 'a loose seek back from the end',

@@ -23,6 +23,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "packages" / "bili_core"
 STAMP = ROOT / ".git" / "gate-passed"
 
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+
 Step = tuple[list[str], Path]
 
 
