@@ -50,3 +50,6 @@ app.*.map.json
 # Cookies, saved playurl responses (signed URLs) and bench output stay on this PC.
 /local/
 /logs/
+
+# FVM Version Cache
+.fvm/

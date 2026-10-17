@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.kaichuan" "\0"
-            VALUE "FileDescription", "bili_flutter_spike" "\0"
+            VALUE "FileDescription", "BiliFast" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "bili_flutter_spike" "\0"
+            VALUE "InternalName", "bilifast" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.kaichuan. All rights reserved." "\0"
-            VALUE "OriginalFilename", "bili_flutter_spike.exe" "\0"
-            VALUE "ProductName", "bili_flutter_spike" "\0"
+            VALUE "OriginalFilename", "bilifast.exe" "\0"
+            VALUE "ProductName", "BiliFast" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

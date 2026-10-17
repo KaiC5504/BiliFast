@@ -1,4 +1,4 @@
-import 'package:bili_flutter_spike/ui/swipe_back_route.dart';
+import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

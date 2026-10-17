@@ -1,38 +1,41 @@
-import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
 
-import 'bench.dart';
-import 'services.dart';
-import 'ui/home_page.dart';
-import 'ui/theme.dart';
+import 'shared/theme.dart';
 
-Future<void> main(List<String> args) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  MediaKit.ensureInitialized();
-  await Services.init(args);
-  final bench = BenchPlan.fromArgs(args);
-  runApp(SpikeApp(home: bench == null ? const HomePage() : BenchPage(plan: bench)));
+void main() {
+  runApp(const BiliFastApp());
 }
 
-class SpikeApp extends StatelessWidget {
-  const SpikeApp({super.key, required this.home});
-
-  final Widget home;
+class BiliFastApp extends StatelessWidget {
+  const BiliFastApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BiliFlutter spike',
+      title: 'BiliFast',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Bili.pink, primary: Bili.pink),
-        scaffoldBackgroundColor: Bili.page,
-        pageTransitionsTheme: PageTransitionsTheme(builders: {
-          for (final p in TargetPlatform.values) p: const CupertinoPageTransitionsBuilder(),
-        }),
+        colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
+        scaffoldBackgroundColor: BiliColors.pageGrey,
       ),
-      home: home,
+      home: const _PlaceholderHome(),
+    );
+  }
+}
+
+/// Stands in until slice 3 ports the 推荐 home.
+class _PlaceholderHome extends StatelessWidget {
+  const _PlaceholderHome();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: Text(
+          'BiliFast',
+          style: TextStyle(color: BiliColors.pink, fontSize: 28, fontWeight: FontWeight.w700),
+        ),
+      ),
     );
   }
 }
