@@ -87,7 +87,12 @@ final class DanmakuSprites {
 
   static ui.Paragraph _paragraph(String text, double pointSize, Paint foreground) {
     final builder = ui.ParagraphBuilder(ui.ParagraphStyle(textDirection: TextDirection.ltr, maxLines: 1))
-      ..pushStyle(ui.TextStyle(fontSize: pointSize, fontWeight: FontWeight.w600, foreground: foreground))
+      ..pushStyle(ui.TextStyle(
+          fontFamily: BiliFonts.family,
+          locale: BiliFonts.locale,
+          fontSize: pointSize,
+          fontWeight: FontWeight.w600,
+          foreground: foreground))
       ..addText(text);
     return builder.build()..layout(const ui.ParagraphConstraints(width: double.infinity));
   }

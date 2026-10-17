@@ -69,6 +69,14 @@ abstract final class BiliColors {
   static const nodeOther = Color(0xFF8E8E93);
 }
 
+/// MiSans (Xiaomi, free for apps that credit it; see README) on every platform, as Kazumi does: one font draws all the
+/// Chinese, where the platform fallback mixes Japanese and Chinese fonts on Windows. The zh-Hans locale makes any
+/// character MiSans lacks fall back to a Chinese font.
+abstract final class BiliFonts {
+  static const family = 'MiSans';
+  static const locale = Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN');
+}
+
 abstract final class BiliMetrics {
   static const gutter = 12.0;
   static const cardRadius = 6.0;

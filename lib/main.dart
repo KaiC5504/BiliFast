@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app/app_environment.dart';
 import 'devtools/crash_log.dart';
@@ -48,7 +49,11 @@ class BiliFastApp extends StatelessWidget {
     return MaterialApp(
       title: 'BiliFast',
       debugShowCheckedModeBanner: false,
+      locale: BiliFonts.locale,
+      supportedLocales: const [BiliFonts.locale],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: ThemeData(
+        fontFamily: BiliFonts.family,
         colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
         scaffoldBackgroundColor: BiliColors.pageGrey,
       ),
