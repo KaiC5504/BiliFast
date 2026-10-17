@@ -1,0 +1,88 @@
+# Every push: analyze and tests on Linux, then an unsigned iOS release build on macOS. No secrets and no
+# environment here; the signed build is testflight.yml, dispatched by scripts/testflight.py.
+name: App compile check
+
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: app-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.47.7
+  # The pair the signed build uses; see testflight.yml.
+  XCODE_VERSION: "26.6"
+  XCODE_BUILD: 17F113
+
+jobs:
+  checks:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          # Restoring the SDK takes as long as installing it.
+          cache: false
+
+      - name: bili_core
+        working-directory: packages/bili_core
+        run: |
+          dart pub get
+          dart analyze --fatal-infos
+          dart test
+
+      - name: App
+        run: |
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Workflow tests
+        run: |
+          python -m pip install --quiet pyyaml==6.0.3
+          python -m unittest discover -s test_ci -v
+
+  ios:
+    name: iOS build (no codesign)
+    needs: checks
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: false
+
+      - name: Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
+
+      - name: Build
+        run: |
+          flutter pub get
+          flutter build ios --release --no-codesign
