@@ -1,0 +1,1019 @@
+import 'dart:async';
+import 'dart:io' show IOException;
+import 'dart:math';
+
+import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
+import 'package:bili_core/engine.dart';
+import 'package:bili_core/logic.dart';
+import 'package:bili_core/shared.dart';
+import 'package:flutter/foundation.dart';
+
+import '../player/bili_player.dart';
+import '../player/playback_clock.dart';
+import 'codec_memory.dart';
+import 'danmaku_feed.dart';
+import 'overlay_stats.dart';
+import 'playing_stream.dart';
+import 'seek_timer.dart';
+
+typedef StartTimer = Timer Function(Duration delay, void Function() callback);
+
+enum PlaybackPhase { idle, loading, playing, failed }
+
+enum PlaybackFailure implements Exception {
+  /// Every codec left is one this phone's codec memory refuses.
+  noPlayableCodec('本机无法播放这个视频的任何编码，可重启应用后重试'),
+
+  /// Every codec failed in this playback, without a verdict worth remembering.
+  unplayable('这个视频暂时无法在本机播放，请稍后重试'),
+  network('网络连接中断，请检查网络后重试');
+
+  const PlaybackFailure(this.userMessage);
+
+  final String userMessage;
+}
+
+enum ItemFailure { format, network, unknown }
+
+enum ItemFailureReaction {
+  fallBackToDirect,
+  nextCodec,
+  nextCodecRemembered,
+
+  /// Fresh URLs, unless a restart happened recently.
+  restart,
+
+  /// Fresh URLs once per codec, then the next codec.
+  restartOnceThenNextCodec,
+}
+
+/// Plays one video at a time on one player (port of PlaybackController.swift, the parts slice 1 needs):
+/// link → view → playurl → track choice → engine.prepare → player.load, with BTR and 直连, codec fallback,
+/// signed URL refresh, the local server check, stall and seek timing, and the stats overlay.
+class PlaybackController extends ChangeNotifier {
+  PlaybackController({
+    required BiliClient client,
+    required this.engine,
+    required this.player,
+    CodecMemory? codecMemory,
+    int quality = defaultQuality,
+    this._codec = VideoCodec.hevc,
+    PlaybackMode mode = PlaybackMode.btr,
+    String transportName = '',
+    MonotonicClock? clock,
+    DateTime Function()? now,
+    StartTimer? startTimer,
+    Logger? logger,
+  })  : _client = client,
+        _memory = codecMemory ?? CodecMemory(),
+        _selectedQuality = quality,
+        _mode = mode,
+        _transportName = transportName,
+        _monotonic = clock ?? MonotonicClock.system,
+        _now = now ?? DateTime.now,
+        _startTimer = startTimer ?? Timer.new,
+        _logger = logger ?? Logger.shared,
+        clock = PlaybackClock(clock: clock),
+        stats = ValueNotifier(OverlayStats(mode: mode, transport: transportName.isEmpty ? null : transportName)),
+        duration = ValueNotifier(0),
+        danmaku = DanmakuFeed(client: client, logger: logger) {
+    _playerEvents = player.events.listen(_onPlayerEvent);
+    _engineStats = engine.stats.listen(_onEngineStats, onError: (Object error) {
+      _logger.warn(LogCategory.engine, 'stats failed', {'error': '$error'});
+    });
+  }
+
+  /// 4K, as the Swift app's `settings.quality` default; HDR and 杜比视界 are picked from [qualities].
+  static const defaultQuality = 120;
+
+  /// Signed URLs are refreshed this long before their deadline, and count as stale within it.
+  static const urlMarginSeconds = 300.0;
+  static const refreshRetrySeconds = 30.0;
+  static const minRefreshWaitSeconds = 30.0;
+
+  /// A network failure in direct mode restarts with fresh URLs at most this often.
+  static const networkRestartSeconds = 60.0;
+
+  final PlaybackEngine engine;
+  final BiliPlayer player;
+
+  /// Fed from the player's events; the player UI only reads it.
+  final PlaybackClock clock;
+  final ValueNotifier<OverlayStats> stats;
+
+  /// Seconds; 0 until the player reports it.
+  final ValueNotifier<double> duration;
+  final DanmakuFeed danmaku;
+
+  final BiliClient _client;
+  final CodecMemory _memory;
+  final String _transportName;
+  final MonotonicClock _monotonic;
+  final DateTime Function() _now;
+  final StartTimer _startTimer;
+  final Logger _logger;
+  late final StreamSubscription<PlayerEvent> _playerEvents;
+  late final StreamSubscription<EngineSnapshot> _engineStats;
+
+  PlaybackPhase _phase = PlaybackPhase.idle;
+  String? _error;
+  String? _playerFailure;
+  PlaybackMode _mode;
+  bool _fellBack = false;
+  VideoView? _video;
+  VideoPage? _page;
+  List<QualityOption> _qualities = const [];
+  int _selectedQuality;
+  VideoCodec _codec;
+  PlayingStream? _playing;
+  bool _pictureInPicture = false;
+  ({int width, int height})? _videoSize;
+
+  /// Bumped by every stop, restart, switch and failure; async work of an older epoch does nothing.
+  int _epoch = 0;
+  TrackChoice? _choice;
+
+  /// The last playurl answer's streams, so another codec can be chosen without asking again.
+  Dash? _dash;
+  PreparedSource? _source;
+  String? _token;
+  Timer? _refreshTimer;
+  final Set<Timer> _stallChecks = {};
+  final SeekTimer _seekTimer = SeekTimer();
+  final StallFilter _stallFilter = StallFilter();
+
+  /// Codec kinds that failed in this playback only: not the player's verdict on the phone.
+  final Set<String> _rejectedHere = {};
+
+  /// Codec kinds whose unexplained failure already got one retry with fresh URLs.
+  final Set<String> _unknownRetried = {};
+  DateTime? _lastNetworkRestart;
+
+  /// The position to report while nothing is loaded, so a retry resumes where playback stopped.
+  double _heldPosition = 0;
+
+  /// Whether a load starts playback; reloading a player the user paused leaves it paused.
+  bool _playWhenLoaded = true;
+
+  /// The current load reached playing; a format failure after that is not a codec refusal.
+  bool _itemPlayed = false;
+  bool _sawFirstFrame = false;
+
+  /// False when this playback's first frame waited on the user (loaded paused), so its time means nothing.
+  bool _firstFrameTimed = true;
+  bool _loggedPlayUrl = false;
+  bool _autoPipSet = false;
+  double _startedAtMs = 0;
+
+  /// Set from just before `player.load` until the player reports loading: anything earlier belongs to the
+  /// previous load.
+  bool _awaitingLoad = false;
+  PlayerStatus _status = PlayerStatus.idle;
+  double _rate = 1;
+  bool _disposed = false;
+
+  PlaybackPhase get phase => _phase;
+
+  /// What to tell the user when [phase] is failed.
+  String? get error => _error;
+
+  /// The player's own words for its last failure, shown under [error].
+  String? get playerFailure => _playerFailure;
+
+  /// The mode the user picked.
+  PlaybackMode get mode => _mode;
+
+  /// BTR failed in this playback and it went on direct.
+  bool get fellBack => _fellBack;
+  PlaybackMode get activeMode => _fellBack ? PlaybackMode.direct : _mode;
+  String get modeLabel => _fellBack ? '直连（回退）' : _mode.label;
+  VideoView? get video => _video;
+  VideoPage? get page => _page;
+  List<QualityOption> get qualities => _qualities;
+
+  /// The ceiling asked for; [playing] is the stream actually chosen.
+  int get selectedQuality => _selectedQuality;
+  VideoCodec get codec => _codec;
+  PlayingStream? get playing => _playing;
+  bool get pictureInPicture => _pictureInPicture;
+  ({int width, int height})? get videoSize => _videoSize;
+
+  double get currentSeconds => _token != null ? clock.seconds : _heldPosition;
+
+  String qualityName(int qn) =>
+      QualityNames.full(qn: qn, serverText: _qualities.where((option) => option.id == qn).firstOrNull?.name);
+
+  Future<void> open(String text) async {
+    final link = LinkParser.parse(text);
+    _stopPlayback();
+    _video = null;
+    _page = null;
+    _qualities = const [];
+    danmaku.clear();
+    duration.value = 0;
+    if (link == null) {
+      _failWith(BiliError.invalidLink, 'no link');
+      return;
+    }
+    final current = _advance();
+    _phase = PlaybackPhase.loading;
+    _error = null;
+    _playerFailure = null;
+    _notify();
+    try {
+      final (view, pageNumber) = await _resolve(link);
+      if (current != _epoch) return;
+      final pages = view.pages;
+      if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
+      final page = pages.where((page) => page.page == pageNumber).firstOrNull ?? pages.first;
+      _video = view;
+      _page = page;
+      danmaku.load(cid: page.cid, durationMs: page.duration * 1000);
+      _logger.info(LogCategory.player, 'open', {'bvid': view.bvid, 'page': page.page, 'parts': pages.length});
+      await _startPlayback(0, autoplay: true);
+    } catch (error, stack) {
+      if (current == _epoch) _fail(error, stack);
+    }
+  }
+
+  Future<void> setMode(PlaybackMode mode) async {
+    if (mode == _mode && !_fellBack) return;
+    _logger.info(LogCategory.ui, 'btr switch', {'on': mode == PlaybackMode.btr});
+    _mode = mode;
+    _fellBack = false;
+    _unknownRetried.clear();
+    _lastNetworkRestart = null;
+    _updateModeStats();
+    _notify();
+    await _restart(sameChoice: true);
+  }
+
+  Future<void> setQuality(int quality) async {
+    if (quality == _selectedQuality) return;
+    _logger.info(LogCategory.ui, 'quality', {'id': quality});
+    _selectedQuality = quality;
+    _notify();
+    await _restart(sameChoice: false);
+  }
+
+  Future<void> setCodec(VideoCodec codec) async {
+    if (codec == _codec) return;
+    _logger.info(LogCategory.ui, 'codec', {'codec': codec.name});
+    _codec = codec;
+    _notify();
+    await _restart(sameChoice: false);
+  }
+
+  /// A seek the user made, after the player was told.
+  void userSeeked(double seconds) {
+    final now = _nowMs();
+    _stallFilter.jumped(now);
+    clock.jump(seconds);
+    danmaku.seeked((seconds * 1000).round());
+    if (!_sawFirstFrame) return;
+    final timed = _seekTimer.jumped(position: seconds, atMs: now, rate: _playerRate);
+    _logger.info(LogCategory.player, 'seek', {'to': seconds.round(), 'mode': modeLabel, 'timed': timed});
+  }
+
+  Future<void> startPictureInPicture() async {
+    if (!player.capabilities.pictureInPicture) return;
+    _logger.info(LogCategory.ui, 'pip start');
+    await player.startPictureInPicture();
+  }
+
+  /// iOS can take a suspended app's listening socket: once back in the foreground the local server is probed,
+  /// and a playback prepared before a restart is prepared again where it was.
+  Future<void> appResumed() async {
+    if (_choice == null || _token == null) return;
+    final current = _epoch;
+    final restarted = await _ensureServing();
+    if (!restarted || current != _epoch) return;
+    _logger.warn(LogCategory.player, 'local server restarted, preparing again', {'at': currentSeconds});
+    await _reload(current);
+  }
+
+  Future<(VideoView, int?)> _resolve(VideoLink link) async {
+    await _client.ensureRiskCookies();
+    try {
+      final resolved = await _client.resolve(link);
+      return (resolved.view, resolved.page);
+    } on BiliHTTPError catch (error) {
+      // The unsigned view endpoint answered 412 to dart:io in the spike while its WBI-signed twin worked.
+      if (error.status != 412 || link is! BvidLink) rethrow;
+      _logger.warn(LogCategory.player, 'view refused, trying the signed view', {'status': error.status});
+      final detail = await _client.videoDetail(bvid: link.id);
+      final view = VideoView(
+          bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
+      return (view, link.page);
+    }
+  }
+
+  Future<PlayURLInfo> _playUrl() async {
+    final page = _page;
+    final video = _video;
+    if (page == null || video == null) throw BiliError.invalidLink;
+    await _client.ensureRiskCookies();
+    return _client.playURL(bvid: video.bvid, cid: page.cid, quality: _selectedQuality);
+  }
+
+  Future<void> _startPlayback(double time, {required bool autoplay}) async {
+    _rejectedHere.clear();
+    _unknownRetried.clear();
+    _lastNetworkRestart = null;
+    _fellBack = false;
+    _loggedPlayUrl = false;
+    _playWhenLoaded = autoplay;
+    _seekTimer.cancel();
+    _sawFirstFrame = false;
+    _firstFrameTimed = true;
+    _startedAtMs = _nowMs();
+    stats.value = OverlayStats(mode: activeMode, transport: _transportName.isEmpty ? null : _transportName);
+    await _begin(time);
+  }
+
+  Future<void> _begin(double time) async {
+    final current = _advance();
+    _cancelRefresh();
+    _phase = PlaybackPhase.loading;
+    _heldPosition = time;
+    _playing = null;
+    _notify();
+    try {
+      final info = await _playUrl();
+      _ensureCurrent(current);
+      _qualities = info.qualityOptions;
+      if (!_loggedPlayUrl) {
+        _loggedPlayUrl = true;
+        _logger.info(LogCategory.player, 'playurl', playURLSummary(info));
+      }
+      final dash = info.dash;
+      if (dash == null) throw BiliError.notDash;
+      _dash = dash;
+      final choice = _choose(dash);
+      await _prepareAndLoad(choice, time, current);
+      _scheduleRefresh(choice, current);
+    } catch (error, stack) {
+      await _handle(error, stack, time, current);
+    }
+  }
+
+  /// Another codec from the playurl answer already in hand, while its URLs are fresh: the Swift app asks
+  /// Bilibili again here, and KaiC's account should see as few calls as possible.
+  Future<void> _chooseAgain(double time) async {
+    final dash = _dash;
+    final previous = _choice;
+    if (dash == null || previous == null || urlsNearExpiry(previous, _now())) {
+      await _begin(time);
+      return;
+    }
+    final current = _advance();
+    _cancelRefresh();
+    _phase = PlaybackPhase.loading;
+    _heldPosition = time;
+    try {
+      final choice = _choose(dash);
+      await _prepareAndLoad(choice, time, current);
+      _scheduleRefresh(choice, current);
+    } catch (error, stack) {
+      await _handle(error, stack, time, current);
+    }
+  }
+
+  TrackChoice _choose(Dash dash) {
+    final choice = _pickTracks(dash, skipHEV1: activeMode == PlaybackMode.direct && _memory.hev1LabelsHoldHEV1);
+    _choice = choice;
+    final playing = PlayingStream(choice.video);
+    _playing = playing;
+    if (choice.video.width > 0 && choice.video.height > 0) {
+      _videoSize = (width: choice.video.width, height: choice.video.height);
+    }
+    stats.value = stats.value.copyWith(stream: playing.line(qualityName: qualityName(choice.video.id)));
+    _logger.info(LogCategory.player, 'choice', {
+      'quality': choice.video.id,
+      'codecs': choice.video.codecs,
+      'kbps': choice.video.bandwidth ~/ 1000,
+      'audio': choice.audio.id,
+      'host': Uri.tryParse(choice.video.baseURL)?.host ?? '',
+      'btr': activeMode == PlaybackMode.btr,
+    });
+    _notify();
+    return choice;
+  }
+
+  TrackChoice _pickTracks(Dash dash, {required bool skipHEV1}) {
+    final excluded = {..._memory.failedKinds, ..._rejectedHere};
+    final choice = choose(dash,
+        quality: _selectedQuality, codecOrder: _memory.order(preferred: _codec), excluded: excluded, skipHEV1: skipHEV1);
+    if (choice != null) return choice;
+    final offered = TrackSelector.choose(dash, quality: _selectedQuality, codecOrder: const []) != null;
+    final withoutMemory = choose(dash,
+            quality: _selectedQuality, codecOrder: VideoCodec.values, excluded: _rejectedHere, skipHEV1: skipHEV1) !=
+        null;
+    _logger.warn(LogCategory.player, 'no track', {
+      'excluded': (excluded.toList()..sort()).join(','),
+      'offered': offered,
+      'skipHEV1': skipHEV1,
+      'memoryDecided': withoutMemory,
+    });
+    if (!offered) throw const PlaybackError(PlaybackErrorKind.noTrack);
+    throw withoutMemory ? PlaybackFailure.noPlayableCodec : PlaybackFailure.unplayable;
+  }
+
+  /// TrackSelector falls back to any codec the quality has, so rejected kinds are removed from the streams
+  /// first. Once anything was rejected, codecs of unknown kind are left out too.
+  static TrackChoice? choose(Dash dash,
+      {required int quality,
+      required List<VideoCodec> codecOrder,
+      required Set<String> excluded,
+      bool skipHEV1 = false}) {
+    final banned = {...excluded};
+    if (banned.isNotEmpty) banned.add('other');
+    final videos = dash.video
+        .where((stream) => !banned.contains(TrackSelector.codecKind(stream)) && !(skipHEV1 && _isHEV1(stream)))
+        .toList();
+    if (videos.isEmpty) return null;
+    return TrackSelector.choose(Dash(duration: dash.duration, video: videos, audio: dash.audio),
+        quality: quality, codecOrder: codecOrder.where((codec) => !banned.contains(codec.name)).toList());
+  }
+
+  static bool _isHEV1(DashStream stream) => stream.codecs.startsWith('hev1');
+
+  /// Direct mode serves Bilibili's bytes unchanged and AVPlayer refuses hev1: a hev1 label plays only when the
+  /// bytes hold hvc1.
+  static bool directCanPlay(DashStream stream, {required String? sourceEntry}) =>
+      !_isHEV1(stream) || sourceEntry == 'hvc1';
+
+  /// Unix seconds from the signed URL's `deadline` parameter.
+  static double? urlDeadline(DashStream stream) {
+    final value = Uri.tryParse(stream.baseURL)?.queryParameters['deadline'];
+    return value == null ? null : double.tryParse(value);
+  }
+
+  static bool urlsNearExpiry(TrackChoice choice, DateTime now) {
+    final deadline = urlDeadline(choice.video);
+    if (deadline == null) return false;
+    return deadline - now.millisecondsSinceEpoch / 1000 < urlMarginSeconds;
+  }
+
+  /// What the playurl answer offered, for the log: qualities, codecs and hosts, never a URL.
+  static Map<String, Object> playURLSummary(PlayURLInfo info) {
+    String hosts(List<DashStream> streams) {
+      final all = {
+        for (final stream in streams)
+          for (final url in [stream.baseURL, ...stream.backupURLs]) ?Uri.tryParse(url)?.host,
+      }.toList()
+        ..sort();
+      return all.join(',');
+    }
+
+    final video = info.dash?.video ?? const <DashStream>[];
+    return {
+      'accept': info.acceptQuality.join(','),
+      'streams': video.map((stream) => '${stream.id}:${stream.codecs}').join(','),
+      'videoHosts': hosts(video),
+      'audioHosts': hosts(info.dash?.audio ?? const []),
+      'durl': '${info.hasDurl}',
+    };
+  }
+
+  /// The local server serves an init AVPlayer can read (hev1 renamed to hvc1), so a format failure in BTR mode
+  /// is the player's verdict on the codec, and the same quality is tried in the next codec, still in BTR mode.
+  /// A format failure after the load played only moves this playback to the next codec.
+  static ItemFailureReaction reaction(ItemFailure failure,
+      {required bool btr, required bool servedUnpatchedHEV1, required bool played}) {
+    if (failure == ItemFailure.format && played) return ItemFailureReaction.nextCodec;
+    if (failure == ItemFailure.format && btr) return ItemFailureReaction.nextCodecRemembered;
+    if (btr) return ItemFailureReaction.fallBackToDirect;
+    return switch (failure) {
+      ItemFailure.network => ItemFailureReaction.restart,
+      ItemFailure.unknown => ItemFailureReaction.restartOnceThenNextCodec,
+      // A hev1 entry served unpatched says nothing about what this phone can decode.
+      ItemFailure.format =>
+        servedUnpatchedHEV1 ? ItemFailureReaction.nextCodec : ItemFailureReaction.nextCodecRemembered,
+    };
+  }
+
+  Future<void> _prepareAndLoad(TrackChoice choice, double time, int current) async {
+    final requested = activeMode;
+    await _ensureServing();
+    _ensureCurrent(current);
+    final PreparedSource source;
+    try {
+      source = await engine
+          .prepare(PlaybackRequest(choice: choice, mode: requested, mediaHeaders: BiliClient.mediaHeaders));
+    } catch (error) {
+      final codec = error is PlaybackError && error.kind == PlaybackErrorKind.codecUnplayable;
+      if (current != _epoch || requested != PlaybackMode.btr || codec) rethrow;
+      _logger.warn(LogCategory.player, 'btr start failed, going direct', {'error': '$error'});
+      _fellBack = true;
+      _updateModeStats();
+      _notify();
+      return _prepareAndLoad(choice, time, current);
+    }
+    if (current != _epoch) {
+      _release(source.token);
+      throw const _Stale();
+    }
+    _noteSourceEntry(source, choice);
+    if (source.mode == PlaybackMode.direct && !directCanPlay(choice.video, sourceEntry: source.sourceEntry)) {
+      _release(source.token);
+      _logger.info(LogCategory.player, 'hev1 label holds hev1, choosing again for direct mode');
+      throw const _Reroute();
+    }
+    final previous = _token;
+    _token = source.token;
+    _source = source;
+    if (previous != null && previous != source.token) _release(previous);
+    await _load(source, time, current);
+  }
+
+  void _noteSourceEntry(PreparedSource source, TrackChoice choice) {
+    if (!_isHEV1(choice.video)) return;
+    if (source.sourceEntry == 'hev1') _memory.noteHEV1Entry();
+    _logger.info(LogCategory.player, 'hev1 label',
+        {'entry': source.sourceEntry ?? 'none', 'rewritten': source.rewroteHEV1, 'mode': source.mode.label});
+  }
+
+  Future<void> _load(PreparedSource source, double time, int current) async {
+    _seekTimer.reloadBegan();
+    _itemPlayed = false;
+    // Loaded paused, the first frame waits on the user: that wait is not startup time.
+    if (!_playWhenLoaded && !_sawFirstFrame) _firstFrameTimed = false;
+    clock.jump(time);
+    _awaitingLoad = true;
+    await player.load(PlayerSource(
+      master: source.master,
+      video: source.video,
+      audio: source.audio,
+      headers: source.mode == PlaybackMode.direct ? source.mediaHeaders : const {},
+      startSeconds: time,
+      autoplay: _playWhenLoaded,
+    ));
+    _ensureCurrent(current);
+    if (!_playWhenLoaded) _phase = PlaybackPhase.playing;
+    _updateModeStats();
+    _notify();
+    _logger.info(LogCategory.player, 'load', {'mode': modeLabel, 'at': time, 'play': _playWhenLoaded});
+  }
+
+  Future<bool> _ensureServing() async {
+    try {
+      final restarted = await engine.ensureServing();
+      if (restarted) _logger.warn(LogCategory.server, 'restarted');
+      return restarted;
+    } catch (error) {
+      _logger.error(LogCategory.server, 'probe failed', {'error': '$error'});
+      return false;
+    }
+  }
+
+  /// Prepares the current choice again at the current position, or starts over with fresh URLs when they
+  /// are about to expire.
+  Future<void> _reload(int current) async {
+    final choice = _choice;
+    if (choice == null || current != _epoch) return;
+    final time = currentSeconds;
+    if (urlsNearExpiry(choice, _now())) {
+      await _begin(time);
+      return;
+    }
+    if (activeMode == PlaybackMode.direct && !directCanPlay(choice.video, sourceEntry: _source?.sourceEntry)) {
+      await _chooseAgain(time);
+      return;
+    }
+    final next = _advance();
+    _cancelRefresh();
+    try {
+      await _prepareAndLoad(choice, time, next);
+      _scheduleRefresh(choice, next);
+    } catch (error, stack) {
+      await _handle(error, stack, time, next);
+    }
+  }
+
+  /// A user's pause survives a mode, quality or codec change.
+  Future<void> _restart({required bool sameChoice}) async {
+    if (_page == null) return;
+    if (sameChoice && _choice != null && _token != null) {
+      await _reload(_epoch);
+      return;
+    }
+    final time = currentSeconds;
+    final autoplay = _phase == PlaybackPhase.playing ? _playWhenLoaded : true;
+    _stopPlayback();
+    await _startPlayback(time, autoplay: autoplay);
+  }
+
+  Future<void> _handle(Object error, StackTrace stack, double time, int current) async {
+    if (current != _epoch || error is _Stale) return;
+    if (error is _Reroute) {
+      await _chooseAgain(time);
+      return;
+    }
+    final choice = _choice;
+    if (error is PlaybackError && error.kind == PlaybackErrorKind.codecUnplayable && choice != null) {
+      _logger.warn(LogCategory.player, 'codec unplayable', {'reason': error.detail ?? ''});
+      await _nextCodec(TrackSelector.codecKind(choice.video), remember: false, time: time);
+      return;
+    }
+    _fail(error, stack);
+  }
+
+  Future<void> _nextCodec(String kind, {required bool remember, required double time}) async {
+    if (remember) {
+      _memory.markFailed(kind);
+    } else {
+      _rejectedHere.add(kind);
+    }
+    _logger.warn(LogCategory.player, 'codec failed', {'kind': kind, 'remembered': remember, 'mode': modeLabel});
+    await _chooseAgain(time);
+  }
+
+  Future<void> _itemFailed(PlayerFailed event) async {
+    final choice = _choice;
+    if (choice == null) return;
+    final current = _epoch;
+    final failure = event.formatRejected
+        ? ItemFailure.format
+        : (event.domain == 'NSURLErrorDomain' ? ItemFailure.network : ItemFailure.unknown);
+    _playerFailure = event.message;
+    _logger.error(LogCategory.player, 'item failed', {
+      'mode': modeLabel,
+      'kind': failure.name,
+      'error': event.message,
+      'domain': event.domain ?? '',
+      'code': event.code ?? 0,
+    });
+    final time = currentSeconds;
+    final kind = TrackSelector.codecKind(choice.video);
+    final source = _source;
+    final unpatched = source != null && source.mode == PlaybackMode.direct && source.sourceEntry == 'hev1';
+    switch (reaction(failure, btr: activeMode == PlaybackMode.btr, servedUnpatchedHEV1: unpatched, played: _itemPlayed)) {
+      case ItemFailureReaction.fallBackToDirect:
+        await _fallBackToDirect('item failed in btr mode', current);
+      case ItemFailureReaction.nextCodec:
+        await _nextCodec(kind, remember: false, time: time);
+      case ItemFailureReaction.nextCodecRemembered:
+        await _nextCodec(kind, remember: true, time: time);
+      case ItemFailureReaction.restart:
+        if (!_claimNetworkRestart()) {
+          _fail(PlaybackFailure.network, StackTrace.current);
+          return;
+        }
+        _logger.warn(LogCategory.player, 'restarting with fresh urls', {'at': time});
+        await _begin(time);
+      case ItemFailureReaction.restartOnceThenNextCodec:
+        // Unexplained failures are often expired URLs: one fresh start before the codec is blamed.
+        if (!_unknownRetried.contains(kind) && _claimNetworkRestart()) {
+          _unknownRetried.add(kind);
+          _logger.warn(LogCategory.player, 'unexplained failure, restarting with fresh urls', {'at': time, 'kind': kind});
+          await _begin(time);
+        } else {
+          await _nextCodec(kind, remember: false, time: time);
+        }
+    }
+  }
+
+  Future<void> _fallBackToDirect(String reason, int current) async {
+    final choice = _choice;
+    if (current != _epoch || choice == null) return;
+    final next = _advance();
+    _cancelRefresh();
+    _fellBack = true;
+    _phase = PlaybackPhase.loading;
+    _updateModeStats();
+    _notify();
+    final time = currentSeconds;
+    final expiring = urlsNearExpiry(choice, _now());
+    _logger.warn(LogCategory.player, 'fallback to direct', {'reason': reason, 'at': time, 'urlsExpiring': expiring});
+    if (expiring) {
+      await _begin(time);
+      return;
+    }
+    if (!directCanPlay(choice.video, sourceEntry: _source?.sourceEntry)) {
+      await _chooseAgain(time);
+      return;
+    }
+    try {
+      await _prepareAndLoad(choice, time, next);
+      _scheduleRefresh(choice, next);
+    } catch (error, stack) {
+      await _handle(error, stack, time, next);
+    }
+  }
+
+  bool _claimNetworkRestart() {
+    final now = _now();
+    final last = _lastNetworkRestart;
+    if (last != null && now.difference(last).inMilliseconds < networkRestartSeconds * 1000) return false;
+    _lastNetworkRestart = now;
+    return true;
+  }
+
+  void _scheduleRefresh(TrackChoice choice, int current, {bool retry = false}) {
+    _cancelRefresh();
+    final double wait;
+    if (retry) {
+      wait = refreshRetrySeconds;
+    } else {
+      final deadline = urlDeadline(choice.video);
+      if (deadline == null) return;
+      wait = max(minRefreshWaitSeconds, deadline - _now().millisecondsSinceEpoch / 1000 - urlMarginSeconds);
+    }
+    _refreshTimer = _startTimer(Duration(milliseconds: (wait * 1000).round()), () {
+      _refreshTimer = null;
+      if (current == _epoch) unawaited(_refreshUrls(current));
+    });
+  }
+
+  /// BTR swaps the engine's URLs in place; direct mode's playlists name the CDN, so it reloads where it is.
+  Future<void> _refreshUrls(int current) async {
+    final choice = _choice;
+    final token = _token;
+    if (choice == null || token == null || current != _epoch) return;
+    final TrackChoice refreshed;
+    try {
+      final info = await _playUrl();
+      if (current != _epoch || token != _token) return;
+      final dash = info.dash;
+      final video = dash?.video
+          .where((stream) => stream.id == choice.video.id && stream.codecid == choice.video.codecid)
+          .firstOrNull;
+      final audio = dash?.audio.where((stream) => stream.id == choice.audio.id).firstOrNull;
+      if (video == null || audio == null) {
+        _logger.warn(LogCategory.player, 'url refresh found no matching streams');
+        return;
+      }
+      refreshed = TrackChoice(video: video, audio: audio);
+      if (activeMode == PlaybackMode.btr) {
+        await engine.replaceUrls(token, TrackKind.video, primary: video.baseURL, backups: video.backupURLs);
+        await engine.replaceUrls(token, TrackKind.audio, primary: audio.baseURL, backups: audio.backupURLs);
+        if (current != _epoch || token != _token) return;
+        _choice = refreshed;
+        _logger.info(LogCategory.player, 'urls refreshed', {'mode': modeLabel});
+        _scheduleRefresh(refreshed, current);
+        return;
+      }
+    } catch (error) {
+      _logger.warn(LogCategory.player, 'url refresh failed, retrying',
+          {'error': '$error', 'seconds': refreshRetrySeconds});
+      if (current == _epoch && token == _token) _scheduleRefresh(choice, current, retry: true);
+      return;
+    }
+    _logger.info(LogCategory.player, 'urls refreshed, reloading direct', {'at': currentSeconds});
+    _choice = refreshed;
+    await _reload(current);
+  }
+
+  void _onPlayerEvent(PlayerEvent event) {
+    if (_disposed) return;
+    // Readings from before the player took the new load would move the clock back to the old one.
+    if (_awaitingLoad && (event is PositionChanged || event is DurationChanged)) return;
+    clock.handle(event);
+    switch (event) {
+      case PositionChanged(:final seconds, :final rate):
+        if (rate > 0) _rate = rate;
+        final playing = _status == PlayerStatus.playing;
+        final ms = _seekTimer.ticked(position: seconds, rate: _playerRate, playing: playing, atMs: _nowMs());
+        if (ms != null) _seekResumed(ms, 'playhead');
+        danmaku.update(positionMs: (seconds * 1000).round(), playing: playing);
+      case DurationChanged(:final seconds):
+        if (seconds > 0 && seconds.isFinite) {
+          duration.value = seconds;
+          danmaku.durationMs = (seconds * 1000).round();
+        }
+      case StatusChanged(:final status):
+        _statusChanged(status);
+      case RateChanged(:final rate):
+        if (rate > 0) _rate = rate;
+      case SizeChanged(:final width, :final height):
+        _videoSize = (width: width, height: height);
+        _notify();
+      case PlayerFailed():
+        if (_awaitingLoad || _choice == null || _phase == PlaybackPhase.idle || _phase == PlaybackPhase.failed) return;
+        unawaited(_itemFailed(event).catchError((Object error, StackTrace stack) => _fail(error, stack)));
+      case PictureInPictureChanged(:final active):
+        _pictureInPicture = active;
+        _logger.info(LogCategory.player, 'pip', {'active': active});
+        _notify();
+      case PictureInPictureRestore():
+        break;
+      case BufferedChanged():
+        break;
+      case PlayerLog(:final kind, :final fields):
+        _logger.info(LogCategory.player, kind, {
+          for (final MapEntry(:key, :value) in fields.entries) key: ?value,
+        });
+    }
+  }
+
+  void _statusChanged(PlayerStatus status) {
+    _status = status;
+    if (status == PlayerStatus.loading) {
+      _awaitingLoad = false;
+      return;
+    }
+    if (_awaitingLoad || _choice == null) return;
+    final now = _nowMs();
+    switch (status) {
+      case PlayerStatus.playing:
+        _playWhenLoaded = true;
+        _itemPlayed = true;
+        if (!_sawFirstFrame) {
+          _sawFirstFrame = true;
+          final ms = now - _startedAtMs;
+          if (_firstFrameTimed) stats.value = stats.value.copyWith(firstFrameMs: ms);
+          final choice = _choice;
+          _logger.info(LogCategory.player, 'first frame', {
+            'ms': ms.round(),
+            'timed': _firstFrameTimed,
+            'mode': modeLabel,
+            'quality': choice?.video.id ?? 0,
+            'codecs': choice?.video.codecs ?? '',
+            'kbps': (choice?.video.bandwidth ?? 0) ~/ 1000,
+            'audioKbps': (choice?.audio.bandwidth ?? 0) ~/ 1000,
+          });
+        }
+        final seekMs = _seekTimer.playing(atMs: now);
+        if (seekMs != null) _seekResumed(seekMs, 'status');
+        if (!_autoPipSet && player.capabilities.pictureInPicture) {
+          _autoPipSet = true;
+          _quietly(() => player.setAutoPictureInPicture(true), 'auto pip');
+        }
+        _phase = PlaybackPhase.playing;
+        _notify();
+      case PlayerStatus.buffering:
+        // Waits before this load first played are startup, not stalls.
+        if (_itemPlayed && !_seekTimer.isRunning) _checkStall();
+      case PlayerStatus.paused:
+        _seekTimer.paused();
+        if (_itemPlayed) _playWhenLoaded = false;
+      case PlayerStatus.ended:
+        _playWhenLoaded = false;
+        _logger.info(LogCategory.player, 'ended', {'mode': modeLabel});
+      case PlayerStatus.idle || PlayerStatus.loading:
+        break;
+    }
+  }
+
+  void _checkStall() {
+    final current = _epoch;
+    final stalledAt = _nowMs();
+    final at = currentSeconds;
+    late final Timer timer;
+    timer = _startTimer(const Duration(milliseconds: 750), () {
+      _stallChecks.remove(timer);
+      if (current != _epoch || _disposed) return;
+      final fields = <String, Object>{'at': at.round(), 'mode': modeLabel};
+      if (_stallFilter.isSeekWait(stalledAt)) {
+        _logger.info(LogCategory.player, 'seek wait', fields);
+      } else {
+        stats.value = stats.value.copyWith(stalls: stats.value.stalls + 1);
+        _logger.warn(LogCategory.player, 'stall', fields);
+      }
+    });
+    _stallChecks.add(timer);
+  }
+
+  void _seekResumed(double ms, String via) {
+    final s = stats.value;
+    final lag = StallFilter.isLag(ms);
+    stats.value = s.copyWith(
+      lastSeekMs: ms,
+      worstSeekMs: max(s.worstSeekMs ?? 0, ms),
+      stalls: lag ? s.stalls + 1 : s.stalls,
+    );
+    _logger.info(LogCategory.player, 'seek resumed', {'ms': ms.round(), 'mode': modeLabel, 'via': via, 'lag': lag});
+  }
+
+  void _onEngineStats(EngineSnapshot snapshot) {
+    if (_disposed || _token == null || activeMode != PlaybackMode.btr) return;
+    stats.value = stats.value.copyWith(
+      engine: snapshot,
+      downloadBps: snapshot.downloadBps,
+      transport: snapshot.transport.isEmpty ? null : snapshot.transport,
+    );
+  }
+
+  /// Direct mode has no engine stats; its download speed is the player's business.
+  void _updateModeStats() {
+    final s = stats.value;
+    final btr = activeMode == PlaybackMode.btr;
+    stats.value = OverlayStats(
+      mode: activeMode,
+      stream: s.stream,
+      transport: s.transport,
+      firstFrameMs: s.firstFrameMs,
+      lastSeekMs: s.lastSeekMs,
+      worstSeekMs: s.worstSeekMs,
+      stalls: s.stalls,
+      downloadBps: btr ? s.downloadBps : 0,
+      engine: btr ? s.engine : null,
+    );
+  }
+
+  /// The player's rate as AVPlayer reports it: zero unless playing or waiting to play.
+  double get _playerRate =>
+      _status == PlayerStatus.playing || _status == PlayerStatus.buffering ? _rate : 0;
+
+  void _stopPlayback() {
+    _heldPosition = currentSeconds;
+    _advance();
+    _teardownPlayback();
+    _choice = null;
+    _dash = null;
+    _playing = null;
+    _phase = PlaybackPhase.idle;
+  }
+
+  void _fail(Object error, StackTrace stack) {
+    _heldPosition = currentSeconds;
+    _advance();
+    _teardownPlayback();
+    _choice = null;
+    _dash = null;
+    _playing = null;
+    _failWith(error, '$error');
+  }
+
+  void _failWith(Object error, String detail) {
+    _phase = PlaybackPhase.failed;
+    _error = userMessage(error);
+    _logger.error(LogCategory.player, 'failed', {'error': detail});
+    _notify();
+  }
+
+  static String userMessage(Object error) => switch (error) {
+        BiliError() => error.userMessage,
+        PlaybackError() => error.userMessage,
+        PlaybackFailure() => error.userMessage,
+        IOException() || TimeoutException() => '网络连接失败，请检查网络后重试',
+        _ => '播放失败，请稍后重试',
+      };
+
+  void _teardownPlayback() {
+    _cancelRefresh();
+    for (final timer in _stallChecks) {
+      timer.cancel();
+    }
+    _stallChecks.clear();
+    _seekTimer.cancel();
+    _awaitingLoad = false;
+    final token = _token;
+    _token = null;
+    _source = null;
+    if (token != null) _release(token);
+    if (!_disposed) _quietly(player.pause, 'pause');
+  }
+
+  void _release(String token) => _quietly(() => engine.release(token), 'release');
+
+  void _cancelRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  int _advance() => ++_epoch;
+
+  void _ensureCurrent(int current) {
+    if (current != _epoch) throw const _Stale();
+  }
+
+  double _nowMs() => _monotonic.nowMs();
+
+  void _quietly(Future<void> Function() action, String what) {
+    unawaited(Future.sync(action).catchError((Object error) {
+      _logger.warn(LogCategory.player, '$what failed', {'error': '$error'});
+    }));
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _advance();
+    _teardownPlayback();
+    unawaited(_playerEvents.cancel());
+    unawaited(_engineStats.cancel());
+    _quietly(player.dispose, 'player dispose');
+    _quietly(engine.dispose, 'engine dispose');
+    danmaku.dispose();
+    stats.dispose();
+    duration.dispose();
+    super.dispose();
+  }
+}
+
+/// Work of an older epoch; dropped without a word.
+final class _Stale implements Exception {
+  const _Stale();
+}
+
+/// Direct mode got a stream whose hev1 label holds a real hev1 entry: choose again without one.
+final class _Reroute implements Exception {
+  const _Reroute();
+}
