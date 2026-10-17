@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
@@ -17,6 +18,8 @@ void main() {
       '/trickle': const Trickle(50 << 20),
       '/hang': const Hang(),
       '/drop': const DropFirst(100000),
+      '/keep': const Complete(100000, keepAlive: true),
+      '/stale': const StaleReuse(100000),
     });
   });
 
@@ -61,8 +64,28 @@ void main() {
     expect(server.requests('/hang'), 0);
   });
 
-  test('cancelling the body mid-way frees the connection at once', () async {
-    // One connection per host: the second request can only start once the first gave its connection back.
+  test('cancelling the token mid-body ends the read with CancelledException and closes the socket', () async {
+    // One connection per host: the next request can only start once the first gave its connection back.
+    final transport = IoRangeTransport(connectionsPerHost: 1);
+    addTearDown(transport.close);
+    final cancel = CancelToken();
+    final response = await transport.fetch(server.url('/trickle'), ByteRange(0, (50 << 20) - 1), cancel: cancel);
+    var received = 0;
+    final errors = <Object>[];
+    final done = Completer<void>();
+    response.body.listen((chunk) => received += chunk.length, onError: errors.add, onDone: done.complete);
+    expect(await eventually(() => received >= 4096), isTrue);
+    final clock = Stopwatch()..start();
+    cancel.cancel();
+    await done.future.timeout(const Duration(seconds: 2));
+    expect(clock.elapsedMilliseconds, lessThan(1000));
+    expect(errors.single, isA<CancelledException>());
+    expect(await eventually(() => server.closes('/trickle') == 1), isTrue);
+    final next = await transport.fetch(server.url('/complete'), range).timeout(const Duration(seconds: 2));
+    expect(await collect(next.body), hasLength(100000));
+  });
+
+  test('cancelling the body subscription mid-way frees the connection at once', () async {
     final transport = IoRangeTransport(connectionsPerHost: 1);
     addTearDown(transport.close);
     final response = await transport.fetch(server.url('/trickle'), ByteRange(0, (50 << 20) - 1));
@@ -77,17 +100,14 @@ void main() {
     expect(await eventually(() => server.closes('/trickle') == 1), isTrue);
   });
 
-  test('cancelling the token after the headers ends the body and frees the connection', () async {
+  test('dropping the body unread cancels the request and closes the socket', () async {
+    // What the engine does with a response that lost its race before the body was read.
     final transport = IoRangeTransport(connectionsPerHost: 1);
     addTearDown(transport.close);
-    final cancel = CancelToken();
-    final response = await transport.fetch(server.url('/trickle'), ByteRange(0, (50 << 20) - 1), cancel: cancel);
-    final errors = <Object>[];
-    final done = Completer<void>();
-    response.body.listen((_) {}, onError: errors.add, onDone: done.complete);
-    cancel.cancel();
-    await done.future.timeout(const Duration(seconds: 1));
-    expect(errors.single, isA<CancelledException>());
+    final response = await transport.fetch(server.url('/trickle'), ByteRange(0, (50 << 20) - 1));
+    expect(response.status, 206);
+    await response.body.listen(null).cancel();
+    expect(await eventually(() => server.closes('/trickle') == 1), isTrue);
     final next = await transport.fetch(server.url('/complete'), range).timeout(const Duration(seconds: 2));
     expect(await collect(next.body), hasLength(100000));
   });
@@ -99,5 +119,52 @@ void main() {
     expect(response.status, 206);
     expect(await collect(response.body), LoopbackServer.pattern(0, 99999));
     expect(server.requests('/drop'), 2);
+  });
+
+  test('requests one after another share a keep-alive connection', () async {
+    final transport = IoRangeTransport();
+    addTearDown(transport.close);
+    for (var round = 0; round < 3; round++) {
+      final response = await transport.fetch(server.url('/keep'), range);
+      expect(await collect(response.body), LoopbackServer.pattern(0, 99999));
+    }
+    expect(server.requests('/keep'), 3);
+    expect(server.connections, 1);
+  });
+
+  test('a request sent on a keep-alive socket the server closed is retried on a fresh connection', () async {
+    final transport = IoRangeTransport();
+    addTearDown(transport.close);
+    final first = await transport.fetch(server.url('/stale'), range);
+    expect(await collect(first.body), hasLength(100000));
+    final second = await transport.fetch(server.url('/stale'), ByteRange(100, 199));
+    expect(second.status, 206);
+    expect(second.headers['content-range'], 'bytes 100-199/100000');
+    expect(await collect(second.body), LoopbackServer.pattern(100, 199));
+    expect(server.requests('/stale'), 3);
+    expect(server.connections, 2);
+  });
+
+  test('an error status is an answer, not a lost connection', () async {
+    final transport = IoRangeTransport();
+    addTearDown(transport.close);
+    final response = await transport.fetch(server.url('/missing'), range);
+    expect(response.status, 404);
+    await response.body.drain<void>();
+    expect(server.requests('/missing'), 1);
+  });
+
+  test('a refused connection fails at once instead of being retried as a lost one', () async {
+    final closed = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = closed.port;
+    await closed.close();
+    final transport = IoRangeTransport();
+    addTearDown(transport.close);
+    // Windows takes about 2 s to report each refused connect to a loopback port, so three tries took 6.1 s, past
+    // the engine's 5.5 s first-byte timeout.
+    final clock = Stopwatch()..start();
+    await expectLater(
+        transport.fetch(Uri.parse('http://127.0.0.1:$port/x.m4s'), range), throwsA(isA<SocketException>()));
+    expect(clock.elapsedMilliseconds, lessThan(4000));
   });
 }

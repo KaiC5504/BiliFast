@@ -33,6 +33,10 @@ final class IoRangeTransport implements RangeTransport {
     for (var attempt = 0;; attempt++) {
       try {
         return await _fetchOnce(url, range, cancel);
+      } on _ConnectFailed catch (failure) {
+        // Refused, unreachable or not resolved: the node, not a lost connection. Windows takes about 2 s to report
+        // each refused connect, so retrying those pushed the error past the engine's first-byte timeout.
+        Error.throwWithStackTrace(failure.error, failure.stack);
       } on Object catch (error) {
         // Akamai closes idle keep-alive sockets, and dart:io reports a request sent on one as an HttpException
         // before any header: a lost connection, not a failing node (spec section 7). URLSession retries those
@@ -55,7 +59,12 @@ final class IoRangeTransport implements RangeTransport {
     });
 
     Future<void> send() async {
-      final opened = await _client.getUrl(url);
+      final HttpClientRequest opened;
+      try {
+        opened = await _client.getUrl(url);
+      } on Object catch (error, stack) {
+        throw _ConnectFailed(error, stack);
+      }
       if (result.isCompleted) {
         opened.abort(const CancelledException());
         return;
@@ -85,6 +94,15 @@ final class IoRangeTransport implements RangeTransport {
 
   @override
   void close() => _client.close(force: true);
+}
+
+/// An error from opening the connection, before any request went out on it. A reused keep-alive socket opens at
+/// once, so a stale one fails later, while the request waits for its headers.
+final class _ConnectFailed {
+  const _ConnectFailed(this.error, this.stack);
+
+  final Object error;
+  final StackTrace stack;
 }
 
 /// The response body. Cancelling it, or the request's CancelToken firing, cancels the response subscription,
