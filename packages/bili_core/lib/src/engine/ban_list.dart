@@ -1,8 +1,46 @@
 // Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's BanList.swift.
 
+import 'dart:math';
+
+import '../shared/clock.dart';
 import 'node_catalog.dart';
 
 enum BanKind { node, address, pair }
+
+final class _Turn {
+  _Turn(this.at, this.intervalMs);
+
+  double at;
+  double intervalMs;
+}
+
+/// BiliFast: when a node banned for silent failures may carry one backup copy, so that a success can lift the ban
+/// ([BanList.success] heals silent strikes). The first turn comes [firstMs] after the ban and each turn taken
+/// doubles the wait, up to [capMs]. Build 100 banned Akamai, the fastest node, about 96 s into a video and stalled
+/// 7 times after; one Swift cold jump banned both of the fastest nodes for the rest of the video.
+final class BanProbation {
+  BanProbation({MonotonicClock? clock, this.firstMs = 15000, this.capMs = 120000})
+      : _clock = clock ?? MonotonicClock.system;
+
+  final double firstMs;
+  final double capMs;
+  final MonotonicClock _clock;
+  final _turns = <String, _Turn>{};
+
+  void _start(String node) => _turns[node] = _Turn(_clock.nowMs() + firstMs, firstMs);
+
+  /// Started at the ban; lazily for a ban from before probation was switched on.
+  _Turn _turn(String node) => _turns.putIfAbsent(node, () => _Turn(_clock.nowMs() + firstMs, firstMs));
+
+  bool _due(String node) => _clock.nowMs() >= _turn(node).at;
+
+  void _take(String node) {
+    final turn = _turn(node);
+    turn
+      ..intervalMs = min(capMs, turn.intervalMs * 2)
+      ..at = _clock.nowMs() + turn.intervalMs;
+  }
+}
 
 /// BTR `createBanList`. A node that twice fails without sending a byte is skipped for the rest of
 /// the video. For HTTP 4xx, what has delivered decides who is blamed: a refusal by a node that
@@ -24,6 +62,9 @@ final class BanList {
   var _lossMomentAt = double.negativeInfinity;
 
   void Function(String node, int strikes, BanKind kind)? onBan;
+
+  /// Null (Swift): a banned node gets no more work for the rest of the video.
+  BanProbation? probation;
 
   /// [lostAt] (monotonic ms) is when a request lost its connection before any byte. Requests that lose it at
   /// one moment are one strike, whatever their nodes: a network blip or a pool of connections torn down at once,
@@ -80,6 +121,23 @@ final class BanList {
   List<String> bannedNodes() =>
       [for (final key in _banned) if (key.startsWith('node:')) key.substring(5)]..sort();
 
+  /// [url]'s node is banned for silent failures alone (its address and pair are not) and, with [probation] on, its
+  /// next turn for a backup copy has come.
+  bool probationDue(String url) {
+    final probation = this.probation;
+    if (probation == null || allowsNode(url) || !_allowsAddressAndPair(url)) return false;
+    return probation._due(NodeCatalog.nodeKey(url));
+  }
+
+  /// A backup copy on [url] is under way: the node's next turn waits twice as long (up to the cap).
+  void takeProbation(String url) => probation?._take(NodeCatalog.nodeKey(url));
+
+  bool _allowsAddressAndPair(String url) {
+    final node = NodeCatalog.nodeKey(url);
+    final address = NodeCatalog.address(url);
+    return !_banned.contains('address:$address') && !_banned.contains('pair:$node $address');
+  }
+
   void reset() {
     _emptyReplies = {};
     _goodNodes = {};
@@ -87,6 +145,7 @@ final class BanList {
     _reported = {};
     _banned = {};
     _lossMomentAt = double.negativeInfinity;
+    probation?._turns.clear();
   }
 
   List<(String, int)> _judge() {
@@ -116,6 +175,14 @@ final class BanList {
     final added = <(String, int)>[];
     for (final key in _banned.toList()..sort()) {
       if (_reported.add(key)) added.add((key, strikes[key] ?? 0));
+    }
+    final probation = this.probation;
+    if (probation != null) {
+      probation._turns.removeWhere((node, _) => !_banned.contains('node:$node'));
+      // A node banned again after a probation success starts over from the first wait.
+      for (final (key, _) in added) {
+        if (key.startsWith('node:')) probation._start(key.substring(5));
+      }
     }
     return added;
   }
