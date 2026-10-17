@@ -37,8 +37,8 @@ jobs:
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          # Restoring the SDK takes as long as installing it.
-          cache: false
+          # The SDK and pub cache. Safe here: this workflow holds no secrets. The signed build never restores a cache.
+          cache: true
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -63,7 +63,8 @@ jobs:
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: false
+          # The SDK and pub cache. Safe here: this workflow holds no secrets. The signed build never restores a cache.
+          cache: true
 
       - name: Build
         run: |
