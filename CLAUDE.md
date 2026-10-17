@@ -30,8 +30,10 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 - 2026-10-18: slice 1 built by seven agents in parallel against shared interfaces, merged, played end to end on
   Windows (muted, logged out), reviewed (Swift and Dart), then one TestFlight run: build 100, green on the first
   try (the Swift compiled first time). The processing wait looped on a missing `timeout` on macOS; fixed. Chinese
-  text uses bundled MiSans with the zh-Hans locale (KaiC's choice, as Kazumi). Waiting on KaiC's phone check.
-- Next: KaiC's slice-1 phone check (spec section 6), then slice 2 (engine parity).
+  text uses bundled MiSans with the zh-Hans locale (KaiC's choice, as Kazumi). Phone check passed (KaiC, iOS 27.0.1): logged in from the keychain, 4K, 8K, 真彩 HDR and 杜比视界
+  played over BTR with URLSession in the engine isolate (no fallback), PiP and danmaku fine. Seen in the logs for
+  slice 2: 7 stalls on one 4K video after Akamai was banned, and an 8.3 s first frame on the first open.
+- Next: slice 2 (engine parity, spec section 6).
 - Update this section when a slice finishes.
 
 ## Layout
