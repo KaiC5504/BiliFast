@@ -33,7 +33,16 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   text uses bundled MiSans with the zh-Hans locale (KaiC's choice, as Kazumi). Phone check passed (KaiC, iOS 27.0.1): logged in from the keychain, 4K, 8K, 真彩 HDR and 杜比视界
   played over BTR with URLSession in the engine isolate (no fallback), PiP and danmaku fine. Seen in the logs for
   slice 2: 7 stalls on one 4K video after Akamai was banned, and an 8.3 s first frame on the first open.
-- Next: slice 2 (engine parity, spec section 6).
+- 2026-10-18: slice 2 (engine parity, then speed beyond it). Version 1.0.0, build numbers per version. The engine
+  is level with Swift on `bin/ripper_bench.dart` (same flags as Swift's ripper-bench), then went past it, every
+  speed-up behind a `RipperConfig` knob whose default is Swift's (the 185 ported tests stay unchanged) and switched on
+  in `lib/playback/playback_setup.dart`: prime the start, seek burst, audio first, rate- and bitrate-aware prefetch,
+  back buffer, seek hints from a resting finger, keyframe seeks, preconnect, node memory across launches
+  (`node_memory.json` in the app's support folder), no exploring in a hurry, ban probation, slow-node tail backups,
+  BTR #47's relay fix. Native: a start or seek plays once 3 s are loaded instead of waiting on AVPlayer's rule.
+  `--app [--swift] [--seed N] [--off …]` benches seeks the way the app makes them; give each run its own seed, since
+  a second run over the same segments meets a warm CDN. Cold 8K seeks on the PC: first byte 148-361 ms against
+  Swift's 1.5-2.8 s; whole 15 MiB segments level (median 5.6 s both, the line's limit on a cold CDN).
 - Update this section when a slice finishes.
 
 ## Layout
