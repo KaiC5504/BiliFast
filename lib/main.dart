@@ -50,6 +50,10 @@ class LaunchFailedApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
         title: 'BiliFast',
         debugShowCheckedModeBanner: false,
+        locale: BiliFonts.locale,
+        supportedLocales: const [BiliFonts.locale],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        theme: ThemeData(fontFamily: BiliFonts.family),
         home: Scaffold(
           backgroundColor: BiliColors.pageGrey,
           body: SafeArea(
