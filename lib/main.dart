@@ -21,7 +21,15 @@ Future<void> main(List<String> args) async {
     'os': Platform.operatingSystemVersion,
     'devTools': devToolsEnabled,
   });
-  final environment = await AppEnvironment.load();
+  final AppEnvironment environment;
+  try {
+    environment = await AppEnvironment.load();
+  } catch (error, stack) {
+    // Without this the launch screen would stay up with nothing to say why.
+    CrashLog.report(error, stack, source: 'launch');
+    runApp(LaunchFailedApp(error: '$error'));
+    return;
+  }
   unawaited(environment.refreshAccount());
   runApp(BiliFastApp(
     environment: environment,
@@ -29,6 +37,43 @@ Future<void> main(List<String> args) async {
     startPlayback: () => startPlaybackController(environment.client),
     initialLink: _argument(args, '--play='),
   ));
+}
+
+/// What the app shows when it could not start.
+class LaunchFailedApp extends StatelessWidget {
+  const LaunchFailedApp({super.key, required this.error});
+
+  final String error;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'BiliFast',
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: BiliColors.pageGrey,
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(BiliMetrics.gutter),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('BiliFast 启动失败，请重启应用',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: BiliMetrics.titleText, color: BiliColors.text, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: BiliMetrics.rowGap),
+                    Text(error,
+                        key: const ValueKey('launch-error'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.failure)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 String? _argument(List<String> args, String prefix) =>

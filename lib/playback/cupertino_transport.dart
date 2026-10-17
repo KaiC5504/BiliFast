@@ -113,21 +113,24 @@ final class CupertinoRangeTransport implements RangeTransport {
     late final StreamController<List<int>> body;
     void Function()? unlink;
 
+    // Ends a call still waiting for headers as closed, so close() never leaves one hanging; a cancel completes
+    // it first with CancelledException.
     void abandon() {
       if (abandoned) return;
       abandoned = true;
       _running.remove(abandon);
       unlink?.call();
       task.cancel();
+      if (!result.isCompleted) result.completeError(const RipperError(RipperErrorKind.closed));
     }
 
     body = StreamController<List<int>>(onCancel: abandon);
     _running.add(abandon);
     unlink = cancel?.onCancel(() {
+      final waiting = !result.isCompleted;
+      if (waiting) result.completeError(const CancelledException());
       abandon();
-      if (!result.isCompleted) {
-        result.completeError(const CancelledException());
-      } else if (!body.isClosed) {
+      if (!waiting && !body.isClosed) {
         body
           ..addError(const CancelledException())
           ..close();

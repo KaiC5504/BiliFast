@@ -7,8 +7,12 @@ VideoCard? _relatedItem(Object? json) {
 }
 
 extension BiliClientVideo on BiliClient {
-  Future<VideoDetail> videoDetail({required String bvid}) =>
-      get('/x/web-interface/wbi/view', query: {'bvid': bvid}, signed: true, decode: VideoDetail.fromJson);
+  /// One of [bvid] or [aid].
+  Future<VideoDetail> videoDetail({String? bvid, int? aid}) {
+    if ((bvid == null) == (aid == null)) throw ArgumentError('videoDetail needs exactly one of bvid and aid');
+    final query = bvid != null ? {'bvid': bvid} : {'aid': '$aid'};
+    return get('/x/web-interface/wbi/view', query: query, signed: true, decode: VideoDetail.fromJson);
+  }
 
   Future<PlayerInfo> playerInfo({required String bvid, required int cid}) =>
       get('/x/player/wbi/v2', query: {'bvid': bvid, 'cid': '$cid'}, signed: true, decode: PlayerInfo.fromJson);

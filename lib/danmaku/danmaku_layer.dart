@@ -88,7 +88,7 @@ class DanmakuLayerState extends State<DanmakuLayer> with SingleTickerProviderSta
       return;
     }
     _scene.step(widget.clock.seconds, timeline: timeline, options: widget.options);
-    if (!widget.clock.running) _ticker.stop();
+    if (!widget.clock.running && !_scene.catchingUp) _ticker.stop();
   }
 
   @override

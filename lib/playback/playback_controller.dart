@@ -63,8 +63,9 @@ enum ItemFailureReaction {
 class PlaybackController extends ChangeNotifier {
   PlaybackController({
     required BiliClient client,
-    required this.engine,
+    required PlaybackEngine engine,
     required this.player,
+    this._startEngine,
     CodecMemory? codecMemory,
     int quality = defaultQuality,
     this._codec = VideoCodec.hevc,
@@ -75,6 +76,7 @@ class PlaybackController extends ChangeNotifier {
     StartTimer? startTimer,
     Logger? logger,
   })  : _client = client,
+        _engine = engine,
         _memory = codecMemory ?? CodecMemory(),
         _selectedQuality = quality,
         _mode = mode,
@@ -88,9 +90,7 @@ class PlaybackController extends ChangeNotifier {
         duration = ValueNotifier(0),
         danmaku = DanmakuFeed(client: client, logger: logger) {
     _playerEvents = player.events.listen(_onPlayerEvent);
-    _engineStats = engine.stats.listen(_onEngineStats, onError: (Object error) {
-      _logger.warn(LogCategory.engine, 'stats failed', {'error': '$error'});
-    });
+    _engineStats = _listenToStats(engine);
   }
 
   /// 4K, as the Swift app's `settings.quality` default; HDR and 杜比视界 are picked from [qualities].
@@ -104,7 +104,6 @@ class PlaybackController extends ChangeNotifier {
   /// A network failure in direct mode restarts with fresh URLs at most this often.
   static const networkRestartSeconds = 60.0;
 
-  final PlaybackEngine engine;
   final BiliPlayer player;
 
   /// Fed from the player's events; the player UI only reads it.
@@ -116,6 +115,11 @@ class PlaybackController extends ChangeNotifier {
   final DanmakuFeed danmaku;
 
   final BiliClient _client;
+  PlaybackEngine _engine;
+
+  /// Starts a replacement once the engine isolate has exited; without it a dead engine stays dead.
+  final Future<PlaybackEngine> Function()? _startEngine;
+  bool _engineClosed = false;
   final CodecMemory _memory;
   final String _transportName;
   final MonotonicClock _monotonic;
@@ -123,7 +127,7 @@ class PlaybackController extends ChangeNotifier {
   final StartTimer _startTimer;
   final Logger _logger;
   late final StreamSubscription<PlayerEvent> _playerEvents;
-  late final StreamSubscription<EngineSnapshot> _engineStats;
+  late StreamSubscription<EngineSnapshot> _engineStats;
 
   PlaybackPhase _phase = PlaybackPhase.idle;
   String? _error;
@@ -175,12 +179,14 @@ class PlaybackController extends ChangeNotifier {
   bool _autoPipSet = false;
   double _startedAtMs = 0;
 
-  /// Set from just before `player.load` until the player reports loading: anything earlier belongs to the
-  /// previous load.
+  /// Set when a playback is torn down and from just before `player.load`, until the player reports loading:
+  /// anything earlier belongs to an item that was dropped or replaced.
   bool _awaitingLoad = false;
   PlayerStatus _status = PlayerStatus.idle;
   double _rate = 1;
   bool _disposed = false;
+
+  PlaybackEngine get engine => _engine;
 
   PlaybackPhase get phase => _phase;
 
@@ -231,6 +237,10 @@ class PlaybackController extends ChangeNotifier {
     _playerFailure = null;
     _notify();
     try {
+      if (_engineClosed) {
+        await _replaceEngine();
+        if (current != _epoch) return;
+      }
       final (view, pageNumber) = await _resolve(link);
       if (current != _epoch) return;
       final pages = view.pages;
@@ -296,26 +306,48 @@ class PlaybackController extends ChangeNotifier {
   Future<void> appResumed() async {
     if (_choice == null || _token == null) return;
     final current = _epoch;
-    final restarted = await _ensureServing();
+    final bool restarted;
+    try {
+      restarted = await _ensureServing();
+    } catch (error, stack) {
+      if (current == _epoch) _fail(error, stack);
+      return;
+    }
     if (!restarted || current != _epoch) return;
     _logger.warn(LogCategory.player, 'local server restarted, preparing again', {'at': currentSeconds});
     await _reload(current);
   }
 
+  /// Business codes that say the video itself is gone or hidden; the unsigned view would only say it again.
+  static const _videoUnavailable = {-404, 62002, 62004, 62012};
+
+  /// The unsigned view endpoint answers 412 to dart:io (the spike, and every open on Windows) while its
+  /// WBI-signed twin works, so a BV link asks the signed one first.
   Future<(VideoView, int?)> _resolve(VideoLink link) async {
     await _client.ensureRiskCookies();
+    if (link is BvidLink) {
+      try {
+        return (await _signedView(bvid: link.id), link.page);
+      } catch (error) {
+        if (error is BiliAPIError && _videoUnavailable.contains(error.code)) rethrow;
+        _logger.warn(LogCategory.player, 'signed view failed, trying the unsigned view', {'error': '$error'});
+      }
+      return (await _client.view(bvid: link.id), link.page);
+    }
     try {
       final resolved = await _client.resolve(link);
       return (resolved.view, resolved.page);
     } on BiliHTTPError catch (error) {
-      // The unsigned view endpoint answered 412 to dart:io in the spike while its WBI-signed twin worked.
-      if (error.status != 412 || link is! BvidLink) rethrow;
+      if (error.status != 412 || link is! AidLink) rethrow;
       _logger.warn(LogCategory.player, 'view refused, trying the signed view', {'status': error.status});
-      final detail = await _client.videoDetail(bvid: link.id);
-      final view = VideoView(
-          bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
-      return (view, link.page);
+      return (await _signedView(aid: link.id), link.page);
     }
+  }
+
+  Future<VideoView> _signedView({String? bvid, int? aid}) async {
+    final detail = await _client.videoDetail(bvid: bvid, aid: aid);
+    return VideoView(
+        bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
   }
 
   Future<PlayURLInfo> _playUrl() async {
@@ -509,9 +541,10 @@ class PlaybackController extends ChangeNotifier {
     _ensureCurrent(current);
     final PreparedSource source;
     try {
-      source = await engine
+      source = await _engine
           .prepare(PlaybackRequest(choice: choice, mode: requested, mediaHeaders: BiliClient.mediaHeaders));
     } catch (error) {
+      if (_isClosed(error)) throw _engineGone();
       final codec = error is PlaybackError && error.kind == PlaybackErrorKind.codecUnplayable;
       if (current != _epoch || requested != PlaybackMode.btr || codec) rethrow;
       _logger.warn(LogCategory.player, 'btr start failed, going direct', {'error': '$error'});
@@ -566,16 +599,53 @@ class PlaybackController extends ChangeNotifier {
     _logger.info(LogCategory.player, 'load', {'mode': modeLabel, 'at': time, 'play': _playWhenLoaded});
   }
 
+  /// A server that could not be bound again, or an engine isolate that is gone, fails the playback; the user
+  /// retries from there.
   Future<bool> _ensureServing() async {
     try {
-      final restarted = await engine.ensureServing();
+      final restarted = await _engine.ensureServing();
       if (restarted) _logger.warn(LogCategory.server, 'restarted');
       return restarted;
+    } on PlaybackError catch (error) {
+      _logger.error(LogCategory.server, 'probe failed', {'error': '$error'});
+      rethrow;
     } catch (error) {
       _logger.error(LogCategory.server, 'probe failed', {'error': '$error'});
+      if (_isClosed(error)) throw _engineGone();
       return false;
     }
   }
+
+  static bool _isClosed(Object error) => error is RipperError && error.kind == RipperErrorKind.closed;
+
+  /// The next [open] starts a new engine.
+  PlaybackError _engineGone() {
+    if (!_engineClosed) _logger.error(LogCategory.engine, 'engine closed, a new one starts on the next open');
+    _engineClosed = true;
+    return const PlaybackError(PlaybackErrorKind.serverDown);
+  }
+
+  Future<void> _replaceEngine() async {
+    final start = _startEngine;
+    if (start == null) throw const PlaybackError(PlaybackErrorKind.serverDown);
+    final old = _engine;
+    final next = await start();
+    if (_disposed) {
+      _quietly(next.dispose, 'engine dispose');
+      throw const _Stale();
+    }
+    unawaited(_engineStats.cancel());
+    _engine = next;
+    _engineStats = _listenToStats(next);
+    _engineClosed = false;
+    _quietly(old.dispose, 'old engine dispose');
+    _logger.info(LogCategory.engine, 'engine replaced');
+  }
+
+  StreamSubscription<EngineSnapshot> _listenToStats(PlaybackEngine engine) =>
+      engine.stats.listen(_onEngineStats, onError: (Object error) {
+        _logger.warn(LogCategory.engine, 'stats failed', {'error': '$error'});
+      });
 
   /// Prepares the current choice again at the current position, or starts over with fresh URLs when they
   /// are about to expire.
@@ -744,6 +814,10 @@ class PlaybackController extends ChangeNotifier {
       final info = await _playUrl();
       if (current != _epoch || token != _token) return;
       final dash = info.dash;
+      // Another codec chosen later must come from these URLs, not the ones about to expire.
+      if (dash != null) _dash = dash;
+      _qualities = info.qualityOptions;
+      _notify();
       final video = dash?.video
           .where((stream) => stream.id == choice.video.id && stream.codecid == choice.video.codecid)
           .firstOrNull;
@@ -754,8 +828,8 @@ class PlaybackController extends ChangeNotifier {
       }
       refreshed = TrackChoice(video: video, audio: audio);
       if (activeMode == PlaybackMode.btr) {
-        await engine.replaceUrls(token, TrackKind.video, primary: video.baseURL, backups: video.backupURLs);
-        await engine.replaceUrls(token, TrackKind.audio, primary: audio.baseURL, backups: audio.backupURLs);
+        await _engine.replaceUrls(token, TrackKind.video, primary: video.baseURL, backups: video.backupURLs);
+        await _engine.replaceUrls(token, TrackKind.audio, primary: audio.baseURL, backups: audio.backupURLs);
         if (current != _epoch || token != _token) return;
         _choice = refreshed;
         _logger.info(LogCategory.player, 'urls refreshed', {'mode': modeLabel});
@@ -777,13 +851,16 @@ class PlaybackController extends ChangeNotifier {
     if (_disposed) return;
     // Readings from before the player took the new load would move the clock back to the old one.
     if (_awaitingLoad && (event is PositionChanged || event is DurationChanged)) return;
-    clock.handle(event);
+    final accepted = clock.handle(event);
     switch (event) {
       case PositionChanged(:final seconds, :final rate):
         if (rate > 0) _rate = rate;
         final playing = _status == PlayerStatus.playing;
-        final ms = _seekTimer.ticked(position: seconds, rate: _playerRate, playing: playing, atMs: _nowMs());
-        if (ms != null) _seekResumed(ms, 'playhead');
+        // A stale reading from before a seek landed would time the seek as done.
+        if (accepted) {
+          final ms = _seekTimer.ticked(position: seconds, rate: _playerRate, playing: playing, atMs: _nowMs());
+          if (ms != null) _seekResumed(ms, 'playhead');
+        }
         danmaku.update(positionMs: (seconds * 1000).round(), playing: playing);
       case DurationChanged(:final seconds):
         if (seconds > 0 && seconds.isFinite) {
@@ -871,7 +948,8 @@ class PlaybackController extends ChangeNotifier {
     late final Timer timer;
     timer = _startTimer(const Duration(milliseconds: 750), () {
       _stallChecks.remove(timer);
-      if (current != _epoch || _disposed) return;
+      // Playing again within the wait is a hiccup, not a 卡顿.
+      if (current != _epoch || _disposed || _status != PlayerStatus.buffering) return;
       final fields = <String, Object>{'at': at.round(), 'mode': modeLabel};
       if (_stallFilter.isSeekWait(stalledAt)) {
         _logger.info(LogCategory.player, 'seek wait', fields);
@@ -966,7 +1044,8 @@ class PlaybackController extends ChangeNotifier {
     }
     _stallChecks.clear();
     _seekTimer.cancel();
-    _awaitingLoad = false;
+    // The released item can still report a failure; it must not take over the next load.
+    _awaitingLoad = true;
     final token = _token;
     _token = null;
     _source = null;
@@ -974,7 +1053,7 @@ class PlaybackController extends ChangeNotifier {
     if (!_disposed) _quietly(player.pause, 'pause');
   }
 
-  void _release(String token) => _quietly(() => engine.release(token), 'release');
+  void _release(String token) => _quietly(() => _engine.release(token), 'release');
 
   void _cancelRefresh() {
     _refreshTimer?.cancel();
@@ -1007,7 +1086,7 @@ class PlaybackController extends ChangeNotifier {
     unawaited(_playerEvents.cancel());
     unawaited(_engineStats.cancel());
     _quietly(player.dispose, 'player dispose');
-    _quietly(engine.dispose, 'engine dispose');
+    _quietly(_engine.dispose, 'engine dispose');
     danmaku.dispose();
     stats.dispose();
     duration.dispose();

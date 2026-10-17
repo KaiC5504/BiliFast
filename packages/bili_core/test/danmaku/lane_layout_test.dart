@@ -51,6 +51,20 @@ void main() {
     expect(layout.place(LaneKind.top, width: 100, at: 0.1), 0);
   });
 
+  test('hasRoom answers as place would, without taking the lane', () {
+    final layout = LaneLayout(lanes: 1, width: 400, scrollDuration: 8);
+    expect(layout.hasRoom(LaneKind.scroll, at: 0), isTrue);
+    expect(layout.hasRoom(LaneKind.scroll, at: 0), isTrue, reason: 'asking takes nothing');
+    expect(layout.place(LaneKind.scroll, width: 100, at: 0), 0);
+    expect(layout.hasRoom(LaneKind.scroll, at: 0.1), isFalse);
+    // At 2 s the first has entered; a wide one would still catch it, a narrow one would not.
+    expect(layout.hasRoom(LaneKind.scroll, at: 2, width: 400), isFalse);
+    expect(layout.hasRoom(LaneKind.scroll, at: 2), isTrue);
+    expect(layout.place(LaneKind.top, width: 50, at: 0), 0);
+    expect(layout.hasRoom(LaneKind.top, at: 3.9), isFalse);
+    expect(layout.hasRoom(LaneKind.bottom, at: 0), isTrue);
+  });
+
   test('zero lanes places nothing', () {
     final layout = LaneLayout(lanes: 0, width: 400, scrollDuration: 8);
     expect(layout.place(LaneKind.scroll, width: 10, at: 0), isNull);

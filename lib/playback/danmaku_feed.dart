@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/danmaku.dart';
@@ -7,7 +8,8 @@ import 'package:flutter/foundation.dart';
 
 /// One video's danmaku (the fetching half of DanmakuController.swift): `seg.so` segments fetched as the
 /// playhead reaches them, filtered, and added to one timeline that the player stage draws from. At most the
-/// next segment is fetched ahead, and only while playing.
+/// next segment is fetched ahead, and only while playing. A segment holds thousands of danmaku, so it is decoded
+/// and filtered in a short-lived isolate rather than between frames.
 class DanmakuFeed extends ChangeNotifier {
   DanmakuFeed({required this._client, Logger? logger, this.options = const DanmakuFilterOptions()})
       : _logger = logger ?? Logger.shared;
@@ -105,7 +107,9 @@ class DanmakuFeed extends ChangeNotifier {
 
   Future<void> _run(int index, int load, int cid) async {
     try {
-      final segment = await _client.danmakuSegment(cid: cid, index: index);
+      final data = await _client.danmakuSegmentData(cid: cid, index: index);
+      if (load != _loads || _disposed) return;
+      final segment = await _decode(data, index, options);
       if (load != _loads || _disposed) return;
       _received(segment, index);
     } catch (error) {
@@ -115,7 +119,17 @@ class DanmakuFeed extends ChangeNotifier {
     }
   }
 
-  void _received(DanmakuSegment segment, int index) {
+  /// Static, so the isolate's closure captures only its arguments.
+  static Future<_Segment> _decode(Uint8List data, int index, DanmakuFilterOptions options) => Isolate.run(() {
+        final segment = BiliClientDanmaku.decodeDanmakuSegment(data, index: index);
+        return (
+          closed: segment.closed,
+          count: segment.elems.length,
+          items: DanmakuFilter.apply(segment.elems, options: options, rules: const []),
+        );
+      });
+
+  void _received(_Segment segment, int index) {
     if (segment.closed) {
       _logger.info(LogCategory.player, 'danmaku closed by the uploader', {'cid': _cid});
       _closed = true;
@@ -125,8 +139,8 @@ class DanmakuFeed extends ChangeNotifier {
     }
     // DanmakuTimeline does not dedupe, so a segment must only ever be added once.
     if (!_added.add(index)) return;
-    final items = DanmakuFilter.apply(segment.elems, options: options, rules: const []);
-    _logger.info(LogCategory.player, 'danmaku segment', {'index': index, 'count': segment.elems.length, 'shown': items.length});
+    final items = segment.items;
+    _logger.info(LogCategory.player, 'danmaku segment', {'index': index, 'count': segment.count, 'shown': items.length});
     final timeline = _timeline;
     if (timeline != null) {
       timeline.add(items);
@@ -147,3 +161,5 @@ class DanmakuFeed extends ChangeNotifier {
     super.dispose();
   }
 }
+
+typedef _Segment = ({bool closed, int count, List<DisplayDanmaku> items});

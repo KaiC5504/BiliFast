@@ -11,14 +11,20 @@ final class PlaybackClock {
   /// reported yet doesn't run danmaku ahead of the picture.
   static const maxExtrapolationMs = 1000.0;
 
-  /// After a jump the player can still report positions from before its seek landed; readings this far from the
-  /// target are dropped for [jumpSettleMs], so danmaku doesn't snap back and forth.
+  /// After a jump or a new item the player can still report positions from before its seek landed; readings
+  /// this far from the target are dropped for [jumpSettleMs], so danmaku doesn't snap back and forth.
   static const staleAfterJumpSeconds = 1.5;
   static const jumpSettleMs = 3000.0;
+
+  /// Readings arrive with tens of milliseconds of jitter; one this close to the prediction only nudges the
+  /// clock, so danmaku glides instead of wobbling.
+  static const smoothingWindowSeconds = 0.04;
+  static const smoothing = 0.1;
 
   final MonotonicClock _clock;
   double? _jumpTarget;
   double _jumpAtMs = 0;
+  bool _fresh = true;
   double _seconds = 0;
   double _atMs = 0;
   double _rate = 1;
@@ -32,15 +38,22 @@ final class PlaybackClock {
     return _seconds + elapsed / 1000 * _rate;
   }
 
-  void handle(PlayerEvent event) {
+  /// False when a position reading was dropped as stale.
+  bool handle(PlayerEvent event) {
     switch (event) {
       case PositionChanged(:final seconds, :final hostMs, :final rate):
         if (_jumpTarget case final target?) {
           final settling = _clock.nowMs() - _jumpAtMs < jumpSettleMs;
-          if (settling && (seconds - target).abs() > staleAfterJumpSeconds) return;
+          if (settling && (seconds - target).abs() > staleAfterJumpSeconds) return false;
           _jumpTarget = null;
         }
-        _seconds = seconds;
+        final predicted = _seconds + (hostMs - _atMs) / 1000 * _rate;
+        if (!_fresh && _running && rate == _rate && (seconds - predicted).abs() <= smoothingWindowSeconds) {
+          _seconds = predicted + (seconds - predicted) * smoothing;
+        } else {
+          _seconds = seconds;
+        }
+        _fresh = false;
         _atMs = hostMs;
         _rate = rate;
       case RateChanged(:final rate):
@@ -48,27 +61,26 @@ final class PlaybackClock {
         _rate = rate;
       case StatusChanged(:final status):
         final running = status == PlayerStatus.playing;
-        if (running == _running) return;
+        if (running == _running) return true;
         _rebase();
         _running = running;
       default:
         break;
     }
+    return true;
   }
 
   /// A seek moves the playhead before the player's next reading.
-  void jump(double seconds) {
-    reset(seconds);
-    _jumpTarget = seconds;
-    _jumpAtMs = _atMs;
-  }
+  void jump(double seconds) => reset(seconds);
 
-  /// A new item starts at [seconds]. Unlike [jump], every reading counts at once: the player drops the old
-  /// item's events itself.
+  /// A new item starts at [seconds]. It can report 0 before its start seek lands, so as after a jump, readings
+  /// far from [seconds] wait until one lands near it or [jumpSettleMs] pass.
   void reset(double seconds) {
     _seconds = seconds;
     _atMs = _clock.nowMs();
-    _jumpTarget = null;
+    _jumpTarget = seconds;
+    _jumpAtMs = _atMs;
+    _fresh = true;
   }
 
   void _rebase() {

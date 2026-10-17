@@ -71,6 +71,54 @@ void main() {
     expect(clock.seconds, closeTo(5, 1e-9));
   });
 
+  test('a reading within 40 ms of the prediction moves the clock a tenth of the way to it', () {
+    clock.handle(const StatusChanged(PlayerStatus.playing));
+    clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 1));
+    time.advance(100);
+    expect(clock.handle(PositionChanged(seconds: 5.13, hostMs: time.clock.nowMs(), rate: 1)), isTrue);
+    expect(clock.seconds, closeTo(5.103, 1e-9));
+    time.advance(100);
+    clock.handle(PositionChanged(seconds: 5.173, hostMs: time.clock.nowMs(), rate: 1));
+    expect(clock.seconds, closeTo(5.2, 1e-9));
+  });
+
+  test('a reading further off, or at a new rate, is taken as it is', () {
+    clock.handle(const StatusChanged(PlayerStatus.playing));
+    clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 1));
+    time.advance(100);
+    clock.handle(PositionChanged(seconds: 5.2, hostMs: time.clock.nowMs(), rate: 1));
+    expect(clock.seconds, closeTo(5.2, 1e-9));
+    time.advance(100);
+    clock.handle(PositionChanged(seconds: 5.31, hostMs: time.clock.nowMs(), rate: 2));
+    expect(clock.seconds, closeTo(5.31, 1e-9));
+  });
+
+  test('while paused a reading is taken as it is', () {
+    clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 1));
+    clock.handle(PositionChanged(seconds: 5.02, hostMs: time.clock.nowMs(), rate: 1));
+    expect(clock.seconds, closeTo(5.02, 1e-9));
+  });
+
+  test('a new item drops readings far from its start until one lands near it', () {
+    clock.handle(const StatusChanged(PlayerStatus.playing));
+    clock.reset(300);
+    expect(clock.handle(PositionChanged(seconds: 0, hostMs: time.clock.nowMs(), rate: 1)), isFalse);
+    expect(clock.seconds, closeTo(300, 1e-9));
+    time.advance(100);
+    expect(clock.handle(PositionChanged(seconds: 300.05, hostMs: time.clock.nowMs(), rate: 1)), isTrue);
+    expect(clock.seconds, closeTo(300.05, 1e-9));
+    time.advance(100);
+    expect(clock.handle(PositionChanged(seconds: 0, hostMs: time.clock.nowMs(), rate: 1)), isTrue,
+        reason: 'once a reading landed, the filter is off');
+  });
+
+  test('a new item takes any reading after the settle time', () {
+    clock.reset(300);
+    time.advance(PlaybackClock.jumpSettleMs);
+    expect(clock.handle(PositionChanged(seconds: 0, hostMs: time.clock.nowMs(), rate: 1)), isTrue);
+    expect(clock.seconds, closeTo(0, 1e-9));
+  });
+
   test('a jump moves the playhead at once', () {
     clock.handle(const StatusChanged(PlayerStatus.playing));
     clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 1));

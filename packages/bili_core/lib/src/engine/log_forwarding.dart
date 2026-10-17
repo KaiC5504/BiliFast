@@ -4,7 +4,8 @@ import '../devlog/log_event.dart';
 import '../devlog/logger.dart';
 
 /// Carries the engine isolate's log events to the UI isolate, whose Logger.shared owns the file and network
-/// sinks. Batched, because the engine logs every piece; a warning or an error goes at once.
+/// sinks. Batched, because the engine logs every piece; a warning or an error goes at once. Debug events stay
+/// behind: copying them across the port for every piece costs more than they are worth.
 final class ForwardingLogSink implements LogSink {
   ForwardingLogSink(this._send, {this.interval = const Duration(milliseconds: 100), this.batchSize = 200});
 
@@ -16,6 +17,7 @@ final class ForwardingLogSink implements LogSink {
 
   @override
   void receive(LogEvent event) {
+    if (event.level == LogLevel.debug) return;
     _pending.add(event);
     if (event.level.index >= LogLevel.warn.index || _pending.length >= batchSize) {
       flush();
@@ -33,11 +35,12 @@ final class ForwardingLogSink implements LogSink {
     _send(events);
   }
 
-  /// Logs forwarded events again in this isolate, so they take its session and sequence numbers.
+  /// Logs forwarded events again in this isolate, so they take its session and sequence numbers. The engine's
+  /// Logger redacted them already.
   static void replay(List<LogEvent> events, [Logger? logger]) {
     final target = logger ?? Logger.shared;
     for (final event in events) {
-      target.log(event.level, event.cat, event.msg, event.f);
+      target.logRedacted(event);
     }
   }
 }

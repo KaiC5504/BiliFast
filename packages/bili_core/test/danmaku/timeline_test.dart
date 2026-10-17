@@ -60,6 +60,17 @@ void main() {
     expect(texts(t.advance(600)), ['t500']);
   });
 
+  test('a later segment is merged in time order, ties after what was there', () {
+    final t = DanmakuTimeline()..add(items([100, 300, 500]));
+    t.add([
+      DisplayDanmaku(elem: makeElem('early', at: 50), text: 'early', isOwn: false),
+      DisplayDanmaku(elem: makeElem('tie', at: 300), text: 'tie', isOwn: false),
+      DisplayDanmaku(elem: makeElem('late', at: 900), text: 'late', isOwn: false),
+    ]);
+    t.add(items([400, 200]));
+    expect(texts(t.advance(999)), ['early', 't100', 't200', 't300', 'tie', 't400', 't500', 'late']);
+  });
+
   test('same millisecond keeps arrival order', () {
     final t = DanmakuTimeline()
       ..add([DisplayDanmaku(elem: makeElem('a', at: 100), text: 'a', isOwn: false)])

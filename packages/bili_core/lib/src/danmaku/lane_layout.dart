@@ -56,6 +56,24 @@ final class LaneLayout {
     }
   }
 
+  /// Whether [place] could find a lane, without taking it. A narrower danmaku is slower and fits wherever a wider
+  /// one does, so the default width of 0 answers "could any danmaku of this kind enter now" before its text is
+  /// laid out.
+  bool hasRoom(LaneKind kind, {required double at, double width = 0}) {
+    switch (kind) {
+      case LaneKind.scroll:
+        final speed = (_screenWidth + width) / _scrollDuration;
+        for (var lane = 0; lane < _lanes; lane++) {
+          if (_fitsScroll(lane, speed, at)) return true;
+        }
+        return false;
+      case LaneKind.top:
+        return _topBusyUntil.any((until) => until <= at);
+      case LaneKind.bottom:
+        return _bottomBusyUntil.any((until) => until <= at);
+    }
+  }
+
   void reset({required int lanes, required double width, required double scrollDuration}) {
     final count = lanes < 0 ? 0 : lanes;
     _lanes = count;

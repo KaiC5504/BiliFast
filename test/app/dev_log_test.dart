@@ -76,6 +76,35 @@ void main() {
       expect(forwarder.status, '未开启');
     });
 
+    test('what was logged before the switch went on reaches the PC first, and only once', () async {
+      logger.error(LogCategory.player, 'failed', {'error': 'early'});
+      forwarder.setManual('10.0.0.2');
+      forwarder.setEnabled(true);
+      await forwarder.sink!.flushOnce();
+      List<String> sent() => [
+            for (final (_, body) in posted)
+              for (final line in const LineSplitter().convert(body)) LogEvent.decode(line)!.msg,
+          ];
+      expect(sent(), ['failed', 'log server on']);
+
+      forwarder.setEnabled(false);
+      logger.info(LogCategory.player, 'while off');
+      forwarder.setEnabled(true);
+      await forwarder.sink!.flushOnce();
+      expect(sent(), ['failed', 'log server on', 'while off', 'log server on'],
+          reason: 'the second sink sends only what the first never had');
+    });
+
+    test('the history keeps the newest 5,000 events', () {
+      final history = MemorySink(capacity: LogForwarder.historyLimit);
+      for (var index = 0; index < LogForwarder.historyLimit + 10; index++) {
+        history.receive(LogEvent(
+            t: 0, seq: index + 1, session: 's', level: LogLevel.info, cat: LogCategory.app, msg: 'e$index'));
+      }
+      expect(history.events, hasLength(LogForwarder.historyLimit));
+      expect(history.events.first.msg, 'e10');
+    });
+
     test('a discovered server wins over the typed address', () {
       forwarder.setEnabled(true);
       expect(discovery.browsing, 1);
