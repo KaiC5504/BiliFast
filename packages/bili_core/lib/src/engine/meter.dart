@@ -1,3 +1,5 @@
+// Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's Meter.swift.
+
 import 'dart:math';
 
 double smoothed(double old, double sample) => old > 0 ? old * 0.7 + sample * 0.3 : sample;

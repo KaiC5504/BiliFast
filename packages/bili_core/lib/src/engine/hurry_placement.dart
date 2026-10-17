@@ -1,3 +1,5 @@
+// Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's HurryPlacement.swift.
+
 import 'node_catalog.dart';
 import 'node_stats.dart';
 

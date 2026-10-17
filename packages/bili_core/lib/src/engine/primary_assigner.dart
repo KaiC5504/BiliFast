@@ -1,3 +1,5 @@
+// Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's PrimaryAssigner.swift.
+
 import 'dart:math';
 
 import 'node_catalog.dart';

@@ -90,7 +90,7 @@ final class IoRangeTransport implements RangeTransport {
 /// The response body. Cancelling it, or the request's CancelToken firing, cancels the response subscription,
 /// which makes dart:io destroy the socket instead of draining it, so the connection is free at once.
 final class _Body {
-  _Body(this._response, {required void Function() onEnd}) : _onEnd = onEnd {
+  _Body(this._response, {required this._onEnd}) {
     _controller = StreamController<List<int>>(
       onListen: _listen,
       onPause: () => _subscription?.pause(),

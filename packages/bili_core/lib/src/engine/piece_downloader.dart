@@ -1,3 +1,5 @@
+// Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's PieceDownloader.swift.
+
 import 'dart:async';
 import 'dart:math';
 
@@ -32,9 +34,8 @@ enum PieceMode {
 /// ran out their first-byte timeout waiting inside URLSession. [laterCopies] orders the candidates for every copy
 /// after the first.
 final class CopyTargets {
-  CopyTargets(this.candidates, {required NodeStats nodes, List<String> Function(List<String>)? laterCopies})
-      : _nodes = nodes,
-        _laterCopies = laterCopies ?? ((left) => left);
+  CopyTargets(this.candidates, {required this._nodes, List<String> Function(List<String>)? laterCopies})
+      : _laterCopies = laterCopies ?? ((left) => left);
 
   final List<String> candidates;
   final NodeStats _nodes;

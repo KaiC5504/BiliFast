@@ -1,3 +1,5 @@
+// Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's Resolver.swift.
+
 import 'dart:math';
 
 import '../shared/byte_range.dart';
@@ -21,15 +23,13 @@ final class _Route {
 /// BTR `createResolver`, one per track (port of Resolver.swift).
 final class Resolver {
   Resolver({
-    required String primary,
-    required List<String> backups,
+    required this._primary,
+    required this._backups,
     required this.mode,
     this.policy = MediaURLPolicy.bilibili,
     this.bans,
     MonotonicClock? clock,
-  })  : _primary = primary,
-        _backups = backups,
-        _clock = clock ?? MonotonicClock.system;
+  }) : _clock = clock ?? MonotonicClock.system;
 
   /// A node left out for being slow goes back to the untested ones after this and gets another try.
   static const measurementTTL = 90000.0;

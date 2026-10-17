@@ -1,3 +1,5 @@
+// Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's RangeDownloader.swift.
+
 import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';

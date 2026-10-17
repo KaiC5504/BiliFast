@@ -1,3 +1,5 @@
+// Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's BanList.swift.
+
 import 'node_catalog.dart';
 
 enum BanKind { node, address, pair }

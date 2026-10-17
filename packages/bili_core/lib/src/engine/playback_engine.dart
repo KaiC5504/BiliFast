@@ -1,4 +1,5 @@
 import '../api/track_selector.dart';
+import 'engine_isolate.dart';
 import 'transport.dart';
 
 enum TrackKind { video, audio }
@@ -161,7 +162,7 @@ abstract interface class PlaybackEngine {
   /// Spawns the engine isolate. [transportFactory] runs inside that isolate, so it must be a top-level or
   /// static function.
   static Future<PlaybackEngine> start({required RangeTransport Function() transportFactory}) =>
-      throw UnimplementedError('engine agent');
+      IsolatePlaybackEngine.start(transportFactory: transportFactory);
 
   /// Fetches both tracks' headers, builds the playlists and registers them with the local server.
   /// Throws [PlaybackError].
