@@ -571,6 +571,159 @@ void main() {
 
     replacement.statsController.add(const EngineSnapshot(concurrency: 4));
     expect(controller.stats.value.engine?.concurrency, 4, reason: 'stats come from the new engine');
+    final refreshes = http.to(Canned.playUrlPath).length;
+    replacement.fatalController.add(const FatalReport(token: 'tok1', message: 'range failed'));
+    await settle();
+    expect(http.to(Canned.playUrlPath), hasLength(refreshes + 1), reason: 'fatal reports come from the new engine');
+    controller.dispose();
+  });
+
+  group('feeding the engine', () {
+    test('a BTR source hears the playhead about four times a second, with the buffer ahead and the state', () async {
+      final controller = make();
+      await controller.open(bv);
+      expect(engine.playheads.map((update) => (update.token, update.seconds)), [('tok1', 0.0)],
+          reason: 'the load position, at once');
+      expect(engine.buffers, isEmpty);
+
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      player.emit(const BufferedChanged([(start: 0, end: 8), (start: 20, end: 30)]));
+      for (var tick = 1; tick <= 10; tick++) {
+        time.advance(100);
+        emitPosition(tick / 10);
+      }
+      // Readings come at 10 Hz; the engine hears one every 250 ms at most.
+      expect(engine.playheads.skip(1).map((update) => update.seconds), [0.3, 0.6, 0.9]);
+      expect(engine.playheads.last.rate, 1);
+      expect(engine.buffers, hasLength(3));
+      expect(engine.buffers.last.token, 'tok1');
+      expect(engine.buffers.last.aheadSeconds, closeTo(7.1, 1e-9));
+      expect(engine.buffers.last.playing, isTrue);
+
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      time.advance(300);
+      emitPosition(1);
+      expect(engine.playheads.last.rate, 0, reason: 'the player\'s rate, which is 0 while paused');
+      expect(engine.buffers.last.playing, isFalse);
+
+      player.emit(const BufferedChanged([(start: 20, end: 30)]));
+      time.advance(300);
+      emitPosition(1);
+      expect(engine.buffers.last.aheadSeconds, 0, reason: 'nothing buffered at the playhead');
+      controller.dispose();
+    });
+
+    test('a seek or a reload tells the engine the new playhead at once', () async {
+      final controller = make();
+      await controller.open(bv);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      time.advance(50);
+      controller.userSeeked(120);
+      expect(engine.playheads.last, (token: 'tok1', seconds: 120.0, rate: 1.0));
+      expect(engine.buffers, isEmpty, reason: 'the buffer goes with the regular updates only');
+
+      emitAfterSettle(120.5);
+      player.emit(const PlayerFailed('cannot decode', formatRejected: true));
+      await settle();
+      expect(player.loaded!.master, FakeEngine.masterOf('tok2'));
+      expect(engine.playheads.last.token, 'tok2');
+      expect(engine.playheads.last.seconds, closeTo(120.5, 1e-9));
+      controller.dispose();
+    });
+
+    test('direct mode feeds the engine nothing', () async {
+      final controller = make(mode: PlaybackMode.direct);
+      await controller.open(bv);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      for (var tick = 1; tick <= 4; tick++) {
+        time.advance(300);
+        emitPosition(tick * 0.3);
+      }
+      controller.userSeeked(50);
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      expect(engine.playheads, isEmpty);
+      expect(engine.buffers, isEmpty);
+      expect(engine.stalls, isEmpty);
+      controller.dispose();
+    });
+
+    test('a stall while playing reaches the engine at once; startup and seek waits do not', () async {
+      final controller = make();
+      await controller.open(bv);
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      expect(engine.stalls, isEmpty, reason: 'waiting before the first frame is startup');
+
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      controller.userSeeked(60);
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      expect(engine.stalls, isEmpty, reason: 'the wait of a timed seek');
+
+      time.advance(400);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      expect(engine.stalls, ['tok1']);
+      controller.dispose();
+    });
+
+    test('memory pressure drops the engine\'s prefetched segments', () async {
+      final controller = make();
+      await controller.open(bv);
+      controller.memoryPressure();
+      expect(engine.cacheDrops, 1);
+      expect(logs.events.map((event) => event.msg), contains('memory warning, prefetch cache dropped'));
+      controller.dispose();
+    });
+  });
+
+  test('a fatal engine report refreshes the URLs once, then falls back to direct', () async {
+    final controller = make();
+    await controller.open(bv);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    emitAfterSettle(40);
+
+    engine.fatalController.add(const FatalReport(token: 'tok9', message: 'another playback'));
+    await settle();
+    expect(http.to(Canned.playUrlPath), hasLength(1), reason: 'not this playback');
+
+    http.routes[Canned.playUrlPath] = (200, Canned.playUrl(tag: 'fresh'));
+    final gate = Completer<void>();
+    http.gates[Canned.playUrlPath] = gate;
+    engine.fatalController.add(const FatalReport(token: 'tok1', message: 'range failed'));
+    await settle();
+    expect(http.to(Canned.playUrlPath), hasLength(2), reason: 'fresh URLs first');
+    engine.fatalController.add(const FatalReport(token: 'tok1', message: 'pipelined request'));
+    await settle();
+    expect(http.to(Canned.playUrlPath), hasLength(2), reason: 'a failure during the refresh says nothing of the new URLs');
+    expect(controller.fellBack, isFalse);
+
+    gate.complete();
+    await settle();
+    expect(engine.replaced.map((entry) => (entry.token, entry.track)),
+        [('tok1', TrackKind.video), ('tok1', TrackKind.audio)]);
+    expect(engine.replaced.first.primary, contains('upsig=fresh'));
+    expect(loads(), 1, reason: 'BTR keeps playing on the new URLs');
+
+    engine.fatalController.add(const FatalReport(token: 'tok1', message: 'failed again'));
+    await settle();
+    expect(controller.fellBack, isTrue);
+    expect(engine.prepared.map((request) => request.mode), [PlaybackMode.btr, PlaybackMode.direct]);
+    expect(engine.released, ['tok1']);
+    expect(player.loaded!.startSeconds, closeTo(40, 1e-9));
+    controller.dispose();
+  });
+
+  test('after a new start a fatal report refreshes the URLs again before giving up on BTR', () async {
+    final controller = make();
+    await controller.open(bv);
+    engine.fatalController.add(const FatalReport(token: 'tok1', message: 'range failed'));
+    await settle();
+    expect(http.to(Canned.playUrlPath), hasLength(2));
+
+    await controller.setQuality(80);
+    engine.fatalController.add(const FatalReport(token: 'tok2', message: 'range failed'));
+    await settle();
+    expect(http.to(Canned.playUrlPath), hasLength(4), reason: 'the new start, then its own refresh');
+    expect(controller.fellBack, isFalse);
     controller.dispose();
   });
 

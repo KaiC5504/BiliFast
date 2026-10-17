@@ -91,6 +91,7 @@ class PlaybackController extends ChangeNotifier {
         danmaku = DanmakuFeed(client: client, logger: logger) {
     _playerEvents = player.events.listen(_onPlayerEvent);
     _engineStats = _listenToStats(engine);
+    _engineFatals = _listenToFatals(engine);
   }
 
   /// 4K, as the Swift app's `settings.quality` default; HDR and 杜比视界 are picked from [qualities].
@@ -103,6 +104,10 @@ class PlaybackController extends ChangeNotifier {
 
   /// A network failure in direct mode restarts with fresh URLs at most this often.
   static const networkRestartSeconds = 60.0;
+
+  /// The engine hears the playhead at most this often, as Swift's 0.25 s time observer fed the session; the
+  /// players report about ten times a second.
+  static const engineFeedMs = 250.0;
 
   final BiliPlayer player;
 
@@ -128,6 +133,7 @@ class PlaybackController extends ChangeNotifier {
   final Logger _logger;
   late final StreamSubscription<PlayerEvent> _playerEvents;
   late StreamSubscription<EngineSnapshot> _engineStats;
+  late StreamSubscription<FatalReport> _engineFatals;
 
   PlaybackPhase _phase = PlaybackPhase.idle;
   String? _error;
@@ -162,6 +168,12 @@ class PlaybackController extends ChangeNotifier {
   /// Codec kinds whose unexplained failure already got one retry with fresh URLs.
   final Set<String> _unknownRetried = {};
   DateTime? _lastNetworkRestart;
+
+  /// A BTR request failed for good once in this start: the URLs were refreshed, and the next failure goes direct.
+  bool _refreshedAfterFatal = false;
+  bool _refreshingAfterFatal = false;
+  double? _lastFeedMs;
+  List<({double start, double end})> _buffered = const [];
 
   /// The position to report while nothing is loaded, so a retry resumes where playback stopped.
   double _heldPosition = 0;
@@ -289,10 +301,17 @@ class PlaybackController extends ChangeNotifier {
     final now = _nowMs();
     _stallFilter.jumped(now);
     clock.jump(seconds);
+    _jumpedTo(seconds);
     danmaku.seeked((seconds * 1000).round());
     if (!_sawFirstFrame) return;
     final timed = _seekTimer.jumped(position: seconds, atMs: now, rate: _playerRate);
     _logger.info(LogCategory.player, 'seek', {'to': seconds.round(), 'mode': modeLabel, 'timed': timed});
+  }
+
+  /// The system is short of memory: the engine drops its prefetched segments and playback goes on.
+  void memoryPressure() {
+    _engine.dropCache();
+    _logger.warn(LogCategory.player, 'memory warning, prefetch cache dropped');
   }
 
   Future<void> startPictureInPicture() async {
@@ -378,6 +397,8 @@ class PlaybackController extends ChangeNotifier {
     _cancelRefresh();
     _phase = PlaybackPhase.loading;
     _heldPosition = time;
+    _refreshedAfterFatal = false;
+    _refreshingAfterFatal = false;
     _playing = null;
     _notify();
     try {
@@ -583,6 +604,8 @@ class PlaybackController extends ChangeNotifier {
     // Loaded paused, the first frame waits on the user: that wait is not startup time.
     if (!_playWhenLoaded && !_sawFirstFrame) _firstFrameTimed = false;
     clock.reset(time);
+    _buffered = const [];
+    _jumpedTo(time);
     _awaitingLoad = true;
     await player.load(PlayerSource(
       master: source.master,
@@ -635,8 +658,10 @@ class PlaybackController extends ChangeNotifier {
       throw const _Stale();
     }
     unawaited(_engineStats.cancel());
+    unawaited(_engineFatals.cancel());
     _engine = next;
     _engineStats = _listenToStats(next);
+    _engineFatals = _listenToFatals(next);
     _engineClosed = false;
     _quietly(old.dispose, 'old engine dispose');
     _logger.info(LogCategory.engine, 'engine replaced');
@@ -646,6 +671,8 @@ class PlaybackController extends ChangeNotifier {
       engine.stats.listen(_onEngineStats, onError: (Object error) {
         _logger.warn(LogCategory.engine, 'stats failed', {'error': '$error'});
       });
+
+  StreamSubscription<FatalReport> _listenToFatals(PlaybackEngine engine) => engine.fatals.listen(_onEngineFatal);
 
   /// Prepares the current choice again at the current position, or starts over with fresh URLs when they
   /// are about to expire.
@@ -780,6 +807,25 @@ class PlaybackController extends ChangeNotifier {
     }
   }
 
+  /// A BTR request failed after every retry: fresh URLs once per start, then direct mode.
+  Future<void> _ripperFailed(String error, int current) async {
+    if (current != _epoch || _choice == null) return;
+    // A pipelined request that failed before the refresh landed says nothing about the new URLs.
+    if (_refreshingAfterFatal) {
+      _logger.info(LogCategory.player, 'btr range failed during url refresh, ignored', {'error': error});
+      return;
+    }
+    if (!_refreshedAfterFatal) {
+      _refreshedAfterFatal = true;
+      _refreshingAfterFatal = true;
+      _logger.warn(LogCategory.player, 'btr range failed, refreshing urls', {'error': error});
+      await _refreshUrls(current);
+      if (current == _epoch) _refreshingAfterFatal = false;
+      return;
+    }
+    await _fallBackToDirect('btr failed again', current);
+  }
+
   bool _claimNetworkRestart() {
     final now = _now();
     final last = _lastNetworkRestart;
@@ -860,6 +906,7 @@ class PlaybackController extends ChangeNotifier {
         if (accepted) {
           final ms = _seekTimer.ticked(position: seconds, rate: _playerRate, playing: playing, atMs: _nowMs());
           if (ms != null) _seekResumed(ms, 'playhead');
+          _feedEngine(seconds);
         }
         danmaku.update(positionMs: (seconds * 1000).round(), playing: playing);
       case DurationChanged(:final seconds):
@@ -883,8 +930,8 @@ class PlaybackController extends ChangeNotifier {
         _notify();
       case PictureInPictureRestore():
         break;
-      case BufferedChanged():
-        break;
+      case BufferedChanged(:final ranges):
+        _buffered = ranges;
       case PlayerLog(:final kind, :final fields):
         _logger.info(LogCategory.player, kind, {
           for (final MapEntry(:key, :value) in fields.entries) key: ?value,
@@ -929,7 +976,11 @@ class PlaybackController extends ChangeNotifier {
         _notify();
       case PlayerStatus.buffering:
         // Waits before this load first played are startup, not stalls.
-        if (_itemPlayed && !_seekTimer.isRunning) _checkStall();
+        if (_itemPlayed && !_seekTimer.isRunning) {
+          final token = _btrToken;
+          if (token != null) _engine.reportStall(token);
+          _checkStall();
+        }
       case PlayerStatus.paused:
         _seekTimer.paused();
         if (_itemPlayed) _playWhenLoaded = false;
@@ -970,6 +1021,37 @@ class PlaybackController extends ChangeNotifier {
       stalls: lag ? s.stalls + 1 : s.stalls,
     );
     _logger.info(LogCategory.player, 'seek resumed', {'ms': ms.round(), 'mode': modeLabel, 'via': via, 'lag': lag});
+  }
+
+  /// The token of the source playing through the engine; null in direct mode and while nothing is loaded.
+  String? get _btrToken => _source?.mode == PlaybackMode.btr ? _token : null;
+
+  /// A regular playhead reading: the engine hears it, with the buffer ahead, at most every [engineFeedMs].
+  void _feedEngine(double seconds) {
+    final token = _btrToken;
+    if (token == null) return;
+    final now = _nowMs();
+    final last = _lastFeedMs;
+    if (last != null && now - last < engineFeedMs) return;
+    _lastFeedMs = now;
+    _engine.updatePlayhead(token, seconds: seconds, rate: _playerRate);
+    final ahead = _buffered.where((range) => range.start <= seconds + 0.5 && range.end >= seconds).firstOrNull;
+    _engine.reportBuffer(token,
+        aheadSeconds: ahead == null ? 0 : ahead.end - seconds, playing: _status == PlayerStatus.playing);
+  }
+
+  /// Swift fed the session from AVPlayer's time observer, which also fires on jumps: a seek or a load reaches the
+  /// engine at once. The rate is the one playback resumes at; the buffer waits for the next regular reading.
+  void _jumpedTo(double seconds) {
+    final token = _btrToken;
+    if (token == null) return;
+    _lastFeedMs = _nowMs();
+    _engine.updatePlayhead(token, seconds: seconds, rate: _rate);
+  }
+
+  void _onEngineFatal(FatalReport report) {
+    if (_disposed || report.token != _btrToken) return;
+    unawaited(_ripperFailed(report.message, _epoch).catchError((Object error, StackTrace stack) => _fail(error, stack)));
   }
 
   void _onEngineStats(EngineSnapshot snapshot) {
@@ -1085,6 +1167,7 @@ class PlaybackController extends ChangeNotifier {
     _teardownPlayback();
     unawaited(_playerEvents.cancel());
     unawaited(_engineStats.cancel());
+    unawaited(_engineFatals.cancel());
     _quietly(player.dispose, 'player dispose');
     _quietly(_engine.dispose, 'engine dispose');
     danmaku.dispose();
