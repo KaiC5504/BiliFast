@@ -35,18 +35,89 @@ typedef TrackSource = ({String primary, List<String> backups});
 typedef _Key = (TrackKind, ByteRange);
 
 final class _CacheEntry {
-  const _CacheEntry(this.bytes, this.endTime);
+  const _CacheEntry(this.bytes, this.endTime, {this.startTime = 0, this.served = false});
 
   final Uint8List bytes;
+  final double startTime;
   final double endTime;
+
+  /// The player has read it: kept as back buffer ([RipperConfig.keepBehindBytes]), not counted as prefetch.
+  final bool served;
 }
 
-/// A segment downloading ahead of the player: Swift's prefetch Task, cancelled through its token.
+/// Why a segment downloads ahead of the player's request for it.
+enum _FetchKind {
+  prefetch,
+
+  /// The start position, before the player's first request ([RipperSession.prime]).
+  prime,
+
+  /// Where a finger rests on the seek bar ([RipperSession.hint]).
+  hint,
+}
+
+/// A segment downloading ahead of the player: Swift's prefetch Task, cancelled through its token. Its bytes so far
+/// are kept in order, so a read that takes it over can pass them on before it ends ([RipperConfig.streamAdopted]).
 final class _Prefetch {
-  _Prefetch(this.token);
+  _Prefetch(this.token, {this.kind = _FetchKind.prefetch, this.startedAt = 0});
 
   final CancelToken token;
+  final _FetchKind kind;
+  final double startedAt;
   late final Future<Uint8List> bytes;
+  double? firstByteAt;
+  int received = 0;
+
+  /// A player read took it over at least once.
+  bool adopted = false;
+  final _chunks = <Uint8List>[];
+  final _listeners = <int, void Function(Uint8List chunk)>{};
+  int _nextListener = 0;
+
+  List<Uint8List> get chunks => List.of(_chunks);
+
+  void add(Uint8List chunk, {required double at}) {
+    firstByteAt ??= at;
+    received += chunk.length;
+    _chunks.add(chunk);
+    for (final listener in _listeners.values.toList()) {
+      listener(chunk);
+    }
+  }
+
+  /// Returns a function that stops the listener.
+  void Function() listen(void Function(Uint8List chunk) listener) {
+    final id = _nextListener++;
+    _listeners[id] = listener;
+    return () => _listeners.remove(id);
+  }
+
+  Uint8List takeBytes() {
+    final builder = BytesBuilder(copy: false);
+    _chunks.forEach(builder.add);
+    _chunks.clear();
+    return builder.takeBytes();
+  }
+}
+
+/// New prefetch waits while a seek's head is on its way ([RipperConfig.seekBurst]); [landed] lets it go once the
+/// head is in, [end] when the read ends first.
+final class _Hold {
+  _Hold(this._head, this._release);
+
+  final int _head;
+  final void Function() _release;
+  bool _done = false;
+
+  void landed(int bytes) {
+    if (bytes >= _head) end();
+  }
+
+  void end() {
+    if (_done) return;
+    _done = true;
+    _release();
+  }
 }
 
 final class _Request {
@@ -121,6 +192,11 @@ final class RipperSession {
     }
   }
 
+  /// Audio player reads rank above every video request of their class, audio prefetch just above video prefetch
+  /// ([RipperConfig.audioFirst]). 100 outweighs the 12 a deadline adds and over 4 s of a video request's aging.
+  static const _audioReadBoost = 100.0;
+  static const _audioPrefetchBoost = 5.0;
+
   final EngineContext _ctx;
   final _bans = BanList();
   late final Map<TrackKind, Resolver> _resolvers;
@@ -134,8 +210,18 @@ final class RipperSession {
 
   /// Position in [_segments] by range start.
   final _segmentAt = <TrackKind, Map<int, int>>{};
+
+  /// Bytes per second of the video, for [RipperConfig.prefetchVideoMaxBytes].
+  final _byteRate = <TrackKind, double>{};
   final _cache = <_Key, _CacheEntry>{};
   final _inflight = <_Key, _Prefetch>{};
+
+  /// Each track's latest hint, so a newer one can cancel it.
+  final _hints = <TrackKind, _Key>{};
+
+  /// Heads of seek reads still on their way, and the prefetch held back until they are in.
+  int _bursting = 0;
+  final _deferred = <TrackKind, MediaSegment>{};
 
   /// Bumped by [_dropPrefetch]; a reader that adopted a prefetch before a seek must not hand it back after.
   final _seekGeneration = <TrackKind, int>{};
@@ -159,6 +245,8 @@ final class RipperSession {
 
   bool get isClosed => _closed;
   int get deliveredBytes => _ctx.stats.deliveredBytes;
+
+  bool get _retains => _ctx.config.keepBehindBytes > 0;
 
   Future<TrackHeaders> loadHeaders(TrackKind track, {required int through}) async {
     if (_closed) throw const RipperError(RipperErrorKind.closed);
@@ -186,6 +274,46 @@ final class RipperSession {
     _segmentAt[track] = {
       for (var position = 0; position < segments.length; position++) segments[position].range.start: position,
     };
+    final span = segments.isEmpty ? 0.0 : segments.last.endTime - segments.first.startTime;
+    if (span > 0) {
+      _byteRate[track] = segments.fold(0, (sum, segment) => sum + segment.range.length) / span;
+    } else {
+      _byteRate.remove(track);
+    }
+  }
+
+  /// Starts the segment at [seconds] downloading as the player's first read of it would, before the player asks:
+  /// that read then takes it over. With [RipperConfig.prefetchOnPrime] the segments after it are prefetched at
+  /// once, after the head is in when [RipperConfig.seekBurst] is on.
+  void prime(TrackKind track, {required double seconds}) {
+    if (_closed) return;
+    final segment = _segmentAtTime(track, seconds);
+    if (segment == null) return;
+    // Playback starts here: deadlines and the look-ahead count from it until the player reports a position.
+    _playhead = seconds;
+    _start(track, segment, _FetchKind.prime);
+    if (_ctx.config.prefetchOnPrime) _schedulePrefetch(track, segment);
+  }
+
+  /// The user is about to seek to [seconds]: each track's segment there downloads as a seek read would, without
+  /// counting as the player's seek; the seek's read then takes it over. A newer hint cancels an older one still
+  /// downloading, so each track has at most one; null cancels them.
+  void hint(double? seconds) {
+    if (_closed) return;
+    for (final track in _resolvers.keys) {
+      final segment = seconds == null ? null : _segmentAtTime(track, seconds);
+      final key = segment == null ? null : (track, segment.range);
+      final previous = _hints[track];
+      if (previous != null && previous != key) {
+        _hints.remove(track);
+        final running = _inflight[previous];
+        if (running != null && running.kind == _FetchKind.hint) {
+          _inflight.remove(previous);
+          running.token.cancel();
+        }
+      }
+      if (segment != null && key != null && _start(track, segment, _FetchKind.hint)) _hints[track] = key;
+    }
   }
 
   /// Single subscription. Cancelling the subscription cancels every piece of the read at once; a prefetch the read
@@ -216,7 +344,8 @@ final class RipperSession {
   void updatePlayhead({required double seconds, required double rate}) {
     _playhead = seconds;
     _rate = rate > 0 ? rate : 1;
-    _cache.removeWhere((_, entry) => entry.endTime < seconds - 2);
+    _cache.removeWhere((_, entry) => entry.endTime < seconds - _ctx.config.keepBehindSeconds);
+    if (_retains) _trimKept();
   }
 
   void reportBuffer({required double aheadSeconds, required bool playing}) =>
@@ -261,6 +390,8 @@ final class RipperSession {
     if (_closed) return;
     _closed = true;
     _cache.clear();
+    _deferred.clear();
+    _hints.clear();
     final prefetches = _inflight.values.toList();
     _inflight.clear();
     _ctx.pool.onChange = null;
@@ -282,50 +413,66 @@ final class RipperSession {
   ) async {
     final resolver = _resolvers[track];
     if (resolver == null) throw const RipperError(RipperErrorKind.noNodes);
+    final config = _ctx.config;
     final began = _ctx.clock.nowMs();
     final key = (track, range);
     final request = _plan(track, range, key);
     final pending = request.memory == null;
+    final segment = request.segment;
+    // A whole segment the player reads is kept as back buffer.
+    final kept = pending && _retains && segment != null ? BytesBuilder(copy: false) : null;
+    final hold = pending && request.seek && request.adopted == null ? _holdPrefetch(range) : null;
+    double? firstByteAt;
+    var sent = 0;
+    void out(Uint8List bytes) {
+      firstByteAt ??= _ctx.clock.nowMs();
+      sent += bytes.length;
+      kept?.add(bytes);
+      emit(bytes);
+      hold?.landed(sent);
+    }
+
+    final audioWait = pending && track == TrackKind.audio && config.audioFirst;
+    if (audioWait) _ctx.audioReadBegan();
     try {
       var served = false;
       var source = 'fetch';
       final adopted = request.adopted;
       if (request.memory case final bytes?) {
         _ctx.stats.cache(hit: true);
-        emit(bytes);
+        out(bytes);
         served = true;
         source = 'memory';
       } else if (adopted != null) {
-        final bytes = await _waitForPrefetch(adopted, token);
+        final bytes = await _takeOver(adopted, out, token);
         if (token.isCancelled) {
-          _returnPrefetch(adopted, key, endTime: request.segment?.endTime ?? 0, generation: request.generation);
+          _returnPrefetch(adopted, key, endTime: segment?.endTime ?? 0, generation: request.generation);
           throw const CancelledException();
         }
         if (bytes != null) {
           _ctx.stats.cache(hit: true);
-          emit(bytes);
+          if (sent < bytes.length) out(Uint8List.sublistView(bytes, sent));
           served = true;
-          source = 'prefetch';
+          source = adopted.kind.name;
         }
       }
       if (!served) {
         _ctx.stats.cache(hit: false);
-        if (adopted == null && request.seek) {
+        // Nothing of the track was prefetched before its first read, so only a later seek has anything to drop.
+        if (adopted == null && request.seek && !request.firstOfTrack) {
           _dropPrefetch(track);
-          if (!request.firstOfTrack) _ctx.auto?.newSession();
+          _ctx.auto?.newSession();
         }
+        // A streamed prefetch that broke off has already sent the front of the range.
+        final rest = sent == 0 ? range : ByteRange(range.start + sent, range.end);
         try {
-          await _downloader.stream(
-            range,
-            resolver,
-            startup: request.seek,
-            priority: _ctx.config.priority,
-            emit: emit,
-            deadline: _deadline(request.segment),
-            expectedTotal: request.total,
-            hurry: _hurry(request.segment, startup: request.seek),
-            cancel: token,
-          );
+          await _download(track, rest, resolver,
+              startup: request.seek,
+              player: true,
+              segment: segment,
+              total: request.total,
+              emit: out,
+              cancel: token);
           token.throwIfCancelled();
         } catch (error) {
           if (!token.isCancelled && error is! CancelledException) {
@@ -336,15 +483,32 @@ final class RipperSession {
           rethrow;
         }
       }
+      if (kept != null && segment != null && !_closed) _keep(key, kept.takeBytes(), segment);
+      final now = _ctx.clock.nowMs();
+      final firstByteMs = ((firstByteAt ?? now) - began).roundToDouble();
       _ctx.logger.debug(LogCategory.engine, 'read', {
         'track': track.name,
         'range': '$range',
         'source': source,
         'seek': request.seek,
-        'ms': (_ctx.clock.nowMs() - began).roundToDouble(),
+        'firstByteMs': firstByteMs,
+        'ms': (now - began).roundToDouble(),
       });
-      _schedulePrefetch(track, request.segment);
+      if (request.seek && pending) {
+        _ctx.logger.info(LogCategory.engine, 'seek read', {
+          'track': track.name,
+          'segment': segment?.index ?? -1,
+          'source': source,
+          'first': request.firstOfTrack,
+          'firstByteMs': firstByteMs,
+          'ms': (now - began).roundToDouble(),
+          'bytes': range.length,
+        });
+      }
+      _schedulePrefetch(track, segment);
     } finally {
+      hold?.end();
+      if (audioWait) _ctx.audioReadEnded();
       if (pending) {
         final left = (_playerPending[key] ?? 1) - 1;
         if (left > 0) {
@@ -374,13 +538,22 @@ final class RipperSession {
       firstOfTrack: previous == null,
       total: headers?.totalSize,
     );
-    final entry = _cache.remove(key);
+    final entry = _retains ? _cache[key] : _cache.remove(key);
     final prefetch = entry == null ? _inflight.remove(key) : null;
     if (entry != null) {
       request.memory = entry.bytes;
+      if (_retains) {
+        _cache[key] = _CacheEntry(entry.bytes, entry.endTime, startTime: entry.startTime, served: true);
+      }
     } else if (prefetch != null) {
       // Taken out of `_inflight`, so a seek cannot cancel it and its bytes do not also land in the cache.
       request.adopted = prefetch;
+      // A seek onto a hint leaves the old position behind as any seek does; a prime is the start, not a seek.
+      if (prefetch.kind == _FetchKind.hint && request.seek && !request.firstOfTrack) {
+        _seeks += 1;
+        _dropPrefetch(track);
+        _ctx.auto?.newSession();
+      }
       request.generation = _seekGeneration[track] ?? 0;
     } else if (request.seek) {
       _seeks += 1;
@@ -426,11 +599,115 @@ final class RipperSession {
     };
   }
 
+  /// One download for the player ([player], at the configured priority) or for prefetch (at 10). Under
+  /// [RipperConfig.audioFirst] a small audio read for the player is one piece raced over two nodes.
+  Future<void> _download(
+    TrackKind track,
+    ByteRange range,
+    Resolver resolver, {
+    required bool startup,
+    required bool player,
+    required MediaSegment? segment,
+    required int? total,
+    required void Function(Uint8List bytes) emit,
+    required CancelToken cancel,
+  }) {
+    final config = _ctx.config;
+    final lane = _lane(track, player: player);
+    if (player && config.audioFirst && track == TrackKind.audio && range.length < config.audioWholeBytes) {
+      return _downloader.whole(range, resolver,
+          copies: 2,
+          priority: 220,
+          emit: emit,
+          deadline: _deadline(segment),
+          expectedTotal: total,
+          hurry: _hurry(segment, startup: startup),
+          cancel: cancel,
+          lane: lane);
+    }
+    return _downloader.stream(
+      range,
+      resolver,
+      startup: startup,
+      priority: player ? config.priority : 10,
+      emit: emit,
+      deadline: _deadline(segment),
+      expectedTotal: total,
+      hurry: _hurry(segment, startup: startup),
+      cancel: cancel,
+      burst: startup && config.seekBurst,
+      lane: lane,
+    );
+  }
+
+  RequestLane _lane(TrackKind track, {required bool player}) {
+    if (!_ctx.config.audioFirst) return RequestLane.any;
+    if (track == TrackKind.video) return const RequestLane(track: TrackKind.video);
+    return player
+        ? const RequestLane(track: TrackKind.audio, boost: _audioReadBoost, minClass: QueueClass.startup)
+        : const RequestLane(track: TrackKind.audio, boost: _audioPrefetchBoost);
+  }
+
+  /// Under [RipperConfig.seekBurst], prefetch scheduled from now on waits until the first
+  /// [RipperConfig.seekBurstBytes] of [range] are in or the read ends.
+  _Hold? _holdPrefetch(ByteRange range) {
+    if (!_ctx.config.seekBurst) return null;
+    _bursting += 1;
+    return _Hold(min(range.length, _ctx.config.seekBurstBytes), _releaseHold);
+  }
+
+  void _releaseHold() {
+    if (_bursting > 0) _bursting -= 1;
+    if (_bursting > 0 || _closed) return;
+    final deferred = Map.of(_deferred);
+    _deferred.clear();
+    for (final MapEntry(key: track, value: segment) in deferred.entries) {
+      _schedulePrefetch(track, segment);
+    }
+  }
+
+  MediaSegment? _segmentFor(_Key key) {
+    final position = _segmentAt[key.$1]?[key.$2.start];
+    return position == null ? null : _segments[key.$1]?[position];
+  }
+
+  /// The segment playing at [seconds]: the last one starting at or before it.
+  MediaSegment? _segmentAtTime(TrackKind track, double seconds) {
+    final segments = _segments[track];
+    if (segments == null || segments.isEmpty) return null;
+    var low = 0;
+    var high = segments.length - 1;
+    while (low < high) {
+      final middle = (low + high + 1) >> 1;
+      if (segments[middle].startTime <= seconds) {
+        low = middle;
+      } else {
+        high = middle - 1;
+      }
+    }
+    return segments[low];
+  }
+
+  /// A prime or a hint: the segment downloads as a player's seek read would, waiting in `_inflight` for the read
+  /// that takes it over. False when the segment is cached, downloading or the player's already.
+  bool _start(TrackKind track, MediaSegment segment, _FetchKind kind) {
+    final resolver = _resolvers[track];
+    final key = (track, segment.range);
+    if (resolver == null || _closed) return false;
+    if (_cache.containsKey(key) || _inflight.containsKey(key) || _playerPending.containsKey(key)) return false;
+    final prefetch = _Prefetch(CancelToken(_root), kind: kind, startedAt: _ctx.clock.nowMs());
+    prefetch.bytes = _fetchSegment(track, segment, resolver, _headers[track]?.totalSize, prefetch);
+    _inflight[key] = prefetch;
+    _watch(key, prefetch, segment.endTime);
+    return true;
+  }
+
   /// After a seek the track's prefetched segments belong to the old position; left in place they
-  /// would hold the cap and keep the new position from being prefetched.
+  /// would hold the cap and keep the new position from being prefetched. Segments the player read stay.
   void _dropPrefetch(TrackKind track) {
     _seekGeneration[track] = (_seekGeneration[track] ?? 0) + 1;
-    _cache.removeWhere((key, _) => key.$1 == track);
+    _cache.removeWhere((key, entry) => key.$1 == track && !entry.served);
+    _deferred.remove(track);
     final keys = _inflight.keys.where((key) => key.$1 == track).toList();
     for (final key in keys) {
       _inflight.remove(key)?.token.cancel();
@@ -440,7 +717,7 @@ final class RipperSession {
   int _prefetchedBytes(TrackKind track) {
     var bytes = 0;
     for (final MapEntry(:key, :value) in _cache.entries) {
-      if (key.$1 == track) bytes += value.bytes.length;
+      if (key.$1 == track && !value.served) bytes += value.bytes.length;
     }
     for (final key in _inflight.keys) {
       if (key.$1 == track) bytes += key.$2.length;
@@ -448,48 +725,92 @@ final class RipperSession {
     return bytes;
   }
 
+  /// How far ahead of the playhead prefetch reaches, in seconds of the video.
+  double _lookAhead() {
+    final config = _ctx.config;
+    if (!config.prefetchFollowsRate) return config.prefetchAheadSeconds;
+    return config.prefetchAheadSeconds * _rate.clamp(1.0, RipperConfig.maxPrefetchRate);
+  }
+
+  /// The fixed cap, or with a max cap set, enough for [ahead] seconds at the track's own bitrate.
+  int _prefetchCap(TrackKind track, double ahead) {
+    final config = _ctx.config;
+    final video = track == TrackKind.video;
+    final fixed = video ? config.prefetchVideoBytes : config.prefetchAudioBytes;
+    final ceiling = video ? config.prefetchVideoMaxBytes : config.prefetchAudioMaxBytes;
+    final rate = _byteRate[track];
+    if (ceiling == null || rate == null) return fixed;
+    // A quarter more than the average, since the segments right ahead can run above it.
+    return (rate * ahead * 1.25).round().clamp(fixed, max(fixed, ceiling));
+  }
+
   void _schedulePrefetch(TrackKind track, MediaSegment? segment) {
     final resolver = _resolvers[track];
     if (segment == null || resolver == null || _closed) return;
+    if (_bursting > 0) {
+      _deferred[track] = segment;
+      return;
+    }
     final segments = _segments[track];
     final position = _segmentAt[track]?[segment.range.start];
     if (segments == null || position == null) return;
-    final config = _ctx.config;
-    final cap = track == TrackKind.video ? config.prefetchVideoBytes : config.prefetchAudioBytes;
+    final ahead = _lookAhead();
     final total = _headers[track]?.totalSize;
-    var budget = cap - _prefetchedBytes(track);
+    var budget = _prefetchCap(track, ahead) - _prefetchedBytes(track);
     for (final next in segments.skip(position + 1)) {
-      if (next.startTime - _playhead > config.prefetchAheadSeconds) break;
+      if (next.startTime - _playhead > ahead) break;
       final key = (track, next.range);
       if (_cache.containsKey(key) || _inflight.containsKey(key) || _playerPending.containsKey(key)) continue;
       if (next.range.length > budget) break;
       budget -= next.range.length;
-      final prefetch = _Prefetch(CancelToken(_root));
-      prefetch.bytes = _fetchSegment(next, resolver, total, prefetch.token);
+      final prefetch = _Prefetch(CancelToken(_root), startedAt: _ctx.clock.nowMs());
+      prefetch.bytes = _fetchSegment(track, next, resolver, total, prefetch);
       _inflight[key] = prefetch;
       _watch(key, prefetch, next.endTime);
     }
   }
 
-  Future<Uint8List> _fetchSegment(MediaSegment segment, Resolver resolver, int? total, CancelToken cancel) async {
-    final builder = BytesBuilder(copy: false);
+  Future<Uint8List> _fetchSegment(
+      TrackKind track, MediaSegment segment, Resolver resolver, int? total, _Prefetch prefetch) async {
+    final cancel = prefetch.token;
+    final urgent = prefetch.kind != _FetchKind.prefetch;
+    final hold = urgent ? _holdPrefetch(segment.range) : null;
     try {
-      await _downloader.stream(
-        segment.range,
-        resolver,
-        startup: false,
-        priority: 10,
-        emit: builder.add,
-        deadline: _deadline(segment),
-        expectedTotal: total,
-        hurry: _hurry(segment, startup: false),
-        cancel: cancel,
-      );
+      await _download(track, segment.range, resolver,
+          startup: urgent,
+          player: urgent,
+          segment: segment,
+          total: total,
+          emit: (bytes) {
+            prefetch.add(bytes, at: _ctx.clock.nowMs());
+            hold?.landed(prefetch.received);
+          },
+          cancel: cancel);
       cancel.throwIfCancelled();
-      return builder.takeBytes();
+      if (urgent) _logFetch(track, segment, prefetch, 'done');
+      return prefetch.takeBytes();
+    } catch (error) {
+      if (urgent) _logFetch(track, segment, prefetch, cancel.isCancelled ? 'cancelled' : 'failed');
+      rethrow;
     } finally {
+      hold?.end();
       cancel.dispose();
     }
+  }
+
+  /// How a prime or a hint went, for timing startup and seeks from the phone's log.
+  void _logFetch(TrackKind track, MediaSegment segment, _Prefetch prefetch, String outcome) {
+    final now = _ctx.clock.nowMs();
+    final first = prefetch.firstByteAt;
+    _ctx.logger.info(LogCategory.engine, prefetch.kind.name, {
+      'track': track.name,
+      'segment': segment.index,
+      'outcome': outcome,
+      'adopted': prefetch.adopted,
+      'firstByteMs': first == null ? -1 : (first - prefetch.startedAt).roundToDouble(),
+      'ms': (now - prefetch.startedAt).roundToDouble(),
+      'bytes': prefetch.received,
+    });
   }
 
   void _watch(_Key key, _Prefetch prefetch, double endTime) {
@@ -502,11 +823,29 @@ final class RipperSession {
   void _prefetchFinished(_Key key, _Prefetch prefetch, double endTime, {Uint8List? bytes, Object? error}) {
     if (identical(_inflight[key], prefetch)) {
       _inflight.remove(key);
-      if (bytes != null && !_closed) _cache[key] = _CacheEntry(bytes, endTime);
+      if (bytes != null && !_closed) {
+        _cache[key] = _CacheEntry(bytes, endTime, startTime: _segmentFor(key)?.startTime ?? endTime);
+      }
     }
     if (error != null && error is! CancelledException) {
       _ctx.logger.warn(LogCategory.engine, 'prefetch failed',
           {'track': key.$1.name, 'range': '${key.$2}', 'error': '$error'});
+    }
+  }
+
+  /// Waits for a prefetch the read took over. Under [RipperConfig.streamAdopted] its bytes so far and those that
+  /// follow go to [out] as they come; the caller sends whatever the result holds beyond them.
+  Future<Uint8List?> _takeOver(_Prefetch prefetch, void Function(Uint8List bytes) out, CancelToken token) async {
+    prefetch.adopted = true;
+    if (!_ctx.config.streamAdopted) return _waitForPrefetch(prefetch, token);
+    for (final chunk in prefetch.chunks) {
+      out(chunk);
+    }
+    final stop = prefetch.listen(out);
+    try {
+      return await _waitForPrefetch(prefetch, token);
+    } finally {
+      stop();
     }
   }
 
@@ -533,6 +872,35 @@ final class RipperSession {
     _watch(key, prefetch, endTime);
   }
 
+  /// A segment the player read stays cached as back buffer ([RipperConfig.keepBehindBytes]).
+  void _keep(_Key key, Uint8List bytes, MediaSegment segment) {
+    _cache[key] = _CacheEntry(bytes, segment.endTime, startTime: segment.startTime, served: true);
+    _trimKept();
+  }
+
+  /// Each track keeps at most [RipperConfig.keepBehindBytes] of segments the player read, dropping those furthest
+  /// from the playhead first.
+  void _trimKept() {
+    final limit = _ctx.config.keepBehindBytes;
+    for (final track in TrackKind.values) {
+      final kept = [
+        for (final MapEntry(:key, :value) in _cache.entries)
+          if (key.$1 == track && value.served) (key: key, entry: value),
+      ];
+      var bytes = kept.fold(0, (sum, item) => sum + item.entry.bytes.length);
+      if (bytes <= limit) continue;
+      double distance(_CacheEntry entry) => entry.endTime < _playhead
+          ? _playhead - entry.endTime
+          : max(0.0, entry.startTime - _playhead);
+      kept.sort((a, b) => distance(b.entry).compareTo(distance(a.entry)));
+      for (final item in kept) {
+        if (bytes <= limit) break;
+        _cache.remove(item.key);
+        bytes -= item.entry.bytes.length;
+      }
+    }
+  }
+
   // For tests.
   bool isCached(TrackKind track, ByteRange range) => _cache.containsKey((track, range));
   NodeStats get nodeStats => _ctx.nodes;
@@ -550,4 +918,9 @@ final class RipperSession {
   int seekGeneration(TrackKind track) => _seekGeneration[track] ?? 0;
   int prefetchesRunning(TrackKind track) => _inflight.keys.where((key) => key.$1 == track).length;
   int get readsRunning => _reads;
+  int prefetchCap(TrackKind track) => _prefetchCap(track, _lookAhead());
+  double get lookAhead => _lookAhead();
+  bool hinting(TrackKind track, ByteRange range) => _inflight[(track, range)]?.kind == _FetchKind.hint;
+  bool priming(TrackKind track, ByteRange range) => _inflight[(track, range)]?.kind == _FetchKind.prime;
+  EngineContext get context => _ctx;
 }

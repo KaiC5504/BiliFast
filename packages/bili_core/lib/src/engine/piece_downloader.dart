@@ -19,10 +19,14 @@ enum PieceMode {
   startup,
 
   /// The first small piece of a startup range, raced over many nodes at once.
-  probe;
+  probe,
+
+  /// A piece of a seek's head ([RipperConfig.seekBurst]) or a small audio read ([RipperConfig.audioFirst]): its
+  /// first copies all start at once on the best nodes, and any later one follows the startup rules.
+  burst;
 
   QueueClass get queueClass => switch (this) {
-        PieceMode.probe => QueueClass.critical,
+        PieceMode.probe || PieceMode.burst => QueueClass.critical,
         PieceMode.startup => QueueClass.startup,
         PieceMode.normal => QueueClass.ordinary,
       };
@@ -34,12 +38,16 @@ enum PieceMode {
 /// ran out their first-byte timeout waiting inside URLSession. [laterCopies] orders the candidates for every copy
 /// after the first.
 final class CopyTargets {
-  CopyTargets(this.candidates, {required this._nodes, List<String> Function(List<String>)? laterCopies})
+  CopyTargets(this.candidates,
+      {required this._nodes, List<String> Function(List<String>)? laterCopies, this.orderFirst = false})
       : _laterCopies = laterCopies ?? ((left) => left);
 
   final List<String> candidates;
   final NodeStats _nodes;
   final List<String> Function(List<String>) _laterCopies;
+
+  /// The first copy is placed by `laterCopies` too: copies that start together all go by expected finish.
+  final bool orderFirst;
   final _taken = <int, String>{};
 
   String? url(int copy) => _taken[copy];
@@ -52,7 +60,7 @@ final class CopyTargets {
 
   String claim(int copy) {
     final left = _remaining();
-    final order = copy == 0 ? left : _laterCopies(left);
+    final order = copy == 0 && !orderFirst ? left : _laterCopies(left);
     final open = order.where((url) => !_taken.containsValue(url)).toList();
     final url = _nodes.beginFirstOpen(open.isNotEmpty ? open : left.isNotEmpty ? left : candidates);
     _taken[copy] = url;
@@ -81,6 +89,7 @@ final class PieceDownloader {
   /// a third once the backup is late too (see [hurryHedgeDue]); the first to finish wins and the others
   /// are cancelled. A copy skips a full node while another has room ([CopyTargets]). Bytes already
   /// received survive into the next try. [deadline] returns when playback needs the piece (monotonic ms).
+  /// In [PieceMode.burst] the first [burstWidth] copies of a group start together.
   Future<AttemptOutput> download({
     required ByteRange piece,
     required int index,
@@ -91,6 +100,8 @@ final class PieceDownloader {
     double Function()? deadline,
     bool Function()? hurry,
     CancelToken? cancel,
+    int burstWidth = 3,
+    RequestLane lane = RequestLane.any,
   }) async {
     final started = ctx.clock.nowMs();
     final kept = _Kept();
@@ -99,7 +110,11 @@ final class PieceDownloader {
       if (round > 0 && !await ctx.pauseBeforeRound(round, startedAt: started, cancel: cancel)) break;
       final candidates = PieceDownloader.candidates(preferred, resolver, pieceIndex: index, round: round);
       final limit = min(8, candidates.length);
-      final width = mode == PieceMode.probe ? limit : 3;
+      final width = switch (mode) {
+        PieceMode.probe => limit,
+        PieceMode.burst => max(3, burstWidth),
+        _ => 3,
+      };
       final tried = <String>{};
       while (tried.length < limit) {
         cancel?.throwIfCancelled();
@@ -118,11 +133,13 @@ final class PieceDownloader {
                   nodes: nodes,
                   delivered: (url) => resolver.bans?.hasDelivered(url) ?? true)
               : left,
+          orderFirst: mode == PieceMode.burst && whole.any(nodes.isKnown),
         );
         if (targets.candidates.isEmpty) break;
         final copies = [for (final _ in targets.candidates.take(width)) AttemptProgress()];
         try {
-          final output = await _race(targets, copies, piece, resolver, mode, priority, deadline, hurry, kept, cancel);
+          final output = await _race(
+              targets, copies, piece, resolver, mode, priority, deadline, hurry, kept, cancel, burstWidth, lane);
           ctx.auto?.delivered(piece.length);
           ctx.stats.delivered(piece.length);
           return output;
@@ -155,6 +172,8 @@ final class PieceDownloader {
     bool Function()? hurry,
     _Kept kept,
     CancelToken? cancel,
+    int burstWidth,
+    RequestLane lane,
   ) {
     final hasDeadline = deadline?.call().isFinite ?? false;
     final race = CancelToken(cancel);
@@ -175,7 +194,12 @@ final class PieceDownloader {
     Future<void> runCopy(int position) async {
       final progress = copies[position];
       try {
-        if (position > 0) {
+        if (mode == PieceMode.burst && position < burstWidth) {
+          // A burst's copies ask for their connections together, piece by piece. Started one after the other, the
+          // first copy of every head piece took a connection before any second copy asked, all of them on the node
+          // expected to be fastest, which had nothing of that part of the file.
+          await Future<void>.value();
+        } else if (position > 0) {
           final go = await _waitForCopy(
             position,
             previous: copies[position - 1],
@@ -204,6 +228,7 @@ final class PieceDownloader {
             copy: mode == PieceMode.probe ? 1 : position + 1,
             resumeBase: () => resumeFor(position),
             cancel: race,
+            lane: lane,
           );
           if (winner == null) {
             winner = output;
@@ -247,7 +272,8 @@ final class PieceDownloader {
 
   /// Whether copy [position] sends its request. In a hurry it goes once the copy before it is late or has
   /// failed. Otherwise the second copy follows [hedgeDue] or the delay, and a third waits for a hurry: when
-  /// the second fails first, the round's walk moves on instead.
+  /// the second fails first, the round's walk moves on instead. A burst's copies after those that started together
+  /// follow the startup rules.
   Future<bool> _waitForCopy(
     int position, {
     required AttemptProgress previous,
@@ -264,7 +290,9 @@ final class PieceDownloader {
   }) async {
     if (mode == PieceMode.probe) return true;
     final measured = ctx.meter.hedgeDelayMs(ctx.config.hedgeDelayMs);
-    final delay = mode == PieceMode.startup ? min(hasDeadline ? 200.0 : 250.0, measured) : measured;
+    final delay = mode == PieceMode.startup || mode == PieceMode.burst
+        ? min(hasDeadline ? 200.0 : 250.0, measured)
+        : measured;
     final waitStarted = ctx.clock.nowMs();
     while (true) {
       final hurried = hurry?.call() ?? false;

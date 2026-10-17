@@ -24,6 +24,7 @@ Widget playerStage(BuildContext context, PlaybackController controller,
       danmaku: controller.danmaku.timeline,
       danmakuEnabled: danmakuEnabled,
       onSeek: controller.userSeeked,
+      onHint: controller.seekHint,
     );
 
 /// Slice 1's whole app: the account the keychain login gave, a BV field, the player and its switches. KaiC checks

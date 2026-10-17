@@ -15,6 +15,7 @@ import 'engine_stats.dart';
 import 'meter.dart';
 import 'node_catalog.dart';
 import 'node_stats.dart';
+import 'playback_engine.dart';
 import 'resolver.dart';
 import 'ripper_config.dart';
 import 'transport.dart';
@@ -54,6 +55,120 @@ final class EngineContext {
     await cancellableSleep(min(2000, 500 * pow(2, round - 1)).toDouble(), cancel);
     return true;
   }
+
+  int _audioReads = 0;
+
+  /// Video requests waiting for or holding a pool permit, under [RipperConfig.audioFirst].
+  int _videoInPool = 0;
+  final _videoGate = <_GateWaiter>[];
+
+  /// An audio player read began waiting for bytes; until it ends, video keeps [RipperConfig.audioReserve]
+  /// connections free for it.
+  void audioReadBegan() => _audioReads += 1;
+
+  void audioReadEnded() {
+    if (_audioReads > 0) _audioReads -= 1;
+    _openVideoGate();
+  }
+
+  int get videoInPool => _videoInPool;
+  int get videoGated => _videoGate.length;
+
+  /// A connection permit for one request. [lane] adds its priority boost and class floor, and under
+  /// [RipperConfig.audioFirst] a video request first waits outside the pool while an audio read waits and video
+  /// already holds or waits for all but the connections kept for audio. Give the permit back with [released].
+  Future<Permit> acquire({
+    required double priority,
+    required QueueClass queueClass,
+    double Function()? deadline,
+    CancelToken? cancel,
+    RequestLane lane = RequestLane.any,
+  }) async {
+    final floor = lane.minClass;
+    final effectiveClass = floor != null && floor.index < queueClass.index ? floor : queueClass;
+    final gated = _gates(lane);
+    if (gated) await _enterVideo(priority + lane.boost, effectiveClass, cancel);
+    try {
+      return await pool.acquire(
+          priority: priority + lane.boost, queueClass: effectiveClass, deadline: deadline, cancel: cancel);
+    } catch (_) {
+      if (gated) _leaveVideo();
+      rethrow;
+    }
+  }
+
+  void released(RequestLane lane) {
+    if (_gates(lane)) _leaveVideo();
+  }
+
+  bool _gates(RequestLane lane) => config.audioFirst && lane.track == TrackKind.video;
+
+  bool get _videoMayEnter => _audioReads == 0 || _videoInPool < max(1, pool.limit - config.audioReserve);
+
+  Future<void> _enterVideo(double rank, QueueClass queueClass, CancelToken? cancel) async {
+    cancel?.throwIfCancelled();
+    if (_videoGate.isEmpty && _videoMayEnter) {
+      _videoInPool += 1;
+      return;
+    }
+    final waiter = _GateWaiter(rank, queueClass);
+    _videoGate.add(waiter);
+    final remove = cancel?.onCancel(() {
+      if (_videoGate.remove(waiter)) waiter.completer.completeError(const CancelledException());
+    });
+    // The pool's limit can have grown since the gate last opened.
+    _openVideoGate();
+    try {
+      await waiter.completer.future;
+    } finally {
+      remove?.call();
+    }
+  }
+
+  void _leaveVideo() {
+    if (_videoInPool > 0) _videoInPool -= 1;
+    _openVideoGate();
+  }
+
+  /// In the pool's own order: class first, then rank, then arrival.
+  void _openVideoGate() {
+    while (_videoGate.isNotEmpty && _videoMayEnter) {
+      var best = 0;
+      for (var index = 1; index < _videoGate.length; index++) {
+        final candidate = _videoGate[index];
+        final current = _videoGate[best];
+        if (candidate.queueClass.index < current.queueClass.index ||
+            (candidate.queueClass == current.queueClass && candidate.rank > current.rank)) {
+          best = index;
+        }
+      }
+      _videoInPool += 1;
+      _videoGate.removeAt(best).completer.complete();
+    }
+  }
+}
+
+final class _GateWaiter {
+  _GateWaiter(this.rank, this.queueClass);
+
+  final double rank;
+  final QueueClass queueClass;
+  final completer = Completer<void>();
+}
+
+/// Which track a request serves and how it ranks against the other track's ([RipperConfig.audioFirst]).
+final class RequestLane {
+  const RequestLane({this.track, this.boost = 0, this.minClass});
+
+  static const any = RequestLane();
+
+  final TrackKind? track;
+
+  /// Added to the request's pool priority.
+  final double boost;
+
+  /// The request queues in at least this class.
+  final QueueClass? minClass;
 }
 
 /// Throws [CancelledException] as soon as [cancel] fires, and stops the timer with it.
@@ -153,6 +268,7 @@ final class AttemptRunner {
     int copy = 1,
     Prefix Function()? resumeBase,
     CancelToken? cancel,
+    RequestLane lane = RequestLane.any,
   }) =>
       run(
         claim: () {
@@ -168,6 +284,7 @@ final class AttemptRunner {
         copy: copy,
         resumeBase: resumeBase,
         cancel: cancel,
+        lane: lane,
       );
 
   /// One request for [piece] (or its missing tail): waits for a connection, then [claim] picks the URL and counts the
@@ -185,9 +302,10 @@ final class AttemptRunner {
     int copy = 1,
     Prefix Function()? resumeBase,
     CancelToken? cancel,
+    RequestLane lane = RequestLane.any,
   }) async {
     final permit =
-        await ctx.pool.acquire(priority: priority, queueClass: queueClass, deadline: deadline, cancel: cancel);
+        await ctx.acquire(priority: priority, queueClass: queueClass, deadline: deadline, cancel: cancel, lane: lane);
     try {
       cancel?.throwIfCancelled();
       final url = claim();
@@ -203,6 +321,7 @@ final class AttemptRunner {
       }
     } finally {
       permit.release();
+      ctx.released(lane);
     }
   }
 

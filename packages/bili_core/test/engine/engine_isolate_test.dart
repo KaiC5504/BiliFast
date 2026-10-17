@@ -335,6 +335,90 @@ void main() {
       expect(report.message, isNotEmpty);
     });
   });
+
+  test('by default the engine\'s debug events stay in its isolate', () async {
+    final source = await engine.prepare(request(PlaybackMode.btr));
+    await _get(source.video, range: 'bytes=0-${video.bytes.length - 1}');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(log.events.where((event) => event.cat == LogCategory.engine && event.level == LogLevel.debug), isEmpty);
+  });
+
+  // BiliFast's own startup and seek speed-ups, as the app runs them.
+  group('startup and seek', () {
+    late IsolatePlaybackEngine fast;
+
+    setUp(() async {
+      fast = await IsolatePlaybackEngine.start(
+        transportFactory: _ioTransport,
+        options: EngineOptions(
+          nodeMode:
+              CustomNodes([NodeAddress('127.0.0.1', port: first.port), NodeAddress('127.0.0.1', port: second.port)]),
+          policy: MediaURLPolicy.any,
+          config: const RipperConfig(
+            fixedConcurrency: 8,
+            pieceRounds: 2,
+            firstByteTimeoutMs: 2000,
+            primeStart: true,
+            streamAdopted: true,
+            seekBurst: true,
+            audioFirst: true,
+          ),
+          statsInterval: const Duration(milliseconds: 200),
+          forwardDebugLogs: true,
+        ),
+      );
+    });
+
+    tearDown(() => fast.dispose());
+
+    Iterable<LogEvent> named(String msg) =>
+        log.events.where((event) => event.cat == LogCategory.engine && event.msg == msg);
+    int done(String msg) => named(msg).where((event) => event.f['outcome'] == const LogString('done')).length;
+
+    test('prepare primes both tracks at the start position, and the player\'s read takes it over', () async {
+      final wanted = request(PlaybackMode.btr);
+      final source = await fast.prepare(PlaybackRequest(
+          choice: wanted.choice, mode: wanted.mode, mediaHeaders: wanted.mediaHeaders, startSeconds: 4.5));
+      expect(await _eventually(() => done('prime') == 2), isTrue);
+      final primes = named('prime').toList();
+      expect(primes.map((event) => event.f['track']).toSet(), {const LogString('video'), const LogString('audio')});
+      expect(primes.every((event) => event.f['segment'] == const LogInt(2)), isTrue, reason: '4.5 s is in segment 2');
+      final start = video.index.end + 1 + 2 * _segmentBytes;
+      final range = '$start-${start + _segmentBytes - 1}';
+      final segment = await _get(source.video, range: 'bytes=$range');
+      expect(segment.body, Uint8List.sublistView(video.bytes, start, start + _segmentBytes));
+      expect(
+          await _eventually(() => named('read').any((event) =>
+              event.f['range'] == LogString(range) &&
+              (event.f['source'] == const LogString('memory') || event.f['source'] == const LogString('prime')))),
+          isTrue,
+          reason: 'the primed segment came from memory');
+    });
+
+    test('a hint starts both tracks where the finger rests', () async {
+      final source = await fast.prepare(request(PlaybackMode.btr));
+      fast.hint(source.token, 9);
+      expect(await _eventually(() => done('hint') == 2), isTrue);
+      expect(named('hint').every((event) => event.f['segment'] == const LogInt(4)), isTrue);
+    });
+
+    test('preconnect opens a connection to every node of the playurl', () async {
+      final before = (first: first.requests, second: second.requests);
+      fast.preconnect([request(PlaybackMode.btr).choice.video.baseURL]);
+      expect(await _eventually(() => named('preconnect').isNotEmpty), isTrue);
+      final event = named('preconnect').single;
+      expect(event.f['nodes'], const LogInt(2));
+      expect(event.f['answered'], const LogInt(2));
+      expect(first.requests, before.first + 1);
+      expect(second.requests, before.second + 1);
+    });
+
+    test('the engine\'s debug events reach this isolate when asked', () async {
+      final source = await fast.prepare(request(PlaybackMode.btr));
+      await _get(source.video, range: 'bytes=0-${video.bytes.length - 1}');
+      expect(await _eventually(() => named('piece').any((event) => event.level == LogLevel.debug)), isTrue);
+    });
+  });
 }
 
 Future<bool> _eventually(bool Function() condition, {double seconds = 3}) async {

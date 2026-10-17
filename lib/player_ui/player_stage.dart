@@ -28,6 +28,7 @@ class PlayerStage extends StatefulWidget {
     this.danmaku,
     this.danmakuEnabled = true,
     this.onSeek,
+    this.onHint,
   });
 
   final BiliPlayer player;
@@ -42,8 +43,13 @@ class PlayerStage extends StatefulWidget {
   final DanmakuTimeline? danmaku;
   final bool danmakuEnabled;
 
-  /// A seek the user made (drag on the bar), after the player was told; the controller times it.
-  final void Function(double seconds)? onSeek;
+  /// A seek the user made on the bar, after the player was told; the controller times it. Bar seeks are not
+  /// [precise]: the player starts at the keyframe nearest the spot, without decoding its way up to it.
+  final void Function(double seconds, {required bool precise})? onSeek;
+
+  /// The finger rests on the bar while dragging, so the engine can start loading there; null once the drag
+  /// ended without a seek.
+  final void Function(double? seconds)? onHint;
 
   @override
   State<PlayerStage> createState() => _PlayerStageState();
@@ -65,6 +71,9 @@ class _PlayerStageState extends State<PlayerStage> {
   bool _controlsVisible = true;
   Timer? _hideTimer;
   int _seekCount = 0;
+
+  /// A hint went out during this drag.
+  bool _hinted = false;
 
   /// Where the bar aims while it is dragged, otherwise the playhead.
   double get _position => _scrubbing.value ?? _readout.seconds.value;
@@ -158,18 +167,27 @@ class _PlayerStageState extends State<PlayerStage> {
     _scrubbing.value = seconds;
   }
 
+  void _hint(double seconds) {
+    if (widget.duration.value <= 0 || widget.onHint == null) return;
+    _hinted = true;
+    widget.onHint?.call(seconds);
+  }
+
   void _cancelScrub() {
     _scrubbing.value = null;
+    if (_hinted) widget.onHint?.call(null);
+    _hinted = false;
     if (_controlsVisible) _scheduleHide();
   }
 
   Future<void> _commit(double seconds) async {
+    _hinted = false;
     if (widget.duration.value <= 0) return;
     final count = ++_seekCount;
     _scrubbing.value = seconds;
-    final seeked = widget.player.seek(seconds, precise: true);
-    widget.onSeek?.call(seconds);
-    widget.clock.jump(seconds);
+    final seeked = widget.player.seek(seconds, precise: false);
+    widget.onSeek?.call(seconds, precise: false);
+    widget.clock.jump(seconds, precise: false);
     _readout.refresh();
     try {
       await seeked;
@@ -279,6 +297,7 @@ class _PlayerStageState extends State<PlayerStage> {
                           onScrub: _scrub,
                           onCommit: _commit,
                           onCancel: _cancelScrub,
+                          onRest: _hint,
                         ),
                       ),
                       IgnorePointer(

@@ -26,7 +26,7 @@ RangeTransport createCupertinoTransport() {
 void _logFallback(Object error) =>
     Logger.shared.warn(LogCategory.engine, 'URLSession unusable in the engine isolate, using dart:io', {'error': '$error'});
 
-final class _FallbackTransport implements RangeTransport {
+final class _FallbackTransport implements RangeTransport, WarmableTransport {
   _FallbackTransport(this._primary, this._headers);
 
   CupertinoRangeTransport? _primary;
@@ -68,6 +68,10 @@ final class _FallbackTransport implements RangeTransport {
     return _fallback.fetch(url, range, cancel: cancel);
   }
 
+  /// Through [fetch], so a URLSession that fails here hands over to dart:io as a real request would.
+  @override
+  Future<bool> warm(Uri url) => warmByFetch(this, url);
+
   @override
   void close() {
     _primary?.close();
@@ -78,7 +82,7 @@ final class _FallbackTransport implements RangeTransport {
 /// Port of URLSessionRangeTransport.swift: an ephemeral session, no cache, no cookies, the body streamed from
 /// the task's delegate. Cancelling ends the call at once rather than when URLSession reports the cancellation,
 /// so a cancelled hedge copy gives its connection permit back immediately.
-final class CupertinoRangeTransport implements RangeTransport {
+final class CupertinoRangeTransport implements RangeTransport, WarmableTransport {
   CupertinoRangeTransport({this.headers = const {}, int maxConnectionsPerHost = 8})
       : connectionsPerHost = maxConnectionsPerHost {
     final configuration = URLSessionConfiguration.ephemeralSessionConfiguration()
@@ -174,6 +178,11 @@ final class CupertinoRangeTransport implements RangeTransport {
     task.resume();
     return result.future;
   }
+
+  /// URLSession keeps the connection for the session's next request to the host: on HTTP/2 that one connection
+  /// carries them all.
+  @override
+  Future<bool> warm(Uri url) => warmByFetch(this, url);
 
   @override
   void close() {
