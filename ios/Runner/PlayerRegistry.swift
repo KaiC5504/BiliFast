@@ -73,6 +73,8 @@ final class NativePlayer {
   /// Set by a load or a seek until playback starts; while set, a wait to minimize stalls ends as soon as
   /// `startAheadSeconds` are loaded (see `startIfBuffered`).
   private var starting = false
+  /// Seeks AVPlayer has not finished: until they land, `.playing` is the old position's and must not end the start.
+  private var pendingSeeks = 0
   private var status: NativePlayerStatus?
   private var reportedRate: Double?
   private var reportedDuration: Double?
@@ -100,6 +102,7 @@ final class NativePlayer {
     failed = false
     played = false
     starting = true
+    pendingSeeks = 0
     wantsPlay = autoplay
     reportedDuration = nil
     reportedSize = nil
@@ -147,13 +150,14 @@ final class NativePlayer {
     guard item != nil else { return }
     ended = false
     starting = true
+    pendingSeeks += 1
+    let current = generation
     let target = CMTime(seconds: max(0, seconds), preferredTimescale: 600)
-    if precise {
-      player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
-    } else {
-      // Bilibili's DASH has one keyframe per 5 s segment. Landing on the one that starts the target's segment
-      // decodes at once from the segment the engine already fetched for the hint or the seek.
-      player.seek(to: target, toleranceBefore: Self.keyframeTolerance, toleranceAfter: .zero)
+    // Bilibili's DASH has one keyframe per 5 s segment. Landing on the one that starts the target's segment
+    // decodes at once from the segment the engine already fetched for the hint or the seek.
+    let before = precise ? CMTime.zero : Self.keyframeTolerance
+    player.seek(to: target, toleranceBefore: before, toleranceAfter: .zero) { [weak self] _ in
+      onMainActor { self?.seekLanded(current) }
     }
     updateStatus()
   }
@@ -214,6 +218,7 @@ final class NativePlayer {
 
   func dispose() {
     generation += 1
+    pendingSeeks = 0
     wantsPlay = false
     player.pause()
     detachItem()
@@ -243,6 +248,11 @@ final class NativePlayer {
       },
       player.observe(\.rate, options: [.new]) { [weak self] _, _ in
         onMainActor { self?.rateChanged() }
+      },
+      // At the start of an item the wait often begins as `.evaluatingBufferingRate` and changes reason while
+      // `timeControlStatus` stays the same.
+      player.observe(\.reasonForWaitingToPlay, options: [.new]) { [weak self] _, _ in
+        onMainActor { self?.startIfBuffered() }
       },
     ]
   }
@@ -297,6 +307,12 @@ final class NativePlayer {
     item = nil
   }
 
+  private func seekLanded(_ current: Int) {
+    guard current == generation else { return }
+    pendingSeeks = max(0, pendingSeeks - 1)
+    startIfBuffered()
+  }
+
   private func startSeekFinished(_ current: Int) {
     guard current == generation, wantsPlay else { return }
     player.play()
@@ -307,16 +323,17 @@ final class NativePlayer {
   /// segment: phone logs had it holding up to 7.7 s with the first segments of both tracks already in, while the
   /// engine keeps fetching ahead much faster than playback.
   static let startAheadSeconds = 3.0
-  static let keyframeTolerance = CMTime(seconds: 5, preferredTimescale: 600)
+  static let keyframeTolerance = CMTime(seconds: 6, preferredTimescale: 600)
 
   private func startIfBuffered() {
     guard starting, let item, player.currentItem === item, item.status == .readyToPlay else { return }
     if player.timeControlStatus == .playing {
-      starting = false
+      if pendingSeeks == 0 { starting = false }
       return
     }
+    let reason = player.reasonForWaitingToPlay
     guard wantsPlay, player.timeControlStatus == .waitingToPlayAtSpecifiedRate,
-          player.reasonForWaitingToPlay == .toMinimizeStalls else { return }
+          reason == .toMinimizeStalls || reason == .evaluatingBufferingRate else { return }
     let now = item.currentTime().seconds
     let duration = item.duration.seconds
     guard now.isFinite else { return }
@@ -325,7 +342,7 @@ final class NativePlayer {
     let needed = duration.isFinite ? min(now + Self.startAheadSeconds, duration - 0.1) : now + Self.startAheadSeconds
     guard loadedEnd >= needed else { return }
     starting = false
-    log("start without waiting", ["at": now, "ahead": loadedEnd - now])
+    log("start without waiting", ["at": now, "ahead": loadedEnd - now, "reason": reason?.rawValue ?? ""])
     player.playImmediately(atRate: player.defaultRate > 0 ? player.defaultRate : 1)
   }
 

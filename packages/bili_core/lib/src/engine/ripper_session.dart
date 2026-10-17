@@ -572,10 +572,18 @@ final class RipperSession {
     );
     final entry = _retains ? _cache[key] : _cache.remove(key);
     final prefetch = entry == null ? _inflight.remove(key) : null;
+    final hinted = _hints[track] == key;
+    if (hinted) _hints.remove(track);
     if (entry != null) {
       request.memory = entry.bytes;
       if (_retains) {
         _cache[key] = _CacheEntry(entry.bytes, entry.endTime, startTime: entry.startTime, served: true);
+      }
+      // A hint that finished before the finger lifted: the seek still leaves the old position behind.
+      if (hinted && request.seek && !request.firstOfTrack) {
+        _seeks += 1;
+        _dropPrefetch(track);
+        _ctx.auto?.newSession();
       }
     } else if (prefetch != null) {
       // Taken out of `_inflight`, so a seek cannot cancel it and its bytes do not also land in the cache.
@@ -672,6 +680,7 @@ final class RipperSession {
       cancel: cancel,
       burst: startup && config.seekBurst,
       lane: lane,
+      probation: !player,
     );
   }
 

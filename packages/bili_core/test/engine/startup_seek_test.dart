@@ -554,6 +554,27 @@ void main() {
       expect(session.isCached(TrackKind.audio, all[1].range), isTrue, reason: 'until audio seeks too');
     });
 
+    test('a seek onto a hint that already finished leaves the old prefetch too', () async {
+      final cdn = _Recorder(SimCDN(size: _size));
+      final config = TestEngine.config.copyWith(prefetchVideoBytes: 2 * _segment, prefetchAudioBytes: 2 * _segment);
+      final session = _session(cdn, config: config, tracks: const [TrackKind.video, TrackKind.audio], mode: _oneNode);
+      addTearDown(session.close);
+      await _read(session, all[0].range);
+      await _until(() => session.prefetchesRunning(TrackKind.video) == 0);
+      final seeks = session.seekCount;
+      final generation = session.seekGeneration(TrackKind.video);
+
+      session.hint(all[9].startTime + 0.5);
+      await _until(() => session.isCached(TrackKind.video, all[9].range));
+      expect(session.isCached(TrackKind.video, all[1].range), isTrue);
+
+      expect(await _read(session, all[9].range), _bytes(cdn.cdn, all[9].range));
+      expect(cdn.requestedBytes(all[9].range), _segment, reason: 'downloaded once, by the hint');
+      expect(session.seekCount, seeks + 1);
+      expect(session.seekGeneration(TrackKind.video), generation + 1);
+      expect(session.isCached(TrackKind.video, all[1].range), isFalse, reason: 'the seek left the old position');
+    });
+
     test('a newer hint cancels the older one, and null cancels it', () async {
       final cdn = _Recorder(SimCDN(size: _size))..open = false;
       final session = _session(cdn, tracks: const [TrackKind.video, TrackKind.audio]);

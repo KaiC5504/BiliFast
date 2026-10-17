@@ -100,7 +100,8 @@ final class RangeDownloader {
   /// need this range: it is read once here, to size and place the pieces, and again by each piece while it
   /// waits to send another copy. [deadline] returns when playback needs the range, as a monotonic time in ms;
   /// it is re-read on every pass of the connection queue and by each piece's backup copy. A startup range with
-  /// [burst] races its head first (`RipperConfig.seekBurst`); [lane] ranks every request (`RequestLane`).
+  /// [burst] races its head first (`RipperConfig.seekBurst`); [lane] ranks every request (`RequestLane`). Only a
+  /// range with [probation] (prefetch) may give a banned node its trial copy.
   Future<void> stream(
     ByteRange range,
     Resolver resolver, {
@@ -113,6 +114,7 @@ final class RangeDownloader {
     CancelToken? cancel,
     bool burst = false,
     RequestLane lane = RequestLane.any,
+    bool probation = false,
   }) async {
     final hurryCheck = ctx.config.hurry ? hurry : null;
     final hurried = hurryCheck?.call() ?? false;
@@ -190,6 +192,7 @@ final class RangeDownloader {
           cancel: token,
           lane: lane,
           holdingUp: run.holdingUp,
+          probation: probation,
         ),
       );
     }

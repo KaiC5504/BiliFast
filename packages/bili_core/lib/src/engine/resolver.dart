@@ -166,7 +166,7 @@ final class Resolver {
   /// measure; afterwards measured nodes carry the work, fastest first, and one unmeasured or
   /// stale node rides along per range as exploration. With priors, remembered nodes count as
   /// measured and the warm-up is skipped. A [hurried] range explores nothing when [exploreInHurry]
-  /// is off: it goes to the known nodes, unless none is known.
+  /// is off: it goes to the known nodes once two are known (one alone would carry every piece).
   List<String> rangeCandidates({bool hurried = false}) {
     final list = _usable();
     final now = _clock.nowMs();
@@ -176,7 +176,10 @@ final class Resolver {
     final width = min(_mediaRangeCount == 0 ? pool.length : 6, pool.length);
     if (hurried && !exploreInHurry) {
       final known = pool.where((url) => _known(url, now)).take(width).toList();
-      if (known.isNotEmpty) return known;
+      if (known.length >= 2) {
+        _mediaRangeCount += 1;
+        return known;
+      }
     }
     final remembered = !priors.isEmpty && pool.any((url) => _priorBps(url) > 0);
     List<String> selected;

@@ -126,6 +126,7 @@ final class PieceDownloader {
     int burstWidth = 3,
     RequestLane lane = RequestLane.any,
     bool Function()? holdingUp,
+    bool probation = false,
   }) async {
     final started = ctx.clock.nowMs();
     final kept = _Kept();
@@ -146,14 +147,15 @@ final class PieceDownloader {
         final allowed = untried.where(resolver.allows).toList();
         final whole = allowed.where((url) => !resolver.avoids(url, piece)).toList();
         final nodes = ctx.nodes;
-        // Only prefetch gives a banned node its trial; a player read can't afford it.
-        final probation = mode == PieceMode.normal && round == 0 && tried.isEmpty
+        final pool = whole.isNotEmpty ? whole : (allowed.isNotEmpty ? allowed : untried);
+        // Prefetch only: a player read can't afford the trial. The turn is taken only when a second copy can run.
+        final trial = probation && mode == PieceMode.normal && round == 0 && tried.isEmpty && pool.length > 1
             ? resolver.probationCopy(piece, hurried: hurry?.call() ?? false)
             : null;
         // BTR PR 11 `pick`: by speed alone a backup went to cosov, 661-673 ms to its first byte, while Akamai
         // answered in 15-24 ms (phone, 2026-10-17).
         final targets = CopyTargets(
-          whole.isNotEmpty ? whole : (allowed.isNotEmpty ? allowed : untried),
+          pool,
           nodes: nodes,
           laterCopies: (left) => hurry?.call() ?? false
               ? HurryPlacement.byExpectedFinish(
@@ -163,7 +165,7 @@ final class PieceDownloader {
                   delivered: (url) => resolver.bans?.hasDelivered(url) ?? true,
                 )
               : left,
-          probation: probation,
+          probation: trial,
           orderFirst: mode == PieceMode.burst && whole.any(nodes.isKnown),
         );
         if (targets.candidates.isEmpty) break;
@@ -183,7 +185,7 @@ final class PieceDownloader {
             burstWidth,
             lane,
             holdingUp: holdingUp,
-            probation: probation != null,
+            probation: trial != null,
           );
           ctx.auto?.delivered(piece.length);
           ctx.stats.delivered(piece.length);
@@ -195,7 +197,7 @@ final class PieceDownloader {
         // A copy that never sent its request leaves its node to a later group of this round.
         final used = [
           for (var copy = 0; copy < copies.length; copy++)
-            if (copies[copy].started) ?targets.url(copy),
+            if (copies[copy].started && targets.url(copy) != trial) ?targets.url(copy),
         ];
         tried.addAll(used.isEmpty ? [targets.candidates.first] : used);
       }
