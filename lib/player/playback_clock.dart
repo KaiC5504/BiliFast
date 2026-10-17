@@ -58,10 +58,17 @@ final class PlaybackClock {
 
   /// A seek moves the playhead before the player's next reading.
   void jump(double seconds) {
-    _seconds = seconds;
-    _atMs = _clock.nowMs();
+    reset(seconds);
     _jumpTarget = seconds;
     _jumpAtMs = _atMs;
+  }
+
+  /// A new item starts at [seconds]. Unlike [jump], every reading counts at once: the player drops the old
+  /// item's events itself.
+  void reset(double seconds) {
+    _seconds = seconds;
+    _atMs = _clock.nowMs();
+    _jumpTarget = null;
   }
 
   void _rebase() {

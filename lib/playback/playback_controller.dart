@@ -549,7 +549,7 @@ class PlaybackController extends ChangeNotifier {
     _itemPlayed = false;
     // Loaded paused, the first frame waits on the user: that wait is not startup time.
     if (!_playWhenLoaded && !_sawFirstFrame) _firstFrameTimed = false;
-    clock.jump(time);
+    clock.reset(time);
     _awaitingLoad = true;
     await player.load(PlayerSource(
       master: source.master,
