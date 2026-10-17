@@ -156,6 +156,20 @@ final class EngineSnapshot {
   }
 }
 
+/// A BTR playback's media request failed after every retry (`RipperSession.onFatal`): the app refreshes the URLs
+/// or falls back to direct mode. Requests that fail together are reported once.
+final class FatalReport {
+  const FatalReport({required this.token, required this.message});
+
+  final String token;
+
+  /// The error, as text: it crosses the isolate boundary.
+  final String message;
+
+  @override
+  String toString() => 'FatalReport($token: $message)';
+}
+
 /// The engine and the local server, running in their own isolate so piece handling never touches the
 /// UI thread that draws danmaku.
 abstract interface class PlaybackEngine {
@@ -175,6 +189,24 @@ abstract interface class PlaybackEngine {
   Future<void> replaceUrls(String token, TrackKind track, {required String primary, required List<String> backups});
 
   Future<void> networkChanged({required bool interfaceChanged});
+
+  // These four are fire and forget, so four updates a second cost no round trip; after dispose they are dropped.
+
+  /// The playhead and the player's rate (0 while paused), about four times a second while a BTR source plays and
+  /// after every jump. Deadlines, hurry and prefetch follow it, and cached segments it left behind are dropped.
+  void updatePlayhead(String token, {required double seconds, required double rate});
+
+  /// Seconds buffered ahead of the playhead and whether the player is playing, for the automatic connection count.
+  void reportBuffer(String token, {required double aheadSeconds, required bool playing});
+
+  /// The player stalled while playing.
+  void reportStall(String token);
+
+  /// Memory pressure: every BTR playback drops its cached and still-downloading prefetched segments.
+  void dropCache();
+
+  /// Ends when the engine does.
+  Stream<FatalReport> get fatals;
 
   /// Probes the local server and binds it again if it stopped answering. True when it had to restart:
   /// every source prepared before then must be prepared again.

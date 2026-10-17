@@ -55,6 +55,7 @@ final class _CdnNode {
   final HttpServer _server;
   final Map<String, Uint8List> files;
   int requests = 0;
+  bool _stopped = false;
 
   int get port => _server.port;
 
@@ -77,7 +78,11 @@ final class _CdnNode {
     await response.close();
   }
 
-  Future<void> stop() => _server.close(force: true);
+  Future<void> stop() async {
+    if (_stopped) return;
+    _stopped = true;
+    await _server.close(force: true);
+  }
 }
 
 DashStream _stream(_CdnNode node, String path, _Track track, {required int id, required String codecs}) => DashStream(
@@ -255,6 +260,80 @@ void main() {
     await engine.dispose();
     await expectLater(engine.prepare(request(PlaybackMode.btr)), throwsA(const RipperError(RipperErrorKind.closed)));
     await expectLater(engine.ensureServing(), throwsA(const RipperError(RipperErrorKind.closed)));
+    // Fire-and-forget calls have nobody to fail to; they are dropped.
+    engine
+      ..updatePlayhead('gone', seconds: 1, rate: 1)
+      ..reportBuffer('gone', aheadSeconds: 1, playing: true)
+      ..reportStall('gone')
+      ..dropCache();
+    expect(await engine.fatals.isEmpty, isTrue, reason: 'the fatal reports end with the engine');
+  });
+
+  group('playhead, buffer, stalls and fatal reports', () {
+    late List<EngineSnapshot> snapshots;
+    late PreparedSource source;
+
+    /// The video track's media segment [index], as the player asks for it.
+    Future<void> segment(int index) {
+      final start = video.index.end + 1 + index * _segmentBytes;
+      return _get(source.video, range: 'bytes=$start-${start + _segmentBytes - 1}');
+    }
+
+    /// Segment 0 is the player's; the other five arrive as prefetch and wait in the cache.
+    Future<void> playFirstAndPrefetch() async {
+      final subscription = engine.stats.listen(snapshots.add);
+      addTearDown(subscription.cancel);
+      source = await engine.prepare(request(PlaybackMode.btr));
+      await segment(0);
+      expect(await _eventually(() => snapshots.any((snapshot) => snapshot.deliveredBytes >= _segments * _segmentBytes)),
+          isTrue);
+    }
+
+    Future<EngineSnapshot> snapshotWithMisses(int misses) async {
+      expect(await _eventually(() => snapshots.lastOrNull?.cacheMisses == misses), isTrue);
+      return snapshots.last;
+    }
+
+    setUp(() => snapshots = []);
+
+    test('a playhead update reaches the session without a reply: segments it left behind leave the cache', () async {
+      await playFirstAndPrefetch();
+      await segment(1);
+      engine.updatePlayhead(source.token, seconds: 100, rate: 1);
+      // Commands are handled in order, so the update was applied once this answer is in.
+      expect(await engine.ensureServing(), isFalse);
+      await segment(2);
+      final snapshot = await snapshotWithMisses(2);
+      expect(snapshot.cacheHits, 1, reason: 'segment 1 came from the cache; segment 2 was dropped and fetched again');
+    });
+
+    test('dropCache empties the cache; buffer and stall reports are taken without a reply', () async {
+      await playFirstAndPrefetch();
+      engine
+        ..reportBuffer(source.token, aheadSeconds: 12, playing: true)
+        ..reportStall(source.token)
+        ..reportStall('unknown')
+        ..dropCache();
+      expect(await engine.ensureServing(), isFalse);
+      await segment(1);
+      final snapshot = await snapshotWithMisses(2);
+      expect(snapshot.cacheHits, 0);
+    });
+
+    test('a BTR read that fails after every retry is reported with its token', () async {
+      source = await engine.prepare(request(PlaybackMode.btr));
+      final fatal = engine.fatals.first.timeout(const Duration(seconds: 10));
+      await first.stop();
+      await second.stop();
+      try {
+        await segment(3);
+      } on IOException {
+        // The local server breaks the response off.
+      }
+      final report = await fatal;
+      expect(report.token, source.token);
+      expect(report.message, isNotEmpty);
+    });
   });
 }
 

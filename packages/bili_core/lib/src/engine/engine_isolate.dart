@@ -6,6 +6,7 @@ import '../devlog/logger.dart';
 import '../local_http/local_server.dart';
 import '../local_http/playback_router.dart';
 import '../shared/clock.dart';
+import 'auto_concurrency.dart';
 import 'cancel.dart';
 import 'log_forwarding.dart';
 import 'node_catalog.dart';
@@ -71,9 +72,13 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
   int _nextId = 0;
   bool _closed = false;
   final _stats = StreamController<EngineSnapshot>.broadcast();
+  final _fatals = StreamController<FatalReport>.broadcast();
 
   @override
   Stream<EngineSnapshot> get stats => _stats.stream;
+
+  @override
+  Stream<FatalReport> get fatals => _fatals.stream;
 
   @override
   Future<PreparedSource> prepare(PlaybackRequest request) async =>
@@ -91,6 +96,20 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
       _call((id) => _NetworkChanged(id, interfaceChanged));
 
   @override
+  void updatePlayhead(String token, {required double seconds, required double rate}) =>
+      _notify(_Playhead(token, seconds, rate));
+
+  @override
+  void reportBuffer(String token, {required double aheadSeconds, required bool playing}) =>
+      _notify(_Buffer(token, aheadSeconds, playing));
+
+  @override
+  void reportStall(String token) => _notify(_Stall(token));
+
+  @override
+  void dropCache() => _notify(const _DropCache());
+
+  @override
   Future<bool> ensureServing() async => await _call(_EnsureServing.new) as bool;
 
   /// For tests and the developer menu: stops the local server's listener, as iOS does to a suspended app,
@@ -106,6 +125,13 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
       // Shut down below either way.
     }
     _shutdown();
+  }
+
+  /// Sent on the commands port too, so a notice is handled before any command sent after it.
+  void _notify(_Notice notice) {
+    final commands = _commands;
+    if (_closed || commands == null) return;
+    commands.send(notice);
   }
 
   Future<Object?> _call(_Command Function(int id) make) {
@@ -135,6 +161,8 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
         }
       case _Stats(:final snapshot):
         if (!_stats.isClosed) _stats.add(snapshot);
+      case final FatalReport report:
+        if (!_fatals.isClosed) _fatals.add(report);
       case _Logs(:final events):
         ForwardingLogSink.replay(events);
       case [final error, final stack]:
@@ -157,6 +185,7 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
     _isolate?.kill(priority: Isolate.immediate);
     _isolate = null;
     if (!_stats.isClosed) _stats.close();
+    if (!_fatals.isClosed) _fatals.close();
   }
 }
 
@@ -211,6 +240,37 @@ final class _StopServer extends _Command {
 
 final class _Dispose extends _Command {
   const _Dispose(super.id);
+}
+
+/// Fire and forget: no id, no reply.
+sealed class _Notice {
+  const _Notice();
+}
+
+final class _Playhead extends _Notice {
+  const _Playhead(this.token, this.seconds, this.rate);
+
+  final String token;
+  final double seconds;
+  final double rate;
+}
+
+final class _Buffer extends _Notice {
+  const _Buffer(this.token, this.aheadSeconds, this.playing);
+
+  final String token;
+  final double aheadSeconds;
+  final bool playing;
+}
+
+final class _Stall extends _Notice {
+  const _Stall(this.token);
+
+  final String token;
+}
+
+final class _DropCache extends _Notice {
+  const _DropCache();
 }
 
 final class _Ready {
@@ -273,7 +333,12 @@ Future<void> _engineMain(_Boot boot) async {
   final commands = ReceivePort('engine commands');
   host.onDisposed = commands.close;
   commands.listen((message) {
-    if (message is _Command) unawaited(host.handle(message));
+    switch (message) {
+      case final _Command command:
+        unawaited(host.handle(command));
+      case final _Notice notice:
+        host.notice(notice);
+    }
   });
   boot.events.send(_Ready(commands.sendPort));
 }
@@ -288,6 +353,9 @@ final class _EngineHost {
   late final RangeTransport _transport;
   RangeTransport? _directTransport;
   final _root = CancelToken();
+
+  /// The connection count is app-wide, as in Swift: every session of this engine follows it.
+  final _auto = AutoConcurrency();
   final _sessions = <String, RipperSession>{};
   final _directTokens = <String>{};
   final _lastDelivered = <String, int>{};
@@ -329,6 +397,22 @@ final class _EngineHost {
     }
   }
 
+  void notice(_Notice notice) {
+    if (_disposed) return;
+    switch (notice) {
+      case _Playhead(:final token, :final seconds, :final rate):
+        _sessions[token]?.updatePlayhead(seconds: seconds, rate: rate);
+      case _Buffer(:final token, :final aheadSeconds, :final playing):
+        _sessions[token]?.reportBuffer(aheadSeconds: aheadSeconds, playing: playing);
+      case _Stall(:final token):
+        _sessions[token]?.reportStall();
+      case _DropCache():
+        for (final session in _sessions.values) {
+          session.dropCache();
+        }
+    }
+  }
+
   Future<Object?> _run(_Command command) async {
     if (_disposed) throw const RipperError(RipperErrorKind.closed);
     switch (command) {
@@ -361,6 +445,7 @@ final class _EngineHost {
       },
       mode: _options.nodeMode,
       transport: _transport,
+      auto: _auto,
       config: _options.config,
       policy: _options.policy,
     );
@@ -375,6 +460,9 @@ final class _EngineHost {
         ..setSegments(TrackKind.audio, prepared.audio.segments);
       final token = _router.register(PlaybackBuilder.ripperAssets(prepared, read: session.read));
       _sessions[token] = session;
+      session.onFatal = (error) {
+        if (identical(_sessions[token], session)) _boot.events.send(FatalReport(token: token, message: '$error'));
+      };
       _lastDelivered[token] = session.deliveredBytes;
       _newest = token;
       _startStats();

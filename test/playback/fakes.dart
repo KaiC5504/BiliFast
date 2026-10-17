@@ -56,6 +56,11 @@ final class FakeEngine implements PlaybackEngine {
   bool rewroteHEV1 = false;
   bool disposed = false;
   final statsController = StreamController<EngineSnapshot>.broadcast(sync: true);
+  final fatalController = StreamController<FatalReport>.broadcast(sync: true);
+  final playheads = <({String token, double seconds, double rate})>[];
+  final buffers = <({String token, double aheadSeconds, bool playing})>[];
+  final stalls = <String>[];
+  int cacheDrops = 0;
   int _next = 0;
 
   static Uri masterOf(String token) => Uri.parse('http://127.0.0.1:5555/$token/master.m3u8');
@@ -91,6 +96,23 @@ final class FakeEngine implements PlaybackEngine {
   Future<void> networkChanged({required bool interfaceChanged}) async {}
 
   @override
+  void updatePlayhead(String token, {required double seconds, required double rate}) =>
+      playheads.add((token: token, seconds: seconds, rate: rate));
+
+  @override
+  void reportBuffer(String token, {required double aheadSeconds, required bool playing}) =>
+      buffers.add((token: token, aheadSeconds: aheadSeconds, playing: playing));
+
+  @override
+  void reportStall(String token) => stalls.add(token);
+
+  @override
+  void dropCache() => cacheDrops += 1;
+
+  @override
+  Stream<FatalReport> get fatals => fatalController.stream;
+
+  @override
   Future<bool> ensureServing() async {
     ensureCalls += 1;
     if (closed) throw const RipperError(RipperErrorKind.closed);
@@ -108,6 +130,7 @@ final class FakeEngine implements PlaybackEngine {
   Future<void> dispose() async {
     disposed = true;
     await statsController.close();
+    await fatalController.close();
   }
 }
 
