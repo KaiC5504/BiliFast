@@ -36,6 +36,15 @@ enum PlaybackFailure implements Exception {
 
 enum ItemFailure { format, network, unknown }
 
+/// When only AVPlayer's error log saw the failure (an expired URL's 403), the code is the HTTP status and the
+/// domain CoreMedia's; Swift counted those as network failures too.
+ItemFailure classifyFailure(PlayerFailed event) {
+  if (event.formatRejected) return ItemFailure.format;
+  final code = event.code;
+  if (event.domain == 'NSURLErrorDomain' || (code != null && code >= 400 && code <= 599)) return ItemFailure.network;
+  return ItemFailure.unknown;
+}
+
 enum ItemFailureReaction {
   fallBackToDirect,
   nextCodec,
@@ -634,9 +643,7 @@ class PlaybackController extends ChangeNotifier {
     final choice = _choice;
     if (choice == null) return;
     final current = _epoch;
-    final failure = event.formatRejected
-        ? ItemFailure.format
-        : (event.domain == 'NSURLErrorDomain' ? ItemFailure.network : ItemFailure.unknown);
+    final failure = classifyFailure(event);
     _playerFailure = event.message;
     _logger.error(LogCategory.player, 'item failed', {
       'mode': modeLabel,

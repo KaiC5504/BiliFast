@@ -52,6 +52,25 @@ void main() {
     expect(clock.seconds, closeTo(6, 1e-9));
   });
 
+  test('a reading from before the seek landed is dropped', () {
+    clock.handle(const StatusChanged(PlayerStatus.playing));
+    clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 1));
+    clock.jump(60);
+    clock.handle(PositionChanged(seconds: 5.1, hostMs: time.clock.nowMs(), rate: 1));
+    expect(clock.seconds, closeTo(60, 1e-9));
+    time.advance(200);
+    clock.handle(PositionChanged(seconds: 60.1, hostMs: time.clock.nowMs(), rate: 1));
+    expect(clock.seconds, closeTo(60.1, 1e-9));
+  });
+
+  test('after the settle time any reading counts again', () {
+    clock.handle(const StatusChanged(PlayerStatus.playing));
+    clock.jump(60);
+    time.advance(PlaybackClock.jumpSettleMs);
+    clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 1));
+    expect(clock.seconds, closeTo(5, 1e-9));
+  });
+
   test('a jump moves the playhead at once', () {
     clock.handle(const StatusChanged(PlayerStatus.playing));
     clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 1));

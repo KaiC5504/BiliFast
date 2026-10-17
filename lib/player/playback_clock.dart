@@ -11,7 +11,14 @@ final class PlaybackClock {
   /// reported yet doesn't run danmaku ahead of the picture.
   static const maxExtrapolationMs = 1000.0;
 
+  /// After a jump the player can still report positions from before its seek landed; readings this far from the
+  /// target are dropped for [jumpSettleMs], so danmaku doesn't snap back and forth.
+  static const staleAfterJumpSeconds = 1.5;
+  static const jumpSettleMs = 3000.0;
+
   final MonotonicClock _clock;
+  double? _jumpTarget;
+  double _jumpAtMs = 0;
   double _seconds = 0;
   double _atMs = 0;
   double _rate = 1;
@@ -28,6 +35,11 @@ final class PlaybackClock {
   void handle(PlayerEvent event) {
     switch (event) {
       case PositionChanged(:final seconds, :final hostMs, :final rate):
+        if (_jumpTarget case final target?) {
+          final settling = _clock.nowMs() - _jumpAtMs < jumpSettleMs;
+          if (settling && (seconds - target).abs() > staleAfterJumpSeconds) return;
+          _jumpTarget = null;
+        }
         _seconds = seconds;
         _atMs = hostMs;
         _rate = rate;
@@ -48,6 +60,8 @@ final class PlaybackClock {
   void jump(double seconds) {
     _seconds = seconds;
     _atMs = _clock.nowMs();
+    _jumpTarget = seconds;
+    _jumpAtMs = _atMs;
   }
 
   void _rebase() {
