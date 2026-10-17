@@ -24,6 +24,9 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 - 2026-10-17: slice 0 (foundations): Flutter app at the root, `packages/bili_core` with BiliShared, DevLog, Danmaku,
   BiliAPI and AppLogic ported from Swift tests-first, the keychain channel (checked on the phone in slice 1), CI and the
   signed TestFlight workflow. The spike moved to `spike/`.
+- 2026-10-18: slice 0 done. TestFlight dry run green on the first try (run 39038017954: signed, IPA built and checked,
+  not uploaded). At KaiC's request the pipeline was cut to one workflow and a local gate (`scripts/gate.py`, 12 s),
+  and GitHub calls are kept to what's needed (6 per start, 1 per status).
 - Next: slice 1, the player core on the phone (the kill switch).
 - Update this section when a slice finishes.
 
