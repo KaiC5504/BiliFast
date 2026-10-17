@@ -308,7 +308,7 @@ void main() {
     );
     await _collect(cdn, _mebibyte, auto: auto, config: config);
     expect(auto.threads, lessThan(16));
-  }, skip: 'needs AutoConcurrency port');
+  });
 
   test('the meta race returns the whole range', () async {
     final cdn = SimCDN(size: 50000, behaviors: {TestEngine.cosov: const NodeBehavior(firstByteMs: 200)});

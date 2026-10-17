@@ -149,7 +149,7 @@ void main() {
       throwsA(const RipperError(RipperErrorKind.stalled)),
     );
     expect(auto.threads, 12);
-  }, skip: 'needs AutoConcurrency port');
+  });
 
   test('the resume base is prepended', () async {
     final cdn = SimCDN(size: 100000);
@@ -232,7 +232,7 @@ void main() {
       throwsA(const RipperError.badResponse(429)),
     );
     expect(auto.threads, 12);
-  }, skip: 'needs AutoConcurrency port');
+  });
 
   test('a cancelled copy is sampled but not struck', () async {
     final cdn = SimCDN(size: 300000, behaviors: {TestEngine.cosov: const NodeBehavior(bytesPerSecond: 200000)});
