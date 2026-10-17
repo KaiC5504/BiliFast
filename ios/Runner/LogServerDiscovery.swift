@@ -87,7 +87,8 @@ final class LogServerDiscovery: NSObject, FlutterStreamHandler {
         publish()
       }
       finish(connection, named: name)
-    case .failed, .cancelled:
+    // .waiting means the network refused it (local network permission, nothing listening); tried again when the browse results next change.
+    case .failed, .waiting, .cancelled:
       finish(connection, named: name)
     default:
       break

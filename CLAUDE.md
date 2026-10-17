@@ -89,8 +89,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - PiliPlus (`D:\Repos\Apps\PiliPlus`) is the main reference for how a feature works (KaiC, 2026-10-18: it's a mature
   Flutter Bilibili client, and BiliFast is largely a new UI over the same behaviour). Before building a feature, read
   how PiliPlus does it (`docs/reference/piliplus-map.md` says where), alongside BiliNative's Swift. It and
-  ATV-Bilibili-demo are GPL: write our own code from what they show; don't copy their code. Keep BTR's MIT notice
-  with the engine port.
+  ATV-Bilibili-demo are GPL: write our own code from what they show; never copy their code (KaiC chose to keep BiliFast
+  non-GPL, 2026-10-18). Keep BTR's MIT notice with the engine port.
 - Danmaku block-word regexes run on Dart's (ECMAScript) `RegExp`, not ICU as in Swift: `(?i)`, possessive and atomic
   groups throw (the rule is skipped), and `\p{Han}` or `\A` mean something else.
 - ghosthand first for screen and browser work. Flutter windows often have a thin accessibility tree; use `screenshot`.

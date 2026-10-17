@@ -413,10 +413,11 @@ final class NativePlayer {
     events.onPictureInPicture(playerId: id, active: active, completion: ignoreReply)
   }
 
-  /// Dart decides whether a page comes back for this player; without one the restore times out after 3 s.
+  /// No page can come back for a player yet, so an off-screen restore ends at once instead of AVKit waiting 3 s;
+  /// a view still on screen completes the restore by itself (PlayerHostView).
   private func restoreRequested() -> Bool {
     events.onPictureInPictureRestore(playerId: id, completion: ignoreReply)
-    return true
+    return false
   }
 
   enum FailureKind: String {
