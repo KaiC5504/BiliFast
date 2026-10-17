@@ -44,7 +44,6 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   module: `shared.dart`, `devlog.dart`, `danmaku.dart`, `api.dart`, `logic.dart`.
 - `ios/Runner/`: native Swift (`KeychainChannel.swift`; the player view comes in slice 1). New Swift files must be added
   to `ios/Runner.xcodeproj/project.pbxproj` by hand (four entries, see `KeychainChannel.swift`'s).
-- `spike/`: the throwaway spike, kept until later slices have taken what they need (spec section 11). Not analysed.
 - `test_ci/`: static tests of the workflows (pins, secrets only in step env, nothing leaks into the public log).
 
 ## How to test

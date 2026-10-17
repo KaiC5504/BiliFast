@@ -10,5 +10,4 @@ analyzer:
     - android/**
     - ios/**
     - windows/**
-    - spike/**
     - packages/**
