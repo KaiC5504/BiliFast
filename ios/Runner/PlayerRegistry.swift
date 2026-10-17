@@ -70,6 +70,9 @@ final class NativePlayer {
   private var failed = false
   /// The current item reached playing; a format failure after that is not a refusal at load.
   private var played = false
+  /// Set by a load or a seek until playback starts; while set, a wait to minimize stalls ends as soon as
+  /// `startAheadSeconds` are loaded (see `startIfBuffered`).
+  private var starting = false
   private var status: NativePlayerStatus?
   private var reportedRate: Double?
   private var reportedDuration: Double?
@@ -96,6 +99,7 @@ final class NativePlayer {
     ended = false
     failed = false
     played = false
+    starting = true
     wantsPlay = autoplay
     reportedDuration = nil
     reportedSize = nil
@@ -142,6 +146,7 @@ final class NativePlayer {
   func seek(seconds: Double, precise: Bool) {
     guard item != nil else { return }
     ended = false
+    starting = true
     let target = CMTime(seconds: max(0, seconds), preferredTimescale: 600)
     if precise {
       player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -229,7 +234,10 @@ final class NativePlayer {
     }
     playerObservations = [
       player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
-        onMainActor { self?.updateStatus() }
+        onMainActor {
+          self?.updateStatus()
+          self?.startIfBuffered()
+        }
       },
       player.observe(\.rate, options: [.new]) { [weak self] _, _ in
         onMainActor { self?.rateChanged() }
@@ -251,7 +259,10 @@ final class NativePlayer {
         onMainActor { self?.reportDuration(current) }
       },
       item.observe(\.loadedTimeRanges, options: [.new]) { [weak self] _, _ in
-        onMainActor { self?.reportBuffered(current) }
+        onMainActor {
+          self?.reportBuffered(current)
+          self?.startIfBuffered()
+        }
       },
       item.observe(\.presentationSize, options: [.new]) { [weak self] _, _ in
         onMainActor { self?.reportSize(current) }
@@ -288,6 +299,31 @@ final class NativePlayer {
     guard current == generation, wantsPlay else { return }
     player.play()
     updateStatus()
+  }
+
+  /// What a start or seek needs loaded before it plays. AVPlayer's own rule waits for more after a slow first
+  /// segment: phone logs had it holding up to 7.7 s with the first segments of both tracks already in, while the
+  /// engine keeps fetching ahead much faster than playback.
+  static let startAheadSeconds = 3.0
+
+  private func startIfBuffered() {
+    guard starting, let item, player.currentItem === item, item.status == .readyToPlay else { return }
+    if player.timeControlStatus == .playing {
+      starting = false
+      return
+    }
+    guard wantsPlay, player.timeControlStatus == .waitingToPlayAtSpecifiedRate,
+          player.reasonForWaitingToPlay == .toMinimizeStalls else { return }
+    let now = item.currentTime().seconds
+    let duration = item.duration.seconds
+    guard now.isFinite else { return }
+    let loadedEnd = item.loadedTimeRanges.map(\.timeRangeValue)
+      .first { $0.start.seconds <= now + 0.1 && $0.end.seconds > now }?.end.seconds ?? now
+    let needed = duration.isFinite ? min(now + Self.startAheadSeconds, duration - 0.1) : now + Self.startAheadSeconds
+    guard loadedEnd >= needed else { return }
+    starting = false
+    log("start without waiting", ["at": now, "ahead": loadedEnd - now])
+    player.playImmediately(atRate: player.defaultRate > 0 ? player.defaultRate : 1)
   }
 
   private func tick(_ time: CMTime) {
