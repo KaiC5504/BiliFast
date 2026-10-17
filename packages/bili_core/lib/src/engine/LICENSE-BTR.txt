@@ -1,4 +1,4 @@
-The download engine in this module is a Swift port of Bilibili-thread-ripper
+The download engine in this module is a Dart port, by way of BiliNative's Swift port, of Bilibili-thread-ripper
 (https://github.com/MrTangLuyao/Bilibili-thread-ripper), used under the MIT License:
 
 MIT License

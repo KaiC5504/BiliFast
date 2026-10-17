@@ -5,8 +5,6 @@ import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
 import 'package:cupertino_http/cupertino_http.dart';
-// NSData's bytes are only reachable through objective_c's extension; it comes with cupertino_http.
-// ignore: depend_on_referenced_packages
 import 'package:objective_c/objective_c.dart' show NSDataExtensions;
 
 /// The iOS transport: URLSession through cupertino_http (HTTP/2 to the mirrors, 8 per host for Akamai).
