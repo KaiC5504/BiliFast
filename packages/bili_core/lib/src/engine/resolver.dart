@@ -6,6 +6,7 @@ import '../shared/byte_range.dart';
 import '../shared/clock.dart';
 import 'ban_list.dart';
 import 'node_catalog.dart';
+import 'node_memory.dart';
 import 'playback_engine.dart';
 
 final class _Health {
@@ -29,6 +30,8 @@ final class Resolver {
     this.policy = MediaURLPolicy.bilibili,
     this.bans,
     MonotonicClock? clock,
+    this.priors = NodePriors.empty,
+    this.exploreInHurry = true,
   }) : _clock = clock ?? MonotonicClock.system;
 
   /// A node left out for being slow goes back to the untested ones after this and gets another try.
@@ -46,8 +49,19 @@ final class Resolver {
   final BanList? bans;
   final MonotonicClock _clock;
 
+  /// What earlier sessions measured (`NodeMemory.priors`). A node with a prior speed counts as measured until this
+  /// session measures it: no warm-up range goes wide for it, no range explores it, and [speed] gives the prior's.
+  final NodePriors priors;
+
+  /// Off: a range in a hurry goes only to measured (or remembered) nodes, so unknown and stale ones are explored on
+  /// prefetch ranges alone. On (Swift): every range carries its exploration slots.
+  final bool exploreInHurry;
+
   String _primary;
   List<String> _backups;
+
+  /// [allURLs] for the current addresses: rebuilding it parses and checks every signed address.
+  List<String>? _all;
   var _health = <String, _Health>{};
   final _routes = <String, _Route>{};
   int _cursor = 0;
@@ -63,6 +77,7 @@ final class Resolver {
   void replaceURLs({required String primary, required List<String> backups}) {
     _primary = primary;
     _backups = backups;
+    _all = null;
   }
 
   /// After a network change, failures seen on the old path say nothing about the new one. A new
@@ -79,11 +94,15 @@ final class Resolver {
     _mediaRangeCount = 0;
   }
 
-  List<String> allURLs() =>
-      NodeCatalog.representationURLs(primary: _primary, backups: _backups, mode: mode, policy: policy);
+  List<String> allURLs() => List.of(_allURLs);
+
+  List<String> get _allURLs => _all ??= List.unmodifiable(
+      NodeCatalog.representationURLs(primary: _primary, backups: _backups, mode: mode, policy: policy));
 
   /// Banned addresses are left out, unless that would leave none at all.
-  List<String> urls() => _unbanned(allURLs());
+  List<String> urls() => List.of(_usable());
+
+  List<String> _usable() => _unbanned(_allURLs);
 
   bool allows(String url) => bans?.allows(url) ?? true;
 
@@ -94,40 +113,45 @@ final class Resolver {
     return allowed.isEmpty ? list : allowed;
   }
 
-  static String routeKey(String url) {
-    final uri = Uri.tryParse(url);
-    return uri == null ? url : NodeCatalog.nodeKey(url) + uri.path;
-  }
+  static String routeKey(String url) => NodeCatalog.routeKey(url);
 
   bool _measuredNow(String url, double now) {
     final route = _routes[routeKey(url)];
     return route != null && route.lastMeasuredAt > 0 && now - route.lastMeasuredAt < measurementTTL;
   }
 
-  int _fasterFirst(String left, String right) {
-    final l = _routes[routeKey(left)];
-    final r = _routes[routeKey(right)];
-    final lProven = (l?.lastSuccessAt ?? 0) > 0;
-    final rProven = (r?.lastSuccessAt ?? 0) > 0;
-    if (lProven != rProven) return lProven ? -1 : 1;
-    return (r?.bps ?? 0).compareTo(l?.bps ?? 0);
-  }
+  /// The prior's speed in this class's units, 0 without one.
+  double _priorBps(String url) => priors.isEmpty ? 0 : priors.of(NodeCatalog.nodeKey(url))?.routeBps ?? 0;
+
+  /// Measured within [measurementTTL], or remembered from earlier sessions.
+  bool _known(String url, double now) => _measuredNow(url, now) || _priorBps(url) > 0;
 
   bool _open(String url, double now) => (_health[url]?.blockedUntil ?? 0) <= now;
 
-  /// Stable (List.sort does not promise it), so equally fast nodes keep the catalog's order.
+  /// Proven addresses first, then by speed: this session's measurement while fresh, else the prior's, else the
+  /// stale measurement. Stable (List.sort does not promise it), so equally fast nodes keep the catalog's order.
   List<String> _sortedFasterFirst(Iterable<String> urls) {
     final list = urls.toList();
+    final now = _clock.nowMs();
+    final proven = <bool>[];
+    final speeds = <double>[];
+    for (final url in list) {
+      final route = _routes[routeKey(url)];
+      proven.add((route?.lastSuccessAt ?? 0) > 0);
+      final prior = _measuredNow(url, now) ? 0.0 : _priorBps(url);
+      speeds.add(prior > 0 ? prior : route?.bps ?? 0);
+    }
     final order = List<int>.generate(list.length, (index) => index)
       ..sort((a, b) {
-        final bySpeed = _fasterFirst(list[a], list[b]);
+        if (proven[a] != proven[b]) return proven[a] ? -1 : 1;
+        final bySpeed = speeds[b].compareTo(speeds[a]);
         return bySpeed != 0 ? bySpeed : a.compareTo(b);
       });
     return [for (final index in order) list[index]];
   }
 
   List<String> ordered({int pieceIndex = 0, Set<String> excluding = const {}}) {
-    final list = urls().where((url) => !excluding.contains(url)).toList();
+    final list = _usable().where((url) => !excluding.contains(url)).toList();
     final now = _clock.nowMs();
     final available = list.where((url) => _open(url, now)).toList();
     final pool = available.isEmpty ? list : available;
@@ -139,21 +163,28 @@ final class Resolver {
 
   /// The nodes for one media range. The first ranges (four overseas, one mainland) go wide to
   /// measure; afterwards measured nodes carry the work, fastest first, and one unmeasured or
-  /// stale node rides along per range as exploration.
-  List<String> rangeCandidates() {
-    final list = urls();
+  /// stale node rides along per range as exploration. With priors, remembered nodes count as
+  /// measured and the warm-up is skipped. A [hurried] range explores nothing when [exploreInHurry]
+  /// is off: it goes to the known nodes, unless none is known.
+  List<String> rangeCandidates({bool hurried = false}) {
+    final list = _usable();
     final now = _clock.nowMs();
     final warmup = mode is MainlandNodes ? 1 : 4;
     final pool = _sortedFasterFirst(list.where((url) => _open(url, now)));
-    if (pool.isEmpty) return list;
+    if (pool.isEmpty) return List.of(list);
     final width = min(_mediaRangeCount == 0 ? pool.length : 6, pool.length);
+    if (hurried && !exploreInHurry) {
+      final known = pool.where((url) => _known(url, now)).take(width).toList();
+      if (known.isNotEmpty) return known;
+    }
+    final remembered = !priors.isEmpty && pool.any((url) => _priorBps(url) > 0);
     List<String> selected;
-    if (_mediaRangeCount < warmup) {
+    if (_mediaRangeCount < warmup && !remembered) {
       selected = pool.take(width).toList();
       _rangeCursor = width % pool.length;
     } else {
-      final measured = pool.where((url) => _measuredNow(url, now)).toList();
-      final rest = pool.where((url) => !_measuredNow(url, now)).toList();
+      final measured = pool.where((url) => _known(url, now)).toList();
+      final rest = pool.where((url) => !_known(url, now)).toList();
       final places = min(rest.length, max(1, width - measured.length));
       final explore = [for (var index = 0; index < places; index++) rest[(_rangeCursor + index) % rest.length]];
       _rangeCursor = (_rangeCursor + places) % max(1, pool.length);
@@ -171,13 +202,27 @@ final class Resolver {
   List<String> startupCandidates() {
     final now = _clock.nowMs();
     final originals = mode is CustomNodes ? const <String>[] : [_primary, ..._backups].where(policy.allowsURL);
-    final candidates = _unbanned(NodeCatalog.deduplicated([...originals, ...allURLs()]));
+    final candidates = _unbanned(NodeCatalog.deduplicated([...originals, ..._allURLs]));
     return candidates.where((url) => _open(url, now)).take(8).toList();
   }
 
   List<String> rescueCandidates() {
     final now = _clock.nowMs();
-    return _sortedFasterFirst(urls().where((url) => _open(url, now)));
+    return _sortedFasterFirst(_usable().where((url) => _open(url, now)));
+  }
+
+  /// With `BanList.probation` on, a banned node's address for one backup copy of [piece] once that node's turn has
+  /// come (taking the turn), else null. Never for a first copy, and never in a hurry: the player is waiting, and a
+  /// node that failed twice in a row is the likeliest to fail again. A success lifts the ban (`BanList.success`).
+  String? probationCopy(ByteRange piece, {bool hurried = false}) {
+    final bans = this.bans;
+    if (hurried || bans == null || bans.probation == null) return null;
+    for (final url in _allURLs) {
+      if (bans.allows(url) || avoids(url, piece) || !bans.probationDue(url)) continue;
+      bans.takeProbation(url);
+      return url;
+    }
+    return null;
   }
 
   void success(String url, {required double bps}) {
@@ -244,8 +289,8 @@ final class Resolver {
       ..blockedUntil = now + min(60000, 3000 * pow(2, min(health.failures, 4))).toDouble();
   }
 
-  /// Measured bytes per second of one connection to this node, 0 when unknown or stale.
-  double speed(String url) => _measuredNow(url, _clock.nowMs()) ? (_routes[routeKey(url)]?.bps ?? 0) : 0;
+  /// Measured bytes per second of one connection to this node, else the prior's; 0 when unknown or stale.
+  double speed(String url) => _measuredNow(url, _clock.nowMs()) ? (_routes[routeKey(url)]?.bps ?? 0) : _priorBps(url);
 
   List<NodeStatus> status() {
     final all = allURLs();
