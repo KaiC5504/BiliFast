@@ -34,8 +34,13 @@ Future<void> main(List<String> arguments) async {
   exit(code);
 }
 
-/// Transport errors can carry the failing signed URL.
-String errorLine(Object error) => 'error: ${Redactor.text('$error')}';
+String errorLine(Object error) => 'error: ${safeError(error)}';
+
+final _url = RegExp(r'https?://([^/\s?#]+)[^\s,)"]*');
+
+/// Transport errors can carry the failing signed URL, sometimes cut short past where a redactor would know to
+/// look; only its host is kept.
+String safeError(Object error) => Redactor.text('$error'.replaceAllMapped(_url, (m) => m[1]!));
 
 final class UsageError implements Exception {
   const UsageError([this.reason]);
@@ -336,7 +341,7 @@ final class Bench {
           await answer.body.listen(null).cancel();
           say('baseline probe: $label on $node answered HTTP ${answer.status}');
         } catch (error) {
-          say('baseline probe: $label on $node failed: ${Redactor.text('$error')}');
+          say('baseline probe: $label on $node failed: ${safeError(error)}');
         }
       }
       return null;
@@ -371,7 +376,7 @@ final class Bench {
               singleBytes += chunk.length;
             }
           } catch (error) {
-            singleCut = Redactor.text('$error');
+            singleCut = safeError(error);
           }
         } else {
           await response.body.listen(null).cancel();
@@ -489,7 +494,7 @@ final class Bench {
           'duplicate ${(stats.duplicateShare * 100).toStringAsFixed(1)}%)',
         );
       } catch (error) {
-        say('$label: failed: ${Redactor.text('$error')}');
+        say('$label: failed: ${safeError(error)}');
       } finally {
         cold.close();
       }

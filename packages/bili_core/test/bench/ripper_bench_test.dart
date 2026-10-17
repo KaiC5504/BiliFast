@@ -279,6 +279,11 @@ void main() {
       expect(line, contains('upos-sz-mirrorcos.bilivideo.com'));
       expect(line, isNot(contains('upsig')));
       expect(line, isNot(contains('abcdef0123')));
+      expect(line, isNot(contains('100112')));
+      expect(
+        errorLine(Exception('cut at https://upos-hz-mirrorakam.akamaized.net/upgcxcode/12/34/5-1-30120.m4s?deadli')),
+        'error: Exception: cut at upos-hz-mirrorakam.akamaized.net',
+      );
     });
   });
 
