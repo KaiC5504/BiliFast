@@ -531,7 +531,7 @@ void main() {
     shared.pushback(status: 429);
     expect(newer.stats().concurrency, shared.threads, reason: 'closing the old session must not unhook the new one');
     newer.close();
-  }, skip: 'needs AutoConcurrency: pushback(429) has to step the count down');
+  });
 
   test('segments near the playhead are in a hurry', () {
     final segments = [

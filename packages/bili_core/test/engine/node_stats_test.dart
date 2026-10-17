@@ -302,11 +302,10 @@ void main() {
       mode: NodeMode.overseas,
       policy: MediaURLPolicy.bilibili,
     );
-    // Dynamic until the session has the getter, so this file compiles meanwhile.
-    final nodeStats = (session as dynamic).nodeStats as NodeStats;
+    final nodeStats = session.nodeStats;
     expect(urls.any(nodeStats.isKnown), isTrue, reason: 'the read measured at least one node');
 
     session.networkChanged(interfaceChanged: false);
     expect(urls.any(nodeStats.isKnown), isFalse);
-  }, skip: 'needs ripper_session.dart: a nodeStats getter returning the session\'s NodeStats');
+  });
 }

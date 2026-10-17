@@ -52,7 +52,7 @@ class PlayerTestPage extends StatefulWidget {
   State<PlayerTestPage> createState() => _PlayerTestPageState();
 }
 
-class _PlayerTestPageState extends State<PlayerTestPage> {
+class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObserver {
   final _link = TextEditingController();
   late final TextEditingController _logAddress = TextEditingController(text: widget.logs?.manual ?? '');
   late final AppLifecycleListener _lifecycle;
@@ -65,6 +65,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onResume: () => unawaited(_controller?.appResumed()));
+    WidgetsBinding.instance.addObserver(this);
     widget.startPlayback().then((controller) {
       if (!mounted) {
         controller.dispose();
@@ -82,7 +83,11 @@ class _PlayerTestPageState extends State<PlayerTestPage> {
   }
 
   @override
+  void didHaveMemoryPressure() => _controller?.memoryPressure();
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _lifecycle.dispose();
     _controller?.dispose();
     _link.dispose();
