@@ -14,7 +14,8 @@ import 'primary_assigner.dart';
 import 'resolver.dart';
 import 'transport.dart';
 
-/// Port of RangeDownloader.swift.
+/// Port of RangeDownloader.swift. Its task groups become races that, like a task group, end only once every
+/// child has: the first success or the first failure decides, then the rest are cancelled and awaited.
 final class RangeDownloader {
   RangeDownloader(this.ctx) : pieces = PieceDownloader(ctx);
 
@@ -33,7 +34,7 @@ final class RangeDownloader {
       if (candidates.isEmpty && round > 0) candidates = resolver.ordered(pieceIndex: round).take(3).toList();
       if (candidates.isEmpty) break;
       try {
-        return await _firstOf(candidates, range, resolver, cancel);
+        return await _firstSuccess(candidates, range, resolver, cancel);
       } catch (error) {
         if (cancel?.isCancelled ?? false) throw const CancelledException();
         lastError = error;
@@ -42,10 +43,13 @@ final class RangeDownloader {
     throw lastError;
   }
 
-  Future<AttemptOutput> _firstOf(List<String> candidates, ByteRange range, Resolver resolver, CancelToken? cancel) {
+  /// The first copy to succeed wins and the others are cancelled; when every copy fails, the last error.
+  Future<AttemptOutput> _firstSuccess(
+      List<String> candidates, ByteRange range, Resolver resolver, CancelToken? cancel) {
     const delays = [0.0, 120.0, 300.0];
     final race = CancelToken(cancel);
     final result = Completer<AttemptOutput>();
+    AttemptOutput? winner;
     var pending = candidates.length;
     Object lastError = const RipperError(RipperErrorKind.noNodes);
 
@@ -59,15 +63,22 @@ final class RangeDownloader {
             priority: 220,
             queueClass: QueueClass.critical,
             cancel: race);
-        if (!result.isCompleted) {
-          result.complete(output);
+        if (winner == null) {
+          winner = output;
           race.cancel();
         }
       } catch (error) {
         if (error is! CancelledException) lastError = error;
       } finally {
         pending -= 1;
-        if (pending == 0 && !result.isCompleted) result.completeError(lastError);
+        if (pending == 0) {
+          final output = winner;
+          if (output != null) {
+            result.complete(output);
+          } else {
+            result.completeError((cancel?.isCancelled ?? false) ? const CancelledException() : lastError);
+          }
+        }
       }
     }
 
@@ -82,7 +93,7 @@ final class RangeDownloader {
   /// disagrees fails the range before any of its bytes are emitted. [hurry] says whether playback is about to
   /// need this range: it is read once here, to size and place the pieces, and again by each piece while it
   /// waits to send another copy. [deadline] returns when playback needs the range, as a monotonic time in ms;
-  /// it is re-read on every pass of the connection queue.
+  /// it is re-read on every pass of the connection queue and by each piece's backup copy.
   Future<void> stream(
     ByteRange range,
     Resolver resolver, {
@@ -121,6 +132,7 @@ final class RangeDownloader {
         preferred: preferred,
         mode: PieceMode.probe,
         priority: 220,
+        deadline: deadline,
         hurry: hurryCheck,
         cancel: cancel,
       );
@@ -165,6 +177,9 @@ final class RangeDownloader {
     final done = Completer<void>();
     final ready = <int, AttemptOutput>{};
     var next = 0;
+    var pending = parts.length;
+    Object? failure;
+    StackTrace? failureStack;
 
     Future<void> runPiece(int offset) async {
       final primary = offset < primaries.length ? primaries[offset] : order.firstOrNull;
@@ -179,21 +194,32 @@ final class RangeDownloader {
           preferred: piecePreferred,
           mode: mode,
           priority: piecePriority,
+          deadline: deadline,
           hurry: hurryCheck,
           cancel: local,
         );
-        if (done.isCompleted) return;
+        if (failure != null) return;
         check(output);
         ready[offset] = output;
-        while (ready.containsKey(next)) {
-          emit(ready.remove(next)!.bytes);
+        for (var item = ready.remove(next); item != null; item = ready.remove(next)) {
+          emit(item.bytes);
           next += 1;
         }
-        if (next == parts.length) done.complete();
       } catch (error, stack) {
-        if (done.isCompleted) return;
-        done.completeError(error, stack);
+        if (failure != null) return;
+        failure = error;
+        failureStack = stack;
         local.cancel();
+      } finally {
+        pending -= 1;
+        if (pending == 0) {
+          final error = failure;
+          if (error != null) {
+            done.completeError(error, failureStack);
+          } else {
+            done.complete();
+          }
+        }
       }
     }
 

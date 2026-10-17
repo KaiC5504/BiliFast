@@ -74,6 +74,16 @@ Future<void> cancellableSleep(double ms, CancelToken? cancel) {
   return completer.future;
 }
 
+/// Bytes already held from the front of a piece; a retry or a backup copy asks only for the rest.
+final class Prefix {
+  const Prefix({this.bytes = 0, this.chunks = const []});
+
+  static const empty = Prefix();
+
+  final int bytes;
+  final List<List<int>> chunks;
+}
+
 final class AttemptOutput {
   const AttemptOutput({required this.bytes, required this.total, required this.url});
 
@@ -89,6 +99,7 @@ final class AttemptProgress {
   bool gotHeaders = false;
   double headersAt = 0;
   double lastProgressAt = 0;
+  Prefix base = Prefix.empty;
   int received = 0;
   final chunks = <List<int>>[];
   int length = 0;
@@ -99,12 +110,13 @@ final class AttemptProgress {
   /// Set by the race that is about to cancel this copy because another copy won.
   bool outrun = false;
 
-  void begin({required double at, required int length}) {
+  void begin({required double at, required int length, Prefix base = Prefix.empty}) {
     started = true;
     startedAt = at;
     lastProgressAt = at;
     seenAt = at;
     this.length = length;
+    this.base = base;
   }
 
   void headers({required double at}) {
@@ -118,14 +130,18 @@ final class AttemptProgress {
     chunks.add(chunk);
     lastProgressAt = at;
   }
+
+  /// The resumed base plus this copy's bytes: the front of the piece this copy has made available.
+  Prefix prefix() => Prefix(bytes: base.bytes + received, chunks: [...base.chunks, ...chunks]);
 }
 
-/// Port of Attempt.swift's `AttemptRunner`, without resumed prefixes.
+/// Port of Attempt.swift's `AttemptRunner`.
 final class AttemptRunner {
   AttemptRunner(this.ctx);
 
   final EngineContext ctx;
 
+  /// Swift's `run(url:)`. Without [resumeBase] the whole piece is asked for.
   Future<AttemptOutput> runAt(
     String url, {
     required ByteRange piece,
@@ -133,6 +149,9 @@ final class AttemptRunner {
     required Resolver resolver,
     required double priority,
     required QueueClass queueClass,
+    double Function()? deadline,
+    int copy = 1,
+    Prefix Function()? resumeBase,
     CancelToken? cancel,
   }) =>
       run(
@@ -145,13 +164,16 @@ final class AttemptRunner {
         resolver: resolver,
         priority: priority,
         queueClass: queueClass,
+        deadline: deadline,
+        copy: copy,
+        resumeBase: resumeBase,
         cancel: cancel,
       );
 
-  /// One request for [piece]: waits for a connection, then [claim] picks the URL and counts the request on its
-  /// node (so a request that waited for a permit goes where there is room by then). Enforces BTR's three
-  /// timeouts, checks the 206 Content-Range and the length, and reports the outcome to the resolver, meter
-  /// and stats.
+  /// One request for [piece] (or its missing tail): waits for a connection, then [claim] picks the URL and counts the
+  /// request on its node (`NodeStats.begin`), so a request that waited for a permit goes where there is room by then.
+  /// Enforces BTR's three timeouts, checks the 206 Content-Range and the length, and reports the outcome to the
+  /// resolver, meter, stats and automatic connection count.
   Future<AttemptOutput> run({
     required String Function() claim,
     required ByteRange piece,
@@ -159,15 +181,23 @@ final class AttemptRunner {
     required Resolver resolver,
     required double priority,
     required QueueClass queueClass,
+    double Function()? deadline,
     int copy = 1,
+    Prefix Function()? resumeBase,
     CancelToken? cancel,
   }) async {
-    final permit = await ctx.pool.acquire(priority: priority, queueClass: queueClass, cancel: cancel);
+    final permit =
+        await ctx.pool.acquire(priority: priority, queueClass: queueClass, deadline: deadline, cancel: cancel);
     try {
       cancel?.throwIfCancelled();
       final url = claim();
       try {
-        return await _attempt(url, piece, progress, resolver, copy, cancel);
+        // Taken now, not when queued: a backup copy that waited resumes from what the first copy has by now.
+        var base = resumeBase?.call() ?? Prefix.empty;
+        if (base.bytes >= piece.length) base = Prefix.empty;
+        final part = ByteRange.of(piece.start + base.bytes, piece.end);
+        if (part == null) throw const RipperError(RipperErrorKind.invalidURL);
+        return await _attempt(url, part, base, progress, resolver, copy, cancel);
       } finally {
         ctx.nodes.end(url, receiving: progress.gotHeaders);
       }
@@ -179,13 +209,14 @@ final class AttemptRunner {
   Future<AttemptOutput> _attempt(
     String url,
     ByteRange part,
+    Prefix base,
     AttemptProgress progress,
     Resolver resolver,
     int copy,
     CancelToken? cancel,
   ) async {
     final started = ctx.clock.nowMs();
-    progress.begin(at: started, length: part.length);
+    progress.begin(at: started, length: part.length, base: base);
     final node = NodeCatalog.nodeKey(url);
     ctx.stats.started(node);
     try {
@@ -201,6 +232,7 @@ final class AttemptRunner {
         'firstByteMs': (progress.headersAt - started).roundToDouble(),
         'bytes': part.length,
         'ms': elapsed.roundToDouble(),
+        'resumed': base.bytes,
         if (copy > 1) 'copy': copy,
       });
       return output;
@@ -227,16 +259,19 @@ final class AttemptRunner {
       } else {
         final ripperError = error is RipperError ? error : null;
         final firstByteTimeout = ripperError?.kind == RipperErrorKind.firstByteTimeout;
+        final timedOut = ripperError?.isTimeout ?? false;
         // BTR PR 11: the request waited behind the node's own transfers (the transport's per-host limit on
-        // HTTP/1.1 Akamai, or the node's queue), so it is not a strike.
+        // HTTP/1.1 Akamai, or the node's queue), so it is neither a strike nor a reason to slow down.
         final busy = received == 0 && firstByteTimeout && ctx.nodes.isBusy(url);
         if (firstByteTimeout) ctx.nodes.silent(url, waitedMs: elapsed);
         if (!busy) {
-          resolver.failure(url,
-              status: ripperError?.status,
-              receivedBytes: received,
-              range: part,
-              timedOut: ripperError?.isTimeout ?? false);
+          final status = ripperError?.status;
+          resolver.failure(url, status: status, receivedBytes: received, range: part, timedOut: timedOut);
+          if (status != null && (status == 412 || status == 429)) {
+            ctx.auto?.pushback(status: status);
+          } else if (timedOut && received == 0) {
+            ctx.auto?.slow();
+          }
         }
         ctx.logger.debug(LogCategory.engine, 'attempt failed', {
           'node': node,
@@ -283,7 +318,8 @@ final class AttemptRunner {
       request.dispose();
     }
 
-    // One timer armed for the next deadline rather than Swift's 25 ms poll.
+    // One timer armed for the next deadline rather than Swift's 25 ms poll: the same three checks, without
+    // waking every copy 40 times a second.
     void arm() {
       final now = ctx.clock.nowMs();
       if (!progress.gotHeaders && now - started > config.firstByteTimeoutMs) {
@@ -307,7 +343,7 @@ final class AttemptRunner {
         return;
       }
       final builder = BytesBuilder(copy: false);
-      progress.chunks.forEach(builder.add);
+      progress.prefix().chunks.forEach(builder.add);
       succeed(AttemptOutput(bytes: builder.takeBytes(), total: contentRange.total, url: url));
     }
 
@@ -330,7 +366,10 @@ final class AttemptRunner {
         throw RipperError.badResponse(response.status);
       }
       body = response.body.listen(
-        (chunk) => progress.append(chunk, at: ctx.clock.nowMs()),
+        (chunk) {
+          progress.append(chunk, at: ctx.clock.nowMs());
+          ctx.auto?.activity();
+        },
         onError: fail,
         onDone: () => onDone(contentRange),
         cancelOnError: true,
