@@ -3,16 +3,41 @@
 2026-10-17. Spike: this repo (`D:\Repos\Apps\BiliFlutterSpike`), Flutter 3.47.7 (latest stable), media_kit 1.2.6 /
 media_kit_video 2.0.1 (latest on pub.dev), measured on KaiC's Windows PC, overseas, home network.
 
-## Answer: no-go for moving the app to Flutter with media_kit
+## Answer: go, as Flutter UI with the native player kept on iOS
 
-Speed is not the problem. The Dart port of BTR works and beats one connection by as much as the Swift engine does.
-Picture quality is the problem. On the iPhone, media_kit cannot show HDR or Dolby Vision, cannot do Picture in
-Picture, and decodes AV1 in software. AVPlayer in the Swift app does all three. On top of that, Flutter's feel is
-what made KaiC drop PiliPlus in the first place (`BiliNative/docs/background.md`, "How the project got here").
+Updated the same day. KaiC: what made him drop PiliPlus was its design, not Flutter's feel. If Flutter can look like
+the official app, Flutter is fine. It can: the official app's look is custom-drawn (pink tabs, cards, its own player
+controls and panels), which is what Flutter does well. The spike's 推荐 feed came close to reference section 01 in an
+hour.
 
-Recommendation: keep the Swift app. Fix the testing pain where it comes from instead. Gesture and layout checks need
-a Mac; GitHub's macOS runners can run the same real-touch UI tests the rented Mac runs. That is the follow-up worth
-doing, not a rewrite.
+That leaves picture quality as the one real problem, and it has a fix:
+
+- Flutter itself cannot show HDR video. Every Flutter video plugin, Flutter's own AVPlayer-based `video_player`
+  included, copies frames into an 8-bit texture (flutter/flutter#91241 for `video_player`, #127520 for HDR output).
+  So switching or patching the Flutter player does not help.
+- What does: on iOS, embed a real UIKit view with an `AVPlayerLayer` in the Flutter page (a platform view). That view
+  is Apple's player, so HDR, Dolby Vision, AV1 hardware decoding, PiP and AirPlay all keep working as in the Swift app.
+  Flutter draws everything around and on top of it.
+
+Recommended shape:
+
+| Part | iPhone | Windows (development) |
+|---|---|---|
+| Screens, gestures, controls, danmaku layer, comments, panels | Flutter | Flutter, same code |
+| Video view | BiliNative's Swift player (AVPlayer, PiP, the HLS bridge) wrapped as a Flutter plugin | media_kit, direct links |
+| Download engine | BiliNative's Swift BTR engine (BiliCore), unchanged | not needed to test screens |
+
+The Dart engine port from this spike is then not needed in the app; it proved that Flutter is not the speed problem.
+
+Risks to check on the phone first, before porting screens:
+
+1. Flutter widgets drawn over a native view on iOS cost extra compositing. Danmaku moving at 120 Hz over the
+   AVPlayer view is the case to try.
+2. HDR shows through the platform view (it should: the layer is AVPlayer's own).
+3. Gestures over the player (seek drag, swipe back, hold to speed up) and rotation to full screen, with Flutter
+   receiving the touches above a native view.
+
+The rest of this file is the original analysis: the measurements, and why media_kit alone is not enough on iOS.
 
 ## Measured: BTR in Dart vs one connection (Windows, media_kit/mpv)
 
@@ -79,9 +104,9 @@ Gained:
 Lost:
 - HDR, Dolby Vision, AV1 hardware decoding and Picture in Picture (above).
 - AVPlayer's own integration: AirPlay, lock-screen controls, and system playback behaviour would need plugins.
-- The native feel KaiC chose Swift for. Flutter's Cupertino route gives the edge swipe back; the swipe from
-  anywhere in the content (iOS 26) had to be written by hand here (`lib/ui/swipe_back_route.dart`). Rotation,
-  sheets and system controls are Flutter's imitations, not UIKit's.
+- UIKit's own behaviour. Flutter's Cupertino route gives the edge swipe back; the swipe from anywhere in the content
+  (iOS 26) had to be written by hand here (`lib/ui/swipe_back_route.dart`). Rotation, sheets and system controls are
+  Flutter's versions, not UIKit's. KaiC's call: the design matters, not this.
 - A stable player library. media_kit's last pub.dev release was December 2025, and its iOS libraries are still the
   2023 build. PiliPlus depends on a community fork.
 - The engine needs more work in Dart than it looks: dart:io speaks HTTP/1.1 only, so every request in flight holds
@@ -107,9 +132,10 @@ built in two days.
 | HDR, Dolby Vision, PiP: a native AVPlayer view embedded in Flutter on iOS, fed by the Dart engine | 2-4 days, uncertain |
 | Phone test rounds and fixes | as many as the Swift app needed |
 
-That comes to about 5-8 days to reach where the Swift app already is. The last row is the only way to keep picture
-quality in Flutter, and it puts the player back outside what Windows can test, which removes most of the reason to
-move.
+That comes to about 5-8 days to reach where the Swift app already is with the Dart engine. With the recommended shape
+(the Swift player and engine wrapped as a plugin instead), the engine rows drop out: about 2-3 days for the plugin
+and the phone checks above, then 2-3 days of screens. The player stays outside what Windows can test, but every
+screen around it moves onto the PC.
 
 ## Not checked
 
