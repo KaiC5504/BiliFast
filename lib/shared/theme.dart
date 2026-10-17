@@ -43,10 +43,26 @@ abstract final class BiliColors {
   static const onVideo = Color(0xFFFFFFFF);
   static const statsFill = Color(0x8C000000);
   static const statsBorder = Color(0x1FFFFFFF);
+
+  /// The test screen (slice 1): text on the pink button, and what went wrong.
+  static const onPink = Color(0xFFFFFFFF);
+  static const failure = Color(0xFFF2453D);
 }
 
 abstract final class BiliMetrics {
   static const gutter = 12.0;
   static const cardRadius = 6.0;
   static const pillHeight = 30.0;
+
+  /// The test screen (slice 1).
+  static const titleText = 17.0;
+  static const bodyText = 15.0;
+  static const smallText = 12.0;
+  static const rowGap = 8.0;
+  static const sectionGap = 16.0;
+  static const avatarSize = 32.0;
+  static const fieldHeight = 40.0;
+  static const tagPadding = 6.0;
+  static const tagVerticalPadding = 2.0;
+  static const iconSize = 18.0;
 }

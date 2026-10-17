@@ -1,0 +1,163 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
+import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
+import 'package:cupertino_http/cupertino_http.dart';
+import 'package:flutter/foundation.dart';
+
+import '../account/cookie_persistence.dart';
+import '../account/keychain_store.dart';
+
+sealed class Account {
+  const Account();
+}
+
+final class AccountUnknown extends Account {
+  const AccountUnknown();
+}
+
+final class LoggedOut extends Account {
+  const LoggedOut();
+}
+
+final class LoggedIn extends Account {
+  const LoggedIn({required this.name, required this.vip});
+
+  final String name;
+  final bool vip;
+}
+
+/// Cookies exist but Bilibili no longer accepts them (nav answered isLogin false).
+final class LoginExpired extends Account {
+  const LoginExpired();
+}
+
+/// The keychain login, the cookie jar and the API client (port of AppEnvironment.swift's account half). On the
+/// iPhone the jar starts from the Swift app's keychain item, so the app opens logged in with no login screen;
+/// Windows has no keychain and runs logged out.
+class AppEnvironment extends ChangeNotifier {
+  AppEnvironment._({required this.cookies, required this.client, required this._persistence, required this._logger});
+
+  /// `http` and `keychain` are for tests; the app passes neither.
+  static Future<AppEnvironment> load({KeychainStore? keychain, HTTPTransport? http, Logger? logger}) async {
+    final log = logger ?? Logger.shared;
+    final persistence = CookiePersistence(_GuardedKeychain(keychain ?? KeychainStore.platform(), log));
+    final jar = CookieJar(await persistence.load());
+    if (persistence.blocked) log.warn(LogCategory.app, 'keychain read failed, cookie writes held back');
+    jar.onChange = (_) => unawaited(persistence.save(jar.all).catchError((Object error) {
+          log.warn(LogCategory.app, 'cookie save failed', {'error': '$error'});
+        }));
+    final client = BiliClient(transport: http ?? platformHttpTransport(), cookies: jar, logger: log);
+    return AppEnvironment._(cookies: jar, client: client, persistence: persistence, logger: log);
+  }
+
+  final CookieJar cookies;
+  final BiliClient client;
+  final CookiePersistence _persistence;
+  final Logger _logger;
+  Account _account = const AccountUnknown();
+  int? _mid;
+  bool _accountCheckFailed = false;
+
+  Account get account => _account;
+
+  /// The logged-in account's uid.
+  int? get mid => _mid;
+
+  /// The last nav call failed (network, not a verdict), so [account] is still unknown.
+  bool get accountCheckFailed => _accountCheckFailed;
+
+  String get accountLabel => switch (_account) {
+        LoggedIn(:final name) => name.isEmpty ? '已登录' : name,
+        LoggedOut() => '未登录',
+        LoginExpired() => '登录已失效',
+        AccountUnknown() => _accountCheckFailed ? '账号确认失败' : '正在确认账号…',
+      };
+
+  /// Returns false when Bilibili could not be asked (network error); [account] then keeps its last value.
+  Future<bool> refreshAccount() async {
+    await _retryBlockedKeychainLoad();
+    try {
+      await client.ensureRiskCookies();
+      final nav = await client.nav();
+      _accountCheckFailed = false;
+      if (nav.isLogin) {
+        _account = LoggedIn(name: nav.uname ?? '', vip: nav.isVip);
+        _mid = nav.mid;
+        final mid = nav.mid;
+        _logger.info(LogCategory.app, 'account', {'user': mid == null ? '?' : Redactor.mid(mid), 'vip': nav.isVip});
+      } else {
+        _account = cookies.value('SESSDATA') == null ? const LoggedOut() : const LoginExpired();
+        _mid = null;
+        _logger.info(LogCategory.app, 'account', {'user': 'none', 'expired': _account is LoginExpired});
+      }
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _logger.warn(LogCategory.app, 'nav failed', {'error': '$error'});
+      if (_account is AccountUnknown) {
+        if (cookies.value('SESSDATA') == null) {
+          _account = const LoggedOut();
+        } else {
+          _accountCheckFailed = true;
+        }
+      }
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// After a failed read the stored cookies may still be there; once a read works they join the jar.
+  Future<void> _retryBlockedKeychainLoad() async {
+    if (!_persistence.blocked) return;
+    final stored = await _persistence.load();
+    if (_persistence.blocked) return;
+    cookies.replaceAll({...stored, ...cookies.all});
+  }
+}
+
+/// URLSession on the iPhone, as the Swift app's API client: ephemeral, with its own cookie store off, since
+/// the jar sets the Cookie header. dart:io elsewhere.
+HTTPTransport platformHttpTransport() {
+  if (!Platform.isIOS) return ClientHTTPTransport();
+  final configuration = URLSessionConfiguration.ephemeralSessionConfiguration()
+    ..httpShouldSetCookies = false
+    ..httpCookieAcceptPolicy = NSHTTPCookieAcceptPolicy.NSHTTPCookieAcceptPolicyNever
+    ..timeoutIntervalForRequest = const Duration(seconds: 15);
+  return ClientHTTPTransport(client: CupertinoClient.fromSessionConfiguration(configuration));
+}
+
+/// A keychain channel that throws (no native side yet, a platform error) counts as a failed read, so the
+/// write block keeps a login that may still be stored.
+final class _GuardedKeychain implements KeychainStore {
+  const _GuardedKeychain(this._inner, this._logger);
+
+  final KeychainStore _inner;
+  final Logger _logger;
+
+  @override
+  Future<CookieLoad> loadCookies() async {
+    try {
+      return await _inner.loadCookies();
+    } catch (error) {
+      _logger.error(LogCategory.app, 'keychain read threw', {'error': '$error'});
+      return const CookieLoadFailed(-1);
+    }
+  }
+
+  @override
+  Future<bool> saveCookies(Map<String, String> cookies) => _inner.saveCookies(cookies);
+
+  @override
+  Future<void> deleteCookies() => _inner.deleteCookies();
+
+  @override
+  Future<String?> loadAppToken() => _inner.loadAppToken();
+
+  @override
+  Future<bool> saveAppToken(String token) => _inner.saveAppToken(token);
+
+  @override
+  Future<void> deleteAppToken() => _inner.deleteAppToken();
+}
