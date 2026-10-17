@@ -4,7 +4,7 @@ import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
 import 'package:test/test.dart';
 
-import 'support/fake_cdn.dart';
+import 'support/sim_cdn.dart';
 import 'support/loopback_server.dart';
 
 void main() {

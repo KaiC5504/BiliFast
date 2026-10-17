@@ -81,13 +81,15 @@ final class RangeDownloader {
   /// Every piece's advertised file size must equal [expectedTotal] (when given) and each other's; a piece that
   /// disagrees fails the range before any of its bytes are emitted. [hurry] says whether playback is about to
   /// need this range: it is read once here, to size and place the pieces, and again by each piece while it
-  /// waits to send another copy.
+  /// waits to send another copy. [deadline] returns when playback needs the range, as a monotonic time in ms;
+  /// it is re-read on every pass of the connection queue.
   Future<void> stream(
     ByteRange range,
     Resolver resolver, {
     required bool startup,
     required double priority,
     required void Function(Uint8List bytes) emit,
+    double Function()? deadline,
     int? expectedTotal,
     bool Function()? hurry,
     CancelToken? cancel,

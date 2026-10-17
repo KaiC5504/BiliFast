@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import '../shared/clock.dart';
 import 'cancel.dart';
 
 enum QueueClass {
@@ -25,21 +26,31 @@ final class Permit {
 }
 
 final class _Waiter {
-  _Waiter(this.priority, this.queueClass);
+  _Waiter(this.priority, this.queueClass, this.deadline);
 
   final double priority;
   final QueueClass queueClass;
+  final double Function()? deadline;
   final completer = Completer<void>();
 }
 
 /// BTR's `Semaphore` (port of ConnectionPool.swift): a connection budget whose waiters are served by class,
-/// then priority, then arrival. Without a playhead there are no deadlines, so no urgency or aging yet.
+/// then priority, then arrival.
+// Wave 0 added [deadline], [onChange] and the clock; urgency and aging come with ConnectionPoolTests.
 final class ConnectionPool {
-  ConnectionPool(int limit) : _limit = limit.clamp(1, 512);
+  ConnectionPool(int limit, {MonotonicClock? clock})
+    : _limit = limit.clamp(1, 512),
+      // ignore: unused_field
+      _clock = clock ?? MonotonicClock.system;
 
   int _limit;
   int _active = 0;
   final _queue = <_Waiter>[];
+  // ignore: unused_field
+  final MonotonicClock _clock;
+
+  /// Called after every change of active, limit or queued requests.
+  void Function(int active, int limit, int queued)? onChange;
 
   int get limit => _limit;
   int get active => _active;
@@ -50,9 +61,15 @@ final class ConnectionPool {
     _drain();
   }
 
-  Future<Permit> acquire({required double priority, required QueueClass queueClass, CancelToken? cancel}) async {
+  /// [deadline] returns the monotonic time (ms) playback needs this request; it is re-read on every pass.
+  Future<Permit> acquire({
+    required double priority,
+    required QueueClass queueClass,
+    double Function()? deadline,
+    CancelToken? cancel,
+  }) async {
     cancel?.throwIfCancelled();
-    final waiter = _Waiter(priority, queueClass);
+    final waiter = _Waiter(priority, queueClass, deadline);
     _queue.add(waiter);
     final remove = cancel?.onCancel(() {
       if (_queue.remove(waiter)) waiter.completer.completeError(const CancelledException());

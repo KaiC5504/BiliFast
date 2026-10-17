@@ -1,3 +1,4 @@
+export 'src/engine/auto_concurrency.dart';
 export 'src/engine/cancel.dart';
 export 'src/engine/engine_isolate.dart' show EngineOptions, IsolatePlaybackEngine;
 export 'src/engine/io_transport.dart';

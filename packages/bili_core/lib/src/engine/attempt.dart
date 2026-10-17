@@ -8,6 +8,7 @@ import '../devlog/log_event.dart';
 import '../devlog/logger.dart';
 import '../shared/byte_range.dart';
 import '../shared/clock.dart';
+import 'auto_concurrency.dart';
 import 'cancel.dart';
 import 'connection_pool.dart';
 import 'engine_stats.dart';
@@ -25,6 +26,7 @@ final class EngineContext {
     required this.config,
     Meter? meter,
     EngineStats? stats,
+    this.auto,
     MonotonicClock? clock,
     Logger? logger,
   })  : meter = meter ?? Meter(),
@@ -38,6 +40,9 @@ final class EngineContext {
   final RipperConfig config;
   final Meter meter;
   final EngineStats stats;
+
+  /// Null when the connection count is fixed.
+  final AutoConcurrency? auto;
   final MonotonicClock clock;
   final Logger logger;
   final NodeStats nodes;

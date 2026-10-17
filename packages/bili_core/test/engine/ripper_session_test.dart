@@ -10,11 +10,11 @@ import 'package:bili_core/src/engine/piece_downloader.dart';
 import 'package:bili_core/src/engine/resolver.dart';
 import 'package:test/test.dart';
 
-import 'support/fake_cdn.dart';
+import 'support/sim_cdn.dart';
 
 const _segmentBytes = 512 * 1024;
 
-RipperSession _session(FakeCDN cdn, {RipperConfig config = TestEngine.config, int segments = 0}) {
+RipperSession _session(SimCDN cdn, {RipperConfig config = TestEngine.config, int segments = 0}) {
   final session = RipperSession(
     sources: {TrackKind.video: (primary: TestEngine.primary, backups: const [])},
     mode: NodeMode.overseas,
@@ -44,12 +44,12 @@ Future<Uint8List> _read(RipperSession session, ByteRange range) async {
   return builder.takeBytes();
 }
 
-Uint8List _expected(FakeCDN cdn, ByteRange range) => Uint8List.sublistView(cdn.content, range.start, range.end + 1);
+Uint8List _expected(SimCDN cdn, ByteRange range) => Uint8List.sublistView(cdn.content, range.start, range.end + 1);
 
 void main() {
   test('reads come back byte-exact and in order across many pieces and nodes', () async {
     // Different speeds finish the pieces out of order.
-    final cdn = FakeCDN(size: 8 * _segmentBytes, behaviors: {
+    final cdn = SimCDN(size: 8 * _segmentBytes, behaviors: {
       TestEngine.cosov: const NodeBehavior(bytesPerSecond: 20e6),
       TestEngine.aliov: const NodeBehavior(bytesPerSecond: 40e6, firstByteMs: 6),
       TestEngine.hk1: const NodeBehavior(bytesPerSecond: 80e6, firstByteMs: 1),
@@ -60,7 +60,7 @@ void main() {
       expect(await _read(session, _segment(index)), _expected(cdn, _segment(index)), reason: 'segment $index');
     }
     expect(cdn.urls.length, greaterThan(40));
-    expect(cdn.nodes.toSet(), hasLength(4));
+    expect(cdn.requests.toSet(), hasLength(4));
     expect(session.seekCount, 1);
     final stats = session.stats();
     expect(stats.deliveredBytes, 8 * _segmentBytes);
@@ -68,7 +68,7 @@ void main() {
   });
 
   test('an unaligned range spanning segments is delivered whole', () async {
-    final cdn = FakeCDN(size: 4 * _segmentBytes);
+    final cdn = SimCDN(size: 4 * _segmentBytes);
     final session = _session(cdn, segments: 4);
     addTearDown(session.close);
     final range = ByteRange(12345, 3 * _segmentBytes + 999);
@@ -76,7 +76,7 @@ void main() {
   });
 
   test('cancelling the subscription cancels every piece at once', () async {
-    final cdn = FakeCDN(size: 4 * _segmentBytes);
+    final cdn = SimCDN(size: 4 * _segmentBytes);
     final session = _session(cdn, config: const RipperConfig(fixedConcurrency: 8, stallTimeoutMs: 2000), segments: 4);
     addTearDown(session.close);
     await _read(session, _segment(0));
@@ -96,7 +96,7 @@ void main() {
   });
 
   test('misbehaving nodes are routed around: refusal, truncation, stall', () async {
-    final cdn = FakeCDN(size: 4 * _segmentBytes, behaviors: {
+    final cdn = SimCDN(size: 4 * _segmentBytes, behaviors: {
       TestEngine.cosov: const NodeBehavior(status: 403),
       TestEngine.aliov: const NodeBehavior(truncateAfter: 1000),
       TestEngine.hk1: const NodeBehavior(stallAfter: 2000),
@@ -110,7 +110,7 @@ void main() {
   });
 
   test('a node that drops its connections is struck and the others finish the read', () async {
-    final cdn = FakeCDN(size: 4 * _segmentBytes, behaviors: {
+    final cdn = SimCDN(size: 4 * _segmentBytes, behaviors: {
       TestEngine.cosov: const NodeBehavior(connectionLost: true),
     });
     final session = _session(cdn, segments: 4);
@@ -128,7 +128,7 @@ void main() {
   });
 
   test('replaceUrls takes effect on the next read', () async {
-    final cdn = FakeCDN(size: 4 * _segmentBytes);
+    final cdn = SimCDN(size: 4 * _segmentBytes);
     final session = _session(cdn, segments: 4);
     addTearDown(session.close);
     await _read(session, _segment(0));
@@ -146,7 +146,7 @@ void main() {
   });
 
   test('a read inside the loaded headers is served from memory', () async {
-    final cdn = FakeCDN(size: 4 * _segmentBytes);
+    final cdn = SimCDN(size: 4 * _segmentBytes);
     final session = _session(cdn, segments: 4);
     addTearDown(session.close);
     final headers = await session.loadHeaders(TrackKind.video, through: 4095);
@@ -158,7 +158,7 @@ void main() {
   });
 
   test('reads after close fail as closed', () async {
-    final cdn = FakeCDN(size: _segmentBytes);
+    final cdn = SimCDN(size: _segmentBytes);
     final session = _session(cdn)..close();
     await expectLater(_read(session, ByteRange(0, 99)), throwsA(const RipperError(RipperErrorKind.closed)));
     await expectLater(session.loadHeaders(TrackKind.video, through: 99), throwsA(const RipperError(RipperErrorKind.closed)));
@@ -168,7 +168,7 @@ void main() {
     // Long timeouts, so only a hedged copy can save the piece in time.
     const config = RipperConfig(firstByteTimeoutMs: 5000, stallTimeoutMs: 5000, hedgeDelayMs: 100);
 
-    Future<(AttemptOutput, int)> download(FakeCDN cdn, {bool hurry = false}) async {
+    Future<(AttemptOutput, int)> download(SimCDN cdn, {bool hurry = false}) async {
       final ctx = EngineContext(transport: cdn, pool: ConnectionPool(8), config: config, logger: Logger(session: 'test'));
       final resolver = Resolver(primary: TestEngine.primary, backups: const [], mode: NodeMode.overseas, bans: BanList());
       final clock = Stopwatch()..start();
@@ -185,7 +185,7 @@ void main() {
     }
 
     test('a node slow to its first byte gets a second copy on another node', () async {
-      final cdn = FakeCDN(size: 1 << 20, behaviors: {TestEngine.cosov: const NodeBehavior(firstByteMs: 2000)});
+      final cdn = SimCDN(size: 1 << 20, behaviors: {TestEngine.cosov: const NodeBehavior(firstByteMs: 2000)});
       final (output, ms) = await download(cdn);
       expect(NodeCatalog.nodeKey(output.url), TestEngine.aliov);
       expect(output.bytes, _expected(cdn, ByteRange(0, 65535)));
@@ -195,14 +195,14 @@ void main() {
     });
 
     test('in a hurry the copy goes after 250 ms without a first byte', () async {
-      final cdn = FakeCDN(size: 1 << 20, behaviors: {TestEngine.cosov: const NodeBehavior(firstByteMs: 2000)});
+      final cdn = SimCDN(size: 1 << 20, behaviors: {TestEngine.cosov: const NodeBehavior(firstByteMs: 2000)});
       final (output, ms) = await download(cdn, hurry: true);
       expect(NodeCatalog.nodeKey(output.url), TestEngine.aliov);
       expect(ms, inInclusiveRange(240, 1000));
     });
 
     test('a node that trickles is hedged too', () async {
-      final cdn = FakeCDN(size: 1 << 20, behaviors: {TestEngine.cosov: const NodeBehavior(bytesPerSecond: 20e3)});
+      final cdn = SimCDN(size: 1 << 20, behaviors: {TestEngine.cosov: const NodeBehavior(bytesPerSecond: 20e3)});
       final (output, ms) = await download(cdn, hurry: true);
       expect(NodeCatalog.nodeKey(output.url), TestEngine.aliov);
       expect(ms, lessThan(2000));

@@ -9,6 +9,7 @@ import '../shared/byte_range.dart';
 import '../shared/clock.dart';
 import '../shared/media_segment.dart';
 import 'attempt.dart';
+import 'auto_concurrency.dart';
 import 'ban_list.dart';
 import 'cancel.dart';
 import 'connection_pool.dart';
@@ -38,6 +39,8 @@ final class RipperSession {
     required Map<TrackKind, TrackSource> sources,
     required NodeMode mode,
     required RangeTransport transport,
+    // ignore: avoid_unused_constructor_parameters
+    AutoConcurrency? auto,
     RipperConfig config = const RipperConfig(),
     MediaURLPolicy policy = MediaURLPolicy.bilibili,
     MonotonicClock? clock,
@@ -136,6 +139,20 @@ final class RipperSession {
     );
     return controller.stream;
   }
+
+  /// A player request failed after every retry: the app refreshes the URLs or falls back to direct mode.
+  /// Requests that fail together are reported once; a request made after a report can report again.
+  void Function(Object error)? onFatal;
+
+  // Wave-0 placeholders, filled with RipperSessionTests.
+  void updatePlayhead({required double seconds, required double rate}) {}
+
+  void reportBuffer({required double aheadSeconds, required bool playing}) {}
+
+  void reportStall() {}
+
+  /// Memory warning: drops cached and still-downloading prefetched segments; playback goes on.
+  void dropCache() {}
 
   void replaceUrls(TrackKind track, {required String primary, required List<String> backups}) {
     _resolvers[track]?.replaceURLs(primary: primary, backups: backups);
