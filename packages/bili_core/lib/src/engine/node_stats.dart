@@ -120,8 +120,9 @@ final class NodeStats {
 
   /// First byte plus the transfer at the speed one connection would get if [extraInflight] more pieces
   /// joined the ones already running. The speed was measured while the node carried `load` connections;
-  /// beyond that it is assumed to share the same total. A node is taken to carry at least four at full speed,
-  /// which is the reason to split a download at all. Null until a speed is known.
+  /// beyond that it is assumed to share the same total, and a node that keeps its speed raises `load` with the
+  /// next measurements. A node is taken to carry at least four at full speed, which is the reason to split a
+  /// download at all. Null until a speed is known.
   double? expectedMs(String url, {required int pieceBytes, int extraInflight = 0}) {
     final node = _peek(url);
     if (node.bps <= 0) return null;

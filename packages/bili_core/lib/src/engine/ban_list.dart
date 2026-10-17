@@ -104,7 +104,8 @@ final class BanList {
       } else if (_goodAddresses.contains(address)) {
         // Deviation from BTR, which blames the node: a refused address can be that node's alone (Akamai
         // refusing os=cosovbv but serving os=akam), and a banned node never gets to prove its other
-        // addresses.
+        // addresses. Counting refused addresses per node would not help: both tracks and every new
+        // signature are further addresses.
         blamed = 'pair:$node $address';
       } else {
         blamed = '';
