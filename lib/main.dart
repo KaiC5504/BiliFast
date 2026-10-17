@@ -12,7 +12,7 @@ import 'playback/playback_setup.dart';
 import 'screens/player_test_page.dart';
 import 'shared/theme.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   CrashLog.install();
   final logs = devToolsEnabled ? LogForwarder() : null;
@@ -27,15 +27,21 @@ Future<void> main() async {
     environment: environment,
     logs: logs,
     startPlayback: () => startPlaybackController(environment.client),
+    initialLink: _argument(args, '--play='),
   ));
 }
 
+String? _argument(List<String> args, String prefix) =>
+    args.where((arg) => arg.startsWith(prefix)).map((arg) => arg.substring(prefix.length)).firstOrNull;
+
 class BiliFastApp extends StatelessWidget {
-  const BiliFastApp({super.key, required this.environment, required this.startPlayback, this.logs});
+  const BiliFastApp(
+      {super.key, required this.environment, required this.startPlayback, this.logs, this.initialLink});
 
   final AppEnvironment environment;
   final Future<PlaybackController> Function() startPlayback;
   final LogForwarder? logs;
+  final String? initialLink;
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +53,8 @@ class BiliFastApp extends StatelessWidget {
         scaffoldBackgroundColor: BiliColors.pageGrey,
       ),
       // Stands in until slice 3 ports the 推荐 home.
-      home: PlayerTestPage(environment: environment, startPlayback: startPlayback, logs: logs),
+      home: PlayerTestPage(
+          environment: environment, startPlayback: startPlayback, logs: logs, initialLink: initialLink),
     );
   }
 }

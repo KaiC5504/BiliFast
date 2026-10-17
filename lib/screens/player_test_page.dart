@@ -35,6 +35,7 @@ class PlayerTestPage extends StatefulWidget {
     required this.startPlayback,
     this.logs,
     this.stageBuilder = playerStage,
+    this.initialLink,
   });
 
   final AppEnvironment environment;
@@ -43,6 +44,9 @@ class PlayerTestPage extends StatefulWidget {
   /// Null when the build has no dev tools.
   final LogForwarder? logs;
   final StageBuilder stageBuilder;
+
+  /// Played as soon as the player is up (`--play=<BV or link>` on the PC, for test runs).
+  final String? initialLink;
 
   @override
   State<PlayerTestPage> createState() => _PlayerTestPageState();
@@ -67,6 +71,11 @@ class _PlayerTestPageState extends State<PlayerTestPage> {
         return;
       }
       setState(() => _controller = controller);
+      final link = widget.initialLink;
+      if (link != null) {
+        _link.text = link;
+        unawaited(controller.open(link));
+      }
     }, onError: (Object error) {
       if (mounted) setState(() => _startError = '$error');
     });
