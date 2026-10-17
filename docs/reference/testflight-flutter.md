@@ -25,8 +25,9 @@ to Flutter too. Rewritten 2026-10-17 in slice 0, when the app moved here from th
 - `.github/workflows/testflight.yml`: BiliNative's signed workflow with Kazumi's Flutter steps.
   - `workflow_dispatch` with `sha`, `upload`, `create_signing`; the SHA guard first; `concurrency: testflight`.
   - `subosito/flutter-action` pinned to Flutter 3.47.7, Xcode 26.6 (build 17F113) checked exactly.
-  - `use-profiles --export-options-plist`, then `flutter build ipa --build-name=0.2.0 --build-number=$BUILD_NUMBER`.
-  - Build number = App Store Connect's latest + 1, floor 99, so Flutter builds start at 100.
+  - `use-profiles --export-options-plist`, then `flutter build ipa --build-name=$BUILD_NAME --build-number=$BUILD_NUMBER`.
+  - Build number = App Store Connect's latest build of `BUILD_NAME` + 1, so each version counts from 1 (1.0.0 (1)
+    followed 0.2.0 (100)). The processing wait matches version and build number, since numbers repeat across versions.
   - `scripts/ipa_manifest.py` describes and checks the IPA (bundle id, build, purpose strings, App Store profile,
     beta-reports-active); the JSON manifest is the only artifact.
   - On uploads, the last step waits for Apple's `VALID` (every 15 s, up to an hour).

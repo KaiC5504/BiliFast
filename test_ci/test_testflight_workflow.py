@@ -175,12 +175,13 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn('--export-options-plist="$RUNNER_TEMP/export_options.plist"', self.text)
         self.assertNotIn("dart-define", self.text)
 
-    def test_build_numbers_keep_rising(self):
-        # Installed apps compare build numbers only; the Swift app shipped up to 8, and
-        # Flutter builds start at 100.
-        self.assertGreaterEqual(int(self.doc["env"]["BUILD_NUMBER_FLOOR"]), 99)
+    def test_build_numbers_count_within_the_version(self):
+        # 1.0.0 starts again at 1: build numbers only have to be unique within a version.
+        self.assertNotIn("BUILD_NUMBER_FLOOR", self.text)
+        self.assertNotIn("--all-versions", self.text)
         step = self.step("build", "Pick the build number")
-        self.assertIn('get-latest-testflight-build-number "$ASC_APP_ID" --all-versions', step["run"])
+        self.assertIn('get-latest-testflight-build-number "$ASC_APP_ID" --pre-release-version "$BUILD_NAME"', step["run"])
+        self.assertIn("next=$(( 10#$latest + 1 ))", step["run"])
         self.assertIn("''|*[!0-9]*)", step["run"])
         self.assertIn('echo "BUILD_NUMBER=$next" >> "$GITHUB_ENV"', step["run"])
 
@@ -189,7 +190,8 @@ class WorkflowTest(unittest.TestCase):
         self.assertLess(names.index("Upload to TestFlight"), names.index("Wait for Apple to finish processing"))
         wait = self.step("build", "Wait for Apple to finish processing")
         self.assertEqual("inputs.upload", wait["if"])
-        self.assertIn('--build-version-number "$BUILD_NUMBER"', wait["run"])
+        # Build 1 also exists in 0.1.0, so the wait matches the version too, or it would find that old build.
+        self.assertIn('--pre-release-version "$BUILD_NAME" --build-version-number "$BUILD_NUMBER"', wait["run"])
         # A failed check is retried a few times, then fails the step with its error, never loops for the hour.
         self.assertIn('state="no answer', wait["run"])
         self.assertIn('if [ "$misses" -ge 8 ]', wait["run"])
@@ -211,6 +213,10 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn(f'"{self.doc["env"]["FLUTTER_VERSION"]}"', fvmrc)
         pubspec = yaml.safe_load((ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
         self.assertEqual(str(self.doc["env"]["FLUTTER_VERSION"]), str(pubspec["environment"]["flutter"]))
+
+    def test_version_matches_the_pubspec(self):
+        pubspec = yaml.safe_load((ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(str(self.doc["env"]["BUILD_NAME"]), str(pubspec["version"]).split("+")[0])
 
     def test_ipa_is_checked_before_it_is_uploaded(self):
         names = [s.get("name") for _, s in self.steps("build")]

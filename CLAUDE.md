@@ -68,8 +68,10 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 The `ios-testflight` skill is the playbook; load it before touching any workflow, signing or Info.plist.
 - `.github/workflows/testflight.yml` signs and uploads when `python scripts/testflight.py start` dispatches it. Run
   `start --dry-run` after any workflow change. Secrets are in this repo's `testflight` environment (limited to `main`).
-- Build numbers come from App Store Connect plus one, with a floor of 99: the Swift app shipped 1-8, Flutter builds
-  start at 100. Version 0.2.0 (the Swift app was 0.1.0).
+- Version 1.0.0 (KaiC, 2026-10-18), set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they
+  agree). Build numbers count from 1 within each version: App Store Connect's latest build of that version plus one
+  (iOS needs them unique only per version; the Swift app shipped 0.1.0 (1-8), slice 1 shipped 0.2.0 (100)). A new
+  version starts at 1 by itself.
 - The loop: `python scripts/gate.py` on the committed tree (it records the commit it passed), push, then
   `python scripts/testflight.py start` (6 GitHub calls). `start` refuses without the gate's record for that exact
   commit, so it can't ship an unchecked commit. No dry run before an ordinary ship: a red upload run costs the same as

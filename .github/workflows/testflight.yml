@@ -49,10 +49,9 @@ env:
   BUNDLE_ID: com.kaichuan.bilifast
   # App Store Connect → the app → App Information → Apple ID.
   ASC_APP_ID: "6823476667"
-  # The Swift app shipped builds 1-8; Flutter builds start at 100 so they're easy to tell apart.
-  BUILD_NUMBER_FLOOR: "99"
-  # The Swift app shipped 0.1.0.
-  BUILD_NAME: 0.2.0
+  # Must match pubspec.yaml's version. Build numbers count from 1 within each version: iOS needs them unique only
+  # per version (the Swift app shipped 0.1.0 (1-8), the first Flutter builds 0.2.0 (100)).
+  BUILD_NAME: 1.0.0
   FLUTTER_VERSION: 3.47.7
   # Flutter 3.47.7 with Xcode 26.6 is the pair Kazumi has proven. The image keeps the
   # Xcode_26.6.app path across patch releases, so the build number is checked too.
@@ -196,11 +195,11 @@ jobs:
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
-          # A brand-new app has no builds yet; anything else non-numeric is an error.
+          # A new version has no builds yet; anything else non-numeric is an error.
           # For a new app the CLI exits 0 and prints "Did not find latest build ...". Otherwise it
           # logs "Found build number N ..." and then prints N alone on the last line.
           status=0
-          output=$(app-store-connect get-latest-testflight-build-number "$ASC_APP_ID" --all-versions 2>&1) || status=$?
+          output=$(app-store-connect get-latest-testflight-build-number "$ASC_APP_ID" --pre-release-version "$BUILD_NAME" 2>&1) || status=$?
           if echo "$output" | grep -qiE "no build|did not find latest build"; then
             latest=0
           elif [ "$status" -ne 0 ]; then
@@ -211,8 +210,8 @@ jobs:
           case "$latest" in
             ''|*[!0-9]*) echo "App Store Connect gave no build number: '$output'"; exit 1 ;;
           esac
-          next=$(( (10#$latest > BUILD_NUMBER_FLOOR ? 10#$latest : BUILD_NUMBER_FLOOR) + 1 ))
-          echo "latest uploaded build is $latest; this one is $next"
+          next=$(( 10#$latest + 1 ))
+          echo "latest uploaded build of $BUILD_NAME is $latest; this one is $next"
           echo "BUILD_NUMBER=$next" >> "$GITHUB_ENV"
 
       - name: Build IPA
@@ -274,9 +273,10 @@ jobs:
           misses=0
           while [ "$SECONDS" -lt "$deadline" ]; do
             # macOS has no GNU timeout: perl's alarm stops a hung call after 120 s. NOT_FOUND for the
-            # first few minutes is normal.
+            # first few minutes is normal. Build numbers repeat across versions, so the version is part of the match.
             if output=$(perl -e 'alarm shift; exec @ARGV' 120 app-store-connect builds list \
-                  --app-id "$ASC_APP_ID" --build-version-number "$BUILD_NUMBER" --json 2> "$RUNNER_TEMP/asc.err") \
+                  --app-id "$ASC_APP_ID" --pre-release-version "$BUILD_NAME" --build-version-number "$BUILD_NUMBER" \
+                  --json 2> "$RUNNER_TEMP/asc.err") \
                 && state=$(printf '%s' "$output" | python -c 'import json,sys; b=json.load(sys.stdin); print(b[0]["attributes"]["processingState"] if b else "NOT_FOUND")'); then
               misses=0
             else

@@ -524,8 +524,7 @@ Everything is in `docs/reference/testflight-flutter.md`. In short:
   covers the Swift repo's runs; the Swift app is frozen, so the two don't build at once.
 - **Toolchain:** Flutter is pinned through `subosito/flutter-action`, with Xcode 26.6 pinned.
 - **Signing:** `use-profiles` with an export-options plist, then `flutter build ipa --build-number="$BUILD_NUMBER"`.
-- **Build numbers:** they continue above the Swift builds (8 so far) by themselves. A floor of 99 marks the Flutter
-  builds clearly.
+- **Build numbers:** they count from 1 within each version (1.0.0 (1) after 0.2.0 (100), KaiC 2026-10-18).
 - **Starting a build:** `scripts/testflight.py start` (after a `--dry-run` whenever the workflow changes), and
   one `gh run view` about 20 minutes later. Report the build number, what changed and the phone steps.
 
