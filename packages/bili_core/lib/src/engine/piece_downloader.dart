@@ -62,10 +62,16 @@ final class CopyTargets {
   List<String> _remaining() => candidates.where((url) => !_taken.containsValue(url)).toList();
 }
 
-/// Port of PieceDownloader.swift, without resumed prefixes and without deadlines: the engine has no playhead
-/// yet, so outside a hurry a copy follows `hedgeDue` as if its segment were due far ahead.
+/// The longest prefix the copies of one piece have kept so far, shared by its rounds.
+final class _Kept {
+  Prefix prefix = Prefix.empty;
+}
+
+/// Port of PieceDownloader.swift.
 final class PieceDownloader {
   PieceDownloader(this.ctx) : runner = AttemptRunner(ctx);
+
+  static const resumeMinBytes = 32 * 1024;
 
   final EngineContext ctx;
   final AttemptRunner runner;
@@ -73,7 +79,8 @@ final class PieceDownloader {
   /// One piece, in up to `pieceRounds` rounds. Each round walks the candidates three at a time: the
   /// first copy starts at once, the backup copy once the first is late (see [hedgeDue]), and in a hurry
   /// a third once the backup is late too (see [hurryHedgeDue]); the first to finish wins and the others
-  /// are cancelled. A copy skips a full node while another has room ([CopyTargets]).
+  /// are cancelled. A copy skips a full node while another has room ([CopyTargets]). Bytes already
+  /// received survive into the next try. [deadline] returns when playback needs the piece (monotonic ms).
   Future<AttemptOutput> download({
     required ByteRange piece,
     required int index,
@@ -81,10 +88,12 @@ final class PieceDownloader {
     required List<String> preferred,
     required PieceMode mode,
     required double priority,
+    double Function()? deadline,
     bool Function()? hurry,
     CancelToken? cancel,
   }) async {
     final started = ctx.clock.nowMs();
+    final kept = _Kept();
     Object lastError = const RipperError(RipperErrorKind.noNodes);
     for (var round = 0; round < ctx.config.pieceRounds; round++) {
       if (round > 0 && !await ctx.pauseBeforeRound(round, startedAt: started, cancel: cancel)) break;
@@ -113,7 +122,8 @@ final class PieceDownloader {
         if (targets.candidates.isEmpty) break;
         final copies = [for (final _ in targets.candidates.take(width)) AttemptProgress()];
         try {
-          final output = await _race(targets, copies, piece, resolver, mode, priority, hurry, cancel);
+          final output = await _race(targets, copies, piece, resolver, mode, priority, deadline, hurry, kept, cancel);
+          ctx.auto?.delivered(piece.length);
           ctx.stats.delivered(piece.length);
           return output;
         } catch (error) {
@@ -131,7 +141,9 @@ final class PieceDownloader {
     throw lastError;
   }
 
-  /// Copy k waits on copy k - 1; a copy that is never needed ends without sending a request.
+  /// Copy k waits on copy k - 1; a copy that is never needed ends without sending a request. As with Swift's task
+  /// group, the race ends only once every copy has, so a losing copy has reported to the node records and the
+  /// resolver by the time the piece is returned.
   Future<AttemptOutput> _race(
     CopyTargets targets,
     List<AttemptProgress> copies,
@@ -139,13 +151,26 @@ final class PieceDownloader {
     Resolver resolver,
     PieceMode mode,
     double priority,
+    double Function()? deadline,
     bool Function()? hurry,
+    _Kept kept,
     CancelToken? cancel,
   ) {
+    final hasDeadline = deadline?.call().isFinite ?? false;
     final race = CancelToken(cancel);
     final result = Completer<AttemptOutput>();
+    AttemptOutput? winner;
     var pending = copies.length;
     Object lastError = const RipperError(RipperErrorKind.noNodes);
+
+    Prefix resumeFor(int position) {
+      Prefix? live;
+      for (final copy in copies.take(position)) {
+        final prefix = copy.prefix();
+        if (live == null || prefix.bytes > live.bytes) live = prefix;
+      }
+      return resumeBase(prefix: kept.prefix, live: live, pieceLength: piece.length);
+    }
 
     Future<void> runCopy(int position) async {
       final progress = copies[position];
@@ -160,6 +185,8 @@ final class PieceDownloader {
             pieceLength: piece.length,
             resolver: resolver,
             mode: mode,
+            hasDeadline: hasDeadline,
+            deadline: deadline,
             hurry: hurry,
             cancel: race,
           );
@@ -173,17 +200,21 @@ final class PieceDownloader {
             resolver: resolver,
             priority: priority + (position > 0 ? 20 : 0),
             queueClass: mode.queueClass,
+            deadline: deadline,
             copy: mode == PieceMode.probe ? 1 : position + 1,
+            resumeBase: () => resumeFor(position),
             cancel: race,
           );
-          if (!result.isCompleted) {
+          if (winner == null) {
+            winner = output;
             for (final copy in copies) {
               copy.outrun = true;
             }
-            result.complete(output);
             race.cancel();
           }
         } catch (error) {
+          final prefix = progress.prefix();
+          if (prefix.bytes < piece.length && prefix.bytes > kept.prefix.bytes) kept.prefix = prefix;
           progress.failed = true;
           rethrow;
         }
@@ -191,8 +222,13 @@ final class PieceDownloader {
         if (error is! CancelledException) lastError = error;
       } finally {
         pending -= 1;
-        if (pending == 0 && !result.isCompleted) {
-          result.completeError((cancel?.isCancelled ?? false) ? const CancelledException() : lastError);
+        if (pending == 0) {
+          final output = winner;
+          if (output != null) {
+            result.complete(output);
+          } else {
+            result.completeError((cancel?.isCancelled ?? false) ? const CancelledException() : lastError);
+          }
         }
       }
     }
@@ -203,9 +239,15 @@ final class PieceDownloader {
     return result.future.whenComplete(race.dispose);
   }
 
+  static Prefix resumeBase({required Prefix prefix, required Prefix? live, required int pieceLength}) {
+    var base = prefix.bytes >= resumeMinBytes ? prefix : Prefix.empty;
+    if (live != null && live.bytes >= resumeMinBytes && live.bytes > base.bytes) base = live;
+    return base.bytes >= pieceLength ? Prefix.empty : base;
+  }
+
   /// Whether copy [position] sends its request. In a hurry it goes once the copy before it is late or has
-  /// failed. Otherwise the second copy follows [hedgeDue], and a third waits for a hurry: when the second
-  /// fails first, the round's walk moves on instead.
+  /// failed. Otherwise the second copy follows [hedgeDue] or the delay, and a third waits for a hurry: when
+  /// the second fails first, the round's walk moves on instead.
   Future<bool> _waitForCopy(
     int position, {
     required AttemptProgress previous,
@@ -215,12 +257,15 @@ final class PieceDownloader {
     required int pieceLength,
     required Resolver resolver,
     required PieceMode mode,
+    required bool hasDeadline,
+    required double Function()? deadline,
     required bool Function()? hurry,
     required CancelToken cancel,
   }) async {
     if (mode == PieceMode.probe) return true;
     final measured = ctx.meter.hedgeDelayMs(ctx.config.hedgeDelayMs);
-    final delay = mode == PieceMode.startup ? min(200.0, measured) : measured;
+    final delay = mode == PieceMode.startup ? min(hasDeadline ? 200.0 : 250.0, measured) : measured;
+    final waitStarted = ctx.clock.nowMs();
     while (true) {
       final hurried = hurry?.call() ?? false;
       if (previous.failed) return hurried || position == 1;
@@ -229,10 +274,15 @@ final class PieceDownloader {
             hurryHedgeDue(previous, url: previousURL(), pieceLength: pieceLength, candidates: candidates)) {
           return true;
         }
-      } else if (position == 1 &&
-          previous.started &&
-          hedgeDue(previous, delayMs: delay, deadlineAt: double.infinity, copyBps: resolver.speed(copyURL()))) {
-        return true;
+      } else if (position == 1) {
+        if (hasDeadline && deadline != null) {
+          if (previous.started &&
+              hedgeDue(previous, delayMs: delay, deadlineAt: deadline(), copyBps: resolver.speed(copyURL()))) {
+            return true;
+          }
+        } else if (ctx.clock.nowMs() - waitStarted >= delay) {
+          return true;
+        }
       }
       await cancellableSleep(50, cancel);
     }
@@ -278,7 +328,8 @@ final class PieceDownloader {
     final elapsed = now - previous.startedAt;
     if (!previous.gotHeaders) return elapsed >= (ttfb > 0 ? min(600, max(250, ttfb * 2)) : 250);
     if (now - previous.lastProgressAt >= 1000) return true;
-    return elapsed >= max(400, (expected ?? ctx.config.hedgeDelayMs) * 2) && previous.received < pieceLength * 0.75;
+    final arrived = previous.base.bytes + previous.received;
+    return elapsed >= max(400, (expected ?? ctx.config.hedgeDelayMs) * 2) && arrived < pieceLength * 0.75;
   }
 
   /// BTR `pieceCandidates`: the assigned node first, then the fastest known nodes.
