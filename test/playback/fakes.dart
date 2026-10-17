@@ -60,6 +60,8 @@ final class FakeEngine implements PlaybackEngine {
   final playheads = <({String token, double seconds, double rate})>[];
   final buffers = <({String token, double aheadSeconds, bool playing})>[];
   final stalls = <String>[];
+  final hints = <({String token, double? seconds})>[];
+  final preconnects = <List<String>>[];
   int cacheDrops = 0;
   int _next = 0;
 
@@ -108,6 +110,12 @@ final class FakeEngine implements PlaybackEngine {
 
   @override
   void dropCache() => cacheDrops += 1;
+
+  @override
+  void hint(String token, double? seconds) => hints.add((token: token, seconds: seconds));
+
+  @override
+  void preconnect(List<String> urls) => preconnects.add(urls);
 
   @override
   Stream<FatalReport> get fatals => fatalController.stream;

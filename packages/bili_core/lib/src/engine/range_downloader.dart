@@ -93,7 +93,8 @@ final class RangeDownloader {
   /// disagrees fails the range before any of its bytes are emitted. [hurry] says whether playback is about to
   /// need this range: it is read once here, to size and place the pieces, and again by each piece while it
   /// waits to send another copy. [deadline] returns when playback needs the range, as a monotonic time in ms;
-  /// it is re-read on every pass of the connection queue and by each piece's backup copy.
+  /// it is re-read on every pass of the connection queue and by each piece's backup copy. A startup range with
+  /// [burst] races its head first (`RipperConfig.seekBurst`); [lane] ranks every request (`RequestLane`).
   Future<void> stream(
     ByteRange range,
     Resolver resolver, {
@@ -104,18 +105,25 @@ final class RangeDownloader {
     int? expectedTotal,
     bool Function()? hurry,
     CancelToken? cancel,
+    bool burst = false,
+    RequestLane lane = RequestLane.any,
   }) async {
     final hurryCheck = ctx.config.hurry ? hurry : null;
     final hurried = hurryCheck?.call() ?? false;
-    var knownTotal = expectedTotal;
-    void check(AttemptOutput output) {
-      final total = output.total;
-      if (total == null) return;
-      if (knownTotal != null && knownTotal != total) throw const RipperError(RipperErrorKind.totalMismatch);
-      knownTotal = total;
-    }
+    final check = _TotalCheck(expectedTotal);
 
     var preferred = resolver.rangeCandidates();
+    if (startup && burst) {
+      return _burst(range, resolver,
+          preferred: preferred,
+          hurried: hurried,
+          hurry: hurryCheck,
+          deadline: deadline,
+          check: check,
+          emit: emit,
+          cancel: cancel,
+          lane: lane);
+    }
     var assignable = preferred;
     var remaining = range;
     var indexOffset = 0;
@@ -135,6 +143,7 @@ final class RangeDownloader {
         deadline: deadline,
         hurry: hurryCheck,
         cancel: cancel,
+        lane: lane,
       );
       check(result);
       emit(result.bytes);
@@ -144,6 +153,43 @@ final class RangeDownloader {
       assignable = preferred.where((url) => url == result.url || resolver.speed(url) > 0).toList();
       indexOffset = 1;
     }
+    final (parts, primaries) =
+        _place(remaining, resolver, preferred: preferred, assignable: assignable, hurried: hurried);
+    final mode = startup ? PieceMode.startup : PieceMode.normal;
+    final order = preferred;
+    final run = _InOrder(cancel, check: check.call, emit: emit);
+    for (var offset = 0; offset < parts.length; offset++) {
+      final primary = offset < primaries.length ? primaries[offset] : order.firstOrNull;
+      final piecePreferred = primary == null ? order : [primary, ...order.where((url) => url != primary)];
+      final pieceIndex = offset + indexOffset;
+      final piecePriority = startup ? 120.0 - min(30, pieceIndex) : priority - min(20, pieceIndex);
+      run.add(
+        (token) => pieces.download(
+          piece: parts[offset],
+          index: pieceIndex,
+          resolver: resolver,
+          preferred: piecePreferred,
+          mode: mode,
+          priority: piecePriority,
+          deadline: deadline,
+          hurry: hurryCheck,
+          cancel: token,
+          lane: lane,
+        ),
+      );
+    }
+    await run.close();
+  }
+
+  /// The pieces of [remaining] and the node each tries first: by expected finish in a hurry, otherwise in
+  /// weighted turns over [assignable].
+  (List<ByteRange>, List<String>) _place(
+    ByteRange remaining,
+    Resolver resolver, {
+    required List<String> preferred,
+    required List<String> assignable,
+    required bool hurried,
+  }) {
     final concurrency = ctx.pool.limit;
     final rescueReserve = concurrency >= 8 ? min(8, max(1, (concurrency + 7) ~/ 8)) : 0;
     final pieceConcurrency = max(1, concurrency - rescueReserve);
@@ -170,66 +216,228 @@ final class RangeDownloader {
             speed: resolver.speed,
             trialKey: resolver,
             isFull: (url, placed) => ctx.nodes.isFull(url, extraInflight: placed));
-    final mode = startup ? PieceMode.startup : PieceMode.normal;
-    final order = preferred;
+    return (parts, primaries);
+  }
 
-    final local = CancelToken(cancel);
-    final done = Completer<void>();
-    final ready = <int, AttemptOutput>{};
-    var next = 0;
-    var pending = parts.length;
-    Object? failure;
-    StackTrace? failureStack;
-
-    Future<void> runPiece(int offset) async {
-      final primary = offset < primaries.length ? primaries[offset] : order.firstOrNull;
-      final piecePreferred = primary == null ? order : [primary, ...order.where((url) => url != primary)];
-      final pieceIndex = offset + indexOffset;
-      final piecePriority = startup ? 120.0 - min(30, pieceIndex) : priority - min(20, pieceIndex);
-      try {
-        final output = await pieces.download(
-          piece: parts[offset],
-          index: pieceIndex,
-          resolver: resolver,
-          preferred: piecePreferred,
-          mode: mode,
-          priority: piecePriority,
-          deadline: deadline,
-          hurry: hurryCheck,
-          cancel: local,
+  /// A seek's head, first [RipperConfig.seekBurstBytes] of it in 64 KiB pieces, all asked for at once: the first on
+  /// [RipperConfig.seekBurstCopies] nodes together, the others on two, so the first piece of a cold seek no longer
+  /// waits 250-600 ms for its second copy. The rest of the range is placed as a startup range's, at once when the
+  /// nodes are measured; otherwise the first piece is the probe, raced over every candidate, and the rest waits for
+  /// what it measures. In the pool the rest queues behind the head, whose pieces are critical.
+  Future<void> _burst(
+    ByteRange range,
+    Resolver resolver, {
+    required List<String> preferred,
+    required bool hurried,
+    required bool Function()? hurry,
+    required double Function()? deadline,
+    required _TotalCheck check,
+    required void Function(Uint8List bytes) emit,
+    required CancelToken? cancel,
+    required RequestLane lane,
+  }) async {
+    const pieceBytes = 64 * 1024;
+    final headLength = min(range.length, max(pieceBytes, ctx.config.seekBurstBytes));
+    final head = [
+      for (var start = range.start; start < range.start + headLength; start += pieceBytes)
+        ByteRange(start, min(range.start + headLength, start + pieceBytes) - 1),
+    ];
+    final known = preferred.any(ctx.nodes.isKnown);
+    final best = known
+        ? HurryPlacement.byExpectedFinish(preferred,
+            pieceBytes: pieceBytes, nodes: ctx.nodes, delivered: (url) => resolver.bans?.hasDelivered(url) ?? true)
+        : preferred;
+    final width = max(1, ctx.config.seekBurstCopies);
+    final run = _InOrder(cancel, check: check.call, emit: emit);
+    Future<AttemptOutput> headPiece(int index) => run.add(
+          (token) => pieces.download(
+            piece: head[index],
+            index: index,
+            resolver: resolver,
+            // Each piece starts its race one node further along, so the head spreads over the best nodes.
+            preferred: index == 0 || best.isEmpty
+                ? best
+                : [...best.skip(index % best.length), ...best.take(index % best.length)],
+            mode: index == 0 && !known ? PieceMode.probe : PieceMode.burst,
+            priority: 220.0 - index,
+            deadline: deadline,
+            hurry: hurry,
+            cancel: token,
+            burstWidth: index == 0 ? width : min(width, 2),
+            lane: lane,
+          ),
         );
-        if (failure != null) return;
+    final first = headPiece(0);
+    for (var index = 1; index < head.length; index++) {
+      headPiece(index);
+    }
+    final headEnd = head.last.end;
+    if (headEnd < range.end) {
+      var ordered = preferred;
+      var assignable = preferred.where((url) => resolver.speed(url) > 0).toList();
+      if (known) {
+        // The head's copies ask for their connections a microtask after they start (see PieceDownloader); the rest
+        // must ask after them, or its pieces take the free connections first.
+        await Future<void>.value();
+      } else {
+        AttemptOutput? measured;
+        try {
+          measured = await first;
+        } catch (_) {
+          // The run has failed with it; close() reports why.
+        }
+        if (measured == null) return run.close();
+        final winner = measured.url;
+        ordered = [winner, ...preferred.where((url) => url != winner)];
+        assignable = ordered.where((url) => url == winner || resolver.speed(url) > 0).toList();
+      }
+      final (parts, primaries) = _place(ByteRange(headEnd + 1, range.end), resolver,
+          preferred: ordered, assignable: assignable.isEmpty ? ordered : assignable, hurried: hurried);
+      for (var offset = 0; offset < parts.length; offset++) {
+        final primary = offset < primaries.length ? primaries[offset] : ordered.first;
+        final pieceIndex = head.length + offset;
+        run.add(
+          (token) => pieces.download(
+            piece: parts[offset],
+            index: pieceIndex,
+            resolver: resolver,
+            preferred: [primary, ...ordered.where((url) => url != primary)],
+            mode: PieceMode.startup,
+            priority: 120.0 - min(30, pieceIndex),
+            deadline: deadline,
+            hurry: hurry,
+            cancel: token,
+            lane: lane,
+          ),
+        );
+      }
+    }
+    await run.close();
+  }
+
+  /// [range] as one piece, its first [copies] copies raced together on the nodes expected to deliver it first:
+  /// a small audio read under [RipperConfig.audioFirst], where a probe and a split only add round trips.
+  Future<void> whole(
+    ByteRange range,
+    Resolver resolver, {
+    required int copies,
+    required double priority,
+    required void Function(Uint8List bytes) emit,
+    double Function()? deadline,
+    int? expectedTotal,
+    bool Function()? hurry,
+    CancelToken? cancel,
+    RequestLane lane = RequestLane.any,
+  }) async {
+    final preferred = resolver.rangeCandidates();
+    final ordered = preferred.any(ctx.nodes.isKnown)
+        ? HurryPlacement.byExpectedFinish(preferred,
+            pieceBytes: range.length, nodes: ctx.nodes, delivered: (url) => resolver.bans?.hasDelivered(url) ?? true)
+        : preferred;
+    final output = await pieces.download(
+      piece: range,
+      index: 0,
+      resolver: resolver,
+      preferred: ordered,
+      mode: PieceMode.burst,
+      priority: priority,
+      deadline: deadline,
+      hurry: ctx.config.hurry ? hurry : null,
+      cancel: cancel,
+      burstWidth: copies,
+      lane: lane,
+    );
+    _TotalCheck(expectedTotal)(output);
+    emit(output.bytes);
+  }
+}
+
+/// Every piece of a range must advertise the same file size, and the one the headers gave when known.
+final class _TotalCheck {
+  _TotalCheck(this._known);
+
+  int? _known;
+
+  void call(AttemptOutput output) {
+    final total = output.total;
+    if (total == null) return;
+    if (_known != null && _known != total) throw const RipperError(RipperErrorKind.totalMismatch);
+    _known = total;
+  }
+}
+
+/// Pieces of one range, run together and handed on in the order they were added. The first failure cancels the
+/// rest; like Swift's task group, [close] ends only once every piece has.
+final class _InOrder {
+  _InOrder(CancelToken? cancel, {required this.check, required this.emit}) : _local = CancelToken(cancel);
+
+  final CancelToken _local;
+  final void Function(AttemptOutput output) check;
+  final void Function(Uint8List bytes) emit;
+  final _ready = <int, AttemptOutput>{};
+  final _done = Completer<void>();
+  var _added = 0;
+  var _next = 0;
+  var _pending = 0;
+  var _closed = false;
+  Object? _failure;
+  StackTrace? _failureStack;
+
+  Future<AttemptOutput> add(Future<AttemptOutput> Function(CancelToken cancel) download) {
+    final order = _added++;
+    _pending += 1;
+    final result = Completer<AttemptOutput>();
+    // A failed piece fails the range on its own, so nobody has to wait on its future.
+    unawaited(result.future.then<void>((_) {}, onError: (Object _) {}));
+    Future<void> run() async {
+      try {
+        final output = await download(_local);
+        if (_failure != null) {
+          result.completeError(const CancelledException());
+          return;
+        }
         check(output);
-        ready[offset] = output;
-        for (var item = ready.remove(next); item != null; item = ready.remove(next)) {
+        result.complete(output);
+        _ready[order] = output;
+        for (var item = _ready.remove(_next); item != null; item = _ready.remove(_next)) {
           emit(item.bytes);
-          next += 1;
+          _next += 1;
         }
       } catch (error, stack) {
-        if (failure != null) return;
-        failure = error;
-        failureStack = stack;
-        local.cancel();
+        if (!result.isCompleted) result.completeError(error, stack);
+        if (_failure != null) return;
+        _failure = error;
+        _failureStack = stack;
+        _local.cancel();
       } finally {
-        pending -= 1;
-        if (pending == 0) {
-          final error = failure;
-          if (error != null) {
-            done.completeError(error, failureStack);
-          } else {
-            done.complete();
-          }
-        }
+        _pending -= 1;
+        _finish();
       }
     }
 
-    for (var offset = 0; offset < parts.length; offset++) {
-      unawaited(runPiece(offset));
-    }
+    unawaited(run());
+    return result.future;
+  }
+
+  /// No more pieces will be added; completes once every piece has ended, with the first failure if there was one.
+  Future<void> close() async {
+    _closed = true;
+    _finish();
     try {
-      await done.future;
+      await _done.future;
     } finally {
-      local.dispose();
+      _local.dispose();
+    }
+  }
+
+  void _finish() {
+    if (!_closed || _pending > 0 || _done.isCompleted) return;
+    final error = _failure;
+    if (error != null) {
+      _done.completeError(error, _failureStack);
+    } else {
+      _done.complete();
     }
   }
 }
+

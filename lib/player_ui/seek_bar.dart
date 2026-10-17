@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -7,7 +8,7 @@ import '../shared/theme.dart';
 /// The seek bar (port of ProgressBar.swift, without chapter ticks yet): played in pink, buffered in white at
 /// 40%, the rest at 20%, and the TV-face thumb. It paints from [repaint] without rebuilding. A touch scrubs at
 /// once and the finger is followed; [onCommit] comes when it lifts.
-class SeekBar extends StatelessWidget {
+class SeekBar extends StatefulWidget {
   const SeekBar({
     super.key,
     required this.position,
@@ -17,7 +18,14 @@ class SeekBar extends StatelessWidget {
     required this.onScrub,
     required this.onCommit,
     required this.onCancel,
+    this.onRest,
   });
+
+  /// How long the finger must stay put for [onRest].
+  static const restDelay = Duration(milliseconds: 150);
+
+  /// A finger never stays exactly still; moving less than this many logical pixels is still resting.
+  static const restSlop = 3.0;
 
   /// Seconds, read when painting.
   final double Function() position;
@@ -30,6 +38,49 @@ class SeekBar extends StatelessWidget {
   /// The touch turned out to be something else, such as a vertical swipe.
   final VoidCallback onCancel;
 
+  /// The finger has stayed at one spot for [restDelay] while on the bar, where the user is likely to let go.
+  final ValueChanged<double>? onRest;
+
+  @override
+  State<SeekBar> createState() => _SeekBarState();
+
+  static double _seconds(double x, {required double width, required double duration}) {
+    final travel = math.max(width - BiliMetrics.thumbWidth, 1.0);
+    final ratio = ((x - BiliMetrics.thumbWidth / 2) / travel).clamp(0.0, 1.0);
+    return ratio * math.max(duration, 0);
+  }
+}
+
+class _SeekBarState extends State<SeekBar> {
+  Timer? _restTimer;
+
+  /// Where the finger last came to rest.
+  double? _anchor;
+
+  @override
+  void dispose() {
+    _restTimer?.cancel();
+    super.dispose();
+  }
+
+  void _follow(double x, double width) {
+    if (widget.onRest == null) return;
+    final anchor = _anchor;
+    if (anchor != null && (x - anchor).abs() <= SeekBar.restSlop) return;
+    _anchor = x;
+    _restTimer?.cancel();
+    _restTimer = Timer(SeekBar.restDelay, () {
+      _restTimer = null;
+      if (mounted) widget.onRest?.call(SeekBar._seconds(x, width: width, duration: widget.duration()));
+    });
+  }
+
+  void _lifted() {
+    _restTimer?.cancel();
+    _restTimer = null;
+    _anchor = null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -39,30 +90,43 @@ class SeekBar extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            double at(Offset local) => _seconds(local.dx, width: width, duration: duration());
+            double at(Offset local) => SeekBar._seconds(local.dx, width: width, duration: widget.duration());
+            void scrub(Offset local) {
+              widget.onScrub(at(local));
+              _follow(local.dx, width);
+            }
+
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onHorizontalDragDown: (details) => onScrub(at(details.localPosition)),
-              onHorizontalDragStart: (details) => onScrub(at(details.localPosition)),
-              onHorizontalDragUpdate: (details) => onScrub(at(details.localPosition)),
-              onHorizontalDragEnd: (details) => onCommit(at(details.localPosition)),
-              onHorizontalDragCancel: onCancel,
-              onTapUp: (details) => onCommit(at(details.localPosition)),
+              onHorizontalDragDown: (details) => scrub(details.localPosition),
+              onHorizontalDragStart: (details) => scrub(details.localPosition),
+              onHorizontalDragUpdate: (details) => scrub(details.localPosition),
+              onHorizontalDragEnd: (details) {
+                _lifted();
+                widget.onCommit(at(details.localPosition));
+              },
+              onHorizontalDragCancel: () {
+                _lifted();
+                widget.onCancel();
+              },
+              onTapUp: (details) {
+                _lifted();
+                widget.onCommit(at(details.localPosition));
+              },
               child: CustomPaint(
                 size: Size(width, BiliMetrics.barTouchHeight),
-                painter: _SeekBarPainter(position: position, duration: duration, buffered: buffered, repaint: repaint),
+                painter: _SeekBarPainter(
+                  position: widget.position,
+                  duration: widget.duration,
+                  buffered: widget.buffered,
+                  repaint: widget.repaint,
+                ),
               ),
             );
           },
         ),
       ),
     );
-  }
-
-  static double _seconds(double x, {required double width, required double duration}) {
-    final travel = math.max(width - BiliMetrics.thumbWidth, 1.0);
-    final ratio = ((x - BiliMetrics.thumbWidth / 2) / travel).clamp(0.0, 1.0);
-    return ratio * math.max(duration, 0);
   }
 }
 

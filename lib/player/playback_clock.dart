@@ -16,6 +16,9 @@ final class PlaybackClock {
   static const staleAfterJumpSeconds = 1.5;
   static const jumpSettleMs = 3000.0;
 
+  /// A seek that may land on a keyframe instead of the exact spot can land a whole segment away from it.
+  static const keyframeJumpSeconds = 10.0;
+
   /// Readings arrive with tens of milliseconds of jitter; one this close to the prediction only nudges the
   /// clock, so danmaku glides instead of wobbling.
   static const smoothingWindowSeconds = 0.04;
@@ -23,6 +26,7 @@ final class PlaybackClock {
 
   final MonotonicClock _clock;
   double? _jumpTarget;
+  double _jumpTolerance = staleAfterJumpSeconds;
   double _jumpAtMs = 0;
   bool _fresh = true;
   double _seconds = 0;
@@ -44,7 +48,7 @@ final class PlaybackClock {
       case PositionChanged(:final seconds, :final hostMs, :final rate):
         if (_jumpTarget case final target?) {
           final settling = _clock.nowMs() - _jumpAtMs < jumpSettleMs;
-          if (settling && (seconds - target).abs() > staleAfterJumpSeconds) return false;
+          if (settling && (seconds - target).abs() > _jumpTolerance) return false;
           _jumpTarget = null;
         }
         final predicted = _seconds + (hostMs - _atMs) / 1000 * _rate;
@@ -70,8 +74,12 @@ final class PlaybackClock {
     return true;
   }
 
-  /// A seek moves the playhead before the player's next reading.
-  void jump(double seconds) => reset(seconds);
+  /// A seek moves the playhead before the player's next reading. A seek that is not [precise] lands on a keyframe
+  /// up to [keyframeJumpSeconds] away, and readings from there are taken at once.
+  void jump(double seconds, {bool precise = true}) {
+    reset(seconds);
+    if (!precise) _jumpTolerance = keyframeJumpSeconds;
+  }
 
   /// A new item starts at [seconds]. It can report 0 before its start seek lands, so as after a jump, readings
   /// far from [seconds] wait until one lands near it or [jumpSettleMs] pass.
@@ -79,6 +87,7 @@ final class PlaybackClock {
     _seconds = seconds;
     _atMs = _clock.nowMs();
     _jumpTarget = seconds;
+    _jumpTolerance = staleAfterJumpSeconds;
     _jumpAtMs = _atMs;
     _fresh = true;
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../shared/byte_range.dart';
 import 'cancel.dart';
 
@@ -28,6 +30,36 @@ abstract interface class RangeTransport {
   String get name;
 
   void close();
+}
+
+/// A transport that can open a connection before the first request needs it (`PlaybackEngine.preconnect`).
+/// Kept apart from [RangeTransport] so a transport without it, such as a test's, does nothing: Dart's `implements`
+/// takes no default body.
+abstract interface class WarmableTransport {
+  /// One tiny request to [url], so the connection to its host is open, and kept alive, for the requests that
+  /// follow. True when the node answered; never throws.
+  Future<bool> warm(Uri url);
+}
+
+/// Warms through [transport] when it is a [WarmableTransport], otherwise does nothing.
+Future<bool> warmConnection(RangeTransport transport, Uri url) =>
+    transport is WarmableTransport ? (transport as WarmableTransport).warm(url) : Future.value(false);
+
+/// A warm-up for a transport that keeps its connections alive: byte 0 of [url], read to the end, so the connection
+/// goes back to the transport's pool open. Errors only mean the head start is lost; the real request reports them.
+Future<bool> warmByFetch(RangeTransport transport, Uri url, {Duration timeout = const Duration(seconds: 5)}) async {
+  final cancel = CancelToken();
+  final timer = Timer(timeout, cancel.cancel);
+  try {
+    final response = await transport.fetch(url, ByteRange(0, 0), cancel: cancel);
+    await response.body.drain<void>();
+    return response.status == 206 || response.status == 200;
+  } catch (_) {
+    return false;
+  } finally {
+    timer.cancel();
+    cancel.dispose();
+  }
 }
 
 enum RipperErrorKind {

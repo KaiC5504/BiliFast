@@ -25,6 +25,13 @@ final class Rig {
   final stats = ValueNotifier(const OverlayStats(mode: PlaybackMode.btr));
   final duration = ValueNotifier<double>(120);
   final seeks = <double>[];
+  final precise = <bool>[];
+  final hints = <double?>[];
+
+  void seek(double seconds, {required bool precise}) {
+    seeks.add(seconds);
+    this.precise.add(precise);
+  }
 
   Future<void> mount(WidgetTester tester, {bool showStats = false, DanmakuTimeline? danmaku}) => tester.pumpWidget(
     Directionality(
@@ -40,7 +47,8 @@ final class Rig {
             showStats: showStats,
             duration: duration,
             danmaku: danmaku,
-            onSeek: seeks.add,
+            onSeek: seek,
+            onHint: hints.add,
           ),
         ),
       ),
@@ -94,7 +102,7 @@ void main() {
     expect(rig.player.calls, ['seek 0.0 precise', 'play']);
   });
 
-  testWidgets('a drag on the bar follows the finger and seeks once, precisely, on release', (tester) async {
+  testWidgets('a drag on the bar follows the finger and seeks once, to a keyframe, on release', (tester) async {
     final rig = Rig();
     await rig.mount(tester);
     rig.status(PlayerStatus.playing);
@@ -120,10 +128,73 @@ void main() {
     await tester.pump();
     final seek = rig.seekCalls().single.split(' ');
     expect(double.parse(seek[1]), closeTo(60, 0.01));
-    expect(seek[2], 'precise');
+    expect(seek, hasLength(2), reason: 'not precise: the player starts at a keyframe');
     expect(rig.seeks.single, closeTo(60, 0.01));
+    expect(rig.precise.single, isFalse);
     expect(rig.clock.seconds, closeTo(60, 0.01));
     expect(rig.timeLabel(tester), '01:00/02:00');
+    expect(rig.hints, isEmpty, reason: 'the finger never rested');
+  });
+
+  testWidgets('after a keyframe seek the clock takes the spot the player landed on', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    rig.status(PlayerStatus.playing);
+    rig.position(5);
+    await tester.pump();
+    final bar = tester.getRect(find.byKey(const ValueKey('player-bar')));
+    final travel = bar.width - BiliMetrics.thumbWidth;
+    await tester.tapAt(Offset(bar.left + BiliMetrics.thumbWidth / 2 + travel / 2, bar.center.dy));
+    await tester.pump();
+    expect(rig.clock.seconds, closeTo(60, 0.01));
+    // The keyframe before 60 s is at 56.5 s, further than a precise seek's 1.5 s.
+    rig.position(56.5);
+    await tester.pump();
+    expect(rig.clock.seconds, closeTo(56.5, 0.01));
+    expect(rig.timeLabel(tester), '00:56/02:00');
+  });
+
+  testWidgets('a finger resting on the bar for 150 ms hints where it rests, once per spot', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    final bar = tester.getRect(find.byKey(const ValueKey('player-bar')));
+    final travel = bar.width - BiliMetrics.thumbWidth;
+    Offset at(double seconds) => Offset(bar.left + BiliMetrics.thumbWidth / 2 + travel * seconds / 120, bar.center.dy);
+
+    final finger = await tester.startGesture(at(10));
+    await finger.moveTo(at(30));
+    await tester.pump(const Duration(milliseconds: 100));
+    await finger.moveTo(at(90));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(rig.hints, isEmpty, reason: 'the finger has not stayed anywhere for 150 ms');
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(rig.hints.single, closeTo(90, 0.01));
+
+    // A twitch smaller than the slop is still resting there.
+    await finger.moveBy(const Offset(1, 0));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(rig.hints, hasLength(1));
+
+    await finger.moveTo(at(45));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(rig.hints.last, closeTo(45, 0.01));
+    await finger.up();
+    await tester.pump();
+    expect(rig.hints, hasLength(2), reason: 'the seek takes the hint over; nothing cancels it');
+    expect(rig.seeks.single, closeTo(45, 0.01));
+  });
+
+  testWidgets('a drag that turns into a scroll after a hint cancels the hint', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    final bar = tester.getRect(find.byKey(const ValueKey('player-bar')));
+    final finger = await tester.startGesture(bar.center);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(rig.hints, hasLength(1), reason: 'a finger held still on the bar is resting too');
+    await finger.cancel();
+    await tester.pump();
+    expect(rig.hints.last, isNull);
+    expect(rig.seekCalls(), isEmpty);
   });
 
   testWidgets('a tap on the bar seeks there', (tester) async {
@@ -135,6 +206,7 @@ void main() {
     await tester.pump();
     expect(double.parse(rig.seekCalls().single.split(' ')[1]), closeTo(30, 0.01));
     expect(rig.seeks.single, closeTo(30, 0.01));
+    expect(rig.precise.single, isFalse, reason: 'any seek on the bar starts at a keyframe');
   });
 
   testWidgets('a page scroll that starts on the bar scrolls, seeks nothing and lets go of the target', (tester) async {
@@ -152,7 +224,8 @@ void main() {
                 stats: rig.stats,
                 showStats: false,
                 duration: rig.duration,
-                onSeek: rig.seeks.add,
+                onSeek: rig.seek,
+                onHint: rig.hints.add,
               ),
             ),
             const SizedBox(height: 2000),

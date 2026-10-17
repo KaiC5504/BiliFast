@@ -41,13 +41,16 @@ final class PlaybackError implements Exception {
 }
 
 final class PlaybackRequest {
-  const PlaybackRequest({required this.choice, required this.mode, required this.mediaHeaders});
+  const PlaybackRequest({required this.choice, required this.mode, required this.mediaHeaders, this.startSeconds = 0});
 
   final TrackChoice choice;
   final PlaybackMode mode;
 
   /// The Safari User-Agent and Bilibili's Referer, sent with every media request.
   final Map<String, String> mediaHeaders;
+
+  /// Where the player will start, for `RipperConfig.primeStart`.
+  final double startSeconds;
 }
 
 /// What the player loads. The playlists always come from the local server.
@@ -175,8 +178,11 @@ final class FatalReport {
 abstract interface class PlaybackEngine {
   /// Spawns the engine isolate. [transportFactory] runs inside that isolate, so it must be a top-level or
   /// static function.
-  static Future<PlaybackEngine> start({required RangeTransport Function() transportFactory}) =>
-      IsolatePlaybackEngine.start(transportFactory: transportFactory);
+  static Future<PlaybackEngine> start({
+    required RangeTransport Function() transportFactory,
+    EngineOptions options = const EngineOptions(),
+  }) =>
+      IsolatePlaybackEngine.start(transportFactory: transportFactory, options: options);
 
   /// Fetches both tracks' headers, builds the playlists and registers them with the local server.
   /// Throws [PlaybackError].
@@ -190,7 +196,7 @@ abstract interface class PlaybackEngine {
 
   Future<void> networkChanged({required bool interfaceChanged});
 
-  // These four are fire and forget, so four updates a second cost no round trip; after dispose they are dropped.
+  // These are fire and forget, so four updates a second cost no round trip; after dispose they are dropped.
 
   /// The playhead and the player's rate (0 while paused), about four times a second while a BTR source plays and
   /// after every jump. Deadlines, hurry and prefetch follow it, and cached segments it left behind are dropped.
@@ -204,6 +210,14 @@ abstract interface class PlaybackEngine {
 
   /// Memory pressure: every BTR playback drops its cached and still-downloading prefetched segments.
   void dropCache();
+
+  /// The user is about to seek to [seconds] (a finger resting on the seek bar): the playback starts the segments
+  /// there, and the seek's reads take them over. A newer hint replaces the last; null cancels it.
+  void hint(String token, double? seconds);
+
+  /// Opens a connection to every node a playurl's [urls] can be fetched from, before the header requests need
+  /// one: on the phone the headers arrived 0.78 s after the open. Errors only lose the head start.
+  void preconnect(List<String> urls);
 
   /// Ends when the engine does.
   Stream<FatalReport> get fatals;

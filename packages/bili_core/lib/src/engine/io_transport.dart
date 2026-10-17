@@ -6,7 +6,7 @@ import 'cancel.dart';
 import 'transport.dart';
 
 /// dart:io (HTTP/1.1): Windows, Android until cronet_http, and the tests.
-final class IoRangeTransport implements RangeTransport {
+final class IoRangeTransport implements RangeTransport, WarmableTransport {
   IoRangeTransport({this.headers = const {}, this.connectionsPerHost = 8})
       : _client = HttpClient()
           ..maxConnectionsPerHost = connectionsPerHost
@@ -91,6 +91,10 @@ final class IoRangeTransport implements RangeTransport {
     });
     return result.future;
   }
+
+  /// The connection the warm-up used stays in the HttpClient's pool for the engine's first request to that host.
+  @override
+  Future<bool> warm(Uri url) => warmByFetch(this, url);
 
   @override
   void close() => _client.close(force: true);

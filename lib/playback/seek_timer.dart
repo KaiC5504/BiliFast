@@ -3,7 +3,7 @@ import 'dart:math';
 /// Times a user's seek from the jump until playback moves again (port of SeekTimer.swift). Times are
 /// milliseconds on a monotonic clock.
 final class SeekTimer {
-  ({double atMs, double position})? _started;
+  ({double atMs, double position, bool exact})? _started;
   bool _reloading = false;
 
   bool get isRunning => _started != null;
@@ -15,13 +15,13 @@ final class SeekTimer {
   }
 
   /// A seek while paused is not timed: the wait would include however long the user stays paused.
-  /// Returns true when timing started.
-  bool jumped({required double position, required double atMs, required double rate}) {
+  /// Returns true when timing started. A seek that is not [exact] lands on a keyframe near [position] instead.
+  bool jumped({required double position, required double atMs, required double rate, bool exact = true}) {
     if (_reloading || rate <= 0) {
       _started = null;
       return false;
     }
-    _started = (atMs: atMs, position: position);
+    _started = (atMs: atMs, position: position, exact: exact);
     return true;
   }
 
@@ -35,10 +35,15 @@ final class SeekTimer {
   }
 
   /// A seek inside the buffer may never leave playing. Once the playhead has moved on from the jump, playback
-  /// resumed `advanced / rate` seconds ago; returns the seek's milliseconds then.
+  /// resumed `advanced / rate` seconds ago; returns the seek's milliseconds then. After a seek to a keyframe the
+  /// first reading says where it landed, and the playhead moves on from there.
   double? ticked({required double position, required double rate, required bool playing, required double atMs}) {
     final started = _started;
     if (started == null || !playing || rate <= 0) return null;
+    if (!started.exact) {
+      _started = (atMs: started.atMs, position: position, exact: true);
+      return null;
+    }
     final advanced = position - started.position;
     if (advanced < 0.2) return null;
     _started = null;

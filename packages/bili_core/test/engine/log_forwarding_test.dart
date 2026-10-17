@@ -40,6 +40,17 @@ void main() {
     expect(batches, hasLength(1));
   });
 
+  test('debug events are forwarded when asked, batched like the rest', () {
+    final batches = <List<LogEvent>>[];
+    final sink = ForwardingLogSink(batches.add, forwardDebug: true, batchSize: 2);
+    Logger(session: 'engine')
+      ..add(sink)
+      ..debug(LogCategory.engine, 'piece')
+      ..debug(LogCategory.engine, 'attempt cancelled');
+    expect(batches.single.map((event) => event.msg), ['piece', 'attempt cancelled']);
+    expect(batches.single.first.level, LogLevel.debug);
+  });
+
   test('replay delivers the forwarded event as it is, without redacting it again', () {
     final target = Logger(session: 'ui');
     final memory = MemorySink();

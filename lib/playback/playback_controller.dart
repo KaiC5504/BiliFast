@@ -189,6 +189,7 @@ class PlaybackController extends ChangeNotifier {
   bool _firstFrameTimed = true;
   bool _loggedPlayUrl = false;
   bool _autoPipSet = false;
+  bool _seekPrecise = true;
   double _startedAtMs = 0;
 
   /// Set when a playback is torn down and from just before `player.load`, until the player reports loading:
@@ -296,16 +297,27 @@ class PlaybackController extends ChangeNotifier {
     await _restart(sameChoice: false);
   }
 
-  /// A seek the user made, after the player was told.
-  void userSeeked(double seconds) {
+  /// A seek the user made, after the player was told. One that is not [precise] lands on a keyframe near [seconds].
+  void userSeeked(double seconds, {bool precise = true}) {
     final now = _nowMs();
     _stallFilter.jumped(now);
-    clock.jump(seconds);
+    clock.jump(seconds, precise: precise);
     _jumpedTo(seconds);
     danmaku.seeked((seconds * 1000).round());
     if (!_sawFirstFrame) return;
-    final timed = _seekTimer.jumped(position: seconds, atMs: now, rate: _playerRate);
-    _logger.info(LogCategory.player, 'seek', {'to': seconds.round(), 'mode': modeLabel, 'timed': timed});
+    final timed = _seekTimer.jumped(position: seconds, atMs: now, rate: _playerRate, exact: precise);
+    _seekPrecise = precise;
+    _logger.info(
+        LogCategory.player, 'seek', {'to': seconds.round(), 'mode': modeLabel, 'timed': timed, 'precise': precise});
+  }
+
+  /// The finger rests on the seek bar at [seconds] while dragging: the engine starts loading there. Null when the
+  /// drag ended without a seek.
+  void seekHint(double? seconds) {
+    final token = _btrToken;
+    if (token == null) return;
+    _engine.hint(token, seconds);
+    _logger.info(LogCategory.player, 'seek hint', {'at': seconds?.round() ?? -1});
   }
 
   /// The system is short of memory: the engine drops its prefetched segments and playback goes on.
@@ -413,11 +425,24 @@ class PlaybackController extends ChangeNotifier {
       if (dash == null) throw BiliError.notDash;
       _dash = dash;
       final choice = _choose(dash);
+      _preconnect(choice);
       await _prepareAndLoad(choice, time, current);
       _scheduleRefresh(choice, current);
     } catch (error, stack) {
       await _handle(error, stack, time, current);
     }
+  }
+
+  /// The engine opens its connections to the nodes while the local server check and the prepare call make their
+  /// round trips; direct mode's media requests are the player's own.
+  void _preconnect(TrackChoice choice) {
+    if (activeMode != PlaybackMode.btr) return;
+    _engine.preconnect([
+      choice.video.baseURL,
+      ...choice.video.backupURLs,
+      choice.audio.baseURL,
+      ...choice.audio.backupURLs,
+    ]);
   }
 
   /// Another codec from the playurl answer already in hand, while its URLs are fresh: the Swift app asks
@@ -562,8 +587,8 @@ class PlaybackController extends ChangeNotifier {
     _ensureCurrent(current);
     final PreparedSource source;
     try {
-      source = await _engine
-          .prepare(PlaybackRequest(choice: choice, mode: requested, mediaHeaders: BiliClient.mediaHeaders));
+      source = await _engine.prepare(PlaybackRequest(
+          choice: choice, mode: requested, mediaHeaders: BiliClient.mediaHeaders, startSeconds: time));
     } catch (error) {
       if (_isClosed(error)) throw _engineGone();
       final codec = error is PlaybackError && error.kind == PlaybackErrorKind.codecUnplayable;
@@ -1020,7 +1045,8 @@ class PlaybackController extends ChangeNotifier {
       worstSeekMs: max(s.worstSeekMs ?? 0, ms),
       stalls: lag ? s.stalls + 1 : s.stalls,
     );
-    _logger.info(LogCategory.player, 'seek resumed', {'ms': ms.round(), 'mode': modeLabel, 'via': via, 'lag': lag});
+    _logger.info(LogCategory.player, 'seek resumed',
+        {'ms': ms.round(), 'mode': modeLabel, 'via': via, 'lag': lag, 'precise': _seekPrecise});
   }
 
   /// The token of the source playing through the engine; null in direct mode and while nothing is loaded.

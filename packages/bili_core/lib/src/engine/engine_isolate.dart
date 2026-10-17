@@ -23,6 +23,7 @@ final class EngineOptions {
     this.config = const RipperConfig(),
     this.statsInterval = const Duration(seconds: 1),
     this.directPrepareSeconds = 20,
+    this.forwardDebugLogs = false,
   });
 
   /// The Swift app's default node setting; there is no setting yet.
@@ -33,6 +34,9 @@ final class EngineOptions {
 
   /// The whole direct-mode header fetch (`PlaybackController.directPrepareSeconds`).
   final double directPrepareSeconds;
+
+  /// The engine's debug events (every piece and attempt) reach the UI isolate's log too; for dev builds.
+  final bool forwardDebugLogs;
 }
 
 /// [PlaybackEngine] over a background isolate that owns the transport, the sessions and the local server.
@@ -108,6 +112,12 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
 
   @override
   void dropCache() => _notify(const _DropCache());
+
+  @override
+  void hint(String token, double? seconds) => _notify(_Hint(token, seconds));
+
+  @override
+  void preconnect(List<String> urls) => _notify(_Preconnect(List.of(urls)));
 
   @override
   Future<bool> ensureServing() async => await _call(_EnsureServing.new) as bool;
@@ -273,6 +283,19 @@ final class _DropCache extends _Notice {
   const _DropCache();
 }
 
+final class _Hint extends _Notice {
+  const _Hint(this.token, this.seconds);
+
+  final String token;
+  final double? seconds;
+}
+
+final class _Preconnect extends _Notice {
+  const _Preconnect(this.urls);
+
+  final List<String> urls;
+}
+
 final class _Ready {
   const _Ready(this.commands);
 
@@ -318,7 +341,8 @@ void _sendOr(SendPort port, Object message, Object Function() fallback) {
 }
 
 Future<void> _engineMain(_Boot boot) async {
-  final sink = ForwardingLogSink((events) => boot.events.send(_Logs(events)));
+  final sink =
+      ForwardingLogSink((events) => boot.events.send(_Logs(events)), forwardDebug: boot.options.forwardDebugLogs);
   Logger.shared.add(sink);
   final host = _EngineHost(boot, sink);
   try {
@@ -410,7 +434,43 @@ final class _EngineHost {
         for (final session in _sessions.values) {
           session.dropCache();
         }
+      case _Hint(:final token, :final seconds):
+        _sessions[token]?.hint(seconds);
+      case _Preconnect(:final urls):
+        _preconnect(urls);
     }
+  }
+
+  /// One connection to each node, three to Akamai: it answers only HTTP/1.1, where each request in flight needs
+  /// a connection of its own. Bilibili's own addresses are warmed too, since the header race starts on them.
+  void _preconnect(List<String> urls) {
+    if (urls.isEmpty) return;
+    final policy = _options.policy;
+    final mode = _options.nodeMode;
+    final all = [
+      if (mode is! CustomNodes) ...urls.where(policy.allowsURL),
+      ...NodeCatalog.representationURLs(
+          primary: urls.first, backups: urls.skip(1).toList(), mode: mode, policy: policy),
+    ];
+    final byNode = <String, Uri>{};
+    for (final url in all) {
+      final node = NodeCatalog.nodeKey(url);
+      final uri = Uri.tryParse(url);
+      if (node.isNotEmpty && uri != null) byNode.putIfAbsent(node, () => uri);
+    }
+    final started = MonotonicClock.system.nowMs();
+    final warming = [
+      for (final uri in byNode.values)
+        for (var copy = 0; copy < (NodeCatalog.isAkamai('$uri') ? 3 : 1); copy++) warmConnection(_transport, uri),
+    ];
+    unawaited(Future.wait(warming).then((answered) {
+      Logger.shared.info(LogCategory.engine, 'preconnect', {
+        'nodes': byNode.length,
+        'requests': warming.length,
+        'answered': answered.where((ok) => ok).length,
+        'ms': (MonotonicClock.system.nowMs() - started).roundToDouble(),
+      });
+    }));
   }
 
   Future<Object?> _run(_Command command) async {
@@ -458,6 +518,11 @@ final class _EngineHost {
       session
         ..setSegments(TrackKind.video, prepared.video.segments)
         ..setSegments(TrackKind.audio, prepared.audio.segments);
+      if (_options.config.primeStart) {
+        session
+          ..prime(TrackKind.video, seconds: request.startSeconds)
+          ..prime(TrackKind.audio, seconds: request.startSeconds);
+      }
       final token = _router.register(PlaybackBuilder.ripperAssets(prepared, read: session.read));
       _sessions[token] = session;
       session.onFatal = (error) {
