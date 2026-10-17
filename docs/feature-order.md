@@ -1,5 +1,7 @@
 # BiliFast in Flutter: which features move first
 
+Short version for KaiC. The full spec, with sources and checks for each slice, is [flutter-move-spec.md](flutter-move-spec.md).
+
 Draft for KaiC, 2026-10-17. Scope: everything on BiliNative `main` today (milestone 1 and milestone 2 builds A and B).
 Shape: Flutter screens, Dart BTR engine, AVPlayer in a native view on iOS (verdict.md). The Flutter app lives in the
 BiliNative repo (`app/`) and ships as the same BiliFast app, reusing the existing login from the keychain. The Swift

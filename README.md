@@ -2,7 +2,9 @@
 
 A throwaway spike that answers one question: can BiliFast (the Swift iOS Bilibili client in
 `D:\Repos\Apps\BiliNative`) move to Flutter without losing playback speed or picture quality?
-The answer is in [docs/verdict.md](docs/verdict.md).
+The answer is in [docs/verdict.md](docs/verdict.md): go, as Flutter screens with Apple's player kept on iOS.
+The handover for the move is [docs/flutter-move-spec.md](docs/flutter-move-spec.md), with the source inventories in
+`docs/reference/`.
 
 What is here:
 

@@ -1,5 +1,8 @@
 # Moving BiliFast to Flutter: what to change first
 
+Superseded by [flutter-move-spec.md](flutter-move-spec.md) where they differ: the app lives in BiliNative `app/` and
+reuses the keychain login (no new repo, no QR login), and the order is the spec's slices.
+
 Draft for KaiC's approval, 2026-10-17. Target shape (verdict.md, option B): Flutter for every screen, one Dart BTR
 engine for iPhone, Android and Windows, and each phone's own player in a native view (AVPlayer on iOS, ExoPlayer on
 Android) so HDR, Dolby Vision and PiP survive.
