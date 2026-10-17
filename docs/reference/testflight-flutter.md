@@ -29,12 +29,12 @@ to Flutter too. Rewritten 2026-10-17 in slice 0, when the app moved here from th
   - Build number = App Store Connect's latest + 1, floor 99, so Flutter builds start at 100.
   - `scripts/ipa_manifest.py` describes and checks the IPA (bundle id, build, purpose strings, App Store profile,
     beta-reports-active); the JSON manifest is the only artifact.
-  - The `processed` job waits for Apple's `VALID` on uploads.
+  - On uploads, the last step waits for Apple's `VALID` (every 15 s, up to an hour).
 - `.github/workflows/app-compile.yml`: on every push, analyze and tests on Linux (bili_core, the app, `test_ci`), then
   `flutter build ios --release --no-codesign` on `macos-26`. No secrets, no environment.
 - `test_ci/test_testflight_workflow.py`: Kazumi's static workflow tests, adapted. Also checks Flutter and Xcode are
   pinned the same in `.fvmrc`, the pubspec and both workflows, and that no other workflow can sign or upload.
-- `scripts/testflight.py`: `start [--dry-run] [--create-signing] [--again]`, `status`. It refuses to start unless the
+- `scripts/testflight.py`: `start [--dry-run] [--create-signing] [--again]`, `status [RUN_ID]`. It refuses to start unless the local gate and compile check passed on the commit, and the
   `testflight` environment is limited to `main` and holds all five secrets.
 
 ## The `testflight` environment (owner, once)
@@ -46,11 +46,19 @@ The ios-testflight skill's manual-steps §5 for repo `BiliFast`: the three `gh a
 
 ## The loop
 
-1. Push; wait for the "App compile check" to go green.
-2. `python scripts/testflight.py start` (after `--dry-run` whenever the workflow or scripts change).
-3. One `gh run view <id>` about 20 minutes later. Never `gh run watch` and never poll: on 2026-10-17 polling tripped
-   GitHub's rate limit and blocked KaiC's own requests.
+1. `python scripts/gate.py` on the committed tree (records the commit), then push. The compile check takes about
+   4 minutes (Linux and macOS jobs in parallel).
+2. `python scripts/testflight.py start` (`--dry-run` whenever the workflow or scripts change). It refuses unless the
+   gate and the compile check passed on that commit. About 7 GitHub calls; `test_ci/test_testflight_script.py` pins
+   the count.
+3. `python scripts/testflight.py status` once (1 call): about 10 minutes after a dry run, 20 after an upload. Never
+   `gh run watch` and never poll: on 2026-10-17 polling tripped GitHub's rate limit and blocked KaiC's own requests.
 4. Report the build number, what changed and phone steps.
+
+Speed notes (2026-10-18): Flutter's iOS artifacts and packages download while cli-tools installs; Apple processing is
+awaited inside the build job (no second runner and install), polling App Store Connect every 15 s; the
+flutter-action SDK cache stays off in the signing job (`cache-mode: none`, so no cache another workflow wrote can run
+next to the signing key).
 
 **Never** `set -x`, `flutter -v`/`--verbose`, `env`/`printenv`, or upload the IPA, Xcode logs or
 `Generated.xcconfig`. The log is public.

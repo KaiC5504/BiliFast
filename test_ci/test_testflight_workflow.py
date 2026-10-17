@@ -68,7 +68,6 @@ class WorkflowTest(unittest.TestCase):
 
     def test_cli_tools_come_from_the_hash_lock(self):
         self.assertIn(LOCKED_INSTALL, self.step("build", "Toolchain")["run"])
-        self.assertIn(LOCKED_INSTALL, self.step("processed", "Install cli-tools")["run"])
         self.assertNotRegex(self.text, r"pip3? install [^\n]*codemagic-cli-tools")
 
     def test_cli_tools_never_caches_its_token_on_disk(self):
@@ -100,8 +99,7 @@ class WorkflowTest(unittest.TestCase):
 
     def test_builds_only_main(self):
         self.assertEqual("github.ref == 'refs/heads/main'", self.jobs["build"]["if"])
-        self.assertEqual(["build"], [self.jobs[j].get("needs") for j in self.jobs
-                                     if j != "build"])
+        self.assertEqual(["build"], list(self.jobs))
 
     def test_first_step_pins_the_checked_commit(self):
         first = self.jobs["build"]["steps"][0]
@@ -187,10 +185,21 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn('echo "BUILD_NUMBER=$next" >> "$GITHUB_ENV"', step["run"])
 
     def test_processing_waits_for_the_right_build(self):
-        self.assertEqual("inputs.upload", self.jobs["processed"]["if"])
-        wait = self.step("processed", "Wait for Apple to finish processing")
-        self.assertEqual("${{ needs.build.outputs.build_number }}", wait["env"]["BUILT"])
+        names = [s.get("name") for _, s in self.steps("build")]
+        self.assertLess(names.index("Upload to TestFlight"), names.index("Wait for Apple to finish processing"))
+        wait = self.step("build", "Wait for Apple to finish processing")
+        self.assertEqual("inputs.upload", wait["if"])
+        self.assertIn('--build-version-number "$BUILD_NUMBER"', wait["run"])
         self.assertIn("|| state=", wait["run"])
+        # An hour of processing has to fit in the job.
+        self.assertGreaterEqual(self.jobs["build"]["timeout-minutes"], 75)
+
+    def test_background_prep_runs_before_any_secret_and_must_succeed(self):
+        names = [s.get("name") for _, s in self.steps("build")]
+        toolchain = self.step("build", "Toolchain")
+        self.assertNotIn("env", toolchain)
+        self.assertLess(names.index("Toolchain"), names.index("Create signing files"))
+        self.assertIn('wait "$prep"', toolchain["run"])
 
     def test_flutter_and_xcode_are_pinned(self):
         self.assertRegex(str(self.doc["env"]["FLUTTER_VERSION"]), r"^\d+\.\d+\.\d+$")

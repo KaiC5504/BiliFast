@@ -63,10 +63,9 @@ jobs:
     name: Signed build
     if: github.ref == 'refs/heads/main'
     runs-on: macos-26
-    timeout-minutes: 60
+    # About 6 minutes of build, then up to an hour of Apple processing on uploads.
+    timeout-minutes: 90
     environment: testflight
-    outputs:
-      build_number: ${{ steps.number.outputs.build_number }}
     steps:
       - name: Build only the checked commit
         env:
@@ -104,6 +103,9 @@ jobs:
             echo "Xcode_$XCODE_VERSION.app is now $(xcodebuild -version | tr '\n' ' ')"
             exit 1
           fi
+          # The iOS engine artifacts and packages download while cli-tools installs.
+          (flutter precache --ios && flutter pub get) > "$RUNNER_TEMP/flutter-prep.log" 2>&1 &
+          prep=$!
           # cli-tools shells out to `openssl smime`; keep OpenSSL 3 first on PATH.
           if [ -d /opt/homebrew/opt/openssl@3/bin ]; then
             echo /opt/homebrew/opt/openssl@3/bin >> "$GITHUB_PATH"
@@ -111,6 +113,10 @@ jobs:
           fi
           # Homebrew's Python refuses global installs (PEP 668), hence setup-python.
           python -m pip install --quiet --require-hashes -r scripts/testflight-requirements.txt
+          if ! wait "$prep"; then
+            cat "$RUNNER_TEMP/flutter-prep.log"
+            exit 1
+          fi
           python - > "$RUNNER_TEMP/toolchain.json" <<'EOF'
           import json, subprocess
           def out(*cmd):
@@ -130,9 +136,6 @@ jobs:
           }, indent=1))
           EOF
           cat "$RUNNER_TEMP/toolchain.json"
-
-      - name: Get packages
-        run: flutter pub get
 
       - name: Create signing files
         env:
@@ -210,7 +213,6 @@ jobs:
           next=$(( (10#$latest > BUILD_NUMBER_FLOOR ? 10#$latest : BUILD_NUMBER_FLOOR) + 1 ))
           echo "latest uploaded build is $latest; this one is $next"
           echo "BUILD_NUMBER=$next" >> "$GITHUB_ENV"
-          echo "build_number=$next" >> "$GITHUB_OUTPUT"
 
       - name: Build IPA
         run: |
@@ -258,31 +260,11 @@ jobs:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: app-store-connect publish --path "$IPA"
 
-  # Green means Apple has processed the build; testers can install it minutes later.
-  processed:
-    name: Apple processing
-    needs: build
-    if: inputs.upload
-    runs-on: ubuntu-latest
-    timeout-minutes: 75
-    environment: testflight
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: scripts/testflight-requirements.txt
-          sparse-checkout-cone-mode: false
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install cli-tools
-        run: python -m pip install --quiet --require-hashes -r scripts/testflight-requirements.txt
-
+      # Green means Apple has processed the build; testers can install it minutes later. In this job rather than its
+      # own, so cli-tools is already installed and no second runner has to start.
       - name: Wait for Apple to finish processing
+        if: inputs.upload
         env:
-          BUILT: ${{ needs.build.outputs.build_number }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
@@ -291,17 +273,13 @@ jobs:
           while [ "$SECONDS" -lt "$deadline" ]; do
             # One failed call is a blip; Apple's answer decides. NOT_FOUND for the first
             # few minutes is normal.
-            state=$(timeout 120 app-store-connect builds list --app-id "$ASC_APP_ID" \
-                --build-version-number "$BUILT" --json \
-              | python -c 'import json,sys; b=json.load(sys.stdin); print(b[0]["attributes"]["processingState"] if b else "NOT_FOUND")') \
-              || state="no answer, retrying"
-            echo "$(date -u +%H:%M:%S) build $BUILT: $state"
+            state=$(timeout 120 app-store-connect builds list --app-id "$ASC_APP_ID"                 --build-version-number "$BUILD_NUMBER" --json               | python -c 'import json,sys; b=json.load(sys.stdin); print(b[0]["attributes"]["processingState"] if b else "NOT_FOUND")')               || state="no answer, retrying"
+            echo "$(date -u +%H:%M:%S) build $BUILD_NUMBER: $state"
             case "$state" in
               VALID) exit 0 ;;
-              FAILED|INVALID) echo "Apple rejected build $BUILT; its email says why."; exit 1 ;;
+              FAILED|INVALID) echo "Apple rejected build $BUILD_NUMBER; its email says why."; exit 1 ;;
             esac
-            sleep 30
+            sleep 15
           done
-          echo "Still processing after an hour. Once TestFlight shows it, rerun this job:"
-          echo "  gh run rerun $GITHUB_RUN_ID -R $GITHUB_REPOSITORY --failed"
+          echo "Still processing after an hour; TestFlight will still show it once Apple is done."
           exit 1
