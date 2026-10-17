@@ -1,6 +1,6 @@
-# BiliFlutterSpike
+# BiliFast (Flutter spike and handover)
 
-The spike that decided BiliFast (KaiC's Swift iOS Bilibili client, `D:\Repos\Apps\BiliNative`) moves to Flutter, and
+This folder (renamed from `BiliFlutterSpike` on 2026-10-17) holds the spike that decided BiliFast (KaiC's Swift iOS Bilibili client, `D:\Repos\Apps\BiliNative`) moves to Flutter, and
 the handover for doing it. The spike itself is throwaway. It has its own git repo with no remote; KaiC hasn't OK'd a
 public repo for it, so never push it.
 

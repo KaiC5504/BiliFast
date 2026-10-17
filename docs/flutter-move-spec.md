@@ -64,7 +64,7 @@ iPhone 17 Pro Max. Then the Swift app retires and milestone 3 continues in Flutt
 | `D:\Repos\Apps\BiliNative` | The Swift app (public repo `KaiC5504/BiliNative`, branch `main`, at `a956b99` when this was written). | The reference for every behaviour. Swift sources `ios/Sources/App/` (132 files, 19.4k lines), package `ios/Packages/BiliCore/` (7.9k lines plus 8.2k lines of tests), docs `docs/`. The Flutter app goes in `app/` here. |
 | `D:\Repos\Apps\BiliNative\docs\background.md` | Real CDN behaviour, deviations from BTR, hurry mode, environment limits. | Read before touching the engine. Summarised at the end of `bilicore-inventory.md`. |
 | `D:\Repos\Apps\BiliNative\docs\superpowers\specs\` and `plans\` | M1 and M2 designs and plans. | The *why* behind each Swift screen. The M2 design (`2026-10-17-m2-video-page-design.md`) explains the player and page. |
-| `D:\Repos\Apps\BiliFlutterSpike` (this folder, own git repo, no remote) | The spike: WBI, feed, a minimal Dart BTR engine, media_kit playback on Windows, swipe back. | Code to carry over (section 11) and these docs. Never pushed anywhere; KaiC hasn't OK'd a public repo for it. |
+| `D:\Repos\Apps\BiliFast` (this folder, own git repo, no remote) | The spike: WBI, feed, a minimal Dart BTR engine, media_kit playback on Windows, swipe back. | Code to carry over (section 11) and these docs. Never pushed anywhere; KaiC hasn't OK'd a public repo for it. |
 | `D:\Repos\Apps\PiliPlus` (GPL-3.0, `bb2d86ca`) | A Flutter Bilibili client. | Endpoints and formats only, never code (`piliplus-map.md`). |
 | `D:\Repos\Apps\Kazumi` | KaiC's Flutter fork, shipped to TestFlight by GitHub Actions. | The Flutter signed-build steps (`testflight-flutter.md`). |
 | `D:\Repos\Apps\Bilibili-thread-ripper` | BTR, the JS engine BiliNative's Swift engine was ported from (MIT). | Read at tag `2026.10.8.1` only: `git -C D:\Repos\Apps\Bilibili-thread-ripper show 2026.10.8.1:src/idm-downloader.js`. Port from the Swift version, not from BTR: Swift carries the phone fixes. |
@@ -546,7 +546,7 @@ plugin) and stopping.
 - **Slice 6:** add `BILI_APP_KEYS` to the `testflight` environment for 不喜欢, or keep it greyed.
 - **Android:** when, and whether one more Bilibili login there is acceptable.
 
-## 11. What the spike already has (`D:\Repos\Apps\BiliFlutterSpike`)
+## 11. What the spike already has (`D:\Repos\Apps\BiliFast`)
 
 | Spike file | Carry over? |
 |---|---|

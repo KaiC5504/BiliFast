@@ -1,6 +1,6 @@
 # Verdict: should BiliFast move to Flutter?
 
-2026-10-17. Spike: this repo (`D:\Repos\Apps\BiliFlutterSpike`), Flutter 3.47.7 (latest stable), media_kit 1.2.6 /
+2026-10-17. Spike: this repo (`D:\Repos\Apps\BiliFast`), Flutter 3.47.7 (latest stable), media_kit 1.2.6 /
 media_kit_video 2.0.1 (latest on pub.dev), measured on KaiC's Windows PC, overseas, home network.
 
 ## Answer: go, as Flutter UI with the native player kept on iOS
@@ -154,7 +154,7 @@ as the BiliFast build on the phone already fetches them.
 
 ## How to look at it yourself
 
-1. `D:\Repos\Apps\BiliFlutterSpike\build\windows\x64\runner\Release\bili_flutter_spike.exe` (logged out, 480P).
+1. `D:\Repos\Apps\BiliFast\build\windows\x64\runner\Release\bili_flutter_spike.exe` (logged out, 480P).
 2. The 推荐 feed shows two columns of cards. Tap one: the video plays with the stats panel underneath.
 3. Switch between `BTR 多节点` and `直连`: the video restarts in that mode and the panel shows start time, stalls,
    download speed and the nodes in use. `跳到中间` measures a jump.
