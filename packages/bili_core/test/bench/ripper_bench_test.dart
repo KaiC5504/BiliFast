@@ -97,6 +97,36 @@ void main() {
       expect(options.seeks, 0);
       expect(options.hurry, isTrue);
       expect(options.repeat, 1);
+      expect(options.app, isFalse);
+      expect(options.swift, isFalse);
+      expect(options.off, isEmpty);
+      expect(options.seed, Bench.seed);
+    });
+
+    test('the app-like seek flags', () {
+      final options = BenchOptions.parse([
+        '--playurl',
+        'saved.json',
+        '--seeks',
+        '6',
+        '--app',
+        '--swift',
+        '--seed',
+        '101',
+        '--off',
+        'burst,tail',
+      ]);
+      expect(options.app, isTrue);
+      expect(options.swift, isTrue);
+      expect(options.seed, 101);
+      expect(options.off, {'burst', 'tail'});
+      expect(() => BenchOptions.parse(['--playurl', 'saved.json', '--seed', '0']), throwsA(isA<UsageError>()));
+    });
+
+    test('the app-like config matches the app', () {
+      expect(appLikeConfig.seekBurst && appLikeConfig.primeStart && appLikeConfig.audioFirst, isTrue);
+      expect(appLikeConfig.exploreInHurry, isFalse);
+      expect(appLikeConfig.tailBackups && appLikeConfig.banProbation, isTrue);
     });
 
     test('every flag', () {

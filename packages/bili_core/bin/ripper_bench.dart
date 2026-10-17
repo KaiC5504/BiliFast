@@ -4,13 +4,18 @@
 //
 //   cd packages/bili_core
 //   fvm dart run bili_core:ripper_bench --playurl saved-playurl.json [--mb 16] [--mode overseas|mainland]
-//       [--quality 80] [--codec hevc|av1|avc] [--seeks N] [--no-hurry] [--repeat N]
+//       [--quality 80] [--codec hevc|av1|avc] [--seeks N] [--no-hurry] [--repeat N] [--app [--swift] [--seed N] [--off a,b]]
 //
 // Without --seeks it downloads the start of the video twice, over one connection and through Ripper. --seeks N times
 // N cold 4 MiB reads at seeded random offsets instead; --no-hurry turns hurry mode off for that run (and for the
 // Ripper half of the comparison). --repeat N runs the measurement N times and adds the median: seek runs continue the
 // seeded sequence, so the first run reads Swift's offsets and later runs fresh, still cold ones, while comparison runs
 // read the same bytes and so meet a warm CDN after the first.
+//
+// --app (with --seeks) runs the seeks the way the app does instead: one session for all of them, with the app's
+// speed-ups and node memory, warm connections and a few seconds of watching (and prefetch) between seeks. Each seek
+// reads the segment the player asks for and the one after it, so the lines give first byte, the first segment and
+// about 10 s of video ready. --swift runs the same seeks with Swift's settings and no node memory, for comparison.
 
 import 'dart:io';
 import 'dart:math';
@@ -61,11 +66,15 @@ final class BenchOptions {
     this.seeks = 0,
     this.hurry = true,
     this.repeat = 1,
+    this.app = false,
+    this.swift = false,
+    this.off = const {},
+    this.seed = Bench.seed,
   });
 
   static const usage =
       'usage: ripper_bench --playurl file.json [--mb 16] [--mode overseas|mainland] [--quality 80] '
-      '[--codec hevc|av1|avc] [--seeks N] [--no-hurry] [--repeat N]';
+      '[--codec hevc|av1|avc] [--seeks N] [--no-hurry] [--repeat N] [--app [--swift] [--seed N] [--off a,b]]';
 
   final String playurl;
   final int megabytes;
@@ -75,6 +84,14 @@ final class BenchOptions {
   final int seeks;
   final bool hurry;
   final int repeat;
+  final bool app;
+  final bool swift;
+
+  /// App speed-ups switched off for an --app run: burst, prefetch, explore, tail, probation, memory, keep.
+  final Set<String> off;
+
+  /// Another seed picks other segments, which the CDN has not just served to an earlier run.
+  final int seed;
 
   /// As lenient as Swift's: an unreadable --mb or --quality keeps its default, an unknown codec is HEVC and any mode
   /// but mainland is overseas. A count that is not positive is a usage error.
@@ -87,6 +104,10 @@ final class BenchOptions {
     var seeks = 0;
     var hurry = true;
     var repeat = 1;
+    var app = false;
+    var swift = false;
+    var off = <String>{};
+    var seed = Bench.seed;
     int count(String value) {
       final parsed = int.tryParse(value);
       if (parsed == null || parsed < 1) throw const UsageError();
@@ -98,6 +119,14 @@ final class BenchOptions {
       final flag = iterator.current;
       if (flag == '--no-hurry') {
         hurry = false;
+        continue;
+      }
+      if (flag == '--app') {
+        app = true;
+        continue;
+      }
+      if (flag == '--swift') {
+        swift = true;
         continue;
       }
       if (flag == '--bv' || flag == '--cookies') {
@@ -119,6 +148,10 @@ final class BenchOptions {
           codec = VideoCodec.values.asNameMap()[value] ?? VideoCodec.hevc;
         case '--seeks':
           seeks = count(value);
+        case '--seed':
+          seed = count(value);
+        case '--off':
+          off = value.split(',').toSet();
         case '--repeat':
           repeat = count(value);
         default:
@@ -135,9 +168,31 @@ final class BenchOptions {
       seeks: seeks,
       hurry: hurry,
       repeat: repeat,
+      app: app,
+      swift: swift,
+      off: off,
+      seed: seed,
     );
   }
 }
+
+/// The app's engine settings (`lib/playback/playback_setup.dart`'s `appRipperConfig`, which this package can't
+/// import); keep the two alike.
+const appLikeConfig = RipperConfig(
+  primeStart: true,
+  prefetchOnPrime: true,
+  streamAdopted: true,
+  seekBurst: true,
+  audioFirst: true,
+  prefetchFollowsRate: true,
+  prefetchVideoMaxBytes: 256 * 1024 * 1024,
+  prefetchAudioMaxBytes: 16 * 1024 * 1024,
+  keepBehindSeconds: 30,
+  keepBehindBytes: 96 * 1024 * 1024,
+  exploreInHurry: false,
+  tailBackups: true,
+  banProbation: true,
+);
 
 /// Bench.swift's `SeededGenerator` (SplitMix64), on Dart's wrapping 64-bit ints.
 final class SeededGenerator {
@@ -270,6 +325,14 @@ final class Bench {
     final video = chooseVideo(info, quality: options.quality, codec: options.codec);
     say(describe(video));
     final runs = options.repeat;
+    if (options.seeks > 0 && options.app) {
+      final generator = SeededGenerator(options.seed);
+      for (var run = 1; run <= runs; run++) {
+        if (runs > 1) say('run $run of $runs');
+        await appSeeks(video, generator);
+      }
+      return;
+    }
     if (options.seeks > 0) {
       final generator = SeededGenerator(seed);
       final firsts = <double>[];
@@ -509,4 +572,121 @@ final class Bench {
     say('median ${mib(seekBytes)} MiB: ${_f2(wholeMedian)} s over ${whole.length} of ${options.seeks} seeks');
     return (firstMiB: firstMedian, whole: wholeMedian);
   }
+
+  RipperConfig _appConfig() {
+    final off = options.off;
+    final base = off.contains('prefetch')
+        ? RipperConfig(
+            primeStart: true,
+            prefetchOnPrime: true,
+            streamAdopted: true,
+            seekBurst: true,
+            audioFirst: true,
+            keepBehindSeconds: 30,
+            keepBehindBytes: 96 * 1024 * 1024,
+            exploreInHurry: false,
+            tailBackups: true,
+            banProbation: true,
+          )
+        : appLikeConfig;
+    return base.copyWith(
+      hurry: options.hurry,
+      seekBurst: off.contains('burst') ? false : null,
+      exploreInHurry: off.contains('explore') ? true : null,
+      tailBackups: off.contains('tail') ? false : null,
+      banProbation: off.contains('probation') ? false : null,
+      keepBehindBytes: off.contains('keep') ? 0 : null,
+      keepBehindSeconds: off.contains('keep') ? 2 : null,
+    );
+  }
+
+  /// Seeks inside one session, as the app makes them: the playhead moves to the segment, the player reads it and
+  /// the one after, then plays on for [watchSeconds] while prefetch runs, until the next seek.
+  Future<void> appSeeks(DashStream video, SeededGenerator generator, {double watchSeconds = 3}) async {
+    final transport = IoRangeTransport(headers: BiliClient.mediaHeaders, connectionsPerHost: 8);
+    final memory = NodeMemory()..signature = 'bench';
+    final session = RipperSession(
+      sources: {TrackKind.video: (primary: video.baseURL, backups: video.backupURLs)},
+      mode: options.mode,
+      transport: transport,
+      auto: AutoConcurrency(),
+      config: options.swift ? RipperConfig(hurry: options.hurry) : _appConfig(),
+      policy: policy,
+      memory: options.swift || options.off.contains('memory') ? null : memory,
+    );
+    try {
+      final opened = Stopwatch()..start();
+      final headers = await session.loadHeaders(TrackKind.video, through: video.indexRange.end);
+      final segments = SidxParser.parse(headers.bytes, absoluteStart: 0);
+      if (segments == null || segments.isEmpty) throw const BiliError.decoding('no sidx');
+      session.setSegments(TrackKind.video, segments);
+      say(
+        '${options.swift ? 'swift settings' : 'app settings${options.off.isEmpty ? '' : ' without ${options.off.join(', ')}'}'}, seeks: ${options.seeks}, seed ${options.seed}, headers ${_f2(_seconds(opened))} s, '
+        '${segments.length} segments, median ${mib(_medianSize(segments))} MiB each',
+      );
+      final plan = coldSeekPlan(segments, total: headers.totalSize, count: options.seeks + 1, generator: generator);
+      final firstBytes = <double>[];
+      final firstSegments = <double>[];
+      final pairs = <double>[];
+      for (final (index, seek) in plan.indexed) {
+        final label = index == 0
+            ? 'open at ${seek.segment.startTime.round()} s'
+            : 'seek $index to ${seek.segment.startTime.round()} s';
+        final position = segments.indexOf(seek.segment);
+        final reads = [seek.segment, if (position + 1 < segments.length) segments[position + 1]];
+        try {
+          final clock = Stopwatch()..start();
+          if (index == 0 && !options.swift) session.prime(TrackKind.video, seconds: seek.segment.startTime);
+          session.updatePlayhead(seconds: seek.segment.startTime, rate: 1);
+          double? firstByte;
+          double? firstSegment;
+          var bytes = 0;
+          for (final (number, segment) in reads.indexed) {
+            await for (final chunk in session.read(TrackKind.video, segment.range)) {
+              firstByte ??= _seconds(clock);
+              bytes += chunk.length;
+            }
+            if (number == 0) firstSegment = _seconds(clock);
+          }
+          final both = _seconds(clock);
+          say(
+            '$label: first byte ${_ms(firstByte)}, segment ${_ms(firstSegment)} (${mib(reads.first.range.length)} MiB), '
+            '10 s ready ${_ms(both)} (${mib(bytes)} MiB)',
+          );
+          if (index > 0 && firstByte != null && firstSegment != null) {
+            firstBytes.add(firstByte);
+            firstSegments.add(firstSegment);
+            pairs.add(both);
+          }
+        } catch (error) {
+          say('$label: failed: ${safeError(error)}');
+        }
+        if (index < plan.length - 1) {
+          // Playing on: the playhead moves and prefetch fetches ahead until the next seek.
+          final start = seek.segment.startTime;
+          for (var tick = 1; tick <= (watchSeconds * 4).round(); tick++) {
+            await Future<void>.delayed(const Duration(milliseconds: 250));
+            session.updatePlayhead(seconds: start + tick / 4, rate: 1);
+          }
+        }
+      }
+      final stats = session.stats();
+      say(
+        'median over ${firstBytes.length} seeks: first byte ${_ms(median(firstBytes))}, '
+        'segment ${_ms(median(firstSegments))}, 10 s ready ${_ms(median(pairs))}',
+      );
+      say(
+        'connections ${stats.concurrency}, requests ${stats.requests}, failures ${stats.failures}, '
+        'duplicate ${(stats.duplicateShare * 100).toStringAsFixed(1)}%',
+      );
+    } finally {
+      session.close();
+      transport.close();
+    }
+  }
 }
+
+String _ms(double? seconds) => seconds == null ? '-' : '${(seconds * 1000).round()} ms';
+
+int _medianSize(List<MediaSegment> segments) =>
+    median([for (final segment in segments) segment.range.length.toDouble()])!.round();
