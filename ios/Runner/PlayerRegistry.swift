@@ -151,7 +151,9 @@ final class NativePlayer {
     if precise {
       player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
     } else {
-      player.seek(to: target)
+      // Bilibili's DASH has one keyframe per 5 s segment. Landing on the one that starts the target's segment
+      // decodes at once from the segment the engine already fetched for the hint or the seek.
+      player.seek(to: target, toleranceBefore: Self.keyframeTolerance, toleranceAfter: .zero)
     }
     updateStatus()
   }
@@ -305,6 +307,7 @@ final class NativePlayer {
   /// segment: phone logs had it holding up to 7.7 s with the first segments of both tracks already in, while the
   /// engine keeps fetching ahead much faster than playback.
   static let startAheadSeconds = 3.0
+  static let keyframeTolerance = CMTime(seconds: 5, preferredTimescale: 600)
 
   private func startIfBuffered() {
     guard starting, let item, player.currentItem === item, item.status == .readyToPlay else { return }
