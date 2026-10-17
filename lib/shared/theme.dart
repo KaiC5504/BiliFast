@@ -37,6 +37,12 @@ abstract final class BiliColors {
   static const panelCard = Color(0xCC2B2C30);
   static const panelText = Color(0xFFFFFFFF);
   static const panelSecondary = Color(0xFF9499A0);
+
+  /// Behind and over the video.
+  static const videoBackground = Color(0xFF000000);
+  static const onVideo = Color(0xFFFFFFFF);
+  static const statsFill = Color(0x8C000000);
+  static const statsBorder = Color(0x1FFFFFFF);
 }
 
 abstract final class BiliMetrics {

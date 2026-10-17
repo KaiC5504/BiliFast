@@ -53,3 +53,5 @@ app.*.map.json
 
 # FVM Version Cache
 .fvm/
+# Agent worktrees
+/.claude/worktrees/

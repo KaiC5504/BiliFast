@@ -12,11 +12,18 @@ dependencies:
     sdk: flutter
   bili_core:
     path: packages/bili_core
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_windows_video: ^1.0.11
+  cupertino_http: ^3.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  pigeon: ^29.0.10
+  integration_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true

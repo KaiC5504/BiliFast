@@ -43,6 +43,8 @@ FIELDS = "databaseId,displayTitle,status,conclusion,headSha,headBranch,event,url
 ROOT = Path(__file__).resolve().parents[1]
 GATE_STAMP = ROOT / ".git" / "gate-passed"
 LAST_RUN = ROOT / ".git" / "testflight-last-run"
+# Swift and clang `error:`, Dart `Error:`, Flutter's `Error (Xcode):`, and fatal ones.
+ERROR_LINE = re.compile(r"error:|error \(xcode\)|fatal", re.IGNORECASE)
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -94,9 +96,21 @@ def report(run_: dict) -> None:
                               "--log-failed"], capture_output=True, text=True,
                              encoding="utf-8", errors="replace").stdout
         lines = [line for line in log.splitlines() if line.strip()]
+        # Every error, not just the tail: a Release build type-checks the whole Swift module at
+        # once, so one red run can list all of them and they get fixed in one round.
+        errors = list(dict.fromkeys(message(line) for line in lines if ERROR_LINE.search(line)))
+        if errors:
+            print(f"\n--- {len(errors)} error lines ---")
+            print("\n".join(errors[:200]))
         if lines:
-            print(f"\n--- failed steps: last {min(len(lines), 60)} lines ---")
-            print("\n".join(lines[-60:]))
+            print(f"\n--- failed steps: last {min(len(lines), 30)} lines ---")
+            print("\n".join(lines[-30:]))
+
+
+def message(line: str) -> str:
+    """A --log-failed line without its job, step and timestamp columns."""
+    text = line.split("\t")[-1]
+    return re.sub(r"^\d{4}-\d\d-\d\dT[\d:.]+Z ", "", text)
 
 
 def environment_problems() -> list[str]:

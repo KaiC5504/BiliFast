@@ -99,5 +99,28 @@ class StartTest(unittest.TestCase):
         self.assertEqual(1, len(fake.calls))
 
 
+class ReportTest(unittest.TestCase):
+    def test_a_failed_run_lists_every_error_line_once(self):
+        log = "\n".join([
+            "build\tBuild IPA\t2026-10-18T10:00:00.0000000Z Compiling Runner",
+            "build\tBuild IPA\t2026-10-18T10:00:01.0000000Z /x/PlayerHost.swift:12:3: error: cannot find 'foo'",
+            "build\tBuild IPA\t2026-10-18T10:00:02.0000000Z /x/Registry.swift:40:9: error: missing return",
+            "build\tBuild IPA\t2026-10-18T10:00:03.0000000Z /x/PlayerHost.swift:12:3: error: cannot find 'foo'",
+            "build\tBuild IPA\t2026-10-18T10:00:04.0000000Z Error (Xcode): Command SwiftCompile failed",
+        ] + [f"build\tBuild IPA\t2026-10-18T10:00:05.0000000Z noise {n}" for n in range(40)])
+        failed = {"databaseId": 3, "displayTitle": "t", "status": "completed", "conclusion": "failure",
+                  "url": "u", "jobs": []}
+        printed = []
+        result = mock.Mock(stdout=log)
+        with mock.patch.object(testflight.subprocess, "run", return_value=result), \
+                mock.patch("builtins.print", side_effect=lambda *a: printed.append(" ".join(map(str, a)))):
+            testflight.report(failed)
+        text = "\n".join(printed)
+        self.assertIn("3 error lines", text)
+        self.assertEqual(1, text.count("/x/PlayerHost.swift:12:3: error: cannot find 'foo'"))
+        self.assertIn("/x/Registry.swift:40:9: error: missing return", text)
+        self.assertIn("Error (Xcode): Command SwiftCompile failed", text)
+
+
 if __name__ == "__main__":
     unittest.main()
