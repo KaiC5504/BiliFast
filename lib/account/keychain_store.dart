@@ -1,0 +1,106 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/services.dart';
+
+sealed class CookieLoad {
+  const CookieLoad();
+}
+
+final class StoredCookies extends CookieLoad {
+  const StoredCookies(this.cookies);
+  final Map<String, String> cookies;
+}
+
+final class NoStoredCookies extends CookieLoad {
+  const NoStoredCookies();
+}
+
+/// The keychain refused (e.g. errSecInteractionNotAllowed before the first unlock). The stored cookies may
+/// still be there, so callers must not overwrite them.
+final class CookieLoadFailed extends CookieLoad {
+  const CookieLoadFailed(this.status);
+  final int status;
+}
+
+/// The keychain items the Swift BiliFast wrote (`ios/Runner/KeychainChannel.swift`), so its login carries over.
+abstract interface class KeychainStore {
+  Future<CookieLoad> loadCookies();
+
+  /// An empty map deletes the item. Returns whether the keychain took it.
+  Future<bool> saveCookies(Map<String, String> cookies);
+  Future<void> deleteCookies();
+
+  /// The app-API access token 不喜欢 needs; null when absent or unreadable.
+  Future<String?> loadAppToken();
+  Future<bool> saveAppToken(String token);
+  Future<void> deleteAppToken();
+
+  /// The iOS keychain on the phone; elsewhere (the Windows development build) nothing is stored and the app
+  /// runs logged out.
+  factory KeychainStore.platform() => Platform.isIOS ? ChannelKeychainStore() : const NoKeychainStore();
+}
+
+class ChannelKeychainStore implements KeychainStore {
+  ChannelKeychainStore([MethodChannel? channel]) : _channel = channel ?? const MethodChannel('bilifast/keychain');
+
+  final MethodChannel _channel;
+
+  @override
+  Future<CookieLoad> loadCookies() async {
+    final reply = await _channel.invokeMapMethod<String, Object?>('loadCookies') ?? const {};
+    switch (reply['status']) {
+      case 'cookies':
+        final cookies = reply['cookies'];
+        if (cookies is Map) {
+          return StoredCookies({for (final e in cookies.entries) '${e.key}': '${e.value}'});
+        }
+        return const CookieLoadFailed(-26275); // errSecDecode
+      case 'notFound':
+        return const NoStoredCookies();
+      default:
+        return CookieLoadFailed(reply['code'] as int? ?? 0);
+    }
+  }
+
+  @override
+  Future<bool> saveCookies(Map<String, String> cookies) async {
+    final reply = await _channel.invokeMapMethod<String, Object?>('saveCookies', {'cookies': cookies});
+    return reply?['ok'] == true;
+  }
+
+  @override
+  Future<void> deleteCookies() => _channel.invokeMethod<void>('deleteCookies');
+
+  @override
+  Future<String?> loadAppToken() async {
+    final reply = await _channel.invokeMapMethod<String, Object?>('loadAppToken');
+    final token = reply?['token'];
+    return token is String && token.isNotEmpty ? token : null;
+  }
+
+  @override
+  Future<bool> saveAppToken(String token) async {
+    final reply = await _channel.invokeMapMethod<String, Object?>('saveAppToken', {'token': token});
+    return reply?['ok'] == true;
+  }
+
+  @override
+  Future<void> deleteAppToken() => _channel.invokeMethod<void>('deleteAppToken');
+}
+
+class NoKeychainStore implements KeychainStore {
+  const NoKeychainStore();
+
+  @override
+  Future<CookieLoad> loadCookies() async => const NoStoredCookies();
+  @override
+  Future<bool> saveCookies(Map<String, String> cookies) async => false;
+  @override
+  Future<void> deleteCookies() async {}
+  @override
+  Future<String?> loadAppToken() async => null;
+  @override
+  Future<bool> saveAppToken(String token) async => false;
+  @override
+  Future<void> deleteAppToken() async {}
+}
