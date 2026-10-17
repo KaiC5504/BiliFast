@@ -37,15 +37,17 @@ final class Logger {
   void log(LogLevel level, LogCategory cat, String msg, [Map<String, Object> fields = const {}]) {
     final seq = ++_seq;
     if (_sinks.isEmpty) return;
-    _deliver(LogEvent(
-      t: DateTime.now().microsecondsSinceEpoch / 1e6,
-      seq: seq,
-      session: session,
-      level: level,
-      cat: cat,
-      msg: Redactor.text(msg),
-      f: Redactor.fields(fields),
-    ));
+    _deliver(
+      LogEvent(
+        t: DateTime.now().microsecondsSinceEpoch / 1e6,
+        seq: seq,
+        session: session,
+        level: level,
+        cat: cat,
+        msg: Redactor.text(msg),
+        f: Redactor.fields(fields),
+      ),
+    );
   }
 
   /// An event another Logger built and redacted (another isolate's), under this logger's session and sequence;
@@ -53,8 +55,9 @@ final class Logger {
   void logRedacted(LogEvent event) {
     final seq = ++_seq;
     if (_sinks.isEmpty) return;
-    _deliver(LogEvent(
-        t: event.t, seq: seq, session: session, level: event.level, cat: event.cat, msg: event.msg, f: event.f));
+    _deliver(
+      LogEvent(t: event.t, seq: seq, session: session, level: event.level, cat: event.cat, msg: event.msg, f: event.f),
+    );
   }
 
   void _deliver(LogEvent event) {

@@ -106,10 +106,7 @@ final class SPIInfo {
 
   factory SPIInfo.fromJson(Object? json) {
     final object = JsonObject.from(json);
-    return SPIInfo(
-      b3: object.required(object.string('b_3'), 'b_3'),
-      b4: object.required(object.string('b_4'), 'b_4'),
-    );
+    return SPIInfo(b3: object.required(object.string('b_3'), 'b_3'), b4: object.required(object.string('b_4'), 'b_4'));
   }
 
   final String b3;
@@ -254,8 +251,20 @@ final class DashStream {
       other.indexRange == indexRange;
 
   @override
-  int get hashCode => Object.hash(id, baseURL, Object.hashAll(backupURLs), bandwidth, mimeType, codecs, codecid, width,
-      height, frameRate, initialization, indexRange);
+  int get hashCode => Object.hash(
+    id,
+    baseURL,
+    Object.hashAll(backupURLs),
+    bandwidth,
+    mimeType,
+    codecs,
+    codecid,
+    width,
+    height,
+    frameRate,
+    initialization,
+    indexRange,
+  );
 }
 
 final class Dash {
@@ -316,7 +325,10 @@ final class PlayURLInfo {
     return PlayURLInfo(
       quality: object.integer('quality') ?? 0,
       acceptQuality: strictList(object.list('accept_quality'), (value) => asRequiredInt(value, 'accept_quality')),
-      acceptDescription: strictList(object.list('accept_description'), (value) => asString(value, 'accept_description')),
+      acceptDescription: strictList(
+        object.list('accept_description'),
+        (value) => asString(value, 'accept_description'),
+      ),
       dash: dash == null ? null : Dash.fromJson(dash),
       hasDurl: durl is List && durl.isNotEmpty,
       lastPlayTimeMs: object.integer('last_play_time') ?? 0,
@@ -333,7 +345,7 @@ final class PlayURLInfo {
   final int lastPlayCid;
 
   List<QualityOption> get qualityOptions => [
-        for (var index = 0; index < acceptQuality.length && index < acceptDescription.length; index++)
-          QualityOption(id: acceptQuality[index], name: acceptDescription[index]),
-      ];
+    for (var index = 0; index < acceptQuality.length && index < acceptDescription.length; index++)
+      QualityOption(id: acceptQuality[index], name: acceptDescription[index]),
+  ];
 }

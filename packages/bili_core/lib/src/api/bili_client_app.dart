@@ -52,20 +52,30 @@ extension BiliClientApp on BiliClient {
   /// The URL is Bilibili's confirm page; the user opens it in a signed-in web view and taps 确认登录.
   Future<({String url, String authCode})> tvAuthCode({required AppSigner signer}) {
     final form = signer.signed({'local_id': '0'}, ts: _unixSeconds);
-    return post('/x/passport-tv-login/qrcode/auth_code',
-        form: form, host: BiliClient.passport, cookies: false, decode: (json) {
-      final object = JsonObject.from(json);
-      return (
-        url: object.required(object.string('url'), 'url'),
-        authCode: object.required(object.string('auth_code'), 'auth_code'),
-      );
-    });
+    return post(
+      '/x/passport-tv-login/qrcode/auth_code',
+      form: form,
+      host: BiliClient.passport,
+      cookies: false,
+      decode: (json) {
+        final object = JsonObject.from(json);
+        return (
+          url: object.required(object.string('url'), 'url'),
+          authCode: object.required(object.string('auth_code'), 'auth_code'),
+        );
+      },
+    );
   }
 
   Future<TVLoginState> tvPoll({required AppSigner signer, required String authCode}) async {
     final form = signer.signed({'auth_code': authCode, 'local_id': '0'}, ts: _unixSeconds);
-    final envelope = await _postEnvelope('/x/passport-tv-login/qrcode/poll',
-        form: form, host: BiliClient.passport, cookies: false, decode: _tvToken);
+    final envelope = await _postEnvelope(
+      '/x/passport-tv-login/qrcode/poll',
+      form: form,
+      host: BiliClient.passport,
+      cookies: false,
+      decode: _tvToken,
+    );
     switch (envelope.code) {
       case 0:
         final token = envelope.data;

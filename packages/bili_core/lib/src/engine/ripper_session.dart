@@ -15,6 +15,7 @@ import 'ban_list.dart';
 import 'cancel.dart';
 import 'connection_pool.dart';
 import 'node_catalog.dart';
+import 'node_memory.dart';
 import 'node_stats.dart';
 import 'playback_engine.dart';
 import 'range_downloader.dart';
@@ -150,17 +151,38 @@ final class RipperSession {
     MediaURLPolicy policy = MediaURLPolicy.bilibili,
     MonotonicClock? clock,
     Logger? logger,
+    NodeMemory? memory,
   }) {
     final follower = config.fixedConcurrency == null ? auto : null;
     final monotonic = clock ?? MonotonicClock.system;
-    final pool = ConnectionPool(config.fixedConcurrency ?? follower?.threads ?? RipperConfig.defaultConcurrency,
-        clock: monotonic);
+    final pool = ConnectionPool(
+      config.fixedConcurrency ?? follower?.threads ?? RipperConfig.defaultConcurrency,
+      clock: monotonic,
+    );
     final ctx = EngineContext(
-        transport: transport, pool: pool, config: config, auto: follower, clock: monotonic, logger: logger);
-    return RipperSession._(ctx, sources, mode, policy);
+      transport: transport,
+      pool: pool,
+      config: config,
+      auto: follower,
+      clock: monotonic,
+      logger: logger,
+    );
+    final priors = memory?.priors ?? NodePriors.empty;
+    ctx.nodes
+      ..priors = priors
+      ..onMeasured = memory?.record
+      ..exploreInHurry = config.exploreInHurry
+      ..tailBackups = config.tailBackups;
+    return RipperSession._(ctx, sources, mode, policy, priors);
   }
 
-  RipperSession._(this._ctx, Map<TrackKind, TrackSource> sources, NodeMode mode, MediaURLPolicy policy) {
+  RipperSession._(
+    this._ctx,
+    Map<TrackKind, TrackSource> sources,
+    NodeMode mode,
+    MediaURLPolicy policy,
+    NodePriors priors,
+  ) {
     _resolvers = {
       for (final MapEntry(key: kind, value: source) in sources.entries)
         kind: Resolver(
@@ -170,8 +192,11 @@ final class RipperSession {
           policy: policy,
           bans: _bans,
           clock: _ctx.clock,
+          priors: priors,
+          exploreInHurry: _ctx.config.exploreInHurry,
         ),
     };
+    if (_ctx.config.banProbation) _bans.probation = BanProbation(clock: _ctx.clock);
     _downloader = RangeDownloader(_ctx);
     _bans.onBan = (node, strikes, kind) =>
         _ctx.logger.warn(LogCategory.engine, 'ban', {'node': node, 'strikes': strikes, 'kind': kind.name});
@@ -264,8 +289,11 @@ final class RipperSession {
     if (total == null) throw const RipperError.badResponse(206);
     final headers = TrackHeaders(bytes: output.bytes, totalSize: total);
     _headers[track] = headers;
-    _ctx.logger.info(LogCategory.engine, 'headers',
-        {'track': track.name, 'bytes': output.bytes.length, 'node': NodeCatalog.nodeKey(output.url)});
+    _ctx.logger.info(LogCategory.engine, 'headers', {
+      'track': track.name,
+      'bytes': output.bytes.length,
+      'node': NodeCatalog.nodeKey(output.url),
+    });
     return headers;
   }
 
@@ -325,16 +353,18 @@ final class RipperSession {
     controller = StreamController<List<int>>(
       onListen: () {
         _reads += 1;
-        _serve(track, range, controller.add, token).then(
-          (_) => controller.close(),
-          onError: (Object error, StackTrace stack) {
-            controller.addError(_closed ? const RipperError(RipperErrorKind.closed) : error, stack);
-            controller.close();
-          },
-        ).whenComplete(() {
-          _reads -= 1;
-          token.dispose();
-        });
+        _serve(track, range, controller.add, token)
+            .then(
+              (_) => controller.close(),
+              onError: (Object error, StackTrace stack) {
+                controller.addError(_closed ? const RipperError(RipperErrorKind.closed) : error, stack);
+                controller.close();
+              },
+            )
+            .whenComplete(() {
+              _reads -= 1;
+              token.dispose();
+            });
       },
       onCancel: token.cancel,
     );
@@ -380,11 +410,11 @@ final class RipperSession {
   }
 
   EngineSnapshot stats({double downloadBps = 0, String transport = ''}) => _ctx.stats.snapshot(
-        concurrency: _ctx.pool.limit,
-        nodeStates: _resolvers[TrackKind.video]?.status() ?? const [],
-        downloadBps: downloadBps,
-        transport: transport,
-      );
+    concurrency: _ctx.pool.limit,
+    nodeStates: _resolvers[TrackKind.video]?.status() ?? const [],
+    downloadBps: downloadBps,
+    transport: transport,
+  );
 
   void close() {
     if (_closed) return;
@@ -405,12 +435,7 @@ final class RipperSession {
     _root.cancel();
   }
 
-  Future<void> _serve(
-    TrackKind track,
-    ByteRange range,
-    void Function(Uint8List bytes) emit,
-    CancelToken token,
-  ) async {
+  Future<void> _serve(TrackKind track, ByteRange range, void Function(Uint8List bytes) emit, CancelToken token) async {
     final resolver = _resolvers[track];
     if (resolver == null) throw const RipperError(RipperErrorKind.noNodes);
     final config = _ctx.config;
@@ -466,18 +491,25 @@ final class RipperSession {
         // A streamed prefetch that broke off has already sent the front of the range.
         final rest = sent == 0 ? range : ByteRange(range.start + sent, range.end);
         try {
-          await _download(track, rest, resolver,
-              startup: request.seek,
-              player: true,
-              segment: segment,
-              total: request.total,
-              emit: out,
-              cancel: token);
+          await _download(
+            track,
+            rest,
+            resolver,
+            startup: request.seek,
+            player: true,
+            segment: segment,
+            total: request.total,
+            emit: out,
+            cancel: token,
+          );
           token.throwIfCancelled();
         } catch (error) {
           if (!token.isCancelled && error is! CancelledException) {
-            _ctx.logger
-                .error(LogCategory.engine, 'range failed', {'track': track.name, 'range': '$range', 'error': '$error'});
+            _ctx.logger.error(LogCategory.engine, 'range failed', {
+              'track': track.name,
+              'range': '$range',
+              'error': '$error',
+            });
             if (_claimFatal(request.number)) onFatal?.call(error);
           }
           rethrow;
@@ -615,15 +647,18 @@ final class RipperSession {
     final config = _ctx.config;
     final lane = _lane(track, player: player);
     if (player && config.audioFirst && track == TrackKind.audio && range.length < config.audioWholeBytes) {
-      return _downloader.whole(range, resolver,
-          copies: 2,
-          priority: 220,
-          emit: emit,
-          deadline: _deadline(segment),
-          expectedTotal: total,
-          hurry: _hurry(segment, startup: startup),
-          cancel: cancel,
-          lane: lane);
+      return _downloader.whole(
+        range,
+        resolver,
+        copies: 2,
+        priority: 220,
+        emit: emit,
+        deadline: _deadline(segment),
+        expectedTotal: total,
+        hurry: _hurry(segment, startup: startup),
+        cancel: cancel,
+        lane: lane,
+      );
     }
     return _downloader.stream(
       range,
@@ -771,21 +806,30 @@ final class RipperSession {
   }
 
   Future<Uint8List> _fetchSegment(
-      TrackKind track, MediaSegment segment, Resolver resolver, int? total, _Prefetch prefetch) async {
+    TrackKind track,
+    MediaSegment segment,
+    Resolver resolver,
+    int? total,
+    _Prefetch prefetch,
+  ) async {
     final cancel = prefetch.token;
     final urgent = prefetch.kind != _FetchKind.prefetch;
     final hold = urgent ? _holdPrefetch(segment.range) : null;
     try {
-      await _download(track, segment.range, resolver,
-          startup: urgent,
-          player: urgent,
-          segment: segment,
-          total: total,
-          emit: (bytes) {
-            prefetch.add(bytes, at: _ctx.clock.nowMs());
-            hold?.landed(prefetch.received);
-          },
-          cancel: cancel);
+      await _download(
+        track,
+        segment.range,
+        resolver,
+        startup: urgent,
+        player: urgent,
+        segment: segment,
+        total: total,
+        emit: (bytes) {
+          prefetch.add(bytes, at: _ctx.clock.nowMs());
+          hold?.landed(prefetch.received);
+        },
+        cancel: cancel,
+      );
       cancel.throwIfCancelled();
       if (urgent) _logFetch(track, segment, prefetch, 'done');
       return prefetch.takeBytes();
@@ -814,10 +858,12 @@ final class RipperSession {
   }
 
   void _watch(_Key key, _Prefetch prefetch, double endTime) {
-    unawaited(prefetch.bytes.then(
-      (bytes) => _prefetchFinished(key, prefetch, endTime, bytes: bytes),
-      onError: (Object error) => _prefetchFinished(key, prefetch, endTime, error: error),
-    ));
+    unawaited(
+      prefetch.bytes.then(
+        (bytes) => _prefetchFinished(key, prefetch, endTime, bytes: bytes),
+        onError: (Object error) => _prefetchFinished(key, prefetch, endTime, error: error),
+      ),
+    );
   }
 
   void _prefetchFinished(_Key key, _Prefetch prefetch, double endTime, {Uint8List? bytes, Object? error}) {
@@ -828,8 +874,11 @@ final class RipperSession {
       }
     }
     if (error != null && error is! CancelledException) {
-      _ctx.logger.warn(LogCategory.engine, 'prefetch failed',
-          {'track': key.$1.name, 'range': '${key.$2}', 'error': '$error'});
+      _ctx.logger.warn(LogCategory.engine, 'prefetch failed', {
+        'track': key.$1.name,
+        'range': '${key.$2}',
+        'error': '$error',
+      });
     }
   }
 
@@ -889,9 +938,8 @@ final class RipperSession {
       ];
       var bytes = kept.fold(0, (sum, item) => sum + item.entry.bytes.length);
       if (bytes <= limit) continue;
-      double distance(_CacheEntry entry) => entry.endTime < _playhead
-          ? _playhead - entry.endTime
-          : max(0.0, entry.startTime - _playhead);
+      double distance(_CacheEntry entry) =>
+          entry.endTime < _playhead ? _playhead - entry.endTime : max(0.0, entry.startTime - _playhead);
       kept.sort((a, b) => distance(b.entry).compareTo(distance(a.entry)));
       for (final item in kept) {
         if (bytes <= limit) break;
@@ -907,9 +955,8 @@ final class RipperSession {
   int get seekCount => _seeks;
   int get mediaRequestCount => _requests;
   int prefetchedBytes(TrackKind track) => _prefetchedBytes(track);
-  int cachedBytes(TrackKind track) => _cache.entries
-      .where((entry) => entry.key.$1 == track)
-      .fold(0, (sum, entry) => sum + entry.value.bytes.length);
+  int cachedBytes(TrackKind track) =>
+      _cache.entries.where((entry) => entry.key.$1 == track).fold(0, (sum, entry) => sum + entry.value.bytes.length);
   bool hurries(TrackKind track, ByteRange range) {
     final position = _segmentAt[track]?[range.start];
     return _hurry(position == null ? null : _segments[track]?[position], startup: false)();

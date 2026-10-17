@@ -194,7 +194,9 @@ final class LocalServer {
   }
 
   Future<void> _reject(_Connection connection) async {
-    await connection.send(HTTPResponseWriter.head(status: 400, headers: [('Content-Length', '0'), ('Connection', 'close')]));
+    await connection.send(
+      HTTPResponseWriter.head(status: 400, headers: [('Content-Length', '0'), ('Connection', 'close')]),
+    );
     await connection.finish();
   }
 
@@ -205,19 +207,22 @@ final class LocalServer {
       switch (router.route(head)) {
         case RouteText(:final status, :final contentType, :final body):
           final bytes = BytesBuilder(copy: false)
-            ..add(HTTPResponseWriter.head(status: status, headers: [
-              ('Content-Type', contentType),
-              ('Content-Length', '${body.length}'),
-              ('Connection', 'close'),
-            ]));
+            ..add(
+              HTTPResponseWriter.head(
+                status: status,
+                headers: [('Content-Type', contentType), ('Content-Length', '${body.length}'), ('Connection', 'close')],
+              ),
+            );
           if (!isHead) bytes.add(body);
           await connection.send(bytes.takeBytes());
           _log(head, status: status, bytes: isHead ? 0 : body.length, started: started);
         case RouteFailure(:final status, :final headers):
-          await connection.send(HTTPResponseWriter.head(
-            status: status,
-            headers: [...headers, ('Content-Length', '0'), ('Connection', 'close')],
-          ));
+          await connection.send(
+            HTTPResponseWriter.head(
+              status: status,
+              headers: [...headers, ('Content-Length', '0'), ('Connection', 'close')],
+            ),
+          );
           _log(head, status: status, bytes: 0, started: started);
         case RouteMedia(:final status, :final headers, :final body):
           final headBytes = HTTPResponseWriter.head(status: status, headers: [...headers, ('Connection', 'close')]);
@@ -280,7 +285,13 @@ final class LocalServer {
     return done.future;
   }
 
-  void _log(HTTPRequestHead head, {required int status, required int bytes, double? firstByteMs, required Stopwatch started}) {
+  void _log(
+    HTTPRequestHead head, {
+    required int status,
+    required int bytes,
+    double? firstByteMs,
+    required Stopwatch started,
+  }) {
     Logger.shared.info(LogCategory.server, head.method, {
       'file': _fileName(head),
       'range': head.headers['range'] ?? '',
@@ -292,7 +303,8 @@ final class LocalServer {
   }
 
   /// The last path component only: the token stays out of the log.
-  static String _fileName(HTTPRequestHead head) => head.path.split('/').where((part) => part.isNotEmpty).lastOrNull ?? '';
+  static String _fileName(HTTPRequestHead head) =>
+      head.path.split('/').where((part) => part.isNotEmpty).lastOrNull ?? '';
 }
 
 final class _Connection {
@@ -312,9 +324,9 @@ final class _Connection {
 
   /// True once the socket has taken [bytes]; false, without waiting, once the connection has ended.
   Future<bool> send(List<int> bytes) => _guard(() {
-        socket.add(bytes);
-        return socket.flush();
-      });
+    socket.add(bytes);
+    return socket.flush();
+  });
 
   /// Closes the write side once everything is sent, then the socket.
   Future<void> finish() async {

@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
@@ -145,5 +147,11 @@ void main() {
     expect(config.keepBehindBytes, greaterThan(0));
     expect(appEngineOptions.config, same(appRipperConfig));
     expect(appEngineOptions.forwardDebugLogs, devToolsEnabled);
+    expect(appRipperConfig.exploreInHurry, isFalse);
+    expect(appRipperConfig.tailBackups, isTrue);
+    expect(appRipperConfig.banProbation, isTrue);
+    if (Platform.isWindows) {
+      expect(nodeMemoryPath(), endsWith(r'\bilifast\node_memory.json'));
+    }
   });
 }

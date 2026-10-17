@@ -8,10 +8,10 @@ import 'transport.dart';
 /// dart:io (HTTP/1.1): Windows, Android until cronet_http, and the tests.
 final class IoRangeTransport implements RangeTransport, WarmableTransport {
   IoRangeTransport({this.headers = const {}, this.connectionsPerHost = 8})
-      : _client = HttpClient()
-          ..maxConnectionsPerHost = connectionsPerHost
-          // Byte ranges must arrive as the bytes they name.
-          ..autoUncompress = false;
+    : _client = HttpClient()
+        ..maxConnectionsPerHost = connectionsPerHost
+        // Byte ranges must arrive as the bytes they name.
+        ..autoUncompress = false;
 
   /// Sent with every request: the Safari User-Agent and Bilibili's Referer.
   final Map<String, String> headers;
@@ -30,7 +30,7 @@ final class IoRangeTransport implements RangeTransport, WarmableTransport {
   /// Redirects are followed, with these headers and the Range kept, as URLSession does.
   @override
   Future<TransportResponse> fetch(Uri url, ByteRange range, {CancelToken? cancel}) async {
-    for (var attempt = 0;; attempt++) {
+    for (var attempt = 0; ; attempt++) {
       try {
         return await _fetchOnce(url, range, cancel);
       } on _ConnectFailed catch (failure) {

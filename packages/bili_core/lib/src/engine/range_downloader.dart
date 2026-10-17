@@ -45,7 +45,11 @@ final class RangeDownloader {
 
   /// The first copy to succeed wins and the others are cancelled; when every copy fails, the last error.
   Future<AttemptOutput> _firstSuccess(
-      List<String> candidates, ByteRange range, Resolver resolver, CancelToken? cancel) {
+    List<String> candidates,
+    ByteRange range,
+    Resolver resolver,
+    CancelToken? cancel,
+  ) {
     const delays = [0.0, 120.0, 300.0];
     final race = CancelToken(cancel);
     final result = Completer<AttemptOutput>();
@@ -56,13 +60,15 @@ final class RangeDownloader {
     Future<void> runOne(int index) async {
       try {
         await cancellableSleep(delays[index], race);
-        final output = await pieces.runner.runAt(candidates[index],
-            piece: range,
-            progress: AttemptProgress(),
-            resolver: resolver,
-            priority: 220,
-            queueClass: QueueClass.critical,
-            cancel: race);
+        final output = await pieces.runner.runAt(
+          candidates[index],
+          piece: range,
+          progress: AttemptProgress(),
+          resolver: resolver,
+          priority: 220,
+          queueClass: QueueClass.critical,
+          cancel: race,
+        );
         if (winner == null) {
           winner = output;
           race.cancel();
@@ -112,17 +118,20 @@ final class RangeDownloader {
     final hurried = hurryCheck?.call() ?? false;
     final check = _TotalCheck(expectedTotal);
 
-    var preferred = resolver.rangeCandidates();
+    var preferred = resolver.rangeCandidates(hurried: hurried);
     if (startup && burst) {
-      return _burst(range, resolver,
-          preferred: preferred,
-          hurried: hurried,
-          hurry: hurryCheck,
-          deadline: deadline,
-          check: check,
-          emit: emit,
-          cancel: cancel,
-          lane: lane);
+      return _burst(
+        range,
+        resolver,
+        preferred: preferred,
+        hurried: hurried,
+        hurry: hurryCheck,
+        deadline: deadline,
+        check: check,
+        emit: emit,
+        cancel: cancel,
+        lane: lane,
+      );
     }
     var assignable = preferred;
     var remaining = range;
@@ -153,8 +162,13 @@ final class RangeDownloader {
       assignable = preferred.where((url) => url == result.url || resolver.speed(url) > 0).toList();
       indexOffset = 1;
     }
-    final (parts, primaries) =
-        _place(remaining, resolver, preferred: preferred, assignable: assignable, hurried: hurried);
+    final (parts, primaries) = _place(
+      remaining,
+      resolver,
+      preferred: preferred,
+      assignable: assignable,
+      hurried: hurried,
+    );
     final mode = startup ? PieceMode.startup : PieceMode.normal;
     final order = preferred;
     final run = _InOrder(cancel, check: check.call, emit: emit);
@@ -175,6 +189,7 @@ final class RangeDownloader {
           hurry: hurryCheck,
           cancel: token,
           lane: lane,
+          holdingUp: run.holdingUp,
         ),
       );
     }
@@ -201,7 +216,8 @@ final class RangeDownloader {
             base: ctx.config.minChunkBytes,
             rangeLength: remaining.length,
             pieceLimit: pieceConcurrency,
-            hostCount: preferred.length);
+            hostCount: preferred.length,
+          );
     final parts = remaining.split(concurrency: pieceConcurrency, minChunk: minChunk);
     final primaries = hurried
         ? HurryPlacement.assign(
@@ -209,13 +225,15 @@ final class RangeDownloader {
             count: parts.length,
             pieceBytes: parts.first.length,
             nodes: ctx.nodes,
-            delivered: (url) => resolver.bans?.hasDelivered(url) ?? true)
+            delivered: (url) => resolver.bans?.hasDelivered(url) ?? true,
+          )
         : assigner.assign(
             urls: assignable,
             count: parts.length,
             speed: resolver.speed,
             trialKey: resolver,
-            isFull: (url, placed) => ctx.nodes.isFull(url, extraInflight: placed));
+            isFull: (url, placed) => ctx.nodes.isFull(url, extraInflight: placed),
+          );
     return (parts, primaries);
   }
 
@@ -244,29 +262,34 @@ final class RangeDownloader {
     ];
     final known = preferred.any(ctx.nodes.isKnown);
     final best = known
-        ? HurryPlacement.byExpectedFinish(preferred,
-            pieceBytes: pieceBytes, nodes: ctx.nodes, delivered: (url) => resolver.bans?.hasDelivered(url) ?? true)
+        ? HurryPlacement.byExpectedFinish(
+            preferred,
+            pieceBytes: pieceBytes,
+            nodes: ctx.nodes,
+            delivered: (url) => resolver.bans?.hasDelivered(url) ?? true,
+          )
         : preferred;
     final width = max(1, ctx.config.seekBurstCopies);
     final run = _InOrder(cancel, check: check.call, emit: emit);
     Future<AttemptOutput> headPiece(int index) => run.add(
-          (token) => pieces.download(
-            piece: head[index],
-            index: index,
-            resolver: resolver,
-            // Each piece starts its race one node further along, so the head spreads over the best nodes.
-            preferred: index == 0 || best.isEmpty
-                ? best
-                : [...best.skip(index % best.length), ...best.take(index % best.length)],
-            mode: index == 0 && !known ? PieceMode.probe : PieceMode.burst,
-            priority: 220.0 - index,
-            deadline: deadline,
-            hurry: hurry,
-            cancel: token,
-            burstWidth: index == 0 ? width : min(width, 2),
-            lane: lane,
-          ),
-        );
+      (token) => pieces.download(
+        piece: head[index],
+        index: index,
+        resolver: resolver,
+        // Each piece starts its race one node further along, so the head spreads over the best nodes.
+        preferred: index == 0 || best.isEmpty
+            ? best
+            : [...best.skip(index % best.length), ...best.take(index % best.length)],
+        mode: index == 0 && !known ? PieceMode.probe : PieceMode.burst,
+        priority: 220.0 - index,
+        deadline: deadline,
+        hurry: hurry,
+        cancel: token,
+        burstWidth: index == 0 ? width : min(width, 2),
+        lane: lane,
+        holdingUp: run.holdingUp,
+      ),
+    );
     final first = headPiece(0);
     for (var index = 1; index < head.length; index++) {
       headPiece(index);
@@ -291,8 +314,13 @@ final class RangeDownloader {
         ordered = [winner, ...preferred.where((url) => url != winner)];
         assignable = ordered.where((url) => url == winner || resolver.speed(url) > 0).toList();
       }
-      final (parts, primaries) = _place(ByteRange(headEnd + 1, range.end), resolver,
-          preferred: ordered, assignable: assignable.isEmpty ? ordered : assignable, hurried: hurried);
+      final (parts, primaries) = _place(
+        ByteRange(headEnd + 1, range.end),
+        resolver,
+        preferred: ordered,
+        assignable: assignable.isEmpty ? ordered : assignable,
+        hurried: hurried,
+      );
       for (var offset = 0; offset < parts.length; offset++) {
         final primary = offset < primaries.length ? primaries[offset] : ordered.first;
         final pieceIndex = head.length + offset;
@@ -308,6 +336,7 @@ final class RangeDownloader {
             hurry: hurry,
             cancel: token,
             lane: lane,
+            holdingUp: run.holdingUp,
           ),
         );
       }
@@ -329,10 +358,14 @@ final class RangeDownloader {
     CancelToken? cancel,
     RequestLane lane = RequestLane.any,
   }) async {
-    final preferred = resolver.rangeCandidates();
+    final preferred = resolver.rangeCandidates(hurried: ctx.config.hurry && (hurry?.call() ?? false));
     final ordered = preferred.any(ctx.nodes.isKnown)
-        ? HurryPlacement.byExpectedFinish(preferred,
-            pieceBytes: range.length, nodes: ctx.nodes, delivered: (url) => resolver.bans?.hasDelivered(url) ?? true)
+        ? HurryPlacement.byExpectedFinish(
+            preferred,
+            pieceBytes: range.length,
+            nodes: ctx.nodes,
+            delivered: (url) => resolver.bans?.hasDelivered(url) ?? true,
+          )
         : preferred;
     final output = await pieces.download(
       piece: range,
@@ -382,6 +415,9 @@ final class _InOrder {
   var _closed = false;
   Object? _failure;
   StackTrace? _failureStack;
+
+  /// Whether one piece is all that is left running, so the whole range waits on it.
+  bool holdingUp() => _pending == 1;
 
   Future<AttemptOutput> add(Future<AttemptOutput> Function(CancelToken cancel) download) {
     final order = _added++;
@@ -440,4 +476,3 @@ final class _InOrder {
     }
   }
 }
-

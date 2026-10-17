@@ -7,7 +7,7 @@ import 'bili_hosts.dart';
 
 final class HTTPRequest {
   HTTPRequest({required this.url, Map<String, String>? headers, this.method = 'GET', this.body})
-      : headers = headers ?? {};
+    : headers = headers ?? {};
 
   final Uri url;
   final Map<String, String> headers;
@@ -37,7 +37,7 @@ abstract interface class HTTPTransport {
 /// Cookie header and the body never follow a redirect off Bilibili's hosts.
 final class ClientHTTPTransport implements HTTPTransport {
   ClientHTTPTransport({http.Client? client, this.timeout = const Duration(seconds: 15), this.maxRedirects = 10})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -58,7 +58,7 @@ final class ClientHTTPTransport implements HTTPTransport {
   @override
   Future<HTTPResponse> send(HTTPRequest request) async {
     var current = request;
-    for (var hop = 0;; hop++) {
+    for (var hop = 0; ; hop++) {
       // A timed-out request is aborted, not left running behind the TimeoutException.
       final abort = Completer<void>();
       final outgoing = http.AbortableRequest(current.method, current.url, abortTrigger: abort.future)

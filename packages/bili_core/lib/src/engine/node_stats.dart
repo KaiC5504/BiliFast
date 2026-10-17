@@ -96,7 +96,8 @@ final class NodeStats {
   /// Counts a request on the first of [urls] (not empty) whose node has room, or on the first when every one
   /// is full, and returns it.
   String beginFirstOpen(List<String> urls) {
-    final url = urls.where((url) {
+    final url =
+        urls.where((url) {
           final node = _peek(url);
           return node.inflight < node.limit;
         }).firstOrNull ??

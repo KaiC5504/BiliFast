@@ -91,7 +91,8 @@ final class _Parsed {
       nodeKey: nodeKey,
       address: uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path,
       routeKey: nodeKey + uri.path,
-      relay: NodeCatalog._relayHost.hasMatch(uri.host) ||
+      relay:
+          NodeCatalog._relayHost.hasMatch(uri.host) ||
           NodeCatalog._relayPath.hasMatch(uri.path) ||
           _os(uri)?.toLowerCase() == 'mcdn',
     );
@@ -188,10 +189,10 @@ abstract final class NodeCatalog {
   }
 
   static List<NodeAddress> nodes(NodeMode mode) => switch (mode) {
-        MainlandNodes() => [for (final host in mainland) NodeAddress(host)],
-        OverseasNodes() => [for (final host in overseas) NodeAddress(host)],
-        CustomNodes(:final nodes) => nodes,
-      };
+    MainlandNodes() => [for (final host in mainland) NodeAddress(host)],
+    OverseasNodes() => [for (final host in overseas) NodeAddress(host)],
+    CustomNodes(:final nodes) => nodes,
+  };
 
   /// BTR `representationUrls`: the addresses Bilibili gave that suit the mode, then the signed
   /// address swapped onto every node of the mode.
@@ -230,6 +231,9 @@ abstract final class NodeCatalog {
 
   static List<String> deduplicated(List<String> list) {
     final seen = <String>{};
-    return [for (final url in list) if (seen.add(url)) url];
+    return [
+      for (final url in list)
+        if (seen.add(url)) url,
+    ];
   }
 }

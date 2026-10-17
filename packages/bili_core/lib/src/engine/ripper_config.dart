@@ -30,6 +30,9 @@ final class RipperConfig {
     this.prefetchAudioMaxBytes,
     this.keepBehindSeconds = 2,
     this.keepBehindBytes = 0,
+    this.exploreInHurry = true,
+    this.tailBackups = false,
+    this.banProbation = false,
   });
 
   final double firstByteTimeoutMs;
@@ -101,6 +104,18 @@ final class RipperConfig {
   /// from memory. Swift dropped a segment from the cache once the player read it.
   final int keepBehindBytes;
 
+  /// Off keeps hurried ranges on measured or remembered nodes: unknown and very slow nodes only get backup copies.
+  /// Swift let a hurried range try every node.
+  final bool exploreInHurry;
+
+  /// The last unfinished piece of a hurried range gets a backup once its copy needs 3x as long as a fresh one would
+  /// elsewhere ([HurryPlacement.tailBackupDue]). Swift judged a slow copy only against its own node's usual time.
+  final bool tailBackups;
+
+  /// A node banned for silent failures gets a copy now and then, so it can come back ([BanProbation]). Swift kept it
+  /// out until the network changed.
+  final bool banProbation;
+
   /// The connection count without AutoConcurrency (Swift's fallback when neither is given).
   static const defaultConcurrency = 16;
 
@@ -139,6 +154,9 @@ final class RipperConfig {
     int? prefetchAudioMaxBytes,
     double? keepBehindSeconds,
     int? keepBehindBytes,
+    bool? exploreInHurry,
+    bool? tailBackups,
+    bool? banProbation,
   }) => RipperConfig(
     firstByteTimeoutMs: firstByteTimeoutMs ?? this.firstByteTimeoutMs,
     stallTimeoutMs: stallTimeoutMs ?? this.stallTimeoutMs,
@@ -168,5 +186,8 @@ final class RipperConfig {
     prefetchAudioMaxBytes: prefetchAudioMaxBytes ?? this.prefetchAudioMaxBytes,
     keepBehindSeconds: keepBehindSeconds ?? this.keepBehindSeconds,
     keepBehindBytes: keepBehindBytes ?? this.keepBehindBytes,
+    exploreInHurry: exploreInHurry ?? this.exploreInHurry,
+    tailBackups: tailBackups ?? this.tailBackups,
+    banProbation: banProbation ?? this.banProbation,
   );
 }

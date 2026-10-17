@@ -25,14 +25,37 @@ const appRipperConfig = RipperConfig(
   prefetchAudioMaxBytes: 16 * 1024 * 1024,
   keepBehindSeconds: 30,
   keepBehindBytes: 96 * 1024 * 1024,
+  exploreInHurry: false,
+  tailBackups: true,
+  banProbation: true,
 );
 
-/// Dev builds also send the engine's per-piece debug events to the log, for timing it from the phone.
-const appEngineOptions = EngineOptions(config: appRipperConfig, forwardDebugLogs: devToolsEnabled);
+/// Dev builds also send the engine's per-piece debug events to the log, for timing it from the phone. Node speeds are
+/// remembered between launches in the app's support folder.
+final appEngineOptions = EngineOptions(
+  config: appRipperConfig,
+  forwardDebugLogs: devToolsEnabled,
+  nodeMemoryPath: nodeMemoryPath(),
+);
+
+String? nodeMemoryPath() {
+  final env = Platform.environment;
+  if (Platform.isIOS) {
+    final home = env['HOME'];
+    return home == null ? null : '$home/Library/Application Support/node_memory.json';
+  }
+  if (Platform.isWindows) {
+    final appData = env['APPDATA'];
+    return appData == null ? null : '$appData\\bilifast\\node_memory.json';
+  }
+  return null;
+}
 
 /// URLSession on iOS (HTTP/2 to the mirrors), dart:io elsewhere.
 Future<PlaybackEngine> startPlatformEngine() => PlaybackEngine.start(
-    transportFactory: Platform.isIOS ? createCupertinoTransport : createIoTransport, options: appEngineOptions);
+  transportFactory: Platform.isIOS ? createCupertinoTransport : createIoTransport,
+  options: appEngineOptions,
+);
 
 /// What the overlay shows until the engine's first stats arrive.
 String get platformTransportName => Platform.isIOS ? 'URLSession' : 'dart:io';
@@ -43,11 +66,12 @@ Future<PlaybackController> startPlaybackController(BiliClient client) async {
   try {
     final player = await createPlayer();
     return PlaybackController(
-        client: client,
-        engine: engine,
-        startEngine: startPlatformEngine,
-        player: player,
-        transportName: platformTransportName);
+      client: client,
+      engine: engine,
+      startEngine: startPlatformEngine,
+      player: player,
+      transportName: platformTransportName,
+    );
   } catch (_) {
     await engine.dispose();
     rethrow;

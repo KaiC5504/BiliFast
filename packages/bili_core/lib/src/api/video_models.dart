@@ -268,14 +268,14 @@ final class VideoDetail {
     final object = JsonObject.from(json);
     final bvid = object.required(object.string('bvid'), 'bvid');
     final desc = object.string('desc') ?? '';
-    final parts = [
-      for (final part in object.lenientList('desc_v2', _descEntry)) ?part,
-    ];
+    final parts = [for (final part in object.lenientList('desc_v2', _descEntry)) ?part];
     final dimension = object.nested('dimension');
     final rawWidth = dimension?.integer('width') ?? 0;
     final rawHeight = dimension?.integer('height') ?? 0;
     final rotated = dimension?.integer('rotate') == 1;
-    final honors = object.nested('honor_reply')?.lenientList('honor', (json) => JsonObject.from(json).string('desc') ?? '');
+    final honors = object
+        .nested('honor_reply')
+        ?.lenientList('honor', (json) => JsonObject.from(json).string('desc') ?? '');
     final redirect = object.string('redirect_url');
     return VideoDetail(
       bvid: bvid,
@@ -348,9 +348,9 @@ final class VideoDetail {
 
   @override
   int get hashCode => Object.hashAll([
-        bvid, aid, title, cover, pubdate, duration, desc, Object.hashAll(descParts), copyright, owner, stat, //
-        Object.hashAll(pages), season, Object.hashAll(staff), width, height, honor, redirectURL,
-      ]);
+    bvid, aid, title, cover, pubdate, duration, desc, Object.hashAll(descParts), copyright, owner, stat, //
+    Object.hashAll(pages), season, Object.hashAll(staff), width, height, honor, redirectURL,
+  ]);
 }
 
 T? _optional<T>(Object? json, T Function(Object? json) decode) => json == null ? null : decode(json);
@@ -391,7 +391,12 @@ final class PlayerInfo {
     return PlayerInfo(
       lastPlayCid: object.integer('last_play_cid') ?? 0,
       // type 1 is the uploader's highlight marks, not a chapter list.
-      chapters: points.firstOrNull?.type == 2 ? [for (final point in points) if (point.type == 2) point.chapter] : [],
+      chapters: points.firstOrNull?.type == 2
+          ? [
+              for (final point in points)
+                if (point.type == 2) point.chapter,
+            ]
+          : [],
     );
   }
 

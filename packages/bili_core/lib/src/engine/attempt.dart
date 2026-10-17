@@ -30,11 +30,11 @@ final class EngineContext {
     this.auto,
     MonotonicClock? clock,
     Logger? logger,
-  })  : meter = meter ?? Meter(),
-        stats = stats ?? EngineStats(),
-        clock = clock ?? MonotonicClock.system,
-        logger = logger ?? Logger.shared,
-        nodes = NodeStats(connectionsPerHost: transport.connectionsPerHost);
+  }) : meter = meter ?? Meter(),
+       stats = stats ?? EngineStats(),
+       clock = clock ?? MonotonicClock.system,
+       logger = logger ?? Logger.shared,
+       nodes = NodeStats(connectionsPerHost: transport.connectionsPerHost);
 
   final RangeTransport transport;
   final ConnectionPool pool;
@@ -90,7 +90,11 @@ final class EngineContext {
     if (gated) await _enterVideo(priority + lane.boost, effectiveClass, cancel);
     try {
       return await pool.acquire(
-          priority: priority + lane.boost, queueClass: effectiveClass, deadline: deadline, cancel: cancel);
+        priority: priority + lane.boost,
+        queueClass: effectiveClass,
+        deadline: deadline,
+        cancel: cancel,
+      );
     } catch (_) {
       if (gated) _leaveVideo();
       rethrow;
@@ -181,7 +185,8 @@ Future<void> cancellableSleep(double ms, CancelToken? cancel) {
     remove();
     completer.complete();
   });
-  remove = cancel?.onCancel(() {
+  remove =
+      cancel?.onCancel(() {
         timer.cancel();
         if (!completer.isCompleted) completer.completeError(const CancelledException());
       }) ??
@@ -269,23 +274,22 @@ final class AttemptRunner {
     Prefix Function()? resumeBase,
     CancelToken? cancel,
     RequestLane lane = RequestLane.any,
-  }) =>
-      run(
-        claim: () {
-          ctx.nodes.begin(url);
-          return url;
-        },
-        piece: piece,
-        progress: progress,
-        resolver: resolver,
-        priority: priority,
-        queueClass: queueClass,
-        deadline: deadline,
-        copy: copy,
-        resumeBase: resumeBase,
-        cancel: cancel,
-        lane: lane,
-      );
+  }) => run(
+    claim: () {
+      ctx.nodes.begin(url);
+      return url;
+    },
+    piece: piece,
+    progress: progress,
+    resolver: resolver,
+    priority: priority,
+    queueClass: queueClass,
+    deadline: deadline,
+    copy: copy,
+    resumeBase: resumeBase,
+    cancel: cancel,
+    lane: lane,
+  );
 
   /// One request for [piece] (or its missing tail): waits for a connection, then [claim] picks the URL and counts the
   /// request on its node (`NodeStats.begin`), so a request that waited for a permit goes where there is room by then.
@@ -304,8 +308,13 @@ final class AttemptRunner {
     CancelToken? cancel,
     RequestLane lane = RequestLane.any,
   }) async {
-    final permit =
-        await ctx.acquire(priority: priority, queueClass: queueClass, deadline: deadline, cancel: cancel, lane: lane);
+    final permit = await ctx.acquire(
+      priority: priority,
+      queueClass: queueClass,
+      deadline: deadline,
+      cancel: cancel,
+      lane: lane,
+    );
     try {
       cancel?.throwIfCancelled();
       final url = claim();
@@ -373,8 +382,12 @@ final class AttemptRunner {
         // A copy that lost the race still measured its node; without this a slow node is never measured.
         if (received >= Meter.sampleMinBytes) resolver.sample(url, bps: received * 1000 / elapsed);
         if (received > 0) resolver.streamed(url);
-        ctx.logger.debug(LogCategory.engine, 'attempt cancelled',
-            {'node': node, 'range': '$part', 'bytes': received, 'ms': elapsed.roundToDouble()});
+        ctx.logger.debug(LogCategory.engine, 'attempt cancelled', {
+          'node': node,
+          'range': '$part',
+          'bytes': received,
+          'ms': elapsed.roundToDouble(),
+        });
       } else {
         final ripperError = error is RipperError ? error : null;
         final firstByteTimeout = ripperError?.kind == RipperErrorKind.firstByteTimeout;

@@ -8,21 +8,21 @@ sealed class BiliError implements Exception {
   static const BiliError invalidLink = BiliInvalidLinkError();
 
   bool get needsLogin => switch (this) {
-        BiliAPIError(code: -101) => true,
-        _ => false,
-      };
+    BiliAPIError(code: -101) => true,
+    _ => false,
+  };
 
   String get userMessage => switch (this) {
-        BiliHTTPError(status: 412) => 'B 站暂时拒绝了请求（风控），稍后再试',
-        BiliHTTPError(:final status) => '网络请求失败（HTTP $status）',
-        BiliAPIError(code: -101) => '需要登录',
-        BiliAPIError(code: -352 || -412) => '请求过于频繁，请稍后再试',
-        BiliAPIError(code: -404 || 62002 || 62004) => '视频不存在或已被删除',
-        BiliAPIError(:final code, :final message) => 'B 站返回错误 $code：$message',
-        BiliDecodingError() => 'B 站返回的数据无法解析',
-        BiliNotDashError() => '这个视频不是 DASH 格式，暂不支持',
-        BiliInvalidLinkError() => '没有找到视频链接',
-      };
+    BiliHTTPError(status: 412) => 'B 站暂时拒绝了请求（风控），稍后再试',
+    BiliHTTPError(:final status) => '网络请求失败（HTTP $status）',
+    BiliAPIError(code: -101) => '需要登录',
+    BiliAPIError(code: -352 || -412) => '请求过于频繁，请稍后再试',
+    BiliAPIError(code: -404 || 62002 || 62004) => '视频不存在或已被删除',
+    BiliAPIError(:final code, :final message) => 'B 站返回错误 $code：$message',
+    BiliDecodingError() => 'B 站返回的数据无法解析',
+    BiliNotDashError() => '这个视频不是 DASH 格式，暂不支持',
+    BiliInvalidLinkError() => '没有找到视频链接',
+  };
 }
 
 final class BiliHTTPError extends BiliError {

@@ -181,8 +181,7 @@ abstract interface class PlaybackEngine {
   static Future<PlaybackEngine> start({
     required RangeTransport Function() transportFactory,
     EngineOptions options = const EngineOptions(),
-  }) =>
-      IsolatePlaybackEngine.start(transportFactory: transportFactory, options: options);
+  }) => IsolatePlaybackEngine.start(transportFactory: transportFactory, options: options);
 
   /// Fetches both tracks' headers, builds the playlists and registers them with the local server.
   /// Throws [PlaybackError].

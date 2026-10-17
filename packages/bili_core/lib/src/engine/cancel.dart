@@ -65,13 +65,16 @@ final class CancelToken {
     final remove = onCancel(() {
       if (!completer.isCompleted) completer.completeError(const CancelledException());
     });
-    future.then((value) {
-      remove();
-      if (!completer.isCompleted) completer.complete(value);
-    }, onError: (Object error, StackTrace stack) {
-      remove();
-      if (!completer.isCompleted) completer.completeError(error, stack);
-    });
+    future.then(
+      (value) {
+        remove();
+        if (!completer.isCompleted) completer.complete(value);
+      },
+      onError: (Object error, StackTrace stack) {
+        remove();
+        if (!completer.isCompleted) completer.completeError(error, stack);
+      },
+    );
     return completer.future;
   }
 }

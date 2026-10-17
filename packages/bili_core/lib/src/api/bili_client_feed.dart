@@ -33,12 +33,12 @@ extension BiliClientFeed on BiliClient {
       'brush': position,
       'feed_version': 'V8',
     };
-    final cards = await _getIfPresent('/x/web-interface/wbi/index/top/feed/rcmd',
-        query: query,
-        signed: true,
-        decode: (json) => [
-              for (final card in JsonObject.from(json).lossyList('item', _feedItem)) ?card,
-            ]);
+    final cards = await _getIfPresent(
+      '/x/web-interface/wbi/index/top/feed/rcmd',
+      query: query,
+      signed: true,
+      decode: (json) => [for (final card in JsonObject.from(json).lossyList('item', _feedItem)) ?card],
+    );
     return cards ?? [];
   }
 
@@ -51,8 +51,12 @@ extension BiliClientFeed on BiliClient {
       'type': 'archive',
       'ps': '20',
     };
-    final payload =
-        await _getIfPresent('/x/web-interface/history/cursor', query: query, signed: false, decode: _historyPayload);
+    final payload = await _getIfPresent(
+      '/x/web-interface/history/cursor',
+      query: query,
+      signed: false,
+      decode: _historyPayload,
+    );
     return payload ?? const HistoryPage(items: [], next: null);
   }
 }

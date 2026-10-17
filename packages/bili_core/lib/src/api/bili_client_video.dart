@@ -18,25 +18,28 @@ extension BiliClientVideo on BiliClient {
       get('/x/player/wbi/v2', query: {'bvid': bvid, 'cid': '$cid'}, signed: true, decode: PlayerInfo.fromJson);
 
   /// The server's display string ("1.2万+"), not a number.
-  Future<String> onlineCount({required int aid, required String bvid, required int cid}) => get('/x/player/online/total',
-      query: {'aid': '$aid', 'bvid': bvid, 'cid': '$cid'},
-      signed: false,
-      decode: (json) => JsonObject.from(json).string('total') ?? '');
+  Future<String> onlineCount({required int aid, required String bvid, required int cid}) => get(
+    '/x/player/online/total',
+    query: {'aid': '$aid', 'bvid': bvid, 'cid': '$cid'},
+    signed: false,
+    decode: (json) => JsonObject.from(json).string('total') ?? '',
+  );
 
   Future<List<VideoCard>> related({required String bvid}) async {
-    final cards = await _getIfPresent('/x/web-interface/archive/related',
-        query: {'bvid': bvid},
-        signed: false,
-        decode: (json) => [
-              for (final card in lossy(_array(json), _relatedItem)) ?card,
-            ]);
+    final cards = await _getIfPresent(
+      '/x/web-interface/archive/related',
+      query: {'bvid': bvid},
+      signed: false,
+      decode: (json) => [for (final card in lossy(_array(json), _relatedItem)) ?card],
+    );
     return cards ?? [];
   }
 
-  Future<void> heartbeat({required String bvid, required int cid, required int playedTime}) =>
-      postVoid('/x/click-interface/web/heartbeat',
-          form: {'bvid': bvid, 'cid': '$cid', 'type': '3', 'played_time': '$playedTime'},
-          referer: 'https://www.bilibili.com/video/$bvid');
+  Future<void> heartbeat({required String bvid, required int cid, required int playedTime}) => postVoid(
+    '/x/click-interface/web/heartbeat',
+    form: {'bvid': bvid, 'cid': '$cid', 'type': '3', 'played_time': '$playedTime'},
+    referer: 'https://www.bilibili.com/video/$bvid',
+  );
 
   Future<void> addToWatchLater({required int aid}) => postVoid('/x/v2/history/toview/add', form: {'aid': '$aid'});
 }

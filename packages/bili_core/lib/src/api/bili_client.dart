@@ -31,8 +31,8 @@ typedef _Sent = ({HTTPResponse response, double ms});
 
 final class BiliClient {
   BiliClient({required this._transport, required this.cookies, DateTime Function()? now, Logger? logger})
-      : now = now ?? DateTime.now,
-        _logger = logger ?? Logger.shared;
+    : now = now ?? DateTime.now,
+      _logger = logger ?? Logger.shared;
 
   static const userAgent =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15';
@@ -114,14 +114,7 @@ final class BiliClient {
   }
 
   Future<PlayURLInfo> playURL({required String bvid, required int cid, required int quality}) async {
-    final query = {
-      'bvid': bvid,
-      'cid': '$cid',
-      'qn': '$quality',
-      'fnval': '$dashFnval',
-      'fnver': '0',
-      'fourk': '1',
-    };
+    final query = {'bvid': bvid, 'cid': '$cid', 'qn': '$quality', 'fnval': '$dashFnval', 'fnver': '0', 'fourk': '1'};
     final info = await get('/x/player/wbi/playurl', query: query, signed: true, decode: PlayURLInfo.fromJson);
     if (info.dash == null) throw BiliError.notDash;
     return info;
@@ -154,19 +147,27 @@ final class BiliClient {
     required bool signed,
     String host = api,
     required JsonDecode<T> decode,
-  }) async =>
-      _checked(await _getEnvelope(path, query: query, signed: signed, host: host, decode: decode));
+  }) async => _checked(await _getEnvelope(path, query: query, signed: signed, host: host, decode: decode));
 
   /// For reads whose success may carry `data: null`, which is an empty result rather than an error.
-  Future<T?> _getIfPresent<T>(String path,
-      {Map<String, String> query = const {}, required bool signed, required JsonDecode<T> decode}) async {
+  Future<T?> _getIfPresent<T>(
+    String path, {
+    Map<String, String> query = const {},
+    required bool signed,
+    required JsonDecode<T> decode,
+  }) async {
     final envelope = await _getEnvelope(path, query: query, signed: signed, decode: decode);
     if (envelope.code != 0) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');
     return envelope.data;
   }
 
   /// For endpoints that do not answer with the JSON envelope, such as the protobuf danmaku segments.
-  Future<Uint8List> getData(String path, {Map<String, String> query = const {}, required bool signed, String host = api}) async {
+  Future<Uint8List> getData(
+    String path, {
+    Map<String, String> query = const {},
+    required bool signed,
+    String host = api,
+  }) async {
     final sent = await _send(method: 'GET', path: path, query: query, signed: signed, host: host, accept: '*/*');
     _logger.info(LogCategory.api, path, {'status': sent.response.status, 'ms': sent.ms.round()});
     return sent.response.body;
@@ -183,43 +184,71 @@ final class BiliClient {
       _checked(await _postEnvelope(path, form: form, referer: referer, host: host, cookies: cookies, decode: decode));
 
   /// For writes whose success carries no data (`data` may be null).
-  Future<void> postVoid(String path,
-      {Map<String, String> form = const {}, String? referer, String host = api, bool cookies = true}) async {
-    final envelope =
-        await _postEnvelope(path, form: form, referer: referer, host: host, cookies: cookies, decode: (_) => null);
+  Future<void> postVoid(
+    String path, {
+    Map<String, String> form = const {},
+    String? referer,
+    String host = api,
+    bool cookies = true,
+  }) async {
+    final envelope = await _postEnvelope(
+      path,
+      form: form,
+      referer: referer,
+      host: host,
+      cookies: cookies,
+      decode: (_) => null,
+    );
     if (envelope.code != 0) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');
   }
 
-  Future<BiliEnvelope<T>> _getEnvelope<T>(String path,
-      {Map<String, String> query = const {}, required bool signed, String host = api, required JsonDecode<T> decode}) async {
-    final sent =
-        await _send(method: 'GET', path: path, query: query, signed: signed, host: host, accept: 'application/json');
+  Future<BiliEnvelope<T>> _getEnvelope<T>(
+    String path, {
+    Map<String, String> query = const {},
+    required bool signed,
+    String host = api,
+    required JsonDecode<T> decode,
+  }) async {
+    final sent = await _send(
+      method: 'GET',
+      path: path,
+      query: query,
+      signed: signed,
+      host: host,
+      accept: 'application/json',
+    );
     return _decodeEnvelope(sent, path, decode);
   }
 
-  Future<BiliEnvelope<T>> _postEnvelope<T>(String path,
-      {required Map<String, String> form,
-      String? referer,
-      required String host,
-      bool cookies = true,
-      required JsonDecode<T> decode}) async {
+  Future<BiliEnvelope<T>> _postEnvelope<T>(
+    String path, {
+    required Map<String, String> form,
+    String? referer,
+    required String host,
+    bool cookies = true,
+    required JsonDecode<T> decode,
+  }) async {
     final sent = await _send(
-        method: 'POST',
-        path: path,
-        signed: false,
-        host: host,
-        form: form,
-        referer: referer,
-        accept: 'application/json',
-        sendCookies: cookies);
+      method: 'POST',
+      path: path,
+      signed: false,
+      host: host,
+      form: form,
+      referer: referer,
+      accept: 'application/json',
+      sendCookies: cookies,
+    );
     return _decodeEnvelope(sent, path, decode);
   }
 
   BiliEnvelope<T> _decodeEnvelope<T>(_Sent sent, String path, JsonDecode<T> decode) {
     try {
       final envelope = BiliEnvelope.parse(utf8.decode(sent.response.body), decode);
-      _logger.info(
-          LogCategory.api, path, {'status': sent.response.status, 'code': envelope.code, 'ms': sent.ms.round()});
+      _logger.info(LogCategory.api, path, {
+        'status': sent.response.status,
+        'code': envelope.code,
+        'ms': sent.ms.round(),
+      });
       return envelope;
     } on Exception catch (error) {
       if (error is! DecodeError && error is! FormatException) rethrow;
@@ -293,16 +322,17 @@ final class BiliClient {
         cookies.remove('buvid4');
         await ensureRiskCookies();
         return _send(
-            method: method,
-            path: path,
-            query: query,
-            signed: signed,
-            host: host,
-            form: form,
-            referer: referer,
-            accept: accept,
-            sendCookies: sendCookies,
-            retried: true);
+          method: method,
+          path: path,
+          query: query,
+          signed: signed,
+          host: host,
+          form: form,
+          referer: referer,
+          accept: accept,
+          sendCookies: sendCookies,
+          retried: true,
+        );
       }
       throw BiliError.http(response.status);
     }

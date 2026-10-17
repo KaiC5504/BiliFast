@@ -112,9 +112,9 @@ T? attempt<T extends Object>(T? Function() decode) {
 }
 
 List<T> lossy<T>(List<Object?> values, T Function(Object? json) decode) => [
-      for (final value in values)
-        if (_attemptElement(() => decode(value)) case (final T decoded,)) decoded,
-    ];
+  for (final value in values)
+    if (_attemptElement(() => decode(value)) case (final T decoded,)) decoded,
+];
 
 /// A record so that a decoder whose result type is nullable still tells "null" from "failed".
 (T,)? _attemptElement<T>(T Function() decode) {
@@ -126,8 +126,9 @@ List<T> lossy<T>(List<Object?> values, T Function(Object? json) decode) => [
 }
 
 /// A strict array: one bad element fails it.
-List<T> strictList<T>(List<Object?>? values, T Function(Object? json) decode) =>
-    [for (final value in values ?? const <Object?>[]) decode(value)];
+List<T> strictList<T>(List<Object?>? values, T Function(Object? json) decode) => [
+  for (final value in values ?? const <Object?>[]) decode(value),
+];
 
 String asString(Object? value, String what) => value is String ? value : throw DecodeError('$what: expected string');
 

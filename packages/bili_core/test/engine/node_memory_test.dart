@@ -5,7 +5,6 @@ import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bili_core/src/engine/ban_list.dart';
 import 'package:bili_core/src/engine/hurry_placement.dart';
-import 'package:bili_core/src/engine/node_memory.dart';
 import 'package:bili_core/src/engine/node_stats.dart';
 import 'package:bili_core/src/engine/primary_assigner.dart';
 import 'package:bili_core/src/engine/range_downloader.dart';

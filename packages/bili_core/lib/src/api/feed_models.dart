@@ -147,10 +147,10 @@ final class HistoryItem {
   String get id => '$bvid@$viewAt';
 
   HistoryDeviceKind get deviceKind => switch (device) {
-        1 || 3 || 5 || 7 => HistoryDeviceKind.phone,
-        2 || 33 => HistoryDeviceKind.pc,
-        _ => HistoryDeviceKind.padOrTV,
-      };
+    1 || 3 || 5 || 7 => HistoryDeviceKind.phone,
+    2 || 33 => HistoryDeviceKind.pc,
+    _ => HistoryDeviceKind.padOrTV,
+  };
 
   @override
   bool operator ==(Object other) =>

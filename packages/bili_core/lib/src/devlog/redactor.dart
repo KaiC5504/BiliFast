@@ -4,7 +4,17 @@ import 'log_event.dart';
 
 abstract final class Redactor {
   static const _secretKeyFragments = [
-    'sessdata', 'bili_jct', 'jct', 'csrf', 'cookie', 'authorization', 'access_key', 'token', 'password', 'passwd', 'pwd',
+    'sessdata',
+    'bili_jct',
+    'jct',
+    'csrf',
+    'cookie',
+    'authorization',
+    'access_key',
+    'token',
+    'password',
+    'passwd',
+    'pwd',
     'dedeuserid__ckmd5',
   ];
   static const _idNames = {'mid', 'dedeuserid'};
@@ -22,10 +32,14 @@ abstract final class Redactor {
 
   static final _urlPattern = RegExp(r'''https?:(?:\\?/){2}[^\s"'<>]+''');
   static const _urlTrailing = ').,;!?]}';
-  static final _authorizationPattern =
-      RegExp(r'''\b((?:proxy-)?authorization["']?\s*[:=]\s*["']?)[^\r\n"']+''', caseSensitive: false);
-  static final _cookieHeaderPattern =
-      RegExp(r'''\b((?:set-)?cookie["']?\s*:\s*["']?)([^\r\n"']+)''', caseSensitive: false);
+  static final _authorizationPattern = RegExp(
+    r'''\b((?:proxy-)?authorization["']?\s*[:=]\s*["']?)[^\r\n"']+''',
+    caseSensitive: false,
+  );
+  static final _cookieHeaderPattern = RegExp(
+    r'''\b((?:set-)?cookie["']?\s*:\s*["']?)([^\r\n"']+)''',
+    caseSensitive: false,
+  );
   static final _bearerPattern = RegExp(r'\b(bearer\s+)[\w.~+/=-]{6,}', caseSensitive: false);
   // `name:SESSDATA value:abc` (NSHTTPCookie) and `"name":"SESSDATA","value":"abc"` (cookie JSON).
   static final _nameValuePattern = RegExp(
@@ -163,16 +177,19 @@ abstract final class Redactor {
   };
 
   /// Cookie and Set-Cookie headers: names stay visible (presence matters when debugging 412s), values go.
-  static String _redactCookieValues(String header) => header.split(';').map((segment) {
-    var lead = 0;
-    while (lead < segment.length && (segment[lead] == ' ' || segment[lead] == '\t')) {
-      lead++;
-    }
-    final leading = segment.substring(0, lead);
-    final body = segment.substring(lead);
-    final equals = body.indexOf('=');
-    if (equals >= 0) return '$leading${body.substring(0, equals)}=[redacted]';
-    final trimmed = body.trim();
-    return _cookieFlags.contains(trimmed.toLowerCase()) || trimmed.isEmpty ? segment : '$leading[redacted]';
-  }).join(';');
+  static String _redactCookieValues(String header) => header
+      .split(';')
+      .map((segment) {
+        var lead = 0;
+        while (lead < segment.length && (segment[lead] == ' ' || segment[lead] == '\t')) {
+          lead++;
+        }
+        final leading = segment.substring(0, lead);
+        final body = segment.substring(lead);
+        final equals = body.indexOf('=');
+        if (equals >= 0) return '$leading${body.substring(0, equals)}=[redacted]';
+        final trimmed = body.trim();
+        return _cookieFlags.contains(trimmed.toLowerCase()) || trimmed.isEmpty ? segment : '$leading[redacted]';
+      })
+      .join(';');
 }

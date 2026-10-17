@@ -8,8 +8,12 @@ import '../devlog/logger.dart';
 /// behind unless [forwardDebug]: copying them across the port for every piece costs more than they are worth,
 /// except to a developer timing the engine from the phone's log.
 final class ForwardingLogSink implements LogSink {
-  ForwardingLogSink(this._send,
-      {this.interval = const Duration(milliseconds: 100), this.batchSize = 200, this.forwardDebug = false});
+  ForwardingLogSink(
+    this._send, {
+    this.interval = const Duration(milliseconds: 100),
+    this.batchSize = 200,
+    this.forwardDebug = false,
+  });
 
   final void Function(List<LogEvent> events) _send;
   final Duration interval;

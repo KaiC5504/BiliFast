@@ -20,7 +20,7 @@ final class _Turn {
 /// 7 times after; one Swift cold jump banned both of the fastest nodes for the rest of the video.
 final class BanProbation {
   BanProbation({MonotonicClock? clock, this.firstMs = 15000, this.capMs = 120000})
-      : _clock = clock ?? MonotonicClock.system;
+    : _clock = clock ?? MonotonicClock.system;
 
   final double firstMs;
   final double capMs;
@@ -108,7 +108,8 @@ final class BanList {
   bool allows(String url) {
     final node = NodeCatalog.nodeKey(url);
     final address = NodeCatalog.address(url);
-    return !_banned.contains('node:$node') && !_banned.contains('address:$address') &&
+    return !_banned.contains('node:$node') &&
+        !_banned.contains('address:$address') &&
         !_banned.contains('pair:$node $address');
   }
 
@@ -118,8 +119,10 @@ final class BanList {
 
   bool allowsAddress(String url) => !_banned.contains('address:${NodeCatalog.address(url)}');
 
-  List<String> bannedNodes() =>
-      [for (final key in _banned) if (key.startsWith('node:')) key.substring(5)]..sort();
+  List<String> bannedNodes() => [
+    for (final key in _banned)
+      if (key.startsWith('node:')) key.substring(5),
+  ]..sort();
 
   /// [url]'s node is banned for silent failures alone (its address and pair are not) and, with [probation] on, its
   /// next turn for a backup copy has come.
@@ -171,7 +174,10 @@ final class BanList {
       }
       if (blamed.isNotEmpty) strikes[blamed] = (strikes[blamed] ?? 0) + count;
     }
-    _banned = {for (final MapEntry(:key, :value) in strikes.entries) if (value >= _limit) key};
+    _banned = {
+      for (final MapEntry(:key, :value) in strikes.entries)
+        if (value >= _limit) key,
+    };
     final added = <(String, int)>[];
     for (final key in _banned.toList()..sort()) {
       if (_reported.add(key)) added.add((key, strikes[key] ?? 0));

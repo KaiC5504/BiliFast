@@ -47,8 +47,10 @@ BlockRule? _ruleOf(_BlockRuleItem item) {
 
 extension BiliClientDanmaku on BiliClient {
   /// One 6-minute slice of a video's danmaku, `index` counting from 1.
-  Future<DanmakuSegment> danmakuSegment({required int cid, required int index}) async =>
-      decodeDanmakuSegment(await danmakuSegmentData(cid: cid, index: index), index: index);
+  Future<DanmakuSegment> danmakuSegment({required int cid, required int index}) async => decodeDanmakuSegment(
+    await danmakuSegmentData(cid: cid, index: index),
+    index: index,
+  );
 
   /// The segment's protobuf bytes, for a caller that decodes them off its own isolate.
   Future<Uint8List> danmakuSegmentData({required int cid, required int index}) async {
@@ -70,16 +72,18 @@ extension BiliClientDanmaku on BiliClient {
     }
   }
 
-  Future<List<BlockRule>> danmakuBlockRules() => get('/x/dm/filter/user',
-      signed: false,
-      decode: (json) => [
-            for (final item in JsonObject.from(json).lossyList('rule', _blockRuleItem))
-              ?_ruleOf(item),
-          ]);
+  Future<List<BlockRule>> danmakuBlockRules() => get(
+    '/x/dm/filter/user',
+    signed: false,
+    decode: (json) => [for (final item in JsonObject.from(json).lossyList('rule', _blockRuleItem)) ?_ruleOf(item)],
+  );
 
   Future<BlockRule> addBlockRule(BlockRuleKind kind, {required String filter}) async {
-    final added = await post('/x/dm/filter/user/add',
-        form: {'type': '${kind.rawValue}', 'filter': filter}, decode: _blockRuleItem);
+    final added = await post(
+      '/x/dm/filter/user/add',
+      form: {'type': '${kind.rawValue}', 'filter': filter},
+      decode: _blockRuleItem,
+    );
     return _ruleOf(added) ?? BlockRule(id: added.id, kind: kind, filter: filter);
   }
 
@@ -100,9 +104,11 @@ extension BiliClientDanmaku on BiliClient {
       'pool': '0',
     };
     if (draft.gradient) form['colorful'] = '60001';
-    return post('/x/v2/dm/post',
-        form: form,
-        referer: 'https://www.bilibili.com/video/${draft.bvid}',
-        decode: (json) => JsonObject.from(json).integer('dmid') ?? 0);
+    return post(
+      '/x/v2/dm/post',
+      form: form,
+      referer: 'https://www.bilibili.com/video/${draft.bvid}',
+      decode: (json) => JsonObject.from(json).integer('dmid') ?? 0,
+    );
   }
 }

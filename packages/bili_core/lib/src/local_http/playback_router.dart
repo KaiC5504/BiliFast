@@ -46,8 +46,7 @@ final class PlaybackBodyError implements Exception {
   int get hashCode => Object.hash(expected, received);
 
   @override
-  String toString() =>
-      isShorter ? 'shorter(expected: $expected, received: $received)' : 'longer(expected: $expected)';
+  String toString() => isShorter ? 'shorter(expected: $expected, received: $received)' : 'longer(expected: $expected)';
 }
 
 sealed class RouteResult {

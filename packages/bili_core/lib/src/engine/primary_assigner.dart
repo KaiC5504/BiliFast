@@ -42,7 +42,10 @@ final class PrimaryAssigner {
       candidates = eligible;
       known = candidates.map(speed).toList();
     }
-    final unknown = [for (var index = 0; index < candidates.length; index++) if (known[index] == 0) candidates[index]];
+    final unknown = [
+      for (var index = 0; index < candidates.length; index++)
+        if (known[index] == 0) candidates[index],
+    ];
     final spare = min(unknown.length * 2, remaining ~/ 4);
     final trialState = _trials.putIfAbsent(trialKey, _TrialState.new);
     var trials = spare;
@@ -55,12 +58,20 @@ final class PrimaryAssigner {
     final trialCursor = trialState.cursor;
     trialState.cursor = (trialState.cursor + trials) % 4096;
     if (unknown.isNotEmpty) {
-      candidates = [for (var index = 0; index < candidates.length; index++) if (known[index] > 0) candidates[index]];
+      candidates = [
+        for (var index = 0; index < candidates.length; index++)
+          if (known[index] > 0) candidates[index],
+      ];
       known = candidates.map(speed).toList();
       remaining -= trials;
     }
-    final primaries =
-        _turns(candidates, [for (final value in known) max(value, top * 0.05)], max(0, remaining), turn, full);
+    final primaries = _turns(
+      candidates,
+      [for (final value in known) max(value, top * 0.05)],
+      max(0, remaining),
+      turn,
+      full,
+    );
     for (var index = 0; index < trials; index++) {
       primaries.add(unknown[(index + trialCursor) % unknown.length]);
     }

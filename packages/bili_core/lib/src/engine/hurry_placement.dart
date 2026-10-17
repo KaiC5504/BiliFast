@@ -88,14 +88,15 @@ abstract final class HurryPlacement {
     final costs = [
       for (var index = 0; index < urls.length; index++)
         _cost(
-          expected: expected[index],
-          best: best,
-          inflight: nodes.inflight(urls[index]),
-          crowded: false,
-          delivered: delivered(urls[index]),
-          full: nodes.isFull(urls[index]),
-          firstByte: _firstByteFloor(urls[index], nodes),
-        ) + leftOut(urls[index]),
+              expected: expected[index],
+              best: best,
+              inflight: nodes.inflight(urls[index]),
+              crowded: false,
+              delivered: delivered(urls[index]),
+              full: nodes.isFull(urls[index]),
+              firstByte: _firstByteFloor(urls[index], nodes),
+            ) +
+            leftOut(urls[index]),
     ];
     final order = List<int>.generate(urls.length, (index) => index)
       ..sort((a, b) {
@@ -111,7 +112,10 @@ abstract final class HurryPlacement {
     final speeds = [for (final url in urls) nodes.bps(url)];
     final best = speeds.fold(0.0, max);
     if (best <= 0) return urls;
-    final fast = [for (var index = 0; index < urls.length; index++) if (speeds[index] >= best / slowShare) urls[index]];
+    final fast = [
+      for (var index = 0; index < urls.length; index++)
+        if (speeds[index] >= best / slowShare) urls[index],
+    ];
     if (fast.map(NodeCatalog.nodeKey).toSet().length >= 2) return fast;
     // One measurement must not decide a whole segment: unknown nodes keep their share until a second node is known.
     return [

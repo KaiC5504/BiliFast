@@ -167,9 +167,8 @@ final class AutoConcurrency {
   });
 
   /// A connection waited too long for its first byte while every slot was busy.
-  bool slow() => _mutate(
-    (at, changes) => _saturation(at) >= 0.6 ? _stepUp('连接排队等太久', strong: false, at, changes) : false,
-  );
+  bool slow() =>
+      _mutate((at, changes) => _saturation(at) >= 0.6 ? _stepUp('连接排队等太久', strong: false, at, changes) : false);
 
   bool pushback({required int status}) => _mutate(
     (at, changes) => _stepDown(

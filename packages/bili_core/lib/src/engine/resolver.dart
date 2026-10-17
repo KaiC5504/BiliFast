@@ -97,7 +97,8 @@ final class Resolver {
   List<String> allURLs() => List.of(_allURLs);
 
   List<String> get _allURLs => _all ??= List.unmodifiable(
-      NodeCatalog.representationURLs(primary: _primary, backups: _backups, mode: mode, policy: policy));
+    NodeCatalog.representationURLs(primary: _primary, backups: _backups, mode: mode, policy: policy),
+  );
 
   /// Banned addresses are left out, unless that would leave none at all.
   List<String> urls() => List.of(_usable());
@@ -305,10 +306,10 @@ final class Resolver {
           state: !(bans?.allows(url) ?? true)
               ? 'banned'
               : (_health[url]?.blockedUntil ?? 0) > now
-                  ? 'blocked'
-                  : (_routes[routeKey(url)]?.lastSuccessAt ?? 0) > 0
-                      ? 'healthy'
-                      : 'untested',
+              ? 'blocked'
+              : (_routes[routeKey(url)]?.lastSuccessAt ?? 0) > 0
+              ? 'healthy'
+              : 'untested',
           bps: _routes[routeKey(url)]?.bps ?? 0,
         ),
     ];

@@ -41,7 +41,8 @@ final class VideoRelation {
   int get hashCode => Object.hash(like, dislike, favorite, attention, coins);
 
   @override
-  String toString() => 'VideoRelation(like: $like, dislike: $dislike, favorite: $favorite, attention: $attention, '
+  String toString() =>
+      'VideoRelation(like: $like, dislike: $dislike, favorite: $favorite, attention: $attention, '
       'coins: $coins)';
 }
 

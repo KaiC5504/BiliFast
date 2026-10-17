@@ -81,11 +81,11 @@ final class CommentMember {
       other.fanCardColor == fanCardColor;
 
   @override
-  int get hashCode =>
-      Object.hash(mid, name, face, level, isVip, pendant, fanCardImage, fanCardNumber, fanCardColor);
+  int get hashCode => Object.hash(mid, name, face, level, isVip, pendant, fanCardImage, fanCardNumber, fanCardColor);
 
   @override
-  String toString() => 'CommentMember($mid, $name, level: $level, vip: $isVip, pendant: $pendant, '
+  String toString() =>
+      'CommentMember($mid, $name, level: $level, vip: $isVip, pendant: $pendant, '
       'fanCard: $fanCardImage $fanCardNumber $fanCardColor)';
 }
 
@@ -148,8 +148,8 @@ final class Comment {
     if (rpid == 0) throw const DecodeError('missing rpid');
     final mid = object.count('mid');
     final memberJson = object.map['member'];
-    final member = (memberJson == null ? null : attempt(() => CommentMember.fromJson(memberJson))) ??
-        CommentMember(mid: mid);
+    final member =
+        (memberJson == null ? null : attempt(() => CommentMember.fromJson(memberJson))) ?? CommentMember(mid: mid);
 
     var message = '';
     var emotes = <String, EmoteRef>{};
@@ -170,7 +170,10 @@ final class Comment {
         return (title: entry.text('title') ?? '', pcURL: entry.text('pc_url') ?? '');
       });
       for (final MapEntry(:key, value: entry) in jumps.entries) {
-        links[key] = LinkRef(title: entry.title.isEmpty ? key : entry.title, url: _absolute(entry.pcURL, orElse: key));
+        links[key] = LinkRef(
+          title: entry.title.isEmpty ? key : entry.title,
+          url: _absolute(entry.pcURL, orElse: key),
+        );
       }
       pictures = content.lenientList('pictures', CommentPicture.fromJson);
     }
@@ -185,8 +188,8 @@ final class Comment {
     final place = location == null
         ? null
         : location.startsWith(_locationPrefix)
-            ? location.substring(_locationPrefix.length)
-            : location;
+        ? location.substring(_locationPrefix.length)
+        : location;
     return Comment(
       rpid: rpid,
       oid: object.count('oid'),
@@ -236,7 +239,8 @@ final class Comment {
   int get id => rpid;
 
   /// Swift's Comment is a value type with these fields mutable; here a changed copy stands in for the mutation.
-  Comment copyWith({int? likes, int? replyCount, int? action, bool? isPinned, List<Comment>? previewReplies}) => Comment(
+  Comment copyWith({int? likes, int? replyCount, int? action, bool? isPinned, List<Comment>? previewReplies}) =>
+      Comment(
         rpid: rpid,
         oid: oid,
         mid: mid,
@@ -278,8 +282,25 @@ final class Comment {
       listEquals(other.previewReplies, previewReplies);
 
   @override
-  int get hashCode => Object.hash(rpid, oid, mid, root, parent, ctime, likes, replyCount, action, member, message,
-      Object.hashAll(runs), Object.hashAll(pictures), location, upLiked, isPinned, Object.hashAll(previewReplies));
+  int get hashCode => Object.hash(
+    rpid,
+    oid,
+    mid,
+    root,
+    parent,
+    ctime,
+    likes,
+    replyCount,
+    action,
+    member,
+    message,
+    Object.hashAll(runs),
+    Object.hashAll(pictures),
+    location,
+    upLiked,
+    isPinned,
+    Object.hashAll(previewReplies),
+  );
 
   @override
   String toString() => 'Comment($rpid, $message)';
@@ -297,12 +318,12 @@ final class CommentPage {
   final int total;
 
   CommentPage copyWith({List<Comment>? comments, Comment? Function()? pinned, int? total}) => CommentPage(
-        comments: comments ?? this.comments,
-        pinned: pinned == null ? this.pinned : pinned(),
-        nextOffset: nextOffset,
-        isEnd: isEnd,
-        total: total ?? this.total,
-      );
+    comments: comments ?? this.comments,
+    pinned: pinned == null ? this.pinned : pinned(),
+    nextOffset: nextOffset,
+    isEnd: isEnd,
+    total: total ?? this.total,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -326,11 +347,11 @@ final class ThreadPage {
   final bool isEnd;
 
   ThreadPage copyWith({Comment? root, List<Comment>? replies, int? total, bool? isEnd}) => ThreadPage(
-        root: root ?? this.root,
-        replies: replies ?? this.replies,
-        total: total ?? this.total,
-        isEnd: isEnd ?? this.isEnd,
-      );
+    root: root ?? this.root,
+    replies: replies ?? this.replies,
+    total: total ?? this.total,
+    isEnd: isEnd ?? this.isEnd,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -351,11 +372,7 @@ final class Emote {
     final object = JsonObject.from(json);
     final token = object.text('text');
     if (token == null || token.isEmpty) throw const DecodeError('missing text');
-    return Emote(
-      token: token,
-      url: object.text('url') ?? '',
-      large: (object.nested('meta')?.count('size') ?? 1) != 1,
-    );
+    return Emote(token: token, url: object.text('url') ?? '', large: (object.nested('meta')?.count('size') ?? 1) != 1);
   }
 
   /// What the comment text carries for the emote, such as "[doge]".
@@ -414,8 +431,7 @@ final class EmotePackage {
   int get hashCode => Object.hash(id, name, icon, isText, Object.hashAll(emotes));
 }
 
-List<EmotePackage> decodeEmotePanel(Object? json) =>
-    JsonObject.from(json).lossyList('packages', EmotePackage.fromJson);
+List<EmotePackage> decodeEmotePanel(Object? json) => JsonObject.from(json).lossyList('packages', EmotePackage.fromJson);
 
 CommentPage decodeCommentList(Object? json) {
   final object = JsonObject.from(json);

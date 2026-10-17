@@ -24,11 +24,11 @@ final class HTTPRequestHead {
 
   @override
   int get hashCode => Object.hash(
-        method,
-        target,
-        path,
-        Object.hashAllUnordered(headers.entries.map((entry) => Object.hash(entry.key, entry.value))),
-      );
+    method,
+    target,
+    path,
+    Object.hashAllUnordered(headers.entries.map((entry) => Object.hash(entry.key, entry.value))),
+  );
 
   @override
   String toString() => 'HTTPRequestHead($method $target)';

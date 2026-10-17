@@ -67,7 +67,7 @@ double _systemNowMs() => DateTime.now().millisecondsSinceEpoch.toDouble();
 /// probe race, and the warm-up sent the first four ranges to every node, the 0.2 MB/s HK ones included.
 final class NodeMemory {
   NodeMemory({double Function()? wallClockMs, this.halfLifeMs = defaultHalfLifeMs})
-      : _now = wallClockMs ?? _systemNowMs;
+    : _now = wallClockMs ?? _systemNowMs;
 
   factory NodeMemory.fromJson(Object? json, {double Function()? wallClockMs, double halfLifeMs = defaultHalfLifeMs}) {
     final memory = NodeMemory(wallClockMs: wallClockMs, halfLifeMs: halfLifeMs);

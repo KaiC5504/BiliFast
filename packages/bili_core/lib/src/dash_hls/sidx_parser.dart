@@ -59,8 +59,9 @@ abstract final class SidxParser {
       // Type 1 points at another sidx; dropping it would leave byte and time gaps, so the caller falls back
       // to direct mode.
       if (reference >> 31 != 0) return null;
-      segments.add(MediaSegment(
-          index: segments.length, range: range, startTime: time / timescale, duration: duration / timescale));
+      segments.add(
+        MediaSegment(index: segments.length, range: range, startTime: time / timescale, duration: duration / timescale),
+      );
       byteCursor = next;
       time += duration;
     }

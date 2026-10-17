@@ -77,14 +77,11 @@ enum RipperErrorKind {
 final class RipperError implements Exception {
   const RipperError(this.kind, {this.status, this.got, this.expected});
 
-  const RipperError.badResponse(int this.status)
-      : kind = RipperErrorKind.badResponse,
-        got = null,
-        expected = null;
+  const RipperError.badResponse(int this.status) : kind = RipperErrorKind.badResponse, got = null, expected = null;
 
   const RipperError.lengthMismatch({required int this.got, required int this.expected})
-      : kind = RipperErrorKind.lengthMismatch,
-        status = null;
+    : kind = RipperErrorKind.lengthMismatch,
+      status = null;
 
   final RipperErrorKind kind;
   final int? status;
@@ -109,8 +106,8 @@ final class RipperError implements Exception {
 
   @override
   String toString() => switch (kind) {
-        RipperErrorKind.badResponse => 'badResponse($status)',
-        RipperErrorKind.lengthMismatch => 'lengthMismatch(got $got, expected $expected)',
-        _ => kind.name,
-      };
+    RipperErrorKind.badResponse => 'badResponse($status)',
+    RipperErrorKind.lengthMismatch => 'lengthMismatch(got $got, expected $expected)',
+    _ => kind.name,
+  };
 }

@@ -114,8 +114,12 @@ abstract final class PlaybackBuilder {
     PreparedPlayback prepared, {
     required Stream<List<int>> Function(TrackKind kind, ByteRange range) read,
   }) {
-    final playlists = _playlists(prepared,
-        videoUri: 'v.mp4', audioUri: 'a.mp4', sampleEntry: prepared.rewroteHEV1 ? 'hvc1' : prepared.sourceEntry);
+    final playlists = _playlists(
+      prepared,
+      videoUri: 'v.mp4',
+      audioUri: 'a.mp4',
+      sampleEntry: prepared.rewroteHEV1 ? 'hvc1' : prepared.sourceEntry,
+    );
     MediaResource resource(TrackKind kind, PreparedTrack track) =>
         MediaResource(totalSize: track.totalSize, prefix: track.headers, read: (range) => read(kind, range));
     return PlaybackAssets(
@@ -127,10 +131,14 @@ abstract final class PlaybackBuilder {
   /// Direct mode: the playlists only; the media playlists point at the CDN addresses that answered.
   /// The player reads Bilibili's original bytes here, so the codec declared is the one in them.
   static PlaybackAssets directAssets(PreparedPlayback prepared) => PlaybackAssets(
-        playlists: _playlists(prepared,
-            videoUri: prepared.video.mediaUrl, audioUri: prepared.audio.mediaUrl, sampleEntry: prepared.sourceEntry),
-        media: const {},
-      );
+    playlists: _playlists(
+      prepared,
+      videoUri: prepared.video.mediaUrl,
+      audioUri: prepared.audio.mediaUrl,
+      sampleEntry: prepared.sourceEntry,
+    ),
+    media: const {},
+  );
 
   /// Runs [body] with a deadline: when it passes first, [body]'s token is cancelled and [CandidateTimeout]
   /// thrown. Cancelling [cancel] cancels [body] too and throws [CancelledException].
@@ -198,7 +206,12 @@ abstract final class PlaybackBuilder {
         }
       }
       final prepared = PreparedTrack(
-          stream: stream, mediaUrl: fetched.url, headers: headers, totalSize: fetched.total, segments: segments);
+        stream: stream,
+        mediaUrl: fetched.url,
+        headers: headers,
+        totalSize: fetched.total,
+        segments: segments,
+      );
       return (prepared, rewrote);
     }
 
@@ -216,8 +229,12 @@ abstract final class PlaybackBuilder {
     return BoxReader.boxes(bytes, from: 0, to: initRange.end + 1).any((box) => box.type == 'moov');
   }
 
-  static Map<String, String> _playlists(PreparedPlayback prepared,
-      {required String videoUri, required String audioUri, required String? sampleEntry}) {
+  static Map<String, String> _playlists(
+    PreparedPlayback prepared, {
+    required String videoUri,
+    required String audioUri,
+    required String? sampleEntry,
+  }) {
     final video = prepared.video.stream;
     final audio = prepared.audio.stream;
     final variant = HLSVariant(
@@ -231,9 +248,11 @@ abstract final class PlaybackBuilder {
     return {
       'master.m3u8': PlaylistBuilder.master(variant, videoPlaylist: 'v.m3u8', audioPlaylist: 'a.m3u8'),
       'v.m3u8': PlaylistBuilder.media(
-          HLSTrack(uri: videoUri, initRange: prepared.video.initRange, segments: prepared.video.segments)),
+        HLSTrack(uri: videoUri, initRange: prepared.video.initRange, segments: prepared.video.segments),
+      ),
       'a.m3u8': PlaylistBuilder.media(
-          HLSTrack(uri: audioUri, initRange: prepared.audio.initRange, segments: prepared.audio.segments)),
+        HLSTrack(uri: audioUri, initRange: prepared.audio.initRange, segments: prepared.audio.segments),
+      ),
     };
   }
 
@@ -241,7 +260,11 @@ abstract final class PlaybackBuilder {
   /// with the whole range wins. Some accounts get a primary that refuses everything (403) next to
   /// working backups on the same host.
   static Future<_Fetched> _directHeaders(
-      DashStream stream, RangeTransport transport, double candidateSeconds, CancelToken cancel) async {
+    DashStream stream,
+    RangeTransport transport,
+    double candidateSeconds,
+    CancelToken cancel,
+  ) async {
     final range = ByteRange.of(0, stream.indexRange.end);
     if (range == null) throw const PlaybackError(PlaybackErrorKind.noSidx);
     final candidates = [stream.baseURL, ...stream.backupURLs];
@@ -250,10 +273,16 @@ abstract final class PlaybackBuilder {
       try {
         final url = Uri.tryParse(address);
         if (url == null) throw const RipperError(RipperErrorKind.invalidURL);
-        final fetched =
-            await within(candidateSeconds, (token) => _wholeRange(url, range, transport, token), cancel: cancel);
-        Logger.shared.info(
-            LogCategory.player, 'direct source', {'url': address, 'refused': refused, 'candidates': candidates.length});
+        final fetched = await within(
+          candidateSeconds,
+          (token) => _wholeRange(url, range, transport, token),
+          cancel: cancel,
+        );
+        Logger.shared.info(LogCategory.player, 'direct source', {
+          'url': address,
+          'refused': refused,
+          'candidates': candidates.length,
+        });
         return (bytes: fetched.bytes, total: fetched.total, url: address);
       } catch (error) {
         if (cancel.isCancelled) throw const CancelledException();
@@ -267,7 +296,11 @@ abstract final class PlaybackBuilder {
   }
 
   static Future<({Uint8List bytes, int total})> _wholeRange(
-      Uri url, ByteRange range, RangeTransport transport, CancelToken cancel) async {
+    Uri url,
+    ByteRange range,
+    RangeTransport transport,
+    CancelToken cancel,
+  ) async {
     final response = await transport.fetch(url, range, cancel: cancel);
     final contentRange = ContentRange.parse(response.headers['content-range']);
     final total = contentRange?.total;

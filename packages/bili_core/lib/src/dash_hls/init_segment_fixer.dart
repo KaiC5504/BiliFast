@@ -120,8 +120,11 @@ abstract final class InitSegmentFixer {
     // A VisualSampleEntry has 78 bytes of fixed fields before its child boxes.
     final childStart = entry.payloadStart + 78;
     if (childStart > entry.end) return false;
-    final hvcC =
-        BoxReader.boxes(bytes, from: childStart, to: entry.end).where((child) => child.type == 'hvcC').firstOrNull;
+    final hvcC = BoxReader.boxes(
+      bytes,
+      from: childStart,
+      to: entry.end,
+    ).where((child) => child.type == 'hvcC').firstOrNull;
     if (hvcC == null) return false;
     var cursor = hvcC.payloadStart + 22;
     if (cursor >= hvcC.end) return false;

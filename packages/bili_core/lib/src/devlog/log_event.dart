@@ -80,8 +80,7 @@ final class LogDouble extends LogValue {
   Object toJson() => value.isFinite ? value : (value.isNaN ? 'nan' : (value < 0 ? '-inf' : 'inf'));
 
   @override
-  bool operator ==(Object other) =>
-      other is LogDouble && (other.value == value || (other.value.isNaN && value.isNaN));
+  bool operator ==(Object other) => other is LogDouble && (other.value == value || (other.value.isNaN && value.isNaN));
 
   @override
   int get hashCode => value.isNaN ? double.nan.hashCode : value.hashCode;
@@ -187,7 +186,14 @@ final class LogEvent {
 
   @override
   int get hashCode => Object.hash(
-    t, seq, session, level, cat, msg, Object.hashAllUnordered(f.entries.map((e) => Object.hash(e.key, e.value))));
+    t,
+    seq,
+    session,
+    level,
+    cat,
+    msg,
+    Object.hashAllUnordered(f.entries.map((e) => Object.hash(e.key, e.value))),
+  );
 
   @override
   String toString() => 'LogEvent(t: $t, seq: $seq, session: $session, ${level.name}, ${cat.name}, $msg, $f)';

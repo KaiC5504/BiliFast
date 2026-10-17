@@ -151,23 +151,27 @@ abstract final class RichText {
   }) {
     var pieces = <_Piece>[(pending: graphemes(message), done: null)];
     pieces = _split(
-        pieces,
-        _literals([
-          for (final MapEntry(:key, :value) in emotes.entries)
-            (token: key, run: RichRun.emote(token: key, url: value.url, size: value.size)),
-        ], once: false));
+      pieces,
+      _literals([
+        for (final MapEntry(:key, :value) in emotes.entries)
+          (token: key, run: RichRun.emote(token: key, url: value.url, size: value.size)),
+      ], once: false),
+    );
     pieces = _split(
-        pieces,
-        _literals([
-          for (final MapEntry(:key, :value) in mentions.entries) (token: '@$key', run: RichRun.mention(name: key, mid: value)),
-        ], once: false));
+      pieces,
+      _literals([
+        for (final MapEntry(:key, :value) in mentions.entries)
+          (token: '@$key', run: RichRun.mention(name: key, mid: value)),
+      ], once: false),
+    );
     // The server marks these `match_once`: only the first occurrence of a link word is a link.
     pieces = _split(
-        pieces,
-        _literals([
-          for (final MapEntry(:key, :value) in links.entries)
-            (token: key, run: RichRun.link(title: value.title, url: value.url)),
-        ], once: true));
+      pieces,
+      _literals([
+        for (final MapEntry(:key, :value) in links.entries)
+          (token: key, run: RichRun.link(title: value.title, url: value.url)),
+      ], once: true),
+    );
     pieces = _split(pieces, _videoID);
     pieces = _split(pieces, _timestamp);
     return _merged(pieces);
@@ -221,15 +225,16 @@ abstract final class RichText {
 
   /// Longest token first, so "@小明明" is not read as "@小明" followed by "明".
   static _Matcher _literals(List<({String token, RichRun run})> entries, {required bool once}) {
-    final tokens = [
-      for (final entry in entries)
-        if (entry.token.isNotEmpty) (text: entry.token, characters: graphemes(entry.token), run: entry.run),
-    ]..sort((lhs, rhs) {
-        if (lhs.characters.length != rhs.characters.length) {
-          return rhs.characters.length.compareTo(lhs.characters.length);
-        }
-        return lhs.text.compareTo(rhs.text);
-      });
+    final tokens =
+        [
+          for (final entry in entries)
+            if (entry.token.isNotEmpty) (text: entry.token, characters: graphemes(entry.token), run: entry.run),
+        ]..sort((lhs, rhs) {
+          if (lhs.characters.length != rhs.characters.length) {
+            return rhs.characters.length.compareTo(lhs.characters.length);
+          }
+          return lhs.text.compareTo(rhs.text);
+        });
     final used = <int>{};
     return (characters, index) {
       for (var position = 0; position < tokens.length; position++) {
@@ -285,10 +290,14 @@ abstract final class RichText {
     }
     if (_isDigit(characters, end) || !fields.skip(1).every((field) => field < 60)) return null;
     final seconds = fields.fold(0, (total, field) => total * 60 + field);
-    return (length: end - index, run: RichRun.timestamp(label: characters.sublist(index, end).join(), seconds: seconds));
+    return (
+      length: end - index,
+      run: RichRun.timestamp(label: characters.sublist(index, end).join(), seconds: seconds),
+    );
   }
 
-  static int _number(List<String> characters, int from, int to) => int.tryParse(characters.sublist(from, to).join()) ?? 0;
+  static int _number(List<String> characters, int from, int to) =>
+      int.tryParse(characters.sublist(from, to).join()) ?? 0;
 
   static int _endOfDigits(List<String> characters, int index) {
     var end = index;

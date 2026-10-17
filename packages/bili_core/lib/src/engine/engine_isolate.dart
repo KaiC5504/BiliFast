@@ -10,6 +10,8 @@ import 'auto_concurrency.dart';
 import 'cancel.dart';
 import 'log_forwarding.dart';
 import 'node_catalog.dart';
+import 'node_memory.dart';
+import 'node_memory_store.dart';
 import 'playback_builder.dart';
 import 'playback_engine.dart';
 import 'ripper_config.dart';
@@ -24,6 +26,7 @@ final class EngineOptions {
     this.statsInterval = const Duration(seconds: 1),
     this.directPrepareSeconds = 20,
     this.forwardDebugLogs = false,
+    this.nodeMemoryPath,
   });
 
   /// The Swift app's default node setting; there is no setting yet.
@@ -37,6 +40,10 @@ final class EngineOptions {
 
   /// The engine's debug events (every piece and attempt) reach the UI isolate's log too; for dev builds.
   final bool forwardDebugLogs;
+
+  /// Where the engine keeps what it measured about each node between launches ([NodeMemory]); null forgets it all
+  /// at the end of each session, as Swift did.
+  final String? nodeMemoryPath;
 }
 
 /// [PlaybackEngine] over a background isolate that owns the transport, the sessions and the local server.
@@ -96,8 +103,7 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
       _call((id) => _ReplaceUrls(id, token, track, primary, backups));
 
   @override
-  Future<void> networkChanged({required bool interfaceChanged}) =>
-      _call((id) => _NetworkChanged(id, interfaceChanged));
+  Future<void> networkChanged({required bool interfaceChanged}) => _call((id) => _NetworkChanged(id, interfaceChanged));
 
   @override
   void updatePlayhead(String token, {required double seconds, required double rate}) =>
@@ -341,8 +347,10 @@ void _sendOr(SendPort port, Object message, Object Function() fallback) {
 }
 
 Future<void> _engineMain(_Boot boot) async {
-  final sink =
-      ForwardingLogSink((events) => boot.events.send(_Logs(events)), forwardDebug: boot.options.forwardDebugLogs);
+  final sink = ForwardingLogSink(
+    (events) => boot.events.send(_Logs(events)),
+    forwardDebug: boot.options.forwardDebugLogs,
+  );
   Logger.shared.add(sink);
   final host = _EngineHost(boot, sink);
   try {
@@ -388,8 +396,24 @@ final class _EngineHost {
   double _lastTickAt = 0;
   bool _disposed = false;
   void Function()? onDisposed;
+  late final NodeMemoryStore? _store = switch (_options.nodeMemoryPath) {
+    final String path => NodeMemoryStore(path),
+    null => null,
+  };
+  late final NodeMemory? _memory = _store?.load();
+  var _ticks = 0;
 
   EngineOptions get _options => _boot.options;
+
+  Future<void> _refreshSignature() async {
+    final memory = _memory;
+    if (memory != null) memory.signature = await NodeMemoryStore.networkSignature();
+  }
+
+  void _saveMemory() {
+    final memory = _memory;
+    if (memory != null) _store?.save(memory);
+  }
 
   Future<void> start() async {
     _transport = _boot.transportFactory();
@@ -412,8 +436,11 @@ final class _EngineHost {
       final value = await _run(command);
       port.send(_Reply(command.id, value: value));
     } catch (error, stack) {
-      _sendOr(port, _Reply(command.id, error: error, stack: '$stack'),
-          () => _Reply(command.id, error: RemoteError('$error', '$stack'), stack: '$stack'));
+      _sendOr(
+        port,
+        _Reply(command.id, error: error, stack: '$stack'),
+        () => _Reply(command.id, error: RemoteError('$error', '$stack'), stack: '$stack'),
+      );
     }
     if (command is _Dispose) {
       Logger.shared.remove(_sink);
@@ -450,7 +477,11 @@ final class _EngineHost {
     final all = [
       if (mode is! CustomNodes) ...urls.where(policy.allowsURL),
       ...NodeCatalog.representationURLs(
-          primary: urls.first, backups: urls.skip(1).toList(), mode: mode, policy: policy),
+        primary: urls.first,
+        backups: urls.skip(1).toList(),
+        mode: mode,
+        policy: policy,
+      ),
     ];
     final byNode = <String, Uri>{};
     for (final url in all) {
@@ -463,14 +494,16 @@ final class _EngineHost {
       for (final uri in byNode.values)
         for (var copy = 0; copy < (NodeCatalog.isAkamai('$uri') ? 3 : 1); copy++) warmConnection(_transport, uri),
     ];
-    unawaited(Future.wait(warming).then((answered) {
-      Logger.shared.info(LogCategory.engine, 'preconnect', {
-        'nodes': byNode.length,
-        'requests': warming.length,
-        'answered': answered.where((ok) => ok).length,
-        'ms': (MonotonicClock.system.nowMs() - started).roundToDouble(),
-      });
-    }));
+    unawaited(
+      Future.wait(warming).then((answered) {
+        Logger.shared.info(LogCategory.engine, 'preconnect', {
+          'nodes': byNode.length,
+          'requests': warming.length,
+          'answered': answered.where((ok) => ok).length,
+          'ms': (MonotonicClock.system.nowMs() - started).roundToDouble(),
+        });
+      }),
+    );
   }
 
   Future<Object?> _run(_Command command) async {
@@ -483,6 +516,7 @@ final class _EngineHost {
       case _ReplaceUrls(:final token, :final track, :final primary, :final backups):
         _sessions[token]?.replaceUrls(track, primary: primary, backups: backups);
       case _NetworkChanged(:final interfaceChanged):
+        await _refreshSignature();
         for (final session in _sessions.values) {
           session.networkChanged(interfaceChanged: interfaceChanged);
         }
@@ -498,6 +532,7 @@ final class _EngineHost {
 
   Future<PreparedSource> _prepareRipper(PlaybackRequest request) async {
     final choice = request.choice;
+    await _refreshSignature();
     final session = RipperSession(
       sources: {
         TrackKind.video: (primary: choice.video.baseURL, backups: choice.video.backupURLs),
@@ -508,12 +543,16 @@ final class _EngineHost {
       auto: _auto,
       config: _options.config,
       policy: _options.policy,
+      memory: _memory,
     );
     try {
-      final prepared = await PlaybackBuilder.prepare(choice, fetchHeaders: (kind, stream) async {
-        final headers = await session.loadHeaders(kind, through: stream.indexRange.end);
-        return (bytes: headers.bytes, total: headers.totalSize);
-      });
+      final prepared = await PlaybackBuilder.prepare(
+        choice,
+        fetchHeaders: (kind, stream) async {
+          final headers = await session.loadHeaders(kind, through: stream.indexRange.end);
+          return (bytes: headers.bytes, total: headers.totalSize);
+        },
+      );
       if (_disposed) throw const RipperError(RipperErrorKind.closed);
       session
         ..setSegments(TrackKind.video, prepared.video.segments)
@@ -580,7 +619,10 @@ final class _EngineHost {
     _router.unregister(token);
     _directTokens.remove(token);
     _lastDelivered.remove(token);
-    _sessions.remove(token)?.close();
+    if (_sessions.remove(token) case final session?) {
+      session.close();
+      _saveMemory();
+    }
     if (_sessions.isEmpty) _stopStats();
   }
 
@@ -627,6 +669,7 @@ final class _EngineHost {
     _lastTickAt = now;
     final bps = seconds > 0 ? delta / seconds : 0.0;
     _boot.events.send(_Stats(newest.stats(downloadBps: bps, transport: _transport.name)));
+    if (++_ticks % 30 == 0) _saveMemory();
   }
 
   Future<void> _dispose() async {
@@ -639,6 +682,7 @@ final class _EngineHost {
     for (final session in _sessions.values) {
       session.close();
     }
+    if (_sessions.isNotEmpty) _saveMemory();
     _sessions.clear();
     _directTokens.clear();
     await _server.close();

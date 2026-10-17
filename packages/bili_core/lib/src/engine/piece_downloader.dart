@@ -26,10 +26,10 @@ enum PieceMode {
   burst;
 
   QueueClass get queueClass => switch (this) {
-        PieceMode.probe || PieceMode.burst => QueueClass.critical,
-        PieceMode.startup => QueueClass.startup,
-        PieceMode.normal => QueueClass.ordinary,
-      };
+    PieceMode.probe || PieceMode.burst => QueueClass.critical,
+    PieceMode.startup => QueueClass.startup,
+    PieceMode.normal => QueueClass.ordinary,
+  };
 }
 
 /// Where the copies of one race go. A copy takes its node once it holds a connection permit: the first candidate no
@@ -38,9 +38,13 @@ enum PieceMode {
 /// ran out their first-byte timeout waiting inside URLSession. [laterCopies] orders the candidates for every copy
 /// after the first.
 final class CopyTargets {
-  CopyTargets(this.candidates,
-      {required this._nodes, List<String> Function(List<String>)? laterCopies, this.orderFirst = false})
-      : _laterCopies = laterCopies ?? ((left) => left);
+  CopyTargets(
+    this.candidates, {
+    required this._nodes,
+    List<String> Function(List<String>)? laterCopies,
+    this.orderFirst = false,
+    this.probation,
+  }) : _laterCopies = laterCopies ?? ((left) => left);
 
   final List<String> candidates;
   final NodeStats _nodes;
@@ -48,24 +52,43 @@ final class CopyTargets {
 
   /// The first copy is placed by `laterCopies` too: copies that start together all go by expected finish.
   final bool orderFirst;
+
+  /// A banned node on probation ([BanProbation]) takes the second copy.
+  final String? probation;
   final _taken = <int, String>{};
 
   String? url(int copy) => _taken[copy];
 
   /// Where the next copy would go now.
   String next() {
+    final trial = _trial(_taken.length);
+    if (trial != null) return trial;
     final left = _laterCopies(_remaining());
     return left.where((url) => !_nodes.isFull(url)).firstOrNull ?? left.firstOrNull ?? candidates.first;
   }
 
   String claim(int copy) {
+    final trial = _trial(copy);
+    if (trial != null) {
+      _nodes.beginFirstOpen([trial]);
+      _taken[copy] = trial;
+      return trial;
+    }
     final left = _remaining();
     final order = copy == 0 && !orderFirst ? left : _laterCopies(left);
     final open = order.where((url) => !_taken.containsValue(url)).toList();
-    final url = _nodes.beginFirstOpen(open.isNotEmpty ? open : left.isNotEmpty ? left : candidates);
+    final url = _nodes.beginFirstOpen(
+      open.isNotEmpty
+          ? open
+          : left.isNotEmpty
+          ? left
+          : candidates,
+    );
     _taken[copy] = url;
     return url;
   }
+
+  String? _trial(int copy) => copy == 1 && probation != null && !_taken.containsValue(probation) ? probation : null;
 
   List<String> _remaining() => candidates.where((url) => !_taken.containsValue(url)).toList();
 }
@@ -102,6 +125,7 @@ final class PieceDownloader {
     CancelToken? cancel,
     int burstWidth = 3,
     RequestLane lane = RequestLane.any,
+    bool Function()? holdingUp,
   }) async {
     final started = ctx.clock.nowMs();
     final kept = _Kept();
@@ -122,24 +146,45 @@ final class PieceDownloader {
         final allowed = untried.where(resolver.allows).toList();
         final whole = allowed.where((url) => !resolver.avoids(url, piece)).toList();
         final nodes = ctx.nodes;
+        // Only prefetch gives a banned node its trial; a player read can't afford it.
+        final probation = mode == PieceMode.normal && round == 0 && tried.isEmpty
+            ? resolver.probationCopy(piece, hurried: hurry?.call() ?? false)
+            : null;
         // BTR PR 11 `pick`: by speed alone a backup went to cosov, 661-673 ms to its first byte, while Akamai
         // answered in 15-24 ms (phone, 2026-10-17).
         final targets = CopyTargets(
           whole.isNotEmpty ? whole : (allowed.isNotEmpty ? allowed : untried),
           nodes: nodes,
           laterCopies: (left) => hurry?.call() ?? false
-              ? HurryPlacement.byExpectedFinish(left,
+              ? HurryPlacement.byExpectedFinish(
+                  left,
                   pieceBytes: piece.length,
                   nodes: nodes,
-                  delivered: (url) => resolver.bans?.hasDelivered(url) ?? true)
+                  delivered: (url) => resolver.bans?.hasDelivered(url) ?? true,
+                )
               : left,
+          probation: probation,
           orderFirst: mode == PieceMode.burst && whole.any(nodes.isKnown),
         );
         if (targets.candidates.isEmpty) break;
         final copies = [for (final _ in targets.candidates.take(width)) AttemptProgress()];
         try {
           final output = await _race(
-              targets, copies, piece, resolver, mode, priority, deadline, hurry, kept, cancel, burstWidth, lane);
+            targets,
+            copies,
+            piece,
+            resolver,
+            mode,
+            priority,
+            deadline,
+            hurry,
+            kept,
+            cancel,
+            burstWidth,
+            lane,
+            holdingUp: holdingUp,
+            probation: probation != null,
+          );
           ctx.auto?.delivered(piece.length);
           ctx.stats.delivered(piece.length);
           return output;
@@ -173,8 +218,10 @@ final class PieceDownloader {
     _Kept kept,
     CancelToken? cancel,
     int burstWidth,
-    RequestLane lane,
-  ) {
+    RequestLane lane, {
+    bool Function()? holdingUp,
+    bool probation = false,
+  }) {
     final hasDeadline = deadline?.call().isFinite ?? false;
     final race = CancelToken(cancel);
     final result = Completer<AttemptOutput>();
@@ -212,6 +259,8 @@ final class PieceDownloader {
             hasDeadline: hasDeadline,
             deadline: deadline,
             hurry: hurry,
+            holdingUp: holdingUp,
+            probation: probation,
             cancel: race,
           );
           if (!go) return;
@@ -287,8 +336,12 @@ final class PieceDownloader {
     required double Function()? deadline,
     required bool Function()? hurry,
     required CancelToken cancel,
+    bool Function()? holdingUp,
+    bool probation = false,
   }) async {
     if (mode == PieceMode.probe) return true;
+    // A probation copy goes second, and a prefetch piece's second copy would otherwise rarely start.
+    if (position == 1 && probation) return true;
     final measured = ctx.meter.hedgeDelayMs(ctx.config.hedgeDelayMs);
     final delay = mode == PieceMode.startup || mode == PieceMode.burst
         ? min(hasDeadline ? 200.0 : 250.0, measured)
@@ -299,7 +352,18 @@ final class PieceDownloader {
       if (previous.failed) return hurried || position == 1;
       if (hurried) {
         if (previous.started &&
-            hurryHedgeDue(previous, url: previousURL(), pieceLength: pieceLength, candidates: candidates)) {
+            (hurryHedgeDue(previous, url: previousURL(), pieceLength: pieceLength, candidates: candidates) ||
+                ((holdingUp?.call() ?? false) &&
+                    HurryPlacement.tailBackupDue(
+                      url: previousURL(),
+                      backupURL: copyURL(),
+                      nodes: ctx.nodes,
+                      pieceBytes: pieceLength,
+                      elapsedMs: ctx.clock.nowMs() - previous.startedAt,
+                      receivingMs: previous.gotHeaders ? ctx.clock.nowMs() - previous.headersAt : null,
+                      receivedBytes: previous.received,
+                      resumedBytes: previous.base.bytes,
+                    )))) {
           return true;
         }
       } else if (position == 1) {
@@ -340,8 +404,12 @@ final class PieceDownloader {
   /// seconds over a part of the file it has not served lately. Due when the copy before is late to its first
   /// byte (twice its node's usual, within 250-600 ms), has stopped for 1 s, or is past twice its node's
   /// expected time with under three quarters in.
-  bool hurryHedgeDue(AttemptProgress previous,
-      {required String url, required int pieceLength, List<String> candidates = const []}) {
+  bool hurryHedgeDue(
+    AttemptProgress previous, {
+    required String url,
+    required int pieceLength,
+    List<String> candidates = const [],
+  }) {
     final now = ctx.clock.nowMs();
     final ttfb = ctx.nodes.ttfbMs(url);
     // A node not measured yet is held to the best known candidate, or one that answers and then trickles
@@ -361,8 +429,12 @@ final class PieceDownloader {
   }
 
   /// BTR `pieceCandidates`: the assigned node first, then the fastest known nodes.
-  static List<String> candidates(List<String> preferred, Resolver resolver,
-      {required int pieceIndex, required int round}) {
+  static List<String> candidates(
+    List<String> preferred,
+    Resolver resolver, {
+    required int pieceIndex,
+    required int round,
+  }) {
     final offset = preferred.isEmpty ? 0 : round % preferred.length;
     final rotated = [...preferred.sublist(offset), ...preferred.sublist(0, offset)];
     final rescue = resolver.rescueCandidates().where((url) => !rotated.contains(url));
