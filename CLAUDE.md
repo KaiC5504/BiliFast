@@ -1,50 +1,77 @@
-# BiliFast (Flutter spike and handover)
+# BiliFast (Flutter)
 
-This folder (renamed from `BiliFlutterSpike` on 2026-10-17) holds the spike that decided BiliFast (KaiC's Swift iOS Bilibili client, `D:\Repos\Apps\BiliNative`) moves to Flutter, and
-the handover for doing it. The spike itself is throwaway. It has its own git repo with no remote; KaiC hasn't OK'd a
-public repo for it, so never push it.
+KaiC's Bilibili client for iPhone, being moved from Swift (`D:\Repos\Apps\BiliNative`, public repo
+`KaiC5504/BiliNative`) to Flutter. This repo is the Flutter app: public `KaiC5504/BiliFast`, branch `main`. It ships as
+the same BiliFast app (bundle id `com.kaichuan.bilifast`, App Store Connect Apple ID `6823476667`), so its TestFlight
+builds replace the Swift ones on the phone and read the Swift app's keychain login. KaiC's call on 2026-10-17: build it
+here rather than in BiliNative `app/`, and push this folder as its own repo.
 
 ## Read before working
 
-1. `docs/flutter-move-spec.md`: the spec. It covers what was decided and why, the architecture, the rules, the slices in
-   order, and the lessons that must survive. Start with its section 0.
-2. `D:\Repos\Apps\BiliNative\CLAUDE.md`: the Swift app's rules. Most still apply to the Flutter app.
+1. `docs/flutter-move-spec.md`: the spec: decisions and why, architecture, rules, the slices in order, and the lessons
+   that must survive. Start with its section 0. Where it says `BiliNative/app/`, read this repo's root.
+2. `D:\Repos\Apps\BiliNative\CLAUDE.md`: the Swift app's rules. Most still apply.
 3. `docs/reference/`:
-   - `bilicore-inventory.md` and `app-inventory.md`: what BiliNative has, with paths.
-   - `piliplus-map.md`: where PiliPlus keeps what; it is GPL, so read only.
-   - `testflight-flutter.md`: shipping from BiliNative `app/`.
-
-## Where the real work happens
-
-The Flutter app is built in **`D:\Repos\Apps\BiliNative\app\`** (KaiC's choice, 2026-10-17: "Same app, BiliNative
-repo"). It ships as the same BiliFast app and reuses his keychain login. A session started in this folder reads the
-docs here, then works in BiliNative by absolute path.
-- Commit there on `main`. Commit, push and Actions runs are authorised there.
-- Touch only `app/`, the new workflows, `.gitignore`, `scripts/testflight.py` and the docs. The Swift app in `ios/` stays
-  as it is.
+   - `bilicore-inventory.md` and `app-inventory.md`: what BiliNative has, with paths. The port's checklist.
+   - `piliplus-map.md`: where PiliPlus keeps what; GPL, so read only.
+   - `testflight-flutter.md`: how this repo ships to TestFlight.
 
 Work slice by slice (spec section 6). Show KaiC a short plan before each slice and wait for his go. Finish each slice
 with what was built, how it works and numbered test steps. For phone slices, include the TestFlight build number.
 
+## Status
+
+- 2026-10-17: slice 0 (foundations): Flutter app at the root, `packages/bili_core` with BiliShared, DevLog, Danmaku,
+  BiliAPI and AppLogic ported from Swift tests-first, the keychain channel (checked on the phone in slice 1), CI and the
+  signed TestFlight workflow. The spike moved to `spike/`.
+- Next: slice 1, the player core on the phone (the kill switch).
+- Update this section when a slice finishes.
+
+## Layout
+
+- `lib/`: the Flutter app. `lib/account/` keychain and cookie persistence, `lib/app/` routes, `lib/shared/theme.dart`
+  the colour and size tokens (never hardcode colours).
+- `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`. One library per Swift
+  module: `shared.dart`, `devlog.dart`, `danmaku.dart`, `api.dart`, `logic.dart`.
+- `ios/Runner/`: native Swift (`KeychainChannel.swift`; the player view comes in slice 1). New Swift files must be added
+  to `ios/Runner.xcodeproj/project.pbxproj` by hand (four entries, see `KeychainChannel.swift`'s).
+- `spike/`: the throwaway spike, kept until later slices have taken what they need (spec section 11). Not analysed.
+- `test_ci/`: static tests of the workflows (pins, secrets only in step env, nothing leaks into the public log).
+
+## How to test
+
+- Flutter 3.47.7 through fvm: `fvm flutter …` / `fvm dart …` (`flutter` is not on PATH). Pinned in `.fvmrc`, the
+  pubspec and both workflows; `test_ci` checks they agree.
+- Core: `fvm dart test` in `packages/bili_core`.
+- App: `fvm flutter analyze` and `fvm flutter test` at the root.
+- Workflows: `uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s test_ci`.
+- Windows app: `fvm flutter build windows --release`, then `build\windows\x64\runner\Release\bilifast.exe` (440×880
+  window). It runs logged out; there is no keychain on Windows.
+- CI: "App compile check" (`app-compile.yml`) on every push: analyze and tests on Linux, then
+  `flutter build ios --release --no-codesign` on `macos-26` with Xcode 26.6.
+
+## Shipping
+
+The `ios-testflight` skill is the playbook; load it before touching any workflow, signing or Info.plist.
+- `.github/workflows/testflight.yml` signs and uploads when `python scripts/testflight.py start` dispatches it. Run
+  `start --dry-run` after any workflow change. Secrets are in this repo's `testflight` environment (limited to `main`).
+- Build numbers come from App Store Connect plus one, with a floor of 99: the Swift app shipped 1-8, Flutter builds
+  start at 100. Version 0.2.0 (the Swift app was 0.1.0).
+- Never start a signed build before the compile check is green.
+- Don't watch the run: check it once with `gh run view <id>` about 20 minutes after `start`.
+- Report the build number, what changed and phone test steps.
+- Commit, push and Actions runs (signed builds included) are authorised on `main`.
+
 ## Rules that bite
 
-- Never commit, print or log secrets, cookies, tokens, signed playurl responses, or anything in `local/` or `logs/`.
-  BiliNative is public.
-- KaiC's Bilibili account:
-  - no second login;
-  - few live calls;
-  - no loops against the API.
-- No Mac (`ssh macrent`, `tools/mac-test.sh`): KaiC is stopping it. iOS checks run in GitHub Actions and on his phone.
-- No `gh run watch` and no polling GitHub; check a TestFlight run once, about 20 minutes after `start`.
+- Public repo. Never commit, print or log secrets, cookies, tokens, signed playurl responses, or anything in `local/`
+  or `logs/` (both gitignored). The build log and artifacts are public too.
+- KaiC's Bilibili account: no second login, few live calls, no loops against the API. Tests never touch the network.
+- No Mac (`ssh macrent`): iOS checks run in GitHub Actions and on his phone.
+- No `gh run watch` and no polling GitHub.
 - PiliPlus and ATV-Bilibili-demo are GPL: read for endpoints and formats, never copy. Keep BTR's MIT notice with the
-  engine.
-- ghosthand first for screen and browser work.
-- Load the `ios-testflight` skill before any workflow, signing or Info.plist change.
-
-## Running the spike (reference only)
-
-- Flutter 3.47.7 is installed through fvm (`fvm flutter …`; `flutter` is not on PATH).
-- `fvm flutter build windows --release`, then run `build\windows\x64\runner\Release\bili_flutter_spike.exe`. It runs
-  logged out at 480P; options are in `README.md`.
-- `fvm flutter test` runs the swipe-back tests.
-- `local/` is gitignored and holds saved playurl responses and bench output. Delete saved playurls after use.
+  engine port.
+- Danmaku block-word regexes run on Dart's (ECMAScript) `RegExp`, not ICU as in Swift: `(?i)`, possessive and atomic
+  groups throw (the rule is skipped), and `\p{Han}` or `\A` mean something else.
+- ghosthand first for screen and browser work. Flutter windows often have a thin accessibility tree; use `screenshot`.
+- The BiliNative repo: only docs change there now (and Swift fixes if something blocks daily use).

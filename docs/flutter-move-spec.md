@@ -1,7 +1,13 @@
 # BiliFast in Flutter: the spec for the move
 
 Written 2026-10-17 for the session that does the work. It is the handover from the spike session: everything that
-was decided, where every source lives, and the order to build in. Nothing here has been built yet in BiliNative.
+was decided, where every source lives, and the order to build in.
+
+**Update 2026-10-17, slice 0:** KaiC moved the Flutter app out of BiliNative. It lives at the root of this repo
+(`D:\Repos\Apps\BiliFast`, public `KaiC5504/BiliFast`), not in `BiliNative/app/`. Wherever this spec says
+`BiliNative/app/` or `app/`, read this repo's root; BiliNative stays the Swift reference. The app identity (bundle id,
+App Store record, keychain items) is unchanged, so builds still replace the Swift app and keep its login. The signed
+workflow is plain `testflight.yml` in this repo, with its own `testflight` environment.
 
 Reference documents next to this one:
 
@@ -10,7 +16,7 @@ Reference documents next to this one:
 | `docs/reference/bilicore-inventory.md` | BiliNative's Swift package `BiliCore`, module by module: every endpoint with its signing, the engine's rules with their numbers, the HLS bridge, DevLog, and all 546 tests. The port's checklist. |
 | `docs/reference/app-inventory.md` | BiliNative's SwiftUI app, feature by feature: files, settings keys, keychain format, demo screens, tests, CI, docs, and every hard-won rule with `file:line`. |
 | `docs/reference/piliplus-map.md` | Where PiliPlus keeps what, which of its packages are licence-safe, and what never to take from it. |
-| `docs/reference/testflight-flutter.md` | How to ship the Flutter app from BiliNative `app/` as the next BiliFast builds (workflow, `.gitignore`, build numbers, Info.plist). |
+| `docs/reference/testflight-flutter.md` | How this repo ships as the next BiliFast builds (workflow, build numbers, Info.plist). |
 | `docs/verdict.md` | The spike's measurements and why the iPhone keeps AVPlayer. |
 | `docs/feature-order.md` | The short version of section 6, for KaiC. |
 | `docs/migration-plan.md` | The earlier plan. Superseded by this file where they differ. |
@@ -50,7 +56,7 @@ iPhone 17 Pro Max. Then the Swift app retires and milestone 3 continues in Flutt
 | **Flutter for every screen.** | KaiC dropped PiliPlus for its *design*, not for Flutter's feel. The official app's look is custom-drawn (pink tabs, cards, its own player chrome and panels), which suits Flutter. The spike's 推荐 feed came close to reference screen 01 within an hour. |
 | **The iPhone keeps Apple's player.** An `AVPlayerLayer` in a native view (a platform view) shows the video. Flutter draws everything around and on top of it. | Flutter cannot show HDR video: every Flutter video path copies frames into an 8-bit texture. Flutter's own `video_player` shows HDR wrong (flutter/flutter#91241), there is no HDR texture output (#127520, open), and media_kit's iOS build forces 8-bit (`ffmpeg-fix-ios-hdr-texture.patch`, OpenGL ES) and has no PiP. A native view keeps HDR, 杜比视界, AV1 hardware decoding, PiP and AirPlay exactly as today. |
 | **Option B: one Dart BTR engine for every platform**, with each platform's own player: AVPlayer on iOS, ExoPlayer (Media3) on Android, media_kit on Windows for development. | KaiC wants Android to be possible. With A (wrapping the Swift engine as a plugin), Android would need a third engine in Kotlin. With B, Windows runs the real engine too. Risks and mitigations are in section 10. |
-| **Same app, BiliNative repo** (AskUserQuestion answer: "Same app, BiliNative repo (Recommended)"). The Flutter app lives in `D:\Repos\Apps\BiliNative\app\` and ships as BiliFast. | Same bundle id `com.kaichuan.bilifast`, App Store record (`ASC_APP_ID` 6823476667) and signing secrets, so KaiC has no setup clicks. The new app reads his existing login from the keychain, so there is no new login. The Swift code stays in `ios/` as the reference. |
+| **Same app, its own repo.** First "Same app, BiliNative repo"; changed by KaiC at the start of slice 0 to "build slice 0 in this folder, check the history, then create the public KaiC5504/BiliFast repo and push." | Same bundle id `com.kaichuan.bilifast` and App Store record (`ASC_APP_ID` 6823476667), so builds replace the Swift app and read its keychain login: no new login. The repo needs its own `testflight` environment (the same five secrets, one manual step). BiliNative stays untouched as the Swift reference. |
 | **No new Bilibili login.** | KaiC: "I would only do it once to prevent bili from suspecting multiple logins." BiliFast's cookies are already in the keychain (section 4.6). For the PC, KaiC logged in once in the ghosthand test Chrome; that session stays the only other one. |
 | **Light testing on KaiC's account.** | "no need for very detailed or bad testing that could cause my acc issues." Engine work runs against the simulated CDN. Live checks use a handful of calls; the whole spike used 8 logged-in API calls. |
 | **No Mac.** | "Dont install in MAC, im planning to stop using it." Don't use `tools/mac-test.sh` or `ssh macrent` for this work. iOS checks run in GitHub Actions (`macos-26`) and on the phone. |
@@ -61,10 +67,10 @@ iPhone 17 Pro Max. Then the Swift app retires and milestone 3 continues in Flutt
 
 | Path | What | Use it for |
 |---|---|---|
-| `D:\Repos\Apps\BiliNative` | The Swift app (public repo `KaiC5504/BiliNative`, branch `main`, at `a956b99` when this was written). | The reference for every behaviour. Swift sources `ios/Sources/App/` (132 files, 19.4k lines), package `ios/Packages/BiliCore/` (7.9k lines plus 8.2k lines of tests), docs `docs/`. The Flutter app goes in `app/` here. |
+| `D:\Repos\Apps\BiliNative` | The Swift app (public repo `KaiC5504/BiliNative`, branch `main`, at `a956b99` when this was written). | The reference for every behaviour. Swift sources `ios/Sources/App/` (132 files, 19.4k lines), package `ios/Packages/BiliCore/` (7.9k lines plus 8.2k lines of tests), docs `docs/`. |
 | `D:\Repos\Apps\BiliNative\docs\background.md` | Real CDN behaviour, deviations from BTR, hurry mode, environment limits. | Read before touching the engine. Summarised at the end of `bilicore-inventory.md`. |
 | `D:\Repos\Apps\BiliNative\docs\superpowers\specs\` and `plans\` | M1 and M2 designs and plans. | The *why* behind each Swift screen. The M2 design (`2026-10-17-m2-video-page-design.md`) explains the player and page. |
-| `D:\Repos\Apps\BiliFast` (this folder, own git repo, no remote) | The spike: WBI, feed, a minimal Dart BTR engine, media_kit playback on Windows, swipe back. | Code to carry over (section 11) and these docs. Never pushed anywhere; KaiC hasn't OK'd a public repo for it. |
+| `D:\Repos\Apps\BiliFast` (this repo, public `KaiC5504/BiliFast`) | The Flutter app at the root; the spike in `spike/`: WBI, feed, a minimal Dart BTR engine, media_kit playback on Windows, swipe back. | The app, these docs, and spike code to carry over (section 11). |
 | `D:\Repos\Apps\PiliPlus` (GPL-3.0, `bb2d86ca`) | A Flutter Bilibili client. | Endpoints and formats only, never code (`piliplus-map.md`). |
 | `D:\Repos\Apps\Kazumi` | KaiC's Flutter fork, shipped to TestFlight by GitHub Actions. | The Flutter signed-build steps (`testflight-flutter.md`). |
 | `D:\Repos\Apps\Bilibili-thread-ripper` | BTR, the JS engine BiliNative's Swift engine was ported from (MIT). | Read at tag `2026.10.8.1` only: `git -C D:\Repos\Apps\Bilibili-thread-ripper show 2026.10.8.1:src/idm-downloader.js`. Port from the Swift version, not from BTR: Swift carries the phone fixes. |
@@ -79,7 +85,7 @@ iPhone 17 Pro Max. Then the Swift app retires and milestone 3 continues in Flutt
 | Layer | iPhone | Android (later) | Windows (development) |
 |---|---|---|---|
 | Screens, gestures, chrome, panels, danmaku, comments | Flutter | Flutter | Flutter (same code) |
-| Video view | `AVPlayerLayer` in a native view (Swift, in `app/ios/Runner/`) | ExoPlayer in a native view (Kotlin) | media_kit (`Video` widget) |
+| Video view | `AVPlayerLayer` in a native view (Swift, in `ios/Runner/`) | ExoPlayer in a native view (Kotlin) | media_kit (`Video` widget) |
 | What the player reads | HLS from the Dart local server (`master.m3u8` → byte-range segments of the DASH files) | DASH (an MPD built in Dart) from the same local server | The same local server: EDL as in the spike, or the HLS playlists if mpv takes them |
 | Download engine | Dart BTR engine in a background isolate | the same | the same |
 | HTTP underneath the engine | `cupertino_http` (URLSession, HTTP/2) | `cronet_http` | dart:io |
@@ -88,9 +94,7 @@ iPhone 17 Pro Max. Then the Swift app retires and milestone 3 continues in Flutt
 ### 4.2 Folders in BiliNative
 
 ```
-BiliNative/
-  ios/                         Swift app: reference until cutover, blocker fixes only
-  app/                         Flutter app (pubspec name bilifast)
+BiliFast/                      this repo: the Flutter app (pubspec name bilifast)
     packages/bili_core/        pure Dart, no Flutter import: runs with `fvm dart test` on Windows
       lib/src/shared/          ByteRange, ContentRange, MediaSegment, clocks
       lib/src/devlog/          LogEvent, Logger, Redactor, FileSink, NetworkSink, AckStore/Replay
@@ -303,11 +307,10 @@ between position events.
   - Never `gh run watch`, and never poll in a loop.
   - Check a TestFlight run once, about 20 minutes after `start`.
   - Start long waits in the background so KaiC can keep talking.
-- **BiliNative repo hygiene:**
-  - Work on `main`. Commit, push and Actions runs are authorised.
-  - Never start a signed build before the gate for that slice is green: PC tests, plus the `app/` compile check.
-  - Only `app/`, the new workflows, `.gitignore`, `scripts/testflight.py` and the docs change; the Swift app in `ios/`
-    stays as it is.
+- **Repo hygiene:**
+  - Work on `main` here. Commit, push and Actions runs are authorised.
+  - Never start a signed build before the gate for that slice is green: PC tests, plus the compile check.
+  - In BiliNative only the docs change; the Swift app stays as it is.
 - **Speed first** (KaiC's call): ship to his phone once the gate is green, let him report, fix in the next build.
 
 ## 6. The slices
@@ -327,12 +330,12 @@ The tables name:
 
 | | |
 |---|---|
-| Set up | `fvm flutter create --org com.kaichuan --project-name bilifast --platforms ios,android,windows app` in BiliNative; `.gitignore` gets `!/app/ios/Runner.xcodeproj/`; Info.plist and project settings from `testflight-flutter.md` plus `CADisableMinimumFrameDurationOnPhone` = true (120 Hz); `.fvmrc`; Windows runner 440×880 titled BiliFast. |
-| Port, tests first | Into `app/packages/bili_core`: `BiliShared`, `DevLog`, `Danmaku`, `BiliAPI`, `AppLogic`. Translate each XCTest file to `package:test` before the code (BiliSharedTests 6, DevLogTests 39, DanmakuTests 41, BiliAPITests 179, AppLogicTests 47). `BiliAPITests/Fixtures.swift` raw strings become Dart fixture constants; `FakeHTTP` becomes a fake `http.Client`. |
+| Set up | `fvm flutter create --org com.kaichuan --project-name bilifast --platforms ios,android,windows .` at this repo's root, the spike moved to `spike/`; Info.plist and project settings from `testflight-flutter.md` plus `CADisableMinimumFrameDurationOnPhone` = true (120 Hz); `.fvmrc`; Windows runner 440×880 titled BiliFast. |
+| Port, tests first | Into `packages/bili_core`: `BiliShared`, `DevLog`, `Danmaku`, `BiliAPI`, `AppLogic`. Translate each XCTest file to `package:test` before the code (BiliSharedTests 6, DevLogTests 39, DanmakuTests 41, BiliAPITests 179, AppLogicTests 47). `BiliAPITests/Fixtures.swift` raw strings become Dart fixture constants; `FakeHTTP` becomes a fake `http.Client`. |
 | Reuse from the spike | `lib/api/wbi.dart` (check it against `WBITests`' reference vector), the `SwipeBackPageRoute` and its 5 widget tests. |
 | Native, written but checked only in slice 1 | Keychain read/write channel (`KeychainStore.swift`, `AppTokenStore.swift`). |
-| Pipeline | `.github/workflows/app-compile.yml` (analyze, test, `flutter build ios --release --no-codesign`); `.github/workflows/testflight-flutter.yml` and `scripts/testflight.py --flutter`, then `start --dry-run` (`testflight-flutter.md`). |
-| BiliNative docs | `CLAUDE.md`: Status entry, a Flutter section (how to test `app/`), the rented Mac marked as no longer used. `docs/background.md`: it still says Flutter was rejected for feel; correct it to KaiC's actual reason (PiliPlus's design). |
+| Pipeline | `.github/workflows/app-compile.yml` (analyze, test, `flutter build ios --release --no-codesign`); `.github/workflows/testflight.yml` and `scripts/testflight.py`, then `start --dry-run` (`testflight-flutter.md`). |
+| BiliNative docs | `CLAUDE.md`: Status entry, where the Flutter app lives now, the rented Mac marked as no longer used. `docs/background.md`: it still says Flutter was rejected for feel; correct it to KaiC's actual reason (PiliPlus's design). |
 | Done when | `fvm dart test` in `bili_core` passes every ported test; `fvm flutter test` passes; the compile check is green; the TestFlight dry run is green. |
 
 ### Slice 1: the player core on the phone (the kill switch) · about 2 days + 1 TestFlight round
@@ -502,12 +505,12 @@ All of these come from phone logs or phone bugs. Sources are in the two BiliNati
 
 | Where | What | Command or tool |
 |---|---|---|
-| PC | `bili_core` (ported Swift tests, SimCDN) | `fvm dart test` in `app/packages/bili_core` |
-| PC | Widget tests: chrome state, panels, swipe back, page lifecycle with `leak_tracker`, demo screens | `fvm flutter test` in `app/` |
+| PC | `bili_core` (ported Swift tests, SimCDN) | `fvm dart test` in `packages/bili_core` |
+| PC | Widget tests: chrome state, panels, swipe back, page lifecycle with `leak_tracker`, demo screens | `fvm flutter test` at the root |
 | PC | The Windows app with demo data or logged out; the engine against real CDN nodes on a saved playurl | `fvm flutter build windows --release`, then the exe; ghosthand `screenshot` |
 | PC | Engine bench vs Swift | section 6, slice 2 |
 | PC | The Swift reference still passes | `swift test --package-path ios/Packages/BiliCore` |
-| CI (`macos-26`) | analyze, tests, unsigned iOS build | `app-compile.yml` on every push to `app/` |
+| CI (`macos-26`) | analyze, tests, unsigned iOS build | `app-compile.yml` on every push |
 | CI | Platform-view transitions on the iPhone 17 Pro Max simulator: rotation with the player attached, PiP controller exists and starts, share sheet over landscape (the Swift `PlayerTransitionTests` list) | `integration_test` run by `flutter test integration_test -d <simulator>` in a dispatched job |
 | CI | Real touches: swipe back from edge and middle, player seek drag, thread close, scrolling (the Swift `SwipeBackUITests` list) | An XCUITest target (`RunnerUITests`) driving the Flutter app at about 1500 pt/s; `flutter test` alone synthesises pointer events inside Flutter and can't catch UIKit-level gesture problems over the platform view |
 | Phone | Each slice's checklist items, with logs streaming to the PC | `uv run tools/logserver.py` in BiliNative; 设置 → 开发者 → 发送日志到电脑; read `logs/<date>/*.jsonl` before guessing |
@@ -515,13 +518,13 @@ All of these come from phone logs or phone bugs. Sources are in the two BiliNati
 ## 9. Shipping
 
 Everything is in `docs/reference/testflight-flutter.md`. In short:
-- **The workflow:** a second workflow, `testflight-flutter.yml`, in the same `testflight` concurrency group as the Swift
-  one.
+- **The workflow:** `testflight.yml` in this repo, with its own `testflight` environment. Its concurrency group no longer
+  covers the Swift repo's runs; the Swift app is frozen, so the two don't build at once.
 - **Toolchain:** Flutter is pinned through `subosito/flutter-action`, with Xcode 26.6 pinned.
 - **Signing:** `use-profiles` with an export-options plist, then `flutter build ipa --build-number="$BUILD_NUMBER"`.
 - **Build numbers:** they continue above the Swift builds (8 so far) by themselves. A floor of 99 marks the Flutter
   builds clearly.
-- **Starting a build:** `scripts/testflight.py start --flutter` (after a `--dry-run` whenever the workflow changes), and
+- **Starting a build:** `scripts/testflight.py start` (after a `--dry-run` whenever the workflow changes), and
   one `gh run view` about 20 minutes later. Report the build number, what changed and the phone steps.
 
 ## 10. Risks, kill criteria, open questions

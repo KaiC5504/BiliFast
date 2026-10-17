@@ -1,17 +1,14 @@
-# bilifast
+# BiliFast
 
-BiliFast, a Bilibili client
+A Bilibili client for iPhone, written in Flutter, with a Dart port of the
+[Bilibili Thread Ripper](https://github.com/MrTangLuyao/Bilibili-thread-ripper) multi-node download engine underneath
+and Apple's own player for the video. It replaces the Swift version ([BiliNative](https://github.com/KaiC5504/BiliNative))
+screen by screen.
 
-## Getting Started
+A personal project. Not affiliated with Bilibili.
 
-This project is a starting point for a Flutter application.
+- `lib/`: the app.
+- `packages/bili_core/`: pure Dart: API client, logging, danmaku, app rules (and later the download engine).
+- `docs/flutter-move-spec.md`: how and why the move happens.
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Build and test: see `CLAUDE.md`, "How to test". The BTR port keeps BTR's MIT notice.
