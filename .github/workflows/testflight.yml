@@ -1,5 +1,6 @@
 # Signed device build to TestFlight on GitHub Actions. Free and queue-free on a public
-# repo. The unsigned compile check is app-compile.yml; this runs only when dispatched.
+# repo. The only workflow (KaiC's call, 2026-10-18): tests run locally (scripts/gate.py), and a
+# dry run of this one is the iOS compile check. It runs only when dispatched.
 #
 # Start it with `python scripts/testflight.py start`, never by hand: that hands main's
 # exact head to this workflow and checks the environment first.

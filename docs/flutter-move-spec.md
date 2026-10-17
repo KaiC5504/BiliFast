@@ -309,7 +309,8 @@ between position events.
   - Start long waits in the background so KaiC can keep talking.
 - **Repo hygiene:**
   - Work on `main` here. Commit, push and Actions runs are authorised.
-  - Never start a signed build before the gate for that slice is green: PC tests, plus the compile check.
+  - Never start a signed build before the gate for that slice is green: `scripts/gate.py` on the commit. (The
+    separate compile-check workflow was removed on 2026-10-18; `testflight.yml` is the only workflow.)
   - In BiliNative only the docs change; the Swift app stays as it is.
 - **Speed first** (KaiC's call): ship to his phone once the gate is green, let him report, fix in the next build.
 
@@ -334,9 +335,9 @@ The tables name:
 | Port, tests first | Into `packages/bili_core`: `BiliShared`, `DevLog`, `Danmaku`, `BiliAPI`, `AppLogic`. Translate each XCTest file to `package:test` before the code (BiliSharedTests 6, DevLogTests 39, DanmakuTests 41, BiliAPITests 179, AppLogicTests 47). `BiliAPITests/Fixtures.swift` raw strings become Dart fixture constants; `FakeHTTP` becomes a fake `http.Client`. |
 | Reuse from the spike | `lib/api/wbi.dart` (check it against `WBITests`' reference vector), the `SwipeBackPageRoute` and its 5 widget tests. |
 | Native, written but checked only in slice 1 | Keychain read/write channel (`KeychainStore.swift`, `AppTokenStore.swift`). |
-| Pipeline | `.github/workflows/app-compile.yml` (analyze, test, `flutter build ios --release --no-codesign`); `.github/workflows/testflight.yml` and `scripts/testflight.py`, then `start --dry-run` (`testflight-flutter.md`). |
+| Pipeline | `.github/workflows/testflight.yml`, `scripts/testflight.py` and the local gate `scripts/gate.py`, then `start --dry-run` (`testflight-flutter.md`). |
 | BiliNative docs | `CLAUDE.md`: Status entry, where the Flutter app lives now, the rented Mac marked as no longer used. `docs/background.md`: it still says Flutter was rejected for feel; correct it to KaiC's actual reason (PiliPlus's design). |
-| Done when | `fvm dart test` in `bili_core` passes every ported test; `fvm flutter test` passes; the compile check is green; the TestFlight dry run is green. |
+| Done when | `fvm dart test` in `bili_core` passes every ported test; `fvm flutter test` passes; the TestFlight dry run is green. |
 
 ### Slice 1: the player core on the phone (the kill switch) · about 2 days + 1 TestFlight round
 
@@ -510,7 +511,8 @@ All of these come from phone logs or phone bugs. Sources are in the two BiliNati
 | PC | The Windows app with demo data or logged out; the engine against real CDN nodes on a saved playurl | `fvm flutter build windows --release`, then the exe; ghosthand `screenshot` |
 | PC | Engine bench vs Swift | section 6, slice 2 |
 | PC | The Swift reference still passes | `swift test --package-path ios/Packages/BiliCore` |
-| CI (`macos-26`) | analyze, tests, unsigned iOS build | `app-compile.yml` on every push |
+| PC | Everything above in parallel, before every push that ships | `python scripts/gate.py` |
+| CI (`macos-26`) | Signed iOS build; a dry run doubles as the compile check | `scripts/testflight.py start --dry-run` |
 | CI | Platform-view transitions on the iPhone 17 Pro Max simulator: rotation with the player attached, PiP controller exists and starts, share sheet over landscape (the Swift `PlayerTransitionTests` list) | `integration_test` run by `flutter test integration_test -d <simulator>` in a dispatched job |
 | CI | Real touches: swipe back from edge and middle, player seek drag, thread close, scrolling (the Swift `SwipeBackUITests` list) | An XCUITest target (`RunnerUITests`) driving the Flutter app at about 1500 pt/s; `flutter test` alone synthesises pointer events inside Flutter and can't catch UIKit-level gesture problems over the platform view |
 | Phone | Each slice's checklist items, with logs streaming to the PC | `uv run tools/logserver.py` in BiliNative; 设置 → 开发者 → 发送日志到电脑; read `logs/<date>/*.jsonl` before guessing |

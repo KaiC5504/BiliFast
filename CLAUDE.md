@@ -48,8 +48,9 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 - Workflows: `uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s test_ci`.
 - Windows app: `fvm flutter build windows --release`, then `build\windows\x64\runner\Release\bilifast.exe` (440×880
   window). It runs logged out; there is no keychain on Windows.
-- CI: "App compile check" (`app-compile.yml`) on every push, about 4 minutes: the gate on Linux and
-  `flutter build ios --release --no-codesign` on `macos-26` with Xcode 26.6, side by side.
+- GitHub runs nothing on push. `testflight.yml` is the only workflow (KaiC's call, 2026-10-18: keep only the
+  workflows that matter, such as shipping to TestFlight). Tests run in the local gate; a dry run of the signed build
+  is the iOS compile check. Don't add a workflow without asking; `test_ci` fails if one appears.
 
 ## Shipping
 
@@ -59,8 +60,10 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Build numbers come from App Store Connect plus one, with a floor of 99: the Swift app shipped 1-8, Flutter builds
   start at 100. Version 0.2.0 (the Swift app was 0.1.0).
 - The loop: `python scripts/gate.py` on the committed tree (about 15 s, three lanes in parallel; it records the
-  commit it passed), push, then `python scripts/testflight.py start` once the compile check is green. `start`
-  refuses without both, so it can't ship an unchecked commit. It costs about 7 GitHub calls.
+  commit it passed), push, then `python scripts/testflight.py start` (6 GitHub calls). `start` refuses without the
+  gate's record for that exact commit, so it can't ship an unchecked commit.
+- GitHub calls only when the answer is needed (KaiC gets rate-limited): no polling, no extra runs to measure
+  things, one `status` per run.
 - Don't watch the run: `python scripts/testflight.py status` once (1 call), about 10 minutes after a dry run and 20
   after an upload. There is no watch command on purpose.
 - Report the build number, what changed and phone test steps.

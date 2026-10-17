@@ -16,9 +16,8 @@ SHA = "a" * 40
 
 
 class FakeGitHub:
-    def __init__(self, compile_conclusion="success", busy=False):
+    def __init__(self, busy=False):
         self.calls = []
-        self.compile_conclusion = compile_conclusion
         self.busy = busy
 
     def __call__(self, *args):
@@ -26,8 +25,6 @@ class FakeGitHub:
             return SHA if args[1] == "rev-parse" else ""
         self.calls.append(args)
         joined = " ".join(args)
-        if "--workflow app-compile.yml" in joined:
-            return json.dumps([{"status": "completed", "conclusion": self.compile_conclusion, "url": "u"}])
         if args[1:3] == ("run", "list"):
             status = "in_progress" if self.busy else "completed"
             return json.dumps([{"databaseId": 1, "displayTitle": f"TestFlight upload {'b' * 40}", "status": status,
@@ -71,11 +68,11 @@ class StartTest(unittest.TestCase):
         self.assertEqual(1, self.start(fake, "--dry-run"))
         self.assertEqual([], fake.calls)
 
-    def test_a_red_compile_check_stops_it_after_one_call(self):
-        self.stamp.write_text(SHA)
-        fake = FakeGitHub(compile_conclusion="failure")
+    def test_a_gate_on_another_commit_does_not_count(self):
+        self.stamp.write_text("c" * 40)
+        fake = FakeGitHub()
         self.assertEqual(1, self.start(fake, "--dry-run"))
-        self.assertEqual(1, len(fake.calls))
+        self.assertEqual([], fake.calls)
 
     def test_a_busy_run_stops_it(self):
         self.stamp.write_text(SHA)
@@ -83,12 +80,12 @@ class StartTest(unittest.TestCase):
         self.assertEqual(1, self.start(fake, "--dry-run"))
         self.assertFalse(any(c[1:3] == ("workflow", "run") for c in fake.calls))
 
-    def test_a_dry_run_costs_seven_calls_and_remembers_the_run(self):
+    def test_a_dry_run_costs_six_calls_and_remembers_the_run(self):
         self.stamp.write_text(SHA)
         fake = FakeGitHub()
         self.assertEqual(0, self.start(fake, "--dry-run"))
-        # compile check, run list, environment x3, dispatch, one look at the new run
-        self.assertEqual(7, len(fake.calls))
+        # run list, environment x3, dispatch, one look at the new run
+        self.assertEqual(6, len(fake.calls))
         self.assertEqual("2", self.last.read_text().strip())
         dispatch = next(c for c in fake.calls if c[1:3] == ("workflow", "run"))
         self.assertIn("upload=false", dispatch)

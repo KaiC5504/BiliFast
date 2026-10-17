@@ -5,8 +5,9 @@
     python scripts/testflight.py status [RUN_ID]     # one GitHub call; default: the last run started here
 
 start builds origin/main's head. It refuses unless the local gate passed on that commit
-(scripts/gate.py), the compile check passed on it, nothing else is building, and the `testflight`
-environment is locked to main with its secrets in place. --dry-run signs and checks the IPA without
+(scripts/gate.py), nothing else is building, and the `testflight` environment is locked to main with
+its secrets in place. There is no separate compile check: the signed build compiles iOS itself, so a
+dry run is the iOS check. --dry-run signs and checks the IPA without
 uploading. --create-signing registers the bundle id and creates the profile or renews an expired
 certificate. --again rebuilds a commit that already shipped.
 
@@ -27,7 +28,6 @@ from pathlib import Path
 
 REPO = "KaiC5504/BiliFast"
 WORKFLOW = "testflight.yml"
-COMPILE_WORKFLOW = "app-compile.yml"
 ENVIRONMENT = "testflight"
 SECRETS = {
     "APP_STORE_CONNECT_ISSUER_ID",
@@ -118,16 +118,6 @@ def environment_problems() -> list[str]:
     return problems
 
 
-def compile_check_problem(sha: str) -> str | None:
-    found = json.loads(run("gh", "run", "list", "-R", REPO, "--workflow", COMPILE_WORKFLOW,
-                           "--commit", sha, "--limit", "1", "--json", "status,conclusion,url"))
-    if not found:
-        return f"no compile check ran on {sha[:8]}"
-    if found[0]["conclusion"] != "success":
-        return f"the compile check on {sha[:8]} is {found[0]['conclusion'] or found[0]['status']}: {found[0]['url']}"
-    return None
-
-
 def dispatched_run(output: str, known: set[int], sha: str) -> dict | None:
     """The run `gh workflow run` just made. Its title is the bare workflow name until
     GitHub evaluates run-name, so the first look waits a few seconds."""
@@ -180,10 +170,6 @@ def cmd_start(argv: list[str]) -> int:
         print(f"The local gate hasn't passed on {sha[:8]}: run `python scripts/gate.py` on that commit.")
         return 1
 
-    problem = compile_check_problem(sha)
-    if problem:
-        print(f"Not starting: {problem}")
-        return 1
     recent = runs()
     busy = [r for r in recent if r["status"] != "completed"]
     if busy:

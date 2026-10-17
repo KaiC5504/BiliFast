@@ -207,9 +207,6 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn(f'"{self.doc["env"]["FLUTTER_VERSION"]}"', fvmrc)
         pubspec = yaml.safe_load((ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
         self.assertEqual(str(self.doc["env"]["FLUTTER_VERSION"]), str(pubspec["environment"]["flutter"]))
-        compile_env = yaml.safe_load((WORKFLOW.parent / "app-compile.yml").read_text(encoding="utf-8"))["env"]
-        for key in ("FLUTTER_VERSION", "XCODE_VERSION", "XCODE_BUILD"):
-            self.assertEqual(str(self.doc["env"][key]), str(compile_env[key]), key)
 
     def test_ipa_is_checked_before_it_is_uploaded(self):
         names = [s.get("name") for _, s in self.steps("build")]
@@ -218,6 +215,11 @@ class WorkflowTest(unittest.TestCase):
 
 
 class OtherWorkflowsTest(unittest.TestCase):
+    def test_testflight_is_the_only_workflow(self):
+        # KaiC's call (2026-10-18): keep only the workflows that matter; tests run locally in scripts/gate.py.
+        names = sorted(p.name for p in WORKFLOW.parent.glob("*.y*ml"))
+        self.assertEqual([WORKFLOW.name], names, "a new workflow needs KaiC's OK first")
+
     def test_only_this_workflow_can_sign_or_upload(self):
         # Environment secrets reach any job on main that names the environment,
         # whatever its trigger.
