@@ -26,30 +26,32 @@ final class Permit {
 }
 
 final class _Waiter {
-  _Waiter(this.priority, this.queueClass, this.deadline);
+  _Waiter(this.priority, this.queueClass, this.deadline, {required this.ages, required this.queuedAt});
 
   final double priority;
   final QueueClass queueClass;
   final double Function()? deadline;
+  final bool ages;
+  final double queuedAt;
   final completer = Completer<void>();
 }
 
 /// BTR's `Semaphore` (port of ConnectionPool.swift): a connection budget whose waiters are served by class,
-/// then priority, then arrival.
-// Wave 0 added [deadline], [onChange] and the clock; urgency and aging come with ConnectionPoolTests.
+/// deadline urgency and age.
 final class ConnectionPool {
   ConnectionPool(int limit, {MonotonicClock? clock})
     : _limit = limit.clamp(1, 512),
-      // ignore: unused_field
       _clock = clock ?? MonotonicClock.system;
+
+  /// A hedge copy's +20 is worth 0.9 s of waiting.
+  static const agingPerMs = 20.0 / 900.0;
 
   int _limit;
   int _active = 0;
   final _queue = <_Waiter>[];
-  // ignore: unused_field
   final MonotonicClock _clock;
 
-  /// Called after every change of active, limit or queued requests.
+  /// Called after every change, once the pool's state is settled, so the handler may read the pool.
   void Function(int active, int limit, int queued)? onChange;
 
   int get limit => _limit;
@@ -69,10 +71,14 @@ final class ConnectionPool {
     CancelToken? cancel,
   }) async {
     cancel?.throwIfCancelled();
-    final waiter = _Waiter(priority, queueClass, deadline);
+    final ages = queueClass == QueueClass.ordinary && (deadline?.call().isFinite ?? false);
+    final waiter = _Waiter(priority, queueClass, deadline, ages: ages, queuedAt: _clock.nowMs());
     _queue.add(waiter);
+    // Whoever takes the waiter out of the queue owns its completer, so it completes once.
     final remove = cancel?.onCancel(() {
-      if (_queue.remove(waiter)) waiter.completer.completeError(const CancelledException());
+      if (!_queue.remove(waiter)) return;
+      waiter.completer.completeError(const CancelledException());
+      _notify();
     });
     _drain();
     try {
@@ -94,20 +100,43 @@ final class ConnectionPool {
     _drain();
   }
 
+  double _rank(_Waiter waiter, double now) {
+    var urgency = 0.0;
+    final deadline = waiter.deadline?.call();
+    if (deadline != null && deadline.isFinite) {
+      final remaining = deadline - now;
+      urgency = remaining <= 0
+          ? 12
+          : remaining <= 750
+          ? 9
+          : remaining <= 2000
+          ? 6
+          : 0;
+    }
+    return waiter.priority + urgency + (waiter.ages ? (now - waiter.queuedAt) * agingPerMs : 0);
+  }
+
   void _drain() {
+    final now = _clock.nowMs();
     while (_active < _limit && _queue.isNotEmpty) {
       var best = 0;
+      var bestRank = _rank(_queue[0], now);
       for (var index = 1; index < _queue.length; index++) {
         final candidate = _queue[index];
         final current = _queue[best];
+        final candidateRank = _rank(candidate, now);
         if (candidate.queueClass.index < current.queueClass.index ||
-            (candidate.queueClass == current.queueClass && candidate.priority > current.priority)) {
+            (candidate.queueClass == current.queueClass && candidateRank > bestRank)) {
           best = index;
+          bestRank = candidateRank;
         }
       }
       final waiter = _queue.removeAt(best);
       _active += 1;
       waiter.completer.complete();
     }
+    _notify();
   }
+
+  void _notify() => onChange?.call(_active, _limit, _queue.length);
 }
