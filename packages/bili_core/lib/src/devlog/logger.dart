@@ -37,7 +37,7 @@ final class Logger {
   void log(LogLevel level, LogCategory cat, String msg, [Map<String, Object> fields = const {}]) {
     final seq = ++_seq;
     if (_sinks.isEmpty) return;
-    final event = LogEvent(
+    _deliver(LogEvent(
       t: DateTime.now().microsecondsSinceEpoch / 1e6,
       seq: seq,
       session: session,
@@ -45,7 +45,19 @@ final class Logger {
       cat: cat,
       msg: Redactor.text(msg),
       f: Redactor.fields(fields),
-    );
+    ));
+  }
+
+  /// An event another Logger built and redacted (another isolate's), under this logger's session and sequence;
+  /// its time is kept.
+  void logRedacted(LogEvent event) {
+    final seq = ++_seq;
+    if (_sinks.isEmpty) return;
+    _deliver(LogEvent(
+        t: event.t, seq: seq, session: session, level: event.level, cat: event.cat, msg: event.msg, f: event.f));
+  }
+
+  void _deliver(LogEvent event) {
     for (final sink in List.of(_sinks)) {
       // A logger must never take the app down, so a throwing sink only loses this event.
       try {

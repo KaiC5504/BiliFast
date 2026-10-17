@@ -22,7 +22,12 @@ Future<PlaybackController> startPlaybackController(BiliClient client) async {
   final engine = await startPlatformEngine();
   try {
     final player = await createPlayer();
-    return PlaybackController(client: client, engine: engine, player: player, transportName: platformTransportName);
+    return PlaybackController(
+        client: client,
+        engine: engine,
+        startEngine: startPlatformEngine,
+        player: player,
+        transportName: platformTransportName);
   } catch (_) {
     await engine.dispose();
     rethrow;

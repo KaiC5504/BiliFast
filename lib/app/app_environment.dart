@@ -39,8 +39,12 @@ final class LoginExpired extends Account {
 class AppEnvironment extends ChangeNotifier {
   AppEnvironment._({required this.cookies, required this.client, required this._persistence, required this._logger});
 
-  /// `http` and `keychain` are for tests; the app passes neither.
-  static Future<AppEnvironment> load({KeychainStore? keychain, HTTPTransport? http, Logger? logger}) async {
+  /// `http`, `httpFactory` and `keychain` are for tests; the app passes none.
+  static Future<AppEnvironment> load(
+      {KeychainStore? keychain,
+      HTTPTransport? http,
+      HTTPTransport Function() httpFactory = platformHttpTransport,
+      Logger? logger}) async {
     final log = logger ?? Logger.shared;
     final persistence = CookiePersistence(_GuardedKeychain(keychain ?? KeychainStore.platform(), log));
     final jar = CookieJar(await persistence.load());
@@ -48,7 +52,7 @@ class AppEnvironment extends ChangeNotifier {
     jar.onChange = (_) => unawaited(persistence.save(jar.all).catchError((Object error) {
           log.warn(LogCategory.app, 'cookie save failed', {'error': '$error'});
         }));
-    final client = BiliClient(transport: http ?? platformHttpTransport(), cookies: jar, logger: log);
+    final client = BiliClient(transport: http ?? httpTransportOrFallback(httpFactory, log), cookies: jar, logger: log);
     return AppEnvironment._(cookies: jar, client: client, persistence: persistence, logger: log);
   }
 
@@ -126,6 +130,17 @@ HTTPTransport platformHttpTransport() {
     ..httpCookieAcceptPolicy = NSHTTPCookieAcceptPolicy.NSHTTPCookieAcceptPolicyNever
     ..timeoutIntervalForRequest = const Duration(seconds: 15);
   return ClientHTTPTransport(client: CupertinoClient.fromSessionConfiguration(configuration));
+}
+
+/// cupertino_http reaches URLSession through native bindings that can fail to load; the app then talks to
+/// Bilibili over dart:io rather than not starting.
+HTTPTransport httpTransportOrFallback(HTTPTransport Function() make, Logger logger) {
+  try {
+    return make();
+  } catch (error) {
+    logger.error(LogCategory.app, 'http transport failed, using dart:io', {'error': '$error'});
+    return ClientHTTPTransport();
+  }
 }
 
 /// A keychain channel that throws (no native side yet, a platform error) counts as a failed read, so the

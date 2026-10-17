@@ -1,3 +1,4 @@
+import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
@@ -72,6 +73,22 @@ void main() {
     environment.cookies.set('buvid3', 'b3');
     await Future<void>.delayed(Duration.zero);
     expect(keychain.saved, isEmpty);
+  });
+
+  test('a URLSession transport that throws while building falls back to dart:io with an error logged', () async {
+    final logger = Logger(session: 'test');
+    final memory = MemorySink();
+    logger.add(memory);
+    final transport = httpTransportOrFallback(() => throw StateError('no native bindings'), logger);
+    expect(transport, isA<ClientHTTPTransport>());
+    final event = memory.events.single;
+    expect((event.level, event.msg), (LogLevel.error, 'http transport failed, using dart:io'));
+
+    final environment = await AppEnvironment.load(
+        keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
+        httpFactory: () => throw StateError('no native bindings'),
+        logger: logger);
+    expect(environment.cookies.value('SESSDATA'), 's');
   });
 
   test('a network failure with cookies keeps the account unknown', () async {

@@ -84,6 +84,10 @@ final class DanmakuScene extends ChangeNotifier {
 
   static const staticDuration = 4.0;
 
+  /// Text layouts one frame may do. A seek into a dense stretch can hand out hundreds of danmaku at once; the
+  /// rest wait for the next frames, still placed where they would be by then.
+  static const maxLayoutsPerFrame = 40;
+
   final DanmakuSprites sprites;
 
   /// The area the danmaku are laid out in; the layer sets it from its constraints.
@@ -91,6 +95,9 @@ final class DanmakuScene extends ChangeNotifier {
 
   final LaneLayout _layout = LaneLayout(lanes: 0, width: 0, scrollDuration: 7);
   final List<_Item> _items = [];
+
+  /// Handed out by the timeline, in time order, and not placed yet.
+  final List<DisplayDanmaku> _backlog = [];
   Object? _geometry;
   int _lanes = 0;
   double _laneHeight = 0;
@@ -98,6 +105,9 @@ final class DanmakuScene extends ChangeNotifier {
   double _scrollDuration = 7;
   double? _lastTime;
   DanmakuTimeline? _timeline;
+
+  /// Danmaku from a seek are still being laid out, so frames are needed even while the clock stands still.
+  bool get catchingUp => _backlog.isNotEmpty;
 
   List<DanmakuOnScreen> get visible => [
     for (final item in _items)
@@ -116,7 +126,10 @@ final class DanmakuScene extends ChangeNotifier {
 
   /// One frame at video time [seconds]. Listeners hear about it only when something on screen moved or changed.
   void step(double seconds, {required DanmakuTimeline timeline, DanmakuOptions options = const DanmakuOptions()}) {
-    if (!seconds.isFinite || size.isEmpty) return;
+    if (!seconds.isFinite || size.isEmpty) {
+      _backlog.clear();
+      return;
+    }
     var time = math.max(seconds, 0.0);
     var relay = _lastTime == null;
     final geometry = (size, options.fullScreen, options.area, options.scale, options.scrollDuration);
@@ -145,18 +158,15 @@ final class DanmakuScene extends ChangeNotifier {
     }
     final ms = (time * 1000).floor();
     final hadItems = _items.isNotEmpty;
-    final List<DisplayDanmaku> fresh;
     if (relay) {
       _clear();
-      fresh = _catchUp(timeline, ms);
+      _backlog.addAll(_catchUp(timeline, ms));
     } else {
-      fresh = timeline.advance(ms);
+      _backlog.addAll(timeline.advance(ms));
     }
-    if (!relay && fresh.isEmpty && time == _lastTime) return;
+    if (!relay && _backlog.isEmpty && time == _lastTime) return;
     _lastTime = time;
-    for (final danmaku in fresh) {
-      _place(danmaku, time);
-    }
+    _placeBacklog(time);
     _move(time);
     // An empty screen that stays empty needs no repaint.
     if (hadItems || _items.isNotEmpty) notifyListeners();
@@ -165,6 +175,7 @@ final class DanmakuScene extends ChangeNotifier {
   /// Takes everything off; the next [step] lays the screen out again.
   void reset() {
     _lastTime = null;
+    _backlog.clear();
     if (_items.isEmpty) return;
     _items.clear();
     notifyListeners();
@@ -200,6 +211,7 @@ final class DanmakuScene extends ChangeNotifier {
 
   void _clear() {
     _items.clear();
+    _backlog.clear();
     _layout.reset(lanes: _lanes, width: size.width, scrollDuration: _scrollDuration);
   }
 
@@ -217,6 +229,16 @@ final class DanmakuScene extends ChangeNotifier {
     return items;
   }
 
+  void _placeBacklog(double time) {
+    final budget = sprites.layouts + maxLayoutsPerFrame;
+    var placed = 0;
+    while (placed < _backlog.length && sprites.layouts < budget) {
+      _place(_backlog[placed], time);
+      placed += 1;
+    }
+    _backlog.removeRange(0, placed);
+  }
+
   void _place(DisplayDanmaku danmaku, double time) {
     final elem = danmaku.elem;
     final start = elem.progressMs / 1000;
@@ -227,6 +249,8 @@ final class DanmakuScene extends ChangeNotifier {
     };
     // Re-laid after a seek: one that would already have left is not drawn at all.
     if (time - start >= (kind == LaneKind.scroll ? _scrollDuration : staticDuration)) return;
+    // Most of a dense catch-up finds every lane taken; those are dropped before their text is laid out.
+    if (!_layout.hasRoom(kind, at: start)) return;
     final fontSize = elem.fontSize > 0 ? elem.fontSize : 25;
     final sprite = sprites.of(danmaku, pointSize: _basePointSize * fontSize / 25);
     final width = sprite.size.width;

@@ -240,6 +240,41 @@ void main() {
     expect(rig.state(tester).ticking, isFalse);
   });
 
+  test('a seek into a dense stretch lays out at most 40 danmaku a frame and the rest in the next frames', () {
+    final sprites = DanmakuSprites(capacity: 1000);
+    final scene = DanmakuScene(sprites: sprites)..size = const Size(800, 2000);
+    const options = DanmakuOptions(area: 1);
+    final timeline = DanmakuTimeline()..add([for (var i = 0; i < 300; i++) item('密集 $i', 30000 + i * 23)]);
+
+    scene.step(37, timeline: timeline, options: options);
+    expect(sprites.layouts, DanmakuScene.maxLayoutsPerFrame);
+    expect(scene.visible, hasLength(DanmakuScene.maxLayoutsPerFrame));
+    expect(scene.catchingUp, isTrue);
+
+    var frames = 0;
+    var last = sprites.layouts;
+    while (scene.catchingUp && frames < 30) {
+      frames += 1;
+      scene.step(37 + frames / 120, timeline: timeline, options: options);
+      expect(sprites.layouts - last, lessThanOrEqualTo(DanmakuScene.maxLayoutsPerFrame));
+      last = sprites.layouts;
+    }
+    expect(scene.catchingUp, isFalse);
+    expect(scene.visible.length, greaterThan(DanmakuScene.maxLayoutsPerFrame));
+  });
+
+  test('a danmaku with no free lane is dropped before its text is laid out', () {
+    final sprites = DanmakuSprites();
+    final scene = DanmakuScene(sprites: sprites)..size = Rig.size;
+    final timeline = DanmakuTimeline()..add([for (var i = 0; i < 30; i++) item('顶 $i', 1000, mode: 5)]);
+    scene.step(0, timeline: timeline);
+    scene.step(0.5, timeline: timeline);
+    scene.step(1.2, timeline: timeline);
+    expect(scene.visible, isNotEmpty);
+    expect(scene.visible.length, lessThan(30));
+    expect(sprites.layouts, scene.visible.length);
+  });
+
   test('sprites: own danmaku get a wider box, and dark text still gets a sprite', () {
     final sprites = DanmakuSprites();
     final plain = sprites.of(item('同样', 0), pointSize: 17);

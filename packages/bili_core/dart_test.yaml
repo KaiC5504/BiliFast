@@ -1,4 +1,4 @@
 tags:
-  # Needs the other slice 1 branches (PlaybackBuilder, LocalServer) merged; run the rest with
-  # `fvm dart test --exclude-tags needs-merge` before that.
+  # Engine tests that needed PlaybackBuilder and LocalServer from the other slice 1 branches. Everything is
+  # merged now and they run with the rest; the tag is kept so the tests that carry it still resolve.
   needs-merge:

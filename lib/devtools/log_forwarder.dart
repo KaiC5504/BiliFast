@@ -11,6 +11,9 @@ const devToolsEnabled = bool.fromEnvironment('DEV_TOOLS', defaultValue: true);
 
 /// Sends Logger.shared to the PC's `tools/logserver.py` while switched on (port of DevLogSetup.swift's network
 /// half). Off by default and kept in memory for now; `--dart-define=LOG_SERVER=host:port` starts it on.
+///
+/// From launch it keeps the last [historyLimit] events in memory, and a sink that starts sends those it has not
+/// sent yet first, so a crash or a failed playback before the switch was turned on still reaches the PC.
 class LogForwarder extends ChangeNotifier {
   LogForwarder({
     Logger? logger,
@@ -21,6 +24,7 @@ class LogForwarder extends ChangeNotifier {
   })  : _logger = logger ?? Logger.shared,
         _discovery = discovery ?? LogServerDiscovery.platform(),
         _poster = poster ?? _httpPoster {
+    _logger.add(_history);
     if (initialTarget.trim().isNotEmpty) {
       _manual = initialTarget.trim();
       setEnabled(true);
@@ -28,11 +32,16 @@ class LogForwarder extends ChangeNotifier {
   }
 
   static const defineTarget = String.fromEnvironment('LOG_SERVER');
+  static const historyLimit = 5000;
 
   final Logger _logger;
   final LogServerDiscovery _discovery;
   final LogPoster Function(LogServerEndpoint endpoint) _poster;
   final Duration _statusInterval;
+  final MemorySink _history = MemorySink(capacity: historyLimit);
+
+  /// The newest seq a sink was there for; the history after it has not reached the PC.
+  int _coveredThrough = 0;
 
   bool _enabled = false;
   String _manual = '';
@@ -122,7 +131,11 @@ class LogForwarder extends ChangeNotifier {
     }
     _stopSink();
     if (wanted != null) {
-      final sink = NetworkSink(poster: _poster(wanted));
+      final sink = NetworkSink(poster: _poster(wanted))
+        ..enqueue([
+          for (final event in _history.events)
+            if (event.seq > _coveredThrough) event,
+        ]);
       _logger.add(sink);
       sink.start();
       _sink = sink;
@@ -145,6 +158,7 @@ class LogForwarder extends ChangeNotifier {
     if (sink != null) {
       sink.stop();
       _logger.remove(sink);
+      _coveredThrough = _history.events.lastOrNull?.seq ?? _coveredThrough;
     }
     _sink = null;
     _applied = null;
@@ -158,6 +172,7 @@ class LogForwarder extends ChangeNotifier {
   @override
   void dispose() {
     _stopSink();
+    _logger.remove(_history);
     unawaited(_browsing?.cancel());
     _browsing = null;
     super.dispose();

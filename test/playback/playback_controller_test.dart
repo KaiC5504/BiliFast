@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
@@ -5,6 +7,7 @@ import 'package:bili_core/shared.dart';
 import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
+import 'package:bilifast/player/playback_clock.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player.dart';
@@ -55,11 +58,17 @@ void main() {
   void emitPosition(double seconds) =>
       player.emit(PositionChanged(seconds: seconds, hostMs: time.clock.nowMs(), rate: 1));
 
+  /// A reading far from where the load started counts only once the clock's settle time has passed.
+  void emitAfterSettle(double seconds) {
+    time.advance(PlaybackClock.jumpSettleMs);
+    emitPosition(seconds);
+  }
+
   test('a BV link plays: view, playurl, prepare, then load with the master URL', () async {
     final controller = make();
     await controller.open('看看 https://www.bilibili.com/video/$bv');
 
-    expect(http.paths.where((path) => path != Canned.navPath), [Canned.viewPath, Canned.playUrlPath]);
+    expect(http.paths.where((path) => path != Canned.navPath), [Canned.signedViewPath, Canned.playUrlPath]);
     final query = http.to(Canned.playUrlPath).single.url.queryParameters;
     expect(query['bvid'], bv);
     expect(query['cid'], '137649199');
@@ -121,7 +130,7 @@ void main() {
   test('a format refusal in BTR mode remembers the codec and tries the next one where it was', () async {
     final controller = make();
     await controller.open(bv);
-    emitPosition(42);
+    emitAfterSettle(42);
     player.emit(const PlayerFailed('cannot decode', formatRejected: true));
     await settle();
 
@@ -210,7 +219,7 @@ void main() {
     final controller = make();
     await controller.open(bv);
     player.emit(const StatusChanged(PlayerStatus.playing));
-    emitPosition(20);
+    emitAfterSettle(20);
     await controller.setMode(PlaybackMode.direct);
 
     expect(engine.prepared.map((request) => request.mode), [PlaybackMode.btr, PlaybackMode.direct]);
@@ -257,7 +266,7 @@ void main() {
     final controller = make(mode: PlaybackMode.direct);
     await controller.open(bv);
     player.emit(const StatusChanged(PlayerStatus.playing));
-    emitPosition(75);
+    emitAfterSettle(75);
     http.routes[Canned.playUrlPath] = (200, Canned.playUrl(tag: 'fresh'));
     timers.activeWith(const Duration(seconds: 700))!.fire();
     await settle();
@@ -284,7 +293,7 @@ void main() {
     final controller = make();
     await controller.open(bv);
     player.emit(const StatusChanged(PlayerStatus.playing));
-    emitPosition(30);
+    emitAfterSettle(30);
 
     await controller.appResumed();
     expect(engine.prepared, hasLength(1), reason: 'the server still answered');
@@ -435,6 +444,170 @@ void main() {
     final text = logs.events.map((event) => event.encode()).join('\n');
     expect(text, isNot(contains('upsig')));
     expect(text, contains('playurl'));
+  });
+
+  test('a failure from the released item does not take over the next load', () async {
+    final controller = make();
+    await controller.open(bv);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    final gate = Completer<void>();
+    engine.prepareGate = gate;
+    final switching = controller.setQuality(80);
+    await settle();
+    expect(engine.released, ['tok1']);
+    expect(engine.prepared, hasLength(2), reason: 'the new prepare is waiting');
+
+    player.emit(const PlayerFailed('connection lost', domain: 'NSURLErrorDomain', code: -1005));
+    gate.complete();
+    await switching;
+    await settle();
+    expect(engine.prepared.map((request) => request.mode), [PlaybackMode.btr, PlaybackMode.btr]);
+    expect(controller.fellBack, isFalse);
+    expect(player.loaded!.master, FakeEngine.masterOf('tok2'));
+
+    player.emit(const PlayerFailed('connection lost', domain: 'NSURLErrorDomain', code: -1005));
+    await settle();
+    expect(controller.fellBack, isTrue, reason: 'once the new item loaded its failures count again');
+    controller.dispose();
+  });
+
+  test('buffering that ends within 0.75 s is not a stall; one that lasts is counted once', () async {
+    final controller = make();
+    await controller.open(bv);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+
+    player.emit(const StatusChanged(PlayerStatus.buffering));
+    time.advance(300);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    timers.activeWith(const Duration(milliseconds: 750))!.fire();
+    expect(controller.stats.value.stalls, 0);
+
+    player.emit(const StatusChanged(PlayerStatus.buffering));
+    time.advance(800);
+    timers.activeWith(const Duration(milliseconds: 750))!.fire();
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    expect(controller.stats.value.stalls, 1);
+    controller.dispose();
+  });
+
+  test('refreshed URLs replace the streams and qualities that another codec is chosen from', () async {
+    final controller = make();
+    await controller.open(bv);
+    http.routes[Canned.playUrlPath] = (
+      200,
+      Canned.playUrl(tag: 'fresh').replaceFirst(
+          '"accept_quality":[126,125,120,80],"accept_description":["杜比视界","真彩 HDR","超清 4K","高清 1080P"]',
+          '"accept_quality":[120,80],"accept_description":["超清 4K","高清 1080P"]'),
+    );
+    timers.activeWith(const Duration(seconds: 700))!.fire();
+    await settle();
+    expect(controller.qualities.map((option) => option.id), [120, 80]);
+
+    player.emit(const PlayerFailed('cannot decode', formatRejected: true));
+    await settle();
+    expect(engine.prepared.last.choice.video.codecid, 7);
+    expect(engine.prepared.last.choice.video.baseURL, contains('upsig=fresh'));
+    expect(http.to(Canned.playUrlPath), hasLength(2));
+    controller.dispose();
+  });
+
+  test('a local server that cannot be bound again fails the playback, and a retry plays', () async {
+    engine.ensureError = const PlaybackError(PlaybackErrorKind.serverDown);
+    final controller = make();
+    await controller.open(bv);
+    expect(controller.phase, PlaybackPhase.failed);
+    expect(controller.error, '本地加速服务不可用');
+    expect(engine.prepared, isEmpty);
+
+    engine.ensureError = null;
+    await controller.open(bv);
+    expect(controller.error, isNull);
+    expect(player.loaded!.master, FakeEngine.masterOf('tok1'));
+    controller.dispose();
+  });
+
+  test('back in the foreground, a local server that is down fails the playback', () async {
+    final controller = make();
+    await controller.open(bv);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    engine.ensureError = const PlaybackError(PlaybackErrorKind.serverDown);
+    await controller.appResumed();
+    expect(controller.phase, PlaybackPhase.failed);
+    expect(controller.error, PlaybackErrorKind.serverDown.userMessage);
+    controller.dispose();
+  });
+
+  test('an engine whose isolate exited is replaced on the next open', () async {
+    final replacement = FakeEngine();
+    var started = 0;
+    final logger = Logger(session: 'test')..add(logs);
+    final controller = PlaybackController(
+      client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), now: () => now, logger: logger),
+      engine: engine,
+      startEngine: () async {
+        started += 1;
+        return replacement;
+      },
+      player: player,
+      clock: time.clock,
+      now: () => now,
+      startTimer: timers.start,
+      logger: logger,
+    );
+    await controller.open(bv);
+    engine.closed = true;
+    await controller.open(bv);
+    expect(controller.phase, PlaybackPhase.failed);
+    expect(controller.error, PlaybackErrorKind.serverDown.userMessage);
+    expect(started, 0);
+
+    await controller.open(bv);
+    expect(started, 1);
+    expect(controller.engine, same(replacement));
+    expect(engine.disposed, isTrue);
+    expect(replacement.prepared, hasLength(1));
+    expect(player.loaded!.master, FakeEngine.masterOf('tok1'));
+    expect(controller.phase, isNot(PlaybackPhase.failed));
+
+    replacement.statsController.add(const EngineSnapshot(concurrency: 4));
+    expect(controller.stats.value.engine?.concurrency, 4, reason: 'stats come from the new engine');
+    controller.dispose();
+  });
+
+  test('a BV link asks the WBI-signed view first, and the unsigned one only when that fails', () async {
+    final controller = make();
+    await controller.open(bv);
+    expect(http.to(Canned.signedViewPath), hasLength(1));
+    expect(http.to(Canned.viewPath), isEmpty);
+
+    http.routes[Canned.signedViewPath] = (500, '');
+    await controller.open(bv);
+    expect(http.to(Canned.viewPath), hasLength(1));
+    expect(controller.video?.title, '测试视频');
+    controller.dispose();
+  });
+
+  test('a BV link the signed view calls gone fails without asking the unsigned view', () async {
+    http.routes[Canned.signedViewPath] = (200, '{"code":-404,"message":"啥都木有","ttl":1}');
+    final controller = make();
+    await controller.open(bv);
+    expect(controller.phase, PlaybackPhase.failed);
+    expect(http.to(Canned.viewPath), isEmpty);
+    controller.dispose();
+  });
+
+  test('an av link uses the unsigned view, and the signed one when that answers 412', () async {
+    final controller = make();
+    await controller.open('av80433022');
+    expect(http.to(Canned.viewPath).single.url.queryParameters['aid'], '80433022');
+    expect(http.to(Canned.signedViewPath), isEmpty);
+
+    http.routes[Canned.viewPath] = (412, '');
+    http.routes['/x/frontend/finger/spi'] = (200, '{"code":0,"message":"ok","data":{"b_3":"B3","b_4":"B4"}}');
+    await controller.open('av80433022');
+    expect(http.to(Canned.signedViewPath).single.url.queryParameters['aid'], '80433022');
+    expect(controller.video?.title, '测试视频');
+    controller.dispose();
   });
 
   group('track choice', () {

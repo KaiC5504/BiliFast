@@ -47,16 +47,22 @@ BlockRule? _ruleOf(_BlockRuleItem item) {
 
 extension BiliClientDanmaku on BiliClient {
   /// One 6-minute slice of a video's danmaku, `index` counting from 1.
-  Future<DanmakuSegment> danmakuSegment({required int cid, required int index}) async {
+  Future<DanmakuSegment> danmakuSegment({required int cid, required int index}) async =>
+      decodeDanmakuSegment(await danmakuSegmentData(cid: cid, index: index), index: index);
+
+  /// The segment's protobuf bytes, for a caller that decodes them off its own isolate.
+  Future<Uint8List> danmakuSegmentData({required int cid, required int index}) async {
     final query = {'type': '1', 'oid': '$cid', 'segment_index': '$index'};
-    Uint8List data;
     try {
-      data = await getData('/x/v2/dm/web/seg.so', query: query, signed: false);
+      return await getData('/x/v2/dm/web/seg.so', query: query, signed: false);
     } on BiliHTTPError catch (error) {
       if (error.status != 403 && error.status != 412) rethrow;
       // Risk control sometimes refuses the plain endpoint while the signed twin still answers.
-      data = await getData('/x/v2/dm/wbi/web/seg.so', query: query, signed: true);
+      return getData('/x/v2/dm/wbi/web/seg.so', query: query, signed: true);
     }
+  }
+
+  static DanmakuSegment decodeDanmakuSegment(Uint8List data, {required int index}) {
     try {
       return DanmakuSegment.decode(data);
     } on Object catch (error) {

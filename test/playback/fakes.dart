@@ -43,6 +43,15 @@ final class FakeEngine implements PlaybackEngine {
   final prepareErrors = <Object>[];
   bool restartOnEnsure = false;
   int ensureCalls = 0;
+
+  /// Thrown by every ensureServing while set.
+  Object? ensureError;
+
+  /// As IsolatePlaybackEngine once its isolate exited: every call fails with RipperError(closed).
+  bool closed = false;
+
+  /// Holds prepares until the test completes it.
+  Completer<void>? prepareGate;
   String? sourceEntry = 'hvc1';
   bool rewroteHEV1 = false;
   bool disposed = false;
@@ -54,6 +63,8 @@ final class FakeEngine implements PlaybackEngine {
   @override
   Future<PreparedSource> prepare(PlaybackRequest request) async {
     prepared.add(request);
+    await prepareGate?.future;
+    if (closed) throw const RipperError(RipperErrorKind.closed);
     if (prepareErrors.isNotEmpty) throw prepareErrors.removeAt(0);
     final token = 'tok${++_next}';
     final direct = request.mode == PlaybackMode.direct;
@@ -82,6 +93,9 @@ final class FakeEngine implements PlaybackEngine {
   @override
   Future<bool> ensureServing() async {
     ensureCalls += 1;
+    if (closed) throw const RipperError(RipperErrorKind.closed);
+    final error = ensureError;
+    if (error != null) throw error;
     final restarted = restartOnEnsure;
     restartOnEnsure = false;
     return restarted;
@@ -190,6 +204,7 @@ abstract final class Canned {
   static const navPath = '/x/web-interface/nav';
   static const viewPath = '/x/web-interface/view';
   static const playUrlPath = '/x/player/wbi/playurl';
+  static const signedViewPath = '/x/web-interface/wbi/view';
   static const segmentPath = '/x/v2/dm/web/seg.so';
 
   /// The signed URLs' `deadline`.
@@ -220,6 +235,7 @@ abstract final class Canned {
   static CannedHttp http({bool loggedIn = true}) => CannedHttp()
     ..routes[navPath] = (200, loggedIn ? navLoggedIn : navLoggedOut)
     ..routes[viewPath] = (200, view)
+    ..routes[signedViewPath] = (200, view)
     ..routes[playUrlPath] = (200, playUrl())
     ..dataRoutes[segmentPath] = (200, danmakuSegmentBytes([(1000, '前方高能'), (2000, '来了')]));
 
