@@ -43,10 +43,60 @@ abstract final class BiliColors {
   static const onVideo = Color(0xFFFFFFFF);
   static const statsFill = Color(0x8C000000);
   static const statsBorder = Color(0x1FFFFFFF);
+
+  /// The player's controls (BiliNative `ChromeTheme.swift`); the played part is [pink].
+  static const chromeTrack = Color(0x33FFFFFF);
+  static const chromeBuffered = Color(0x66FFFFFF);
+  static const chromeShade = Color(0x73000000);
+  static const chromeShadeClear = Color(0x00000000);
+  static const thumbRim = Color(0x4DFF6699);
+  static const thumbBody = Color(0xFF000000);
+  static const thumbScreen = Color(0xFFFFFFFF);
+
+  /// Danmaku outlines: very dark text gets the light one, or it would vanish inside it.
+  static const danmakuOutline = Color(0xD9000000);
+  static const danmakuOutlineLight = Color(0xD9FFFFFF);
+  static const danmakuOwnBox = Color(0xFFFFFFFF);
+
+  /// The stats overlay's node dots (iOS system green, orange, red and grey).
+  static const nodeHealthy = Color(0xFF34C759);
+  static const nodeBlocked = Color(0xFFFF9500);
+  static const nodeBanned = Color(0xFFFF3B30);
+  static const nodeOther = Color(0xFF8E8E93);
 }
 
 abstract final class BiliMetrics {
   static const gutter = 12.0;
   static const cardRadius = 6.0;
   static const pillHeight = 30.0;
+
+  /// The player's controls (BiliNative `ChromeTheme.swift`).
+  static const chromeButton = 44.0;
+  static const chromeIcon = 28.0;
+  static const chromeShadeHeight = 70.0;
+  static const chromeTimeFont = 12.0;
+  static const chromeTimeLeading = 9.0;
+  static const chromeTimeTrailing = 10.0;
+  static const barHeight = 2.0;
+  static const barTouchHeight = 24.0;
+  static const thumbWidth = 18.0;
+  static const thumbHeight = 16.0;
+  static const hiddenLine = 2.0;
+
+  /// The stats overlay.
+  static const statsFont = 10.0;
+  static const statsPadding = 6.0;
+  static const statsRadius = 6.0;
+  static const statsLineGap = 2.0;
+  static const statsDot = 5.0;
+  static const statsDotGap = 4.0;
+
+  /// Danmaku text at the normal size (25); an elem's own size scales it.
+  static const danmakuFont = 17.0;
+  static const danmakuFontFullScreen = 22.0;
+  static const danmakuOutline = 1.0;
+  static const danmakuPad = 1.0;
+  static const danmakuOwnPadX = 5.0;
+  static const danmakuOwnPadY = 1.5;
+  static const danmakuOwnRadius = 3.0;
 }
