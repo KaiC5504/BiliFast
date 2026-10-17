@@ -45,7 +45,9 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 
 - Flutter 3.47.7 through fvm: `fvm flutter …` / `fvm dart …` (`flutter` is not on PATH). Pinned in `.fvmrc`, the
   pubspec and both workflows; `test_ci` checks they agree.
-- Everything at once: `python scripts/gate.py` (bili_core, the app and `test_ci` in parallel).
+- Everything at once: `python scripts/gate.py`. Lanes in parallel: bili_core, the app, `test_ci`, a Swift syntax check
+  of `ios/Runner` (`swiftc -parse`; no iOS SDK on the PC), and the Windows release build plus the Windows
+  integration tests (real mpv). About 20 s warm. `--quick` skips the Windows lane and records nothing.
 - Core: `fvm dart test` in `packages/bili_core`.
 - App: `fvm flutter analyze` and `fvm flutter test` at the root.
 - Workflows: `uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s test_ci`.
@@ -62,9 +64,14 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   `start --dry-run` after any workflow change. Secrets are in this repo's `testflight` environment (limited to `main`).
 - Build numbers come from App Store Connect plus one, with a floor of 99: the Swift app shipped 1-8, Flutter builds
   start at 100. Version 0.2.0 (the Swift app was 0.1.0).
-- The loop: `python scripts/gate.py` on the committed tree (about 15 s, three lanes in parallel; it records the
-  commit it passed), push, then `python scripts/testflight.py start` (6 GitHub calls). `start` refuses without the
-  gate's record for that exact commit, so it can't ship an unchecked commit.
+- The loop: `python scripts/gate.py` on the committed tree (it records the commit it passed), push, then
+  `python scripts/testflight.py start` (6 GitHub calls). `start` refuses without the gate's record for that exact
+  commit, so it can't ship an unchecked commit. No dry run before an ordinary ship: a red upload run costs the same as
+  a red dry run, and a green one is on the phone.
+- GitHub comes last (KaiC, 2026-10-18): parallel work is merged, checked locally and reviewed (Swift that only the Mac
+  can compile gets a review agent) before the one run, and each red run's errors are all fixed together. `status`
+  prints every error line of a failed run, and a Release build type-checks the whole Swift module at once, so one run
+  shows them all.
 - GitHub calls only when the answer is needed (KaiC gets rate-limited): no polling, no extra runs to measure
   things, one `status` per run.
 - Don't watch the run: `python scripts/testflight.py status` once (1 call), about 10 minutes after a dry run and 20
