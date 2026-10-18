@@ -13,8 +13,10 @@ shared pieces, merges and ships. Building a slice alone in the main session is t
 
 Read the spec's section 0 and the slice's entry, `docs/reference/app-inventory.md` for the Swift paths (open the
 Swift only where the plan needs a detail), PiliPlus through `docs/reference/piliplus-map.md` where the spec says it
-helps (GPL: read only), and the slice's items in `D:\Repos\Apps\BiliNative\docs\m2-phone-checklist.md`. Show one
-screen:
+helps (GPL: read only), the slice's items in `D:\Repos\Apps\BiliNative\docs\m2-phone-checklist.md`, and for
+anything on screen the official app's screenshots in `local/official-app-reference/` (iPhone 17 Pro Max at 3×: 440×956
+pt portrait, 956×440 landscape). KaiC wants the layout identical to them; they win over the Swift app. `local/` is
+gitignored: never copy, commit or embed them. Show one screen:
 
 1. **Done:** the numbered phone test steps.
 2. **Shared pieces** Claude commits first (step 2).
@@ -51,7 +53,8 @@ are pieces). Each brief contains, in order:
    start on an old commit.
 2. Read CLAUDE.md. Rules: public repo, no secrets in code or logs, tests never touch the network, theme tokens only,
    PiliPlus read only, Flutter through `fvm`.
-3. The job, with its Swift and PiliPlus references.
+3. The job, with its Swift and PiliPlus references, and for UI the reference screenshots it must match (by file
+   name), measured in pt (px/3).
 4. **Your files:** the full list; edit nothing else, and report needs outside it. For a shared file such as
    `theme.dart`, name the exact spot to insert.
 5. Never `dart format` a whole file that wasn't formatted before; it rewraps everything.
@@ -77,6 +80,10 @@ slice.
 - Test gaps, with sketch tests run against the code.
 - Spec and phone checklist.
 - Comments against KaiC's comment style.
+- Look-alike check, for every screen the slice touches: render ours at the phone's size and safe areas (a widget test
+  at 440×956 or 956×440, 3×, MiSans loaded, fake data, PNGs to the scratchpad, never committed) and compare each with
+  its reference screenshot. A verdict per screen: PASS when the layout matches (positions, sizes, icons, colours,
+  fonts, text; the video frame itself differs), FAIL with every difference listed.
 - Swift review of every Swift change (only when Swift changed).
 - Windows run, as a general agent bound by the ghosthand rules:
   - load the ghosthand skill first; no other screen tool; never `keys` with allow_focus;
@@ -86,7 +93,8 @@ slice.
 ## 6. Fix round
 
 Group the findings by file. Run one fix agent per group in worktrees, with the same brief (and a contracts commit if
-fixers share anything). Merge each as it lands.
+fixers share anything). Merge each as it lands. Run the look-alike check again on every screen that failed; repeat
+until each passes, or report the screens still failing and why.
 
 Then, in parallel, run:
 - a final seam review of how the merged branches fit;
