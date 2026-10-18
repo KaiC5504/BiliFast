@@ -33,6 +33,11 @@ final class RipperConfig {
     this.exploreInHurry = true,
     this.tailBackups = false,
     this.banProbation = false,
+    this.hurryKeepsOffSlow = false,
+    this.emptyLossCounts = false,
+    this.seekHurriesPrefetch = false,
+    this.trimOnMemoryWarning = false,
+    this.peakBandwidth = false,
   });
 
   final double firstByteTimeoutMs;
@@ -116,6 +121,28 @@ final class RipperConfig {
   /// out until the network changed.
   final bool banProbation;
 
+  /// In a hurry a node far slower than the best known one never takes a piece's first copy, even when the fast
+  /// nodes are full or carry more than half: the piece waits for a fast node instead. On the phone (1.0.0 (1)) cosov
+  /// and the HK nodes ran at 1-2 Mbps against Akamai's 130 and aliov's 23, yet took the first copy of 773 of 3,300
+  /// pieces, and 528 of those sat 0.4-0.7 s without a byte before a backup went elsewhere.
+  final bool hurryKeepsOffSlow;
+
+  /// A copy outrun before its first byte counts for its node as a first byte at least that late. Without it a node
+  /// that never answers in time is never measured as slow (cosov lost 333 races with nothing sent, 665 ms each).
+  final bool emptyLossCounts;
+
+  /// A seek onto a segment that prefetch is still fetching turns that fetch into a hurried one. A seek that took
+  /// over a slow prefetch waited 4.6 s for a 3.9 MB segment on the phone.
+  final bool seekHurriesPrefetch;
+
+  /// A memory warning drops only what is far from the playhead: the segments around it stay. Dropping everything
+  /// made the player's next reads download again what it had just played (six warnings in four minutes).
+  final bool trimOnMemoryWarning;
+
+  /// The master playlist's BANDWIDTH is the largest segment's bitrate rather than 1.5x the average; AVPlayer logged
+  /// "Segment exceeds specified bandwidth for variant" for bigger segments.
+  final bool peakBandwidth;
+
   /// The connection count without AutoConcurrency (Swift's fallback when neither is given).
   static const defaultConcurrency = 16;
 
@@ -157,6 +184,11 @@ final class RipperConfig {
     bool? exploreInHurry,
     bool? tailBackups,
     bool? banProbation,
+    bool? hurryKeepsOffSlow,
+    bool? emptyLossCounts,
+    bool? seekHurriesPrefetch,
+    bool? trimOnMemoryWarning,
+    bool? peakBandwidth,
   }) => RipperConfig(
     firstByteTimeoutMs: firstByteTimeoutMs ?? this.firstByteTimeoutMs,
     stallTimeoutMs: stallTimeoutMs ?? this.stallTimeoutMs,
@@ -189,5 +221,132 @@ final class RipperConfig {
     exploreInHurry: exploreInHurry ?? this.exploreInHurry,
     tailBackups: tailBackups ?? this.tailBackups,
     banProbation: banProbation ?? this.banProbation,
+    hurryKeepsOffSlow: hurryKeepsOffSlow ?? this.hurryKeepsOffSlow,
+    emptyLossCounts: emptyLossCounts ?? this.emptyLossCounts,
+    seekHurriesPrefetch: seekHurriesPrefetch ?? this.seekHurriesPrefetch,
+    trimOnMemoryWarning: trimOnMemoryWarning ?? this.trimOnMemoryWarning,
+    peakBandwidth: peakBandwidth ?? this.peakBandwidth,
+  );
+
+  /// Every field by name, for logs and speed test plans.
+  Map<String, Object?> toJson() => {
+    'firstByteTimeoutMs': firstByteTimeoutMs,
+    'stallTimeoutMs': stallTimeoutMs,
+    'attemptTimeoutMs': attemptTimeoutMs,
+    'hedgeDelayMs': hedgeDelayMs,
+    'minChunkBytes': minChunkBytes,
+    'pieceRounds': pieceRounds,
+    'retryWindowMs': retryWindowMs,
+    'fixedConcurrency': fixedConcurrency,
+    'prefetchVideoBytes': prefetchVideoBytes,
+    'prefetchAudioBytes': prefetchAudioBytes,
+    'prefetchAheadSeconds': prefetchAheadSeconds,
+    'priority': priority,
+    'hurry': hurry,
+    'hurryAheadSeconds': hurryAheadSeconds,
+    'primeStart': primeStart,
+    'prefetchOnPrime': prefetchOnPrime,
+    'streamAdopted': streamAdopted,
+    'seekBurst': seekBurst,
+    'seekBurstBytes': seekBurstBytes,
+    'seekBurstCopies': seekBurstCopies,
+    'audioFirst': audioFirst,
+    'audioReserve': audioReserve,
+    'audioWholeBytes': audioWholeBytes,
+    'prefetchFollowsRate': prefetchFollowsRate,
+    'prefetchVideoMaxBytes': prefetchVideoMaxBytes,
+    'prefetchAudioMaxBytes': prefetchAudioMaxBytes,
+    'keepBehindSeconds': keepBehindSeconds,
+    'keepBehindBytes': keepBehindBytes,
+    'exploreInHurry': exploreInHurry,
+    'tailBackups': tailBackups,
+    'banProbation': banProbation,
+    'hurryKeepsOffSlow': hurryKeepsOffSlow,
+    'emptyLossCounts': emptyLossCounts,
+    'seekHurriesPrefetch': seekHurriesPrefetch,
+    'trimOnMemoryWarning': trimOnMemoryWarning,
+    'peakBandwidth': peakBandwidth,
+  };
+
+  /// This config with fields set by name, as a speed test plan from the PC gives them. A name that is not a field,
+  /// or a value of the wrong type, changes nothing and comes back in `rejected`. Null clears a nullable field.
+  ({RipperConfig config, List<String> rejected}) withOverrides(Map<String, Object?> overrides) {
+    final fields = toJson();
+    final rejected = <String>[];
+    for (final MapEntry(:key, :value) in overrides.entries) {
+      if (!fields.containsKey(key)) {
+        rejected.add(key);
+        continue;
+      }
+      final current = fields[key];
+      final Object? accepted = switch (value) {
+        null when _nullable.contains(key) => null,
+        final bool flag when current is bool => flag,
+        final num number when _doubles.contains(key) => number.toDouble(),
+        final int count when current is int || _nullable.contains(key) => count,
+        _ => _rejected,
+      };
+      if (identical(accepted, _rejected)) {
+        rejected.add(key);
+      } else {
+        fields[key] = accepted;
+      }
+    }
+    return (config: RipperConfig._fromJson(fields), rejected: rejected);
+  }
+
+  static const _rejected = Object();
+
+  static const _nullable = {'fixedConcurrency', 'prefetchVideoMaxBytes', 'prefetchAudioMaxBytes'};
+
+  static const _doubles = {
+    'firstByteTimeoutMs',
+    'stallTimeoutMs',
+    'attemptTimeoutMs',
+    'hedgeDelayMs',
+    'retryWindowMs',
+    'prefetchAheadSeconds',
+    'priority',
+    'hurryAheadSeconds',
+    'keepBehindSeconds',
+  };
+
+  factory RipperConfig._fromJson(Map<String, Object?> json) => RipperConfig(
+    firstByteTimeoutMs: json['firstByteTimeoutMs']! as double,
+    stallTimeoutMs: json['stallTimeoutMs']! as double,
+    attemptTimeoutMs: json['attemptTimeoutMs']! as double,
+    hedgeDelayMs: json['hedgeDelayMs']! as double,
+    minChunkBytes: json['minChunkBytes']! as int,
+    pieceRounds: json['pieceRounds']! as int,
+    retryWindowMs: json['retryWindowMs']! as double,
+    fixedConcurrency: json['fixedConcurrency'] as int?,
+    prefetchVideoBytes: json['prefetchVideoBytes']! as int,
+    prefetchAudioBytes: json['prefetchAudioBytes']! as int,
+    prefetchAheadSeconds: json['prefetchAheadSeconds']! as double,
+    priority: json['priority']! as double,
+    hurry: json['hurry']! as bool,
+    hurryAheadSeconds: json['hurryAheadSeconds']! as double,
+    primeStart: json['primeStart']! as bool,
+    prefetchOnPrime: json['prefetchOnPrime']! as bool,
+    streamAdopted: json['streamAdopted']! as bool,
+    seekBurst: json['seekBurst']! as bool,
+    seekBurstBytes: json['seekBurstBytes']! as int,
+    seekBurstCopies: json['seekBurstCopies']! as int,
+    audioFirst: json['audioFirst']! as bool,
+    audioReserve: json['audioReserve']! as int,
+    audioWholeBytes: json['audioWholeBytes']! as int,
+    prefetchFollowsRate: json['prefetchFollowsRate']! as bool,
+    prefetchVideoMaxBytes: json['prefetchVideoMaxBytes'] as int?,
+    prefetchAudioMaxBytes: json['prefetchAudioMaxBytes'] as int?,
+    keepBehindSeconds: json['keepBehindSeconds']! as double,
+    keepBehindBytes: json['keepBehindBytes']! as int,
+    exploreInHurry: json['exploreInHurry']! as bool,
+    tailBackups: json['tailBackups']! as bool,
+    banProbation: json['banProbation']! as bool,
+    hurryKeepsOffSlow: json['hurryKeepsOffSlow']! as bool,
+    emptyLossCounts: json['emptyLossCounts']! as bool,
+    seekHurriesPrefetch: json['seekHurriesPrefetch']! as bool,
+    trimOnMemoryWarning: json['trimOnMemoryWarning']! as bool,
+    peakBandwidth: json['peakBandwidth']! as bool,
   );
 }
