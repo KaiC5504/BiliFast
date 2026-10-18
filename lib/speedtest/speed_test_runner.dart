@@ -324,7 +324,7 @@ class SpeedTestRunner extends ChangeNotifier {
       _logger.info(LogCategory.app, 'speedtest done', {'passes': finished, 'cancelled': _cancelled});
       _running = false;
       _pass = null;
-      _step = _cancelled ? '已停止' : '完成';
+      _step = _cancelled ? '已停止' : (_error != null ? '出错，已停止' : '完成');
       _notify();
     }
   }
