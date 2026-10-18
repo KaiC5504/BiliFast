@@ -359,6 +359,43 @@ class PlayerHostApi {
     ;
   }
 
+  Future<void> setMuted(int playerId, bool muted) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.setMuted$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[playerId, muted]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// App-wide, not per player: the idle timer that dims and locks the screen.
+  Future<void> setKeepAwake(bool enabled) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.setKeepAwake$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   Future<void> setFit(int playerId, NativeFit fit) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.setFit$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

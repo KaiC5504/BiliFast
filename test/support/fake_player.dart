@@ -45,6 +45,12 @@ final class FakePlayer implements BiliPlayer {
   Future<void> setRate(double rate) async => _record('rate $rate');
 
   @override
+  Future<void> setMuted(bool muted) async => _record('muted $muted');
+
+  @override
+  Future<void> setKeepAwake(bool on) async => _record('keep awake $on');
+
+  @override
   Future<void> setFit(FitMode fit) async => _record('fit ${fit.name}');
 
   @override

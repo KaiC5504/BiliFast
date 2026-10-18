@@ -44,6 +44,12 @@ final class FakePlayerHost extends PlayerHostApi {
   Future<void> setRate(int playerId, double rate) async => calls.add('rate $playerId $rate');
 
   @override
+  Future<void> setMuted(int playerId, bool muted) async => calls.add('muted $playerId $muted');
+
+  @override
+  Future<void> setKeepAwake(bool enabled) async => calls.add('keep awake $enabled');
+
+  @override
   Future<void> setFit(int playerId, NativeFit fit) async => calls.add('fit $playerId ${fit.name}');
 
   @override

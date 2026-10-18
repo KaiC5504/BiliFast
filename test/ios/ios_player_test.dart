@@ -82,6 +82,14 @@ void main() {
       ]);
     });
 
+    test('mute goes to the native player, keep awake to the app', () async {
+      await player.setMuted(true);
+      await player.setKeepAwake(true);
+      await player.setMuted(false);
+      await player.setKeepAwake(false);
+      expect(host.calls.skip(1), ['muted 7 true', 'keep awake true', 'muted 7 false', 'keep awake false']);
+    });
+
     test('every fit mode maps to its native mode', () async {
       for (final fit in FitMode.values) {
         await player.setFit(fit);

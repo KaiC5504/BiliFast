@@ -1,0 +1,17 @@
+{
+  "id": "builtin-1",
+  "videos": [],
+  "qualities": [127],
+  "variants": [
+    {"name": "A", "config": {}, "connectionsPerHost": 8},
+    {"name": "B", "config": {"hurryKeepsOffSlow": true, "medianEstimates": true, "seekHurriesPrefetch": true, "trimOnMemoryWarning": true, "peakBandwidth": true}, "connectionsPerHost": 8},
+    {"name": "C", "config": {"hurryKeepsOffSlow": true, "medianEstimates": true, "seekHurriesPrefetch": true, "trimOnMemoryWarning": true, "peakBandwidth": true, "hurryHedgeMinMs": 120}, "connectionsPerHost": 16}
+  ],
+  "order": "ABCCBA",
+  "seeks": 8,
+  "hints": 2,
+  "backJumps": 2,
+  "dwellSeconds": 3,
+  "fastSeconds": 20,
+  "fastRate": 2
+}

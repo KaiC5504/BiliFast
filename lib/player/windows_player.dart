@@ -91,6 +91,7 @@ final class WindowsPlayer implements BiliPlayer {
   (int, int)? _size;
   List<({double start, double end})> _buffered = const [];
   String? _lastError;
+  double? _volumeBeforeMute;
   int _ticks = 0;
   bool _ticking = false;
   bool _disposed = false;
@@ -171,6 +172,24 @@ final class WindowsPlayer implements BiliPlayer {
     _check();
     await _player.setRate(rate);
   }
+
+  @override
+  Future<void> setMuted(bool muted) async {
+    _check();
+    if (muted) {
+      _volumeBeforeMute ??= _player.state.volume;
+      await _player.setVolume(0);
+      return;
+    }
+    final volume = _volumeBeforeMute;
+    if (volume == null) return;
+    _volumeBeforeMute = null;
+    await _player.setVolume(volume);
+  }
+
+  /// The PC's screen saver is the user's business.
+  @override
+  Future<void> setKeepAwake(bool on) async => _check();
 
   @override
   Future<void> setFit(FitMode fit) async {

@@ -39,6 +39,11 @@ abstract class PlayerHostApi {
 
   void setRate(int playerId, double rate);
 
+  void setMuted(int playerId, bool muted);
+
+  /// App-wide, not per player: the idle timer that dims and locks the screen.
+  void setKeepAwake(bool enabled);
+
   void setFit(int playerId, NativeFit fit);
 
   void setMirrored(int playerId, bool mirrored);

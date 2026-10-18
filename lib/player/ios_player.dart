@@ -93,6 +93,18 @@ final class IosPlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> setMuted(bool muted) async {
+    _check();
+    await _host.setMuted(nativeId, muted);
+  }
+
+  @override
+  Future<void> setKeepAwake(bool on) async {
+    _check();
+    await _host.setKeepAwake(on);
+  }
+
+  @override
   Future<void> setFit(FitMode fit) async {
     _check();
     await _host.setFit(nativeId, switch (fit) {

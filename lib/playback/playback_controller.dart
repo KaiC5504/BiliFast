@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show IOException;
+import 'dart:io' show IOException, ProcessInfo;
 import 'dart:math';
 
 import 'package:bili_core/api.dart';
@@ -32,6 +32,38 @@ enum PlaybackFailure implements Exception {
   const PlaybackFailure(this.userMessage);
 
   final String userMessage;
+}
+
+/// Moments the speed test measures, emitted where the controller logs them.
+sealed class PlaybackMark {
+  const PlaybackMark();
+}
+
+final class FirstFrame extends PlaybackMark {
+  const FirstFrame(this.ms, {required this.timed});
+
+  final double ms;
+
+  /// False when the load waited on the user (loaded paused), so [ms] means nothing.
+  final bool timed;
+}
+
+final class SeekResumed extends PlaybackMark {
+  const SeekResumed(this.ms);
+
+  final double ms;
+}
+
+final class Stall extends PlaybackMark {
+  const Stall(this.atSeconds);
+
+  final double atSeconds;
+}
+
+final class MemoryWarning extends PlaybackMark {
+  const MemoryWarning(this.rssBytes);
+
+  final int rssBytes;
 }
 
 enum ItemFailure { format, network, unknown }
@@ -119,6 +151,8 @@ class PlaybackController extends ChangeNotifier {
   final ValueNotifier<double> duration;
   final DanmakuFeed danmaku;
 
+  final _marks = StreamController<PlaybackMark>.broadcast();
+
   final BiliClient _client;
   PlaybackEngine _engine;
 
@@ -200,6 +234,8 @@ class PlaybackController extends ChangeNotifier {
   bool _disposed = false;
 
   PlaybackEngine get engine => _engine;
+
+  Stream<PlaybackMark> get marks => _marks.stream;
 
   PlaybackPhase get phase => _phase;
 
@@ -289,6 +325,46 @@ class PlaybackController extends ChangeNotifier {
     await _restart(sameChoice: false);
   }
 
+  /// Closes the video and puts [start]'s engine in place of the current one; the next [open] plays on it.
+  Future<void> useEngine(Future<PlaybackEngine> Function() start) async {
+    _stopPlayback();
+    _video = null;
+    _page = null;
+    _qualities = const [];
+    _error = null;
+    _playerFailure = null;
+    danmaku.clear();
+    duration.value = 0;
+    _notify();
+    await _replaceEngine(start);
+  }
+
+  /// The same video again from 0 s, cold: the playing source is released first so it stops downloading, then the
+  /// engine is replaced if [engine] is given, and the streams are chosen again from the playurl answer in hand.
+  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality}) async {
+    if (_page == null) return;
+    _heldPosition = 0;
+    _advance();
+    _teardownPlayback();
+    _phase = PlaybackPhase.loading;
+    _error = null;
+    _playerFailure = null;
+    _notify();
+    if (engine != null) {
+      try {
+        await _replaceEngine(engine);
+      } catch (error, stack) {
+        if (error is! _Stale) _fail(error, stack);
+        return;
+      }
+    }
+    if (quality != null) _selectedQuality = quality;
+    _logger.info(LogCategory.player, 'replay', {'quality': _selectedQuality, 'engineReplaced': engine != null});
+    danmaku.seeked(0);
+    _resetStart(autoplay: true);
+    await _chooseAgain(0);
+  }
+
   Future<void> setCodec(VideoCodec codec) async {
     if (codec == _codec) return;
     _logger.info(LogCategory.ui, 'codec', {'codec': codec.name});
@@ -323,7 +399,9 @@ class PlaybackController extends ChangeNotifier {
   /// The system is short of memory: the engine drops its prefetched segments and playback goes on.
   void memoryPressure() {
     _engine.dropCache();
-    _logger.warn(LogCategory.player, 'memory warning, prefetch cache dropped');
+    final rss = ProcessInfo.currentRss;
+    _logger.warn(LogCategory.player, 'memory warning, prefetch cache dropped', {'rssMB': rss ~/ (1024 * 1024)});
+    _mark(MemoryWarning(rss));
   }
 
   Future<void> startPictureInPicture() async {
@@ -390,6 +468,11 @@ class PlaybackController extends ChangeNotifier {
   }
 
   Future<void> _startPlayback(double time, {required bool autoplay}) async {
+    _resetStart(autoplay: autoplay);
+    await _begin(time);
+  }
+
+  void _resetStart({required bool autoplay}) {
     _rejectedHere.clear();
     _unknownRetried.clear();
     _lastNetworkRestart = null;
@@ -401,7 +484,6 @@ class PlaybackController extends ChangeNotifier {
     _firstFrameTimed = true;
     _startedAtMs = _nowMs();
     stats.value = OverlayStats(mode: activeMode, transport: _transportName.isEmpty ? null : _transportName);
-    await _begin(time);
   }
 
   Future<void> _begin(double time) async {
@@ -673,8 +755,8 @@ class PlaybackController extends ChangeNotifier {
     return const PlaybackError(PlaybackErrorKind.serverDown);
   }
 
-  Future<void> _replaceEngine() async {
-    final start = _startEngine;
+  Future<void> _replaceEngine([Future<PlaybackEngine> Function()? starter]) async {
+    final start = starter ?? _startEngine;
     if (start == null) throw const PlaybackError(PlaybackErrorKind.serverDown);
     final old = _engine;
     final next = await start();
@@ -981,6 +1063,7 @@ class PlaybackController extends ChangeNotifier {
           final ms = now - _startedAtMs;
           if (_firstFrameTimed) stats.value = stats.value.copyWith(firstFrameMs: ms);
           final choice = _choice;
+          _mark(FirstFrame(ms, timed: _firstFrameTimed));
           _logger.info(LogCategory.player, 'first frame', {
             'ms': ms.round(),
             'timed': _firstFrameTimed,
@@ -1032,6 +1115,7 @@ class PlaybackController extends ChangeNotifier {
       } else {
         stats.value = stats.value.copyWith(stalls: stats.value.stalls + 1);
         _logger.warn(LogCategory.player, 'stall', fields);
+        _mark(Stall(at));
       }
     });
     _stallChecks.add(timer);
@@ -1047,6 +1131,11 @@ class PlaybackController extends ChangeNotifier {
     );
     _logger.info(LogCategory.player, 'seek resumed',
         {'ms': ms.round(), 'mode': modeLabel, 'via': via, 'lag': lag, 'precise': _seekPrecise});
+    _mark(SeekResumed(ms));
+  }
+
+  void _mark(PlaybackMark mark) {
+    if (!_marks.isClosed) _marks.add(mark);
   }
 
   /// The token of the source playing through the engine; null in direct mode and while nothing is loaded.
@@ -1199,6 +1288,7 @@ class PlaybackController extends ChangeNotifier {
     danmaku.dispose();
     stats.dispose();
     duration.dispose();
+    unawaited(_marks.close());
     super.dispose();
   }
 }

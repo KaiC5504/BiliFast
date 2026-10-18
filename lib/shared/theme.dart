@@ -62,6 +62,10 @@ abstract final class BiliColors {
   static const danmakuOutlineLight = Color(0xD9FFFFFF);
   static const danmakuOwnBox = Color(0xFFFFFFFF);
 
+  /// The speed test's comparison with the first variant.
+  static const faster = Color(0xFF34C759);
+  static const slower = Color(0xFFF2453D);
+
   /// The stats overlay's node dots (iOS system green, orange, red and grey).
   static const nodeHealthy = Color(0xFF34C759);
   static const nodeBlocked = Color(0xFFFF9500);

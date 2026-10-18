@@ -13,13 +13,14 @@ import 'package:objective_c/objective_c.dart' show NSDataExtensions;
 /// Whether cupertino_http works from a background isolate only shows on the phone (spec 4.3), so if
 /// creating it, or its first requests, fail with anything but a network error, the engine carries on over
 /// dart:io and the stats overlay says `dart:io (fallback)`.
-RangeTransport createCupertinoTransport() {
+RangeTransport createCupertinoTransport({int connectionsPerHost = 8}) {
   final headers = BiliClient.mediaHeaders;
   try {
-    return _FallbackTransport(CupertinoRangeTransport(headers: headers), headers);
+    return _FallbackTransport(
+        CupertinoRangeTransport(headers: headers, maxConnectionsPerHost: connectionsPerHost), headers, connectionsPerHost);
   } catch (error) {
     _logFallback(error);
-    return _FallbackTransport(null, headers);
+    return _FallbackTransport(null, headers, connectionsPerHost);
   }
 }
 
@@ -27,16 +28,17 @@ void _logFallback(Object error) =>
     Logger.shared.warn(LogCategory.engine, 'URLSession unusable in the engine isolate, using dart:io', {'error': '$error'});
 
 final class _FallbackTransport implements RangeTransport, WarmableTransport {
-  _FallbackTransport(this._primary, this._headers);
+  _FallbackTransport(this._primary, this._headers, this._perHost);
 
   CupertinoRangeTransport? _primary;
   final Map<String, String> _headers;
+  final int _perHost;
   IoRangeTransport? _io;
 
   /// After one response URLSession is known to work here; later errors are the network's.
   bool _proven = false;
 
-  IoRangeTransport get _fallback => _io ??= IoRangeTransport(headers: _headers);
+  IoRangeTransport get _fallback => _io ??= IoRangeTransport(headers: _headers, connectionsPerHost: _perHost);
 
   @override
   int? get connectionsPerHost => _primary?.connectionsPerHost ?? _fallback.connectionsPerHost;

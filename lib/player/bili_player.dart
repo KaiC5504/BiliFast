@@ -150,6 +150,12 @@ abstract interface class BiliPlayer {
 
   Future<void> setRate(double rate);
 
+  /// Silences the sound without changing the volume it comes back at.
+  Future<void> setMuted(bool muted);
+
+  /// Keeps the screen on while set, app-wide (the speed test runs with nobody touching the phone).
+  Future<void> setKeepAwake(bool on);
+
   Future<void> setFit(FitMode fit);
 
   Future<void> setMirrored(bool mirrored);

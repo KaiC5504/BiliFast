@@ -65,6 +65,15 @@ final class PlayerHostApiImpl: PlayerHostApi {
     try MainActor.assumeIsolated { try registry.player(playerId).setRate(rate) }
   }
 
+  func setMuted(playerId: Int64, muted: Bool) throws {
+    let registry = self.registry
+    try MainActor.assumeIsolated { try registry.player(playerId).setMuted(muted) }
+  }
+
+  func setKeepAwake(enabled: Bool) throws {
+    MainActor.assumeIsolated { UIApplication.shared.isIdleTimerDisabled = enabled }
+  }
+
   func setFit(playerId: Int64, fit: NativeFit) throws {
     let registry = self.registry
     try MainActor.assumeIsolated { try registry.player(playerId).setFit(fit) }

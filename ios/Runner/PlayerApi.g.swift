@@ -311,6 +311,9 @@ protocol PlayerHostApi {
   func pause(playerId: Int64) throws
   func seek(playerId: Int64, seconds: Double, precise: Bool) throws
   func setRate(playerId: Int64, rate: Double) throws
+  func setMuted(playerId: Int64, muted: Bool) throws
+  /// App-wide, not per player: the idle timer that dims and locks the screen.
+  func setKeepAwake(enabled: Bool) throws
   func setFit(playerId: Int64, fit: NativeFit) throws
   func setMirrored(playerId: Int64, mirrored: Bool) throws
   func startPiP(playerId: Int64) throws
@@ -434,6 +437,38 @@ class PlayerHostApiSetup {
       }
     } else {
       setRateChannel.setMessageHandler(nil)
+    }
+    let setMutedChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.setMuted\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setMutedChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let playerIdArg = args[0] as! Int64
+        let mutedArg = args[1] as! Bool
+        do {
+          try api.setMuted(playerId: playerIdArg, muted: mutedArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setMutedChannel.setMessageHandler(nil)
+    }
+    /// App-wide, not per player: the idle timer that dims and locks the screen.
+    let setKeepAwakeChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.setKeepAwake\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setKeepAwakeChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let enabledArg = args[0] as! Bool
+        do {
+          try api.setKeepAwake(enabled: enabledArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setKeepAwakeChannel.setMessageHandler(nil)
     }
     let setFitChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.setFit\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

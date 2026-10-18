@@ -169,6 +169,10 @@ final class NativePlayer {
     reportRate(rate)
   }
 
+  func setMuted(_ muted: Bool) {
+    player.isMuted = muted
+  }
+
   func setFit(_ fit: NativeFit) {
     switch fit {
     case .fit: host.fit = .fit
