@@ -16,10 +16,10 @@ import UIKit
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  /// Full screen is the same page rotated, so the app turns only when Dart's DeviceChannel allows it.
-  /// FlutterAppDelegate doesn't declare this method, so it is exposed by hand, under the selector UIKit asks for.
-  @objc(application:supportedInterfaceOrientationsForWindow:)
-  func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+  /// Full screen is the same page rotated, so the app turns only when Dart's DeviceChannel allows it. An override:
+  /// Swift mirrors UIApplicationDelegate's methods onto FlutterAppDelegate, which adopts the protocol, as with
+  /// didFinishLaunchingWithOptions above.
+  override func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
     MainActor.assumeIsolated { DeviceChannel.mask }
   }
 

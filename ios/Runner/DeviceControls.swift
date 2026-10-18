@@ -59,7 +59,7 @@ enum DeviceControls {
     if fresh {
       Task { @MainActor in
         try? await Task.sleep(for: .milliseconds(50))
-        guard attached, volumeView?.window != nil else { return }
+        guard attached, slider.window != nil else { return }
         lastOwnVolumeChange = Date()
         slider.value = level
       }
