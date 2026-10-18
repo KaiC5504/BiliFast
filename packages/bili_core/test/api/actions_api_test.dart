@@ -36,6 +36,12 @@ void main() {
     expect(http.query(request), {'aid': '80433022', 'bvid': bvid});
   });
 
+  test('relation reads season_fav', () async {
+    http.routes['/x/web-interface/archive/relation'] = (200, '{"code":0,"data":{"season_fav":true}}');
+    final relation = await client.relation(aid: aid, bvid: bvid);
+    expect(relation.seasonFav, isTrue);
+  });
+
   test('relation defaults missing fields and accepts numeric flags', () async {
     http.routes['/x/web-interface/archive/relation'] = (200, '{"code":0,"data":{"like":1,"coin":1}}');
     final relation = await client.relation(aid: aid, bvid: bvid);
@@ -63,6 +69,16 @@ void main() {
     final request = sent(path);
     expect(request.method, 'GET');
     expect(http.query(request), {'mid': '4242', 'photo': 'false'});
+  });
+
+  test('uploader card reads the verification kind', () async {
+    for (final (type, kind) in [('0', OfficialKind.person), ('1', OfficialKind.organisation), ('-1', OfficialKind.none)]) {
+      http.routes['/x/web-interface/card'] = (
+        200,
+        '{"code":0,"data":{"card":{"mid":7,"name":"n","face":"f","Official":{"role":0,"title":"","desc":"","type":$type}}}}'
+      );
+      expect((await client.uploaderCard(mid: 7)).official, kind);
+    }
   });
 
   test('uploader card without vip or following reads as false', () async {
@@ -264,6 +280,23 @@ void main() {
     expect(request.method, 'POST');
     expect(http.bodyText(request), 'act=1&csrf=TOKEN&fid=4242&re_src=14');
     expect(request.headers['Referer'], 'https://space.bilibili.com/4242');
+  });
+
+  test('season fav and unfav post the season id', () async {
+    http.routes['/x/v3/fav/season/fav'] = (200, okEmpty);
+    http.routes['/x/v3/fav/season/unfav'] = (200, okEmpty);
+    await client.favSeason(seasonId: 1234, on: true);
+    await client.favSeason(seasonId: 1234, on: false);
+    expect(http.bodyText(sent('/x/v3/fav/season/fav')), 'csrf=TOKEN&platform=web&season_id=1234');
+    expect(http.bodyText(sent('/x/v3/fav/season/unfav')), 'csrf=TOKEN&platform=web&season_id=1234');
+  });
+
+  test('season fav refusal throws the server message', () async {
+    http.routes['/x/v3/fav/season/fav'] = (200, '{"code":11010,"message":"内容不存在"}');
+    await expectLater(
+      client.favSeason(seasonId: 1, on: true),
+      throwsA(isA<BiliError>()),
+    );
   });
 
   test('unfollow sends act=2', () async {

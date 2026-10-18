@@ -90,6 +90,12 @@ extension BiliClientActions on BiliClient {
     referer: 'https://space.bilibili.com/$mid',
   );
 
+  /// 订阅 (the 合集 sheet's 收藏) adds or removes a whole 合集.
+  Future<void> favSeason({required int seasonId, required bool on}) => postVoid(
+    on ? '/x/v3/fav/season/fav' : '/x/v3/fav/season/unfav',
+    form: {'platform': 'web', 'season_id': '$seasonId'},
+  );
+
   Future<List<VideoTag>> tags({required String bvid, required int cid}) async {
     final tags = await _getIfPresent(
       '/x/web-interface/view/detail/tag',

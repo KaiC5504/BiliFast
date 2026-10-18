@@ -700,3 +700,38 @@ abstract final class BiliMetrics {
   static const danmakuOwnPadY = 1.5;
   static const danmakuOwnRadius = 3.0;
 }
+
+/// The tab row under the player (简介 / 评论 N, the 弹 toggle and 点我发弹幕) and the 简介 page's spacing (03, 18).
+abstract final class PageTheme {
+  static const tabRowHeight = 44.0;
+}
+
+/// The uploader row and the title block (03, 18).
+abstract final class IntroTheme {
+  static const uploaderTop = 13.0;
+}
+
+/// 合集, the part strip, the topic and BGM chips and the related rows (03, 18).
+abstract final class IntroListTheme {
+  static const relatedRowHeight = 112.0;
+}
+
+/// The action row under the title, the 三连 rings and the coin dialog (03, 15).
+abstract final class ActionTheme {
+  static const rowHeight = 70.0;
+}
+
+/// The favourites sheet and panel, and the unfollow confirm.
+abstract final class FavouriteTheme {
+  static const rowHeight = 56.0;
+}
+
+/// Landscape's top actions, uploader and 关注 (04), and its end screen's actions (27).
+abstract final class LandscapeActionTheme {
+  static const iconSize = 28.0;
+}
+
+/// 竖屏's action column, uploader, 粉丝 and 关注 (09), and the 选集 sheet's share circle and 收藏 (19).
+abstract final class VerticalActionTheme {
+  static const iconSize = 36.0;
+}

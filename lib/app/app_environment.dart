@@ -85,7 +85,24 @@ class AppEnvironment extends ChangeNotifier {
 
   /// Returns false when Bilibili could not be asked (network error); [account] then keeps its last value. A check
   /// already running answers every caller (launch, coming back to the app, returning to home) with one request.
-  Future<bool> refreshAccount() => _checking ??= _checkAccount().whenComplete(() => _checking = null);
+  Future<bool> refreshAccount() {
+    if (_fake) return Future.value(true);
+    return _checking ??= _checkAccount().whenComplete(() => _checking = null);
+  }
+
+  bool _fake = false;
+
+  /// A `--fake-account` run on the PC: logged in as nobody, so the page's actions can be pressed against the
+  /// in-memory `FakePageApi`. No call goes out as this account, and nothing reports watch progress.
+  bool get fake => _fake;
+
+  void useFakeAccount() {
+    _fake = true;
+    _account = const LoggedIn(name: '测试账号', vip: false);
+    _mid = 1;
+    _face = null;
+    notifyListeners();
+  }
 
   Future<bool>? _checking;
 

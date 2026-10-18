@@ -18,6 +18,7 @@ import 'screens/player_test_page.dart';
 import 'settings/follow_font.dart';
 import 'settings/font_store.dart';
 import 'shared/theme.dart';
+import 'video/fake_page_api.dart';
 import 'video/player_prefs.dart';
 
 Future<void> main(List<String> args) async {
@@ -43,6 +44,9 @@ Future<void> main(List<String> args) async {
     runApp(LaunchFailedApp(error: '$error'));
     return;
   }
+  // PC checks only: the page's actions answer from memory, so every button can be pressed with no account traffic.
+  final fakeAccount = !Platform.isIOS && args.contains('--fake-account');
+  if (fakeAccount) environment.useFakeAccount();
   unawaited(environment.refreshAccount());
   final playback = AppPlayback(
     () => startPlaybackController(environment.client),
@@ -61,6 +65,7 @@ Future<void> main(List<String> args) async {
       recents: recents,
       device: device,
       fonts: fonts,
+      pageApi: fakeAccount ? FakePageApi.demo() : null,
       logs: logs,
     ),
     initialLink: _argument(args, '--play='),

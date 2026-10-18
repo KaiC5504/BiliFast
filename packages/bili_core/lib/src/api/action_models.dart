@@ -7,6 +7,7 @@ final class VideoRelation {
     required this.favorite,
     required this.attention,
     required this.coins,
+    this.seasonFav = false,
   });
 
   factory VideoRelation.fromJson(Object? json) {
@@ -17,6 +18,7 @@ final class VideoRelation {
       favorite: object.flag('favorite'),
       attention: object.flag('attention'),
       coins: object.count('coin'),
+      seasonFav: object.flag('season_fav'),
     );
   }
 
@@ -28,6 +30,9 @@ final class VideoRelation {
   /// Coins this account has given the video, 0 to 2.
   final int coins;
 
+  /// The 合集 holding the video is in this account's 订阅.
+  final bool seasonFav;
+
   @override
   bool operator ==(Object other) =>
       other is VideoRelation &&
@@ -35,15 +40,16 @@ final class VideoRelation {
       other.dislike == dislike &&
       other.favorite == favorite &&
       other.attention == attention &&
-      other.coins == coins;
+      other.coins == coins &&
+      other.seasonFav == seasonFav;
 
   @override
-  int get hashCode => Object.hash(like, dislike, favorite, attention, coins);
+  int get hashCode => Object.hash(like, dislike, favorite, attention, coins, seasonFav);
 
   @override
   String toString() =>
       'VideoRelation(like: $like, dislike: $dislike, favorite: $favorite, attention: $attention, '
-      'coins: $coins)';
+      'coins: $coins, seasonFav: $seasonFav)';
 }
 
 final class UploaderCard {
@@ -55,6 +61,7 @@ final class UploaderCard {
     required this.videos,
     required this.isVip,
     required this.following,
+    this.official = OfficialKind.none,
   });
 
   factory UploaderCard.fromJson(Object? json) {
@@ -70,6 +77,11 @@ final class UploaderCard {
       videos: object.count('archive_count'),
       isVip: attempt(() => card.nested('vip')?.integer('status', 'vipStatus')) == 1,
       following: object.flag('following'),
+      official: switch (attempt(() => card.nested('Official')?.integer('type'))) {
+        0 => OfficialKind.person,
+        1 => OfficialKind.organisation,
+        _ => OfficialKind.none,
+      },
     );
   }
 
@@ -81,6 +93,9 @@ final class UploaderCard {
   final bool isVip;
   final bool following;
 
+  /// The verification badge on the avatar: yellow for a person, blue for an organisation.
+  final OfficialKind official;
+
   @override
   bool operator ==(Object other) =>
       other is UploaderCard &&
@@ -90,11 +105,14 @@ final class UploaderCard {
       other.fans == fans &&
       other.videos == videos &&
       other.isVip == isVip &&
-      other.following == following;
+      other.following == following &&
+      other.official == official;
 
   @override
-  int get hashCode => Object.hash(mid, name, face, fans, videos, isVip, following);
+  int get hashCode => Object.hash(mid, name, face, fans, videos, isVip, following, official);
 }
+
+enum OfficialKind { none, person, organisation }
 
 final class TripleResult {
   const TripleResult({required this.like, required this.coin, required this.favorite, required this.multiply});
