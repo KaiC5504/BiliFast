@@ -209,6 +209,42 @@ void main() {
     expect(notified, 2);
   });
 
+  test('a hold only changes the rate of the player: no pause, play, seek or load; the engine just hears the rate',
+      () async {
+    final session = makeSession();
+    await controller.openVideo(bv, cid: p1);
+    playing();
+    player.emit(PositionChanged(seconds: 0.2, hostMs: time.clock.nowMs(), rate: 1));
+    await settle();
+    player.calls.clear();
+    final prepares = engine.prepared.length;
+    final releases = engine.released.length;
+    final hints = engine.hints.length;
+    final drops = engine.cacheDrops;
+
+    session.speedUp(true);
+    // As AVPlayer reports a rate change: the rate, then readings at it.
+    player.emit(const RateChanged(2));
+    time.advance(600);
+    player.emit(PositionChanged(seconds: 1.4, hostMs: time.clock.nowMs(), rate: 2));
+    await settle();
+    session.speedUp(false);
+    player.emit(const RateChanged(1));
+    time.advance(600);
+    player.emit(PositionChanged(seconds: 2.0, hostMs: time.clock.nowMs(), rate: 1));
+    await settle();
+
+    expect(player.calls, ['rate 2.0', 'rate 1.0']);
+    expect(engine.prepared, hasLength(prepares));
+    expect(engine.released, hasLength(releases));
+    expect(engine.hints, hasLength(hints));
+    expect(engine.cacheDrops, drops);
+    expect(engine.stalls, isEmpty);
+    expect(engine.playheads.map((playhead) => playhead.rate), containsAllInOrder([2.0, 1.0]));
+    expect(controller.rate, 1);
+    expect(controller.phase, PlaybackPhase.playing);
+  });
+
   test('fit and mirroring reach the player and stay for the next load; fit is saved', () async {
     final session = makeSession();
     await controller.openVideo(bv, cid: p1);

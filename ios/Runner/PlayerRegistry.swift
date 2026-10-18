@@ -182,7 +182,13 @@ final class NativePlayer {
   func setRate(_ rate: Double) {
     let value = Float(rate)
     player.defaultRate = value
-    if player.rate > 0 { player.rate = value }
+    if player.timeControlStatus == .playing {
+      // Setting `rate` is a new play request: waiting to minimize stalls, AVPlayer holds the picture while it judges
+      // the buffer at the new rate, a hitch on every hold to 2× and every release. Already playing, the data is there.
+      player.playImmediately(atRate: value)
+    } else if player.rate > 0 {
+      player.rate = value
+    }
     reportRate(rate)
   }
 
