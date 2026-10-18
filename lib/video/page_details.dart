@@ -20,7 +20,7 @@ abstract interface class PageDetails implements Listenable {
   /// N人正在看's N as the server words it ("53", "1000+"); null until known. Asked every 30 s while active.
   ValueListenable<String?> get online;
 
-  /// 稍后再看 from a related row's ⋮; completes with the toast text.
+  /// 稍后再看 from a related row's ⋮; completes with the toast text, empty when it asked for a login instead.
   Future<ActionResult> watchLater(VideoCard card);
 
   /// False while the page is covered or has left: no polls, no fetches.
