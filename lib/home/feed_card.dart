@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../video/video_route.dart';
 
 /// Card sizes that depend on the text size, so the grid can give every card the same height.
 abstract final class FeedCardSize {
@@ -120,7 +121,7 @@ class _Cover extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        Hero(tag: 'cover-${card.bvid}', child: RemoteImage(card.cover)),
+        Hero(tag: VideoRoute.coverTag(card.bvid), child: RemoteImage(card.cover)),
         const Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../devtools/crash_log.dart';
 import '../devtools/log_forwarder.dart';
 import '../home/recent_store.dart';
 import '../playback/playback_controller.dart';
@@ -10,16 +11,35 @@ import 'app_environment.dart';
 /// The one player and engine, started at launch and shared by the video page and the developer page. It hears the
 /// app come back to the foreground and the system run short of memory for whichever page is playing.
 class AppPlayback with WidgetsBindingObserver {
-  AppPlayback(Future<PlaybackController> Function() start) : controller = start() {
-    controller.then((ready) => _ready = ready, onError: (Object _) {});
+  AppPlayback(this._start) {
+    unawaited(obtain().then((_) {}, onError: (Object _) {}));
     WidgetsBinding.instance.addObserver(this);
   }
 
-  final Future<PlaybackController> controller;
+  final Future<PlaybackController> Function() _start;
+  Future<PlaybackController>? _starting;
   PlaybackController? _ready;
 
   /// The controller once it has started.
   PlaybackController? get ready => _ready;
+
+  /// The shared controller; after a failed start, the next call starts it again (a page's 重试).
+  Future<PlaybackController> obtain() {
+    final starting = _starting;
+    if (starting != null) return starting;
+    final started = _start().then(
+      (controller) => _ready = controller,
+      onError: (Object error, StackTrace stack) {
+        CrashLog.report(error, stack, source: 'player start');
+        _starting = null;
+        Error.throwWithStackTrace(error, stack);
+      },
+    );
+    _starting = started;
+    return started;
+  }
+
+  void dispose() => WidgetsBinding.instance.removeObserver(this);
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {

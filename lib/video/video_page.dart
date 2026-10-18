@@ -63,7 +63,7 @@ class _VideoPageState extends State<VideoPage> {
     if (_services != null) return;
     final services = AppScope.of(context);
     _services = services;
-    services.playback.controller.then(
+    services.playback.obtain().then(
       (controller) {
         if (_disposed) return;
         setState(() => _controller = controller);
@@ -82,7 +82,7 @@ class _VideoPageState extends State<VideoPage> {
 
   void _openVideo(PlaybackController controller) {
     final route = widget.route;
-    unawaited(controller.openVideo(route.bvid, cid: route.cid, start: route.start));
+    unawaited(controller.openVideo(route.bvid, cid: route.cid, start: route.start, view: route.view));
     _open = controller.opens;
   }
 

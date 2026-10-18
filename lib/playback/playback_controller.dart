@@ -330,12 +330,13 @@ class PlaybackController extends ChangeNotifier {
 
   /// The video page's open: part [cid], or without one the part Bilibili saw this account watch last, or the first;
   /// from [start] seconds, or without one from where Bilibili saw it last (`ResumePoint`), which only arrives with
-  /// the playurl answer.
-  Future<void> openVideo(String bvid, {int? cid, double? start}) async {
+  /// the playurl answer. A [view] already resolved (a pasted link) saves asking for it again.
+  Future<void> openVideo(String bvid, {int? cid, double? start, VideoView? view}) async {
     _opens += 1;
     _clearVideo();
+    final known = view?.bvid == bvid ? view : null;
     await _openWith((current) async {
-      final (view, _) = await _resolve(BvidLink(bvid));
+      final view = known ?? (await _resolve(BvidLink(bvid))).$1;
       if (current != _epoch) return null;
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');

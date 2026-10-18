@@ -38,7 +38,9 @@ Future<void> main(List<String> args) async {
   unawaited(environment.refreshAccount());
   final playback = AppPlayback(() => startPlaybackController(environment.client));
   // Checks run on the PC play silently.
-  if (args.contains('--mute')) unawaited(playback.controller.then((controller) => controller.player.setMuted(true)));
+  if (args.contains('--mute')) {
+    unawaited(playback.obtain().then((controller) => controller.player.setMuted(true), onError: (Object _) {}));
+  }
   runApp(BiliFastApp(
     services: AppServices(environment: environment, playback: playback, recents: recents, logs: logs),
     initialLink: _argument(args, '--play='),
@@ -115,7 +117,7 @@ class BiliFastApp extends StatelessWidget {
             ? null
             : (context) => PlayerTestPage(
                   environment: services.environment,
-                  startPlayback: () => services.playback.controller,
+                  startPlayback: services.playback.obtain,
                   logs: services.logs,
                   ownsController: false,
                 ),

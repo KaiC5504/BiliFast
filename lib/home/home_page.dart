@@ -10,6 +10,7 @@ import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../playback/playback_controller.dart';
+import '../shared/paste_button.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/video_route.dart';
@@ -116,14 +117,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _paste() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text?.trim() ?? '';
+  void _pasted(String text) {
+    if (!mounted) return;
     if (text.isEmpty) {
-      if (mounted) showToast(context, '剪贴板里没有链接');
+      showToast(context, '剪贴板里没有链接');
       return;
     }
-    await _open(text);
+    unawaited(_open(text));
   }
 
   Future<void> _open(String text) async {
@@ -188,7 +188,7 @@ class _HomePageState extends State<HomePage> {
         pageCount: view.pages.length,
       ),
     );
-    unawaited(openVideoPage(context, VideoRoute(bvid: view.bvid, cid: page.cid, title: view.title)));
+    unawaited(openVideoPage(context, VideoRoute(bvid: view.bvid, cid: page.cid, title: view.title, view: view)));
   }
 
   void _openCard(FeedCard card) =>
@@ -232,7 +232,7 @@ class _HomePageState extends State<HomePage> {
                             onAvatar: _toggleMenu,
                             onChanged: _textChanged,
                             onSubmit: _open,
-                            onPaste: _paste,
+                            onPaste: _pasted,
                           ),
                         ),
                         const _RecommendTab(),
@@ -335,7 +335,7 @@ class _TopRow extends StatelessWidget {
   final VoidCallback onAvatar;
   final ValueChanged<String> onChanged;
   final ValueChanged<String> onSubmit;
-  final VoidCallback onPaste;
+  final ValueChanged<String> onPaste;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -390,13 +390,7 @@ class _TopRow extends StatelessWidget {
                     ListenableBuilder(
                       listenable: link,
                       builder: (context, _) => link.text.isEmpty
-                          ? IconButton(
-                              key: const ValueKey('home-paste'),
-                              onPressed: opening ? null : onPaste,
-                              tooltip: '粘贴',
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.content_paste_rounded, size: 18, color: BiliColors.pink),
-                            )
+                          ? PasteButton(key: const ValueKey('home-paste'), enabled: !opening, onText: onPaste)
                           : IconButton(
                               key: const ValueKey('home-clear'),
                               onPressed: () {
