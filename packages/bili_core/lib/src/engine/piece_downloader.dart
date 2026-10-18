@@ -166,7 +166,11 @@ final class PieceDownloader {
                 )
               : left,
           probation: trial,
-          orderFirst: mode == PieceMode.burst && whole.any(nodes.isKnown),
+          // Under keepsOffSlow a hurried piece's first copy also goes by expected finish when it gets its connection:
+          // the range was planned before Akamai's 8 connections freed up again.
+          orderFirst:
+              (mode == PieceMode.burst || (nodes.keepsOffSlow && mode != PieceMode.probe && (hurry?.call() ?? false))) &&
+              whole.any(nodes.isKnown),
         );
         if (targets.candidates.isEmpty) break;
         final copies = [for (final _ in targets.candidates.take(width)) AttemptProgress()];
@@ -424,7 +428,8 @@ final class PieceDownloader {
       }
     }
     final elapsed = now - previous.startedAt;
-    if (!previous.gotHeaders) return elapsed >= (ttfb > 0 ? min(600, max(250, ttfb * 2)) : 250);
+    final floor = ctx.config.hurryHedgeMinMs;
+    if (!previous.gotHeaders) return elapsed >= (ttfb > 0 ? min(600, max(floor, ttfb * 2)) : floor);
     if (now - previous.lastProgressAt >= 1000) return true;
     final arrived = previous.base.bytes + previous.received;
     return elapsed >= max(400, (expected ?? ctx.config.hedgeDelayMs) * 2) && arrived < pieceLength * 0.75;

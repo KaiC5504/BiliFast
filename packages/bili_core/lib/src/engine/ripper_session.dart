@@ -129,6 +129,10 @@ final class _Request {
 
   /// A prefetch the request took over.
   _Prefetch? adopted;
+
+  /// A plain prefetch a seek landed on ([RipperConfig.seekHurriesPrefetch]): its bytes so far go to the player,
+  /// then it is cancelled and the rest is fetched as a seek.
+  _Prefetch? superseded;
   final MediaSegment? segment;
   final int number;
   final bool seek;
@@ -172,7 +176,9 @@ final class RipperSession {
       ..priors = priors
       ..onMeasured = memory?.record
       ..exploreInHurry = config.exploreInHurry
-      ..tailBackups = config.tailBackups;
+      ..tailBackups = config.tailBackups
+      ..keepsOffSlow = config.hurryKeepsOffSlow
+      ..median = config.medianEstimates;
     return RipperSession._(ctx, sources, mode, policy, priors);
   }
 
@@ -399,14 +405,47 @@ final class RipperSession {
     _ctx.logger.info(LogCategory.engine, 'network changed, node health reset', {'interfaceChanged': interfaceChanged});
   }
 
-  /// Memory warning: drops cached and still-downloading prefetched segments; playback goes on.
+  /// Memory warning: drops cached and still-downloading prefetched segments; playback goes on. Under
+  /// [RipperConfig.trimOnMemoryWarning] the segments within [_trimBehindSeconds] behind the playhead and a hurry's
+  /// reach ahead of it stay.
   void dropCache() {
+    if (_ctx.config.trimOnMemoryWarning) {
+      _trimCache();
+      return;
+    }
     _cache.clear();
     final prefetches = _inflight.values.toList();
     _inflight.clear();
     for (final prefetch in prefetches) {
       prefetch.token.cancel();
     }
+  }
+
+  static const _trimBehindSeconds = 10.0;
+
+  void _trimCache() {
+    final ahead = _ctx.config.hurryAheadSeconds * _rate;
+    bool near(double start, double end) => end >= _playhead - _trimBehindSeconds && start <= _playhead + ahead;
+    var kept = 0;
+    var dropped = 0;
+    _cache.removeWhere((key, entry) {
+      final drop = !near(entry.startTime, entry.endTime);
+      if (drop) {
+        dropped += entry.bytes.length;
+      } else {
+        kept += entry.bytes.length;
+      }
+      return drop;
+    });
+    for (final key in _inflight.keys.toList()) {
+      final segment = _segmentFor(key);
+      if (segment != null && near(segment.startTime, segment.endTime)) continue;
+      final prefetch = _inflight.remove(key);
+      if (prefetch == null) continue;
+      dropped += prefetch.received;
+      prefetch.token.cancel();
+    }
+    _ctx.logger.info(LogCategory.engine, 'cache trimmed', {'keptBytes': kept, 'droppedBytes': dropped});
   }
 
   EngineSnapshot stats({double downloadBps = 0, String transport = ''}) => _ctx.stats.snapshot(
@@ -481,10 +520,21 @@ final class RipperSession {
           source = adopted.kind.name;
         }
       }
+      if (request.superseded case final old? when !served) {
+        old.chunks.forEach(out);
+        old.token.cancel();
+        _ctx.logger.info(LogCategory.engine, 'seek hurried prefetch', {
+          'track': track.name,
+          'segment': segment?.index ?? -1,
+          'kept': sent,
+          'bytes': range.length,
+        });
+      }
       if (!served) {
         _ctx.stats.cache(hit: false);
-        // Nothing of the track was prefetched before its first read, so only a later seek has anything to drop.
-        if (adopted == null && request.seek && !request.firstOfTrack) {
+        // Nothing of the track was prefetched before its first read, so only a later seek has anything to drop. A
+        // seek onto a segment prefetch had reached stays near the old position, so the prefetch ahead stays too.
+        if (adopted == null && request.superseded == null && request.seek && !request.firstOfTrack) {
           _dropPrefetch(track);
           _ctx.auto?.newSession();
         }
@@ -585,6 +635,13 @@ final class RipperSession {
         _dropPrefetch(track);
         _ctx.auto?.newSession();
       }
+    } else if (prefetch != null &&
+        request.seek &&
+        _ctx.config.seekHurriesPrefetch &&
+        prefetch.kind == _FetchKind.prefetch &&
+        prefetch.received < range.length) {
+      request.superseded = prefetch;
+      _seeks += 1;
     } else if (prefetch != null) {
       // Taken out of `_inflight`, so a seek cannot cancel it and its bytes do not also land in the cache.
       request.adopted = prefetch;

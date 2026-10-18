@@ -19,6 +19,10 @@ final class _Node {
   double bps = 0;
   double load = 0;
 
+  /// The latest samples, newest last, under `NodeStats.median`.
+  final ttfbSamples = <double>[];
+  final bpsSamples = <double>[];
+
   /// What the transport sends the node at once.
   final int connections;
   int limit;
@@ -36,6 +40,8 @@ final class NodeStats {
     this.onMeasured,
     this.exploreInHurry = true,
     this.tailBackups = false,
+    this.keepsOffSlow = false,
+    this.median = false,
   }) : _akamaiConnections = connectionsPerHost ?? _unlimited;
 
   final int _akamaiConnections;
@@ -59,6 +65,14 @@ final class NodeStats {
   /// On: `HurryPlacement.tailBackupDue` may give the last piece of a hurried range an early backup copy.
   bool tailBackups;
 
+  /// `RipperConfig.hurryKeepsOffSlow`.
+  bool keepsOffSlow;
+
+  /// `RipperConfig.medianEstimates`.
+  bool median;
+
+  static const medianSamples = 9;
+
   _Node _fresh(String url) => _Node(NodeCatalog.isAkamai(url) ? _akamaiConnections : _unlimited);
 
   _Node _node(String url) => _nodes.putIfAbsent(NodeCatalog.nodeKey(url), () => _fresh(url));
@@ -72,9 +86,12 @@ final class NodeStats {
   double _bps(String url, _Node node) => node.bps > 0 ? node.bps : _prior(url)?.bps ?? 0;
 
   void _setTtfb(String url, _Node node, double sample) {
-    if (node.ttfbMs > 0) {
+    if (median && node.ttfbMs > 0) {
+      node.ttfbMs = _median(node.ttfbSamples, sample);
+    } else if (node.ttfbMs > 0) {
       node.ttfbMs = smoothed(node.ttfbMs, sample);
     } else {
+      if (median) _median(node.ttfbSamples, sample);
       final prior = _prior(url);
       node.ttfbMs = prior == null ? sample : NodePrior.blend(prior.ttfbMs, prior.ttfbWeight, sample);
     }
@@ -82,13 +99,25 @@ final class NodeStats {
   }
 
   void _setBps(String url, _Node node, double sample) {
-    if (node.bps > 0) {
+    if (median && node.bps > 0) {
+      node.bps = _median(node.bpsSamples, sample);
+    } else if (node.bps > 0) {
       node.bps = smoothed(node.bps, sample);
     } else {
+      if (median) _median(node.bpsSamples, sample);
       final prior = _prior(url);
       node.bps = prior == null ? sample : NodePrior.blend(prior.bps, prior.bpsWeight, sample);
     }
     onMeasured?.call(NodeCatalog.nodeKey(url), bps: node.bps);
+  }
+
+  /// Adds [sample] to [samples], keeping the last [medianSamples], and returns their median.
+  static double _median(List<double> samples, double sample) {
+    samples.add(sample);
+    if (samples.length > medianSamples) samples.removeAt(0);
+    final sorted = List.of(samples)..sort();
+    final middle = sorted.length ~/ 2;
+    return sorted.length.isOdd ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
   }
 
   void begin(String url) => _node(url).inflight += 1;

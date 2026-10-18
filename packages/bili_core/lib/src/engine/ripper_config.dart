@@ -34,10 +34,11 @@ final class RipperConfig {
     this.tailBackups = false,
     this.banProbation = false,
     this.hurryKeepsOffSlow = false,
-    this.emptyLossCounts = false,
+    this.medianEstimates = false,
     this.seekHurriesPrefetch = false,
     this.trimOnMemoryWarning = false,
     this.peakBandwidth = false,
+    this.hurryHedgeMinMs = 250,
   });
 
   final double firstByteTimeoutMs;
@@ -121,15 +122,18 @@ final class RipperConfig {
   /// out until the network changed.
   final bool banProbation;
 
-  /// In a hurry a node far slower than the best known one never takes a piece's first copy, even when the fast
-  /// nodes are full or carry more than half: the piece waits for a fast node instead. On the phone (1.0.0 (1)) cosov
-  /// and the HK nodes ran at 1-2 Mbps against Akamai's 130 and aliov's 23, yet took the first copy of 773 of 3,300
-  /// pieces, and 528 of those sat 0.4-0.7 s without a byte before a backup went elsewhere.
+  /// In a hurry nodes are judged by the time a piece takes, first byte included, not by speed alone: a node expected
+  /// to take `HurryPlacement.slowFactor` times as long as the second best gets no first copy, no node is kept to
+  /// half of a range, and each piece's first copy goes to the node expected to finish it first when it gets its
+  /// connection, not where the range was planned. On the phone (1.0.0 (1)) cosov and the HK nodes took the first copy
+  /// of 773 of 3,300 pieces, and 528 of those sat 0.4-0.7 s without a byte before a backup went elsewhere.
   final bool hurryKeepsOffSlow;
 
-  /// A copy outrun before its first byte counts for its node as a first byte at least that late. Without it a node
-  /// that never answers in time is never measured as slow (cosov lost 333 races with nothing sent, 665 ms each).
-  final bool emptyLossCounts;
+  /// A node's first byte and speed are the medians of its last few samples instead of running averages. Akamai's
+  /// first bytes come in two clusters on the phone (75% under 48 ms; a fifth of requests miss its cache and wait over
+  /// 400 ms), and replaying the phone's pieces into the average swung it between 25 ms and 2.3 s, and cosov's speed
+  /// between 0.04 and 15 MB/s.
+  final bool medianEstimates;
 
   /// A seek onto a segment that prefetch is still fetching turns that fetch into a hurried one. A seek that took
   /// over a slow prefetch waited 4.6 s for a 3.9 MB segment on the phone.
@@ -142,6 +146,11 @@ final class RipperConfig {
   /// The master playlist's BANDWIDTH is the largest segment's bitrate rather than 1.5x the average; AVPlayer logged
   /// "Segment exceeds specified bandwidth for variant" for bigger segments.
   final bool peakBandwidth;
+
+  /// In a hurry a piece's next copy goes once the copy before is this late to its first byte, or twice its node's
+  /// usual first byte if longer (up to 600 ms). Akamai answers in 20-50 ms but misses its cache on a fifth of
+  /// requests, and each miss held its piece for the whole 250 ms.
+  final double hurryHedgeMinMs;
 
   /// The connection count without AutoConcurrency (Swift's fallback when neither is given).
   static const defaultConcurrency = 16;
@@ -185,10 +194,11 @@ final class RipperConfig {
     bool? tailBackups,
     bool? banProbation,
     bool? hurryKeepsOffSlow,
-    bool? emptyLossCounts,
+    bool? medianEstimates,
     bool? seekHurriesPrefetch,
     bool? trimOnMemoryWarning,
     bool? peakBandwidth,
+    double? hurryHedgeMinMs,
   }) => RipperConfig(
     firstByteTimeoutMs: firstByteTimeoutMs ?? this.firstByteTimeoutMs,
     stallTimeoutMs: stallTimeoutMs ?? this.stallTimeoutMs,
@@ -222,10 +232,11 @@ final class RipperConfig {
     tailBackups: tailBackups ?? this.tailBackups,
     banProbation: banProbation ?? this.banProbation,
     hurryKeepsOffSlow: hurryKeepsOffSlow ?? this.hurryKeepsOffSlow,
-    emptyLossCounts: emptyLossCounts ?? this.emptyLossCounts,
+    medianEstimates: medianEstimates ?? this.medianEstimates,
     seekHurriesPrefetch: seekHurriesPrefetch ?? this.seekHurriesPrefetch,
     trimOnMemoryWarning: trimOnMemoryWarning ?? this.trimOnMemoryWarning,
     peakBandwidth: peakBandwidth ?? this.peakBandwidth,
+    hurryHedgeMinMs: hurryHedgeMinMs ?? this.hurryHedgeMinMs,
   );
 
   /// Every field by name, for logs and speed test plans.
@@ -262,10 +273,11 @@ final class RipperConfig {
     'tailBackups': tailBackups,
     'banProbation': banProbation,
     'hurryKeepsOffSlow': hurryKeepsOffSlow,
-    'emptyLossCounts': emptyLossCounts,
+    'medianEstimates': medianEstimates,
     'seekHurriesPrefetch': seekHurriesPrefetch,
     'trimOnMemoryWarning': trimOnMemoryWarning,
     'peakBandwidth': peakBandwidth,
+    'hurryHedgeMinMs': hurryHedgeMinMs,
   };
 
   /// This config with fields set by name, as a speed test plan from the PC gives them. A name that is not a field,
@@ -309,6 +321,7 @@ final class RipperConfig {
     'priority',
     'hurryAheadSeconds',
     'keepBehindSeconds',
+    'hurryHedgeMinMs',
   };
 
   factory RipperConfig._fromJson(Map<String, Object?> json) => RipperConfig(
@@ -344,9 +357,10 @@ final class RipperConfig {
     tailBackups: json['tailBackups']! as bool,
     banProbation: json['banProbation']! as bool,
     hurryKeepsOffSlow: json['hurryKeepsOffSlow']! as bool,
-    emptyLossCounts: json['emptyLossCounts']! as bool,
+    medianEstimates: json['medianEstimates']! as bool,
     seekHurriesPrefetch: json['seekHurriesPrefetch']! as bool,
     trimOnMemoryWarning: json['trimOnMemoryWarning']! as bool,
     peakBandwidth: json['peakBandwidth']! as bool,
+    hurryHedgeMinMs: json['hurryHedgeMinMs']! as double,
   );
 }

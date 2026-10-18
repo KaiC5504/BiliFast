@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:typed_data';
 
 import '../api/models.dart';
@@ -113,12 +114,14 @@ abstract final class PlaybackBuilder {
   static PlaybackAssets ripperAssets(
     PreparedPlayback prepared, {
     required Stream<List<int>> Function(TrackKind kind, ByteRange range) read,
+    bool peakBandwidth = false,
   }) {
     final playlists = _playlists(
       prepared,
       videoUri: 'v.mp4',
       audioUri: 'a.mp4',
       sampleEntry: prepared.rewroteHEV1 ? 'hvc1' : prepared.sourceEntry,
+      peakBandwidth: peakBandwidth,
     );
     MediaResource resource(TrackKind kind, PreparedTrack track) =>
         MediaResource(totalSize: track.totalSize, prefix: track.headers, read: (range) => read(kind, range));
@@ -221,6 +224,17 @@ abstract final class PlaybackBuilder {
     return PreparedPlayback(video: video, audio: audio, rewroteHEV1: rewrote, sourceEntry: sourceEntry);
   }
 
+  /// The largest video segment's bitrate plus the largest audio segment's, never under [average]; null without
+  /// segments.
+  static int? _peak(PreparedPlayback prepared, {required int average}) {
+    double peakOf(List<MediaSegment> segments) => segments
+        .where((segment) => segment.duration > 0)
+        .fold(0.0, (peak, segment) => max(peak, segment.range.length * 8 / segment.duration));
+    final video = peakOf(prepared.video.segments);
+    if (video <= 0) return null;
+    return max(average, (video + peakOf(prepared.audio.segments)).ceil());
+  }
+
   static void _unusable(TrackKind kind, String reason) =>
       Logger.shared.warn(LogCategory.player, 'headers unusable', {'track': kind.name, 'reason': reason});
 
@@ -234,6 +248,7 @@ abstract final class PlaybackBuilder {
     required String videoUri,
     required String audioUri,
     required String? sampleEntry,
+    bool peakBandwidth = false,
   }) {
     final video = prepared.video.stream;
     final audio = prepared.audio.stream;
@@ -244,6 +259,7 @@ abstract final class PlaybackBuilder {
       width: video.width,
       height: video.height,
       frameRate: CodecMapper.frameRate(video.frameRate),
+      peakBandwidth: peakBandwidth ? _peak(prepared, average: video.bandwidth + audio.bandwidth) : null,
     );
     return {
       'master.m3u8': PlaylistBuilder.master(variant, videoPlaylist: 'v.m3u8', audioPlaylist: 'a.m3u8'),

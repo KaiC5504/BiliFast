@@ -562,7 +562,9 @@ final class _EngineHost {
           ..prime(TrackKind.video, seconds: request.startSeconds)
           ..prime(TrackKind.audio, seconds: request.startSeconds);
       }
-      final token = _router.register(PlaybackBuilder.ripperAssets(prepared, read: session.read));
+      final token = _router.register(
+        PlaybackBuilder.ripperAssets(prepared, read: session.read, peakBandwidth: _options.config.peakBandwidth),
+      );
       _sessions[token] = session;
       session.onFatal = (error) {
         if (identical(_sessions[token], session)) _boot.events.send(FatalReport(token: token, message: '$error'));

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:bili_core/api.dart';
@@ -471,6 +472,22 @@ v.m3u8
       expect(hdrMaster, contains('CODECS="hev1.2.4.L153.90,mp4a.40.2"'), reason: 'an empty audio codec falls back to AAC');
       expect(hdrMaster, contains('FRAME-RATE=30.000,VIDEO-RANGE=PQ,'));
       expect(hdrMaster, isNot(contains('SUPPLEMENTAL-CODECS')));
+    });
+
+    test("with peakBandwidth, BANDWIDTH is the largest segments' bitrate, never under the average", () async {
+      final prepared = await prepareFixture(headerFixture(withMoov: true));
+      String bandwidth({required bool peak}) {
+        final master = PlaybackBuilder.ripperAssets(prepared, read: (_, _) => const Stream.empty(), peakBandwidth: peak)
+            .playlists['master.m3u8']!;
+        return RegExp(r'[:,]BANDWIDTH=(\d+)').firstMatch(master)!.group(1)!;
+      }
+
+      double peakOf(List<MediaSegment> segments) =>
+          segments.map((segment) => segment.range.length * 8 / segment.duration).reduce(max);
+      final average = prepared.video.stream.bandwidth + prepared.audio.stream.bandwidth;
+      final expected = max(average, (peakOf(prepared.video.segments) + peakOf(prepared.audio.segments)).ceil());
+      expect(bandwidth(peak: true), '$expected');
+      expect(bandwidth(peak: false), '${(average * 1.5).toInt()}');
     });
   });
 }

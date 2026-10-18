@@ -21,6 +21,7 @@ final class HLSVariant {
     required this.width,
     required this.height,
     required this.frameRate,
+    this.peakBandwidth,
   });
 
   final HLSVideoCodec codec;
@@ -31,6 +32,10 @@ final class HLSVariant {
   final int width;
   final int height;
   final String frameRate;
+
+  /// The largest segment's bitrate, video plus audio, when known; BANDWIDTH is then that rather than 1.5x the
+  /// average.
+  final int? peakBandwidth;
 }
 
 abstract final class PlaylistBuilder {
@@ -60,7 +65,7 @@ abstract final class PlaylistBuilder {
 
   static String master(HLSVariant variant, {required String videoPlaylist, required String audioPlaylist}) {
     final attributes = [
-      'BANDWIDTH=${(variant.averageBandwidth.toDouble() * 1.5).toInt()}',
+      'BANDWIDTH=${variant.peakBandwidth ?? (variant.averageBandwidth.toDouble() * 1.5).toInt()}',
       'AVERAGE-BANDWIDTH=${variant.averageBandwidth}',
       'CODECS="${variant.codec.codecs},${variant.audioCodecs}"',
       if (variant.codec.supplemental case final supplemental?) 'SUPPLEMENTAL-CODECS="$supplemental"',

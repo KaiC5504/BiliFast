@@ -15,6 +15,13 @@ abstract final class HurryPlacement {
   /// cosov and the HK nodes finished the last piece of 16% of segments, taking 0.8-1.8 s at p50.
   static const slowShare = 8;
 
+  /// With `NodeStats.keepsOffSlow`, a node expected to take this many times as long over a [probeBytes] piece as the
+  /// second best known node stays out of a hurry. The second best, since the best alone may not have the
+  /// connections (Akamai: 8 on HTTP/1.1): on the phone aliov took ~250 ms a piece, cosov ~1.2 s and the HK nodes
+  /// 0.6-0.9 s.
+  static const slowFactor = 2.5;
+  static const probeBytes = 64 * 1024;
+
   /// A backup copy for the tail is due when the copy it backs up would need this many times as long as a fresh
   /// copy on the backup's node, and [tailMarginMs] more.
   static const tailFactor = 3;
@@ -54,7 +61,7 @@ abstract final class HurryPlacement {
           expected: expected[index],
           best: best,
           inflight: inflight[index],
-          crowded: hosts.length > 2 && inflight[index] >= 2 && inflight[index] * 2 > carried,
+          crowded: !nodes.keepsOffSlow && hosts.length > 2 && inflight[index] >= 2 && inflight[index] * 2 > carried,
           delivered: delivered(url),
           full: nodes.isFull(url, extraInflight: placed[keys[index]] ?? 0),
           firstByte: _firstByteFloor(url, nodes),
@@ -109,6 +116,7 @@ abstract final class HurryPlacement {
   /// The candidates a hurry keeps to when it does not explore: nodes under 1/[slowShare] of the best known speed
   /// are left out, and nodes not known yet once two known nodes (hosts) remain. With nothing known, all of [urls].
   static List<String> kept(List<String> urls, NodeStats nodes) {
+    if (nodes.keepsOffSlow) return _prompt(urls, nodes);
     final speeds = [for (final url in urls) nodes.bps(url)];
     final best = speeds.fold(0.0, max);
     if (best <= 0) return urls;
@@ -121,6 +129,30 @@ abstract final class HurryPlacement {
     return [
       for (var index = 0; index < urls.length; index++)
         if (speeds[index] <= 0 || speeds[index] >= best / slowShare) urls[index],
+    ];
+  }
+
+  /// `kept` under `NodeStats.keepsOffSlow`: by the time a [probeBytes] piece is expected to take, first byte
+  /// included, nodes over [slowFactor] times the second best's are left out, and unknown nodes once two are known.
+  /// By speed alone cosov, which sends nothing for a second and then the whole piece at once, measured fastest and
+  /// pushed aliov out.
+  static List<String> _prompt(List<String> urls, NodeStats nodes) {
+    final expected = [for (final url in urls) nodes.expectedMs(url, pieceBytes: probeBytes)];
+    final byNode = <String, double>{};
+    for (var index = 0; index < urls.length; index++) {
+      final value = expected[index];
+      if (value == null) continue;
+      final key = NodeCatalog.nodeKey(urls[index]);
+      byNode[key] = min(byNode[key] ?? double.infinity, value);
+    }
+    if (byNode.isEmpty) return urls;
+    // One measurement must not decide a whole segment: unknown nodes keep their share until a second node is known.
+    if (byNode.length < 2) return [for (var index = 0; index < urls.length; index++) urls[index]];
+    final ranked = byNode.values.toList()..sort();
+    final limit = ranked[1] * slowFactor;
+    return [
+      for (var index = 0; index < urls.length; index++)
+        if (expected[index] case final value? when value <= limit) urls[index],
     ];
   }
 

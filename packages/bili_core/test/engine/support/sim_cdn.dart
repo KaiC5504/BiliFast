@@ -32,6 +32,8 @@ final class NodeBehavior {
     this.coldRange,
     this.coldRangeFirstByteMs = 0,
     this.coldRangeBytesPerSecond,
+    this.missEvery,
+    this.missFirstByteMs = 0,
   });
 
   final double firstByteMs;
@@ -83,6 +85,11 @@ final class NodeBehavior {
   final ByteRange? coldRange;
   final double coldRangeFirstByteMs;
   final double? coldRangeBytesPerSecond;
+
+  /// Every this many requests (per node) misses the edge's cache and takes [missFirstByteMs] to its first byte, as a
+  /// fifth of Akamai's did on the phone (1.0.0 (1)): 75% under 48 ms, the misses over 400 ms.
+  final int? missEvery;
+  final double missFirstByteMs;
 }
 
 final class ConnectionLost implements Exception {
@@ -254,11 +261,15 @@ final class SimCDN implements RangeTransport {
     _served[node] = number;
     final cold = number <= behavior.coldRequests || number >= (behavior.lateFirstByteFromRequest ?? 1 << 62);
     final coldSpan = _holds(behavior.coldRange, range.start);
+    final every = behavior.missEvery;
+    final miss = every != null && number % every == 0;
     await _sleep(
       coldSpan
           ? behavior.coldRangeFirstByteMs
           : cold
           ? behavior.coldFirstByteMs
+          : miss
+          ? behavior.missFirstByteMs
           : behavior.firstByteMs,
       cancel,
     );
