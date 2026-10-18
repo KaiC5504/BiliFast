@@ -7,40 +7,142 @@ enum DeviceChannel {
   /// What the app delegate reports; portrait until Dart asks for full screen.
   @MainActor static var mask: UIInterfaceOrientationMask = .portrait
 
+  /// Set once at registration; the callbacks that arrive off the main actor reach Dart through it.
+  @MainActor static var events: DeviceEventApi?
+
   static func register(with messenger: FlutterBinaryMessenger) {
-    DeviceHostApiSetup.setUp(binaryMessenger: messenger, api: DeviceHostApiImpl(events: DeviceEventApi(binaryMessenger: messenger)))
+    MainActor.assumeIsolated {
+      DeviceChannel.events = DeviceEventApi(binaryMessenger: messenger)
+      DeviceControls.hardwareVolumeChanged = { volume in
+        Task { @MainActor in try? await DeviceChannel.events?.onHardwareVolume(volume: volume) }
+      }
+    }
+    DeviceHostApiSetup.setUp(binaryMessenger: messenger, api: DeviceHostApiImpl())
+  }
+
+  @MainActor static var scene: UIWindowScene? {
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
   }
 }
 
 /// Pigeon calls in on the main thread.
 final class DeviceHostApiImpl: DeviceHostApi {
-  private let events: DeviceEventApi
+  private let orientation = MainActor.assumeIsolated { OrientationEvents() }
 
-  init(events: DeviceEventApi) {
-    self.events = events
+  func setOrientationEvents(enabled: Bool) throws {
+    let orientation = self.orientation
+    MainActor.assumeIsolated { enabled ? orientation.start() : orientation.stop() }
   }
 
-  func setOrientationEvents(enabled: Bool) throws {}
+  func deviceOrientation() throws -> NativeDeviceOrientation {
+    MainActor.assumeIsolated { OrientationEvents.native(UIDevice.current.orientation) }
+  }
 
-  func deviceOrientation() throws -> NativeDeviceOrientation { .unknown }
+  func interfaceOrientation() throws -> NativeInterfaceOrientation {
+    MainActor.assumeIsolated {
+      guard let current = DeviceChannel.scene?.effectiveGeometry.interfaceOrientation else { return .unknown }
+      switch current {
+      case .portrait: return .portrait
+      case .landscapeLeft: return .landscapeLeft
+      case .landscapeRight: return .landscapeRight
+      default: return .unknown
+      }
+    }
+  }
 
-  func interfaceOrientation() throws -> NativeInterfaceOrientation { .unknown }
+  func requestOrientations(request: Int64, mask: NativeOrientationMask) throws {
+    MainActor.assumeIsolated {
+      let wanted: UIInterfaceOrientationMask
+      switch mask {
+      case .portrait: wanted = .portrait
+      case .landscape: wanted = .landscape
+      case .landscapeLeft: wanted = .landscapeLeft
+      case .landscapeRight: wanted = .landscapeRight
+      }
+      DeviceChannel.mask = wanted
+      guard let scene = DeviceChannel.scene else { return }
+      // FlutterViewController's own set (SystemChrome's, all by default) intersects with the app delegate's.
+      for window in scene.windows {
+        window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+      }
+      let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: wanted)
+      scene.requestGeometryUpdate(preferences) { @Sendable error in
+        let message = String(describing: error)
+        Task { @MainActor in try? await DeviceChannel.events?.onOrientationRefused(request: request, error: message) }
+      }
+    }
+  }
 
-  func requestOrientations(request: Int64, mask: NativeOrientationMask) throws {}
+  func brightness() throws -> Double {
+    MainActor.assumeIsolated { DeviceControls.brightness }
+  }
 
-  func brightness() throws -> Double { 0.5 }
+  func setBrightness(value: Double) throws {
+    MainActor.assumeIsolated { DeviceControls.brightness = value }
+  }
 
-  func setBrightness(value: Double) throws {}
+  func saveBrightness() throws {
+    MainActor.assumeIsolated { DeviceControls.saveBrightness() }
+  }
 
-  func saveBrightness() throws {}
+  func restoreBrightness() throws {
+    MainActor.assumeIsolated { DeviceControls.restoreBrightness() }
+  }
 
-  func restoreBrightness() throws {}
+  func volume() throws -> Double {
+    MainActor.assumeIsolated { DeviceControls.volume() }
+  }
 
-  func volume() throws -> Double { 0.5 }
+  func setVolume(value: Double) throws {
+    let moved = MainActor.assumeIsolated { DeviceControls.setVolume(value) }
+    if !moved {
+      throw DeviceApiError(code: "no-volume-slider", message: "MPVolumeView has no slider", details: nil)
+    }
+  }
 
-  func setVolume(value: Double) throws {}
+  func attachVolumeView() throws {
+    MainActor.assumeIsolated { DeviceControls.attachVolumeView() }
+  }
 
-  func attachVolumeView() throws {}
+  func detachVolumeView() throws {
+    MainActor.assumeIsolated { DeviceControls.detachVolumeView() }
+  }
+}
 
-  func detachVolumeView() throws {}
+/// UIDevice's orientation notifications, on only while a page with a player is open.
+@MainActor
+final class OrientationEvents {
+  private var observer: NSObjectProtocol?
+
+  func start() {
+    guard observer == nil else { return }
+    UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+    observer = NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil,
+                                                      queue: .main) { _ in
+      MainActor.assumeIsolated {
+        let orientation = OrientationEvents.native(UIDevice.current.orientation)
+        Task { @MainActor in try? await DeviceChannel.events?.onDeviceOrientation(orientation: orientation) }
+      }
+    }
+  }
+
+  func stop() {
+    guard let observer else { return }
+    NotificationCenter.default.removeObserver(observer)
+    UIDevice.current.endGeneratingDeviceOrientationNotifications()
+    self.observer = nil
+  }
+
+  static func native(_ orientation: UIDeviceOrientation) -> NativeDeviceOrientation {
+    switch orientation {
+    case .portrait: return .portrait
+    case .portraitUpsideDown: return .portraitUpsideDown
+    case .landscapeLeft: return .landscapeLeft
+    case .landscapeRight: return .landscapeRight
+    case .faceUp: return .faceUp
+    case .faceDown: return .faceDown
+    default: return .unknown
+    }
+  }
 }
