@@ -1219,6 +1219,7 @@ void main() {
       intro(tester).onOpenEpisodes();
       expect(ui(tester).panels.value, PlayerPanel.episodes);
       ui(tester).panels.close();
+      sessions.single.duration.value = 200;
       intro(tester).onSeek(83);
       expect(session.calls, contains('commitSeek 83.0'));
 
@@ -1318,6 +1319,7 @@ void main() {
       final session = sessions.single;
       player.emit(const StatusChanged(PlayerStatus.paused));
       player.calls.clear();
+      sessions.single.duration.value = 200;
       intro(tester).onSeek(83);
       await tester.pump();
       expect(session.calls, contains('commitSeek 83.0'));
@@ -1329,6 +1331,19 @@ void main() {
       intro(tester).onSeek(90);
       await tester.pump();
       expect(session.calls, contains('commitSeek 90.0'));
+      expect(player.calls, isEmpty);
+      await back(tester);
+    });
+
+    testWidgets('a timestamp tapped before the duration is known neither seeks nor plays', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      player.calls.clear();
+      intro(tester).onSeek(83);
+      await tester.pump();
+      expect(sessions.single.calls, isNot(contains('commitSeek 83.0')));
       expect(player.calls, isEmpty);
       await back(tester);
     });

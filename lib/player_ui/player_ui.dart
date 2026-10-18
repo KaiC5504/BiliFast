@@ -19,6 +19,7 @@ final class PlayerUi {
     required this.onBack,
     this.details,
     this.onComments,
+    this.overlay,
   });
 
   final PlayerSession session;
@@ -36,6 +37,9 @@ final class PlayerUi {
 
   /// 评论 in full screen: back to the small player on the 评论 tab.
   final VoidCallback? onComments;
+
+  /// What the page's action overlays have up, null when nothing; the chrome stands aside while it isn't.
+  final ValueListenable<Object?>? overlay;
 
   Presentation get presentation => orientation.presentation;
 }

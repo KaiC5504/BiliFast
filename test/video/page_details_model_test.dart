@@ -676,7 +676,7 @@ void main() {
       addTearDown(r.dispose);
       r.api.failures['addToWatchLater'] = const BiliError.api(code: -101, message: '账号未登录');
       final result = await r.model.watchLater(_related('BV1xx411c7mD'));
-      expect(result.message, '需要登录');
+      expect(result.message, isEmpty, reason: 'the login prompt has the words');
       expect(r.logins, 1);
     });
   });

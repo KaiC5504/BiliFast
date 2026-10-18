@@ -294,6 +294,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
       onBack: _back,
       details: details,
       onComments: _showComments,
+      overlay: _overlays,
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
@@ -459,7 +460,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
         } finally {
           _resolvingId = false;
         }
-        if (!mounted || _left || view.bvid == _bvid) return;
+        // The lookup may answer after a related page or a menu went up over this one.
+        if (!mounted || _left || !(ModalRoute.isCurrentOf(context) ?? false) || view.bvid == _bvid) return;
         await widget.openPage(context, VideoRoute(bvid: view.bvid, title: view.title, view: view));
       default:
         break;

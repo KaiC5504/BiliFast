@@ -188,7 +188,7 @@ void main() {
       expect(r.model.liked, isFalse);
       expect(r.model.likeCount, 9131);
       expect(r.logins, 1);
-      expect(r.toasts, ['需要登录']);
+      expect(r.toasts, isEmpty, reason: 'the login prompt has the words');
     });
 
     test('a second tap while one is out sends nothing', () async {

@@ -278,7 +278,11 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
       return const ActionResult('已添加至稍后再看', ok: true);
     } catch (error) {
       _logger.warn(LogCategory.api, 'watch later failed', {'error': '$error'});
-      if (error is BiliError && error.needsLogin && !_disposed) _requestLogin();
+      if (error is BiliError && error.needsLogin) {
+        // The login prompt has the words.
+        if (!_disposed) _requestLogin();
+        return const ActionResult('', ok: false);
+      }
       return ActionResult(requestFailureMessage(error), ok: false);
     }
   }

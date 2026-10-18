@@ -38,13 +38,16 @@ class LandscapeChrome extends StatelessWidget {
   Widget build(BuildContext context) {
     final insets = MediaQuery.paddingOf(context);
     return ListenableBuilder(
-      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.orientation, ui.details]),
+      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.orientation, ui.details, ui.overlay]),
       builder: (context, _) {
         final shown = ui.chrome.visible && ui.panels.value == null;
         return Stack(
           fit: StackFit.expand,
           children: [
-            LandscapeCornerOnline(ui: ui, shown: !ui.chrome.visible && ui.panels.value == null),
+            LandscapeCornerOnline(
+              ui: ui,
+              shown: !ui.chrome.visible && ui.panels.value == null && ui.overlay?.value == null,
+            ),
             _controls(context, insets, shown),
           ],
         );

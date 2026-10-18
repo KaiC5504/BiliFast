@@ -444,8 +444,12 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
         // A refusal is Bilibili's; anything else may be a bug in reading its answer.
         if (error is! BiliError) 'stack': '$stack',
       });
-      _say(failureMessage(error));
-      if (error is BiliError && error.needsLogin) _login();
+      // An expired login gets the login prompt's words alone.
+      if (error is BiliError && error.needsLogin) {
+        _login();
+      } else {
+        _say(failureMessage(error));
+      }
     } finally {
       _busy.remove(name);
       _notify();

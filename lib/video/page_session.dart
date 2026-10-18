@@ -31,6 +31,8 @@ extension SeekAndPlay on PlayerSession {
   /// Plays once the seek has landed, unless already playing. Not [PlayerSession.togglePlay], which would play an
   /// ended video again from the start.
   Future<void> seekAndPlay(double seconds) async {
+    // Before the duration is known commitSeek does nothing, and playing would start from the wrong place.
+    if (duration.value <= 0) return;
     await commitSeek(seconds);
     if (readout.wantsPlay) return;
     try {
