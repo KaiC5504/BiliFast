@@ -734,7 +734,7 @@ abstract final class LandscapeActionTheme {
 /// 竖屏's action column, uploader, 粉丝 and 关注 (09), and the 选集 sheet's share circle and 收藏 (19).
 abstract final class VerticalActionTheme {
   /// 09's column: 44 wide, centred 27 in from the right edge, items 69 apart with the icon centre 27.5 above its
-  /// count's; the last count ends 64 above the bottom row's bottom, clear of the bar's touch.
+  /// count's; the last count's line ends 62.5 above the bottom row's bottom, about where the bar's touch starts.
   static const columnWidth = 44.0;
   static const columnTrailing = 5.0;
   static const columnLift = 62.5;
