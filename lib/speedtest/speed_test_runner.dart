@@ -26,11 +26,19 @@ abstract interface class SpeedTestTarget {
   int? get playingQuality;
   String get playingCodec;
   int get selectedQuality;
+
+  /// A playurl answer is in hand: [replay] asks Bilibili nothing.
+  bool get canReplay;
+  PlaybackMode get mode;
+
+  /// BTR failed during this playback and it went on direct.
+  bool get fellBack;
   double get durationSeconds;
   double get positionSeconds;
 
   Future<void> useEngine(Future<PlaybackEngine> Function() start);
   Future<void> setQuality(int quality);
+  Future<void> setMode(PlaybackMode mode);
   Future<void> open(String link);
   Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality});
 
@@ -72,6 +80,18 @@ final class ControllerTarget implements SpeedTestTarget {
 
   @override
   int get selectedQuality => controller.selectedQuality;
+
+  @override
+  bool get canReplay => controller.canReplay;
+
+  @override
+  PlaybackMode get mode => controller.mode;
+
+  @override
+  bool get fellBack => controller.fellBack;
+
+  @override
+  Future<void> setMode(PlaybackMode mode) => controller.setMode(mode);
 
   @override
   double get durationSeconds {
@@ -254,12 +274,15 @@ class SpeedTestRunner extends ChangeNotifier {
     final marks = target.marks.listen(_onMark);
     final sampler = Timer.periodic(const Duration(seconds: 1), (_) => _current?.noteRss(_rss()));
     final originalQuality = target.selectedQuality;
+    final originalMode = target.mode;
     var engineSwapped = false;
     var finished = 0;
     _soundAndScreenRestored = false;
     final done = <String>{};
     int? openVideo;
     int? brokenVideo;
+    // A failed pass loses the playurl answer; the next may ask for it once, and the video is given up after that.
+    var refetched = false;
     try {
       await _quietly(() => target.setMuted(true));
       await _quietly(() => target.setKeepAwake(true));
@@ -283,20 +306,37 @@ class SpeedTestRunner extends ChangeNotifier {
           'seed': result.seed,
           'connectionsPerHost': pass.variant.connectionsPerHost,
           'overrides': jsonEncode(pass.variant.overrides),
-          'opened': pass.videoIndex != openVideo,
         });
+        if (pass.videoIndex != openVideo && pass.videoIndex != brokenVideo) {
+          engineSwapped = true;
+          switch (await _openVideo(pass)) {
+            case _Opened.ok:
+              openVideo = pass.videoIndex;
+              refetched = false;
+            case _Opened.broken:
+              brokenVideo = pass.videoIndex;
+            case _Opened.engineFailed:
+              break;
+          }
+        }
+        if (!target.canReplay && pass.videoIndex == openVideo) {
+          if (refetched) {
+            brokenVideo = pass.videoIndex;
+            openVideo = null;
+          } else {
+            refetched = true;
+          }
+        }
         if (pass.videoIndex == brokenVideo) {
           result
             ..failed = true
             ..failure = '视频打不开';
+        } else if (pass.videoIndex != openVideo) {
+          result
+            ..failed = true
+            ..failure = '引擎启动失败';
         } else {
-          final opening = pass.videoIndex != openVideo;
-          if (opening) {
-            openVideo = pass.videoIndex;
-            engineSwapped = true;
-          }
-          await _runPass(plan, pass, result, opening: opening, done: done);
-          if (opening && target.bvid == null) brokenVideo = pass.videoIndex;
+          await _runPass(plan, pass, result, done: done);
         }
         _logPassDone(result);
         finished++;
@@ -314,13 +354,15 @@ class SpeedTestRunner extends ChangeNotifier {
       _fast = false;
       sampler.cancel();
       unawaited(marks.cancel());
+      // Sound and screen first: restoring the engine can hang on a network that has gone.
+      _restoreSoundAndScreen();
       await _quietly(() => target.setRate(1));
       if (engineSwapped && !_disposed) {
         _setStep('正在恢复…');
         await _quietly(() => target.useEngine(hooks.appEngine));
         await _quietly(() => target.setQuality(originalQuality));
+        if (target.mode != originalMode) await _quietly(() => target.setMode(originalMode));
       }
-      _restoreSoundAndScreen();
       _logger.info(LogCategory.app, 'speedtest done', {'passes': finished, 'cancelled': _cancelled});
       _running = false;
       _pass = null;
@@ -329,35 +371,41 @@ class SpeedTestRunner extends ChangeNotifier {
     }
   }
 
+  /// Opens the pass's video in BTR mode: the run's one call for its playurl. What plays is only a warm-up; every pass,
+  /// the first too, replays from 0 on a fresh engine, so no pass's first frame carries the playurl round trip.
+  Future<_Opened> _openVideo(SpeedTestPass pass) async {
+    _setStep('正在打开视频');
+    try {
+      await target.useEngine(() => hooks.startEngine(pass.variant));
+    } catch (error) {
+      _logger.warn(LogCategory.app, 'speedtest engine failed', {'error': '$error'});
+      return _Opened.engineFailed;
+    }
+    _checkCancelled();
+    // With nothing loaded, neither reloads anything.
+    if (target.mode != PlaybackMode.btr) await target.setMode(PlaybackMode.btr);
+    await target.setQuality(pass.quality);
+    await target.open(pass.video);
+    _checkCancelled();
+    return target.bvid != null && target.canReplay ? _Opened.ok : _Opened.broken;
+  }
+
   Future<void> _runPass(SpeedTestPlan plan, SpeedTestPass pass, PassResult result,
-      {required bool opening, required Set<String> done}) async {
+      {required Set<String> done}) async {
     final random = Random(result.seed);
     final visited = <double>[0];
     _MarkWait<FirstFrame>? first;
     try {
-      if (opening) {
-        _setStep('正在打开视频');
-        try {
-          await target.useEngine(() => hooks.startEngine(pass.variant));
-        } catch (error) {
-          _logger.warn(LogCategory.app, 'speedtest engine failed', {'error': '$error'});
-          throw const _PassFailed('引擎启动失败');
-        }
-        _checkCancelled();
-        await target.setQuality(pass.quality);
-        first = _MarkWait(this, firstFrameTimeout);
-        await target.open(pass.video);
-      } else {
-        _setStep('重新开始播放');
-        first = _MarkWait(this, firstFrameTimeout);
-        await target.replay(engine: () => hooks.startEngine(pass.variant), quality: pass.quality);
-      }
+      _setStep('从头播放');
+      first = _MarkWait(this, firstFrameTimeout);
+      await target.replay(engine: () => hooks.startEngine(pass.variant), quality: pass.quality);
       _checkCancelled();
       final played = target.playingQuality;
       result.bvid = target.bvid ?? result.bvid;
       if (played == null || target.phase == PlaybackPhase.failed) {
         throw const _PassFailed('播放失败');
       }
+      if (target.fellBack) throw const _PassFailed('回退到直连');
       result
         ..quality = played
         ..codec = target.playingCodec;
@@ -419,6 +467,8 @@ class SpeedTestRunner extends ChangeNotifier {
           await _quietly(() => target.setRate(1));
         }
       }
+      // Numbers from a pass that went on direct are not the variant's.
+      if (target.fellBack) throw const _PassFailed('回退到直连');
     } on _PassFailed catch (failure) {
       result
         ..failed = true
@@ -658,3 +708,5 @@ final class _PassFailed implements Exception {
 
   final String reason;
 }
+
+enum _Opened { ok, broken, engineFailed }

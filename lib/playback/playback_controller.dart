@@ -235,6 +235,9 @@ class PlaybackController extends ChangeNotifier {
 
   PlaybackEngine get engine => _engine;
 
+  /// A playurl answer is in hand, so [replay] needs no call to Bilibili (unless its URLs are about to expire).
+  bool get canReplay => _dash != null && _choice != null && _page != null;
+
   Stream<PlaybackMark> get marks => _marks.stream;
 
   PlaybackPhase get phase => _phase;
@@ -344,7 +347,7 @@ class PlaybackController extends ChangeNotifier {
   Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality}) async {
     if (_page == null) return;
     _heldPosition = 0;
-    _advance();
+    final current = _advance();
     _teardownPlayback();
     _phase = PlaybackPhase.loading;
     _error = null;
@@ -357,6 +360,8 @@ class PlaybackController extends ChangeNotifier {
         if (error is! _Stale) _fail(error, stack);
         return;
       }
+      // An open while the engine started has taken over.
+      if (current != _epoch) return;
     }
     if (quality != null) _selectedQuality = quality;
     _logger.info(LogCategory.player, 'replay', {'quality': _selectedQuality, 'engineReplaced': engine != null});

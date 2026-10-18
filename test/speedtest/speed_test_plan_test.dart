@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/devtools/log_server_discovery.dart';
+import 'package:bilifast/playback/playback_setup.dart';
 import 'package:bilifast/speedtest/speed_test_plan.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -131,11 +132,13 @@ void main() {
     expect(config.primeStart, isTrue, reason: 'the rest is the app\'s config');
   });
 
-  // The built-in plan names switches that reach bili_core with the engine work, so only its shape is checked here.
   test('the built-in plan is the one in tools/speedtest_plan.json: A, B and C in ABCCBA at 8K', () {
     final file = File('tools/speedtest_plan.json').readAsStringSync();
     expect(jsonDecode(file), jsonDecode(SpeedTestPlan.builtinJson));
-    final plan = SpeedTestPlan.parse(SpeedTestPlan.builtinJson, check: acceptAll);
+    final plan = SpeedTestPlan.parse(SpeedTestPlan.builtinJson);
+    expect(plan.variant('C')!.config.hurryHedgeMinMs, 120);
+    expect(plan.variant('B')!.config.hurryKeepsOffSlow, isTrue);
+    expect(plan.variant('A')!.config.toJson(), appRipperConfig.toJson());
     expect(plan.id, 'builtin-1');
     expect(plan.qualities, [127]);
     expect(plan.order, 'ABCCBA');

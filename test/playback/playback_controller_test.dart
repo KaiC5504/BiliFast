@@ -886,6 +886,33 @@ void main() {
       controller.dispose();
     });
 
+    test('an open while replay starts its engine wins, and replay asks Bilibili nothing', () async {
+      final next = FakeEngine();
+      final controller = make();
+      await controller.open(bv);
+      final starting = Completer<PlaybackEngine>();
+      final replayed = controller.replay(engine: () => starting.future);
+      await settle();
+      final opened = controller.open(bv);
+      starting.complete(next);
+      await replayed;
+      await opened;
+      expect(controller.phase, isNot(PlaybackPhase.failed));
+      expect(controller.video?.bvid, isNotNull);
+      expect(http.to(Canned.playUrlPath), hasLength(2), reason: 'the two opens; the replay made no call of its own');
+      controller.dispose();
+    });
+
+    test('canReplay says whether a playurl answer is in hand', () async {
+      final controller = make();
+      expect(controller.canReplay, isFalse);
+      await controller.open(bv);
+      expect(controller.canReplay, isTrue);
+      await controller.useEngine(() async => FakeEngine());
+      expect(controller.canReplay, isFalse);
+      controller.dispose();
+    });
+
     test('useEngine closes the video, so a quality set next waits for the open', () async {
       final next = FakeEngine();
       final controller = make();

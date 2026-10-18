@@ -1,4 +1,5 @@
 import 'package:bili_core/devlog.dart';
+import 'package:bili_core/engine.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/speedtest/speed_test_plan.dart';
 import 'package:bilifast/speedtest/speed_test_results.dart';
@@ -45,7 +46,7 @@ void main() {
         body(async);
       });
 
-  test('ABBA: one open, then cold replays on each pass\'s engine, the same steps each time, all logged', () {
+  test('ABBA: one open as a warm-up, then a cold replay on each pass\'s engine, the same steps each time, all logged', () {
     onFakeClock((async) {
       final runner = make();
       var finished = false;
@@ -55,12 +56,15 @@ void main() {
       expect(runner.running, isFalse);
       expect(runner.step, '完成');
 
-      expect(hooks.engines, ['A', 'B', 'B', 'A', 'app'], reason: 'a fresh engine every pass, then the app\'s own');
+      expect(hooks.engines, ['A', 'A', 'B', 'B', 'A', 'app'],
+          reason: 'the warm-up open, a fresh engine every pass, then the app\'s own');
       expect(target.calls.where((call) => call.startsWith('open')), ['open $video']);
-      expect(target.calls.where((call) => call.startsWith('replay')), ['replay 120', 'replay 120', 'replay 120']);
+      expect(target.calls.where((call) => call.startsWith('replay')), List.filled(4, 'replay 120'),
+          reason: 'the first pass replays too, so no first frame carries the playurl call');
+      expect(target.playurlCalls, 1);
       expect(target.calls.take(4), ['muted true', 'awake true', 'useEngine', 'quality 120']);
       expect(target.calls.reversed.take(5).toList().reversed,
-          ['rate 1.0', 'useEngine', 'quality 120', 'muted false', 'awake false']);
+          ['muted false', 'awake false', 'rate 1.0', 'useEngine', 'quality 120']);
       expect(target.calls.where((call) => call == 'rate 2.0'), hasLength(4));
 
       final results = runner.results;
@@ -84,7 +88,6 @@ void main() {
       expect(field(start, 'videos'), 1);
       final passes = events('speedtest pass');
       expect(passes.map((event) => field(event, 'variant')), ['A', 'B', 'B', 'A']);
-      expect(passes.map((event) => field(event, 'opened')), [true, false, false, false]);
       expect(field(passes[1], 'connectionsPerHost'), 4);
       expect(field(passes[1], 'overrides'), '{"peakBandwidth":true}');
       expect(field(passes[0], 'overrides'), '{}');
@@ -187,7 +190,8 @@ void main() {
 
   test('no first frame within 20 s fails the pass, and the next pass runs', () {
     onFakeClock((async) {
-      target.firstFrames.add(null);
+      // The warm-up open's first frame, then none for the first pass.
+      target.firstFrames.addAll([800, null]);
       hooks.plan = planWith({'order': 'AB'});
       final runner = make();
       runner.start(links: [video]);
@@ -231,7 +235,67 @@ void main() {
       async.elapse(const Duration(minutes: 5));
       expect(runner.results.map((pass) => pass.failed), [true, true, false, false]);
       expect(target.calls.where((call) => call.startsWith('open') || call.startsWith('replay')),
-          ['open BVbroken', 'open $video', 'replay 120']);
+          ['open BVbroken', 'open $video', 'replay 120', 'replay 120']);
+    });
+  });
+
+  test('a video whose playurl fails costs one call, not one a pass', () {
+    onFakeClock((async) {
+      target.failPlayurl.add('BVlocked');
+      hooks.plan = planWith({'order': 'ABBBBA'});
+      final runner = make();
+      runner.start(links: ['BVlocked']);
+      async.elapse(const Duration(minutes: 5));
+      expect(runner.results.map((pass) => pass.failure), List.filled(6, '视频打不开'));
+      expect(target.playurlCalls, 1);
+      expect(target.calls.where((call) => call.startsWith('replay')), isEmpty);
+    });
+  });
+
+  test('a pass that fails loses the playurl answer: the next asks once, and a second failure gives the video up', () {
+    onFakeClock((async) {
+      target.failReplays.addAll([1, 2]);
+      hooks.plan = planWith({'order': 'ABBA'});
+      final runner = make();
+      runner.start(links: [video]);
+      async.elapse(const Duration(minutes: 5));
+      expect(runner.results.map((pass) => pass.failure), ['播放失败', '播放失败', '视频打不开', '视频打不开']);
+      expect(target.playurlCalls, 2, reason: 'the open, then one more after the first failure');
+    });
+  });
+
+  test('a failed pass costs one playurl call, and the passes after it run', () {
+    onFakeClock((async) {
+      target.failReplays.add(1);
+      hooks.plan = planWith({'order': 'ABBA'});
+      final runner = make();
+      runner.start(links: [video]);
+      async.elapse(const Duration(minutes: 5));
+      expect(runner.results.map((pass) => pass.failed), [true, false, false, false]);
+      expect(target.playurlCalls, 2);
+    });
+  });
+
+  test('the run plays in BTR mode and puts the mode back', () {
+    onFakeClock((async) {
+      target.mode = PlaybackMode.direct;
+      make().start(links: [video]);
+      async.elapse(const Duration(minutes: 5));
+      final calls = target.calls;
+      expect(calls.indexOf('mode btr'), lessThan(calls.indexOf('open $video')));
+      expect(calls.last, 'mode direct');
+      expect(target.mode, PlaybackMode.direct);
+    });
+  });
+
+  test('a pass that fell back to direct does not count as its variant', () {
+    onFakeClock((async) {
+      target.fallBackOnReplays.add(2);
+      hooks.plan = planWith({'order': 'AB'});
+      final runner = make();
+      runner.start(links: [video]);
+      async.elapse(const Duration(minutes: 5));
+      expect(runner.results.map((pass) => (pass.failed, pass.failure)), [(false, null), (true, '回退到直连')]);
     });
   });
 
@@ -288,7 +352,7 @@ void main() {
       expect(runner.step, '已停止');
       expect(runner.results, isEmpty);
       expect(target.calls.reversed.take(5).toList().reversed,
-          ['rate 1.0', 'useEngine', 'quality 120', 'muted false', 'awake false']);
+          ['muted false', 'awake false', 'rate 1.0', 'useEngine', 'quality 120']);
       expect(events('speedtest pass done'), isEmpty);
       final done = events('speedtest done').single;
       expect(field(done, 'cancelled'), isTrue);
@@ -307,7 +371,7 @@ void main() {
       final calls = target.calls.length;
       async.elapse(const Duration(minutes: 1));
       expect(target.calls.skip(calls), isNot(contains('useEngine')));
-      expect(hooks.engines, ['A']);
+      expect(hooks.engines, ['A', 'A'], reason: 'the warm-up open and the first pass, not the app\'s');
     });
   });
 

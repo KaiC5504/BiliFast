@@ -245,7 +245,7 @@ void main() {
       expect(find.text('B 4K ×1'), findsOneWidget);
       expect(find.text('B−A 4K'), findsOneWidget);
       expect(find.textContaining('完成'), findsOneWidget);
-      expect(engines, ['A', 'B', 'app']);
+      expect(engines, ['A', 'A', 'B', 'app']);
       expect(player.calls, containsAllInOrder(['muted true', 'keep awake true', 'muted false', 'keep awake false']));
       expect(http.to(Canned.viewPath).length + http.to(Canned.signedViewPath).length, 1, reason: 'one open per video');
     });

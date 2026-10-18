@@ -43,6 +43,17 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   `--app [--swift] [--seed N] [--off …]` benches seeks the way the app makes them; give each run its own seed, since
   a second run over the same segments meets a warm CDN. Cold 8K seeks on the PC: first byte 148-361 ms against
   Swift's 1.5-2.8 s; whole 15 MiB segments level (median 5.6 s both, the line's limit on a cold CDN).
+- 2026-10-18: 1.0.0 (1) on the phone: first frame 0.7-2.8 s (was 8.3), no stalls, seeks median ~1 s. Its log showed
+  cosov and the HK nodes taking first copies (judged by body speed alone, cosov looks fastest: it waits over a
+  second, then sends the whole piece), Akamai's first byte bimodal (a fifth of requests miss its cache), memory
+  warnings every 30-40 s dropping everything, and a seek waiting 4.6 s on a slow prefetch. Fixes, each behind a
+  switch that defaults off: `hurryKeepsOffSlow`, `medianEstimates`, `seekHurriesPrefetch`, `trimOnMemoryWarning`,
+  `peakBandwidth`, `hurryHedgeMinMs`. The app still plays with 1.0.0 (1)'s settings until the phone picks.
+- 2026-10-18: the phone speed test (KaiC's idea): a 速度测试 card in dev builds plays a plan unattended (variants of
+  engine settings, cold each pass, the same seeks every time, muted, screen kept on) and logs every number. Plans
+  come from the PC (`tools/logserver.py --plan`, `GET /plan`) or the built-in one (A = 1.0.0 (1), B = the fixes,
+  C = B with a 120 ms hurried backup and 16 Akamai connections, ABCCBA at 8K); `tools/phone_report.py --latest`
+  summarises a run. Tune by editing `tools/speedtest_plan.json` and asking KaiC to tap 开始测试 again: no build.
 - Update this section when a slice finishes.
 
 ## Layout
@@ -54,6 +65,10 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 - `ios/Runner/`: native Swift (`KeychainChannel.swift`; the player view comes in slice 1). New Swift files must be added
   to `ios/Runner.xcodeproj/project.pbxproj` by hand (four entries, see `KeychainChannel.swift`'s).
 - `test_ci/`: static tests of the workflows (pins, secrets only in step env, nothing leaks into the public log).
+- `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
+  test plan; `phone_report.py` reads a session; `speedtest_plan.json` is the plan it serves. Run the server with
+  `uv run tools/logserver.py` in the background before KaiC tests.
+- `lib/speedtest/`: the speed test's plan, runner and results (dev builds only).
 
 ## How to test
 

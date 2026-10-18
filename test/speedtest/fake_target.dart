@@ -49,6 +49,20 @@ final class FakeTarget implements SpeedTestTarget {
   double position = 0;
   final failToOpen = <String>{};
 
+  /// Links whose view works but whose playurl call fails.
+  final failPlayurl = <String>{};
+
+  /// Replays (counting from 1) that fail and lose the playurl answer, as the controller's `_fail` does.
+  final failReplays = <int>{};
+
+  /// Replays (counting from 1) that fall back to direct.
+  final fallBackOnReplays = <int>{};
+  int _replays = 0;
+  bool _answer = false;
+
+  /// The pending first frame; a replay or an engine swap drops it, as the controller ignores an old item's events.
+  Timer? _firstFrame;
+
   /// One per open or replay, in order; once used up, [defaultFirstFrameMs]. Null: no first frame.
   final firstFrames = <int?>[];
   int defaultFirstFrameMs = 800;
@@ -62,6 +76,16 @@ final class FakeTarget implements SpeedTestTarget {
   int? playingQuality;
   @override
   int selectedQuality = 120;
+  @override
+  PlaybackMode mode = PlaybackMode.btr;
+  @override
+  bool fellBack = false;
+
+  @override
+  bool get canReplay => bvid != null && _answer;
+
+  /// Playurl calls: each open, and each replay without the answer in hand.
+  int playurlCalls = 0;
 
   void emit(PlaybackMark mark) => _marks.add(mark);
 
@@ -88,8 +112,11 @@ final class FakeTarget implements SpeedTestTarget {
   @override
   Future<void> useEngine(Future<PlaybackEngine> Function() start) async {
     _note('useEngine');
+    _firstFrame?.cancel();
     await start();
     bvid = null;
+    _answer = false;
+    fellBack = false;
     playingQuality = null;
     phase = PlaybackPhase.idle;
   }
@@ -101,6 +128,12 @@ final class FakeTarget implements SpeedTestTarget {
   }
 
   @override
+  Future<void> setMode(PlaybackMode mode) async {
+    _note('mode ${mode.name}');
+    this.mode = mode;
+  }
+
+  @override
   Future<void> open(String link) async {
     _note('open $link');
     if (failToOpen.contains(link)) {
@@ -108,15 +141,35 @@ final class FakeTarget implements SpeedTestTarget {
       return;
     }
     bvid = link;
+    playurlCalls += 1;
+    if (failPlayurl.contains(link)) {
+      _answer = false;
+      phase = PlaybackPhase.failed;
+      return;
+    }
+    _answer = true;
     _play();
   }
 
   @override
   Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality}) async {
     _note('replay $quality');
+    _firstFrame?.cancel();
     if (bvid == null) return;
     if (engine != null) await engine();
     if (quality != null) selectedQuality = quality;
+    _replays += 1;
+    fellBack = fallBackOnReplays.contains(_replays);
+    if (!_answer) {
+      playurlCalls += 1;
+      _answer = !failPlayurl.contains(bvid);
+    }
+    if (failReplays.contains(_replays) || !_answer) {
+      _answer = false;
+      playingQuality = null;
+      phase = PlaybackPhase.failed;
+      return;
+    }
     _play();
   }
 
@@ -126,7 +179,7 @@ final class FakeTarget implements SpeedTestTarget {
     playingQuality = min(selectedQuality, maxQuality);
     final ms = firstFrames.isEmpty ? defaultFirstFrameMs : firstFrames.removeAt(0);
     if (ms == null) return;
-    Timer(Duration(milliseconds: ms), () {
+    _firstFrame = Timer(Duration(milliseconds: ms), () {
       phase = PlaybackPhase.playing;
       emit(FirstFrame(ms.toDouble(), timed: true));
     });
