@@ -80,9 +80,11 @@ final class PasteTargetView: UIView {
     pasteConfiguration = UIPasteConfiguration(forAccepting: NSString.self)
     control.frame = bounds
     control.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    // A control squeezed below the size it wants turns itself off; large Dynamic Type would make it want more
-    // than the 34 pt field has.
-    control.maximumContentSizeCategory = .large
+    // 1.0.0 (4) drew a blue box: the control takes its fill from the tint, not only the configuration.
+    control.tintColor = fill
+    // Squeezed below the size it wants, the control drops its glyph and turns itself off (1.0.0 (4): an empty box
+    // in the 34 pt field); the smallest text size wants the least room.
+    control.maximumContentSizeCategory = .extraSmall
     control.target = self
     addSubview(control)
     // After a copy in another app the control can keep its old clipboard state until its target is set again.
