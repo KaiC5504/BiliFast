@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
@@ -192,6 +193,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     if (!_ui.session.readout.wantsPlay) return;
     _holding = true;
     _ui.session.speedUp(true);
+    unawaited(HapticFeedback.mediumImpact());
     _ui.chrome
       ..hide()
       ..showHud(const SpeedUpHud());
@@ -201,6 +203,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     if (!_holding) return;
     _holding = false;
     _ui.session.speedUp(false);
+    unawaited(HapticFeedback.mediumImpact());
     _clearHud<SpeedUpHud>(_ui.chrome);
   }
 

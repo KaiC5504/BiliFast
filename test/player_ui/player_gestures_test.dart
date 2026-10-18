@@ -11,6 +11,7 @@ import 'package:bilifast/player_ui/player_gestures.dart';
 import 'package:bilifast/player_ui/player_hud.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
@@ -255,6 +256,77 @@ void main() {
       expect(rig.calls, isEmpty);
       expect(rig.chrome.hud.value, isNull);
       expect(rig.chrome.visible, isTrue);
+    });
+  });
+
+  group('hold haptics', () {
+    late List<Object?> haptics;
+
+    setUp(() {
+      haptics = [];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'HapticFeedback.vibrate') haptics.add(call.arguments);
+          return null;
+        },
+      );
+    });
+
+    tearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    testWidgets('a medium impact when the speed-up starts and another when the finger lifts', (tester) async {
+      rig.playing();
+      await rig.mountInline(tester);
+      final gesture = await tester.startGesture(const Offset(400, 200));
+      await tester.pump(const Duration(milliseconds: 330));
+      expect(haptics, isEmpty, reason: 'not before the hold counts');
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(haptics, ['HapticFeedbackType.mediumImpact']);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(haptics, hasLength(1), reason: 'once per hold, not per frame');
+      await gesture.up();
+      expect(haptics, ['HapticFeedbackType.mediumImpact', 'HapticFeedbackType.mediumImpact']);
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('a cancelled hold ends with one impact', (tester) async {
+      rig.playing();
+      await rig.mountInline(tester);
+      final gesture = await tester.startGesture(const Offset(400, 200));
+      await tester.pump(const Duration(milliseconds: 400));
+      await gesture.cancel();
+      await tester.pump(_tapSettles);
+      expect(haptics, hasLength(2));
+    });
+
+    testWidgets('a hold on a paused video, a short press, a tap and a drag give none', (tester) async {
+      await rig.mountInline(tester);
+      var gesture = await tester.startGesture(const Offset(400, 200));
+      await tester.pump(const Duration(milliseconds: 400));
+      await gesture.up();
+      await tester.pump(_tapSettles);
+
+      rig.playing();
+      await tester.pump();
+      gesture = await tester.startGesture(const Offset(400, 200));
+      await tester.pump(const Duration(milliseconds: 300));
+      await gesture.up();
+      await tester.pump(_tapSettles);
+
+      await tester.tapAt(const Offset(400, 200));
+      await tester.pump(_tapSettles);
+
+      await tester.timedDragFrom(const Offset(300, 200), const Offset(150, 0), thumb(150));
+      await tester.pump(_tapSettles);
+
+      expect(rig.callsStarting('speedUp'), isEmpty);
+      expect(haptics, isEmpty);
     });
   });
 
