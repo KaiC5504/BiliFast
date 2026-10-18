@@ -28,7 +28,8 @@ class WatchReporter {
   }
 
   /// Logged in, or still unknown with a session in the jar: a launch account check that failed (no network) must not
-  /// cost the whole session its history, and Bilibili ignores the heartbeats of a session that turns out dead.
+  /// cost the whole session its history, and Bilibili ignores the heartbeats of a session that turns out dead. Never
+  /// in a `--fake-account` run.
   static bool canReport(AppEnvironment environment) => !environment.fake && switch (environment.account) {
     LoggedIn() => true,
     AccountUnknown() => environment.cookies.all.containsKey('SESSDATA'),

@@ -160,5 +160,13 @@ void main() {
       expect(expired.account, isA<LoginExpired>());
       expect(WatchReporter.canReport(expired), isFalse);
     });
+
+    test('never in a --fake-account run, even with a session in the jar', () async {
+      final faked = await environment(stored: session, nav: null);
+      expect(WatchReporter.canReport(faked), isTrue);
+      faked.useFakeAccount();
+      expect(faked.account, isA<LoggedIn>());
+      expect(WatchReporter.canReport(faked), isFalse);
+    });
   });
 }

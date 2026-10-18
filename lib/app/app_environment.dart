@@ -92,8 +92,8 @@ class AppEnvironment extends ChangeNotifier {
 
   bool _fake = false;
 
-  /// A `--fake-account` run on the PC: logged in as nobody, so the page's actions can be pressed against the
-  /// in-memory `FakePageApi`. No call goes out as this account, and nothing reports watch progress.
+  /// A `--fake-account` run on the PC: logged in as a made-up 测试账号 with mid 1, so the page's actions can be pressed
+  /// against the in-memory `FakePageApi`. No call goes out as this account, and nothing reports watch progress.
   bool get fake => _fake;
 
   void useFakeAccount() {

@@ -6,7 +6,7 @@ import 'package:bilifast/video/actions/actions_model.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/page_details_model.dart';
 import 'package:fake_async/fake_async.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
@@ -170,8 +170,22 @@ class PeriodicTimerSpy {
   }
 }
 
+const _toBackground = [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused];
+const _toForeground = [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed];
+
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+
+  void lifecycle(List<AppLifecycleState> states) {
+    for (final state in states) {
+      // ignore: invalid_use_of_protected_member
+      binding.handleAppLifecycleStateChanged(state);
+    }
+  }
+
+  tearDown(() {
+    if (binding.lifecycleState case final state? when state != AppLifecycleState.resumed) lifecycle(_toForeground);
+  });
 
   void onFakeClock(void Function(FakeAsync async, _Rig Function({FakePageApi? api, bool loggedIn}) rig) body) {
     fakeAsync((async) {
@@ -289,6 +303,146 @@ void main() {
       r.model.active = true;
       async.flushMicrotasks();
       expect(r.callsTo('onlineCount'), hasLength(3), reason: 'already active');
+    });
+  });
+
+  group('in the background', () {
+    test('N人正在看 stops; back in the foreground it asks at once and polls on', () {
+      onFakeClock((async, rig) {
+        final r = rig();
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        expect(r.callsTo('onlineCount'), hasLength(1));
+        lifecycle(_toBackground);
+        async.elapse(const Duration(minutes: 5));
+        expect(r.callsTo('onlineCount'), hasLength(1), reason: 'polled in the background or in PiP');
+
+        lifecycle(_toForeground);
+        async.flushMicrotasks();
+        expect(r.callsTo('onlineCount'), hasLength(2));
+        async.elapse(const Duration(seconds: 30));
+        expect(r.callsTo('onlineCount'), hasLength(3));
+      });
+    });
+
+    test('a moment inactive (Control Centre, a call banner) keeps polling', () {
+      onFakeClock((async, rig) {
+        final r = rig();
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        lifecycle([AppLifecycleState.inactive]);
+        async.elapse(const Duration(seconds: 30));
+        expect(r.callsTo('onlineCount'), hasLength(2));
+        lifecycle([AppLifecycleState.resumed]);
+        async.flushMicrotasks();
+        expect(r.callsTo('onlineCount'), hasLength(2), reason: 'it never stopped');
+      });
+    });
+
+    test('a covered page stays quiet when the app comes back', () {
+      onFakeClock((async, rig) {
+        final r = rig();
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        r.model.active = false;
+        lifecycle(_toBackground);
+        lifecycle(_toForeground);
+        async.elapse(const Duration(minutes: 1));
+        expect(r.callsTo('onlineCount'), hasLength(1));
+      });
+    });
+
+    test('a page made in the background waits for the foreground', () {
+      onFakeClock((async, rig) {
+        lifecycle(_toBackground);
+        final r = rig();
+        r.show(_detail(_bvA), cid: 11);
+        async.elapse(const Duration(minutes: 1));
+        expect(r.callsTo('onlineCount'), isEmpty);
+        lifecycle(_toForeground);
+        async.flushMicrotasks();
+        expect(r.callsTo('onlineCount'), hasLength(1));
+      });
+    });
+  });
+
+  group('a relation that failed', () {
+    test('is asked again once the page shows again, and not once it answered', () {
+      onFakeClock((async, rig) {
+        final r = rig();
+        r.api.failures['relation'] = const BiliError.http(500);
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(1));
+        r.api.failures.remove('relation');
+        r.api.relationValue = const VideoRelation(like: true, dislike: false, favorite: false, attention: false, coins: 2);
+        async.elapse(const Duration(minutes: 1));
+        expect(r.callsTo('relation'), hasLength(1), reason: 'no retries on a timer');
+
+        r.model.active = false;
+        r.model.active = true;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(2));
+        expect(r.actions?.liked, isTrue);
+        expect(r.actions?.maxCoins, 0, reason: 'the coins given are known now');
+        r.model.active = false;
+        r.model.active = true;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(2), reason: 'it answered');
+      });
+    });
+
+    test('is asked again when the app comes back, once each time', () {
+      onFakeClock((async, rig) {
+        final r = rig();
+        r.api.failures['relation'] = const BiliError.http(500);
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        lifecycle(_toBackground);
+        lifecycle(_toForeground);
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(2));
+        async.elapse(const Duration(minutes: 1));
+        expect(r.callsTo('relation'), hasLength(2));
+        lifecycle(_toBackground);
+        lifecycle(_toForeground);
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(3));
+      });
+    });
+
+    test('asked again keeps what was tapped since', () {
+      onFakeClock((async, rig) {
+        final r = rig();
+        r.api.failures['relation'] = const BiliError.http(500);
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        unawaited(r.actions!.toggleLike());
+        async.flushMicrotasks();
+        r.api.failures.remove('relation');
+        r.api.relationValue = const VideoRelation(like: false, dislike: false, favorite: false, attention: false, coins: 1);
+        r.model.active = false;
+        r.model.active = true;
+        async.flushMicrotasks();
+        expect(r.actions?.liked, isTrue);
+        expect(r.actions?.coins, 1);
+      });
+    });
+
+    test('for an earlier video is not asked again', () {
+      onFakeClock((async, rig) {
+        final r = rig();
+        r.api.failures['relation'] = const BiliError.http(500);
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        r.api.failures.remove('relation');
+        r.show(_detail(_bvB, cids: [21]), cid: 21);
+        async.flushMicrotasks();
+        r.model.active = false;
+        r.model.active = true;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(2), reason: 'the new video asked its own');
+      });
     });
   });
 
@@ -491,7 +645,7 @@ void main() {
       final r = _Rig(loggedIn: false);
       addTearDown(r.dispose);
       final result = await r.model.watchLater(_related('BV1xx411c7mD'));
-      expect(result.message, '请先登录');
+      expect(result.message, isEmpty, reason: 'the login request says so itself');
       expect(result.ok, isFalse);
       expect(r.logins, 1);
       expect(r.api.calls, isEmpty);
@@ -574,9 +728,36 @@ void main() {
         account.dispose();
       });
     });
+
+    test('whose relation failed asks again once the page shows again', () {
+      fakeAsync((async) {
+        final account = ValueNotifier(0);
+        final r = _Rig(loggedIn: false, accountChanges: account);
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        r.api.failures['relation'] = const BiliError.http(500);
+        r.loggedIn = true;
+        account.value += 1;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(1));
+        expect(r.logged, contains('relation failed'));
+        expect(r.toasts, isEmpty);
+
+        r.api.failures.remove('relation');
+        r.api.relationValue = const VideoRelation(like: true, dislike: false, favorite: true, attention: false, coins: 0);
+        r.model.active = false;
+        r.model.active = true;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(2));
+        expect(r.actions?.liked, isTrue);
+        expect(r.actions?.favorited, isTrue);
+        r.dispose();
+        account.dispose();
+      });
+    });
   });
 
-  test('dispose stops the poll, stops following, and disposes the actions and the count', () {
+  test('dispose stops the poll and every listener, and disposes the actions and the count', () {
     fakeAsync((async) {
       final account = ValueNotifier(0);
       final r = _Rig(accountChanges: account);
@@ -588,6 +769,8 @@ void main() {
       r.model.dispose();
       r.show(_detail(_bvB, cids: [21]), cid: 21);
       account.value += 1;
+      lifecycle(_toBackground);
+      lifecycle(_toForeground);
       async.elapse(const Duration(minutes: 2));
       expect(r.api.calls, hasLength(calls));
       expect(() => actions.addListener(() {}), throwsFlutterError);

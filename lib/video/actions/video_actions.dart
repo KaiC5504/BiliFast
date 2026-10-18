@@ -1,12 +1,13 @@
 import 'package:bili_core/api.dart' show FavFolder;
 import 'package:flutter/foundation.dart';
 
-/// What a tap asks the page to put up. The page clears it once the overlay is up, or once the share sheet closed.
+/// What a tap asks the page to put up; [ActionOverlays] takes it and clears it at once.
 enum ActionPrompt { coin, favourites, unfollow, share }
 
 /// 点赞, 不喜欢, 三连, 投币, 收藏, 分享 and 关注 for the video on the page (BiliNative `ActionsModel.swift`), shared by
 /// the action row, the full-screen chrome and the end screens. Every change shows at once and is taken back, field by
-/// field, if the server refuses it. Logged out, every action but 分享 asks for a login and sends nothing.
+/// field, if the server refuses it. Logged out, every action but 分享 asks for a login and sends nothing; 不喜欢 says
+/// it isn't supported first (see [dislikeAvailable]).
 abstract interface class VideoActions implements Listenable {
   bool get liked;
 
@@ -35,10 +36,11 @@ abstract interface class VideoActions implements Listenable {
   /// Whether a 三连 now goes to the server, so the row bursts only for one that does.
   bool get tripleSends;
 
-  /// False in a build without the TV app keys: 不喜欢 is grey and a tap says 此版本不支持不喜欢.
+  /// Always false until the TV login is ported: 不喜欢 is grey and a tap says 此版本不支持不喜欢.
   bool get dislikeAvailable;
 
-  /// The 合集 holding the video is in this account's 订阅; null without a 合集 or before the relation answers.
+  /// The 合集 holding the video is in this account's 订阅; null without a 合集, before the relation answers, or when
+  /// it couldn't be asked.
   bool? get seasonFavourited;
 
   ActionPrompt? get prompt;
@@ -61,7 +63,8 @@ abstract interface class VideoActions implements Listenable {
   /// [inAnyFolder]: whether the video stays in some folder afterwards, which only the favourites sheet knows.
   Future<void> applyFavourites({required List<int> add, required List<int> remove, bool? inAnyFolder});
 
-  /// The account's folders for the favourites sheet, starting to load. The sheet disposes it when it closes.
+  /// The account's folders for the favourites sheet, starting to load. The caller disposes it ([ActionOverlays], once
+  /// the sheet has gone).
   FavouriteFolders openFolders();
 
   /// 关注 follows at once; 已关注 puts up [ActionPrompt.unfollow] first.

@@ -84,6 +84,7 @@ class _Rig {
     VideoRelation? relation,
     UploaderCard? uploader,
     int? mid = 10001,
+    bool dislikeAvailable = false,
   }) {
     model = ActionsModel(
       api: api,
@@ -94,6 +95,7 @@ class _Rig {
       accountMid: () => mid,
       requestLogin: () => logins += 1,
       toast: toasts.add,
+      dislikeAvailable: dislikeAvailable,
       logger: Logger(session: 'test')..add(logs),
     );
     model.addListener(() => notified += 1);
@@ -122,6 +124,7 @@ void main() {
     VideoRelation? relation,
     UploaderCard? uploader,
     int? mid = 10001,
+    bool dislikeAvailable = false,
   }) {
     final made = _Rig(
       loggedIn: loggedIn,
@@ -130,6 +133,7 @@ void main() {
       relation: relation,
       uploader: uploader,
       mid: mid,
+      dislikeAvailable: dislikeAvailable,
     );
     rigs.add(made);
     return made;
@@ -174,6 +178,7 @@ void main() {
       expect(r.toasts, ['已赞过']);
       expect(r.logins, 0);
       expect(r.logged, contains('like failed'));
+      expect(r.logs.events.single.f.keys, isNot(contains('stack')), reason: 'a refusal is not a bug');
     });
 
     test('an expired login rolls back and asks for a login', () async {
@@ -204,6 +209,16 @@ void main() {
       expect(r.model.liked, isFalse);
       expect(r.toasts, ['网络连接失败，请检查网络后重试']);
       expect(r.logins, 0);
+    });
+
+    test('a bug in the answer says 操作失败 and logs where it came from', () async {
+      final r = rig();
+      r.api.failures['like'] = StateError('No element');
+      await r.model.toggleLike();
+      expect(r.model.liked, isFalse);
+      expect(r.toasts, ['操作失败']);
+      final event = r.logs.events.singleWhere((event) => event.msg == 'like failed');
+      expect(event.f.keys, contains('stack'));
     });
   });
 
@@ -270,6 +285,27 @@ void main() {
       expect(r.model.favCount, 3907);
       expect(r.model.coins, 0, reason: 'no coins to give');
       expect(r.model.coinCount, 1210);
+    });
+
+    test('answered without the coin it toasts 投币失败 and keeps the like and the favourite', () async {
+      final r = rig();
+      r.api.tripleAnswer = const TripleResult(like: true, coin: false, favorite: true, multiply: 0);
+      await r.model.triple();
+      expect(r.toasts, ['投币失败']);
+      expect(r.model.liked, isTrue);
+      expect(r.model.likeCount, 9132);
+      expect(r.model.favorited, isTrue);
+      expect(r.model.favCount, 3908);
+      expect(r.model.coins, 0);
+      expect(r.model.coinCount, 1210);
+    });
+
+    test('with no coin left to give, an answer without one toasts nothing', () async {
+      final r = rig(relation: _relation(coins: 2));
+      r.api.tripleAnswer = const TripleResult(like: true, coin: false, favorite: true, multiply: 0);
+      await r.model.triple();
+      expect(r.toasts, isEmpty);
+      expect(r.model.tripleDone, isTrue);
     });
 
     test('never counts more coins than the video allows', () async {
@@ -461,27 +497,81 @@ void main() {
       expect(r.model.tripleDone, isTrue);
     });
 
-    test('after a login, refreshRelation shows this account\'s state whatever was tapped', () async {
+    test('a refused like takes the relation that answers after it', () async {
+      final r = rig();
+      r.api.failures['like'] = const BiliError.api(code: 65006, message: '已赞过');
+      await r.model.toggleLike();
+      expect(r.model.liked, isFalse);
+      r.model.apply(_relation(like: true));
+      expect(r.model.liked, isTrue, reason: 'the refused tap kept the relation out');
+      expect(r.model.likeCount, 9131, reason: 'the count holds this account\'s like already');
+
+      r.api.failures.remove('like');
+      await r.model.toggleLike();
+      expect(r.api.calls, ['like on=true', 'like on=false']);
+      expect(r.model.liked, isFalse);
+      expect(r.model.likeCount, 9130);
+    });
+
+    test('a relation that lands while a refused like is out shows once the like is taken back', () async {
+      final r = rig();
+      r.api.failures['like'] = const BiliError.api(code: 65006, message: '已赞过');
+      final gate = r.hold('like');
+      final pending = r.model.toggleLike();
+      r.model.apply(_relation(like: true, coins: 1));
+      expect(r.model.liked, isTrue);
+      expect(r.model.likeCount, 9132, reason: 'the tap shows until it is answered');
+      expect(r.model.coins, 1);
+      gate.complete();
+      await pending;
+      expect(r.model.liked, isTrue);
+      expect(r.model.likeCount, 9131);
+    });
+
+    test('a change taken back under another action still out shows that action\'s', () async {
+      final r = rig();
+      r.api.failures['like'] = const BiliError.api(code: 65004, message: '取消点赞失败');
+      final coinGate = r.hold('coin');
+      final coin = r.model.coin(1, alsoLike: true);
+      await r.model.toggleLike();
+      expect(r.model.liked, isTrue, reason: 'the coin\'s like is back');
+      expect(r.model.likeCount, 9132);
+      r.model.apply(_relation());
+      expect(r.model.liked, isTrue, reason: 'the coin still out stands on it');
+      coinGate.complete();
+      await coin;
+      expect(r.model.liked, isTrue);
+    });
+
+    test('two refused actions on one field leave neither\'s change', () async {
+      final r = rig(relation: _relation());
+      r.api.failures['coin'] = const BiliError.api(code: -104, message: '硬币不足');
+      r.api.failures['like'] = const BiliError.api(code: 65004, message: '取消点赞失败');
+      final coinGate = r.hold('coin');
+      final likeGate = r.hold('like');
+      final coin = r.model.coin(1, alsoLike: true);
+      final like = r.model.toggleLike();
+      expect(r.model.liked, isFalse);
+      coinGate.complete();
+      await coin;
+      expect(r.model.coins, 0);
+      expect(r.model.liked, isFalse);
+      likeGate.complete();
+      await like;
+      expect(r.model.liked, isFalse, reason: 'the unlike\'s rollback brought back the refused coin\'s like');
+      expect(r.model.likeCount, 9131);
+      expect(r.model.coinCount, 1210);
+    });
+
+    test('after a login, reset shows this account\'s state whatever was tapped', () async {
       final r = rig();
       await r.model.toggleLike();
-      r.api.relationValue = _relation(favorite: true, coins: 2, attention: true);
-      await r.model.refreshRelation();
+      r.model.reset(_relation(favorite: true, coins: 2, attention: true));
       expect(r.model.liked, isFalse);
       expect(r.model.favorited, isTrue);
       expect(r.model.coins, 2);
       expect(r.model.following, isTrue);
-    });
-
-    test('refreshRelation logged out asks nothing, and a failure keeps the state', () async {
-      final r = rig(loggedIn: false, relation: _relation(like: true));
-      await r.model.refreshRelation();
-      expect(r.api.calls, isEmpty);
-      r.loggedIn = true;
-      r.api.failures['relation'] = const BiliError.http(500);
-      await r.model.refreshRelation();
-      expect(r.model.liked, isTrue);
-      expect(r.logged, contains('relation failed'));
-      expect(r.toasts, isEmpty);
+      expect(r.api.calls, ['like on=true'], reason: 'the page asks for the relation; the actions only show it');
     });
   });
 
@@ -524,6 +614,33 @@ void main() {
       expect(r.model.likeCount, 9131);
       expect(r.model.following, isFalse);
       expect(r.toasts, ['已赞过', '不能关注自己']);
+    });
+
+    test('a refused like does not undo the like a 三连 confirmed', () async {
+      final r = rig();
+      r.api.failures['like'] = const BiliError.api(code: 65006, message: '已赞过');
+      final gate = r.hold('like');
+      final like = r.model.toggleLike();
+      await r.model.triple();
+      expect(r.model.liked, isTrue);
+      gate.complete();
+      await like;
+      expect(r.model.liked, isTrue, reason: 'the like\'s rollback undid what the 三连 did');
+      expect(r.model.likeCount, 9132);
+      expect(r.model.tripleDone, isTrue);
+      expect(r.toasts, ['已赞过']);
+    });
+
+    test('a refused 收藏 does not undo the favourite a 三连 confirmed', () async {
+      final r = rig();
+      r.api.failures['updateFavourites'] = const BiliError.api(code: 11201, message: '已经收藏过了');
+      final gate = r.hold('updateFavourites');
+      final favourites = r.model.applyFavourites(add: [11], remove: []);
+      await r.model.triple();
+      gate.complete();
+      await favourites;
+      expect(r.model.favorited, isTrue);
+      expect(r.model.favCount, 3908);
     });
 
     test('a failed coin takes back only what it changed', () async {
@@ -589,6 +706,21 @@ void main() {
       expect(r.model.seasonFavourited, isTrue);
     });
 
+    test('logged out a tap asks for a login and sends nothing', () async {
+      final r = rig(loggedIn: false, season: _season);
+      await r.model.toggleSeasonFavourite();
+      expect(r.logins, 1);
+      expect(r.api.calls, isEmpty);
+    });
+
+    test('logged in with the relation unknown, a tap subscribes', () async {
+      final r = rig(season: _season);
+      expect(r.model.seasonFavourited, isNull);
+      await r.model.toggleSeasonFavourite();
+      expect(r.api.calls, ['favSeason season=5001 on=true']);
+      expect(r.model.seasonFavourited, isTrue);
+    });
+
     test('without a 合集 there is nothing to send', () async {
       final r = rig();
       await r.model.toggleSeasonFavourite();
@@ -612,6 +744,19 @@ void main() {
       await r.model.toggleDislike();
       expect(r.toasts, ['此版本不支持不喜欢']);
       expect(r.logins, 0);
+    });
+
+    test('with the TV keys: logged out asks for a login, logged in still says it can\'t', () async {
+      final out = rig(loggedIn: false, dislikeAvailable: true);
+      await out.model.toggleDislike();
+      expect(out.logins, 1);
+      expect(out.toasts, isEmpty);
+
+      final r = rig(dislikeAvailable: true);
+      await r.model.toggleDislike();
+      expect(r.toasts, ['此版本不支持不喜欢']);
+      expect(r.logins, 0);
+      expect(r.api.calls, isEmpty);
     });
   });
 
@@ -654,7 +799,7 @@ void main() {
   });
 
   group('failure words', () {
-    test('Bilibili\'s own refusals show as sent; codes the app knows keep its words', () {
+    test('Bilibili\'s own refusals show word for word; codes the app knows keep its words; a bug is 操作失败', () {
       expect(ActionsModel.failureMessage(const BiliError.api(code: 65006, message: '已赞过')), '已赞过');
       expect(ActionsModel.failureMessage(const BiliError.api(code: -101, message: '账号未登录')), '需要登录');
       expect(ActionsModel.failureMessage(const BiliError.api(code: -352, message: '风控校验失败')), '请求过于频繁，请稍后再试');
@@ -663,6 +808,9 @@ void main() {
       expect(ActionsModel.failureMessage(const BiliError.api(code: 10003, message: '')), 'B 站返回错误 10003：');
       expect(ActionsModel.failureMessage(const BiliError.http(412)), 'B 站暂时拒绝了请求（风控），稍后再试');
       expect(ActionsModel.failureMessage(const SocketLikeError()), '网络连接失败，请检查网络后重试');
+      expect(ActionsModel.failureMessage(TimeoutException('slow')), '网络连接失败，请检查网络后重试');
+      expect(ActionsModel.failureMessage(StateError('No element')), '操作失败');
+      expect(ActionsModel.failureMessage(const FormatException('Unexpected end of input')), '操作失败');
     });
   });
 
