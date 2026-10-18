@@ -45,11 +45,19 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
   void initState() {
     super.initState();
     // A long list opens on the one playing rather than at P1.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_current.currentContext case final current? when mounted) {
-        Scrollable.ensureVisible(current, alignment: 0.3);
-      }
-    });
+    _revealCurrent();
+  }
+
+  void _revealCurrent() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (_current.currentContext case final current? when mounted) {
+      Scrollable.ensureVisible(current, alignment: 0.3);
+    }
+  });
+
+  /// Turned round, the list keeps its offset, which would leave the one playing out of view.
+  void _toggleOrder() {
+    setState(() => _reversed = !_reversed);
+    _revealCurrent();
   }
 
   void _choose(Episode episode) {
@@ -234,7 +242,7 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
             child: GestureDetector(
               key: const ValueKey('sheet-order'),
               behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _reversed = !_reversed),
+              onTap: _toggleOrder,
               child: SizedBox(
                 height: BiliMetrics.sheetSectionHeight,
                 child: Row(
@@ -253,8 +261,8 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
   );
 }
 
-/// 19's grey share circle and pink 收藏 (★ 已收藏 once subscribed), once the actions exist. While the relation
-/// hasn't answered, 收藏 is dimmed and does nothing.
+/// 19's grey share circle and pink 收藏 (★ 已收藏 once subscribed), once the actions exist. Until the relation says
+/// subscribed, 收藏 reads as not, and a tap is always the actions' to judge: logged out they ask for a login.
 class _SeasonActions extends StatelessWidget {
   const _SeasonActions({required this.details});
 
@@ -287,8 +295,7 @@ class _SeasonActions extends StatelessWidget {
   }
 
   Widget _row(VideoActions actions, {required bool still}) {
-    final subscribed = actions.seasonFavourited;
-    final on = subscribed ?? false;
+    final on = actions.seasonFavourited ?? false;
     final label = on ? '已收藏' : '收藏';
     final colour = on ? VerticalActionTheme.sheetSubscribedLabel : VerticalActionTheme.sheetPillLabel;
     return Row(
@@ -315,33 +322,29 @@ class _SeasonActions extends StatelessWidget {
         _SheetTap(
           key: const ValueKey('sheet-favourite'),
           label: label,
-          onTap: subscribed == null ? null : actions.toggleSeasonFavourite,
-          child: AnimatedOpacity(
-            opacity: subscribed == null ? VerticalActionTheme.sheetUnknownOpacity : 1,
-            duration: still ? Duration.zero : const Duration(milliseconds: 200),
-            child: AnimatedContainer(
-              duration: still ? Duration.zero : const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              height: VerticalActionTheme.sheetPillHeight,
-              padding: const EdgeInsets.symmetric(horizontal: VerticalActionTheme.sheetPillPad),
-              decoration: ShapeDecoration(
-                color: on ? VerticalActionTheme.sheetSubscribedFill : VerticalActionTheme.sheetPill,
-                shape: const StadiumBorder(),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ActionIcon(ActionGlyph.favourite, solid: on, size: VerticalActionTheme.sheetStar, color: colour),
-                  const SizedBox(width: VerticalActionTheme.sheetStarGap),
-                  Transform.translate(
-                    offset: Offset(0, VerticalActionTheme.sheetPillTextDrop),
-                    child: Text(
-                      label,
-                      style: TextStyle(fontSize: VerticalActionTheme.sheetPillText, height: 1, color: colour),
-                    ),
+          onTap: actions.toggleSeasonFavourite,
+          child: AnimatedContainer(
+            duration: still ? Duration.zero : const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            height: VerticalActionTheme.sheetPillHeight,
+            padding: const EdgeInsets.symmetric(horizontal: VerticalActionTheme.sheetPillPad),
+            decoration: ShapeDecoration(
+              color: on ? VerticalActionTheme.sheetSubscribedFill : VerticalActionTheme.sheetPill,
+              shape: const StadiumBorder(),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ActionIcon(ActionGlyph.favourite, solid: on, size: VerticalActionTheme.sheetStar, color: colour),
+                const SizedBox(width: VerticalActionTheme.sheetStarGap),
+                Transform.translate(
+                  offset: Offset(0, VerticalActionTheme.sheetPillTextDrop),
+                  child: Text(
+                    label,
+                    style: TextStyle(fontSize: VerticalActionTheme.sheetPillText, height: 1, color: colour),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -350,12 +353,12 @@ class _SeasonActions extends StatelessWidget {
   }
 }
 
-/// A button in the light sheet: shrinks under the finger and answers accessibility presses; inert without [onTap].
+/// A button in the light sheet: shrinks under the finger and answers accessibility presses.
 class _SheetTap extends StatefulWidget {
   const _SheetTap({super.key, required this.label, required this.onTap, required this.child});
 
   final String label;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
   final Widget child;
 
   @override
@@ -366,13 +369,12 @@ class _SheetTapState extends State<_SheetTap> {
   var _pressed = false;
 
   void _press(bool pressed) {
-    if (_pressed != pressed && widget.onTap != null) setState(() => _pressed = pressed);
+    if (_pressed != pressed) setState(() => _pressed = pressed);
   }
 
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    enabled: widget.onTap != null,
     label: widget.label,
     onTap: widget.onTap,
     excludeSemantics: true,
@@ -486,7 +488,7 @@ class _CoverRow extends StatelessWidget {
                                       left: BiliMetrics.sheetPlayingLead,
                                       right: BiliMetrics.sheetPlayingGap,
                                     ),
-                                    child: PanelGlyph(PanelGlyphKind.playing, color: BiliColors.pink),
+                                    child: PanelGlyph(PanelGlyphKind.playing, color: VerticalActionTheme.sheetPlaying),
                                   ),
                                 ),
                               TextSpan(text: episode.title),
@@ -497,7 +499,7 @@ class _CoverRow extends StatelessWidget {
                           style: TextStyle(
                             fontSize: BiliMetrics.sheetEpisodeTitleText,
                             height: BiliMetrics.sheetEpisodeTitleLine / BiliMetrics.sheetEpisodeTitleText,
-                            color: playing ? BiliColors.pink : BiliColors.text,
+                            color: playing ? VerticalActionTheme.sheetPlaying : BiliColors.text,
                           ),
                         ),
                       ),
@@ -557,7 +559,7 @@ class _PartRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playing = episode.current;
-    final color = playing ? BiliColors.pink : BiliColors.text;
+    final color = playing ? VerticalActionTheme.sheetPlaying : BiliColors.text;
     final duration = episode.duration;
     return Semantics(
       button: true,
@@ -573,7 +575,7 @@ class _PartRow extends StatelessWidget {
           child: Row(
             children: [
               if (playing) ...[
-                const PanelGlyph(PanelGlyphKind.playing, color: BiliColors.pink),
+                const PanelGlyph(PanelGlyphKind.playing, color: VerticalActionTheme.sheetPlaying),
                 const SizedBox(width: BiliMetrics.sheetPlayingGap),
               ],
               Expanded(

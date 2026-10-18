@@ -412,7 +412,7 @@ abstract final class BiliMetrics {
   static const landscapeEndActionsOutset = 2.0;
   static const landscapeEndActionWidth = 59.0;
   static const landscapeEndActionIcon = 22.0;
-  static const landscapeEndActionText = 13.0;
+  static const landscapeEndActionText = 12.0;
   static const landscapeEndActionTop = 24.4;
   static const landscapeEndActionGap = 11.2;
   static const landscapeEndDividerHeight = 48.0;
@@ -1113,8 +1113,8 @@ abstract final class LandscapeActionTheme {
   /// After each 44 pt button, the last one's before ⋮.
   static const buttonGap = 8.0;
 
-  /// The superscript count: its left edge this far right of its button's centre, its digits' tops 5 pt into the
-  /// button.
+  /// The superscript count: its left edge this far right of its button's centre, the top of its line box 5.5 pt into
+  /// the button.
   static const countText = 9.5;
   static const countLead = 6.7;
   static const countTop = 5.5;
@@ -1129,6 +1129,19 @@ abstract final class LandscapeActionTheme {
   static const onlineGap = 5.5;
   static const onlineText = 12.0;
   static const online = Color(0x99FFFFFF);
+
+  /// 25's faint N人正在看 at the bottom left while the controls are hidden (27 keeps it under the end screen's dim):
+  /// the glyph 33.3 pt past the left inset, the line centred 9.7 pt above the screen's edge, inside the home
+  /// indicator's band rather than above it.
+  static const cornerInset = 33.3;
+  static const cornerCentre = 9.7;
+  static const cornerHeight = 12.0;
+  static const cornerIconWidth = 9.0;
+  static const cornerIconHeight = 7.6;
+  static const cornerIconStroke = 0.7;
+  static const cornerGap = 4.9;
+  static const cornerText = 9.0;
+  static const corner = Color(0x59FFFFFF);
 
   /// The uploader's avatar and + 关注 on the line below, centred 93 pt down.
   static const uploaderHeight = 40.4;
@@ -1151,7 +1164,7 @@ abstract final class LandscapeActionTheme {
   static const boltHeight = 11.6;
   static const boltGap = 7.6;
 
-  /// Padding before ⚡ 充电, which 27 sets half this right of its pill's centre.
+  /// Padding before the bolt and 充电, which 27 sets half this right of its pill's centre.
   static const chargeShift = 4.0;
   static const pillPlus = 9.0;
   static const pillPlusStroke = 1.2;
@@ -1201,7 +1214,7 @@ abstract final class VerticalActionTheme {
   static double get nameDrop => BiliFonts.nudged ? 1.7 : 0;
   static double get fansDrop => BiliFonts.nudged ? 1 : 0;
 
-  /// + 关注: 60 × 24 on 09, 9.7 after the name.
+  /// + 关注: 60 × 24 on 09, 8.7 after the name.
   static const followGap = 8.7;
   static const followHeight = 24.0;
   static const followLead = 11.5;
@@ -1214,7 +1227,7 @@ abstract final class VerticalActionTheme {
   static const followingFill = Color(0x33FFFFFF);
   static const followingText = Color(0xB3FFFFFF);
 
-  /// 👥 479人正在看 after the back arrow, a 40% white.
+  /// The viewers mark and 479人正在看 after the back arrow, a 40% white.
   static const online = Color(0x66FFFFFF);
   static const onlineLead = 8.3;
   static const onlineIconWidth = 11.3;
@@ -1243,6 +1256,6 @@ abstract final class VerticalActionTheme {
   static const sheetSubscribedFill = BiliColors.pageGrey;
   static const sheetSubscribedLabel = BiliColors.secondaryText;
 
-  /// 收藏 while the relation hasn't said whether the 合集 is subscribed.
-  static const sheetUnknownOpacity = 0.5;
+  /// The playing episode's title and bars in the light 选集 sheet: 19 draws them in 收藏's pink, not the app's.
+  static const sheetPlaying = sheetPill;
 }

@@ -795,7 +795,11 @@ void main() {
         expect(find.text('选集'), findsOneWidget);
         final tops = [for (final episode in episodes) tester.getTopLeft(find.text(episode.title)).dy];
         expect(tops, [...tops]..sort());
-        expect(textColor(tester, 'P2 中间'), BiliColors.pink);
+        // The light sheet's pink is 19's, a little softer than the dark cards'.
+        expect(
+          textColor(tester, 'P2 中间'),
+          shape == Shape.landscape ? BiliColors.pink : VerticalActionTheme.sheetPlaying,
+        );
         expect(textColor(tester, 'P1 开头'), shape == Shape.landscape ? BiliColors.panelText : BiliColors.text);
         await tapText(tester, 'P3 结尾');
         expect(rig.session.calls, ['playEpisode BV1 3']);
@@ -952,7 +956,16 @@ void main() {
       }
       final bars = find.byWidgetPredicate((widget) => widget is PanelGlyph && widget.kind == PanelGlyphKind.playing);
       expect(bars, findsOneWidget);
-      expect(tester.widget<PanelGlyph>(bars).color, BiliColors.pink);
+      // 19's #ED7098, 收藏's pink, for the bars and the playing title alike.
+      expect(VerticalActionTheme.sheetPlaying, const Color(0xFFED7098));
+      expect(tester.widget<PanelGlyph>(bars).color, VerticalActionTheme.sheetPlaying);
+      Color? titleColour(String title) => tester
+          .widget<RichText>(find.descendant(of: find.textContaining(title), matching: find.byType(RichText)).first)
+          .text
+          .style
+          ?.color;
+      expect(titleColour('第三集'), VerticalActionTheme.sheetPlaying);
+      expect(titleColour('第一集'), BiliColors.text);
       expect(tester.getTopLeft(bars).dx, greaterThan(BiliMetrics.gutter + BiliMetrics.sheetCoverWidth));
       expect(find.text('内容到底啦'), findsOneWidget);
       expect(find.text('仅展示本App中可查看的稿件'), findsOneWidget);
@@ -970,6 +983,38 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('sheet-order')));
       await tester.pumpAndSettle();
       expect(top('第一集'), lessThan(top('第三集')));
+    });
+
+    testWidgets('a long 合集 opens on the playing episode, and keeps it in view when the order turns round', (
+      tester,
+    ) async {
+      final long = [
+        for (var i = 1; i <= 7; i++)
+          Episode(bvid: 'BV$i', cid: i, title: '长篇第$i集', current: i == 7, cover: '', duration: 60),
+      ];
+      final rig = await pumpLayer(tester, Shape.portrait, session: season()..episodes = long);
+      await open(tester, rig, PlayerPanel.episodes);
+      final button = find.byKey(const ValueKey('sheet-order'));
+      final list = find.ancestor(of: button, matching: find.byType(Scrollable)).first;
+      final viewport = tester.getRect(list);
+      final playing = find.textContaining('长篇第7集', findRichText: true);
+      bool inView() => viewport.contains(tester.getRect(playing).center);
+      expect(inView(), isTrue, reason: 'it opens on the playing episode');
+      expect(viewport.contains(tester.getCenter(button)), isFalse);
+
+      // VoiceOver and the Windows driver press 正序 where it lies, scrolled out of view.
+      for (final (label, next) in [('正序', '倒序'), ('倒序', '正序')]) {
+        tester.semantics.tap(find.semantics.byLabel(label));
+        await tester.pumpAndSettle();
+        expect(find.text(next, skipOffstage: false), findsOneWidget);
+        expect(inView(), isTrue, reason: next);
+      }
+
+      await tester.scrollUntilVisible(button, -100, scrollable: list);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.text('倒序'), findsOneWidget);
+      expect(inView(), isTrue);
     });
 
     testWidgets('a tap plays the episode and closes', (tester) async {
@@ -995,9 +1040,6 @@ void main() {
       final pill = find.descendant(of: button, matching: find.byType(AnimatedContainer));
       return (tester.widget<AnimatedContainer>(pill).decoration! as ShapeDecoration).color;
     }
-
-    double opacityOf(WidgetTester tester, Finder button) =>
-        tester.widget<AnimatedOpacity>(find.descendant(of: button, matching: find.byType(AnimatedOpacity))).opacity;
 
     testWidgets('the share circle and 收藏 sit at the right of the intro\'s line, as on 19', (tester) async {
       final details = withActions();
@@ -1026,7 +1068,6 @@ void main() {
       expect(iconIn(tester, favourite).glyph, ActionGlyph.favourite);
       expect(iconIn(tester, favourite).solid, isFalse);
       expect(fillOf(tester, favourite), VerticalActionTheme.sheetPill);
-      expect(opacityOf(tester, favourite), 1);
     });
 
     testWidgets('the header, the intro and 选集 stay where they are with or without the actions', (tester) async {
@@ -1085,7 +1126,9 @@ void main() {
       expect(fillOf(tester, favourite), VerticalActionTheme.sheetPill);
     });
 
-    testWidgets('while the relation hasn\'t answered, 收藏 is dimmed and does nothing', (tester) async {
+    testWidgets('unknown (logged out, or no answer from the relation), 收藏 reads 收藏 and still taps through', (
+      tester,
+    ) async {
       final details = withActions(subscribed: null);
       addTearDown(details.dispose);
       final rig = await pumpLayer(tester, Shape.portrait, session: season(), details: details);
@@ -1093,25 +1136,21 @@ void main() {
       final actions = details.actions! as FakeVideoActions;
 
       expect(find.text('收藏'), findsOneWidget);
-      expect(opacityOf(tester, favourite), VerticalActionTheme.sheetUnknownOpacity);
+      expect(find.text('已收藏'), findsNothing);
+      expect(fillOf(tester, favourite), VerticalActionTheme.sheetPill);
+      expect(iconIn(tester, favourite).solid, isFalse);
+      expect(find.descendant(of: favourite, matching: find.byType(AnimatedOpacity)), findsNothing, reason: 'undimmed');
       expect(
         tester.getSemantics(favourite),
-        isSemantics(label: '收藏', isButton: true, hasEnabledState: true, isEnabled: false, hasTapAction: false),
+        isSemantics(label: '收藏', isButton: true, hasTapAction: true),
       );
+      // The actions decide: logged out they ask for a login, otherwise they subscribe.
       await tester.tap(favourite);
       await tester.pumpAndSettle();
-      expect(actions.calls, isEmpty);
-      // Share needs no relation.
-      await tester.tap(share);
-      expect(actions.calls, ['ask share']);
-
-      actions
-        ..seasonFavourited = false
-        ..changed();
-      await tester.pumpAndSettle();
-      expect(opacityOf(tester, favourite), 1);
-      await tester.tap(favourite);
-      expect(actions.calls, ['ask share', 'toggleSeasonFavourite']);
+      expect(actions.calls, ['toggleSeasonFavourite']);
+      tester.semantics.tap(find.semantics.byLabel('收藏'));
+      expect(actions.calls, ['toggleSeasonFavourite', 'toggleSeasonFavourite']);
+      expect(rig.panels.value, PlayerPanel.episodes);
     });
 
     testWidgets('nothing until the actions exist; they fade in without moving anything', (tester) async {

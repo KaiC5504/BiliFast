@@ -41,77 +41,85 @@ class LandscapeChrome extends StatelessWidget {
       listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.orientation, ui.details]),
       builder: (context, _) {
         final shown = ui.chrome.visible && ui.panels.value == null;
-        return IgnorePointer(
-          key: const ValueKey('landscape-chrome'),
-          ignoring: !shown,
-          child: DefaultTextStyle(
-            style: fullScreenText,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ChromeSlide(
-                  shown: shown,
-                  from: Offset.zero,
-                  child: const Column(
-                    children: [
-                      ChromeShade(height: BiliMetrics.chromeTopShade, fromTop: true),
-                      Spacer(),
-                      ChromeShade(height: BiliMetrics.chromeBottomShade, fromTop: false),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  child: ChromeSlide(
-                    shown: shown,
-                    from: const Offset(0, -BiliMetrics.chromeSlide),
-                    child: _topBar(insets),
-                  ),
-                ),
-                Positioned(
-                  left: insets.left + BiliMetrics.landscapeEdge,
-                  right: insets.right,
-                  top: insets.top + LandscapeActionTheme.onlineTop,
-                  child: ChromeSlide(
-                    shown: shown,
-                    from: const Offset(0, -BiliMetrics.chromeSlide),
-                    child: _UploaderBlock(ui: ui, touch: _touch),
-                  ),
-                ),
-                Positioned(
-                  right: math.max(insets.right - 1, 0),
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: Transform.translate(
-                      offset: const Offset(0, -BiliMetrics.chromeSideLift),
-                      child: ChromeSlide(
-                        shown: shown,
-                        from: const Offset(BiliMetrics.chromeSlide, 0),
-                        child: _sideColumn(context),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: ChromeSlide(
-                    shown: shown,
-                    from: const Offset(0, BiliMetrics.chromeSlide),
-                    child: _bottomBar(insets),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            LandscapeCornerOnline(ui: ui, shown: !ui.chrome.visible && ui.panels.value == null),
+            _controls(context, insets, shown),
+          ],
         );
       },
     );
   }
+
+  Widget _controls(BuildContext context, EdgeInsets insets, bool shown) => IgnorePointer(
+    key: const ValueKey('landscape-chrome'),
+    ignoring: !shown,
+    child: DefaultTextStyle(
+      style: fullScreenText,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ChromeSlide(
+            shown: shown,
+            from: Offset.zero,
+            child: const Column(
+              children: [
+                ChromeShade(height: BiliMetrics.chromeTopShade, fromTop: true),
+                Spacer(),
+                ChromeShade(height: BiliMetrics.chromeBottomShade, fromTop: false),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: ChromeSlide(
+              shown: shown,
+              from: const Offset(0, -BiliMetrics.chromeSlide),
+              child: _topBar(insets),
+            ),
+          ),
+          Positioned(
+            left: insets.left + BiliMetrics.landscapeEdge,
+            right: insets.right,
+            top: insets.top + LandscapeActionTheme.onlineTop,
+            child: ChromeSlide(
+              shown: shown,
+              from: const Offset(0, -BiliMetrics.chromeSlide),
+              child: _UploaderBlock(ui: ui, touch: _touch),
+            ),
+          ),
+          Positioned(
+            right: math.max(insets.right - 1, 0),
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Transform.translate(
+                offset: const Offset(0, -BiliMetrics.chromeSideLift),
+                child: ChromeSlide(
+                  shown: shown,
+                  from: const Offset(BiliMetrics.chromeSlide, 0),
+                  child: _sideColumn(context),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ChromeSlide(
+              shown: shown,
+              from: const Offset(0, BiliMetrics.chromeSlide),
+              child: _bottomBar(insets),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   VoidCallback _touch(VoidCallback action) => () {
     ui.chrome.show();
@@ -646,7 +654,10 @@ class _Online extends StatelessWidget {
               children: [
                 const CustomPaint(
                   size: Size(LandscapeActionTheme.onlineIconWidth, LandscapeActionTheme.onlineIconHeight),
-                  painter: _OnlinePainter(),
+                  painter: _OnlinePainter(
+                    color: LandscapeActionTheme.online,
+                    stroke: LandscapeActionTheme.onlineIconStroke,
+                  ),
                 ),
                 const SizedBox(width: LandscapeActionTheme.onlineGap),
                 Text(
@@ -658,6 +669,73 @@ class _Online extends StatelessWidget {
               ],
             ),
     ),
+  );
+}
+
+/// 25's faint N人正在看 in the bottom-left corner, which takes no touches; [shown] while the controls are hidden and
+/// no panel is open (BiliNative `LandscapeChrome.swift`). The end screen keeps it under its dim, as 27 does.
+class LandscapeCornerOnline extends StatelessWidget {
+  const LandscapeCornerOnline({super.key, required this.ui, required this.shown});
+
+  final PlayerUi ui;
+  final bool shown;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = ui.details;
+    if (details == null) return const SizedBox.shrink();
+    final motion = _motion(context);
+    return IgnorePointer(
+      // The same count is read under the title once the controls show.
+      child: ExcludeSemantics(
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: MediaQuery.paddingOf(context).left + LandscapeActionTheme.cornerInset,
+              bottom: LandscapeActionTheme.cornerCentre - LandscapeActionTheme.cornerHeight / 2,
+            ),
+            child: SizedBox(
+              height: LandscapeActionTheme.cornerHeight,
+              child: AnimatedSwitcher(
+                duration: motion,
+                layoutBuilder: (current, previous) =>
+                    Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                child: !shown
+                    ? const SizedBox.shrink()
+                    : ValueListenableBuilder(
+                        valueListenable: details.online,
+                        builder: (context, count, _) => AnimatedSwitcher(
+                          duration: motion,
+                          layoutBuilder: (current, previous) =>
+                              Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                          child: count == null ? const SizedBox.shrink() : _corner(count),
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _corner(String count) => Row(
+    key: const ValueKey('landscape-corner-online'),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const CustomPaint(
+        size: Size(LandscapeActionTheme.cornerIconWidth, LandscapeActionTheme.cornerIconHeight),
+        painter: _OnlinePainter(color: LandscapeActionTheme.corner, stroke: LandscapeActionTheme.cornerIconStroke),
+      ),
+      const SizedBox(width: LandscapeActionTheme.cornerGap),
+      Text(
+        '$count人正在看',
+        maxLines: 1,
+        softWrap: false,
+        style: fullScreenText.copyWith(color: LandscapeActionTheme.corner, fontSize: LandscapeActionTheme.cornerText),
+      ),
+    ],
   );
 }
 
@@ -740,7 +818,10 @@ class FollowPlusPainter extends CustomPainter {
 /// 04's viewers glyph, traced on its 13 × 11 box: a head open at the bottom into two flared legs, and a second
 /// person's edge behind it to the right.
 class _OnlinePainter extends CustomPainter {
-  const _OnlinePainter();
+  const _OnlinePainter({required this.color, required this.stroke});
+
+  final Color color;
+  final double stroke;
 
   static const _grid = Size(LandscapeActionTheme.onlineIconWidth, LandscapeActionTheme.onlineIconHeight);
 
@@ -756,11 +837,11 @@ class _OnlinePainter extends CustomPainter {
       ..lineToPoint(p(8.78, 10.84))
       ..arcTo(Rect.fromCircle(center: back, radius: 3.47 * scale), -73 * math.pi / 180, 134 * math.pi / 180, true)
       ..lineToPoint(p(12.67, 10.84));
-    canvas.drawPath(path, _line(LandscapeActionTheme.online, LandscapeActionTheme.onlineIconStroke));
+    canvas.drawPath(path, _line(color, stroke));
   }
 
   @override
-  bool shouldRepaint(_OnlinePainter oldDelegate) => false;
+  bool shouldRepaint(_OnlinePainter oldDelegate) => oldDelegate.color != color || oldDelegate.stroke != stroke;
 }
 
 /// 弹 on a little TV: a pink tick in its corner while danmaku show, a cross while they are off.

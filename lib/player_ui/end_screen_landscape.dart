@@ -18,14 +18,15 @@ import 'player_ui.dart';
 import 'portrait_controls.dart';
 
 /// The full-screen end screen (BiliNative `EndScreens.swift`, measured on 27): back, the uploader with 充电 and 关注,
-/// 重播 | 点赞 投币 收藏 分享, and a row of related videos that rise in one after another. It fills the screen. 充电鸣谢
-/// has its room kept, and so do the actions until they arrive, so nothing else moves when they come.
+/// 重播 | 点赞 投币 收藏 分享, and a row of related videos that rise in one after another. It fills the screen. The
+/// actions have their room kept until they arrive, so nothing else moves when they come.
 class EndScreenLandscape extends StatefulWidget {
   const EndScreenLandscape({super.key, required this.ui, this.share = shareThroughSystem});
 
   final PlayerUi ui;
 
-  /// Where 分享 sends the link; tests pass their own so nothing reaches the platform.
+  /// Where 分享 sends the link outside a video page (inside one, the page's overlays share it); tests pass their own
+  /// so nothing reaches the platform.
   final ShareLink share;
 
   @override
@@ -56,7 +57,7 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
     try {
       await widget.share(link);
     } on Object catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '${error.runtimeType}'});
+      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '$error'});
       if (mounted) showToast(context, '分享失败');
     }
   }
@@ -65,12 +66,20 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
   Widget build(BuildContext context) {
     final ui = widget.ui;
     final insets = MediaQuery.paddingOf(context);
-    return ListenableBuilder(
-      listenable: Listenable.merge([ui.session, ui.details]),
-      builder: (context, _) => ListenableBuilder(
-        listenable: Listenable.merge([ui.details?.actions]),
-        builder: (context, _) => _build(context, insets),
-      ),
+    return Stack(
+      key: const ValueKey('end-landscape-layers'),
+      fit: StackFit.expand,
+      children: [
+        // Under the dim, as on 27.
+        LandscapeCornerOnline(ui: ui, shown: true),
+        ListenableBuilder(
+          listenable: Listenable.merge([ui.session, ui.details]),
+          builder: (context, _) => ListenableBuilder(
+            listenable: Listenable.merge([ui.details?.actions]),
+            builder: (context, _) => _build(context, insets),
+          ),
+        ),
+      ],
     );
   }
 
