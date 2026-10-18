@@ -87,7 +87,7 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-/// The ⚡ disc on a verified uploader's avatar, ringed in the page's white so it reads over any face.
+/// The bolt disc on a verified uploader's avatar, ringed in the page's white so it reads over any face.
 class VerifiedBadge extends StatelessWidget {
   const VerifiedBadge({super.key, required this.color});
 
