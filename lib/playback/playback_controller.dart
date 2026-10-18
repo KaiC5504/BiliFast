@@ -86,8 +86,7 @@ Future<(VideoView, int?)> resolveVideoLink(BiliClient client, VideoLink link,
       log.info(LogCategory.player, 'view redirects, not playable here', {'bvid': detail.bvid});
       throw PlaybackFailure.unsupported;
     }
-    return VideoView(
-        bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
+    return _viewOf(detail);
   }
 
   await client.ensureRiskCookies();
@@ -111,6 +110,9 @@ Future<(VideoView, int?)> resolveVideoLink(BiliClient client, VideoLink link,
     return (await signedView(aid: link.id), link.page);
   }
 }
+
+VideoView _viewOf(VideoDetail detail) =>
+    VideoView(bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
 
 enum ItemFailure { format, network, unknown }
 
@@ -284,7 +286,7 @@ class PlaybackController extends ChangeNotifier {
   double _wantedRate = 1;
   FitMode _fit = FitMode.fit;
   bool _mirrored = false;
-  UgcSeason? _season;
+  VideoDetail? _detail;
   ({int cid, PlayerInfo info})? _playerInfo;
   final _endings = StreamController<void>.broadcast();
   bool _disposed = false;
@@ -331,8 +333,12 @@ class PlaybackController extends ChangeNotifier {
 
   bool get mirrored => _mirrored;
 
-  /// The 合集 holding the video, when the signed view resolved it here; null for a view handed to [openVideo].
-  UgcSeason? get season => _season;
+  /// The signed view's detail: resolved here, or handed to [openVideo] with the view; null when only the unsigned view
+  /// answered or a view came without one.
+  VideoDetail? get detail => _detail;
+
+  /// The 合集 holding the video, from [detail].
+  UgcSeason? get season => _detail?.season;
 
   /// Fires when the playing item reaches its end.
   Stream<void> get endings => _endings.stream;
@@ -343,22 +349,43 @@ class PlaybackController extends ChangeNotifier {
     return asked != null && asked.cid == cid ? asked.info : null;
   }
 
+  /// The look setters below show the new value at once and put the old one back when the player refuses it, unless a
+  /// newer value was set meanwhile; the failure is rethrown for the toast.
   Future<void> setRate(double rate) async {
+    final old = _wantedRate;
     _wantedRate = rate;
     _notify();
-    await player.setRate(rate);
+    await _orRestore(() => player.setRate(rate), () {
+      if (_wantedRate == rate) _wantedRate = old;
+    });
   }
 
   Future<void> setFit(FitMode fit) async {
+    final old = _fit;
     _fit = fit;
     _notify();
-    await player.setFit(fit);
+    await _orRestore(() => player.setFit(fit), () {
+      if (_fit == fit) _fit = old;
+    });
   }
 
   Future<void> setMirrored(bool on) async {
+    final old = _mirrored;
     _mirrored = on;
     _notify();
-    await player.setMirrored(on);
+    await _orRestore(() => player.setMirrored(on), () {
+      if (_mirrored == on) _mirrored = old;
+    });
+  }
+
+  Future<void> _orRestore(Future<void> Function() call, void Function() restore) async {
+    try {
+      await call();
+    } catch (_) {
+      restore();
+      _notify();
+      rethrow;
+    }
   }
 
   String qualityName(int qn) =>
@@ -377,10 +404,10 @@ class PlaybackController extends ChangeNotifier {
       return;
     }
     await _openWith((current) async {
-      UgcSeason? season;
-      final (view, pageNumber) = await _resolve(link, onDetail: (detail) => season = detail.season);
+      VideoDetail? resolved;
+      final (view, pageNumber) = await _resolve(link, onDetail: (detail) => resolved = detail);
       if (current != _epoch) return null;
-      _season = season;
+      _detail = resolved;
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
       return (view, pages.where((page) => page.page == pageNumber).firstOrNull ?? pages.first);
@@ -389,16 +416,19 @@ class PlaybackController extends ChangeNotifier {
 
   /// The video page's open: part [cid], or without one the part Bilibili saw this account watch last, or the first;
   /// from [start] seconds, or without one from where Bilibili saw it last (`ResumePoint`), which only arrives with
-  /// the playurl answer. A [view] already resolved (a pasted link) saves asking for it again.
-  Future<void> openVideo(String bvid, {int? cid, double? start, VideoView? view}) async {
+  /// the playurl answer. A [view] already resolved (a pasted link, another part) saves asking for it again, and the
+  /// signed [detail] that came with it keeps the 合集; a [detail] alone gives the view as well.
+  Future<void> openVideo(String bvid, {int? cid, double? start, VideoView? view, VideoDetail? detail}) async {
     _opens += 1;
-    _clearVideo();
-    final known = view?.bvid == bvid ? view : null;
+    // Another part keeps the video's shape until its stream gives its own, so the layout doesn't flip meanwhile.
+    _clearVideo(keepSize: _video?.bvid == bvid);
+    final knownDetail = detail != null && detail.bvid == bvid && detail.redirectURL == null ? detail : null;
+    final known = view?.bvid == bvid ? view : (knownDetail == null ? null : _viewOf(knownDetail));
     await _openWith((current) async {
-      UgcSeason? season;
-      final view = known ?? (await _resolve(BvidLink(bvid), onDetail: (detail) => season = detail.season)).$1;
+      var resolved = knownDetail;
+      final view = known ?? (await _resolve(BvidLink(bvid), onDetail: (detail) => resolved = detail)).$1;
       if (current != _epoch) return null;
-      _season = season;
+      _detail = resolved;
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
       if (cid != null) {
@@ -437,11 +467,12 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// The player UI reads the clock and the duration as soon as the next video is set, before its load resets them.
-  void _clearVideo() {
+  void _clearVideo({bool keepSize = false}) {
     _stopPlayback();
     _video = null;
     _page = null;
-    _season = null;
+    _detail = null;
+    if (!keepSize) _videoSize = null;
     _playerInfo = null;
     _qualities = const [];
     _resumeFromHistory = false;

@@ -4,6 +4,10 @@ import 'dart:typed_data';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/engine.dart';
+import 'package:bilifast/player/bili_player.dart';
+import 'package:flutter/widgets.dart';
+
+import '../support/fake_player.dart';
 
 /// Answers from fixed routes; nothing ever reaches the network.
 final class CannedHttp implements HTTPTransport {
@@ -145,6 +149,78 @@ final class FakeEngine implements PlaybackEngine {
     await statsController.close();
     await fatalController.close();
   }
+}
+
+/// [inner] with the calls named in [refused] failing, as a platform player's can: `seek`, `rate`, `fit`, `mirrored`
+/// and `pip`. Everything else, events included, is [inner]'s.
+final class RefusingPlayer implements BiliPlayer {
+  RefusingPlayer(this.inner, [Set<String>? refused]) : refused = refused ?? {};
+
+  final FakePlayer inner;
+  final Set<String> refused;
+
+  Future<void> _call(String name, Future<void> Function() call) async {
+    if (refused.contains(name)) throw StateError('$name refused');
+    await call();
+  }
+
+  @override
+  PlayerCapabilities get capabilities => inner.capabilities;
+
+  @override
+  Stream<PlayerEvent> get events => inner.events;
+
+  @override
+  Widget buildView() => inner.buildView();
+
+  @override
+  Future<void> load(PlayerSource source) => inner.load(source);
+
+  @override
+  Future<void> unload() => inner.unload();
+
+  @override
+  Future<void> play() => inner.play();
+
+  @override
+  Future<void> pause() => inner.pause();
+
+  @override
+  Future<void> seek(double seconds, {bool precise = false}) =>
+      _call('seek', () => inner.seek(seconds, precise: precise));
+
+  @override
+  Future<void> setRate(double rate) => _call('rate', () => inner.setRate(rate));
+
+  @override
+  Future<void> setMuted(bool muted) => inner.setMuted(muted);
+
+  @override
+  bool get muted => inner.muted;
+
+  @override
+  Future<void> setKeepAwake(bool on) => inner.setKeepAwake(on);
+
+  @override
+  Future<void> setFit(FitMode fit) => _call('fit', () => inner.setFit(fit));
+
+  @override
+  Future<void> setMirrored(bool mirrored) => _call('mirrored', () => inner.setMirrored(mirrored));
+
+  @override
+  Future<void> startPictureInPicture() => _call('pip', inner.startPictureInPicture);
+
+  @override
+  Future<void> stopPictureInPicture() => inner.stopPictureInPicture();
+
+  @override
+  Future<void> setAutoPictureInPicture(bool enabled) => inner.setAutoPictureInPicture(enabled);
+
+  @override
+  Future<bool> captureFrame() => inner.captureFrame();
+
+  @override
+  Future<void> dispose() => inner.dispose();
 }
 
 final class FakeTimer implements Timer {

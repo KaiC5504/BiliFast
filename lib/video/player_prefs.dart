@@ -22,7 +22,7 @@ class PlayerPrefs {
   static PlayerPrefs shared = PlayerPrefs.memory();
 
   /// [path] null keeps the settings in memory. A file that can't be read is set aside as `.bad` and the defaults
-  /// apply; a value of the wrong type falls back to its default alone.
+  /// apply; a value of the wrong type falls back to its default alone, logged by its key (never its value).
   static Future<PlayerPrefs> load(String? path, {Logger? logger}) async {
     final log = logger ?? Logger.shared;
     if (path == null) return PlayerPrefs._(null, const {}, log);
@@ -82,9 +82,22 @@ class PlayerPrefs {
   set codec(VideoCodec? value) => _set(() => _codec = value);
 
   void _read(Map<String, Object?> values) {
-    T? pick<T>(String key) => values[key] is T ? values[key] as T : null;
-    E? named<E extends Enum>(String key, List<E> all) =>
-        all.where((value) => value.name == pick<String>(key)).firstOrNull;
+    void ignored(String key) => _logger.warn(LogCategory.app, 'player prefs value ignored', {'key': key});
+    T? pick<T>(String key) {
+      final value = values[key];
+      if (value is T) return value;
+      if (value != null) ignored(key);
+      return null;
+    }
+
+    E? named<E extends Enum>(String key, List<E> all) {
+      final name = pick<String>(key);
+      if (name == null) return null;
+      final match = all.where((value) => value.name == name).firstOrNull;
+      if (match == null) ignored(key);
+      return match;
+    }
+
     _autoplay = pick<bool>('autoplay') ?? _autoplay;
     _loop = named('loop', LoopMode.values) ?? _loop;
     _fit = named('fit', FitMode.values) ?? _fit;

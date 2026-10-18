@@ -11,6 +11,7 @@ import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/shared/menu.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/video/video_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -245,6 +246,9 @@ void main() {
     expect(controller.page?.cid, 137649200);
     expect(find.text('UP主 · P2 第二集'), findsOneWidget);
     expect(recents.items.single.id, 'BV1GJ411x7h7#137649200');
+    final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
+    expect(route.detail?.bvid, 'BV1GJ411x7h7', reason: 'the signed view that resolved the link, for its 合集');
+    expect(http.canned.to(Canned.signedViewPath), hasLength(1));
 
     await tester.tap(find.byKey(const ValueKey('video-back')));
     await settle(tester, 20);

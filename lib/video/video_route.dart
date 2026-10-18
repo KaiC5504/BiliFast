@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show VideoView;
+import 'package:bili_core/api.dart' show VideoDetail, VideoView;
 import 'package:flutter/widgets.dart';
 
 import '../app/swipe_back_route.dart';
@@ -8,10 +8,11 @@ import 'video_page.dart';
 /// account watch last, or the first. Without a [start] it resumes per ResumePoint: only on the part it was saved on,
 /// and not within 5 s of the end. [title] (from the card, link or 最近打开) shows until the video's own arrives;
 /// [cover] (feed cards only) flies in from the card and covers the player until the video first plays. [view] is the
-/// video a pasted link already resolved, so the page doesn't ask Bilibili for it again.
+/// video a pasted link already resolved, so the page doesn't ask Bilibili for it again, and [detail] the signed view
+/// that resolved it, when that one answered (its 合集 and counts).
 @immutable
 final class VideoRoute {
-  const VideoRoute({required this.bvid, this.cid, this.start, this.title, this.cover, this.view});
+  const VideoRoute({required this.bvid, this.cid, this.start, this.title, this.cover, this.view, this.detail});
 
   final String bvid;
   final int? cid;
@@ -19,6 +20,7 @@ final class VideoRoute {
   final String? title;
   final String? cover;
   final VideoView? view;
+  final VideoDetail? detail;
 
   /// The feed card's cover and the page's player box share it, so the cover flies into the player.
   static String coverTag(String bvid) => 'cover-$bvid';

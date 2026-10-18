@@ -152,18 +152,21 @@ class _HomePageState extends State<HomePage> {
     }
     setState(() => _opening = true);
     try {
-      final (view, pageNumber) = await resolveVideoLink(_environment.client, link);
+      VideoDetail? resolved;
+      final (view, pageNumber) = await resolveVideoLink(_environment.client, link, onDetail: (d) => resolved = d);
       if (!mounted) return;
       Logger.shared.info(LogCategory.ui, 'open', {'bvid': view.bvid, 'pages': view.pages.length});
+      // Handed to the page so its open asks for nothing again and keeps the 合集.
+      final detail = resolved?.bvid == view.bvid ? resolved : null;
       final match = view.pages.where((page) => page.page == pageNumber).firstOrNull;
       if (match != null) {
-        _go(view, match);
+        _go(view, match, detail);
       } else if (view.pages.length > 1) {
         // The spinner would otherwise wait behind the sheet for as long as it is up.
         setState(() => _opening = false);
-        await _choosePart(view);
+        await _choosePart(view, detail);
       } else if (view.pages.firstOrNull case final first?) {
-        _go(view, first);
+        _go(view, first, detail);
       } else {
         showToast(context, '该视频没有可播放的分P');
       }
@@ -177,7 +180,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _choosePart(VideoView view) async {
+  Future<void> _choosePart(VideoView view, VideoDetail? detail) async {
     final page = await showCupertinoModalPopup<VideoPage>(
       context: context,
       builder: (context) => CupertinoActionSheet(
@@ -193,10 +196,10 @@ class _HomePageState extends State<HomePage> {
         cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
       ),
     );
-    if (page != null && mounted) _go(view, page);
+    if (page != null && mounted) _go(view, page, detail);
   }
 
-  void _go(VideoView view, VideoPage page) {
+  void _go(VideoView view, VideoPage page, VideoDetail? detail) {
     _services.recents.add(
       RecentVideo(
         bvid: view.bvid,
@@ -207,9 +210,8 @@ class _HomePageState extends State<HomePage> {
         pageCount: view.pages.length,
       ),
     );
-    unawaited(
-      _visit(openVideoPage(context, VideoRoute(bvid: view.bvid, cid: page.cid, title: view.title, view: view))),
-    );
+    final route = VideoRoute(bvid: view.bvid, cid: page.cid, title: view.title, view: view, detail: detail);
+    unawaited(_visit(openVideoPage(context, route)));
   }
 
   void _openCard(FeedCard card) =>
