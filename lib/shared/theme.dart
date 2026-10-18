@@ -195,6 +195,9 @@ abstract final class BiliMetrics {
   static const recentsTileRadius = 10.0;
   static const recentsTileIcon = 26.0;
 
+  /// 竖屏 full screen centres a landscape video at this fraction of the screen's height (screen 09).
+  static const verticalVideoCentre = 0.415;
+
   /// The menus' frosted glass.
   static const glassBlur = 24.0;
   static const glassHairline = 0.5;
