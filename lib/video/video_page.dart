@@ -404,17 +404,21 @@ class _VideoPageState extends State<VideoPage> {
                         // them itself; the small player sits below the status bar with no insets of its own.
                         child: MediaQuery(
                           data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
-                          child: VideoPlayerArea(
-                            key: _areaKey,
-                            presentation: presentation,
-                            onBack: _back,
-                            ui: ui,
-                            video: mine ? _videoView : null,
-                            danmaku: mine ? controller.danmaku : null,
-                            cover: _cover(context),
-                            loading: _loading(controller, mine),
-                            failure: _failure(controller, mine),
-                            onRetry: _retry,
+                          // An open panel covers the player for VoiceOver too, as landscape's panel already does.
+                          child: ExcludeSemantics(
+                            excluding: _panels.value != null,
+                            child: VideoPlayerArea(
+                              key: _areaKey,
+                              presentation: presentation,
+                              onBack: _back,
+                              ui: ui,
+                              video: mine ? _videoView : null,
+                              danmaku: mine ? controller.danmaku : null,
+                              cover: _cover(context),
+                              loading: _loading(controller, mine),
+                              failure: _failure(controller, mine),
+                              onRetry: _retry,
+                            ),
                           ),
                         ),
                       ),
