@@ -2,23 +2,34 @@ import 'package:bili_core/logic.dart' show TimeFormat;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
 
+import '../../devtools/log_forwarder.dart';
 import '../../player/bili_player.dart';
 import '../../shared/theme.dart';
 import '../../video/player_session.dart';
+import 'panel_glyphs.dart';
 import 'panel_parts.dart';
 
 enum _Page { root, timer, fit }
 
 enum _Sleep { off, minutes15, minutes30, minutes60, custom }
 
-/// ⋮ (20, 21): the official panel's rows that make sense here, plus a 测试 card for BTR and the stats overlay (port of
-/// BiliNative `MorePanel.swift`).
+/// ⋮ (20, 21): the official panel's rows that make sense here, each where 20 and 21 have it with the others' places
+/// left empty, plus a 测试 card for BTR and the stats overlay in dev builds (port of BiliNative `MorePanel.swift`).
 class MorePanel extends StatefulWidget {
-  const MorePanel({super.key, required this.session, required this.toast, required this.close});
+  const MorePanel({
+    super.key,
+    required this.session,
+    required this.toast,
+    required this.close,
+    this.devTools = devToolsEnabled,
+  });
 
   final PlayerSession session;
   final ValueChanged<String> toast;
+
+  /// Closes ⋮ if it is still the open panel.
   final VoidCallback close;
+  final bool devTools;
 
   static const maxCustomMinutes = 180;
 
@@ -59,15 +70,17 @@ class _MorePanelState extends State<MorePanel> {
   }
 
   Future<void> _watchLater() async {
-    final message = (await _session.watchLater()).message;
-    widget.toast(message);
-    widget.close();
+    final result = await _session.watchLater();
+    widget.toast(result.message);
+    if (result.ok) widget.close();
   }
 
   void _pictureInPicture() {
-    _session.startPictureInPicture();
+    toastFailure(_session.startPictureInPicture(), widget.toast);
     widget.close();
   }
+
+  void _report(Future<String?> result) => toastFailure(result, widget.toast);
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
@@ -111,12 +124,16 @@ class _MorePanelState extends State<MorePanel> {
               child: Row(
                 spacing: BiliMetrics.panelActionGap,
                 children: [
-                  _ActionButton(icon: Icons.play_circle_outline, title: '稍后再看', onTap: _watchLater),
+                  // 听视频.
+                  const SizedBox(width: BiliMetrics.panelActionSize),
+                  _ActionButton(glyph: PanelGlyphKind.watchLater, title: '稍后再看', onTap: _watchLater),
                   _ActionButton(
-                    icon: Icons.picture_in_picture_alt_outlined,
+                    glyph: PanelGlyphKind.pictureInPicture,
                     title: '小窗播放',
                     onTap: _session.pictureInPictureSupported ? _pictureInPicture : null,
                   ),
+                  // 投屏.
+                  const SizedBox(width: BiliMetrics.panelActionSize),
                 ],
               ),
             ),
@@ -156,13 +173,13 @@ class _MorePanelState extends State<MorePanel> {
             child: PanelGroup(
               children: [
                 PanelToggleRow(
-                  icon: Icons.skip_next_outlined,
+                  icon: const PanelGlyph(PanelGlyphKind.autoplay),
                   title: '自动连播',
                   value: _session.autoplayNext,
                   onChanged: _session.setAutoplayNext,
                 ),
                 PanelRowFrame(
-                  icon: Icons.loop,
+                  icon: const PanelGlyph(PanelGlyphKind.loop),
                   title: '循环播放',
                   trailing: PanelSegments(
                     compact: true,
@@ -172,135 +189,162 @@ class _MorePanelState extends State<MorePanel> {
                   ),
                 ),
                 PanelToggleRow(
-                  icon: Icons.flip,
+                  icon: const PanelGlyph(PanelGlyphKind.mirror),
                   title: '镜像翻转',
                   value: _session.mirrored,
-                  onChanged: _session.setMirrored,
+                  onChanged: (on) => _report(_session.setMirrored(on)),
                 ),
-                GestureDetector(
-                  key: const ValueKey('more-fit'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => setState(() => _page = _Page.fit),
-                  child: PanelRowFrame(
-                    icon: Icons.crop_free,
-                    title: '画面尺寸',
-                    divider: false,
-                    trailing: Align(
-                      alignment: Alignment.centerRight,
-                      child: PanelDisclosure(text: _session.fit.label),
+                // 后台听视频.
+                const PanelBlankRow(),
+                Semantics(
+                  button: true,
+                  child: GestureDetector(
+                    key: const ValueKey('more-fit'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _page = _Page.fit),
+                    child: PanelRowFrame(
+                      icon: const PanelGlyph(PanelGlyphKind.fit),
+                      title: '画面尺寸',
+                      trailing: Align(
+                        alignment: Alignment.centerRight,
+                        child: PanelDisclosure(text: _session.fit.label),
+                      ),
                     ),
                   ),
                 ),
+                // 色觉辅助.
+                const PanelBlankRow(divider: false),
               ],
             ),
           ),
-          const SizedBox(height: BiliMetrics.panelSectionGap),
-          const PanelReveal(order: 4, child: PanelTitle('测试')),
-          const SizedBox(height: BiliMetrics.panelTitleGap),
-          PanelReveal(
-            order: 5,
-            child: PanelGroup(
-              children: [
-                PanelToggleRow(icon: Icons.bolt, title: 'BTR 加速', value: _session.btr, onChanged: _session.setBtr),
-                PanelToggleRow(
-                  icon: Icons.bar_chart,
-                  title: '显示统计',
-                  divider: false,
-                  value: _session.showStats,
-                  onChanged: _session.setShowStats,
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: BiliMetrics.panelCardGap),
+          // Where the official 播放反馈 and 编辑播放器 card is; the dev builds' 测试 card has as many rows.
+          if (widget.devTools)
+            PanelReveal(
+              order: 4,
+              child: PanelGroup(
+                children: [
+                  PanelToggleRow(
+                    icon: const Icon(Icons.bolt, size: BiliMetrics.panelRowIcon, color: BiliColors.panelText),
+                    title: 'BTR 加速',
+                    value: _session.btr,
+                    onChanged: (on) => _report(_session.setBtr(on)),
+                  ),
+                  PanelToggleRow(
+                    icon: const Icon(Icons.bar_chart, size: BiliMetrics.panelRowIcon, color: BiliColors.panelText),
+                    title: '显示统计',
+                    divider: false,
+                    value: _session.showStats,
+                    onChanged: _session.setShowStats,
+                  ),
+                ],
+              ),
+            )
+          else
+            const SizedBox(height: BiliMetrics.panelRowHeight * 2),
         ],
       ),
     );
   }
 
-  Widget _timer() => Padding(
-    padding: const EdgeInsets.only(top: BiliMetrics.panelTop),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: BiliMetrics.gutter,
-      children: [
-        PanelHeader(title: '自定义定时关闭', back: () => setState(() => _page = _Page.root)),
-        SizedBox(
-          height: BiliMetrics.panelWheelHeight,
-          child: CupertinoTheme(
-            data: const CupertinoThemeData(
-              brightness: Brightness.dark,
-              textTheme: CupertinoTextThemeData(
-                pickerTextStyle: TextStyle(
-                  fontFamily: BiliFonts.family,
-                  fontSize: BiliMetrics.bodyText,
-                  color: BiliColors.panelText,
-                ),
-              ),
+  Widget _timer() => PanelPage(
+    header: PanelHeader(title: '自定义定时关闭', back: () => setState(() => _page = _Page.root)),
+    spacing: BiliMetrics.gutter,
+    children: [
+      _SleepWheel(initialMinutes: _customMinutes, onChanged: (minutes) => _customMinutes = minutes),
+      Semantics(
+        button: true,
+        child: PanelPressable(
+          radius: BiliMetrics.panelButtonHeight / 2,
+          onTap: () {
+            _session.setSleepTimer(Duration(minutes: _customMinutes));
+            setState(() => _page = _Page.root);
+          },
+          child: Container(
+            height: BiliMetrics.panelButtonHeight,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: BiliColors.pink,
+              borderRadius: BorderRadius.circular(BiliMetrics.panelButtonHeight / 2),
             ),
-            child: CupertinoPicker(
-              key: const ValueKey('sleep-wheel'),
-              itemExtent: BiliMetrics.panelWheelItem,
-              scrollController: FixedExtentScrollController(initialItem: _customMinutes - 1),
-              onSelectedItemChanged: (index) => _customMinutes = index + 1,
-              children: [
-                for (var minutes = 1; minutes <= MorePanel.maxCustomMinutes; minutes++)
-                  Center(child: Text('$minutes 分钟')),
-              ],
-            ),
+            child: const Text('确定', style: TextStyle(color: BiliColors.onPink)),
           ),
         ),
-        Semantics(
-          button: true,
-          child: PanelPressable(
-            radius: BiliMetrics.panelButtonHeight / 2,
-            onTap: () {
-              _session.setSleepTimer(Duration(minutes: _customMinutes));
-              setState(() => _page = _Page.root);
-            },
-            child: Container(
-              height: BiliMetrics.panelButtonHeight,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: BiliColors.pink,
-                borderRadius: BorderRadius.circular(BiliMetrics.panelButtonHeight / 2),
-              ),
-              child: const Text('确定', style: TextStyle(color: BiliColors.onPink)),
-            ),
-          ),
-        ),
-      ],
-    ),
+      ),
+    ],
   );
 
-  Widget _fit() => Padding(
-    padding: const EdgeInsets.only(top: BiliMetrics.panelTop),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: BiliMetrics.panelGap,
-      children: [
-        PanelHeader(title: '画面尺寸', back: () => setState(() => _page = _Page.root)),
-        for (final (index, mode) in FitMode.values.indexed)
-          PanelReveal(
-            order: index,
-            child: PanelCardRow(
-              title: mode.label,
-              selected: _session.fit == mode,
-              onTap: () {
-                _session.setFit(mode);
-                setState(() => _page = _Page.root);
-              },
-            ),
+  Widget _fit() => PanelPage(
+    header: PanelHeader(title: '画面尺寸', back: () => setState(() => _page = _Page.root)),
+    children: [
+      for (final (index, mode) in FitMode.values.indexed)
+        PanelReveal(
+          order: index,
+          child: PanelCardRow(
+            title: mode.label,
+            selected: _session.fit == mode,
+            onTap: () {
+              _report(_session.setFit(mode));
+              setState(() => _page = _Page.root);
+            },
           ),
-      ],
+        ),
+    ],
+  );
+}
+
+/// The 自定义 wheel, which owns its scroll controller for as long as the page shows.
+class _SleepWheel extends StatefulWidget {
+  const _SleepWheel({required this.initialMinutes, required this.onChanged});
+
+  final int initialMinutes;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_SleepWheel> createState() => _SleepWheelState();
+}
+
+class _SleepWheelState extends State<_SleepWheel> {
+  late final _controller = FixedExtentScrollController(initialItem: widget.initialMinutes - 1);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: BiliMetrics.panelWheelHeight,
+    child: CupertinoTheme(
+      data: const CupertinoThemeData(
+        brightness: Brightness.dark,
+        textTheme: CupertinoTextThemeData(
+          pickerTextStyle: TextStyle(
+            fontFamily: BiliFonts.family,
+            fontSize: BiliMetrics.bodyText,
+            color: BiliColors.panelText,
+          ),
+        ),
+      ),
+      child: CupertinoPicker(
+        key: const ValueKey('sleep-wheel'),
+        itemExtent: BiliMetrics.panelWheelItem,
+        scrollController: _controller,
+        onSelectedItemChanged: (index) => widget.onChanged(index + 1),
+        children: [
+          for (var minutes = 1; minutes <= MorePanel.maxCustomMinutes; minutes++) Center(child: Text('$minutes 分钟')),
+        ],
+      ),
     ),
   );
 }
 
 /// The 稍后再看 and 小窗播放 squares at the top of ⋮.
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.title, required this.onTap});
+  const _ActionButton({required this.glyph, required this.title, required this.onTap});
 
-  final IconData icon;
+  final PanelGlyphKind glyph;
   final String title;
 
   /// Null greys it out, as 小窗播放 where picture in picture isn't available.
@@ -313,7 +357,7 @@ class _ActionButton extends StatelessWidget {
     label: title,
     excludeSemantics: true,
     child: Opacity(
-      opacity: onTap == null ? 0.4 : 1,
+      opacity: onTap == null ? BiliMetrics.panelDisabledOpacity : 1,
       child: PanelPressable(
         onTap: onTap,
         radius: BiliMetrics.panelRowRadius,
@@ -327,7 +371,7 @@ class _ActionButton extends StatelessWidget {
                 color: BiliColors.panelCard,
                 borderRadius: BorderRadius.circular(BiliMetrics.panelRowRadius),
               ),
-              child: Icon(icon, size: BiliMetrics.panelActionIcon, color: BiliColors.panelText),
+              child: Center(child: PanelGlyph(glyph)),
             ),
             const SizedBox(height: BiliMetrics.panelGap),
             SizedBox(

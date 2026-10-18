@@ -29,51 +29,49 @@ class QualityPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final options = [...session.qualities]..sort((a, b) => b.id.compareTo(a.id));
-    return Padding(
-      padding: const EdgeInsets.only(top: BiliMetrics.panelTop),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: BiliMetrics.panelGap,
-        children: [
-          PanelHeader(
-            title: '清晰度',
-            trailing: GestureDetector(
-              key: const ValueKey('quality-advanced'),
-              behavior: HitTestBehavior.opaque,
-              onTap: openCodec,
-              child: const SizedBox(
-                height: BiliMetrics.panelHeaderHeight,
-                child: Center(child: PanelDisclosure(text: '高级设置')),
-              ),
+    return PanelPage(
+      header: PanelHeader(
+        title: '清晰度',
+        trailing: Semantics(
+          button: true,
+          child: GestureDetector(
+            key: const ValueKey('quality-advanced'),
+            behavior: HitTestBehavior.opaque,
+            onTap: openCodec,
+            child: const SizedBox(
+              height: BiliMetrics.panelHitBox,
+              child: Center(child: PanelDisclosure(text: '高级设置')),
             ),
           ),
-          PanelReveal(
-            order: 0,
-            child: PanelCardRow(title: '自动', onTap: () => _chooseAuto(options)),
-          ),
-          for (final (index, option) in options.indexed)
-            PanelReveal(
-              order: index + 1,
-              child: PanelCardRow(
-                title: title(option),
-                subtitle: subtitle(option),
-                badge: QualityRules.needsVip(option.id) ? '大会员' : null,
-                trailing: subtitle(option) == null
-                    ? null
-                    : Transform.translate(
-                        offset: const Offset(BiliMetrics.panelCardPadX - BiliMetrics.panelInfoInset, 0),
-                        child: const Icon(
-                          Icons.info_outline,
-                          size: BiliMetrics.panelInfoIcon,
-                          color: BiliColors.panelSecondary,
-                        ),
-                      ),
-                selected: option.id == session.quality,
-                onTap: () => _choose(option),
-              ),
-            ),
-        ],
+        ),
       ),
+      children: [
+        PanelReveal(
+          order: 0,
+          child: PanelCardRow(title: '自动', onTap: () => _chooseAuto(options)),
+        ),
+        for (final (index, option) in options.indexed)
+          PanelReveal(
+            order: index + 1,
+            child: PanelCardRow(
+              title: title(option),
+              subtitle: subtitle(option),
+              badge: QualityRules.needsVip(option.id) ? '大会员' : null,
+              trailing: subtitle(option) == null
+                  ? null
+                  : Transform.translate(
+                      offset: const Offset(BiliMetrics.panelCardPadX - BiliMetrics.panelInfoInset, 0),
+                      child: const Icon(
+                        Icons.info_outline,
+                        size: BiliMetrics.panelInfoIcon,
+                        color: BiliColors.panelSecondary,
+                      ),
+                    ),
+              selected: option.id == session.playingQuality,
+              onTap: () => _choose(option),
+            ),
+          ),
+      ],
     );
   }
 
@@ -92,40 +90,36 @@ class QualityPanel extends StatelessWidget {
   }
 
   void _apply(int qn) {
-    session.setQuality(qn);
+    toastFailure(session.setQuality(qn), toast);
     close();
   }
 }
 
 /// 高级设置 > from 清晰度: which codec the engine asks Bilibili for.
 class CodecPanel extends StatelessWidget {
-  const CodecPanel({super.key, required this.session, required this.back, required this.close});
+  const CodecPanel({super.key, required this.session, required this.back, required this.toast, required this.close});
 
   final PlayerSession session;
   final VoidCallback back;
+  final ValueChanged<String> toast;
   final VoidCallback close;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: BiliMetrics.panelTop),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: BiliMetrics.panelGap,
-      children: [
-        PanelHeader(title: '高级设置', back: back),
-        for (final (index, codec) in VideoCodec.values.indexed)
-          PanelReveal(
-            order: index,
-            child: PanelCardRow(
-              title: codec.label,
-              selected: codec == session.codec,
-              onTap: () {
-                session.setCodec(codec);
-                close();
-              },
-            ),
+  Widget build(BuildContext context) => PanelPage(
+    header: PanelHeader(title: '高级设置', back: back),
+    children: [
+      for (final (index, codec) in VideoCodec.values.indexed)
+        PanelReveal(
+          order: index,
+          child: PanelCardRow(
+            title: codec.label,
+            selected: codec == session.codec,
+            onTap: () {
+              toastFailure(session.setCodec(codec), toast);
+              close();
+            },
           ),
-      ],
-    ),
+        ),
+    ],
   );
 }
