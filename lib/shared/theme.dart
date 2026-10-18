@@ -723,7 +723,61 @@ abstract final class ActionTheme {
 
 /// The favourites sheet and panel, and the unfollow confirm.
 abstract final class FavouriteTheme {
+  /// Over the whole page, player included (BiliNative `Theme.Favourites.dim`).
+  static const dim = Color(0x66000000);
   static const rowHeight = 56.0;
+  static const newRowHeight = 48.0;
+  static const titleText = 15.0;
+  static const countText = 12.0;
+  static const countGap = 3.0;
+  static const lockIcon = 12.0;
+  static const plusIcon = 18.0;
+  static const plusGap = 6.0;
+
+  /// The tick circle: an empty ring, or pink with a white tick drawn in.
+  static const check = 21.0;
+  static const checkStroke = 1.2;
+  static const tickStroke = 1.8;
+  static const ringLight = Color(0xFFC9CCCF);
+  static const ringDark = Color(0x66FFFFFF);
+  static const tick = Color(0xFFFFFFFF);
+  static const doneHeight = 40.0;
+  static const doneText = 15.0;
+  static const doneTop = 12.0;
+
+  /// 新建收藏夹's form; Bilibili refuses names longer than [maxTitle].
+  static const maxTitle = 20;
+  static const fieldHeight = 38.0;
+  static const fieldPad = 12.0;
+  static const formGap = 10.0;
+  static const formButtonHeight = 32.0;
+  static const formButtonPad = 10.0;
+  static const formSpinnerRadius = 7.0;
+  static const darkField = Color(0x1AFFFFFF);
+  static const switchOffLight = Color(0xFFE3E5E7);
+  static const knobShadow = Color(0x33000000);
+  static const knobShadowBlur = 2.0;
+
+  /// Loading and failure inside the list, and 重试.
+  static const statePad = 32.0;
+  static const stateText = 13.0;
+  static const spinnerRadius = 10.0;
+  static const retryHeight = 30.0;
+  static const retryPad = 18.0;
+  static const retryBorder = 0.8;
+
+  /// The unfollow confirm, an iOS-sized alert in the official app's light style.
+  static const alertWidth = 280.0;
+  static const alertRadius = 12.0;
+  static const alertTitleText = 16.0;
+  static const alertTitlePadTop = 26.0;
+  static const alertTitlePadBottom = 22.0;
+  static const alertButtonHeight = 48.0;
+  static const alertButtonText = 16.0;
+  static const alertDim = Color(0x80000000);
+
+  /// The alert grows to its size from this as it fades in.
+  static const alertStartScale = 1.08;
 }
 
 /// Landscape's top actions, uploader and 关注 (04), and its end screen's actions (27).
