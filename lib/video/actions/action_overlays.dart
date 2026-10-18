@@ -3,12 +3,20 @@ import 'package:flutter/widgets.dart';
 import '../../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSystem;
 import 'video_actions.dart';
 
+/// What [ActionOverlays] has up (the prompt it took), so the page's back closes it before anything else.
+class ActionOverlayController extends ValueNotifier<ActionPrompt?> {
+  ActionOverlayController() : super(null);
+
+  void close() => value = null;
+}
+
 /// Puts up what the actions ask for, over the whole page in every presentation: the coin dialog, the favourites sheet,
 /// the unfollow confirm, or the system share sheet (counted once it closes). Lets touches through when nothing is up.
 class ActionOverlays extends StatelessWidget {
   const ActionOverlays({
     super.key,
     required this.actions,
+    required this.controller,
     required this.landscape,
     required this.shareLink,
     this.share = shareThroughSystem,
@@ -16,6 +24,7 @@ class ActionOverlays extends StatelessWidget {
 
   /// Null until the video's detail arrives.
   final VideoActions? actions;
+  final ActionOverlayController controller;
   final bool landscape;
   final Uri? shareLink;
   final ShareLink share;
