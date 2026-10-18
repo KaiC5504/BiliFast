@@ -1,15 +1,17 @@
-import 'package:bili_core/api.dart' show VideoCard, VideoDetail;
+import 'package:bili_core/api.dart' show UploaderCard, VideoCard, VideoDetail;
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/end_screen_landscape.dart';
 import 'package:bilifast/player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
+import '../support/fake_video_actions.dart';
 
 VideoCard card(int n) => VideoCard(
   aid: n,
@@ -27,11 +29,14 @@ VideoCard card(int n) => VideoCard(
 
 /// The end screen at 27's size: 956 × 440 pt, 62 each side, 21 below.
 final class Rig {
+  Rig({this.details});
+
   final session = FakePlayerSession()..shareLink = Uri.parse('https://www.bilibili.com/video/BV1xx411c7mD');
   final chrome = ChromeState();
   final panels = PanelController();
   final orientation = OrientationController()..enterLandscape();
   final shared = <Uri>[];
+  final FakePageDetails? details;
   int backs = 0;
 
   late final ui = PlayerUi(
@@ -41,6 +46,7 @@ final class Rig {
     orientation: orientation,
     device: orientation.controls,
     onBack: () => backs += 1,
+    details: details,
   );
 
   Future<void> mount(WidgetTester tester) async {
@@ -54,6 +60,7 @@ final class Rig {
       panels.dispose();
       orientation.dispose();
       session.dispose();
+      details?.dispose();
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -230,4 +237,205 @@ void main() {
     await tester.pumpAndSettle();
     expect(opacityOf('推荐 3'), 1);
   });
+
+  testWidgets('点赞 投币 收藏 fill the room between the divider and 分享 as on 27, outlined and white', (tester) async {
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions()))..session.detail = detail;
+    await rig.mount(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(centre(tester, 'end-like').dx, closeTo(689, 1.5));
+    expect(centre(tester, 'end-coin').dx, closeTo(749, 1.5));
+    expect(centre(tester, 'end-favourite').dx, closeTo(809, 1.5));
+    expect(centre(tester, 'end-replay').dx, closeTo(604, 2));
+    expect(centre(tester, 'end-share').dx, closeTo(866.5, 1));
+    expect(centre(tester, 'end-divider').dx, closeTo(647.3, 0.5));
+    for (final key in ['end-like', 'end-coin', 'end-favourite']) {
+      expect(iconOf(tester, key).solid, isFalse, reason: key);
+      expect(iconOf(tester, key).color, BiliColors.onVideo, reason: key);
+      final icon = find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(ActionIcon));
+      expect(tester.getCenter(icon).dy, closeTo(80, 1.5), reason: key);
+    }
+    for (final label in ['点赞', '投币', '收藏']) {
+      expect(tester.widget<Text>(find.text(label)).style!.fontSize, 13, reason: label);
+      expect(tester.getCenter(find.text(label)).dy, tester.getCenter(find.text('重播')).dy, reason: label);
+    }
+  });
+
+  testWidgets('点赞 likes, 投币 and 收藏 ask for their sheets, 分享 goes through the actions so it is counted', (
+    tester,
+  ) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions))..session.detail = detail;
+    await rig.mount(tester);
+
+    await tester.tap(find.byKey(const ValueKey('end-like')));
+    await tester.tap(find.byKey(const ValueKey('end-coin')));
+    await tester.tap(find.byKey(const ValueKey('end-favourite')));
+    await tester.tap(find.byKey(const ValueKey('end-share')));
+    expect(actions.calls, ['toggleLike', 'ask coin', 'ask favourites', 'ask share']);
+    expect(rig.shared, isEmpty);
+  });
+
+  testWidgets('liked, coined and favourited turn solid pink; the labels stay white', (tester) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions))..session.detail = detail;
+    await rig.mount(tester);
+
+    actions
+      ..liked = true
+      ..coins = 2
+      ..favorited = true
+      ..changed();
+    await tester.pumpAndSettle();
+    for (final key in ['end-like', 'end-coin', 'end-favourite']) {
+      expect(iconOf(tester, key).solid, isTrue, reason: key);
+      expect(iconOf(tester, key).color, BiliColors.pink, reason: key);
+    }
+    expect(tester.widget<Text>(find.text('点赞')).style!.color, BiliColors.onVideo);
+    expect(find.bySemanticsLabel('取消点赞'), findsOneWidget);
+    expect(find.bySemanticsLabel('已投币'), findsOneWidget);
+    expect(find.bySemanticsLabel('已收藏'), findsOneWidget);
+
+    actions
+      ..coins = 0
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(iconOf(tester, 'end-coin').color, BiliColors.onVideo);
+  });
+
+  testWidgets("under the name: 充电's pink outline and 关注's pink pill, as on 27", (tester) async {
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions()))..session.detail = detail;
+    await rig.mount(tester);
+
+    final charge = find.byKey(const ValueKey('end-charge'));
+    final follow = find.byKey(const ValueKey('end-follow'));
+    expect(tester.getRect(charge), rectMoreOrLessEquals(const Rect.fromLTRB(146, 93, 234, 123), epsilon: 0.5));
+    expect(tester.getRect(follow), rectMoreOrLessEquals(const Rect.fromLTRB(242, 93, 330, 123), epsilon: 0.5));
+    final outline = tester.widget<Container>(find.descendant(of: charge, matching: find.byType(Container)));
+    final border = (outline.decoration! as BoxDecoration).border! as Border;
+    expect(border.top.color, BiliColors.pink);
+    expect(border.top.width, 1);
+    expect(tester.widget<Text>(find.text('充电')).style!.color, BiliColors.pink);
+    expect(tester.widget<Text>(find.text('充电')).style!.fontSize, 14);
+    final fill = tester.widget<AnimatedContainer>(find.descendant(of: follow, matching: find.byType(AnimatedContainer)));
+    expect((fill.decoration! as BoxDecoration).color, BiliColors.pink);
+    expect(tester.widget<Text>(find.text('关注')).style!.color, BiliColors.onPink);
+    expect(tester.getCenter(find.text('关注')).dx, closeTo(293.3, 1.5));
+    // The name stays where it was before the pills came.
+    expect(tester.getTopLeft(find.text('不科学の小石头')).dx, closeTo(146, 1));
+  });
+
+  testWidgets('充电 toasts that it is not supported; 关注 follows, and 已关注 is a grey pill', (tester) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions))..session.detail = detail;
+    await rig.mount(tester);
+
+    await tester.tap(find.byKey(const ValueKey('end-charge')));
+    await tester.pump();
+    expect(find.text('暂不支持充电'), findsOneWidget);
+    expect(actions.calls, isEmpty);
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    await tester.tap(find.byKey(const ValueKey('end-follow')));
+    expect(actions.calls, ['tapFollow']);
+
+    actions
+      ..following = true
+      ..changed();
+    await tester.pumpAndSettle();
+    final follow = find.byKey(const ValueKey('end-follow'));
+    expect(find.descendant(of: follow, matching: find.text('已关注')), findsOneWidget);
+    expect(find.text('关注'), findsNothing);
+    final fill = tester.widget<AnimatedContainer>(find.descendant(of: follow, matching: find.byType(AnimatedContainer)));
+    expect((fill.decoration! as BoxDecoration).color, LandscapeActionTheme.followedPill);
+    expect(tester.widget<Text>(find.text('已关注')).style!.color, LandscapeActionTheme.followed);
+    expect(tester.getRect(follow), rectMoreOrLessEquals(const Rect.fromLTRB(242, 93, 330, 123), epsilon: 0.5));
+  });
+
+  testWidgets('before the actions arrive their room stays empty and 充电 alone shows; then they come in place', (
+    tester,
+  ) async {
+    final details = FakePageDetails();
+    final rig = Rig(details: details)..session.detail = detail;
+    await rig.mount(tester);
+
+    for (final key in ['end-like', 'end-coin', 'end-favourite', 'end-follow']) {
+      expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
+    }
+    expect(find.byKey(const ValueKey('end-charge')), findsOneWidget);
+    final replay = centre(tester, 'end-replay');
+    final share = centre(tester, 'end-share');
+    final charge = tester.getRect(find.byKey(const ValueKey('end-charge')));
+
+    await tester.tap(find.byKey(const ValueKey('end-share')));
+    expect(rig.shared, hasLength(1), reason: 'without actions 分享 shares by itself');
+
+    final actions = FakeVideoActions();
+    details
+      ..actions = actions
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(centre(tester, 'end-like').dx, closeTo(689, 1.5));
+    expect(find.byKey(const ValueKey('end-follow')), findsOneWidget);
+    expect(centre(tester, 'end-replay'), replay);
+    expect(centre(tester, 'end-share'), share);
+    expect(tester.getRect(find.byKey(const ValueKey('end-charge'))), charge);
+
+    actions
+      ..liked = true
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(iconOf(tester, 'end-like').color, BiliColors.pink);
+  });
+
+  testWidgets("without the session's detail the uploader comes from the page details", (tester) async {
+    final rig = Rig(
+      details: FakePageDetails(
+        actions: FakeVideoActions(),
+        uploader: const UploaderCard(
+          mid: 9,
+          name: '不科学の小石头',
+          face: '',
+          fans: 0,
+          videos: 0,
+          isVip: false,
+          following: false,
+        ),
+      ),
+    );
+    await rig.mount(tester);
+
+    expect(find.text('不科学の小石头'), findsOneWidget);
+    expect(find.byKey(const ValueKey('end-follow')), findsOneWidget);
+  });
+
+  testWidgets('the actions and the pills press through accessibility too, as VoiceOver and the Windows test driver do',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions))..session.detail = detail;
+    await rig.mount(tester);
+
+    for (final label in ['点赞', '投币', '收藏', '分享', '关注']) {
+      tester.semantics.tap(find.semantics.byLabel(label));
+    }
+    expect(actions.calls, ['toggleLike', 'ask coin', 'ask favourites', 'ask share', 'tapFollow']);
+    tester.semantics.tap(find.semantics.byLabel('充电'));
+    await tester.pump();
+    expect(find.text('暂不支持充电'), findsOneWidget);
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    semantics.dispose();
+  });
 }
+
+final detail = VideoDetail.fromJson({
+  'bvid': 'BV1',
+  'owner': {'mid': 1, 'name': '不科学の小石头', 'face': ''},
+});
+
+ActionIcon iconOf(WidgetTester tester, String key) =>
+    tester.widget<ActionIcon>(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(ActionIcon)));

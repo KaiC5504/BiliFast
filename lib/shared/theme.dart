@@ -726,9 +726,63 @@ abstract final class FavouriteTheme {
   static const rowHeight = 56.0;
 }
 
-/// Landscape's top actions, uploader and 关注 (04), and its end screen's actions (27).
+/// Landscape's top actions, uploader and 关注 (04), and its end screen's actions (27), measured at 3 px per pt.
 abstract final class LandscapeActionTheme {
-  static const iconSize = 28.0;
+  /// The glyphs' ink is 20 pt on both screens, 0.84 of the icon's box.
+  static const iconSize = 24.0;
+
+  /// After each 44 pt button, the last one's before ⋮.
+  static const buttonGap = 8.0;
+
+  /// The superscript count: its left edge this far right of its button's centre, its digits' tops 5 pt into the
+  /// button.
+  static const countText = 9.5;
+  static const countLead = 6.7;
+  static const countTop = 5.5;
+
+  /// N人正在看 under the title, centred 64.8 pt down: the icon 4.7 pt right of the back button.
+  static const onlineTop = 56.8;
+  static const onlineHeight = 16.0;
+  static const onlineInset = 4.7;
+  static const onlineIconWidth = 13.0;
+  static const onlineIconHeight = 11.0;
+  static const onlineIconStroke = 0.85;
+  static const onlineGap = 5.5;
+  static const onlineText = 12.0;
+  static const online = Color(0x99FFFFFF);
+
+  /// The uploader's avatar and + 关注 on the line below, centred 93 pt down.
+  static const uploaderHeight = 40.4;
+  static const avatar = 24.0;
+  static const avatarInset = 12.0;
+  static const avatarGap = 7.7;
+  static const plus = 10.7;
+  static const plusStroke = 0.8;
+  static const plusGap = 4.7;
+  static const followText = 12.5;
+  static const followed = Color(0x99FFFFFF);
+
+  /// 27's 充电 and 关注 pills under the uploader's name, level with the avatar's bottom.
+  static const pillWidth = 88.0;
+  static const pillHeight = 30.0;
+  static const pillGap = 8.0;
+  static const pillBorder = 1.0;
+  static const pillText = 14.0;
+  static const boltWidth = 7.2;
+  static const boltHeight = 11.6;
+  static const boltGap = 7.6;
+
+  /// Padding before ⚡ 充电, which 27 sets half this right of its pill's centre.
+  static const chargeShift = 4.0;
+  static const pillPlus = 9.0;
+  static const pillPlusStroke = 1.2;
+  static const pillPlusGap = 5.0;
+
+  /// 已关注's pill, as BiliNative's end screen draws it.
+  static const followedPill = Color(0x38FFFFFF);
+
+  /// How far an action's icon swells as it turns on.
+  static const pop = 1.28;
 }
 
 /// 竖屏's action column, uploader, 粉丝 and 关注 (09), and the 选集 sheet's share circle and 收藏 (19).
