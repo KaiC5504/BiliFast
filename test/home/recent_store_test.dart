@@ -212,6 +212,8 @@ void main() {
       final again = await RecentStore.load(path, logger: Logger(session: 'test'), readSwift: () async => swiftRecents);
       expect(reads, 1);
       expect(again.items, hasLength(2));
+      // The import's save still runs, and Windows refuses to delete a folder with a file open in it.
+      await again.settle();
     });
 
     test('is not asked for when the file exists or the list lives in memory only', () async {
