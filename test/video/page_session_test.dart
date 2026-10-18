@@ -828,6 +828,7 @@ void main() {
       'btr': false,
       'showStats': true,
       'danmakuOn': false,
+      'coinAlsoLike': true,
       'quality': 80,
       'codec': 'avc',
     });

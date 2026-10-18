@@ -53,6 +53,7 @@ class PlayerPrefs {
   bool _btr = true;
   bool _showStats = false;
   bool _danmakuOn = true;
+  bool _coinAlsoLike = true;
   int? _quality;
   VideoCodec? _codec;
 
@@ -73,6 +74,10 @@ class PlayerPrefs {
 
   bool get danmakuOn => _danmakuOn;
   set danmakuOn(bool value) => _set(() => _danmakuOn = value);
+
+  /// The coin dialog's 同时点赞内容.
+  bool get coinAlsoLike => _coinAlsoLike;
+  set coinAlsoLike(bool value) => _set(() => _coinAlsoLike = value);
 
   /// Null until the user picks one: the controller's own default applies.
   int? get quality => _quality;
@@ -104,6 +109,7 @@ class PlayerPrefs {
     _btr = pick<bool>('btr') ?? _btr;
     _showStats = pick<bool>('showStats') ?? _showStats;
     _danmakuOn = pick<bool>('danmakuOn') ?? _danmakuOn;
+    _coinAlsoLike = pick<bool>('coinAlsoLike') ?? _coinAlsoLike;
     _quality = pick<int>('quality');
     _codec = named('codec', VideoCodec.values);
   }
@@ -115,6 +121,7 @@ class PlayerPrefs {
     'btr': _btr,
     'showStats': _showStats,
     'danmakuOn': _danmakuOn,
+    'coinAlsoLike': _coinAlsoLike,
     'quality': ?_quality,
     'codec': ?_codec?.name,
   };

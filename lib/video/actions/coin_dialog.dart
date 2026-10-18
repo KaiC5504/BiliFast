@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
+import '../player_prefs.dart';
 import 'video_actions.dart';
 
 /// Opens a link outside the app; false when nothing could.
@@ -30,8 +31,9 @@ class CoinDialog extends StatefulWidget {
   /// 如何获取硬币？, as BiliNative opens it.
   static final helpLink = Uri.parse('https://www.bilibili.com/blackboard/help.html');
 
-  /// 同时点赞内容, on by default; kept for the session only until the player prefs carry it.
-  static bool alsoLike = true;
+  /// 同时点赞内容, on by default and remembered across launches.
+  static bool get alsoLike => PlayerPrefs.shared.coinAlsoLike;
+  static set alsoLike(bool value) => PlayerPrefs.shared.coinAlsoLike = value;
 
   @override
   State<CoinDialog> createState() => _CoinDialogState();

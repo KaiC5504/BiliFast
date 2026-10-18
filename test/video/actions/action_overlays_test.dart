@@ -151,7 +151,8 @@ void main() {
       expect(tester.widget<CoinDialog>(find.byType(CoinDialog)).actions, same(actions));
       expect(rig.controller.value, ActionPrompt.coin);
       expect(actions.prompt, isNull);
-      expect(actions.calls, ['ask coin', 'clearPrompt']);
+      // The dialog itself asks for the balance.
+      expect(actions.calls.take(2), ['ask coin', 'clearPrompt']);
       tester.widget<CoinDialog>(find.byType(CoinDialog)).onClose();
       await tester.pumpAndSettle();
       expect(rig.controller.value, isNull);

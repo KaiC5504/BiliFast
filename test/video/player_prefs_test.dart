@@ -30,6 +30,7 @@ void main() {
     expect(prefs.btr, isTrue);
     expect(prefs.showStats, isFalse);
     expect(prefs.danmakuOn, isTrue);
+    expect(prefs.coinAlsoLike, isTrue);
     expect(prefs.quality, isNull);
     expect(prefs.codec, isNull);
     expect(File(path).existsSync(), isFalse, reason: 'nothing is written until something changes');
@@ -44,6 +45,7 @@ void main() {
       ..btr = false
       ..showStats = true
       ..danmakuOn = false
+      ..coinAlsoLike = false
       ..quality = 127
       ..codec = VideoCodec.av1;
     await prefs.settle();
@@ -55,6 +57,7 @@ void main() {
     expect(again.btr, isFalse);
     expect(again.showStats, isTrue);
     expect(again.danmakuOn, isFalse);
+    expect(again.coinAlsoLike, isFalse);
     expect(again.quality, 127);
     expect(again.codec, VideoCodec.av1);
   });
