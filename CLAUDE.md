@@ -114,6 +114,8 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   official app; the iPhone's default), MiSans (bundled; the default elsewhere), or a .ttf/.otf/.ttc imported from Files.
   A change rebuilds every widget in place (`FollowFont`), so styles read `BiliFonts.family` where they're built, never
   in a const. The five MiSans layout nudges in `BiliMetrics` apply only while MiSans is on. Not on TestFlight yet.
+- Next, KaiC's order (2026-10-19): slice 6 (the page body, with 推荐视频), then 7 (comments), then 5 (danmaku), so
+  the video page looks like the official app sooner. Slice 5 doesn't block 6 or 7.
 - Update this section when a slice finishes.
 
 ## Layout
