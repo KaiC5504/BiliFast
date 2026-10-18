@@ -4,10 +4,11 @@
     python scripts/gate.py           # all lanes; a pass on a clean tree is recorded for testflight.py
     python scripts/gate.py --quick   # without the Windows build, for the edit loop; records nothing
 
-Lanes: bili_core (analyze, tests), the app (analyze, widget tests), the workflow tests, a Swift
-syntax check of ios/Runner (the PC has no iOS SDK, so only syntax), and the Windows release build
-plus the Windows integration tests (real mpv). A pass on a clean tree is recorded in .git/gate-passed
-(the commit), so testflight.py can tell the commit it ships passed without running anything again.
+Lanes: bili_core (analyze, tests), the app (analyze, widget tests), the workflow tests, the PC tools'
+tests (log server, phone report), a Swift syntax check of ios/Runner (the PC has no iOS SDK, so only
+syntax), and the Windows release build plus the Windows integration tests (real mpv). A pass on a
+clean tree is recorded in .git/gate-passed (the commit), so testflight.py can tell the commit it ships
+passed without running anything again.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ def lanes(quick: bool) -> dict[str, list[Step]]:
         "app": [(flutter + ["analyze", "--fatal-infos"], ROOT),
                 (flutter + ["test", "--reporter", "failures-only"], ROOT)],
         "workflows": [(python + ["-m", "unittest", "discover", "-s", "test_ci"], ROOT)],
+        "tools": [(python + ["-m", "unittest", "discover", "-s", "tools", "-p", "test_*.py"], ROOT)],
         "swift": [([tool("swiftc"), "-parse"] + swift_files, ROOT)],
     }
     if not quick:
