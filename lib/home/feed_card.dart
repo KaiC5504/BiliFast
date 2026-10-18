@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/logic.dart';
+import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../video/video_route.dart';
+import 'avatar_menu.dart';
 
 /// Card sizes that depend on the text size, so the grid can give every card the same height.
 abstract final class FeedCardSize {
@@ -12,9 +17,12 @@ abstract final class FeedCardSize {
 
   static double titleHeight(TextScaler scaler) => scaler.scale(BiliMetrics.cardTitleText) * _lineHeight * 2;
 
+  /// The tag, uploader and ⋮ row with its gaps. Its text keeps one size, as Swift's fixed `.system(size:)` did.
+  static const footerHeight = BiliMetrics.cardFooterInset * 2 + BiliMetrics.cardTagHeight;
+
   /// The whole card for a column [width] wide: 4:3 cover, two title lines, the footer and their gaps.
   static double height(double width, TextScaler scaler) =>
-      width / BiliMetrics.coverAspect + 10 + titleHeight(scaler) + 9 + BiliMetrics.cardTagHeight + 9;
+      width / BiliMetrics.coverAspect + BiliMetrics.cardTitleTop + titleHeight(scaler) + footerHeight;
 }
 
 /// One 推荐 card (01, port of FeedCard.swift): the cover with counts and duration, a two-line title, and the tag,
@@ -47,61 +55,81 @@ class _FeedCardViewState extends State<FeedCardView> {
   Widget build(BuildContext context) {
     final card = widget.card;
     final scaler = MediaQuery.textScalerOf(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _press(true),
-      onTapUp: (_) => _press(false),
-      onTapCancel: () => _press(false),
+    // One element for VoiceOver, named by the title; ⋮'s 稍后再看 is its action.
+    return Semantics(
+      button: true,
+      label: card.title,
       onTap: widget.onOpen,
-      child: AnimatedScale(
-        scale: _pressed ? BiliMetrics.pressedScale : 1,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(BiliMetrics.cardRadius),
-          child: ColoredBox(
-            color: BiliColors.card,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Cover(card: card),
-                Padding(
-                  padding: const EdgeInsets.only(left: BiliMetrics.cardInset, right: BiliMetrics.cardInset, top: 10),
-                  child: SizedBox(
-                    height: FeedCardSize.titleHeight(scaler),
-                    child: Text(
-                      card.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: BiliMetrics.cardTitleText, color: BiliColors.text, height: 1.3),
+      customSemanticsActions: {const CustomSemanticsAction(label: '稍后再看'): widget.onWatchLater},
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _press(true),
+        onTapUp: (_) => _press(false),
+        onTapCancel: () => _press(false),
+        onTap: widget.onOpen,
+        child: AnimatedScale(
+          scale: _pressed ? BiliMetrics.pressedScale : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(BiliMetrics.cardRadius),
+            child: ColoredBox(
+              color: BiliColors.card,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Cover(card: card),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: BiliMetrics.cardInset,
+                      right: BiliMetrics.cardInset,
+                      top: BiliMetrics.cardTitleTop,
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: BiliMetrics.cardInset, top: 9, bottom: 9),
-                  child: SizedBox(
-                    height: BiliMetrics.cardTagHeight,
-                    child: Row(
-                      children: [
-                        _Badge(card: card),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            card.ownerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: BiliMetrics.cardFooterText,
-                              color: BiliColors.secondaryText,
-                            ),
-                          ),
+                    child: SizedBox(
+                      height: FeedCardSize.titleHeight(scaler),
+                      child: Text(
+                        card.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: BiliMetrics.cardTitleText,
+                          color: BiliColors.text,
+                          height: FeedCardSize._lineHeight,
                         ),
-                        _More(onWatchLater: widget.onWatchLater),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  MediaQuery.withClampedTextScaling(
+                    maxScaleFactor: 1,
+                    child: SizedBox(
+                      height: FeedCardSize.footerHeight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: BiliMetrics.cardInset),
+                        child: Row(
+                          children: [
+                            _Badge(card: card),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                card.ownerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: BiliMetrics.cardFooterText,
+                                  color: BiliColors.secondaryText,
+                                ),
+                              ),
+                            ),
+                            _More(onWatchLater: widget.onWatchLater),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -142,26 +170,42 @@ class _Cover extends StatelessWidget {
           left: BiliMetrics.cardInset,
           right: BiliMetrics.cardInset,
           bottom: 6,
-          child: DefaultTextStyle(
-            style: const TextStyle(
-              fontFamily: BiliFonts.family,
-              fontSize: BiliMetrics.cardStatText,
-              color: BiliColors.onCover,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-            maxLines: 1,
-            child: Row(
-              children: [
-                const Icon(Icons.smart_display_outlined, size: BiliMetrics.cardStatIcon, color: BiliColors.onCover),
-                const SizedBox(width: 3),
-                Text(CountFormat.short(card.views)),
-                const SizedBox(width: 10),
-                const Icon(Icons.subtitles_outlined, size: BiliMetrics.cardStatIcon, color: BiliColors.onCover),
-                const SizedBox(width: 3),
-                Text(CountFormat.short(card.danmaku)),
-                const Spacer(),
-                Text(FeedCardView.duration(card.duration)),
-              ],
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1,
+            child: DefaultTextStyle(
+              style: const TextStyle(
+                fontFamily: BiliFonts.family,
+                fontSize: BiliMetrics.cardStatText,
+                color: BiliColors.onCover,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.clip,
+              // On a card too narrow for them all, the counts give way before the duration does.
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.smart_display_outlined,
+                          size: BiliMetrics.cardStatIcon,
+                          color: BiliColors.onCover,
+                        ),
+                        const SizedBox(width: 3),
+                        Flexible(child: Text(CountFormat.short(card.views))),
+                        const SizedBox(width: 10),
+                        const Icon(Icons.subtitles_outlined, size: BiliMetrics.cardStatIcon, color: BiliColors.onCover),
+                        const SizedBox(width: 3),
+                        Flexible(child: Text(CountFormat.short(card.danmaku))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(FeedCardView.duration(card.duration)),
+                ],
+              ),
             ),
           ),
         ),
@@ -208,7 +252,7 @@ class UpBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    height: 12,
+    height: BiliMetrics.upBadgeHeight,
     padding: const EdgeInsets.symmetric(horizontal: 2),
     alignment: Alignment.center,
     decoration: BoxDecoration(
@@ -217,40 +261,137 @@ class UpBadge extends StatelessWidget {
     ),
     child: const Text(
       'UP',
-      style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: BiliColors.secondaryText, height: 1),
+      style: TextStyle(
+        fontSize: BiliMetrics.upBadgeText,
+        fontWeight: FontWeight.bold,
+        color: BiliColors.secondaryText,
+        height: 1,
+      ),
     ),
   );
 }
 
+/// The ⋮ at the end of the footer, Swift's 24 × 24 target.
 class _More extends StatelessWidget {
   const _More({required this.onWatchLater});
 
   final VoidCallback onWatchLater;
 
-  @override
-  Widget build(BuildContext context) => PopupMenuButton<void>(
-    tooltip: '更多',
-    padding: EdgeInsets.zero,
-    iconSize: BiliMetrics.cardFooterText + 4,
-    icon: const Icon(Icons.more_vert, color: BiliColors.secondaryText),
-    constraints: const BoxConstraints(minWidth: 120),
-    color: BiliColors.card,
-    itemBuilder: (context) => [
-      PopupMenuItem<void>(
-        onTap: onWatchLater,
-        child: const Row(
-          children: [
-            Icon(Icons.schedule, size: BiliMetrics.iconSize, color: BiliColors.text),
-            SizedBox(width: BiliMetrics.rowGap),
-            Text(
-              '稍后再看',
-              style: TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text),
-            ),
-          ],
+  void _open(BuildContext context) {
+    final box = context.findRenderObject()! as RenderBox;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    unawaited(
+      Navigator.of(context).push(
+        _CardMenuRoute(
+          anchor: anchor,
+          reduceMotion: MediaQuery.disableAnimationsOf(context),
+          onWatchLater: onWatchLater,
         ),
       ),
-    ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    key: const ValueKey('card-more'),
+    behavior: HitTestBehavior.opaque,
+    onTap: () => _open(context),
+    child: const SizedBox.square(
+      dimension: BiliMetrics.cardMoreTarget,
+      child: Icon(Icons.more_vert, size: BiliMetrics.cardFooterText + 4, color: BiliColors.secondaryText),
+    ),
   );
+}
+
+/// ⋮'s menu (Swift's Menu): frosted glass growing out of the button, below it or, near the bottom, above; a tap
+/// anywhere else closes it.
+class _CardMenuRoute extends PopupRoute<void> {
+  _CardMenuRoute({required this.anchor, required this.reduceMotion, required this.onWatchLater});
+
+  final Rect anchor;
+  final bool reduceMotion;
+  final VoidCallback onWatchLater;
+
+  static const _height = BiliMetrics.menuRowHeight;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  bool get barrierDismissible => true;
+
+  @override
+  String get barrierLabel => '关闭菜单';
+
+  @override
+  Duration get transitionDuration => reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+
+  @override
+  Duration get reverseTransitionDuration => reduceMotion ? Duration.zero : const Duration(milliseconds: 150);
+
+  @override
+  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
+    final screen = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.paddingOf(context);
+    final below =
+        anchor.bottom + BiliMetrics.cardMenuGap + _height <= screen.height - padding.bottom - BiliMetrics.gutter;
+    final left = clampDouble(
+      anchor.right - BiliMetrics.cardMenuWidth,
+      BiliMetrics.gutter,
+      screen.width - BiliMetrics.gutter - BiliMetrics.cardMenuWidth,
+    );
+    return Stack(
+      children: [
+        Positioned(
+          left: left,
+          top: below ? anchor.bottom + BiliMetrics.cardMenuGap : anchor.top - BiliMetrics.cardMenuGap - _height,
+          child: ScaleTransition(
+            alignment: below ? Alignment.topRight : Alignment.bottomRight,
+            scale: Tween(begin: 0.8, end: 1.0).animate(animation),
+            child: FadeTransition(
+              opacity: animation,
+              // The route sits outside the page's Material, whose text style the row would otherwise miss.
+              child: Material(
+                type: MaterialType.transparency,
+                child: GlassPanel(
+                  width: BiliMetrics.cardMenuWidth,
+                  child: MenuRow(
+                    key: const ValueKey('card-watch-later'),
+                    title: '稍后再看',
+                    icon: Icons.schedule,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onWatchLater();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => child;
+
+  CurvedAnimation? _curve;
+
+  @override
+  Animation<double> createAnimation() =>
+      _curve = CurvedAnimation(parent: super.createAnimation(), curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
+
+  @override
+  void dispose() {
+    _curve?.dispose();
+    super.dispose();
+  }
 }
 
 /// A card's outline while the first page loads, a light band sweeping across it.
@@ -274,7 +415,11 @@ class FeedCardSkeleton extends StatelessWidget {
                 child: ColoredBox(color: BiliColors.shimmerBase),
               ),
               Padding(
-                padding: const EdgeInsets.only(left: BiliMetrics.cardInset, right: BiliMetrics.cardInset * 3, top: 10),
+                padding: const EdgeInsets.only(
+                  left: BiliMetrics.cardInset,
+                  right: BiliMetrics.cardInset * 3,
+                  top: BiliMetrics.cardTitleTop,
+                ),
                 child: SizedBox(
                   height: FeedCardSize.titleHeight(scaler),
                   child: const Column(
@@ -287,11 +432,14 @@ class FeedCardSkeleton extends StatelessWidget {
                   ),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.only(left: BiliMetrics.cardInset, top: 9, bottom: 9),
-                child: SizedBox(
-                  height: BiliMetrics.cardTagHeight,
-                  child: FractionallySizedBox(widthFactor: 0.4, alignment: Alignment.centerLeft, child: _Bar()),
+              const SizedBox(
+                height: FeedCardSize.footerHeight,
+                child: Padding(
+                  padding: EdgeInsets.only(left: BiliMetrics.cardInset),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(widthFactor: 0.4, child: _Bar()),
+                  ),
                 ),
               ),
             ],
@@ -312,7 +460,7 @@ class _Bar extends StatelessWidget {
   );
 }
 
-/// Sweeps a light band across [child] every 1.3 s.
+/// Sweeps a light band across [child] every 1.3 s; still when the system asks for less motion.
 class Shimmer extends StatefulWidget {
   const Shimmer({super.key, required this.child});
 
@@ -323,8 +471,20 @@ class Shimmer extends StatefulWidget {
 }
 
 class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
-  late final AnimationController _sweep = AnimationController(vsync: this, duration: const Duration(milliseconds: 1300))
-    ..repeat();
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1300),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _sweep.stop();
+    } else if (!_sweep.isAnimating) {
+      unawaited(_sweep.repeat());
+    }
+  }
 
   @override
   void dispose() {
@@ -333,21 +493,24 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _sweep,
-    child: widget.child,
-    builder: (context, child) => ShaderMask(
-      blendMode: BlendMode.srcATop,
-      shaderCallback: (bounds) {
-        final at = -1.0 + _sweep.value * 3;
-        return LinearGradient(
-          begin: Alignment(at - 1, -0.3),
-          end: Alignment(at + 1, 0.3),
-          colors: const [BiliColors.shimmerBase, BiliColors.shimmerHighlight, BiliColors.shimmerBase],
-          stops: const [0.35, 0.5, 0.65],
-        ).createShader(bounds);
-      },
-      child: child,
-    ),
-  );
+  Widget build(BuildContext context) {
+    if (!_sweep.isAnimating) return widget.child;
+    return AnimatedBuilder(
+      animation: _sweep,
+      child: widget.child,
+      builder: (context, child) => ShaderMask(
+        blendMode: BlendMode.srcATop,
+        shaderCallback: (bounds) {
+          final at = -1.0 + _sweep.value * 3;
+          return LinearGradient(
+            begin: Alignment(at - 1, -0.3),
+            end: Alignment(at + 1, 0.3),
+            colors: const [BiliColors.shimmerBase, BiliColors.shimmerHighlight, BiliColors.shimmerBase],
+            stops: const [0.35, 0.5, 0.65],
+          ).createShader(bounds);
+        },
+        child: child,
+      ),
+    );
+  }
 }
