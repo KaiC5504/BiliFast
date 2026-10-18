@@ -8,6 +8,7 @@ import '../shared/theme.dart';
 import '../shared/toast.dart';
 import 'panels/panel_controller.dart';
 import 'player_ui.dart';
+import 'portrait_controls.dart';
 import 'seek_bar.dart';
 
 const _fade = Duration(milliseconds: 220);
@@ -15,8 +16,8 @@ const _press = Duration(milliseconds: 90);
 
 /// The landscape full-screen controls, filling the screen (BiliNative `LandscapeChrome.swift`, measured on 04): back
 /// and the title, ⋮, 截图 and the rotation lock on the right edge, the time, the bar and the bottom row. The bars
-/// slide in from their edges as the controls show and stand aside while a panel is open. The top actions, 弹幕设置 and
-/// the danmaku field come in later slices; their room is kept so nothing else moves when they do.
+/// slide in from their edges as the controls show and stand aside while a panel is open. The top actions (slice 6),
+/// 弹幕设置 and the danmaku field (slice 5) have their room kept so nothing else moves when they come.
 class LandscapeChrome extends StatelessWidget {
   const LandscapeChrome({super.key, required this.ui});
 
@@ -110,48 +111,34 @@ class LandscapeChrome extends StatelessWidget {
         right: insets.right + BiliMetrics.landscapeEdge,
         top: insets.top,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: BiliMetrics.chromeTitleTop),
-              child: SizedBox(
-                height: BiliMetrics.chromeTitleRow,
-                child: Row(
-                  children: [
-                    FullScreenButton(
-                      key: const ValueKey('landscape-back'),
-                      label: '返回',
-                      height: BiliMetrics.chromeTitleRow,
-                      onTap: ui.onBack,
-                      child: const ChromeBackGlyph(),
-                    ),
-                    Expanded(
-                      child: Text(
-                        ui.session.title,
-                        key: const ValueKey('landscape-title'),
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: BiliColors.onVideo,
-                          fontSize: BiliMetrics.titleText,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
+      child: Padding(
+        padding: const EdgeInsets.only(top: BiliMetrics.chromeMoreTop),
+        child: Row(
+          children: [
+            ChromeTap(key: const ValueKey('landscape-back'), label: '返回', onTap: ui.onBack, child: const BackGlyph()),
+            Expanded(
+              child: Text(
+                ui.session.title,
+                key: const ValueKey('landscape-title'),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: BiliColors.onVideo,
+                  fontSize: BiliMetrics.chromeTitleText,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: BiliMetrics.chromeActionsRoom),
-          Padding(
-            padding: const EdgeInsets.only(top: BiliMetrics.chromeMoreTop),
-            child: FullScreenMoreButton(key: const ValueKey('landscape-more'), ui: ui),
-          ),
-        ],
+            const SizedBox(width: BiliMetrics.chromeActionsRoom),
+            ChromeTap(
+              key: const ValueKey('landscape-more'),
+              label: '更多',
+              onTap: _touch(() => ui.panels.open(PlayerPanel.more)),
+              child: const MoreDots(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -162,7 +149,7 @@ class LandscapeChrome extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (ui.session.canCaptureFrame) ...[
-          FullScreenButton(
+          ChromeTap(
             key: const ValueKey('landscape-capture'),
             label: '截图',
             onTap: _touch(() => unawaited(_capture(context))),
@@ -173,7 +160,7 @@ class LandscapeChrome extends StatelessWidget {
           ),
           const SizedBox(height: BiliMetrics.chromeSideGap),
         ],
-        FullScreenButton(
+        ChromeTap(
           key: const ValueKey('landscape-lock'),
           label: locked ? '解锁屏幕方向' : '锁定屏幕方向',
           onTap: _touch(ui.orientation.toggleLock),
@@ -200,7 +187,11 @@ class LandscapeChrome extends StatelessWidget {
     final session = ui.session;
     final bar = FullScreenSeekBar.repaintOf(ui);
     return Padding(
-      padding: EdgeInsets.only(left: insets.left, right: insets.right, bottom: insets.bottom),
+      padding: EdgeInsets.only(
+        left: insets.left,
+        right: insets.right,
+        bottom: insets.bottom + BiliMetrics.chromeRowBottom,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,38 +222,40 @@ class LandscapeChrome extends StatelessWidget {
             padding: const EdgeInsets.only(top: BiliMetrics.chromeRowTop, right: BiliMetrics.chromeRowTrailing),
             child: Row(
               children: [
-                FullScreenPlayButton(key: const ValueKey('landscape-play'), ui: ui),
+                _PlayButton(key: const ValueKey('landscape-play'), ui: ui),
                 Padding(
                   padding: const EdgeInsets.only(left: BiliMetrics.landscapeEdge),
-                  child: FullScreenButton(
+                  child: ChromeTap(
                     key: const ValueKey('landscape-danmaku'),
                     label: session.danmakuOn ? '关闭弹幕' : '开启弹幕',
                     onTap: _touch(() => session.setDanmakuOn(!session.danmakuOn)),
                     child: DanmakuGlyph(on: session.danmakuOn),
                   ),
                 ),
-                // 弹幕设置 and the danmaku field (later slices) sit here.
+                // 弹幕设置 and the danmaku field (slice 5) sit here.
                 const SizedBox(width: BiliMetrics.chromeSettingsRoom),
                 const Expanded(child: SizedBox.shrink()),
                 const SizedBox(width: BiliMetrics.chromeSpeedGap),
-                FullScreenButton.text(
+                _TextButton(
                   key: const ValueKey('landscape-speed'),
                   label: '倍速',
                   text: speedLabel(session.rate),
                   onTap: _touch(() => ui.panels.open(PlayerPanel.speed)),
                 ),
                 const SizedBox(width: BiliMetrics.chromeQualityGap),
-                FullScreenButton.text(
+                _TextButton(
                   key: const ValueKey('landscape-quality'),
                   label: '清晰度',
-                  text: session.qualityName(session.quality),
-                  fontSize: BiliMetrics.chromeQualityText,
+                  text: QualityNames.short(
+                    qn: session.playingQuality,
+                    serverText: session.qualityName(session.playingQuality),
+                  ),
                   bold: true,
                   onTap: _touch(() => ui.panels.open(PlayerPanel.quality)),
                 ),
                 if (session.episodes.isNotEmpty) ...[
                   const SizedBox(width: BiliMetrics.chromeEpisodesGap),
-                  FullScreenButton.text(
+                  _TextButton(
                     key: const ValueKey('landscape-episodes'),
                     label: '选集',
                     text: '选集',
@@ -335,149 +328,45 @@ class ChromeShade extends StatelessWidget {
   );
 }
 
-/// Shrinks a little under the finger, so a tap on the controls is felt.
-class ChromePressable extends StatefulWidget {
-  const ChromePressable({super.key, required this.label, required this.onTap, required this.child});
+/// A line of text on the bottom row, as tall as the glyph buttons.
+class _TextButton extends StatelessWidget {
+  const _TextButton({super.key, required this.label, required this.text, required this.onTap, this.bold = false});
 
   final String label;
+  final String text;
   final VoidCallback onTap;
-  final Widget child;
+  final bool bold;
 
   @override
-  State<ChromePressable> createState() => _ChromePressableState();
-}
-
-class _ChromePressableState extends State<ChromePressable> {
-  bool _down = false;
-
-  void _set(bool down) {
-    if (down != _down) setState(() => _down = down);
-  }
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: widget.label,
-    excludeSemantics: true,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _set(true),
-      onTapUp: (_) => _set(false),
-      onTapCancel: () => _set(false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _down ? BiliMetrics.fullScreenPressedScale : 1,
-        duration: _press,
-        curve: Curves.easeOut,
-        child: widget.child,
+  Widget build(BuildContext context) => ChromeTap(
+    label: label,
+    square: false,
+    onTap: onTap,
+    child: SizedBox(
+      height: BiliMetrics.chromeButton,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.chromeTextPad),
+        child: Center(
+          widthFactor: 1,
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              color: BiliColors.onVideo,
+              fontSize: BiliMetrics.chromeLabelText,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ),
       ),
     ),
   );
 }
 
-/// A control on the full-screen chrome: a glyph in a 44 pt square, or a line of text.
-class FullScreenButton extends StatelessWidget {
-  const FullScreenButton({
-    super.key,
-    required this.label,
-    required this.onTap,
-    required this.child,
-    this.width = BiliMetrics.chromeButton,
-    this.height = BiliMetrics.chromeButton,
-  });
-
-  FullScreenButton.text({
-    super.key,
-    required this.label,
-    required String text,
-    required this.onTap,
-    double fontSize = BiliMetrics.bodyText,
-    bool bold = false,
-  }) : width = null,
-       height = BiliMetrics.chromeButton,
-       child = Padding(
-         padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.chromeTextPad),
-         child: Text(
-           text,
-           maxLines: 1,
-           softWrap: false,
-           style: TextStyle(
-             color: BiliColors.onVideo,
-             fontSize: fontSize,
-             fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-           ),
-         ),
-       );
-
-  final String label;
-  final VoidCallback onTap;
-  final Widget child;
-
-  /// Null: as wide as the text.
-  final double? width;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) => ChromePressable(
-    label: label,
-    onTap: onTap,
-    child: SizedBox(
-      width: width,
-      height: height,
-      child: Center(widthFactor: width == null ? 1 : null, child: child),
-    ),
-  );
-}
-
-/// The thin back chevron.
-class ChromeBackGlyph extends StatelessWidget {
-  const ChromeBackGlyph({
-    super.key,
-    this.width = BiliMetrics.chromeBackWidth,
-    this.height = BiliMetrics.chromeBackHeight,
-    this.color = BiliColors.onVideo,
-  });
-
-  final double width;
-  final double height;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => CustomPaint(size: Size(width, height), painter: _ChevronPainter(color));
-}
-
-/// ⋮, opening the 更多 panel.
-class FullScreenMoreButton extends StatelessWidget {
-  const FullScreenMoreButton({super.key, required this.ui, this.color = BiliColors.onVideo});
-
-  final PlayerUi ui;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => FullScreenButton(
-    label: '更多',
-    onTap: () {
-      ui.chrome.show();
-      ui.panels.open(PlayerPanel.more);
-    },
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < 3; i++) ...[
-          if (i > 0) const SizedBox(height: BiliMetrics.chromeMoreDotSpacing),
-          DecoratedBox(
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: const SizedBox.square(dimension: BiliMetrics.chromeMoreDotSize),
-          ),
-        ],
-      ],
-    ),
-  );
-}
-
-/// Play or pause; it shows play once the video has ended.
-class FullScreenPlayButton extends StatelessWidget {
-  const FullScreenPlayButton({super.key, required this.ui});
+/// Play or pause, drawn larger and rounder than the small player's (04).
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({super.key, required this.ui});
 
   final PlayerUi ui;
 
@@ -488,19 +377,22 @@ class FullScreenPlayButton extends StatelessWidget {
       listenable: Listenable.merge([session.readout.status, session]),
       builder: (context, _) {
         final playing = session.readout.wantsPlay && !session.ended;
-        return FullScreenButton(
+        return ChromeTap(
           label: playing ? '暂停' : '播放',
           onTap: () {
             ui.chrome.show();
             session.togglePlay();
           },
-          child: AnimatedSwitcher(
-            duration: _press * 2,
-            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-            child: CustomPaint(
-              key: ValueKey(playing),
-              size: const Size(BiliMetrics.chromePlayWidth, BiliMetrics.chromePlayHeight),
-              painter: _PlayPainter(playing: playing),
+          child: Transform.translate(
+            offset: const Offset(BiliMetrics.chromePlayShift, 0),
+            child: AnimatedSwitcher(
+              duration: _press * 2,
+              transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+              child: CustomPaint(
+                key: ValueKey(playing),
+                size: const Size(BiliMetrics.chromePlayWidth, BiliMetrics.chromePlayHeight),
+                painter: _PlayPainter(playing: playing),
+              ),
             ),
           ),
         );
@@ -599,26 +491,19 @@ Paint _line(Color color, [double width = BiliMetrics.chromeLineStroke]) => Paint
   ..strokeJoin = StrokeJoin.round
   ..color = color;
 
-class _ChevronPainter extends CustomPainter {
-  const _ChevronPainter(this.color);
+/// Maps a point traced on 04 inside a box of [grid] points (3 px per pt) into [size], so the glyphs scale with their
+/// box as the small player's do.
+Offset Function(double x, double y) _traced(Size grid, Size size) =>
+    (x, y) => Offset(x * size.width / grid.width, y * size.height / grid.height);
 
-  final Color color;
+extension on Path {
+  void moveToPoint(Offset point) => moveTo(point.dx, point.dy);
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    const inset = BiliMetrics.chromeBackStroke / 2;
-    canvas.drawPath(
-      Path()
-        ..moveTo(size.width - inset, inset)
-        ..lineTo(inset, size.height / 2)
-        ..lineTo(size.width - inset, size.height - inset),
-      _line(color, BiliMetrics.chromeBackStroke),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_ChevronPainter oldDelegate) => oldDelegate.color != color;
+  void lineToPoint(Offset point) => lineTo(point.dx, point.dy);
 }
+
+Radius _round(Size grid, Size size, double r) =>
+    Radius.elliptical(r * size.width / grid.width, r * size.height / grid.height);
 
 /// The official play glyph is a triangle with well rounded corners; pause is two rounded bars of the same height.
 class _PlayPainter extends CustomPainter {
@@ -665,7 +550,9 @@ class _PlayPainter extends CustomPainter {
   bool shouldRepaint(_PlayPainter oldDelegate) => oldDelegate.playing != playing;
 }
 
-/// Points measured on 04 at 3 px per pt, inside a 21 × 20 box.
+const _danmakuGrid = Size(BiliMetrics.chromeDanmakuWidth, BiliMetrics.chromeDanmakuHeight);
+
+/// The TV, traced on its 21 × 20 box.
 class _DanmakuTvPainter extends CustomPainter {
   const _DanmakuTvPainter();
 
@@ -673,21 +560,22 @@ class _DanmakuTvPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const corner = Radius.circular(radius);
+    final p = _traced(_danmakuGrid, size);
+    final corner = _round(_danmakuGrid, size, radius);
     // The box leaves its bottom-right corner open for the tick or the cross.
     final box = Path()
-      ..moveTo(right, 14.3)
-      ..lineTo(right, top + radius)
-      ..arcToPoint(const Offset(right - radius, top), radius: corner, clockwise: false)
-      ..lineTo(left + radius, top)
-      ..arcToPoint(const Offset(left, top + radius), radius: corner, clockwise: false)
-      ..lineTo(left, bottom - radius)
-      ..arcToPoint(const Offset(left + radius, bottom), radius: corner, clockwise: false)
-      ..lineTo(11.8, bottom)
-      ..moveTo(5.5, 0.7)
-      ..lineTo(7.4, top - 0.4)
-      ..moveTo(13.9, 0.7)
-      ..lineTo(12, top - 0.4);
+      ..moveToPoint(p(right, 14.3))
+      ..lineToPoint(p(right, top + radius))
+      ..arcToPoint(p(right - radius, top), radius: corner, clockwise: false)
+      ..lineToPoint(p(left + radius, top))
+      ..arcToPoint(p(left, top + radius), radius: corner, clockwise: false)
+      ..lineToPoint(p(left, bottom - radius))
+      ..arcToPoint(p(left + radius, bottom), radius: corner, clockwise: false)
+      ..lineToPoint(p(11.8, bottom))
+      ..moveToPoint(p(5.5, 0.7))
+      ..lineToPoint(p(7.4, top - 0.4))
+      ..moveToPoint(p(13.9, 0.7))
+      ..lineToPoint(p(12, top - 0.4));
     canvas.drawPath(box, _line(BiliColors.onVideo));
   }
 
@@ -702,58 +590,56 @@ class _DanmakuMarkPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (on) {
-      canvas.drawPath(
-        Path()
-          ..moveTo(12.4, 16.4)
-          ..lineTo(15.7, 18.6)
-          ..lineTo(20.4, 14.5),
-        _line(BiliColors.pink),
-      );
-      return;
-    }
-    canvas.drawPath(
-      Path()
-        ..moveTo(14.2, 14.2)
-        ..lineTo(19.2, 19.2)
-        ..moveTo(19.2, 14.2)
-        ..lineTo(14.2, 19.2),
-      _line(BiliColors.onVideo),
-    );
+    final p = _traced(_danmakuGrid, size);
+    final path = on
+        ? (Path()
+            ..moveToPoint(p(12.4, 16.4))
+            ..lineToPoint(p(15.7, 18.6))
+            ..lineToPoint(p(20.4, 14.5)))
+        : (Path()
+            ..moveToPoint(p(14.2, 14.2))
+            ..lineToPoint(p(19.2, 19.2))
+            ..moveToPoint(p(19.2, 14.2))
+            ..lineToPoint(p(14.2, 19.2)));
+    canvas.drawPath(path, _line(on ? BiliColors.pink : BiliColors.onVideo));
   }
 
   @override
   bool shouldRepaint(_DanmakuMarkPainter oldDelegate) => oldDelegate.on != on;
 }
 
-/// 04's camera, 20 × 17: the body with its hump, the lens, and the flash mark at the top right.
+/// 04's camera, traced on its 20 × 17 box: the body with its hump, the lens, and the flash mark at the top right.
 class _CameraPainter extends CustomPainter {
   const _CameraPainter();
 
+  static const _grid = Size(BiliMetrics.chromeCameraWidth, BiliMetrics.chromeCameraHeight);
+
   @override
   void paint(Canvas canvas, Size size) {
+    final p = _traced(_grid, size);
     const s = BiliMetrics.chromeLineStroke / 2;
-    final right = size.width - s, bottom = size.height - s;
+    const right = BiliMetrics.chromeCameraWidth - s, bottom = BiliMetrics.chromeCameraHeight - s;
     const top = 4.2, r = 3.6;
-    const corner = Radius.circular(r);
+    final corner = _round(_grid, size, r);
+    final lens = p(BiliMetrics.chromeCameraWidth / 2 - 0.4, 10.2);
     final body = Path()
-      ..moveTo(s + r, top)
-      ..lineTo(4.6, top)
-      ..lineTo(6.4, 1.2)
-      ..lineTo(12.6, 1.2)
-      ..lineTo(14.4, top)
-      ..lineTo(right - r, top)
-      ..arcToPoint(Offset(right, top + r), radius: corner)
-      ..lineTo(right, bottom - r)
-      ..arcToPoint(Offset(right - r, bottom), radius: corner)
-      ..lineTo(s + r, bottom)
-      ..arcToPoint(Offset(s, bottom - r), radius: corner)
-      ..lineTo(s, top + r)
-      ..arcToPoint(const Offset(s + r, top), radius: corner)
+      ..moveToPoint(p(s + r, top))
+      ..lineToPoint(p(4.6, top))
+      ..lineToPoint(p(6.4, 1.2))
+      ..lineToPoint(p(12.6, 1.2))
+      ..lineToPoint(p(14.4, top))
+      ..lineToPoint(p(right - r, top))
+      ..arcToPoint(p(right, top + r), radius: corner)
+      ..lineToPoint(p(right, bottom - r))
+      ..arcToPoint(p(right - r, bottom), radius: corner)
+      ..lineToPoint(p(s + r, bottom))
+      ..arcToPoint(p(s, bottom - r), radius: corner)
+      ..lineToPoint(p(s, top + r))
+      ..arcToPoint(p(s + r, top), radius: corner)
       ..close()
-      ..addOval(Rect.fromCircle(center: Offset(size.width / 2 - 0.4, 10.2), radius: 3.3))
-      ..moveTo(15.8, 0.8)
-      ..lineTo(18.2, 1.3);
+      ..addOval(Rect.fromCenter(center: lens, width: p(6.6, 0).dx, height: p(0, 6.6).dy))
+      ..moveToPoint(p(15.8, 0.8))
+      ..lineToPoint(p(18.2, 1.3));
     canvas.drawPath(body, _line(BiliColors.onVideo));
   }
 
@@ -761,37 +647,33 @@ class _CameraPainter extends CustomPainter {
   bool shouldRepaint(_CameraPainter oldDelegate) => false;
 }
 
-/// 04's padlock, 21 × 20.5: open, the shackle lifted off to the right; locked, it closes over the body.
+/// 04's padlock, traced on its 21 × 20.5 box: open, the shackle lifted off to the right; locked, it closes over the
+/// body.
 class _LockPainter extends CustomPainter {
   const _LockPainter({required this.locked});
 
   final bool locked;
 
+  static const _grid = Size(BiliMetrics.chromeLockWidth, BiliMetrics.chromeLockHeight);
+
   @override
   void paint(Canvas canvas, Size size) {
+    final p = _traced(_grid, size);
     const s = BiliMetrics.chromeLineStroke / 2;
-    const bodyTop = 8.3, bodyRight = 17.7;
-    final bodyBottom = size.height - s;
+    const bodyTop = 8.3, bodyRight = 17.7, bodyBottom = BiliMetrics.chromeLockHeight - s;
     final paint = _line(BiliColors.onVideo);
-    canvas.drawRRect(RRect.fromLTRBR(s, bodyTop, bodyRight, bodyBottom, const Radius.circular(3.2)), paint);
-    final keyY = (bodyTop + bodyBottom) / 2;
-    canvas.drawLine(Offset(7.2, keyY), Offset(10.5, keyY), _line(BiliColors.onVideo, BiliMetrics.chromeLockKey));
-    final shackle = Path();
-    if (locked) {
-      const legLeft = 4.6, legRight = 13.6, radius = (legRight - legLeft) / 2, arcY = 4.9;
-      shackle
-        ..moveTo(legLeft, bodyTop)
-        ..lineTo(legLeft, arcY)
-        ..arcToPoint(const Offset(legRight, arcY), radius: const Radius.circular(radius))
-        ..lineTo(legRight, bodyTop);
-    } else {
-      const legLeft = 13.3, legRight = 20.2, radius = (legRight - legLeft) / 2, arcY = 4.5;
-      shackle
-        ..moveTo(legLeft, bodyTop)
-        ..lineTo(legLeft, arcY)
-        ..arcToPoint(const Offset(legRight, arcY), radius: const Radius.circular(radius))
-        ..lineTo(legRight, 6.2);
-    }
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromPoints(p(s, bodyTop), p(bodyRight, bodyBottom)), _round(_grid, size, 3.2)),
+      paint,
+    );
+    const keyY = (bodyTop + bodyBottom) / 2;
+    canvas.drawLine(p(7.2, keyY), p(10.5, keyY), _line(BiliColors.onVideo, BiliMetrics.chromeLockKey));
+    final (legLeft, legRight, arcY, end) = locked ? (4.6, 13.6, 4.9, bodyTop) : (13.3, 20.2, 4.5, 6.2);
+    final shackle = Path()
+      ..moveToPoint(p(legLeft, bodyTop))
+      ..lineToPoint(p(legLeft, arcY))
+      ..arcToPoint(p(legRight, arcY), radius: _round(_grid, size, (legRight - legLeft) / 2))
+      ..lineToPoint(p(legRight, end));
     canvas.drawPath(shackle, paint);
   }
 

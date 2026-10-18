@@ -1,15 +1,21 @@
 import 'dart:math' as math;
 
+import 'package:bili_core/api.dart' show VideoDetail;
+import 'package:bili_core/logic.dart' show CountFormat;
 import 'package:flutter/widgets.dart';
 
+import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import 'landscape_chrome.dart';
-import 'seek_bar.dart';
+import 'panels/panel_controller.dart';
 import 'player_ui.dart';
+import 'portrait_controls.dart';
+import 'seek_bar.dart';
 
 /// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back and ⋮ at the top, the
-/// title over the bar, then the 弹 toggle, 详情页 and 横屏全屏. The uploader, the action column, the search row and
-/// the 发弹幕 field come in later slices; their room is kept so nothing else moves when they do.
+/// uploader, the title and its plays over the bar, then the 弹 toggle, 详情页 and 横屏全屏. The search button, 粉丝,
+/// 关注, the action column and the search row (slice 6) and the 发弹幕 field (slice 5) have their room kept so nothing
+/// else moves when they come.
 class VerticalChrome extends StatelessWidget {
   const VerticalChrome({super.key, required this.ui});
 
@@ -39,7 +45,7 @@ class VerticalChrome extends StatelessWidget {
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: insets.bottom,
+                  bottom: math.max(insets.bottom - BiliMetrics.verticalBottomDrop, 0),
                   child: ChromeSlide(
                     shown: shown,
                     from: const Offset(0, BiliMetrics.chromeSlide / 2),
@@ -61,31 +67,66 @@ class VerticalChrome extends StatelessWidget {
 
   Widget _topRow() => Row(
     children: [
-      FullScreenButton(
+      ChromeTap(
         key: const ValueKey('vertical-back'),
         label: '返回',
         onTap: ui.onBack,
-        child: const ChromeBackGlyph(
-          width: BiliMetrics.verticalBackWidth,
-          height: BiliMetrics.verticalBackHeight,
-          color: BiliColors.chromeFaint,
+        child: const CustomPaint(
+          size: Size(BiliMetrics.verticalBackWidth, BiliMetrics.verticalBackHeight),
+          painter: _BackPainter(),
         ),
       ),
       const Spacer(),
-      FullScreenMoreButton(key: const ValueKey('vertical-more'), ui: ui, color: BiliColors.chromeFaint),
+      ChromeTap(
+        key: const ValueKey('vertical-more'),
+        label: '更多',
+        onTap: _touch(() => ui.panels.open(PlayerPanel.more)),
+        child: const _FaintDots(),
+      ),
     ],
   );
 
   Widget _bottom() {
     final session = ui.session;
+    final detail = session.detail;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        SizedBox(
+          height: BiliMetrics.verticalAvatar,
+          child: detail == null ? null : _Uploader(detail: detail),
+        ),
+        const SizedBox(height: BiliMetrics.verticalUploaderGap),
         Padding(
           padding: const EdgeInsets.only(left: BiliMetrics.verticalInfoInset, right: BiliMetrics.verticalColumnRoom),
-          child: Text(
-            session.title,
+          child: Text.rich(
+            TextSpan(
+              text: session.title,
+              children: [
+                if (detail != null) ...[
+                  const WidgetSpan(child: SizedBox(width: BiliMetrics.verticalViewsGap)),
+                  TextSpan(
+                    text: '${CountFormat.short(detail.stat.view)}播放',
+                    style: const TextStyle(fontSize: BiliMetrics.verticalViewsText),
+                  ),
+                  const WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    // Centred on the line, so the top padding drops it by half as much.
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        left: BiliMetrics.verticalChevronGap,
+                        top: BiliMetrics.verticalChevronTop,
+                      ),
+                      child: CustomPaint(
+                        size: Size(BiliMetrics.verticalChevronWidth, BiliMetrics.verticalChevronHeight),
+                        painter: _ChevronDownPainter(),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
             key: const ValueKey('vertical-title'),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -96,9 +137,9 @@ class VerticalChrome extends StatelessWidget {
             ),
           ),
         ),
-        // The search suggestion row (a later slice) sits between the title and the bar.
+        // The search suggestion row (slice 6) sits between the title and the bar.
         const SizedBox(height: BiliMetrics.verticalSearchRoom),
-        // The row starts a little above the bar's touch area ends, as in 09.
+        // The row overlaps the bar's touch area by [verticalRowLift], as on 09.
         SizedBox(
           height: BiliMetrics.barTouchHeight - BiliMetrics.verticalRowLift,
           child: OverflowBox(
@@ -122,21 +163,18 @@ class VerticalChrome extends StatelessWidget {
               const SizedBox(width: BiliMetrics.verticalInfoInset),
               Expanded(child: _field()),
               const SizedBox(width: BiliMetrics.verticalDetailGap),
-              FullScreenButton(
+              ChromeTap(
                 key: const ValueKey('vertical-detail'),
                 label: '详情页',
                 onTap: _touch(ui.orientation.exitToInline),
                 child: const _DetailGlyph(),
               ),
               const SizedBox(width: BiliMetrics.verticalLandscapeGap),
-              FullScreenButton(
+              ChromeTap(
                 key: const ValueKey('vertical-landscape'),
                 label: '横屏全屏',
                 onTap: _touch(ui.orientation.enterLandscape),
-                child: const CustomPaint(
-                  size: Size.square(BiliMetrics.verticalFullScreenGlyph),
-                  painter: _FullScreenPainter(),
-                ),
+                child: const CustomPaint(size: Size.square(BiliMetrics.fullScreenGlyph), painter: _FullScreenPainter()),
               ),
               const SizedBox(width: BiliMetrics.landscapeEdge),
             ],
@@ -146,7 +184,7 @@ class VerticalChrome extends StatelessWidget {
     );
   }
 
-  /// The dark capsule of 09's 发弹幕 field, with the 弹 toggle at its right end; the field itself is a later slice.
+  /// The dark capsule of 09's 发弹幕 field, with the 弹 toggle at its right end; the field itself is slice 5.
   Widget _field() {
     final session = ui.session;
     return Container(
@@ -160,18 +198,57 @@ class VerticalChrome extends StatelessWidget {
             height: BiliMetrics.verticalDividerHeight,
             color: BiliColors.chromeDivider,
           ),
-          FullScreenButton(
+          ChromeTap(
             key: const ValueKey('vertical-danmaku'),
             label: session.danmakuOn ? '关闭弹幕' : '开启弹幕',
-            width: BiliMetrics.verticalToggleWidth,
-            height: BiliMetrics.verticalFieldHeight,
+            square: false,
             onTap: _touch(() => session.setDanmakuOn(!session.danmakuOn)),
-            child: DanmakuGlyph(on: session.danmakuOn),
+            child: SizedBox(
+              width: BiliMetrics.verticalToggleWidth,
+              height: BiliMetrics.verticalFieldHeight,
+              child: Center(child: DanmakuGlyph(on: session.danmakuOn)),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+/// The uploader's avatar with the name at its top; 粉丝 and 关注 (slice 6) go under and beside the name.
+class _Uploader extends StatelessWidget {
+  const _Uploader({required this.detail});
+
+  final VideoDetail detail;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    key: const ValueKey('vertical-uploader'),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const SizedBox(width: BiliMetrics.verticalAvatarInset),
+      ClipOval(
+        child: SizedBox.square(
+          dimension: BiliMetrics.verticalAvatar,
+          child: RemoteImage(
+            detail.owner.face,
+            size: const Size.square(BiliMetrics.verticalAvatar),
+            placeholder: const ColoredBox(color: BiliColors.landscapeEndPlaceholder),
+          ),
+        ),
+      ),
+      const SizedBox(width: BiliMetrics.verticalAvatarGap),
+      Flexible(
+        child: Text(
+          detail.owner.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.verticalNameText),
+        ),
+      ),
+      const SizedBox(width: BiliMetrics.verticalColumnRoom),
+    ],
+  );
 }
 
 /// Inward corners with a small 详情页 pill above and to the right, as on 09.
@@ -190,20 +267,22 @@ class _DetailGlyph extends StatelessWidget {
       Transform.translate(
         offset: const Offset(BiliMetrics.verticalBadgeX, BiliMetrics.verticalBadgeY),
         child: Container(
-          height: BiliMetrics.verticalBadgeHeight,
-          padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.verticalBadgePad),
-          alignment: Alignment.center,
+          height: BiliMetrics.badgeHeight,
+          padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.badgePadding),
           decoration: const ShapeDecoration(
-            color: BiliColors.chromeBadgeFill,
+            color: BiliColors.badgeFill,
             shape: StadiumBorder(
-              side: BorderSide(color: BiliColors.chromeBadgeBorder, width: BiliMetrics.verticalBadgeBorder),
+              side: BorderSide(color: BiliColors.badgeBorder, width: BiliMetrics.badgeBorderWidth),
             ),
           ),
-          child: const Text(
-            '详情页',
-            softWrap: false,
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(color: BiliColors.chromeBadgeText, fontSize: BiliMetrics.verticalBadgeText, height: 1),
+          child: const Center(
+            widthFactor: 1,
+            child: Text(
+              '详情页',
+              softWrap: false,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(color: BiliColors.badgeText, fontSize: BiliMetrics.badgeFont, height: 1),
+            ),
           ),
         ),
       ),
@@ -211,12 +290,66 @@ class _DetailGlyph extends StatelessWidget {
   );
 }
 
-Paint _stroke() => Paint()
+/// ⋮ in 09's faint white, without the small player's shadow.
+class _FaintDots extends StatelessWidget {
+  const _FaintDots();
+
+  @override
+  Widget build(BuildContext context) {
+    const dot = DecoratedBox(
+      decoration: BoxDecoration(color: BiliColors.chromeFaint, shape: BoxShape.circle),
+      child: SizedBox.square(dimension: BiliMetrics.moreDot),
+    );
+    return const Column(mainAxisSize: MainAxisSize.min, spacing: BiliMetrics.moreDotGap, children: [dot, dot, dot]);
+  }
+}
+
+Paint _stroke({Color color = BiliColors.onVideo, double width = BiliMetrics.chromeGlyphStroke}) => Paint()
   ..style = PaintingStyle.stroke
-  ..strokeWidth = BiliMetrics.verticalGlyphStroke
+  ..strokeWidth = width
   ..strokeCap = StrokeCap.round
   ..strokeJoin = StrokeJoin.round
-  ..color = BiliColors.onVideo;
+  ..color = color;
+
+/// 09's back chevron: smaller than the small player's and faint.
+class _BackPainter extends CustomPainter {
+  const _BackPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const inset = BiliMetrics.backGlyphStroke / 2;
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width - inset, inset)
+        ..lineTo(inset, size.height / 2)
+        ..lineTo(size.width - inset, size.height - inset),
+      _stroke(color: BiliColors.chromeFaint, width: BiliMetrics.backGlyphStroke),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BackPainter oldDelegate) => false;
+}
+
+/// The ⌄ after the plays.
+class _ChevronDownPainter extends CustomPainter {
+  const _ChevronDownPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const inset = BiliMetrics.verticalChevronStroke / 2;
+    canvas.drawPath(
+      Path()
+        ..moveTo(inset, inset)
+        ..lineTo(size.width / 2, size.height - inset)
+        ..lineTo(size.width - inset, inset),
+      _stroke(width: BiliMetrics.verticalChevronStroke),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ChevronDownPainter oldDelegate) => false;
+}
 
 /// Four brackets whose elbows sit in from the corners, their arms pointing back to the edges.
 class _CornersPainter extends CustomPainter {
