@@ -1,21 +1,26 @@
 import 'dart:math' as math;
 
-import 'package:bili_core/api.dart' show VideoDetail;
+import 'package:bili_core/api.dart' show UploaderCard, VideoDetail;
 import 'package:bili_core/logic.dart' show CountFormat;
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
+import '../shared/action_glyphs.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../video/actions/video_actions.dart';
+import '../video/page_details.dart';
+import '../video/player_session.dart';
 import 'landscape_chrome.dart';
 import 'panels/panel_controller.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
 import 'seek_bar.dart';
 
-/// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back and ⋮ at the top, the
-/// uploader, the title and its plays over the bar, then the 弹 toggle, 详情页 and 横屏全屏. The search button, 粉丝,
-/// 关注, the action column and the search row (slice 6) and the 发弹幕 field (slice 5) have their room kept so nothing
-/// else moves when they come.
+/// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back, N人正在看 and ⋮ at
+/// the top, the action column down the right, the uploader with 粉丝 and 关注, the title and its plays over the bar,
+/// then the 弹 toggle, 详情页 and 横屏全屏. The search button, the search row and the 发弹幕 field have their room kept
+/// so nothing else moves when they come; so does whatever the page details haven't brought yet.
 class VerticalChrome extends StatelessWidget {
   const VerticalChrome({super.key, required this.ui});
 
@@ -24,6 +29,7 @@ class VerticalChrome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.paddingOf(context);
+    final bottom = math.max(insets.bottom - BiliMetrics.verticalBottomDrop, 0.0);
     return ListenableBuilder(
       listenable: Listenable.merge([ui.chrome, ui.panels, ui.session]),
       builder: (context, _) {
@@ -45,13 +51,29 @@ class VerticalChrome extends StatelessWidget {
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: math.max(insets.bottom - BiliMetrics.verticalBottomDrop, 0),
+                  bottom: bottom,
                   child: ChromeSlide(
                     shown: shown,
                     from: const Offset(0, BiliMetrics.chromeSlide / 2),
                     child: _bottom(),
                   ),
                 ),
+                if (ui.details case final details?)
+                  Positioned(
+                    right: VerticalActionTheme.columnTrailing,
+                    bottom: bottom + VerticalActionTheme.columnLift,
+                    width: VerticalActionTheme.columnWidth,
+                    child: ChromeSlide(
+                      shown: shown,
+                      from: const Offset(BiliMetrics.chromeSlide, 0),
+                      child: _ActionColumn(
+                        details: details,
+                        session: ui.session,
+                        touch: _touch,
+                        onComments: ui.onComments,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -78,7 +100,15 @@ class VerticalChrome extends StatelessWidget {
           shadow: false,
         ),
       ),
-      const Spacer(),
+      Expanded(
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: switch (ui.details) {
+            final details? => _Online(online: details.online),
+            null => null,
+          },
+        ),
+      ),
       ChromeTap(
         key: const ValueKey('vertical-more'),
         label: '更多',
@@ -97,7 +127,7 @@ class VerticalChrome extends StatelessWidget {
       children: [
         SizedBox(
           height: BiliMetrics.verticalAvatar,
-          child: detail == null ? null : _Uploader(detail: detail),
+          child: detail == null ? null : _Uploader(detail: detail, details: ui.details, touch: _touch),
         ),
         const SizedBox(height: BiliMetrics.verticalUploaderGap),
         Padding(
@@ -139,7 +169,7 @@ class VerticalChrome extends StatelessWidget {
             ),
           ),
         ),
-        // The search suggestion row (slice 6) sits between the title and the bar.
+        // The search suggestion row will sit between the title and the bar.
         const SizedBox(height: BiliMetrics.verticalSearchRoom),
         // The row overlaps the bar's touch area by [verticalRowLift], as on 09.
         SizedBox(
@@ -217,16 +247,32 @@ class VerticalChrome extends StatelessWidget {
   }
 }
 
-/// The uploader's avatar with the name at its top; 粉丝 and 关注 (slice 6) go under and beside the name.
+/// The uploader's avatar, the name (pink for 大会员) with 粉丝 under it, and + 关注 beside it, each once known.
 class _Uploader extends StatelessWidget {
-  const _Uploader({required this.detail});
+  const _Uploader({required this.detail, required this.details, required this.touch});
 
   final VideoDetail detail;
+  final PageDetails? details;
+  final VoidCallback Function(VoidCallback) touch;
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) {
+    final details = this.details;
+    if (details == null) return _row(null, null);
+    return ListenableBuilder(
+      listenable: details,
+      builder: (context, _) => switch (details.actions) {
+        final actions? => ListenableBuilder(
+          listenable: actions,
+          builder: (context, _) => _row(details.uploader, actions),
+        ),
+        null => _row(details.uploader, null),
+      },
+    );
+  }
+
+  Widget _row(UploaderCard? uploader, VideoActions? actions) => Row(
     key: const ValueKey('vertical-uploader'),
-    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const SizedBox(width: BiliMetrics.verticalAvatarInset),
       Container(
@@ -247,16 +293,452 @@ class _Uploader extends StatelessWidget {
       ),
       const SizedBox(width: BiliMetrics.verticalAvatarGap),
       Flexible(
-        child: Text(
-          detail.owner.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.verticalNameText),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: VerticalActionTheme.nameLine,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                widthFactor: 1,
+                child: Transform.translate(
+                  offset: Offset(0, VerticalActionTheme.nameDrop),
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: fullScreenText.merge(
+                      TextStyle(
+                        color: uploader?.isVip ?? false ? BiliColors.pink : BiliColors.onVideo,
+                        fontSize: BiliMetrics.verticalNameText,
+                        fontWeight: FontWeight.w500,
+                        height: 1,
+                      ),
+                    ),
+                    child: Text(
+                      detail.owner.name,
+                      key: const ValueKey('vertical-name'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              height: VerticalActionTheme.fansLine,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                widthFactor: 1,
+                child: _FadeIn(
+                  child: uploader == null
+                      ? null
+                      : Transform.translate(
+                          offset: Offset(0, VerticalActionTheme.fansDrop),
+                          child: Text(
+                            '${CountFormat.short(uploader.fans)}粉丝',
+                            key: const ValueKey('vertical-fans'),
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: VerticalActionTheme.fans,
+                              fontSize: VerticalActionTheme.fansText,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ],
         ),
+      ),
+      _FadeIn(
+        child: actions == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(left: VerticalActionTheme.followGap),
+                child: _FollowPill(following: actions.following, onTap: touch(actions.tapFollow)),
+              ),
       ),
       const SizedBox(width: BiliMetrics.verticalColumnRoom),
     ],
   );
+}
+
+/// Fades a part in when it arrives and out when it goes, taking no room while absent.
+class _FadeIn extends StatelessWidget {
+  const _FadeIn({required this.child});
+
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 220),
+    switchInCurve: Curves.easeOut,
+    switchOutCurve: Curves.easeIn,
+    layoutBuilder: (current, previous) => current == null && previous.isEmpty
+        ? const SizedBox.shrink()
+        : Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+    child: child,
+  );
+}
+
+/// + 关注 in pink; 已关注 dims to a grey glass pill.
+class _FollowPill extends StatelessWidget {
+  const _FollowPill({required this.following, required this.onTap});
+
+  final bool following;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.disableAnimationsOf(context);
+    return ChromeTap(
+      key: const ValueKey('vertical-follow'),
+      label: following ? '已关注' : '关注',
+      square: false,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: still ? Duration.zero : const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        height: VerticalActionTheme.followHeight,
+        padding: const EdgeInsets.only(
+          left: VerticalActionTheme.followLead,
+          right: VerticalActionTheme.followTrailing,
+        ),
+        decoration: ShapeDecoration(
+          color: following ? VerticalActionTheme.followingFill : BiliColors.pink,
+          shape: const StadiumBorder(),
+        ),
+        child: AnimatedSize(
+          duration: still ? Duration.zero : const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          child: AnimatedSwitcher(
+            duration: still ? Duration.zero : const Duration(milliseconds: 180),
+            child: Row(
+              key: ValueKey(following),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!following) ...[
+                  const CustomPaint(
+                    size: Size.square(VerticalActionTheme.followPlus),
+                    painter: _PlusPainter(),
+                  ),
+                  const SizedBox(width: VerticalActionTheme.followPlusGap),
+                ],
+                Transform.translate(
+                  offset: Offset(0, VerticalActionTheme.followTextDrop),
+                  child: Text(
+                    following ? '已关注' : '关注',
+                    style: TextStyle(
+                      color: following ? VerticalActionTheme.followingText : BiliColors.onPink,
+                      fontSize: VerticalActionTheme.followText,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlusPainter extends CustomPainter {
+  const _PlusPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = _stroke(VerticalActionTheme.followPlusStroke)..color = BiliColors.onPink;
+    const inset = VerticalActionTheme.followPlusStroke / 2;
+    canvas
+      ..drawLine(Offset(inset, size.height / 2), Offset(size.width - inset, size.height / 2), paint)
+      ..drawLine(Offset(size.width / 2, inset), Offset(size.width / 2, size.height - inset), paint);
+  }
+
+  @override
+  bool shouldRepaint(_PlusPainter oldDelegate) => false;
+}
+
+/// 👥 N人正在看, from the page's poll; nothing until it answers.
+class _Online extends StatelessWidget {
+  const _Online({required this.online});
+
+  final ValueListenable<String?> online;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: online,
+    builder: (context, count, _) => _FadeIn(
+      child: count == null
+          ? null
+          : Padding(
+              key: const ValueKey('vertical-online'),
+              padding: const EdgeInsets.only(left: VerticalActionTheme.onlineLead),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CustomPaint(
+                    size: Size(VerticalActionTheme.onlineIconWidth, VerticalActionTheme.onlineIconHeight),
+                    painter: _ViewersPainter(),
+                  ),
+                  const SizedBox(width: VerticalActionTheme.onlineGap),
+                  Text(
+                    '$count人正在看',
+                    maxLines: 1,
+                    style: const TextStyle(
+                      color: VerticalActionTheme.online,
+                      fontSize: VerticalActionTheme.onlineText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    ),
+  );
+}
+
+/// Two outlined heads and shoulders, the nearer one whole, as 09 draws them before N人正在看.
+class _ViewersPainter extends CustomPainter {
+  const _ViewersPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = _stroke(VerticalActionTheme.onlineIconStroke)..color = VerticalActionTheme.online;
+    final w = size.width, h = size.height;
+    const inset = VerticalActionTheme.onlineIconStroke / 2;
+    final r = h * 0.29;
+    final head = Offset(r + inset, r + inset);
+    // The head opens at the bottom into the shoulders.
+    final front = Path()
+      ..moveTo(inset, h - inset)
+      ..lineTo(head.dx - r * 0.55, head.dy + r * 0.83)
+      ..arcTo(Rect.fromCircle(center: head, radius: r), math.pi * 0.69, math.pi * 1.62, false)
+      ..lineTo(head.dx * 2 - inset, h - inset);
+    final backHead = Offset(w - r - inset, head.dy);
+    final back = Path()
+      ..addArc(Rect.fromCircle(center: backHead, radius: r), -math.pi * 0.62, math.pi * 1.26)
+      ..moveTo(backHead.dx + r * 0.3, backHead.dy + r * 0.96)
+      ..lineTo(w - inset, h - inset);
+    canvas
+      ..drawPath(front, paint)
+      ..drawPath(back, paint);
+  }
+
+  @override
+  bool shouldRepaint(_ViewersPainter oldDelegate) => false;
+}
+
+/// 点赞 评论 投币 收藏 分享 down the right, solid white with their counts, pink once given; once the actions exist.
+class _ActionColumn extends StatelessWidget {
+  const _ActionColumn({required this.details, required this.session, required this.touch, required this.onComments});
+
+  final PageDetails details;
+  final PlayerSession session;
+  final VoidCallback Function(VoidCallback) touch;
+  final VoidCallback? onComments;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: details,
+    builder: (context, _) {
+      final actions = details.actions;
+      final detail = session.detail;
+      return AnimatedSwitcher(
+        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 260),
+        switchInCurve: Curves.easeOut,
+        child: actions == null || detail == null
+            ? const SizedBox(width: VerticalActionTheme.columnWidth)
+            : ListenableBuilder(
+                key: ObjectKey(actions),
+                listenable: actions,
+                builder: (context, _) => _items(actions, detail.stat.reply),
+              ),
+      );
+    },
+  );
+
+  Widget _items(VideoActions actions, int replies) => Column(
+    key: const ValueKey('vertical-actions'),
+    mainAxisSize: MainAxisSize.min,
+    spacing: VerticalActionTheme.itemSpacing,
+    children: [
+      _ColumnItem(
+        key: const ValueKey('vertical-like'),
+        label: '点赞',
+        glyph: ActionGlyph.like,
+        size: VerticalActionTheme.likeIcon,
+        count: actions.likeCount,
+        active: actions.liked,
+        onTap: touch(actions.toggleLike),
+      ),
+      _ColumnItem(
+        key: const ValueKey('vertical-comment'),
+        label: '评论',
+        glyph: ActionGlyph.comment,
+        size: VerticalActionTheme.commentIcon,
+        count: replies,
+        active: false,
+        onTap: touch(() => onComments?.call()),
+      ),
+      _ColumnItem(
+        key: const ValueKey('vertical-coin'),
+        label: '投币',
+        glyph: ActionGlyph.coin,
+        size: VerticalActionTheme.coinIcon,
+        count: actions.coinCount,
+        active: actions.coins > 0,
+        onTap: touch(() => actions.ask(ActionPrompt.coin)),
+      ),
+      _ColumnItem(
+        key: const ValueKey('vertical-favourite'),
+        label: '收藏',
+        glyph: ActionGlyph.favourite,
+        size: VerticalActionTheme.favouriteIcon,
+        count: actions.favCount,
+        active: actions.favorited,
+        onTap: touch(() => actions.ask(ActionPrompt.favourites)),
+      ),
+      _ColumnItem(
+        key: const ValueKey('vertical-share'),
+        label: '分享',
+        glyph: ActionGlyph.share,
+        size: VerticalActionTheme.shareIcon,
+        count: actions.shareCount,
+        active: false,
+        onTap: touch(() => actions.ask(ActionPrompt.share)),
+      ),
+    ],
+  );
+}
+
+class _ColumnItem extends StatelessWidget {
+  const _ColumnItem({
+    super.key,
+    required this.label,
+    required this.glyph,
+    required this.size,
+    required this.count,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final ActionGlyph glyph;
+  final double size;
+  final int count;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.disableAnimationsOf(context);
+    final text = CountFormat.short(count);
+    return ChromeTap(
+      label: label,
+      square: false,
+      onTap: onTap,
+      child: SizedBox(
+        width: VerticalActionTheme.columnWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: VerticalActionTheme.iconBox,
+              child: OverflowBox(
+                maxWidth: double.infinity,
+                maxHeight: double.infinity,
+                child: _Pop(
+                  active: active,
+                  child: TweenAnimationBuilder<Color?>(
+                    tween: ColorTween(end: active ? BiliColors.pink : VerticalActionTheme.icon),
+                    duration: still ? Duration.zero : const Duration(milliseconds: 200),
+                    builder: (context, color, _) =>
+                        ActionIcon(glyph, solid: true, size: size, color: color ?? VerticalActionTheme.icon),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: VerticalActionTheme.countGap),
+            SizedBox(
+              height: VerticalActionTheme.countLine,
+              child: AnimatedSwitcher(
+                duration: still ? Duration.zero : const Duration(milliseconds: 240),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween(
+                      begin: Offset(0, child.key == ValueKey(text) ? 0.5 : -0.5),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: Text(
+                  text,
+                  key: ValueKey(text),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
+                  style: const TextStyle(
+                    color: VerticalActionTheme.count,
+                    fontSize: VerticalActionTheme.countText,
+                    fontWeight: FontWeight.w600,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Swells and settles once when [active] turns on, as the official icons do when tapped.
+class _Pop extends StatefulWidget {
+  const _Pop({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_Pop> createState() => _PopState();
+}
+
+class _PopState extends State<_Pop> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+  late final Animation<double> _scale = TweenSequence([
+    TweenSequenceItem(
+      tween: Tween(begin: 1.0, end: VerticalActionTheme.popScale).chain(CurveTween(curve: Curves.easeOut)),
+      weight: 35,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: VerticalActionTheme.popScale, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)),
+      weight: 65,
+    ),
+  ]).animate(_controller);
+
+  @override
+  void didUpdateWidget(_Pop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active && !MediaQuery.disableAnimationsOf(context)) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ScaleTransition(scale: _scale, child: widget.child);
 }
 
 /// Inward corners with a small 详情页 pill above and to the right, as on 09.

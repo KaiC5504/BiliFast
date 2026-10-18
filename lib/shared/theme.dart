@@ -733,5 +733,83 @@ abstract final class LandscapeActionTheme {
 
 /// 竖屏's action column, uploader, 粉丝 and 关注 (09), and the 选集 sheet's share circle and 收藏 (19).
 abstract final class VerticalActionTheme {
-  static const iconSize = 36.0;
+  /// 09's column: 44 wide, centred 27 in from the right edge, items 69 apart with the icon centre 27.5 above its
+  /// count's; the last count ends 64 above the bottom row's bottom, clear of the bar's touch.
+  static const columnWidth = 44.0;
+  static const columnTrailing = 5.0;
+  static const columnLift = 62.5;
+  static const itemSpacing = 17.5;
+  static const iconBox = 32.0;
+  static const countGap = 3.5;
+  static const countLine = 16.0;
+  static const countText = 13.0;
+
+  /// [ActionIcon] sizes that draw 09's glyphs at their measured size (30, 30, 32, 29.3 and 30 × 24.3).
+  static const likeIcon = 36.0;
+  static const commentIcon = 35.0;
+  static const coinIcon = 38.0;
+  static const favouriteIcon = 32.0;
+  static const shareIcon = 34.0;
+
+  /// The icons are a 90% white; the counts full white.
+  static const icon = Color(0xE6FFFFFF);
+  static const count = Color(0xFFFFFFFF);
+
+  /// How far a glyph swells as it turns pink.
+  static const popScale = 1.3;
+
+  /// The name's and 粉丝's lines beside the 36 pt avatar, centred 10.5 and 28.5 below its top.
+  static const nameLine = 21.0;
+  static const fansLine = 15.0;
+  static const fansText = 11.5;
+  static const fans = Color(0xE6FFFFFF);
+
+  /// MiSans sits higher in its line than the official app's PingFang; these bring the name and 粉丝 level with 09's.
+  static double get nameDrop => BiliFonts.nudged ? 1.7 : 0;
+  static double get fansDrop => BiliFonts.nudged ? 1 : 0;
+
+  /// + 关注: 60 × 24 on 09, 9.7 after the name.
+  static const followGap = 8.7;
+  static const followHeight = 24.0;
+  static const followLead = 11.5;
+  static const followTrailing = 10.0;
+  static const followText = 13.0;
+  static double get followTextDrop => BiliFonts.nudged ? 1 : 0;
+  static const followPlus = 9.0;
+  static const followPlusStroke = 1.3;
+  static const followPlusGap = 5.0;
+  static const followingFill = Color(0x33FFFFFF);
+  static const followingText = Color(0xB3FFFFFF);
+
+  /// 👥 479人正在看 after the back arrow, a 40% white.
+  static const online = Color(0x66FFFFFF);
+  static const onlineLead = 8.3;
+  static const onlineIconWidth = 11.3;
+  static const onlineIconHeight = 10.0;
+  static const onlineIconStroke = 1.1;
+  static const onlineGap = 5.6;
+  static const onlineText = 12.0;
+
+  /// 19's share circle and 收藏 at the right of the 合集 description, centred 5 above its first line: a 24 pt grey
+  /// circle, 12 before a 71 × 24 pill, 12 from the edge. The list starts [sheetLift] into the header's empty bottom,
+  /// so the two clear its clip, which cuts their tops on 19.
+  static const sheetLift = 8.0;
+  static const sheetShare = 24.0;
+  static const sheetShareGlyph = 15.0;
+  static const sheetGap = 12.0;
+  static const sheetPillHeight = 24.0;
+  static const sheetPillPad = 15.0;
+  static const sheetStar = 13.0;
+  static const sheetStarGap = 2.5;
+  static const sheetPillText = 13.0;
+
+  /// MiSans sits higher in its line than PingFang; this centres 收藏 in its pill as on 19.
+  static double get sheetPillTextDrop => BiliFonts.nudged ? 1.5 : 0;
+  static const sheetPill = Color(0xFFED7098);
+  static const sheetPillLabel = Color(0xFFFFFFFF);
+  static const sheetSubscribedFill = BiliColors.pageGrey;
+  static const sheetSubscribedLabel = BiliColors.secondaryText;
+
+  /// 收藏 while the relation hasn't said whether the 合集 is subscribed.
+  static const sheetUnknownOpacity = 0.5;
 }

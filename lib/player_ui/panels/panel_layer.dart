@@ -255,7 +255,12 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
             ),
             PlayerPanel.speed => SpeedPanel(session: session, toast: _toast, close: _close),
             PlayerPanel.more => MorePanel(session: session, toast: _toast, close: () => _closeIf(PlayerPanel.more)),
-            PlayerPanel.episodes => EpisodesPanel(session: session, close: _close, light: light),
+            PlayerPanel.episodes => EpisodesPanel(
+              session: session,
+              details: widget.ui.details,
+              close: _close,
+              light: light,
+            ),
           },
         ),
       ),

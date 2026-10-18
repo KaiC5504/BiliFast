@@ -1,14 +1,16 @@
-import 'package:bili_core/api.dart' show VideoDetail;
+import 'package:bili_core/api.dart' show UploaderCard, VideoDetail;
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
+import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
+import '../support/fake_video_actions.dart';
 
 class CountingChrome extends ChromeState {
   int shows = 0;
@@ -27,6 +29,10 @@ final class Rig {
   final panels = PanelController();
   final orientation = OrientationController()..enterVertical();
   int backs = 0;
+  int comments = 0;
+
+  /// Set before [mount]; null is a player outside a video page.
+  FakePageDetails? details;
 
   late final ui = PlayerUi(
     session: session,
@@ -35,9 +41,11 @@ final class Rig {
     orientation: orientation,
     device: orientation.controls,
     onBack: () => backs += 1,
+    details: details,
+    onComments: () => comments += 1,
   );
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(WidgetTester tester, {bool still = false}) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1
@@ -48,17 +56,56 @@ final class Rig {
       panels.dispose();
       orientation.dispose();
       session.dispose();
+      details?.dispose();
     });
     await tester.pumpWidget(
       MaterialApp(
-        home: ColoredBox(
-          color: Colors.black,
-          child: VerticalChrome(ui: ui),
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: still),
+            child: ColoredBox(
+              color: Colors.black,
+              child: VerticalChrome(ui: ui),
+            ),
+          ),
         ),
       ),
     );
   }
 }
+
+VideoDetail detail({int reply = 239}) => VideoDetail.fromJson({
+  'bvid': 'BV1',
+  'title': '【VIT赛后】我们接受了LOUD的回溯！！',
+  'owner': {'mid': 1, 'name': '我们一起去养猪', 'face': ''},
+  'stat': {'view': 56000, 'reply': reply, 'like': 352, 'coin': 12, 'favorite': 59, 'share': 136},
+});
+
+UploaderCard uploader({int fans = 6129, bool vip = true}) => UploaderCard(
+  mid: 1,
+  name: '我们一起去养猪',
+  face: '',
+  fans: fans,
+  videos: 10,
+  isVip: vip,
+  following: false,
+);
+
+FakeVideoActions actions09() => FakeVideoActions(likeCount: 352, coinCount: 12, favCount: 59, shareCount: 136);
+
+/// 09's video with everything the page details bring.
+Rig rig09() => Rig()
+  ..session.title = '【VIT赛后】我们接受了LOUD的回溯！！'
+  ..session.detail = detail()
+  ..details = FakePageDetails(actions: actions09(), uploader: uploader(), online: '479');
+
+FakeVideoActions actionsOf(Rig rig) => rig.details!.actions! as FakeVideoActions;
+
+Color iconColour(WidgetTester tester, String key) =>
+    tester.widget<ActionIcon>(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(ActionIcon))).color;
+
+Color? textColour(WidgetTester tester, Finder text) =>
+    tester.widget<RichText>(find.descendant(of: text, matching: find.byType(RichText)).first).text.style?.color;
 
 Offset centre(WidgetTester tester, String key) => tester.getCenter(find.byKey(ValueKey(key)));
 
@@ -198,5 +245,347 @@ void main() {
     rig.panels.open(PlayerPanel.more);
     await tester.pumpAndSettle();
     expect(tester.widget<IgnorePointer>(root).ignoring, isTrue);
+  });
+
+  group('the page details (09)', () {
+    testWidgets('the action column runs down the right with its counts, 69 apart, clear of the bar', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+
+      for (final count in ['352', '239', '12', '59', '136']) {
+        expect(find.text(count), findsOneWidget, reason: count);
+      }
+      const keys = ['vertical-like', 'vertical-comment', 'vertical-coin', 'vertical-favourite', 'vertical-share'];
+      for (final key in keys) {
+        expect(centre(tester, key).dx, closeTo(413, 0.5), reason: key);
+      }
+      final tops = [for (final key in keys) tester.getTopLeft(find.byKey(ValueKey(key))).dy];
+      for (var i = 1; i < tops.length; i++) {
+        expect(tops[i] - tops[i - 1], closeTo(69, 0.01));
+      }
+      // 956 less the 33 the bottom block sits up, less the column's lift.
+      expect(tester.getBottomLeft(find.byKey(const ValueKey('vertical-share'))).dy, closeTo(860.5, 0.01));
+      expect(tester.getCenter(find.text('352')).dy - tester.getTopLeft(find.byKey(ValueKey(keys[0]))).dy, 43.5);
+      // The title still stops short of the column.
+      expect(
+        tester.getTopRight(find.byKey(const ValueKey('vertical-title'))).dx,
+        lessThan(tester.getTopLeft(find.byKey(const ValueKey('vertical-like'))).dx),
+      );
+    });
+
+    testWidgets('each action does its thing and keeps the controls up', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      final actions = actionsOf(rig);
+
+      await tester.tap(find.byKey(const ValueKey('vertical-like')));
+      expect(actions.calls, ['toggleLike']);
+      await tester.tap(find.byKey(const ValueKey('vertical-comment')));
+      expect(rig.comments, 1);
+      await tester.tap(find.byKey(const ValueKey('vertical-coin')));
+      await tester.tap(find.byKey(const ValueKey('vertical-favourite')));
+      await tester.tap(find.byKey(const ValueKey('vertical-share')));
+      expect(actions.calls, ['toggleLike', 'ask coin', 'ask favourites', 'ask share']);
+      expect(rig.chrome.shows, 5);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('every action answers an accessibility press by its name', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      for (final label in ['点赞', '评论', '投币', '收藏', '分享', '关注']) {
+        tester.semantics.tap(find.semantics.byLabel(label));
+      }
+      await tester.pumpAndSettle();
+      expect(actionsOf(rig).calls, ['toggleLike', 'ask coin', 'ask favourites', 'ask share', 'tapFollow']);
+      expect(rig.comments, 1);
+    });
+
+    testWidgets('white at rest; 点赞, 投币 and 收藏 turn pink once given, and back', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      const keys = ['vertical-like', 'vertical-comment', 'vertical-coin', 'vertical-favourite', 'vertical-share'];
+      for (final key in keys) {
+        expect(iconColour(tester, key), VerticalActionTheme.icon, reason: key);
+      }
+      expect(tester.widget<ActionIcon>(find.byType(ActionIcon).first).solid, isTrue);
+
+      actionsOf(rig)
+        ..liked = true
+        ..coins = 1
+        ..favorited = true
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(iconColour(tester, 'vertical-like'), BiliColors.pink);
+      expect(iconColour(tester, 'vertical-coin'), BiliColors.pink);
+      expect(iconColour(tester, 'vertical-favourite'), BiliColors.pink);
+      expect(iconColour(tester, 'vertical-comment'), VerticalActionTheme.icon);
+      expect(iconColour(tester, 'vertical-share'), VerticalActionTheme.icon);
+
+      actionsOf(rig)
+        ..liked = false
+        ..coins = 0
+        ..favorited = false
+        ..changed();
+      await tester.pumpAndSettle();
+      for (final key in keys) {
+        expect(iconColour(tester, key), VerticalActionTheme.icon, reason: key);
+      }
+    });
+
+    testWidgets('a liked icon swells and settles; with reduced motion it just turns pink', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      final like = find.descendant(of: find.byKey(const ValueKey('vertical-like')), matching: find.byType(ActionIcon));
+      final width = tester.getSize(like).width;
+
+      actionsOf(rig)
+        ..liked = true
+        ..changed();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 140));
+      expect(tester.getRect(like).width, greaterThan(width * 1.1));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(like).width, closeTo(width, 0.01));
+
+      final still = rig09();
+      await still.mount(tester, still: true);
+      await tester.pumpAndSettle();
+      actionsOf(still)
+        ..liked = true
+        ..changed();
+      await tester.pump();
+      expect(iconColour(tester, 'vertical-like'), BiliColors.pink);
+      expect(tester.getRect(like).width, closeTo(width, 0.01));
+    });
+
+    testWidgets('counts follow the actions, the comments the detail', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+
+      actionsOf(rig)
+        ..likeCount = 353
+        ..favCount = 12345
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('353'), findsOneWidget);
+      expect(find.text('352'), findsNothing);
+      expect(find.text('1.2万'), findsOneWidget);
+
+      rig.session
+        ..detail = detail(reply: 240)
+        ..changed();
+      rig.details!.changed();
+      await tester.pumpAndSettle();
+      expect(find.text('240'), findsOneWidget);
+    });
+
+    testWidgets('a new video brings new actions; the old ones no longer show', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      final old = actionsOf(rig);
+
+      rig.details!
+        ..actions = FakeVideoActions(likeCount: 7, coinCount: 8, favCount: 9, shareCount: 10, liked: true)
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('7'), findsOneWidget);
+      expect(find.text('352'), findsNothing);
+      expect(iconColour(tester, 'vertical-like'), BiliColors.pink);
+
+      old
+        ..likeCount = 999
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('999'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('vertical-like')));
+      expect(old.calls, isEmpty);
+      expect(actionsOf(rig).calls, ['toggleLike']);
+    });
+
+    testWidgets('the uploader as 09: pink name for 大会员, 粉丝 under it, + 关注 beside it on the avatar\'s line',
+        (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+
+      final name = find.byKey(const ValueKey('vertical-name'));
+      expect(textColour(tester, name), BiliColors.pink);
+      expect(find.text('6129粉丝'), findsOneWidget);
+      expect(find.text('关注'), findsOneWidget);
+      final avatar = find.byKey(const ValueKey('vertical-avatar'));
+      final pill = find.byKey(const ValueKey('vertical-follow'));
+      expect(tester.getSize(pill).height, VerticalActionTheme.followHeight);
+      expect(tester.getCenter(pill).dy, closeTo(tester.getCenter(avatar).dy, 0.01));
+      expect(tester.getTopLeft(pill).dx - tester.getTopRight(name).dx, closeTo(VerticalActionTheme.followGap, 0.01));
+      expect(tester.getTopLeft(name).dx, closeTo(59, 1));
+      expect(tester.getTopLeft(find.text('6129粉丝')).dx, closeTo(59, 1));
+      expect(tester.getCenter(find.text('6129粉丝')).dy, greaterThan(tester.getCenter(name).dy + 12));
+      final pillColour = tester.widget<AnimatedContainer>(
+        find.descendant(of: pill, matching: find.byType(AnimatedContainer)),
+      ).decoration! as ShapeDecoration;
+      expect(pillColour.color, BiliColors.pink);
+    });
+
+    testWidgets('a plain uploader\'s name is white, and 粉丝 counts in 万', (tester) async {
+      final rig = rig09()..details!.uploader = uploader(fans: 1234567, vip: false);
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(textColour(tester, find.byKey(const ValueKey('vertical-name'))), BiliColors.onVideo);
+      expect(find.text('123.4万粉丝'), findsOneWidget);
+    });
+
+    testWidgets('关注 follows through the actions; 已关注 shows once following', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('vertical-follow')));
+      expect(actionsOf(rig).calls, ['tapFollow']);
+      expect(rig.chrome.shows, 1);
+
+      actionsOf(rig)
+        ..following = true
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('已关注'), findsOneWidget);
+      expect(find.text('关注'), findsNothing);
+      expect(find.bySemanticsLabel('已关注'), findsOneWidget);
+      final decoration = tester.widget<AnimatedContainer>(
+        find.descendant(of: find.byKey(const ValueKey('vertical-follow')), matching: find.byType(AnimatedContainer)),
+      ).decoration! as ShapeDecoration;
+      expect(decoration.color, VerticalActionTheme.followingFill);
+
+      await tester.tap(find.byKey(const ValueKey('vertical-follow')));
+      expect(actionsOf(rig).calls, ['tapFollow', 'tapFollow']);
+    });
+
+    testWidgets('N人正在看 after the back arrow once the poll answers, gone while it hasn\'t', (tester) async {
+      final rig = rig09()..details!.online.value = null;
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('人正在看'), findsNothing);
+
+      rig.details!.online.value = '479';
+      await tester.pumpAndSettle();
+      expect(find.text('479人正在看'), findsOneWidget);
+      // 09: the icon 52.3 in, the text from 69.3, both on the back arrow's line.
+      final label = find.byKey(const ValueKey('vertical-online'));
+      expect(tester.getTopLeft(find.text('479人正在看')).dx, closeTo(69.3, 0.5));
+      expect(tester.getCenter(label).dy, closeTo(centre(tester, 'vertical-back').dy, 0.5));
+
+      rig.details!.online.value = '1000+';
+      await tester.pumpAndSettle();
+      expect(find.text('1000+人正在看'), findsOneWidget);
+
+      rig.details!.online.value = null;
+      await tester.pumpAndSettle();
+      expect(find.textContaining('人正在看'), findsNothing);
+      expect(centre(tester, 'vertical-more'), within(distance: 1, from: const Offset(418, 76)));
+    });
+
+    testWidgets('before the details arrive nothing of theirs shows, and nothing moves when they do', (tester) async {
+      final rig = Rig()
+        ..session.title = '【VIT赛后】我们接受了LOUD的回溯！！'
+        ..session.detail = detail()
+        ..details = FakePageDetails();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('vertical-actions')), findsNothing);
+      expect(find.byKey(const ValueKey('vertical-follow')), findsNothing);
+      expect(find.byKey(const ValueKey('vertical-fans')), findsNothing);
+      expect(find.textContaining('人正在看'), findsNothing);
+      expect(find.text('我们一起去养猪'), findsOneWidget);
+
+      Map<String, Rect> places() => {
+        for (final key in [
+          'vertical-back',
+          'vertical-more',
+          'vertical-name',
+          'vertical-avatar',
+          'vertical-title',
+          'vertical-bar',
+          'vertical-detail',
+          'vertical-landscape',
+        ])
+          key: tester.getRect(find.byKey(ValueKey(key))),
+      };
+      final before = places();
+
+      rig.details!
+        ..uploader = uploader()
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('6129粉丝'), findsOneWidget);
+      expect(find.byKey(const ValueKey('vertical-follow')), findsNothing);
+
+      rig.details!
+        ..actions = actions09()
+        ..changed();
+      rig.details!.online.value = '479';
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('vertical-actions')), findsOneWidget);
+      expect(find.byKey(const ValueKey('vertical-follow')), findsOneWidget);
+      expect(find.text('479人正在看'), findsOneWidget);
+      expect(places(), before);
+
+      rig.details!
+        ..actions = null
+        ..uploader = null
+        ..changed();
+      rig.details!.online.value = null;
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('vertical-actions')), findsNothing);
+      expect(find.byKey(const ValueKey('vertical-follow')), findsNothing);
+      expect(places(), before);
+    });
+
+    testWidgets('the column waits for the video\'s detail too', (tester) async {
+      final rig = Rig()..details = FakePageDetails(actions: actions09());
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('vertical-actions')), findsNothing);
+
+      rig.session
+        ..detail = detail()
+        ..changed();
+      rig.details!.changed();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('vertical-actions')), findsOneWidget);
+      expect(find.text('239'), findsOneWidget);
+    });
+
+    testWidgets('outside a video page there is no column, 关注 or N人正在看', (tester) async {
+      final rig = Rig()
+        ..session.detail = detail()
+        ..session.title = 'x';
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('vertical-actions')), findsNothing);
+      expect(find.byKey(const ValueKey('vertical-follow')), findsNothing);
+      expect(find.byKey(const ValueKey('vertical-fans')), findsNothing);
+      expect(find.byKey(const ValueKey('vertical-online')), findsNothing);
+      expect(textColour(tester, find.byKey(const ValueKey('vertical-name'))), BiliColors.onVideo);
+    });
+
+    testWidgets('hidden controls take the column and 关注 with them', (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+
+      rig.chrome.hide();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('vertical-like')), warnIfMissed: false);
+      await tester.tap(find.byKey(const ValueKey('vertical-follow')), warnIfMissed: false);
+      expect(actionsOf(rig).calls, isEmpty);
+    });
   });
 }
