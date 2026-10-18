@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../device/player_device.dart';
 import '../devtools/crash_log.dart';
 import '../devtools/log_forwarder.dart';
 import '../home/recent_store.dart';
@@ -54,14 +55,16 @@ class AppPlayback with WidgetsBindingObserver {
   void didHaveMemoryPressure() => _ready?.memoryPressure();
 }
 
-/// What every page reaches: the account and API client, the shared player, 最近打开, and the log forwarder in dev
-/// builds (null otherwise).
+/// What every page reaches: the account and API client, the shared player, 最近打开, the phone's rotation and levels,
+/// and the log forwarder in dev builds (null otherwise).
 class AppServices {
-  const AppServices({required this.environment, required this.playback, required this.recents, this.logs});
+  AppServices({required this.environment, required this.playback, required this.recents, PlayerDevice? device, this.logs})
+    : device = device ?? PlayerDevice.inWindow();
 
   final AppEnvironment environment;
   final AppPlayback playback;
   final RecentStore recents;
+  final PlayerDevice device;
   final LogForwarder? logs;
 }
 

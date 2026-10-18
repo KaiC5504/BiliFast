@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app/app_environment.dart';
 import 'app/app_scope.dart';
+import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_forwarder.dart';
 import 'home/home_page.dart';
@@ -45,7 +46,13 @@ Future<void> main(List<String> args) async {
     unawaited(playback.obtain().then((controller) => controller.player.setMuted(true), onError: (Object _) {}));
   }
   runApp(BiliFastApp(
-    services: AppServices(environment: environment, playback: playback, recents: recents, logs: logs),
+    services: AppServices(
+      environment: environment,
+      playback: playback,
+      recents: recents,
+      device: PlayerDevice.platform(),
+      logs: logs,
+    ),
     initialLink: _argument(args, '--play='),
   ));
 }

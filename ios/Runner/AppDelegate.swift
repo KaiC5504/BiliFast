@@ -16,6 +16,11 @@ import UIKit
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  /// Full screen is the same page rotated, so the app turns only when Dart's DeviceChannel allows it.
+  func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+    MainActor.assumeIsolated { DeviceChannel.mask }
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KeychainChannel") {
@@ -32,6 +37,9 @@ import UIKit
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LegacyDefaults") {
       LegacyDefaults.register(with: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "DeviceChannel") {
+      DeviceChannel.register(with: registrar.messenger())
     }
   }
 }
