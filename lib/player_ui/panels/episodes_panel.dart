@@ -231,7 +231,7 @@ class _CoverRow extends StatelessWidget {
   final bool divider;
   final VoidCallback onTap;
 
-  static const _meta = TextStyle(
+  static TextStyle get _meta => TextStyle(
     fontSize: BiliMetrics.sheetMetaText,
     height: BiliMetrics.sheetLineHeight,
     letterSpacing: BiliMetrics.sheetMetaSpacing,
@@ -360,7 +360,7 @@ class _CoverRow extends StatelessWidget {
   }
 
   static Widget _count(int? count) => Transform.translate(
-    offset: const Offset(0, BiliMetrics.sheetCountTextDrop),
+    offset: Offset(0, BiliMetrics.sheetCountTextDrop),
     child: Text(CountFormat.short(count ?? 0), style: _meta),
   );
 

@@ -7,6 +7,7 @@ import '../devtools/crash_log.dart';
 import '../devtools/log_forwarder.dart';
 import '../home/recent_store.dart';
 import '../playback/playback_controller.dart';
+import '../settings/font_store.dart';
 import 'app_environment.dart';
 
 /// The one player and engine, started at launch and shared by the video page and the developer page. It hears the
@@ -56,15 +57,23 @@ class AppPlayback with WidgetsBindingObserver {
 }
 
 /// What every page reaches: the account and API client, the shared player, 最近打开, the phone's rotation and levels,
-/// and the log forwarder in dev builds (null otherwise).
+/// the font, and the log forwarder in dev builds (null otherwise).
 class AppServices {
-  AppServices({required this.environment, required this.playback, required this.recents, PlayerDevice? device, this.logs})
-    : device = device ?? PlayerDevice.inWindow();
+  AppServices({
+    required this.environment,
+    required this.playback,
+    required this.recents,
+    PlayerDevice? device,
+    FontStore? fonts,
+    this.logs,
+  }) : device = device ?? PlayerDevice.inWindow(),
+       fonts = fonts ?? FontStore.memory();
 
   final AppEnvironment environment;
   final AppPlayback playback;
   final RecentStore recents;
   final PlayerDevice device;
+  final FontStore fonts;
   final LogForwarder? logs;
 }
 

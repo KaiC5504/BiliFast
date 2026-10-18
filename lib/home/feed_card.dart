@@ -173,7 +173,7 @@ class _Cover extends StatelessWidget {
           child: MediaQuery.withClampedTextScaling(
             maxScaleFactor: 1,
             child: DefaultTextStyle(
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: BiliFonts.family,
                 fontSize: BiliMetrics.cardStatText,
                 color: BiliColors.onCover,

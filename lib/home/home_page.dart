@@ -12,6 +12,7 @@ import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../playback/playback_controller.dart';
+import '../settings/settings_page.dart';
 import '../shared/paste_button.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -116,6 +117,8 @@ class _HomePageState extends State<HomePage> {
     switch (item) {
       case AvatarMenuItem.recents:
         unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const RecentsPage()))));
+      case AvatarMenuItem.settings:
+        unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const SettingsPage()))));
       case AvatarMenuItem.developer:
         final page = widget.developerPage;
         if (page != null) unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: page))));

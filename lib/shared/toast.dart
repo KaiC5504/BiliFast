@@ -80,7 +80,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
             widget.message,
             textAlign: TextAlign.center,
             // The root overlay sits outside any Material, whose text style would otherwise be missing.
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: BiliFonts.family,
               fontSize: BiliMetrics.bodyText,
               color: BiliColors.panelText,

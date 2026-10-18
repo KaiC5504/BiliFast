@@ -186,7 +186,7 @@ class _Recommended extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Transform.translate(
-            offset: const Offset(0, BiliMetrics.endCaptionDrop),
+            offset: Offset(0, BiliMetrics.endCaptionDrop),
             child: const Text('推荐视频', style: _caption),
           ),
           const SizedBox(height: BiliMetrics.endCaptionGap),
@@ -268,7 +268,7 @@ class _Recommended extends StatelessWidget {
                           borderRadius: BorderRadius.circular(BiliMetrics.endButtonHeight / 2),
                         ),
                         child: Transform.translate(
-                          offset: const Offset(0, BiliMetrics.endButtonTextDrop),
+                          offset: Offset(0, BiliMetrics.endButtonTextDrop),
                           child: const Text('立即播放', style: _button, maxLines: 1, softWrap: false),
                         ),
                       ),

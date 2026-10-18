@@ -15,6 +15,8 @@ import 'home/home_page.dart';
 import 'home/recent_store.dart';
 import 'playback/playback_setup.dart';
 import 'screens/player_test_page.dart';
+import 'settings/follow_font.dart';
+import 'settings/font_store.dart';
 import 'shared/theme.dart';
 import 'video/player_prefs.dart';
 
@@ -29,10 +31,12 @@ Future<void> main(List<String> args) async {
   });
   final AppEnvironment environment;
   final RecentStore recents;
+  final FontStore fonts;
   try {
     environment = await AppEnvironment.load();
     recents = await RecentStore.load(supportFilePath('recents.json'));
     PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
+    fonts = await FontStore.load(supportFilePath('font.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
     CrashLog.report(error, stack, source: 'launch');
@@ -56,6 +60,7 @@ Future<void> main(List<String> args) async {
       playback: playback,
       recents: recents,
       device: device,
+      fonts: fonts,
       logs: logs,
     ),
     initialLink: _argument(args, '--play='),
@@ -120,30 +125,33 @@ class BiliFastApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'BiliFast',
-      debugShowCheckedModeBanner: false,
-      locale: BiliFonts.locale,
-      supportedLocales: const [BiliFonts.locale],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: ThemeData(
-        fontFamily: BiliFonts.family,
-        colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
-        scaffoldBackgroundColor: BiliColors.pageGrey,
-        // iOS has no ripples; rows show their own press highlight.
-        splashFactory: NoSplash.splashFactory,
-      ),
-      builder: (context, child) => AppScope(services: services, child: PhoneFrame.wrap(context, child!)),
-      home: HomePage(
-        initialLink: initialLink,
-        developerPage: services.logs == null
-            ? null
-            : (context) => PlayerTestPage(
-                  environment: services.environment,
-                  startPlayback: services.playback.obtain,
-                  logs: services.logs,
-                  ownsController: false,
-                ),
+    return FollowFont(
+      fonts: services.fonts,
+      builder: (context) => MaterialApp(
+        title: 'BiliFast',
+        debugShowCheckedModeBanner: false,
+        locale: BiliFonts.locale,
+        supportedLocales: const [BiliFonts.locale],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        theme: ThemeData(
+          fontFamily: BiliFonts.family,
+          colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
+          scaffoldBackgroundColor: BiliColors.pageGrey,
+          // iOS has no ripples; rows show their own press highlight.
+          splashFactory: NoSplash.splashFactory,
+        ),
+        builder: (context, child) => AppScope(services: services, child: PhoneFrame.wrap(context, child!)),
+        home: HomePage(
+          initialLink: initialLink,
+          developerPage: services.logs == null
+              ? null
+              : (context) => PlayerTestPage(
+                    environment: services.environment,
+                    startPlayback: services.playback.obtain,
+                    logs: services.logs,
+                    ownsController: false,
+                  ),
+        ),
       ),
     );
   }

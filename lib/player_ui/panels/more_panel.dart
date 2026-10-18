@@ -317,7 +317,7 @@ class _SleepWheelState extends State<_SleepWheel> {
   Widget build(BuildContext context) => SizedBox(
     height: BiliMetrics.panelWheelHeight,
     child: CupertinoTheme(
-      data: const CupertinoThemeData(
+      data: CupertinoThemeData(
         brightness: Brightness.dark,
         textTheme: CupertinoTextThemeData(
           pickerTextStyle: TextStyle(

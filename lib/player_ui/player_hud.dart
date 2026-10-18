@@ -70,7 +70,7 @@ class _Label extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Transform.translate(offset: const Offset(0, BiliMetrics.hudLabelDrop), child: text);
+      Transform.translate(offset: Offset(0, BiliMetrics.hudLabelDrop), child: text);
 }
 
 class _Pill extends StatelessWidget {

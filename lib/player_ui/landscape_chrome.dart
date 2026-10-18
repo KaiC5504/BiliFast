@@ -282,7 +282,7 @@ class LandscapeChrome extends StatelessWidget {
 }
 
 /// The full-screen controls draw over the page's own text style, which may be outside any Material.
-const fullScreenText = TextStyle(
+TextStyle get fullScreenText => TextStyle(
   fontFamily: BiliFonts.family,
   color: BiliColors.onVideo,
   decoration: TextDecoration.none,

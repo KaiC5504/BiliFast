@@ -324,6 +324,7 @@ void main() {
     expect(find.text('测试用户'), findsOneWidget);
     expect(find.text('大会员'), findsOneWidget);
     expect(find.text('开发者'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
     expect(find.descendant(of: find.byType(GlassPanel), matching: find.byType(BackdropFilter)), findsOneWidget);
     await tester.tap(find.text('最近打开'));
     await settle(tester, 20);
@@ -340,6 +341,17 @@ void main() {
     await settle(tester, 20);
     expect(find.text('还没有打开过视频'), findsOneWidget);
     expect(recents.items, isEmpty);
+  });
+
+  testWidgets('设置 in the avatar menu opens 设置 with the font in use', (tester) async {
+    await show(tester);
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('home-avatar')));
+    await settle(tester);
+    await tester.tap(find.text('设置'));
+    await settle(tester, 20);
+    expect(find.byKey(const ValueKey('settings-font')), findsOneWidget);
+    expect(find.text('MiSans'), findsOneWidget);
   });
 
   testWidgets('a tap outside closes the menu, which then leaves the tree; release builds have no 开发者', (tester) async {

@@ -110,6 +110,10 @@ with what was built, how it works and numbered test steps. For phone slices, inc
     landscape full screen.
   - Left for later slices: danmaku settings and the send field (5); actions, 关注, the uploader's VIP colour, N人正在看
     and search (6). Pasted links now carry their 合集 with no extra call.
+- 2026-10-19, after slice 4: 设置 (avatar menu) → 字体 (`lib/settings/`): 系统字体 (SF with PingFang SC, as the
+  official app; the iPhone's default), MiSans (bundled; the default elsewhere), or a .ttf/.otf/.ttc imported from Files.
+  A change rebuilds every widget in place (`FollowFont`), so styles read `BiliFonts.family` where they're built, never
+  in a const. The five MiSans layout nudges in `BiliMetrics` apply only while MiSans is on. Not on TestFlight yet.
 - Update this section when a slice finishes.
 
 ## Layout
@@ -124,6 +128,7 @@ with what was built, how it works and numbered test steps. For phone slices, inc
     `panels/`.
   - `lib/device/`: rotation (`orientation.dart`, the rules) and brightness/volume, over `DeviceChannel.swift`.
   - `lib/app/phone_frame.dart`: Windows only; the window as KaiC's iPhone.
+  - `lib/settings/`: 设置 and 字体, and the font store (`font.json` and imported fonts in the support folder).
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`. One library per Swift
   module: `shared.dart`, `devlog.dart`, `danmaku.dart`, `api.dart`, `logic.dart`.

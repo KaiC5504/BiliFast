@@ -137,11 +137,19 @@ abstract final class BiliColors {
   static const nodeOther = Color(0xFF8E8E93);
 }
 
-/// MiSans (Xiaomi, free for apps that credit it; see README) on every platform, as Kazumi does: one font draws all the
-/// Chinese, where the platform fallback mixes Japanese and Chinese fonts on Windows. The zh-Hans locale makes any
-/// character MiSans lacks fall back to a Chinese font.
+/// The app's font, picked in 设置 → 字体 and applied at launch by `FontStore`. MiSans (Xiaomi, free for apps that credit
+/// it; see README) is bundled: one font draws all the Chinese, where the Windows fallback mixes Japanese and Chinese
+/// fonts. The zh-Hans locale makes any character a font lacks fall back to a Chinese font.
 abstract final class BiliFonts {
-  static const family = 'MiSans';
+  static const miSans = 'MiSans';
+
+  /// The family every style names; null is the system's, which on the iPhone is SF with PingFang SC, as the official
+  /// app draws.
+  static String? family = miSans;
+
+  /// The layout nudges that line MiSans up with the official app's PingFang apply only while MiSans is on.
+  static bool get nudged => family == miSans;
+
   static const locale = Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN');
 }
 
@@ -181,7 +189,7 @@ abstract final class BiliMetrics {
   static const hudFont = 14.0;
 
   /// MiSans sits higher in its line than the official app's PingFang; this brings the labels level with 25's.
-  static const hudLabelDrop = 4 / 3;
+  static double get hudLabelDrop => BiliFonts.nudged ? 4 / 3 : 0;
   static const hudArrowWidth = 31 / 3;
   static const hudArrowHeight = 41 / 3;
   static const hudArrowStep = 22 / 3;
@@ -250,7 +258,7 @@ abstract final class BiliMetrics {
   static const endCaptionGap = 3.8;
 
   /// MiSans draws 推荐视频 higher in its line than PingFang; this brings it level with 26's.
-  static const endCaptionDrop = 0.5;
+  static double get endCaptionDrop => BiliFonts.nudged ? 0.5 : 0;
   static const endCoverWidth = 128.0;
   static const endCoverHeight = 72.0;
   static const endCoverRadius = 5.0;
@@ -282,7 +290,7 @@ abstract final class BiliMetrics {
   static const endButtonHeight = 30.0;
 
   /// MiSans sits higher in its line than the official app's PingFang; this centres 立即播放 in its pill as on 26.
-  static const endButtonTextDrop = 2.0;
+  static double get endButtonTextDrop => BiliFonts.nudged ? 2 : 0;
   static const endButtonTrailing = 12.0;
   static const endActionsLeading = 13.7;
   static const endActionFont = 14.0;
@@ -613,13 +621,13 @@ abstract final class BiliMetrics {
   static const sheetMetaText = 12.0;
 
   /// MiSans digits are narrower than the official PingFang's.
-  static const sheetMetaSpacing = 0.6;
+  static double get sheetMetaSpacing => BiliFonts.nudged ? 0.6 : 0;
   static const sheetMetaLine = 16.0;
   static const sheetDateCentre = 51.1;
   static const sheetCountsCentre = 69.7;
 
   /// MiSans digits sit higher in their line than PingFang's, which centre on the count glyphs.
-  static const sheetCountTextDrop = 1.0;
+  static double get sheetCountTextDrop => BiliFonts.nudged ? 1 : 0;
   static const sheetCountGlyphWidth = 13.4;
   static const sheetCountLead = 1.0;
   static const sheetCountGlyphHeight = 11.4;
@@ -663,6 +671,16 @@ abstract final class BiliMetrics {
   static const recentsTile = 40.0;
   static const recentsTileRadius = 10.0;
   static const recentsTileIcon = 26.0;
+
+  /// 设置 and its pages, as iOS grouped lists.
+  static const settingsRowHeight = 50.0;
+  static const settingsSectionGap = 10.0;
+  static const settingsValueText = 14.0;
+  static const settingsValueWidth = 200.0;
+  static const settingsChevron = 20.0;
+  static const fontRowPadding = 12.0;
+  static const fontSampleGap = 4.0;
+  static const fontCheck = 20.0;
 
   /// 竖屏 full screen centres a landscape video at this fraction of the screen's height (screen 09).
   static const verticalVideoCentre = 0.415;

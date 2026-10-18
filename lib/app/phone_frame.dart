@@ -80,14 +80,15 @@ class _StatusBarState extends State<_StatusBar> {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final time = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
-    return IgnorePointer(child: CustomPaint(painter: _StatusPainter(time)));
+    return IgnorePointer(child: CustomPaint(painter: _StatusPainter(time, BiliFonts.family)));
   }
 }
 
 class _StatusPainter extends CustomPainter {
-  _StatusPainter(this.time);
+  _StatusPainter(this.time, this.family);
 
   final String time;
+  final String? family;
 
   static final _ink = Paint()
     ..color = BiliColors.onVideo
@@ -98,7 +99,7 @@ class _StatusPainter extends CustomPainter {
     final clock = TextPainter(
       text: TextSpan(
         text: time,
-        style: TextStyle(fontFamily: BiliFonts.family, fontSize: 17, fontWeight: FontWeight.w600, foreground: _ink),
+        style: TextStyle(fontFamily: family, fontSize: 17, fontWeight: FontWeight.w600, foreground: _ink),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
@@ -125,5 +126,5 @@ class _StatusPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_StatusPainter oldDelegate) => oldDelegate.time != time;
+  bool shouldRepaint(_StatusPainter oldDelegate) => oldDelegate.time != time || oldDelegate.family != family;
 }

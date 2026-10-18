@@ -30,9 +30,9 @@ class AccountAvatar extends StatelessWidget {
   }
 }
 
-enum AvatarMenuItem { history, recents, developer }
+enum AvatarMenuItem { history, recents, settings, developer }
 
-/// What the avatar opens (port of AvatarMenu.swift): the account, then 历史记录, 最近打开 and, in dev builds, 开发者.
+/// What the avatar opens (port of AvatarMenu.swift): the account, then 历史记录, 最近打开, 设置 and, in dev builds, 开发者.
 /// The official app keeps these on 我的 (02); with no tab bar they drop down from the avatar instead. 历史记录 waits
 /// for slice 8, and logging in and out with it.
 class AvatarMenu extends StatelessWidget {
@@ -58,6 +58,7 @@ class AvatarMenu extends StatelessWidget {
         const Divider(height: 0.5, thickness: 0.5, color: BiliColors.divider),
         const MenuRow(title: '历史记录', icon: Icons.history, onTap: null, note: '即将推出'),
         MenuRow(title: '最近打开', icon: Icons.video_library_outlined, onTap: () => onSelect(AvatarMenuItem.recents)),
+        MenuRow(title: '设置', icon: Icons.settings_outlined, onTap: () => onSelect(AvatarMenuItem.settings)),
         if (developer)
           MenuRow(title: '开发者', icon: Icons.build_outlined, onTap: () => onSelect(AvatarMenuItem.developer)),
         const SizedBox(height: 4),

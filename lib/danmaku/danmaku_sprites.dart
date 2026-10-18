@@ -24,11 +24,11 @@ final class DanmakuSprites {
 
   // Insertion ordered: the first key is the least recently used.
   final _cache = <String, DanmakuSprite>{};
-  final _lineHeights = <double, double>{};
+  final _lineHeights = <String, double>{};
 
   DanmakuSprite of(DisplayDanmaku danmaku, {required double pointSize}) {
     final rgb = danmaku.elem.color & 0xFFFFFF;
-    final key = '$pointSize|$rgb|${danmaku.isOwn}|${danmaku.text}';
+    final key = '${BiliFonts.family}|$pointSize|$rgb|${danmaku.isOwn}|${danmaku.text}';
     final cached = _cache.remove(key);
     if (cached != null) {
       _cache[key] = cached;
@@ -42,7 +42,7 @@ final class DanmakuSprites {
 
   /// The height of one line of danmaku text, which the lanes are spaced by.
   double lineHeight(double pointSize) =>
-      _lineHeights[pointSize] ??= _paragraph('弹幕Ag', pointSize, Paint()).height;
+      _lineHeights['${BiliFonts.family}|$pointSize'] ??= _paragraph('弹幕Ag', pointSize, Paint()).height;
 
   /// The text with a 1 pt outline; one's own danmaku also get a white rounded box.
   DanmakuSprite _render(String text, {required double pointSize, required int rgb, required bool own}) {

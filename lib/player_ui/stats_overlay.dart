@@ -10,11 +10,11 @@ class StatsOverlay extends StatelessWidget {
 
   final OverlayStats stats;
 
-  static const _style = TextStyle(
+  static TextStyle get _style => TextStyle(
     color: BiliColors.onVideo,
     fontSize: BiliMetrics.statsFont,
     fontFamily: 'Menlo',
-    fontFamilyFallback: ['Consolas', 'Courier New', BiliFonts.family],
+    fontFamilyFallback: ['Consolas', 'Courier New', ?BiliFonts.family],
     fontFeatures: [FontFeature.tabularFigures()],
   );
 
