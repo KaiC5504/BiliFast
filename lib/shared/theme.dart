@@ -703,7 +703,47 @@ abstract final class BiliMetrics {
 
 /// The tab row under the player (简介 / 评论 N, the 弹 toggle and 点我发弹幕) and the 简介 page's spacing (03, 18).
 abstract final class PageTheme {
-  static const tabRowHeight = 44.0;
+  /// 40 pt from the player's bottom to the hairline's, which the underline covers.
+  static const tabRowHeight = 40.0;
+  static const hairline = 0.5;
+  static const tabText = Color(0xFF61666D);
+
+  /// 简介 and 评论 in 61666D or pink, 评论's count smaller on their baseline (03, 10, 18).
+  static const tabLabelText = 13.5;
+  static const tabCountText = 10.5;
+  static const tabCountGap = 3.5;
+
+  /// Where 简介's label starts, and the room between the labels; each tab's touch area takes half that room.
+  static const tabFirstLabel = 33.2;
+  static const tabSpacing = 48.6;
+
+  /// The underline: as wide as the tab's label and count, flush with the row's bottom.
+  static const underlineHeight = 2.0;
+  static const underlineRadius = 1.0;
+
+  /// 点我发弹幕 joined to the 弹 toggle (18), or the toggle alone in a 44 pt capsule (03), 12 pt from the edge.
+  static const capsuleHeight = 30.0;
+  static const capsuleBorder = 0.7;
+  static const danmakuFieldWidth = 97.0;
+  static const danmakuFieldText = 13.5;
+  static const danmakuToggleOn = 40.0;
+  static const danmakuToggleOff = 44.0;
+
+  /// The 弹 glyph sits 22 pt from the capsule's right end, on or off.
+  static const danmakuMarkBox = 44.0;
+  static const danmakuMark = 23.0;
+
+  /// The on glyph's tick, in the official pink: everything right of half the glyph and below 58.8% of it.
+  static const danmakuTickLeft = 0.5;
+  static const danmakuTickTop = 0.588;
+
+  static const placeholderText = 14.0;
+
+  /// Below the related list, above the home indicator.
+  static const introBottom = 12.0;
+
+  /// How far the 简介 column rises while it fades in for a new video.
+  static const introRise = 8.0;
 }
 
 /// The uploader row and the title block, measured on the official app's 03, 18 and 26 at 3 px per point. Each part

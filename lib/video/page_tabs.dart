@@ -1,0 +1,483 @@
+import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
+
+import 'package:bili_core/logic.dart' show CountFormat;
+import 'package:flutter/material.dart';
+
+import '../shared/custom_icons.dart';
+import '../shared/theme.dart';
+import 'page_details.dart';
+
+/// Which tab the page shows, and the pager both tabs live in. The row reads [position] through a swipe, so the
+/// underline and the colours follow the finger.
+class PageTabsController extends ChangeNotifier {
+  final PageController pager = PageController();
+  PageTab _selected = PageTab.intro;
+
+  static const _slide = Duration(milliseconds: 300);
+
+  PageTab get selected => _selected;
+
+  /// 0 on 简介, 1 on 评论, in between during a swipe.
+  double get position {
+    if (pager.hasClients && pager.position.hasContentDimensions) return pager.page ?? _selected.index.toDouble();
+    return _selected.index.toDouble();
+  }
+
+  /// [animate] false jumps, as for a pager out of sight in full screen or with reduced motion.
+  void select(PageTab tab, {bool animate = true}) {
+    _set(tab);
+    if (!pager.hasClients) return;
+    if (animate) {
+      pager.animateToPage(tab.index, duration: _slide, curve: Curves.easeOutCubic);
+    } else {
+      pager.jumpToPage(tab.index);
+    }
+  }
+
+  void _set(PageTab tab) {
+    if (tab == _selected) return;
+    _selected = tab;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    pager.dispose();
+    super.dispose();
+  }
+}
+
+/// 简介 and 评论 side by side in a pager; a sideways swipe switches, and each keeps its scroll position. The route's
+/// edge swipe stays the route's: its detector sits over the page and wins the drag before the pager sees it.
+class PageTabs extends StatefulWidget {
+  const PageTabs({super.key, required this.controller, required this.intro, required this.comments});
+
+  final PageTabsController controller;
+  final Widget intro;
+  final Widget comments;
+
+  @override
+  State<PageTabs> createState() => _PageTabsState();
+}
+
+class _PageTabsState extends State<PageTabs> {
+  @override
+  void initState() {
+    super.initState();
+    // A tab chosen before the pager existed: the pager starts on 简介 and catches up once laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final controller = widget.controller;
+      if (!mounted || !controller.pager.hasClients) return;
+      if (controller.pager.page?.round() != controller.selected.index) {
+        controller.pager.jumpToPage(controller.selected.index);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: BiliColors.card,
+    child: PageView(
+      key: const ValueKey('page-tabs'),
+      controller: widget.controller.pager,
+      // No bounce past either tab: the official pager stops at its ends.
+      physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
+      onPageChanged: (index) => widget.controller._set(PageTab.values[index]),
+      children: [
+        _KeepAlive(child: widget.intro),
+        _KeepAlive(child: widget.comments),
+      ],
+    ),
+  );
+}
+
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+
+/// 评论 until slice 7 brings the comments.
+class CommentsPlaceholder extends StatelessWidget {
+  const CommentsPlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Text(
+      '评论将在下个版本推出',
+      style: TextStyle(
+        fontFamily: BiliFonts.family,
+        fontSize: PageTheme.placeholderText,
+        color: BiliColors.secondaryText,
+      ),
+    ),
+  );
+}
+
+/// The row under the player (03, 10, 18): 简介 and 评论 N with the pink underline that slides between them, and at
+/// the right 点我发弹幕 joined to the 弹 toggle, or the toggle alone while danmaku is off.
+class PageTabRow extends StatelessWidget {
+  const PageTabRow({
+    super.key,
+    required this.controller,
+    required this.replyCount,
+    required this.danmakuOn,
+    required this.onToggleDanmaku,
+    required this.onSendDanmaku,
+  });
+
+  final PageTabsController controller;
+
+  /// Null until the video's detail arrives.
+  final int? replyCount;
+  final bool danmakuOn;
+
+  /// Null before the page has its session.
+  final VoidCallback? onToggleDanmaku;
+  final VoidCallback onSendDanmaku;
+
+  static const _fade = Duration(milliseconds: 250);
+
+  TextStyle _labelStyle(Color color) => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: PageTheme.tabLabelText,
+    color: color,
+    height: 1.2,
+    letterSpacing: 0,
+  );
+
+  TextStyle _countStyle(Color color) => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: PageTheme.tabCountText,
+    color: color,
+    height: 1.2,
+    letterSpacing: 0,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final still = MediaQuery.disableAnimationsOf(context);
+    // Measured as the labels render: over whatever the surrounding text style leaves in place.
+    final base = DefaultTextStyle.of(context).style;
+    final count = replyCount == null ? null : CountFormat.short(replyCount!);
+    final introWidth = _measure('简介', base.merge(_labelStyle(PageTheme.tabText)), scaler);
+    final commentsWidth =
+        _measure('评论', base.merge(_labelStyle(PageTheme.tabText)), scaler) +
+        (count == null
+            ? 0
+            : PageTheme.tabCountGap + _measure(count, base.merge(_countStyle(PageTheme.tabText)), scaler));
+    const pad = PageTheme.tabSpacing / 2;
+    const introLeft = PageTheme.tabFirstLabel;
+    final commentsLeft = introLeft + introWidth + PageTheme.tabSpacing;
+    return SizedBox(
+      height: PageTheme.tabRowHeight,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: BiliColors.card,
+          border: Border(
+            bottom: BorderSide(color: BiliColors.divider, width: PageTheme.hairline),
+          ),
+        ),
+        child: ListenableBuilder(
+          listenable: Listenable.merge([controller, controller.pager]),
+          builder: (context, _) {
+            final position = controller.position.clamp(0.0, 1.0);
+            return Stack(
+              children: [
+                Positioned(
+                  left: introLeft - pad,
+                  top: 0,
+                  bottom: 0,
+                  child: _tab(
+                    key: const ValueKey('tab-intro'),
+                    tab: PageTab.intro,
+                    label: '简介',
+                    count: null,
+                    emphasis: 1 - position,
+                    still: still,
+                  ),
+                ),
+                Positioned(
+                  left: commentsLeft - pad,
+                  top: 0,
+                  bottom: 0,
+                  child: _tab(
+                    key: const ValueKey('tab-comments'),
+                    tab: PageTab.comments,
+                    label: '评论',
+                    count: count,
+                    emphasis: position,
+                    still: still,
+                  ),
+                ),
+                _underline(position: position, from: (introLeft, introWidth), to: (commentsLeft, commentsWidth)),
+                Positioned(
+                  right: BiliMetrics.gutter,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _DanmakuCapsule(
+                      on: danmakuOn,
+                      onToggle: onToggleDanmaku,
+                      onSend: onSendDanmaku,
+                      duration: still ? Duration.zero : _fade,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  static double _measure(String text, TextStyle style, TextScaler scaler) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
+  Widget _tab({
+    required Key key,
+    required PageTab tab,
+    required String label,
+    required String? count,
+    required double emphasis,
+    required bool still,
+  }) {
+    final color = Color.lerp(PageTheme.tabText, BiliColors.pink, emphasis.clamp(0.0, 1.0))!;
+    final selected = controller.selected == tab;
+    void select() => controller.select(tab, animate: !still);
+    return Semantics(
+      key: key,
+      button: true,
+      selected: selected,
+      label: count == null ? label : '$label $count',
+      onTap: select,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: select,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: PageTheme.tabSpacing / 2),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(label, style: _labelStyle(color)),
+                if (count != null) ...[
+                  const SizedBox(width: PageTheme.tabCountGap),
+                  Text(count, style: _countStyle(color)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The leading end runs ahead and the trailing end catches up, so the bar stretches as it travels.
+  Widget _underline({required double position, required (double, double) from, required (double, double) to}) {
+    final (fromLeft, fromWidth) = from;
+    final (toLeft, toWidth) = to;
+    final lead = Curves.easeOut.transform(position);
+    final trail = Curves.easeIn.transform(position);
+    final left = lerpDouble(fromLeft, toLeft, trail)!;
+    final right = lerpDouble(fromLeft + fromWidth, toLeft + toWidth, lead)!;
+    return Positioned(
+      key: const ValueKey('tab-underline'),
+      left: left,
+      width: math.max(0, right - left),
+      bottom: 0,
+      height: PageTheme.underlineHeight,
+      child: const DecoratedBox(
+        decoration: BoxDecoration(
+          color: BiliColors.pink,
+          borderRadius: BorderRadius.all(Radius.circular(PageTheme.underlineRadius)),
+        ),
+      ),
+    );
+  }
+}
+
+/// The toggle alone in a small grey capsule, or grown leftwards into 点我发弹幕 with the toggle on white.
+class _DanmakuCapsule extends StatelessWidget {
+  const _DanmakuCapsule({required this.on, required this.onToggle, required this.onSend, required this.duration});
+
+  final bool on;
+  final VoidCallback? onToggle;
+  final VoidCallback onSend;
+  final Duration duration;
+
+  static const _curve = Curves.easeOutCubic;
+
+  @override
+  Widget build(BuildContext context) {
+    final toggleWidth = on ? PageTheme.danmakuToggleOn : PageTheme.danmakuToggleOff;
+    return AnimatedContainer(
+      key: const ValueKey('danmaku-capsule'),
+      duration: duration,
+      curve: _curve,
+      width: on ? PageTheme.danmakuFieldWidth + PageTheme.danmakuToggleOn : PageTheme.danmakuToggleOff,
+      height: PageTheme.capsuleHeight,
+      clipBehavior: Clip.antiAlias,
+      decoration: const ShapeDecoration(color: BiliColors.softGrey, shape: StadiumBorder()),
+      foregroundDecoration: const ShapeDecoration(
+        shape: StadiumBorder(
+          side: BorderSide(color: BiliColors.divider, width: PageTheme.capsuleBorder),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _field()),
+          AnimatedContainer(
+            duration: duration,
+            curve: _curve,
+            width: toggleWidth,
+            color: on ? BiliColors.card : BiliColors.softGrey,
+            child: _toggle(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _field() => ClipRect(
+    child: OverflowBox(
+      minWidth: PageTheme.danmakuFieldWidth,
+      maxWidth: PageTheme.danmakuFieldWidth,
+      alignment: Alignment.centerRight,
+      child: AnimatedOpacity(
+        opacity: on ? 1 : 0,
+        duration: duration,
+        child: ExcludeSemantics(
+          excluding: !on,
+          child: Semantics(
+            key: const ValueKey('danmaku-send'),
+            button: true,
+            label: '点我发弹幕',
+            onTap: on ? onSend : null,
+            excludeSemantics: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: on ? onSend : null,
+              child: Center(
+                child: Text(
+                  '点我发弹幕',
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontFamily: BiliFonts.family,
+                    fontSize: PageTheme.danmakuFieldText,
+                    color: BiliColors.secondaryText,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _toggle() => Semantics(
+    key: const ValueKey('danmaku-toggle'),
+    button: true,
+    toggled: on,
+    label: on ? '关闭弹幕' : '开启弹幕',
+    onTap: onToggle,
+    excludeSemantics: true,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onToggle,
+      child: OverflowBox(
+        minWidth: PageTheme.danmakuMarkBox,
+        maxWidth: PageTheme.danmakuMarkBox,
+        alignment: Alignment.centerRight,
+        child: Center(
+          child: AnimatedSwitcher(
+            duration: duration,
+            child: DanmakuMark(key: ValueKey(on), on: on),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// The borrowed 弹 glyph in the tab grey, its on tick pink as the official app draws it.
+class DanmakuMark extends StatelessWidget {
+  const DanmakuMark({super.key, required this.on});
+
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!on) {
+      return const Icon(CustomIcons.danmakuOff, size: PageTheme.danmakuMark, color: PageTheme.tabText);
+    }
+    return const SizedBox.square(
+      dimension: PageTheme.danmakuMark,
+      child: Stack(
+        children: [
+          ClipPath(
+            clipper: _TickClip(tick: false),
+            child: Icon(CustomIcons.danmakuOn, size: PageTheme.danmakuMark, color: PageTheme.tabText),
+          ),
+          ClipPath(
+            clipper: _TickClip(tick: true),
+            child: Icon(CustomIcons.danmakuOn, size: PageTheme.danmakuMark, color: BiliColors.pink),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The font's tick is its own contour below and right of the box's strokes, so a rectangle separates it.
+class _TickClip extends CustomClipper<Path> {
+  const _TickClip({required this.tick});
+
+  final bool tick;
+
+  @override
+  Path getClip(Size size) {
+    final corner = Rect.fromLTRB(
+      size.width * PageTheme.danmakuTickLeft,
+      size.height * PageTheme.danmakuTickTop,
+      size.width * 2,
+      size.height * 2,
+    );
+    if (tick) return Path()..addRect(corner);
+    return Path.combine(PathOperation.difference, Path()..addRect(Offset.zero & size), Path()..addRect(corner));
+  }
+
+  @override
+  bool shouldReclip(_TickClip oldClipper) => oldClipper.tick != tick;
+}

@@ -1,11 +1,14 @@
 import 'dart:async';
 
-import 'package:bili_core/api.dart' as bili show VideoDetail, VideoPage, VideoView;
+import 'package:bili_core/api.dart' as bili
+    show AidLink, BvidLink, LinkParser, VideoCard, VideoDetail, VideoPage, VideoView;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../device/orientation.dart';
+import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_controller.dart';
 import '../player_ui/chrome_state.dart';
 import '../player_ui/panels/panel_controller.dart';
@@ -13,7 +16,14 @@ import '../player_ui/panels/panel_layer.dart';
 import '../player_ui/player_ui.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../shared/toast.dart';
+import 'actions/action_overlays.dart';
+import 'intro/intro_tab.dart';
+import 'page_details.dart';
+import 'page_details_model.dart';
 import 'page_session.dart';
+import 'page_tabs.dart';
+import 'player_prefs.dart';
 import 'player_session.dart';
 import 'video_player_area.dart';
 import 'video_route.dart';
@@ -34,15 +44,51 @@ PlayerSession pageSession({
   required void Function(double seconds) onSeeked,
 }) => createPageSession(controller: controller, services: services, open: open, onSeeked: onSeeked);
 
-/// The video page: the player at 16:9 under a black status bar with the title, uploader and part below it, or the
+typedef PageDetailsFactory = PageDetails Function({
+  required PlayerSession session,
+  required AppServices services,
+  required void Function(String message) toast,
+});
+
+/// The app's page details. Logging in comes in slice 8; until then an action that needs it says so.
+PageDetails pageDetails({
+  required PlayerSession session,
+  required AppServices services,
+  required void Function(String message) toast,
+}) {
+  final environment = services.environment;
+  return VideoPageDetailsModel(
+    session: session,
+    api: services.pageApi,
+    isLoggedIn: () => environment.account is LoggedIn,
+    accountMid: () => environment.mid,
+    requestLogin: () => toast('请先登录'),
+    toast: toast,
+  );
+}
+
+typedef VideoPageOpener = Future<void> Function(BuildContext context, VideoRoute route);
+
+/// The video page: the player at 16:9 under a black status bar with the tab row and 简介 | 评论 below it, or the
 /// player alone over the whole screen in full screen, which is this page laid out again rather than a route of its
 /// own. It opens the route's video on the shared player, reports watch progress while logged in, and gives the player
-/// back when it is popped. The intro, actions and comments come in later slices.
+/// back when it is popped. A page shown again after a newer video page took the player opens its video again where
+/// it was covered. The comments come in slice 7.
 class VideoPage extends StatefulWidget {
-  const VideoPage({super.key, required this.route, this.createSession = pageSession});
+  const VideoPage({
+    super.key,
+    required this.route,
+    this.createSession = pageSession,
+    this.createDetails = pageDetails,
+    this.openPage = openVideoPage,
+  });
 
   final VideoRoute route;
   final PageSessionFactory createSession;
+  final PageDetailsFactory createDetails;
+
+  /// A related video, or a video id in the description, opens a page on top through this.
+  final VideoPageOpener openPage;
 
   @override
   State<VideoPage> createState() => _VideoPageState();
@@ -70,20 +116,24 @@ class _VideoPageState extends State<VideoPage> {
   late double? _startAt = widget.route.start;
   late bili.VideoView? _view = widget.route.view;
   late bili.VideoDetail? _detail = widget.route.detail;
-  late String? _title = widget.route.title;
-
-  /// The last video and part this page opened, so the title stays put while the page slides away.
-  bili.VideoView? _video;
-  bili.VideoPage? _part;
 
   PlayerSession? _session;
+  PageDetails? _details;
   PlayerUi? _ui;
+
+  /// 简介's video, taken from the session only while the player is this page's.
+  IntroContent _intro = const IntroContent();
+
+  /// Where this page's video stood when another page covered it, for opening it again once shown.
+  ({double seconds, bili.VideoView? view, bili.VideoPage? part, bili.VideoDetail? detail})? _coveredAt;
 
   /// The native view: built once, so no layout switch or chrome change recreates it.
   Widget? _videoView;
   Listenable? _autoHideInputs;
   final _chrome = ChromeState();
   final _panels = PanelController();
+  final _overlays = ActionOverlayController();
+  final _tabs = PageTabsController();
   final _areaKey = GlobalKey();
 
   /// This page's begin is the orientation's latest, so the presentation is this page's.
@@ -102,6 +152,7 @@ class _VideoPageState extends State<VideoPage> {
   void initState() {
     super.initState();
     _panels.addListener(_panelChanged);
+    _overlays.addListener(_panelChanged);
   }
 
   @override
@@ -118,17 +169,51 @@ class _VideoPageState extends State<VideoPage> {
     _current = current;
     if (!current) {
       _owning = false;
-      _session?.active = false;
+      final controller = _controller;
+      if (controller != null && _isMine(controller)) {
+        _coveredAt = (
+          seconds: controller.currentSeconds,
+          view: controller.video,
+          part: controller.page,
+          detail: controller.detail,
+        );
+      }
+      _setActive(false);
     } else if (covered) {
       // Shown again after the page above popped: this page takes the orientation back. Not during this build, since
       // the orientation's other listeners would rebuild inside it.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || _left) return;
         _claimOrientation();
         final controller = _controller;
-        if (controller != null && _isMine(controller)) _session?.active = true;
+        if (controller == null) return;
+        if (_isMine(controller)) {
+          _coveredAt = null;
+          _setActive(true);
+        } else if (_session != null) {
+          _reopen(controller);
+        }
       });
     }
+  }
+
+  void _setActive(bool active) {
+    _session?.active = active;
+    _details?.active = active;
+  }
+
+  /// The page above had the player and gave it back closed: this page plays its own video again from where it was
+  /// covered. A stopgap until slice 9 resumes without a reload.
+  void _reopen(PlaybackController controller) {
+    if (_coveredAt case final covered?) {
+      _coveredAt = null;
+      _startAt = covered.seconds;
+      if (covered.part case final part?) _cid = part.cid;
+      if (covered.view case final view? when view.bvid == _bvid) _view = view;
+      if (covered.detail case final detail? when detail.bvid == _bvid) _detail = detail;
+    }
+    _openVideo(controller);
+    _setActive(true);
   }
 
   void _start() {
@@ -170,6 +255,8 @@ class _VideoPageState extends State<VideoPage> {
       onSeeked: (seconds) => _reporter?.seeked(seconds),
     );
     _session = session;
+    final details = widget.createDetails(session: session, services: services, toast: _toast);
+    _details = details;
     _ui = PlayerUi(
       session: session,
       chrome: _chrome,
@@ -177,6 +264,8 @@ class _VideoPageState extends State<VideoPage> {
       orientation: _orientation,
       device: services.device.controls,
       onBack: _back,
+      details: details,
+      onComments: _showComments,
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
@@ -191,11 +280,6 @@ class _VideoPageState extends State<VideoPage> {
     final controller = _controller;
     if (controller == null || !_isMine(controller)) return;
     final samePart = bvid == _bvid;
-    if (!samePart) {
-      _video = null;
-      _part = null;
-      _title = null;
-    }
     // Another part of this video needs no second signed view.
     _view = samePart ? controller.video : null;
     _detail = samePart ? controller.detail : null;
@@ -212,10 +296,7 @@ class _VideoPageState extends State<VideoPage> {
     if (controller == null) return;
     setState(() {
       if (!_isMine(controller)) return;
-      if (controller.video case final video?) {
-        _video = video;
-        _part = controller.page;
-      }
+      if (_session case final session?) _intro = IntroContent.of(session);
       if (controller.phase == PlaybackPhase.playing) _played = true;
     });
     _syncAutoHide();
@@ -225,7 +306,10 @@ class _VideoPageState extends State<VideoPage> {
     final session = _session;
     final controller = _controller;
     // A covered page's session hears the newer page's video on the shared controller.
-    if (session == null || controller == null || !_isMine(controller) || session.video == null) return;
+    if (session == null || controller == null || !_isMine(controller)) return;
+    final intro = IntroContent.of(session);
+    if (intro != _intro && mounted) setState(() => _intro = intro);
+    if (session.video == null) return;
     final vertical = session.isVertical;
     final changed = vertical != _vertical;
     _vertical = vertical;
@@ -279,14 +363,54 @@ class _VideoPageState extends State<VideoPage> {
     if (mounted) setState(() {});
   }
 
-  /// Back closes an open panel first, in every presentation.
+  /// Back closes an open overlay first, then a panel, in every presentation.
   void _back() {
-    if (_panels.value != null) {
+    if (_overlays.value != null) {
+      _overlays.close();
+    } else if (_panels.value != null) {
       _panels.close();
     } else if (_presentation.fullScreen) {
       _orientation.exitToInline();
     } else {
       unawaited(Navigator.of(context).maybePop());
+    }
+  }
+
+  void _toast(String message) {
+    if (mounted) showToast(context, message);
+  }
+
+  /// 评论 in full screen: back to the small player on the 评论 tab.
+  void _showComments() {
+    _tabs.select(PageTab.comments, animate: false);
+    _orientation.exitToInline();
+  }
+
+  void _openRelated(bili.VideoCard card) =>
+      unawaited(widget.openPage(context, VideoRoute(bvid: card.bvid, title: card.title, cover: card.cover)));
+
+  Future<void> _watchLater(bili.VideoCard card) async {
+    final details = _details;
+    if (details == null) return;
+    final result = await details.watchLater(card);
+    if (result.message.isNotEmpty) _toast(result.message);
+  }
+
+  /// A BV id opens at once; an av id asks Bilibili for its video first.
+  Future<void> _openVideoId(String id) async {
+    switch (bili.LinkParser.parse(id)) {
+      case bili.BvidLink(id: final bvid):
+        await widget.openPage(context, VideoRoute(bvid: bvid));
+      case final bili.AidLink link:
+        try {
+          final (view, _) = await resolveVideoLink(_services!.environment.client, link);
+          if (!mounted || _left) return;
+          await widget.openPage(context, VideoRoute(bvid: view.bvid, title: view.title, view: view));
+        } catch (error) {
+          _toast(requestFailureMessage(error, fallback: '打开视频失败，请稍后重试'));
+        }
+      default:
+        break;
     }
   }
 
@@ -307,7 +431,7 @@ class _VideoPageState extends State<VideoPage> {
     if (_left) return;
     _left = true;
     _owning = false;
-    _session?.active = false;
+    _setActive(false);
     final controller = _controller;
     controller?.removeListener(_follow);
     unawaited(_reporter?.leave());
@@ -339,13 +463,17 @@ class _VideoPageState extends State<VideoPage> {
     _leave(fromDispose: true);
     _services?.device.orientation.removeListener(_presentationChanged);
     _panels.removeListener(_panelChanged);
+    _overlays.removeListener(_panelChanged);
     _autoHideInputs?.removeListener(_syncAutoHide);
     final session = _session;
     session?.removeListener(_sessionChanged);
+    _details?.dispose();
     // PlayerSession declares no dispose; the app's session is a ChangeNotifier that frees what it holds.
     if (session case final ChangeNotifier notifier) notifier.dispose();
     _chrome.dispose();
     _panels.dispose();
+    _overlays.dispose();
+    _tabs.dispose();
     super.dispose();
   }
 
@@ -357,10 +485,12 @@ class _VideoPageState extends State<VideoPage> {
     final mine = controller != null && _isMine(controller);
     final ui = mine ? _ui : null;
     return PopScope<Object?>(
-      canPop: !fullScreen && _panels.value == null,
+      canPop: !fullScreen && _panels.value == null && _overlays.value == null,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           setState(_leave);
+        } else if (_overlays.value != null) {
+          _overlays.close();
         } else if (_panels.value != null) {
           _panels.close();
         } else if (_presentation.fullScreen) {
@@ -387,7 +517,7 @@ class _VideoPageState extends State<VideoPage> {
                       offstage: fullScreen,
                       child: TickerMode(
                         enabled: !fullScreen,
-                        child: _Details(title: _title, video: _video, part: _part),
+                        child: MediaQuery.removePadding(context: context, removeTop: true, child: _body(context)),
                       ),
                     ),
                   ),
@@ -425,12 +555,65 @@ class _VideoPageState extends State<VideoPage> {
                     ),
                   ),
                   if (ui != null) Positioned.fill(key: const ValueKey('video-panels'), child: PanelLayer(ui: ui)),
+                  if ((ui, _details) case (final ui?, final details?))
+                    Positioned.fill(
+                      key: const ValueKey('video-overlays'),
+                      child: ListenableBuilder(
+                        listenable: details,
+                        builder: (context, _) => ActionOverlays(
+                          actions: details.actions,
+                          controller: _overlays,
+                          landscape: presentation == Presentation.landscape,
+                          shareLink: ui.session.shareLink,
+                        ),
+                      ),
+                    ),
                 ],
               );
             },
           ),
         ),
       ),
+    );
+  }
+
+  /// The tab row and the pager under the small player. Before the session exists the row shows the saved danmaku
+  /// switch and 简介 stays empty.
+  Widget _body(BuildContext context) {
+    final session = _session;
+    final details = _details;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListenableBuilder(
+          listenable: session ?? _tabs,
+          builder: (context, _) => PageTabRow(
+            controller: _tabs,
+            replyCount: _intro.detail?.stat.reply,
+            danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
+            onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
+            onSendDanmaku: () => _toast('发弹幕将在下个版本推出'),
+          ),
+        ),
+        Expanded(
+          child: PageTabs(
+            controller: _tabs,
+            intro: session == null || details == null
+                ? const SizedBox.expand()
+                : IntroTab(
+                    content: _intro,
+                    details: details,
+                    onSeek: (seconds) => unawaited(session.commitSeek(seconds)),
+                    onOpenVideo: (id) => unawaited(_openVideoId(id)),
+                    onPlayEpisode: session.playEpisode,
+                    onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
+                    onOpenRelated: _openRelated,
+                    onWatchLater: (card) => unawaited(_watchLater(card)),
+                  ),
+            comments: const CommentsPlaceholder(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -488,41 +671,6 @@ class _VideoPageState extends State<VideoPage> {
       cover,
       size: _coverSize(flight),
       placeholder: cardSize == null ? null : RemoteImage(cover, size: cardSize),
-    );
-  }
-}
-
-/// The title, uploader and, for a video in parts, the part playing; the route's title until the video's own arrives.
-class _Details extends StatelessWidget {
-  const _Details({required this.title, required this.video, required this.part});
-
-  final String? title;
-  final bili.VideoView? video;
-  final bili.VideoPage? part;
-
-  @override
-  Widget build(BuildContext context) {
-    final video = this.video;
-    final part = this.part;
-    final title = video?.title ?? this.title ?? '';
-    return ListView(
-      padding: const EdgeInsets.all(BiliMetrics.gutter),
-      children: [
-        Text(
-          title,
-          key: const ValueKey('video-title'),
-          style: const TextStyle(fontSize: BiliMetrics.titleText, color: BiliColors.text, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: BiliMetrics.rowGap),
-        Text(
-          [
-            if (video?.owner case final owner? when owner.isNotEmpty) owner,
-            if (video != null && video.pages.length > 1 && part != null) 'P${part.page} ${part.part}',
-          ].join(' · '),
-          key: const ValueKey('video-meta'),
-          style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),
-        ),
-      ],
     );
   }
 }
