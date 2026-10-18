@@ -238,10 +238,12 @@ class _VideoPageState extends State<VideoPage> {
                 child: IconButton(
                   key: const ValueKey('video-back'),
                   onPressed: () => Navigator.of(context).maybePop(),
+                  // Sits on the picture itself, over danmaku and white frames.
                   icon: const Icon(
                     Icons.arrow_back_ios_new_rounded,
                     color: BiliColors.onVideo,
                     size: BiliMetrics.videoBackIcon,
+                    shadows: [Shadow(color: BiliColors.chromeShade, blurRadius: BiliMetrics.videoBackShadow)],
                   ),
                   tooltip: '返回',
                 ),

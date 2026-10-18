@@ -68,12 +68,36 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   the CDN didn't have failed the 20 s first frame in 4 of 18 passes (aliov 6-10 Mbps, Akamai failing): the CDN's
   limit. KaiC's call: no more tuning rounds; the speed test stays as a check after big engine changes (builtin-3:
   the app against D).
+- 2026-10-18: slice 3 (home and the video page shell), shipped as 1.0.0 (4) with engine B.
+  - Home: the 推荐 feed in two columns, the link field, the avatar menu (账号, 最近打开, 开发者 in dev builds), and
+    最近打开 (30, carried over once from the Swift app's UserDefaults).
+  - The paste button is the system's UIPasteControl, so iOS doesn't ask "Allow Paste?" every time.
+  - The video page plays on one shared player started at launch, resumes from Bilibili's saved position (the part
+    seen last when no part is given), and sends watch-progress heartbeats.
+  - Built solo, so KaiC asked for the process that every slice now follows:
+    1. seven read-only checking agents (two reviews, silent failures, test gaps, spec, comments, a muted Windows run);
+    2. a contracts commit for what the fixers share;
+    3. five fix agents in worktrees, each owning its own files;
+    4. merge, a Swift review, a final review, a second Windows run;
+    5. the gate, then one GitHub run.
+  - The checks found:
+    - load more looping against the API;
+    - an invisible spinner keeping a core busy;
+    - 开发者 able to dispose or leave a speed-test engine on the shared player;
+    - heartbeats crossing pages;
+    - the cover Hero remounting mid-flight;
+    - swipe back firing on vertical drags.
+  - Worktrees start at an old commit: each fix agent must fast-forward to the contracts commit first.
 - Update this section when a slice finishes.
 
 ## Layout
 
-- `lib/`: the Flutter app. `lib/account/` keychain and cookie persistence, `lib/app/` routes, `lib/shared/theme.dart`
-  the colour and size tokens (never hardcode colours).
+- `lib/`: the Flutter app.
+  - `lib/account/`: keychain and cookie persistence.
+  - `lib/app/`: routes and `AppScope` (the services every page reaches, the shared player among them).
+  - `lib/home/`: home, the feed, the avatar menu and 最近打开.
+  - `lib/video/`: the video page and the watch-progress reporter.
+  - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`. One library per Swift
   module: `shared.dart`, `devlog.dart`, `danmaku.dart`, `api.dart`, `logic.dart`.
 - `ios/Runner/`: native Swift (`KeychainChannel.swift`; the player view comes in slice 1). New Swift files must be added

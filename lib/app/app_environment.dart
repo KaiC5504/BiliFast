@@ -83,8 +83,13 @@ class AppEnvironment extends ChangeNotifier {
         AccountUnknown() => _accountCheckFailed ? '账号确认失败' : '正在确认账号…',
       };
 
-  /// Returns false when Bilibili could not be asked (network error); [account] then keeps its last value.
-  Future<bool> refreshAccount() async {
+  /// Returns false when Bilibili could not be asked (network error); [account] then keeps its last value. A check
+  /// already running answers every caller (launch, coming back to the app, returning to home) with one request.
+  Future<bool> refreshAccount() => _checking ??= _checkAccount().whenComplete(() => _checking = null);
+
+  Future<bool>? _checking;
+
+  Future<bool> _checkAccount() async {
     await _retryBlockedKeychainLoad();
     try {
       await client.ensureRiskCookies();

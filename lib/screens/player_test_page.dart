@@ -60,7 +60,7 @@ class PlayerTestPage extends StatefulWidget {
   final LogForwarder? logs;
   final StageBuilder stageBuilder;
 
-  /// Played as soon as the player is up (`--play=<BV or link>` on the PC, for test runs).
+  /// Played as soon as the player is up (tests; `--play=` on the PC now opens a video page from home).
   final String? initialLink;
   final SpeedTestHooks speedTestHooks;
 
@@ -130,7 +130,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     if (widget.ownsController) WidgetsBinding.instance.removeObserver(this);
     _lifecycle?.dispose();
     // Before the controller, so sound and screen are put back while the player is still there.
-    _speedTest?.dispose();
+    _stopSpeedTest();
     final controller = _controller;
     if (widget.ownsController) {
       controller?.dispose();
@@ -145,6 +145,16 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     _testLinks.dispose();
     _logAddress.dispose();
     super.dispose();
+  }
+
+  bool _speedTestStopped = false;
+
+  /// With the shared player this runs at the pop, not at dispose half a second later: a video page opened during the
+  /// slide must find the app's engine, not the run still seeking or a put-back clearing its video.
+  void _stopSpeedTest() {
+    if (_speedTestStopped) return;
+    _speedTestStopped = true;
+    _speedTest?.dispose();
   }
 
   void _play() {
@@ -172,7 +182,14 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => PopScope<Object?>(
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop && !widget.ownsController) _stopSpeedTest();
+        },
+        child: _page(context),
+      );
+
+  Widget _page(BuildContext context) {
     final controller = _controller;
     return Scaffold(
       backgroundColor: BiliColors.pageGrey,
@@ -203,7 +220,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
                   children: [
                     if (controller != null) ..._playbackSection(controller),
                     if (widget.logs case final logs?) _LogSection(logs: logs, address: _logAddress),
-                    if (_speedTest case final runner?) ...[
+                    if (_speedTest case final runner? when !_speedTestStopped) ...[
                       const SizedBox(height: BiliMetrics.sectionGap),
                       _SpeedTestSection(runner: runner, links: _testLinks, onStart: _startSpeedTest),
                     ],

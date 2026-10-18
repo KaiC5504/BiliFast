@@ -98,4 +98,14 @@ void main() {
     expect(environment.account, isA<AccountUnknown>());
     expect(environment.accountLabel, '账号确认失败');
   });
+
+  test('checks asked for while one is running share its request; a later one asks again', () async {
+    final http = Canned.http();
+    final environment = await load(FakeKeychain(const StoredCookies(Canned.cookies)), http);
+    final answers = await Future.wait([environment.refreshAccount(), environment.refreshAccount()]);
+    expect(answers, [true, true]);
+    expect(http.to(Canned.navPath), hasLength(1));
+    await environment.refreshAccount();
+    expect(http.to(Canned.navPath), hasLength(2));
+  });
 }
