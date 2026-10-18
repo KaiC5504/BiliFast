@@ -138,18 +138,27 @@ class _VideoPageState extends State<VideoPage> {
 
   /// Runs at the pop, not at dispose 500 ms later: a card opened during the transition would by then have the
   /// player, and this page would report and close the newer page's video.
-  void _leave() {
+  void _leave({bool fromDispose = false}) {
     if (_left) return;
     _left = true;
     final controller = _controller;
     controller?.removeListener(_follow);
     unawaited(_reporter?.leave());
-    if (controller != null && controller.opens == _open) controller.close();
+    if (controller == null || controller.opens != _open) return;
+    // Disposal runs while the tree is locked, and close() notifies the other pages listening to the player.
+    if (fromDispose) {
+      final open = _open;
+      scheduleMicrotask(() {
+        if (controller.opens == open) controller.close();
+      });
+    } else {
+      controller.close();
+    }
   }
 
   @override
   void dispose() {
-    _leave();
+    _leave(fromDispose: true);
     super.dispose();
   }
 
