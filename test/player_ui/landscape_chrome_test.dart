@@ -1,15 +1,18 @@
-import 'package:bili_core/api.dart' show QualityOption;
+import 'package:bili_core/api.dart' show QualityOption, UploaderCard, VideoDetail;
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/landscape_chrome.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/shared/action_glyphs.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
+import '../support/fake_video_actions.dart';
 
 class CountingChrome extends ChromeState {
   int shows = 0;
@@ -24,11 +27,15 @@ class CountingChrome extends ChromeState {
 /// The landscape chrome on an iPhone 17 Pro Max turned sideways (956 × 440 pt, the island's 62 pt each side, the
 /// home indicator's 21 below), the size 04 was taken at.
 final class Rig {
+  Rig({this.details});
+
   final session = FakePlayerSession();
   final chrome = CountingChrome();
   final panels = PanelController();
   final orientation = OrientationController()..enterLandscape();
+  final FakePageDetails? details;
   int backs = 0;
+  int comments = 0;
 
   late final ui = PlayerUi(
     session: session,
@@ -37,6 +44,8 @@ final class Rig {
     orientation: orientation,
     device: orientation.controls,
     onBack: () => backs += 1,
+    details: details,
+    onComments: () => comments += 1,
   );
 
   Future<void> mount(WidgetTester tester) async {
@@ -50,6 +59,7 @@ final class Rig {
       panels.dispose();
       orientation.dispose();
       session.dispose();
+      details?.dispose();
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -63,6 +73,22 @@ final class Rig {
 }
 
 Offset centre(WidgetTester tester, String key) => tester.getCenter(find.byKey(ValueKey(key)));
+
+final detail = VideoDetail.fromJson({
+  'bvid': 'BV1',
+  'owner': {'mid': 1, 'name': 'PRORES 8K', 'face': ''},
+});
+
+ActionIcon iconOf(WidgetTester tester, String key) =>
+    tester.widget<ActionIcon>(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(ActionIcon)));
+
+/// The glyph's own swell, inside the press shrink every chrome button has.
+double scaleOf(WidgetTester tester, String key) => tester
+    .widget<ScaleTransition>(
+      find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(ScaleTransition)).last,
+    )
+    .scale
+    .value;
 
 void main() {
   testWidgets('lays out as 04: back and ⋮ level at the top, 截图 and the lock on the right, the bottom row', (
@@ -293,6 +319,323 @@ void main() {
     rig.panels.open(PlayerPanel.quality);
     await tester.pumpAndSettle();
     expect(tester.widget<IgnorePointer>(root).ignoring, isTrue);
+  });
+
+  testWidgets('点赞 评论 收藏 投币 充电 分享 line up before ⋮ as on 04, 52 pt apart, and nothing else moves', (tester) async {
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions()))..session.title = 'Dolby Vision 8K HDR 120FPS';
+    await rig.mount(tester);
+
+    expect(tester.takeException(), isNull);
+    for (final (key, x) in [
+      ('landscape-like', 555.0),
+      ('landscape-comments', 607.0),
+      ('landscape-favourite', 659.0),
+      ('landscape-coin', 711.0),
+      ('landscape-charge', 763.0),
+      ('landscape-share', 815.0),
+    ]) {
+      expect(centre(tester, key), within(distance: 0.5, from: Offset(x, 42)), reason: key);
+      expect(tester.getSize(find.byKey(ValueKey(key))), const Size(44, 44), reason: key);
+    }
+    expect(centre(tester, 'landscape-more'), within(distance: 1, from: const Offset(867, 42)));
+    expect(centre(tester, 'landscape-back'), within(distance: 1, from: const Offset(89, 42)));
+    expect(tester.getTopRight(find.byKey(const ValueKey('landscape-title'))).dx, lessThanOrEqualTo(509));
+    final icons = tester.widgetList<ActionIcon>(find.byType(ActionIcon));
+    expect(icons.map((icon) => icon.glyph), [
+      ActionGlyph.like,
+      ActionGlyph.comment,
+      ActionGlyph.favourite,
+      ActionGlyph.coin,
+      ActionGlyph.charge,
+      ActionGlyph.share,
+    ]);
+    for (final icon in icons) {
+      expect(icon.solid, isFalse);
+      expect(icon.color, BiliColors.onVideo);
+      expect(icon.size, LandscapeActionTheme.iconSize);
+    }
+  });
+
+  testWidgets('点赞 and 收藏 carry their counts as superscripts at their top right; none at 0', (tester) async {
+    final actions = FakeVideoActions(likeCount: 30, favCount: 38);
+    final rig = Rig(details: FakePageDetails(actions: actions));
+    await rig.mount(tester);
+
+    Finder countOf(String key, String text) =>
+        find.descendant(of: find.byKey(ValueKey(key)), matching: find.text(text));
+    Finder textsOf(String key) => find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(Text));
+    expect(countOf('landscape-like', '30'), findsOneWidget);
+    expect(countOf('landscape-favourite', '38'), findsOneWidget);
+    expect(tester.getTopLeft(countOf('landscape-like', '30')), within(distance: 0.5, from: const Offset(561.7, 25.5)));
+    expect(tester.getTopLeft(countOf('landscape-favourite', '38')).dx, closeTo(665.7, 0.5));
+    expect(tester.widget<Text>(countOf('landscape-like', '30')).style!.fontSize, LandscapeActionTheme.countText);
+    for (final key in ['landscape-comments', 'landscape-coin', 'landscape-charge', 'landscape-share']) {
+      expect(textsOf(key), findsNothing, reason: key);
+    }
+
+    actions
+      ..likeCount = 12345
+      ..favCount = 0
+      ..changed();
+    await tester.pump();
+    expect(countOf('landscape-like', '1.2万'), findsOneWidget);
+    expect(textsOf('landscape-favourite'), findsNothing);
+    expect(centre(tester, 'landscape-like'), within(distance: 0.5, from: const Offset(555, 42)));
+  });
+
+  testWidgets('each action does what it says and keeps the controls up; 充电 toasts that it is not supported', (
+    tester,
+  ) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions));
+    await rig.mount(tester);
+
+    await tester.tap(find.byKey(const ValueKey('landscape-like')));
+    await tester.tap(find.byKey(const ValueKey('landscape-favourite')));
+    await tester.tap(find.byKey(const ValueKey('landscape-coin')));
+    await tester.tap(find.byKey(const ValueKey('landscape-share')));
+    expect(actions.calls, ['toggleLike', 'ask favourites', 'ask coin', 'ask share']);
+
+    await tester.tap(find.byKey(const ValueKey('landscape-comments')));
+    expect(rig.comments, 1);
+
+    await tester.tap(find.byKey(const ValueKey('landscape-charge')));
+    await tester.pump();
+    expect(find.text('暂不支持充电'), findsOneWidget);
+    expect(actions.calls, hasLength(4));
+    expect(rig.chrome.shows, 6);
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.text('暂不支持充电'), findsNothing);
+  });
+
+  testWidgets('liked, favourited and coined turn their glyphs solid pink, swelling as they turn on', (tester) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions));
+    await rig.mount(tester);
+
+    actions
+      ..liked = true
+      ..favorited = true
+      ..coins = 1
+      ..changed();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    for (final key in ['landscape-like', 'landscape-favourite', 'landscape-coin']) {
+      expect(iconOf(tester, key).color, BiliColors.pink, reason: key);
+      expect(iconOf(tester, key).solid, isTrue, reason: key);
+      expect(scaleOf(tester, key), greaterThan(1), reason: key);
+    }
+    for (final key in ['landscape-comments', 'landscape-charge', 'landscape-share']) {
+      expect(iconOf(tester, key).color, BiliColors.onVideo, reason: key);
+    }
+    expect(find.bySemanticsLabel('取消点赞'), findsOneWidget);
+    expect(find.bySemanticsLabel('已收藏'), findsOneWidget);
+    expect(find.bySemanticsLabel('已投币'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(scaleOf(tester, 'landscape-like'), 1);
+
+    actions
+      ..liked = false
+      ..changed();
+    await tester.pump();
+    expect(iconOf(tester, 'landscape-like').color, BiliColors.onVideo);
+    expect(iconOf(tester, 'landscape-like').solid, isFalse);
+    expect(scaleOf(tester, 'landscape-like'), 1);
+  });
+
+  testWidgets('with animations off the glyphs turn on without swelling', (tester) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions));
+    await rig.mount(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: LandscapeChrome(ui: rig.ui),
+          ),
+        ),
+      ),
+    );
+
+    actions
+      ..liked = true
+      ..changed();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(iconOf(tester, 'landscape-like').color, BiliColors.pink);
+    expect(scaleOf(tester, 'landscape-like'), 1);
+  });
+
+  testWidgets('N人正在看 sits under the title as on 04, follows the count, and is gone while unknown', (tester) async {
+    final details = FakePageDetails(actions: FakeVideoActions());
+    final rig = Rig(details: details);
+    await rig.mount(tester);
+    expect(find.byKey(const ValueKey('landscape-online')), findsNothing);
+    final title = tester.getRect(find.byKey(const ValueKey('landscape-title')));
+
+    details.online.value = '1';
+    await tester.pumpAndSettle();
+    expect(find.text('1人正在看'), findsOneWidget);
+    final online = find.byKey(const ValueKey('landscape-online'));
+    expect(tester.getTopLeft(online).dx, closeTo(115.7, 0.5));
+    expect(tester.getCenter(online).dy, closeTo(64.8, 0.5));
+    final style = tester.widget<Text>(find.text('1人正在看')).style!;
+    expect(style.color, LandscapeActionTheme.online);
+    expect(style.fontSize, 12);
+    expect(tester.getRect(find.byKey(const ValueKey('landscape-title'))), title);
+
+    details.online.value = '1000+';
+    await tester.pumpAndSettle();
+    expect(find.text('1000+人正在看'), findsOneWidget);
+
+    details.online.value = null;
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('landscape-online')), findsNothing);
+  });
+
+  testWidgets('the uploader under it: avatar and a white + 关注 that follows; 已关注 is grey with no plus', (
+    tester,
+  ) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(
+      details: FakePageDetails(
+        actions: actions,
+        online: '1',
+        uploader: const UploaderCard(
+          mid: 7,
+          name: 'PRORES 8K',
+          face: '',
+          fans: 0,
+          videos: 0,
+          isVip: false,
+          following: false,
+        ),
+      ),
+    );
+    await rig.mount(tester);
+
+    final avatar = find.byKey(const ValueKey('landscape-avatar'));
+    expect(tester.getCenter(avatar), within(distance: 0.5, from: const Offset(91, 93)));
+    expect(tester.getSize(avatar), const Size(24, 24));
+    expect(tester.getTopLeft(find.text('关注')).dx, closeTo(126.4, 1));
+    expect(tester.getCenter(find.text('关注')).dy, closeTo(93, 1));
+    expect(tester.widget<Text>(find.text('关注')).style!.color, BiliColors.onVideo);
+    final follow = find.byKey(const ValueKey('landscape-follow'));
+    expect(find.descendant(of: follow, matching: find.byType(CustomPaint)), findsOneWidget);
+
+    await tester.tap(follow);
+    expect(actions.calls, ['tapFollow']);
+    expect(rig.chrome.shows, 1);
+
+    actions
+      ..following = true
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(find.text('已关注'), findsOneWidget);
+    expect(find.text('关注'), findsNothing);
+    expect(tester.widget<Text>(find.text('已关注')).style!.color, LandscapeActionTheme.followed);
+    expect(find.descendant(of: follow, matching: find.byType(CustomPaint)), findsNothing);
+    expect(tester.getCenter(avatar), within(distance: 0.5, from: const Offset(91, 93)));
+    expect(find.bySemanticsLabel('已关注'), findsOneWidget);
+  });
+
+  testWidgets('without page details none of their parts show, and the rest is where it was', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+
+    for (final key in ['landscape-like', 'landscape-online', 'landscape-avatar', 'landscape-follow']) {
+      expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
+    }
+    expect(centre(tester, 'landscape-more'), within(distance: 1, from: const Offset(867, 42)));
+    expect(centre(tester, 'landscape-back'), within(distance: 1, from: const Offset(89, 42)));
+  });
+
+  testWidgets("before the actions: the detail's avatar and no actions; they come in place, follow a new video's", (
+    tester,
+  ) async {
+    final details = FakePageDetails();
+    final rig = Rig(details: details)
+      ..session.title = 'Dolby Vision 8K HDR 120FPS'
+      ..session.detail = detail;
+    await rig.mount(tester);
+
+    expect(find.byKey(const ValueKey('landscape-like')), findsNothing);
+    expect(find.byKey(const ValueKey('landscape-follow')), findsNothing);
+    expect(find.byKey(const ValueKey('landscape-online')), findsNothing);
+    final avatar = find.byKey(const ValueKey('landscape-avatar'));
+    expect(tester.getCenter(avatar), within(distance: 0.5, from: const Offset(91, 93)));
+    final title = tester.getRect(find.byKey(const ValueKey('landscape-title')));
+    final more = centre(tester, 'landscape-more');
+
+    details
+      ..actions = FakeVideoActions()
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(centre(tester, 'landscape-like'), within(distance: 0.5, from: const Offset(555, 42)));
+    expect(find.byKey(const ValueKey('landscape-follow')), findsOneWidget);
+    expect(tester.getRect(find.byKey(const ValueKey('landscape-title'))), title);
+    expect(centre(tester, 'landscape-more'), more);
+    expect(tester.getCenter(avatar), within(distance: 0.5, from: const Offset(91, 93)));
+
+    final next = FakeVideoActions(liked: true);
+    details
+      ..actions = next
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(iconOf(tester, 'landscape-like').color, BiliColors.pink);
+    await tester.tap(find.byKey(const ValueKey('landscape-like')));
+    expect(next.calls, ['toggleLike']);
+
+    details
+      ..actions = null
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('landscape-like')), findsNothing);
+    expect(centre(tester, 'landscape-more'), more);
+  });
+
+  testWidgets('the actions and 关注 press through accessibility too, as VoiceOver and the Windows test driver do', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions, online: '3'))..session.detail = detail;
+    await rig.mount(tester);
+
+    for (final label in ['点赞', '收藏', '投币', '分享', '关注']) {
+      tester.semantics.tap(find.semantics.byLabel(label));
+    }
+    expect(actions.calls, ['toggleLike', 'ask favourites', 'ask coin', 'ask share', 'tapFollow']);
+    tester.semantics.tap(find.semantics.byLabel('评论'));
+    expect(rig.comments, 1);
+    tester.semantics.tap(find.semantics.byLabel('充电'));
+    await tester.pump();
+    expect(find.text('暂不支持充电'), findsOneWidget);
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    semantics.dispose();
+  });
+
+  testWidgets('hidden controls take the actions and the uploader with them', (tester) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions, online: '3'))..session.detail = detail;
+    await rig.mount(tester);
+
+    rig.chrome.hide();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('landscape-like')), warnIfMissed: false);
+    await tester.tap(find.byKey(const ValueKey('landscape-follow')), warnIfMissed: false);
+    expect(actions.calls, isEmpty);
+    for (final key in ['landscape-like', 'landscape-online']) {
+      final fade = tester.widget<AnimatedOpacity>(
+        find.ancestor(of: find.byKey(ValueKey(key)), matching: find.byType(AnimatedOpacity)).first,
+      );
+      expect(fade.opacity, 0, reason: key);
+    }
   });
 
   test('speedLabel', () {

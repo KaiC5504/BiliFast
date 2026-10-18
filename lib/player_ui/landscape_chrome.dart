@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:bili_core/logic.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
+import '../shared/action_glyphs.dart';
+import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../video/actions/video_actions.dart';
 import 'panels/panel_controller.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
@@ -14,9 +18,10 @@ import 'seek_bar.dart';
 const _fade = Duration(milliseconds: 220);
 
 /// The landscape full-screen controls, filling the screen (BiliNative `LandscapeChrome.swift`, measured on 04): back
-/// and the title, ⋮, 截图 and the rotation lock on the right edge, the time, the bar and the bottom row. The bars
-/// slide in from their edges as the controls show and stand aside while a panel is open. The top actions (slice 6),
-/// 弹幕设置 and the danmaku field (slice 5) have their room kept so nothing else moves when they come.
+/// and the title with N人正在看 and the uploader under it, 点赞 评论 收藏 投币 充电 分享 and ⋮, 截图 and the rotation
+/// lock on the right edge, the time, the bar and the bottom row. The bars slide in from their edges as the controls
+/// show and stand aside while a panel is open. 弹幕设置 and the danmaku field (slice 5) have their room kept so nothing
+/// else moves when they come; so do the page details' parts until they arrive.
 class LandscapeChrome extends StatelessWidget {
   const LandscapeChrome({super.key, required this.ui});
 
@@ -33,7 +38,7 @@ class LandscapeChrome extends StatelessWidget {
   Widget build(BuildContext context) {
     final insets = MediaQuery.paddingOf(context);
     return ListenableBuilder(
-      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.orientation]),
+      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.orientation, ui.details]),
       builder: (context, _) {
         final shown = ui.chrome.visible && ui.panels.value == null;
         return IgnorePointer(
@@ -63,6 +68,16 @@ class LandscapeChrome extends StatelessWidget {
                     shown: shown,
                     from: const Offset(0, -BiliMetrics.chromeSlide),
                     child: _topBar(insets),
+                  ),
+                ),
+                Positioned(
+                  left: insets.left + BiliMetrics.landscapeEdge,
+                  right: insets.right,
+                  top: insets.top + LandscapeActionTheme.onlineTop,
+                  child: ChromeSlide(
+                    shown: shown,
+                    from: const Offset(0, -BiliMetrics.chromeSlide),
+                    child: _UploaderBlock(ui: ui, touch: _touch),
                   ),
                 ),
                 Positioned(
@@ -129,7 +144,10 @@ class LandscapeChrome extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: BiliMetrics.chromeActionsRoom),
+            SizedBox(
+              width: BiliMetrics.chromeActionsRoom,
+              child: _TopActions(ui: ui, touch: _touch),
+            ),
             ChromeTap(
               key: const ValueKey('landscape-more'),
               label: '更多',
@@ -372,6 +390,377 @@ class _TextButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+typedef _Touch = VoidCallback Function(VoidCallback action);
+
+Duration _motion(BuildContext context) => MediaQuery.disableAnimationsOf(context) ? Duration.zero : _fade;
+
+/// 点赞 评论 收藏 投币 充电 分享 at the right of the room kept before ⋮; nothing until the video's actions arrive.
+class _TopActions extends StatelessWidget {
+  const _TopActions({required this.ui, required this.touch});
+
+  final PlayerUi ui;
+  final _Touch touch;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = ui.details?.actions;
+    return AnimatedSwitcher(
+      duration: _motion(context),
+      layoutBuilder: (current, previous) =>
+          Stack(alignment: Alignment.centerRight, children: [...previous, ?current]),
+      child: actions == null
+          ? const SizedBox.shrink()
+          : ListenableBuilder(
+              key: ObjectKey(actions),
+              listenable: actions,
+              builder: (context, _) => Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  for (final action in [
+                    _TopAction(
+                      key: const ValueKey('landscape-like'),
+                      label: actions.liked ? '取消点赞' : '点赞',
+                      glyph: ActionGlyph.like,
+                      active: actions.liked,
+                      count: actions.likeCount,
+                      onTap: touch(() => unawaited(actions.toggleLike())),
+                    ),
+                    _TopAction(
+                      key: const ValueKey('landscape-comments'),
+                      label: '评论',
+                      glyph: ActionGlyph.comment,
+                      onTap: touch(() => ui.onComments?.call()),
+                    ),
+                    _TopAction(
+                      key: const ValueKey('landscape-favourite'),
+                      label: actions.favorited ? '已收藏' : '收藏',
+                      glyph: ActionGlyph.favourite,
+                      active: actions.favorited,
+                      count: actions.favCount,
+                      onTap: touch(() => actions.ask(ActionPrompt.favourites)),
+                    ),
+                    _TopAction(
+                      key: const ValueKey('landscape-coin'),
+                      label: actions.coins > 0 ? '已投币' : '投币',
+                      glyph: ActionGlyph.coin,
+                      active: actions.coins > 0,
+                      onTap: touch(() => actions.ask(ActionPrompt.coin)),
+                    ),
+                    _TopAction(
+                      key: const ValueKey('landscape-charge'),
+                      label: '充电',
+                      glyph: ActionGlyph.charge,
+                      onTap: touch(() => showToast(context, '暂不支持充电')),
+                    ),
+                    _TopAction(
+                      key: const ValueKey('landscape-share'),
+                      label: '分享',
+                      glyph: ActionGlyph.share,
+                      onTap: touch(() => actions.ask(ActionPrompt.share)),
+                    ),
+                  ]) ...[action, const SizedBox(width: LandscapeActionTheme.buttonGap)],
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+/// A 44 pt action with its count, when it has one, as a superscript at its top right (04).
+class _TopAction extends StatelessWidget {
+  const _TopAction({
+    super.key,
+    required this.label,
+    required this.glyph,
+    required this.onTap,
+    this.active = false,
+    this.count,
+  });
+
+  final String label;
+  final ActionGlyph glyph;
+  final VoidCallback onTap;
+  final bool active;
+  final int? count;
+
+  @override
+  Widget build(BuildContext context) => ChromeTap(
+    label: label,
+    square: false,
+    onTap: onTap,
+    child: SizedBox.square(
+      dimension: BiliMetrics.chromeButton,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Center(child: ActionPop(glyph, active: active)),
+          if (count case final count? when count > 0)
+            Positioned(
+              left: BiliMetrics.chromeButton / 2 + LandscapeActionTheme.countLead,
+              top: LandscapeActionTheme.countTop,
+              child: Text(
+                CountFormat.short(count),
+                maxLines: 1,
+                softWrap: false,
+                textScaler: TextScaler.noScaling,
+                style: const TextStyle(
+                  color: BiliColors.onVideo,
+                  fontSize: LandscapeActionTheme.countText,
+                  height: 1,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// An action's outline glyph, solid and pink while on (as BiliNative's `.fill` icons); it swells and settles as it
+/// turns on.
+class ActionPop extends StatefulWidget {
+  const ActionPop(this.glyph, {super.key, required this.active, this.size = LandscapeActionTheme.iconSize});
+
+  final ActionGlyph glyph;
+  final bool active;
+  final double size;
+
+  @override
+  State<ActionPop> createState() => _ActionPopState();
+}
+
+class _ActionPopState extends State<ActionPop> with SingleTickerProviderStateMixin {
+  late final AnimationController _pop = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 480),
+    value: 1,
+  );
+  late final Animation<double> _scale = _pop.drive(
+    TweenSequence([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: LandscapeActionTheme.pop).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: LandscapeActionTheme.pop, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 70,
+      ),
+    ]),
+  );
+
+  @override
+  void didUpdateWidget(ActionPop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active && !MediaQuery.disableAnimationsOf(context)) _pop.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ScaleTransition(
+    scale: _scale,
+    child: ActionIcon(
+      widget.glyph,
+      solid: widget.active,
+      size: widget.size,
+      color: widget.active ? BiliColors.pink : BiliColors.onVideo,
+    ),
+  );
+}
+
+/// N人正在看 and the uploader's avatar with + 关注 under the title. Each keeps its line whether or not it has arrived.
+class _UploaderBlock extends StatelessWidget {
+  const _UploaderBlock({required this.ui, required this.touch});
+
+  final PlayerUi ui;
+  final _Touch touch;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = ui.details;
+    final owner = ui.session.detail?.owner;
+    final face = details?.uploader?.face ?? (owner == null || owner.mid == 0 ? null : owner.face);
+    final actions = details?.actions;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: LandscapeActionTheme.onlineHeight,
+          child: Padding(
+            padding: const EdgeInsets.only(left: BiliMetrics.chromeButton + LandscapeActionTheme.onlineInset),
+            child: details == null ? null : _Online(online: details.online),
+          ),
+        ),
+        SizedBox(
+          height: LandscapeActionTheme.uploaderHeight,
+          child: face == null
+              ? null
+              : Row(
+                  children: [
+                    const SizedBox(width: LandscapeActionTheme.avatarInset),
+                    ClipOval(
+                      key: const ValueKey('landscape-avatar'),
+                      child: SizedBox.square(
+                        dimension: LandscapeActionTheme.avatar,
+                        child: RemoteImage(
+                          face,
+                          size: const Size.square(LandscapeActionTheme.avatar),
+                          placeholder: const ColoredBox(color: BiliColors.landscapeEndPlaceholder),
+                        ),
+                      ),
+                    ),
+                    if (actions != null) _Follow(actions: actions, touch: touch),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Online extends StatelessWidget {
+  const _Online({required this.online});
+
+  final ValueListenable<String?> online;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: online,
+    builder: (context, count, _) => AnimatedSwitcher(
+      duration: _motion(context),
+      layoutBuilder: (current, previous) =>
+          Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+      child: count == null
+          ? const SizedBox.shrink()
+          : Row(
+              key: const ValueKey('landscape-online'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CustomPaint(
+                  size: Size(LandscapeActionTheme.onlineIconWidth, LandscapeActionTheme.onlineIconHeight),
+                  painter: _OnlinePainter(),
+                ),
+                const SizedBox(width: LandscapeActionTheme.onlineGap),
+                Text(
+                  '$count人正在看',
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(color: LandscapeActionTheme.online, fontSize: LandscapeActionTheme.onlineText),
+                ),
+              ],
+            ),
+    ),
+  );
+}
+
+/// 04's + 关注 is white text with a thin plus and no pill; 已关注 is grey.
+class _Follow extends StatelessWidget {
+  const _Follow({required this.actions, required this.touch});
+
+  final VideoActions actions;
+  final _Touch touch;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: actions,
+    builder: (context, _) {
+      final following = actions.following;
+      return ChromeTap(
+        key: const ValueKey('landscape-follow'),
+        label: following ? '已关注' : '关注',
+        square: false,
+        onTap: touch(actions.tapFollow),
+        child: SizedBox(
+          height: LandscapeActionTheme.uploaderHeight,
+          child: Padding(
+            padding: const EdgeInsets.only(left: LandscapeActionTheme.avatarGap, right: BiliMetrics.chromeTextPad),
+            child: AnimatedSwitcher(
+              duration: _motion(context),
+              layoutBuilder: (current, previous) =>
+                  Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+              child: Row(
+                key: ValueKey(following),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!following) ...[
+                    const CustomPaint(
+                      size: Size.square(LandscapeActionTheme.plus),
+                      painter: FollowPlusPainter(color: BiliColors.onVideo, stroke: LandscapeActionTheme.plusStroke),
+                    ),
+                    const SizedBox(width: LandscapeActionTheme.plusGap),
+                  ],
+                  Text(
+                    following ? '已关注' : '关注',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: following ? LandscapeActionTheme.followed : BiliColors.onVideo,
+                      fontSize: LandscapeActionTheme.followText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// The thin plus before 关注.
+class FollowPlusPainter extends CustomPainter {
+  const FollowPlusPainter({required this.color, required this.stroke});
+
+  final Color color;
+  final double stroke;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = stroke;
+    canvas
+      ..drawLine(Offset(0, size.height / 2), Offset(size.width, size.height / 2), paint)
+      ..drawLine(Offset(size.width / 2, 0), Offset(size.width / 2, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(FollowPlusPainter oldDelegate) => oldDelegate.color != color || oldDelegate.stroke != stroke;
+}
+
+/// 04's viewers glyph, traced on its 13 × 11 box: a head open at the bottom into two flared legs, and a second
+/// person's edge behind it to the right.
+class _OnlinePainter extends CustomPainter {
+  const _OnlinePainter();
+
+  static const _grid = Size(LandscapeActionTheme.onlineIconWidth, LandscapeActionTheme.onlineIconHeight);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = _traced(_grid, size);
+    final scale = size.width / _grid.width;
+    final front = p(4.53, 4.65);
+    final back = p(9.2, 5.57);
+    final path = Path()
+      ..moveToPoint(p(0.31, 10.84))
+      ..arcTo(Rect.fromCircle(center: front, radius: 4.22 * scale), 121.7 * math.pi / 180, 298 * math.pi / 180, false)
+      ..lineToPoint(p(8.78, 10.84))
+      ..arcTo(Rect.fromCircle(center: back, radius: 3.47 * scale), -73 * math.pi / 180, 134 * math.pi / 180, true)
+      ..lineToPoint(p(12.67, 10.84));
+    canvas.drawPath(path, _line(LandscapeActionTheme.online, LandscapeActionTheme.onlineIconStroke));
+  }
+
+  @override
+  bool shouldRepaint(_OnlinePainter oldDelegate) => false;
 }
 
 /// 弹 on a little TV: a pink tick in its corner while danmaku show, a cross while they are off.
