@@ -901,7 +901,7 @@ abstract final class IntroListTheme {
   /// so 03's long two are 133.3 wide, as three long ones would fill it.
   static const chipHeight = 26.0;
   static const chipLead = 10.0;
-  static const chipTrailing = 34 / 3;
+  static const chipTrailing = 32 / 3;
   static const chipGap = 8.0;
   static const chipText = 12.0;
   static const chipIconGap = 5.5;
@@ -1146,6 +1146,9 @@ abstract final class LandscapeActionTheme {
   static const cornerGap = 4.9;
   static const cornerText = 9.0;
   static const corner = Color(0x59FFFFFF);
+
+  /// Under the end screen's dim 27 shows the corner at about 22% white where the dim alone leaves 38%.
+  static const cornerUnderEndOpacity = 0.58;
 
   /// The uploader's avatar and + 关注 on the line below, centred 93 pt down.
   static const uploaderHeight = 40.4;

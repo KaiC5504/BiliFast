@@ -733,7 +733,14 @@ class LandscapeCornerOnline extends StatelessWidget {
         '$count人正在看',
         maxLines: 1,
         softWrap: false,
-        style: fullScreenText.copyWith(color: LandscapeActionTheme.corner, fontSize: LandscapeActionTheme.cornerText),
+        // Outside the chrome's DefaultTextStyle, so nothing ambient (Material's spacing and line height) may leak in.
+        style: fullScreenText.copyWith(
+          color: LandscapeActionTheme.corner,
+          fontSize: LandscapeActionTheme.cornerText,
+          fontWeight: FontWeight.normal,
+          letterSpacing: 0,
+          height: 1,
+        ),
       ),
     ],
   );

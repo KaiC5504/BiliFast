@@ -71,7 +71,10 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
       fit: StackFit.expand,
       children: [
         // Under the dim, as on 27.
-        LandscapeCornerOnline(ui: ui, shown: true),
+        Opacity(
+          opacity: LandscapeActionTheme.cornerUnderEndOpacity,
+          child: LandscapeCornerOnline(ui: ui, shown: true),
+        ),
         ListenableBuilder(
           listenable: Listenable.merge([ui.session, ui.details]),
           builder: (context, _) => ListenableBuilder(

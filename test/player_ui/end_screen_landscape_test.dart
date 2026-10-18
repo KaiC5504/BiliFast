@@ -219,7 +219,9 @@ void main() {
     expect(tester.getCenter(corner).dy, closeTo(430.3, 0.5));
     expect(corner.hitTestable(), findsNothing);
     final layers = tester.widget<Stack>(find.byKey(const ValueKey('end-landscape-layers')));
-    expect(layers.children.first, isA<LandscapeCornerOnline>(), reason: 'painted before the dim, so it sits under it');
+    final under = layers.children.first as Opacity;
+    expect(under.child, isA<LandscapeCornerOnline>(), reason: 'painted before the dim, so it sits under it');
+    expect(under.opacity, LandscapeActionTheme.cornerUnderEndOpacity, reason: '27 dims it further than the dim alone');
 
     details.online.value = null;
     await tester.pumpAndSettle();
