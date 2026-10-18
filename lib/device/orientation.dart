@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
 import 'device_controls.dart';
+import 'orientation_host.dart';
 
 enum Presentation {
   inline,
@@ -13,13 +17,27 @@ enum Presentation {
 }
 
 /// Full screen is the same page laid out again, never a new route (port of BiliNative `OrientationController.swift`).
-/// The rules live here; the host only applies masks and reports the phone's orientation.
+/// The rules live here; the host only applies masks and reports the phone's orientation. Without a host (Windows)
+/// every move applies at once.
 ///
 /// Pages stack: the latest [begin] wins, and a covered page's late [end] does nothing.
 class OrientationController extends ChangeNotifier {
-  OrientationController({DeviceControls? controls}) : controls = controls ?? NoDeviceControls();
+  OrientationController({DeviceControls? controls, OrientationHost? host, Logger? logger})
+      : controls = controls ?? NoDeviceControls(),
+        _host = host,
+        _logger = logger ?? Logger.shared {
+    if (host != null) {
+      _subscriptions = [
+        host.deviceOrientations.listen(_deviceOrientationChanged),
+        host.refusals.listen((refusal) => _refused(refusal.request, refusal.error)),
+      ];
+    }
+  }
 
   final DeviceControls controls;
+  final OrientationHost? _host;
+  final Logger _logger;
+  List<StreamSubscription<Object?>> _subscriptions = const [];
 
   Presentation get presentation => _presentation;
   Presentation _presentation = Presentation.inline;
@@ -32,10 +50,33 @@ class OrientationController extends ChangeNotifier {
   bool _videoIsVertical = false;
 
   Object? _owner;
+  bool _observing = false;
+  PhoneOrientation? _lastDeviceOrientation;
 
+  /// Landscape was entered by the button with the phone flat or upright. Lifting it off the table reports portrait
+  /// before anyone has turned it, so portrait only exits once the phone has really been landscape.
+  bool _awaitingLandscape = false;
+
+  /// Bumped by every move, so a late refusal cannot undo a newer one.
+  int _requests = 0;
+  ({int request, Presentation previous, Presentation next})? _lastMove;
+  Future<void> _hostQueue = Future.value();
+
+  /// The most recent begin wins. A page shown again calls it too, so its own vertical flag comes back.
   void begin(Object owner, {required bool videoIsVertical}) {
-    _owner = owner;
+    if (!identical(_owner, owner)) {
+      if (_owner != null) {
+        // The previous page is covered or being popped: its lock and full screen are not this page's.
+        _locked = false;
+        if (_presentation != Presentation.inline) exitToInline();
+      }
+      _owner = owner;
+    }
     _videoIsVertical = videoIsVertical;
+    if (!_observing) {
+      _observing = true;
+      _host?.setOrientationEvents(true).catchError(_hostFailed);
+    }
     notifyListeners();
   }
 
@@ -45,27 +86,138 @@ class OrientationController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Does nothing unless [owner] began last.
   void end(Object owner) {
     if (!identical(_owner, owner)) return;
     _owner = null;
+    if (_observing) {
+      _observing = false;
+      _lastDeviceOrientation = null;
+      _host?.setOrientationEvents(false).catchError(_hostFailed);
+    }
     _locked = false;
     _videoIsVertical = false;
-    _move(Presentation.inline);
+    if (_presentation != Presentation.inline) exitToInline();
+    notifyListeners();
   }
 
   void toggleLock() {
     _locked = !_locked;
     notifyListeners();
+    // Locked landscape keeps the side it is on, so the mask changes with the lock.
+    if (_presentation == Presentation.landscape) _apply(_requests);
   }
 
-  void enterLandscape() => _move(Presentation.landscape);
+  void enterLandscape() {
+    _awaitingLandscape = !(_lastDeviceOrientation?.isLandscape ?? false);
+    _move(Presentation.landscape);
+    final host = _host;
+    if (host == null || !_awaitingLandscape) return;
+    // The last event may be older than the phone's turn; ask, as Swift read UIDevice at once.
+    final request = _requests;
+    host.deviceOrientation().then((orientation) {
+      if (request == _requests && orientation.isLandscape) _awaitingLandscape = false;
+    }, onError: _hostFailed);
+  }
 
   void enterVertical() => _move(Presentation.vertical);
 
   void exitToInline() => _move(Presentation.inline);
 
+  @override
+  void dispose() {
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    super.dispose();
+  }
+
+  void _deviceOrientationChanged(PhoneOrientation orientation) {
+    // Events still in flight after end belong to no page.
+    if (!_observing) return;
+    _lastDeviceOrientation = orientation;
+    if (orientation.isLandscape) _awaitingLandscape = false;
+    if (_locked || _videoIsVertical) return;
+    switch (_presentation) {
+      case Presentation.inline when orientation.isLandscape:
+        _move(Presentation.landscape);
+      case Presentation.landscape when orientation == PhoneOrientation.portrait && !_awaitingLandscape:
+        exitToInline();
+      default:
+        break;
+    }
+  }
+
+  /// Asks the host again even when the presentation is unchanged, so a refused rotation can be retried.
   void _move(Presentation next) {
+    final previous = _presentation;
+    if (next != previous) {
+      _logger.info(LogCategory.ui, 'presentation', {'from': previous.name, 'to': next.name});
+      _present(next);
+    }
+    if (next == Presentation.inline) _awaitingLandscape = false;
+    final request = ++_requests;
+    _lastMove = (request: request, previous: previous, next: next);
+    _apply(request);
+  }
+
+  void _refused(int request, String error) {
+    _logger.warn(LogCategory.ui, 'orientation request refused', {'error': error});
+    final move = _lastMove;
+    if (move == null || request != _requests || move.request != request) return;
+    // Going back inline is never undone: the page may be closing, and portrait is the safe state.
+    if (_presentation != move.next || move.next == Presentation.inline || move.previous == move.next) return;
+    _logger.info(
+      LogCategory.ui,
+      'presentation',
+      {'from': move.next.name, 'to': move.previous.name, 'reason': 'rotation refused'},
+    );
+    _present(move.previous);
+    if (move.previous == Presentation.inline) _awaitingLandscape = false;
+    _apply(request);
+  }
+
+  void _present(Presentation next) {
+    final wasFullScreen = _presentation.fullScreen;
     _presentation = next;
+    if (next.fullScreen != wasFullScreen) {
+      (next.fullScreen ? controls.enterFullScreen() : controls.leaveFullScreen()).catchError(_controlsFailed);
+    }
     notifyListeners();
   }
+
+  /// Requests go out in order, so the last one sent is always the latest presentation's.
+  void _apply(int request) {
+    final host = _host;
+    if (host == null) return;
+    final presentation = _presentation;
+    final locked = _locked;
+    _hostQueue = _hostQueue.then((_) async {
+      try {
+        await host.requestOrientations(request, await _mask(host, presentation, locked: locked));
+      } catch (error) {
+        _hostFailed(error);
+      }
+    });
+  }
+
+  static Future<OrientationMask> _mask(OrientationHost host, Presentation presentation, {required bool locked}) async {
+    switch (presentation) {
+      case Presentation.inline || Presentation.vertical:
+        return OrientationMask.portrait;
+      case Presentation.landscape:
+        // Locked in landscape keeps the side it is on rather than flipping with the phone.
+        if (!locked) return OrientationMask.landscape;
+        return switch (await host.interfaceOrientation()) {
+          ScreenOrientation.landscapeLeft => OrientationMask.landscapeLeft,
+          ScreenOrientation.landscapeRight => OrientationMask.landscapeRight,
+          _ => OrientationMask.landscape,
+        };
+    }
+  }
+
+  void _hostFailed(Object error) => _logger.warn(LogCategory.ui, 'orientation host failed', {'error': '$error'});
+
+  void _controlsFailed(Object error) =>
+      _logger.warn(LogCategory.ui, 'full screen device controls failed', {'error': '$error'});
 }
