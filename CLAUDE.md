@@ -88,6 +88,28 @@ with what was built, how it works and numbered test steps. For phone slices, inc
     - the cover Hero remounting mid-flight;
     - swipe back firing on vertical drags.
   - Worktrees start at an old commit: each fix agent must fast-forward to the contracts commit first.
+- 2026-10-19: slice 4 (player interaction), shipped as 1.0.0 (5), the first slice run through
+  `.claude/skills/running-a-slice` (designed with KaiC).
+  - Built by seven agents against a contracts commit:
+    - native rotation, brightness and volume (`lib/device/`, `DeviceChannel.swift`, `DeviceControls.swift`; the
+      rules live in Dart);
+    - gestures and the HUD;
+    - the small player's controls;
+    - the landscape and 竖屏 controls;
+    - the panels (清晰度, 编码, 倍速, ⋮, 选集);
+    - the page's player session (speed kept across parts, 自动连播, loops, 定时关闭, saved settings);
+    - the page.
+  - Ten checking agents, then five fixers, a tidy-up and a final round.
+  - KaiC's rules from this slice:
+    - Swipe back starts only from the left edge.
+    - The UI must match the official app's screenshots in `local/official-app-reference/` (his iPhone 17 Pro Max,
+      440×956 pt); look-alike agents render our screens and pass or fail each one.
+    - Nothing ships until every button is pressed on Windows and its effect confirmed.
+  - That run found the buttons pressed nothing through accessibility (VoiceOver included); fixed.
+  - The Windows app now runs as the phone: 440×956 with the safe areas and a drawn status bar, turned sideways for
+    landscape full screen.
+  - Left for later slices: danmaku settings and the send field (5); actions, 关注, the uploader's VIP colour, N人正在看
+    and search (6). Pasted links now carry their 合集 with no extra call.
 - Update this section when a slice finishes.
 
 ## Layout
@@ -96,7 +118,12 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   - `lib/account/`: keychain and cookie persistence.
   - `lib/app/`: routes and `AppScope` (the services every page reaches, the shared player among them).
   - `lib/home/`: home, the feed, the avatar menu and 最近打开.
-  - `lib/video/`: the video page and the watch-progress reporter.
+  - `lib/video/`: the video page, its player session (`page_session.dart`, `player_prefs.dart`) and the
+    watch-progress reporter.
+  - `lib/player_ui/`: the player's controls for each presentation, gestures, the HUD, the end screens, and
+    `panels/`.
+  - `lib/device/`: rotation (`orientation.dart`, the rules) and brightness/volume, over `DeviceChannel.swift`.
+  - `lib/app/phone_frame.dart`: Windows only; the window as KaiC's iPhone.
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`. One library per Swift
   module: `shared.dart`, `devlog.dart`, `danmaku.dart`, `api.dart`, `logic.dart`.
@@ -118,8 +145,10 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 - Core: `fvm dart test` in `packages/bili_core`.
 - App: `fvm flutter analyze` and `fvm flutter test` at the root.
 - Workflows: `uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s test_ci`.
-- Windows app: `fvm flutter build windows --release`, then `build\windows\x64\runner\Release\bilifast.exe` (440×880
-  window). It runs logged out; there is no keychain on Windows.
+- Windows app: `fvm flutter build windows --release`, then `build\windows\x64\runner\Release\bilifast.exe`. The window
+  is KaiC's iPhone: 440×956 with its safe areas and a drawn status bar, turned to 956×440 for landscape full screen.
+  It runs logged out; there is no keychain on Windows. Every button answers accessibility presses, so ghosthand can
+  drive the player (`视频画面` toggles the controls).
 - GitHub runs nothing on push. `testflight.yml` is the only workflow (KaiC's call, 2026-10-18: keep only the
   workflows that matter, such as shipping to TestFlight). Tests run in the local gate; a dry run of the signed build
   is the iOS compile check. Don't add a workflow without asking; `test_ci` fails if one appears.
