@@ -249,6 +249,44 @@ void main() {
       expect(controls.calls, ['enter', 'leave']);
     });
 
+    test('a request that fails moves back to the previous presentation', () async {
+      host.failing.add(1);
+      orientation.enterLandscape();
+      await settle();
+      expect(orientation.presentation, Presentation.inline);
+      expect(controls.calls, ['enter', 'leave']);
+      expect(presentationLogs().last, {'from': 'landscape', 'to': 'inline', 'reason': 'request failed'});
+      expect(logs.events.where((event) => event.msg == 'orientation host failed'), isNotEmpty);
+    });
+
+    test('a landscape whose side cannot be read moves back, then asks for portrait', () async {
+      host.interfaceError = StateError('no window scene');
+      orientation.toggleLock();
+      orientation.enterLandscape();
+      await settle();
+      expect(orientation.presentation, Presentation.inline);
+      expect(host.requests, [(1, OrientationMask.portrait)]);
+    });
+
+    test('a failure of an older request cannot undo a newer move', () async {
+      host.failing.add(1);
+      orientation.enterLandscape();
+      orientation.enterVertical();
+      await settle();
+      expect(orientation.presentation, Presentation.vertical);
+      expect(host.requests, [(2, OrientationMask.portrait)]);
+    });
+
+    test('a failed move inline is never undone', () async {
+      orientation.enterLandscape();
+      await settle();
+      host.failing.add(2);
+      orientation.exitToInline();
+      await settle();
+      expect(orientation.presentation, Presentation.inline);
+      expect(controls.calls, ['enter', 'leave']);
+    });
+
     test('locked in landscape keeps the side it is on', () async {
       host.screen = ScreenOrientation.landscapeLeft;
       orientation.enterLandscape();

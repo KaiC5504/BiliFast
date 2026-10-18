@@ -179,7 +179,8 @@ protocol DeviceHostApi {
   func saveBrightness() throws
   func restoreBrightness() throws
   func volume() throws -> Double
-  /// Through the hidden MPVolumeView's slider; does nothing while that view is detached.
+  /// Through the hidden MPVolumeView's slider; does nothing while that view is detached, and throws
+  /// `no-volume-slider` when it is attached but has no slider.
   func setVolume(value: Double) throws
   /// The hidden MPVolumeView, there only in full screen, which also keeps the system volume HUD away.
   func attachVolumeView() throws
@@ -320,7 +321,8 @@ class DeviceHostApiSetup {
     } else {
       volumeChannel.setMessageHandler(nil)
     }
-    /// Through the hidden MPVolumeView's slider; does nothing while that view is detached.
+    /// Through the hidden MPVolumeView's slider; does nothing while that view is detached, and throws
+    /// `no-volume-slider` when it is attached but has no slider.
     let setVolumeChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.setVolume\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       setVolumeChannel.setMessageHandler { message, reply in

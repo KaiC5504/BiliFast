@@ -10,6 +10,12 @@ final class FakeOrientationHost implements OrientationHost {
   final events = <bool>[];
   final requests = <(int, OrientationMask)>[];
 
+  /// Requests that throw rather than reach the screen, as a channel that fails.
+  final failing = <int>{};
+
+  /// Thrown by [interfaceOrientation] while set.
+  Object? interfaceError;
+
   final _orientations = StreamController<PhoneOrientation>.broadcast(sync: true);
   final _refusals = StreamController<OrientationRefusal>.broadcast(sync: true);
 
@@ -34,10 +40,16 @@ final class FakeOrientationHost implements OrientationHost {
   Future<PhoneOrientation> deviceOrientation() async => phone;
 
   @override
-  Future<ScreenOrientation> interfaceOrientation() async => screen;
+  Future<ScreenOrientation> interfaceOrientation() async {
+    if (interfaceError case final error?) throw error;
+    return screen;
+  }
 
   @override
-  Future<void> requestOrientations(int request, OrientationMask mask) async => requests.add((request, mask));
+  Future<void> requestOrientations(int request, OrientationMask mask) async {
+    if (failing.contains(request)) throw StateError('channel closed');
+    requests.add((request, mask));
+  }
 
   @override
   Stream<OrientationRefusal> get refusals => _refusals.stream;

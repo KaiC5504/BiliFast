@@ -298,7 +298,8 @@ class DeviceHostApi {
     return pigeonVar_replyValue! as double;
   }
 
-  /// Through the hidden MPVolumeView's slider; does nothing while that view is detached.
+  /// Through the hidden MPVolumeView's slider; does nothing while that view is detached, and throws
+  /// `no-volume-slider` when it is attached but has no slider.
   Future<void> setVolume(double value) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.setVolume$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

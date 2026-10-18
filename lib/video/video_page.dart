@@ -98,6 +98,12 @@ class _VideoPageState extends State<VideoPage> {
   Presentation get _presentation => _owning && !_left ? _orientation.presentation : Presentation.inline;
 
   @override
+  void initState() {
+    super.initState();
+    _panels.addListener(_panelChanged);
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_services == null) {
@@ -111,11 +117,15 @@ class _VideoPageState extends State<VideoPage> {
     _current = current;
     if (!current) {
       _owning = false;
+      _session?.active = false;
     } else if (covered) {
       // Shown again after the page above popped: this page takes the orientation back. Not during this build, since
       // the orientation's other listeners would rebuild inside it.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _claimOrientation();
+        if (!mounted) return;
+        _claimOrientation();
+        final controller = _controller;
+        if (controller != null && _isMine(controller)) _session?.active = true;
       });
     }
   }
@@ -204,6 +214,7 @@ class _VideoPageState extends State<VideoPage> {
       }
       if (controller.phase == PlaybackPhase.playing) _played = true;
     });
+    _syncAutoHide();
   }
 
   void _sessionChanged() {
@@ -235,7 +246,7 @@ class _VideoPageState extends State<VideoPage> {
     _applySystemUi();
   }
 
-  /// Full screen keeps the status bar, light on black as in screens 04 and 09, and hides the home indicator.
+  /// Full screen keeps the status bar, light on black as in 04 and 09, and hides the home indicator.
   void _applySystemUi() {
     final immersive = _presentation.fullScreen;
     if (immersive == (_immersive ?? false)) return;
@@ -249,12 +260,26 @@ class _VideoPageState extends State<VideoPage> {
 
   void _syncAutoHide() {
     final session = _session;
-    if (session == null) return;
-    _chrome.autoHide = session.readout.wantsPlay && session.scrubbing.value == null && _panels.value == null;
+    final controller = _controller;
+    if (session == null || controller == null) return;
+    // Another part opening on the page keeps the last one's status until its own load starts, so the phase counts.
+    _chrome.autoHide = _isMine(controller) &&
+        controller.phase == PlaybackPhase.playing &&
+        session.readout.wantsPlay &&
+        session.scrubbing.value == null &&
+        _panels.value == null;
   }
 
+  /// Rebuilds the PopScope, which lets a pop through only with no panel open.
+  void _panelChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Back closes an open panel first, in every presentation.
   void _back() {
-    if (_presentation.fullScreen) {
+    if (_panels.value != null) {
+      _panels.close();
+    } else if (_presentation.fullScreen) {
       _orientation.exitToInline();
     } else {
       unawaited(Navigator.of(context).maybePop());
@@ -278,6 +303,7 @@ class _VideoPageState extends State<VideoPage> {
     if (_left) return;
     _left = true;
     _owning = false;
+    _session?.active = false;
     final controller = _controller;
     controller?.removeListener(_follow);
     unawaited(_reporter?.leave());
@@ -308,6 +334,7 @@ class _VideoPageState extends State<VideoPage> {
   void dispose() {
     _leave(fromDispose: true);
     _services?.device.orientation.removeListener(_presentationChanged);
+    _panels.removeListener(_panelChanged);
     _autoHideInputs?.removeListener(_syncAutoHide);
     final session = _session;
     session?.removeListener(_sessionChanged);
@@ -326,10 +353,12 @@ class _VideoPageState extends State<VideoPage> {
     final mine = controller != null && _isMine(controller);
     final ui = mine ? _ui : null;
     return PopScope<Object?>(
-      canPop: !fullScreen,
+      canPop: !fullScreen && _panels.value == null,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           setState(_leave);
+        } else if (_panels.value != null) {
+          _panels.close();
         } else if (_presentation.fullScreen) {
           _orientation.exitToInline();
         }

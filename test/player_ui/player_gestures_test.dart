@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
@@ -21,21 +22,33 @@ final class RecordingDevice implements DeviceControls {
   final sets = <String>[];
   final hardware = StreamController<double>.broadcast(sync: true);
 
+  /// Thrown by the reads, or by the sets once recorded, while set.
+  Object? readError;
+  Object? setError;
+
   @override
-  Future<double> brightness() async => brightnessLevel;
+  Future<double> brightness() async {
+    if (readError case final error?) throw error;
+    return brightnessLevel;
+  }
 
   @override
   Future<void> setBrightness(double value) async {
     sets.add('brightness $value');
+    if (setError case final error?) throw error;
     brightnessLevel = value;
   }
 
   @override
-  Future<double> volume() async => volumeLevel;
+  Future<double> volume() async {
+    if (readError case final error?) throw error;
+    return volumeLevel;
+  }
 
   @override
   Future<void> setVolume(double value) async {
     sets.add('volume $value');
+    if (setError case final error?) throw error;
     volumeLevel = value;
   }
 
@@ -139,6 +152,25 @@ void main() {
       await tester.pump(_tapSettles);
       expect(rig.chrome.visible, isTrue);
       expect(rig.calls, isEmpty);
+    });
+
+    testWidgets('the picture is a button VoiceOver and the test driver can tap, which toggles the controls',
+        (tester) async {
+      final semantics = tester.ensureSemantics();
+      await rig.mountInline(tester);
+      expect(
+        tester.getSemantics(find.byType(PlayerGestureLayer)),
+        isSemantics(label: '视频画面', isButton: true, hasTapAction: true),
+      );
+      final picture = find.semantics.byLabel('视频画面');
+      tester.semantics.tap(picture);
+      await tester.pump();
+      expect(rig.chrome.visible, isFalse, reason: 'at once, with no double-tap window');
+      tester.semantics.tap(picture);
+      await tester.pump();
+      expect(rig.chrome.visible, isTrue);
+      expect(rig.calls, isEmpty);
+      semantics.dispose();
     });
 
     testWidgets('a double tap plays or pauses and shows the controls, without toggling them', (tester) async {
@@ -449,6 +481,40 @@ void main() {
       expect(rig.device.sets.where((set) => set.startsWith('brightness')), isEmpty);
       expect(rig.chrome.hud.value, isNull);
       await tester.pump(_tapSettles);
+    });
+
+    testWidgets('a level the device refuses to set clears the HUD and logs once, not once per move', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      rig.device.setError = StateError('no volume slider');
+      await rig.mountFullScreen(tester);
+      final gesture = await tester.startGesture(const Offset(600, 400));
+      for (var i = 0; i < 6; i++) {
+        await gesture.moveBy(const Offset(0, -25), timeStamp: Duration(milliseconds: 16 * (i + 1)));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(rig.chrome.hud.value, isNull);
+      expect(rig.device.sets, hasLength(1), reason: 'the drag stops setting after the first failure');
+      expect(logs.events.where((event) => event.msg == 'volume gesture failed'), hasLength(1));
+      await gesture.up();
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('a level the device cannot read shows nothing and logs once per drag', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      rig.device.readError = StateError('no screen');
+      await rig.mountFullScreen(tester);
+      for (var drag = 0; drag < 2; drag++) {
+        await tester.timedDragFrom(const Offset(200, 400), const Offset(0, -150), thumb(150));
+        await tester.pump(_tapSettles);
+      }
+      expect(rig.chrome.hud.value, isNull);
+      expect(rig.device.sets, isEmpty);
+      expect(logs.events.where((event) => event.msg == 'brightness gesture failed'), hasLength(2));
+      expect(logs.events.where((event) => event.msg == 'brightness gesture failed').first.level, LogLevel.warn);
     });
 
     testWidgets('sideways still seeks in full screen', (tester) async {

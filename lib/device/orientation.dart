@@ -42,7 +42,8 @@ class OrientationController extends ChangeNotifier {
   Presentation get presentation => _presentation;
   Presentation _presentation = Presentation.inline;
 
-  /// The rotation lock: turning the phone does nothing until it is lifted; it lasts until the page ends.
+  /// The rotation lock: turning the phone does nothing while it is on; it ends with the page, or when another page
+  /// begins.
   bool get locked => _locked;
   bool _locked = false;
 
@@ -163,6 +164,11 @@ class OrientationController extends ChangeNotifier {
 
   void _refused(int request, String error) {
     _logger.warn(LogCategory.ui, 'orientation request refused', {'error': error});
+    _revert(request, 'rotation refused');
+  }
+
+  /// A failed request leaves the screen as it was, so the presentation goes back to match it.
+  void _revert(int request, String reason) {
     final move = _lastMove;
     if (move == null || request != _requests || move.request != request) return;
     // Going back inline is never undone: the page may be closing, and portrait is the safe state.
@@ -170,7 +176,7 @@ class OrientationController extends ChangeNotifier {
     _logger.info(
       LogCategory.ui,
       'presentation',
-      {'from': move.next.name, 'to': move.previous.name, 'reason': 'rotation refused'},
+      {'from': move.next.name, 'to': move.previous.name, 'reason': reason},
     );
     _present(move.previous);
     if (move.previous == Presentation.inline) _awaitingLandscape = false;
@@ -197,6 +203,7 @@ class OrientationController extends ChangeNotifier {
         await host.requestOrientations(request, await _mask(host, presentation, locked: locked));
       } catch (error) {
         _hostFailed(error);
+        _revert(request, 'request failed');
       }
     });
   }

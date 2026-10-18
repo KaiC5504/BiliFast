@@ -59,6 +59,7 @@ enum DeviceControls {
     if fresh {
       Task { @MainActor in
         try? await Task.sleep(for: .milliseconds(50))
+        guard attached, volumeView?.window != nil else { return }
         lastOwnVolumeChange = Date()
         slider.value = level
       }
@@ -99,6 +100,7 @@ enum DeviceControls {
     volumeView?.removeFromSuperview()
     // Inside the window's bounds: a view placed off screen may no longer keep the system HUD away.
     let view = MPVolumeView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+    // 0.01, not 0 or hidden: an invisible MPVolumeView no longer keeps the system HUD away.
     view.alpha = 0.01
     view.isUserInteractionEnabled = false
     window.addSubview(view)
