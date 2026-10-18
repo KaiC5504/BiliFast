@@ -3,8 +3,8 @@ import UIKit
 
 /// The link field's paste button for Dart's PasteButton: the system's UIPasteControl, which pastes without the
 /// "Allow Paste?" prompt that reading UIPasteboard from code brings up on every tap (the Swift app used SwiftUI's
-/// PasteButton). Each view has its own `bilifast/paste_control/<id>` channel: `paste` with the text (empty when
-/// none loaded) goes to Dart, `setEnabled` comes from it.
+/// PasteButton). Each view has its own `bilifast/paste_control/<id>` channel to Dart: `paste` with the text (empty
+/// when none loaded), and `layout` once with the room it got against the room it wants.
 enum PasteControl {
   static let viewType = "bilifast/paste_control"
 
@@ -24,23 +24,13 @@ final class PasteControlFactory: NSObject, FlutterPlatformViewFactory {
 
   func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
     let params = args as? [String: Any]
-    let tint = Self.color((params?["color"] as? NSNumber)?.int64Value ?? 0)
-    let enabled = params?["enabled"] as? Bool ?? true
+    let fill = Self.color((params?["fill"] as? NSNumber)?.int64Value ?? 0)
+    let glyph = Self.color((params?["glyph"] as? NSNumber)?.int64Value ?? 0xFFFF_FFFF)
     let channel = FlutterMethodChannel(name: "\(PasteControl.viewType)/\(viewId)", binaryMessenger: messenger)
     let target: PasteTargetView = MainActor.assumeIsolated {
-      PasteTargetView(frame: frame, tint: tint, enabled: enabled, channel: channel)
+      PasteTargetView(frame: frame, fill: fill, glyph: glyph, channel: channel)
     }
-    channel.setMethodCallHandler { [weak target] call, result in
-      switch call.method {
-      case "setEnabled":
-        let enabled = call.arguments as? Bool ?? true
-        MainActor.assumeIsolated { target?.setEnabled(enabled) }
-        result(nil)
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    }
-    return PastePlatformView(target: target, channel: channel)
+    return PastePlatformView(target: target)
   }
 
   func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
@@ -56,35 +46,33 @@ final class PasteControlFactory: NSObject, FlutterPlatformViewFactory {
 
 final class PastePlatformView: NSObject, FlutterPlatformView {
   private let target: PasteTargetView
-  private let channel: FlutterMethodChannel
 
-  init(target: PasteTargetView, channel: FlutterMethodChannel) {
+  init(target: PasteTargetView) {
     self.target = target
-    self.channel = channel
     super.init()
   }
 
   func view() -> UIView {
     target
   }
-
-  /// iOS platform views get no dispose call: the engine releases this object.
-  deinit {
-    channel.setMethodCallHandler(nil)
-  }
 }
 
 /// Hosts the control and is its paste target; UIResponder already speaks UIPasteConfigurationSupporting.
+///
+/// The control decides for itself when it is enabled (from what the clipboard holds), so Dart never sets isEnabled:
+/// forcing it on with nothing to paste brings back the prompt. A disabled PasteButton refuses the touch in Dart.
 final class PasteTargetView: UIView {
   private let control: UIPasteControl
   private let channel: FlutterMethodChannel
+  private var reportedLayout = false
 
-  init(frame: CGRect, tint: UIColor, enabled: Bool, channel: FlutterMethodChannel) {
+  init(frame: CGRect, fill: UIColor, glyph: UIColor, channel: FlutterMethodChannel) {
     let configuration = UIPasteControl.Configuration()
     configuration.displayMode = .iconOnly
     configuration.cornerStyle = .capsule
-    configuration.baseForegroundColor = tint
-    configuration.baseBackgroundColor = .clear
+    // Opaque, as the Swift app's PasteButton was: the control checks it can be seen before it pastes.
+    configuration.baseBackgroundColor = fill
+    configuration.baseForegroundColor = glyph
     control = UIPasteControl(configuration: configuration)
     self.channel = channel
     super.init(frame: frame)
@@ -92,15 +80,36 @@ final class PasteTargetView: UIView {
     pasteConfiguration = UIPasteConfiguration(forAccepting: NSString.self)
     control.frame = bounds
     control.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    control.isEnabled = enabled
+    // A control squeezed below the size it wants turns itself off; large Dynamic Type would make it want more
+    // than the 34 pt field has.
+    control.maximumContentSizeCategory = .large
     control.target = self
     addSubview(control)
+    // After a copy in another app the control can keep its old clipboard state until its target is set again.
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(reattach), name: UIApplication.didBecomeActiveNotification, object: nil)
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  func setEnabled(_ enabled: Bool) {
-    control.isEnabled = enabled
+  @objc private func reattach() {
+    control.target = nil
+    control.target = self
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    guard !reportedLayout, bounds.width > 0 else { return }
+    reportedLayout = true
+    // The intrinsic size settles a moment after the first layout.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+      guard let self else { return }
+      let wanted = self.control.intrinsicContentSize
+      self.channel.invokeMethod("layout", arguments: [
+        "width": Double(self.bounds.width), "height": Double(self.bounds.height),
+        "wantedWidth": Double(wanted.width), "wantedHeight": Double(wanted.height),
+      ])
+    }
   }
 
   override func paste(itemProviders: [NSItemProvider]) {

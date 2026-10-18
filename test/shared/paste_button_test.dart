@@ -1,3 +1,4 @@
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/shared/paste_button.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/gestures.dart';
@@ -101,7 +102,7 @@ void main() {
       await host(tester, PasteButton(enabled: true, onText: (_) {}));
       final view = tester.widget<UiKitView>(find.byType(UiKitView));
       expect(view.viewType, 'bilifast/paste_control');
-      expect(view.creationParams, {'color': BiliColors.pink.toARGB32(), 'enabled': true});
+      expect(view.creationParams, {'fill': BiliColors.pink.toARGB32(), 'glyph': BiliColors.onPink.toARGB32()});
       expect(view.creationParamsCodec, isA<StandardMessageCodec>());
       expect(view.hitTestBehavior, PlatformViewHitTestBehavior.opaque);
       final recognizer = view.gestureRecognizers!.single.constructor();
@@ -114,7 +115,7 @@ void main() {
       final create = views.firstWhere((call) => call.method == 'create').arguments as Map<Object?, Object?>;
       expect(create['viewType'], 'bilifast/paste_control');
       expect(const StandardMessageCodec().decodeMessage(ByteData.sublistView(create['params']! as Uint8List)),
-          {'color': 0xFFFF6699, 'enabled': true});
+          {'fill': 0xFFFF6699, 'glyph': 0xFFFFFFFF});
     }, variant: ios);
 
     testWidgets('a tap goes to the control and never reads the clipboard from Dart', (tester) async {
@@ -133,11 +134,11 @@ void main() {
       expect(pasted, ['【标题】 https://b23.tv/abc', '']);
     }, variant: ios);
 
-    testWidgets('disabled: touches are refused, the control is told, and a late paste is dropped', (tester) async {
+    testWidgets('disabled: touches are refused in Dart and a late paste is dropped', (tester) async {
       final pasted = <String>[];
       await host(tester, PasteButton(enabled: true, onText: pasted.add));
       await tester.pumpWidget(field(PasteButton(enabled: false, onText: pasted.add)));
-      expect(sent.map((call) => (call.method, call.arguments)), [('setEnabled', false)]);
+      expect(sent, isEmpty, reason: 'the control enables itself from the clipboard; forcing it brings the prompt back');
       expect(tester.widget<IgnorePointer>(
         find.ancestor(of: find.byType(UiKitView), matching: find.byType(IgnorePointer)).first,
       ).ignoring, isTrue);
@@ -150,17 +151,23 @@ void main() {
       expect(pasted, isEmpty);
 
       await tester.pumpWidget(field(PasteButton(enabled: true, onText: pasted.add)));
-      await tester.pumpWidget(field(PasteButton(enabled: true, onText: pasted.add)));
-      expect(sent.map((call) => (call.method, call.arguments)), [('setEnabled', false), ('setEnabled', true)],
-          reason: 'only changes are sent');
       await fromNative(tester, const MethodCall('paste', 'BV1GJ411x7h7'));
       expect(pasted, ['BV1GJ411x7h7']);
+      expect(sent, isEmpty);
     }, variant: ios);
 
-    testWidgets('created disabled, the creation params say so and nothing more is sent', (tester) async {
-      await host(tester, PasteButton(enabled: false, onText: (_) {}));
-      expect(tester.widget<UiKitView>(find.byType(UiKitView)).creationParams, containsPair('enabled', false));
-      expect(sent, isEmpty);
+    testWidgets('the control says once how much room it got against what it wants, for the log', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await host(tester, PasteButton(enabled: true, onText: (_) {}));
+      await fromNative(
+        tester,
+        const MethodCall('layout', {'width': 40.0, 'height': 34.0, 'wantedWidth': 44.0, 'wantedHeight': 44.0}),
+      );
+      final event = logs.events.singleWhere((event) => event.msg == 'paste control');
+      expect(event.f.map((key, value) => MapEntry(key, value.toJson())),
+          {'width': 40.0, 'height': 34.0, 'wantedWidth': 44.0, 'wantedHeight': 44.0});
     }, variant: ios);
   });
 }

@@ -1,8 +1,8 @@
 import AVFoundation
 import UIKit
 
-/// Every native player by id. A player outlives its Flutter view: picture in picture keeps playing after the page
-/// closes, and a restored page attaches the same host view again. Only `dispose` releases one.
+/// Every native player by id. A player outlives its Flutter view: picture in picture keeps playing while the view is
+/// gone, and a restored page attaches the same host view again. Only `dispose` releases one.
 @MainActor
 final class PlayerRegistry {
   private let events: PlayerEventApi
@@ -134,13 +134,17 @@ final class NativePlayer {
     }
   }
 
-  /// Without an item AVPlayer stops filling its 30 s forward buffer; the layer and picture in picture stay attached.
+  /// The page closed: without an item AVPlayer stops filling its 30 s forward buffer. The layer stays attached for
+  /// the next load.
   func unload() {
+    // An emptied player under a live picture in picture would leave a black window to close by hand.
+    host.stopPiP()
     generation += 1
     pendingSeeks = 0
     wantsPlay = false
-    player.pause()
+    // Detached first, so the pause doesn't report a status for the item being dropped.
     detachItem()
+    player.pause()
     player.replaceCurrentItem(with: nil)
     updateStatus()
   }

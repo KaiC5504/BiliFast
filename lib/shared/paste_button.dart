@@ -1,3 +1,4 @@
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -58,38 +59,25 @@ class _NativePasteControlState extends State<_NativePasteControl> {
 
   MethodChannel? _channel;
 
-  /// What the native control was last told; the creation params carry the first build's value.
-  late bool _nativeEnabled;
-
   void _created(int id) {
     if (!mounted) return;
     _channel = MethodChannel('${_NativePasteControl.viewType}/$id')..setMethodCallHandler(_handle);
-    _syncEnabled();
   }
 
+  /// The control enables itself from what the clipboard holds, so a disabled button only refuses the touch here and
+  /// drops a paste that lands late.
   Future<void> _handle(MethodCall call) async {
-    if (call.method != 'paste' || !mounted || !widget.enabled) return;
-    widget.onText((call.arguments as String? ?? '').trim());
-  }
-
-  void _syncEnabled() {
-    final channel = _channel;
-    if (channel == null || widget.enabled == _nativeEnabled) return;
-    _nativeEnabled = widget.enabled;
-    // A view already gone has nothing left to disable.
-    channel.invokeMethod<void>('setEnabled', widget.enabled).ignore();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _nativeEnabled = widget.enabled;
-  }
-
-  @override
-  void didUpdateWidget(_NativePasteControl old) {
-    super.didUpdateWidget(old);
-    _syncEnabled();
+    switch (call.method) {
+      case 'paste':
+        if (mounted && widget.enabled) widget.onText((call.arguments as String? ?? '').trim());
+      case 'layout':
+        // A control given less room than it wants turns itself off without a word; this says whether it fits.
+        final sizes = call.arguments as Map<Object?, Object?>? ?? const {};
+        Logger.shared.info(LogCategory.ui, 'paste control', {
+          for (final MapEntry(:key, :value) in sizes.entries)
+            if (value != null) '$key': value,
+        });
+    }
   }
 
   @override
@@ -105,7 +93,10 @@ class _NativePasteControlState extends State<_NativePasteControl> {
       dimension: _side,
       child: UiKitView(
         viewType: _NativePasteControl.viewType,
-        creationParams: <String, Object?>{'color': BiliColors.pink.toARGB32(), 'enabled': widget.enabled},
+        creationParams: <String, Object?>{
+          'fill': BiliColors.pink.toARGB32(),
+          'glyph': BiliColors.onPink.toARGB32(),
+        },
         creationParamsCodec: const StandardMessageCodec(),
         hitTestBehavior: PlatformViewHitTestBehavior.opaque,
         gestureRecognizers: _gestures,
