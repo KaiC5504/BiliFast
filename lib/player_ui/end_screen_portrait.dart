@@ -10,17 +10,19 @@ import 'package:share_plus/share_plus.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../video/actions/video_actions.dart';
 import '../video/player_session.dart';
 import 'panels/panel_controller.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
 
-/// Hands a link to the share sheet; completes with whether it went somewhere, so only real shares are counted.
+/// Hands a link to the share sheet; completes true only when the share sheet reports a share.
 typedef ShareLink = Future<bool> Function(Uri link);
 
+/// Windows has no sheet and answers unavailable, which must not count as a share.
 Future<bool> shareThroughSystem(Uri link) async {
   final result = await SharePlus.instance.share(ShareParams(uri: link));
-  return result.status != ShareResultStatus.dismissed;
+  return result.status == ShareResultStatus.success;
 }
 
 /// The small player's end screen (BiliNative `EndScreens.swift`, laid out as the official app's 26): the last frame
@@ -59,12 +61,17 @@ class _EndScreenPortraitState extends State<EndScreenPortrait> with SingleTicker
   };
 
   Future<void> _share() async {
+    // Through the actions the page counts the share once the sheet completes it.
+    if (_ui.details?.actions case final actions?) {
+      actions.ask(ActionPrompt.share);
+      return;
+    }
     final link = _session.shareLink;
     if (link == null) return;
     try {
       await widget.share(link);
     } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '${error.runtimeType}'});
+      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '$error'});
       if (mounted) showToast(context, '分享失败');
     }
   }

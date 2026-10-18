@@ -460,7 +460,7 @@ class _PlusPainter extends CustomPainter {
   bool shouldRepaint(_PlusPainter oldDelegate) => false;
 }
 
-/// 👥 N人正在看, from the page's poll; nothing until it answers.
+/// The viewers mark and N人正在看, from the page's poll; nothing until it answers.
 class _Online extends StatelessWidget {
   const _Online({required this.online});
 

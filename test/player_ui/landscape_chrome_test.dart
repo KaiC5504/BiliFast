@@ -496,6 +496,64 @@ void main() {
     expect(find.byKey(const ValueKey('landscape-online')), findsNothing);
   });
 
+  testWidgets('while the controls are hidden a faint N人正在看 stays at the bottom left, as on 25', (tester) async {
+    final details = FakePageDetails(online: '1');
+    final rig = Rig(details: details);
+    await rig.mount(tester);
+    final corner = find.byKey(const ValueKey('landscape-corner-online'));
+    expect(corner, findsNothing, reason: 'not while the controls show');
+
+    rig.chrome.hide();
+    await tester.pumpAndSettle();
+    expect(corner, findsOneWidget);
+    // 33 pt past the island's inset, centred 9.7 pt above the screen's edge, within the home indicator's band.
+    expect(tester.getTopLeft(corner).dx, closeTo(95.3, 0.5));
+    expect(tester.getCenter(corner).dy, closeTo(430.3, 0.5));
+    final text = find.descendant(of: corner, matching: find.text('1人正在看'));
+    expect(tester.widget<Text>(text).style!.color, LandscapeActionTheme.corner);
+    expect(tester.widget<Text>(text).style!.fontSize, 9);
+    final glyph = find.descendant(of: corner, matching: find.byType(CustomPaint));
+    expect(
+      tester.getSize(glyph),
+      const Size(LandscapeActionTheme.cornerIconWidth, LandscapeActionTheme.cornerIconHeight),
+    );
+    expect(tester.getTopLeft(text).dx - tester.getTopRight(glyph).dx, closeTo(LandscapeActionTheme.cornerGap, 0.01));
+    expect(corner.hitTestable(), findsNothing, reason: 'touches go through it to the video');
+    expect(find.semantics.byLabel(RegExp('人正在看')), findsNothing);
+
+    details.online.value = '1000+';
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: corner, matching: find.text('1000+人正在看')), findsOneWidget);
+
+    rig.panels.open(PlayerPanel.quality);
+    await tester.pumpAndSettle();
+    expect(corner, findsNothing, reason: 'not with a panel open');
+    rig.panels.close();
+    await tester.pumpAndSettle();
+    expect(corner, findsOneWidget);
+
+    details.online.value = null;
+    await tester.pumpAndSettle();
+    expect(corner, findsNothing, reason: 'nothing while the count is unknown');
+    details.online.value = '3';
+    await tester.pumpAndSettle();
+    expect(corner, findsOneWidget);
+
+    rig.chrome.show();
+    await tester.pumpAndSettle();
+    expect(corner, findsNothing);
+    expect(find.text('3人正在看'), findsOneWidget, reason: 'the controls show it under the title instead');
+  });
+
+  testWidgets('without page details there is no corner count', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    rig.chrome.hide();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('landscape-corner-online')), findsNothing);
+    expect(find.textContaining('人正在看'), findsNothing);
+  });
+
   testWidgets('the uploader under it: avatar and a white + 关注 that follows; 已关注 is grey with no plus', (
     tester,
   ) async {

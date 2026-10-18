@@ -1,8 +1,10 @@
 import 'package:bili_core/api.dart' show UploaderCard, VideoCard, VideoDetail;
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/end_screen_landscape.dart';
 import 'package:bilifast/player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
+import 'package:bilifast/player_ui/landscape_chrome.dart' show LandscapeCornerOnline;
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
@@ -147,7 +149,10 @@ void main() {
     expect(centre(tester, 'end-replay').dx, closeTo(604, 2));
   });
 
-  testWidgets('a share that fails is logged and toasts 分享失败', (tester) async {
+  testWidgets('a share that fails is logged with its error and toasts 分享失败', (tester) async {
+    final logs = MemorySink();
+    Logger.shared.add(logs);
+    addTearDown(() => Logger.shared.remove(logs));
     final rig = Rig();
     tester.view
       ..physicalSize = const Size(956, 440)
@@ -170,6 +175,8 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
     expect(find.text('分享失败'), findsOneWidget);
+    final failure = logs.events.singleWhere((event) => event.msg == 'share failed');
+    expect(failure.f['error']?.toJson(), 'Bad state: no share sheet');
     for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
@@ -195,10 +202,28 @@ void main() {
     expect(sizeOf('推荐 1'), 12);
     expect(sizeOf('UP 1'), 10);
     expect(sizeOf('0:48'), 11);
-    expect(sizeOf('重播'), 13);
-    expect(sizeOf('分享'), 13);
+    expect(sizeOf('重播'), 12);
+    expect(sizeOf('分享'), 12);
     final badge = find.ancestor(of: find.text('UP'), matching: find.byType(Container)).first;
     expect(tester.getSize(badge).width, closeTo(13, 0.5));
+  });
+
+  testWidgets('the faint N人正在看 stays at the bottom left under the dim, as on 27', (tester) async {
+    final details = FakePageDetails(online: '1');
+    final rig = Rig(details: details);
+    await rig.mount(tester);
+
+    final corner = find.byKey(const ValueKey('landscape-corner-online'));
+    expect(corner, findsOneWidget);
+    expect(tester.getTopLeft(corner).dx, closeTo(95.3, 0.5));
+    expect(tester.getCenter(corner).dy, closeTo(430.3, 0.5));
+    expect(corner.hitTestable(), findsNothing);
+    final layers = tester.widget<Stack>(find.byKey(const ValueKey('end-landscape-layers')));
+    expect(layers.children.first, isA<LandscapeCornerOnline>(), reason: 'painted before the dim, so it sits under it');
+
+    details.online.value = null;
+    await tester.pumpAndSettle();
+    expect(corner, findsNothing);
   });
 
   testWidgets('a related video plays on tap; without any, 推荐视频 is not shown', (tester) async {
@@ -259,7 +284,7 @@ void main() {
       expect(tester.getCenter(icon).dy, closeTo(80, 1.5), reason: key);
     }
     for (final label in ['点赞', '投币', '收藏']) {
-      expect(tester.widget<Text>(find.text(label)).style!.fontSize, 13, reason: label);
+      expect(tester.widget<Text>(find.text(label)).style!.fontSize, 12, reason: label);
       expect(tester.getCenter(find.text(label)).dy, tester.getCenter(find.text('重播')).dy, reason: label);
     }
   });

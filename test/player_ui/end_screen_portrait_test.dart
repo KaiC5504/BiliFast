@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart' show VideoCard;
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
@@ -6,10 +7,12 @@ import 'package:bilifast/player_ui/end_screen_portrait.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
+import '../support/fake_video_actions.dart';
 
 /// No cover address, so the image stays a grey box and nothing is fetched.
 const _card = VideoCard(
@@ -27,12 +30,15 @@ const _card = VideoCard(
 );
 
 final class Rig {
+  Rig({this.details});
+
   final session = FakePlayerSession()
     ..ended = true
     ..shareLink = Uri.parse('https://www.bilibili.com/video/BV1this');
   final chrome = ChromeState();
   final panels = PanelController();
   final orientation = OrientationController();
+  final FakePageDetails? details;
   final shared = <Uri>[];
   int backs = 0;
 
@@ -43,6 +49,7 @@ final class Rig {
     orientation: orientation,
     device: NoDeviceControls(),
     onBack: () => backs++,
+    details: details,
   );
 
   Future<bool> share(Uri link) async {
@@ -56,6 +63,7 @@ final class Rig {
       panels.dispose();
       orientation.dispose();
       session.dispose();
+      details?.dispose();
     });
     await tester.pumpWidget(
       Directionality(
@@ -120,11 +128,57 @@ void main() {
     expect(rig.shared, [Uri.parse('https://www.bilibili.com/video/BV1this')]);
   });
 
-  for (final (name, share) in <(String, ShareLink)>[
-    ('fails', (_) async => throw StateError('no sheet')),
-    ('throws at once', (_) => throw StateError('no plugin')),
+  testWidgets('on a video page 分享 goes through the actions, so the share is counted', (tester) async {
+    final actions = FakeVideoActions();
+    final rig = Rig(details: FakePageDetails(actions: actions));
+    await rig.mount(tester);
+
+    await tester.tap(find.byKey(const ValueKey('end-share')));
+    await tester.pump();
+    expect(actions.calls, ['ask share']);
+    expect(rig.shared, isEmpty);
+
+    tester.semantics.tap(find.semantics.byLabel('分享'));
+    expect(actions.calls, ['ask share', 'ask share']);
+  });
+
+  for (final (status, answer, counted) in [
+    ('a share', 'com.apple.UIKit.activity.Message', true),
+    ('a dismissed sheet', '', false),
+    ('unavailable, as on Windows', 'dev.fluttercommunity.plus/share/unavailable', false),
   ]) {
-    testWidgets('a share that $name is caught and says 分享失败', (tester) async {
+    testWidgets('the system share counts ${counted ? '' : 'nothing for '}$status', (tester) async {
+      const channel = MethodChannel('dev.fluttercommunity.plus/share');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return answer;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+      expect(await shareThroughSystem(Uri.parse('https://www.bilibili.com/video/BV1this')), counted);
+      expect(calls.single.method, 'share');
+    });
+  }
+
+  testWidgets('before the page\'s actions arrive 分享 shares by itself', (tester) async {
+    final rig = Rig(details: FakePageDetails());
+    await rig.mount(tester);
+
+    await tester.tap(find.byKey(const ValueKey('end-share')));
+    await tester.pump();
+    expect(rig.shared, [Uri.parse('https://www.bilibili.com/video/BV1this')]);
+  });
+
+  for (final (name, share, message) in <(String, ShareLink, String)>[
+    ('fails', (_) async => throw StateError('no sheet'), 'Bad state: no sheet'),
+    ('throws at once', (_) => throw StateError('no plugin'), 'Bad state: no plugin'),
+  ]) {
+    testWidgets('a share that $name is caught, logged with its error and says 分享失败', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
       final rig = Rig();
       await tester.pumpWidget(
         Directionality(
@@ -140,6 +194,8 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull);
       expect(find.text('分享失败'), findsOneWidget);
+      final failure = logs.events.singleWhere((event) => event.msg == 'share failed');
+      expect(failure.f['error']?.toJson(), message);
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
