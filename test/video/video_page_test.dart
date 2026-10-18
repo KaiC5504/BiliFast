@@ -1439,6 +1439,26 @@ void main() {
       await back(tester);
     });
 
+    testWidgets("leaving, the body's Heroes stand down so a related cover never flies back to a feed card",
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      sessions.single
+        ..detail = detail(bv)
+        ..related = [card('BV1xx411c7mD')]
+        ..changed();
+      await tester.pump();
+      bool bodyFlies() => tester
+          .widget<HeroMode>(find.ancestor(of: find.byType(PageTabs), matching: find.byType(HeroMode)).first)
+          .enabled;
+      expect(bodyFlies(), isTrue);
+      unawaited(nav.currentState!.maybePop());
+      await tester.pump();
+      expect(bodyFlies(), isFalse);
+      await frames(tester, 20);
+    });
+
     testWidgets('a related video opens a page on top, and back returns to the first video playing', (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p2, start: 0));

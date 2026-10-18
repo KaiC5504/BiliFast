@@ -652,21 +652,25 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
           ),
         ),
         Expanded(
-          child: PageTabs(
-            controller: _tabs,
-            intro: session == null || details == null
-                ? const SizedBox.expand()
-                : IntroTab(
-                    content: _intro,
-                    details: details,
-                    onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
-                    onOpenVideo: (id) => unawaited(_openVideoId(id)),
-                    onPlayEpisode: session.playEpisode,
-                    onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
-                    onOpenRelated: _openRelated,
-                    onWatchLater: (card) => unawaited(_watchLater(card)),
-                  ),
-            comments: const CommentsPlaceholder(),
+          // Leaving, a related row's cover would otherwise fly back to a feed card showing the same video.
+          child: HeroMode(
+            enabled: !_left,
+            child: PageTabs(
+              controller: _tabs,
+              intro: session == null || details == null
+                  ? const SizedBox.expand()
+                  : IntroTab(
+                      content: _intro,
+                      details: details,
+                      onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
+                      onOpenVideo: (id) => unawaited(_openVideoId(id)),
+                      onPlayEpisode: session.playEpisode,
+                      onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
+                      onOpenRelated: _openRelated,
+                      onWatchLater: (card) => unawaited(_watchLater(card)),
+                    ),
+              comments: const CommentsPlaceholder(),
+            ),
           ),
         ),
       ],
