@@ -87,8 +87,8 @@ final class SpeedTestPlan {
   final List<SpeedTestVariant> variants;
   final String order;
 
-  /// Each video (and quality) starts [order] one letter further along, so the cold first pass falls on every variant
-  /// in turn rather than always on the first.
+  /// Each video starts [order] one letter further along, at every quality alike, so the cold first pass falls on every
+  /// variant in turn rather than always on the first.
   final bool rotate;
   final int seeks;
   final int hints;
@@ -124,15 +124,13 @@ final class SpeedTestPlan {
 
   SpeedTestVariant? variant(String name) => variants.where((variant) => variant.name == name).firstOrNull;
 
-  /// For each video, each quality, each letter of [order] ([rotate]d one further for each).
+  /// For each video, each quality, each letter of [order] ([rotate]d one further for each video).
   List<SpeedTestPass> passes(List<String> videos) {
     final passes = <SpeedTestPass>[];
     final letters = order.split('');
-    var block = 0;
     for (final (videoIndex, video) in videos.indexed) {
+      final shift = rotate ? videoIndex % letters.length : 0;
       for (final quality in qualities) {
-        final shift = rotate ? block % letters.length : 0;
-        block++;
         final seen = <String, int>{};
         for (final (position, letter) in [...letters.skip(shift), ...letters.take(shift)].indexed) {
           final repeat = seen[letter] ?? 0;

@@ -240,6 +240,30 @@ void main() {
       expect(capped.toSet().length, lessThanOrEqualTo(2), reason: 'equal pieces, differing by a byte at most');
     });
 
+    test('the capped pieces leave the connection kept for backups free', () async {
+      Future<int> peakPieces({int? cap}) async {
+        final cdn = SimCDN(size: _size);
+        final transport = _Holding(cdn)..holdFrom = segment.range.start + 64 * 1024;
+        final session = RipperSession(
+          sources: {TrackKind.video: (primary: TestEngine.primary, backups: const <String>[])},
+          mode: CustomNodes([NodeAddress('upos-sz-mirrorcos.bilivideo.com')]),
+          config: TestEngine.slowConfig.copyWith(prefetchVideoBytes: 0, hurryPieceBytes: cap, hurryHedgeMinMs: 600),
+          transport: transport,
+          logger: Logger(session: 'test'),
+        )..setSegments(TrackKind.video, [segment]);
+        addTearDown(session.close);
+        final done = _read(session, segment.range);
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        final peak = transport.heldRanges;
+        transport.holdFrom = null;
+        expect(await done, _bytes(cdn, segment.range));
+        return peak;
+      }
+
+      expect(await peakPieces(), 7, reason: 'Swift: one piece per connection, less the one kept for backups');
+      expect(await peakPieces(cap: 64 * 1024), 7, reason: '31 pieces, 7 at a time');
+    });
+
     test('a range already in small pieces is cut as before', () {
       final range = ByteRange(0, 300 * 1024 - 1);
       expect(range.split(concurrency: 7, minChunk: 64 * 1024), hasLength(5));
@@ -329,6 +353,10 @@ final class _Holding implements RangeTransport {
 
   final SimCDN cdn;
   int? holdFrom;
+  final _held = <ByteRange>{};
+
+  /// Distinct ranges being held right now.
+  int get heldRanges => _held.length;
 
   @override
   int? get connectionsPerHost => cdn.connectionsPerHost;
@@ -341,8 +369,13 @@ final class _Holding implements RangeTransport {
 
   @override
   Future<TransportResponse> fetch(Uri url, ByteRange range, {CancelToken? cancel}) async {
-    while (range.start >= (holdFrom ?? 1 << 62)) {
-      await cancellableSleep(5, cancel);
+    _held.add(range);
+    try {
+      while (range.start >= (holdFrom ?? 1 << 62)) {
+        await cancellableSleep(5, cancel);
+      }
+    } finally {
+      _held.remove(range);
     }
     return cdn.fetch(url, range, cancel: cancel);
   }

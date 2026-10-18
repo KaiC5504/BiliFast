@@ -1,6 +1,7 @@
 // Port of Bilibili-thread-ripper (see LICENSE-BTR.txt), by way of BiliNative's RangeDownloader.swift.
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -164,7 +165,7 @@ final class RangeDownloader {
       assignable = preferred.where((url) => url == result.url || resolver.speed(url) > 0).toList();
       indexOffset = 1;
     }
-    final (parts, primaries) = _place(
+    final (parts, primaries, window) = _place(
       remaining,
       resolver,
       preferred: preferred,
@@ -180,28 +181,33 @@ final class RangeDownloader {
       final pieceIndex = offset + indexOffset;
       final piecePriority = startup ? 120.0 - min(30, pieceIndex) : priority - min(20, pieceIndex);
       run.add(
-        (token) => pieces.download(
-          piece: parts[offset],
-          index: pieceIndex,
-          resolver: resolver,
-          preferred: piecePreferred,
-          mode: mode,
-          priority: piecePriority,
-          deadline: deadline,
-          hurry: hurryCheck,
-          cancel: token,
-          lane: lane,
-          holdingUp: run.holdingUp,
-          probation: probation,
+        (token) => _Window.within(
+          window,
+          token,
+          () => pieces.download(
+            piece: parts[offset],
+            index: pieceIndex,
+            resolver: resolver,
+            preferred: piecePreferred,
+            mode: mode,
+            priority: piecePriority,
+            deadline: deadline,
+            hurry: hurryCheck,
+            cancel: token,
+            lane: lane,
+            holdingUp: run.holdingUp,
+            probation: probation,
+          ),
         ),
       );
     }
     await run.close();
   }
 
-  /// The pieces of [remaining] and the node each tries first: by expected finish in a hurry, otherwise in
-  /// weighted turns over [assignable].
-  (List<ByteRange>, List<String>) _place(
+  /// The pieces of [remaining], the node each tries first (by expected finish in a hurry, otherwise in weighted
+  /// turns over [assignable]), and, when [RipperConfig.hurryPieceBytes] cut more pieces than may run at once, the
+  /// window they run in.
+  (List<ByteRange>, List<String>, _Window?) _place(
     ByteRange remaining,
     Resolver resolver, {
     required List<String> preferred,
@@ -243,7 +249,8 @@ final class RangeDownloader {
             trialKey: resolver,
             isFull: (url, placed) => ctx.nodes.isFull(url, extraInflight: placed),
           );
-    return (parts, primaries);
+    // Their first copies would otherwise take the connections kept free for backups, which a cold CDN needs most.
+    return (parts, primaries, parts.length > pieceConcurrency ? _Window(pieceConcurrency) : null);
   }
 
   /// A seek's head, first [RipperConfig.seekBurstBytes] of it in 64 KiB pieces, all asked for at once: the first on
@@ -323,7 +330,7 @@ final class RangeDownloader {
         ordered = [winner, ...preferred.where((url) => url != winner)];
         assignable = ordered.where((url) => url == winner || resolver.speed(url) > 0).toList();
       }
-      final (parts, primaries) = _place(
+      final (parts, primaries, window) = _place(
         ByteRange(headEnd + 1, range.end),
         resolver,
         preferred: ordered,
@@ -334,18 +341,22 @@ final class RangeDownloader {
         final primary = offset < primaries.length ? primaries[offset] : ordered.first;
         final pieceIndex = head.length + offset;
         run.add(
-          (token) => pieces.download(
-            piece: parts[offset],
-            index: pieceIndex,
-            resolver: resolver,
-            preferred: [primary, ...ordered.where((url) => url != primary)],
-            mode: PieceMode.startup,
-            priority: 120.0 - min(30, pieceIndex),
-            deadline: deadline,
-            hurry: hurry,
-            cancel: token,
-            lane: lane,
-            holdingUp: run.holdingUp,
+          (token) => _Window.within(
+            window,
+            token,
+            () => pieces.download(
+              piece: parts[offset],
+              index: pieceIndex,
+              resolver: resolver,
+              preferred: [primary, ...ordered.where((url) => url != primary)],
+              mode: PieceMode.startup,
+              priority: 120.0 - min(30, pieceIndex),
+              deadline: deadline,
+              hurry: hurry,
+              cancel: token,
+              lane: lane,
+              holdingUp: run.holdingUp,
+            ),
           ),
         );
       }
@@ -410,6 +421,47 @@ final class _TotalCheck {
 
 /// Pieces of one range, run together and handed on in the order they were added. The first failure cancels the
 /// rest; like Swift's task group, [close] ends only once every piece has.
+/// At most [limit] pieces of one range downloading at once, the rest waiting their turn in order.
+final class _Window {
+  _Window(this.limit);
+
+  final int limit;
+  var _running = 0;
+  final _waiting = Queue<Completer<void>>();
+
+  static Future<T> within<T>(_Window? window, CancelToken cancel, Future<T> Function() task) =>
+      window == null ? task() : window._run(cancel, task);
+
+  Future<T> _run<T>(CancelToken cancel, Future<T> Function() task) async {
+    if (_running < limit) {
+      _running += 1;
+    } else {
+      final turn = Completer<void>();
+      _waiting.add(turn);
+      try {
+        await cancel.guard(turn.future);
+      } catch (_) {
+        // Handed the turn just as it was cancelled: pass it on.
+        if (!_waiting.remove(turn)) _release();
+        rethrow;
+      }
+    }
+    try {
+      return await task();
+    } finally {
+      _release();
+    }
+  }
+
+  void _release() {
+    if (_waiting.isNotEmpty) {
+      _waiting.removeFirst().complete();
+    } else {
+      _running -= 1;
+    }
+  }
+}
+
 final class _InOrder {
   _InOrder(CancelToken? cancel, {required this.check, required this.emit}) : _local = CancelToken(cancel);
 

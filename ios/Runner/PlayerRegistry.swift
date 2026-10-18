@@ -124,6 +124,8 @@ final class NativePlayer {
     log("load", ["at": startSeconds, "play": autoplay])
     if startSeconds > 0 {
       let start = CMTime(seconds: startSeconds, preferredTimescale: 600)
+      // A reload mid-playback keeps the rate, so the new item can wait at 0 while this seek is in flight.
+      pendingSeeks += 1
       player.seek(to: start, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
         onMainActor { self?.startSeekFinished(current) }
       }
@@ -318,9 +320,12 @@ final class NativePlayer {
   }
 
   private func startSeekFinished(_ current: Int) {
-    guard current == generation, wantsPlay else { return }
+    guard current == generation else { return }
+    pendingSeeks = max(0, pendingSeeks - 1)
+    guard wantsPlay else { return }
     player.play()
     updateStatus()
+    startIfBuffered()
   }
 
   /// What a start or seek needs loaded before it plays. AVPlayer's own rule waits for more after a slow first

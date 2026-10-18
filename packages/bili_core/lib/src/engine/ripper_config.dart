@@ -153,8 +153,8 @@ final class RipperConfig {
   /// requests, and each miss held its piece for the whole 250 ms.
   final double hurryHedgeMinMs;
 
-  /// When set, a range in a hurry is cut into pieces no bigger than this, however many that makes; they queue for
-  /// the connections. Swift cut it into one piece per connection. On a CDN that has not cached the file a few blocks
+  /// When set, a range in a hurry is cut into pieces no bigger than this (32 KiB at least), however many that makes,
+  /// as many running at once as Swift's one piece per connection would. On a CDN that has not cached the file a few blocks
   /// answer only after 3-6 s, from every node alike: in 1.0.0 (2)'s speed test one ~490 KB piece held its 7.5 MB
   /// segment for 5 s after the rest was in, its backups no faster.
   final int? hurryPieceBytes;

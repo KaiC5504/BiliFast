@@ -69,10 +69,10 @@ void main() {
     expect(plan.rotate, isFalse);
   });
 
-  test('rotate starts each video and quality one letter further along, so the cold pass goes round', () {
+  test('rotate starts each video one letter further along, so every variant gets a cold pass at every quality', () {
     final plan = parse(const {'order': 'AB', 'rotate': true, 'qualities': [127, 120]});
     final passes = plan.passes(['BV1', 'BV2']);
-    expect(passes.map((pass) => '${pass.variant.name}${pass.cold ? '*' : ''}').join(' '), 'A* B B* A A* B B* A');
+    expect(passes.map((pass) => '${pass.variant.name}${pass.cold ? '*' : ''}').join(' '), 'A* B A* B B* A B* A');
     expect(passes.map((pass) => pass.repeat), everyElement(0));
     refuses({...smallPlan, 'rotate': 'yes'}, 'rotate');
   });
