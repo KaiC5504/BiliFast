@@ -46,9 +46,10 @@ abstract final class BiliColors {
   static const panelKnob = Color(0xFFFFFFFF);
   static const panelPressed = Color(0x14FFFFFF);
 
-  /// The light 选集 sheet in portrait (19): its grabber and the cross in the grey close circle.
+  /// The light 选集 sheet in portrait (19): its grabber, the cross in the grey close circle, and 内容到底啦.
   static const sheetGrabber = Color(0xFFC9CCCF);
   static const sheetCloseGlyph = Color(0xFF61666D);
+  static const sheetHint = Color(0xFFC9CCCF);
 
   /// Behind and over the video.
   static const videoBackground = Color(0xFF000000);
@@ -456,7 +457,7 @@ abstract final class BiliMetrics {
   static const panelWidth = 0.4;
   static const panelQualityWidth = 0.3;
   static const panelMoreWidth = 0.416;
-  static const panelSpeedWidth = 0.265;
+  static const panelSpeedWidth = 270 / 956;
   static const panelSheetHeight = 0.62;
   static const panelSpeedSheetHeight = 0.32;
   static const panelMoreSheetHeight = 0.8;
@@ -467,15 +468,25 @@ abstract final class BiliMetrics {
   static const panelFadeHeight = 90.0;
   static const panelTop = 16.0;
   static const panelTrailing = 16.0;
-  static const panelBottom = 16.0;
+
+  /// Over 21's 21 pt home-indicator inset, so ⋮'s last card ends 28.3 above the bottom.
+  static const panelBottom = 7.3;
   static const panelHeaderHeight = 28.0;
+
+  /// The touch box of the small things a finger aims at (back, 高级设置, the sheet's cross); their drawings keep
+  /// their own size. A page whose header has one starts [panelHeaderTop] down, so the title stays where it was.
+  static const panelHitBox = 44.0;
+  static const panelHeaderTop = panelTop - (panelHitBox - panelHeaderHeight) / 2;
   static const panelGap = 8.0;
   static const panelRowRadius = 8.0;
   static const panelGroupRadius = 10.0;
   static const panelCardHeight = 54.0;
   static const panelCardPadX = 16.0;
   static const panelCardPadY = 8.0;
-  static const panelSubtitleGap = 4.0;
+  static const panelSubtitleGap = 1.5;
+
+  /// 05's two-line HDR card sits its text this far above the card's middle.
+  static const panelSubtitleLift = 3.2;
   static const panelTitleText = 14.0;
   static const panelDetailText = 12.0;
   static const panelSubtitleText = 10.0;
@@ -484,7 +495,10 @@ abstract final class BiliMetrics {
   static const panelBadgeGap = 10.0;
   static const panelInfoIcon = 16.0;
   static const panelInfoInset = 12.0;
-  static const panelChevron = 16.0;
+  static const panelChevronWidth = 5.0;
+  static const panelChevronHeight = 10.0;
+  static const panelChevronGap = 4.7;
+  static const panelChevronTrailing = 4.7;
 
   /// ⋮'s rows: 51 tall, the icon centred 26 in, the label 44 in and the hairline from there.
   static const panelRowHeight = 51.0;
@@ -498,6 +512,13 @@ abstract final class BiliMetrics {
   static const panelSwitchWidth = 33.0;
   static const panelSwitchHeight = 20.0;
   static const panelSwitchKnob = 16.0;
+  static const panelAutoplayGlyphWidth = 12.6;
+  static const panelAutoplayGlyphHeight = 14.0;
+  static const panelLoopGlyphWidth = 18.0;
+  static const panelLoopGlyphHeight = 16.0;
+  static const panelFitGlyph = 13.0;
+  static const panelMirrorGlyphWidth = 16.4;
+  static const panelMirrorGlyphHeight = 14.0;
 
   /// ⋮'s top: the squares, their labels, then 定时关闭's title.
   static const panelActionSize = 48.0;
@@ -506,21 +527,29 @@ abstract final class BiliMetrics {
   static const panelActionLabel = 14.0;
   static const panelActionGap = 36.0;
   static const panelActionLead = 6.0;
+
+  /// 小窗播放 where picture in picture isn't available.
+  static const panelDisabledOpacity = 0.4;
   static const panelSectionGap = 36.0;
   static const panelSectionTitle = 20.0;
   static const panelTitleGap = 12.0;
   static const panelCardGap = 16.0;
   static const panelSpeedRow = 50.0;
+
+  /// 倍速's strip starts 16.5 before its column, which stays centred at 06's x 790.
+  static const panelSpeedLead = 16.5;
   static const panelSpeedCell = 40.0;
   static const panelWheelHeight = 150.0;
   static const panelWheelItem = 32.0;
   static const panelButtonHeight = 40.0;
 
-  /// The dark portrait sheet's grabber, and how far a drag on it must go before the sheet lets go.
+  /// The dark portrait sheet's grabber, and how far (or how fast, in points a second) a drag on it must go before
+  /// the sheet lets go.
   static const panelGrabberWidth = 36.0;
   static const panelGrabberHeight = 4.0;
   static const panelGrabberPad = 8.0;
   static const panelDismissDrag = 40.0;
+  static const panelDismissVelocity = 700.0;
 
   /// How far a row slides while it fades in as the panel opens.
   static const panelRevealShift = 18.0;
@@ -535,7 +564,59 @@ abstract final class BiliMetrics {
   static const sheetClose = 24.0;
   static const sheetCloseGlyph = 17.0;
   static const sheetRowHeight = 52.0;
-  static const sheetPlayingIcon = 16.0;
+
+  /// 19's 合集 header and rows, measured from the sheet's top: the intro line, 选集 with 正序, then rows 100.3 apart
+  /// (12 above and below a 134.7 × 76 cover, and the hairline) with their text lines placed from the cover's top.
+  static const sheetLineHeight = 1.2;
+  static const sheetIntroText = 12.0;
+  static const sheetIntroTop = 1.8;
+  static const sheetIntroTrailing = 146.0;
+  static const sheetSectionText = 14.0;
+  static const sheetSectionLead = 14.0;
+  static const sheetSectionTop = 21.2;
+  static const sheetSectionHeight = 29.0;
+  static const sheetOrderTrailing = 13.0;
+  static const sheetOrderGap = 6.3;
+  static const sheetOrderGlyphWidth = 12.5;
+  static const sheetOrderGlyphHeight = 11.0;
+  static const sheetListTop = 1.0;
+  static const sheetRowPad = 12.0;
+  static const sheetCoverWidth = 134.7;
+  static const sheetCoverHeight = 76.0;
+  static const sheetCoverGap = 8.3;
+  static const sheetBadgeText = 10.0;
+  static const sheetBadgeHeight = 13.6;
+  static const sheetBadgePad = 3.8;
+  static const sheetBadgeRadius = 1.7;
+  static const sheetBadgeInsetX = 3.8;
+  static const sheetBadgeInsetY = 4.4;
+  static const sheetEpisodeTitleText = 14.0;
+  static const sheetEpisodeTitleLine = 20.0;
+  static const sheetEpisodeTitleTop = -1.0;
+  static const sheetPlayingGlyphWidth = 12.0;
+  static const sheetPlayingLead = 1.7;
+  static const sheetPlayingDrop = 1.4;
+  static const sheetPlayingGlyphHeight = 14.0;
+  static const sheetPlayingBar = 2.4;
+  static const sheetPlayingGap = 6.5;
+  static const sheetMetaText = 12.0;
+
+  /// MiSans digits are narrower than the official PingFang's.
+  static const sheetMetaSpacing = 0.6;
+  static const sheetMetaLine = 16.0;
+  static const sheetDateCentre = 51.1;
+  static const sheetCountsCentre = 69.7;
+
+  /// MiSans digits sit higher in their line than PingFang's, which centre on the count glyphs.
+  static const sheetCountTextDrop = 1.0;
+  static const sheetCountGlyphWidth = 13.4;
+  static const sheetCountLead = 1.0;
+  static const sheetCountGlyphHeight = 11.4;
+  static const sheetCountGap = 4.0;
+  static const sheetCountSpacing = 12.0;
+  static const sheetFooterText = 12.0;
+  static const sheetFooterTop = 21.9;
+  static const sheetFooterGap = 32.6;
 
   /// How far a pressed card shrinks.
   static const pressedScale = 0.97;

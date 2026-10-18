@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 import '../../shared/theme.dart';
+import 'panel_glyphs.dart';
 
 /// What the panel's frame tells its rows: whether it sits at the right of a landscape screen (false in the portrait
 /// sheet), and the open animation the rows reveal themselves along.
@@ -102,7 +103,9 @@ class _PanelPressableState extends State<PanelPressable> {
   );
 }
 
-/// A panel's title, a back chevron before it when it is a page inside another, and whatever sits at the right.
+/// A panel's title, a back chevron before it when it is a page inside another, and whatever sits at the right. Its
+/// row is [BiliMetrics.panelHitBox] tall so the chevron and the trailing control are full-size touches; pages start
+/// it [BiliMetrics.panelHeaderTop] down.
 class PanelHeader extends StatelessWidget {
   const PanelHeader({super.key, required this.title, this.back, this.trailing});
 
@@ -112,33 +115,72 @@ class PanelHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: BiliMetrics.panelHeaderHeight,
-    child: Row(
+    height: BiliMetrics.panelHitBox,
+    child: Stack(
       children: [
+        Positioned.fill(
+          child: Row(
+            children: [
+              if (back != null) const SizedBox(width: BiliMetrics.panelHeaderHeight),
+              Text(title),
+              const Spacer(),
+              ?trailing,
+            ],
+          ),
+        ),
         if (back case final back?)
-          Semantics(
-            button: true,
-            label: '返回',
-            child: GestureDetector(
-              key: const ValueKey('panel-back'),
-              behavior: HitTestBehavior.opaque,
-              onTap: back,
-              child: const SizedBox(
-                width: BiliMetrics.panelHeaderHeight,
-                height: BiliMetrics.panelHeaderHeight,
-                child: Align(
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: BiliMetrics.panelHitBox,
+            child: Semantics(
+              button: true,
+              label: '返回',
+              child: GestureDetector(
+                key: const ValueKey('panel-back'),
+                behavior: HitTestBehavior.opaque,
+                onTap: back,
+                child: const Align(
                   alignment: Alignment.centerLeft,
                   child: Icon(Icons.arrow_back_ios_new, size: BiliMetrics.panelTitleText, color: BiliColors.panelText),
                 ),
               ),
             ),
           ),
-        Text(title),
-        const Spacer(),
-        ?trailing,
       ],
     ),
   );
+}
+
+/// A page under a [PanelHeader]: its rows [spacing] apart, the first as far below the header's drawn line as the
+/// rest are from each other.
+class PanelPage extends StatelessWidget {
+  const PanelPage({super.key, required this.header, required this.children, this.spacing = BiliMetrics.panelGap});
+
+  final PanelHeader header;
+  final List<Widget> children;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: BiliMetrics.panelHeaderTop),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        SizedBox(height: spacing - (BiliMetrics.panelHitBox - BiliMetrics.panelHeaderHeight) / 2),
+        Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: spacing, children: children),
+      ],
+    ),
+  );
+}
+
+/// Toasts what a setter's future completes with when it failed.
+void toastFailure(Future<String?> result, ValueChanged<String> toast) {
+  result.then((message) {
+    if (message != null) toast(message);
+  });
 }
 
 /// A section's title over its card, as 定时关闭.
@@ -193,47 +235,50 @@ class PanelCardRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: AnimatedDefaultTextStyle(
-                                duration: const Duration(milliseconds: 160),
-                                style: DefaultTextStyle.of(context).style.copyWith(
-                                  color: selected ? BiliColors.pink : BiliColors.panelText,
-                                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              child: Transform.translate(
+                offset: Offset(0, subtitle == null ? 0 : -BiliMetrics.panelSubtitleLift),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 160),
+                                  style: DefaultTextStyle.of(context).style.copyWith(
+                                    color: selected ? BiliColors.pink : BiliColors.panelText,
+                                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                                  ),
+                                  child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
                                 ),
-                                child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
                               ),
-                            ),
-                            if (badge case final badge?) ...[
-                              const SizedBox(width: BiliMetrics.panelBadgeGap),
-                              _Badge(badge),
+                              if (badge case final badge?) ...[
+                                const SizedBox(width: BiliMetrics.panelBadgeGap),
+                                _Badge(badge),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                      ?trailing,
-                    ],
-                  ),
-                  if (subtitle case final subtitle?)
-                    Padding(
-                      padding: const EdgeInsets.only(top: BiliMetrics.panelSubtitleGap),
-                      child: Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: BiliMetrics.panelSubtitleText,
-                          color: BiliColors.panelSecondary,
-                        ),
-                      ),
+                        ?trailing,
+                      ],
                     ),
-                ],
+                    if (subtitle case final subtitle?)
+                      Padding(
+                        padding: const EdgeInsets.only(top: BiliMetrics.panelSubtitleGap),
+                        child: Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: BiliMetrics.panelSubtitleText,
+                            color: BiliColors.panelSecondary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -296,7 +341,7 @@ class PanelRowFrame extends StatelessWidget {
     this.divider = true,
   });
 
-  final IconData icon;
+  final Widget icon;
   final String title;
   final Widget trailing;
   final bool divider;
@@ -310,7 +355,7 @@ class PanelRowFrame extends StatelessWidget {
       children: [
         SizedBox(
           width: BiliMetrics.panelRowIcon,
-          child: Icon(icon, size: BiliMetrics.panelRowIcon, color: BiliColors.panelText),
+          child: Center(child: icon),
         ),
         const SizedBox(width: BiliMetrics.panelLabelInset - BiliMetrics.panelRowLead - BiliMetrics.panelRowIcon),
         Text(title, maxLines: 1),
@@ -318,6 +363,17 @@ class PanelRowFrame extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Where the official card has a row this app doesn't (后台听视频, 色觉辅助), so the rest sit where they do in 21.
+class PanelBlankRow extends StatelessWidget {
+  const PanelBlankRow({super.key, this.divider = true});
+
+  final bool divider;
+
+  @override
+  Widget build(BuildContext context) =>
+      Container(height: BiliMetrics.panelRowHeight, foregroundDecoration: divider ? const _Hairline() : null);
 }
 
 class _Hairline extends Decoration {
@@ -354,7 +410,7 @@ class PanelToggleRow extends StatelessWidget {
     this.divider = true,
   });
 
-  final IconData icon;
+  final Widget icon;
   final String title;
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -504,7 +560,9 @@ class PanelDisclosure extends StatelessWidget {
         text,
         style: const TextStyle(fontSize: BiliMetrics.panelDetailText, color: BiliColors.panelSecondary),
       ),
-      const Icon(Icons.chevron_right, size: BiliMetrics.panelChevron, color: BiliColors.panelSecondary),
+      const SizedBox(width: BiliMetrics.panelChevronGap),
+      const PanelGlyph(PanelGlyphKind.chevron, color: BiliColors.panelSecondary),
+      const SizedBox(width: BiliMetrics.panelChevronTrailing),
     ],
   );
 }

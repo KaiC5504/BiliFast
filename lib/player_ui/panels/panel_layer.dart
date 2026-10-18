@@ -165,6 +165,11 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   void _close() => widget.ui.panels.close();
 
+  /// For what a panel does once a call comes back: by then the user may have closed it or opened another.
+  void _closeIf(PlayerPanel panel) {
+    if (widget.ui.panels.value == panel) _close();
+  }
+
   void _toast(String message) {
     if (mounted) showToast(context, message);
   }
@@ -245,10 +250,11 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
             PlayerPanel.codec => CodecPanel(
               session: session,
               back: () => widget.ui.panels.open(PlayerPanel.quality),
+              toast: _toast,
               close: _close,
             ),
-            PlayerPanel.speed => SpeedPanel(session: session, close: _close),
-            PlayerPanel.more => MorePanel(session: session, toast: _toast, close: _close),
+            PlayerPanel.speed => SpeedPanel(session: session, toast: _toast, close: _close),
+            PlayerPanel.more => MorePanel(session: session, toast: _toast, close: () => _closeIf(PlayerPanel.more)),
             PlayerPanel.episodes => EpisodesPanel(session: session, close: _close, light: light),
           },
         ),
@@ -325,7 +331,10 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
           Positioned.fill(
             child: _body(
               child: SingleChildScrollView(
-                padding: EdgeInsets.only(right: insets.right + BiliMetrics.panelTrailing),
+                padding: EdgeInsets.only(
+                  left: BiliMetrics.panelSpeedLead,
+                  right: insets.right + BiliMetrics.panelTrailing,
+                ),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: size.height),
                   child: Center(child: content),
@@ -358,7 +367,8 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     onVerticalDragStart: (_) => _dragBack.stop(),
     onVerticalDragUpdate: (details) => _drag.value = math.max(0, _drag.value + details.delta.dy),
     onVerticalDragEnd: (details) {
-      if (_drag.value > BiliMetrics.panelDismissDrag || (details.primaryVelocity ?? 0) > 700) {
+      if (_drag.value > BiliMetrics.panelDismissDrag ||
+          (details.primaryVelocity ?? 0) > BiliMetrics.panelDismissVelocity) {
         _close();
       } else {
         _dragFrom = _drag.value;
@@ -427,7 +437,8 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     );
   }
 
-  /// The official 合集 list (19): white, rounded at the top, from the player's bottom down.
+  /// The official 合集 list (19): white, rounded at the top, from the player's bottom down; [EpisodesPanel] fills it
+  /// below the grabber.
   Widget _lightSheet(Size size, EdgeInsets insets, Widget content) {
     final height = widget.ui.presentation == Presentation.inline
         ? size.height - insets.top - size.width / BiliMetrics.videoAspect
@@ -458,13 +469,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              EpisodesSheetHeader(close: _close),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.only(bottom: insets.bottom + BiliMetrics.gutter),
-                  child: content,
-                ),
-              ),
+              Expanded(child: content),
             ],
           ),
         ),

@@ -7,9 +7,10 @@ import 'panel_parts.dart';
 /// 倍速 (06): a plain column of values on the dimmed video in landscape, a grid in the portrait sheet (port of
 /// BiliNative `SpeedPanel.swift`).
 class SpeedPanel extends StatelessWidget {
-  const SpeedPanel({super.key, required this.session, required this.close});
+  const SpeedPanel({super.key, required this.session, required this.toast, required this.close});
 
   final PlayerSession session;
+  final ValueChanged<String> toast;
   final VoidCallback close;
 
   static const choices = <(double, String)>[
@@ -23,7 +24,7 @@ class SpeedPanel extends StatelessWidget {
   ];
 
   void _choose(double rate) {
-    session.setRate(rate);
+    toastFailure(session.setRate(rate), toast);
     close();
   }
 
@@ -61,7 +62,7 @@ class SpeedPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const PanelHeader(title: '倍速'),
-        const SizedBox(height: BiliMetrics.gutter),
+        const SizedBox(height: BiliMetrics.gutter - (BiliMetrics.panelHitBox - BiliMetrics.panelHeaderHeight) / 2),
         LayoutBuilder(
           builder: (context, constraints) {
             const columns = 4;

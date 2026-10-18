@@ -1,9 +1,13 @@
-import 'package:bili_core/api.dart' show QualityOption, VideoCodec;
+import 'dart:async';
+
+import 'package:bili_core/api.dart' show QualityOption, UgcSeason, VideoCodec, VideoDetail, VideoOwner, VideoStat;
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
+import 'package:bilifast/player_ui/panels/more_panel.dart';
+import 'package:bilifast/player_ui/panels/panel_glyphs.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -108,6 +112,24 @@ Future<void> tapText(WidgetTester tester, String text) async {
   await tester.pumpAndSettle();
 }
 
+/// Lets a toast run out, so no timer is left when the test ends.
+Future<void> clearToast(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump(const Duration(seconds: 3));
+  await tester.pumpAndSettle();
+}
+
+/// 稍后再看 answers only when the test says.
+class SlowWatchLater extends FakePlayerSession {
+  final answer = Completer<ActionResult>();
+
+  @override
+  Future<ActionResult> watchLater() {
+    calls.add('watchLater');
+    return answer.future;
+  }
+}
+
 void main() {
   group('the layer', () {
     testWidgets('closed, it shows nothing and every touch reaches the page', (tester) async {
@@ -181,6 +203,45 @@ void main() {
       await tester.drag(grabber, const Offset(0, 120));
       await tester.pumpAndSettle();
       expect(rig.panels.value, isNull);
+    });
+
+    testWidgets('a quick flick of the grabber closes the sheet short of the distance', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      await open(tester, rig, PlayerPanel.quality);
+      // The sheet follows from the end of the touch slop, so this moves it about 31, short of the 40.
+      await tester.fling(
+        find.byKey(const ValueKey('panel-grabber')),
+        const Offset(0, BiliMetrics.panelDismissDrag + 10),
+        BiliMetrics.panelDismissVelocity * 2,
+        frameInterval: const Duration(milliseconds: 1),
+      );
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, isNull);
+    });
+
+    testWidgets("the back arrow, 高级设置 and the sheet's cross are 44 pt touches", (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape, session: FakePlayerSession()..qualities = _qualities);
+      await open(tester, rig, PlayerPanel.quality);
+      expect(tester.getSize(find.byKey(const ValueKey('quality-advanced'))).height, BiliMetrics.panelHitBox);
+      rig.panels.open(PlayerPanel.codec);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(const ValueKey('panel-back'))), const Size.square(BiliMetrics.panelHitBox));
+
+      final sheet = await pumpLayer(tester, Shape.portrait);
+      await open(tester, sheet, PlayerPanel.episodes);
+      expect(tester.getSize(find.byKey(const ValueKey('sheet-close'))), const Size.square(BiliMetrics.panelHitBox));
+      // The grey circle keeps its size and sits 12 from the edge as in 19.
+      final circle = find.descendant(of: find.byKey(const ValueKey('sheet-close')), matching: find.byType(Container));
+      expect(tester.getSize(circle), const Size.square(BiliMetrics.sheetClose));
+      expect(tester.getTopRight(circle).dx, portraitSize.width - BiliMetrics.gutter);
+    });
+
+    testWidgets('the titles stay where they were under the taller header', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape, session: FakePlayerSession()..qualities = _qualities);
+      await open(tester, rig, PlayerPanel.quality);
+      expect(tester.getCenter(find.text('清晰度')).dy, BiliMetrics.panelTop + BiliMetrics.panelHeaderHeight / 2);
+      final card = find.ancestor(of: find.text('自动'), matching: find.byType(Container)).first;
+      expect(tester.getTopLeft(card).dy, BiliMetrics.panelTop + BiliMetrics.panelHeaderHeight + BiliMetrics.panelGap);
     });
 
     final landscapeWidths = {
@@ -269,6 +330,48 @@ void main() {
       expect(textColor(tester, '4K 超高清'), BiliColors.pink);
       expect(textColor(tester, '1080P 高清'), BiliColors.panelText);
       expect(find.text('高级设置'), findsOneWidget);
+    });
+
+    testWidgets('the quality playing is the pink one, not the one asked for', (tester) async {
+      final session = FakePlayerSession()
+        ..qualities = _qualities
+        ..quality = 120
+        ..playing = 80;
+      final rig = await pumpLayer(tester, Shape.landscape, session: session);
+      await open(tester, rig, PlayerPanel.quality);
+      expect(textColor(tester, '1080P 高清'), BiliColors.pink);
+      expect(textColor(tester, '4K 超高清'), BiliColors.panelText);
+    });
+
+    testWidgets("the HDR card keeps the cards' height with its second line", (tester) async {
+      await quality(tester);
+      final card = find.ancestor(of: find.text('绚丽色彩，沉浸体验'), matching: find.byType(Container)).first;
+      expect(tester.getSize(card).height, BiliMetrics.panelCardHeight);
+    });
+
+    testWidgets('高级设置 is a button', (tester) async {
+      final handle = tester.ensureSemantics();
+      await quality(tester);
+      expect(tester.getSemantics(find.byKey(const ValueKey('quality-advanced'))), isSemantics(isButton: true));
+      handle.dispose();
+    });
+
+    testWidgets('a quality or codec that fails toasts why after closing', (tester) async {
+      final rig = await quality(tester);
+      rig.session.failure = '清晰度切换失败';
+      await tester.tap(find.text('1080P 高清'));
+      await tester.pump();
+      expect(rig.panels.value, isNull);
+      expect(find.text('清晰度切换失败'), findsOneWidget);
+      await clearToast(tester);
+
+      rig.panels.open(PlayerPanel.codec);
+      await tester.pumpAndSettle();
+      rig.session.failure = '编码切换失败';
+      await tester.tap(find.text('AV1'));
+      await tester.pump();
+      expect(find.text('编码切换失败'), findsOneWidget);
+      await clearToast(tester);
     });
 
     testWidgets('a free quality plays and closes', (tester) async {
@@ -360,6 +463,24 @@ void main() {
       expect(textColor(tester, '1.0X'), BiliColors.pink);
     });
 
+    testWidgets("the strip is 270 wide and its column stays centred at 06's x 790", (tester) async {
+      tester.view.padding = const FakeViewPadding(left: 62, right: 62);
+      final rig = await pumpLayer(tester, Shape.landscape);
+      await open(tester, rig, PlayerPanel.speed);
+      expect(tester.getTopLeft(frame).dx, closeTo(686, 0.01));
+      expect(tester.getCenter(find.text('1.0X')).dx, closeTo(790, 0.5));
+    });
+
+    testWidgets('a rate that fails toasts why', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape, session: FakePlayerSession()..failure = '倍速设置失败');
+      await open(tester, rig, PlayerPanel.speed);
+      await tester.tap(find.text('2.0X'));
+      await tester.pump();
+      expect(rig.panels.value, isNull);
+      expect(find.text('倍速设置失败'), findsOneWidget);
+      await clearToast(tester);
+    });
+
     testWidgets('a pick sets the rate and closes', (tester) async {
       final rig = await pumpLayer(tester, Shape.landscape);
       await open(tester, rig, PlayerPanel.speed);
@@ -378,12 +499,130 @@ void main() {
 
     testWidgets('has the official rows in order', (tester) async {
       await more(tester);
-      final rows = ['稍后再看', '定时关闭', '不开启', '自动连播', '循环播放', '镜像翻转', '画面尺寸', '测试', 'BTR 加速', '显示统计'];
+      final rows = ['稍后再看', '定时关闭', '不开启', '自动连播', '循环播放', '镜像翻转', '画面尺寸', 'BTR 加速', '显示统计'];
       final tops = [for (final row in rows) tester.getTopLeft(find.text(row)).dy];
       expect(tops, [...tops]..sort());
       for (final text in ['小窗播放', '15:00', '30:00', '60:00', '自定义', '单集循环', '列表循环', '不循环', '适应']) {
         expect(find.text(text), findsOneWidget);
       }
+    });
+
+    testWidgets('keeps the official places: empty slots round the squares, 画面尺寸 a row down', (tester) async {
+      await more(tester);
+      final panelLeft = landscapeSize.width * (1 - BiliMetrics.panelMoreWidth);
+      const pitch = BiliMetrics.panelActionSize + BiliMetrics.panelActionGap;
+      final later = tester.getRect(find.bySemanticsLabel('稍后再看'));
+      final pip = tester.getRect(find.bySemanticsLabel('小窗播放'));
+      expect(later.left, closeTo(panelLeft + BiliMetrics.panelActionLead + pitch, 0.01));
+      expect(later.width, BiliMetrics.panelActionSize);
+      expect(pip.left - later.left, pitch);
+      final mirror = tester.getCenter(find.text('镜像翻转')).dy;
+      expect(tester.getCenter(find.text('画面尺寸')).dy - mirror, BiliMetrics.panelRowHeight * 2);
+      for (final kind in [
+        PanelGlyphKind.watchLater,
+        PanelGlyphKind.autoplay,
+        PanelGlyphKind.loop,
+        PanelGlyphKind.fit,
+      ]) {
+        expect(find.byWidgetPredicate((widget) => widget is PanelGlyph && widget.kind == kind), findsOneWidget);
+      }
+    });
+
+    testWidgets('画面尺寸 is a button', (tester) async {
+      final handle = tester.ensureSemantics();
+      await more(tester);
+      expect(tester.getSemantics(find.byKey(const ValueKey('more-fit'))), isSemantics(isButton: true));
+      handle.dispose();
+    });
+
+    testWidgets("scrolled to the end, the last card ends 28.3 above the bottom over 21's inset", (tester) async {
+      tester.view.padding = const FakeViewPadding(left: 62, right: 62, bottom: 21);
+      final rig = await pumpLayer(tester, Shape.landscape);
+      await open(tester, rig, PlayerPanel.more);
+      final scroll = tester.state<ScrollableState>(find.descendant(of: frame, matching: find.byType(Scrollable)));
+      scroll.position.jumpTo(scroll.position.maxScrollExtent);
+      await tester.pumpAndSettle();
+      final card = find.ancestor(of: find.text('显示统计'), matching: find.byType(DecoratedBox)).first;
+      expect(tester.getBottomLeft(card).dy, closeTo(landscapeSize.height - 28.3, 0.01));
+    });
+
+    testWidgets('the 测试 card is for dev builds; release keeps its room empty', (tester) async {
+      final session = FakePlayerSession();
+      addTearDown(session.dispose);
+      Future<double> height({required bool devTools}) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: 400,
+                child: SingleChildScrollView(
+                  child: MorePanel(session: session, toast: (_) {}, close: () {}, devTools: devTools),
+                ),
+              ),
+            ),
+          ),
+        );
+        return tester.getSize(find.byType(MorePanel)).height;
+      }
+
+      final dev = await height(devTools: true);
+      expect(find.text('BTR 加速'), findsOneWidget);
+      final release = await height(devTools: false);
+      expect(find.text('BTR 加速'), findsNothing);
+      expect(find.text('显示统计'), findsNothing);
+      expect(release, dev);
+    });
+
+    testWidgets('稍后再看 that fails toasts and stays open', (tester) async {
+      final rig = await more(
+        tester,
+        session: FakePlayerSession()..watchLaterResult = const ActionResult('添加失败', ok: false),
+      );
+      await tester.tap(find.text('稍后再看'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('添加失败'), findsOneWidget);
+      expect(rig.panels.value, PlayerPanel.more);
+      await clearToast(tester);
+    });
+
+    testWidgets('稍后再看 answering after another panel opened leaves that one open', (tester) async {
+      final session = SlowWatchLater();
+      final rig = await more(tester, session: session);
+      await tester.tap(find.text('稍后再看'));
+      await tester.pump();
+      rig.panels.open(PlayerPanel.speed);
+      await tester.pumpAndSettle();
+      session.answer.complete(const ActionResult('已添加至稍后再看', ok: true));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('已添加至稍后再看'), findsOneWidget);
+      expect(rig.panels.value, PlayerPanel.speed);
+      await clearToast(tester);
+    });
+
+    testWidgets('a switch, 画面尺寸 or 小窗播放 that fails toasts why', (tester) async {
+      final rig = await more(tester, session: FakePlayerSession()..failure = '设置失败');
+      for (final row in ['镜像翻转', 'BTR 加速']) {
+        await tester.ensureVisible(find.text(row));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(row));
+        await tester.pump();
+        expect(find.text('设置失败'), findsOneWidget, reason: row);
+        expect(rig.panels.value, PlayerPanel.more);
+        await clearToast(tester);
+      }
+      await tapText(tester, '画面尺寸');
+      await tester.tap(find.text('16:9'));
+      await tester.pump();
+      expect(find.text('设置失败'), findsOneWidget);
+      await clearToast(tester);
+      await tester.tap(find.text('小窗播放'));
+      await tester.pump();
+      expect(find.text('设置失败'), findsOneWidget);
+      expect(rig.panels.value, isNull);
+      await clearToast(tester);
     });
 
     testWidgets('稍后再看 toasts what the session says and closes', (tester) async {
@@ -443,6 +682,21 @@ void main() {
       expect(find.text('$minutes分钟'), findsOneWidget);
       expect(textColor(tester, '$minutes分钟'), BiliColors.pink);
       expect(rig.panels.value, PlayerPanel.more);
+    });
+
+    testWidgets('the wheel opens on the minutes set before, each time', (tester) async {
+      final rig = await more(tester);
+      await tapText(tester, '自定义');
+      await tester.drag(find.byType(CupertinoPicker), const Offset(0, -BiliMetrics.panelWheelItem * 15));
+      await tester.pumpAndSettle();
+      await tapText(tester, '确定');
+      final minutes = int.parse(rig.session.calls.single.split(' ').last);
+      await tapText(tester, '$minutes分钟');
+      final picker = tester.widget<CupertinoPicker>(find.byType(CupertinoPicker));
+      expect(picker.scrollController?.selectedItem, minutes - 1);
+      await tester.tap(find.byKey(const ValueKey('panel-back')));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoPicker), findsNothing);
     });
 
     testWidgets('the wheel ends at 180 and starts at 1', (tester) async {
@@ -521,11 +775,173 @@ void main() {
       expect(rig.panels.value, isNull);
     });
 
+    testWidgets('landscape cards show the duration when known', (tester) async {
+      final rig = await pumpLayer(
+        tester,
+        Shape.landscape,
+        session: FakePlayerSession()
+          ..episodes = const [
+            Episode(bvid: 'BV1', cid: 1, title: 'P1', current: true, duration: 95),
+            Episode(bvid: 'BV1', cid: 2, title: 'P2', current: false),
+          ],
+      );
+      await open(tester, rig, PlayerPanel.episodes);
+      expect(find.text('01:35'), findsOneWidget);
+    });
+
+    testWidgets('portrait parts are compact rows with their duration', (tester) async {
+      final rig = await pumpLayer(
+        tester,
+        Shape.portrait,
+        session: FakePlayerSession()
+          ..episodes = const [
+            Episode(bvid: 'BV1', cid: 1, title: 'P1', current: true, duration: 95),
+            Episode(bvid: 'BV1', cid: 2, title: 'P2', current: false, duration: 3725),
+          ],
+      );
+      await open(tester, rig, PlayerPanel.episodes);
+      expect(find.text('01:35'), findsOneWidget);
+      expect(find.text('1:02:05'), findsOneWidget);
+      expect(find.text('正序'), findsNothing);
+      expect(find.text('内容到底啦'), findsNothing);
+    });
+
     testWidgets('the light sheet closes from its cross', (tester) async {
       final rig = await pumpLayer(tester, Shape.portrait, session: FakePlayerSession()..episodes = episodes);
       await open(tester, rig, PlayerPanel.episodes);
       await tester.tap(find.byKey(const ValueKey('sheet-close')));
       await tester.pumpAndSettle();
+      expect(rig.panels.value, isNull);
+    });
+  });
+
+  group('选集 sheet for a 合集 (19)', () {
+    final year = DateTime.now().year;
+    int day(int month, int d) => DateTime(year, month, d).millisecondsSinceEpoch ~/ 1000;
+    final episodes = [
+      Episode(
+        bvid: 'BV1',
+        cid: 1,
+        title: '第一集',
+        current: false,
+        cover: '',
+        duration: 32,
+        pubdate: day(8, 28),
+        views: 209000,
+        danmaku: 237,
+      ),
+      Episode(
+        bvid: 'BV2',
+        cid: 2,
+        title: '第二集',
+        current: false,
+        cover: '',
+        duration: 61,
+        pubdate: day(9, 3),
+        views: 113000,
+        danmaku: 217,
+      ),
+      Episode(
+        bvid: 'BV3',
+        cid: 3,
+        title: '第三集',
+        current: true,
+        cover: '',
+        duration: 66,
+        pubdate: DateTime(year - 1, 10, 11).millisecondsSinceEpoch ~/ 1000,
+        views: 4300,
+        danmaku: 344,
+      ),
+    ];
+
+    FakePlayerSession season({String intro = '求订阅！谢谢大家一直以来的支持！'}) => FakePlayerSession()
+      ..episodesAreParts = false
+      ..episodes = episodes
+      ..detail = VideoDetail(
+        bvid: 'BV3',
+        aid: 3,
+        title: '',
+        cover: '',
+        pubdate: 0,
+        duration: 66,
+        desc: '',
+        descParts: const [],
+        copyright: 1,
+        owner: VideoOwner.empty,
+        stat: VideoStat.zero,
+        pages: const [],
+        season: UgcSeason(id: 1, title: 'MAD系列', intro: intro, sections: const []),
+        staff: const [],
+        width: 1920,
+        height: 1080,
+        honor: null,
+        redirectURL: null,
+      );
+
+    testWidgets('the 合集 name heads it, then the intro with 展开 and 选集 with 正序', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait, session: season());
+      await open(tester, rig, PlayerPanel.episodes);
+      expect(find.text('MAD系列'), findsOneWidget);
+      expect(find.text('求订阅！谢谢大家一直以来的支持！'), findsOneWidget);
+      expect(find.text('展开'), findsOneWidget);
+      expect(find.text('选集'), findsOneWidget);
+      expect(find.text('正序'), findsOneWidget);
+      final title = tester.getCenter(find.text('MAD系列')).dy;
+      final intro = tester.getCenter(find.text('展开')).dy;
+      final section = tester.getCenter(find.text('选集')).dy;
+      expect(title, lessThan(intro));
+      expect(intro, lessThan(section));
+      // The share circle and 收藏 come in slice 6; their room stays empty.
+      expect(
+        tester.getTopRight(find.text('展开')).dx,
+        lessThanOrEqualTo(portraitSize.width - BiliMetrics.sheetIntroTrailing),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('sheet-intro')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('收起', findRichText: true), findsOneWidget);
+    });
+
+    testWidgets('rows 100.3 apart with cover, duration, date, counts and the pink playing bars', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait, session: season());
+      await open(tester, rig, PlayerPanel.episodes);
+      final tops = [
+        for (final title in ['第一集', '第二集']) tester.getTopLeft(find.text(title, findRichText: true)).dy,
+      ];
+      expect(tops[1] - tops[0], closeTo(BiliMetrics.sheetRowPad * 2 + BiliMetrics.sheetCoverHeight + 1 / 3, 0.01));
+      expect(tester.getTopLeft(find.text('第一集', findRichText: true)).dx, closeTo(155, 0.5));
+      for (final text in ['00:32', '01:01', '01:06', '8月28日', '9月3日', '${year - 1}年10月11日', '20.9万', '237', '4300']) {
+        expect(find.text(text), findsOneWidget, reason: text);
+      }
+      final bars = find.byWidgetPredicate((widget) => widget is PanelGlyph && widget.kind == PanelGlyphKind.playing);
+      expect(bars, findsOneWidget);
+      expect(tester.widget<PanelGlyph>(bars).color, BiliColors.pink);
+      expect(tester.getTopLeft(bars).dx, greaterThan(BiliMetrics.gutter + BiliMetrics.sheetCoverWidth));
+      expect(find.text('内容到底啦'), findsOneWidget);
+      expect(find.text('仅展示本App中可查看的稿件'), findsOneWidget);
+    });
+
+    testWidgets('正序 turns the list round, and back', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait, session: season());
+      await open(tester, rig, PlayerPanel.episodes);
+      double top(String title) => tester.getTopLeft(find.textContaining(title, findRichText: true)).dy;
+      expect(top('第一集'), lessThan(top('第三集')));
+      await tester.tap(find.byKey(const ValueKey('sheet-order')));
+      await tester.pumpAndSettle();
+      expect(find.text('倒序'), findsOneWidget);
+      expect(top('第三集'), lessThan(top('第一集')));
+      await tester.tap(find.byKey(const ValueKey('sheet-order')));
+      await tester.pumpAndSettle();
+      expect(top('第一集'), lessThan(top('第三集')));
+    });
+
+    testWidgets('a tap plays the episode and closes', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait, session: season(intro: ''));
+      await open(tester, rig, PlayerPanel.episodes);
+      expect(find.text('展开'), findsNothing);
+      await tester.tap(find.text('第二集', findRichText: true));
+      await tester.pumpAndSettle();
+      expect(rig.session.calls, ['playEpisode BV2 2']);
       expect(rig.panels.value, isNull);
     });
   });
