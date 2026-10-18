@@ -1,6 +1,7 @@
 import 'package:bili_core/api.dart' show Chapter;
 import 'package:bilifast/player_ui/seek_bar.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -174,6 +175,84 @@ void main() {
     await tester.tapAt(rect.centerLeft + const Offset(dot, 0));
     await tester.pumpAndSettle();
     expect(rig.commits.last, closeTo(0, 0.01));
+  });
+
+  testWidgets('VoiceOver reads the time and steps it by ten seconds through the commit', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final rig = Rig()..position = 30;
+    await rig.mount(tester);
+
+    final node = tester.getSemantics(find.byType(SeekBar));
+    expect(
+      node,
+      isSemantics(
+        label: '进度',
+        value: '00:30 / 01:40',
+        increasedValue: '00:40 / 01:40',
+        decreasedValue: '00:20 / 01:40',
+        isSlider: true,
+        hasIncreaseAction: true,
+        hasDecreaseAction: true,
+      ),
+    );
+
+    node.owner!.performAction(node.id, SemanticsAction.increase);
+    node.owner!.performAction(node.id, SemanticsAction.decrease);
+    expect(rig.commits, [40, 20]);
+
+    rig.position = 95;
+    rig.repaint.value++;
+    await tester.pump();
+    expect(tester.getSemantics(find.byType(SeekBar)), isSemantics(value: '01:35 / 01:40'));
+    node.owner!.performAction(node.id, SemanticsAction.increase);
+    rig.position = 4;
+    node.owner!.performAction(node.id, SemanticsAction.decrease);
+    expect(rig.commits.skip(2), [100, 0], reason: 'a step stops at the ends');
+    semantics.dispose();
+  });
+
+  testWidgets('before the duration is known VoiceOver gets no time and no steps', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final rig = Rig()..duration = 0;
+    await rig.mount(tester);
+    expect(
+      tester.getSemantics(find.byType(SeekBar)),
+      isSemantics(label: '进度', value: '', hasIncreaseAction: false, hasDecreaseAction: false),
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('the hidden line draws only the played part, with round ends and no track', (tester) async {
+    var position = 25.0;
+    final repaint = ValueNotifier(0);
+    addTearDown(repaint.dispose);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: SizedBox(
+            width: 400,
+            child: HiddenProgressLine(position: () => position, duration: () => 100, repaint: repaint),
+          ),
+        ),
+      ),
+    );
+    RenderObject line() =>
+        tester.renderObject(find.descendant(of: find.byType(HiddenProgressLine), matching: find.byType(CustomPaint)));
+    const height = BiliMetrics.hiddenLine;
+    expect(
+      line(),
+      paints
+        ..rrect(rrect: RRect.fromLTRBR(0, 0, 100, height, const Radius.circular(height / 2)), color: BiliColors.pink),
+    );
+    expect(line(), paintsExactlyCountTimes(#drawRRect, 1));
+    expect(line(), paintsExactlyCountTimes(#drawRect, 0));
+
+    position = 0;
+    repaint.value++;
+    await tester.pump();
+    expect(line(), paintsNothing);
   });
 
   testWidgets('the dot grows under the finger and shrinks back', (tester) async {

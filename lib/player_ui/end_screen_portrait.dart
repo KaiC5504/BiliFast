@@ -4,12 +4,12 @@ import 'dart:math' as math;
 import 'package:bili_core/api.dart' show VideoCard;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart' show CountFormat, TimeFormat;
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../shared/toast.dart';
 import '../video/player_session.dart';
 import 'panels/panel_controller.dart';
 import 'player_ui.dart';
@@ -57,14 +57,15 @@ class _EndScreenPortraitState extends State<EndScreenPortrait> with SingleTicker
     action();
   };
 
-  void _share() {
+  Future<void> _share() async {
     final link = _session.shareLink;
     if (link == null) return;
-    unawaited(
-      widget.share(link).catchError((Object error) {
-        Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '${error.runtimeType}'});
-      }),
-    );
+    try {
+      await widget.share(link);
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '${error.runtimeType}'});
+      if (mounted) showToast(context, '分享失败');
+    }
   }
 
   @override
@@ -125,7 +126,7 @@ class _EndScreenPortraitState extends State<EndScreenPortrait> with SingleTicker
                             key: const ValueKey('end-share'),
                             title: '分享',
                             glyph: const _ShareGlyph(),
-                            onTap: _tap(_share),
+                            onTap: _tap(() => unawaited(_share())),
                           ),
                       ],
                     ),
@@ -167,6 +168,14 @@ class _Recommended extends StatelessWidget {
   static const _caption = TextStyle(color: BiliColors.endCaption, fontSize: BiliMetrics.endCaptionFont, height: 1);
   static const _title = TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.endTitleFont, height: 1.2);
   static const _meta = TextStyle(color: BiliColors.endMeta, fontSize: BiliMetrics.endMetaFont, height: 1);
+
+  /// Figures as wide as the official app's SF digits, which are tabular by default.
+  static const _count = TextStyle(
+    color: BiliColors.endMeta,
+    fontSize: BiliMetrics.endMetaFont,
+    fontFeatures: [FontFeature.tabularFigures()],
+    height: 1,
+  );
   static const _button = TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.endButtonFont, height: 1);
 
   @override
@@ -176,7 +185,10 @@ class _Recommended extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('推荐视频', style: _caption),
+          Transform.translate(
+            offset: const Offset(0, BiliMetrics.endCaptionDrop),
+            child: const Text('推荐视频', style: _caption),
+          ),
           const SizedBox(height: BiliMetrics.endCaptionGap),
           SizedBox(
             height: BiliMetrics.endCoverHeight,
@@ -223,21 +235,13 @@ class _Recommended extends StatelessWidget {
                         height: BiliMetrics.endMetaRow,
                         child: Row(
                           children: [
-                            const Icon(
-                              Icons.smart_display_outlined,
-                              size: BiliMetrics.endMetaIcon,
-                              color: BiliColors.endMeta,
-                            ),
+                            const _CountIcon(_CountGlyph.views),
                             const SizedBox(width: BiliMetrics.endMetaGap),
-                            Text(CountFormat.short(card.views), style: _meta),
+                            Text(CountFormat.short(card.views), style: _count),
                             const SizedBox(width: BiliMetrics.endMetaSpacing),
-                            const Icon(
-                              Icons.subtitles_outlined,
-                              size: BiliMetrics.endMetaIcon,
-                              color: BiliColors.endMeta,
-                            ),
+                            const _CountIcon(_CountGlyph.danmaku),
                             const SizedBox(width: BiliMetrics.endMetaGap),
-                            Text(CountFormat.short(card.danmaku), style: _meta),
+                            Text(CountFormat.short(card.danmaku), style: _count),
                           ],
                         ),
                       ),
@@ -249,15 +253,26 @@ class _Recommended extends StatelessWidget {
                   label: '立即播放',
                   square: false,
                   onTap: onPlay,
-                  child: Container(
-                    width: BiliMetrics.endButtonWidth,
-                    height: BiliMetrics.endButtonHeight,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: BiliColors.endButton,
-                      borderRadius: BorderRadius.circular(BiliMetrics.endButtonHeight / 2),
+                  // The pill is 30 tall and sits on the cover's bottom line, so the rest of a 44 target goes above it.
+                  child: SizedBox(
+                    height: BiliMetrics.chromeButton,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      widthFactor: 1,
+                      child: Container(
+                        width: BiliMetrics.endButtonWidth,
+                        height: BiliMetrics.endButtonHeight,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: BiliColors.endButton,
+                          borderRadius: BorderRadius.circular(BiliMetrics.endButtonHeight / 2),
+                        ),
+                        child: Transform.translate(
+                          offset: const Offset(0, BiliMetrics.endButtonTextDrop),
+                          child: const Text('立即播放', style: _button, maxLines: 1, softWrap: false),
+                        ),
+                      ),
                     ),
-                    child: const Text('立即播放', style: _button, maxLines: 1, softWrap: false),
                   ),
                 ),
                 const SizedBox(width: BiliMetrics.endButtonTrailing),
@@ -346,6 +361,7 @@ class _UpBadge extends StatelessWidget {
     ),
     child: const Text(
       'UP',
+      textScaler: TextScaler.noScaling,
       style: TextStyle(
         color: BiliColors.endMeta,
         fontSize: BiliMetrics.endUpFont,
@@ -354,6 +370,61 @@ class _UpBadge extends StatelessWidget {
       ),
     ),
   );
+}
+
+enum _CountGlyph { views, danmaku }
+
+/// Bilibili's own count icons, the same box as the UP badge: a small play triangle, or two dot-and-dash rows.
+class _CountIcon extends StatelessWidget {
+  const _CountIcon(this.glyph);
+
+  final _CountGlyph glyph;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    size: const Size(BiliMetrics.endCountIconWidth, BiliMetrics.endCountIconHeight),
+    painter: _CountPainter(glyph),
+  );
+}
+
+class _CountPainter extends CustomPainter {
+  const _CountPainter(this.glyph);
+
+  final _CountGlyph glyph;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = BiliMetrics.endUpBorder;
+    final box = (Offset.zero & size).deflate(stroke / 2);
+    final line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = BiliColors.endMeta;
+    canvas.drawRRect(RRect.fromRectAndRadius(box, const Radius.circular(BiliMetrics.endUpRadius)), line);
+
+    // Measured on 26 at 3 px per point, inside its 13.3 × 11.3 box.
+    final sx = size.width / 13.3, sy = size.height / 11.3;
+    Offset p(double x, double y) => Offset(x * sx, y * sy);
+    switch (glyph) {
+      case _CountGlyph.views:
+        final triangle = Path()..addPolygon([p(5.45, 3.7), p(8.65, 5.6), p(5.45, 7.5)], true);
+        canvas
+          ..drawPath(triangle, Paint()..color = BiliColors.endMeta)
+          ..drawPath(triangle, line..strokeWidth = stroke / 2);
+      case _CountGlyph.danmaku:
+        final dot = Paint()..color = BiliColors.endMeta;
+        for (final (y, x) in [(4.17, 3.35), (6.83, 4.35)]) {
+          canvas
+            ..drawCircle(p(x, y), 0.65 * sx, dot)
+            ..drawLine(p(x + 2.05, y), p(x + 5.95, y), line);
+        }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CountPainter oldDelegate) => oldDelegate.glyph != glyph;
 }
 
 class _EndAction extends StatelessWidget {
@@ -390,7 +461,7 @@ Paint _endStroke() => Paint()
   ..strokeJoin = StrokeJoin.round
   ..color = BiliColors.onVideo;
 
-/// 重播: a circle open at the lower right, its arrowhead at three o'clock pointing on round (26).
+/// 重播, as 26 shows: a circle open at the lower right, its arrowhead at three o'clock pointing on round.
 class _ReplayGlyph extends StatelessWidget {
   const _ReplayGlyph();
 
@@ -406,7 +477,7 @@ class _ReplayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Proportions measured on 26 at 8×: a ring of 0.45 of the height, open from 46° round to -8°, and a chevron whose
+    // Proportions measured on 26 at 8×: a ring of radius 0.44 of the height, open from 46° round to -8°, and a chevron whose
     // tip sits just outside the ring at three o'clock.
     final unit = size.height / 18;
     final centre = Offset(8.85 * unit, 9 * unit);
@@ -425,7 +496,7 @@ class _ReplayPainter extends CustomPainter {
   bool shouldRepaint(_ReplayPainter oldDelegate) => false;
 }
 
-/// 分享: the outlined arrow turning up and right (26).
+/// 分享, as 26 shows: the outlined arrow turning up and right.
 class _ShareGlyph extends StatelessWidget {
   const _ShareGlyph();
 
