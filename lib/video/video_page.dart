@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:bili_core/api.dart' as bili
     show AidLink, BvidLink, LinkParser, VideoCard, VideoDetail, VideoPage, VideoView;
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
+import '../app/route_observer.dart';
 import '../device/orientation.dart';
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_controller.dart';
@@ -95,7 +97,7 @@ class VideoPage extends StatefulWidget {
   State<VideoPage> createState() => _VideoPageState();
 }
 
-class _VideoPageState extends State<VideoPage> {
+class _VideoPageState extends State<VideoPage> with RouteAware {
   AppServices? _services;
   PlaybackController? _controller;
   WatchReporter? _reporter;
@@ -142,8 +144,18 @@ class _VideoPageState extends State<VideoPage> {
 
   /// Whether this page's video is vertical; null until the video is known.
   bool? _vertical;
-  bool? _current;
+
+  /// Another page is on top of this one; a menu, sheet or dialog doesn't count.
+  bool _covered = false;
+  PageRoute<dynamic>? _route;
   bool? _immersive;
+
+  /// An av id from the description is being looked up.
+  bool _resolvingId = false;
+
+  /// An action overlay is up in full screen, and whether the chrome showed when it went up.
+  bool _overlayAside = false;
+  bool _chromeShownBefore = false;
 
   OrientationController get _orientation => _services!.device.orientation;
 
@@ -153,7 +165,9 @@ class _VideoPageState extends State<VideoPage> {
   void initState() {
     super.initState();
     _panels.addListener(_panelChanged);
-    _overlays.addListener(_panelChanged);
+    _overlays
+      ..addListener(_panelChanged)
+      ..addListener(_standAside);
   }
 
   @override
@@ -164,38 +178,51 @@ class _VideoPageState extends State<VideoPage> {
       _orientation.addListener(_presentationChanged);
       _start();
     }
-    final current = ModalRoute.isCurrentOf(context) ?? true;
-    if (current == _current) return;
-    final covered = _current == false;
-    _current = current;
-    if (!current) {
-      _owning = false;
-      final controller = _controller;
-      if (controller != null && _isMine(controller)) {
-        _coveredAt = (
-          seconds: controller.currentSeconds,
-          view: controller.video,
-          part: controller.page,
-          detail: controller.detail,
-        );
-      }
-      _setActive(false);
-    } else if (covered) {
-      // Shown again after the page above popped: this page takes the orientation back. Not during this build, since
-      // the orientation's other listeners would rebuild inside it.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _left) return;
-        _claimOrientation();
-        final controller = _controller;
-        if (controller == null) return;
-        if (_isMine(controller)) {
-          _coveredAt = null;
-          _setActive(true);
-        } else if (_session != null) {
-          _reopen(controller);
-        }
-      });
+    // Only another page covers this one. A popup on top (the ⋮ menu, a dialog) makes the route not current as well,
+    // so ModalRoute.isCurrentOf would stop the end rules and the background pause under a menu.
+    if (ModalRoute.of(context) case final PageRoute<dynamic> route when route != _route) {
+      pageRoutes.unsubscribe(this);
+      _route = route;
+      pageRoutes.subscribe(this, route);
     }
+  }
+
+  @override
+  void didPushNext() {
+    if (_covered) return;
+    _covered = true;
+    _owning = false;
+    final controller = _controller;
+    if (controller != null && _isMine(controller)) {
+      _coveredAt = (
+        seconds: controller.currentSeconds,
+        view: controller.video,
+        part: controller.page,
+        detail: controller.detail,
+      );
+    }
+    _setActive(false);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didPopNext() {
+    if (!_covered) return;
+    _covered = false;
+    // Shown again after the page above popped: this page takes the orientation back after the frame, once the pop
+    // and the page above's leaving are done.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _left || _covered) return;
+      _claimOrientation();
+      final controller = _controller;
+      if (controller == null) return;
+      if (_isMine(controller)) {
+        _coveredAt = null;
+        _setActive(true);
+      } else if (_session != null) {
+        _reopen(controller);
+      }
+    });
   }
 
   void _setActive(bool active) {
@@ -270,7 +297,7 @@ class _VideoPageState extends State<VideoPage> {
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
-    _autoHideInputs = Listenable.merge([session.readout.status, session.scrubbing, _panels])
+    _autoHideInputs = Listenable.merge([session.readout.status, session.scrubbing, _panels, _overlays])
       ..addListener(_syncAutoHide);
     _syncAutoHide();
     _sessionChanged();
@@ -324,7 +351,7 @@ class _VideoPageState extends State<VideoPage> {
   /// Once the video is known, and again each time the page is shown after one above it: the latest begin wins.
   void _claimOrientation() {
     final vertical = _vertical;
-    if (_left || vertical == null || _current == false) return;
+    if (_left || vertical == null || _covered) return;
     _owning = true;
     _orientation.begin(this, videoIsVertical: vertical);
   }
@@ -333,6 +360,21 @@ class _VideoPageState extends State<VideoPage> {
     if (!mounted) return;
     setState(() {});
     _applySystemUi();
+    _standAside();
+  }
+
+  /// In full screen an action overlay puts the chrome away, as an open panel does, and gives it back as it was once
+  /// the overlay closes: the dark favourites sheet would otherwise show the chrome's action row through it.
+  void _standAside() {
+    final aside = _overlays.value != null && _presentation.fullScreen;
+    if (aside == _overlayAside) return;
+    _overlayAside = aside;
+    if (aside) {
+      _chromeShownBefore = _chrome.visible;
+      _chrome.hide();
+    } else if (_chromeShownBefore) {
+      _chrome.show();
+    }
   }
 
   /// Full screen keeps the status bar, light on black as in 04 and 09, and hides the home indicator.
@@ -356,10 +398,11 @@ class _VideoPageState extends State<VideoPage> {
         controller.phase == PlaybackPhase.playing &&
         session.readout.wantsPlay &&
         session.scrubbing.value == null &&
-        _panels.value == null;
+        _panels.value == null &&
+        _overlays.value == null;
   }
 
-  /// Rebuilds the PopScope, which lets a pop through only with no panel open.
+  /// Rebuilds the PopScope, which lets a pop through only with no overlay or panel open.
   void _panelChanged() {
     if (mounted) setState(() {});
   }
@@ -397,19 +440,27 @@ class _VideoPageState extends State<VideoPage> {
     if (result.message.isNotEmpty) _toast(result.message);
   }
 
-  /// A BV id opens at once; an av id asks Bilibili for its video first.
+  /// A BV id opens at once; an av id asks Bilibili for its video first. The page's own video opens nothing.
   Future<void> _openVideoId(String id) async {
     switch (bili.LinkParser.parse(id)) {
       case bili.BvidLink(id: final bvid):
+        if (bvid == _bvid) return;
         await widget.openPage(context, VideoRoute(bvid: bvid));
       case final bili.AidLink link:
+        if (_resolvingId || link.id == _intro.detail?.aid) return;
+        _resolvingId = true;
+        final bili.VideoView view;
         try {
-          final (view, _) = await resolveVideoLink(_services!.environment.client, link);
-          if (!mounted || _left) return;
-          await widget.openPage(context, VideoRoute(bvid: view.bvid, title: view.title, view: view));
+          view = (await resolveVideoLink(_services!.environment.client, link)).$1;
         } catch (error) {
+          Logger.shared.warn(LogCategory.ui, 'open video id failed', {'error': '$error'});
           _toast(requestFailureMessage(error, fallback: '打开视频失败，请稍后重试'));
+          return;
+        } finally {
+          _resolvingId = false;
         }
+        if (!mounted || _left || view.bvid == _bvid) return;
+        await widget.openPage(context, VideoRoute(bvid: view.bvid, title: view.title, view: view));
       default:
         break;
     }
@@ -462,9 +513,12 @@ class _VideoPageState extends State<VideoPage> {
   @override
   void dispose() {
     _leave(fromDispose: true);
+    pageRoutes.unsubscribe(this);
     _services?.device.orientation.removeListener(_presentationChanged);
     _panels.removeListener(_panelChanged);
-    _overlays.removeListener(_panelChanged);
+    _overlays
+      ..removeListener(_panelChanged)
+      ..removeListener(_standAside);
     _autoHideInputs?.removeListener(_syncAutoHide);
     final session = _session;
     session?.removeListener(_sessionChanged);
@@ -549,6 +603,7 @@ class _VideoPageState extends State<VideoPage> {
                               loading: _loading(controller, mine),
                               failure: _failure(controller, mine),
                               onRetry: _retry,
+                              endScreenAside: _overlayAside,
                             ),
                           ),
                         ),
@@ -604,7 +659,7 @@ class _VideoPageState extends State<VideoPage> {
                 : IntroTab(
                     content: _intro,
                     details: details,
-                    onSeek: (seconds) => unawaited(session.commitSeek(seconds)),
+                    onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
                     onOpenVideo: (id) => unawaited(_openVideoId(id)),
                     onPlayEpisode: session.playEpisode,
                     onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
@@ -636,15 +691,21 @@ class _VideoPageState extends State<VideoPage> {
     final route = widget.route;
     final cover = route.cover;
     if (cover == null) return null;
+    // Two Heroes with one tag in a page throw at the next push or pop, and after another video opened on the page its
+    // related videos can hold this one. HeroMode rather than no Hero, so the cover keeps its element.
+    final flies = !_played && !_intro.related.any((card) => card.bvid == route.bvid);
     return IgnorePointer(
       key: const ValueKey('video-cover'),
       child: AnimatedOpacity(
         opacity: _played ? 0 : 1,
         duration: const Duration(milliseconds: 200),
-        child: Hero(
-          tag: route.heroTag,
-          flightShuttleBuilder: _coverInFlight,
-          child: RemoteImage(cover, size: _coverSize(context)),
+        child: HeroMode(
+          enabled: flies,
+          child: Hero(
+            tag: route.heroTag,
+            flightShuttleBuilder: _coverInFlight,
+            child: RemoteImage(cover, size: _coverSize(context)),
+          ),
         ),
       ),
     );

@@ -32,6 +32,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.loading = false,
     this.failure,
     this.onRetry,
+    this.endScreenAside = false,
   });
 
   final Presentation presentation;
@@ -53,6 +54,9 @@ class VideoPlayerArea extends StatelessWidget {
   final bool loading;
   final String? failure;
   final VoidCallback? onRetry;
+
+  /// An action overlay is up over the full-screen player: the end screen gets out of its way, as the chrome does.
+  final bool endScreenAside;
 
   @override
   Widget build(BuildContext context) {
@@ -85,13 +89,20 @@ class VideoPlayerArea extends StatelessWidget {
               children: [
                 KeyedSubtree(key: const ValueKey('video-view'), child: video),
                 if (session != null)
-                  DanmakuLayer(
-                    key: const ValueKey('video-danmaku'),
-                    clock: session.clock,
-                    timeline: danmaku?.timeline,
-                    // The end screens show no danmaku over the last frame.
-                    enabled: session.danmakuOn && !ended,
-                    wake: session.readout.any,
+                  // 竖屏's video runs under the status bar; its danmaku start below it.
+                  SafeArea(
+                    key: const ValueKey('video-danmaku-area'),
+                    left: false,
+                    right: false,
+                    bottom: false,
+                    child: DanmakuLayer(
+                      key: const ValueKey('video-danmaku'),
+                      clock: session.clock,
+                      timeline: danmaku?.timeline,
+                      // The end screens show no danmaku over the last frame.
+                      enabled: session.danmakuOn && !ended,
+                      wake: session.readout.any,
+                    ),
                   ),
               ],
             ),
@@ -111,7 +122,17 @@ class VideoPlayerArea extends StatelessWidget {
       ?cover,
       if (ui != null && !failed) ...[
         if (!ended) PlayerGestureLayer(key: const ValueKey('video-gestures'), ui: ui),
-        if (ended) _endScreen(ui) else _chrome(ui),
+        if (ended)
+          IgnorePointer(
+            key: const ValueKey('video-end'),
+            ignoring: endScreenAside,
+            child: ExcludeSemantics(
+              excluding: endScreenAside,
+              child: ChromeSlide(shown: !endScreenAside, from: Offset.zero, child: _endScreen(ui)),
+            ),
+          )
+        else
+          _chrome(ui),
         if (!ended) PlayerHud(key: const ValueKey('video-hud'), ui: ui),
       ],
       if (failure case final failure?)
