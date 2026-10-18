@@ -44,6 +44,12 @@ final class UnsupportedPlayer implements BiliPlayer {
   Future<void> setRate(double rate) async => _check();
 
   @override
+  Future<void> setMuted(bool muted) async => _check();
+
+  @override
+  Future<void> setKeepAwake(bool on) async => _check();
+
+  @override
   Future<void> setFit(FitMode fit) async => _check();
 
   @override
