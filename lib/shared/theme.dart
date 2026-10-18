@@ -713,7 +713,117 @@ abstract final class IntroTheme {
 
 /// 合集, the part strip, the topic and BGM chips and the related rows (03, 18).
 abstract final class IntroListTheme {
-  static const relatedRowHeight = 112.0;
+  /// 03 and 18 put 18 pt between the action labels, the 合集 card, the chips and the related list's first hairline.
+  /// The action row's box ends 3.33 below its labels' ink, so each section owns this much above it and
+  /// [sectionBottom] below, and two sections meet 18 apart.
+  static const sectionTop = 46 / 3;
+  static const sectionBottom = 8 / 3;
+
+  /// 合集 (03): a 36 pt card inside the gutters, its title 12 in, then the playing bars, the place and the ›, which
+  /// ends 15.7 before the card's edge.
+  static const collectionHeight = 36.0;
+  static const collectionLead = 12.0;
+  static const collectionTrailing = 47 / 3;
+  static const collectionTitleText = 14.0;
+
+  /// The official digits are taller and narrower than MiSans's; 13 matches their width.
+  static const collectionPlaceText = 13.0;
+  static const collectionBarsGap = 7.0;
+  static const collectionChevronGap = 6.5;
+  static const collectionChevronWidth = 20 / 3;
+  static const collectionChevronHeight = 12.0;
+  static const chevronStroke = 1.3;
+
+  /// Three round-ended bars, the first full height, the other two 60% of it, 4.33 apart.
+  static const barsWidth = 21 / 2;
+  static const barsHeight = 34 / 3;
+  static const barWidth = 11 / 6;
+  static const barShortShare = 20 / 34;
+
+  /// The part strip (no screenshot; the official app's style): 选集 N/M › over 140 × 52 chips with two lines.
+  static const partHeaderHeight = 36.0;
+  static const partChipWidth = 140.0;
+  static const partChipHeight = 52.0;
+  static const partChipPad = 10.0;
+  static const partChipGap = 8.0;
+  static const partChipText = 13.0;
+  static const partChipLine = 17.0;
+  static const partChipBorder = 1.0;
+  static const partPlayingGap = 5.0;
+
+  /// The topic and BGM capsules (03, 18): 26 tall, 7.3 apart; the name stops at 80 and scrolls by once.
+  static const chipHeight = 26.0;
+  static const chipLead = 10.0;
+  static const chipTrailing = 34 / 3;
+  static const chipGap = 22 / 3;
+  static const chipText = 12.0;
+  static const chipIconGap = 5.5;
+  static const chipChevronGap = 4.5;
+  static const chipTextMax = 80.0;
+  static const chipFade = 12.0;
+  static const chipChevronWidth = 16 / 3;
+  static const chipChevronHeight = 28 / 3;
+  static const chipChevronStroke = 1.2;
+  static const musicGlyphWidth = 12.1;
+  static const musicGlyphHeight = 12.8;
+  static const topicGlyphWidth = 13.2;
+  static const topicGlyphHeight = 12.9;
+  static const topicGlyphStroke = 1.1;
+
+  /// Points a second the name scrolls, the rest before it starts, and the gap before it comes round again.
+  static const marqueeSpeed = 30.0;
+  static const marqueeRest = Duration(milliseconds: 1500);
+  static const marqueeGap = 24.0;
+
+  static const chipTextColor = Color(0xFF61666D);
+  static const chipGlyphColor = Color(0xFF656668);
+
+  /// A related row (03, 18): 92 apart, a 128 × 72 cover 10.33 below the hairline, the text 8 right of it.
+  static const relatedRowHeight = 92.0;
+  static const relatedCoverTop = 31 / 3;
+  static const relatedCoverWidth = 128.0;
+  static const relatedCoverHeight = 72.0;
+  static const relatedCoverRadius = 4.0;
+  static const relatedTextGap = 8.0;
+  static const relatedTitleText = 14.0;
+  static const relatedTitleLine = 17.0;
+
+  /// The title's line box starts this far above the cover's top, which puts its ink 1 pt below it.
+  static const relatedTitleLift = 1.0;
+
+  /// The UP line's and the counts' centres, below the cover's top.
+  static const relatedUploaderCentre = 46.5;
+  static const relatedCountsCentre = 191 / 3;
+  static const relatedMetaText = 12.0;
+  static const relatedMetaLine = 16.0;
+  static const relatedMetaGap = 3.5;
+
+  /// The UP badge and the count icons start 2.33 right of the title.
+  static const relatedMetaLead = 7 / 3;
+  static const relatedCountSpacing = 12.0;
+
+  /// Between rows the hairline starts 10 in; the first runs the full width.
+  static const relatedDividerInset = 10.0;
+
+  /// The duration's dark tag, 4 in from the cover's corner.
+  static const durationHeight = 16.0;
+  static const durationPad = 4.0;
+  static const durationRadius = 1.8;
+  static const durationInset = 4.0;
+  static const durationText = 10.5;
+  static const durationFill = Color(0x8C000000);
+
+  /// ⋮: three 2.67 dots 1.33 apart, their column centred 20 from the right edge on the counts' line.
+  static const moreDot = 8 / 3;
+  static const moreDotGap = 4 / 3;
+  static const moreCentreFromRight = 20.0;
+  static const moreTarget = 36.0;
+
+  /// The rows that are there when the list arrives come in one after another.
+  static const revealStagger = Duration(milliseconds: 35);
+  static const revealDuration = Duration(milliseconds: 320);
+  static const revealRows = 8;
+  static const revealRise = 8.0;
 }
 
 /// The action row under the title, the 三连 rings and the coin dialog (03, 15).
