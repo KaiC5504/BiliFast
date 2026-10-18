@@ -718,7 +718,80 @@ abstract final class IntroListTheme {
 
 /// The action row under the title, the 三连 rings and the coin dialog (03, 15).
 abstract final class ActionTheme {
-  static const rowHeight = 70.0;
+  /// 03's icons are #61666D and their counts the page's grey; on, both turn [BiliColors.pink].
+  static const icon = Color(0xFF61666D);
+  static const count = BiliColors.secondaryText;
+  static const unavailableOpacity = 0.4;
+
+  /// From 03 (px / 3): the icons' ink starts 23.7 pt under the meta line's and spans 20 pt (a 24 pt icon), the counts'
+  /// digits are centred 22.7 pt under the icons'. The row ends at the bottom of the count line.
+  static const topGap = 19.0;
+  static const iconSize = 24.0;
+  static const countGap = 10 / 3;
+  static const countLine = 14.0;
+
+  /// The official app's 10 pt; MiSans draws its digits taller, so they come out about half a point over 03's.
+  static const countFont = 10.0;
+  static const rowHeight = topGap + iconSize + countGap + countLine;
+  static const popScale = 1.24;
+
+  /// The 三连 ring round 点赞, 投币 and 收藏, clear of the counts, and the burst of eight dots when it fires.
+  static const ring = 32.0;
+  static const ringWidth = 2.0;
+  static const burstDot = 4.0;
+  static const burstSpread = 1.6;
+
+  /// The coin dialog (15): white over the page dimmed to 40%, the hint and the ✕ at 60% and 50%.
+  static const coinDim = Color(0x99000000);
+  static const coinText = Color(0xFFFFFFFF);
+  static const coinHint = Color(0x99FFFFFF);
+  static const coinClose = Color(0x80FFFFFF);
+  static const coinUnaffordable = Color(0x66000000);
+
+  /// The crate art has a shadow round it: drawn 84 and 100 pt, its boxes show 72 and 86 pt, 114 pt apart and centred
+  /// at 49.8% of the height. The coin art is 56% of the crate art and sits a little low. The arrows' centres are 22 pt
+  /// in from the edges.
+  static const crate = 84.0;
+  static const selectedCrate = 100.0;
+  static const crateSpacing = 114.0;
+  static const coinArt = 0.56;
+  static const coinArtDrop = 0.017;
+  static const cratesCentre = 0.498;
+  static const arrowWidth = 15.6;
+  static const arrowHeight = 30.0;
+  static const arrowCentreInset = 22.0;
+
+  /// 22娘's art is 150 pt tall, 34 pt under the crate art; the two lines under her are 18 pt apart, the first centred
+  /// 17 pt under her art.
+  static const mascotGap = 34.0;
+  static const mascotHeight = 150.0;
+  static const mascotAspect = 321 / 447;
+  static const hintGap = 8.0;
+  static const hintLine = 18.0;
+  static const hintFont = 13.0;
+
+  /// The bottom row is centred 30 pt above the safe area: ☐ 同时点赞内容 17 pt in, ✕ 30 pt, 如何获取硬币？ 13 pt in.
+  static const bottomLift = 30.0;
+  static const bottomRow = 44.0;
+  static const bottomInset = 17.0;
+  static const bottomEndInset = 13.0;
+  static const bottomFont = 12.0;
+  static const checkbox = 14.0;
+  static const checkboxLine = 1.0;
+  static const checkboxTick = 1.4;
+  static const checkboxRadius = 2.0;
+  static const checkboxGap = 5.0;
+  static const close = 30.0;
+  static const closeRing = 1.0;
+  static const closeCross = 1.3;
+  static const closeCrossHalf = 4.3;
+
+  /// Landscape lays the portrait column out 440 pt wide, scaled down to fit the height.
+  static const landscapeColumn = 440.0;
+
+  /// The lightning frames are 1080 px wide round a 225 px crate; the first one's crate is 27.5 px below its centre.
+  static const thunderWidth = 1080 / 225;
+  static const thunderFirstDrop = 27.5 / 225;
 }
 
 /// The favourites sheet and panel, and the unfollow confirm.
