@@ -38,6 +38,18 @@ abstract final class BiliColors {
   static const panelText = Color(0xFFFFFFFF);
   static const panelSecondary = Color(0xFF9499A0);
 
+  /// Inside the player's panels, measured on the official app's 05, 06, 20 and 21: hairlines, the off switch track,
+  /// the dark sheet's grabber, the switch knob and the highlight under a pressed row.
+  static const panelHairline = Color(0x1FFFFFFF);
+  static const panelTrackOff = Color(0x0FFFFFFF);
+  static const panelGrabber = Color(0x4DFFFFFF);
+  static const panelKnob = Color(0xFFFFFFFF);
+  static const panelPressed = Color(0x14FFFFFF);
+
+  /// The light 选集 sheet in portrait (19): its grabber and the cross in the grey close circle.
+  static const sheetGrabber = Color(0xFFC9CCCF);
+  static const sheetCloseGlyph = Color(0xFF61666D);
+
   /// Behind and over the video.
   static const videoBackground = Color(0xFF000000);
   static const onVideo = Color(0xFFFFFFFF);
@@ -159,6 +171,93 @@ abstract final class BiliMetrics {
   static const cardMenuWidth = 168.0;
   static const cardMenuGap = 4.0;
   static const feedSpinnerRadius = 10.0;
+
+  /// The player's panels, measured on the official app's 05, 06, 20 and 21 (956 pt wide, 62 pt safe area at the
+  /// right). Fractions are of the screen: widths in landscape, heights of the portrait sheet; the cards end
+  /// [panelTrailing] before the safe area.
+  static const panelWidth = 0.4;
+  static const panelQualityWidth = 0.3;
+  static const panelMoreWidth = 0.416;
+  static const panelSpeedWidth = 0.265;
+  static const panelSheetHeight = 0.62;
+  static const panelSpeedSheetHeight = 0.32;
+  static const panelMoreSheetHeight = 0.8;
+
+  /// Where the dark layer starts to fade in before the cards: a share of the screen width in landscape, points above
+  /// the portrait sheet.
+  static const panelFadeFraction = 0.18;
+  static const panelFadeHeight = 90.0;
+  static const panelTop = 16.0;
+  static const panelTrailing = 16.0;
+  static const panelBottom = 16.0;
+  static const panelHeaderHeight = 28.0;
+  static const panelGap = 8.0;
+  static const panelRowRadius = 8.0;
+  static const panelGroupRadius = 10.0;
+  static const panelCardHeight = 54.0;
+  static const panelCardPadX = 16.0;
+  static const panelCardPadY = 8.0;
+  static const panelSubtitleGap = 4.0;
+  static const panelTitleText = 14.0;
+  static const panelDetailText = 12.0;
+  static const panelSubtitleText = 10.0;
+  static const panelBadgeHeight = 14.0;
+  static const panelBadgePad = 4.0;
+  static const panelBadgeGap = 10.0;
+  static const panelInfoIcon = 16.0;
+  static const panelInfoInset = 12.0;
+  static const panelChevron = 16.0;
+
+  /// ⋮'s rows: 51 tall, the icon centred 26 in, the label 44 in and the hairline from there.
+  static const panelRowHeight = 51.0;
+  static const panelRowLead = 16.0;
+  static const panelRowIcon = 20.0;
+  static const panelRowTrailing = 15.0;
+  static const panelLabelInset = 44.0;
+  static const panelHairline = 1 / 3;
+  static const panelSegmentDivider = 20.0;
+  static const panelSegmentPad = 13.0;
+  static const panelSwitchWidth = 33.0;
+  static const panelSwitchHeight = 20.0;
+  static const panelSwitchKnob = 16.0;
+
+  /// ⋮'s top: the squares, their labels, then 定时关闭's title.
+  static const panelActionSize = 48.0;
+  static const panelActionIcon = 24.0;
+  static const panelActionText = 11.0;
+  static const panelActionLabel = 14.0;
+  static const panelActionGap = 36.0;
+  static const panelActionLead = 6.0;
+  static const panelSectionGap = 36.0;
+  static const panelSectionTitle = 20.0;
+  static const panelTitleGap = 12.0;
+  static const panelCardGap = 16.0;
+  static const panelSpeedRow = 50.0;
+  static const panelSpeedCell = 40.0;
+  static const panelWheelHeight = 150.0;
+  static const panelWheelItem = 32.0;
+  static const panelButtonHeight = 40.0;
+
+  /// The dark portrait sheet's grabber, and how far a drag on it must go before the sheet lets go.
+  static const panelGrabberWidth = 36.0;
+  static const panelGrabberHeight = 4.0;
+  static const panelGrabberPad = 8.0;
+  static const panelDismissDrag = 40.0;
+
+  /// How far a row slides while it fades in as the panel opens.
+  static const panelRevealShift = 18.0;
+
+  /// The light 选集 sheet in portrait (19), whose top meets the player's bottom.
+  static const sheetRadius = 12.0;
+  static const sheetGrabberWidth = 30.0;
+  static const sheetGrabberHeight = 3.0;
+  static const sheetGrabberTop = 8.0;
+  static const sheetHeaderHeight = 52.0;
+  static const sheetTitleText = 16.0;
+  static const sheetClose = 24.0;
+  static const sheetCloseGlyph = 17.0;
+  static const sheetRowHeight = 52.0;
+  static const sheetPlayingIcon = 16.0;
 
   /// How far a pressed card shrinks.
   static const pressedScale = 0.97;

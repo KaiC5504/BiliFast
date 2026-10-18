@@ -1,0 +1,532 @@
+import 'package:bili_core/api.dart' show QualityOption, VideoCodec;
+import 'package:bilifast/device/device_controls.dart';
+import 'package:bilifast/device/orientation.dart';
+import 'package:bilifast/player/bili_player.dart';
+import 'package:bilifast/player_ui/chrome_state.dart';
+import 'package:bilifast/player_ui/panels/panel_controller.dart';
+import 'package:bilifast/player_ui/panels/panel_layer.dart';
+import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/player_session.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/fake_player_session.dart';
+
+const landscapeSize = Size(956, 440);
+const portraitSize = Size(440, 956);
+
+const _qualities = [
+  QualityOption(id: 80, name: '高清 1080P'),
+  QualityOption(id: 125, name: '真彩 HDR'),
+  QualityOption(id: 120, name: '超清 4K'),
+  QualityOption(id: 64, name: '高清 720P'),
+];
+
+class Rig {
+  Rig(this.session, this.ui, this.below);
+
+  final FakePlayerSession session;
+  final PlayerUi ui;
+
+  /// Taps that went through the layer to the page under it.
+  final List<int> below;
+
+  PanelController get panels => ui.panels;
+}
+
+enum Shape { landscape, portrait, vertical }
+
+Future<Rig> pumpLayer(WidgetTester tester, Shape shape, {FakePlayerSession? session}) async {
+  final size = shape == Shape.landscape ? landscapeSize : portraitSize;
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final fake = session ?? FakePlayerSession();
+  final orientation = OrientationController();
+  switch (shape) {
+    case Shape.landscape:
+      orientation.enterLandscape();
+    case Shape.vertical:
+      orientation.enterVertical();
+    case Shape.portrait:
+      break;
+  }
+  final chrome = ChromeState();
+  final panels = PanelController();
+  final ui = PlayerUi(
+    session: fake,
+    chrome: chrome,
+    panels: panels,
+    orientation: orientation,
+    device: NoDeviceControls(),
+    onBack: () {},
+  );
+  final below = <int>[];
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => below.add(below.length),
+              child: const ColoredBox(color: BiliColors.videoBackground),
+            ),
+          ),
+          Positioned.fill(child: PanelLayer(ui: ui)),
+        ],
+      ),
+    ),
+  );
+  addTearDown(() {
+    chrome.dispose();
+    panels.dispose();
+    orientation.dispose();
+    fake.dispose();
+  });
+  return Rig(fake, ui, below);
+}
+
+Future<void> open(WidgetTester tester, Rig rig, PlayerPanel panel) async {
+  rig.panels.open(panel);
+  await tester.pumpAndSettle();
+}
+
+Color? textColor(WidgetTester tester, String text) {
+  final rich = tester.widget<RichText>(find.descendant(of: find.text(text), matching: find.byType(RichText)).first);
+  return rich.text.style?.color;
+}
+
+Finder get frame => find.byKey(const ValueKey('panel-frame'));
+
+Future<void> tapText(WidgetTester tester, String text) async {
+  await tester.ensureVisible(find.text(text));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(text));
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  group('the layer', () {
+    testWidgets('closed, it shows nothing and every touch reaches the page', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape);
+      expect(frame, findsNothing);
+      await tester.tapAt(const Offset(900, 220));
+      expect(rig.below, [0]);
+
+      await open(tester, rig, PlayerPanel.quality);
+      rig.panels.close();
+      await tester.pump();
+      // Sliding out, it already lets touches through.
+      await tester.tapAt(const Offset(900, 220));
+      expect(rig.below, [0, 1]);
+      await tester.pumpAndSettle();
+      expect(frame, findsNothing);
+      expect(find.byKey(const ValueKey('panel-dismiss')), findsNothing);
+    });
+
+    testWidgets('slides in from the right in landscape and back out', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape);
+      rig.panels.open(PlayerPanel.quality);
+      await tester.pump();
+      expect(tester.getTopLeft(frame).dx, greaterThanOrEqualTo(landscapeSize.width));
+      await tester.pump(const Duration(milliseconds: 150));
+      final midway = tester.getTopLeft(frame).dx;
+      expect(midway, lessThan(landscapeSize.width));
+      await tester.pumpAndSettle();
+      expect(tester.getTopRight(frame).dx, landscapeSize.width);
+      expect(tester.getTopLeft(frame).dx, lessThan(midway));
+    });
+
+    testWidgets('rises from the bottom in portrait', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      rig.panels.open(PlayerPanel.quality);
+      await tester.pump();
+      expect(tester.getTopLeft(frame).dy, greaterThanOrEqualTo(portraitSize.height));
+      await tester.pumpAndSettle();
+      expect(tester.getBottomLeft(frame).dy, portraitSize.height);
+    });
+
+    testWidgets('a tap outside closes it in landscape, a tap on it does not', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape);
+      await open(tester, rig, PlayerPanel.more);
+      await tester.tapAt(tester.getBottomLeft(frame) + const Offset(20, -4));
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.more);
+      await tester.tapAt(const Offset(100, 220));
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, isNull);
+      expect(rig.below, isEmpty);
+    });
+
+    testWidgets('a tap outside closes it in portrait', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      await open(tester, rig, PlayerPanel.speed);
+      await tester.tapAt(const Offset(220, 100));
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, isNull);
+      expect(rig.below, isEmpty);
+    });
+
+    testWidgets('pulling the grabber down closes the sheet; a short pull springs back', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      await open(tester, rig, PlayerPanel.quality);
+      final grabber = find.byKey(const ValueKey('panel-grabber'));
+      await tester.timedDrag(grabber, const Offset(0, 20), const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.quality);
+      expect(tester.getBottomLeft(frame).dy, portraitSize.height);
+      await tester.drag(grabber, const Offset(0, 120));
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, isNull);
+    });
+
+    final landscapeWidths = {
+      PlayerPanel.quality: BiliMetrics.panelQualityWidth,
+      PlayerPanel.codec: BiliMetrics.panelQualityWidth,
+      PlayerPanel.speed: BiliMetrics.panelSpeedWidth,
+      PlayerPanel.more: BiliMetrics.panelMoreWidth,
+      PlayerPanel.episodes: BiliMetrics.panelWidth,
+    };
+    for (final MapEntry(key: panel, value: fraction) in landscapeWidths.entries) {
+      testWidgets('${panel.name} is ${fraction * 100}% of the width in landscape, full height', (tester) async {
+        final rig = await pumpLayer(tester, Shape.landscape);
+        await open(tester, rig, panel);
+        expect(tester.getSize(frame), Size(landscapeSize.width * fraction, landscapeSize.height));
+        expect(tester.getTopRight(frame), Offset(landscapeSize.width, 0));
+      });
+    }
+
+    final sheetHeights = {
+      PlayerPanel.quality: BiliMetrics.panelSheetHeight,
+      PlayerPanel.codec: BiliMetrics.panelSheetHeight,
+      PlayerPanel.speed: BiliMetrics.panelSpeedSheetHeight,
+      PlayerPanel.more: BiliMetrics.panelMoreSheetHeight,
+    };
+    for (final MapEntry(key: panel, value: fraction) in sheetHeights.entries) {
+      testWidgets('${panel.name} is a sheet ${fraction * 100}% of the height in portrait', (tester) async {
+        final rig = await pumpLayer(tester, Shape.portrait);
+        await open(tester, rig, panel);
+        expect(tester.getSize(frame), Size(portraitSize.width, portraitSize.height * fraction));
+        expect(tester.getBottomLeft(frame), Offset(0, portraitSize.height));
+      });
+    }
+
+    testWidgets('竖屏 gets the portrait sheet too', (tester) async {
+      final rig = await pumpLayer(tester, Shape.vertical);
+      await open(tester, rig, PlayerPanel.quality);
+      expect(tester.getSize(frame), Size(portraitSize.width, portraitSize.height * BiliMetrics.panelSheetHeight));
+    });
+
+    testWidgets('选集 in portrait is the light sheet from the player down, in 竖屏 0.62 of the screen', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      await open(tester, rig, PlayerPanel.episodes);
+      final player = portraitSize.width / BiliMetrics.videoAspect;
+      expect(tester.getTopLeft(frame), Offset(0, player));
+      expect(tester.getBottomLeft(frame).dy, portraitSize.height);
+
+      final vertical = await pumpLayer(tester, Shape.vertical);
+      await open(tester, vertical, PlayerPanel.episodes);
+      expect(tester.getSize(frame).height, portraitSize.height * BiliMetrics.panelSheetHeight);
+    });
+
+    testWidgets('the cards end 16 before the safe area at the right, as the official 05', (tester) async {
+      tester.view.padding = const FakeViewPadding(left: 62, right: 62);
+      final rig = await pumpLayer(tester, Shape.landscape, session: FakePlayerSession()..qualities = _qualities);
+      await open(tester, rig, PlayerPanel.quality);
+      final card = find.ancestor(of: find.text('自动'), matching: find.byType(Container)).first;
+      expect(tester.getTopRight(card).dx, closeTo(878, 0.5));
+      expect(tester.getTopLeft(card).dx, closeTo(669, 1));
+      expect(tester.getSize(card).height, BiliMetrics.panelCardHeight);
+      expect(tester.getTopLeft(card).dy, closeTo(52, 0.5));
+    });
+  });
+
+  group('清晰度', () {
+    Future<Rig> quality(WidgetTester tester, {bool vip = false}) async {
+      final session = FakePlayerSession()
+        ..qualities = _qualities
+        ..quality = 120
+        ..isVip = vip;
+      final rig = await pumpLayer(tester, Shape.landscape, session: session);
+      await open(tester, rig, PlayerPanel.quality);
+      return rig;
+    }
+
+    testWidgets('lists 自动 then every quality best first, the current one pink, 大会员 badges and the HDR line', (
+      tester,
+    ) async {
+      await quality(tester);
+      final titles = ['自动', 'HDR 真彩', '4K 超高清', '1080P 高清', '720P 准高清'];
+      final tops = [for (final title in titles) tester.getTopLeft(find.text(title)).dy];
+      expect(tops, [...tops]..sort());
+      expect(find.text('大会员'), findsNWidgets(2));
+      expect(find.text('绚丽色彩，沉浸体验'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('绚丽色彩，沉浸体验')).dy, greaterThan(tester.getTopLeft(find.text('HDR 真彩')).dy));
+      expect(find.byIcon(Icons.info_outline), findsOneWidget);
+      expect(textColor(tester, '4K 超高清'), BiliColors.pink);
+      expect(textColor(tester, '1080P 高清'), BiliColors.panelText);
+      expect(find.text('高级设置'), findsOneWidget);
+    });
+
+    testWidgets('a free quality plays and closes', (tester) async {
+      final rig = await quality(tester);
+      await tapText(tester, '1080P 高清');
+      expect(rig.session.calls, ['setQuality 80']);
+      expect(rig.panels.value, isNull);
+    });
+
+    testWidgets('without 大会员 a 大会员 quality only toasts, and the panel stays', (tester) async {
+      final rig = await quality(tester);
+      await tester.tap(find.text('HDR 真彩'));
+      await tester.pump();
+      expect(find.text('开通大会员后可观看'), findsOneWidget);
+      expect(rig.session.calls, isEmpty);
+      expect(rig.panels.value, PlayerPanel.quality);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('with 大会员 it plays', (tester) async {
+      final rig = await quality(tester, vip: true);
+      await tapText(tester, 'HDR 真彩');
+      expect(rig.session.calls, ['setQuality 125']);
+      expect(rig.panels.value, isNull);
+    });
+
+    testWidgets('自动 picks the best one the account may play', (tester) async {
+      final rig = await quality(tester);
+      await tapText(tester, '自动');
+      expect(rig.session.calls, ['setQuality 80']);
+    });
+
+    testWidgets('高级设置 opens 编码: the current codec pink, a pick sets it and closes, the arrow goes back', (
+      tester,
+    ) async {
+      final rig = await quality(tester);
+      final before = tester.getRect(frame);
+      await tester.tap(find.byKey(const ValueKey('quality-advanced')));
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.codec);
+      expect(tester.getRect(frame), before);
+      expect([for (final codec in VideoCodec.values) codec.label], ['HEVC', 'AV1', 'H.264']);
+      for (final label in ['HEVC', 'AV1', 'H.264']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(textColor(tester, 'HEVC'), BiliColors.pink);
+      expect(textColor(tester, 'AV1'), BiliColors.panelText);
+
+      await tester.tap(find.byKey(const ValueKey('panel-back')));
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.quality);
+
+      rig.panels.open(PlayerPanel.codec);
+      await tester.pumpAndSettle();
+      await tapText(tester, 'AV1');
+      expect(rig.session.calls, ['setCodec av1']);
+      expect(rig.panels.value, isNull);
+    });
+  });
+
+  group('倍速', () {
+    const labels = ['3.0X', '2.0X', '1.5X', '1.25X', '1.0X', '0.75X', '0.5X'];
+
+    testWidgets('a column in landscape, centred on the screen, the current one pink', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape, session: FakePlayerSession()..rate = 1.25);
+      await open(tester, rig, PlayerPanel.speed);
+      expect(find.text('倍速'), findsNothing);
+      final centres = [for (final label in labels) tester.getCenter(find.text(label))];
+      for (final (index, centre) in centres.indexed.skip(1)) {
+        expect(centre.dx, closeTo(centres.first.dx, 0.5));
+        expect(centre.dy - centres[index - 1].dy, BiliMetrics.panelSpeedRow);
+      }
+      expect((centres.first.dy + centres.last.dy) / 2, landscapeSize.height / 2);
+      expect(textColor(tester, '1.25X'), BiliColors.pink);
+      expect(textColor(tester, '1.0X'), BiliColors.panelText);
+    });
+
+    testWidgets('a four-column grid in portrait', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      await open(tester, rig, PlayerPanel.speed);
+      expect(find.text('倍速'), findsOneWidget);
+      final centres = [for (final label in labels) tester.getCenter(find.text(label))];
+      expect(centres.take(4).map((c) => c.dy).toSet(), hasLength(1));
+      expect(centres.skip(4).map((c) => c.dy).toSet(), hasLength(1));
+      expect(centres[4].dy, greaterThan(centres[0].dy));
+      expect(centres[4].dx, closeTo(centres[0].dx, 0.5));
+      expect(textColor(tester, '1.0X'), BiliColors.pink);
+    });
+
+    testWidgets('a pick sets the rate and closes', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape);
+      await open(tester, rig, PlayerPanel.speed);
+      await tapText(tester, '1.5X');
+      expect(rig.session.calls, ['setRate 1.5']);
+      expect(rig.panels.value, isNull);
+    });
+  });
+
+  group('⋮', () {
+    Future<Rig> more(WidgetTester tester, {FakePlayerSession? session}) async {
+      final rig = await pumpLayer(tester, Shape.landscape, session: session);
+      await open(tester, rig, PlayerPanel.more);
+      return rig;
+    }
+
+    testWidgets('has the official rows in order', (tester) async {
+      await more(tester);
+      final rows = ['稍后再看', '定时关闭', '不开启', '自动连播', '循环播放', '镜像翻转', '画面尺寸', '测试', 'BTR 加速', '显示统计'];
+      final tops = [for (final row in rows) tester.getTopLeft(find.text(row)).dy];
+      expect(tops, [...tops]..sort());
+      for (final text in ['小窗播放', '15:00', '30:00', '60:00', '自定义', '单集循环', '列表循环', '不循环', '适应']) {
+        expect(find.text(text), findsOneWidget);
+      }
+    });
+
+    testWidgets('稍后再看 toasts what the session says and closes', (tester) async {
+      final rig = await more(tester);
+      await tester.tap(find.text('稍后再看'));
+      await tester.pump();
+      await tester.pump();
+      expect(rig.session.calls, ['watchLater']);
+      expect(find.text('已添加至稍后再看'), findsOneWidget);
+      expect(rig.panels.value, isNull);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('小窗播放 starts picture in picture and closes; greyed out where unsupported', (tester) async {
+      final rig = await more(tester);
+      await tapText(tester, '小窗播放');
+      expect(rig.session.calls, ['startPictureInPicture']);
+      expect(rig.panels.value, isNull);
+
+      final unsupported = await more(tester, session: FakePlayerSession()..pictureInPictureSupported = false);
+      await tapText(tester, '小窗播放');
+      expect(unsupported.session.calls, isEmpty);
+      expect(unsupported.panels.value, PlayerPanel.more);
+    });
+
+    testWidgets('定时关闭 presets set the timer and stay open, showing the time left', (tester) async {
+      final rig = await more(tester);
+      expect(textColor(tester, '不开启'), BiliColors.pink);
+      await tapText(tester, '15:00');
+      expect(rig.session.calls, ['setSleepTimer 15']);
+      expect(rig.panels.value, PlayerPanel.more);
+      expect(textColor(tester, '15:00'), BiliColors.pink);
+      expect(find.text('15:00 后暂停'), findsOneWidget);
+      rig.session.sleepRemaining.value = const Duration(minutes: 14, seconds: 3);
+      await tester.pump();
+      expect(find.text('14:03 后暂停'), findsOneWidget);
+      await tapText(tester, '不开启');
+      expect(rig.session.calls.last, 'setSleepTimer null');
+      expect(find.byKey(const ValueKey('sleep-remaining')), findsNothing);
+    });
+
+    testWidgets('自定义 turns a wheel of 1 to 180 minutes; 确定 sets it and shows it in the row', (tester) async {
+      final rig = await more(tester);
+      await tapText(tester, '自定义');
+      expect(find.byType(CupertinoPicker), findsOneWidget);
+      expect(find.text('自定义定时关闭'), findsOneWidget);
+      expect(find.text('30 分钟'), findsOneWidget);
+      await tester.drag(find.byType(CupertinoPicker), const Offset(0, -BiliMetrics.panelWheelItem * 15));
+      await tester.pumpAndSettle();
+      await tapText(tester, '确定');
+      final call = rig.session.calls.single;
+      final minutes = int.parse(call.split(' ').last);
+      expect(minutes, greaterThan(30));
+      expect(minutes, lessThanOrEqualTo(180));
+      expect(find.text('$minutes分钟'), findsOneWidget);
+      expect(textColor(tester, '$minutes分钟'), BiliColors.pink);
+      expect(rig.panels.value, PlayerPanel.more);
+    });
+
+    testWidgets('the wheel ends at 180 and starts at 1', (tester) async {
+      final rig = await more(tester);
+      await tapText(tester, '自定义');
+      await tester.drag(find.byType(CupertinoPicker), const Offset(0, -BiliMetrics.panelWheelItem * 400));
+      await tester.pumpAndSettle();
+      await tapText(tester, '确定');
+      await tapText(tester, '180分钟');
+      await tester.drag(find.byType(CupertinoPicker), const Offset(0, BiliMetrics.panelWheelItem * 400));
+      await tester.pumpAndSettle();
+      await tapText(tester, '确定');
+      expect(rig.session.calls, ['setSleepTimer 180', 'setSleepTimer 1']);
+    });
+
+    testWidgets('the switches and the loop segments call the session and stay open', (tester) async {
+      final rig = await more(tester);
+      await tapText(tester, '自动连播');
+      await tapText(tester, '单集循环');
+      await tapText(tester, '镜像翻转');
+      await tapText(tester, 'BTR 加速');
+      await tapText(tester, '显示统计');
+      expect(rig.session.calls, [
+        'setAutoplayNext false',
+        'setLoop single',
+        'setMirrored true',
+        'setBtr false',
+        'setShowStats true',
+      ]);
+      expect(textColor(tester, '单集循环'), BiliColors.pink);
+      expect(rig.panels.value, PlayerPanel.more);
+    });
+
+    testWidgets('画面尺寸 opens its page; a pick sets it and comes back', (tester) async {
+      final rig = await more(tester);
+      await tapText(tester, '画面尺寸');
+      for (final mode in FitMode.values) {
+        expect(find.text(mode.label), findsOneWidget);
+      }
+      expect(textColor(tester, '适应'), BiliColors.pink);
+      await tapText(tester, '16:9');
+      expect(rig.session.calls, ['setFit ratio16x9']);
+      expect(find.text('定时关闭'), findsOneWidget);
+      expect(find.text('16:9'), findsOneWidget);
+      expect(rig.panels.value, PlayerPanel.more);
+    });
+  });
+
+  group('选集', () {
+    const episodes = [
+      Episode(bvid: 'BV1', cid: 1, title: 'P1 开头', current: false),
+      Episode(bvid: 'BV1', cid: 2, title: 'P2 中间', current: true),
+      Episode(bvid: 'BV1', cid: 3, title: 'P3 结尾', current: false),
+    ];
+
+    for (final shape in [Shape.landscape, Shape.portrait]) {
+      testWidgets('${shape.name}: lists the episodes, the current pink; a tap plays it and closes', (tester) async {
+        final rig = await pumpLayer(tester, shape, session: FakePlayerSession()..episodes = episodes);
+        await open(tester, rig, PlayerPanel.episodes);
+        expect(find.text('选集'), findsOneWidget);
+        final tops = [for (final episode in episodes) tester.getTopLeft(find.text(episode.title)).dy];
+        expect(tops, [...tops]..sort());
+        expect(textColor(tester, 'P2 中间'), BiliColors.pink);
+        expect(textColor(tester, 'P1 开头'), shape == Shape.landscape ? BiliColors.panelText : BiliColors.text);
+        await tapText(tester, 'P3 结尾');
+        expect(rig.session.calls, ['playEpisode BV1 3']);
+        expect(rig.panels.value, isNull);
+      });
+    }
+
+    testWidgets('the current one only closes', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape, session: FakePlayerSession()..episodes = episodes);
+      await open(tester, rig, PlayerPanel.episodes);
+      await tapText(tester, 'P2 中间');
+      expect(rig.session.calls, isEmpty);
+      expect(rig.panels.value, isNull);
+    });
+
+    testWidgets('the light sheet closes from its cross', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait, session: FakePlayerSession()..episodes = episodes);
+      await open(tester, rig, PlayerPanel.episodes);
+      await tester.tap(find.byKey(const ValueKey('sheet-close')));
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, isNull);
+    });
+  });
+}
