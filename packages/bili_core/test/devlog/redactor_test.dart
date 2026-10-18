@@ -168,6 +168,49 @@ void main() {
     expect(Redactor.text('https://app.bilibili.com/x?appkey=k&sign=abc123&design=ok'), 'https://app.bilibili.com/x');
   });
 
+  test('protocol-relative signed URL keeps host, path and deadline', () {
+    const url = '//upos-sz-mirrorcos.bilivideo.com/upgcxcode/12/34/567/567-1-100050.m4s?e=ig8euxZM&uipk=5'
+        '&deadline=1760000000&gen=playurlv2&os=cosbv&auth_key=1760000000-0-0-deadbeef&mid=99887766';
+    const kept = '//upos-sz-mirrorcos.bilivideo.com/upgcxcode/12/34/567/567-1-100050.m4s?deadline=1760000000';
+    expect(Redactor.text('GET $url done'), 'GET $kept done');
+    expect(Redactor.text('url=$url'), 'url=$kept');
+    expect(Redactor.url(url), kept);
+  });
+
+  test('protocol-relative URLs in JSON and prose lose their query', () {
+    expect(
+      Redactor.text(
+        r'{"baseUrl":"//upos-sz.bilivideo.com/a.m4s?auth_key=SECRET",'
+        r'"backupUrl":["\/\/upos-hz.bilivideo.com\/a.m4s?upsig=SECRET&deadline=1"]}',
+      ),
+      r'{"baseUrl":"//upos-sz.bilivideo.com/a.m4s","backupUrl":["//upos-hz.bilivideo.com/a.m4s?deadline=1"]}',
+    );
+    expect(
+      Redactor.text('(//h.bilivideo.com/p/a.m4s?auth_key=S), then //h.bilivideo.com/p?x#f.'),
+      '(//h.bilivideo.com/p/a.m4s), then //h.bilivideo.com/p.',
+    );
+  });
+
+  test('double slashes that are not protocol-relative URLs are left alone', () {
+    const text = 'a//b?c=1 10//2?x=y // note';
+    expect(Redactor.text(text), text);
+  });
+
+  test('signed media URL secrets are redacted as pairs and fields; uparams only names them', () {
+    expect(
+      Redactor.text('auth_key=1760000000-0-0-abc upsig=deadbeef&hdnts=exp=1760000000~acl=/*~hmac=ff00'),
+      'auth_key=[redacted] upsig=[redacted]&hdnts=[redacted]',
+    );
+    expect(Redactor.text(r'{"auth_key":"1760000000-0-0-abc"}'), r'{"auth_key":"[redacted]"}');
+    const names = 'uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform';
+    expect(Redactor.text(names), names);
+    final out = Redactor.fields({'auth_key': 'a', 'upsig': 'u', 'hdnts': 'h', 'uparams': 'e,deadline'});
+    for (final key in ['auth_key', 'upsig', 'hdnts']) {
+      expect(out[key], const LogString('[redacted]'), reason: key);
+    }
+    expect(out['uparams'], const LogString('e,deadline'));
+  });
+
   test('mid hash', () {
     expect(Redactor.mid(12345), Redactor.mid(12345));
     expect(Redactor.mid(12345), isNot(contains('12345')));
