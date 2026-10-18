@@ -133,7 +133,7 @@ void main() {
   testWidgets('截图 saves the frame and toasts what came of it; it is gone where frames cannot be captured', (
     tester,
   ) async {
-    final rig = Rig()..session.captureToast = '已保存到相册';
+    final rig = Rig()..session.captureResult = const ActionResult('已保存到相册', ok: true);
     await rig.mount(tester);
 
     await tester.tap(find.byKey(const ValueKey('landscape-capture')));

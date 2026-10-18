@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show Chapter, QualityOption, VideoCard, VideoCodec, VideoPage, VideoView;
+import 'package:bili_core/api.dart' show Chapter, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoView;
 import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
@@ -36,6 +36,9 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
 
   @override
   VideoPage? part;
+
+  @override
+  VideoDetail? detail;
 
   @override
   String title = '';
@@ -92,11 +95,15 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   double rate = 1;
 
   @override
-  Future<void> setRate(double rate) async {
+  Future<String?> setRate(double rate) async {
     calls.add('setRate $rate');
     this.rate = rate;
     notifyListeners();
+    return failure;
   }
+
+  /// What every setter completes with: null for success, or a failure's toast text.
+  String? failure;
 
   @override
   bool speedingUp = false;
@@ -112,20 +119,22 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   FitMode fit = FitMode.fit;
 
   @override
-  Future<void> setFit(FitMode fit) async {
+  Future<String?> setFit(FitMode fit) async {
     calls.add('setFit ${fit.name}');
     this.fit = fit;
     notifyListeners();
+    return failure;
   }
 
   @override
   bool mirrored = false;
 
   @override
-  Future<void> setMirrored(bool on) async {
+  Future<String?> setMirrored(bool on) async {
     calls.add('setMirrored $on');
     mirrored = on;
     notifyListeners();
+    return failure;
   }
 
   @override
@@ -189,10 +198,11 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   bool btr = true;
 
   @override
-  Future<void> setBtr(bool on) async {
+  Future<String?> setBtr(bool on) async {
     calls.add('setBtr $on');
     btr = on;
     notifyListeners();
+    return failure;
   }
 
   @override
@@ -201,6 +211,11 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   @override
   int quality = 80;
 
+  int? playing;
+
+  @override
+  int get playingQuality => playing ?? quality;
+
   @override
   String qualityName(int qn) => qualities.where((option) => option.id == qn).firstOrNull?.name ?? '$qn';
 
@@ -208,20 +223,22 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   bool isVip = false;
 
   @override
-  Future<void> setQuality(int qn) async {
+  Future<String?> setQuality(int qn) async {
     calls.add('setQuality $qn');
     quality = qn;
     notifyListeners();
+    return failure;
   }
 
   @override
   VideoCodec codec = VideoCodec.hevc;
 
   @override
-  Future<void> setCodec(VideoCodec codec) async {
+  Future<String?> setCodec(VideoCodec codec) async {
     calls.add('setCodec ${codec.name}');
     this.codec = codec;
     notifyListeners();
+    return failure;
   }
 
   @override
@@ -239,30 +256,36 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   @override
   void playRelated(VideoCard card) => calls.add('playRelated ${card.bvid}');
 
-  String watchLaterToast = '已添加至稍后再看';
+  ActionResult watchLaterResult = const ActionResult('已添加至稍后再看', ok: true);
 
   @override
-  Future<String> watchLater() async {
+  Future<ActionResult> watchLater() async {
     calls.add('watchLater');
-    return watchLaterToast;
+    return watchLaterResult;
   }
 
   @override
   bool pictureInPictureSupported = true;
 
   @override
-  Future<void> startPictureInPicture() async => calls.add('startPictureInPicture');
+  Future<String?> startPictureInPicture() async {
+    calls.add('startPictureInPicture');
+    return failure;
+  }
 
   @override
   bool canCaptureFrame = true;
 
-  String captureToast = '已保存到相册';
+  ActionResult captureResult = const ActionResult('已保存到相册', ok: true);
 
   @override
-  Future<String> captureFrame() async {
+  Future<ActionResult> captureFrame() async {
     calls.add('captureFrame');
-    return captureToast;
+    return captureResult;
   }
+
+  @override
+  bool active = true;
 
   @override
   void dispose() {

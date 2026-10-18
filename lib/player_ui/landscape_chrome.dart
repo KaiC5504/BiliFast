@@ -192,7 +192,7 @@ class LandscapeChrome extends StatelessWidget {
   }
 
   Future<void> _capture(BuildContext context) async {
-    final message = await ui.session.captureFrame();
+    final message = (await ui.session.captureFrame()).message;
     if (context.mounted) showToast(context, message);
   }
 

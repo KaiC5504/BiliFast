@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show Chapter, QualityOption, VideoCard, VideoCodec, VideoPage, VideoView;
+import 'package:bili_core/api.dart' show Chapter, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoView;
 import 'package:flutter/foundation.dart';
 
 import '../playback/overlay_stats.dart';
@@ -17,9 +17,20 @@ enum LoopMode {
 }
 
 /// A part of this video, or an episode of the 合集 section holding it: what 选集 lists and 自动连播 plays next.
+/// A 合集 episode carries its cover, publish time and counts for the 选集 sheet; a part only its duration.
 @immutable
 final class Episode {
-  const Episode({required this.bvid, required this.cid, required this.title, required this.current});
+  const Episode({
+    required this.bvid,
+    required this.cid,
+    required this.title,
+    required this.current,
+    this.cover,
+    this.duration,
+    this.pubdate,
+    this.views,
+    this.danmaku,
+  });
 
   final String bvid;
   final int cid;
@@ -27,13 +38,40 @@ final class Episode {
 
   /// The one playing.
   final bool current;
+  final String? cover;
+
+  /// Seconds.
+  final int? duration;
+
+  /// Unix seconds.
+  final int? pubdate;
+  final int? views;
+  final int? danmaku;
 
   @override
   bool operator ==(Object other) =>
-      other is Episode && other.bvid == bvid && other.cid == cid && other.title == title && other.current == current;
+      other is Episode &&
+      other.bvid == bvid &&
+      other.cid == cid &&
+      other.title == title &&
+      other.current == current &&
+      other.cover == cover &&
+      other.duration == duration &&
+      other.pubdate == pubdate &&
+      other.views == views &&
+      other.danmaku == danmaku;
 
   @override
-  int get hashCode => Object.hash(bvid, cid, title, current);
+  int get hashCode => Object.hash(bvid, cid, title, current, cover, duration, pubdate, views, danmaku);
+}
+
+/// What an action left for the toast, and whether it worked (a panel stays open after a failure).
+@immutable
+final class ActionResult {
+  const ActionResult(this.message, {required this.ok});
+
+  final String message;
+  final bool ok;
 }
 
 /// What the player's controls, gestures and panels read and do, for the video page's one video (the player half of
@@ -51,6 +89,9 @@ abstract interface class PlayerSession implements Listenable {
   VideoView? get video;
 
   VideoPage? get part;
+
+  /// The signed view's detail (counts, uploader, 合集 name and description), null until it arrives.
+  VideoDetail? get detail;
 
   /// The full-screen title: the part's name for a video in parts, otherwise the video's.
   String get title;
@@ -93,7 +134,8 @@ abstract interface class PlayerSession implements Listenable {
   /// The chosen speed; it stays for the next part.
   double get rate;
 
-  Future<void> setRate(double rate);
+  /// The setters below complete with the failure's toast text, or null when it worked.
+  Future<String?> setRate(double rate);
 
   /// Hold to speed up: 2× while on, then back to [rate].
   void speedUp(bool on);
@@ -102,11 +144,11 @@ abstract interface class PlayerSession implements Listenable {
 
   FitMode get fit;
 
-  Future<void> setFit(FitMode fit);
+  Future<String?> setFit(FitMode fit);
 
   bool get mirrored;
 
-  Future<void> setMirrored(bool on);
+  Future<String?> setMirrored(bool on);
 
   LoopMode get loop;
 
@@ -138,23 +180,27 @@ abstract interface class PlayerSession implements Listenable {
   /// The 测试 card's BTR 加速.
   bool get btr;
 
-  Future<void> setBtr(bool on);
+  Future<String?> setBtr(bool on);
 
   List<QualityOption> get qualities;
 
   /// The quality asked for.
   int get quality;
 
+  /// The quality playing, which can be lower than [quality] when the video tops out below it; [quality] until a
+  /// stream plays.
+  int get playingQuality;
+
   String qualityName(int qn);
 
   /// Logged in with 大会员: 大会员 qualities play rather than toasting 开通大会员后可观看.
   bool get isVip;
 
-  Future<void> setQuality(int qn);
+  Future<String?> setQuality(int qn);
 
   VideoCodec get codec;
 
-  Future<void> setCodec(VideoCodec codec);
+  Future<String?> setCodec(VideoCodec codec);
 
   /// The video played to its end and nothing plays next: the end screen's moment.
   bool get ended;
@@ -168,15 +214,19 @@ abstract interface class PlayerSession implements Listenable {
 
   void playRelated(VideoCard card);
 
-  /// 稍后再看; completes with the toast's text.
-  Future<String> watchLater();
+  /// 稍后再看.
+  Future<ActionResult> watchLater();
 
   bool get pictureInPictureSupported;
 
-  Future<void> startPictureInPicture();
+  Future<String?> startPictureInPicture();
 
   bool get canCaptureFrame;
 
-  /// The screenshot button; completes with the toast's text (已保存到相册 or 保存失败).
-  Future<String> captureFrame();
+  /// The screenshot button: 已保存到相册, or why not.
+  Future<ActionResult> captureFrame();
+
+  /// False while the page is covered by another video page or has left: the shared player is someone else's, so
+  /// the session stops acting on it (end rules, 定时关闭, background pause, fetches) and ignores its events.
+  set active(bool value);
 }

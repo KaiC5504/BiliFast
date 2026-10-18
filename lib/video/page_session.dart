@@ -381,9 +381,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   double get rate => _controller.rate;
 
   @override
-  Future<void> setRate(double rate) async {
+  Future<String?> setRate(double rate) async {
     _speedingUp = false;
     await _controller.setRate(rate);
+    return null;
   }
 
   @override
@@ -401,16 +402,20 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   FitMode get fit => _controller.fit;
 
   @override
-  Future<void> setFit(FitMode fit) async {
+  Future<String?> setFit(FitMode fit) async {
     _prefs.fit = fit;
     await _controller.setFit(fit);
+    return null;
   }
 
   @override
   bool get mirrored => _controller.mirrored;
 
   @override
-  Future<void> setMirrored(bool on) => _controller.setMirrored(on);
+  Future<String?> setMirrored(bool on) async {
+    await _controller.setMirrored(on);
+    return null;
+  }
 
   @override
   LoopMode get loop => _prefs.loop;
@@ -485,9 +490,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   bool get btr => _controller.mode == PlaybackMode.btr;
 
   @override
-  Future<void> setBtr(bool on) {
+  Future<String?> setBtr(bool on) async {
     _prefs.btr = on;
-    return _controller.setMode(on ? PlaybackMode.btr : PlaybackMode.direct);
+    await _controller.setMode(on ? PlaybackMode.btr : PlaybackMode.direct);
+    return null;
   }
 
   @override
@@ -497,24 +503,29 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   int get quality => _controller.selectedQuality;
 
   @override
+  int get playingQuality => _controller.playing?.quality ?? quality;
+
+  @override
   String qualityName(int qn) => _controller.qualityName(qn);
 
   @override
   bool get isVip => _isVip();
 
   @override
-  Future<void> setQuality(int qn) {
+  Future<String?> setQuality(int qn) async {
     _prefs.quality = qn;
-    return _controller.setQuality(qn);
+    await _controller.setQuality(qn);
+    return null;
   }
 
   @override
   VideoCodec get codec => _controller.codec;
 
   @override
-  Future<void> setCodec(VideoCodec codec) {
+  Future<String?> setCodec(VideoCodec codec) async {
     _prefs.codec = codec;
-    return _controller.setCodec(codec);
+    await _controller.setCodec(codec);
+    return null;
   }
 
   @override
@@ -583,15 +594,15 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   void playRelated(VideoCard card) => _open(card.bvid);
 
   @override
-  Future<String> watchLater() async {
+  Future<ActionResult> watchLater() async {
     final aid = video?.aid ?? 0;
-    if (aid == 0) return '视频还没有加载完';
+    if (aid == 0) return const ActionResult('视频还没有加载完', ok: false);
     try {
       await _client.addToWatchLater(aid: aid);
-      return '已添加至稍后再看';
+      return const ActionResult('已添加至稍后再看', ok: true);
     } catch (error) {
       _logger.warn(LogCategory.ui, 'watch later failed', {'error': '$error'});
-      return requestFailureMessage(error);
+      return ActionResult(requestFailureMessage(error), ok: false);
     }
   }
 
@@ -599,21 +610,30 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   bool get pictureInPictureSupported => player.capabilities.pictureInPicture;
 
   @override
-  Future<void> startPictureInPicture() => _controller.startPictureInPicture();
+  Future<String?> startPictureInPicture() async {
+    await _controller.startPictureInPicture();
+    return null;
+  }
 
   @override
   bool get canCaptureFrame => player.capabilities.frameCapture;
 
   @override
-  Future<String> captureFrame() async {
+  Future<ActionResult> captureFrame() async {
     try {
-      if (await player.captureFrame()) return '已保存到相册';
+      if (await player.captureFrame()) return const ActionResult('已保存到相册', ok: true);
       _logger.warn(LogCategory.ui, 'frame capture failed');
     } catch (error) {
       _logger.warn(LogCategory.ui, 'frame capture failed', {'error': '$error'});
     }
-    return '保存失败';
+    return const ActionResult('保存失败', ok: false);
   }
+
+  @override
+  VideoDetail? get detail => null;
+
+  @override
+  set active(bool value) {}
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
