@@ -1,3 +1,4 @@
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/actions/coin_dialog.dart';
 import 'package:flutter/widgets.dart';
@@ -125,9 +126,12 @@ void main() {
     expect(rig.sent, ['coin 1 alsoLike=true']);
   });
 
-  testWidgets('the balance is asked three times, a second and then two apart, and stays -- if all fail', (
+  testWidgets('the balance is asked three times, a second and then two apart, and says so if all fail', (
     tester,
   ) async {
+    final sink = MemorySink();
+    Logger.shared.add(sink);
+    addTearDown(() => Logger.shared.remove(sink));
     final rig = Rig();
     rig.actions.balanceFailure = Exception('offline');
     await rig.mount(tester, settle: false);
@@ -136,13 +140,22 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 990));
     expect(rig.balanceAsks, 1);
+    expect(find.text('硬币余额：--'), findsOneWidget, reason: 'still trying');
     await tester.pump(const Duration(milliseconds: 20));
     expect(rig.balanceAsks, 2);
     await tester.pump(const Duration(seconds: 2));
     expect(rig.balanceAsks, 3);
     await tester.pump(const Duration(seconds: 10));
     expect(rig.balanceAsks, 3);
-    expect(find.text('硬币余额：--'), findsOneWidget);
+    expect(find.text('硬币余额获取失败'), findsOneWidget);
+    expect(find.text('硬币余额：--'), findsNothing);
+    expect(
+      [
+        for (final event in sink.events)
+          if (event.msg == 'coin balance failed') event.f['error'],
+      ],
+      List.filled(3, const LogString('Exception: offline')),
+    );
 
     // Unknown, both crates stay open as far as the coins still allowed.
     await tester.tap(find.bySemanticsLabel('投币'));
@@ -178,6 +191,55 @@ void main() {
     await rig.mount(tester);
     expect(crate(tester, 1).width, ActionTheme.selectedCrate);
     expect(find.text('上滑或点击22娘投硬币'), findsOneWidget);
+  });
+
+  testWidgets('a relation that lands while it is up, with one coin given, leaves only the one-coin crate', (
+    tester,
+  ) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    expect(crate(tester, 2).width, ActionTheme.selectedCrate);
+
+    rig.actions
+      ..coins = 1
+      ..maxCoins = 1
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('2 硬币'), findsNothing);
+    expect(crate(tester, 1).width, ActionTheme.selectedCrate);
+    expect(tester.getCenter(find.bySemanticsLabel('1 硬币')).dx, closeTo(220, 0.5));
+    expect(find.text('上滑或点击22娘投硬币'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('投币'));
+    await tester.pumpAndSettle();
+    expect(rig.sent, ['coin 1 alsoLike=true']);
+  });
+
+  testWidgets('a relation that lands at the limit closes it, and coin() says it is full', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    rig.actions
+      ..coins = 2
+      ..maxCoins = 0
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(rig.sent, ['coin 1 alsoLike=false']);
+    expect(rig.closes, 1);
+  });
+
+  testWidgets('a change while its own coin flies neither stops the throw nor closes it twice', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    await tester.tap(find.bySemanticsLabel('投币'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    rig.actions
+      ..coins = 2
+      ..maxCoins = 0
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(rig.sent, ['coin 2 alsoLike=true']);
+    expect(rig.closes, 1);
   });
 
   testWidgets('without enough coins 22娘 says so and nothing is sent', (tester) async {
@@ -283,6 +345,47 @@ void main() {
     expect(find.text('每日登录可获得1硬币'), findsOneWidget);
     await expireToast(tester);
     expect(rig.closes, 0);
+  });
+
+  testWidgets('a help link that throws is logged with its error and still says how to earn coins', (tester) async {
+    final sink = MemorySink();
+    Logger.shared.add(sink);
+    addTearDown(() => Logger.shared.remove(sink));
+    final rig = Rig();
+    tester.view.physicalSize = const Size(1320, 2868);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(440, 956)),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Overlay(
+            initialEntries: [
+              OverlayEntry(
+                builder: (context) => CoinDialog(
+                  actions: rig.actions,
+                  onClose: () => rig.closes++,
+                  openLink: (_) async => throw StateError('no browser'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('如何获取硬币？'));
+    await tester.pump();
+    expect(find.text('每日登录可获得1硬币'), findsOneWidget);
+    expect(
+      [
+        for (final event in sink.events)
+          if (event.msg == 'coin help link failed') event.f['error'],
+      ],
+      [const LogString('Bad state: no browser')],
+    );
+    await expireToast(tester);
   });
 
   testWidgets('landscape full screen lays the column out in the middle, every control reachable', (tester) async {

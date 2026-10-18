@@ -55,10 +55,13 @@ class _ActionOverlaysState extends State<ActionOverlays> with SingleTickerProvid
   /// What shows: the open overlay, or the one going away after a close.
   ActionPrompt? _shown;
 
-  /// The actions the overlay on screen belongs to, and the prompt's when it is taken: a new video's actions may
-  /// arrive while it is still up.
+  /// The actions whose prompt is on screen: a new video's actions may arrive while it is still up.
   VideoActions? _owner;
   FavouriteFolders? _folders;
+
+  /// Bumped for every prompt taken, keying its overlay: one taken again while it goes away starts fresh, where the
+  /// closing one's state would stay closed (the coin dialog then ignores every tap) or dragged down.
+  int _opening = 0;
 
   @override
   void initState() {
@@ -142,7 +145,10 @@ class _ActionOverlaysState extends State<ActionOverlays> with SingleTickerProvid
     _owner = owner;
     if (next == ActionPrompt.favourites && _folders == null) _replaceFolders(owner.openFolders());
     final wasShown = _shown != null;
-    setState(() => _shown = next);
+    setState(() {
+      _shown = next;
+      _opening++;
+    });
     // Taken again while going away: it turns around where it is.
     _motion.forward(from: wasShown ? null : 0);
   }
@@ -190,7 +196,7 @@ class _ActionOverlaysState extends State<ActionOverlays> with SingleTickerProvid
     try {
       sent = await widget.share(link);
     } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '${error.runtimeType}'});
+      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '$error'});
       _toast('分享失败');
       _closeIf(ActionPrompt.share);
       return;
@@ -209,12 +215,14 @@ class _ActionOverlaysState extends State<ActionOverlays> with SingleTickerProvid
     final owner = _owner;
     if (shown == null || owner == null) return const SizedBox.shrink();
     final open = widget.controller.value == shown;
+    final opening = ValueKey(_opening);
     final Widget child = switch (shown) {
       ActionPrompt.coin => FadeTransition(
         opacity: _curve,
-        child: CoinDialog(actions: owner, onClose: () => _closeIf(ActionPrompt.coin)),
+        child: CoinDialog(key: opening, actions: owner, onClose: () => _closeIf(ActionPrompt.coin)),
       ),
       ActionPrompt.favourites => FavouriteSheet(
+        key: opening,
         folders: _folders!,
         dark: widget.landscape,
         motion: _curve,

@@ -2,8 +2,8 @@ import 'package:flutter/widgets.dart';
 
 import '../../shared/theme.dart';
 
-/// 确定不再关注？ with 取消 and 确定, over the page: a white alert over a dim, which grows in as it fades. A tap on the
-/// dim cancels.
+/// 确定不再关注？ with 取消 and 确定, over the page: a white alert over a dim, which settles from slightly large as it
+/// fades in. A tap on the dim cancels.
 class UnfollowConfirm extends StatelessWidget {
   const UnfollowConfirm({
     super.key,

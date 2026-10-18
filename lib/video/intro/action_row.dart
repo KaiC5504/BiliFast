@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/logic.dart' show CountFormat;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -204,7 +205,8 @@ class _ActionCell extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
-  /// 点赞 takes the raw press instead of [onTap], so a hold can become 三连.
+  /// 点赞 takes the raw press instead of [onTap], so a hold can become 三连: [onDown] as the finger lands, then
+  /// [onUp] or [onCancel].
   final VoidCallback? onDown;
   final VoidCallback? onUp;
   final VoidCallback? onCancel;
@@ -228,6 +230,9 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
   ]).animate(_pop);
   bool _pressed = false;
 
+  /// From the finger landing until it lifts, slides off or is taken by a scroll.
+  bool _holding = false;
+
   @override
   void didUpdateWidget(_ActionCell old) {
     super.didUpdateWidget(old);
@@ -242,6 +247,18 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
 
   void _press(bool pressed) {
     if (_pressed != pressed) setState(() => _pressed = pressed);
+  }
+
+  void _landed() {
+    _holding = true;
+    widget.onDown?.call();
+  }
+
+  void _ended({required bool cancelled}) {
+    _press(false);
+    if (!_holding) return;
+    _holding = false;
+    (cancelled ? widget.onCancel : widget.onUp)?.call();
   }
 
   String get _text {
@@ -307,23 +324,46 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
           ? null
           : {const CustomSemanticsAction(label: '一键三连'): widget.onLongPress!},
       excludeSemantics: true,
-      child: GestureDetector(
+      child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapDown: (_) {
-          _press(true);
-          widget.onDown?.call();
+        gestures: {
+          _PressRecognizer: GestureRecognizerFactoryWithHandlers<_PressRecognizer>(
+            () => _PressRecognizer(debugOwner: this),
+            (recognizer) => recognizer
+              ..onPress = _landed
+              ..onLost = (() => _ended(cancelled: true))
+              ..onTapDown = ((_) => _press(true))
+              ..onTapUp = ((_) => _ended(cancelled: false))
+              ..onTapCancel = (() => _ended(cancelled: true))
+              ..onTap = raw ? null : widget.onTap,
+          ),
         },
-        onTapUp: (_) {
-          _press(false);
-          widget.onUp?.call();
-        },
-        onTapCancel: () {
-          _press(false);
-          widget.onCancel?.call();
-        },
-        onTap: raw ? null : widget.onTap,
         child: widget.decorate?.call(body) ?? body,
       ),
     );
+  }
+}
+
+/// A tap that also says when its finger lands and when the finger is taken before any tap down. In the page's scroll
+/// view and pager onTapDown waits [kPressTimeout] to see the finger isn't scrolling, which would start the 三连 hold
+/// late, and a scroll that wins before then sends no cancel.
+class _PressRecognizer extends TapGestureRecognizer {
+  _PressRecognizer({super.debugOwner});
+
+  VoidCallback? onPress;
+  VoidCallback? onLost;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    final fresh = state == GestureRecognizerState.ready;
+    super.addAllowedPointer(event);
+    if (fresh) onPress?.call();
+  }
+
+  @override
+  void rejectGesture(int pointer) {
+    final primary = pointer == primaryPointer;
+    super.rejectGesture(pointer);
+    if (primary) onLost?.call();
   }
 }

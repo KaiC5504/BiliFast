@@ -18,7 +18,7 @@ Future<bool> _openExternally(Uri link) => launchUrl(link);
 
 /// 投币 (15): the one- and two-coin crates, 22娘, the balance and 同时点赞内容, over the whole page (BiliNative
 /// `CoinDialog.swift`). Arrows, a sideways swipe or a tap on the other crate picks; a swipe up or a tap on 22娘 (or
-/// on the picked crate) throws, and the coin goes out once the dialog has gone.
+/// on the picked crate) throws, and the coin goes out when the throw ends, as the dialog closes.
 class CoinDialog extends StatefulWidget {
   const CoinDialog({super.key, required this.actions, required this.onClose, this.openLink = _openExternally});
 
@@ -70,6 +70,7 @@ class _CoinDialogState extends State<CoinDialog> with TickerProviderStateMixin {
 
   late int _selection = _offered.last;
   double? _balance;
+  bool _balanceFailed = false;
   bool _throwing = false;
   bool _closing = false;
   Offset _drag = Offset.zero;
@@ -87,9 +88,19 @@ class _CoinDialogState extends State<CoinDialog> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _actions.addListener(_actionsChanged);
     _entrance.forward();
     _mascotIn.forward();
     unawaited(_askBalance());
+  }
+
+  @override
+  void didUpdateWidget(CoinDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.actions, widget.actions)) {
+      oldWidget.actions.removeListener(_actionsChanged);
+      widget.actions.addListener(_actionsChanged);
+    }
   }
 
   @override
@@ -104,6 +115,7 @@ class _CoinDialogState extends State<CoinDialog> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _actions.removeListener(_actionsChanged);
     _entrance.dispose();
     _mascotRise.dispose();
     _mascotIn.dispose();
@@ -112,7 +124,8 @@ class _CoinDialogState extends State<CoinDialog> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  /// The balance decides which crates are open, so a failed ask is tried again while the dialog stays up.
+  /// The balance decides which crates are open, so a failed ask is tried again while the dialog stays up: three tries,
+  /// 1 s then 2 s apart.
   Future<void> _askBalance() async {
     for (var attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await Future<void>.delayed(Duration(seconds: attempt));
@@ -122,16 +135,31 @@ class _CoinDialogState extends State<CoinDialog> with TickerProviderStateMixin {
         if (!mounted) return;
         setState(() {
           _balance = balance;
-          if (!_affordable(_selection) && _affordable(1)) _selection = 1;
+          _settleSelection();
         });
         return;
       } catch (error) {
-        Logger.shared.warn(LogCategory.api, 'coin balance failed', {
-          'attempt': attempt,
-          'error': '${error.runtimeType}',
-        });
+        Logger.shared.warn(LogCategory.api, 'coin balance failed', {'attempt': attempt, 'error': '$error'});
       }
     }
+    if (mounted) setState(() => _balanceFailed = true);
+  }
+
+  /// The relation can land after the dialog opened, with coins given since: fewer crates, or none.
+  void _actionsChanged() {
+    if (_throwing || _closing) return;
+    if (_actions.maxCoins <= 0) {
+      // As ActionOverlays does with a prompt at the limit: coin() says 已投满.
+      unawaited(_actions.coin(1, alsoLike: false));
+      unawaited(_close());
+      return;
+    }
+    setState(_settleSelection);
+  }
+
+  void _settleSelection() {
+    if (!_offered.contains(_selection)) _selection = _offered.last;
+    if (!_affordable(_selection) && _affordable(1)) _selection = 1;
   }
 
   void _choose(int multiply) {
@@ -182,7 +210,7 @@ class _CoinDialogState extends State<CoinDialog> with TickerProviderStateMixin {
     try {
       opened = await widget.openLink(CoinDialog.helpLink);
     } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'coin help link failed', {'error': '${error.runtimeType}'});
+      Logger.shared.warn(LogCategory.ui, 'coin help link failed', {'error': '$error'});
     }
     if (!opened && mounted) showToast(context, '每日登录可获得1硬币');
   }
@@ -288,7 +316,12 @@ class _CoinDialogState extends State<CoinDialog> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   Text(short ? '硬币不足' : '上滑或点击22娘投硬币', style: text.copyWith(color: ActionTheme.coinHint)),
-                  Text('硬币余额：${balance == null ? '--' : balance.toStringAsFixed(1)}', style: text),
+                  Text(
+                    balance != null
+                        ? '硬币余额：${balance.toStringAsFixed(1)}'
+                        : (_balanceFailed ? '硬币余额获取失败' : '硬币余额：--'),
+                    style: text,
+                  ),
                 ],
               ),
             ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/video/actions/action_overlays.dart';
 import 'package:bilifast/video/actions/coin_dialog.dart';
 import 'package:bilifast/video/actions/favourite_sheet.dart';
@@ -159,6 +160,31 @@ void main() {
       expect(find.byType(CoinDialog), findsNothing);
     });
 
+    testWidgets('taken again while it fades out, it comes back whole: it asks the balance again and closes again', (
+      tester,
+    ) async {
+      final actions = fakeActions();
+      final rig = await pumpOverlays(tester, actions);
+      actions.ask(ActionPrompt.coin);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('关闭'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(rig.controller.value, isNull);
+      expect(find.byType(CoinDialog), findsOneWidget, reason: 'still fading out');
+
+      actions.ask(ActionPrompt.coin);
+      await tester.pumpAndSettle();
+      expect(rig.controller.value, ActionPrompt.coin);
+      expect(actions.calls.where((call) => call == 'coinBalance'), hasLength(2));
+      await tester.tapAt(const Offset(220, 150));
+      await tester.pumpAndSettle();
+      expect(rig.controller.value, isNull);
+      expect(find.byType(CoinDialog), findsNothing);
+      expect(rig.below, isEmpty);
+    });
+
     testWidgets('at the limit there is no dialog: coin() says it is full', (tester) async {
       final actions = fakeActions(maxCoins: 0);
       final rig = await pumpOverlays(tester, actions);
@@ -230,6 +256,24 @@ void main() {
       expect(tester.widget<FavouriteSheet>(find.byType(FavouriteSheet)).folders, same(second));
       expect(first.disposed, isTrue);
       expect(second.disposed, isFalse);
+    });
+
+    testWidgets('dragged shut and taken again while it goes, it comes back to where it sits', (tester) async {
+      final actions = fakeActions();
+      final rig = await pumpOverlays(tester, actions);
+      actions.ask(ActionPrompt.favourites);
+      await tester.pumpAndSettle();
+      final grabber = find.byKey(const ValueKey('favourite-grabber'));
+      final top = tester.getTopLeft(grabber).dy;
+      await tester.drag(grabber, const Offset(0, 200));
+      await tester.pump();
+      expect(rig.controller.value, isNull);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      actions.ask(ActionPrompt.favourites);
+      await tester.pumpAndSettle();
+      expect(rig.controller.value, ActionPrompt.favourites);
+      expect(tester.getTopLeft(grabber).dy, closeTo(top, 0.5));
     });
   });
 
@@ -353,7 +397,10 @@ void main() {
       await clearToast(tester);
     });
 
-    testWidgets('a share sheet that fails says 分享失败 and counts nothing', (tester) async {
+    testWidgets('a share sheet that fails says 分享失败, logs why and counts nothing', (tester) async {
+      final sink = MemorySink();
+      Logger.shared.add(sink);
+      addTearDown(() => Logger.shared.remove(sink));
       final actions = fakeActions();
       final rig = await pumpOverlays(tester, actions, shareLink: link, share: (_) async => throw StateError('no'));
       actions.ask(ActionPrompt.share);
@@ -362,6 +409,13 @@ void main() {
       expect(find.text('分享失败'), findsOneWidget);
       expect(actions.calls, ['ask share', 'clearPrompt']);
       expect(rig.controller.value, isNull);
+      expect(
+        [
+          for (final event in sink.events)
+            if (event.msg == 'share failed') event.f['error'],
+        ],
+        [const LogString('Bad state: no')],
+      );
       await clearToast(tester);
     });
   });

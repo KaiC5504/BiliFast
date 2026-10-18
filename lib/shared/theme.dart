@@ -1101,7 +1101,7 @@ abstract final class FavouriteTheme {
   static const alertButtonText = 16.0;
   static const alertDim = Color(0x80000000);
 
-  /// The alert grows to its size from this as it fades in.
+  /// The alert settles from this, slightly large, to its size as it fades in.
   static const alertStartScale = 1.08;
 }
 

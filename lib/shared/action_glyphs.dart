@@ -168,7 +168,8 @@ class ActionGlyphPainter extends CustomPainter {
   }
 
   void _charge(Canvas canvas, Rect box) {
-    // 04's battery: 14.7 x 20.3 pt on a 20 pt glyph, its cap a short bar above a rounded body, a bolt inside.
+    // 04's battery: 0.73 of the glyph wide and all of it tall (14.6 x 20 pt on a 20 pt glyph), its cap a short bar
+    // above a rounded body, a bolt inside.
     final width = box.width * 0.73;
     final battery = Rect.fromCenter(center: box.center, width: width, height: box.height);
     Offset at(double u, double v) => Offset(battery.left + u * width, battery.top + v * battery.height);

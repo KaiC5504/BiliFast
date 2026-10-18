@@ -23,6 +23,32 @@ Future<void> mount(WidgetTester tester, FakeVideoActions actions, {bool still = 
   );
 }
 
+/// As on the page: in the intro's scroll view, inside the tabs' pager. Both delay a tap's down by kPressTimeout.
+Future<void> mountScrolled(WidgetTester tester, FakeVideoActions actions) async {
+  await tester.pumpWidget(
+    MediaQuery(
+      data: const MediaQueryData(size: Size(440, 956)),
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: PageView(
+          children: [
+            SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 200),
+                  ActionRow(actions: actions),
+                  const SizedBox(height: 1200),
+                ],
+              ),
+            ),
+            const SizedBox.expand(),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 ActionIcon icon(WidgetTester tester, ActionGlyph glyph) =>
     tester.widget<ActionIcon>(find.byWidgetPredicate((widget) => widget is ActionIcon && widget.glyph == glyph));
 
@@ -208,6 +234,68 @@ void main() {
 
     expect(actions.calls, isEmpty);
     expect(ring.progress.value, 0);
+  });
+
+  group('inside the page\'s scroll view and pager', () {
+    testWidgets('the ring starts 0.2 s after the finger lands and 三连 fires 1.2 s later', (tester) async {
+      final actions = FakeVideoActions();
+      await mountScrolled(tester, actions);
+      final ring = tester.widget<TripleRing>(find.byType(TripleRing).first);
+
+      final press = await tester.startGesture(centreOf(tester, '点赞'));
+      await tester.pump(const Duration(milliseconds: 190));
+      expect(ring.progress.value, 0);
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(ring.progress.value, closeTo(0.5, 0.05));
+      await tester.pump(const Duration(milliseconds: 620));
+      expect(actions.calls, ['triple']);
+
+      await press.up();
+      await tester.pumpAndSettle();
+      expect(actions.calls, ['triple']);
+    });
+
+    testWidgets('a 0.25 s press is a hold that was let go, not a like', (tester) async {
+      final actions = FakeVideoActions();
+      await mountScrolled(tester, actions);
+
+      final press = await tester.startGesture(centreOf(tester, '点赞'));
+      await tester.pump(const Duration(milliseconds: 250));
+      await press.up();
+      await tester.pumpAndSettle();
+      expect(actions.calls, isEmpty);
+    });
+
+    testWidgets('a quick tap still likes', (tester) async {
+      final actions = FakeVideoActions();
+      await mountScrolled(tester, actions);
+
+      final press = await tester.startGesture(centreOf(tester, '点赞'));
+      await tester.pump(const Duration(milliseconds: 50));
+      await press.up();
+      await tester.pumpAndSettle();
+      expect(actions.calls, ['toggleLike']);
+    });
+
+    for (final (name, move) in [('a scroll', const Offset(0, -60)), ('a page swipe', const Offset(-60, 0))]) {
+      testWidgets('$name that takes the finger before the tap is sure stops the hold', (tester) async {
+        final actions = FakeVideoActions();
+        await mountScrolled(tester, actions);
+        final ring = tester.widget<TripleRing>(find.byType(TripleRing).first);
+
+        final press = await tester.startGesture(centreOf(tester, '点赞'));
+        await tester.pump(const Duration(milliseconds: 30));
+        await press.moveBy(move);
+        await tester.pump(const Duration(milliseconds: 30));
+        await tester.pump(const Duration(seconds: 2));
+        expect(ring.progress.value, 0);
+        expect(actions.calls, isEmpty);
+        await press.up();
+        await tester.pumpAndSettle();
+        expect(actions.calls, isEmpty);
+      });
+    }
   });
 
   testWidgets('every cell presses through accessibility, and 点赞 long-presses into 三连', (tester) async {
