@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:bili_core/api.dart' as bili show VideoPage, VideoView;
+import 'package:bili_core/api.dart' as bili show VideoDetail, VideoPage, VideoView;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -64,11 +64,12 @@ class _VideoPageState extends State<VideoPage> {
   bool _played = false;
 
   /// What this page plays: the route's video at first, then whatever the session opens on the page. Only the
-  /// route's own open starts at its position and uses its resolved view.
+  /// route's own open starts at its position; another part of the same video reuses the view and detail it has.
   late String _bvid = widget.route.bvid;
   late int? _cid = widget.route.cid;
   late double? _startAt = widget.route.start;
   late bili.VideoView? _view = widget.route.view;
+  late bili.VideoDetail? _detail = widget.route.detail;
   late String? _title = widget.route.title;
 
   /// The last video and part this page opened, so the title stays put while the page slides away.
@@ -150,7 +151,7 @@ class _VideoPageState extends State<VideoPage> {
   void _openVideo(PlaybackController controller) {
     final services = _services!;
     unawaited(_reporter?.leave());
-    unawaited(controller.openVideo(_bvid, cid: _cid, start: _startAt, view: _view));
+    unawaited(controller.openVideo(_bvid, cid: _cid, start: _startAt, view: _view, detail: _detail));
     _reporter = WatchReporter(
       controller: controller,
       client: services.environment.client,
@@ -189,15 +190,18 @@ class _VideoPageState extends State<VideoPage> {
   void _openOnPage(String bvid, {int? cid}) {
     final controller = _controller;
     if (controller == null || !_isMine(controller)) return;
-    if (bvid != _bvid) {
+    final samePart = bvid == _bvid;
+    if (!samePart) {
       _video = null;
       _part = null;
       _title = null;
     }
+    // Another part of this video needs no second signed view.
+    _view = samePart ? controller.video : null;
+    _detail = samePart ? controller.detail : null;
     _bvid = bvid;
     _cid = cid;
     _startAt = null;
-    _view = null;
     _openVideo(controller);
   }
 
