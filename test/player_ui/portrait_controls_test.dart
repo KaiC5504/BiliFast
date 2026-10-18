@@ -7,6 +7,7 @@ import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/seek_bar.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,7 +29,7 @@ final class Rig {
     onBack: () => backs++,
   );
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(WidgetTester tester, {TextScaler textScaler = TextScaler.noScaling}) async {
     addTearDown(() {
       chrome.dispose();
       panels.dispose();
@@ -36,10 +37,13 @@ final class Rig {
       session.dispose();
     });
     await tester.pumpWidget(
-      Directionality(
-        textDirection: TextDirection.ltr,
-        child: Center(
-          child: SizedBox(width: 440, height: 247.5, child: PortraitControls(ui: ui)),
+      MediaQuery(
+        data: MediaQueryData(textScaler: textScaler),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: SizedBox(width: 440, height: 247.5, child: PortraitControls(ui: ui)),
+          ),
         ),
       ),
     );
@@ -109,6 +113,16 @@ void main() {
     }
     semantics.dispose();
   });
+
+  for (final scale in [1.0, 2.0]) {
+    testWidgets('the 竖屏 badge keeps 15\'s size at text scale $scale', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester, textScaler: TextScaler.linear(scale));
+      final badge = tester.getSize(find.ancestor(of: find.text('竖屏'), matching: find.byType(Container)).first);
+      expect(badge.height, BiliMetrics.badgeHeight);
+      expect(badge.width, closeTo(21.7, 0.2));
+    });
+  }
 
   testWidgets('full screen turns a horizontal video sideways', (tester) async {
     final rig = Rig();

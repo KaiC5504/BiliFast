@@ -87,7 +87,9 @@ abstract final class BiliColors {
 
   /// 26's video never gets brighter than 41 of 255 under its dim.
   static const endDim = Color(0xD6000000);
-  static const endButton = Color(0x33FFFFFF);
+
+  /// 立即播放 over 26's dimmed frame (about 10 of 255) comes out #535353.
+  static const endButton = Color(0x4DFFFFFF);
   static const endCaption = Color(0xB3FFFFFF);
   static const endMeta = Color(0x99FFFFFF);
   static const endPlayGlyph = Color(0xF2FFFFFF);
@@ -240,21 +242,24 @@ abstract final class BiliMetrics {
   static const cornersGlyphHeight = 15.5;
   static const badgeFont = 8.0;
   static const badgeHeight = 11.5;
-  static const badgePadding = 3.5;
+  static const badgePadding = 2.2;
   static const badgeBorderWidth = 0.7;
   static const badgeOffsetX = 12.0;
   static const badgeOffsetY = -16.0;
   static const endInset = 12.0;
   static const endCaptionFont = 12.0;
   static const endCaptionGap = 3.8;
+
+  /// MiSans draws 推荐视频 higher in its line than PingFang; this brings it level with 26's.
+  static const endCaptionDrop = 2.2;
   static const endCoverWidth = 128.0;
   static const endCoverHeight = 72.0;
   static const endCoverRadius = 5.0;
   static const endCoverGap = 11.0;
   static const endCoverShadeHeight = 30.0;
-  static const endCoverTextInset = 7.0;
-  static const endCoverTextBottom = 5.0;
-  static const endCoverTimeFont = 12.0;
+  static const endCoverTextInset = 8.7;
+  static const endCoverTextBottom = 4.0;
+  static const endCoverTimeFont = 10.0;
   static const endPlayGlyphWidth = 18.7;
   static const endPlayGlyphHeight = 22.0;
   static const endTitleFont = 14.0;
@@ -264,18 +269,22 @@ abstract final class BiliMetrics {
   static const endCountsTop = 58.0;
   static const endMetaRow = 12.0;
   static const endMetaFont = 10.0;
-  static const endMetaIcon = 16.0;
-  static const endMetaGap = 4.5;
-  static const endMetaSpacing = 12.0;
+  static const endCountIconWidth = 13.3;
+  static const endCountIconHeight = 11.3;
+  static const endMetaGap = 5.0;
+  static const endMetaSpacing = 12.3;
   static const endUpWidth = 13.3;
   static const endUpHeight = 11.3;
   static const endUpFont = 7.5;
   static const endUpRadius = 2.5;
   static const endUpBorder = 1.0;
   static const endButtonFont = 14.0;
-  static const endButtonWidth = 66.5;
+  static const endButtonWidth = 78.0;
   static const endButtonHeight = 30.0;
-  static const endButtonTrailing = 18.0;
+
+  /// MiSans sits higher in its line than the official app's PingFang; this centres 立即播放 in its pill as on 26.
+  static const endButtonTextDrop = 2.0;
+  static const endButtonTrailing = 12.0;
   static const endActionsLeading = 13.7;
   static const endActionFont = 14.0;
   static const endActionGap = 8.0;

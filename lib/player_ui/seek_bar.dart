@@ -3,25 +3,27 @@ import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:bili_core/api.dart' show Chapter;
+import 'package:bili_core/logic.dart' show TimeFormat;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
 
 enum SeekBarStyle {
-  /// The small player and landscape (15, 04): pink played part, white buffered part and the TV face.
+  /// The small player and landscape, as 15 and 04 show: pink played part, white buffered part and the TV face.
   tv,
 
-  /// 竖屏 full screen (09): a white played part and a small dot, no buffered part.
+  /// 竖屏 full screen, as 09 shows: a white played part and a small dot, no buffered part.
   dot;
 
   double get thumbWidth => this == tv ? BiliMetrics.thumbWidth : BiliMetrics.verticalDot;
 }
 
-/// The seek bar (port of ProgressBar.swift): played in pink, buffered in white at 40%, the rest at 20%, a tick where
-/// each chapter starts, and the TV-face thumb, or the 竖屏 [SeekBarStyle.dot]. It paints from [repaint] without
-/// rebuilding. A touch scrubs at once and the finger is followed; [onCommit] comes when it lifts. While a finger is
-/// on it the thumb grows and the chapter under it shows its title above.
+/// The seek bar (port of BiliNative `ProgressBar.swift`): played in pink, buffered in white at 40%, the rest at 20%, a
+/// tick where each chapter starts, and the TV-face thumb, or the 竖屏 [SeekBarStyle.dot]. It paints from [repaint]
+/// without rebuilding. A touch scrubs at once and the finger is followed; [onCommit] comes when it lifts. While a finger
+/// is on it the thumb grows and the chapter under it shows its title above. VoiceOver reads the time and steps it by
+/// [step] through [onCommit].
 class SeekBar extends StatefulWidget {
   const SeekBar({
     super.key,
@@ -44,6 +46,9 @@ class SeekBar extends StatefulWidget {
   static const restSlop = 3.0;
 
   static const _grow = Duration(milliseconds: 160);
+
+  /// How far one VoiceOver swipe seeks, in seconds.
+  static const step = 10.0;
 
   /// Seconds, read when painting.
   final double Function() position;
@@ -123,10 +128,34 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
     _drag.reverse();
   }
 
+  static String _readout(double seconds, double duration) =>
+      '${TimeFormat.clock(seconds)} / ${TimeFormat.clock(duration)}';
+
+  void _step(double by) {
+    final duration = widget.duration();
+    if (duration <= 0) return;
+    widget.onCommit((widget.position() + by).clamp(0.0, duration));
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label: '进度',
+    return ListenableBuilder(
+      listenable: widget.repaint,
+      builder: (context, child) {
+        final duration = widget.duration();
+        final position = widget.position();
+        final known = duration > 0;
+        return Semantics(
+          label: '进度',
+          slider: true,
+          value: known ? _readout(position, duration) : null,
+          increasedValue: known ? _readout(math.min(position + SeekBar.step, duration), duration) : null,
+          decreasedValue: known ? _readout(math.max(position - SeekBar.step, 0), duration) : null,
+          onIncrease: known ? () => _step(SeekBar.step) : null,
+          onDecrease: known ? () => _step(-SeekBar.step) : null,
+          child: child,
+        );
+      },
       child: SizedBox(
         height: BiliMetrics.barTouchHeight,
         child: LayoutBuilder(
@@ -389,7 +418,7 @@ void paintTVThumb(Canvas canvas, Size size) {
   }
 }
 
-/// The thin line along the bottom edge while the controls are hidden.
+/// The thin line along the bottom edge while the controls are hidden: only the played part and no track, as 03 shows.
 class HiddenProgressLine extends StatelessWidget {
   const HiddenProgressLine({super.key, required this.position, required this.duration, required this.repaint});
 
@@ -417,12 +446,12 @@ class _LinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas
-      ..drawRect(Offset.zero & size, Paint()..color = BiliColors.chromeTrack)
-      ..drawRect(
-        Offset.zero & Size(size.width * _fraction(position(), duration()), size.height),
-        Paint()..color = BiliColors.pink,
-      );
+    final played = size.width * _fraction(position(), duration());
+    if (played <= 0) return;
+    canvas.drawRRect(
+      RRect.fromLTRBR(0, 0, played, size.height, Radius.circular(size.height / 2)),
+      Paint()..color = BiliColors.pink,
+    );
   }
 
   @override

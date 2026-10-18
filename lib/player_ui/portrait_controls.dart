@@ -11,7 +11,7 @@ import 'seek_bar.dart';
 
 /// The small player's controls, filling the player (BiliNative `PortraitControls.swift`, laid out as the official
 /// app's 15): back and ⋮ at the top; play, the bar with the TV face, the time, 竖屏 and full screen at the bottom.
-/// While they are hidden, or once the video ended, the thin line runs along the bottom edge instead.
+/// While they are hidden the thin line runs along the bottom edge instead.
 class PortraitControls extends StatefulWidget {
   const PortraitControls({super.key, required this.ui});
 
@@ -353,7 +353,6 @@ class _BackPainter extends CustomPainter {
   bool shouldRepaint(_BackPainter oldDelegate) => false;
 }
 
-/// ⋮
 class MoreDots extends StatelessWidget {
   const MoreDots({super.key});
 
@@ -523,6 +522,7 @@ class _VerticalGlyph extends StatelessWidget {
                   '竖屏',
                   maxLines: 1,
                   softWrap: false,
+                  textScaler: TextScaler.noScaling,
                   style: TextStyle(color: BiliColors.badgeText, fontSize: BiliMetrics.badgeFont, height: 1),
                 ),
               ),

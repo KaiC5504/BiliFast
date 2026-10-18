@@ -5,6 +5,7 @@ import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/end_screen_portrait.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -116,19 +117,104 @@ void main() {
     expect(rig.shared, [Uri.parse('https://www.bilibili.com/video/BV1this')]);
   });
 
-  testWidgets('a failed share is caught', (tester) async {
+  for (final (name, share) in <(String, ShareLink)>[
+    ('fails', (_) async => throw StateError('no sheet')),
+    ('throws at once', (_) => throw StateError('no plugin')),
+  ]) {
+    testWidgets('a share that $name is caught and says 分享失败', (tester) async {
+      final rig = Rig();
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Overlay(
+            initialEntries: [OverlayEntry(builder: (_) => EndScreenPortrait(ui: rig.ui, share: share))],
+          ),
+        ),
+      );
+      addTearDown(rig.session.dispose);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('end-share')));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('分享失败'), findsOneWidget);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.text('分享失败'), findsNothing);
+    });
+  }
+
+  testWidgets('立即播放 is 26\'s pill, 12 from the edge on the cover\'s bottom line, with a 44 point target', (
+    tester,
+  ) async {
     final rig = Rig();
+    rig.session.related = const [_card];
+    await rig.mount(tester);
+
+    final target = tester.getRect(find.byKey(const ValueKey('end-play-now')));
+    final pill = tester.getRect(
+      find.descendant(of: find.byKey(const ValueKey('end-play-now')), matching: find.byType(Container)),
+    );
+    final screen = tester.getRect(find.byType(EndScreenPortrait));
+    final cover = tester.getRect(find.byKey(const ValueKey('end-cover')));
+    expect(pill.size, const Size(78, 30));
+    expect(pill.right, screen.right - 12);
+    expect(pill.bottom, cover.bottom);
+    expect(target.height, greaterThanOrEqualTo(44));
+    expect(target.bottom, pill.bottom);
+
+    await tester.tapAt(Offset(pill.center.dx, pill.top - 10));
+    expect(rig.session.calls, ['playRelated BV1next'], reason: 'a touch just above the pill still plays');
+  });
+
+  testWidgets('the counts carry Bilibili\'s own icons, 5 before each count and 12.3 after it', (tester) async {
+    final rig = Rig();
+    rig.session.related = const [_card];
+    await rig.mount(tester);
+
+    expect(find.byType(Icon), findsNothing);
+    final icons = find.byWidgetPredicate(
+      (widget) =>
+          widget is CustomPaint &&
+          widget.size == const Size(BiliMetrics.endCountIconWidth, BiliMetrics.endCountIconHeight),
+    );
+    expect(icons, findsNWidgets(2));
+    final views = tester.getRect(icons.first), danmaku = tester.getRect(icons.last);
+    final viewsCount = tester.getRect(find.text('135.7万')), danmakuCount = tester.getRect(find.text('284'));
+    expect(viewsCount.left - views.right, closeTo(5, 0.01));
+    expect(danmaku.left - viewsCount.right, closeTo(12.3, 0.01));
+    expect(danmakuCount.left - danmaku.right, closeTo(5, 0.01));
+    expect(tester.renderObject(icons.first), paints..rrect(color: BiliColors.endMeta)..path(color: BiliColors.endMeta));
+    expect(
+      tester.renderObject(icons.last),
+      paints
+        ..rrect(color: BiliColors.endMeta)
+        ..circle(color: BiliColors.endMeta)
+        ..line(color: BiliColors.endMeta)
+        ..circle(color: BiliColors.endMeta)
+        ..line(color: BiliColors.endMeta),
+    );
+  });
+
+  testWidgets('large text leaves the UP badge\'s fixed box alone', (tester) async {
+    final rig = Rig();
+    rig.session.related = const [_card];
+    await rig.mount(tester);
+    final normal = tester.getSize(find.text('UP'));
+
     await tester.pumpWidget(
-      Directionality(
-        textDirection: TextDirection.ltr,
-        child: EndScreenPortrait(ui: rig.ui, share: (_) async => throw StateError('no sheet')),
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: SizedBox(width: 440, height: 247.5, child: EndScreenPortrait(ui: rig.ui, share: rig.share)),
+          ),
+        ),
       ),
     );
-    addTearDown(rig.session.dispose);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('end-share')));
-    await tester.pump();
-    expect(tester.takeException(), isNull);
+    expect(tester.getSize(find.text('UP')), normal);
   });
 
   testWidgets('without related videos only 重播 and 分享 show', (tester) async {
