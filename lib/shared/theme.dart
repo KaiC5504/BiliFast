@@ -706,9 +706,111 @@ abstract final class PageTheme {
   static const tabRowHeight = 44.0;
 }
 
-/// The uploader row and the title block (03, 18).
+/// The uploader row and the title block, measured on the official app's 03, 18 and 26 at 3 px per point. Each part
+/// owns the gap above it and its gutters.
 abstract final class IntroTheme {
-  static const uploaderTop = 13.0;
+  /// The avatar starts this far below the tab row's hairline.
+  static const uploaderTop = 12.0;
+  static const avatar = 30.0;
+  static const avatarGap = 12.0;
+
+  /// 大会员 names are [BiliColors.pink]; everyone else's is this grey, lighter than the title (18).
+  static const name = Color(0xFF484C52);
+  static const nameText = 13.0;
+  static const fansText = 10.0;
+
+  /// Where the name's and the counts' lines centre, down from the avatar's top.
+  static const nameCentre = 7.8;
+  static const fansCentre = 24.8;
+  static const nameLine = 16.0;
+  static const fansLine = 13.0;
+
+  /// 03's ⚡ disc sits flush with the avatar's lower right inside a ring of the page's white.
+  static const badge = 10.0;
+  static const badgeRing = 1.0;
+  static const badgePerson = Color(0xFFFFCC00);
+  static const badgeOrganisation = Color(0xFF3EA2F4);
+  static const badgeBolt = Color(0xFFFFFFFF);
+
+  static const followWidth = 72.0;
+  static const followHeight = 24.0;
+  static const followText = 13.0;
+  static const followPlus = 9.0;
+  static const followPlusStroke = 1.2;
+  static const followPlusGap = 4.0;
+  static const followedFill = BiliColors.pageGrey;
+  static const followedText = BiliColors.secondaryText;
+  static const followPressedScale = 0.94;
+
+  /// 联合投稿: each member's avatar with the name and the role under it, in a row that scrolls sideways.
+  static const staffAvatar = 30.0;
+  static const staffWidth = 60.0;
+  static const staffSpacing = 16.0;
+  static const staffNameText = 11.0;
+  static const staffRoleText = 10.0;
+  static const staffNameTop = 3.0;
+  static const staffLine = 14.0;
+  static const staffRoleLine = 13.0;
+
+  /// The title row starts this far below the avatar; its first line centres in [titleRow].
+  static const titleTop = 18.0;
+  static const titleRow = 22.0;
+  static const titleText = 16.0;
+  static const titleLine = 22.0;
+  static const honorText = 12.0;
+  static const honorPadding = 8.0;
+  static const honorGap = 4.0;
+  static const chevronWidth = 12.0;
+  static const chevronHeight = 6.0;
+  static const chevronStroke = 1.0;
+  static const chevronGap = 8.0;
+
+  /// The ⌄'s centre sits this far in from the right edge.
+  static const chevronTrailing = 14.0 + chevronWidth / 2;
+
+  /// 03's meta line centres 24.8 below the title row's centre.
+  static const metaGap = 5.8;
+
+  /// 03's ▶ starts this far in from the gutter.
+  static const metaLead = 1.3;
+  static const metaLine = 16.0;
+  static const metaText = 12.0;
+  static const metaIconGap = 3.8;
+  static const metaGroupGap = 8.0;
+  static const metaIconWidth = 13.3;
+  static const metaIconHeight = 11.3;
+  static const onlineIconHeight = 11.7;
+  static const metaStroke = 1.0;
+
+  /// Expanded (18): the BV line 18 below the meta line, the description's first line 19.2 below that, 17 between
+  /// its lines, and the tags 20.3 below the last line's centre.
+  static const bvGap = 2.0;
+  static const forbiddenIcon = 12.0;
+  static const forbiddenGap = 9.0;
+  static const forbiddenTextGap = 4.5;
+  static const forbidden = Color(0xFFF85A54);
+  static const descGap = 2.7;
+  static const descText = 12.0;
+  static const descLine = 17.0;
+  static const tagsGap = 11.8;
+  static const tagHeight = 26.0;
+  static const tagText = 12.0;
+  static const tagPadding = 13.0;
+  static const tagSpacing = 8.0;
+  static const tagInk = Color(0xFF61666D);
+
+  static const expandDuration = Duration(milliseconds: 280);
+
+  /// MiSans's Chinese is about 2% wider than the official PingFang, which in turn spaces digits and Latin letters
+  /// away from Chinese; these bring each line to the official width, so the description wraps where 18's does. The
+  /// title's two differences cancel out.
+  static double get nameSpacing => BiliFonts.nudged ? -0.4 : 0;
+  static double get fansSpacing => BiliFonts.nudged ? 0.2 : 0;
+  static double get metaSpacing => BiliFonts.nudged ? 0.3 : 0;
+  static double get proseSpacing => BiliFonts.nudged ? -0.2 : 0;
+
+  /// MiSans sets the counts half a point higher in their line than PingFang.
+  static double get fansDrop => BiliFonts.nudged ? 0.5 : 0;
 }
 
 /// 合集, the part strip, the topic and BGM chips and the related rows (03, 18).
