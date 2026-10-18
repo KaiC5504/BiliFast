@@ -74,8 +74,7 @@ class _NativePasteControlState extends State<_NativePasteControl> {
         // A control given less room than it wants turns itself off without a word; this says whether it fits.
         final sizes = call.arguments as Map<Object?, Object?>? ?? const {};
         Logger.shared.info(LogCategory.ui, 'paste control', {
-          for (final MapEntry(:key, :value) in sizes.entries)
-            if (value != null) '$key': value,
+          for (final MapEntry(:key, :value) in sizes.entries) '$key': ?value,
         });
     }
   }
