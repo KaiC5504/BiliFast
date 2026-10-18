@@ -15,11 +15,12 @@ import 'panels/panel_controller.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
 
-/// Hands a link to the share sheet.
-typedef ShareLink = Future<void> Function(Uri link);
+/// Hands a link to the share sheet; completes with whether it went somewhere, so only real shares are counted.
+typedef ShareLink = Future<bool> Function(Uri link);
 
-Future<void> shareThroughSystem(Uri link) async {
-  await SharePlus.instance.share(ShareParams(uri: link));
+Future<bool> shareThroughSystem(Uri link) async {
+  final result = await SharePlus.instance.share(ShareParams(uri: link));
+  return result.status != ShareResultStatus.dismissed;
 }
 
 /// The small player's end screen (BiliNative `EndScreens.swift`, laid out as the official app's 26): the last frame

@@ -21,7 +21,7 @@ class FakePageApi implements PageApi {
   factory FakePageApi.demo() => FakePageApi(
         uploader: const UploaderCard(
           mid: 1,
-          name: '测试UP主',
+          name: '',
           face: '',
           fans: 475000,
           videos: 410,
@@ -86,7 +86,17 @@ class FakePageApi implements PageApi {
   Future<UploaderCard> uploaderCard({required int mid}) => _answer('uploaderCard', 'uploaderCard mid=$mid', () {
         final card = uploader;
         if (card == null) throw const BiliError.api(code: -404, message: '啥都木有');
-        return card;
+        // Answers for whichever uploader is asked about, so a real video's owner gets the canned counts.
+        return UploaderCard(
+          mid: mid,
+          name: card.name,
+          face: card.face,
+          fans: card.fans,
+          videos: card.videos,
+          isVip: card.isVip,
+          following: card.following,
+          official: card.official,
+        );
       });
 
   @override

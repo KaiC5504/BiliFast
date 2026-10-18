@@ -64,7 +64,10 @@ final class Rig {
     });
     await tester.pumpWidget(
       MaterialApp(
-        home: EndScreenLandscape(ui: ui, share: (link) async => shared.add(link)),
+        home: EndScreenLandscape(ui: ui, share: (link) async {
+          shared.add(link);
+          return true;
+        }),
       ),
     );
     await tester.pumpAndSettle();
@@ -226,7 +229,7 @@ void main() {
     });
     await tester.pumpWidget(
       MaterialApp(
-        home: EndScreenLandscape(ui: rig.ui, share: (_) async {}),
+        home: EndScreenLandscape(ui: rig.ui, share: (_) async => true),
       ),
     );
     await tester.pump(const Duration(milliseconds: 200));

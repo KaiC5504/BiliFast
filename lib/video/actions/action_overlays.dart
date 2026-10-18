@@ -186,15 +186,16 @@ class _ActionOverlaysState extends State<ActionOverlays> with SingleTickerProvid
       _closeIf(ActionPrompt.share);
       return;
     }
+    final bool sent;
     try {
-      await widget.share(link);
+      sent = await widget.share(link);
     } catch (error) {
       Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '${error.runtimeType}'});
       _toast('分享失败');
       _closeIf(ActionPrompt.share);
       return;
     }
-    unawaited(actions.shared());
+    if (sent) unawaited(actions.shared());
     _closeIf(ActionPrompt.share);
   }
 

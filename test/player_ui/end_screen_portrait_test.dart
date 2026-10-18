@@ -45,7 +45,10 @@ final class Rig {
     onBack: () => backs++,
   );
 
-  Future<void> share(Uri link) async => shared.add(link);
+  Future<bool> share(Uri link) async {
+    shared.add(link);
+    return true;
+  }
 
   Future<void> mount(WidgetTester tester, {bool settle = true}) async {
     addTearDown(() {

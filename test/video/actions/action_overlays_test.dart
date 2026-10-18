@@ -41,7 +41,7 @@ class Host extends StatelessWidget {
   final List<Offset> below;
   final bool landscape;
   final Uri? shareLink;
-  final Future<void> Function(Uri)? share;
+  final Future<bool> Function(Uri)? share;
   final bool still;
 
   @override
@@ -67,7 +67,7 @@ class Host extends StatelessWidget {
                 controller: controller,
                 landscape: landscape,
                 shareLink: shareLink,
-                share: share ?? (_) async {},
+                share: share ?? (_) async => true,
               ),
             ),
           ],
@@ -82,7 +82,7 @@ Future<Rig> pumpOverlays(
   VideoActions? actions, {
   bool landscape = false,
   Uri? shareLink,
-  Future<void> Function(Uri)? share,
+  Future<bool> Function(Uri)? share,
   bool still = false,
 }) async {
   tester.view.physicalSize = landscape ? const Size(956, 440) : const Size(440, 956);
@@ -103,6 +103,7 @@ Future<Rig> pumpOverlays(
           share ??
           (uri) async {
             shared.add(uri);
+            return true;
           },
       still: still,
     ),
@@ -306,7 +307,7 @@ void main() {
   group('share', () {
     testWidgets('hands the link to the share sheet, counts the share once it closes, then clears', (tester) async {
       final actions = fakeActions();
-      final sheet = Completer<void>();
+      final sheet = Completer<bool>();
       final links = <Uri>[];
       final rig = await pumpOverlays(
         tester,
@@ -323,9 +324,18 @@ void main() {
       expect(rig.controller.value, ActionPrompt.share);
       expect(actions.calls, ['ask share', 'clearPrompt']);
       expect(find.byType(FavouriteSheet), findsNothing);
-      sheet.complete();
+      sheet.complete(true);
       await tester.pumpAndSettle();
       expect(actions.calls, ['ask share', 'clearPrompt', 'shared']);
+      expect(rig.controller.value, isNull);
+    });
+
+    testWidgets('a share sheet dismissed without sharing counts nothing', (tester) async {
+      final actions = fakeActions();
+      final rig = await pumpOverlays(tester, actions, shareLink: link, share: (_) async => false);
+      actions.ask(ActionPrompt.share);
+      await tester.pumpAndSettle();
+      expect(actions.calls, ['ask share', 'clearPrompt']);
       expect(rig.controller.value, isNull);
     });
 

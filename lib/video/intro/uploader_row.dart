@@ -43,10 +43,10 @@ class UploaderRow extends StatelessWidget {
       height: IntroTheme.avatar,
       child: Row(
         children: [
-          _Avatar(face: card?.face ?? detail.owner.face, official: card?.official ?? OfficialKind.none),
+          _Avatar(face: _or(card?.face, detail.owner.face), official: card?.official ?? OfficialKind.none),
           const SizedBox(width: IntroTheme.avatarGap),
           Expanded(
-            child: _NameAndCounts(name: card?.name ?? detail.owner.name, card: card),
+            child: _NameAndCounts(name: _or(card?.name, detail.owner.name), card: card),
           ),
           const SizedBox(width: IntroTheme.avatarGap),
           follow,
@@ -376,3 +376,6 @@ class _PlusPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PlusPainter oldDelegate) => oldDelegate.color != color;
 }
+
+/// A card can come back with an empty name or face; the view's owner then stands in.
+String _or(String? fromCard, String fromView) => fromCard == null || fromCard.isEmpty ? fromView : fromCard;

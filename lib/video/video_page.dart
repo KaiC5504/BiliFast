@@ -64,6 +64,7 @@ PageDetails pageDetails({
     accountMid: () => environment.mid,
     requestLogin: () => toast('请先登录'),
     toast: toast,
+    accountChanges: environment,
   );
 }
 
