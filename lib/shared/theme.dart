@@ -171,6 +171,9 @@ abstract final class BiliMetrics {
   static const topRowMargin = 15.0;
   static const homeAvatar = 38.0;
   static const linkFieldHeight = 34.0;
+
+  /// The system paste control inside the link field, with a little of the field showing above and below it.
+  static const pasteControl = 28.0;
   static const linkFieldIcon = 17.0;
   static const linkClearIcon = 18.0;
   static const tabText = 16.0;

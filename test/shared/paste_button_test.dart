@@ -109,8 +109,12 @@ void main() {
       expect(recognizer, isA<EagerGestureRecognizer>());
       recognizer.dispose();
       expect(find.byType(IconButton), findsNothing);
-      expect(tester.getSize(find.byType(UiKitView)), const Size(40, BiliMetrics.linkFieldHeight),
-          reason: 'where the 18 pt icon in a compact button was');
+      expect(tester.getSize(find.byType(UiKitView)), const Size.square(BiliMetrics.pasteControl));
+      final field = tester.getRect(find.byType(Row).first);
+      final control = tester.getRect(find.byType(UiKitView));
+      expect(control.top, greaterThan(field.top), reason: 'inside the field, not over its edge');
+      expect(control.bottom, lessThan(field.bottom));
+      expect(control.right, lessThanOrEqualTo(field.right));
 
       final create = views.firstWhere((call) => call.method == 'create').arguments as Map<Object?, Object?>;
       expect(create['viewType'], 'bilifast/paste_control');

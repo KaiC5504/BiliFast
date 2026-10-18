@@ -77,6 +77,8 @@ final class PasteTargetView: UIView {
     self.channel = channel
     super.init(frame: frame)
     backgroundColor = .clear
+    // Nothing may draw outside the field, even if the control would rather be bigger than the room Dart gives it.
+    clipsToBounds = true
     pasteConfiguration = UIPasteConfiguration(forAccepting: NSString.self)
     control.frame = bounds
     control.autoresizingMask = [.flexibleWidth, .flexibleHeight]

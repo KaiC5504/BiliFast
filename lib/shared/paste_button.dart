@@ -49,9 +49,6 @@ class _NativePasteControl extends StatefulWidget {
 }
 
 class _NativePasteControlState extends State<_NativePasteControl> {
-  /// A compact IconButton's box, as the clipboard button has; the field's height caps it the same way.
-  static final _side = kMinInteractiveDimension + VisualDensity.compact.baseSizeAdjustment.dx;
-
   /// The control must get the touch itself: the system pastes only on a real tap on it.
   static final _gestures = <Factory<OneSequenceGestureRecognizer>>{
     Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
@@ -89,7 +86,7 @@ class _NativePasteControlState extends State<_NativePasteControl> {
   Widget build(BuildContext context) => IgnorePointer(
     ignoring: !widget.enabled,
     child: SizedBox.square(
-      dimension: _side,
+      dimension: BiliMetrics.pasteControl,
       child: UiKitView(
         viewType: _NativePasteControl.viewType,
         creationParams: <String, Object?>{
