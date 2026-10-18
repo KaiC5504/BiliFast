@@ -492,10 +492,9 @@ All of these come from phone logs or phone bugs. Sources are in the two BiliNati
 - Closed pages must free everything (`PageReleaseTests`). Models must not hold closures over the page.
 - The danmaku send bar and the comment composer follow the keyboard by hand.
 - Swipe back:
-  - It works from the edge and from the middle.
-  - The content swipe gives way to the player's seek drag and to sideways scrollers that can still scroll back.
-  - On 评论 the first swipe pages to 简介.
-  - A swipe closes 评论详情 first.
+  - It starts only from the left edge (KaiC, 2026-10-19: the swipe from the middle went back by accident). A
+    sideways drag in the middle belongs to the page: the player's seek, the 简介/评论 pager, scrollers.
+  - An edge swipe closes 评论详情 first.
   - Vertical scrolling must still work.
 - Builds 6 and 7 passed gesture tests that only asked delegates, while the swipe never began. **Gestures need
   real-touch tests at about 1500 pt/s.**
