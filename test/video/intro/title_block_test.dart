@@ -4,6 +4,7 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/intro/desc_text.dart';
 import 'package:bilifast/video/intro/title_block.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,7 +40,9 @@ VideoDetail _detail({
 const _desc = [
   DescPart(text: '从03:15开始，高潮在1:02:03。看 https://example.com/a?b=1。和 www.bilibili.com/read 还有 '),
   DescPart(text: '小明', mentionMid: 42),
-  DescPart(text: ' 相关：BV1AB411c7mD、av170001 与 https://www.bilibili.com/video/BV1GJ411x7h7?p=2'),
+  DescPart(
+    text: ' 相关：BV1AB411c7mD、av170001 与 https://www.bilibili.com/video/BV1GJ411x7h7?p=2 和 https://www.bilibili.com/video/av2/',
+  ),
 ];
 
 const _tags = [
@@ -56,7 +59,15 @@ final class Rig {
   final seeks = <double>[];
   final videos = <String>[];
   final links = <Uri>[];
+  bool linkOpens = true;
+  Object? linkThrows;
   bool _disposes = false;
+
+  Future<bool> openLink(Uri link) async {
+    links.add(link);
+    if (linkThrows case final error?) throw error;
+    return linkOpens;
+  }
 
   Future<void> mount(
     WidgetTester tester,
@@ -71,17 +82,20 @@ final class Rig {
         data: MediaQueryData(size: const Size(440, 956), disableAnimations: disableAnimations),
         child: Directionality(
           textDirection: TextDirection.ltr,
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 440,
-              child: TitleBlock(
-                detail: detail,
-                online: online,
-                tags: tags,
-                onSeek: seeks.add,
-                onOpenVideo: videos.add,
-                openLink: links.add,
+          // Overlay.wrap passes a remount's new block through, so its state sees didUpdateWidget.
+          child: Overlay.wrap(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 440,
+                child: TitleBlock(
+                  detail: detail,
+                  online: online,
+                  tags: tags,
+                  onSeek: seeks.add,
+                  onOpenVideo: videos.add,
+                  openLink: openLink,
+                ),
               ),
             ),
           ),
@@ -100,6 +114,13 @@ final class Rig {
 Future<void> _tapText(WidgetTester tester, String text) async {
   await tester.tapOnText(find.textRange.ofSubstring(text));
   await tester.pump();
+}
+
+/// The toast fades in, waits two seconds and fades out, each step starting a frame after the last ends.
+Future<void> _expireToast(WidgetTester tester) async {
+  for (var i = 0; i < 30; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 void main() {
@@ -285,8 +306,30 @@ void main() {
       await _tapText(tester, 'BV1AB411c7mD');
       await _tapText(tester, 'av170001');
       await _tapText(tester, 'video/BV1GJ411x7h7');
-      expect(rig.videos, ['BV1AB411c7mD', 'av170001', 'BV1GJ411x7h7']);
+      await _tapText(tester, 'video/av2');
+      expect(rig.videos, ['BV1AB411c7mD', 'av170001', 'BV1GJ411x7h7', 'av2']);
       expect(rig.links, isEmpty);
+    });
+
+    testWidgets('a web address that cannot open says so, whether the browser declines or throws', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester, _detail(desc: _desc));
+      await rig.toggle(tester);
+
+      await _tapText(tester, 'example.com');
+      expect(find.text('无法打开链接'), findsNothing);
+
+      rig.linkOpens = false;
+      await _tapText(tester, 'example.com');
+      expect(find.text('无法打开链接'), findsOneWidget);
+      await _expireToast(tester);
+      expect(find.text('无法打开链接'), findsNothing);
+
+      rig.linkThrows = PlatformException(code: 'ACTIVITY_NOT_FOUND');
+      await _tapText(tester, 'example.com');
+      expect(find.text('无法打开链接'), findsOneWidget);
+      await _expireToast(tester);
+      expect(rig.links, hasLength(3));
     });
 
     testWidgets('mentions are blue but lead nowhere yet; plain text stays grey', (tester) async {
@@ -340,6 +383,14 @@ void main() {
       expect(linkTarget(const RichRun.link(title: 't', url: 'https://m.bilibili.com/video/BV1GJ411x7h7')), (
         video: 'BV1GJ411x7h7',
         web: null,
+      ));
+      expect(linkTarget(const RichRun.link(title: 't', url: 'https://www.bilibili.com/video/av170001?p=2')), (
+        video: 'av170001',
+        web: null,
+      ));
+      expect(linkTarget(const RichRun.link(title: 't', url: 'https://www.bilibili.com/video/online.html')), (
+        video: null,
+        web: Uri.parse('https://www.bilibili.com/video/online.html'),
       ));
       expect(linkTarget(const RichRun.link(title: 't', url: 'https://b23.tv/abc')), (
         video: null,

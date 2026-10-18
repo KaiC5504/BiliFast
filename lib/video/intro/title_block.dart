@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:bili_core/api.dart' show VideoDetail, VideoTag, VideoTagKind;
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -9,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
 import '../../shared/theme.dart';
+import '../../shared/toast.dart';
 import 'desc_text.dart';
 
 /// The title with its 活动 tag and ⌄, and the meta line with N人正在看 (03). Expanded (18): the BV id, the reprint
@@ -34,10 +36,10 @@ class TitleBlock extends StatefulWidget {
   /// A BV or av id in the description.
   final ValueChanged<String> onOpenVideo;
 
-  /// A web address in the description; the browser by default.
-  final ValueChanged<Uri> openLink;
+  /// A web address in the description; the browser by default. False when nothing could open it.
+  final Future<bool> Function(Uri link) openLink;
 
-  static void _openInBrowser(Uri url) => unawaited(launchUrl(url, mode: LaunchMode.externalApplication));
+  static Future<bool> _openInBrowser(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
 
   @override
   State<TitleBlock> createState() => _TitleBlockState();
@@ -83,6 +85,16 @@ class _TitleBlockState extends State<TitleBlock> with SingleTickerProviderStateM
     } else {
       _reveal.reverse();
     }
+  }
+
+  Future<void> _openLink(Uri link) async {
+    var opened = false;
+    try {
+      opened = await widget.openLink(link);
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'description link failed', {'error': '$error'});
+    }
+    if (!opened && mounted) showToast(context, '无法打开链接');
   }
 
   @override
@@ -132,7 +144,7 @@ class _TitleBlockState extends State<TitleBlock> with SingleTickerProviderStateM
                         tags: widget.tags,
                         onSeek: widget.onSeek,
                         onOpenVideo: widget.onOpenVideo,
-                        openLink: widget.openLink,
+                        openLink: (link) => unawaited(_openLink(link)),
                       ),
               ),
             ),
@@ -238,8 +250,8 @@ class _ChevronPainter extends CustomPainter {
   bool shouldRepaint(_ChevronPainter oldDelegate) => false;
 }
 
-/// ▶ 3.7万  ☰ 337  2026年10月11日 21:05  👥 53人正在看. Only N人正在看 rebuilds when the count changes; a line too long
-/// for the width shrinks a little rather than cut, as Swift's did.
+/// ▶ 3.7万  ☰ 337  2026年10月11日 21:05, then the viewers mark and 53人正在看. Only N人正在看 rebuilds when the count
+/// changes; a line too long for the width shrinks a little rather than cut, as Swift's did.
 class _MetaLine extends StatelessWidget {
   const _MetaLine({required this.detail, required this.online});
 

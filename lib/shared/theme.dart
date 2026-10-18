@@ -765,7 +765,7 @@ abstract final class IntroTheme {
   static const nameLine = 16.0;
   static const fansLine = 13.0;
 
-  /// 03's ⚡ disc sits flush with the avatar's lower right inside a ring of the page's white.
+  /// 03's bolt disc sits flush with the avatar's lower right inside a ring of the page's white.
   static const badge = 10.0;
   static const badgeRing = 1.0;
   static const badgePerson = Color(0xFFFFCC00);
@@ -855,9 +855,9 @@ abstract final class IntroTheme {
 
 /// 合集, the part strip, the topic and BGM chips and the related rows (03, 18).
 abstract final class IntroListTheme {
-  /// 03 and 18 put 18 pt between the action labels, the 合集 card, the chips and the related list's first hairline.
-  /// The action row's box ends 3.33 below its labels' ink, so each section owns this much above it and
-  /// [sectionBottom] below, and two sections meet 18 apart.
+  /// 03 and 18 put the 合集 card, the chips and the related list's first hairline 18 apart, so each section owns
+  /// [sectionTop] above it and [sectionBottom] below. The action row's box ends 3.33 below its counts' ink, which puts
+  /// the first section 18.67 under the digits, as on both (18 under 不喜欢, whose ink reaches lower).
   static const sectionTop = 46 / 3;
   static const sectionBottom = 8 / 3;
 

@@ -39,14 +39,21 @@ List<RichRun> _noLinks(String text) => bili.RichText.runs(text, emotes: const {}
 final _webAddress = RegExp(r'(?:https?://|www\.)[^\s，。！？、；：（）【】《》「」『』“”‘’<>"]+', caseSensitive: false);
 final _trailingPunctuation = RegExp(r'''[.,;:!?)\]}'"]+$''');
 
-/// What a tap on a link run does: a bilibili.com video address opens the video in the app, anything else goes to the
-/// browser. Null for a run that is not a link.
+/// What a tap on a link run does: a bilibili.com video address, BV or av, opens the video in the app, anything else
+/// goes to the browser. Null for a run that is not a link.
 ({String? video, Uri? web})? linkTarget(RichRun run) {
   if (run is! LinkRun) return null;
   final uri = Uri.tryParse(run.url);
   if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) return null;
   if (uri.host.endsWith('bilibili.com') && uri.path.startsWith('/video/')) {
-    if (LinkParser.parse(run.url) case BvidLink(:final id)) return (video: id, web: null);
+    switch (LinkParser.parse(run.url)) {
+      case BvidLink(:final id):
+        return (video: id, web: null);
+      case AidLink(:final id):
+        return (video: 'av$id', web: null);
+      default:
+        break;
+    }
   }
   return (video: null, web: uri);
 }
