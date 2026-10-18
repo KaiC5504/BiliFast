@@ -20,6 +20,12 @@ final class SeekHud extends Hud {
 
   final double target;
   final double duration;
+
+  @override
+  bool operator ==(Object other) => other is SeekHud && other.target == target && other.duration == duration;
+
+  @override
+  int get hashCode => Object.hash(target, duration);
 }
 
 final class LevelHud extends Hud {
@@ -29,6 +35,12 @@ final class LevelHud extends Hud {
 
   /// 0 to 1.
   final double value;
+
+  @override
+  bool operator ==(Object other) => other is LevelHud && other.kind == kind && other.value == value;
+
+  @override
+  int get hashCode => Object.hash(kind, value);
 }
 
 /// Whether the player's controls show, and the gesture HUD (port of BiliNative `ChromeState.swift`). Shown controls

@@ -56,6 +56,11 @@ abstract final class BiliColors {
   static const statsFill = Color(0x8C000000);
   static const statsBorder = Color(0x1FFFFFFF);
 
+  /// The gesture HUD's pills, sampled on 25: a dark grey at 62%, the 倍速中 arrows white at 91% (front) and 59%.
+  static const hudFill = Color(0x9E1D1D1D);
+  static const hudArrowFront = Color(0xE8FFFFFF);
+  static const hudArrowBack = Color(0x96FFFFFF);
+
   /// The test screen (slice 1): text on the pink button, and what went wrong.
   static const onPink = Color(0xFFFFFFFF);
   static const failure = Color(0xFFF2453D);
@@ -128,6 +133,33 @@ abstract final class BiliMetrics {
   static const videoBackIcon = 20.0;
   static const videoBackShadow = 6.0;
   static const videoSpinnerRadius = 14.0;
+
+  /// The gesture HUD's pills, measured on 25 (px / 3): 倍速中 is 92 × 44, 10 below the top, centred, with its icon 14
+  /// in, and its two overlapping arrows are 28/3 × 12 each before rounding, the second 23/3 right of the first.
+  static const hudHeight = 44.0;
+  static const hudMinWidth = 92.0;
+  static const hudRadius = 8.0;
+  static const hudTop = 10.0;
+  static const hudPadding = 13.0;
+  static const hudSpeedPaddingLeft = 14.0;
+  static const hudSpeedPaddingRight = 12.0;
+  static const hudGap = 19 / 3;
+  static const hudFont = 14.0;
+
+  /// MiSans sits higher in its line than the official app's PingFang; this brings the labels level with 25's.
+  static const hudLabelDrop = 4 / 3;
+  static const hudArrowWidth = 31 / 3;
+  static const hudArrowHeight = 41 / 3;
+  static const hudArrowStep = 22 / 3;
+  static const hudArrowCorner = 3.0;
+  static const hudIcon = 18.0;
+  static const hudBarWidth = 100.0;
+  static const hudBarHeight = 3.0;
+  static const hudSeekGap = 4.0;
+
+  /// Flutter's Cupertino back swipe starts within this many points of the left edge (its private
+  /// `_kBackGestureWidth`), or the left safe-area inset when that is wider.
+  static const swipeBackEdge = 20.0;
 
   /// The player's controls (BiliNative `ChromeTheme.swift`).
   static const chromeButton = 44.0;
