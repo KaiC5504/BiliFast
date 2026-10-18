@@ -62,12 +62,16 @@ class AppEnvironment extends ChangeNotifier {
   final Logger _logger;
   Account _account = const AccountUnknown();
   int? _mid;
+  String? _face;
   bool _accountCheckFailed = false;
 
   Account get account => _account;
 
   /// The logged-in account's uid.
   int? get mid => _mid;
+
+  /// The logged-in account's avatar URL.
+  String? get face => _face;
 
   /// The last nav call failed (network, not a verdict), so [account] is still unknown.
   bool get accountCheckFailed => _accountCheckFailed;
@@ -89,11 +93,13 @@ class AppEnvironment extends ChangeNotifier {
       if (nav.isLogin) {
         _account = LoggedIn(name: nav.uname ?? '', vip: nav.isVip);
         _mid = nav.mid;
+        _face = nav.face;
         final mid = nav.mid;
         _logger.info(LogCategory.app, 'account', {'user': mid == null ? '?' : Redactor.mid(mid), 'vip': nav.isVip});
       } else {
         _account = cookies.value('SESSDATA') == null ? const LoggedOut() : const LoginExpired();
         _mid = null;
+        _face = null;
         _logger.info(LogCategory.app, 'account', {'user': 'none', 'expired': _account is LoginExpired});
       }
       notifyListeners();

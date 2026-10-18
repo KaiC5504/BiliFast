@@ -39,8 +39,8 @@ const appSpeedTestHooks =
 Future<PlaybackEngine> _startVariantEngine(SpeedTestVariant variant) =>
     startPlatformEngine(config: variant.config, connectionsPerHost: variant.connectionsPerHost);
 
-/// Slice 1's whole app: the account the keychain login gave, a BV field, the player and its switches. KaiC checks
-/// HDR, PiP, danmaku and seeking over the native player with it.
+/// Slice 1's whole app, now 开发者 in the avatar menu: the account the keychain login gave, a BV field, the player and
+/// its switches, the log forwarder and the speed test.
 class PlayerTestPage extends StatefulWidget {
   const PlayerTestPage({
     super.key,
@@ -50,6 +50,7 @@ class PlayerTestPage extends StatefulWidget {
     this.stageBuilder = playerStage,
     this.initialLink,
     this.speedTestHooks = appSpeedTestHooks,
+    this.ownsController = true,
   });
 
   final AppEnvironment environment;
@@ -63,6 +64,10 @@ class PlayerTestPage extends StatefulWidget {
   final String? initialLink;
   final SpeedTestHooks speedTestHooks;
 
+  /// False when the controller is the app's shared one (opened from 开发者): the page then closes its video on
+  /// leaving rather than disposing the player, and the app hears lifecycle and memory events for it.
+  final bool ownsController;
+
   @override
   State<PlayerTestPage> createState() => _PlayerTestPageState();
 }
@@ -71,7 +76,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   final _link = TextEditingController();
   final _testLinks = TextEditingController();
   late final TextEditingController _logAddress = TextEditingController(text: widget.logs?.manual ?? '');
-  late final AppLifecycleListener _lifecycle;
+  AppLifecycleListener? _lifecycle;
   PlaybackController? _controller;
 
   /// Dev builds only, like the log section.
@@ -83,8 +88,10 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onResume: () => unawaited(_controller?.appResumed()));
-    WidgetsBinding.instance.addObserver(this);
+    if (widget.ownsController) {
+      _lifecycle = AppLifecycleListener(onResume: () => unawaited(_controller?.appResumed()));
+      WidgetsBinding.instance.addObserver(this);
+    }
     widget.startPlayback().then((controller) {
       if (!mounted) {
         controller.dispose();
@@ -111,11 +118,15 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _lifecycle.dispose();
+    if (widget.ownsController) WidgetsBinding.instance.removeObserver(this);
+    _lifecycle?.dispose();
     // Before the controller, so sound and screen are put back while the player is still there.
     _speedTest?.dispose();
-    _controller?.dispose();
+    if (widget.ownsController) {
+      _controller?.dispose();
+    } else {
+      _controller?.close();
+    }
     _link.dispose();
     _testLinks.dispose();
     _logAddress.dispose();

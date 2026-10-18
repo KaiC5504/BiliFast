@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app/app_environment.dart';
+import 'app/app_scope.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_forwarder.dart';
-import 'playback/playback_controller.dart';
+import 'home/home_page.dart';
+import 'home/recent_store.dart';
 import 'playback/playback_setup.dart';
 import 'screens/player_test_page.dart';
 import 'shared/theme.dart';
@@ -23,8 +25,10 @@ Future<void> main(List<String> args) async {
     'devTools': devToolsEnabled,
   });
   final AppEnvironment environment;
+  final RecentStore recents;
   try {
     environment = await AppEnvironment.load();
+    recents = await RecentStore.load(supportFilePath('recents.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
     CrashLog.report(error, stack, source: 'launch');
@@ -33,9 +37,12 @@ Future<void> main(List<String> args) async {
   }
   unawaited(environment.refreshAccount());
   runApp(BiliFastApp(
-    environment: environment,
-    logs: logs,
-    startPlayback: () => startPlaybackController(environment.client),
+    services: AppServices(
+      environment: environment,
+      playback: AppPlayback(() => startPlaybackController(environment.client)),
+      recents: recents,
+      logs: logs,
+    ),
     initialLink: _argument(args, '--play='),
   ));
 }
@@ -85,12 +92,9 @@ String? _argument(List<String> args, String prefix) =>
     args.where((arg) => arg.startsWith(prefix)).map((arg) => arg.substring(prefix.length)).firstOrNull;
 
 class BiliFastApp extends StatelessWidget {
-  const BiliFastApp(
-      {super.key, required this.environment, required this.startPlayback, this.logs, this.initialLink});
+  const BiliFastApp({super.key, required this.services, this.initialLink});
 
-  final AppEnvironment environment;
-  final Future<PlaybackController> Function() startPlayback;
-  final LogForwarder? logs;
+  final AppServices services;
   final String? initialLink;
 
   @override
@@ -106,9 +110,18 @@ class BiliFastApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
         scaffoldBackgroundColor: BiliColors.pageGrey,
       ),
-      // Stands in until slice 3 ports the 推荐 home.
-      home: PlayerTestPage(
-          environment: environment, startPlayback: startPlayback, logs: logs, initialLink: initialLink),
+      builder: (context, child) => AppScope(services: services, child: child!),
+      home: HomePage(
+        initialLink: initialLink,
+        developerPage: services.logs == null
+            ? null
+            : (context) => PlayerTestPage(
+                  environment: services.environment,
+                  startPlayback: () => services.playback.controller,
+                  logs: services.logs,
+                  ownsController: false,
+                ),
+      ),
     );
   }
 }

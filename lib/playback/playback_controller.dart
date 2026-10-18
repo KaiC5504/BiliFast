@@ -66,6 +66,39 @@ final class MemoryWarning extends PlaybackMark {
   final int rssBytes;
 }
 
+/// Business codes that say the video itself is gone or hidden; the unsigned view would only say it again.
+const _videoUnavailable = {-404, 62002, 62004, 62012};
+
+/// The video and part number a link names. The unsigned view endpoint answers 412 to dart:io (the spike, and every
+/// open on Windows) while its WBI-signed twin works, so a BV link asks the signed one first.
+Future<(VideoView, int?)> resolveVideoLink(BiliClient client, VideoLink link, {Logger? logger}) async {
+  final log = logger ?? Logger.shared;
+  Future<VideoView> signedView({String? bvid, int? aid}) async {
+    final detail = await client.videoDetail(bvid: bvid, aid: aid);
+    return VideoView(
+        bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
+  }
+
+  await client.ensureRiskCookies();
+  if (link is BvidLink) {
+    try {
+      return (await signedView(bvid: link.id), link.page);
+    } catch (error) {
+      if (error is BiliAPIError && _videoUnavailable.contains(error.code)) rethrow;
+      log.warn(LogCategory.player, 'signed view failed, trying the unsigned view', {'error': '$error'});
+    }
+    return (await client.view(bvid: link.id), link.page);
+  }
+  try {
+    final resolved = await client.resolve(link);
+    return (resolved.view, resolved.page);
+  } on BiliHTTPError catch (error) {
+    if (error.status != 412 || link is! AidLink) rethrow;
+    log.warn(LogCategory.player, 'view refused, trying the signed view', {'status': error.status});
+    return (await signedView(aid: link.id), link.page);
+  }
+}
+
 enum ItemFailure { format, network, unknown }
 
 /// When only AVPlayer's error log saw the failure (an expired URL's 403), the code is the HTTP status and the
@@ -215,6 +248,9 @@ class PlaybackController extends ChangeNotifier {
   /// Whether a load starts playback; reloading a player the user paused leaves it paused.
   bool _playWhenLoaded = true;
 
+  /// Set by an [openVideo] without a start until the playurl answer's saved progress has placed it.
+  bool _resumeFromHistory = false;
+
   /// The current load reached playing; a format failure after that is not a codec refusal.
   bool _itemPlayed = false;
   bool _sawFirstFrame = false;
@@ -271,18 +307,71 @@ class PlaybackController extends ChangeNotifier {
   String qualityName(int qn) =>
       QualityNames.full(qn: qn, serverText: _qualities.where((option) => option.id == qn).firstOrNull?.name);
 
+  /// Counts [open] and [openVideo] calls, so a page that closes late can tell a newer page has the player.
+  int get opens => _opens;
+  int _opens = 0;
+
   Future<void> open(String text) async {
+    _opens += 1;
     final link = LinkParser.parse(text);
-    _stopPlayback();
-    _video = null;
-    _page = null;
-    _qualities = const [];
-    danmaku.clear();
-    duration.value = 0;
+    _clearVideo();
     if (link == null) {
       _failWith(BiliError.invalidLink, 'no link');
       return;
     }
+    await _openWith((current) async {
+      final (view, pageNumber) = await _resolve(link);
+      if (current != _epoch) return null;
+      final pages = view.pages;
+      if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
+      return (view, pages.where((page) => page.page == pageNumber).firstOrNull ?? pages.first);
+    }, start: 0);
+  }
+
+  /// The video page's open: part [cid], or without one the part Bilibili saw this account watch last, or the first;
+  /// from [start] seconds, or without one from where Bilibili saw it last (`ResumePoint`), which only arrives with
+  /// the playurl answer.
+  Future<void> openVideo(String bvid, {int? cid, double? start}) async {
+    _opens += 1;
+    _clearVideo();
+    await _openWith((current) async {
+      final (view, _) = await _resolve(BvidLink(bvid));
+      if (current != _epoch) return null;
+      final pages = view.pages;
+      if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
+      if (cid != null) return (view, pages.where((page) => page.cid == cid).firstOrNull ?? pages.first);
+      if (pages.length == 1) return (view, pages.first);
+      int? saved;
+      try {
+        saved = (await _client.playerInfo(bvid: view.bvid, cid: pages.first.cid)).lastPlayCid;
+      } catch (error) {
+        _logger.warn(LogCategory.player, 'player info failed, playing P1', {'error': '$error'});
+      }
+      if (current != _epoch) return null;
+      return (view, pages.where((page) => page.cid == saved).firstOrNull ?? pages.first);
+    }, start: start);
+  }
+
+  /// The video page went away: playback stops and nothing of it stays.
+  void close() {
+    _clearVideo();
+    _error = null;
+    _playerFailure = null;
+    _notify();
+  }
+
+  void _clearVideo() {
+    _stopPlayback();
+    _video = null;
+    _page = null;
+    _qualities = const [];
+    _resumeFromHistory = false;
+    danmaku.clear();
+    duration.value = 0;
+  }
+
+  /// [pick] resolves the video and its part, or answers null once a newer open has taken over.
+  Future<void> _openWith(Future<(VideoView, VideoPage)?> Function(int current) pick, {required double? start}) async {
     final current = _advance();
     _phase = PlaybackPhase.loading;
     _error = null;
@@ -293,16 +382,15 @@ class PlaybackController extends ChangeNotifier {
         await _replaceEngine();
         if (current != _epoch) return;
       }
-      final (view, pageNumber) = await _resolve(link);
-      if (current != _epoch) return;
-      final pages = view.pages;
-      if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
-      final page = pages.where((page) => page.page == pageNumber).firstOrNull ?? pages.first;
+      final picked = await pick(current);
+      if (picked == null || current != _epoch) return;
+      final (view, page) = picked;
       _video = view;
       _page = page;
       danmaku.load(cid: page.cid, durationMs: page.duration * 1000);
-      _logger.info(LogCategory.player, 'open', {'bvid': view.bvid, 'page': page.page, 'parts': pages.length});
-      await _startPlayback(0, autoplay: true);
+      _logger.info(LogCategory.player, 'open', {'bvid': view.bvid, 'page': page.page, 'parts': view.pages.length});
+      _resumeFromHistory = start == null;
+      await _startPlayback(start ?? 0, autoplay: true);
     } catch (error, stack) {
       if (current == _epoch) _fail(error, stack);
     }
@@ -432,37 +520,7 @@ class PlaybackController extends ChangeNotifier {
     await _reload(current);
   }
 
-  /// Business codes that say the video itself is gone or hidden; the unsigned view would only say it again.
-  static const _videoUnavailable = {-404, 62002, 62004, 62012};
-
-  /// The unsigned view endpoint answers 412 to dart:io (the spike, and every open on Windows) while its
-  /// WBI-signed twin works, so a BV link asks the signed one first.
-  Future<(VideoView, int?)> _resolve(VideoLink link) async {
-    await _client.ensureRiskCookies();
-    if (link is BvidLink) {
-      try {
-        return (await _signedView(bvid: link.id), link.page);
-      } catch (error) {
-        if (error is BiliAPIError && _videoUnavailable.contains(error.code)) rethrow;
-        _logger.warn(LogCategory.player, 'signed view failed, trying the unsigned view', {'error': '$error'});
-      }
-      return (await _client.view(bvid: link.id), link.page);
-    }
-    try {
-      final resolved = await _client.resolve(link);
-      return (resolved.view, resolved.page);
-    } on BiliHTTPError catch (error) {
-      if (error.status != 412 || link is! AidLink) rethrow;
-      _logger.warn(LogCategory.player, 'view refused, trying the signed view', {'status': error.status});
-      return (await _signedView(aid: link.id), link.page);
-    }
-  }
-
-  Future<VideoView> _signedView({String? bvid, int? aid}) async {
-    final detail = await _client.videoDetail(bvid: bvid, aid: aid);
-    return VideoView(
-        bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
-  }
+  Future<(VideoView, int?)> _resolve(VideoLink link) => resolveVideoLink(_client, link, logger: _logger);
 
   Future<PlayURLInfo> _playUrl() async {
     final page = _page;
@@ -500,6 +558,7 @@ class PlaybackController extends ChangeNotifier {
     _refreshingAfterFatal = false;
     _playing = null;
     _notify();
+    var at = time;
     try {
       final info = await _playUrl();
       _ensureCurrent(current);
@@ -508,16 +567,37 @@ class PlaybackController extends ChangeNotifier {
         _loggedPlayUrl = true;
         _logger.info(LogCategory.player, 'playurl', playURLSummary(info));
       }
+      at = _resumePoint(info) ?? time;
       final dash = info.dash;
       if (dash == null) throw BiliError.notDash;
       _dash = dash;
       final choice = _choose(dash);
       _preconnect(choice);
-      await _prepareAndLoad(choice, time, current);
+      await _prepareAndLoad(choice, at, current);
       _scheduleRefresh(choice, current);
     } catch (error, stack) {
-      await _handle(error, stack, time, current);
+      await _handle(error, stack, at, current);
     }
+  }
+
+  /// Where an [openVideo] without a start begins, from the first playurl answer's saved progress; null after that,
+  /// so a restart or a URL refresh keeps the playhead.
+  double? _resumePoint(PlayURLInfo info) {
+    final page = _page;
+    if (!_resumeFromHistory || page == null) return null;
+    _resumeFromHistory = false;
+    final at = ResumePoint.start(
+      lastPlayTimeMs: info.lastPlayTimeMs,
+      lastPlayCid: info.lastPlayCid,
+      cid: page.cid,
+      duration: page.duration.toDouble(),
+    );
+    _logger.info(LogCategory.player, 'resume', {'at': at.round(), 'saved': info.lastPlayTimeMs ~/ 1000});
+    if (at > 0) {
+      _heldPosition = at;
+      danmaku.seeked((at * 1000).round());
+    }
+    return at;
   }
 
   /// The engine opens its connections to the nodes while the local server check and the prepare call make their

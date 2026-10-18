@@ -46,15 +46,18 @@ final appEngineOptions = EngineOptions(
   nodeMemoryPath: nodeMemoryPath(),
 );
 
-String? nodeMemoryPath() {
+String? nodeMemoryPath() => supportFilePath('node_memory.json');
+
+/// [name] in the app's support folder (kept across launches, not backed up as documents); null where there is none.
+String? supportFilePath(String name) {
   final env = Platform.environment;
   if (Platform.isIOS) {
     final home = env['HOME'];
-    return home == null ? null : '$home/Library/Application Support/node_memory.json';
+    return home == null ? null : '$home/Library/Application Support/$name';
   }
   if (Platform.isWindows) {
     final appData = env['APPDATA'];
-    return appData == null ? null : '$appData\\bilifast\\node_memory.json';
+    return appData == null ? null : '$appData\\bilifast\\$name';
   }
   return null;
 }

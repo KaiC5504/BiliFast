@@ -66,6 +66,10 @@ abstract final class BiliColors {
   static const faster = Color(0xFF34C759);
   static const slower = Color(0xFFF2453D);
 
+  /// The loading cards' sweep.
+  static const shimmerBase = Color(0xFFEDEEF0);
+  static const shimmerHighlight = Color(0xFFF8F9FA);
+
   /// The stats overlay's node dots (iOS system green, orange, red and grey).
   static const nodeHealthy = Color(0xFF34C759);
   static const nodeBlocked = Color(0xFFFF9500);
@@ -118,6 +122,33 @@ abstract final class BiliMetrics {
   static const statsLineGap = 2.0;
   static const statsDot = 5.0;
   static const statsDotGap = 4.0;
+
+  /// 首页 (BiliNative `FeedMetrics`, measured on screen 01 at 3 px per point).
+  static const feedSpacing = 6.0;
+  static const coverAspect = 4 / 3;
+  static const cardInset = 8.0;
+  static const cardTitleText = 14.0;
+  static const cardFooterText = 12.0;
+  static const cardTagText = 11.0;
+  static const cardTagHeight = 16.0;
+  static const cardStatText = 11.0;
+  static const cardStatIcon = 13.0;
+  static const coverShadeHeight = 36.0;
+  static const topRowHeight = 44.0;
+  static const topRowMargin = 15.0;
+  static const homeAvatar = 38.0;
+  static const linkFieldHeight = 34.0;
+  static const tabText = 16.0;
+  static const tabIndicatorWidth = 18.0;
+  static const tabIndicatorHeight = 3.0;
+  static const menuWidth = 248.0;
+  static const menuRowHeight = 46.0;
+  static const menuAvatar = 40.0;
+  static const menuRadius = 12.0;
+  static const toastRadius = 16.0;
+
+  /// How far a pressed card shrinks.
+  static const pressedScale = 0.97;
 
   /// Danmaku text at the normal size (25); an elem's own size scales it.
   static const danmakuFont = 17.0;
