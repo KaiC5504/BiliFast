@@ -11,6 +11,7 @@ import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/shared/menu.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/video/intro/title_block.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -242,9 +243,9 @@ void main() {
     await settle(tester);
     await tester.enterText(find.byKey(const ValueKey('home-link')), 'https://www.bilibili.com/video/BV1GJ411x7h7?p=2');
     await settle(tester, 20);
-    expect(find.text('测试视频'), findsOneWidget);
+    expect(controller.video?.title, '测试视频');
     expect(controller.page?.cid, 137649200);
-    expect(find.text('UP主 · P2 第二集'), findsOneWidget);
+    expect(shownTitle(tester), '测试视频', reason: 'the page shows the video it opened');
     expect(recents.items.single.id, 'BV1GJ411x7h7#137649200');
     final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
     expect(route.detail?.bvid, 'BV1GJ411x7h7', reason: 'the signed view that resolved the link, for its 合集');
@@ -276,11 +277,12 @@ void main() {
     await settle(tester);
     await tester.tap(card('BV1aaa'));
     await settle(tester, 20);
-    expect(find.byKey(const ValueKey('video-title')), findsOneWidget);
-    expect(tester.widget<Text>(find.byKey(const ValueKey('video-title'))).data, '视频 BV1aaa');
+    expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.title, '视频 BV1aaa');
+    expect(shownTitle(tester), isNull, reason: '简介 waits for the video\'s detail');
     http.canned.gates[Canned.signedViewPath]!.complete();
     await settle(tester, 20);
-    expect(tester.widget<Text>(find.byKey(const ValueKey('video-title'))).data, '测试视频');
+    expect(controller.video?.title, '测试视频');
+    expect(shownTitle(tester), '测试视频', reason: 'the page shows the video it opened');
   });
 
   testWidgets('⋮ opens a frosted menu beside it whose 稍后再看 adds the video', (tester) async {
@@ -468,4 +470,10 @@ Future<Widget> editMenu(WidgetTester tester) async {
   final editable = find.descendant(of: field, matching: find.byType(EditableText));
   final state = tester.state<EditableTextState>(editable);
   return tester.widget<TextField>(field).contextMenuBuilder!(tester.element(editable), state);
+}
+
+/// The title the video page's title block shows; null before the video's detail arrives.
+String? shownTitle(WidgetTester tester) {
+  final blocks = find.byType(TitleBlock, skipOffstage: false);
+  return blocks.evaluate().isEmpty ? null : tester.widget<TitleBlock>(blocks.first).detail.title;
 }

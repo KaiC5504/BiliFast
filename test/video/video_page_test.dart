@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bili_core/api.dart' show VideoCard, VideoDetail, VideoOwner, VideoStat;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
@@ -25,7 +26,12 @@ import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/actions/action_overlays.dart';
+import 'package:bilifast/video/actions/video_actions.dart';
+import 'package:bilifast/video/intro/intro_tab.dart';
+import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_session.dart';
+import 'package:bilifast/video/page_tabs.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:bilifast/video/video_page.dart';
@@ -39,6 +45,7 @@ import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
 import '../support/fake_player_session.dart';
+import '../support/fake_video_actions.dart';
 
 const heartbeatPath = '/x/click-interface/web/heartbeat';
 const bv = 'BV1GJ411x7h7';
@@ -85,6 +92,9 @@ void main() {
   late List<FakePlayerSession> sessions;
   late List<SessionOpen> sessionOpens;
 
+  /// Each page's details, in the order the pages made them.
+  late List<FakePageDetails> detailsMade;
+
   setUp(() {
     http = Canned.http()..routes[heartbeatPath] = (200, '{"code":0,"message":"0"}');
     player = FakePlayer();
@@ -93,6 +103,7 @@ void main() {
     orientation = SpyOrientation();
     sessions = [];
     sessionOpens = [];
+    detailsMade = [];
   });
 
   PlayerSession fakeSession({
@@ -162,9 +173,26 @@ void main() {
     }
   }
 
-  void pushVideo(VideoRoute route) => unawaited(
-    nav.currentState!.push(SwipeBackPageRoute<void>(builder: (_) => VideoPage(route: route, createSession: fakeSession))),
-  );
+  PageDetails fakeDetails({
+    required PlayerSession session,
+    required AppServices services,
+    required void Function(String message) toast,
+  }) {
+    final details = FakePageDetails();
+    detailsMade.add(details);
+    return details;
+  }
+
+  late VideoPageOpener openPage;
+
+  Widget page(VideoRoute route) =>
+      VideoPage(route: route, createSession: fakeSession, createDetails: fakeDetails, openPage: openPage);
+
+  /// openVideoPage's push, with the test's session and details.
+  openPage = (context, route) => Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route)));
+
+  void pushVideo(VideoRoute route) =>
+      unawaited(nav.currentState!.push(SwipeBackPageRoute<void>(builder: (_) => page(route))));
 
   /// The top page's back, as the chrome's arrow and the system's back both pop it.
   Future<void> back(WidgetTester tester) async {
@@ -371,9 +399,7 @@ void main() {
             child: GestureDetector(
               key: const ValueKey('card'),
               // openVideoPage's push, with the test's session.
-              onTap: () => Navigator.of(context).push(
-                SwipeBackPageRoute<void>(builder: (_) => VideoPage(route: route, createSession: fakeSession)),
-              ),
+              onTap: () => Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route))),
               child: SizedBox(
                 width: 214,
                 height: 160,
@@ -445,12 +471,17 @@ void main() {
   });
 
   group('full screen is the same page laid out again', () {
-    testWidgets('inline: black under the status bar, the 16:9 player, the details below (screen 03)', (tester) async {
+    testWidgets('inline: black under the status bar, the 16:9 player, the tab row right under it and the tabs below '
+        '(screen 03 without its ad card)', (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
       await opened(tester);
       expect(area(tester), const Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect));
-      expect(tester.getTopLeft(find.byKey(const ValueKey('video-title'))).dy, greaterThan(62 + 247.5));
+      expect(tester.getRect(find.byType(PageTabRow)), const Rect.fromLTWH(0, 62 + 247.5, 440, PageTheme.tabRowHeight));
+      expect(
+        tester.getRect(find.byType(PageTabs)),
+        const Rect.fromLTRB(0, 62 + 247.5 + PageTheme.tabRowHeight, 440, 956),
+      );
       expect(find.byType(PortraitControls), findsOneWidget);
       expect(
         MediaQuery.paddingOf(tester.element(find.byType(PortraitControls))),
@@ -477,7 +508,7 @@ void main() {
       expect(area(tester), const Rect.fromLTWH(0, 0, 956, 440));
       expect(find.byType(LandscapeChrome), findsOneWidget);
       expect(find.byType(PortraitControls), findsNothing);
-      expect(find.byKey(const ValueKey('video-title')), findsNothing, reason: 'offstage');
+      expect(find.byType(PageTabRow), findsNothing, reason: 'offstage');
       expect(
         MediaQuery.paddingOf(tester.element(find.byType(LandscapeChrome))),
         const EdgeInsets.fromLTRB(62, 0, 62, 21),
@@ -487,7 +518,7 @@ void main() {
 
       await rotate(tester, Presentation.inline);
       expect(area(tester), const Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect));
-      expect(find.byKey(const ValueKey('video-title')), findsOneWidget);
+      expect(find.byType(PageTabRow), findsOneWidget);
       await back(tester);
     });
 
@@ -578,7 +609,11 @@ void main() {
       final stack = tester.widget<Stack>(
         find.ancestor(of: find.byType(PanelLayer), matching: find.byType(Stack)).first,
       );
-      expect(stack.children.last.key, const ValueKey('video-panels'), reason: 'above the player and the details');
+      expect(
+        [for (final child in stack.children.skip(stack.children.length - 2)) child.key],
+        const [ValueKey('video-panels'), ValueKey('video-overlays')],
+        reason: 'above the player and the tabs, with the action overlays over the panels',
+      );
       await rotate(tester, Presentation.inline);
       await back(tester);
     });
@@ -781,11 +816,10 @@ void main() {
   });
 
   group('the session', () {
-    testWidgets('its open plays another part on the same page, with its own watch reports and title', (tester) async {
+    testWidgets('its open plays another part on the same page, with its own watch reports', (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0, title: '卡片标题'));
       await opened(tester);
-      expect(find.text('测试视频'), findsOneWidget);
       player.emit(const StatusChanged(PlayerStatus.playing));
       position(10);
       sessionOpens.single(bv, cid: p2);
@@ -793,7 +827,7 @@ void main() {
       expect(controller.page?.cid, p2);
       expect(find.byType(VideoPage), findsOneWidget);
       expect(sessions, hasLength(1));
-      expect(find.text('UP主 · P2 第二集'), findsOneWidget);
+      expect(detailsMade, hasLength(1), reason: 'one details per page, through its parts');
       player.emit(const StatusChanged(PlayerStatus.playing));
       await frames(tester);
       expect(sent(), [(p1, '0'), (p1, '10'), (p2, '0')]);
@@ -806,20 +840,33 @@ void main() {
       expect(controller.opens, opens, reason: 'a page that left opens nothing');
     });
 
-    testWidgets('another video clears the last one\'s title until its own arrives', (tester) async {
-      final view = Completer<void>();
+    testWidgets('简介 follows the session\'s video while the player is the page\'s, and keeps it under a newer page',
+        (tester) async {
       await host(tester);
-      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0, title: '卡片标题'));
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
       await opened(tester);
-      expect(find.text('测试视频'), findsOneWidget);
-      http.gates[Canned.signedViewPath] = view;
-      sessionOpens.single('BV1xx411c7mD');
-      await frames(tester);
-      expect(find.text('测试视频'), findsNothing);
-      expect(find.text('卡片标题'), findsNothing, reason: 'the card\'s title is the first video\'s');
-      view.complete();
-      await frames(tester, 20);
-      expect(find.text('测试视频'), findsOneWidget, reason: 'the canned view answers every bvid');
+      IntroContent intro() => tester.widget<IntroTab>(find.byType(IntroTab, skipOffstage: false).first).content;
+      expect(intro().detail, isNull);
+      sessions.single
+        ..detail = detail(bv, reply: 213)
+        ..episodes = const [
+          Episode(bvid: bv, cid: p1, title: 'P1 第一集', current: true),
+          Episode(bvid: bv, cid: p2, title: 'P2 第二集', current: false),
+        ]
+        ..changed();
+      await tester.pump();
+      expect(intro().detail?.bvid, bv);
+      expect(intro().episodes, hasLength(2));
+      expect(find.bySemanticsLabel('评论 213'), findsOneWidget);
+
+      pushVideo(const VideoRoute(bvid: 'BV1xx411c7mD', start: 0));
+      await opened(tester, page: 1);
+      sessions.first
+        ..detail = detail('BV1xx411c7mD')
+        ..changed();
+      await tester.pump();
+      expect(intro().detail?.bvid, bv, reason: 'the covered page\'s session hears the newer video; its 简介 does not');
+      await back(tester);
       await back(tester);
     });
 
@@ -839,19 +886,34 @@ void main() {
       expect(session.active, isFalse, reason: 'the page left');
     });
 
-    testWidgets('stays inactive under a newer video page, and after it, since the player was that page\'s',
+    testWidgets('is inactive under a newer video page, then opens its own video again where it was covered',
         (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
       await opened(tester);
-      pushVideo(const VideoRoute(bvid: bv, cid: p2, start: 0));
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      position(42);
+      pushVideo(const VideoRoute(bvid: 'BV1xx411c7mD', start: 0));
       await opened(tester, page: 1);
       expect(sessions.first.active, isFalse);
+      expect(detailsMade.first.activeSet, isFalse);
       expect(sessions.last.active, isTrue);
+      final opens = controller.opens;
+
       await back(tester);
       expect(sessions.last.active, isFalse, reason: 'the page on top left');
-      expect(sessions.first.active, isFalse);
+      expect(controller.opens, opens + 1, reason: 'the first page opened its video again');
+      expect(controller.video?.bvid, bv);
+      expect(controller.page?.cid, p1);
+      expect(player.loaded?.startSeconds, closeTo(42, 0.5));
+      expect(sessions.first.active, isTrue);
+      expect(detailsMade.first.activeSet, isTrue);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester);
+      expect(find.byKey(const ValueKey('video-loading')), findsNothing, reason: 'it plays rather than spinning');
+      expect(find.byType(PortraitControls), findsOneWidget);
       await back(tester);
+      expect(controller.video, isNull);
     });
 
     testWidgets('the app\'s own session across a part change: P2 plays on the page after P1, then the end screen',
@@ -862,7 +924,9 @@ void main() {
       await host(tester);
       unawaited(
         nav.currentState!.push(
-          SwipeBackPageRoute<void>(builder: (_) => const VideoPage(route: VideoRoute(bvid: bv, cid: p1, start: 0))),
+          SwipeBackPageRoute<void>(
+            builder: (_) => VideoPage(route: const VideoRoute(bvid: bv, cid: p1, start: 0), createDetails: fakeDetails),
+          ),
         ),
       );
       await frames(tester, 20);
@@ -876,7 +940,11 @@ void main() {
       expect(controller.page?.cid, p2, reason: '自动连播 opened P2');
       expect(find.byType(VideoPage), findsOneWidget);
       expect(ui(tester).session.title, '第二集');
-      expect(find.text('UP主 · P2 第二集'), findsOneWidget);
+      expect(
+        tester.widget<IntroTab>(find.byType(IntroTab)).content.episodes.where((e) => e.current).single.cid,
+        p2,
+        reason: '简介 follows the app\'s session',
+      );
       expect(find.byType(EndScreenPortrait), findsNothing);
       final opens = controller.opens;
       player.emit(const StatusChanged(PlayerStatus.playing));
@@ -901,7 +969,226 @@ void main() {
       expect(() => sessions.single.addListener(() {}), throwsFlutterError);
     });
   });
+
+  group('the page body', () {
+    IntroTab intro(WidgetTester tester) => tester.widget<IntroTab>(find.byType(IntroTab));
+    ActionOverlayController overlays(WidgetTester tester) =>
+        tester.widget<ActionOverlays>(find.byType(ActionOverlays).last).controller;
+    PageController pager(WidgetTester tester) =>
+        tester.widget<PageView>(find.byKey(const ValueKey('page-tabs')).last).controller!;
+
+    testWidgets('the details are made once with the session, handed to the player, follow its active, and go with '
+        'the page', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final details = detailsMade.single;
+      expect(ui(tester).details, same(details));
+      expect(intro(tester).details, same(details));
+      expect(ui(tester).onComments, isNotNull);
+      unawaited(nav.currentState!.push(SwipeBackPageRoute<void>(builder: (_) => const SizedBox())));
+      await frames(tester, 20);
+      expect(details.activeSet, isFalse);
+      await back(tester);
+      expect(details.activeSet, isTrue);
+      await back(tester);
+      expect(details.activeSet, isFalse);
+      expect(() => details.addListener(() {}), throwsFlutterError, reason: 'disposed with the page');
+      expect(detailsMade, hasLength(1));
+    });
+
+    testWidgets('the row: 评论 shows the reply count, the 弹 toggle switches danmaku, 点我发弹幕 says it comes next',
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final session = sessions.single
+        ..detail = detail(bv, reply: 12345)
+        ..changed();
+      await tester.pump();
+      expect(find.bySemanticsLabel('评论 1.2万'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('danmaku-toggle')));
+      await tester.pump();
+      expect(session.calls, contains('setDanmakuOn false'));
+      expect(find.byKey(const ValueKey('danmaku-send')), findsOneWidget);
+      session
+        ..danmakuOn = true
+        ..changed();
+      await frames(tester, 8);
+      await tester.tap(find.byKey(const ValueKey('danmaku-send')));
+      await tester.pump();
+      expect(find.text('发弹幕将在下个版本推出'), findsOneWidget);
+      await frames(tester, 70);
+      await back(tester);
+    });
+
+    testWidgets('back closes an open overlay first, then a panel, then full screen, then leaves', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final panels = ui(tester).panels;
+      bool canPop() => tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop;
+
+      overlays(tester).value = ActionPrompt.coin;
+      await tester.pump();
+      expect(canPop(), isFalse);
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester, 2);
+      expect(overlays(tester).value, isNull);
+      expect(find.byType(VideoPage), findsOneWidget);
+
+      await rotate(tester, Presentation.landscape);
+      panels.open(PlayerPanel.more);
+      overlays(tester).value = ActionPrompt.favourites;
+      await tester.pump();
+      expect(
+        tester.widget<ActionOverlays>(find.byType(ActionOverlays)).landscape,
+        isTrue,
+        reason: 'the overlays lay out for landscape',
+      );
+      ui(tester).onBack();
+      await frames(tester, 2);
+      expect(overlays(tester).value, isNull);
+      expect(panels.value, PlayerPanel.more, reason: 'the overlay went first');
+      ui(tester).onBack();
+      await frames(tester, 2);
+      expect(panels.value, isNull);
+      expect(orientation.presentation, Presentation.landscape);
+      ui(tester).onBack();
+      await frames(tester, 2);
+      expect(orientation.presentation, Presentation.inline);
+      screen(tester, portrait, portraitInsets);
+      expect(canPop(), isTrue);
+      ui(tester).onBack();
+      await frames(tester, 20);
+      expect(find.byType(VideoPage), findsNothing);
+    });
+
+    testWidgets('评论 in full screen goes back to the small player on the 评论 tab', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await rotate(tester, Presentation.landscape);
+      ui(tester).onComments!();
+      screen(tester, portrait, portraitInsets);
+      await frames(tester, 4);
+      expect(orientation.presentation, Presentation.inline);
+      expect(pager(tester).page, 1);
+      expect(find.byType(CommentsPlaceholder), findsOneWidget);
+      expect(find.text('评论将在下个版本推出'), findsOneWidget);
+      await back(tester);
+    });
+
+    testWidgets('简介\'s parts, 选集, timestamps, video ids and 稍后再看 reach the session, the panel and the details',
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final session = sessions.single;
+      intro(tester).onPlayEpisode(const Episode(bvid: bv, cid: p2, title: 'P2 第二集', current: false));
+      expect(session.calls, contains('playEpisode $bv $p2'));
+      intro(tester).onOpenEpisodes();
+      expect(ui(tester).panels.value, PlayerPanel.episodes);
+      ui(tester).panels.close();
+      intro(tester).onSeek(83);
+      expect(session.calls, contains('commitSeek 83.0'));
+
+      intro(tester).onWatchLater(card('BV1xx411c7mD'));
+      await tester.pump();
+      expect(detailsMade.single.watchLaterCalls, ['BV1xx411c7mD']);
+      expect(find.text('已添加至稍后再看'), findsOneWidget);
+      await frames(tester, 70);
+
+      intro(tester).onOpenVideo('BV1xx411c7mD');
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsNWidgets(2));
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, 'BV1xx411c7mD');
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('a related video opens a page on top, and back returns to the first video playing', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p2, start: 0));
+      await opened(tester);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      position(30);
+      intro(tester).onOpenRelated(card('BV1xx411c7mD'));
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsNWidgets(2));
+      expect(sessions, hasLength(2));
+      final opens = controller.opens;
+      final top = tester.widget<VideoPage>(find.byType(VideoPage).last).route;
+      expect((top.bvid, top.title, top.cover), ('BV1xx411c7mD', '相关视频', cover));
+
+      await back(tester);
+      expect(find.byType(VideoPage), findsOneWidget);
+      expect(controller.opens, opens + 1, reason: 'the first page opened its video again');
+      expect(sessions.first.active, isTrue);
+      expect(controller.page?.cid, p2, reason: 'the part it was on');
+      expect(player.loaded?.startSeconds, closeTo(30, 0.5));
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester);
+      expect(controller.phase, PlaybackPhase.playing);
+      expect(find.byKey(const ValueKey('fake-video')), findsOneWidget);
+      await back(tester);
+      expect(controller.video, isNull);
+    });
+
+    testWidgets('a sideways swipe over the tabs switches them; only the left edge goes back', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await tester.timedDragFrom(const Offset(300, 700), const Offset(-250, 0), const Duration(milliseconds: 200));
+      await frames(tester, 20);
+      expect(find.byType(VideoPage), findsOneWidget);
+      expect(pager(tester).page, 1);
+      await tester.timedDragFrom(const Offset(100, 700), const Offset(250, 0), const Duration(milliseconds: 200));
+      await frames(tester, 20);
+      expect(find.byType(VideoPage), findsOneWidget);
+      expect(pager(tester).page, 0);
+      await tester.timedDragFrom(const Offset(5, 700), const Offset(300, 0), const Duration(milliseconds: 200));
+      await frames(tester, 20);
+      expect(find.byType(VideoPage), findsNothing, reason: 'the edge swipe went back, not to the other tab');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+  });
 }
+
+VideoDetail detail(String bvid, {int reply = 0}) => VideoDetail(
+  bvid: bvid,
+  aid: 1,
+  title: '测试视频',
+  cover: '',
+  pubdate: 0,
+  duration: 712,
+  desc: '',
+  descParts: const [],
+  copyright: 1,
+  owner: VideoOwner.empty,
+  stat: VideoStat(view: 0, danmaku: 0, reply: reply, favorite: 0, coin: 0, share: 0, like: 0),
+  pages: const [],
+  season: null,
+  staff: const [],
+  width: 1920,
+  height: 1080,
+  honor: null,
+  redirectURL: null,
+);
+
+VideoCard card(String bvid) => VideoCard(
+  aid: 2,
+  bvid: bvid,
+  cid: 3,
+  title: '相关视频',
+  cover: cover,
+  duration: 60,
+  ownerMid: 4,
+  ownerName: 'UP',
+  views: 1,
+  danmaku: 1,
+  likes: 1,
+);
 
 /// Records the image URLs asked for and never answers, as covers still downloading.
 final class _RecordingHttpClient implements HttpClient {
