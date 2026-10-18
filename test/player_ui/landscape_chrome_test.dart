@@ -210,16 +210,40 @@ void main() {
     expect(rig.panels.value, PlayerPanel.speed);
   });
 
-  testWidgets('the quality button names the quality asked for and opens the quality panel', (tester) async {
+  testWidgets('the quality button names the quality playing as 04 does, and opens the quality panel', (tester) async {
     final rig = Rig();
     rig.session
-      ..qualities = const [QualityOption(id: 120, name: '4K'), QualityOption(id: 80, name: '1080P')]
+      ..qualities = const [QualityOption(id: 120, name: '4K 超清'), QualityOption(id: 80, name: '1080P 高清')]
       ..quality = 120;
     await rig.mount(tester);
+    final quality = find.byKey(const ValueKey('landscape-quality'));
 
-    expect(find.descendant(of: find.byKey(const ValueKey('landscape-quality')), matching: find.text('4K')), findsOne);
-    await tester.tap(find.byKey(const ValueKey('landscape-quality')));
+    expect(find.descendant(of: quality, matching: find.text('4K')), findsOne);
+    // The video tops out below the quality asked for.
+    rig.session
+      ..playing = 80
+      ..changed();
+    await tester.pump();
+    expect(find.descendant(of: quality, matching: find.text('1080P')), findsOne);
+
+    await tester.tap(quality);
     expect(rig.panels.value, PlayerPanel.quality);
+  });
+
+  testWidgets('sizes as 04: the title at 16, 倍速 and the quality at 14, back a full 44 pt target', (tester) async {
+    final rig = Rig()..session.title = 'Dolby Vision 8K HDR 120FPS';
+    await rig.mount(tester);
+
+    TextStyle styleOf(Finder text) => tester.widget<Text>(text).style!;
+    expect(styleOf(find.byKey(const ValueKey('landscape-title'))).fontSize, 16);
+    final speed = find.descendant(of: find.byKey(const ValueKey('landscape-speed')), matching: find.byType(Text));
+    expect(styleOf(speed).fontSize, 14);
+    final quality = find.descendant(of: find.byKey(const ValueKey('landscape-quality')), matching: find.byType(Text));
+    expect(styleOf(quality).fontSize, 14);
+    expect(tester.getSize(find.byKey(const ValueKey('landscape-back'))), const Size(44, 44));
+    // The triangle sits 2.2 pt right of its button's centre, where 04 has it.
+    final glyph = find.descendant(of: find.byKey(const ValueKey('landscape-play')), matching: find.byType(CustomPaint));
+    expect(tester.getCenter(glyph.last).dx - centre(tester, 'landscape-play').dx, closeTo(2.2, 0.01));
   });
 
   testWidgets('选集 shows only with episodes, and opens the episodes panel', (tester) async {

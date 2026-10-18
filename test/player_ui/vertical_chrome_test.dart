@@ -1,3 +1,4 @@
+import 'package:bili_core/api.dart' show VideoDetail;
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
@@ -79,6 +80,45 @@ void main() {
     // The title stops short of where the action column goes.
     expect(tester.getTopRight(find.byKey(const ValueKey('vertical-title'))).dx, lessThanOrEqualTo(378));
     expect(find.text('详情页'), findsOneWidget);
+  });
+
+  testWidgets('the uploader and the plays come with the detail, where 09 has them', (tester) async {
+    final rig = Rig()..session.title = '【VIT赛后】我们接受了LOUD的回溯！！';
+    await rig.mount(tester);
+    expect(find.byKey(const ValueKey('vertical-uploader')), findsNothing);
+    expect(find.textContaining('播放', findRichText: true), findsNothing);
+
+    rig.session
+      ..detail = VideoDetail.fromJson({
+        'bvid': 'BV1',
+        'owner': {'mid': 1, 'name': '我们一起去养猪', 'face': ''},
+        'stat': {'view': 56000},
+      })
+      ..changed();
+    await tester.pump();
+
+    expect(find.text('我们一起去养猪'), findsOneWidget);
+    expect(find.textContaining('【VIT赛后】我们接受了LOUD的回溯！！', findRichText: true), findsOneWidget);
+    expect(find.textContaining('5.6万播放', findRichText: true), findsOneWidget);
+    final avatar = find.descendant(
+      of: find.byKey(const ValueKey('vertical-uploader')),
+      matching: find.byType(ClipOval),
+    );
+    expect(tester.getSize(avatar), const Size.square(36));
+    expect(tester.getTopLeft(avatar).dx, 13);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('vertical-title'))).dy - tester.getBottomLeft(avatar).dy,
+      closeTo(9.7, 0.01),
+    );
+    expect(tester.getTopLeft(find.text('我们一起去养猪')).dx, closeTo(59, 1));
+  });
+
+  testWidgets('the 详情页 pill hugs its text, as on 09', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    final pill = find.ancestor(of: find.text('详情页'), matching: find.byType(Container)).first;
+    expect(tester.getSize(pill).width, closeTo(31, 2));
+    expect(tester.getCenter(pill), within(distance: 1, from: const Offset(377, 882.5)));
   });
 
   testWidgets('back and ⋮', (tester) async {

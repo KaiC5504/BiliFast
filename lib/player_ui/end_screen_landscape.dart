@@ -1,29 +1,25 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:bili_core/api.dart' show VideoCard;
+import 'package:bili_core/api.dart' show VideoCard, VideoOwner;
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../shared/toast.dart';
+import 'end_screen_portrait.dart' show ShareLink, shareThroughSystem;
 import 'landscape_chrome.dart';
 import 'player_ui.dart';
+import 'portrait_controls.dart';
 
-/// Hands a link to the share sheet.
-typedef ShareLink = Future<void> Function(Uri link);
-
-Future<void> shareWithSystem(Uri link) async {
-  await SharePlus.instance.share(ShareParams(uri: link));
-}
-
-/// The full-screen end screen (BiliNative `EndScreens.swift`, measured on 27): back, 重播 and 分享, and a row of
-/// related videos that rise in one after another. It fills the screen. The uploader, 充电鸣谢 and 点赞 投币 收藏 come
-/// in later slices; their room is kept so nothing else moves when they do.
+/// The full-screen end screen (BiliNative `EndScreens.swift`, measured on 27): back, the uploader, 重播 and 分享, and a
+/// row of related videos that rise in one after another. It fills the screen. 充电鸣谢, 充电, 关注 and 点赞 投币 收藏
+/// (slice 6) have their room kept so nothing else moves when they come.
 class EndScreenLandscape extends StatefulWidget {
-  const EndScreenLandscape({super.key, required this.ui, this.share = shareWithSystem});
+  const EndScreenLandscape({super.key, required this.ui, this.share = shareThroughSystem});
 
   final PlayerUi ui;
 
@@ -54,6 +50,15 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
     return Curves.easeOutCubic.transform(((_entrance.value - start) / (1 - start)).clamp(0.0, 1.0));
   }
 
+  Future<void> _share(Uri link) async {
+    try {
+      await widget.share(link);
+    } on Object catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '${error.runtimeType}'});
+      if (mounted) showToast(context, '分享失败');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ui = widget.ui;
@@ -64,6 +69,7 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
         final session = ui.session;
         final link = session.shareLink;
         final related = session.related;
+        final owner = session.detail?.owner;
         final rule = Padding(
           padding: EdgeInsets.only(left: insets.left, right: insets.right),
           child: const SizedBox(
@@ -85,54 +91,53 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
-                      padding: EdgeInsets.only(
-                        left: math.max(insets.left - 1, 0),
-                        top: BiliMetrics.landscapeEndBackTop,
-                        bottom: BiliMetrics.landscapeEndBackTop,
-                      ),
-                      child: FullScreenButton(
+                      padding: EdgeInsets.only(left: insets.left),
+                      child: ChromeTap(
                         key: const ValueKey('end-back'),
                         label: '返回',
-                        height: BiliMetrics.landscapeEndBackHeight,
                         onTap: ui.onBack,
-                        child: const ChromeBackGlyph(),
+                        child: const BackGlyph(),
                       ),
                     ),
                     rule,
                     SizedBox(
                       height: BiliMetrics.landscapeEndRow,
                       child: Padding(
-                        padding: EdgeInsets.only(left: insets.left, right: insets.right),
+                        padding: EdgeInsets.only(
+                          left: insets.left,
+                          right: math.max(insets.right - BiliMetrics.landscapeEndActionsOutset, 0),
+                        ),
                         child: Row(
                           children: [
-                            const Spacer(),
+                            Expanded(child: owner == null ? const SizedBox.shrink() : _Uploader(owner: owner)),
                             _EndAction(
                               key: const ValueKey('end-replay'),
                               title: '重播',
                               glyph: const CustomPaint(
-                                size: Size.square(BiliMetrics.landscapeEndActionIcon),
+                                size: Size(BiliMetrics.replayGlyphWidth, BiliMetrics.replayGlyphHeight),
                                 painter: _ReplayPainter(),
                               ),
                               onTap: () => unawaited(session.replay()),
                             ),
                             const SizedBox(width: BiliMetrics.landscapeEndDividerGap),
                             const SizedBox(
+                              key: ValueKey('end-divider'),
                               width: BiliMetrics.landscapeEndRule,
                               height: BiliMetrics.landscapeEndDividerHeight,
                               child: ColoredBox(color: BiliColors.landscapeEndRule),
                             ),
                             const SizedBox(width: BiliMetrics.landscapeEndDividerGap),
-                            // 点赞, 投币 and 收藏 (a later slice) sit here.
+                            // 点赞, 投币 and 收藏 (slice 6) sit here.
                             const SizedBox(width: BiliMetrics.landscapeEndActionWidth * 3),
                             if (link != null)
                               _EndAction(
                                 key: const ValueKey('end-share'),
                                 title: '分享',
                                 glyph: const CustomPaint(
-                                  size: Size(BiliMetrics.landscapeEndShareWidth, BiliMetrics.landscapeEndShareHeight),
+                                  size: Size(BiliMetrics.shareGlyphWidth, BiliMetrics.shareGlyphHeight),
                                   painter: _SharePainter(),
                                 ),
-                                onTap: () => unawaited(widget.share(link)),
+                                onTap: () => unawaited(_share(link)),
                               )
                             else
                               const SizedBox(width: BiliMetrics.landscapeEndActionWidth),
@@ -196,6 +201,49 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
   }
 }
 
+/// The uploader's ringed avatar and name; 充电 and 关注 (slice 6) go under the name.
+class _Uploader extends StatelessWidget {
+  const _Uploader({required this.owner});
+
+  final VideoOwner owner;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    key: const ValueKey('end-uploader'),
+    children: [
+      const SizedBox(width: BiliMetrics.landscapeEndAvatarInset),
+      Container(
+        width: BiliMetrics.landscapeEndAvatar,
+        height: BiliMetrics.landscapeEndAvatar,
+        padding: const EdgeInsets.all(BiliMetrics.landscapeEndAvatarRing),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: BiliColors.onVideo, width: BiliMetrics.landscapeEndAvatarRing),
+        ),
+        child: ClipOval(
+          child: RemoteImage(
+            owner.face,
+            size: const Size.square(BiliMetrics.landscapeEndAvatar),
+            placeholder: const ColoredBox(color: BiliColors.landscapeEndPlaceholder),
+          ),
+        ),
+      ),
+      const SizedBox(width: BiliMetrics.landscapeEndAvatarGap),
+      Expanded(
+        child: SizedBox(
+          height: BiliMetrics.landscapeEndAvatar,
+          child: Text(
+            owner.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.landscapeEndNameText),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
 class _EndAction extends StatelessWidget {
   const _EndAction({super.key, required this.title, required this.glyph, required this.onTap});
 
@@ -204,14 +252,16 @@ class _EndAction extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => ChromePressable(
+  Widget build(BuildContext context) => ChromeTap(
     label: title,
+    square: false,
     onTap: onTap,
     child: SizedBox(
       width: BiliMetrics.landscapeEndActionWidth,
+      height: BiliMetrics.landscapeEndRow,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
+          const SizedBox(height: BiliMetrics.landscapeEndActionTop),
           SizedBox(
             height: BiliMetrics.landscapeEndActionIcon,
             child: Center(child: glyph),
@@ -247,8 +297,9 @@ class _RelatedCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => ChromePressable(
+  Widget build(BuildContext context) => ChromeTap(
     label: card.title,
+    square: false,
     onTap: onTap,
     child: SizedBox(
       width: BiliMetrics.landscapeEndCardWidth,
@@ -257,7 +308,7 @@ class _RelatedCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(BiliMetrics.landscapeEndCoverRadius),
+            borderRadius: BorderRadius.circular(BiliMetrics.endCoverRadius),
             child: SizedBox(
               width: BiliMetrics.landscapeEndCardWidth,
               height: BiliMetrics.landscapeEndCoverHeight,
@@ -268,14 +319,14 @@ class _RelatedCard extends StatelessWidget {
                   const Align(
                     alignment: Alignment.bottomCenter,
                     child: SizedBox(
-                      height: BiliMetrics.landscapeEndCoverShadeHeight,
+                      height: BiliMetrics.endCoverShadeHeight,
                       width: double.infinity,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [BiliColors.chromeShadeClear, BiliColors.landscapeEndCoverShade],
+                            colors: [BiliColors.chromeShadeClear, BiliColors.endCoverShade],
                           ),
                         ),
                       ),
@@ -330,7 +381,11 @@ class _RelatedCard extends StatelessWidget {
               card.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.landscapeEndCardTitle),
+              style: const TextStyle(
+                color: BiliColors.onVideo,
+                fontSize: BiliMetrics.landscapeEndCardTitle,
+                height: BiliMetrics.landscapeEndCardTitleLeading,
+              ),
             ),
           ),
           Padding(
@@ -338,34 +393,31 @@ class _RelatedCard extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  height: BiliMetrics.upBadgeHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.landscapeEndUpBadgePad),
+                  width: BiliMetrics.endUpWidth,
+                  height: BiliMetrics.endUpHeight,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    border: Border.all(color: BiliColors.chromeSecondary),
-                    borderRadius: BorderRadius.circular(BiliMetrics.landscapeEndUpBadgeRadius),
+                    border: Border.all(color: BiliColors.endMeta, width: BiliMetrics.endUpBorder),
+                    borderRadius: BorderRadius.circular(BiliMetrics.endUpRadius),
                   ),
                   child: const Text(
                     'UP',
                     textScaler: TextScaler.noScaling,
                     style: TextStyle(
-                      color: BiliColors.chromeSecondary,
-                      fontSize: BiliMetrics.upBadgeText,
+                      color: BiliColors.endMeta,
+                      fontSize: BiliMetrics.endUpFont,
                       fontWeight: FontWeight.bold,
                       height: 1,
                     ),
                   ),
                 ),
-                const SizedBox(width: BiliMetrics.landscapeEndCountGap),
+                const SizedBox(width: BiliMetrics.endMetaGap),
                 Expanded(
                   child: Text(
                     card.ownerName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: BiliColors.chromeSecondary,
-                      fontSize: BiliMetrics.landscapeEndUploaderText,
-                    ),
+                    style: const TextStyle(color: BiliColors.endMeta, fontSize: BiliMetrics.landscapeEndUploaderText),
                   ),
                 ),
               ],
@@ -379,56 +431,56 @@ class _RelatedCard extends StatelessWidget {
 
 Paint _endStroke() => Paint()
   ..style = PaintingStyle.stroke
-  ..strokeWidth = BiliMetrics.chromeLineStroke
+  ..strokeWidth = BiliMetrics.chromeGlyphStroke
   ..strokeCap = StrokeCap.round
   ..strokeJoin = StrokeJoin.round
   ..color = BiliColors.onVideo;
 
-/// A circle open at the upper right, its arrowhead at the top pointing clockwise.
+/// 重播 on 27, traced on its 21 × 18 box: a ring open at the lower right, its arrowhead at three o'clock pointing
+/// on round.
 class _ReplayPainter extends CustomPainter {
   const _ReplayPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final centre = size.center(Offset.zero);
-    final radius = size.shortestSide / 2 - BiliMetrics.chromeLineStroke;
-    final paint = _endStroke();
-    canvas.drawArc(Rect.fromCircle(center: centre, radius: radius), -math.pi / 2, -math.pi * 5 / 3, false, paint);
-    final tip = Offset(centre.dx + radius * 0.25, centre.dy - radius);
-    final head = radius * 0.42;
-    canvas.drawPath(
-      Path()
-        ..moveTo(tip.dx - head, tip.dy - head)
-        ..lineTo(tip.dx, tip.dy)
-        ..lineTo(tip.dx - head, tip.dy + head),
-      paint,
-    );
+    final sx = size.width / BiliMetrics.replayGlyphWidth, sy = size.height / BiliMetrics.replayGlyphHeight;
+    Offset p(double x, double y) => Offset(x * sx, y * sy);
+    const start = 46 * math.pi / 180;
+    const sweep = 306 * math.pi / 180;
+    final left = p(14.8, 8.45), tip = p(17.5, 11.55), right = p(20.2, 8.45);
+    final path = Path()
+      ..addArc(Rect.fromPoints(p(0.85, 1), p(16.85, 17)), start, sweep)
+      ..moveTo(left.dx, left.dy)
+      ..lineTo(tip.dx, tip.dy)
+      ..lineTo(right.dx, right.dy);
+    canvas.drawPath(path, _endStroke());
   }
 
   @override
   bool shouldRepaint(_ReplayPainter oldDelegate) => false;
 }
 
-/// The outlined arrow that turns up and to the right.
+/// 分享 on 27, traced on its 20 × 17 box: the outlined arrow turning up and to the right.
 class _SharePainter extends CustomPainter {
   const _SharePainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    final s = BiliMetrics.chromeLineStroke / 2;
-    final neck = w * 0.6;
-    canvas.drawPath(
-      Path()
-        ..moveTo(neck, s)
-        ..lineTo(w - s, h * 0.45)
-        ..lineTo(neck, h * 0.9 - s)
-        ..lineTo(neck, h * 0.64)
-        ..cubicTo(w * 0.32, h * 0.62, w * 0.14, h * 0.74, s, h - s)
-        ..cubicTo(w * 0.08, h * 0.5, w * 0.28, h * 0.3, neck, h * 0.28)
-        ..close(),
-      _endStroke(),
-    );
+    final sx = size.width / BiliMetrics.shareGlyphWidth, sy = size.height / BiliMetrics.shareGlyphHeight;
+    Offset p(double x, double y) => Offset(x * sx, y * sy);
+    final neckTop = p(9.3, 5.3), neckBottom = p(9.6, 10.9), tail = p(0.9, 13.4);
+    final lower = p(4.85, 10.5), upper = p(1.5, 6.3);
+    final points = [p(9.9, 0.9), p(18.9, 7.8), p(9.9, 14.5)];
+    final path = Path()..moveTo(neckTop.dx, neckTop.dy);
+    for (final point in points) {
+      path.lineTo(point.dx, point.dy);
+    }
+    path
+      ..lineTo(neckBottom.dx, neckBottom.dy)
+      ..quadraticBezierTo(lower.dx, lower.dy, tail.dx, tail.dy)
+      ..quadraticBezierTo(upper.dx, upper.dy, neckTop.dx, neckTop.dy)
+      ..close();
+    canvas.drawPath(path, _endStroke());
   }
 
   @override

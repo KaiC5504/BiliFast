@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show VideoCard;
+import 'package:bili_core/api.dart' show VideoCard, VideoDetail;
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/end_screen_landscape.dart';
@@ -70,11 +70,13 @@ void main() {
     await rig.mount(tester);
 
     expect(tester.takeException(), isNull);
-    expect(centre(tester, 'end-back'), within(distance: 1, from: const Offset(83, 22)));
+    expect(centre(tester, 'end-back'), within(distance: 1, from: const Offset(84, 22)));
+    expect(tester.getSize(find.byKey(const ValueKey('end-back'))), const Size(44, 44));
     expect(centre(tester, 'end-replay').dx, closeTo(604, 2));
-    expect(centre(tester, 'end-share').dx, closeTo(864.5, 2));
+    expect(centre(tester, 'end-share').dx, closeTo(866.5, 1));
+    expect(centre(tester, 'end-divider').dx, closeTo(647.3, 0.5));
     expect(find.text('推荐视频'), findsOneWidget);
-    expect(tester.getTopLeft(find.text('推荐 1')).dx, closeTo(75, 1));
+    expect(tester.getTopLeft(find.text('推荐 1')).dx, closeTo(74, 1));
     expect(find.text('0:48'), findsWidgets);
     expect(find.text('135.7万'), findsWidgets);
   });
@@ -102,6 +104,60 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('end-share')), findsNothing);
     expect(centre(tester, 'end-replay').dx, closeTo(604, 2));
+  });
+
+  testWidgets('a share that fails is logged and toasts 分享失败', (tester) async {
+    final rig = Rig();
+    tester.view
+      ..physicalSize = const Size(956, 440)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(() {
+      rig.chrome.dispose();
+      rig.panels.dispose();
+      rig.orientation.dispose();
+      rig.session.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EndScreenLandscape(ui: rig.ui, share: (_) async => throw StateError('no share sheet')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('end-share')));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('分享失败'), findsOneWidget);
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.text('分享失败'), findsNothing);
+  });
+
+  testWidgets('the uploader shows with the detail, and the text is sized as on 27', (tester) async {
+    final rig = Rig()
+      ..session.related = [card(1)]
+      ..session.detail = VideoDetail.fromJson({
+        'bvid': 'BV1',
+        'owner': {'mid': 1, 'name': '不科学の小石头', 'face': ''},
+      });
+    await rig.mount(tester);
+
+    expect(find.text('不科学の小石头'), findsOneWidget);
+    final avatar = find.descendant(of: find.byKey(const ValueKey('end-uploader')), matching: find.byType(ClipOval));
+    expect(tester.getCenter(avatar), within(distance: 1, from: const Offset(104, 93)));
+    expect(tester.getTopLeft(find.text('不科学の小石头')).dx, closeTo(146, 1));
+
+    double sizeOf(String text) => tester.widget<Text>(find.text(text)).style!.fontSize!;
+    expect(sizeOf('推荐视频'), 14);
+    expect(sizeOf('推荐 1'), 12);
+    expect(sizeOf('UP 1'), 10);
+    expect(sizeOf('0:48'), 11);
+    expect(sizeOf('重播'), 13);
+    expect(sizeOf('分享'), 13);
+    final badge = find.ancestor(of: find.text('UP'), matching: find.byType(Container)).first;
+    expect(tester.getSize(badge).width, closeTo(13, 0.5));
   });
 
   testWidgets('a related video plays on tap; without any, 推荐视频 is not shown', (tester) async {
