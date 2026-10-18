@@ -88,7 +88,10 @@ slice.
 - Windows run, as a general agent bound by the ghosthand rules:
   - load the ghosthand skill first; no other screen tool; never `keys` with allow_focus;
   - always `--mute`; at most 3 live video opens; nothing on the clipboard (use `--play=` for links);
-  - screenshots to the scratchpad; measure idle CPU.
+  - screenshots to the scratchpad; measure idle CPU;
+  - every button and control the slice added or touched is operated and its effect confirmed from a fresh
+    screenshot or read, reported as a table (control | worked | evidence). Nothing ships untested (KaiC): a control
+    that fails is a finding, and one ghosthand can't reach is listed with why.
 
 ## 6. Fix round
 
