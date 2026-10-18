@@ -137,7 +137,8 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
       for (final line in _testLinks.text.split('\n'))
         if (line.trim().isNotEmpty) line.trim(),
     ];
-    unawaited(runner.start(links: links, server: widget.logs?.target));
+    final logs = widget.logs;
+    unawaited(runner.start(links: links, server: logs != null && logs.enabled ? logs.target : null));
   }
 
   @override

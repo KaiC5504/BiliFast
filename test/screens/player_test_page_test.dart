@@ -261,6 +261,28 @@ void main() {
       expect(find.byKey(const ValueKey('speedtest-results')), findsNothing);
     });
 
+    testWidgets('the plan is asked of the PC the logs go to, only while they are switched on', (tester) async {
+      final asked = <String?>[];
+      await show(tester,
+          logs: logs,
+          hooks: SpeedTestHooks(
+            choosePlan: (server) async {
+              asked.add(server?.host);
+              throw const SpeedTestPlanError('stop here');
+            },
+            startEngine: (variant) async => FakeEngine(),
+            appEngine: () async => FakeEngine(),
+          ));
+      logs.setManual('10.0.0.2:47321');
+      await startTest(tester, 'BV1GJ411x7h7');
+      logs.setEnabled(true);
+      await tester.pump();
+      await startTest(tester, 'BV1GJ411x7h7');
+      logs.setEnabled(false);
+      await tester.pump();
+      expect(asked, [null, '10.0.0.2']);
+    });
+
     testWidgets('a plan the PC got wrong is shown and nothing plays', (tester) async {
       await show(tester,
           logs: logs, hooks: hooksFor(quick, planError: const SpeedTestPlanError('方案 B 的 config 有引擎不认识或类型不对的项：typo')));
