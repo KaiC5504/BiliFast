@@ -27,5 +27,11 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LogServerDiscovery") {
       LogServerDiscovery.register(with: registrar.messenger())
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PasteControl") {
+      PasteControl.register(with: registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LegacyDefaults") {
+      LegacyDefaults.register(with: registrar.messenger())
+    }
   }
 }
