@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
 import 'landscape_chrome.dart';
+import 'seek_bar.dart';
 import 'player_ui.dart';
 
 /// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back and ⋮ at the top, the
@@ -109,6 +110,7 @@ class VerticalChrome extends StatelessWidget {
                 key: const ValueKey('vertical-bar'),
                 ui: ui,
                 repaint: FullScreenSeekBar.repaintOf(ui),
+                style: SeekBarStyle.dot,
               ),
             ),
           ),

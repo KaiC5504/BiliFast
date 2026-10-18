@@ -188,7 +188,7 @@ void main() {
     await same();
   });
 
-  testWidgets('without a session or after a failure the area has its own back arrow; with chrome it has none',
+  testWidgets('without a session or after a failure the area has its own back arrow; with chrome it is the controls one',
       (tester) async {
     await show(tester, Presentation.inline, withUi: false, loading: true);
     expect(find.byKey(const ValueKey('video-loading')), findsOneWidget);
@@ -197,7 +197,11 @@ void main() {
     expect(backs, 1);
 
     await show(tester, Presentation.inline);
-    expect(find.byKey(const ValueKey('video-back')), findsNothing);
+    expect(
+      find.descendant(of: find.byType(PortraitControls), matching: find.byKey(const ValueKey('video-back'))),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('video-back')), findsOneWidget);
 
     await show(tester, Presentation.inline, failure: '播放失败');
     expect(find.byKey(const ValueKey('video-retry')), findsOneWidget);

@@ -559,10 +559,11 @@ class DanmakuGlyph extends StatelessWidget {
 
 /// The [SeekBar] driven by the session: a drag scrubs, a resting finger hints, a lift seeks.
 class FullScreenSeekBar extends StatelessWidget {
-  const FullScreenSeekBar({super.key, required this.ui, required this.repaint});
+  const FullScreenSeekBar({super.key, required this.ui, required this.repaint, this.style = SeekBarStyle.tv});
 
   final PlayerUi ui;
   final Listenable repaint;
+  final SeekBarStyle style;
 
   /// What the bar and the time redraw on.
   static Listenable repaintOf(PlayerUi ui) {
@@ -578,6 +579,8 @@ class FullScreenSeekBar extends StatelessWidget {
       duration: () => session.duration.value,
       buffered: () => session.readout.bufferedEnd(session.position),
       repaint: repaint,
+      chapters: session.chapters,
+      style: style,
       onScrub: session.scrub,
       onRest: session.hint,
       onCancel: session.cancelScrub,
