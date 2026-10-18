@@ -423,18 +423,18 @@ void main() {
 
   test('稍后再看 toasts what happened', () async {
     final session = makeSession();
-    expect(await session.watchLater(), '视频还没有加载完');
+    expect((await session.watchLater()).message, '视频还没有加载完');
     await controller.openVideo(bv, cid: p1);
-    expect(await session.watchLater(), '已添加至稍后再看');
+    expect((await session.watchLater()).message, '已添加至稍后再看');
     expect(http.to(watchLaterPath), hasLength(1));
     http.routes[watchLaterPath] = (200, '{"code":-101,"message":"账号未登录"}');
-    expect(await session.watchLater(), '需要登录');
+    expect((await session.watchLater()).message, '需要登录');
   });
 
   test('the screenshot toasts 已保存到相册, or 保存失败 when the player cannot', () async {
     final session = makeSession();
     expect(session.canCaptureFrame, isTrue);
-    expect(await session.captureFrame(), '已保存到相册');
+    expect((await session.captureFrame()).message, '已保存到相册');
     session.dispose();
     sessions.remove(session);
 
@@ -442,7 +442,7 @@ void main() {
     final without = makeSession();
     expect(without.canCaptureFrame, isFalse);
     expect(without.pictureInPictureSupported, isFalse);
-    expect(await without.captureFrame(), '保存失败');
+    expect((await without.captureFrame()).message, '保存失败');
   });
 
   group('seeks', () {
