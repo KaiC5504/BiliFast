@@ -7,8 +7,8 @@ import 'video_page.dart';
 /// What opens a video page (port of VideoRoute.swift). Without a [cid] the page plays the part Bilibili saw this
 /// account watch last, or the first. Without a [start] it resumes per ResumePoint: only on the part it was saved on,
 /// and not within 5 s of the end. [title] (from the card, link or 最近打开) shows until the video's own arrives;
-/// [cover] (feed cards only) covers the player until it plays. [view] is the video a pasted link already resolved,
-/// so the page doesn't ask Bilibili for it again.
+/// [cover] (feed cards only) flies in from the card and covers the player until the video first plays. [view] is the
+/// video a pasted link already resolved, so the page doesn't ask Bilibili for it again.
 @immutable
 final class VideoRoute {
   const VideoRoute({required this.bvid, this.cid, this.start, this.title, this.cover, this.view});

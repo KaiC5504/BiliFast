@@ -105,6 +105,12 @@ abstract final class BiliMetrics {
   /// The player's controls (BiliNative `ChromeTheme.swift`).
   static const chromeButton = 44.0;
   static const chromeIcon = 28.0;
+
+  /// The video page's player box, its back arrow and the loading spinner's radius (twice it is [chromeIcon]).
+  static const videoAspect = 16 / 9;
+  static const videoBackIcon = 20.0;
+  static const videoSpinnerRadius = 14.0;
+
   static const chromeShadeHeight = 70.0;
   static const chromeTimeFont = 12.0;
   static const chromeTimeLeading = 9.0;

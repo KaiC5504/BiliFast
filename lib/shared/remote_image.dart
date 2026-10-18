@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/widgets.dart';
 
 import 'theme.dart';
@@ -19,51 +20,82 @@ String sizedImageUrl(String url, {required int width, required int height}) {
   return '$secure@${width}w_${height}h_1c.webp';
 }
 
-/// Fills the box it is given with the image, grey until it arrives and then faded in. Sizes are rounded up to steps,
-/// so cards of nearly the same width share one cached download.
+/// Fills the box it is given with the image, grey (or [placeholder]) until it arrives and then faded in. Sizes are
+/// rounded up to steps, so cards of nearly the same width share one cached download.
 class RemoteImage extends StatelessWidget {
-  const RemoteImage(this.url, {super.key, this.fit = BoxFit.cover});
+  const RemoteImage(this.url, {super.key, this.fit = BoxFit.cover, this.size, this.placeholder});
 
   final String? url;
   final BoxFit fit;
 
+  /// Asks for the image at this size instead of the box's, so a box that changes size every frame (a Hero flight)
+  /// keeps one download.
+  final Size? size;
+
+  /// Shown instead of the grey until the image arrives, and if it fails.
+  final Widget? placeholder;
+
   static const _step = 60;
+
+  /// A failure is logged once per host and status: enough to see a CDN refusing the size suffix.
+  static final _loggedFailures = <String>{};
 
   static int _bucket(double pixels) => pixels.isFinite && pixels > 0 ? ((pixels / _step).ceil() * _step) : 480;
 
   @override
   Widget build(BuildContext context) {
     final source = url;
-    return ColoredBox(
-      color: BiliColors.pageGrey,
-      child: source == null || source.isEmpty
-          ? const SizedBox.expand()
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final ratio = MediaQuery.devicePixelRatioOf(context);
-                return Image.network(
-                  sizedImageUrl(
-                    source,
-                    width: _bucket(constraints.maxWidth * ratio),
-                    height: _bucket(constraints.maxHeight * ratio),
-                  ),
-                  headers: BiliClient.mediaHeaders,
-                  fit: fit,
-                  width: double.infinity,
-                  height: double.infinity,
-                  gaplessPlayback: true,
-                  frameBuilder: (context, child, frame, synchronous) => synchronous
-                      ? child
-                      : AnimatedOpacity(
-                          opacity: frame == null ? 0 : 1,
-                          duration: const Duration(milliseconds: 150),
-                          curve: Curves.easeOut,
-                          child: child,
-                        ),
-                  errorBuilder: (context, error, stack) => const SizedBox.expand(),
-                );
-              },
+    final fixed = size;
+    final Widget image;
+    if (source == null || source.isEmpty) {
+      image = const SizedBox.expand();
+    } else if (fixed != null) {
+      image = _image(context, source, fixed);
+    } else {
+      image = LayoutBuilder(builder: (context, constraints) => _image(context, source, constraints.biggest));
+    }
+    final under = placeholder;
+    if (under == null) return ColoredBox(color: BiliColors.pageGrey, child: image);
+    return Stack(fit: StackFit.expand, children: [under, image]);
+  }
+
+  Widget _image(BuildContext context, String source, Size logical) {
+    final ratio = MediaQuery.devicePixelRatioOf(context);
+    final address =
+        sizedImageUrl(source, width: _bucket(logical.width * ratio), height: _bucket(logical.height * ratio));
+    return Image.network(
+      address,
+      headers: BiliClient.mediaHeaders,
+      fit: fit,
+      width: double.infinity,
+      height: double.infinity,
+      gaplessPlayback: true,
+      frameBuilder: (context, child, frame, synchronous) => synchronous
+          ? child
+          : AnimatedOpacity(
+              opacity: frame == null ? 0 : 1,
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              child: child,
             ),
+      errorBuilder: (context, error, stack) {
+        _logFailure(address, error);
+        return const SizedBox.expand();
+      },
     );
+  }
+
+  /// The path shows the size suffix; the query, which can carry a signature, never goes in the log.
+  static void _logFailure(String address, Object error) {
+    final uri = Uri.tryParse(address);
+    final host = uri?.host ?? '';
+    final status = error is NetworkImageLoadException ? error.statusCode : null;
+    final kind = status == null ? '${error.runtimeType}' : '$status';
+    if (!_loggedFailures.add('$host $kind')) return;
+    Logger.shared.warn(LogCategory.ui, 'image failed', {
+      'host': host,
+      'path': uri?.path ?? '',
+      if (status != null) 'status': status else 'error': kind,
+    });
   }
 }
