@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 
 import 'page_api.dart';
@@ -57,6 +59,13 @@ class FakePageApi implements PageApi {
   /// A method named here (`like`, `coinBalance`, ...) throws this instead of answering.
   final Map<String, Object> failures = {};
 
+  /// A method named here waits for its completer before it answers (or throws), so a test can look at what shows
+  /// while the server hasn't answered. The call is in [calls] already.
+  final Map<String, Completer<void>> holds = {};
+
+  /// False: folder lists leave out the folders [createFolder] made, as a list fetched before them would.
+  bool listsNewFolders = true;
+
   var _nextFolderId = 100;
 
   List<FavFolder> get folders => List.unmodifiable(_folders);
@@ -64,6 +73,7 @@ class FakePageApi implements PageApi {
   Future<T> _answer<T>(String name, String call, T Function() value) async {
     calls.add(call);
     if (delay > Duration.zero) await Future<void>.delayed(delay);
+    if (holds[name] case final hold?) await hold.future;
     if (failures[name] case final failure?) throw failure;
     return value();
   }
@@ -145,7 +155,7 @@ class FakePageApi implements PageApi {
           contains: false,
           isDefault: false,
         );
-        _folders.add(folder);
+        if (listsNewFolders) _folders.add(folder);
         return folder;
       });
 
