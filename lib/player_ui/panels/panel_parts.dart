@@ -420,6 +420,7 @@ class PanelToggleRow extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     toggled: value,
     label: title,
+    onTap: () => onChanged(!value),
     excludeSemantics: true,
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,

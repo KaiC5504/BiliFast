@@ -292,9 +292,12 @@ class _ChromeTapState extends State<ChromeTap> {
     final child = widget.square
         ? SizedBox.square(dimension: BiliMetrics.chromeButton, child: Center(child: widget.child))
         : widget.child;
+    // excludeSemantics drops the detector's own tap action, so the node carries it: VoiceOver, Voice Control and
+    // the Windows test driver press buttons through it.
     return Semantics(
       button: true,
       label: widget.label,
+      onTap: widget.onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

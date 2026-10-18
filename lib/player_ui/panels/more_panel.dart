@@ -355,6 +355,7 @@ class _ActionButton extends StatelessWidget {
     button: true,
     enabled: onTap != null,
     label: title,
+    onTap: onTap,
     excludeSemantics: true,
     child: Opacity(
       opacity: onTap == null ? BiliMetrics.panelDisabledOpacity : 1,

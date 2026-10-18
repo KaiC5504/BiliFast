@@ -68,6 +68,19 @@ void main() {
     expect(rig.panels.value, PlayerPanel.more);
   });
 
+  testWidgets('the controls press through accessibility too, as VoiceOver and the Windows test driver do',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final rig = Rig();
+    await rig.mount(tester);
+
+    tester.semantics.tap(find.semantics.byLabel('返回'));
+    expect(rig.backs, 1);
+    tester.semantics.tap(find.semantics.byLabel('更多'));
+    expect(rig.panels.value, PlayerPanel.more);
+    semantics.dispose();
+  });
+
   testWidgets('a tap on a control starts the hide timer again', (tester) async {
     final rig = Rig();
     await rig.mount(tester);
