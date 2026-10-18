@@ -125,7 +125,7 @@ class LandscapeChrome extends StatelessWidget {
                 style: const TextStyle(
                   color: BiliColors.onVideo,
                   fontSize: BiliMetrics.chromeTitleText,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -234,7 +234,7 @@ class LandscapeChrome extends StatelessWidget {
                   pauseHeight: BiliMetrics.chromePauseShare,
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(left: BiliMetrics.landscapeEdge),
+                  padding: const EdgeInsets.only(left: BiliMetrics.landscapeDanmakuLead),
                   child: ChromeTap(
                     key: const ValueKey('landscape-danmaku'),
                     label: session.danmakuOn ? '关闭弹幕' : '开启弹幕',
@@ -521,9 +521,9 @@ class _DanmakuMarkPainter extends CustomPainter {
     final p = _traced(_danmakuGrid, size);
     final path = on
         ? (Path()
-            ..moveToPoint(p(12.4, 16.4))
-            ..lineToPoint(p(15.7, 18.6))
-            ..lineToPoint(p(20.4, 14.5)))
+            ..moveToPoint(p(13.8, 16.4))
+            ..lineToPoint(p(17.1, 18.6))
+            ..lineToPoint(p(21.8, 14.5)))
         : (Path()
             ..moveToPoint(p(14.2, 14.2))
             ..lineToPoint(p(19.2, 19.2))

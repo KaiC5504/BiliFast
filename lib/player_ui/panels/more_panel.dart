@@ -241,7 +241,7 @@ class _MorePanelState extends State<MorePanel> {
               ),
             )
           else
-            const SizedBox(height: BiliMetrics.panelRowHeight * 2),
+            const PanelReveal(order: 4, child: PanelGroup(children: [PanelBlankRow(), PanelBlankRow(divider: false)])),
         ],
       ),
     );

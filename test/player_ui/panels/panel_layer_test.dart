@@ -9,6 +9,7 @@ import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/panels/more_panel.dart';
 import 'package:bilifast/player_ui/panels/panel_glyphs.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
+import 'package:bilifast/player_ui/panels/panel_parts.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_session.dart';
@@ -293,6 +294,33 @@ void main() {
       expect(tester.getSize(frame).height, portraitSize.height * BiliMetrics.panelSheetHeight);
     });
 
+    testWidgets('the light sheet dims the page below the player and fades the dim with its slide', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      final dim = find.byKey(const ValueKey('panel-sheet-dim'));
+      double opacity() => tester.widget<Opacity>(find.descendant(of: dim, matching: find.byType(Opacity))).opacity;
+
+      rig.panels.open(PlayerPanel.episodes);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(opacity(), inExclusiveRange(0, 1));
+      await tester.pumpAndSettle();
+      expect(opacity(), 1);
+      expect(tester.getTopLeft(dim), Offset(0, portraitSize.width / BiliMetrics.videoAspect));
+      expect(tester.getBottomRight(dim), Offset(portraitSize.width, portraitSize.height));
+      final fill = tester.widget<ColoredBox>(find.descendant(of: dim, matching: find.byType(ColoredBox)));
+      expect(fill.color, BiliColors.sheetDim);
+
+      rig.panels.close();
+      await tester.pumpAndSettle();
+      expect(dim, findsNothing);
+    });
+
+    testWidgets('the dark sheets have no dim of their own', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      await open(tester, rig, PlayerPanel.more);
+      expect(find.byKey(const ValueKey('panel-sheet-dim')), findsNothing);
+    });
+
     testWidgets('the cards end 16 before the safe area at the right, as the official 05', (tester) async {
       tester.view.padding = const FakeViewPadding(left: 62, right: 62);
       final rig = await pumpLayer(tester, Shape.landscape, session: FakePlayerSession()..qualities = _qualities);
@@ -546,7 +574,7 @@ void main() {
       expect(tester.getBottomLeft(card).dy, closeTo(landscapeSize.height - 28.3, 0.01));
     });
 
-    testWidgets('the 测试 card is for dev builds; release keeps its room empty', (tester) async {
+    testWidgets('the 测试 card is for dev builds; release shows a blank card of two rows in its place', (tester) async {
       final session = FakePlayerSession();
       addTearDown(session.dispose);
       Future<double> height({required bool devTools}) async {
@@ -572,6 +600,10 @@ void main() {
       expect(find.text('BTR 加速'), findsNothing);
       expect(find.text('显示统计'), findsNothing);
       expect(release, dev);
+      // As on 21: a hairline between two blank rows where the official 播放反馈 and 编辑播放器 are.
+      final last = tester.widgetList<PanelGroup>(find.byType(PanelGroup)).last;
+      expect(last.children, hasLength(2));
+      expect([for (final row in last.children) (row as PanelBlankRow).divider], [true, false]);
     });
 
     testWidgets('稍后再看 that fails toasts and stays open', (tester) async {

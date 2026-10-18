@@ -229,9 +229,15 @@ class _Uploader extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const SizedBox(width: BiliMetrics.verticalAvatarInset),
-      ClipOval(
-        child: SizedBox.square(
-          dimension: BiliMetrics.verticalAvatar,
+      Container(
+        key: const ValueKey('vertical-avatar'),
+        width: BiliMetrics.verticalAvatar,
+        height: BiliMetrics.verticalAvatar,
+        foregroundDecoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: BiliColors.onVideo, width: BiliMetrics.verticalAvatarRing),
+        ),
+        child: ClipOval(
           child: RemoteImage(
             detail.owner.face,
             size: const Size.square(BiliMetrics.verticalAvatar),

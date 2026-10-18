@@ -79,7 +79,7 @@ void main() {
     expect(centre(tester, 'landscape-capture'), within(distance: 1.5, from: const Offset(873, 178.5)));
     expect(centre(tester, 'landscape-lock'), within(distance: 1.5, from: const Offset(873, 231.5)));
     expect(centre(tester, 'landscape-play'), within(distance: 1, from: const Offset(84, 397)));
-    expect(centre(tester, 'landscape-danmaku'), within(distance: 1, from: const Offset(133, 397)));
+    expect(centre(tester, 'landscape-danmaku'), within(distance: 1, from: const Offset(134, 396)));
     expect(centre(tester, 'landscape-bar').dy, closeTo(359, 1));
     expect(tester.getTopLeft(find.byKey(const ValueKey('landscape-bar'))).dx, 62);
     expect(tester.getTopRight(find.byKey(const ValueKey('landscape-bar'))).dx, 894);
@@ -236,6 +236,8 @@ void main() {
 
     TextStyle styleOf(Finder text) => tester.widget<Text>(text).style!;
     expect(styleOf(find.byKey(const ValueKey('landscape-title'))).fontSize, 16);
+    // MiSans ships one weight, and only w600 and up get the synthetic bold 04's semibold title needs.
+    expect(styleOf(find.byKey(const ValueKey('landscape-title'))).fontWeight, FontWeight.w600);
     final speed = find.descendant(of: find.byKey(const ValueKey('landscape-speed')), matching: find.byType(Text));
     expect(styleOf(speed).fontSize, 14);
     final quality = find.descendant(of: find.byKey(const ValueKey('landscape-quality')), matching: find.byType(Text));
