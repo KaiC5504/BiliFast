@@ -2,7 +2,9 @@
 #define RUNNER_FLUTTER_WINDOW_H_
 
 #include <flutter/dart_project.h>
+#include <flutter/encodable_value.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -28,6 +30,12 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // bilifast/window: Dart sizes the window like the iPhone's screen, upright or sideways.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> window_channel_;
+
+  // Resizes the client area to |width| x |height| logical pixels, kept inside the monitor's work area.
+  void SetClientSize(double width, double height);
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

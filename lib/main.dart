@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app/app_environment.dart';
 import 'app/app_scope.dart';
+import 'app/phone_frame.dart';
 import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_forwarder.dart';
@@ -47,12 +48,14 @@ Future<void> main(List<String> args) async {
   if (args.contains('--mute')) {
     unawaited(playback.obtain().then((controller) => controller.player.setMuted(true), onError: (Object _) {}));
   }
+  final device = PlayerDevice.platform();
+  PhoneFrame.follow(device.orientation);
   runApp(BiliFastApp(
     services: AppServices(
       environment: environment,
       playback: playback,
       recents: recents,
-      device: PlayerDevice.platform(),
+      device: device,
       logs: logs,
     ),
     initialLink: _argument(args, '--play='),
@@ -130,7 +133,7 @@ class BiliFastApp extends StatelessWidget {
         // iOS has no ripples; rows show their own press highlight.
         splashFactory: NoSplash.splashFactory,
       ),
-      builder: (context, child) => AppScope(services: services, child: child!),
+      builder: (context, child) => AppScope(services: services, child: PhoneFrame.wrap(context, child!)),
       home: HomePage(
         initialLink: initialLink,
         developerPage: services.logs == null
