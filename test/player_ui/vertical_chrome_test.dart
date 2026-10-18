@@ -4,6 +4,7 @@ import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -106,6 +107,13 @@ void main() {
     );
     expect(tester.getSize(avatar), const Size.square(36));
     expect(tester.getTopLeft(avatar).dx, 13);
+    // 09 rings the avatar in 1 pt of white, inside its 36 pt.
+    final ring = tester.widget<Container>(find.byKey(const ValueKey('vertical-avatar'))).foregroundDecoration!;
+    expect(ring, isA<BoxDecoration>().having((d) => d.shape, 'shape', BoxShape.circle));
+    final border = (ring as BoxDecoration).border! as Border;
+    expect(border.top.color, BiliColors.onVideo);
+    expect(border.top.width, 1);
+    expect(border.top.strokeAlign, BorderSide.strokeAlignInside);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('vertical-title'))).dy - tester.getBottomLeft(avatar).dy,
       closeTo(9.7, 0.01),

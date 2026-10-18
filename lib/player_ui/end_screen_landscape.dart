@@ -4,13 +4,13 @@ import 'dart:math' as math;
 import 'package:bili_core/api.dart' show VideoCard, VideoOwner;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
-import 'end_screen_portrait.dart' show ReplayPainter, ShareLink, SharePainter, shareThroughSystem;
+import 'end_screen_portrait.dart'
+    show CountGlyph, CountPainter, ReplayPainter, ShareLink, SharePainter, shareThroughSystem;
 import 'landscape_chrome.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
@@ -244,6 +244,27 @@ class _Uploader extends StatelessWidget {
   );
 }
 
+/// The portrait end screen's count icon, white and smaller; 27 sets it further in and a little higher than the
+/// counts' text box would.
+class _CountIcon extends StatelessWidget {
+  const _CountIcon(this.glyph);
+
+  final CountGlyph glyph;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(
+      left: BiliMetrics.landscapeEndCountIconLead,
+      right: BiliMetrics.landscapeEndCountIconGap,
+      bottom: BiliMetrics.landscapeEndCountIconRise * 2,
+    ),
+    child: CustomPaint(
+      size: const Size(BiliMetrics.landscapeEndCountIconWidth, BiliMetrics.landscapeEndCountIconHeight),
+      painter: CountPainter(glyph, color: BiliColors.onVideo),
+    ),
+  );
+}
+
 class _EndAction extends StatelessWidget {
   const _EndAction({super.key, required this.title, required this.glyph, required this.onTap});
 
@@ -285,7 +306,7 @@ class _RelatedCard extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _countStyle = TextStyle(
-    color: BiliColors.chromeViews,
+    color: BiliColors.onVideo,
     fontSize: BiliMetrics.landscapeEndCountText,
     fontFeatures: [FontFeature.tabularFigures()],
   );
@@ -343,22 +364,12 @@ class _RelatedCard extends StatelessWidget {
                           child: ClipRect(
                             child: Row(
                               children: [
-                                const Icon(
-                                  Icons.smart_display_outlined,
-                                  size: BiliMetrics.landscapeEndCountIcon,
-                                  color: BiliColors.chromeViews,
-                                ),
-                                const SizedBox(width: BiliMetrics.landscapeEndCountGap),
+                                const _CountIcon(CountGlyph.views),
                                 Flexible(
                                   child: Text(CountFormat.short(card.views), style: _countStyle, softWrap: false),
                                 ),
                                 const SizedBox(width: BiliMetrics.landscapeEndCountSpacing),
-                                const Icon(
-                                  Icons.subtitles_outlined,
-                                  size: BiliMetrics.landscapeEndCountIcon,
-                                  color: BiliColors.chromeViews,
-                                ),
-                                const SizedBox(width: BiliMetrics.landscapeEndCountGap),
+                                const _CountIcon(CountGlyph.danmaku),
                                 Flexible(
                                   child: Text(CountFormat.short(card.danmaku), style: _countStyle, softWrap: false),
                                 ),
@@ -367,7 +378,7 @@ class _RelatedCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: BiliMetrics.landscapeEndCountGap),
-                        Text(_duration(card.duration), style: _countStyle.copyWith(color: BiliColors.onVideo)),
+                        Text(_duration(card.duration), style: _countStyle),
                       ],
                     ),
                   ),

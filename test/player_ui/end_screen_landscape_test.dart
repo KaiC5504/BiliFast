@@ -2,8 +2,10 @@ import 'package:bili_core/api.dart' show VideoCard, VideoDetail;
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/end_screen_landscape.dart';
+import 'package:bilifast/player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -79,6 +81,35 @@ void main() {
     expect(tester.getTopLeft(find.text('推荐 1')).dx, closeTo(74, 1));
     expect(find.text('0:48'), findsWidgets);
     expect(find.text('135.7万'), findsWidgets);
+  });
+
+  testWidgets("27's rules: 1 pt, the divider 48 tall around y 93", (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+
+    final divider = find.byKey(const ValueKey('end-divider'));
+    expect(tester.getSize(divider), const Size(1, 48));
+    expect(tester.getCenter(divider).dy, closeTo(93, 0.5));
+    expect(BiliMetrics.landscapeEndRule, 1);
+  });
+
+  testWidgets("the counts on a cover are white, with the portrait end screen's icons", (tester) async {
+    final rig = Rig()..session.related = [card(1)];
+    await rig.mount(tester);
+
+    final icons = [
+      for (final paint in tester.widgetList<CustomPaint>(find.byType(CustomPaint)))
+        if (paint.painter case final CountPainter painter) (painter, paint.size),
+    ];
+    expect([for (final (painter, _) in icons) painter.glyph], [CountGlyph.views, CountGlyph.danmaku]);
+    for (final (painter, size) in icons) {
+      expect(painter.color, BiliColors.onVideo);
+      expect(size, const Size(BiliMetrics.landscapeEndCountIconWidth, BiliMetrics.landscapeEndCountIconHeight));
+    }
+    expect(find.byType(Icon), findsNothing);
+    for (final count in ['135.7万', '284', '0:48']) {
+      expect(tester.widget<Text>(find.text(count)).style?.color, BiliColors.onVideo);
+    }
   });
 
   testWidgets('重播 replays, back goes back', (tester) async {

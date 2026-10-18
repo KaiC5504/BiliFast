@@ -212,7 +212,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                     ),
                   ),
                   if (!landscape && light)
-                    _lightSheet(size, insets, content)
+                    ..._lightSheet(size, insets, content)
                   else if (!landscape)
                     _sheet(size, insets, frame, content)
                   else if (frame.column)
@@ -438,43 +438,61 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
   }
 
   /// The official 合集 list (19): white, rounded at the top, from the player's bottom down; [EpisodesPanel] fills it
-  /// below the grabber.
-  Widget _lightSheet(Size size, EdgeInsets insets, Widget content) {
+  /// below the grabber. The page under it dims, the player above it doesn't.
+  List<Widget> _lightSheet(Size size, EdgeInsets insets, Widget content) {
     final height = widget.ui.presentation == Presentation.inline
         ? size.height - insets.top - size.width / BiliMetrics.videoAspect
         : size.height * BiliMetrics.panelSheetHeight;
-    return _slidingSheet(
-      height: height,
-      hidden: height + insets.bottom,
-      child: _body(
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            color: BiliColors.card,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
-          ),
-          child: Column(
-            children: [
-              _grabber(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.only(top: BiliMetrics.sheetGrabberTop),
-                  alignment: Alignment.topCenter,
-                  child: Container(
-                    width: BiliMetrics.sheetGrabberWidth,
-                    height: BiliMetrics.sheetGrabberHeight,
-                    decoration: BoxDecoration(
-                      color: BiliColors.sheetGrabber,
-                      borderRadius: BorderRadius.circular(BiliMetrics.sheetGrabberHeight / 2),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(child: content),
-            ],
+    final hidden = height + insets.bottom;
+    return [
+      Positioned(
+        key: const ValueKey('panel-sheet-dim'),
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: height,
+        child: IgnorePointer(
+          child: AnimatedBuilder(
+            animation: Listenable.merge([_slide, _drag]),
+            builder: (context, child) =>
+                Opacity(opacity: (_slide.value * (1 - _drag.value / hidden)).clamp(0.0, 1.0), child: child),
+            child: const ColoredBox(color: BiliColors.sheetDim),
           ),
         ),
       ),
-    );
+      _slidingSheet(
+        height: height,
+        hidden: hidden,
+        child: _body(
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              color: BiliColors.card,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
+            ),
+            child: Column(
+              children: [
+                _grabber(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.only(top: BiliMetrics.sheetGrabberTop),
+                    alignment: Alignment.topCenter,
+                    child: Container(
+                      width: BiliMetrics.sheetGrabberWidth,
+                      height: BiliMetrics.sheetGrabberHeight,
+                      decoration: BoxDecoration(
+                        color: BiliColors.sheetGrabber,
+                        borderRadius: BorderRadius.circular(BiliMetrics.sheetGrabberHeight / 2),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(child: content),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ];
   }
 }
 

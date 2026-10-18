@@ -235,11 +235,11 @@ class _Recommended extends StatelessWidget {
                         height: BiliMetrics.endMetaRow,
                         child: Row(
                           children: [
-                            const _CountIcon(_CountGlyph.views),
+                            const _CountIcon(CountGlyph.views),
                             const SizedBox(width: BiliMetrics.endMetaGap),
                             Text(CountFormat.short(card.views), style: _count),
                             const SizedBox(width: BiliMetrics.endMetaSpacing),
-                            const _CountIcon(_CountGlyph.danmaku),
+                            const _CountIcon(CountGlyph.danmaku),
                             const SizedBox(width: BiliMetrics.endMetaGap),
                             Text(CountFormat.short(card.danmaku), style: _count),
                           ],
@@ -372,25 +372,26 @@ class _UpBadge extends StatelessWidget {
   );
 }
 
-enum _CountGlyph { views, danmaku }
+enum CountGlyph { views, danmaku }
 
 /// Bilibili's own count icons, the same box as the UP badge: a small play triangle, or two dot-and-dash rows.
 class _CountIcon extends StatelessWidget {
   const _CountIcon(this.glyph);
 
-  final _CountGlyph glyph;
+  final CountGlyph glyph;
 
   @override
   Widget build(BuildContext context) => CustomPaint(
     size: const Size(BiliMetrics.endCountIconWidth, BiliMetrics.endCountIconHeight),
-    painter: _CountPainter(glyph),
+    painter: CountPainter(glyph),
   );
 }
 
-class _CountPainter extends CustomPainter {
-  const _CountPainter(this.glyph);
+class CountPainter extends CustomPainter {
+  const CountPainter(this.glyph, {this.color = BiliColors.endMeta});
 
-  final _CountGlyph glyph;
+  final CountGlyph glyph;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -401,20 +402,20 @@ class _CountPainter extends CustomPainter {
       ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..color = BiliColors.endMeta;
+      ..color = color;
     canvas.drawRRect(RRect.fromRectAndRadius(box, const Radius.circular(BiliMetrics.endUpRadius)), line);
 
     // Measured on 26 at 3 px per point, inside its 13.3 × 11.3 box.
     final sx = size.width / 13.3, sy = size.height / 11.3;
     Offset p(double x, double y) => Offset(x * sx, y * sy);
     switch (glyph) {
-      case _CountGlyph.views:
+      case CountGlyph.views:
         final triangle = Path()..addPolygon([p(5.45, 3.7), p(8.65, 5.6), p(5.45, 7.5)], true);
         canvas
-          ..drawPath(triangle, Paint()..color = BiliColors.endMeta)
+          ..drawPath(triangle, Paint()..color = color)
           ..drawPath(triangle, line..strokeWidth = stroke / 2);
-      case _CountGlyph.danmaku:
-        final dot = Paint()..color = BiliColors.endMeta;
+      case CountGlyph.danmaku:
+        final dot = Paint()..color = color;
         for (final (y, x) in [(4.17, 3.35), (6.83, 4.35)]) {
           canvas
             ..drawCircle(p(x, y), 0.65 * sx, dot)
@@ -424,7 +425,7 @@ class _CountPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CountPainter oldDelegate) => oldDelegate.glyph != glyph;
+  bool shouldRepaint(CountPainter oldDelegate) => oldDelegate.glyph != glyph || oldDelegate.color != color;
 }
 
 class _EndAction extends StatelessWidget {

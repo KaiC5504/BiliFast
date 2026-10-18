@@ -40,7 +40,7 @@ abstract final class BiliColors {
 
   /// Inside the player's panels, measured on the official app's 05, 06, 20 and 21: hairlines, the off switch track,
   /// the dark sheet's grabber, the switch knob and the highlight under a pressed row.
-  static const panelHairline = Color(0x1FFFFFFF);
+  static const panelHairline = Color(0xFF484C52);
   static const panelTrackOff = Color(0x0FFFFFFF);
   static const panelGrabber = Color(0x4DFFFFFF);
   static const panelKnob = Color(0xFFFFFFFF);
@@ -50,6 +50,9 @@ abstract final class BiliColors {
   static const sheetGrabber = Color(0xFFC9CCCF);
   static const sheetCloseGlyph = Color(0xFF61666D);
   static const sheetHint = Color(0xFFC9CCCF);
+
+  /// 19 dims the page below the player behind the 选集 sheet; the player stays undimmed.
+  static const sheetDim = Color(0x80000000);
 
   /// Behind and over the video.
   static const videoBackground = Color(0xFF000000);
@@ -84,14 +87,14 @@ abstract final class BiliColors {
   static const chapterFill = Color(0x8C000000);
   static const badgeFill = Color(0x40000000);
   static const badgeBorder = Color(0x80FFFFFF);
-  static const badgeText = Color(0xE6FFFFFF);
+  static const badgeText = Color(0xFFFFFFFF);
 
   /// 26's video never gets brighter than 41 of 255 under its dim.
   static const endDim = Color(0xD6000000);
 
   /// 立即播放 over 26's dimmed frame (about 10 of 255) comes out #535353.
   static const endButton = Color(0x4DFFFFFF);
-  static const endCaption = Color(0xB3FFFFFF);
+  static const endCaption = Color(0x99FFFFFF);
   static const endMeta = Color(0x99FFFFFF);
   static const endPlayGlyph = Color(0xF2FFFFFF);
   static const endCoverShade = Color(0x8C000000);
@@ -247,7 +250,7 @@ abstract final class BiliMetrics {
   static const endCaptionGap = 3.8;
 
   /// MiSans draws 推荐视频 higher in its line than PingFang; this brings it level with 26's.
-  static const endCaptionDrop = 2.2;
+  static const endCaptionDrop = 0.5;
   static const endCoverWidth = 128.0;
   static const endCoverHeight = 72.0;
   static const endCoverRadius = 5.0;
@@ -338,6 +341,9 @@ abstract final class BiliMetrics {
   static const chromeDanmakuHeight = 20.0;
   static const chromeDanmakuText = 10.5;
 
+  /// 04 sets the TV 1 pt further from play than [landscapeEdge]; 09's 竖屏 row has it where it is.
+  static const landscapeDanmakuLead = 6.0;
+
   /// 弹幕设置 and the 3 pt before the danmaku field.
   static const chromeSettingsRoom = 52.0;
   static const chromeSpeedGap = 14.0;
@@ -367,6 +373,7 @@ abstract final class BiliMetrics {
 
   /// The uploader above the title; 粉丝 goes under the name.
   static const verticalAvatar = 36.0;
+  static const verticalAvatarRing = 1.0;
   static const verticalAvatarInset = 13.0;
   static const verticalAvatarGap = 10.0;
   static const verticalNameText = 15.0;
@@ -390,7 +397,7 @@ abstract final class BiliMetrics {
   static const verticalBadgeY = -18.0;
 
   /// The full-screen end screen, measured on 27.
-  static const landscapeEndRule = 0.6;
+  static const landscapeEndRule = 1.0;
   static const landscapeEndRow = 96.0;
 
   /// The actions' column ends this far into the right safe area.
@@ -400,7 +407,7 @@ abstract final class BiliMetrics {
   static const landscapeEndActionText = 13.0;
   static const landscapeEndActionTop = 24.4;
   static const landscapeEndActionGap = 11.2;
-  static const landscapeEndDividerHeight = 60.0;
+  static const landscapeEndDividerHeight = 48.0;
   static const landscapeEndDividerGap = 12.5;
   static const landscapeEndAvatar = 60.0;
   static const landscapeEndAvatarRing = 2.0;
@@ -422,7 +429,11 @@ abstract final class BiliMetrics {
   static const landscapeEndCoverInset = 7.0;
   static const landscapeEndCoverBottom = 3.3;
   static const landscapeEndCountText = 11.0;
-  static const landscapeEndCountIcon = 13.0;
+  static const landscapeEndCountIconWidth = 11.3;
+  static const landscapeEndCountIconHeight = 9.1;
+  static const landscapeEndCountIconLead = 2.0;
+  static const landscapeEndCountIconGap = 1.0;
+  static const landscapeEndCountIconRise = 0.8;
   static const landscapeEndCountGap = 3.0;
   static const landscapeEndCountSpacing = 7.0;
 
@@ -511,7 +522,7 @@ abstract final class BiliMetrics {
   static const panelSegmentPad = 13.0;
   static const panelSwitchWidth = 33.0;
   static const panelSwitchHeight = 20.0;
-  static const panelSwitchKnob = 16.0;
+  static const panelSwitchKnob = 17.5;
   static const panelAutoplayGlyphWidth = 12.6;
   static const panelAutoplayGlyphHeight = 14.0;
   static const panelLoopGlyphWidth = 18.0;
