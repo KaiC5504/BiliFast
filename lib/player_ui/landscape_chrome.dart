@@ -12,7 +12,6 @@ import 'portrait_controls.dart';
 import 'seek_bar.dart';
 
 const _fade = Duration(milliseconds: 220);
-const _press = Duration(milliseconds: 90);
 
 /// The landscape full-screen controls, filling the screen (BiliNative `LandscapeChrome.swift`, measured on 04): back
 /// and the title, ⋮, 截图 and the rotation lock on the right edge, the time, the bar and the bottom row. The bars
@@ -222,7 +221,18 @@ class LandscapeChrome extends StatelessWidget {
             padding: const EdgeInsets.only(top: BiliMetrics.chromeRowTop, right: BiliMetrics.chromeRowTrailing),
             child: Row(
               children: [
-                _PlayButton(key: const ValueKey('landscape-play'), ui: ui),
+                // 04's play glyph is larger and rounder than the small player's, its pause bars shorter.
+                PlayPauseButton(
+                  key: const ValueKey('landscape-play'),
+                  session: session,
+                  onTap: _touch(session.togglePlay),
+                  glyphSize: const Size(BiliMetrics.chromePlayWidth, BiliMetrics.chromePlayHeight),
+                  glyphShift: BiliMetrics.chromePlayShift,
+                  cornerRadius: BiliMetrics.chromePlayCorner,
+                  pauseBar: BiliMetrics.chromePauseBar,
+                  pauseGap: BiliMetrics.chromePauseGap,
+                  pauseHeight: BiliMetrics.chromePauseShare,
+                ),
                 Padding(
                   padding: const EdgeInsets.only(left: BiliMetrics.landscapeEdge),
                   child: ChromeTap(
@@ -364,43 +374,6 @@ class _TextButton extends StatelessWidget {
   );
 }
 
-/// Play or pause, drawn larger and rounder than the small player's (04).
-class _PlayButton extends StatelessWidget {
-  const _PlayButton({super.key, required this.ui});
-
-  final PlayerUi ui;
-
-  @override
-  Widget build(BuildContext context) {
-    final session = ui.session;
-    return ListenableBuilder(
-      listenable: Listenable.merge([session.readout.status, session]),
-      builder: (context, _) {
-        final playing = session.readout.wantsPlay && !session.ended;
-        return ChromeTap(
-          label: playing ? '暂停' : '播放',
-          onTap: () {
-            ui.chrome.show();
-            session.togglePlay();
-          },
-          child: Transform.translate(
-            offset: const Offset(BiliMetrics.chromePlayShift, 0),
-            child: AnimatedSwitcher(
-              duration: _press * 2,
-              transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-              child: CustomPaint(
-                key: ValueKey(playing),
-                size: const Size(BiliMetrics.chromePlayWidth, BiliMetrics.chromePlayHeight),
-                painter: _PlayPainter(playing: playing),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 /// 弹 on a little TV: a pink tick in its corner while danmaku show, a cross while they are off.
 class DanmakuGlyph extends StatelessWidget {
   const DanmakuGlyph({super.key, required this.on});
@@ -504,51 +477,6 @@ extension on Path {
 
 Radius _round(Size grid, Size size, double r) =>
     Radius.elliptical(r * size.width / grid.width, r * size.height / grid.height);
-
-/// The official play glyph is a triangle with well rounded corners; pause is two rounded bars of the same height.
-class _PlayPainter extends CustomPainter {
-  const _PlayPainter({required this.playing});
-
-  final bool playing;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fill = Paint()..color = BiliColors.onVideo;
-    if (playing) {
-      const bar = BiliMetrics.chromePauseBar;
-      final height = size.height * BiliMetrics.chromePauseShare;
-      final top = (size.height - height) / 2;
-      final left = (size.width - bar * 2 - BiliMetrics.chromePauseGap) / 2;
-      for (final x in [left, left + bar + BiliMetrics.chromePauseGap]) {
-        canvas.drawRRect(
-          RRect.fromLTRBR(x, top, x + bar, top + height, const Radius.circular(BiliMetrics.chromePlayCorner)),
-          fill,
-        );
-      }
-      return;
-    }
-    // A triangle drawn inside the outline by the corner radius and stroked with round joins of twice that width:
-    // its outer edge is the full triangle with round corners.
-    const r = BiliMetrics.chromePlayCorner;
-    final a = Offset.zero, b = Offset(0, size.height), c = Offset(size.width, size.height / 2);
-    final ab = (a - b).distance, bc = (b - c).distance, ca = (c - a).distance;
-    final perimeter = ab + bc + ca;
-    final centre = (a * bc + b * ca + c * ab) / perimeter;
-    final inradius = size.width * size.height / perimeter;
-    Offset inward(Offset p) => centre + (p - centre) * ((inradius - r) / inradius);
-    final path = Path()
-      ..moveTo(inward(a).dx, inward(a).dy)
-      ..lineTo(inward(b).dx, inward(b).dy)
-      ..lineTo(inward(c).dx, inward(c).dy)
-      ..close();
-    canvas
-      ..drawPath(path, fill)
-      ..drawPath(path, _line(BiliColors.onVideo, r * 2));
-  }
-
-  @override
-  bool shouldRepaint(_PlayPainter oldDelegate) => oldDelegate.playing != playing;
-}
 
 const _danmakuGrid = Size(BiliMetrics.chromeDanmakuWidth, BiliMetrics.chromeDanmakuHeight);
 

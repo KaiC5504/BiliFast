@@ -211,7 +211,7 @@ class _PortraitControlsState extends State<PortraitControls> {
             onTap: _tap(_fullScreen),
             child: const CustomPaint(
               size: Size.square(BiliMetrics.fullScreenGlyph),
-              painter: _FullScreenGlyph(),
+              painter: FullScreenPainter(),
             ),
           ),
         ),
@@ -315,17 +315,31 @@ class _ChromeTapState extends State<ChromeTap> {
 
 /// The thin back chevron, shadowed so it holds over bright frames.
 class BackGlyph extends StatelessWidget {
-  const BackGlyph({super.key});
+  const BackGlyph({
+    super.key,
+    this.width = BiliMetrics.backGlyphWidth,
+    this.height = BiliMetrics.backGlyphHeight,
+    this.color = BiliColors.onVideo,
+    this.shadow = true,
+  });
+
+  final double width;
+  final double height;
+  final Color color;
+  final bool shadow;
 
   @override
-  Widget build(BuildContext context) => const CustomPaint(
-    size: Size(BiliMetrics.backGlyphWidth, BiliMetrics.backGlyphHeight),
-    painter: _BackPainter(),
+  Widget build(BuildContext context) => CustomPaint(
+    size: Size(width, height),
+    painter: _BackPainter(color: color, shadow: shadow),
   );
 }
 
 class _BackPainter extends CustomPainter {
-  const _BackPainter();
+  const _BackPainter({required this.color, required this.shadow});
+
+  final Color color;
+  final bool shadow;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -340,33 +354,39 @@ class _BackPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..color = color;
-    canvas
-      ..drawPath(
+    if (shadow) {
+      canvas.drawPath(
         path,
         stroke(BiliColors.chromeShade)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, BiliMetrics.videoBackShadow / 2),
-      )
-      ..drawPath(path, stroke(BiliColors.onVideo));
+      );
+    }
+    canvas.drawPath(path, stroke(color));
   }
 
   @override
-  bool shouldRepaint(_BackPainter oldDelegate) => false;
+  bool shouldRepaint(_BackPainter oldDelegate) => oldDelegate.color != color || oldDelegate.shadow != shadow;
 }
 
 class MoreDots extends StatelessWidget {
-  const MoreDots({super.key});
+  const MoreDots({super.key, this.color = BiliColors.onVideo, this.shadow = true});
+
+  final Color color;
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
-    const dot = DecoratedBox(
+    final dot = DecoratedBox(
       decoration: BoxDecoration(
-        color: BiliColors.onVideo,
+        color: color,
         shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: BiliColors.chromeShade, blurRadius: BiliMetrics.videoBackShadow / 2)],
+        boxShadow: shadow
+            ? const [BoxShadow(color: BiliColors.chromeShade, blurRadius: BiliMetrics.videoBackShadow / 2)]
+            : null,
       ),
-      child: SizedBox.square(dimension: BiliMetrics.moreDot),
+      child: const SizedBox.square(dimension: BiliMetrics.moreDot),
     );
-    return const Column(
+    return Column(
       mainAxisSize: MainAxisSize.min,
       spacing: BiliMetrics.moreDotGap,
       children: [dot, dot, dot],
@@ -376,10 +396,30 @@ class MoreDots extends StatelessWidget {
 
 /// Play and pause, the triangle folding into the two bars and back.
 class PlayPauseButton extends StatefulWidget {
-  const PlayPauseButton({super.key, required this.session, required this.onTap});
+  const PlayPauseButton({
+    super.key,
+    required this.session,
+    required this.onTap,
+    this.glyphSize = const Size(BiliMetrics.playGlyphWidth, BiliMetrics.playGlyphHeight),
+    this.glyphShift = 0,
+    this.cornerRadius,
+    this.pauseBar,
+    this.pauseGap,
+    this.pauseHeight = 1,
+  });
 
   final PlayerSession session;
   final VoidCallback onTap;
+  final Size glyphSize;
+
+  /// Moves the glyph right of the button's centre without moving the button.
+  final double glyphShift;
+
+  /// See [PlayPausePainter].
+  final double? cornerRadius;
+  final double? pauseBar;
+  final double? pauseGap;
+  final double pauseHeight;
 
   @override
   State<PlayPauseButton> createState() => _PlayPauseButtonState();
@@ -434,47 +474,92 @@ class _PlayPauseButtonState extends State<PlayPauseButton> with SingleTickerProv
     return ChromeTap(
       label: _playing ? '暂停' : '播放',
       onTap: widget.onTap,
-      child: CustomPaint(
-        size: const Size(BiliMetrics.playGlyphWidth, BiliMetrics.playGlyphHeight),
-        painter: PlayPausePainter(_curve),
+      child: Transform.translate(
+        offset: Offset(widget.glyphShift, 0),
+        child: CustomPaint(
+          size: widget.glyphSize,
+          painter: PlayPausePainter(
+            _curve,
+            cornerRadius: widget.cornerRadius,
+            pauseBar: widget.pauseBar,
+            pauseGap: widget.pauseGap,
+            pauseHeight: widget.pauseHeight,
+          ),
+        ),
       ),
     );
   }
 }
 
 /// A play triangle at 0 and pause bars at 1: each half of the triangle becomes one bar.
+///
+/// Without [cornerRadius], a thin stroke of the same colour rounds the corners outside the outline, as SF Symbols'
+/// play.fill has them on the small player. With it, the corners are rounded inside the outline, as 04's larger glyph
+/// has them. [pauseBar] and [pauseGap] default to the small player's, scaled to the glyph's width; [pauseHeight] is the
+/// bars' share of its height.
 class PlayPausePainter extends CustomPainter {
-  PlayPausePainter(this.progress, {this.color = BiliColors.onVideo}) : super(repaint: progress);
+  PlayPausePainter(
+    this.progress, {
+    this.color = BiliColors.onVideo,
+    this.cornerRadius,
+    this.pauseBar,
+    this.pauseGap,
+    this.pauseHeight = 1,
+  }) : super(repaint: progress);
 
   final Animation<double> progress;
   final Color color;
+  final double? cornerRadius;
+  final double? pauseBar;
+  final double? pauseGap;
+  final double pauseHeight;
 
   @override
   void paint(Canvas canvas, Size size) {
     final t = progress.value;
     final w = size.width, h = size.height;
-    final bar = BiliMetrics.pauseBarWidth * w / BiliMetrics.playGlyphWidth;
-    final gap = BiliMetrics.pauseBarGap * w / BiliMetrics.playGlyphWidth;
+    final r = cornerRadius;
+    final bar = pauseBar ?? BiliMetrics.pauseBarWidth * w / BiliMetrics.playGlyphWidth;
+    final gap = pauseGap ?? BiliMetrics.pauseBarGap * w / BiliMetrics.playGlyphWidth;
     final left = (w - bar * 2 - gap) / 2;
     final right = left + bar + gap;
-    final playLeft = [Offset.zero, Offset(w / 2, h / 4), Offset(w / 2, h * 3 / 4), Offset(0, h)];
-    final pauseLeft = [Offset(left, 0), Offset(left + bar, 0), Offset(left + bar, h), Offset(left, h)];
-    final playRight = [Offset(w / 2, h / 4), Offset(w, h / 2), Offset(w, h / 2), Offset(w / 2, h * 3 / 4)];
-    final pauseRight = [Offset(right, 0), Offset(right + bar, 0), Offset(right + bar, h), Offset(right, h)];
+    final top = h * (1 - pauseHeight) / 2, bottom = h - top;
+    List<Offset> pause(double x) {
+      final rect = Rect.fromLTRB(x, top, x + bar, bottom).deflate(r ?? 0);
+      return [rect.topLeft, rect.topRight, rect.bottomRight, rect.bottomLeft];
+    }
+
+    var playLeft = [Offset.zero, Offset(w / 2, h / 4), Offset(w / 2, h * 3 / 4), Offset(0, h)];
+    var playRight = [Offset(w / 2, h / 4), Offset(w, h / 2), Offset(w, h / 2), Offset(w / 2, h * 3 / 4)];
+    if (r != null) {
+      // Shrinking the triangle towards its incentre moves every edge in by r; a stroke of 2r then gives back the
+      // full outline with corners of radius r.
+      final inward = _towardIncentre(size, r);
+      playLeft = playLeft.map(inward).toList();
+      playRight = playRight.map(inward).toList();
+    }
     final fill = Paint()..color = color;
-    // A thin stroke of the same colour rounds the corners, as SF Symbols' play.fill has them.
     final round = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = BiliMetrics.playGlyphRounding
+      ..strokeWidth = r == null ? BiliMetrics.playGlyphRounding : r * 2
       ..strokeJoin = StrokeJoin.round;
-    for (final (from, to) in [(playLeft, pauseLeft), (playRight, pauseRight)]) {
+    for (final (from, to) in [(playLeft, pause(left)), (playRight, pause(right))]) {
       final points = [for (var i = 0; i < 4; i++) Offset.lerp(from[i], to[i], t)!];
-      final path = Path()..addPolygon(_inset(points, size), true);
+      final path = Path()..addPolygon(r == null ? _inset(points, size) : points, true);
       canvas
         ..drawPath(path, fill)
         ..drawPath(path, round);
     }
+  }
+
+  static Offset Function(Offset) _towardIncentre(Size size, double r) {
+    final a = Offset.zero, b = Offset(0, size.height), c = Offset(size.width, size.height / 2);
+    final ab = (a - b).distance, bc = (b - c).distance, ca = (c - a).distance;
+    final perimeter = ab + bc + ca;
+    final centre = (a * bc + b * ca + c * ab) / perimeter;
+    final inradius = size.width * size.height / perimeter;
+    return (p) => centre + (p - centre) * ((inradius - r) / inradius);
   }
 
   /// Pulls the outline in by half the rounding stroke so the glyph keeps its measured size.
@@ -487,7 +572,13 @@ class PlayPausePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(PlayPausePainter oldDelegate) => oldDelegate.progress != progress || oldDelegate.color != color;
+  bool shouldRepaint(PlayPausePainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.color != color ||
+      oldDelegate.cornerRadius != cornerRadius ||
+      oldDelegate.pauseBar != pauseBar ||
+      oldDelegate.pauseGap != pauseGap ||
+      oldDelegate.pauseHeight != pauseHeight;
 }
 
 /// The 竖屏 button: four corner brackets with a small 竖屏 pill above to the right.
@@ -504,7 +595,7 @@ class _VerticalGlyph extends StatelessWidget {
         children: [
           const CustomPaint(
             size: Size(BiliMetrics.cornersGlyphWidth, BiliMetrics.cornersGlyphHeight),
-            painter: _CornersGlyph(),
+            painter: CornersPainter(),
           ),
           Transform.translate(
             offset: const Offset(BiliMetrics.badgeOffsetX, BiliMetrics.badgeOffsetY),
@@ -541,34 +632,39 @@ Paint _glyphStroke() => Paint()
   ..strokeJoin = StrokeJoin.round
   ..color = BiliColors.onVideo;
 
-class _CornersGlyph extends CustomPainter {
-  const _CornersGlyph();
+/// Four corner brackets; [inward] puts their elbows in from the corners with the arms pointing back to the edges.
+class CornersPainter extends CustomPainter {
+  const CornersPainter({this.inward = false});
+
+  final bool inward;
 
   @override
   void paint(Canvas canvas, Size size) {
     final arm = size.shortestSide * 0.3;
     final path = Path();
-    for (final (corner, sx, sy) in [
-      (Offset.zero, 1.0, 1.0),
-      (Offset(size.width, 0), -1.0, 1.0),
-      (Offset(0, size.height), 1.0, -1.0),
-      (Offset(size.width, size.height), -1.0, -1.0),
+    for (final (x, y, sx, sy) in [
+      (0.0, 0.0, 1.0, 1.0),
+      (size.width, 0.0, -1.0, 1.0),
+      (0.0, size.height, 1.0, -1.0),
+      (size.width, size.height, -1.0, -1.0),
     ]) {
+      final ex = x + sx * arm, ey = y + sy * arm;
+      final elbow = inward ? Offset(ex, ey) : Offset(x, y);
       path
-        ..moveTo(corner.dx, corner.dy + sy * arm)
-        ..lineTo(corner.dx, corner.dy)
-        ..lineTo(corner.dx + sx * arm, corner.dy);
+        ..moveTo(x, ey)
+        ..lineTo(elbow.dx, elbow.dy)
+        ..lineTo(ex, y);
     }
     canvas.drawPath(path, _glyphStroke());
   }
 
   @override
-  bool shouldRepaint(_CornersGlyph oldDelegate) => false;
+  bool shouldRepaint(CornersPainter oldDelegate) => oldDelegate.inward != inward;
 }
 
 /// A top-left and a bottom-right bracket.
-class _FullScreenGlyph extends CustomPainter {
-  const _FullScreenGlyph();
+class FullScreenPainter extends CustomPainter {
+  const FullScreenPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -584,5 +680,5 @@ class _FullScreenGlyph extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_FullScreenGlyph oldDelegate) => false;
+  bool shouldRepaint(FullScreenPainter oldDelegate) => false;
 }

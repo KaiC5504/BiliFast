@@ -468,12 +468,12 @@ class _ReplayGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const CustomPaint(
     size: Size(BiliMetrics.replayGlyphWidth, BiliMetrics.replayGlyphHeight),
-    painter: _ReplayPainter(),
+    painter: ReplayPainter(),
   );
 }
 
-class _ReplayPainter extends CustomPainter {
-  const _ReplayPainter();
+class ReplayPainter extends CustomPainter {
+  const ReplayPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -493,7 +493,7 @@ class _ReplayPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ReplayPainter oldDelegate) => false;
+  bool shouldRepaint(ReplayPainter oldDelegate) => false;
 }
 
 /// 分享, as 26 shows: the outlined arrow turning up and right.
@@ -503,12 +503,12 @@ class _ShareGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const CustomPaint(
     size: Size(BiliMetrics.shareGlyphWidth, BiliMetrics.shareGlyphHeight),
-    painter: _SharePainter(),
+    painter: SharePainter(),
   );
 }
 
-class _SharePainter extends CustomPainter {
-  const _SharePainter();
+class SharePainter extends CustomPainter {
+  const SharePainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -530,5 +530,5 @@ class _SharePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SharePainter oldDelegate) => false;
+  bool shouldRepaint(SharePainter oldDelegate) => false;
 }

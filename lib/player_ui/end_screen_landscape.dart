@@ -10,7 +10,7 @@ import 'package:flutter/widgets.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
-import 'end_screen_portrait.dart' show ShareLink, shareThroughSystem;
+import 'end_screen_portrait.dart' show ReplayPainter, ShareLink, SharePainter, shareThroughSystem;
 import 'landscape_chrome.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
@@ -115,7 +115,7 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
                               title: '重播',
                               glyph: const CustomPaint(
                                 size: Size(BiliMetrics.replayGlyphWidth, BiliMetrics.replayGlyphHeight),
-                                painter: _ReplayPainter(),
+                                painter: ReplayPainter(),
                               ),
                               onTap: () => unawaited(session.replay()),
                             ),
@@ -135,7 +135,7 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
                                 title: '分享',
                                 glyph: const CustomPaint(
                                   size: Size(BiliMetrics.shareGlyphWidth, BiliMetrics.shareGlyphHeight),
-                                  painter: _SharePainter(),
+                                  painter: SharePainter(),
                                 ),
                                 onTap: () => unawaited(_share(link)),
                               )
@@ -427,62 +427,4 @@ class _RelatedCard extends StatelessWidget {
       ),
     ),
   );
-}
-
-Paint _endStroke() => Paint()
-  ..style = PaintingStyle.stroke
-  ..strokeWidth = BiliMetrics.chromeGlyphStroke
-  ..strokeCap = StrokeCap.round
-  ..strokeJoin = StrokeJoin.round
-  ..color = BiliColors.onVideo;
-
-/// 重播 on 27, traced on its 21 × 18 box: a ring open at the lower right, its arrowhead at three o'clock pointing
-/// on round.
-class _ReplayPainter extends CustomPainter {
-  const _ReplayPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final sx = size.width / BiliMetrics.replayGlyphWidth, sy = size.height / BiliMetrics.replayGlyphHeight;
-    Offset p(double x, double y) => Offset(x * sx, y * sy);
-    const start = 46 * math.pi / 180;
-    const sweep = 306 * math.pi / 180;
-    final left = p(14.8, 8.45), tip = p(17.5, 11.55), right = p(20.2, 8.45);
-    final path = Path()
-      ..addArc(Rect.fromPoints(p(0.85, 1), p(16.85, 17)), start, sweep)
-      ..moveTo(left.dx, left.dy)
-      ..lineTo(tip.dx, tip.dy)
-      ..lineTo(right.dx, right.dy);
-    canvas.drawPath(path, _endStroke());
-  }
-
-  @override
-  bool shouldRepaint(_ReplayPainter oldDelegate) => false;
-}
-
-/// 分享 on 27, traced on its 20 × 17 box: the outlined arrow turning up and to the right.
-class _SharePainter extends CustomPainter {
-  const _SharePainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final sx = size.width / BiliMetrics.shareGlyphWidth, sy = size.height / BiliMetrics.shareGlyphHeight;
-    Offset p(double x, double y) => Offset(x * sx, y * sy);
-    final neckTop = p(9.3, 5.3), neckBottom = p(9.6, 10.9), tail = p(0.9, 13.4);
-    final lower = p(4.85, 10.5), upper = p(1.5, 6.3);
-    final points = [p(9.9, 0.9), p(18.9, 7.8), p(9.9, 14.5)];
-    final path = Path()..moveTo(neckTop.dx, neckTop.dy);
-    for (final point in points) {
-      path.lineTo(point.dx, point.dy);
-    }
-    path
-      ..lineTo(neckBottom.dx, neckBottom.dy)
-      ..quadraticBezierTo(lower.dx, lower.dy, tail.dx, tail.dy)
-      ..quadraticBezierTo(upper.dx, upper.dy, neckTop.dx, neckTop.dy)
-      ..close();
-    canvas.drawPath(path, _endStroke());
-  }
-
-  @override
-  bool shouldRepaint(_SharePainter oldDelegate) => false;
 }

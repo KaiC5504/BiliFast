@@ -71,9 +71,11 @@ class VerticalChrome extends StatelessWidget {
         key: const ValueKey('vertical-back'),
         label: '返回',
         onTap: ui.onBack,
-        child: const CustomPaint(
-          size: Size(BiliMetrics.verticalBackWidth, BiliMetrics.verticalBackHeight),
-          painter: _BackPainter(),
+        child: const BackGlyph(
+          width: BiliMetrics.verticalBackWidth,
+          height: BiliMetrics.verticalBackHeight,
+          color: BiliColors.chromeFaint,
+          shadow: false,
         ),
       ),
       const Spacer(),
@@ -81,7 +83,7 @@ class VerticalChrome extends StatelessWidget {
         key: const ValueKey('vertical-more'),
         label: '更多',
         onTap: _touch(() => ui.panels.open(PlayerPanel.more)),
-        child: const _FaintDots(),
+        child: const MoreDots(color: BiliColors.chromeFaint, shadow: false),
       ),
     ],
   );
@@ -174,7 +176,7 @@ class VerticalChrome extends StatelessWidget {
                 key: const ValueKey('vertical-landscape'),
                 label: '横屏全屏',
                 onTap: _touch(ui.orientation.enterLandscape),
-                child: const CustomPaint(size: Size.square(BiliMetrics.fullScreenGlyph), painter: _FullScreenPainter()),
+                child: const CustomPaint(size: Size.square(BiliMetrics.fullScreenGlyph), painter: FullScreenPainter()),
               ),
               const SizedBox(width: BiliMetrics.landscapeEdge),
             ],
@@ -262,7 +264,7 @@ class _DetailGlyph extends StatelessWidget {
     children: [
       const CustomPaint(
         size: Size(BiliMetrics.verticalCornersWidth, BiliMetrics.verticalCornersHeight),
-        painter: _CornersPainter(),
+        painter: CornersPainter(inward: true),
       ),
       Transform.translate(
         offset: const Offset(BiliMetrics.verticalBadgeX, BiliMetrics.verticalBadgeY),
@@ -290,46 +292,12 @@ class _DetailGlyph extends StatelessWidget {
   );
 }
 
-/// ⋮ in 09's faint white, without the small player's shadow.
-class _FaintDots extends StatelessWidget {
-  const _FaintDots();
-
-  @override
-  Widget build(BuildContext context) {
-    const dot = DecoratedBox(
-      decoration: BoxDecoration(color: BiliColors.chromeFaint, shape: BoxShape.circle),
-      child: SizedBox.square(dimension: BiliMetrics.moreDot),
-    );
-    return const Column(mainAxisSize: MainAxisSize.min, spacing: BiliMetrics.moreDotGap, children: [dot, dot, dot]);
-  }
-}
-
-Paint _stroke({Color color = BiliColors.onVideo, double width = BiliMetrics.chromeGlyphStroke}) => Paint()
+Paint _stroke(double width) => Paint()
   ..style = PaintingStyle.stroke
   ..strokeWidth = width
   ..strokeCap = StrokeCap.round
   ..strokeJoin = StrokeJoin.round
-  ..color = color;
-
-/// 09's back chevron: smaller than the small player's and faint.
-class _BackPainter extends CustomPainter {
-  const _BackPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const inset = BiliMetrics.backGlyphStroke / 2;
-    canvas.drawPath(
-      Path()
-        ..moveTo(size.width - inset, inset)
-        ..lineTo(inset, size.height / 2)
-        ..lineTo(size.width - inset, size.height - inset),
-      _stroke(color: BiliColors.chromeFaint, width: BiliMetrics.backGlyphStroke),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_BackPainter oldDelegate) => false;
-}
+  ..color = BiliColors.onVideo;
 
 /// The ⌄ after the plays.
 class _ChevronDownPainter extends CustomPainter {
@@ -343,60 +311,10 @@ class _ChevronDownPainter extends CustomPainter {
         ..moveTo(inset, inset)
         ..lineTo(size.width / 2, size.height - inset)
         ..lineTo(size.width - inset, inset),
-      _stroke(width: BiliMetrics.verticalChevronStroke),
+      _stroke(BiliMetrics.verticalChevronStroke),
     );
   }
 
   @override
   bool shouldRepaint(_ChevronDownPainter oldDelegate) => false;
-}
-
-/// Four brackets whose elbows sit in from the corners, their arms pointing back to the edges.
-class _CornersPainter extends CustomPainter {
-  const _CornersPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final arm = math.min(size.width, size.height) * 0.3;
-    final path = Path();
-    for (final (x, y, sx, sy) in [
-      (0.0, 0.0, 1.0, 1.0),
-      (size.width, 0.0, -1.0, 1.0),
-      (0.0, size.height, 1.0, -1.0),
-      (size.width, size.height, -1.0, -1.0),
-    ]) {
-      final ex = x + sx * arm, ey = y + sy * arm;
-      path
-        ..moveTo(x, ey)
-        ..lineTo(ex, ey)
-        ..lineTo(ex, y);
-    }
-    canvas.drawPath(path, _stroke());
-  }
-
-  @override
-  bool shouldRepaint(_CornersPainter oldDelegate) => false;
-}
-
-/// A top-left and a bottom-right bracket.
-class _FullScreenPainter extends CustomPainter {
-  const _FullScreenPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final arm = size.width * 0.56;
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, arm)
-        ..lineTo(0, 0)
-        ..lineTo(arm, 0)
-        ..moveTo(size.width, size.height - arm)
-        ..lineTo(size.width, size.height)
-        ..lineTo(size.width - arm, size.height),
-      _stroke(),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_FullScreenPainter oldDelegate) => false;
 }
