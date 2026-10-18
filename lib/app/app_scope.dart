@@ -9,14 +9,16 @@ import '../playback/playback_controller.dart';
 import 'app_environment.dart';
 
 /// The one player and engine, started at launch and shared by the video page and the developer page. It hears the
-/// app come back to the foreground and the system run short of memory for whichever page is playing.
+/// app come back to the foreground and the system run short of memory for whichever page is playing, and tells
+/// [onResumed] of the first.
 class AppPlayback with WidgetsBindingObserver {
-  AppPlayback(this._start) {
+  AppPlayback(this._start, {this.onResumed}) {
     unawaited(obtain().then((_) {}, onError: (Object _) {}));
     WidgetsBinding.instance.addObserver(this);
   }
 
   final Future<PlaybackController> Function() _start;
+  final VoidCallback? onResumed;
   Future<PlaybackController>? _starting;
   PlaybackController? _ready;
 
@@ -43,7 +45,9 @@ class AppPlayback with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(_ready?.appResumed());
+    if (state != AppLifecycleState.resumed) return;
+    onResumed?.call();
+    unawaited(_ready?.appResumed());
   }
 
   @override

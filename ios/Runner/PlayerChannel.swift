@@ -45,6 +45,11 @@ final class PlayerHostApiImpl: PlayerHostApi {
     }
   }
 
+  func unload(playerId: Int64) throws {
+    let registry = self.registry
+    try MainActor.assumeIsolated { try registry.player(playerId).unload() }
+  }
+
   func play(playerId: Int64) throws {
     let registry = self.registry
     try MainActor.assumeIsolated { try registry.player(playerId).play() }

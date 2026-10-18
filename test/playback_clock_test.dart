@@ -126,4 +126,15 @@ void main() {
     time.advance(10);
     expect(clock.seconds, closeTo(60.01, 1e-9));
   });
+
+  test('cleared, it stands at 0 and drops what the old item still reports', () {
+    clock.handle(const StatusChanged(PlayerStatus.playing));
+    clock.handle(PositionChanged(seconds: 45, hostMs: time.clock.nowMs(), rate: 1));
+    clock.clear();
+    time.advance(500);
+    expect(clock.running, isFalse);
+    expect(clock.seconds, 0);
+    expect(clock.handle(PositionChanged(seconds: 45.5, hostMs: time.clock.nowMs(), rate: 1)), isFalse);
+    expect(clock.seconds, 0);
+  });
 }

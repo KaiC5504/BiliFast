@@ -14,6 +14,9 @@ final class FakePlayer implements BiliPlayer {
   final calls = <String>[];
   PlayerSource? loaded;
   bool disposed = false;
+
+  @override
+  bool muted = false;
   final _events = StreamController<PlayerEvent>.broadcast(sync: true);
 
   void emit(PlayerEvent event) => _events.add(event);
@@ -32,6 +35,9 @@ final class FakePlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> unload() async => _record('unload');
+
+  @override
   Future<void> play() async => _record('play');
 
   @override
@@ -45,7 +51,10 @@ final class FakePlayer implements BiliPlayer {
   Future<void> setRate(double rate) async => _record('rate $rate');
 
   @override
-  Future<void> setMuted(bool muted) async => _record('muted $muted');
+  Future<void> setMuted(bool muted) async {
+    _record('muted $muted');
+    this.muted = muted;
+  }
 
   @override
   Future<void> setKeepAwake(bool on) async => _record('keep awake $on');

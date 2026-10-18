@@ -307,6 +307,8 @@ protocol PlayerHostApi {
   func create() throws -> Int64
   func pictureInPictureSupported() throws -> Bool
   func load(playerId: Int64, url: String, headers: [String: String], startSeconds: Double, autoplay: Bool) throws
+  /// Drops the item, so AVPlayer stops buffering it; the player and its view stay for the next load.
+  func unload(playerId: Int64) throws
   func play(playerId: Int64) throws
   func pause(playerId: Int64) throws
   func seek(playerId: Int64, seconds: Double, precise: Bool) throws
@@ -374,6 +376,22 @@ class PlayerHostApiSetup {
       }
     } else {
       loadChannel.setMessageHandler(nil)
+    }
+    /// Drops the item, so AVPlayer stops buffering it; the player and its view stay for the next load.
+    let unloadChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.unload\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      unloadChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let playerIdArg = args[0] as! Int64
+        do {
+          try api.unload(playerId: playerIdArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      unloadChannel.setMessageHandler(nil)
     }
     let playChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.play\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

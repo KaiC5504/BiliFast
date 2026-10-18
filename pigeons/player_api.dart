@@ -31,6 +31,9 @@ abstract class PlayerHostApi {
 
   void load(int playerId, String url, Map<String, String> headers, double startSeconds, bool autoplay);
 
+  /// Drops the item, so AVPlayer stops buffering it; the player and its view stay for the next load.
+  void unload(int playerId);
+
   void play(int playerId);
 
   void pause(int playerId);

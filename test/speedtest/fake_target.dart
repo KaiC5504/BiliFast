@@ -200,7 +200,13 @@ final class FakeTarget implements SpeedTestTarget {
   Future<void> setRate(double rate) async => _note('rate $rate');
 
   @override
-  Future<void> setMuted(bool muted) async => _note('muted $muted');
+  bool muted = false;
+
+  @override
+  Future<void> setMuted(bool muted) async {
+    _note('muted $muted');
+    this.muted = muted;
+  }
 
   @override
   Future<void> setKeepAwake(bool on) async => _note('awake $on');

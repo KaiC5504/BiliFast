@@ -17,11 +17,16 @@ final class CannedHttp implements HTTPTransport {
   /// Completes a request only when the test says so, keyed by path.
   final Map<String, Completer<void>> gates = {};
 
+  /// Thrown instead of answering (a timeout, a lost connection), keyed by path.
+  final Map<String, Object> errors = {};
+
   @override
   Future<HTTPResponse> send(HTTPRequest request) async {
     requests.add(request);
     final path = request.url.path;
     await gates[path]?.future;
+    final error = errors[path];
+    if (error != null) throw error;
     final data = dataRoutes[path];
     if (data != null) return HTTPResponse(status: data.$1, headers: {}, body: data.$2, finalURL: request.url);
     final route = routes[path];

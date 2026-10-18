@@ -82,11 +82,16 @@ class _PlayerStageState extends State<PlayerStage> {
   void initState() {
     super.initState();
     _attach();
+    widget.duration.addListener(_durationChanged);
   }
 
   @override
   void didUpdateWidget(PlayerStage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      oldWidget.duration.removeListener(_durationChanged);
+      widget.duration.addListener(_durationChanged);
+    }
     if (oldWidget.player != widget.player || oldWidget.clock != widget.clock) {
       _detach();
       _attach();
@@ -97,6 +102,7 @@ class _PlayerStageState extends State<PlayerStage> {
 
   @override
   void dispose() {
+    widget.duration.removeListener(_durationChanged);
     _hideTimer?.cancel();
     _detach();
     _scrubbing.dispose();
@@ -118,6 +124,10 @@ class _PlayerStageState extends State<PlayerStage> {
 
   Listenable _barListenable() =>
       Listenable.merge([_readout.seconds, _readout.buffered, _scrubbing, widget.duration]);
+
+  /// The next video resets the duration and the clock before its load; a stage kept for it would otherwise show the
+  /// last video's time until the player's next event.
+  void _durationChanged() => _readout.refresh();
 
   void _statusChanged() {
     if (!_readout.wantsPlay) {

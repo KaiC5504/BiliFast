@@ -27,7 +27,10 @@ enum PlaybackFailure implements Exception {
 
   /// Every codec failed in this playback, without a verdict worth remembering.
   unplayable('这个视频暂时无法在本机播放，请稍后重试'),
-  network('网络连接中断，请检查网络后重试');
+  network('网络连接中断，请检查网络后重试'),
+
+  /// 番剧 and other PGC pages: the view redirects, and their playurl is another API.
+  unsupported('暂不支持播放此类视频');
 
   const PlaybackFailure(this.userMessage);
 
@@ -70,11 +73,16 @@ final class MemoryWarning extends PlaybackMark {
 const _videoUnavailable = {-404, 62002, 62004, 62012};
 
 /// The video and part number a link names. The unsigned view endpoint answers 412 to dart:io (the spike, and every
-/// open on Windows) while its WBI-signed twin works, so a BV link asks the signed one first.
+/// open on Windows) while its WBI-signed twin works, so a BV link asks the signed one first. Only the signed view
+/// says when a video redirects (番剧); the unsigned one has no such field.
 Future<(VideoView, int?)> resolveVideoLink(BiliClient client, VideoLink link, {Logger? logger}) async {
   final log = logger ?? Logger.shared;
   Future<VideoView> signedView({String? bvid, int? aid}) async {
     final detail = await client.videoDetail(bvid: bvid, aid: aid);
+    if (detail.redirectURL != null) {
+      log.info(LogCategory.player, 'view redirects, not playable here', {'bvid': detail.bvid});
+      throw PlaybackFailure.unsupported;
+    }
     return VideoView(
         bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
   }
@@ -83,8 +91,10 @@ Future<(VideoView, int?)> resolveVideoLink(BiliClient client, VideoLink link, {L
   if (link is BvidLink) {
     try {
       return (await signedView(bvid: link.id), link.page);
-    } catch (error) {
-      if (error is BiliAPIError && _videoUnavailable.contains(error.code)) rethrow;
+    } on BiliError catch (error) {
+      // Only a refusal is worth asking the unsigned view; a timeout or a lost connection would cost as long a wait.
+      final refused = error is BiliHTTPError || (error is BiliAPIError && !_videoUnavailable.contains(error.code));
+      if (!refused) rethrow;
       log.warn(LogCategory.player, 'signed view failed, trying the unsigned view', {'error': '$error'});
     }
     return (await client.view(bvid: link.id), link.page);
@@ -192,6 +202,7 @@ class PlaybackController extends ChangeNotifier {
   /// Starts a replacement once the engine isolate has exited; without it a dead engine stays dead.
   final Future<PlaybackEngine> Function()? _startEngine;
   bool _engineClosed = false;
+  Future<void>? _swapping;
   final CodecMemory _memory;
   final String _transportName;
   final MonotonicClock _monotonic;
@@ -340,27 +351,39 @@ class PlaybackController extends ChangeNotifier {
       if (current != _epoch) return null;
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
-      if (cid != null) return (view, pages.where((page) => page.cid == cid).firstOrNull ?? pages.first);
+      if (cid != null) {
+        final match = pages.where((page) => page.cid == cid).firstOrNull;
+        if (match == null) {
+          _logger.warn(LogCategory.player, 'part not in the video, playing P1', {'bvid': view.bvid, 'cid': cid});
+        }
+        return (view, match ?? pages.first);
+      }
       if (pages.length == 1) return (view, pages.first);
       int? saved;
+      // last_play_cid is per video, so any part's cid asks for it; the playurl answer has it too, but only after a
+      // part is chosen.
       try {
         saved = (await _client.playerInfo(bvid: view.bvid, cid: pages.first.cid)).lastPlayCid;
       } catch (error) {
-        _logger.warn(LogCategory.player, 'player info failed, playing P1', {'error': '$error'});
+        _logger.warn(LogCategory.player, 'player info failed, playing P1',
+            {'bvid': view.bvid, 'cid': pages.first.cid, 'error': '$error'});
       }
       if (current != _epoch) return null;
       return (view, pages.where((page) => page.cid == saved).firstOrNull ?? pages.first);
     }, start: start);
   }
 
-  /// The video page went away: playback stops and nothing of it stays.
+  /// A page on the shared player went away: playback stops and nothing of it stays.
   void close() {
     _clearVideo();
     _error = null;
     _playerFailure = null;
+    // Paused, AVPlayer would keep its item and go on filling the forward buffer while home shows.
+    _quietly(player.unload, 'unload');
     _notify();
   }
 
+  /// The player UI reads the clock and the duration as soon as the next video is set, before its load resets them.
   void _clearVideo() {
     _stopPlayback();
     _video = null;
@@ -369,6 +392,9 @@ class PlaybackController extends ChangeNotifier {
     _resumeFromHistory = false;
     danmaku.clear();
     duration.value = 0;
+    _heldPosition = 0;
+    _buffered = const [];
+    clock.clear();
   }
 
   /// [pick] resolves the video and its part, or answers null once a newer open has taken over.
@@ -419,14 +445,9 @@ class PlaybackController extends ChangeNotifier {
 
   /// Closes the video and puts [start]'s engine in place of the current one; the next [open] plays on it.
   Future<void> useEngine(Future<PlaybackEngine> Function() start) async {
-    _stopPlayback();
-    _video = null;
-    _page = null;
-    _qualities = const [];
+    _clearVideo();
     _error = null;
     _playerFailure = null;
-    danmaku.clear();
-    duration.value = 0;
     _notify();
     await _replaceEngine(start);
   }
@@ -750,6 +771,12 @@ class PlaybackController extends ChangeNotifier {
   }
 
   Future<void> _prepareAndLoad(TrackChoice choice, double time, int current) async {
+    // Prepared on an engine that is about to be replaced, the source would go with it.
+    final swapping = _swapping;
+    if (swapping != null) {
+      await swapping.then((_) {}, onError: (Object _) {});
+      _ensureCurrent(current);
+    }
     final requested = activeMode;
     await _ensureServing();
     _ensureCurrent(current);
@@ -841,7 +868,17 @@ class PlaybackController extends ChangeNotifier {
     return const PlaybackError(PlaybackErrorKind.serverDown);
   }
 
-  Future<void> _replaceEngine([Future<PlaybackEngine> Function()? starter]) async {
+  /// Swaps run one after another, so the engine asked for last is the one left, whatever each takes to start.
+  Future<void> _replaceEngine([Future<PlaybackEngine> Function()? starter]) {
+    final swap = _swapEngine(_swapping, starter);
+    _swapping = swap;
+    return swap.whenComplete(() {
+      if (identical(_swapping, swap)) _swapping = null;
+    });
+  }
+
+  Future<void> _swapEngine(Future<void>? previous, Future<PlaybackEngine> Function()? starter) async {
+    if (previous != null) await previous.then((_) {}, onError: (Object _) {});
     final start = starter ?? _startEngine;
     if (start == null) throw const PlaybackError(PlaybackErrorKind.serverDown);
     final old = _engine;

@@ -359,6 +359,19 @@ void main() {
     expect(rig.timeLabel(tester), '01:05/1:02:05');
   });
 
+  testWidgets('a stage kept for the next video reads 0 once the clock and the duration are reset', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    rig.status(PlayerStatus.playing);
+    rig.position(45);
+    await tester.pump();
+    expect(rig.timeLabel(tester), '00:45/02:00');
+    rig.clock.clear();
+    rig.duration.value = 0;
+    await tester.pump();
+    expect(rig.timeLabel(tester), '00:00/00:00');
+  });
+
   testWidgets('the stats overlay shows only when asked', (tester) async {
     final rig = Rig();
     await rig.mount(tester);
