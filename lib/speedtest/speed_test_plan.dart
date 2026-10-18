@@ -99,11 +99,10 @@ final class SpeedTestPlan {
 
   /// The plan used when the PC has none; `tools/speedtest_plan.json` holds the same.
   static const builtinJson = '''
-{"id": "builtin-2", "videos": [], "qualities": [127],
+{"id": "builtin-3", "videos": [], "qualities": [127],
  "variants": [{"name": "A", "config": {}, "connectionsPerHost": 8},
-              {"name": "B", "config": {"hurryKeepsOffSlow": true, "medianEstimates": true, "seekHurriesPrefetch": true, "trimOnMemoryWarning": true, "peakBandwidth": true}, "connectionsPerHost": 8},
-              {"name": "D", "config": {"hurryKeepsOffSlow": true, "medianEstimates": true, "seekHurriesPrefetch": true, "trimOnMemoryWarning": true, "peakBandwidth": true, "hurryPieceBytes": 196608}, "connectionsPerHost": 8}],
- "order": "ABD", "rotate": true, "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
+              {"name": "D", "config": {"hurryPieceBytes": 196608}, "connectionsPerHost": 8}],
+ "order": "AD", "rotate": true, "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
 ''';
 
   static const _keys = {

@@ -150,6 +150,9 @@ void main() {
     expect(appRipperConfig.exploreInHurry, isFalse);
     expect(appRipperConfig.tailBackups, isTrue);
     expect(appRipperConfig.banProbation, isTrue);
+    expect(config.hurryKeepsOffSlow && config.medianEstimates && config.seekHurriesPrefetch, isTrue);
+    expect(config.trimOnMemoryWarning && config.peakBandwidth, isTrue);
+    expect(config.hurryPieceBytes, isNull, reason: 'mixed in the speed test: still on trial');
     if (Platform.isWindows) {
       expect(nodeMemoryPath(), endsWith(r'\bilifast\node_memory.json'));
     }

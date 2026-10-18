@@ -15,7 +15,8 @@ RangeTransport createIoTransport({int connectionsPerHost = 8}) =>
 
 /// The engine as the app runs it: Swift's defaults plus BiliFast's own startup and seek speed-ups. 8K runs
 /// 15-25 MB per 5 s segment, so prefetch may hold up to 256 MiB of video ahead and 96 MiB of it behind the playhead,
-/// which a memory warning drops.
+/// which a memory warning trims to what is near the playhead. The last five came from 1.0.0 (1)'s phone log and won
+/// the speed tests on warm 8K seeks (variant B in 1.0.0 (2) and (3)).
 const appRipperConfig = RipperConfig(
   primeStart: true,
   prefetchOnPrime: true,
@@ -30,6 +31,11 @@ const appRipperConfig = RipperConfig(
   exploreInHurry: false,
   tailBackups: true,
   banProbation: true,
+  hurryKeepsOffSlow: true,
+  medianEstimates: true,
+  seekHurriesPrefetch: true,
+  trimOnMemoryWarning: true,
+  peakBandwidth: true,
 );
 
 /// Dev builds also send the engine's per-piece debug events to the log, for timing it from the phone. Node speeds are

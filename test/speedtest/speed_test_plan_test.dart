@@ -143,21 +143,18 @@ void main() {
     expect(config.primeStart, isTrue, reason: 'the rest is the app\'s config');
   });
 
-  test('the built-in plan is the one in tools/speedtest_plan.json: A, B and D in ABD, rotated, at 8K', () {
+  test('the built-in plan is the one in tools/speedtest_plan.json: the app against D in AD, rotated, at 8K', () {
     final file = File('tools/speedtest_plan.json').readAsStringSync();
     expect(jsonDecode(file), jsonDecode(SpeedTestPlan.builtinJson));
     final plan = SpeedTestPlan.parse(SpeedTestPlan.builtinJson);
-    expect(plan.variant('D')!.config.hurryPieceBytes, 192 * 1024);
-    expect(plan.variant('B')!.config.hurryKeepsOffSlow, isTrue);
     expect(plan.variant('A')!.config.toJson(), appRipperConfig.toJson());
-    expect(plan.id, 'builtin-2');
+    expect(plan.variant('D')!.config.toJson(), appRipperConfig.copyWith(hurryPieceBytes: 196608).toJson());
+    expect(plan.id, 'builtin-3');
     expect(plan.qualities, [127]);
-    expect((plan.order, plan.rotate), ('ABD', true));
-    expect(plan.variants.map((variant) => (variant.name, variant.connectionsPerHost)), [('A', 8), ('B', 8), ('D', 8)]);
-    expect(plan.variant('A')!.overrides, isEmpty);
-    expect(plan.variant('D')!.overrides, {...plan.variant('B')!.overrides, 'hurryPieceBytes': 196608});
-    final passes = plan.passes(['BV1', 'BV2', 'BV3']);
-    expect(passes.where((pass) => pass.cold).map((pass) => pass.variant.name), ['A', 'B', 'D']);
+    expect((plan.order, plan.rotate), ('AD', true));
+    expect(plan.variants.map((variant) => (variant.name, variant.connectionsPerHost)), [('A', 8), ('D', 8)]);
+    final passes = plan.passes(['BV1', 'BV2']);
+    expect(passes.where((pass) => pass.cold).map((pass) => pass.variant.name), ['A', 'D']);
   });
 
   group('choosing the plan', () {
@@ -179,7 +176,7 @@ void main() {
 
     test('the built-in plan without a PC, on a 404, another status, an error or no answer in time', () async {
       final none = await choose(answering(200, ''), at: null);
-      expect((none.source, none.note, none.plan.id), (PlanSource.builtin, '没有连接电脑', 'builtin-2'));
+      expect((none.source, none.note, none.plan.id), (PlanSource.builtin, '没有连接电脑', 'builtin-3'));
       expect((await choose(answering(404, 'not found'))).note, '电脑上没有计划');
       expect((await choose(answering(500, ''))).note, '电脑回答 500');
       final unreachable = await choose((url) async => throw const SocketException('refused'));

@@ -62,6 +62,12 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   CDN blocks answering after 3-6 s on every node alike, where `hurryPieceBytes` (smaller hurried pieces) is on test.
   Plans can `rotate` the order per video, and the first pass on each video is marked cold in the logs, the phone's
   table (冷/热) and `phone_report.py`.
+- 2026-10-18: the second and last speed test (1.0.0 (3), 6 videos, ABD rotated): the start fix held (no stale
+  starts in 168 seeks; the player now waits 0.1 s after the data where it waited 4.6 s). B beat A on warm 8K seeks
+  again and is now the app's config; D (`hurryPieceBytes`) was mixed and stays off. Cold 8K/HDR starts on files
+  the CDN didn't have failed the 20 s first frame in 4 of 18 passes (aliov 6-10 Mbps, Akamai failing): the CDN's
+  limit. KaiC's call: no more tuning rounds; the speed test stays as a check after big engine changes (builtin-3:
+  the app against D).
 - Update this section when a slice finishes.
 
 ## Layout
