@@ -123,10 +123,14 @@ abstract final class BiliMetrics {
   static const statsDot = 5.0;
   static const statsDotGap = 4.0;
 
-  /// 首页 (BiliNative `FeedMetrics`, measured on screen 01 at 3 px per point).
+  /// 首页's feed cards (BiliNative FeedMetrics, measured on 01 at 3 px per point).
   static const feedSpacing = 6.0;
+
+  /// 633 × 475 px on 01, so 4:3, not the 16:10 the spec guessed.
   static const coverAspect = 4 / 3;
   static const cardInset = 8.0;
+  static const cardTitleTop = 10.0;
+  static const cardFooterInset = 9.0;
   static const cardTitleText = 14.0;
   static const cardFooterText = 12.0;
   static const cardTagText = 11.0;
@@ -134,10 +138,26 @@ abstract final class BiliMetrics {
   static const cardStatText = 11.0;
   static const cardStatIcon = 13.0;
   static const coverShadeHeight = 36.0;
+  static const upBadgeHeight = 12.0;
+  static const upBadgeText = 8.0;
+  static const cardMoreTarget = 24.0;
+  static const cardMenuWidth = 168.0;
+  static const cardMenuGap = 4.0;
+  static const feedSpinnerRadius = 10.0;
+
+  /// How far a pressed card shrinks.
+  static const pressedScale = 0.97;
+
+  /// How far a new card rises while it fades in, as a share of its height.
+  static const cardRise = 0.06;
+
+  /// 首页's top row, the menus and the toast.
   static const topRowHeight = 44.0;
   static const topRowMargin = 15.0;
   static const homeAvatar = 38.0;
   static const linkFieldHeight = 34.0;
+  static const linkFieldIcon = 17.0;
+  static const linkClearIcon = 18.0;
   static const tabText = 16.0;
   static const tabIndicatorWidth = 18.0;
   static const tabIndicatorHeight = 3.0;
@@ -145,10 +165,30 @@ abstract final class BiliMetrics {
   static const menuRowHeight = 46.0;
   static const menuAvatar = 40.0;
   static const menuRadius = 12.0;
+  static const menuIconBox = 24.0;
+  static const menuIcon = 20.0;
+  static const menuSpinnerRadius = 9.0;
+  static const vipBadgeHeight = 16.0;
+  static const vipBadgeText = 10.0;
   static const toastRadius = 16.0;
+  static const openingPadding = 28.0;
+  static const openingSpinner = 32.0;
+  static const recentsTile = 40.0;
+  static const recentsTileRadius = 10.0;
+  static const recentsTileIcon = 26.0;
 
-  /// How far a pressed card shrinks.
-  static const pressedScale = 0.97;
+  /// The menus' frosted glass, and the highlight under a pressed row.
+  static const glassBlur = 24.0;
+  static const glassHairline = 0.5;
+  static const glassFill = Color(0xB8FFFFFF);
+  static const glassBorder = Color(0x99FFFFFF);
+  static const glassShadow = Color(0x26000000);
+  static const glassShadowBlur = 24.0;
+  static const glassShadowDrop = 8.0;
+  static const pressedFill = Color(0x14000000);
+
+  /// The 最近打开 tile runs from this down to [BiliColors.pink], one hue as Swift's `Theme.pink.gradient`.
+  static const recentsTileTop = Color(0xFFFF8AB2);
 
   /// Danmaku text at the normal size (25); an elem's own size scales it.
   static const danmakuFont = 17.0;

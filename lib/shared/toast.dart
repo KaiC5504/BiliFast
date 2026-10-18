@@ -8,19 +8,25 @@ OverlayEntry? _shown;
 void showToast(BuildContext context, String message) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
-  _shown?.remove();
+  if (_shown case final previous?) _dismiss(previous);
   late final OverlayEntry entry;
   entry = OverlayEntry(
     builder: (context) => _Toast(
       message: message,
       onDone: () {
-        if (identical(_shown, entry)) _shown = null;
-        if (entry.mounted) entry.remove();
+        if (identical(_shown, entry)) _dismiss(entry);
       },
     ),
   );
   _shown = entry;
   overlay.insert(entry);
+}
+
+void _dismiss(OverlayEntry entry) {
+  _shown = null;
+  entry
+    ..remove()
+    ..dispose();
 }
 
 class _Toast extends StatefulWidget {

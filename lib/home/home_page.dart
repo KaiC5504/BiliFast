@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../app/app_environment.dart';
@@ -85,7 +87,22 @@ class _HomePageState extends State<HomePage> {
     }
     final previous = _feedSignedIn;
     _feedSignedIn = signedIn;
-    if (previous != null && previous != signedIn) unawaited(_feed?.refresh());
+    if (previous != null && previous != signedIn) unawaited(_refreshFeed());
+  }
+
+  /// A refresh that fails with cards on screen keeps them and says why in a toast.
+  Future<void> _refreshFeed() async {
+    final failure = await _feed?.refresh();
+    if (failure != null && mounted) showToast(context, failure);
+  }
+
+  /// Back on home from a pushed page, an account check that failed is tried again, as Swift's HomeView.task did on
+  /// every return; one still running is left to answer.
+  Future<void> _visit(Future<void> pushed) async {
+    await pushed;
+    if (mounted && _environment.account is AccountUnknown && _environment.accountCheckFailed) {
+      await _environment.refreshAccount();
+    }
   }
 
   void _toggleMenu() => setState(() => _menuOpen = !_menuOpen);
@@ -98,10 +115,10 @@ class _HomePageState extends State<HomePage> {
     _closeMenu();
     switch (item) {
       case AvatarMenuItem.recents:
-        unawaited(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const RecentsPage())));
+        unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const RecentsPage()))));
       case AvatarMenuItem.developer:
         final page = widget.developerPage;
-        if (page != null) unawaited(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: page)));
+        if (page != null) unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: page))));
       case AvatarMenuItem.history:
         break;
     }
@@ -142,6 +159,8 @@ class _HomePageState extends State<HomePage> {
       if (match != null) {
         _go(view, match);
       } else if (view.pages.length > 1) {
+        // The spinner would otherwise wait behind the sheet for as long as it is up.
+        setState(() => _opening = false);
         await _choosePart(view);
       } else if (view.pages.firstOrNull case final first?) {
         _go(view, first);
@@ -188,11 +207,13 @@ class _HomePageState extends State<HomePage> {
         pageCount: view.pages.length,
       ),
     );
-    unawaited(openVideoPage(context, VideoRoute(bvid: view.bvid, cid: page.cid, title: view.title, view: view)));
+    unawaited(
+      _visit(openVideoPage(context, VideoRoute(bvid: view.bvid, cid: page.cid, title: view.title, view: view))),
+    );
   }
 
   void _openCard(FeedCard card) =>
-      unawaited(openVideoPage(context, VideoRoute(bvid: card.bvid, title: card.title, cover: card.cover)));
+      unawaited(_visit(openVideoPage(context, VideoRoute(bvid: card.bvid, title: card.title, cover: card.cover))));
 
   Future<void> _watchLater(FeedCard card) async {
     try {
@@ -207,6 +228,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
+    final still = MediaQuery.disableAnimationsOf(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
@@ -242,42 +264,55 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const Divider(height: 0.5, thickness: 0.5, color: BiliColors.divider),
                 Expanded(
-                  child: _FeedGrid(feed: _feed!, onOpen: _openCard, onWatchLater: _watchLater),
+                  child: _FeedGrid(feed: _feed!, onOpen: _openCard, onWatchLater: _watchLater, onRefresh: _refreshFeed),
                 ),
               ],
             ),
-            // The menu drops from the avatar over a dimmed page; a tap outside closes it.
-            IgnorePointer(
-              ignoring: !_menuOpen,
-              child: AnimatedOpacity(
-                opacity: _menuOpen ? 1 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: GestureDetector(
-                  key: const ValueKey('menu-scrim'),
-                  onTap: _closeMenu,
-                  child: const ColoredBox(color: BiliColors.scrim, child: SizedBox.expand()),
+            _Presence(
+              visible: _menuOpen,
+              duration: still ? Duration.zero : const Duration(milliseconds: 200),
+              builder: (context, animation) => FadeTransition(
+                opacity: animation,
+                // While the menu is open VoiceOver reaches only the menu and this way out, not the cards behind.
+                child: BlockSemantics(
+                  child: Semantics(
+                    label: '关闭菜单',
+                    button: true,
+                    onTap: _closeMenu,
+                    onDismiss: _closeMenu,
+                    child: GestureDetector(
+                      key: const ValueKey('menu-scrim'),
+                      behavior: HitTestBehavior.opaque,
+                      excludeFromSemantics: true,
+                      onTap: _closeMenu,
+                      child: const ColoredBox(color: BiliColors.scrim, child: SizedBox.expand()),
+                    ),
+                  ),
                 ),
               ),
             ),
             Positioned(
               left: BiliMetrics.topRowMargin,
               top: top + BiliMetrics.topRowHeight + 2,
-              child: IgnorePointer(
-                ignoring: !_menuOpen,
-                child: AnimatedScale(
-                  scale: _menuOpen ? 1 : 0.6,
-                  alignment: Alignment.topLeft,
-                  duration: const Duration(milliseconds: 240),
-                  curve: _menuOpen ? Curves.easeOutBack : Curves.easeIn,
-                  child: AnimatedOpacity(
-                    opacity: _menuOpen ? 1 : 0,
-                    duration: const Duration(milliseconds: 180),
-                    child: ListenableBuilder(
-                      listenable: _environment,
-                      builder: (context, _) => AvatarMenu(
-                        environment: _environment,
-                        developer: widget.developerPage != null,
-                        onSelect: _menuSelected,
+              child: _Presence(
+                visible: _menuOpen,
+                duration: still ? Duration.zero : const Duration(milliseconds: 240),
+                reverseDuration: still ? Duration.zero : const Duration(milliseconds: 180),
+                curve: Curves.easeOutBack,
+                builder: (context, animation) => IgnorePointer(
+                  ignoring: !_menuOpen,
+                  child: ScaleTransition(
+                    scale: Tween(begin: 0.6, end: 1.0).animate(animation),
+                    alignment: Alignment.topLeft,
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: ListenableBuilder(
+                        listenable: _environment,
+                        builder: (context, _) => AvatarMenu(
+                          environment: _environment,
+                          developer: widget.developerPage != null,
+                          onSelect: _menuSelected,
+                        ),
                       ),
                     ),
                   ),
@@ -286,22 +321,25 @@ class _HomePageState extends State<HomePage> {
             ),
             IgnorePointer(
               child: Center(
-                child: AnimatedScale(
-                  scale: _opening ? 1 : 0.85,
-                  duration: const Duration(milliseconds: 220),
-                  child: AnimatedOpacity(
-                    opacity: _opening ? 1 : 0,
-                    duration: const Duration(milliseconds: 180),
-                    child: Container(
-                      key: const ValueKey('opening'),
-                      padding: const EdgeInsets.all(28),
-                      decoration: BoxDecoration(
-                        color: BiliColors.toastFill,
-                        borderRadius: BorderRadius.circular(BiliMetrics.toastRadius),
-                      ),
-                      child: const SizedBox.square(
-                        dimension: 32,
-                        child: CircularProgressIndicator(strokeWidth: 3, color: BiliColors.panelText),
+                child: _Presence(
+                  visible: _opening,
+                  duration: still ? Duration.zero : const Duration(milliseconds: 220),
+                  reverseDuration: still ? Duration.zero : const Duration(milliseconds: 180),
+                  builder: (context, animation) => ScaleTransition(
+                    scale: Tween(begin: 0.85, end: 1.0).animate(animation),
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: Container(
+                        key: const ValueKey('opening'),
+                        padding: const EdgeInsets.all(BiliMetrics.openingPadding),
+                        decoration: BoxDecoration(
+                          color: BiliColors.toastFill,
+                          borderRadius: BorderRadius.circular(BiliMetrics.toastRadius),
+                        ),
+                        child: const CupertinoActivityIndicator(
+                          radius: BiliMetrics.openingSpinner / 2,
+                          color: BiliColors.panelText,
+                        ),
                       ),
                     ),
                   ),
@@ -313,6 +351,71 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+/// Builds its child only while [visible] or animating out, so nothing in it (a spinner above all) keeps ticking once
+/// it has gone.
+class _Presence extends StatefulWidget {
+  const _Presence({
+    required this.visible,
+    required this.duration,
+    this.reverseDuration,
+    this.curve = Curves.easeOut,
+    required this.builder,
+  });
+
+  final bool visible;
+  final Duration duration;
+  final Duration? reverseDuration;
+  final Curve curve;
+  final Widget Function(BuildContext context, Animation<double> animation) builder;
+
+  @override
+  State<_Presence> createState() => _PresenceState();
+}
+
+class _PresenceState extends State<_Presence> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+    reverseDuration: widget.reverseDuration,
+    value: widget.visible ? 1 : 0,
+  )..addStatusListener(_statusChanged);
+  late final CurvedAnimation _curved = CurvedAnimation(
+    parent: _controller,
+    curve: widget.curve,
+    reverseCurve: Curves.easeIn,
+  );
+
+  void _statusChanged(AnimationStatus status) {
+    if (status.isDismissed && mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(_Presence oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller
+      ..duration = widget.duration
+      ..reverseDuration = widget.reverseDuration;
+    if (widget.visible != oldWidget.visible) {
+      if (widget.visible) {
+        unawaited(_controller.forward());
+      } else {
+        unawaited(_controller.reverse());
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _curved.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _controller.isDismissed ? const SizedBox.shrink() : widget.builder(context, _curved);
 }
 
 /// The avatar and the rounded link field (01's search field).
@@ -336,6 +439,12 @@ class _TopRow extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final ValueChanged<String> onSubmit;
   final ValueChanged<String> onPaste;
+
+  /// iOS's own edit menu: its Paste reads the clipboard without the "Allow Paste" alert that Flutter's toolbar
+  /// brings up.
+  static Widget _editMenu(BuildContext context, EditableTextState state) => SystemContextMenu.isSupported(context)
+      ? SystemContextMenu.editableText(editableTextState: state)
+      : AdaptiveTextSelectionToolbar.editableText(editableTextState: state);
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -365,7 +474,7 @@ class _TopRow extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.search, size: 17, color: BiliColors.secondaryText),
+                    const Icon(Icons.search, size: BiliMetrics.linkFieldIcon, color: BiliColors.secondaryText),
                     const SizedBox(width: 6),
                     Expanded(
                       child: TextField(
@@ -376,6 +485,7 @@ class _TopRow extends StatelessWidget {
                         autocorrect: false,
                         enableSuggestions: false,
                         textInputAction: TextInputAction.go,
+                        contextMenuBuilder: _editMenu,
                         onChanged: onChanged,
                         onSubmitted: onSubmit,
                         style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text),
@@ -399,7 +509,11 @@ class _TopRow extends StatelessWidget {
                               },
                               tooltip: '清空',
                               visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.cancel, size: 18, color: BiliColors.divider),
+                              icon: const Icon(
+                                Icons.cancel,
+                                size: BiliMetrics.linkClearIcon,
+                                color: BiliColors.divider,
+                              ),
                             ),
                     ),
                   ],
@@ -441,132 +555,276 @@ class _RecommendTab extends StatelessWidget {
   );
 }
 
-class _FeedGrid extends StatelessWidget {
-  const _FeedGrid({required this.feed, required this.onOpen, required this.onWatchLater});
+class _FeedGrid extends StatefulWidget {
+  const _FeedGrid({required this.feed, required this.onOpen, required this.onWatchLater, required this.onRefresh});
 
   final FeedModel feed;
   final void Function(FeedCard card) onOpen;
   final void Function(FeedCard card) onWatchLater;
+  final Future<void> Function() onRefresh;
 
+  @override
+  State<_FeedGrid> createState() => _FeedGridState();
+}
+
+class _FeedGridState extends State<_FeedGrid> {
   static const _skeletons = 6;
 
-  /// Asks for the next page after this frame: asking while building would rebuild mid-build.
-  void _loadMoreSoon() => WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(feed.loadMore()));
+  /// The next page is asked for once fewer than this many rows of cards are left below the screen.
+  static const _rowsAhead = 2;
+
+  /// Cards appearing in the same frame come in this far apart, the later ones all at the last step.
+  static const _staggerStep = Duration(milliseconds: 45);
+  static const _staggerSteps = 6;
+
+  final _scroll = ScrollController();
+
+  /// Cards that have made their entrance; one rebuilt or scrolled back into view just shows.
+  final _entered = <String>{};
+  int _batch = 0;
+  double _rowExtent = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.feed.addListener(_feedChanged);
+  }
+
+  @override
+  void didUpdateWidget(_FeedGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.feed, widget.feed)) {
+      oldWidget.feed.removeListener(_feedChanged);
+      widget.feed.addListener(_feedChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.feed.removeListener(_feedChanged);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _feedChanged() {
+    setState(() {});
+    // A page too short to scroll leaves the end on screen with no scrolling to notice it; look once it is laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _loadMoreNearEnd(_scroll.position);
+    });
+  }
+
+  bool _scrolled(ScrollNotification notification) {
+    if (notification.depth == 0) _loadMoreNearEnd(notification.metrics);
+    return false;
+  }
+
+  void _loadMoreNearEnd(ScrollMetrics metrics) {
+    if (!widget.feed.canLoadMore || !metrics.hasContentDimensions) return;
+    if (metrics.extentAfter >= _rowExtent * _rowsAhead) return;
+    // A scroll notification can come mid-layout, where the feed's change must not rebuild anything yet.
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.feed.canLoadMore) unawaited(widget.feed.loadMore());
+      });
+    } else {
+      unawaited(widget.feed.loadMore());
+    }
+  }
+
+  Duration _nextStagger() {
+    if (_batch == 0) WidgetsBinding.instance.addPostFrameCallback((_) => _batch = 0);
+    return _staggerStep * math.min(_batch++, _staggerSteps);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final feed = widget.feed;
     final scaler = MediaQuery.textScalerOf(context);
-    return ListenableBuilder(
-      listenable: feed,
-      builder: (context, _) => LayoutBuilder(
-        builder: (context, constraints) {
-          const spacing = BiliMetrics.feedSpacing;
-          final width = (constraints.maxWidth - spacing * 3) / 2;
-          final grid = SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: spacing,
-            crossAxisSpacing: spacing,
-            mainAxisExtent: FeedCardSize.height(width, scaler),
-          );
-          final cards = feed.cards;
-          final error = feed.error;
-          return CustomScrollView(
-            key: const ValueKey('feed'),
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            slivers: [
-              CupertinoSliverRefreshControl(onRefresh: feed.refresh),
-              if (cards.isEmpty && error != null && !feed.loading)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: _RetryMessage(message: error, onRetry: feed.refresh),
-                  ),
-                )
-              else if (cards.isEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.all(spacing),
-                  sliver: SliverGrid(
-                    gridDelegate: grid,
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => const FeedCardSkeleton(),
-                      childCount: _skeletons,
+    final still = MediaQuery.disableAnimationsOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = BiliMetrics.feedSpacing;
+        final width = (constraints.maxWidth - spacing * 3) / 2;
+        final extent = FeedCardSize.height(width, scaler);
+        _rowExtent = extent + spacing;
+        final grid = SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: spacing,
+          crossAxisSpacing: spacing,
+          mainAxisExtent: extent,
+        );
+        final cards = feed.cards;
+        final loadingFirst = cards.isEmpty && (feed.loading || feed.error == null);
+        return AnimatedSwitcher(
+          duration: still ? Duration.zero : const Duration(milliseconds: 320),
+          layoutBuilder: (current, previous) =>
+              Stack(fit: StackFit.expand, children: [...previous, ?current]),
+          child: loadingFirst
+              ? CustomScrollView(
+                  key: const ValueKey('feed-skeleton'),
+                  physics: const NeverScrollableScrollPhysics(),
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.all(spacing),
+                      sliver: SliverGrid(
+                        gridDelegate: grid,
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => const FeedCardSkeleton(),
+                          childCount: _skeletons,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 )
-              else ...[
-                SliverPadding(
-                  padding: const EdgeInsets.all(spacing),
-                  sliver: SliverGrid(
-                    gridDelegate: grid,
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        // Starts the next page a few cards before the end, so scrolling rarely waits.
-                        if (index >= cards.length - 4 && error == null) _loadMoreSoon();
-                        final card = cards[index];
-                        return FeedCardView(
-                          key: ValueKey('feed-card-${card.bvid}'),
-                          card: card,
-                          onOpen: () => onOpen(card),
-                          onWatchLater: () => onWatchLater(card),
-                        );
-                      },
-                      childCount: cards.length,
-                      findChildIndexCallback: (key) {
-                        if (key is! ValueKey<String>) return null;
-                        final index = cards.indexWhere((card) => 'feed-card-${card.bvid}' == key.value);
-                        return index < 0 ? null : index;
-                      },
-                    ),
+              : NotificationListener<ScrollNotification>(
+                  onNotification: _scrolled,
+                  child: CustomScrollView(
+                    key: const ValueKey('feed'),
+                    controller: _scroll,
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    slivers: [
+                      CupertinoSliverRefreshControl(onRefresh: widget.onRefresh),
+                      if (cards.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: _RetryMessage(
+                              message: feed.error ?? FeedModel.emptyMessage,
+                              messageKey: const ValueKey('feed-error'),
+                              onRetry: feed.retry,
+                            ),
+                          ),
+                        )
+                      else ...[
+                        SliverPadding(
+                          padding: const EdgeInsets.all(spacing),
+                          sliver: SliverGrid(
+                            gridDelegate: grid,
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final card = cards[index];
+                                final enter = !still && _entered.add(card.bvid);
+                                return _Entrance(
+                                  key: ValueKey('feed-card-${card.bvid}'),
+                                  delay: enter ? _nextStagger() : null,
+                                  child: FeedCardView(
+                                    card: card,
+                                    onOpen: () => widget.onOpen(card),
+                                    onWatchLater: () => widget.onWatchLater(card),
+                                  ),
+                                );
+                              },
+                              childCount: cards.length,
+                              findChildIndexCallback: (key) {
+                                if (key is! ValueKey<String>) return null;
+                                final index = cards.indexWhere((card) => 'feed-card-${card.bvid}' == key.value);
+                                return index < 0 ? null : index;
+                              },
+                            ),
+                          ),
+                        ),
+                        SliverToBoxAdapter(child: _Footer(feed: feed)),
+                      ],
+                    ],
                   ),
                 ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: BiliMetrics.rowGap, bottom: 24),
-                    child: Center(
-                      child: error != null
-                          ? _RetryMessage(message: error, onRetry: feed.loadMore)
-                          : _FooterLoader(onShown: _loadMoreSoon),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
+        );
+      },
+    );
+  }
+}
+
+/// A card's first appearance: after [delay] it fades in and rises into place. Without a delay it just shows, as it
+/// does when rebuilt or scrolled back into view.
+class _Entrance extends StatefulWidget {
+  const _Entrance({super.key, required this.delay, required this.child});
+
+  final Duration? delay;
+  final Widget child;
+
+  @override
+  State<_Entrance> createState() => _EntranceState();
+}
+
+class _EntranceState extends State<_Entrance> with SingleTickerProviderStateMixin {
+  static const _rise = Duration(milliseconds: 380);
+
+  AnimationController? _controller;
+  CurvedAnimation? _curve;
+  Animation<Offset>? _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    final delay = widget.delay;
+    if (delay == null) return;
+    final total = delay + _rise;
+    final controller = AnimationController(vsync: this, duration: total);
+    final curve = CurvedAnimation(
+      parent: controller,
+      curve: Interval(delay.inMicroseconds / total.inMicroseconds, 1, curve: Curves.easeOutCubic),
+    );
+    _controller = controller;
+    _curve = curve;
+    _offset = Tween(begin: const Offset(0, BiliMetrics.cardRise), end: Offset.zero).animate(curve);
+    unawaited(controller.forward());
+  }
+
+  @override
+  void dispose() {
+    _curve?.dispose();
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final curve = _curve;
+    final offset = _offset;
+    if (curve == null || offset == null) return widget.child;
+    return FadeTransition(
+      opacity: curve,
+      child: SlideTransition(position: offset, child: widget.child),
+    );
+  }
+}
+
+/// Under the cards: the spinner while the next page loads, or why it didn't with 重试.
+class _Footer extends StatelessWidget {
+  const _Footer({required this.feed});
+
+  final FeedModel feed;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = feed.error;
+    return Padding(
+      padding: const EdgeInsets.only(top: BiliMetrics.rowGap, bottom: BiliMetrics.sectionGap + BiliMetrics.rowGap),
+      child: Center(
+        child: error != null
+            ? _RetryMessage(message: error, messageKey: const ValueKey('feed-error'), onRetry: feed.retry)
+            : feed.exhausted
+            ? _RetryMessage(message: FeedModel.endMessage, messageKey: const ValueKey('feed-end'), onRetry: feed.retry)
+            : SizedBox.square(
+                dimension: BiliMetrics.feedSpinnerRadius * 2,
+                child: feed.loading
+                    ? const CupertinoActivityIndicator(
+                        key: ValueKey('feed-more'),
+                        radius: BiliMetrics.feedSpinnerRadius,
+                      )
+                    : null,
+              ),
       ),
     );
   }
 }
 
-/// The spinner under the last cards; also asks for the next page by itself, in case the last cards were already on
-/// screen when the page before added nothing.
-class _FooterLoader extends StatefulWidget {
-  const _FooterLoader({required this.onShown});
-
-  final VoidCallback onShown;
-
-  @override
-  State<_FooterLoader> createState() => _FooterLoaderState();
-}
-
-class _FooterLoaderState extends State<_FooterLoader> {
-  @override
-  void initState() {
-    super.initState();
-    widget.onShown();
-  }
-
-  @override
-  Widget build(BuildContext context) => const SizedBox.square(
-    dimension: 22,
-    child: CircularProgressIndicator(strokeWidth: 2, color: BiliColors.secondaryText),
-  );
-}
-
 class _RetryMessage extends StatelessWidget {
-  const _RetryMessage({required this.message, required this.onRetry});
+  const _RetryMessage({required this.message, required this.messageKey, required this.onRetry});
 
   final String message;
+  final Key messageKey;
   final Future<void> Function() onRetry;
 
   @override
@@ -577,19 +835,28 @@ class _RetryMessage extends StatelessWidget {
       children: [
         Text(
           message,
-          key: const ValueKey('feed-error'),
+          key: messageKey,
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.secondaryText),
         ),
         const SizedBox(height: BiliMetrics.rowGap),
-        OutlinedButton(
+        CupertinoButton(
           key: const ValueKey('feed-retry'),
           onPressed: onRetry,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: BiliColors.pink,
-            side: const BorderSide(color: BiliColors.pink),
+          padding: EdgeInsets.zero,
+          minimumSize: const Size.square(BiliMetrics.pillHeight),
+          child: Container(
+            height: BiliMetrics.pillHeight,
+            padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.sectionGap),
+            alignment: Alignment.center,
+            decoration: const ShapeDecoration(
+              shape: StadiumBorder(side: BorderSide(color: BiliColors.pink)),
+            ),
+            child: const Text(
+              '重试',
+              style: TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.pink),
+            ),
           ),
-          child: const Text('重试'),
         ),
       ],
     ),
