@@ -15,6 +15,7 @@ import 'home/recent_store.dart';
 import 'playback/playback_setup.dart';
 import 'screens/player_test_page.dart';
 import 'shared/theme.dart';
+import 'video/player_prefs.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,7 @@ Future<void> main(List<String> args) async {
   try {
     environment = await AppEnvironment.load();
     recents = await RecentStore.load(supportFilePath('recents.json'));
+    PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
     CrashLog.report(error, stack, source: 'launch');
