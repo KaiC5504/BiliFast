@@ -114,18 +114,49 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   official app; the iPhone's default), MiSans (bundled; the default elsewhere), or a .ttf/.otf/.ttc imported from Files.
   A change rebuilds every widget in place (`FollowFont`), so styles read `BiliFonts.family` where they're built, never
   in a const. The five MiSans layout nudges in `BiliMetrics` apply only while MiSans is on. Not on TestFlight yet.
-- Next, KaiC's order (2026-10-19): slice 6 (the page body, with 推荐视频), then 7 (comments), then 5 (danmaku), so
-  the video page looks like the official app sooner. Slice 5 doesn't block 6 or 7.
+- 2026-10-19/20: slice 6 (the page body), shipped as 1.0.0 (6) with 字体 and KaiC's hold-speed-up asks. Run
+  overnight with no plan stop (KaiC's call): 9 builders, 9 checkers, 5 fixers, a final round.
+  - Under the player: 简介 / 评论 N with the 弹 toggle and 点我发弹幕 (a toast until slice 5); 评论 is a placeholder
+    until slice 7. 简介: the uploader (大会员 pink, the verification bolt, 粉丝/视频, 关注 with 确定不再关注？), the
+    title (活动, ⌄ to the BV id, the reprint notice, the description with seeking timestamps, links to the browser and
+    video ids in the app, the plain tags), N人正在看 every 30 s while the page is active and the app in front, the
+    action row (点赞, hold for 三连, 不喜欢, 投币, 收藏, 分享), 合集 or the part chips, the topic/BGM chips, 推荐视频
+    with ⋮ 稍后再看; a related video opens on top and back reopens the first at its position (seamless in slice 9).
+  - Actions (`lib/video/actions/`): optimistic, rolled back field by field; the coin dialog with PiliPlus's art (the
+    balance asked 3 times, 同时点赞内容 remembered); the favourites sheet (only the difference sent, 新建收藏夹 with
+    私密); shares counted only when the sheet reports one. In-page overlays; back closes them first.
+  - Full screen: landscape's top actions, N人正在看 (also faint in the corner while the controls hide) and 关注; its end
+    screen's 充电 (a toast), 关注, 点赞 投币 收藏; 竖屏's action column and uploader; the 合集 sheet's share and 收藏
+    (订阅). 评论 returns to the small player on 评论. The chrome stands aside while an overlay is up.
+  - 不喜欢 is grey (此版本不支持不喜欢): `BILI_APP_KEYS` isn't in this repo's `testflight` environment. Its TV-login
+    flow comes with slice 8's web view; KaiC adds the secret first (`gh secret set BILI_APP_KEYS -R KaiC5504/BiliFast
+    --env testflight`, value `appkey:appsec` of the 云视听小电视 pair from bilibili-API-collect).
+  - Hold speed-up: a medium haptic at its start and end; the native rate change uses `playImmediately(atRate:)`
+    while playing so AVPlayer doesn't re-judge its buffer (the stutter KaiC saw; to confirm on the phone).
+  - Assets: KaiC's rule (2026-10-19): take PiliPlus's asset files when they help match the official look, never its
+    code or layout (`assets/README.md`). The action glyphs are drawn (`lib/shared/action_glyphs.dart`).
+  - `--fake-account` (PC only): logged in as a made-up account, the page's calls answered by `FakePageApi`, no
+    heartbeats, so Windows runs press every action with no account traffic.
+  - The page counts as covered only when a page route is pushed over it (`lib/app/route_observer.dart`), so popups
+    don't pause anything. iOS Reduce Motion reaches `MediaQuery.disableAnimationsOf` (`lib/app/reduce_motion.dart`).
+  - Left: 竖屏 search, 充电鸣谢, the official player box's height following a 16:10 video, logged-out actions
+    opening the login page (slice 8).
+- Next, KaiC's order: slice 7 (comments), then 5 (danmaku).
 - Update this section when a slice finishes.
 
 ## Layout
 
 - `lib/`: the Flutter app.
   - `lib/account/`: keychain and cookie persistence.
-  - `lib/app/`: routes and `AppScope` (the services every page reaches, the shared player among them).
+  - `lib/app/`: routes and `AppScope` (the services every page reaches, the shared player and `PageApi` among them),
+    the page-route observer and Reduce Motion.
   - `lib/home/`: home, the feed, the avatar menu and 最近打开.
-  - `lib/video/`: the video page, its player session (`page_session.dart`, `player_prefs.dart`) and the
-    watch-progress reporter.
+  - `lib/video/`: the video page, its player session (`page_session.dart`, `player_prefs.dart`), the tab row
+    (`page_tabs.dart`), the page body's model (`page_details_model.dart` over `page_api.dart`; `fake_page_api.dart`
+    for tests and `--fake-account`) and the watch-progress reporter.
+    - `lib/video/intro/`: 简介's pieces (uploader, title, action row, 合集, parts, chips, related).
+    - `lib/video/actions/`: the actions model, the coin dialog, the favourites sheet, the unfollow confirm and the
+      overlays that put them up.
   - `lib/player_ui/`: the player's controls for each presentation, gestures, the HUD, the end screens, and
     `panels/`.
   - `lib/device/`: rotation (`orientation.dart`, the rules) and brightness/volume, over `DeviceChannel.swift`.
@@ -155,7 +186,8 @@ with what was built, how it works and numbered test steps. For phone slices, inc
 - Windows app: `fvm flutter build windows --release`, then `build\windows\x64\runner\Release\bilifast.exe`. The window
   is KaiC's iPhone: 440×956 with its safe areas and a drawn status bar, turned to 956×440 for landscape full screen.
   It runs logged out; there is no keychain on Windows. Every button answers accessibility presses, so ghosthand can
-  drive the player (`视频画面` toggles the controls).
+  drive the player (`视频画面` toggles the controls). Flags: `--mute` (always), `--play=<BV>`, and `--fake-account`
+  to press the page's actions against `FakePageApi` with no account traffic.
 - GitHub runs nothing on push. `testflight.yml` is the only workflow (KaiC's call, 2026-10-18: keep only the
   workflows that matter, such as shipping to TestFlight). Tests run in the local gate; a dry run of the signed build
   is the iOS compile check. Don't add a workflow without asking; `test_ci` fails if one appears.
