@@ -41,7 +41,8 @@ final class IosDeviceControls implements DeviceControls {
   @override
   Stream<double> get hardwareVolume => _events.hardwareVolume;
 
-  // Both messages leave before either reply, so a leave right after an enter still reaches the native side after it.
+  // Sent together rather than awaited in turn, so a leaveFullScreen right after enterFullScreen can't overtake enter's
+  // second message.
   @override
   Future<void> enterFullScreen() => Future.wait([_host.saveBrightness(), _host.attachVolumeView()]);
 

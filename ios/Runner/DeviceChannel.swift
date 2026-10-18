@@ -61,8 +61,14 @@ final class DeviceHostApiImpl: DeviceHostApi {
       case .landscapeRight: wanted = .landscapeRight
       }
       DeviceChannel.mask = wanted
-      guard let scene = DeviceChannel.scene else { return }
-      // FlutterViewController's own set (SystemChrome's, all by default) intersects with the app delegate's.
+      guard let scene = DeviceChannel.scene else {
+        Task { @MainActor in
+          try? await DeviceChannel.events?.onOrientationRefused(request: request, error: "no window scene")
+        }
+        return
+      }
+      // iOS intersects the root controller's orientations (SystemChrome's, all by default) with the app delegate's,
+      // so the controllers must ask again after `mask` changes.
       for window in scene.windows {
         window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
       }

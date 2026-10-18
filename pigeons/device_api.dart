@@ -42,7 +42,8 @@ abstract class DeviceHostApi {
 
   double volume();
 
-  /// Through the hidden MPVolumeView's slider; does nothing while that view is detached.
+  /// Through the hidden MPVolumeView's slider; does nothing while that view is detached, and throws
+  /// `no-volume-slider` when it is attached but has no slider.
   void setVolume(double value);
 
   /// The hidden MPVolumeView, there only in full screen, which also keeps the system volume HUD away.

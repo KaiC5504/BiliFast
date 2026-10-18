@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
@@ -50,6 +51,9 @@ class _Level {
   double? start;
   double dy = 0;
   double? value;
+
+  /// The device refused a read or a set: the rest of the drag does nothing.
+  bool failed = false;
 }
 
 class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
@@ -212,11 +216,14 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     _hardwareTimer?.cancel();
     final device = _ui.device;
     unawaited(
-      (kind == LevelKind.brightness ? device.brightness() : device.volume()).then((value) {
-        if (!identical(_level, level)) return;
-        level.start = value;
-        _applyLevel(level);
-      }),
+      (kind == LevelKind.brightness ? device.brightness() : device.volume()).then(
+        (value) {
+          if (!identical(_level, level)) return;
+          level.start = value;
+          _applyLevel(level);
+        },
+        onError: (Object error) => _levelFailed(level, error),
+      ),
     );
   }
 
@@ -281,13 +288,23 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
   void _applyLevel(_Level level) {
     final start = level.start;
-    if (start == null) return;
+    if (start == null || level.failed) return;
     final value = GestureMath.level(start: start, dy: level.dy, height: level.height);
     _ui.chrome.showHud(LevelHud(level.kind, value));
     if (value == level.value) return;
     level.value = value;
     final device = _ui.device;
-    unawaited(level.kind == LevelKind.brightness ? device.setBrightness(value) : device.setVolume(value));
+    unawaited(
+      (level.kind == LevelKind.brightness ? device.setBrightness(value) : device.setVolume(value))
+          .catchError((Object error) => _levelFailed(level, error)),
+    );
+  }
+
+  void _levelFailed(_Level level, Object error) {
+    if (level.failed) return;
+    level.failed = true;
+    Logger.shared.warn(LogCategory.ui, '${level.kind.name} gesture failed', {'error': '$error'});
+    if (mounted && identical(_level, level)) _clearHud<LevelHud>(_ui.chrome);
   }
 
   void _endLevel() {
@@ -309,6 +326,18 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
   @override
   Widget build(BuildContext context) {
+    // RawGestureDetector gives the private recognisers no semantics, so VoiceOver and the Windows test driver need
+    // this node to show or hide the controls.
+    return Semantics(
+      container: true,
+      button: true,
+      label: '视频画面',
+      onTap: _ui.chrome.toggle,
+      child: _gestures(),
+    );
+  }
+
+  Widget _gestures() {
     return RawGestureDetector(
       behavior: HitTestBehavior.opaque,
       gestures: {

@@ -26,6 +26,7 @@ import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/page_session.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/video/video_player_area.dart';
@@ -499,7 +500,7 @@ void main() {
       expect(area(tester), const Rect.fromLTWH(0, 0, 440, 956));
       expect(find.byType(VerticalChrome), findsOneWidget);
       expect(MediaQuery.paddingOf(tester.element(find.byType(VerticalChrome))), const EdgeInsets.only(top: 62, bottom: 34));
-      // The surface runs to 83% of the screen, so a fitted 16:9 picture centres at 41.5% as in the screenshot.
+      // The surface runs to 83% of the screen, so a fitted 16:9 picture centres at 41.5% as on 09.
       final surface = tester.getRect(find.byKey(const ValueKey('fake-video')));
       expect(surface, Rect.fromLTWH(0, 0, 440, 956 * BiliMetrics.verticalVideoCentre * 2));
       expect(surface.center.dy, closeTo(397, 1));
@@ -604,6 +605,68 @@ void main() {
       await back(tester);
     });
 
+    testWidgets('with a panel open, the back arrow and a pop close it first; the next back leaves the page',
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final panels = ui(tester).panels;
+      bool canPop() => tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop;
+
+      panels.open(PlayerPanel.more);
+      await tester.pump();
+      ui(tester).onBack();
+      await frames(tester, 2);
+      expect(panels.value, isNull);
+      expect(find.byType(VideoPage), findsOneWidget);
+
+      panels.open(PlayerPanel.speed);
+      await tester.pump();
+      expect(canPop(), isFalse);
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester, 2);
+      expect(panels.value, isNull);
+      expect(find.byType(VideoPage), findsOneWidget);
+      expect(controller.video, isNotNull, reason: 'the page kept the player');
+      expect(canPop(), isTrue);
+
+      ui(tester).onBack();
+      await frames(tester, 20);
+      expect(find.byType(VideoPage), findsNothing);
+    });
+
+    testWidgets('in full screen with a panel open, back closes it first; the next back goes to the small player',
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final panels = ui(tester).panels;
+      for (final full in [Presentation.landscape, Presentation.vertical]) {
+        await rotate(tester, full);
+        panels.open(PlayerPanel.more);
+        await tester.pump();
+        ui(tester).onBack();
+        await frames(tester, 2);
+        expect(panels.value, isNull, reason: '$full');
+        expect(orientation.presentation, full);
+
+        panels.open(PlayerPanel.quality);
+        await tester.pump();
+        unawaited(nav.currentState!.maybePop());
+        await frames(tester, 2);
+        expect(panels.value, isNull, reason: '$full');
+        expect(orientation.presentation, full);
+
+        unawaited(nav.currentState!.maybePop());
+        await frames(tester, 2);
+        expect(orientation.presentation, Presentation.inline);
+        expect(find.byType(VideoPage), findsOneWidget);
+        screen(tester, portrait, portraitInsets);
+      }
+      await back(tester);
+      expect(find.byType(VideoPage), findsNothing);
+    });
+
     testWidgets('two stacked pages: the latest begin wins and the page below takes the orientation back',
         (tester) async {
       await host(tester);
@@ -628,6 +691,29 @@ void main() {
       expect(orientation.videoIsVertical, isFalse, reason: 'the page below begins with its own video\'s shape');
       await back(tester);
       expect(orientation.log.last, 'end page1');
+    });
+
+    testWidgets('the chrome stops hiding by itself while the next part loads, then hides again once it plays',
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final chrome = ui(tester).chrome;
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(chrome.autoHide, isTrue);
+      http.gates[Canned.playUrlPath] = Completer<void>();
+      // As 自动连播 or 选集 opens the next part: the player still reports P1 playing until P2's load starts.
+      sessionOpens.single(bv, cid: p2);
+      await tester.pump();
+      expect(controller.phase, PlaybackPhase.loading);
+      expect(sessions.single.readout.wantsPlay, isTrue);
+      expect(chrome.autoHide, isFalse);
+      http.gates[Canned.playUrlPath]!.complete();
+      await frames(tester, 20);
+      expect(chrome.autoHide, isFalse);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(chrome.autoHide, isTrue);
+      await back(tester);
     });
 
     testWidgets('in full screen the edge swipe and a pop go back to the small player, not off the page',
@@ -735,6 +821,75 @@ void main() {
       await frames(tester, 20);
       expect(find.text('测试视频'), findsOneWidget, reason: 'the canned view answers every bvid');
       await back(tester);
+    });
+
+    testWidgets('is inactive while another page covers the page, and active again once shown with its own open',
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final session = sessions.single;
+      expect(session.active, isTrue);
+      unawaited(nav.currentState!.push(SwipeBackPageRoute<void>(builder: (_) => const SizedBox())));
+      await frames(tester, 20);
+      expect(session.active, isFalse);
+      await back(tester);
+      expect(session.active, isTrue, reason: 'the player is still this page\'s open');
+      await back(tester);
+      expect(session.active, isFalse, reason: 'the page left');
+    });
+
+    testWidgets('stays inactive under a newer video page, and after it, since the player was that page\'s',
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p2, start: 0));
+      await opened(tester, page: 1);
+      expect(sessions.first.active, isFalse);
+      expect(sessions.last.active, isTrue);
+      await back(tester);
+      expect(sessions.last.active, isFalse, reason: 'the page on top left');
+      expect(sessions.first.active, isFalse);
+      await back(tester);
+    });
+
+    testWidgets('the app\'s own session across a part change: P2 plays on the page after P1, then the end screen',
+        (tester) async {
+      final prefs = PlayerPrefs.shared;
+      PlayerPrefs.shared = PlayerPrefs.memory();
+      addTearDown(() => PlayerPrefs.shared = prefs);
+      await host(tester);
+      unawaited(
+        nav.currentState!.push(
+          SwipeBackPageRoute<void>(builder: (_) => const VideoPage(route: VideoRoute(bvid: bv, cid: p1, start: 0))),
+        ),
+      );
+      await frames(tester, 20);
+      expect(ui(tester).session, isA<PagePlayerSession>());
+      expect(controller.page?.cid, p1);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester);
+
+      player.emit(const StatusChanged(PlayerStatus.ended));
+      await frames(tester, 20);
+      expect(controller.page?.cid, p2, reason: '自动连播 opened P2');
+      expect(find.byType(VideoPage), findsOneWidget);
+      expect(ui(tester).session.title, '第二集');
+      expect(find.text('UP主 · P2 第二集'), findsOneWidget);
+      expect(find.byType(EndScreenPortrait), findsNothing);
+      final opens = controller.opens;
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester);
+
+      player.emit(const StatusChanged(PlayerStatus.ended));
+      await frames(tester, 20);
+      expect(find.byType(EndScreenPortrait), findsOneWidget);
+      expect(controller.opens, opens, reason: 'nothing plays after the last part');
+      expect(controller.page?.cid, p2);
+      expect(sent(), [(p1, '0'), (p1, '-1'), (p2, '0'), (p2, '-1')]);
+      await back(tester);
+      expect(controller.video, isNull);
     });
 
     testWidgets('is made once the player is the page\'s and disposed when the page leaves', (tester) async {
