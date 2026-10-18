@@ -3,21 +3,27 @@ import 'package:bili_core/logic.dart' show CountFormat, TimeFormat;
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
+import '../../shared/action_glyphs.dart';
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
+import '../../video/actions/video_actions.dart';
+import '../../video/page_details.dart';
 import '../../video/player_session.dart';
 import 'panel_glyphs.dart';
 import 'panel_parts.dart';
 
 /// 选集: the parts of a video in parts, or else the 合集 section holding it (port of BiliNative `EpisodesPanel.swift`).
 /// Dark cards at the right in landscape; in portrait the official app's light sheet (19), which this fills below its
-/// grabber.
+/// grabber, with the 合集's share circle and 收藏 once the page's actions exist.
 class EpisodesPanel extends StatefulWidget {
-  const EpisodesPanel({super.key, required this.session, required this.close, this.light = false});
+  const EpisodesPanel({super.key, required this.session, required this.close, this.details, this.light = false});
 
   final PlayerSession session;
   final VoidCallback close;
   final bool light;
+
+  /// The page's actions for the 合集's share and 收藏; null outside a video page.
+  final PageDetails? details;
 
   /// The cover rows' date: month and day this year, with the year before that.
   static String date(int unix, {DateTime? now}) {
@@ -92,17 +98,25 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
     final UgcSeason? season = session.episodesAreParts ? null : session.detail?.season;
     final episodes = _reversed ? session.episodes.reversed.toList() : session.episodes;
     final title = season == null || season.title.isEmpty ? '选集' : season.title;
+    final header = EpisodesSheetHeader(title: title, close: widget.close);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        EpisodesSheetHeader(title: title, close: widget.close),
+        if (season == null)
+          header
+        else
+          // The list starts a little into the header's empty bottom, so the share circle's top isn't clipped.
+          SizedBox(
+            height: BiliMetrics.sheetHeaderHeight - VerticalActionTheme.sheetLift,
+            child: OverflowBox(alignment: Alignment.topCenter, maxHeight: BiliMetrics.sheetHeaderHeight, child: header),
+          ),
         Expanded(
           child: SingleChildScrollView(
             padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom + BiliMetrics.gutter),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (season != null) ...[if (season.intro.isNotEmpty) _intro(season.intro), _section()],
+                if (season != null) ...[_seasonTop(season.intro), _section()],
                 for (final (index, episode) in episodes.indexed)
                   PanelReveal(
                     key: episode.current ? _current : null,
@@ -144,12 +158,29 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
 
   static const _more = TextStyle(color: BiliColors.text);
 
-  /// The 合集's description on one line ending in 展开, leaving the right for the share circle and 收藏 (slice 6).
+  /// The description with the share circle and 收藏 at the right of its first line, which keeps their height even
+  /// with no description.
+  Widget _seasonTop(String intro) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: VerticalActionTheme.sheetShare),
+    child: Stack(
+      children: [
+        if (intro.isEmpty) const SizedBox(width: double.infinity) else _intro(intro),
+        Positioned(
+          top: 0,
+          right: BiliMetrics.gutter,
+          height: VerticalActionTheme.sheetShare,
+          child: _SeasonActions(details: widget.details),
+        ),
+      ],
+    ),
+  );
+
+  /// The 合集's description on one line ending in 展开, leaving the right for the share circle and 收藏.
   Widget _intro(String intro) => Padding(
     padding: const EdgeInsets.only(
       left: BiliMetrics.gutter,
       right: BiliMetrics.sheetIntroTrailing,
-      top: BiliMetrics.sheetIntroTop,
+      top: BiliMetrics.sheetIntroTop + VerticalActionTheme.sheetLift,
     ),
     child: Semantics(
       button: true,
@@ -217,6 +248,145 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
             ),
           ),
         ],
+      ),
+    ),
+  );
+}
+
+/// 19's grey share circle and pink 收藏 (★ 已收藏 once subscribed), once the actions exist. While the relation
+/// hasn't answered, 收藏 is dimmed and does nothing.
+class _SeasonActions extends StatelessWidget {
+  const _SeasonActions({required this.details});
+
+  final PageDetails? details;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = this.details;
+    if (details == null) return const SizedBox.shrink();
+    final still = MediaQuery.disableAnimationsOf(context);
+    return ListenableBuilder(
+      listenable: details,
+      builder: (context, _) {
+        final actions = details.actions;
+        return AnimatedSwitcher(
+          duration: still ? Duration.zero : const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOut,
+          layoutBuilder: (current, previous) =>
+              Stack(alignment: Alignment.centerRight, children: [...previous, ?current]),
+          child: actions == null
+              ? const SizedBox.shrink()
+              : ListenableBuilder(
+                  key: ObjectKey(actions),
+                  listenable: actions,
+                  builder: (context, _) => _row(actions, still: still),
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _row(VideoActions actions, {required bool still}) {
+    final subscribed = actions.seasonFavourited;
+    final on = subscribed ?? false;
+    final label = on ? '已收藏' : '收藏';
+    final colour = on ? VerticalActionTheme.sheetSubscribedLabel : VerticalActionTheme.sheetPillLabel;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SheetTap(
+          key: const ValueKey('sheet-share'),
+          label: '分享',
+          onTap: () => actions.ask(ActionPrompt.share),
+          child: Container(
+            width: VerticalActionTheme.sheetShare,
+            height: VerticalActionTheme.sheetShare,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(color: BiliColors.pageGrey, shape: BoxShape.circle),
+            child: const ActionIcon(
+              ActionGlyph.share,
+              solid: false,
+              size: VerticalActionTheme.sheetShareGlyph,
+              color: BiliColors.text,
+            ),
+          ),
+        ),
+        const SizedBox(width: VerticalActionTheme.sheetGap),
+        _SheetTap(
+          key: const ValueKey('sheet-favourite'),
+          label: label,
+          onTap: subscribed == null ? null : actions.toggleSeasonFavourite,
+          child: AnimatedOpacity(
+            opacity: subscribed == null ? VerticalActionTheme.sheetUnknownOpacity : 1,
+            duration: still ? Duration.zero : const Duration(milliseconds: 200),
+            child: AnimatedContainer(
+              duration: still ? Duration.zero : const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              height: VerticalActionTheme.sheetPillHeight,
+              padding: const EdgeInsets.symmetric(horizontal: VerticalActionTheme.sheetPillPad),
+              decoration: ShapeDecoration(
+                color: on ? VerticalActionTheme.sheetSubscribedFill : VerticalActionTheme.sheetPill,
+                shape: const StadiumBorder(),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ActionIcon(ActionGlyph.favourite, solid: on, size: VerticalActionTheme.sheetStar, color: colour),
+                  const SizedBox(width: VerticalActionTheme.sheetStarGap),
+                  Transform.translate(
+                    offset: Offset(0, VerticalActionTheme.sheetPillTextDrop),
+                    child: Text(
+                      label,
+                      style: TextStyle(fontSize: VerticalActionTheme.sheetPillText, height: 1, color: colour),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A button in the light sheet: shrinks under the finger and answers accessibility presses; inert without [onTap].
+class _SheetTap extends StatefulWidget {
+  const _SheetTap({super.key, required this.label, required this.onTap, required this.child});
+
+  final String label;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  State<_SheetTap> createState() => _SheetTapState();
+}
+
+class _SheetTapState extends State<_SheetTap> {
+  var _pressed = false;
+
+  void _press(bool pressed) {
+    if (_pressed != pressed && widget.onTap != null) setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    enabled: widget.onTap != null,
+    label: widget.label,
+    onTap: widget.onTap,
+    excludeSemantics: true,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _press(true),
+      onTapUp: (_) => _press(false),
+      onTapCancel: () => _press(false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? BiliMetrics.chromePressedScale : 1,
+        duration: Duration(milliseconds: _pressed ? 90 : 260),
+        curve: _pressed ? Curves.easeOut : Curves.elasticOut,
+        child: widget.child,
       ),
     ),
   );

@@ -11,13 +11,16 @@ import 'package:bilifast/player_ui/panels/panel_glyphs.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/panels/panel_parts.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_player_session.dart';
+import '../../support/fake_video_actions.dart';
 
 const landscapeSize = Size(956, 440);
 const portraitSize = Size(440, 956);
@@ -43,7 +46,7 @@ class Rig {
 
 enum Shape { landscape, portrait, vertical }
 
-Future<Rig> pumpLayer(WidgetTester tester, Shape shape, {FakePlayerSession? session}) async {
+Future<Rig> pumpLayer(WidgetTester tester, Shape shape, {FakePlayerSession? session, PageDetails? details}) async {
   final size = shape == Shape.landscape ? landscapeSize : portraitSize;
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -67,6 +70,7 @@ Future<Rig> pumpLayer(WidgetTester tester, Shape shape, {FakePlayerSession? sess
     orientation: orientation,
     device: NoDeviceControls(),
     onBack: () {},
+    details: details,
   );
   final below = <int>[];
   await tester.pumpWidget(
@@ -923,7 +927,8 @@ void main() {
       final section = tester.getCenter(find.text('选集')).dy;
       expect(title, lessThan(intro));
       expect(intro, lessThan(section));
-      // The share circle and 收藏 come in slice 6; their room stays empty.
+      // The share circle and 收藏 come with the page's actions; without them their room stays empty.
+      expect(find.byKey(const ValueKey('sheet-share')), findsNothing);
       expect(
         tester.getTopRight(find.text('展开')).dx,
         lessThanOrEqualTo(portraitSize.width - BiliMetrics.sheetIntroTrailing),
@@ -975,6 +980,200 @@ void main() {
       await tester.pumpAndSettle();
       expect(rig.session.calls, ['playEpisode BV2 2']);
       expect(rig.panels.value, isNull);
+    });
+
+    FakePageDetails withActions({bool? subscribed = false}) =>
+        FakePageDetails(actions: FakeVideoActions(seasonFavourited: subscribed));
+
+    final share = find.byKey(const ValueKey('sheet-share'));
+    final favourite = find.byKey(const ValueKey('sheet-favourite'));
+
+    ActionIcon iconIn(WidgetTester tester, Finder button) =>
+        tester.widget<ActionIcon>(find.descendant(of: button, matching: find.byType(ActionIcon)));
+
+    Color? fillOf(WidgetTester tester, Finder button) {
+      final pill = find.descendant(of: button, matching: find.byType(AnimatedContainer));
+      return (tester.widget<AnimatedContainer>(pill).decoration! as ShapeDecoration).color;
+    }
+
+    double opacityOf(WidgetTester tester, Finder button) =>
+        tester.widget<AnimatedOpacity>(find.descendant(of: button, matching: find.byType(AnimatedOpacity))).opacity;
+
+    testWidgets('the share circle and 收藏 sit at the right of the intro\'s line, as on 19', (tester) async {
+      final details = withActions();
+      addTearDown(details.dispose);
+      final rig = await pumpLayer(tester, Shape.portrait, session: season(), details: details);
+      await open(tester, rig, PlayerPanel.episodes);
+
+      expect(find.text('收藏'), findsOneWidget);
+      expect(tester.getSize(share), const Size.square(VerticalActionTheme.sheetShare));
+      expect(tester.getSize(favourite).height, VerticalActionTheme.sheetPillHeight);
+      expect(tester.getTopRight(favourite).dx, closeTo(portraitSize.width - BiliMetrics.gutter, 0.01));
+      expect(
+        tester.getTopLeft(favourite).dx - tester.getTopRight(share).dx,
+        closeTo(VerticalActionTheme.sheetGap, 0.01),
+      );
+      // Both centred 5 above the description's line, which ends before them.
+      final line = tester.getCenter(find.byKey(const ValueKey('sheet-intro'))).dy;
+      expect(tester.getCenter(share).dy, closeTo(line - 5, 0.5));
+      expect(tester.getCenter(favourite).dy, closeTo(line - 5, 0.5));
+      expect(tester.getTopRight(find.text('展开')).dx, lessThan(tester.getTopLeft(share).dx));
+      // A grey circle round an outlined arrow; a pink pill with an outlined star.
+      final circle = tester.widget<Container>(find.descendant(of: share, matching: find.byType(Container)).first);
+      expect((circle.decoration! as BoxDecoration).color, BiliColors.pageGrey);
+      expect(iconIn(tester, share).glyph, ActionGlyph.share);
+      expect(iconIn(tester, share).solid, isFalse);
+      expect(iconIn(tester, favourite).glyph, ActionGlyph.favourite);
+      expect(iconIn(tester, favourite).solid, isFalse);
+      expect(fillOf(tester, favourite), VerticalActionTheme.sheetPill);
+      expect(opacityOf(tester, favourite), 1);
+    });
+
+    testWidgets('the header, the intro and 选集 stay where they are with or without the actions', (tester) async {
+      Future<Map<String, Offset>> places(PageDetails? details) async {
+        final rig = await pumpLayer(tester, Shape.portrait, session: season(), details: details);
+        await open(tester, rig, PlayerPanel.episodes);
+        return {
+          for (final text in ['MAD系列', '展开', '选集', '正序']) text: tester.getCenter(find.text(text)),
+          'close': tester.getCenter(find.byKey(const ValueKey('sheet-close'))),
+        };
+      }
+
+      final bare = await places(null);
+      final details = withActions();
+      addTearDown(details.dispose);
+      expect(await places(details), bare);
+    });
+
+    testWidgets('share asks the page for the share sheet; 收藏 subscribes the 合集', (tester) async {
+      final details = withActions();
+      addTearDown(details.dispose);
+      final rig = await pumpLayer(tester, Shape.portrait, session: season(), details: details);
+      await open(tester, rig, PlayerPanel.episodes);
+      final actions = details.actions! as FakeVideoActions;
+
+      await tester.tap(share);
+      await tester.tap(favourite);
+      await tester.pumpAndSettle();
+      expect(actions.calls, ['ask share', 'toggleSeasonFavourite']);
+      expect(rig.panels.value, PlayerPanel.episodes);
+
+      tester.semantics.tap(find.semantics.byLabel('分享'));
+      tester.semantics.tap(find.semantics.byLabel('收藏'));
+      expect(actions.calls, ['ask share', 'toggleSeasonFavourite', 'ask share', 'toggleSeasonFavourite']);
+    });
+
+    testWidgets('subscribed, it reads ★ 已收藏 in grey, and a tap unsubscribes', (tester) async {
+      final details = withActions(subscribed: true);
+      addTearDown(details.dispose);
+      final rig = await pumpLayer(tester, Shape.portrait, session: season(), details: details);
+      await open(tester, rig, PlayerPanel.episodes);
+
+      expect(find.text('已收藏'), findsOneWidget);
+      expect(find.text('收藏'), findsNothing);
+      expect(iconIn(tester, favourite).solid, isTrue);
+      expect(iconIn(tester, favourite).color, VerticalActionTheme.sheetSubscribedLabel);
+      expect(fillOf(tester, favourite), VerticalActionTheme.sheetSubscribedFill);
+      await tester.tap(favourite);
+      expect((details.actions! as FakeVideoActions).calls, ['toggleSeasonFavourite']);
+
+      (details.actions! as FakeVideoActions)
+        ..seasonFavourited = false
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('收藏'), findsOneWidget);
+      expect(fillOf(tester, favourite), VerticalActionTheme.sheetPill);
+    });
+
+    testWidgets('while the relation hasn\'t answered, 收藏 is dimmed and does nothing', (tester) async {
+      final details = withActions(subscribed: null);
+      addTearDown(details.dispose);
+      final rig = await pumpLayer(tester, Shape.portrait, session: season(), details: details);
+      await open(tester, rig, PlayerPanel.episodes);
+      final actions = details.actions! as FakeVideoActions;
+
+      expect(find.text('收藏'), findsOneWidget);
+      expect(opacityOf(tester, favourite), VerticalActionTheme.sheetUnknownOpacity);
+      expect(
+        tester.getSemantics(favourite),
+        isSemantics(label: '收藏', isButton: true, hasEnabledState: true, isEnabled: false, hasTapAction: false),
+      );
+      await tester.tap(favourite);
+      await tester.pumpAndSettle();
+      expect(actions.calls, isEmpty);
+      // Share needs no relation.
+      await tester.tap(share);
+      expect(actions.calls, ['ask share']);
+
+      actions
+        ..seasonFavourited = false
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(opacityOf(tester, favourite), 1);
+      await tester.tap(favourite);
+      expect(actions.calls, ['ask share', 'toggleSeasonFavourite']);
+    });
+
+    testWidgets('nothing until the actions exist; they fade in without moving anything', (tester) async {
+      final details = FakePageDetails();
+      addTearDown(details.dispose);
+      final rig = await pumpLayer(tester, Shape.portrait, session: season(), details: details);
+      await open(tester, rig, PlayerPanel.episodes);
+      expect(share, findsNothing);
+      expect(favourite, findsNothing);
+      final intro = tester.getRect(find.text('展开'));
+      final section = tester.getRect(find.text('选集'));
+
+      details
+        ..actions = FakeVideoActions(seasonFavourited: false)
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(share, findsOneWidget);
+      expect(find.text('收藏'), findsOneWidget);
+      expect(tester.getRect(find.text('展开')), intro);
+      expect(tester.getRect(find.text('选集')), section);
+    });
+
+    testWidgets('a 合集 with no description still has them, above 选集', (tester) async {
+      final details = withActions();
+      addTearDown(details.dispose);
+      final rig = await pumpLayer(tester, Shape.portrait, session: season(intro: ''), details: details);
+      await open(tester, rig, PlayerPanel.episodes);
+      expect(find.text('展开'), findsNothing);
+      expect(share, findsOneWidget);
+      expect(tester.getBottomLeft(favourite).dy, lessThan(tester.getTopLeft(find.text('选集')).dy));
+    });
+
+    testWidgets('parts get neither, nor does a player outside a video page', (tester) async {
+      final details = withActions();
+      addTearDown(details.dispose);
+      final rig = await pumpLayer(
+        tester,
+        Shape.portrait,
+        session: FakePlayerSession()
+          ..episodes = const [
+            Episode(bvid: 'BV1', cid: 1, title: 'P1', current: true, duration: 95),
+            Episode(bvid: 'BV1', cid: 2, title: 'P2', current: false, duration: 3725),
+          ],
+        details: details,
+      );
+      await open(tester, rig, PlayerPanel.episodes);
+      expect(share, findsNothing);
+      expect(favourite, findsNothing);
+
+      final bare = await pumpLayer(tester, Shape.portrait, session: season());
+      await open(tester, bare, PlayerPanel.episodes);
+      expect(share, findsNothing);
+      expect(favourite, findsNothing);
+    });
+
+    testWidgets('landscape 选集 cards carry neither', (tester) async {
+      final details = withActions();
+      addTearDown(details.dispose);
+      final rig = await pumpLayer(tester, Shape.landscape, session: season(), details: details);
+      await open(tester, rig, PlayerPanel.episodes);
+      expect(find.text('第一集'), findsOneWidget);
+      expect(share, findsNothing);
     });
   });
 }
