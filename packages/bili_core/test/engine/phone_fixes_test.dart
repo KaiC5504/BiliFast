@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
+import 'package:bili_core/src/engine/attempt.dart';
 import 'package:bili_core/src/engine/hurry_placement.dart';
 import 'package:bili_core/src/engine/node_stats.dart';
 import 'package:test/test.dart';
@@ -103,6 +104,27 @@ void main() {
       _measure(stats, _akamai, ttfbMs: 21, bytesPerSecond: 16e6);
       expect(HurryPlacement.kept([_akamai, _aliov, _cosov], stats), [_akamai, _aliov, _cosov]);
     });
+
+    test('with only two known and the second slow, unknown nodes stay in until a third is known', () {
+      final stats = NodeStats(exploreInHurry: false, keepsOffSlow: true);
+      _measure(stats, _akamai, ttfbMs: 60, bytesPerSecond: 16e6);
+      _measure(stats, _cosov, ttfbMs: 1250, bytesPerSecond: 20e6);
+      expect(HurryPlacement.kept([_akamai, _aliov, _cosov], stats), contains(_aliov));
+      _measure(stats, _aliov, ttfbMs: 219, bytesPerSecond: 2.9e6);
+      expect(HurryPlacement.kept([_akamai, _aliov, _cosov, _hk], stats), [_akamai, _aliov]);
+    });
+
+    test('slow nodes stay out even where exploring in a hurry is on', () {
+      final stats = _phone(keepsOffSlow: true)..exploreInHurry = true;
+      final primaries = HurryPlacement.assign(
+        urls: [_akamai, _aliov, _cosov, _hk],
+        count: 16,
+        pieceBytes: 64 * 1024,
+        nodes: stats,
+        delivered: (_) => true,
+      );
+      expect(primaries.toSet().difference({_akamai, _aliov}), isEmpty);
+    });
   });
 
   group('medianEstimates', () {
@@ -123,6 +145,18 @@ void main() {
       }
     });
 
+    test('the prior seeds the window, so one cache miss after it does not average in', () {
+      final stats = NodeStats(
+        median: true,
+        priors: NodePriors.fixed({'upos-hz-mirrorakam.akamaized.net': const NodePrior(ttfbMs: 40, bps: 16e6)}),
+      );
+      stats
+        ..begin(_akamai)
+        ..firstByte(_akamai, ms: 450)
+        ..end(_akamai, receiving: true);
+      expect(stats.ttfbMs(_akamai), 40);
+    });
+
     test('one burst does not make a node that waits a second look fast', () {
       final stats = NodeStats(median: true);
       for (var index = 0; index < 4; index++) {
@@ -134,36 +168,42 @@ void main() {
   });
 
   group('seekHurriesPrefetch', () {
-    // One node sending 256 KiB a second per request: after the first read the prefetch of the next segments is
-    // still running when the seek lands on one of them.
-    Future<(Uint8List, List<LogEvent>)> seekOntoPrefetch({required bool on}) async {
-      final cdn = SimCDN(
-        size: _size,
-        behaviors: {'upos-sz-mirrorcos.bilivideo.com': NodeBehavior(bytesPerSecond: _segment.toDouble())},
-      );
+    // Prefetch of segment 3 gets its first piece and then waits; the seek lands while it does.
+    Future<(SimCDN, List<LogEvent>, int)> seekOntoPrefetch({required bool on}) async {
+      final cdn = SimCDN(size: _size);
+      final transport = _Holding(cdn)..holdFrom = _segments[3].range.start + 1;
       final logs = MemorySink();
       final session = _session(
-        cdn,
-        TestEngine.slowConfig.copyWith(seekHurriesPrefetch: on, streamAdopted: true),
+        transport,
+        TestEngine.slowConfig.copyWith(seekHurriesPrefetch: on, streamAdopted: true, fixedConcurrency: 48),
         logger: Logger(session: 'test')..add(logs),
       );
       addTearDown(session.close);
       await _read(session, _segments[0].range);
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(session.prefetchedBytes(TrackKind.video), greaterThan(0));
+      await eventually(() => session.prefetchedBytes(TrackKind.video) > 0);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       session.updatePlayhead(seconds: _segments[3].startTime, rate: 1);
-      final bytes = await _read(session, _segments[3].range);
-      expect(bytes, _bytes(cdn, _segments[3].range));
-      return (bytes, logs.events.toList());
+      final builder = BytesBuilder(copy: false);
+      final done = session.read(TrackKind.video, _segments[3].range).forEach(builder.add);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final passedOn = builder.length;
+      transport.holdFrom = null;
+      await done;
+      expect(builder.takeBytes(), _bytes(cdn, _segments[3].range));
+      return (cdn, logs.events.toList(), passedOn);
     }
 
     test('a seek onto a running prefetch keeps its bytes and fetches the rest as a seek', () async {
-      final (_, before) = await seekOntoPrefetch(on: false);
+      final (_, before, _) = await seekOntoPrefetch(on: false);
       expect(before.where((event) => event.msg == 'seek hurried prefetch'), isEmpty);
-      final (_, after) = await seekOntoPrefetch(on: true);
+      final (_, after, passedOn) = await seekOntoPrefetch(on: true);
       final hurried = after.where((event) => event.msg == 'seek hurried prefetch').toList();
       expect(hurried, hasLength(1));
       expect((hurried.single.f['segment']! as LogInt).value, 3);
+      final kept = (hurried.single.f['kept']! as LogInt).value;
+      expect(kept, greaterThan(0), reason: 'the prefetch had its first piece');
+      expect(kept, lessThan(_segment));
+      expect(passedOn, kept, reason: 'the front reached the player before the rest was let through');
     });
   });
 
@@ -192,8 +232,8 @@ void main() {
       trimmed.dropCache();
       expect(
         [for (final segment in _segments.take(6)) trimmed.isCached(TrackKind.video, segment.range)],
-        [false, true, true, true, true, true],
-        reason: 'only the segment that ended over 10 s behind goes',
+        [false, false, false, false, true, true],
+        reason: 'segments that ended over 5 s behind go',
       );
 
       final cleared = await readSix(SimCDN(size: _size), trim: false);
@@ -203,5 +243,43 @@ void main() {
         for (final segment in _segments.take(6)) cleared.isCached(TrackKind.video, segment.range),
       ], List.filled(6, false));
     });
+
+    test('running prefetch beyond the next 10 s is cancelled, the nearer stays', () async {
+      final cdn = SimCDN(
+        size: _size,
+        behaviors: {'upos-sz-mirrorcos.bilivideo.com': NodeBehavior(bytesPerSecond: _segment / 4)},
+      );
+      final session = _session(cdn, TestEngine.slowConfig.copyWith(trimOnMemoryWarning: true));
+      addTearDown(session.close);
+      await _read(session, _segments[0].range);
+      expect(session.prefetchedBytes(TrackKind.video), greaterThan(6 * _segment), reason: 'prefetch reaches past 10 s');
+      session.dropCache();
+      expect(session.prefetchedBytes(TrackKind.video), 5 * _segment, reason: 'segments 1-5 start within 10 s');
+    });
   });
+}
+
+/// Holds every request starting at or after [holdFrom] until it is cleared.
+final class _Holding implements RangeTransport {
+  _Holding(this.cdn);
+
+  final SimCDN cdn;
+  int? holdFrom;
+
+  @override
+  int? get connectionsPerHost => cdn.connectionsPerHost;
+
+  @override
+  String get name => 'holding';
+
+  @override
+  void close() {}
+
+  @override
+  Future<TransportResponse> fetch(Uri url, ByteRange range, {CancelToken? cancel}) async {
+    while (range.start >= (holdFrom ?? 1 << 62)) {
+      await cancellableSleep(5, cancel);
+    }
+    return cdn.fetch(url, range, cancel: cancel);
+  }
 }

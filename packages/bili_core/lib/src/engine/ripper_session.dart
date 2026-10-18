@@ -406,8 +406,8 @@ final class RipperSession {
   }
 
   /// Memory warning: drops cached and still-downloading prefetched segments; playback goes on. Under
-  /// [RipperConfig.trimOnMemoryWarning] the segments within [_trimBehindSeconds] behind the playhead and a hurry's
-  /// reach ahead of it stay.
+  /// [RipperConfig.trimOnMemoryWarning] the segments within [_trimBehindSeconds] behind the playhead and
+  /// `hurryAheadSeconds` of the video ahead of it stay.
   void dropCache() {
     if (_ctx.config.trimOnMemoryWarning) {
       _trimCache();
@@ -421,10 +421,11 @@ final class RipperSession {
     }
   }
 
-  static const _trimBehindSeconds = 10.0;
+  static const _trimBehindSeconds = 5.0;
 
   void _trimCache() {
-    final ahead = _ctx.config.hurryAheadSeconds * _rate;
+    // Not scaled by the rate: at 2x on 8K that would keep about 100 MB after the warning.
+    final ahead = _ctx.config.hurryAheadSeconds;
     bool near(double start, double end) => end >= _playhead - _trimBehindSeconds && start <= _playhead + ahead;
     var kept = 0;
     var dropped = 0;
@@ -642,6 +643,7 @@ final class RipperSession {
         prefetch.received < range.length) {
       request.superseded = prefetch;
       _seeks += 1;
+      if (request.segment case final target?) _dropBefore(track, target.startTime);
     } else if (prefetch != null) {
       // Taken out of `_inflight`, so a seek cannot cancel it and its bytes do not also land in the cache.
       request.adopted = prefetch;
@@ -801,6 +803,16 @@ final class RipperSession {
     _inflight[key] = prefetch;
     _watch(key, prefetch, segment.endTime);
     return true;
+  }
+
+  /// A seek forward onto a prefetched segment: the prefetch between the old position and the target would only compete
+  /// with the target's fetch (hurried, since the playhead passed it).
+  void _dropBefore(TrackKind track, double seconds) {
+    _cache.removeWhere((key, entry) => key.$1 == track && !entry.served && entry.endTime <= seconds);
+    for (final key in _inflight.keys.where((key) => key.$1 == track).toList()) {
+      final segment = _segmentFor(key);
+      if (segment != null && segment.endTime <= seconds) _inflight.remove(key)?.token.cancel();
+    }
   }
 
   /// After a seek the track's prefetched segments belong to the old position; left in place they

@@ -90,8 +90,11 @@ final class NodeStats {
       node.ttfbMs = _median(node.ttfbSamples, sample);
     } else if (node.ttfbMs > 0) {
       node.ttfbMs = smoothed(node.ttfbMs, sample);
+    } else if (median) {
+      final prior = _prior(url);
+      if (prior != null && prior.ttfbMs > 0) node.ttfbSamples.add(prior.ttfbMs);
+      node.ttfbMs = _median(node.ttfbSamples, sample);
     } else {
-      if (median) _median(node.ttfbSamples, sample);
       final prior = _prior(url);
       node.ttfbMs = prior == null ? sample : NodePrior.blend(prior.ttfbMs, prior.ttfbWeight, sample);
     }
@@ -103,21 +106,24 @@ final class NodeStats {
       node.bps = _median(node.bpsSamples, sample);
     } else if (node.bps > 0) {
       node.bps = smoothed(node.bps, sample);
+    } else if (median) {
+      final prior = _prior(url);
+      if (prior != null && prior.bps > 0) node.bpsSamples.add(prior.bps);
+      node.bps = _median(node.bpsSamples, sample);
     } else {
-      if (median) _median(node.bpsSamples, sample);
       final prior = _prior(url);
       node.bps = prior == null ? sample : NodePrior.blend(prior.bps, prior.bpsWeight, sample);
     }
     onMeasured?.call(NodeCatalog.nodeKey(url), bps: node.bps);
   }
 
-  /// Adds [sample] to [samples], keeping the last [medianSamples], and returns their median.
+  /// Adds [sample] to [samples], keeping the last [medianSamples], and returns their median; the lower middle one of
+  /// an even count, so a prior and one cache miss do not average into a value neither had.
   static double _median(List<double> samples, double sample) {
     samples.add(sample);
     if (samples.length > medianSamples) samples.removeAt(0);
     final sorted = List.of(samples)..sort();
-    final middle = sorted.length ~/ 2;
-    return sorted.length.isOdd ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    return sorted[(sorted.length - 1) ~/ 2];
   }
 
   void begin(String url) => _node(url).inflight += 1;

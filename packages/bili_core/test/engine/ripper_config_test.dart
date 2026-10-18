@@ -4,6 +4,8 @@ import 'package:test/test.dart';
 void main() {
   test('toJson names every field once, and no overrides keep the config', () {
     const config = RipperConfig(seekBurst: true, prefetchVideoMaxBytes: 7);
+    // A field missing from toJson or _fromJson would be reset to its default by every override.
+    expect(config.toJson(), hasLength(37));
     final same = config.withOverrides(const {});
     expect(same.rejected, isEmpty);
     expect(same.config.toJson(), config.toJson());
@@ -39,5 +41,16 @@ void main() {
     });
     expect(result.rejected, ['noSuchKnob', 'seekBurst', 'minChunkBytes', 'hurryAheadSeconds']);
     expect(result.config.toJson(), const RipperConfig().toJson());
+  });
+
+  test('negative numbers, and zero where it would stall every read, are rejected', () {
+    final result = const RipperConfig().withOverrides({
+      'pieceRounds': 0,
+      'fixedConcurrency': 0,
+      'hurryHedgeMinMs': -1,
+      'keepBehindBytes': 0,
+    });
+    expect(result.rejected, ['pieceRounds', 'fixedConcurrency', 'hurryHedgeMinMs']);
+    expect(result.config.keepBehindBytes, 0);
   });
 }

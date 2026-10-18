@@ -35,7 +35,7 @@ abstract final class HurryPlacement {
     required bool Function(String url) delivered,
   }) {
     if (urls.isEmpty || count <= 0) return const [];
-    if (!nodes.exploreInHurry) urls = kept(urls, nodes);
+    if (!nodes.exploreInHurry || nodes.keepsOffSlow) urls = kept(urls, nodes);
     final keys = urls.map(NodeCatalog.nodeKey).toList();
     final hosts = keys.toSet();
     final placed = <String, int>{};
@@ -90,7 +90,7 @@ abstract final class HurryPlacement {
   }) {
     final expected = [for (final url in urls) nodes.expectedMs(url, pieceBytes: pieceBytes)];
     final best = _min(expected);
-    final settled = nodes.exploreInHurry ? null : kept(urls, nodes).toSet();
+    final settled = nodes.exploreInHurry && !nodes.keepsOffSlow ? null : kept(urls, nodes).toSet();
     double leftOut(String url) => settled == null || settled.contains(url) ? 0 : (nodes.isKnown(url) ? 1e7 : 1e5);
     final costs = [
       for (var index = 0; index < urls.length; index++)
@@ -147,12 +147,19 @@ abstract final class HurryPlacement {
     }
     if (byNode.isEmpty) return urls;
     // One measurement must not decide a whole segment: unknown nodes keep their share until a second node is known.
-    if (byNode.length < 2) return [for (var index = 0; index < urls.length; index++) urls[index]];
+    if (byNode.length < 2) return urls;
     final ranked = byNode.values.toList()..sort();
     final limit = ranked[1] * slowFactor;
+    // With only two known, the second may be the slow one (priors of Akamai and cosov alone): unknown nodes stay in
+    // until a third is known.
+    final keepUnknown = byNode.length < 3;
     return [
       for (var index = 0; index < urls.length; index++)
-        if (expected[index] case final value? when value <= limit) urls[index],
+        if (switch (expected[index]) {
+          final value? => value <= limit,
+          null => keepUnknown,
+        })
+          urls[index],
     ];
   }
 

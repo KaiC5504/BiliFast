@@ -225,11 +225,18 @@ abstract final class PlaybackBuilder {
   }
 
   /// The largest video segment's bitrate plus the largest audio segment's, never under [average]; null without
-  /// segments.
+  /// segments. Segments under half the median length are left out: a short last segment that starts on a keyframe
+  /// can double the rate, and Apple measures the peak over windows near the target duration.
   static int? _peak(PreparedPlayback prepared, {required int average}) {
-    double peakOf(List<MediaSegment> segments) => segments
-        .where((segment) => segment.duration > 0)
-        .fold(0.0, (peak, segment) => max(peak, segment.range.length * 8 / segment.duration));
+    double peakOf(List<MediaSegment> segments) {
+      final durations = [for (final segment in segments) segment.duration]..sort();
+      if (durations.isEmpty) return 0;
+      final shortest = max(durations[durations.length ~/ 2] / 2, 1e-3);
+      return segments
+          .where((segment) => segment.duration >= shortest)
+          .fold(0.0, (peak, segment) => max(peak, segment.range.length * 8 / segment.duration));
+    }
+
     final video = peakOf(prepared.video.segments);
     if (video <= 0) return null;
     return max(average, (video + peakOf(prepared.audio.segments)).ceil());

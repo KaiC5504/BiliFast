@@ -291,6 +291,10 @@ final class RipperConfig {
         continue;
       }
       final current = fields[key];
+      if (value is num && (value < 0 || (value == 0 && _positive.contains(key)))) {
+        rejected.add(key);
+        continue;
+      }
       final Object? accepted = switch (value) {
         null when _nullable.contains(key) => null,
         final bool flag when current is bool => flag,
@@ -308,6 +312,9 @@ final class RipperConfig {
   }
 
   static const _rejected = Object();
+
+  /// Zero would fail or stall every read.
+  static const _positive = {'pieceRounds', 'fixedConcurrency', 'minChunkBytes', 'seekBurstCopies', 'priority'};
 
   static const _nullable = {'fixedConcurrency', 'prefetchVideoMaxBytes', 'prefetchAudioMaxBytes'};
 
