@@ -803,6 +803,107 @@ void main() {
     });
   });
 
+  group('speed test hooks', () {
+    test('marks come where the first frame, a resumed seek, a stall and a memory warning are logged', () async {
+      final controller = make();
+      final marks = <PlaybackMark>[];
+      controller.marks.listen(marks.add);
+      await controller.open(bv);
+      time.advance(1234);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+
+      controller.userSeeked(60, precise: false);
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      time.advance(400);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+
+      time.advance(2000);
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      time.advance(750);
+      timers.activeWith(const Duration(milliseconds: 750))!.fire();
+
+      controller.memoryPressure();
+      await settle();
+
+      expect(marks.map((mark) => mark.runtimeType), [FirstFrame, SeekResumed, Stall, MemoryWarning]);
+      final first = marks[0] as FirstFrame;
+      expect(first.ms, 1234);
+      expect(first.timed, isTrue);
+      expect((marks[1] as SeekResumed).ms, 400);
+      expect((marks[2] as Stall).atSeconds, closeTo(60, 5));
+      expect((marks[3] as MemoryWarning).rssBytes, greaterThan(0));
+      final warning = logs.events.lastWhere((event) => event.msg == 'memory warning, prefetch cache dropped');
+      expect((warning.f['rssMB']! as LogInt).value, greaterThan(0));
+      controller.dispose();
+    });
+
+    test('replay releases the source before the new engine starts, then plays from 0 s off the answer in hand',
+        () async {
+      final next = FakeEngine();
+      final controller = make();
+      await controller.open(bv);
+      time.advance(500);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      emitAfterSettle(42);
+
+      final releasedAtStart = <String>[];
+      await controller.replay(
+        engine: () async {
+          releasedAtStart.addAll(engine.released);
+          return next;
+        },
+        quality: 80,
+      );
+      expect(releasedAtStart, ['tok1'], reason: 'the old source stops downloading first');
+      expect(engine.disposed, isTrue);
+      expect(controller.engine, same(next));
+      expect(controller.selectedQuality, 80);
+      expect(next.prepared.single.choice.video.id, 80);
+      expect(next.prepared.single.startSeconds, 0);
+      expect(player.loaded!.startSeconds, 0);
+      expect(http.to(Canned.playUrlPath), hasLength(1), reason: 'no new playurl call while the URLs are fresh');
+      final replay = logs.events.lastWhere((event) => event.msg == 'replay');
+      expect(replay.f['quality'], const LogInt(80));
+      expect(replay.f['engineReplaced'], const LogBool(true));
+
+      time.advance(700);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(controller.stats.value.firstFrameMs, 700, reason: 'timed from the replay');
+      controller.dispose();
+    });
+
+    test('replay without an engine keeps it, and does nothing with no video open', () async {
+      final controller = make();
+      await controller.replay();
+      expect(engine.prepared, isEmpty);
+
+      await controller.open(bv);
+      await controller.replay();
+      expect(controller.engine, same(engine));
+      expect(engine.released, ['tok1']);
+      expect(engine.prepared, hasLength(2));
+      expect(player.loaded!.master, FakeEngine.masterOf('tok2'));
+      controller.dispose();
+    });
+
+    test('useEngine closes the video, so a quality set next waits for the open', () async {
+      final next = FakeEngine();
+      final controller = make();
+      await controller.open(bv);
+      await controller.useEngine(() async => next);
+      expect(engine.released, ['tok1']);
+      expect(engine.disposed, isTrue);
+      expect(controller.video, isNull);
+      expect(controller.phase, PlaybackPhase.idle);
+
+      await controller.setQuality(80);
+      expect(http.to(Canned.playUrlPath), hasLength(1));
+      await controller.open(bv);
+      expect(next.prepared.single.choice.video.id, 80);
+      controller.dispose();
+    });
+  });
+
   test('the reaction to a failed load follows the Swift table', () {
     ItemFailureReaction react(ItemFailure failure, {bool btr = false, bool unpatched = false, bool played = false}) =>
         PlaybackController.reaction(failure, btr: btr, servedUnpatchedHEV1: unpatched, played: played);

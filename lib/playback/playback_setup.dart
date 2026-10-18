@@ -8,8 +8,10 @@ import '../player/player_factory.dart';
 import 'cupertino_transport.dart';
 import 'playback_controller.dart';
 
-/// dart:io with Bilibili's media headers, 8 connections per host. Top-level: it runs in the engine isolate.
-RangeTransport createIoTransport() => IoRangeTransport(headers: BiliClient.mediaHeaders, connectionsPerHost: 8);
+/// dart:io with Bilibili's media headers, 8 connections per host by default. Top-level: it runs in the engine
+/// isolate.
+RangeTransport createIoTransport({int connectionsPerHost = 8}) =>
+    IoRangeTransport(headers: BiliClient.mediaHeaders, connectionsPerHost: connectionsPerHost);
 
 /// The engine as the app runs it: Swift's defaults plus BiliFast's own startup and seek speed-ups. 8K runs
 /// 15-25 MB per 5 s segment, so prefetch may hold up to 256 MiB of video ahead and 96 MiB of it behind the playhead,
@@ -51,11 +53,21 @@ String? nodeMemoryPath() {
   return null;
 }
 
-/// URLSession on iOS (HTTP/2 to the mirrors), dart:io elsewhere.
-Future<PlaybackEngine> startPlatformEngine() => PlaybackEngine.start(
-  transportFactory: Platform.isIOS ? createCupertinoTransport : createIoTransport,
-  options: appEngineOptions,
-);
+/// URLSession on iOS (HTTP/2 to the mirrors), dart:io elsewhere. The speed test starts engines with other configs;
+/// [connectionsPerHost] only limits HTTP/1.1 hosts (Akamai), since an HTTP/2 mirror takes everything on one
+/// connection.
+Future<PlaybackEngine> startPlatformEngine({RipperConfig config = appRipperConfig, int connectionsPerHost = 8}) =>
+    PlaybackEngine.start(
+      transportFactory: _transportFactory(connectionsPerHost),
+      options: identical(config, appRipperConfig)
+          ? appEngineOptions
+          : EngineOptions(config: config, forwardDebugLogs: devToolsEnabled, nodeMemoryPath: nodeMemoryPath()),
+    );
+
+/// The factory is sent to the engine isolate, so it captures nothing but the count.
+RangeTransport Function() _transportFactory(int connectionsPerHost) => Platform.isIOS
+    ? () => createCupertinoTransport(connectionsPerHost: connectionsPerHost)
+    : () => createIoTransport(connectionsPerHost: connectionsPerHost);
 
 /// What the overlay shows until the engine's first stats arrive.
 String get platformTransportName => Platform.isIOS ? 'URLSession' : 'dart:io';
