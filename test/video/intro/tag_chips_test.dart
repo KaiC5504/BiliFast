@@ -8,6 +8,13 @@ const bgm = VideoTag(id: 1, name: '晴天', kind: VideoTagKind.bgm);
 const topic = VideoTag(id: 2, name: '动漫', kind: VideoTagKind.topic);
 const plain = VideoTag(id: 3, name: '必剪创作', kind: VideoTagKind.normal);
 const long = VideoTag(id: 4, name: '一个很长很长很长很长很长的话题名字', kind: VideoTagKind.topic);
+const longBgm = VideoTag(id: 5, name: '《グランドエスケープ》（Movie edit）feat.三浦透子', kind: VideoTagKind.bgm);
+
+const row = 440 - BiliMetrics.gutter * 2;
+
+/// The capsule round the [index]th chip's name.
+Rect pill(WidgetTester tester, [int index = 0]) =>
+    tester.getRect(find.ancestor(of: find.byType(ChipName).at(index), matching: find.byType(Container)).first);
 
 Future<void> show(WidgetTester tester, List<VideoTag> tags, {bool still = false}) async {
   tester.view.physicalSize = const Size(440, 956);
@@ -67,7 +74,9 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('a long name is cut at the chip, then scrolls round once and comes to rest', (tester) async {
+  testWidgets('a long name is cut at the chip, half the row when alone (18), then scrolls round once and rests', (
+    tester,
+  ) async {
     await show(tester, const [long]);
 
     final name = find.byType(ChipName);
@@ -76,7 +85,7 @@ void main() {
         .transform
         .getTranslation()
         .x;
-    expect(tester.getSize(name).width, IntroListTheme.chipTextMax);
+    expect(pill(tester).width, moreOrLessEquals(row / 2));
     expect(tester.binding.hasScheduledFrame, isTrue);
     await tester.pump(IntroListTheme.marqueeRest);
     expect(shift(), 0);
@@ -84,7 +93,42 @@ void main() {
     expect(shift(), lessThan(0));
     await tester.pumpAndSettle();
     expect(tester.binding.hasScheduledFrame, isFalse);
-    expect(tester.getSize(name).width, IntroListTheme.chipTextMax);
+    expect(pill(tester).width, moreOrLessEquals(row / 2));
+  });
+
+  testWidgets('three chips share the row, so three long ones would fill it (03)', (tester) async {
+    await show(tester, const [longBgm, topic, long]);
+
+    final third = (row - IntroListTheme.chipGap * 2) / 3;
+    expect(pill(tester, 0).width, moreOrLessEquals(third));
+    expect(pill(tester, 1).width, lessThan(third));
+    expect(pill(tester, 2).width, moreOrLessEquals(third));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a fourth long chip keeps the width of three, and the row scrolls to it', (tester) async {
+    const fourth = VideoTag(id: 6, name: '第四个很长很长很长很长的话题', kind: VideoTagKind.topic);
+    await show(tester, const [longBgm, long, long, fourth]);
+
+    final third = (row - IntroListTheme.chipGap * 2) / 3;
+    expect(pill(tester, 1).width, moreOrLessEquals(third));
+    await tester.drag(find.byType(ListView), const Offset(-300, 0));
+    await tester.pumpAndSettle();
+    final last = tester.getRect(find.ancestor(of: find.text(fourth.name), matching: find.byType(Container)).first);
+    expect(last.width, moreOrLessEquals(third));
+    expect(last.right, lessThanOrEqualTo(440));
+  });
+
+  testWidgets('only the first name too long for its chip scrolls; a later one ends in … (03)', (tester) async {
+    await show(tester, const [longBgm, long]);
+
+    final names = find.byType(ChipName);
+    expect(find.descendant(of: names.at(0), matching: find.byType(Transform)), findsWidgets);
+    expect(find.descendant(of: names.at(1), matching: find.byType(Transform)), findsNothing);
+    final cut = tester.widget<Text>(find.descendant(of: names.at(1), matching: find.byType(Text)));
+    expect(cut.overflow, TextOverflow.ellipsis);
+    expect(pill(tester, 1).width, moreOrLessEquals((row - IntroListTheme.chipGap) / 2));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('with reduced motion a long name stays still', (tester) async {
@@ -92,7 +136,7 @@ void main() {
 
     await tester.pump();
     expect(tester.binding.hasScheduledFrame, isFalse);
-    expect(tester.getSize(find.byType(ChipName)).width, IntroListTheme.chipTextMax);
+    expect(pill(tester).width, moreOrLessEquals(row / 2));
   });
 
   testWidgets('a short name takes only its own width and never moves', (tester) async {
@@ -100,6 +144,6 @@ void main() {
 
     await tester.pump();
     expect(tester.binding.hasScheduledFrame, isFalse);
-    expect(tester.getSize(find.byType(ChipName)).width, lessThan(IntroListTheme.chipTextMax));
+    expect(pill(tester).width, lessThan(row / 2));
   });
 }

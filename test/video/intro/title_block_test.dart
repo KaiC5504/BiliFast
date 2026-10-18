@@ -401,6 +401,28 @@ void main() {
     });
   });
 
+  testWidgets('expanded, the plain tags keep their room below them; without tags the block ends at its text', (
+    tester,
+  ) async {
+    final rig = Rig();
+    await rig.mount(tester, _detail(desc: _desc));
+    await rig.toggle(tester);
+    final block = tester.getRect(find.byType(TitleBlock));
+    expect(block.bottom - tester.getRect(find.byType(Wrap)).bottom, moreOrLessEquals(IntroTheme.tagsBottom));
+
+    final bare = Rig();
+    await bare.mount(
+      tester,
+      _detail(desc: _desc, bvid: 'BV1other'),
+      tags: const [],
+    );
+    await bare.toggle(tester);
+    expect(
+      tester.getRect(find.byType(TitleBlock)).bottom,
+      moreOrLessEquals(tester.getRect(find.byType(DescriptionText)).bottom),
+    );
+  });
+
   testWidgets('without a description or plain tags the expanded block is just the BV line', (tester) async {
     final rig = Rig();
     await rig.mount(

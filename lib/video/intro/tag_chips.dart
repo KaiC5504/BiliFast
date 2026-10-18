@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:bili_core/api.dart' show VideoTag, VideoTagKind;
 import 'package:flutter/widgets.dart';
 
@@ -5,7 +7,8 @@ import '../../shared/theme.dart';
 import 'collection_row.dart' show Chevron;
 
 /// The topic and BGM chips in a sideways row (03); plain tags are the title block's. There are no topic or music
-/// pages yet, so they lead nowhere and aren't buttons.
+/// pages yet, so they lead nowhere and aren't buttons. Only the first name too long for its chip scrolls; a later one
+/// ends in …, as 03's topic does after its scrolling BGM.
 class TagChips extends StatelessWidget {
   const TagChips({super.key, required this.tags});
 
@@ -24,12 +27,26 @@ class TagChips extends StatelessWidget {
         maxScaleFactor: 1,
         child: SizedBox(
           height: IntroListTheme.chipHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.gutter),
-            itemCount: shown.length,
-            separatorBuilder: (context, index) => const SizedBox(width: IntroListTheme.chipGap),
-            itemBuilder: (context, index) => _Chip(shown[index]),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final row = constraints.maxWidth - BiliMetrics.gutter * 2;
+              // A fourth chip onwards keeps 03's width and the row scrolls, rather than squeezing every name.
+              final sharing = math.min(shown.length, 3);
+              final widest = math.min(row / 2, (row - IntroListTheme.chipGap * (sharing - 1)) / sharing);
+              final rooms = [for (final tag in shown) math.max(0.0, widest - _chrome(tag.kind))];
+              final scaler = MediaQuery.textScalerOf(context);
+              var scrolling = -1;
+              for (var index = 0; index < shown.length && scrolling < 0; index++) {
+                if (_nameWidth(shown[index].name, scaler) > rooms[index]) scrolling = index;
+              }
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.gutter),
+                itemCount: shown.length,
+                separatorBuilder: (context, index) => const SizedBox(width: IntroListTheme.chipGap),
+                itemBuilder: (context, index) => _Chip(shown[index], room: rooms[index], scrolls: index == scrolling),
+              );
+            },
           ),
         ),
       ),
@@ -37,10 +54,40 @@ class TagChips extends StatelessWidget {
   }
 }
 
+/// A chip's width less its name's.
+double _chrome(VideoTagKind kind) =>
+    IntroListTheme.chipLead +
+    (kind == VideoTagKind.bgm ? IntroListTheme.musicGlyphWidth : IntroListTheme.topicGlyphWidth) +
+    IntroListTheme.chipIconGap +
+    IntroListTheme.chipChevronGap +
+    IntroListTheme.chipChevronWidth +
+    IntroListTheme.chipTrailing;
+
+TextStyle _nameStyle() => TextStyle(
+  fontFamily: BiliFonts.family,
+  fontSize: IntroListTheme.chipText,
+  color: IntroListTheme.chipTextColor,
+  height: 1,
+);
+
+double _nameWidth(String text, TextScaler scaler) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: _nameStyle()),
+    textDirection: TextDirection.ltr,
+    textScaler: scaler,
+    maxLines: 1,
+  )..layout();
+  final width = painter.width;
+  painter.dispose();
+  return width;
+}
+
 class _Chip extends StatelessWidget {
-  const _Chip(this.tag);
+  const _Chip(this.tag, {required this.room, required this.scrolls});
 
   final VideoTag tag;
+  final double room;
+  final bool scrolls;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -67,7 +114,7 @@ class _Chip extends StatelessWidget {
               painter: _TopicPainter(),
             ),
           const SizedBox(width: IntroListTheme.chipIconGap),
-          ChipName(tag.name),
+          ChipName(tag.name, room: room, scrolls: scrolls),
           const SizedBox(width: IntroListTheme.chipChevronGap),
           const Chevron(
             size: Size(IntroListTheme.chipChevronWidth, IntroListTheme.chipChevronHeight),
@@ -80,12 +127,14 @@ class _Chip extends StatelessWidget {
   );
 }
 
-/// A chip's name. One longer than the chip allows fades out at the right edge and, after a rest, scrolls round once
-/// so the whole of it has been seen, as 18's does; with reduced motion it only fades.
+/// A chip's name. One wider than [room] ends in …, or, when it [scrolls], fades out at the right edge and, after a
+/// rest, scrolls round once so the whole of it has been seen, as 18's does; with reduced motion it only fades.
 class ChipName extends StatefulWidget {
-  const ChipName(this.text, {super.key});
+  const ChipName(this.text, {super.key, required this.room, this.scrolls = true});
 
   final String text;
+  final double room;
+  final bool scrolls;
 
   @override
   State<ChipName> createState() => _ChipNameState();
@@ -95,29 +144,10 @@ class _ChipNameState extends State<ChipName> with SingleTickerProviderStateMixin
   late final AnimationController _run = AnimationController(vsync: this);
   double? _started;
 
-  TextStyle get _style => TextStyle(
-    fontFamily: BiliFonts.family,
-    fontSize: IntroListTheme.chipText,
-    color: IntroListTheme.chipTextColor,
-    height: 1,
-  );
-
   @override
   void dispose() {
     _run.dispose();
     super.dispose();
-  }
-
-  double _measure(BuildContext context) {
-    final painter = TextPainter(
-      text: TextSpan(text: widget.text, style: _style),
-      textDirection: TextDirection.ltr,
-      textScaler: MediaQuery.textScalerOf(context),
-      maxLines: 1,
-    )..layout();
-    final width = painter.width;
-    painter.dispose();
-    return width;
   }
 
   /// Runs once per text width: the rest, then one lap of the name and the gap behind it.
@@ -138,9 +168,16 @@ class _ChipNameState extends State<ChipName> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    final width = _measure(context);
-    final text = Text(widget.text, maxLines: 1, softWrap: false, style: _style);
-    if (width <= IntroListTheme.chipTextMax) return text;
+    final width = _nameWidth(widget.text, MediaQuery.textScalerOf(context));
+    final style = _nameStyle();
+    final text = Text(widget.text, maxLines: 1, softWrap: false, style: style);
+    if (width <= widget.room) return text;
+    if (!widget.scrolls) {
+      return SizedBox(
+        width: widget.room,
+        child: Text(widget.text, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: style),
+      );
+    }
     final still = MediaQuery.disableAnimationsOf(context);
     if (still ? _run.isAnimating : _started != width) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -149,7 +186,7 @@ class _ChipNameState extends State<ChipName> with SingleTickerProviderStateMixin
     }
     final travel = width + IntroListTheme.marqueeGap;
     return SizedBox(
-      width: IntroListTheme.chipTextMax,
+      width: widget.room,
       child: ClipRect(
         child: AnimatedBuilder(
           animation: _run,

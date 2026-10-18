@@ -839,6 +839,10 @@ abstract final class IntroTheme {
   static const tagSpacing = 8.0;
   static const tagInk = Color(0xFF61666D);
 
+  /// 18 sets the action icons 30 below the plain tags, more than the action row's own top gap leaves; the tags keep
+  /// the rest under them.
+  static const tagsBottom = 23 / 3;
+
   static const expandDuration = Duration(milliseconds: 280);
 
   /// MiSans's Chinese is about 2% wider than the official PingFang, which in turn spaces digits and Latin letters
@@ -893,15 +897,15 @@ abstract final class IntroListTheme {
   static const partChipBorder = 1.0;
   static const partPlayingGap = 5.0;
 
-  /// The topic and BGM capsules (03, 18): 26 tall, 7.3 apart; the name stops at 80 and scrolls by once.
+  /// The topic and BGM capsules (03, 18): 26 tall, 8 apart. One takes up to half the row (208 on 18); three share it,
+  /// so 03's long two are 133.3 wide, as three long ones would fill it.
   static const chipHeight = 26.0;
   static const chipLead = 10.0;
   static const chipTrailing = 34 / 3;
-  static const chipGap = 22 / 3;
+  static const chipGap = 8.0;
   static const chipText = 12.0;
   static const chipIconGap = 5.5;
   static const chipChevronGap = 4.5;
-  static const chipTextMax = 80.0;
   static const chipFade = 12.0;
   static const chipChevronWidth = 16 / 3;
   static const chipChevronHeight = 28 / 3;

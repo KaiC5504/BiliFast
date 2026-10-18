@@ -422,6 +422,7 @@ class _Details extends StatelessWidget {
             runSpacing: IntroTheme.tagSpacing,
             children: [for (final tag in plain) _PlainTag(name: tag.name)],
           ),
+          const SizedBox(height: IntroTheme.tagsBottom),
         ],
       ],
     );
