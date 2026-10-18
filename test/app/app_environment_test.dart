@@ -99,6 +99,22 @@ void main() {
     expect(environment.accountLabel, '账号确认失败');
   });
 
+  test('a --fake-account run is 测试账号 with mid 1, and its account checks ask Bilibili nothing', () async {
+    final http = Canned.http();
+    final environment = await load(FakeKeychain(const StoredCookies(Canned.cookies)), http);
+    var notified = 0;
+    environment.addListener(() => notified += 1);
+    environment.useFakeAccount();
+    expect(environment.fake, isTrue);
+    expect(notified, 1);
+
+    expect(await environment.refreshAccount(), isTrue);
+    expect(http.requests, isEmpty);
+    expect(environment.account, isA<LoggedIn>().having((account) => account.name, 'name', '测试账号'));
+    expect(environment.mid, 1);
+    expect(environment.accountLabel, '测试账号');
+  });
+
   test('checks asked for while one is running share its request; a later one asks again', () async {
     final http = Canned.http();
     final environment = await load(FakeKeychain(const StoredCookies(Canned.cookies)), http);

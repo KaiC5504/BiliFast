@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../home/feed_model.dart' show requestFailureMessage;
 import 'actions/actions_model.dart';
@@ -13,10 +14,12 @@ import 'page_session.dart' show PeriodicTimer;
 import 'player_session.dart';
 
 /// The page body's side loads (BiliNative `VideoPageModel.swift`'s): for each video the session plays, new actions,
-/// the relation and the uploader's card; for each part its tags; N人正在看 while active. Each shows as it lands, a late
-/// answer for an earlier video or part is dropped, and a failure keeps what was there.
-class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
-  /// [accountChanges] hears logins, after which the actions ask for this account's relation again.
+/// the relation and the uploader's card; for each part its tags; N人正在看 while active and the app is in the
+/// foreground. Each shows as it lands, a late answer for an earlier video or part is dropped, and a failure keeps what
+/// was there. A failed relation is asked again the next time the page shows or the app comes back, since without it
+/// the actions show defaults as the account's state.
+class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver implements PageDetails {
+  /// [accountChanges] hears logins, after which the relation is asked again for this account.
   VideoPageDetailsModel({
     required this._session,
     required this._api,
@@ -31,6 +34,8 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
   })  : _periodic = periodic ?? _systemPeriodic,
         _logger = logger ?? Logger.shared {
     _loggedIn = _isLoggedIn();
+    _background = _inBackground(WidgetsBinding.instance.lifecycleState);
+    WidgetsBinding.instance.addObserver(this);
     _session.addListener(_sessionChanged);
     _accountChanges?.addListener(_accountChanged);
     _sessionChanged();
@@ -39,6 +44,10 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
   static const onlineInterval = Duration(seconds: 30);
 
   static Timer _systemPeriodic(Duration period, void Function() tick) => Timer.periodic(period, (_) => tick());
+
+  /// Picture in picture counts: the app is in the background with the page out of sight.
+  static bool _inBackground(AppLifecycleState? state) =>
+      state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
 
   final PlayerSession _session;
   final PageApi _api;
@@ -68,10 +77,12 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
   /// The part an N人正在看 ask is out for: a slow answer doesn't get a second ask piled on.
   int? _asking;
   bool _active = true;
+  bool _background = false;
   bool _loggedIn = false;
 
-  /// A login while covered: the relation is asked again once the page shows.
-  bool _relationStale = false;
+  /// A relation ask for the current video still to make once the page shows and the app is in the foreground: one
+  /// that failed, or a login's while the page was covered.
+  _RelationAsk? _owed;
   bool _disposed = false;
 
   @override
@@ -94,14 +105,30 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
       _stopPoll();
       return;
     }
-    final actions = _actions;
     _sessionChanged();
-    if (_poll == null) _startPoll();
-    if (_relationStale) {
-      _relationStale = false;
-      // A video that only just arrived had its relation asked for with it.
-      if (identical(actions, _actions)) unawaited(actions?.refreshRelation());
+    _wake();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final background = _inBackground(state);
+    if (_disposed || background == _background) return;
+    _background = background;
+    if (background) {
+      _stopPoll();
+    } else {
+      _wake();
     }
+  }
+
+  /// Shown again, or back in the foreground: N人正在看 asks at once and polls on, and an owed relation is asked for.
+  void _wake() {
+    if (!_active || _background) return;
+    if (_poll == null) _startPoll();
+    final owed = _owed;
+    final detail = _detail;
+    _owed = null;
+    if (owed != null && detail != null) unawaited(_loadRelation(detail, owed));
   }
 
   /// A covered page's session can be looking at the newer page's video on the shared player, so only an active page
@@ -128,6 +155,7 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
     _uploader = null;
     _tags = const [];
     _online.value = null;
+    _owed = null;
     _actions = ActionsModel(
       api: _api,
       detail: detail,
@@ -140,7 +168,7 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
     );
     notifyListeners();
     unawaited(_loadUploader(detail));
-    if (_isLoggedIn()) unawaited(_loadRelation(detail));
+    unawaited(_loadRelation(detail, _RelationAsk.fill));
   }
 
   void _newPart(VideoDetail detail, int cid) {
@@ -150,14 +178,24 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
     _startPoll();
   }
 
-  Future<void> _loadRelation(VideoDetail detail) async {
+  /// Logged out there is nothing to ask. A failure is owed until the page next shows or the app comes back, once each
+  /// time, so nothing loops against the API.
+  Future<void> _loadRelation(VideoDetail detail, _RelationAsk ask) async {
+    if (!_isLoggedIn()) return;
     final video = _video;
     try {
       final relation = await _api.relation(aid: detail.aid, bvid: detail.bvid);
       if (_disposed || video != _video) return;
-      _actions?.apply(relation);
+      switch (ask) {
+        case _RelationAsk.fill:
+          _actions?.apply(relation);
+        case _RelationAsk.reset:
+          _actions?.reset(relation);
+      }
     } catch (error) {
       _logger.warn(LogCategory.api, 'relation failed', {'bvid': detail.bvid, 'error': '$error'});
+      if (_disposed || video != _video) return;
+      if (_owed != _RelationAsk.reset) _owed = ask;
     }
   }
 
@@ -186,10 +224,10 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
     }
   }
 
-  /// Asks at once, then every [onlineInterval]; only while active and the part is known.
+  /// Asks at once, then every [onlineInterval]; only while active, in the foreground, and the part is known.
   void _startPoll() {
     _stopPoll();
-    if (_disposed || !_active || _detail == null || _cid == null) return;
+    if (_disposed || !_active || _background || _detail == null || _cid == null) return;
     unawaited(_askOnline());
     _poll = _periodic(onlineInterval, () => unawaited(_askOnline()));
   }
@@ -203,7 +241,7 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
     final detail = _detail;
     final cid = _cid;
     final part = _part;
-    if (_disposed || !_active || detail == null || cid == null || _asking == part) return;
+    if (_disposed || !_active || _background || detail == null || cid == null || _asking == part) return;
     _asking = part;
     try {
       final count = await _api.onlineCount(aid: detail.aid, bvid: detail.bvid, cid: cid);
@@ -221,10 +259,10 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
     if (_disposed || loggedIn == _loggedIn) return;
     _loggedIn = loggedIn;
     if (!loggedIn) return;
-    if (_active) {
-      unawaited(_actions?.refreshRelation());
-    } else {
-      _relationStale = true;
+    if (!_active) {
+      _owed = _RelationAsk.reset;
+    } else if (_detail case final detail?) {
+      unawaited(_loadRelation(detail, _RelationAsk.reset));
     }
   }
 
@@ -232,7 +270,8 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
   Future<ActionResult> watchLater(VideoCard card) async {
     if (!_isLoggedIn()) {
       _requestLogin();
-      return const ActionResult('请先登录', ok: false);
+      // The login request says so itself.
+      return const ActionResult('', ok: false);
     }
     try {
       await _api.addToWatchLater(aid: card.aid);
@@ -249,6 +288,7 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
     if (_disposed) return;
     _disposed = true;
     _stopPoll();
+    WidgetsBinding.instance.removeObserver(this);
     _session.removeListener(_sessionChanged);
     _accountChanges?.removeListener(_accountChanged);
     _actions?.dispose();
@@ -256,3 +296,7 @@ class VideoPageDetailsModel extends ChangeNotifier implements PageDetails {
     super.dispose();
   }
 }
+
+/// [fill]: the video's own ask, which fills in what wasn't tapped. [reset]: a login's, which shows the account's
+/// state whatever was tapped before.
+enum _RelationAsk { fill, reset }

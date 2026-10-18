@@ -5,6 +5,7 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../home/feed_model.dart' show requestFailureMessage;
 import '../page_api.dart';
 import 'favourites_model.dart';
 import 'video_actions.dart';
@@ -54,8 +55,13 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   int _shareCount;
   ActionPrompt? _prompt;
 
-  /// What the user has changed: a late relation answer must not overwrite those, but still fills in the rest.
-  final Set<_Field> _touched = {};
+  /// The change that set each field last. A late relation answer must not overwrite those, but still fills in the
+  /// rest, and a field whose changes are all taken back shows what Bilibili last said again.
+  final Map<_Field, _Change> _owners = {};
+  VideoRelation? _relation;
+
+  /// The relation's 关注 or the uploader card's, whichever came last.
+  bool? _saidFollowing;
   final Set<String> _busy = {};
   bool _disposed = false;
 
@@ -92,40 +98,29 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   @override
   ActionPrompt? get prompt => _prompt;
 
-  /// A relation answer fills in what the user hasn't changed yet.
+  /// A relation answer fills in what the user hasn't changed, and later what a refused change gives back.
   void apply(VideoRelation relation) {
     final before = _snapshot;
-    if (!_touched.contains(_Field.liked)) _liked = relation.like;
-    if (!_touched.contains(_Field.disliked)) _disliked = relation.dislike;
-    if (!_touched.contains(_Field.favorited)) _favorited = relation.favorite;
-    if (!_touched.contains(_Field.following)) _following = relation.attention;
-    if (!_touched.contains(_Field.coins)) _coins = relation.coins;
-    if (detail.season != null && !_touched.contains(_Field.seasonFav)) _seasonFav = relation.seasonFav;
+    _relation = relation;
+    _saidFollowing = relation.attention;
+    for (final field in _Field.values) {
+      if (!_owners.containsKey(field)) _showSaid(field);
+    }
     if (_snapshot.changedFrom(before).isNotEmpty) _notify();
   }
 
   void applyUploader(UploaderCard card) {
-    if (_touched.contains(_Field.following) || card.mid != detail.owner.mid || card.following == _following) return;
+    if (card.mid != detail.owner.mid) return;
+    _saidFollowing = card.following;
+    if (_owners.containsKey(_Field.following) || card.following == _following) return;
     _following = card.following;
     _notify();
   }
 
   /// After a login: this account's state, whatever was tapped before.
-  Future<void> refreshRelation() async {
-    if (!_isLoggedIn()) return;
-    try {
-      final relation = await _api.relation(aid: detail.aid, bvid: detail.bvid);
-      if (_disposed) return;
-      _liked = relation.like;
-      _disliked = relation.dislike;
-      _favorited = relation.favorite;
-      _following = relation.attention;
-      _coins = relation.coins;
-      if (detail.season != null) _seasonFav = relation.seasonFav;
-      _notify();
-    } catch (error) {
-      _logger.warn(LogCategory.api, 'relation failed', {'error': '$error'});
-    }
+  void reset(VideoRelation relation) {
+    _owners.clear();
+    apply(relation);
   }
 
   int get _coinLimit => detail.copyright == 2 ? 1 : 2;
@@ -152,13 +147,18 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   @override
   Future<void> toggleLike() {
     final on = !_liked;
-    return _perform('like', () => _setLiked(on), () => _api.like(aid: detail.aid, bvid: detail.bvid, on: on));
+    return _perform('like', () => _setLiked(on), (_) => _api.like(aid: detail.aid, bvid: detail.bvid, on: on));
   }
 
-  /// Bilibili takes 不喜欢 only through the app API, signed with the TV app's keys and the TV login's token.
+  /// Never sent in this build: Bilibili takes 不喜欢 only through the app API, signed with the TV app's keys and the TV
+  /// login's token, and [PageApi] has no such call yet. Checked in Swift's order, keys first and then the login.
   @override
   Future<void> toggleDislike() async {
-    if (dislikeAvailable && !_isLoggedIn()) {
+    if (!dislikeAvailable) {
+      _say('此版本不支持不喜欢');
+      return;
+    }
+    if (!_isLoggedIn()) {
       _login();
       return;
     }
@@ -175,14 +175,14 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
       _say('已三连');
       return;
     }
-    final before = _snapshot;
     final expected = maxCoins;
     await _perform('triple', () {
       _setLiked(true);
       _setFavorited(true);
-    }, () async {
+    }, (action) async {
       final result = await _api.triple(aid: detail.aid, bvid: detail.bvid);
-      _settleTriple(result, before, expected);
+      _settleTriple(action, result, expected);
+      if (expected > 0 && !result.coin) _say('投币失败');
     });
   }
 
@@ -201,7 +201,7 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
       _coins += multiply;
       _coinCount += multiply;
       if (alsoLike) _setLiked(true);
-    }, () => _api.coin(aid: detail.aid, bvid: detail.bvid, multiply: multiply, alsoLike: alsoLike));
+    }, (_) => _api.coin(aid: detail.aid, bvid: detail.bvid, multiply: multiply, alsoLike: alsoLike));
   }
 
   @override
@@ -215,7 +215,7 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     await _perform(
       'favourites',
       () => _setFavorited(after),
-      () => _api.updateFavourites(aid: detail.aid, add: add, remove: remove),
+      (_) => _api.updateFavourites(aid: detail.aid, add: add, remove: remove),
     );
   }
 
@@ -239,9 +239,10 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   @override
   Future<void> toggleFollow() {
     final on = !_following;
-    return _perform('follow', () => _following = on, () => _api.follow(mid: detail.owner.mid, on: on));
+    return _perform('follow', () => _following = on, (_) => _api.follow(mid: detail.owner.mid, on: on));
   }
 
+  /// Not knowing (the relation hasn't answered or couldn't be asked) counts as not subscribed.
   @override
   Future<void> toggleSeasonFavourite() async {
     final season = detail.season;
@@ -250,12 +251,12 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     await _perform(
       'season',
       () => _seasonFav = on,
-      () => _api.favSeason(seasonId: season.id, on: on),
+      (_) => _api.favSeason(seasonId: season.id, on: on),
       done: () => _say(on ? '已收藏合集' : '已取消收藏'),
     );
   }
 
-  /// Sharing needs no account, so logged out it is simply not counted.
+  /// Sharing needs no account but the counter does, so logged out a share isn't counted.
   @override
   Future<void> shared() async {
     if (!_isLoggedIn()) return;
@@ -285,12 +286,11 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     _notify();
   }
 
-  /// Bilibili words its refusals for the user (硬币不足, 已经点赞过了), so those show as sent; codes the app knows
-  /// better keep [BiliError.userMessage].
+  /// Bilibili words its refusals for the user (硬币不足, 已经点赞过了), so their message shows word for word; codes the
+  /// app knows better keep [BiliError.userMessage]. Anything else is a lost connection or a bug (操作失败).
   static String failureMessage(Object error) => switch (error) {
         BiliAPIError(:final code, :final message) when message.isNotEmpty && !_ownWords.contains(code) => message,
-        final BiliError failure => failure.userMessage,
-        _ => '网络连接失败，请检查网络后重试',
+        _ => requestFailureMessage(error, fallback: '操作失败'),
       };
 
   static const _ownWords = {-101, -352, -412, -404};
@@ -307,19 +307,84 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
         favCount: _favCount,
       );
 
-  /// Takes back one action: only the fields it changed, and only those still showing its change. Actions run side
-  /// by side (点赞 and 关注 sit next to each other), and one failing must not undo another.
-  void _undo(_Snapshot before, _Snapshot after) {
-    T back<T>(T now, T was, T changed) => was != changed && now == changed ? was : now;
-    _liked = back(_liked, before.liked, after.liked);
-    _disliked = back(_disliked, before.disliked, after.disliked);
-    _favorited = back(_favorited, before.favorited, after.favorited);
-    _following = back(_following, before.following, after.following);
-    _coins = back(_coins, before.coins, after.coins);
-    _seasonFav = back(_seasonFav, before.seasonFav, after.seasonFav);
-    _likeCount = back(_likeCount, before.likeCount, after.likeCount);
-    _coinCount = back(_coinCount, before.coinCount, after.coinCount);
-    _favCount = back(_favCount, before.favCount, after.favCount);
+  /// Runs [change] for [action], which then holds every field the change moved, and the [confirmed] ones as well.
+  void _record(_Action action, void Function() change, {Set<_Field> confirmed = const {}}) {
+    final before = _snapshot;
+    change();
+    for (final field in {..._snapshot.changedFrom(before), ...confirmed}) {
+      final under = _owners[field];
+      if (under != null && identical(under, action.changes[field])) continue;
+      _owners[field] = action.changes[field] = _Change(before, under);
+    }
+  }
+
+  /// Takes back [action]'s change to each of [fields]. A field another action has set since keeps that value, and
+  /// skips this change if that one is taken back too; a field no change holds any more shows what Bilibili last said.
+  /// Actions run side by side (点赞 and 关注 sit next to each other, a 三连 can land while a 点赞 is out), and one
+  /// failing must not undo another.
+  void _undo(_Action action, Iterable<_Field> fields) {
+    for (final field in fields) {
+      final change = action.changes[field];
+      if (change == null || change.undone) continue;
+      change.undone = true;
+      if (!identical(_owners[field], change)) continue;
+      var back = change;
+      while (back.under?.undone ?? false) {
+        back = back.under!;
+      }
+      _restore(field, back.before);
+      if (back.under case final standing?) {
+        _owners[field] = standing;
+      } else {
+        _owners.remove(field);
+        _showSaid(field);
+      }
+    }
+  }
+
+  void _restore(_Field field, _Snapshot from) {
+    switch (field) {
+      case _Field.liked:
+        _liked = from.liked;
+        _likeCount = from.likeCount;
+      case _Field.disliked:
+        _disliked = from.disliked;
+      case _Field.favorited:
+        _favorited = from.favorited;
+        _favCount = from.favCount;
+      case _Field.following:
+        _following = from.following;
+      case _Field.coins:
+        _coins = from.coins;
+        _coinCount = from.coinCount;
+      case _Field.seasonFav:
+        _seasonFav = from.seasonFav;
+    }
+  }
+
+  /// What Bilibili last said about [field], for a field no change holds. The counts stay: they include this account's
+  /// part already.
+  void _showSaid(_Field field) {
+    if (field == _Field.following) {
+      if (_saidFollowing case final following?) _following = following;
+      return;
+    }
+    final relation = _relation;
+    if (relation == null) return;
+    switch (field) {
+      case _Field.liked:
+        _liked = relation.like;
+      case _Field.disliked:
+        _disliked = relation.dislike;
+      case _Field.favorited:
+        _favorited = relation.favorite;
+      case _Field.coins:
+        _coins = relation.coins;
+      case _Field.seasonFav:
+        if (detail.season != null) _seasonFav = relation.seasonFav;
+      case _Field.following:
+        break;
+    }
   }
 
   /// Like clears dislike, as on the server.
@@ -336,38 +401,49 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     _favCount = max(0, _favCount + (on ? 1 : -1));
   }
 
-  /// The server says what 三连 actually did: the optimistic like and favourite are corrected to it and the coins it
-  /// spent are added.
-  void _settleTriple(TripleResult result, _Snapshot before, int expected) {
-    _liked = before.liked || result.like;
-    _likeCount = before.likeCount + (_liked && !before.liked ? 1 : 0);
-    _disliked = _liked ? false : before.disliked;
-    _favorited = before.favorited || result.favorite;
-    _favCount = before.favCount + (_favorited && !before.favorited ? 1 : 0);
+  /// The server says what 三连 actually did: what it didn't do is taken back as a failure would be, and what it did,
+  /// with the coins it spent, is its own from then on, so a refused 点赞 or 收藏 still out can't undo it.
+  void _settleTriple(_Action action, TripleResult result, int expected) {
+    _undo(action, [
+      if (!result.like) ...[_Field.liked, _Field.disliked],
+      if (!result.favorite) _Field.favorited,
+    ]);
     final spent = result.coin ? min(result.multiply, expected) : 0;
-    _coins = before.coins + spent;
-    _coinCount = before.coinCount + spent;
+    _record(action, () {
+      if (result.like) _setLiked(true);
+      if (result.favorite) _setFavorited(true);
+      final coins = min(_coinLimit, _coins + spent);
+      _coinCount += coins - _coins;
+      _coins = coins;
+    }, confirmed: {
+      if (result.like) ...{_Field.liked, _Field.disliked},
+      if (result.favorite) _Field.favorited,
+      if (spent > 0) _Field.coins,
+    });
   }
 
   /// One action: shown at once, sent, and taken back with the server's words if it fails. A second tap while it is
   /// out does nothing.
-  Future<void> _perform(String name, void Function() change, Future<void> Function() call, {VoidCallback? done}) async {
+  Future<void> _perform(String name, void Function() change, Future<void> Function(_Action action) call,
+      {VoidCallback? done}) async {
     if (!_isLoggedIn()) {
       _login();
       return;
     }
     if (!_busy.add(name)) return;
-    final before = _snapshot;
-    change();
-    final after = _snapshot;
-    _touched.addAll(after.changedFrom(before));
+    final action = _Action();
+    _record(action, change);
     _notify();
     try {
-      await call();
+      await call(action);
       done?.call();
-    } catch (error) {
-      _undo(before, after);
-      _logger.warn(LogCategory.api, '$name failed', {'error': '$error'});
+    } catch (error, stack) {
+      _undo(action, _Field.values);
+      _logger.warn(LogCategory.api, '$name failed', {
+        'error': '$error',
+        // A refusal is Bilibili's; anything else may be a bug in reading its answer.
+        if (error is! BiliError) 'stack': '$stack',
+      });
       _say(failureMessage(error));
       if (error is BiliError && error.needsLogin) _login();
     } finally {
@@ -422,12 +498,28 @@ final class _Snapshot {
   final int coinCount;
   final int favCount;
 
+  /// A count belongs to its field: 点赞's to liked, 投币's to coins, 收藏's to favorited.
   Set<_Field> changedFrom(_Snapshot other) => {
-        if (liked != other.liked) _Field.liked,
+        if (liked != other.liked || likeCount != other.likeCount) _Field.liked,
         if (disliked != other.disliked) _Field.disliked,
-        if (favorited != other.favorited) _Field.favorited,
+        if (favorited != other.favorited || favCount != other.favCount) _Field.favorited,
         if (following != other.following) _Field.following,
-        if (coins != other.coins) _Field.coins,
+        if (coins != other.coins || coinCount != other.coinCount) _Field.coins,
         if (seasonFav != other.seasonFav) _Field.seasonFav,
       };
+}
+
+/// One action's change to one field. [under] is the change it replaced, which shows again if this one is taken back.
+final class _Change {
+  _Change(this.before, this.under);
+
+  /// Everything as it was just before; only this change's field is read back from it.
+  final _Snapshot before;
+  final _Change? under;
+  bool undone = false;
+}
+
+/// One tap's changes, field by field.
+final class _Action {
+  final Map<_Field, _Change> changes = {};
 }
