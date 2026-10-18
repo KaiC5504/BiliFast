@@ -96,8 +96,10 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
             children: [
               Expanded(
                 child: _ActionCell(
+                  key: const ValueKey('action-like'),
                   glyph: ActionGlyph.like,
                   label: '点赞',
+                  activeLabel: '取消点赞',
                   count: actions.likeCount,
                   active: actions.liked,
                   onTap: () => unawaited(actions.toggleLike()),
@@ -110,6 +112,7 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
               ),
               Expanded(
                 child: _ActionCell(
+                  key: const ValueKey('action-dislike'),
                   glyph: ActionGlyph.dislike,
                   label: '不喜欢',
                   active: actions.disliked,
@@ -119,8 +122,10 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
               ),
               Expanded(
                 child: _ActionCell(
+                  key: const ValueKey('action-coin'),
                   glyph: ActionGlyph.coin,
                   label: '投币',
+                  activeLabel: '已投币',
                   count: actions.coinCount,
                   active: actions.coins > 0,
                   onTap: () => actions.ask(ActionPrompt.coin),
@@ -129,8 +134,10 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
               ),
               Expanded(
                 child: _ActionCell(
+                  key: const ValueKey('action-favourite'),
                   glyph: ActionGlyph.favourite,
                   label: '收藏',
+                  activeLabel: '已收藏',
                   count: actions.favCount,
                   active: actions.favorited,
                   onTap: () => actions.ask(ActionPrompt.favourites),
@@ -139,6 +146,7 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
               ),
               Expanded(
                 child: _ActionCell(
+                  key: const ValueKey('action-share'),
                   glyph: ActionGlyph.share,
                   label: '分享',
                   count: actions.shareCount,
@@ -182,11 +190,13 @@ class _Ringed extends StatelessWidget {
 /// One column: the icon, pink and popping when it turns on, over its count, or its name while the count is 0.
 class _ActionCell extends StatefulWidget {
   const _ActionCell({
+    super.key,
     required this.glyph,
     required this.label,
     required this.active,
     required this.onTap,
     this.count,
+    this.activeLabel,
     this.dimmed = false,
     this.onLongPress,
     this.onDown,
@@ -197,6 +207,9 @@ class _ActionCell extends StatefulWidget {
 
   final ActionGlyph glyph;
   final String label;
+
+  /// What VoiceOver reads while [active], as landscape says it; the name under the icon stays [label].
+  final String? activeLabel;
   final int? count;
   final bool active;
   final bool dimmed;
@@ -315,7 +328,7 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
     );
     return Semantics(
       button: true,
-      label: widget.label,
+      label: widget.active ? widget.activeLabel ?? widget.label : widget.label,
       value: widget.count == null ? null : CountFormat.short(widget.count!),
       selected: widget.active,
       onTap: widget.onTap,

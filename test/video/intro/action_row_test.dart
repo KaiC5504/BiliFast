@@ -56,6 +56,9 @@ Color? textColour(WidgetTester tester, String text) => tester.widget<Text>(find.
 
 Offset centreOf(WidgetTester tester, String label) => tester.getCenter(find.bySemanticsLabel(label));
 
+/// Each cell by its key, which holds whatever its label says.
+Finder cell(String name) => find.byKey(ValueKey('action-$name'));
+
 void main() {
   testWidgets('five cells: counts in the short form, labels where there is no count', (tester) async {
     final actions = FakeVideoActions(likeCount: 9131, coinCount: 0, favCount: 123456, shareCount: 148);
@@ -182,7 +185,7 @@ void main() {
     await mount(tester, actions);
     final ring = tester.widget<TripleRing>(find.byType(TripleRing).first);
 
-    final press = await tester.startGesture(centreOf(tester, '点赞'));
+    final press = await tester.startGesture(tester.getCenter(cell('like')));
     await tester.pump(const Duration(milliseconds: 210));
     await tester.pump(const Duration(milliseconds: 1250));
     expect(actions.calls, ['triple']);
@@ -304,14 +307,46 @@ void main() {
     await mount(tester, actions);
 
     expect(
-      tester.getSemantics(find.bySemanticsLabel('点赞')),
-      isSemantics(label: '点赞', value: '9131', isButton: true, isSelected: true, hasTapAction: true),
+      tester.getSemantics(find.bySemanticsLabel('取消点赞')),
+      isSemantics(label: '取消点赞', value: '9131', isButton: true, isSelected: true, hasTapAction: true),
     );
-    for (final label in ['点赞', '不喜欢', '投币', '收藏', '分享']) {
+    for (final label in ['取消点赞', '不喜欢', '投币', '收藏', '分享']) {
       tester.semantics.tap(find.semantics.byLabel(label));
     }
-    tester.semantics.longPress(find.semantics.byLabel('点赞'));
+    tester.semantics.longPress(find.semantics.byLabel('取消点赞'));
     expect(actions.calls, ['toggleLike', 'toggleDislike', 'ask coin', 'ask favourites', 'ask share', 'triple']);
+    semantics.dispose();
+  });
+
+  testWidgets('what is on tells VoiceOver, as landscape does, and the keys find each cell either way', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final actions = FakeVideoActions(coinCount: 0);
+    await mount(tester, actions);
+    const off = {'like': '点赞', 'dislike': '不喜欢', 'coin': '投币', 'favourite': '收藏', 'share': '分享'};
+    for (final MapEntry(key: name, value: label) in off.entries) {
+      expect(
+        tester.getSemantics(cell(name)),
+        isSemantics(label: label, isButton: true, hasSelectedState: true, isSelected: false),
+        reason: name,
+      );
+    }
+
+    actions
+      ..liked = true
+      ..disliked = true
+      ..coins = 1
+      ..favorited = true
+      ..changed();
+    await tester.pumpAndSettle();
+    const on = {'like': '取消点赞', 'dislike': '不喜欢', 'coin': '已投币', 'favourite': '已收藏'};
+    for (final MapEntry(key: name, value: label) in on.entries) {
+      expect(
+        tester.getSemantics(cell(name)),
+        isSemantics(label: label, isButton: true, hasSelectedState: true, isSelected: true),
+        reason: name,
+      );
+    }
+    expect(find.text('投币'), findsOneWidget, reason: 'the name under the icon stays while the count is 0');
     semantics.dispose();
   });
 
