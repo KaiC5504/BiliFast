@@ -1,9 +1,10 @@
 import 'dart:async';
 
+import 'package:bili_core/api.dart' as bili show VideoPage, VideoView;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../playback/playback_controller.dart';
 import '../player_ui/player_stage.dart';
@@ -34,9 +35,9 @@ Widget videoStage(
   onHint: controller.seekHint,
 );
 
-/// The video page's shell (slice 3): the player at 16:9 under a black status bar, the title and part below it.
-/// It opens the route's video on the shared player, reports watch progress while logged in, and gives the player
-/// back when it goes. The intro, actions and comments come in later slices.
+/// The video page's shell (slice 3): the player at 16:9 under a black status bar, the title, uploader and part below
+/// it. It opens the route's video on the shared player, reports watch progress while logged in, and gives the player
+/// back when it is popped. The intro, actions and comments come in later slices.
 class VideoPage extends StatefulWidget {
   const VideoPage({super.key, required this.route, this.stageBuilder = videoStage});
 
@@ -55,35 +56,79 @@ class _VideoPageState extends State<VideoPage> {
 
   /// The controller's open count once this page opened its video; a later one means a newer page has the player.
   int? _open;
-  bool _disposed = false;
+
+  /// Popped, or disposed without a pop: the last position went out and the player was given back.
+  bool _left = false;
+
+  /// This page's video has played, so a fallback, reload or replay shows the player rather than the cover again.
+  bool _played = false;
+
+  /// The last video and part this page opened, so the title stays put while the page slides away.
+  bili.VideoView? _video;
+  bili.VideoPage? _part;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_services != null) return;
-    final services = AppScope.of(context);
-    _services = services;
-    services.playback.obtain().then(
-      (controller) {
-        if (_disposed) return;
-        setState(() => _controller = controller);
-        _reporter = WatchReporter(
-          controller: controller,
-          client: services.environment.client,
-          loggedIn: () => services.environment.account is LoggedIn,
-        );
-        _openVideo(controller);
-      },
+    _services = AppScope.of(context);
+    _start();
+  }
+
+  void _start() {
+    _services!.playback.obtain().then(
+      _begin,
       onError: (Object error) {
-        if (!_disposed) setState(() => _startError = '$error');
+        if (mounted && !_left) setState(() => _startError = '$error');
       },
     );
   }
 
+  void _begin(PlaybackController controller) {
+    if (!mounted || _left) return;
+    _controller = controller;
+    _startError = null;
+    controller.addListener(_follow);
+    _openVideo(controller);
+  }
+
   void _openVideo(PlaybackController controller) {
     final route = widget.route;
+    final services = _services!;
+    unawaited(_reporter?.leave());
     unawaited(controller.openVideo(route.bvid, cid: route.cid, start: route.start, view: route.view));
-    _open = controller.opens;
+    _reporter = WatchReporter(
+      controller: controller,
+      client: services.environment.client,
+      loggedIn: () => WatchReporter.canReport(services.environment),
+    );
+    setState(() => _open = controller.opens);
+  }
+
+  bool _isMine(PlaybackController controller) => !_left && controller.opens == _open;
+
+  void _follow() {
+    final controller = _controller;
+    if (controller == null) return;
+    setState(() {
+      if (!_isMine(controller)) return;
+      if (controller.video case final video?) {
+        _video = video;
+        _part = controller.page;
+      }
+      if (controller.phase == PlaybackPhase.playing) _played = true;
+    });
+  }
+
+  VoidCallback? get _retry {
+    if (_startError != null) {
+      return () {
+        setState(() => _startError = null);
+        _start();
+      };
+    }
+    final controller = _controller;
+    return controller == null ? null : () => _openVideo(controller);
   }
 
   void _seeked(double seconds, {required bool precise}) {
@@ -91,87 +136,104 @@ class _VideoPageState extends State<VideoPage> {
     _reporter?.seeked(seconds);
   }
 
+  /// Runs at the pop, not at dispose 500 ms later: a card opened during the transition would by then have the
+  /// player, and this page would report and close the newer page's video.
+  void _leave() {
+    if (_left) return;
+    _left = true;
+    final controller = _controller;
+    controller?.removeListener(_follow);
+    unawaited(_reporter?.leave());
+    if (controller != null && controller.opens == _open) controller.close();
+  }
+
   @override
   void dispose() {
-    _disposed = true;
-    unawaited(_reporter?.leave());
-    final controller = _controller;
-    if (controller != null && controller.opens == _open) controller.close();
+    _leave();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = _controller;
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        backgroundColor: BiliColors.card,
-        body: controller == null
-            ? Column(
-                children: [
-                  _box(context, null),
-                  const Expanded(child: SizedBox()),
-                ],
-              )
-            : ListenableBuilder(
-                listenable: controller,
-                builder: (context, _) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _box(context, controller),
-                    Expanded(
-                      child: _Details(route: widget.route, controller: controller),
-                    ),
-                  ],
-                ),
-              ),
+    return PopScope<Object?>(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) setState(_leave);
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light,
+        child: Scaffold(
+          backgroundColor: BiliColors.card,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _box(context),
+              Expanded(child: _Details(route: widget.route, video: _video, part: _part)),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  /// Black from the top of the screen down to the bottom of the 16:9 player.
-  Widget _box(BuildContext context, PlaybackController? controller) {
+  /// Black from the top of the screen down to the bottom of the 16:9 player. The layers are keyed so the cover's Hero
+  /// keeps its element while the stage, spinner and failure come and go, even mid-flight.
+  Widget _box(BuildContext context) {
     final route = widget.route;
-    final phase = controller?.phase ?? PlaybackPhase.loading;
-    final showsVideo = controller != null && controller.video != null && phase != PlaybackPhase.failed;
+    final cover = route.cover;
+    final controller = _controller;
+    final mine = controller != null && _isMine(controller);
+    final phase = mine ? controller.phase : (_left ? PlaybackPhase.idle : PlaybackPhase.loading);
+    final failed = _startError != null || phase == PlaybackPhase.failed;
     return ColoredBox(
       color: BiliColors.videoBackground,
       child: SafeArea(
         bottom: false,
         child: AspectRatio(
-          aspectRatio: 16 / 9,
+          aspectRatio: BiliMetrics.videoAspect,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (showsVideo) widget.stageBuilder(context, controller, _seeked),
-              // The card's cover flies in and stays until the first frame, as the official app's page opens.
-              if (route.cover != null)
+              if (mine && controller.video != null && !failed)
+                KeyedSubtree(
+                  key: const ValueKey('video-stage'),
+                  child: widget.stageBuilder(context, controller, _seeked),
+                ),
+              // The card's cover flies in and stays until this page's video first plays, then goes for good, as the
+              // official app's page opens.
+              if (cover != null)
                 IgnorePointer(
+                  key: const ValueKey('video-cover'),
                   child: AnimatedOpacity(
-                    opacity: phase == PlaybackPhase.playing ? 0 : 1,
+                    opacity: _played ? 0 : 1,
                     duration: const Duration(milliseconds: 200),
-                    child: Hero(tag: route.heroTag, child: RemoteImage(route.cover)),
+                    child: Hero(
+                      tag: route.heroTag,
+                      flightShuttleBuilder: _coverInFlight,
+                      child: RemoteImage(cover, size: _coverSize(context)),
+                    ),
                   ),
                 ),
-              if (_startError != null || phase == PlaybackPhase.failed)
+              if (failed)
                 _Failure(
+                  key: const ValueKey('video-failure'),
                   message: _startError == null ? controller?.error ?? '播放失败' : '播放器启动失败：$_startError',
-                  onRetry: controller == null ? null : () => _openVideo(controller),
+                  onRetry: _retry,
                 )
               else if (phase == PlaybackPhase.loading)
                 const Center(
-                  child: SizedBox.square(
-                    dimension: BiliMetrics.chromeIcon,
-                    child: CircularProgressIndicator(strokeWidth: 2.5, color: BiliColors.onVideo),
-                  ),
+                  key: ValueKey('video-loading'),
+                  child: CupertinoActivityIndicator(color: BiliColors.onVideo, radius: BiliMetrics.videoSpinnerRadius),
                 ),
               Align(
                 alignment: Alignment.topLeft,
                 child: IconButton(
                   key: const ValueKey('video-back'),
                   onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: BiliColors.onVideo, size: 20),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: BiliColors.onVideo,
+                    size: BiliMetrics.videoBackIcon,
+                  ),
                   tooltip: '返回',
                 ),
               ),
@@ -181,10 +243,35 @@ class _VideoPageState extends State<VideoPage> {
       ),
     );
   }
+
+  /// The player box's final size: the cover is asked for once at it, however the box grows during the flight.
+  static Size _coverSize(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return Size(width, width / BiliMetrics.videoAspect);
+  }
+
+  /// The card's image, already loaded at the card's size, flies; the page's cover, the same download as the page's
+  /// own, fades in over it once it arrives.
+  Widget _coverInFlight(
+    BuildContext flight,
+    Animation<double> animation,
+    HeroFlightDirection direction,
+    BuildContext from,
+    BuildContext to,
+  ) {
+    final cover = widget.route.cover;
+    final card = (direction == HeroFlightDirection.push ? from : to).findRenderObject();
+    final cardSize = card is RenderBox && card.hasSize ? card.size : null;
+    return RemoteImage(
+      cover,
+      size: _coverSize(flight),
+      placeholder: cardSize == null ? null : RemoteImage(cover, size: cardSize),
+    );
+  }
 }
 
 class _Failure extends StatelessWidget {
-  const _Failure({required this.message, required this.onRetry});
+  const _Failure({super.key, required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback? onRetry;
@@ -223,17 +310,18 @@ class _Failure extends StatelessWidget {
   );
 }
 
-/// The title and, for a video in parts, the part playing; the card's title until the video's own arrives.
+/// The title, uploader and, for a video in parts, the part playing; the route's title until the video's own arrives.
 class _Details extends StatelessWidget {
-  const _Details({required this.route, required this.controller});
+  const _Details({required this.route, required this.video, required this.part});
 
   final VideoRoute route;
-  final PlaybackController controller;
+  final bili.VideoView? video;
+  final bili.VideoPage? part;
 
   @override
   Widget build(BuildContext context) {
-    final video = controller.video;
-    final page = controller.page;
+    final video = this.video;
+    final part = this.part;
     final title = video?.title ?? route.title ?? '';
     return ListView(
       padding: const EdgeInsets.all(BiliMetrics.gutter),
@@ -247,7 +335,7 @@ class _Details extends StatelessWidget {
         Text(
           [
             if (video?.owner case final owner? when owner.isNotEmpty) owner,
-            if (video != null && video.pages.length > 1 && page != null) 'P${page.page} ${page.part}',
+            if (video != null && video.pages.length > 1 && part != null) 'P${part.page} ${part.part}',
           ].join(' · '),
           key: const ValueKey('video-meta'),
           style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),

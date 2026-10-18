@@ -3,12 +3,15 @@ import 'dart:convert';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
+import 'package:bilifast/account/keychain_store.dart';
+import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
 import 'package:bilifast/video/watch_reporter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
 
@@ -99,6 +102,20 @@ void main() {
     expect(sent(), isEmpty);
   });
 
+  test('once a newer open has the player, its events are ignored and leaving reports this video where it was',
+      () async {
+    final reporter = make();
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    position(10);
+    await controller.openVideo('BV1GJ411x7h7', cid: 137649200, start: 0);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    position(50);
+    player.emit(const StatusChanged(PlayerStatus.paused));
+    reporter.seeked(60);
+    await settle(reporter);
+    expect(sent(), [('137649199', '0'), ('137649199', '10')]);
+  });
+
   test('nothing is reported before playback starts, and a failed heartbeat does not stop the next', () async {
     final reporter = make();
     player.emit(const StatusChanged(PlayerStatus.paused));
@@ -111,5 +128,37 @@ void main() {
     position(20);
     await settle(reporter);
     expect(sent().map((each) => each.$2), ['0', '20', '20']);
+  });
+
+  group('canReport', () {
+    Future<AppEnvironment> environment({required CookieLoad stored, required (int, String)? nav}) async {
+      final canned = Canned.http();
+      if (nav != null) canned.routes[Canned.navPath] = nav;
+      final environment =
+          await AppEnvironment.load(keychain: FakeKeychain(stored), http: canned, logger: Logger(session: 'test'));
+      if (nav != null) await environment.refreshAccount();
+      return environment;
+    }
+
+    const session = StoredCookies(Canned.cookies);
+
+    test('logged in, or unknown with a session in the jar', () async {
+      expect(WatchReporter.canReport(await environment(stored: session, nav: (200, Canned.navLoggedIn))), isTrue);
+      final failed = await environment(stored: session, nav: (500, ''));
+      expect(failed.account, isA<AccountUnknown>());
+      expect(WatchReporter.canReport(failed), isTrue);
+      expect(WatchReporter.canReport(await environment(stored: session, nav: null)), isTrue,
+          reason: 'the launch check has not answered yet');
+    });
+
+    test('not without a session, nor with one Bilibili refused', () async {
+      expect(WatchReporter.canReport(await environment(stored: const NoStoredCookies(), nav: null)), isFalse);
+      final out = await environment(stored: const NoStoredCookies(), nav: (500, ''));
+      expect(out.account, isA<LoggedOut>());
+      expect(WatchReporter.canReport(out), isFalse);
+      final expired = await environment(stored: session, nav: (200, Canned.navLoggedOut));
+      expect(expired.account, isA<LoginExpired>());
+      expect(WatchReporter.canReport(expired), isFalse);
+    });
   });
 }

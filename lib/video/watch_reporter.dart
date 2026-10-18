@@ -4,12 +4,16 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 
+import '../app/app_environment.dart';
 import '../playback/playback_controller.dart';
 import '../player/bili_player.dart';
 
 /// Tells Bilibili how far the video page got, so it shows in the official app's 历史记录 and the next open resumes
-/// there (VideoPageModel.swift's heartbeats): once playback starts, every 15 s of playing, on pause, after a seek, at
-/// the end (-1) and when the page goes. Logged in only. The speed test plays without one, so it reports nothing.
+/// there (VideoPageModel.swift's heartbeats): once playback starts, while playing whenever the position is 15 s on from
+/// the last report, on pause, after a seek, at the end (-1) and when the page goes, while [canReport] allows. It
+/// belongs to the open the page made just before building it: once a newer open has the player it hears nothing more,
+/// and leaving reports its own video at the last position it saw. The speed test plays without one, so it reports
+/// nothing.
 class WatchReporter {
   WatchReporter({
     required PlaybackController controller,
@@ -17,15 +21,25 @@ class WatchReporter {
     required this._loggedIn,
     Logger? logger,
   }) : _controller = controller,
+       _open = controller.opens,
        _logger = logger ?? Logger.shared {
     // After the controller's own subscription, so its phase already reflects each event.
     _events = controller.player.events.listen(_onEvent);
   }
 
+  /// Logged in, or still unknown with a session in the jar: a launch account check that failed (no network) must not
+  /// cost the whole session its history, and Bilibili ignores the heartbeats of a session that turns out dead.
+  static bool canReport(AppEnvironment environment) => switch (environment.account) {
+    LoggedIn() => true,
+    AccountUnknown() => environment.cookies.all.containsKey('SESSDATA'),
+    LoggedOut() || LoginExpired() => false,
+  };
+
   final PlaybackController _controller;
   final BiliClient _client;
   final bool Function() _loggedIn;
   final Logger _logger;
+  final int _open;
   late final StreamSubscription<PlayerEvent> _events;
 
   ({String bvid, int cid})? _item;
@@ -35,11 +49,17 @@ class WatchReporter {
   /// The finished heartbeat went out; a later mark at the end position would overwrite it.
   bool _finishedSent = false;
   PlayerStatus _status = PlayerStatus.idle;
+
+  /// The position at this open's last event, for a leave after a newer open has moved the controller on.
+  double _position = 0;
   Future<void> _sending = Future.value();
   bool _left = false;
 
+  bool get _isCurrent => _controller.opens == _open;
+
   void _onEvent(PlayerEvent event) {
-    final item = _current();
+    if (!_isCurrent) return;
+    final item = _playing();
     if (item == null) return;
     if (item != _item) {
       _item = item;
@@ -47,9 +67,11 @@ class WatchReporter {
       _started = false;
       _finishedSent = false;
     }
+    _position = _controller.currentSeconds;
     switch (event) {
       case StatusChanged(:final status):
         _status = status;
+        // Statuses while a load starts or reloads are the player's, not the viewer's.
         if (_controller.phase != PlaybackPhase.playing) return;
         switch (status) {
           case PlayerStatus.playing when !_started:
@@ -72,10 +94,11 @@ class WatchReporter {
     }
   }
 
-  /// A seek the user made on the page; reported at where it lands.
+  /// A seek the user made on the page; reported at the position asked for.
   void seeked(double seconds) {
-    final item = _current();
-    if (item == null || item != _item || !_started) return;
+    final item = _item;
+    if (!_isCurrent || item == null || item != _playing() || !_started) return;
+    _position = seconds;
     _finishedSent = false;
     _send(item, _schedule.mark(position: seconds));
   }
@@ -84,13 +107,15 @@ class WatchReporter {
   Future<void> leave() {
     if (_left) return _sending;
     _left = true;
-    final item = _current();
-    if (item != null && item == _item && _started && !_finishedSent) _mark(item);
+    final item = _item;
+    if (item != null && _started && !_finishedSent) {
+      _send(item, _schedule.mark(position: _isCurrent ? _controller.currentSeconds : _position));
+    }
     unawaited(_events.cancel());
     return _sending;
   }
 
-  ({String bvid, int cid})? _current() {
+  ({String bvid, int cid})? _playing() {
     final video = _controller.video;
     final page = _controller.page;
     return video == null || page == null ? null : (bvid: video.bvid, cid: page.cid);
