@@ -74,6 +74,25 @@ abstract final class BiliColors {
   static const thumbBody = Color(0xFF000000);
   static const thumbScreen = Color(0xFFFFFFFF);
 
+  /// The small player's controls and end screen, and the bar's chapter ticks and 竖屏 style, measured on the official
+  /// app's 03, 09, 15 and 26.
+  static const chromeTick = Color(0xB3000000);
+  static const verticalTrack = Color(0x26FFFFFF);
+  static const verticalPlayed = Color(0x99FFFFFF);
+  static const verticalThumb = Color(0xFFFFFFFF);
+  static const chapterFill = Color(0x8C000000);
+  static const badgeFill = Color(0x40000000);
+  static const badgeBorder = Color(0x80FFFFFF);
+  static const badgeText = Color(0xE6FFFFFF);
+
+  /// 26's video never gets brighter than 41 of 255 under its dim.
+  static const endDim = Color(0xD6000000);
+  static const endButton = Color(0x33FFFFFF);
+  static const endCaption = Color(0xB3FFFFFF);
+  static const endMeta = Color(0x99FFFFFF);
+  static const endPlayGlyph = Color(0xF2FFFFFF);
+  static const endCoverShade = Color(0x8C000000);
+
   /// Danmaku outlines: very dark text gets the light one, or it would vanish inside it.
   static const danmakuOutline = Color(0xD9000000);
   static const danmakuOutlineLight = Color(0xD9FFFFFF);
@@ -173,6 +192,87 @@ abstract final class BiliMetrics {
   static const thumbWidth = 18.0;
   static const thumbHeight = 16.0;
   static const hiddenLine = 2.0;
+
+  /// The small player's controls and end screen, and the bar's chapter title and 竖屏 dot, measured on the official
+  /// app's 03, 09, 15 and 26. While dragged, the thumb and the bar grow a little.
+  static const verticalDot = 4.0;
+  static const verticalDotDragging = 10.0;
+  static const thumbDragScale = 1.25;
+  static const barDragHeight = 3.0;
+  static const chapterTitleFont = 13.0;
+  static const chapterTitleHeight = 24.0;
+  static const chapterTitlePadding = 8.0;
+  static const chapterTitleRadius = 4.0;
+  static const chapterTitleGap = 6.0;
+  static const chromeEdge = 1.0;
+
+  /// How far the rows slide as they fade, as a share of their height.
+  static const chromeRise = 0.3;
+  static const chromePressedScale = 0.86;
+  static const chromeGlyphStroke = 1.7;
+  static const backGlyphWidth = 8.7;
+  static const backGlyphHeight = 18.0;
+  static const backGlyphStroke = 1.6;
+  static const playGlyphWidth = 14.7;
+  static const playGlyphHeight = 16.0;
+  static const pauseBarWidth = 4.6;
+  static const pauseBarGap = 4.4;
+  static const playGlyphRounding = 1.4;
+  static const fullScreenGap = 2.0;
+  static const moreDot = 3.3;
+  static const moreDotGap = 3.2;
+  static const fullScreenGlyph = 14.0;
+  static const cornersGlyphWidth = 13.0;
+  static const cornersGlyphHeight = 15.5;
+  static const badgeFont = 8.0;
+  static const badgeHeight = 11.5;
+  static const badgePadding = 3.5;
+  static const badgeBorderWidth = 0.7;
+  static const badgeOffsetX = 12.0;
+  static const badgeOffsetY = -16.0;
+  static const endInset = 12.0;
+  static const endCaptionFont = 12.0;
+  static const endCaptionGap = 3.8;
+  static const endCoverWidth = 128.0;
+  static const endCoverHeight = 72.0;
+  static const endCoverRadius = 5.0;
+  static const endCoverGap = 11.0;
+  static const endCoverShadeHeight = 30.0;
+  static const endCoverTextInset = 7.0;
+  static const endCoverTextBottom = 5.0;
+  static const endCoverTimeFont = 12.0;
+  static const endPlayGlyphWidth = 18.7;
+  static const endPlayGlyphHeight = 22.0;
+  static const endTitleFont = 14.0;
+
+  /// The uploader and counts rows sit at fixed heights inside the cover's 72.
+  static const endUploaderTop = 40.0;
+  static const endCountsTop = 58.0;
+  static const endMetaRow = 12.0;
+  static const endMetaFont = 10.0;
+  static const endMetaIcon = 16.0;
+  static const endMetaGap = 4.5;
+  static const endMetaSpacing = 12.0;
+  static const endUpWidth = 13.3;
+  static const endUpHeight = 11.3;
+  static const endUpFont = 7.5;
+  static const endUpRadius = 2.5;
+  static const endUpBorder = 1.0;
+  static const endButtonFont = 14.0;
+  static const endButtonWidth = 66.5;
+  static const endButtonHeight = 30.0;
+  static const endButtonTrailing = 18.0;
+  static const endActionsLeading = 13.7;
+  static const endActionFont = 14.0;
+  static const endActionGap = 8.0;
+  static const endActionSpacing = 12.0;
+  static const replayGlyphWidth = 21.0;
+  static const replayGlyphHeight = 18.0;
+  static const shareGlyphWidth = 20.0;
+  static const shareGlyphHeight = 17.0;
+
+  /// How far the end screen's parts rise as they come in.
+  static const endRise = 14.0;
 
   /// The stats overlay.
   static const statsFont = 10.0;
