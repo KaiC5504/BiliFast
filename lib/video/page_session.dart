@@ -1,14 +1,656 @@
+import 'dart:async';
+
+import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
+import 'package:bili_core/engine.dart' show PlaybackMode;
+import 'package:bili_core/logic.dart' as logic show Autoplay, LoopMode, NextPlay, NextReplay, NextStop, PlayItem;
+import 'package:bili_core/shared.dart' show MonotonicClock;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+
+import '../app/app_environment.dart';
 import '../app/app_scope.dart';
+import '../home/feed_model.dart' show requestFailureMessage;
+import '../playback/overlay_stats.dart';
 import '../playback/playback_controller.dart';
+import '../player/bili_player.dart';
+import '../player/playback_clock.dart';
+import '../player_ui/player_readout.dart';
+import 'player_prefs.dart';
 import 'player_session.dart';
 
 /// Plays another part or video on the same page: the page opens it, so its own bookkeeping (watch reports, which open
 /// is its) stays right.
 typedef SessionOpen = void Function(String bvid, {int? cid});
 
-/// The video page's [PlayerSession] over the shared controller, one per page.
+typedef PeriodicTimer = Timer Function(Duration period, void Function() tick);
+
+/// The video page's [PlayerSession] over the shared controller, one per page. [onSeeked] hears every seek the
+/// session makes, for the page's watch reports.
 PlayerSession createPageSession({
   required PlaybackController controller,
   required AppServices services,
   required SessionOpen open,
-}) => throw UnimplementedError('PagePlayerSession');
+  void Function(double seconds)? onSeeked,
+  PlayerPrefs? prefs,
+}) {
+  final environment = services.environment;
+  return PagePlayerSession(
+    controller: controller,
+    client: environment.client,
+    open: open,
+    isVip: () => switch (environment.account) {
+      LoggedIn(:final vip) => vip,
+      _ => false,
+    },
+    accountChanges: environment,
+    onSeeked: onSeeked,
+    prefs: prefs,
+  );
+}
+
+/// The player half of BiliNative's VideoPageModel: seeks, speed, the end rules (单集循环, 自动连播, 列表循环), 定时关闭,
+/// 看点 and related videos, and the panels' switches, over the shared [PlaybackController].
+class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver implements PlayerSession {
+  PagePlayerSession({
+    required PlaybackController controller,
+    required this._client,
+    required this._open,
+    required this._isVip,
+    Listenable? accountChanges,
+    this._onSeeked,
+    PlayerPrefs? prefs,
+    MonotonicClock? clock,
+    PeriodicTimer? periodic,
+    StartTimer? startTimer,
+    Logger? logger,
+  })  : _controller = controller,
+        _accountChanges = accountChanges,
+        _prefs = prefs ?? PlayerPrefs.shared,
+        _monotonic = clock ?? MonotonicClock.system,
+        _periodic = periodic ?? _systemPeriodic,
+        _startTimer = startTimer ?? Timer.new,
+        _logger = logger ?? Logger.shared {
+    readout = PlayerReadout(clock: controller.clock, events: controller.player.events);
+    final state = WidgetsBinding.instance.lifecycleState;
+    _background = state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+    WidgetsBinding.instance.addObserver(this);
+    controller.addListener(_controllerChanged);
+    accountChanges?.addListener(notifyListeners);
+    _endings = controller.endings.listen((_) => unawaited(_handleEnd()));
+    _applyPrefs();
+    _controllerChanged();
+  }
+
+  /// Hold to speed up plays at this rate.
+  static const speedUpRate = 2.0;
+
+  /// Auto picture in picture can report its start after the app is already in the background.
+  static const backgroundGrace = Duration(seconds: 1);
+
+  static Timer _systemPeriodic(Duration period, void Function() tick) => Timer.periodic(period, (_) => tick());
+
+  final PlaybackController _controller;
+  final BiliClient _client;
+  final SessionOpen _open;
+  final bool Function() _isVip;
+  final Listenable? _accountChanges;
+  final void Function(double seconds)? _onSeeked;
+  final PlayerPrefs _prefs;
+  final MonotonicClock _monotonic;
+  final PeriodicTimer _periodic;
+  final StartTimer _startTimer;
+  final Logger _logger;
+  late final StreamSubscription<void> _endings;
+
+  @override
+  late final PlayerReadout readout;
+
+  @override
+  final ValueNotifier<double?> scrubbing = ValueNotifier(null);
+
+  @override
+  final ValueNotifier<Duration?> sleepRemaining = ValueNotifier(null);
+
+  /// Bumped by every scrub and seek, so a seek that lands after a newer drag began leaves [scrubbing] alone.
+  int _seekCount = 0;
+
+  /// A hint went out during this drag.
+  bool _hinted = false;
+  bool _speedingUp = false;
+  bool _ended = false;
+  bool _background = false;
+  Timer? _backgroundCheck;
+  Duration? _sleepTimer;
+  double _sleepDeadlineMs = 0;
+  Timer? _sleepTicker;
+  List<Chapter> _chapters = const [];
+  List<VideoCard> _related = const [];
+
+  /// The part [chapters] belong to, and the video [related] belongs to.
+  logic.PlayItem? _chaptersFor;
+  String? _relatedFor;
+  logic.PlayItem? _current;
+  bool _disposed = false;
+  bool _detached = false;
+
+  /// What a new page starts with: the saved settings, at 1× and unmirrored (Swift kept those per page). Before the
+  /// part is chosen none of these restarts anything.
+  void _applyPrefs() {
+    final controller = _controller;
+    if (controller.rate != 1) _quietly(() => controller.setRate(1), 'rate');
+    if (controller.mirrored) _quietly(() => controller.setMirrored(false), 'mirror');
+    if (controller.fit != _prefs.fit) _quietly(() => controller.setFit(_prefs.fit), 'fit');
+    final mode = _prefs.btr ? PlaybackMode.btr : PlaybackMode.direct;
+    if (controller.mode != mode) _quietly(() => controller.setMode(mode), 'mode');
+    final quality = _prefs.quality;
+    if (quality != null && quality != controller.selectedQuality) {
+      _quietly(() => controller.setQuality(quality), 'quality');
+    }
+    final codec = _prefs.codec;
+    if (codec != null && codec != controller.codec) _quietly(() => controller.setCodec(codec), 'codec');
+  }
+
+  @override
+  BiliPlayer get player => _controller.player;
+
+  @override
+  PlaybackClock get clock => _controller.clock;
+
+  @override
+  ValueListenable<double> get duration => _controller.duration;
+
+  @override
+  ValueListenable<OverlayStats> get stats => _controller.stats;
+
+  @override
+  VideoView? get video => _controller.video;
+
+  @override
+  VideoPage? get part => _controller.page;
+
+  bool get _inParts => (video?.pages.length ?? 0) > 1;
+
+  @override
+  String get title {
+    final part = this.part;
+    if (_inParts && part != null && part.part.isNotEmpty) return part.part;
+    return video?.title ?? '';
+  }
+
+  @override
+  bool get isVertical {
+    final size = _controller.videoSize;
+    return size != null && size.height > size.width;
+  }
+
+  @override
+  List<Chapter> get chapters => _chapters;
+
+  @override
+  List<VideoCard> get related => _related;
+
+  @override
+  bool get episodesAreParts => _inParts;
+
+  /// Titles as EpisodesPanel.swift shows them: `P2 名字` for parts, the episode's own title for 合集.
+  @override
+  List<Episode> get episodes {
+    final video = this.video;
+    if (video == null) return const [];
+    final cid = part?.cid;
+    if (_inParts) {
+      return [
+        for (final page in video.pages)
+          Episode(bvid: video.bvid, cid: page.cid, title: _partTitle(page), current: page.cid == cid),
+      ];
+    }
+    return [
+      for (final episode in _section(video)?.episodes ?? const <SeasonEpisode>[])
+        Episode(bvid: episode.bvid, cid: episode.cid, title: episode.title, current: episode.bvid == video.bvid),
+    ];
+  }
+
+  static String _partTitle(VideoPage page) => 'P${page.page} ${page.part}';
+
+  /// The 合集 section holding [video], else the first.
+  SeasonSection? _section(VideoView video) {
+    final sections = _controller.season?.sections ?? const <SeasonSection>[];
+    return sections.where((section) => section.episodes.any((episode) => episode.bvid == video.bvid)).firstOrNull ??
+        sections.firstOrNull;
+  }
+
+  List<logic.PlayItem> get _partItems => [
+        for (final page in video?.pages ?? const <VideoPage>[]) logic.PlayItem(bvid: video!.bvid, cid: page.cid),
+      ];
+
+  /// Every section's episodes in order, as Swift's `episodeItems`.
+  List<logic.PlayItem> get _episodeItems => [
+        for (final section in _controller.season?.sections ?? const <SeasonSection>[])
+          for (final episode in section.episodes) logic.PlayItem(bvid: episode.bvid, cid: episode.cid),
+      ];
+
+  @override
+  Episode? get next {
+    final current = _current;
+    if (current == null) return null;
+    final step = logic.Autoplay.next(
+      after: current,
+      parts: _partItems,
+      episodes: _episodeItems,
+      autoplay: true,
+      loop: loop == LoopMode.list ? logic.LoopMode.list : logic.LoopMode.none,
+    );
+    if (step is! logic.NextPlay) return null;
+    return _episodeFor(step.item);
+  }
+
+  Episode _episodeFor(logic.PlayItem item) {
+    final video = this.video;
+    if (video != null && item.bvid == video.bvid) {
+      final page = video.pages.where((page) => page.cid == item.cid).firstOrNull;
+      if (page != null) {
+        return Episode(bvid: item.bvid, cid: item.cid, title: _inParts ? _partTitle(page) : video.title, current: false);
+      }
+    }
+    final episode = _controller.season?.sections
+        .expand((section) => section.episodes)
+        .where((episode) => episode.bvid == item.bvid && episode.cid == item.cid)
+        .firstOrNull;
+    return Episode(bvid: item.bvid, cid: item.cid, title: episode?.title ?? '', current: false);
+  }
+
+  @override
+  Uri? get shareLink {
+    final video = this.video;
+    if (video == null) return null;
+    final page = part?.page ?? 1;
+    return Uri.parse('https://www.bilibili.com/video/${video.bvid}${page > 1 ? '?p=$page' : ''}');
+  }
+
+  /// Follows the controller's video: 看点 once per part, related videos once per video.
+  void _controllerChanged() {
+    if (_disposed || _detached) return;
+    final video = _controller.video;
+    final page = _controller.page;
+    // The page closed the player at its pop, before it disposes this session: the next page's video is not ours.
+    if (_current != null && video == null && _controller.phase == PlaybackPhase.idle) {
+      _detached = true;
+      _sleepTicker?.cancel();
+      _backgroundCheck?.cancel();
+      return;
+    }
+    if (video != null && video.bvid != _relatedFor) {
+      _relatedFor = video.bvid;
+      _related = const [];
+      unawaited(_loadRelated(video.bvid));
+    }
+    final item = video == null || page == null ? null : logic.PlayItem(bvid: video.bvid, cid: page.cid);
+    if (item != null && item != _current) {
+      _current = item;
+      _ended = false;
+      if (item != _chaptersFor) {
+        _chaptersFor = item;
+        final known = _controller.playerInfoFor(item.cid);
+        _chapters = known?.chapters ?? const [];
+        if (known == null) unawaited(_loadChapters(item));
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> _loadRelated(String bvid) async {
+    try {
+      final cards = await _client.related(bvid: bvid);
+      if (_disposed || _relatedFor != bvid) return;
+      _related = cards;
+      notifyListeners();
+    } catch (error) {
+      _logger.warn(LogCategory.api, 'related failed', {'bvid': bvid, 'error': '$error'});
+    }
+  }
+
+  Future<void> _loadChapters(logic.PlayItem item) async {
+    try {
+      final info = await _client.playerInfo(bvid: item.bvid, cid: item.cid);
+      if (_disposed || _chaptersFor != item) return;
+      _chapters = info.chapters;
+      notifyListeners();
+    } catch (error) {
+      _logger.warn(LogCategory.api, 'player info failed', {'bvid': item.bvid, 'cid': item.cid, 'error': '$error'});
+    }
+  }
+
+  @override
+  void togglePlay() {
+    if (readout.wantsPlay) {
+      _quietly(player.pause, 'pause');
+      return;
+    }
+    if (_ended || readout.status.value == PlayerStatus.ended) {
+      unawaited(replay());
+      return;
+    }
+    _quietly(player.play, 'play');
+  }
+
+  @override
+  double get position => scrubbing.value ?? readout.seconds.value;
+
+  @override
+  void scrub(double seconds) {
+    if (duration.value <= 0) return;
+    _seekCount += 1;
+    scrubbing.value = seconds;
+  }
+
+  @override
+  void hint(double seconds) {
+    if (duration.value <= 0) return;
+    _hinted = true;
+    _controller.seekHint(seconds);
+  }
+
+  @override
+  void cancelScrub() {
+    scrubbing.value = null;
+    if (_hinted) _controller.seekHint(null);
+    _hinted = false;
+  }
+
+  @override
+  Future<void> commitSeek(double seconds) async {
+    _hinted = false;
+    if (duration.value <= 0) return;
+    final count = ++_seekCount;
+    scrubbing.value = seconds;
+    _setEnded(false);
+    final seeked = player.seek(seconds, precise: false);
+    _controller.userSeeked(seconds, precise: false);
+    _onSeeked?.call(seconds);
+    readout.refresh();
+    try {
+      await seeked;
+    } finally {
+      // The bar holds the target until the seek lands, so it doesn't jump back to the old position first.
+      if (!_disposed && _seekCount == count) scrubbing.value = null;
+    }
+  }
+
+  @override
+  double get rate => _controller.rate;
+
+  @override
+  Future<void> setRate(double rate) async {
+    _speedingUp = false;
+    await _controller.setRate(rate);
+  }
+
+  @override
+  void speedUp(bool on) {
+    if (on == _speedingUp) return;
+    _speedingUp = on;
+    _quietly(() => player.setRate(on ? speedUpRate : _controller.rate), 'speed up');
+    notifyListeners();
+  }
+
+  @override
+  bool get speedingUp => _speedingUp;
+
+  @override
+  FitMode get fit => _controller.fit;
+
+  @override
+  Future<void> setFit(FitMode fit) async {
+    _prefs.fit = fit;
+    await _controller.setFit(fit);
+  }
+
+  @override
+  bool get mirrored => _controller.mirrored;
+
+  @override
+  Future<void> setMirrored(bool on) => _controller.setMirrored(on);
+
+  @override
+  LoopMode get loop => _prefs.loop;
+
+  @override
+  void setLoop(LoopMode mode) {
+    _prefs.loop = mode;
+    notifyListeners();
+  }
+
+  @override
+  bool get autoplayNext => _prefs.autoplay;
+
+  @override
+  void setAutoplayNext(bool on) {
+    _prefs.autoplay = on;
+    notifyListeners();
+  }
+
+  @override
+  Duration? get sleepTimer => _sleepTimer;
+
+  @override
+  void setSleepTimer(Duration? after) {
+    _sleepTicker?.cancel();
+    _sleepTicker = null;
+    if (after == null || after <= Duration.zero) {
+      _sleepTimer = null;
+      sleepRemaining.value = null;
+      notifyListeners();
+      return;
+    }
+    _sleepTimer = after;
+    _sleepDeadlineMs = _monotonic.nowMs() + after.inMilliseconds;
+    sleepRemaining.value = after;
+    _logger.info(LogCategory.ui, 'sleep timer', {'minutes': after.inMinutes});
+    _sleepTicker = _periodic(const Duration(seconds: 1), _sleepTick);
+    notifyListeners();
+  }
+
+  void _sleepTick() {
+    if (_disposed) return;
+    final left = _sleepDeadlineMs - _monotonic.nowMs();
+    if (left > 0) {
+      sleepRemaining.value = Duration(milliseconds: left.round());
+      return;
+    }
+    _logger.info(LogCategory.ui, 'sleep timer fired');
+    _quietly(player.pause, 'pause');
+    setSleepTimer(null);
+  }
+
+  @override
+  bool get danmakuOn => _prefs.danmakuOn;
+
+  @override
+  void setDanmakuOn(bool on) {
+    _prefs.danmakuOn = on;
+    notifyListeners();
+  }
+
+  @override
+  bool get showStats => _prefs.showStats;
+
+  @override
+  void setShowStats(bool on) {
+    _prefs.showStats = on;
+    notifyListeners();
+  }
+
+  @override
+  bool get btr => _controller.mode == PlaybackMode.btr;
+
+  @override
+  Future<void> setBtr(bool on) {
+    _prefs.btr = on;
+    return _controller.setMode(on ? PlaybackMode.btr : PlaybackMode.direct);
+  }
+
+  @override
+  List<QualityOption> get qualities => _controller.qualities;
+
+  @override
+  int get quality => _controller.selectedQuality;
+
+  @override
+  String qualityName(int qn) => _controller.qualityName(qn);
+
+  @override
+  bool get isVip => _isVip();
+
+  @override
+  Future<void> setQuality(int qn) {
+    _prefs.quality = qn;
+    return _controller.setQuality(qn);
+  }
+
+  @override
+  VideoCodec get codec => _controller.codec;
+
+  @override
+  Future<void> setCodec(VideoCodec codec) {
+    _prefs.codec = codec;
+    return _controller.setCodec(codec);
+  }
+
+  @override
+  bool get ended => _ended;
+
+  void _setEnded(bool value) {
+    if (_ended == value) return;
+    _ended = value;
+    notifyListeners();
+  }
+
+  Future<void> _handleEnd() async {
+    final current = _current;
+    if (_disposed || _detached || current == null) return;
+    final step = logic.Autoplay.next(
+      after: current,
+      parts: _partItems,
+      episodes: _episodeItems,
+      autoplay: autoplayNext,
+      loop: switch (loop) {
+        LoopMode.single => logic.LoopMode.single,
+        LoopMode.list => logic.LoopMode.list,
+        LoopMode.off => logic.LoopMode.none,
+      },
+    );
+    switch (step) {
+      case logic.NextReplay():
+        await replay();
+      case logic.NextPlay(:final item):
+        // The next part would play as audio only.
+        if (_background && !_controller.pictureInPicture) {
+          _logger.info(LogCategory.ui, 'autoplay skipped in the background', {'cid': item.cid});
+          _setEnded(true);
+          return;
+        }
+        _logger.info(LogCategory.ui, 'autoplay', {'bvid': item.bvid, 'cid': item.cid});
+        _open(item.bvid, cid: item.cid);
+      case logic.NextStop():
+        _setEnded(true);
+    }
+  }
+
+  @override
+  Future<void> replay() async {
+    _setEnded(false);
+    unawaited(player.seek(0, precise: true).catchError((Object error) {
+      _logger.warn(LogCategory.player, 'seek failed', {'error': '$error'});
+    }));
+    _controller.userSeeked(0);
+    _onSeeked?.call(0);
+    readout.refresh();
+    try {
+      await player.play();
+    } catch (error) {
+      _logger.warn(LogCategory.player, 'play failed', {'error': '$error'});
+    }
+  }
+
+  @override
+  void playEpisode(Episode episode) {
+    if (episode.current) return;
+    _open(episode.bvid, cid: episode.cid);
+  }
+
+  @override
+  void playRelated(VideoCard card) => _open(card.bvid);
+
+  @override
+  Future<String> watchLater() async {
+    final aid = video?.aid ?? 0;
+    if (aid == 0) return '视频还没有加载完';
+    try {
+      await _client.addToWatchLater(aid: aid);
+      return '已添加至稍后再看';
+    } catch (error) {
+      _logger.warn(LogCategory.ui, 'watch later failed', {'error': '$error'});
+      return requestFailureMessage(error);
+    }
+  }
+
+  @override
+  bool get pictureInPictureSupported => player.capabilities.pictureInPicture;
+
+  @override
+  Future<void> startPictureInPicture() => _controller.startPictureInPicture();
+
+  @override
+  bool get canCaptureFrame => player.capabilities.frameCapture;
+
+  @override
+  Future<String> captureFrame() async {
+    try {
+      if (await player.captureFrame()) return '已保存到相册';
+      _logger.warn(LogCategory.ui, 'frame capture failed');
+    } catch (error) {
+      _logger.warn(LogCategory.ui, 'frame capture failed', {'error': '$error'});
+    }
+    return '保存失败';
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final background = state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+    if (background == _background) return;
+    _background = background;
+    _backgroundCheck?.cancel();
+    _backgroundCheck = null;
+    if (!background) return;
+    _backgroundCheck = _startTimer(backgroundGrace, () {
+      _backgroundCheck = null;
+      if (_disposed || _detached || !_background || _controller.pictureInPicture || !readout.wantsPlay) return;
+      _logger.info(LogCategory.ui, 'paused in the background');
+      _quietly(player.pause, 'pause');
+    });
+  }
+
+  void _quietly(Future<void> Function() action, String what) {
+    unawaited(Future.sync(action).catchError((Object error) {
+      _logger.warn(LogCategory.player, '$what failed', {'error': '$error'});
+    }));
+  }
+
+  @override
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    _controller.removeListener(_controllerChanged);
+    _accountChanges?.removeListener(notifyListeners);
+    unawaited(_endings.cancel());
+    _sleepTicker?.cancel();
+    _backgroundCheck?.cancel();
+    if (_speedingUp) _quietly(() => player.setRate(_controller.rate), 'speed up');
+    readout.dispose();
+    scrubbing.dispose();
+    sleepRemaining.dispose();
+    super.dispose();
+  }
+}

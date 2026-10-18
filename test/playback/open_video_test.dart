@@ -176,4 +176,66 @@ void main() {
     await opening;
     expect(player.loaded?.startSeconds, 0);
   });
+
+  test('the rate, fit and mirroring chosen are applied again after every load; the defaults add no calls', () async {
+    final controller = make();
+    await controller.openVideo(bv, cid: 137649199);
+    expect(player.calls.last, startsWith('load'), reason: 'at 1x, fitted and unmirrored nothing more is sent');
+    await controller.setRate(1.5);
+    await controller.setFit(FitMode.stretch);
+    await controller.setMirrored(true);
+    expect(player.calls.sublist(player.calls.length - 3), ['rate 1.5', 'fit stretch', 'mirrored true']);
+    await controller.openVideo(bv, cid: 137649200);
+    await settle();
+    final afterLoad = player.calls.sublist(player.calls.lastIndexWhere((call) => call.startsWith('load')));
+    expect(afterLoad, containsAll(['rate 1.5', 'fit stretch', 'mirrored true']));
+    expect(controller.rate, 1.5);
+    expect(controller.fit, FitMode.stretch);
+    expect(controller.mirrored, isTrue);
+  });
+
+  test('the player info that chose the part is kept for P1 only, and forgotten with the video', () async {
+    http.routes[playerInfoPath] = (
+      200,
+      '{"code":0,"data":{"last_play_cid":137649199,"view_points":[{"type":2,"from":0,"to":10,"content":"开场"}]}}',
+    );
+    final controller = make();
+    await controller.openVideo(bv);
+    expect(controller.playerInfoFor(137649199)?.chapters.single.title, '开场');
+    expect(controller.playerInfoFor(137649200), isNull);
+    await controller.openVideo(bv, cid: 137649200);
+    expect(controller.playerInfoFor(137649199), isNull, reason: 'not asked for in this open');
+  });
+
+  test('the 合集 comes from the signed view; a view handed in has none', () async {
+    http.routes[Canned.signedViewPath] = (
+      200,
+      onePartView.replaceFirst(
+        '"pages"',
+        '"ugc_season":{"id":1,"title":"合集","sections":[{"id":1,"title":"正片","episodes":['
+            '{"aid":1,"cid":137649199,"title":"单P","bvid":"$bv"}]}]},"pages"',
+      ),
+    );
+    final controller = make();
+    await controller.openVideo(bv);
+    expect(controller.season?.sections.single.episodes.single.bvid, bv);
+    const view = VideoView(bvid: bv, pages: [VideoPage(cid: 137649199, page: 1, part: '', duration: 712)]);
+    await controller.openVideo(bv, view: view);
+    expect(controller.season, isNull);
+  });
+
+  test('the end of the playing item is announced once; a dropped load\'s is not', () async {
+    final controller = make();
+    var endings = 0;
+    controller.endings.listen((_) => endings++);
+    await controller.openVideo(bv, cid: 137649199);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    player.emit(const StatusChanged(PlayerStatus.ended));
+    await settle();
+    expect(endings, 1);
+    controller.close();
+    player.emit(const StatusChanged(PlayerStatus.ended));
+    await settle();
+    expect(endings, 1);
+  });
 }

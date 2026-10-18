@@ -1,0 +1,138 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:bili_core/api.dart' show VideoCodec;
+import 'package:bili_core/devlog.dart';
+
+import '../player/bili_player.dart';
+import 'player_session.dart';
+
+/// The player settings Swift's AppSettings kept in UserDefaults (自动连播, 循环播放, 画面尺寸, BTR 加速, 显示统计,
+/// the quality and codec asked for, and danmaku on or off), as a small JSON file in the support folder.
+class PlayerPrefs {
+  PlayerPrefs._(this._path, Map<String, Object?> values, this._logger) {
+    _read(values);
+  }
+
+  /// Kept in memory only, for tests and for platforms without a support folder.
+  factory PlayerPrefs.memory({Logger? logger}) => PlayerPrefs._(null, const {}, logger ?? Logger.shared);
+
+  /// What the video page's sessions read; the app puts the loaded file here at launch, and until then it holds the
+  /// defaults in memory.
+  static PlayerPrefs shared = PlayerPrefs.memory();
+
+  /// [path] null keeps the settings in memory. A file that can't be read is set aside as `.bad` and the defaults
+  /// apply; a value of the wrong type falls back to its default alone.
+  static Future<PlayerPrefs> load(String? path, {Logger? logger}) async {
+    final log = logger ?? Logger.shared;
+    if (path == null) return PlayerPrefs._(null, const {}, log);
+    final file = File(path);
+    if (!await file.exists()) return PlayerPrefs._(path, const {}, log);
+    try {
+      final json = jsonDecode(await file.readAsString());
+      if (json is! Map<String, Object?>) throw const FormatException('not an object');
+      return PlayerPrefs._(path, json, log);
+    } catch (error) {
+      log.warn(LogCategory.app, 'player prefs unreadable, using defaults', {'error': _reason(error)});
+    }
+    try {
+      await file.rename('$path.bad');
+    } catch (error) {
+      log.warn(LogCategory.app, 'player prefs not set aside', {'error': _reason(error)});
+    }
+    return PlayerPrefs._(path, const {}, log);
+  }
+
+  final String? _path;
+  final Logger _logger;
+  Future<void> _writing = Future.value();
+
+  bool _autoplay = true;
+  LoopMode _loop = LoopMode.off;
+  FitMode _fit = FitMode.fit;
+  bool _btr = true;
+  bool _showStats = false;
+  bool _danmakuOn = true;
+  int? _quality;
+  VideoCodec? _codec;
+
+  bool get autoplay => _autoplay;
+  set autoplay(bool value) => _set(() => _autoplay = value);
+
+  LoopMode get loop => _loop;
+  set loop(LoopMode value) => _set(() => _loop = value);
+
+  FitMode get fit => _fit;
+  set fit(FitMode value) => _set(() => _fit = value);
+
+  bool get btr => _btr;
+  set btr(bool value) => _set(() => _btr = value);
+
+  bool get showStats => _showStats;
+  set showStats(bool value) => _set(() => _showStats = value);
+
+  bool get danmakuOn => _danmakuOn;
+  set danmakuOn(bool value) => _set(() => _danmakuOn = value);
+
+  /// Null until the user picks one: the controller's own default applies.
+  int? get quality => _quality;
+  set quality(int? value) => _set(() => _quality = value);
+
+  VideoCodec? get codec => _codec;
+  set codec(VideoCodec? value) => _set(() => _codec = value);
+
+  void _read(Map<String, Object?> values) {
+    T? pick<T>(String key) => values[key] is T ? values[key] as T : null;
+    E? named<E extends Enum>(String key, List<E> all) =>
+        all.where((value) => value.name == pick<String>(key)).firstOrNull;
+    _autoplay = pick<bool>('autoplay') ?? _autoplay;
+    _loop = named('loop', LoopMode.values) ?? _loop;
+    _fit = named('fit', FitMode.values) ?? _fit;
+    _btr = pick<bool>('btr') ?? _btr;
+    _showStats = pick<bool>('showStats') ?? _showStats;
+    _danmakuOn = pick<bool>('danmakuOn') ?? _danmakuOn;
+    _quality = pick<int>('quality');
+    _codec = named('codec', VideoCodec.values);
+  }
+
+  Map<String, Object?> toJson() => {
+    'autoplay': _autoplay,
+    'loop': _loop.name,
+    'fit': _fit.name,
+    'btr': _btr,
+    'showStats': _showStats,
+    'danmakuOn': _danmakuOn,
+    'quality': ?_quality,
+    'codec': ?_codec?.name,
+  };
+
+  void _set(void Function() change) {
+    change();
+    final path = _path;
+    if (path == null) return;
+    final text = jsonEncode(toJson());
+    // One write after another, so an older state never lands last.
+    _writing = _writing.then((_) => _write(path, text));
+  }
+
+  Future<void> _write(String path, String text) async {
+    try {
+      await File(path).parent.create(recursive: true);
+      final temporary = File('$path.tmp');
+      await temporary.writeAsString(text, flush: true);
+      await temporary.rename(path);
+    } catch (error) {
+      _logger.warn(LogCategory.app, 'player prefs not saved', {'error': _reason(error)});
+    }
+  }
+
+  /// The error without the text that failed: a FormatException's toString quotes it.
+  static String _reason(Object error) => switch (error) {
+    FormatException(:final message) => message,
+    FileSystemException(:final message, :final osError) => osError == null ? message : '$message: $osError',
+    _ => '${error.runtimeType}',
+  };
+
+  /// Waits for the writes made so far; for tests.
+  Future<void> settle() => _writing;
+}

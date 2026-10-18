@@ -74,11 +74,14 @@ const _videoUnavailable = {-404, 62002, 62004, 62012};
 
 /// The video and part number a link names. The unsigned view endpoint answers 412 to dart:io (the spike, and every
 /// open on Windows) while its WBI-signed twin works, so a BV link asks the signed one first. Only the signed view
-/// says when a video redirects (番剧); the unsigned one has no such field.
-Future<(VideoView, int?)> resolveVideoLink(BiliClient client, VideoLink link, {Logger? logger}) async {
+/// says when a video redirects (番剧); the unsigned one has no such field. [onDetail] hears the signed view's answer
+/// when it is the one that resolved the link.
+Future<(VideoView, int?)> resolveVideoLink(BiliClient client, VideoLink link,
+    {Logger? logger, void Function(VideoDetail detail)? onDetail}) async {
   final log = logger ?? Logger.shared;
   Future<VideoView> signedView({String? bvid, int? aid}) async {
     final detail = await client.videoDetail(bvid: bvid, aid: aid);
+    onDetail?.call(detail);
     if (detail.redirectURL != null) {
       log.info(LogCategory.player, 'view redirects, not playable here', {'bvid': detail.bvid});
       throw PlaybackFailure.unsupported;
@@ -278,6 +281,12 @@ class PlaybackController extends ChangeNotifier {
   bool _awaitingLoad = false;
   PlayerStatus _status = PlayerStatus.idle;
   double _rate = 1;
+  double _wantedRate = 1;
+  FitMode _fit = FitMode.fit;
+  bool _mirrored = false;
+  UgcSeason? _season;
+  ({int cid, PlayerInfo info})? _playerInfo;
+  final _endings = StreamController<void>.broadcast();
   bool _disposed = false;
 
   PlaybackEngine get engine => _engine;
@@ -315,6 +324,43 @@ class PlaybackController extends ChangeNotifier {
 
   double get currentSeconds => _token != null ? clock.seconds : _heldPosition;
 
+  /// The speed chosen; every load plays at it.
+  double get rate => _wantedRate;
+
+  FitMode get fit => _fit;
+
+  bool get mirrored => _mirrored;
+
+  /// The 合集 holding the video, when the signed view resolved it here; null for a view handed to [openVideo].
+  UgcSeason? get season => _season;
+
+  /// Fires when the playing item reaches its end.
+  Stream<void> get endings => _endings.stream;
+
+  /// The player info [openVideo] asked for to choose the part, when it was asked with [cid] for this video.
+  PlayerInfo? playerInfoFor(int cid) {
+    final asked = _playerInfo;
+    return asked != null && asked.cid == cid ? asked.info : null;
+  }
+
+  Future<void> setRate(double rate) async {
+    _wantedRate = rate;
+    _notify();
+    await player.setRate(rate);
+  }
+
+  Future<void> setFit(FitMode fit) async {
+    _fit = fit;
+    _notify();
+    await player.setFit(fit);
+  }
+
+  Future<void> setMirrored(bool on) async {
+    _mirrored = on;
+    _notify();
+    await player.setMirrored(on);
+  }
+
   String qualityName(int qn) =>
       QualityNames.full(qn: qn, serverText: _qualities.where((option) => option.id == qn).firstOrNull?.name);
 
@@ -331,8 +377,10 @@ class PlaybackController extends ChangeNotifier {
       return;
     }
     await _openWith((current) async {
-      final (view, pageNumber) = await _resolve(link);
+      UgcSeason? season;
+      final (view, pageNumber) = await _resolve(link, onDetail: (detail) => season = detail.season);
       if (current != _epoch) return null;
+      _season = season;
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
       return (view, pages.where((page) => page.page == pageNumber).firstOrNull ?? pages.first);
@@ -347,8 +395,10 @@ class PlaybackController extends ChangeNotifier {
     _clearVideo();
     final known = view?.bvid == bvid ? view : null;
     await _openWith((current) async {
-      final view = known ?? (await _resolve(BvidLink(bvid))).$1;
+      UgcSeason? season;
+      final view = known ?? (await _resolve(BvidLink(bvid), onDetail: (detail) => season = detail.season)).$1;
       if (current != _epoch) return null;
+      _season = season;
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
       if (cid != null) {
@@ -359,16 +409,19 @@ class PlaybackController extends ChangeNotifier {
         return (view, match ?? pages.first);
       }
       if (pages.length == 1) return (view, pages.first);
-      int? saved;
+      PlayerInfo? info;
       // last_play_cid is per video, so any part's cid asks for it; the playurl answer has it too, but only after a
       // part is chosen.
       try {
-        saved = (await _client.playerInfo(bvid: view.bvid, cid: pages.first.cid)).lastPlayCid;
+        info = await _client.playerInfo(bvid: view.bvid, cid: pages.first.cid);
       } catch (error) {
         _logger.warn(LogCategory.player, 'player info failed, playing P1',
             {'bvid': view.bvid, 'cid': pages.first.cid, 'error': '$error'});
       }
       if (current != _epoch) return null;
+      // P1's chapters come with it, so the page needn't ask again when P1 is the one chosen.
+      if (info != null) _playerInfo = (cid: pages.first.cid, info: info);
+      final saved = info?.lastPlayCid;
       return (view, pages.where((page) => page.cid == saved).firstOrNull ?? pages.first);
     }, start: start);
   }
@@ -388,6 +441,8 @@ class PlaybackController extends ChangeNotifier {
     _stopPlayback();
     _video = null;
     _page = null;
+    _season = null;
+    _playerInfo = null;
     _qualities = const [];
     _resumeFromHistory = false;
     danmaku.clear();
@@ -542,7 +597,8 @@ class PlaybackController extends ChangeNotifier {
     await _reload(current);
   }
 
-  Future<(VideoView, int?)> _resolve(VideoLink link) => resolveVideoLink(_client, link, logger: _logger);
+  Future<(VideoView, int?)> _resolve(VideoLink link, {void Function(VideoDetail detail)? onDetail}) =>
+      resolveVideoLink(_client, link, logger: _logger, onDetail: onDetail);
 
   Future<PlayURLInfo> _playUrl() async {
     final page = _page;
@@ -836,10 +892,18 @@ class PlaybackController extends ChangeNotifier {
       autoplay: _playWhenLoaded,
     ));
     _ensureCurrent(current);
+    _applyLook();
     if (!_playWhenLoaded) _phase = PlaybackPhase.playing;
     _updateModeStats();
     _notify();
     _logger.info(LogCategory.player, 'load', {'mode': modeLabel, 'at': time, 'play': _playWhenLoaded});
+  }
+
+  /// The rate, fit and mirroring chosen outlive the item; the defaults need no call.
+  void _applyLook() {
+    if (_wantedRate != 1) _quietly(() => player.setRate(_wantedRate), 'rate');
+    if (_fit != FitMode.fit) _quietly(() => player.setFit(_fit), 'fit');
+    if (_mirrored) _quietly(() => player.setMirrored(true), 'mirror');
   }
 
   /// A server that could not be bound again, or an engine isolate that is gone, fails the playback; the user
@@ -1218,6 +1282,7 @@ class PlaybackController extends ChangeNotifier {
       case PlayerStatus.ended:
         _playWhenLoaded = false;
         _logger.info(LogCategory.player, 'ended', {'mode': modeLabel});
+        if (!_endings.isClosed) _endings.add(null);
       case PlayerStatus.idle || PlayerStatus.loading:
         break;
     }
@@ -1412,6 +1477,7 @@ class PlaybackController extends ChangeNotifier {
     stats.dispose();
     duration.dispose();
     unawaited(_marks.close());
+    unawaited(_endings.close());
     super.dispose();
   }
 }
