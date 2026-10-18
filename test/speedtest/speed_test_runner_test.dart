@@ -79,7 +79,8 @@ void main() {
         expect(pass.codec, 'HEVC');
       }
       final groups = GroupSummary.of(results);
-      expect(groups.map((group) => (group.variant, group.quality, group.passes)), [('A', 120, 2), ('B', 120, 2)]);
+      expect(groups.map((group) => (group.variant, group.quality, group.cold, group.passes)),
+          [('A', 120, true, 1), ('A', 120, false, 1), ('B', 120, false, 2)]);
 
       final start = events('speedtest start').single;
       expect(field(start, 'plan'), 'test-1');
@@ -88,6 +89,7 @@ void main() {
       expect(field(start, 'videos'), 1);
       final passes = events('speedtest pass');
       expect(passes.map((event) => field(event, 'variant')), ['A', 'B', 'B', 'A']);
+      expect(passes.map((event) => field(event, 'cold')), [true, false, false, false]);
       expect(field(passes[1], 'connectionsPerHost'), 4);
       expect(field(passes[1], 'overrides'), '{"peakBandwidth":true}');
       expect(field(passes[0], 'overrides'), '{}');

@@ -3,9 +3,9 @@ import 'package:test/test.dart';
 
 void main() {
   test('toJson names every field once, and no overrides keep the config', () {
-    const config = RipperConfig(seekBurst: true, prefetchVideoMaxBytes: 7);
+    const config = RipperConfig(seekBurst: true, prefetchVideoMaxBytes: 7, hurryPieceBytes: 192 * 1024);
     // A field missing from toJson or _fromJson would be reset to its default by every override.
-    expect(config.toJson(), hasLength(37));
+    expect(config.toJson(), hasLength(38));
     final same = config.withOverrides(const {});
     expect(same.rejected, isEmpty);
     expect(same.config.toJson(), config.toJson());
@@ -17,12 +17,14 @@ void main() {
       'firstByteTimeoutMs': 4000,
       'seekBurstBytes': 1024,
       'prefetchVideoMaxBytes': 99,
+      'hurryPieceBytes': 196608,
     });
     expect(result.rejected, isEmpty);
     expect(result.config.hurryKeepsOffSlow, isTrue);
     expect(result.config.firstByteTimeoutMs, 4000.0);
     expect(result.config.seekBurstBytes, 1024);
     expect(result.config.prefetchVideoMaxBytes, 99);
+    expect(result.config.hurryPieceBytes, 196608);
   });
 
   test('null clears only nullable fields', () {
@@ -49,8 +51,9 @@ void main() {
       'fixedConcurrency': 0,
       'hurryHedgeMinMs': -1,
       'keepBehindBytes': 0,
+      'hurryPieceBytes': 0,
     });
-    expect(result.rejected, ['pieceRounds', 'fixedConcurrency', 'hurryHedgeMinMs']);
+    expect(result.rejected, ['pieceRounds', 'fixedConcurrency', 'hurryHedgeMinMs', 'hurryPieceBytes']);
     expect(result.config.keepBehindBytes, 0);
   });
 }

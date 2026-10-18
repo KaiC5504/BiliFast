@@ -92,6 +92,30 @@ class PhoneReportTests(unittest.TestCase):
         self.assertEqual(phone_report.node_table(plain)["cos"]["won"], 4)
         self.assertNotIn("http", text)
 
+    def test_cold_and_warm_passes_are_kept_apart_and_compared_alike(self):
+        def pass_events(number, variant, cold, tap):
+            return [
+                {"seq": number * 10, "msg": "speedtest pass",
+                 "f": {"pass": number, "variant": variant, "quality": 127, "cold": cold, "seed": number}},
+                {"seq": number * 10 + 1, "msg": "speedtest step", "f": {"pass": number, "kind": "tap", "ms": tap}},
+                {"seq": number * 10 + 2, "msg": "speedtest pass done",
+                 "f": {"pass": number, "variant": variant, "quality": 127, "firstFrameMs": 500}},
+            ]
+
+        # Logging came on after the start: the run still counts, from its first pass.
+        events = (pass_events(1, "A", True, 8000) + pass_events(2, "B", False, 300) + pass_events(3, "B", True, 5000)
+                  + pass_events(4, "A", False, 400) + [{"seq": 99, "msg": "speedtest done", "f": {"passes": 4}}])
+        run = phone_report.runs(events)[0]
+        self.assertEqual(len(run["passes"]), 4)
+        self.assertEqual([(g["variant"], g["phase"], g["tapMedian"]) for g in phone_report.groups(run)],
+                         [("A", "cold", 8000), ("A", "warm", 400), ("B", "cold", 5000), ("B", "warm", 300)])
+        self.assertEqual([(d["phase"], d["tapMedian"]) for d in phone_report.deltas(phone_report.groups(run))],
+                         [("cold", -3000), ("warm", -100)])
+        text = phone_report.render(events)
+        self.assertIn("from pass 1 (its start is not in the log", text)
+        self.assertRegex(text, r"B-A 8K\(127\) cold\s+\+0\.00\s+-3\.00")
+        self.assertIn("-- pass 3: B 8K(127) cold", text)
+
     def test_latest_is_the_newest_session_file(self):
         with tempfile.TemporaryDirectory() as folder:
             logs = pathlib.Path(folder)

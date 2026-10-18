@@ -221,7 +221,13 @@ final class RangeDownloader {
             pieceLimit: pieceConcurrency,
             hostCount: preferred.length,
           );
-    final parts = remaining.split(concurrency: pieceConcurrency, minChunk: minChunk);
+    final cap = hurried ? ctx.config.hurryPieceBytes : null;
+    final parts = cap == null
+        ? remaining.split(concurrency: pieceConcurrency, minChunk: minChunk)
+        : remaining.split(
+            concurrency: max(pieceConcurrency, (remaining.length + cap - 1) ~/ cap),
+            minChunk: min(minChunk, cap),
+          );
     final primaries = hurried
         ? HurryPlacement.assign(
             urls: preferred,

@@ -335,6 +335,9 @@ final class NativePlayer {
       if pendingSeeks == 0 { starting = false }
       return
     }
+    // Until the seek lands, currentTime is the old position, already loaded: judged there, the start ended at once
+    // and AVPlayer's own rule decided at the new one, waiting up to 17 s on a cold CDN (phone, 1.0.0 (2)).
+    guard pendingSeeks == 0 else { return }
     let reason = player.reasonForWaitingToPlay
     guard wantsPlay, player.timeControlStatus == .waitingToPlayAtSpecifiedRate,
           reason == .toMinimizeStalls || reason == .evaluatingBufferingRate else { return }

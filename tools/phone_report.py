@@ -117,6 +117,12 @@ def runs(events) -> list[dict]:
             run = {"start": f, "passes": [], "done": None}
             found.append(run)
             current = None
+        elif run is None and msg == "speedtest pass":
+            # Logging turned on mid-run: the buffer that held the start has already been dropped.
+            run = {"start": {}, "passes": [], "done": None}
+            found.append(run)
+            current = {"marker": f, "steps": [], "done": None, "events": []}
+            run["passes"].append(current)
         elif run is None:
             continue
         elif msg == "speedtest pass":
@@ -145,8 +151,15 @@ def step_ms(passes, kind) -> list[float]:
             for ms in [number(step.get("ms"))] if ms is not None]
 
 
+def phase(p) -> str | None:
+    """"cold" for the first pass on a video at its quality (the CDN has not cached that file), "warm" after it; None
+    in logs from before builds marked it."""
+    cold = p["marker"].get("cold")
+    return None if cold is None else ("cold" if cold else "warm")
+
+
 def groups(run) -> list[dict]:
-    """Counted passes pooled per variant and played quality, variants in the order they first ran."""
+    """Counted passes pooled per variant, played quality and phase; variants in the order they first ran, cold first."""
     order = []
     pooled = defaultdict(list)
     for p in counted(run["passes"]):
@@ -154,11 +167,11 @@ def groups(run) -> list[dict]:
         quality = p["done"].get("quality")
         if variant not in order:
             order.append(variant)
-        pooled[(variant, quality)].append(p)
-    keys = sorted(pooled, key=lambda key: (order.index(key[0]), -(key[1] or 0)))
+        pooled[(variant, quality, phase(p))].append(p)
+    keys = sorted(pooled, key=lambda key: (order.index(key[0]), -(key[1] or 0), key[2] != "cold"))
     result = []
-    for variant, quality in keys:
-        passes = pooled[(variant, quality)]
+    for variant, quality, when in keys:
+        passes = pooled[(variant, quality, when)]
         taps = step_ms(passes, "tap")
 
         def total(name):
@@ -167,6 +180,7 @@ def groups(run) -> list[dict]:
         result.append({
             "variant": variant,
             "quality": quality,
+            "phase": when,
             "passes": len(passes),
             "first": median([ms for p in passes for ms in [number(p["done"].get("firstFrameMs"))] if ms is not None]),
             "tapMedian": median(taps),
@@ -184,17 +198,17 @@ def groups(run) -> list[dict]:
 
 
 def deltas(found_groups) -> list[dict]:
-    """Every later variant minus the first one, at the same quality."""
+    """Every later variant minus the first one, at the same quality and phase."""
     if not found_groups:
         return []
     first = found_groups[0]["variant"]
-    bases = {g["quality"]: g for g in found_groups if g["variant"] == first}
+    bases = {(g["quality"], g["phase"]): g for g in found_groups if g["variant"] == first}
     result = []
     for g in found_groups:
-        base = bases.get(g["quality"])
+        base = bases.get((g["quality"], g["phase"]))
         if g["variant"] == first or base is None:
             continue
-        result.append({"variant": g["variant"], "base": first, "quality": g["quality"],
+        result.append({"variant": g["variant"], "base": first, "quality": g["quality"], "phase": g["phase"],
                        **{key: None if g[key] is None or base[key] is None else g[key] - base[key]
                           for key in ("first", "tapMedian", "tapP90", "tapMax", "hint", "back")},
                        **{key: g[key] - base[key] for key in ("stalls", "fastStalls", "timeouts", "rssMB")}})
@@ -281,23 +295,32 @@ def render_nodes(events, indent="  ") -> list[str]:
     return lines or [indent + "(no engine events: dev builds forward them when 发送日志到电脑 is on)"]
 
 
+def label(g) -> str:
+    return f"{g['variant']} {quality_name(g['quality'])}{' ' + g['phase'] if g['phase'] else ''}"
+
+
 def render_run(index, run) -> list[str]:
     start = run["start"]
     source = clean(start.get("source", "?"))
     note = clean(start.get("planNote", ""))
-    lines = [f"== Speed test {index}: plan {clean(start.get('plan', '?'))} ({source}{': ' + note if note and source != 'pc' else ''}), "
-             f"{start.get('passes', '?')} passes, {start.get('videos', '?')} video(s) =="]
+    if start:
+        lines = [f"== Speed test {index}: plan {clean(start.get('plan', '?'))} ({source}{': ' + note if note and source != 'pc' else ''}), "
+                 f"{start.get('passes', '?')} passes, {start.get('videos', '?')} video(s) =="]
+    else:
+        lines = [f"== Speed test {index}: from pass {run['passes'][0]['marker'].get('pass', '?')} (its start is not in "
+                 "the log: 发送日志到电脑 was turned on mid-run) =="]
     found = groups(run)
     if found:
         rows = [["", "passes", "first", "tap med/p90/max", "hint", "back", "stalls", "fast", "timeouts", "rssMB",
                  "memW"]]
         for g in found:
-            rows.append([f"{g['variant']} {quality_name(g['quality'])}", str(g["passes"]), seconds(g["first"]),
+            rows.append([label(g), str(g["passes"]), seconds(g["first"]),
                          "/".join(seconds(g[key]) for key in ("tapMedian", "tapP90", "tapMax")),
                          seconds(g["hint"]), seconds(g["back"]), str(g["stalls"]), str(g["fastStalls"]),
                          str(g["timeouts"]), str(g["rssMB"]), str(g["memoryWarnings"])])
         lines += table(rows)
-        lines.append("(seconds; medians over every pass of the group; a timed-out seek counts as its 15 s)")
+        lines.append("(seconds; medians over every pass of the group; a timed-out seek counts as its 15 s; cold is "
+                     "each video's first pass, before the CDN has the file)")
     else:
         lines.append("no pass finished")
     differences = deltas(found)
@@ -305,7 +328,8 @@ def render_run(index, run) -> list[str]:
         lines.append(f"differences from {differences[0]['base']} (negative is faster, fewer or smaller):")
         rows = [["", "first", "tap med/p90/max", "hint", "back", "stalls", "fast", "timeouts", "rssMB"]]
         for d in differences:
-            rows.append([f"{d['variant']}-{d['base']} {quality_name(d['quality'])}", signed_seconds(d["first"]),
+            rows.append([f"{d['variant']}-{d['base']} {quality_name(d['quality'])}{' ' + d['phase'] if d['phase'] else ''}",
+                         signed_seconds(d["first"]),
                          "/".join(signed_seconds(d[key]) for key in ("tapMedian", "tapP90", "tapMax")),
                          signed_seconds(d["hint"]), signed_seconds(d["back"]), signed(d["stalls"]),
                          signed(d["fastStalls"]), signed(d["timeouts"]), signed(d["rssMB"])])
@@ -330,7 +354,9 @@ def render_run(index, run) -> list[str]:
         done = p["done"] or {}
         played = done.get("quality", marker.get("quality"))
         lines.append("")
-        lines.append(f"-- pass {marker.get('pass')}: {clean(marker.get('variant'))} {quality_name(played)} "
+        when = phase(p)
+        lines.append(f"-- pass {marker.get('pass')}: {clean(marker.get('variant'))} {quality_name(played)}"
+                     f"{' ' + when if when else ''} "
                      f"{clean(done.get('codecs', ''))} {clean(marker.get('bvid', ''))} seed {marker.get('seed')} "
                      f"per host {marker.get('connectionsPerHost')} overrides {clean(marker.get('overrides', ''))} --")
         lines += render_nodes(p["events"])

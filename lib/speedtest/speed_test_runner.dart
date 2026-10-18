@@ -295,6 +295,7 @@ class SpeedTestRunner extends ChangeNotifier {
           askedQuality: pass.quality,
           bvid: pass.videoIndex == openVideo ? target.bvid ?? '' : _idOf(pass.video),
           seed: _newSeed(),
+          cold: pass.cold,
         );
         _current = result;
         _results.add(result);
@@ -304,6 +305,7 @@ class SpeedTestRunner extends ChangeNotifier {
           'quality': pass.quality,
           'bvid': result.bvid,
           'seed': result.seed,
+          'cold': pass.cold,
           'connectionsPerHost': pass.variant.connectionsPerHost,
           'overrides': jsonEncode(pass.variant.overrides),
         });
@@ -557,6 +559,7 @@ class SpeedTestRunner extends ChangeNotifier {
       'variant': result.variant,
       'quality': result.quality,
       'askedQuality': result.askedQuality,
+      'cold': result.cold,
       'codecs': result.codec,
       'firstFrameMs': ?result.firstFrameMs?.round(),
       'seekMedianMs': ?median(seeks)?.round(),

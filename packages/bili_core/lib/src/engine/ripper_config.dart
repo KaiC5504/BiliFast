@@ -39,6 +39,7 @@ final class RipperConfig {
     this.trimOnMemoryWarning = false,
     this.peakBandwidth = false,
     this.hurryHedgeMinMs = 250,
+    this.hurryPieceBytes,
   });
 
   final double firstByteTimeoutMs;
@@ -152,6 +153,12 @@ final class RipperConfig {
   /// requests, and each miss held its piece for the whole 250 ms.
   final double hurryHedgeMinMs;
 
+  /// When set, a range in a hurry is cut into pieces no bigger than this, however many that makes; they queue for
+  /// the connections. Swift cut it into one piece per connection. On a CDN that has not cached the file a few blocks
+  /// answer only after 3-6 s, from every node alike: in 1.0.0 (2)'s speed test one ~490 KB piece held its 7.5 MB
+  /// segment for 5 s after the rest was in, its backups no faster.
+  final int? hurryPieceBytes;
+
   /// The connection count without AutoConcurrency (Swift's fallback when neither is given).
   static const defaultConcurrency = 16;
 
@@ -160,7 +167,8 @@ final class RipperConfig {
 
   int get concurrency => fixedConcurrency ?? defaultConcurrency;
 
-  /// [fixedConcurrency] and the max prefetch caps can't be cleared here; build a new config for that.
+  /// [fixedConcurrency], the max prefetch caps and [hurryPieceBytes] can't be cleared here; build a new config for
+  /// that.
   RipperConfig copyWith({
     double? firstByteTimeoutMs,
     double? stallTimeoutMs,
@@ -199,6 +207,7 @@ final class RipperConfig {
     bool? trimOnMemoryWarning,
     bool? peakBandwidth,
     double? hurryHedgeMinMs,
+    int? hurryPieceBytes,
   }) => RipperConfig(
     firstByteTimeoutMs: firstByteTimeoutMs ?? this.firstByteTimeoutMs,
     stallTimeoutMs: stallTimeoutMs ?? this.stallTimeoutMs,
@@ -237,6 +246,7 @@ final class RipperConfig {
     trimOnMemoryWarning: trimOnMemoryWarning ?? this.trimOnMemoryWarning,
     peakBandwidth: peakBandwidth ?? this.peakBandwidth,
     hurryHedgeMinMs: hurryHedgeMinMs ?? this.hurryHedgeMinMs,
+    hurryPieceBytes: hurryPieceBytes ?? this.hurryPieceBytes,
   );
 
   /// Every field by name, for logs and speed test plans.
@@ -278,6 +288,7 @@ final class RipperConfig {
     'trimOnMemoryWarning': trimOnMemoryWarning,
     'peakBandwidth': peakBandwidth,
     'hurryHedgeMinMs': hurryHedgeMinMs,
+    'hurryPieceBytes': hurryPieceBytes,
   };
 
   /// This config with fields set by name, as a speed test plan from the PC gives them. A name that is not a field,
@@ -314,9 +325,16 @@ final class RipperConfig {
   static const _rejected = Object();
 
   /// Zero would fail or stall every read.
-  static const _positive = {'pieceRounds', 'fixedConcurrency', 'minChunkBytes', 'seekBurstCopies', 'priority'};
+  static const _positive = {
+    'pieceRounds',
+    'fixedConcurrency',
+    'minChunkBytes',
+    'seekBurstCopies',
+    'priority',
+    'hurryPieceBytes',
+  };
 
-  static const _nullable = {'fixedConcurrency', 'prefetchVideoMaxBytes', 'prefetchAudioMaxBytes'};
+  static const _nullable = {'fixedConcurrency', 'prefetchVideoMaxBytes', 'prefetchAudioMaxBytes', 'hurryPieceBytes'};
 
   static const _doubles = {
     'firstByteTimeoutMs',
@@ -369,5 +387,6 @@ final class RipperConfig {
     trimOnMemoryWarning: json['trimOnMemoryWarning']! as bool,
     peakBandwidth: json['peakBandwidth']! as bool,
     hurryHedgeMinMs: json['hurryHedgeMinMs']! as double,
+    hurryPieceBytes: json['hurryPieceBytes'] as int?,
   );
 }

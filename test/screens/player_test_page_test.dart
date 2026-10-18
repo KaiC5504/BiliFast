@@ -227,25 +227,29 @@ void main() {
     });
 
     testWidgets('runs the plan on the given link and shows each variant and the difference', (tester) async {
-      await show(tester, logs: logs, hooks: hooksFor(quick));
+      // The first pass on the video is cold; B is compared with the warm A after it.
+      await show(tester, logs: logs, hooks: hooksFor({...quick, 'order': 'ABA'}));
       expect(find.text('速度测试'), findsOneWidget);
       await startTest(tester, 'BV1GJ411x7h7');
       expect(find.byKey(const ValueKey('speedtest-stop')), findsOneWidget);
-      expect(find.textContaining('计划 test-1（内置，没有连接电脑） · 第 1/2 次 · A · 4K · 等待首帧'), findsOneWidget);
+      expect(find.textContaining('计划 test-1（内置，没有连接电脑） · 第 1/3 次 · A · 4K · 等待首帧'), findsOneWidget);
 
       player.emit(const StatusChanged(PlayerStatus.playing));
       await settleRun(tester);
-      expect(find.textContaining('第 2/2 次 · B'), findsOneWidget);
+      expect(find.textContaining('第 2/3 次 · B'), findsOneWidget);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await settleRun(tester);
       player.emit(const StatusChanged(PlayerStatus.playing));
       await settleRun(tester);
 
       expect(find.byKey(const ValueKey('speedtest-start')), findsOneWidget);
       expect(find.byKey(const ValueKey('speedtest-results')), findsOneWidget);
-      expect(find.text('A 4K ×1'), findsOneWidget);
-      expect(find.text('B 4K ×1'), findsOneWidget);
-      expect(find.text('B−A 4K'), findsOneWidget);
+      expect(find.text('A 4K 冷 ×1'), findsOneWidget);
+      expect(find.text('A 4K 热 ×1'), findsOneWidget);
+      expect(find.text('B 4K 热 ×1'), findsOneWidget);
+      expect(find.text('B−A 4K 热'), findsOneWidget);
       expect(find.textContaining('完成'), findsOneWidget);
-      expect(engines, ['A', 'A', 'B', 'app']);
+      expect(engines, ['A', 'A', 'B', 'A', 'app']);
       expect(player.calls, containsAllInOrder(['muted true', 'keep awake true', 'muted false', 'keep awake false']));
       expect(http.to(Canned.viewPath).length + http.to(Canned.signedViewPath).length, 1, reason: 'one open per video');
     });

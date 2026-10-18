@@ -54,6 +54,14 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   come from the PC (`tools/logserver.py --plan`, `GET /plan`) or the built-in one (A = 1.0.0 (1), B = the fixes,
   C = B with a 120 ms hurried backup and 16 Akamai connections, ABCCBA at 8K); `tools/phone_report.py --latest`
   summarises a run. Tune by editing `tools/speedtest_plan.json` and asking KaiC to tap 开始测试 again: no build.
+- 2026-10-18: the first phone speed test (1.0.0 (2), 6 videos, ABCCBA): no variant won. Each video's first pass
+  seeked in 5-15 s and every later pass, wherever it seeked, in ~0.3 s: Bilibili's CDN caches a file within a minute
+  or two of its first play (longer for a 10 GB 8K file), and the first pass was always A. Two causes of the cold
+  seeks: the native start rule judged a seek at the old position before it landed and gave up (245 of 278 seeks;
+  half the time of slow seeks was AVPlayer waiting with the data in), fixed for every variant in 1.0.0 (3); and cold
+  CDN blocks answering after 3-6 s on every node alike, where `hurryPieceBytes` (smaller hurried pieces) is on test.
+  Plans can `rotate` the order per video, and the first pass on each video is marked cold in the logs, the phone's
+  table (冷/热) and `phone_report.py`.
 - Update this section when a slice finishes.
 
 ## Layout

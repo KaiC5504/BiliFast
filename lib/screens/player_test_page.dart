@@ -595,7 +595,10 @@ class _SpeedTestSection extends StatelessWidget {
               const SizedBox(height: BiliMetrics.rowGap),
               _SpeedTestTable(groups: groups),
               const SizedBox(height: BiliMetrics.rowGap),
-              const Text('时间为秒（中位数），跳转超时按 15 秒计；卡顿为各次合计；内存为峰值 MB', style: _secondary),
+              const Text(
+                  '时间为秒（中位数），跳转超时按 15 秒计；卡顿为各次合计；内存为峰值 MB；'
+                  '冷 = 每个视频的第一次（CDN 还没缓存），热 = 之后各次',
+                  style: _secondary),
             ],
           ]);
         },
@@ -614,7 +617,7 @@ class _SpeedTestSection extends StatelessWidget {
 
 String _quality(int qn) => QualityNames.short(qn: qn, serverText: null);
 
-/// One row per variant and quality, then each later variant's difference from the first.
+/// One row per variant, quality and cold or warm, then each later variant's difference from the first.
 class _SpeedTestTable extends StatelessWidget {
   const _SpeedTestTable({required this.groups});
 
@@ -632,7 +635,7 @@ class _SpeedTestTable extends StatelessWidget {
           _row(const ['', '首帧', '跳转 中位/P90/最慢', '回跳', '卡顿', '内存'], _header),
           for (final group in groups)
             _row([
-              '${group.variant} ${_quality(group.quality)} ×${group.passes}',
+              '${group.variant} ${_quality(group.quality)} ${group.cold ? '冷' : '热'} ×${group.passes}',
               _seconds(group.firstFrameMs),
               [group.seekMedianMs, group.seekP90Ms, group.seekMaxMs].map(_seconds).join('/'),
               _seconds(group.backMedianMs),
@@ -641,7 +644,10 @@ class _SpeedTestTable extends StatelessWidget {
             ], _style),
           for (final delta in GroupDelta.of(groups))
             TableRow(children: [
-              _cell('${delta.other.variant}−${delta.base.variant} ${_quality(delta.base.quality)}', _style),
+              _cell(
+                  '${delta.other.variant}−${delta.base.variant} ${_quality(delta.base.quality)} '
+                  '${delta.base.cold ? '冷' : '热'}',
+                  _style),
               _cell(_signed(delta.firstFrameMs), _better(delta.firstFrameMs)),
               _cell([delta.seekMedianMs, delta.seekP90Ms, delta.seekMaxMs].map(_signed).join('/'),
                   _better(delta.seekMedianMs)),

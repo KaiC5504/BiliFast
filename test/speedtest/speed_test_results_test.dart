@@ -2,8 +2,13 @@ import 'package:bilifast/speedtest/speed_test_results.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 PassResult pass(String variant, int quality,
-    {double? first, List<double> taps = const [], List<double> backs = const [], int stalls = 0, int rssMB = 0}) {
-  final result = PassResult(pass: 1, variant: variant, askedQuality: quality, bvid: 'BV1', seed: 1)
+    {double? first,
+    List<double> taps = const [],
+    List<double> backs = const [],
+    int stalls = 0,
+    int rssMB = 0,
+    bool cold = false}) {
+  final result = PassResult(pass: 1, variant: variant, askedQuality: quality, bvid: 'BV1', seed: 1, cold: cold)
     ..firstFrameMs = first
     ..stalls = stalls
     ..rssMaxBytes = rssMB * 1024 * 1024;
@@ -59,5 +64,19 @@ void main() {
     expect(delta.backMedianMs, isNull);
     expect(delta.stalls, -3);
     expect(delta.rssMaxMB, 50);
+  });
+
+  test('cold passes get their own rows, before the warm ones, and are compared only with cold', () {
+    final results = [
+      pass('A', 127, taps: [8000], cold: true),
+      pass('B', 127, taps: [300]),
+      pass('A', 127, taps: [400]),
+      pass('B', 127, taps: [5000], cold: true),
+    ];
+    final groups = GroupSummary.of(results);
+    expect(groups.map((group) => (group.variant, group.cold, group.seekMedianMs)),
+        [('A', true, 8000), ('A', false, 400), ('B', true, 5000), ('B', false, 300)]);
+    expect(GroupDelta.of(groups).map((delta) => (delta.base.cold, delta.other.cold, delta.seekMedianMs)),
+        [(true, true, -3000), (false, false, -100)]);
   });
 }

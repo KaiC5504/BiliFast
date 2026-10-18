@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:bili_core/devlog.dart';
@@ -207,6 +208,46 @@ void main() {
     });
   });
 
+  group('hurryPieceBytes', () {
+    const big = 2 * 1024 * 1024;
+    final segment =
+        MediaSegment(index: 0, range: ByteRange(_headerEnd + 1, _headerEnd + big), startTime: 0, duration: 5);
+
+    /// The sizes of the requests a seek read of one 2 MiB segment makes after its 64 KiB head.
+    Future<List<int>> seekRead({int? cap}) async {
+      final cdn = SimCDN(size: _size);
+      final transport = _Recording(cdn);
+      final session = RipperSession(
+        sources: {TrackKind.video: (primary: TestEngine.primary, backups: const <String>[])},
+        mode: CustomNodes([NodeAddress('upos-sz-mirrorcos.bilivideo.com')]),
+        config: TestEngine.slowConfig.copyWith(prefetchVideoBytes: 0, hurryPieceBytes: cap),
+        transport: transport,
+        logger: Logger(session: 'test'),
+      )..setSegments(TrackKind.video, [segment]);
+      addTearDown(session.close);
+      expect(await _read(session, segment.range), _bytes(cdn, segment.range));
+      return [
+        for (final range in transport.ranges)
+          if (range.start > segment.range.start + 64 * 1024 && range.end <= segment.range.end) range.length,
+      ];
+    }
+
+    test('a range in a hurry is cut into pieces no bigger than the cap', () async {
+      final uncapped = await seekRead();
+      expect(uncapped.reduce(max), greaterThan(256 * 1024), reason: 'one piece per connection, as Swift');
+      final capped = await seekRead(cap: 128 * 1024);
+      expect(capped.reduce(max), lessThanOrEqualTo(128 * 1024));
+      expect(capped.toSet().length, lessThanOrEqualTo(2), reason: 'equal pieces, differing by a byte at most');
+    });
+
+    test('a range already in small pieces is cut as before', () {
+      final range = ByteRange(0, 300 * 1024 - 1);
+      expect(range.split(concurrency: 7, minChunk: 64 * 1024), hasLength(5));
+      expect(range.split(concurrency: max(7, (range.length + 192 * 1024 - 1) ~/ (192 * 1024)), minChunk: 64 * 1024),
+          hasLength(5));
+    });
+  });
+
   group('trimOnMemoryWarning', () {
     Future<RipperSession> readSix(SimCDN cdn, {required bool trim}) async {
       final session = _session(
@@ -257,6 +298,29 @@ void main() {
       expect(session.prefetchedBytes(TrackKind.video), 5 * _segment, reason: 'segments 1-5 start within 10 s');
     });
   });
+}
+
+/// Records the range of every request.
+final class _Recording implements RangeTransport {
+  _Recording(this.cdn);
+
+  final SimCDN cdn;
+  final ranges = <ByteRange>[];
+
+  @override
+  int? get connectionsPerHost => cdn.connectionsPerHost;
+
+  @override
+  String get name => 'recording';
+
+  @override
+  void close() {}
+
+  @override
+  Future<TransportResponse> fetch(Uri url, ByteRange range, {CancelToken? cancel}) {
+    ranges.add(range);
+    return cdn.fetch(url, range, cancel: cancel);
+  }
 }
 
 /// Holds every request starting at or after [holdFrom] until it is cleared.

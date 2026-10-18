@@ -19,6 +19,7 @@ final class PassResult {
     required this.askedQuality,
     required this.bvid,
     required this.seed,
+    this.cold = false,
   }) : quality = askedQuality;
 
   final int pass;
@@ -26,6 +27,9 @@ final class PassResult {
   final int askedQuality;
   String bvid;
   final int seed;
+
+  /// The first pass on its video at its quality (`SpeedTestPass.cold`).
+  final bool cold;
 
   /// What played; [askedQuality] until the stream is chosen.
   int quality;
@@ -56,9 +60,9 @@ final class PassResult {
   }
 }
 
-/// Every counted pass of one variant at one played quality, pooled.
+/// Every counted pass of one variant at one played quality, cold or warm, pooled.
 final class GroupSummary {
-  GroupSummary({required this.variant, required this.quality, required List<PassResult> passes})
+  GroupSummary({required this.variant, required this.quality, this.cold = false, required List<PassResult> passes})
       : passes = passes.length,
         firstFrameMs = median([for (final pass in passes) ?pass.firstFrameMs]),
         seekMedianMs = median(_pooled(passes, StepKind.tap)),
@@ -74,6 +78,7 @@ final class GroupSummary {
 
   final String variant;
   final int quality;
+  final bool cold;
   final int passes;
   final double? firstFrameMs;
   final double? seekMedianMs;
@@ -87,27 +92,31 @@ final class GroupSummary {
   final int memoryWarnings;
   final int rssMaxMB;
 
-  /// In the order the variants first ran, then by quality, highest first.
+  /// In the order the variants first ran, then by quality, highest first, cold before warm.
   static List<GroupSummary> of(List<PassResult> results) {
     final variants = <String>[];
-    final grouped = <(String, int), List<PassResult>>{};
+    final grouped = <(String, int, bool), List<PassResult>>{};
     for (final pass in results.where((pass) => pass.counts)) {
       if (!variants.contains(pass.variant)) variants.add(pass.variant);
-      grouped.putIfAbsent((pass.variant, pass.quality), () => []).add(pass);
+      grouped.putIfAbsent((pass.variant, pass.quality, pass.cold), () => []).add(pass);
     }
     final keys = grouped.keys.toList()
       ..sort((a, b) {
         final byVariant = variants.indexOf(a.$1).compareTo(variants.indexOf(b.$1));
-        return byVariant != 0 ? byVariant : b.$2.compareTo(a.$2);
+        if (byVariant != 0) return byVariant;
+        final byQuality = b.$2.compareTo(a.$2);
+        return byQuality != 0 ? byQuality : (a.$3 == b.$3 ? 0 : (a.$3 ? -1 : 1));
       });
-    return [for (final key in keys) GroupSummary(variant: key.$1, quality: key.$2, passes: grouped[key]!)];
+    return [
+      for (final key in keys) GroupSummary(variant: key.$1, quality: key.$2, cold: key.$3, passes: grouped[key]!),
+    ];
   }
 
   static List<double> _pooled(List<PassResult> passes, StepKind kind) =>
       [for (final pass in passes) ...pass.msOf(kind)];
 }
 
-/// [other] minus [base] at the same quality, where both have a number.
+/// [other] minus [base] at the same quality, cold or warm alike, where both have a number.
 final class GroupDelta {
   GroupDelta(this.base, this.other)
       : firstFrameMs = _minus(other.firstFrameMs, base.firstFrameMs),
@@ -136,7 +145,8 @@ final class GroupDelta {
       for (final group in groups)
         if (group.variant != first)
           for (final base in groups)
-            if (base.variant == first && base.quality == group.quality) GroupDelta(base, group),
+            if (base.variant == first && base.quality == group.quality && base.cold == group.cold)
+              GroupDelta(base, group),
     ];
   }
 

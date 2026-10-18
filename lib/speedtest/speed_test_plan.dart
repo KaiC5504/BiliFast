@@ -47,6 +47,7 @@ final class SpeedTestPass {
     required this.quality,
     required this.variant,
     required this.repeat,
+    required this.cold,
   });
 
   /// From 1.
@@ -58,6 +59,10 @@ final class SpeedTestPass {
 
   /// How many times this variant came earlier in `order`: ABBA's second A is 1.
   final int repeat;
+
+  /// The first pass on its video at its quality: the CDN may not have that file yet. In 1.0.0 (2)'s run every first
+  /// pass seeked in 5-15 s and every later one, wherever it seeked, in about 0.3 s.
+  final bool cold;
 }
 
 final class SpeedTestPlan {
@@ -67,6 +72,7 @@ final class SpeedTestPlan {
     required this.qualities,
     required this.variants,
     required this.order,
+    this.rotate = false,
     required this.seeks,
     required this.hints,
     required this.backJumps,
@@ -80,6 +86,10 @@ final class SpeedTestPlan {
   final List<int> qualities;
   final List<SpeedTestVariant> variants;
   final String order;
+
+  /// Each video (and quality) starts [order] one letter further along, so the cold first pass falls on every variant
+  /// in turn rather than always on the first.
+  final bool rotate;
   final int seeks;
   final int hints;
   final int backJumps;
@@ -89,11 +99,11 @@ final class SpeedTestPlan {
 
   /// The plan used when the PC has none; `tools/speedtest_plan.json` holds the same.
   static const builtinJson = '''
-{"id": "builtin-1", "videos": [], "qualities": [127],
+{"id": "builtin-2", "videos": [], "qualities": [127],
  "variants": [{"name": "A", "config": {}, "connectionsPerHost": 8},
               {"name": "B", "config": {"hurryKeepsOffSlow": true, "medianEstimates": true, "seekHurriesPrefetch": true, "trimOnMemoryWarning": true, "peakBandwidth": true}, "connectionsPerHost": 8},
-              {"name": "C", "config": {"hurryKeepsOffSlow": true, "medianEstimates": true, "seekHurriesPrefetch": true, "trimOnMemoryWarning": true, "peakBandwidth": true, "hurryHedgeMinMs": 120}, "connectionsPerHost": 16}],
- "order": "ABCCBA", "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
+              {"name": "D", "config": {"hurryKeepsOffSlow": true, "medianEstimates": true, "seekHurriesPrefetch": true, "trimOnMemoryWarning": true, "peakBandwidth": true, "hurryPieceBytes": 196608}, "connectionsPerHost": 8}],
+ "order": "ABD", "rotate": true, "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
 ''';
 
   static const _keys = {
@@ -102,6 +112,7 @@ final class SpeedTestPlan {
     'qualities',
     'variants',
     'order',
+    'rotate',
     'seeks',
     'hints',
     'backJumps',
@@ -113,13 +124,17 @@ final class SpeedTestPlan {
 
   SpeedTestVariant? variant(String name) => variants.where((variant) => variant.name == name).firstOrNull;
 
-  /// For each video, each quality, each letter of [order].
+  /// For each video, each quality, each letter of [order] ([rotate]d one further for each).
   List<SpeedTestPass> passes(List<String> videos) {
     final passes = <SpeedTestPass>[];
+    final letters = order.split('');
+    var block = 0;
     for (final (videoIndex, video) in videos.indexed) {
       for (final quality in qualities) {
+        final shift = rotate ? block % letters.length : 0;
+        block++;
         final seen = <String, int>{};
-        for (final letter in order.split('')) {
+        for (final (position, letter) in [...letters.skip(shift), ...letters.take(shift)].indexed) {
           final repeat = seen[letter] ?? 0;
           seen[letter] = repeat + 1;
           passes.add(SpeedTestPass(
@@ -129,6 +144,7 @@ final class SpeedTestPlan {
             quality: quality,
             variant: variant(letter)!,
             repeat: repeat,
+            cold: position == 0,
           ));
         }
       }
@@ -172,6 +188,8 @@ final class SpeedTestPlan {
     final missing = order.split('').where((letter) => !names.contains(letter)).toSet();
     if (missing.isNotEmpty) throw SpeedTestPlanError('order 里有不存在的方案：${missing.join(', ')}');
 
+    final rotate = json['rotate'] ?? false;
+    if (rotate is! bool) throw const SpeedTestPlanError('rotate 必须是 true 或 false');
     final fastRate = _number(json, 'fastRate', fallback: 2);
     if (fastRate <= 0) throw const SpeedTestPlanError('fastRate 必须大于 0');
     return SpeedTestPlan(
@@ -180,6 +198,7 @@ final class SpeedTestPlan {
       qualities: qualities,
       variants: variants,
       order: order,
+      rotate: rotate,
       seeks: _count(json, 'seeks', fallback: 8),
       hints: _count(json, 'hints', fallback: 2),
       backJumps: _count(json, 'backJumps', fallback: 2),
