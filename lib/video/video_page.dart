@@ -32,7 +32,7 @@ PlayerSession pageSession({
   required AppServices services,
   required SessionOpen open,
   required void Function(double seconds) onSeeked,
-}) => createPageSession(controller: controller, services: services, open: open);
+}) => createPageSession(controller: controller, services: services, open: open, onSeeked: onSeeked);
 
 /// The video page: the player at 16:9 under a black status bar with the title, uploader and part below it, or the
 /// player alone over the whole screen in full screen, which is this page laid out again rather than a route of its
