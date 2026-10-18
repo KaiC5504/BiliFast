@@ -1,14 +1,19 @@
 import 'dart:async';
 
 import 'package:bili_core/engine.dart';
+import 'package:bili_core/logic.dart';
 import 'package:flutter/material.dart';
 
 import '../app/app_environment.dart';
 import '../devtools/log_forwarder.dart';
 import '../devtools/log_server_discovery.dart';
 import '../playback/playback_controller.dart';
+import '../playback/playback_setup.dart';
 import '../player_ui/player_stage.dart';
 import '../shared/theme.dart';
+import '../speedtest/speed_test_plan.dart';
+import '../speedtest/speed_test_results.dart';
+import '../speedtest/speed_test_runner.dart';
 
 typedef StageBuilder = Widget Function(BuildContext context, PlaybackController controller,
     {required bool showStats, required bool danmakuEnabled});
@@ -27,6 +32,13 @@ Widget playerStage(BuildContext context, PlaybackController controller,
       onHint: controller.seekHint,
     );
 
+/// The real plan fetch and engines.
+const appSpeedTestHooks =
+    SpeedTestHooks(choosePlan: choosePlan, startEngine: _startVariantEngine, appEngine: startPlatformEngine);
+
+Future<PlaybackEngine> _startVariantEngine(SpeedTestVariant variant) =>
+    startPlatformEngine(config: variant.config, connectionsPerHost: variant.connectionsPerHost);
+
 /// Slice 1's whole app: the account the keychain login gave, a BV field, the player and its switches. KaiC checks
 /// HDR, PiP, danmaku and seeking over the native player with it.
 class PlayerTestPage extends StatefulWidget {
@@ -37,6 +49,7 @@ class PlayerTestPage extends StatefulWidget {
     this.logs,
     this.stageBuilder = playerStage,
     this.initialLink,
+    this.speedTestHooks = appSpeedTestHooks,
   });
 
   final AppEnvironment environment;
@@ -48,6 +61,7 @@ class PlayerTestPage extends StatefulWidget {
 
   /// Played as soon as the player is up (`--play=<BV or link>` on the PC, for test runs).
   final String? initialLink;
+  final SpeedTestHooks speedTestHooks;
 
   @override
   State<PlayerTestPage> createState() => _PlayerTestPageState();
@@ -55,9 +69,13 @@ class PlayerTestPage extends StatefulWidget {
 
 class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObserver {
   final _link = TextEditingController();
+  final _testLinks = TextEditingController();
   late final TextEditingController _logAddress = TextEditingController(text: widget.logs?.manual ?? '');
   late final AppLifecycleListener _lifecycle;
   PlaybackController? _controller;
+
+  /// Dev builds only, like the log section.
+  SpeedTestRunner? _speedTest;
   String? _startError;
   bool _showStats = true;
   bool _danmakuEnabled = true;
@@ -72,7 +90,12 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
         controller.dispose();
         return;
       }
-      setState(() => _controller = controller);
+      setState(() {
+        _controller = controller;
+        if (widget.logs != null) {
+          _speedTest = SpeedTestRunner(target: ControllerTarget(controller), hooks: widget.speedTestHooks);
+        }
+      });
       final link = widget.initialLink;
       if (link != null) {
         _link.text = link;
@@ -90,8 +113,11 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _lifecycle.dispose();
+    // Before the controller, so sound and screen are put back while the player is still there.
+    _speedTest?.dispose();
     _controller?.dispose();
     _link.dispose();
+    _testLinks.dispose();
     _logAddress.dispose();
     super.dispose();
   }
@@ -101,6 +127,17 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     if (controller == null || _link.text.trim().isEmpty) return;
     FocusScope.of(context).unfocus();
     unawaited(controller.open(_link.text));
+  }
+
+  void _startSpeedTest() {
+    final runner = _speedTest;
+    if (runner == null || runner.running) return;
+    FocusScope.of(context).unfocus();
+    final links = [
+      for (final line in _testLinks.text.split('\n'))
+        if (line.trim().isNotEmpty) line.trim(),
+    ];
+    unawaited(runner.start(links: links, server: widget.logs?.target));
   }
 
   @override
@@ -135,6 +172,10 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
                   children: [
                     if (controller != null) ..._playbackSection(controller),
                     if (widget.logs case final logs?) _LogSection(logs: logs, address: _logAddress),
+                    if (_speedTest case final runner?) ...[
+                      const SizedBox(height: BiliMetrics.sectionGap),
+                      _SpeedTestSection(runner: runner, links: _testLinks, onStart: _startSpeedTest),
+                    ],
                   ],
                 ),
               ),
@@ -491,4 +532,148 @@ class _ServerTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SpeedTestSection extends StatelessWidget {
+  const _SpeedTestSection({required this.runner, required this.links, required this.onStart});
+
+  final SpeedTestRunner runner;
+  final TextEditingController links;
+  final VoidCallback onStart;
+
+  static const _secondary = TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText);
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: runner,
+        builder: (context, _) {
+          final groups = GroupSummary.of(runner.results);
+          final error = runner.error;
+          final status = _status;
+          return _Card(children: [
+            _Row(
+              label: '速度测试',
+              trailing: runner.running
+                  ? OutlinedButton(
+                      key: const ValueKey('speedtest-stop'),
+                      onPressed: runner.cancelled ? null : runner.stop,
+                      child: const Text('停止'),
+                    )
+                  : FilledButton(
+                      key: const ValueKey('speedtest-start'),
+                      onPressed: onStart,
+                      style: FilledButton.styleFrom(
+                          backgroundColor: BiliColors.pink, foregroundColor: BiliColors.onPink),
+                      child: const Text('开始测试'),
+                    ),
+            ),
+            TextField(
+              key: const ValueKey('speedtest-links'),
+              controller: links,
+              enabled: !runner.running,
+              minLines: 2,
+              maxLines: 5,
+              keyboardType: TextInputType.multiline,
+              style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.text),
+              decoration: const InputDecoration(
+                isDense: true,
+                hintText: '每行一个链接，留空则用电脑上的计划或当前视频',
+                hintStyle: _secondary,
+              ),
+            ),
+            const SizedBox(height: BiliMetrics.rowGap),
+            if (status.isNotEmpty) Text(status, key: const ValueKey('speedtest-status'), style: _secondary),
+            if (error != null)
+              Text(error,
+                  key: const ValueKey('speedtest-error'),
+                  style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.failure)),
+            for (final note in runner.notes) Text(note, style: _secondary),
+            for (final failed in runner.results.where((pass) => pass.failed))
+              Text('第 ${failed.pass} 次（${failed.variant}）失败：${failed.failure ?? ''}', style: _secondary),
+            if (groups.isNotEmpty) ...[
+              const SizedBox(height: BiliMetrics.rowGap),
+              _SpeedTestTable(groups: groups),
+              const SizedBox(height: BiliMetrics.rowGap),
+              const Text('时间为秒（中位数），跳转超时按 15 秒计；卡顿为各次合计；内存为峰值 MB', style: _secondary),
+            ],
+          ]);
+        },
+      );
+
+  String get _status {
+    final plan = runner.plan;
+    final pass = runner.pass;
+    return [
+      if (plan != null) '计划 ${plan.plan.id}（${plan.source == PlanSource.pc ? '电脑' : '内置，${plan.note}'}）',
+      if (pass != null) ...['第 ${pass.index}/${runner.passCount} 次', pass.variant.name, _quality(pass.quality)],
+      if (runner.step.isNotEmpty) runner.step,
+    ].join(' · ');
+  }
+}
+
+String _quality(int qn) => QualityNames.short(qn: qn, serverText: null);
+
+/// One row per variant and quality, then each later variant's difference from the first.
+class _SpeedTestTable extends StatelessWidget {
+  const _SpeedTestTable({required this.groups});
+
+  final List<GroupSummary> groups;
+
+  static const _style = TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.text);
+  static const _header = TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText);
+
+  @override
+  Widget build(BuildContext context) => Table(
+        key: const ValueKey('speedtest-results'),
+        defaultColumnWidth: const IntrinsicColumnWidth(),
+        columnWidths: const {2: FlexColumnWidth()},
+        children: [
+          _row(const ['', '首帧', '跳转 中位/P90/最慢', '回跳', '卡顿', '内存'], _header),
+          for (final group in groups)
+            _row([
+              '${group.variant} ${_quality(group.quality)} ×${group.passes}',
+              _seconds(group.firstFrameMs),
+              [group.seekMedianMs, group.seekP90Ms, group.seekMaxMs].map(_seconds).join('/'),
+              _seconds(group.backMedianMs),
+              '${group.stalls}',
+              '${group.rssMaxMB}',
+            ], _style),
+          for (final delta in GroupDelta.of(groups))
+            TableRow(children: [
+              _cell('${delta.other.variant}−${delta.base.variant} ${_quality(delta.base.quality)}', _style),
+              _cell(_signed(delta.firstFrameMs), _better(delta.firstFrameMs)),
+              _cell([delta.seekMedianMs, delta.seekP90Ms, delta.seekMaxMs].map(_signed).join('/'),
+                  _better(delta.seekMedianMs)),
+              _cell(_signed(delta.backMedianMs), _better(delta.backMedianMs)),
+              _cell(_signedCount(delta.stalls), _better(delta.stalls.toDouble())),
+              _cell(_signedCount(delta.rssMaxMB), _better(delta.rssMaxMB.toDouble())),
+            ]),
+        ],
+      );
+
+  static TableRow _row(List<String> cells, TextStyle style) =>
+      TableRow(children: [for (final text in cells) _cell(text, style)]);
+
+  static Widget _cell(String text, TextStyle style) => Padding(
+        padding: const EdgeInsets.only(right: BiliMetrics.rowGap, bottom: BiliMetrics.rowGap / 2),
+        child: Text(text, style: style),
+      );
+
+  static String _seconds(double? ms) => ms == null ? '–' : (ms / 1000).toStringAsFixed(2);
+
+  static String _signed(double? ms) {
+    if (ms == null) return '–';
+    final text = (ms.abs() / 1000).toStringAsFixed(2);
+    return ms < 0 ? '−$text' : '+$text';
+  }
+
+  static String _signedCount(int value) => value < 0 ? '−${-value}' : '+$value';
+
+  /// Lower is better in every column.
+  static TextStyle _better(double? difference) => TextStyle(
+        fontSize: BiliMetrics.smallText,
+        color: difference == null || difference == 0
+            ? BiliColors.text
+            : (difference < 0 ? BiliColors.faster : BiliColors.slower),
+      );
 }

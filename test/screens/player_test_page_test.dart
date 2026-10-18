@@ -9,11 +9,14 @@ import 'package:bilifast/devtools/log_server_discovery.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/screens/player_test_page.dart';
+import 'package:bilifast/speedtest/speed_test_plan.dart';
+import 'package:bilifast/speedtest/speed_test_runner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
+import '../speedtest/fake_target.dart';
 import '../support/fake_player.dart';
 
 /// Stands in for PlayerStage, so the screen is checked without the player UI.
@@ -34,7 +37,7 @@ void main() {
     logger = Logger(session: 'test');
   });
 
-  Future<void> show(WidgetTester tester, {LogForwarder? logs}) async {
+  Future<void> show(WidgetTester tester, {LogForwarder? logs, SpeedTestHooks hooks = appSpeedTestHooks}) async {
     tester.view.physicalSize = const Size(440, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -47,6 +50,7 @@ void main() {
         environment: environment,
         logs: logs,
         stageBuilder: stageStandIn,
+        speedTestHooks: hooks,
         startPlayback: () async => PlaybackController(
           client: environment.client,
           engine: engine,
@@ -163,5 +167,108 @@ void main() {
     expect(logs.target?.host, '10.0.0.2');
     expect(find.byKey(const ValueKey('log-status')), findsOneWidget);
     logs.dispose();
+  });
+
+  group('速度测试', () {
+    late LogForwarder logs;
+    late List<String> engines;
+
+    setUp(() {
+      logs = LogForwarder(
+        logger: logger,
+        discovery: const NoLogServerDiscovery(),
+        poster: (endpoint) => (body) async {},
+        initialTarget: '',
+      );
+      engines = [];
+    });
+
+    tearDown(() => logs.dispose());
+
+    SpeedTestHooks hooksFor(Map<String, Object?> plan, {Object? planError}) => SpeedTestHooks(
+          choosePlan: (server) async {
+            if (planError != null) throw planError;
+            return PlanChoice(plan: planWith(plan), source: PlanSource.builtin, note: '没有连接电脑');
+          },
+          startEngine: (variant) async {
+            engines.add(variant.name);
+            return FakeEngine();
+          },
+          appEngine: () async {
+            engines.add('app');
+            return FakeEngine();
+          },
+        );
+
+    const quick = <String, Object?>{
+      'order': 'AB',
+      'seeks': 0,
+      'hints': 0,
+      'backJumps': 0,
+      'dwellSeconds': 0,
+      'fastSeconds': 0,
+    };
+
+    Future<void> settleRun(WidgetTester tester) async {
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    Future<void> startTest(WidgetTester tester, String links) async {
+      await tester.enterText(find.byKey(const ValueKey('speedtest-links')), links);
+      await tester.tap(find.byKey(const ValueKey('speedtest-start')));
+      await settleRun(tester);
+    }
+
+    testWidgets('only dev builds get the card, under the log section', (tester) async {
+      await show(tester);
+      expect(find.text('速度测试'), findsNothing);
+    });
+
+    testWidgets('runs the plan on the given link and shows each variant and the difference', (tester) async {
+      await show(tester, logs: logs, hooks: hooksFor(quick));
+      expect(find.text('速度测试'), findsOneWidget);
+      await startTest(tester, 'BV1GJ411x7h7');
+      expect(find.byKey(const ValueKey('speedtest-stop')), findsOneWidget);
+      expect(find.textContaining('计划 test-1（内置，没有连接电脑） · 第 1/2 次 · A · 4K · 等待首帧'), findsOneWidget);
+
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await settleRun(tester);
+      expect(find.textContaining('第 2/2 次 · B'), findsOneWidget);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await settleRun(tester);
+
+      expect(find.byKey(const ValueKey('speedtest-start')), findsOneWidget);
+      expect(find.byKey(const ValueKey('speedtest-results')), findsOneWidget);
+      expect(find.text('A 4K ×1'), findsOneWidget);
+      expect(find.text('B 4K ×1'), findsOneWidget);
+      expect(find.text('B−A 4K'), findsOneWidget);
+      expect(find.textContaining('完成'), findsOneWidget);
+      expect(engines, ['A', 'B', 'app']);
+      expect(player.calls, containsAllInOrder(['muted true', 'keep awake true', 'muted false', 'keep awake false']));
+      expect(http.to(Canned.viewPath).length + http.to(Canned.signedViewPath).length, 1, reason: 'one open per video');
+    });
+
+    testWidgets('停止 stops the run and gives the sound and the screen back', (tester) async {
+      await show(tester, logs: logs, hooks: hooksFor(quick));
+      await startTest(tester, 'BV1GJ411x7h7');
+      await tester.tap(find.byKey(const ValueKey('speedtest-stop')));
+      await settleRun(tester);
+      expect(find.textContaining('已停止'), findsOneWidget);
+      expect(find.byKey(const ValueKey('speedtest-start')), findsOneWidget);
+      expect(player.calls, containsAllInOrder(['muted true', 'muted false', 'keep awake false']));
+      expect(find.byKey(const ValueKey('speedtest-results')), findsNothing);
+    });
+
+    testWidgets('a plan the PC got wrong is shown and nothing plays', (tester) async {
+      await show(tester,
+          logs: logs, hooks: hooksFor(quick, planError: const SpeedTestPlanError('方案 B 的 config 有引擎不认识或类型不对的项：typo')));
+      await startTest(tester, 'BV1GJ411x7h7');
+      expect(find.byKey(const ValueKey('speedtest-error')), findsOneWidget);
+      expect(find.textContaining('typo'), findsOneWidget);
+      expect(engines, isEmpty);
+      expect(player.calls, isNot(contains('muted true')));
+    });
   });
 }
