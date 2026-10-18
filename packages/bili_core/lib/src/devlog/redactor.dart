@@ -16,6 +16,9 @@ abstract final class Redactor {
     'passwd',
     'pwd',
     'dedeuserid__ckmd5',
+    'auth_key',
+    'upsig',
+    'hdnts',
   ];
   static const _idNames = {'mid', 'dedeuserid'};
   // Too short to match as a fragment ("design", "assign"), so it only counts as a whole name.
@@ -23,14 +26,17 @@ abstract final class Redactor {
 
   // Prefixes are bounded so matching stays linear on long input.
   static const _secretName =
-      r'(?:[\w-]{0,40}(?:sessdata|bili_jct|access_key|access_token|refresh_token|token|password|passwd|pwd|dedeuserid__ckmd5)'
+      r'(?:[\w-]{0,40}(?:sessdata|bili_jct|access_key|access_token|refresh_token|token|password|passwd|pwd|dedeuserid__ckmd5'
+      r'|auth_key|upsig|hdnts)'
       r'|[\w-]{0,40}csrf[\w-]{0,40}|sign)';
   static const _quote = r'''(?:\\?["'])''';
   static const _separator = r'''(?:\\?["'])?\s*[=:]\s*''';
   // Group 1 is the opening quote of a quoted value, so the quote survives the replacement.
   static const _value = r'''(?:(\\?["'])[^"'\\]*|[^;&\s"'\\]+)''';
 
-  static final _urlPattern = RegExp(r'''https?:(?:\\?/){2}[^\s"'<>]+''');
+  // Bilibili sends some URLs protocol-relative (`//upos-…/x.m4s?…&auth_key=…`). Without a scheme, the slashes must
+  // not follow a word, a colon or another slash, so `a//b`, `10//2` and other schemes' `x://` are left alone.
+  static final _urlPattern = RegExp(r'''(?:https?:|(?<![\w:/\\]))(?:\\?/){2}[^\s"'<>]+''');
   static const _urlTrailing = ').,;!?]}';
   static final _authorizationPattern = RegExp(
     r'''\b((?:proxy-)?authorization["']?\s*[:=]\s*["']?)[^\r\n"']+''',
@@ -87,7 +93,7 @@ abstract final class Redactor {
     return output.replaceAllMapped(_secretPairPattern, (m) => '${m[1]}${m[2] ?? ''}[redacted]');
   }
 
-  static final _urlParts = RegExp(r'^([A-Za-z][A-Za-z0-9+.\-]*)://([^/?#]*)([^?#]*)(?:\?([^#]*))?(?:#.*)?$');
+  static final _urlParts = RegExp(r'^(?:([A-Za-z][A-Za-z0-9+.\-]*):)?//([^/?#]*)([^?#]*)(?:\?([^#]*))?(?:#.*)?$');
   static final _rfc3986 = RegExp(r"^(?:[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=]|%[0-9A-Fa-f]{2})*$");
 
   /// Keeps scheme, host, port, path and the `deadline` parameter: enough to see which node and
@@ -102,7 +108,8 @@ abstract final class Redactor {
       return end < 0 ? unescaped : unescaped.substring(0, end);
     }
     final (host, port) = authority;
-    final buffer = StringBuffer('${parts[1]}://$host');
+    final scheme = parts[1];
+    final buffer = StringBuffer('${scheme == null ? '' : '$scheme:'}//$host');
     if (port != null) buffer.write(':$port');
     buffer.write(_decode(parts[3]!));
     final query = parts[4];

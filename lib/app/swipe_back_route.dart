@@ -120,14 +120,24 @@ class _ContentSwipeState extends State<_ContentSwipe> {
 }
 
 /// A horizontal drag that only claims the gesture when it heads right, so leftward drags stay with the page.
+///
+/// Where nothing else under the finger takes drags (a page too short to scroll, or the player once its taps give
+/// up), it is alone in the arena and wins on touch-down, so it waits for the slop before starting and turns down a
+/// drag that is more vertical than horizontal by then.
 class _RightwardDragRecognizer extends HorizontalDragGestureRecognizer {
-  _RightwardDragRecognizer({super.debugOwner});
+  _RightwardDragRecognizer({super.debugOwner}) {
+    onlyAcceptDragOnThreshold = true;
+  }
 
   double _dx = 0;
+  double _dy = 0;
+  bool _tooVertical = false;
 
   @override
   void addAllowedPointer(PointerDownEvent event) {
     _dx = 0;
+    _dy = 0;
+    _tooVertical = false;
     super.addAllowedPointer(event);
   }
 
@@ -135,18 +145,30 @@ class _RightwardDragRecognizer extends HorizontalDragGestureRecognizer {
   void handleEvent(PointerEvent event) {
     if (event is PointerMoveEvent) {
       _dx += event.delta.dx;
+      _dy += event.delta.dy;
       if (_dx < -kTouchSlop / 2) {
-        resolve(GestureDisposition.rejected);
-        stopTrackingPointer(event.pointer);
+        _giveUp(event.pointer);
         return;
       }
     }
     super.handleEvent(event);
+    if (_tooVertical) {
+      _tooVertical = false;
+      _giveUp(event.pointer);
+    }
   }
 
+  // Not resolve + stopTrackingPointer: once the arena has closed in our favour, only rejectGesture drops the pointer
+  // from the accepted ones, and a stale one there stops the next drag tracking its moves until it wins.
+  void _giveUp(int pointer) => rejectGesture(pointer);
+
   @override
-  bool hasSufficientGlobalDistanceToAccept(PointerDeviceKind pointerDeviceKind, double? deviceTouchSlop) =>
-      super.hasSufficientGlobalDistanceToAccept(pointerDeviceKind, deviceTouchSlop) && _dx > 0;
+  bool hasSufficientGlobalDistanceToAccept(PointerDeviceKind pointerDeviceKind, double? deviceTouchSlop) {
+    if (!super.hasSufficientGlobalDistanceToAccept(pointerDeviceKind, deviceTouchSlop)) return false;
+    // Judged at the exact moment the drag would start; giving up from in here would leave super mid-event.
+    _tooVertical = _dy.abs() > _dx.abs();
+    return !_tooVertical && _dx > 0;
+  }
 
   @override
   String get debugDescription => 'rightward drag';
