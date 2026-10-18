@@ -142,6 +142,9 @@ abstract interface class BiliPlayer {
 
   Future<void> load(PlayerSource source);
 
+  /// Drops the loaded item, so nothing more is buffered or decoded for it; the next [load] plays as usual.
+  Future<void> unload();
+
   Future<void> play();
 
   Future<void> pause();
@@ -152,6 +155,9 @@ abstract interface class BiliPlayer {
 
   /// Silences the sound without changing the volume it comes back at.
   Future<void> setMuted(bool muted);
+
+  /// What the last [setMuted] asked for.
+  bool get muted;
 
   /// Keeps the screen on while set, app-wide (the speed test runs with nobody touching the phone).
   Future<void> setKeepAwake(bool on);

@@ -35,6 +35,7 @@ final class IosPlayer implements BiliPlayer {
   final _events = StreamController<PlayerEvent>.broadcast();
   PlayerStatus? _status;
   int _loadsInFlight = 0;
+  bool _muted = false;
   bool _disposed = false;
 
   @override
@@ -69,6 +70,12 @@ final class IosPlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> unload() async {
+    _check();
+    await _host.unload(nativeId);
+  }
+
+  @override
   Future<void> play() async {
     _check();
     await _host.play(nativeId);
@@ -95,8 +102,12 @@ final class IosPlayer implements BiliPlayer {
   @override
   Future<void> setMuted(bool muted) async {
     _check();
+    _muted = muted;
     await _host.setMuted(nativeId, muted);
   }
+
+  @override
+  bool get muted => _muted;
 
   @override
   Future<void> setKeepAwake(bool on) async {

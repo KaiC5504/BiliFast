@@ -64,8 +64,9 @@ class PlayerTestPage extends StatefulWidget {
   final String? initialLink;
   final SpeedTestHooks speedTestHooks;
 
-  /// False when the controller is the app's shared one (opened from 开发者): the page then closes its video on
-  /// leaving rather than disposing the player, and the app hears lifecycle and memory events for it.
+  /// False when the controller is the app's shared one (opened from 开发者): leaving never disposes it, and closes the
+  /// video only if no other page has opened one since this page's last open (its speed test's included). The app
+  /// then hears lifecycle and memory events for it.
   final bool ownsController;
 
   @override
@@ -85,6 +86,9 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   bool _showStats = true;
   bool _danmakuEnabled = true;
 
+  /// The controller's open count after this page's last open; a later one means another page has the player.
+  int? _open;
+
   @override
   void initState() {
     super.initState();
@@ -92,21 +96,26 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
       _lifecycle = AppLifecycleListener(onResume: () => unawaited(_controller?.appResumed()));
       WidgetsBinding.instance.addObserver(this);
     }
+    final owns = widget.ownsController;
     widget.startPlayback().then((controller) {
       if (!mounted) {
-        controller.dispose();
+        if (owns) controller.dispose();
         return;
       }
       setState(() {
         _controller = controller;
         if (widget.logs != null) {
-          _speedTest = SpeedTestRunner(target: ControllerTarget(controller), hooks: widget.speedTestHooks);
+          _speedTest = SpeedTestRunner(
+            target: ControllerTarget(controller, opened: () => _open = controller.opens),
+            hooks: widget.speedTestHooks,
+            sharedTarget: !owns,
+          );
         }
       });
       final link = widget.initialLink;
       if (link != null) {
         _link.text = link;
-        unawaited(controller.open(link));
+        _openLink(controller, link);
       }
     }, onError: (Object error) {
       if (mounted) setState(() => _startError = '$error');
@@ -122,10 +131,15 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     _lifecycle?.dispose();
     // Before the controller, so sound and screen are put back while the player is still there.
     _speedTest?.dispose();
+    final controller = _controller;
     if (widget.ownsController) {
-      _controller?.dispose();
-    } else {
-      _controller?.close();
+      controller?.dispose();
+    } else if (controller != null && _open != null) {
+      final open = _open;
+      // close() notifies the controller's listeners, which can't happen while this tree is torn down.
+      scheduleMicrotask(() {
+        if (controller.opens == open) controller.close();
+      });
     }
     _link.dispose();
     _testLinks.dispose();
@@ -137,7 +151,12 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     final controller = _controller;
     if (controller == null || _link.text.trim().isEmpty) return;
     FocusScope.of(context).unfocus();
-    unawaited(controller.open(_link.text));
+    _openLink(controller, _link.text);
+  }
+
+  void _openLink(PlaybackController controller, String text) {
+    unawaited(controller.open(text));
+    _open = controller.opens;
   }
 
   void _startSpeedTest() {

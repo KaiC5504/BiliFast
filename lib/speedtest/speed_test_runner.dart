@@ -47,13 +47,17 @@ abstract interface class SpeedTestTarget {
   void seekHint(double seconds);
   Future<void> setRate(double rate);
   Future<void> setMuted(bool muted);
+  bool get muted;
   Future<void> setKeepAwake(bool on);
 }
 
 final class ControllerTarget implements SpeedTestTarget {
-  ControllerTarget(this.controller);
+  ControllerTarget(this.controller, {this.opened});
 
   final PlaybackController controller;
+
+  /// Called as each [open] starts, once the controller has counted it.
+  final void Function()? opened;
 
   @override
   Stream<PlaybackMark> get marks => controller.marks;
@@ -109,7 +113,11 @@ final class ControllerTarget implements SpeedTestTarget {
   Future<void> setQuality(int quality) => controller.setQuality(quality);
 
   @override
-  Future<void> open(String link) => controller.open(link);
+  Future<void> open(String link) {
+    final opening = controller.open(link);
+    opened?.call();
+    return opening;
+  }
 
   @override
   Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality}) =>
@@ -133,6 +141,9 @@ final class ControllerTarget implements SpeedTestTarget {
   Future<void> setMuted(bool muted) => controller.player.setMuted(muted);
 
   @override
+  bool get muted => controller.player.muted;
+
+  @override
   Future<void> setKeepAwake(bool on) => controller.player.setKeepAwake(on);
 }
 
@@ -153,6 +164,7 @@ class SpeedTestRunner extends ChangeNotifier {
   SpeedTestRunner({
     required this.target,
     required this.hooks,
+    this.sharedTarget = false,
     Logger? logger,
     int Function()? newSeed,
     int Function()? rss,
@@ -172,6 +184,10 @@ class SpeedTestRunner extends ChangeNotifier {
 
   final SpeedTestTarget target;
   final SpeedTestHooks hooks;
+
+  /// The target outlives the runner (the app's shared player), so a run cut short by [dispose] still puts the app's
+  /// engine, quality and mode back for the next page.
+  final bool sharedTarget;
   final Logger _logger;
   final int Function() _newSeed;
   final int Function() _rss;
@@ -191,6 +207,14 @@ class SpeedTestRunner extends ChangeNotifier {
   bool _fast = false;
   final Set<void Function()> _interrupts = {};
   bool _soundAndScreenRestored = true;
+
+  /// As the run found them, to be put back.
+  bool _wasMuted = false;
+  int _originalQuality = 0;
+  PlaybackMode _originalMode = PlaybackMode.btr;
+
+  /// A variant engine has been asked for since the run began, so the app's must come back.
+  bool _needsPutBack = false;
 
   bool get running => _running;
   bool get cancelled => _cancelled;
@@ -273,9 +297,9 @@ class SpeedTestRunner extends ChangeNotifier {
   Future<void> _run(SpeedTestPlan plan, List<SpeedTestPass> passes) async {
     final marks = target.marks.listen(_onMark);
     final sampler = Timer.periodic(const Duration(seconds: 1), (_) => _current?.noteRss(_rss()));
-    final originalQuality = target.selectedQuality;
-    final originalMode = target.mode;
-    var engineSwapped = false;
+    _originalQuality = target.selectedQuality;
+    _originalMode = target.mode;
+    _wasMuted = target.muted;
     var finished = 0;
     _soundAndScreenRestored = false;
     final done = <String>{};
@@ -285,6 +309,8 @@ class SpeedTestRunner extends ChangeNotifier {
     var refetched = false;
     try {
       await _quietly(() => target.setMuted(true));
+      // Stopped meanwhile, the screen would stay on: its restore has already been sent.
+      _checkCancelled();
       await _quietly(() => target.setKeepAwake(true));
       for (final pass in passes) {
         _checkCancelled();
@@ -310,7 +336,7 @@ class SpeedTestRunner extends ChangeNotifier {
           'overrides': jsonEncode(pass.variant.overrides),
         });
         if (pass.videoIndex != openVideo && pass.videoIndex != brokenVideo) {
-          engineSwapped = true;
+          _needsPutBack = true;
           switch (await _openVideo(pass)) {
             case _Opened.ok:
               openVideo = pass.videoIndex;
@@ -359,12 +385,8 @@ class SpeedTestRunner extends ChangeNotifier {
       // Sound and screen first: restoring the engine can hang on a network that has gone.
       _restoreSoundAndScreen();
       await _quietly(() => target.setRate(1));
-      if (engineSwapped && !_disposed) {
-        _setStep('正在恢复…');
-        await _quietly(() => target.useEngine(hooks.appEngine));
-        await _quietly(() => target.setQuality(originalQuality));
-        if (target.mode != originalMode) await _quietly(() => target.setMode(originalMode));
-      }
+      // Once disposed, [dispose] has put them back, or the target went with the page.
+      if (!_disposed) await _putBack();
       _logger.info(LogCategory.app, 'speedtest done', {'passes': finished, 'cancelled': _cancelled});
       _running = false;
       _pass = null;
@@ -386,7 +408,9 @@ class SpeedTestRunner extends ChangeNotifier {
     _checkCancelled();
     // With nothing loaded, neither reloads anything.
     if (target.mode != PlaybackMode.btr) await target.setMode(PlaybackMode.btr);
+    _checkCancelled();
     await target.setQuality(pass.quality);
+    _checkCancelled();
     await target.open(pass.video);
     _checkCancelled();
     return target.bvid != null && target.canReplay ? _Opened.ok : _Opened.broken;
@@ -612,8 +636,20 @@ class SpeedTestRunner extends ChangeNotifier {
   void _restoreSoundAndScreen() {
     if (_soundAndScreenRestored) return;
     _soundAndScreenRestored = true;
-    unawaited(_quietly(() => target.setMuted(false)));
+    unawaited(_quietly(() => target.setMuted(_wasMuted)));
     unawaited(_quietly(() => target.setKeepAwake(false)));
+  }
+
+  /// The app's engine, then the quality and mode the run found. The engine swap stops what is loaded at once, so the
+  /// other two only change settings; it queues behind a variant's swap still starting, so the app's is the one left.
+  Future<void> _putBack() async {
+    if (!_needsPutBack) return;
+    _needsPutBack = false;
+    _setStep('正在恢复…');
+    final engine = _quietly(() => target.useEngine(hooks.appEngine));
+    await _quietly(() => target.setQuality(_originalQuality));
+    if (target.mode != _originalMode) await _quietly(() => target.setMode(_originalMode));
+    await engine;
   }
 
   Future<void> _quietly(Future<void> Function() action) async {
@@ -638,13 +674,16 @@ class SpeedTestRunner extends ChangeNotifier {
 
   static String _rate(double value) => value == value.roundToDouble() ? '${value.round()}' : '$value';
 
-  /// The page is going away with its player: sound and screen are put back now, while the player can still hear
-  /// it, and the run unwinds without touching the engine again.
+  /// The page is going away: sound and screen are put back now, while the player can still hear it. A shared target
+  /// also gets the app's engine, quality and mode back, in a microtask: the swap notifies the controller's listeners,
+  /// which must not happen while the page's tree is torn down, yet it has to stop the run's video before another page
+  /// can open one. A target that goes with the page is left alone.
   @override
   void dispose() {
     _disposed = true;
     stop();
     _restoreSoundAndScreen();
+    if (sharedTarget) scheduleMicrotask(() => unawaited(_putBack()));
     super.dispose();
   }
 }

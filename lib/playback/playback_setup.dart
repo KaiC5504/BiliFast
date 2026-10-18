@@ -48,7 +48,7 @@ final appEngineOptions = EngineOptions(
 
 String? nodeMemoryPath() => supportFilePath('node_memory.json');
 
-/// [name] in the app's support folder (kept across launches, not backed up as documents); null where there is none.
+/// [name] in the app's support folder, kept across launches; null on other platforms or without HOME/APPDATA.
 String? supportFilePath(String name) {
   final env = Platform.environment;
   if (Platform.isIOS) {

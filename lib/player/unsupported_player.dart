@@ -9,6 +9,7 @@ import 'bili_player.dart';
 final class UnsupportedPlayer implements BiliPlayer {
   final _events = StreamController<PlayerEvent>.broadcast();
   bool _disposed = false;
+  bool _muted = false;
 
   @override
   PlayerCapabilities get capabilities => PlayerCapabilities.none;
@@ -32,6 +33,9 @@ final class UnsupportedPlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> unload() async => _check();
+
+  @override
   Future<void> play() async => _check();
 
   @override
@@ -44,7 +48,13 @@ final class UnsupportedPlayer implements BiliPlayer {
   Future<void> setRate(double rate) async => _check();
 
   @override
-  Future<void> setMuted(bool muted) async => _check();
+  Future<void> setMuted(bool muted) async {
+    _check();
+    _muted = muted;
+  }
+
+  @override
+  bool get muted => _muted;
 
   @override
   Future<void> setKeepAwake(bool on) async => _check();

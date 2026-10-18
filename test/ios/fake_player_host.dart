@@ -32,6 +32,9 @@ final class FakePlayerHost extends PlayerHostApi {
   }
 
   @override
+  Future<void> unload(int playerId) async => calls.add('unload $playerId');
+
+  @override
   Future<void> play(int playerId) async => calls.add('play $playerId');
 
   @override

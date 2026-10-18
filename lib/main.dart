@@ -36,7 +36,10 @@ Future<void> main(List<String> args) async {
     return;
   }
   unawaited(environment.refreshAccount());
-  final playback = AppPlayback(() => startPlaybackController(environment.client));
+  final playback = AppPlayback(
+    () => startPlaybackController(environment.client),
+    onResumed: () => recheckUnknownAccount(environment),
+  );
   // Checks run on the PC play silently.
   if (args.contains('--mute')) {
     unawaited(playback.obtain().then((controller) => controller.player.setMuted(true), onError: (Object _) {}));
@@ -45,6 +48,12 @@ Future<void> main(List<String> args) async {
     services: AppServices(environment: environment, playback: playback, recents: recents, logs: logs),
     initialLink: _argument(args, '--play='),
   ));
+}
+
+/// The launch's account check fails without a network; as Swift's RootView did on becoming active, coming back to
+/// the foreground asks again while the account is still unknown.
+void recheckUnknownAccount(AppEnvironment environment) {
+  if (environment.account is AccountUnknown) unawaited(environment.refreshAccount());
 }
 
 /// What the app shows when it could not start.
@@ -109,6 +118,8 @@ class BiliFastApp extends StatelessWidget {
         fontFamily: BiliFonts.family,
         colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
         scaffoldBackgroundColor: BiliColors.pageGrey,
+        // iOS has no ripples; rows show their own press highlight.
+        splashFactory: NoSplash.splashFactory,
       ),
       builder: (context, child) => AppScope(services: services, child: child!),
       home: HomePage(

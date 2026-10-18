@@ -83,11 +83,20 @@ void main() {
     });
 
     test('mute goes to the native player, keep awake to the app', () async {
+      expect(player.muted, isFalse);
       await player.setMuted(true);
+      expect(player.muted, isTrue);
       await player.setKeepAwake(true);
       await player.setMuted(false);
       await player.setKeepAwake(false);
+      expect(player.muted, isFalse);
       expect(host.calls.skip(1), ['muted 7 true', 'keep awake true', 'muted 7 false', 'keep awake false']);
+    });
+
+    test('unload goes to the same native player, and a load after it works', () async {
+      await player.unload();
+      await player.load(PlayerSource(master: Uri.parse('http://127.0.0.1:8080/tok/master.m3u8')));
+      expect(host.calls.skip(1), ['unload 7', 'load 7 http://127.0.0.1:8080/tok/master.m3u8 0.0 true']);
     });
 
     test('every fit mode maps to its native mode', () async {

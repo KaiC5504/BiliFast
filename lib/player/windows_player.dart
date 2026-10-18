@@ -24,7 +24,7 @@ enum MpvSource {
 
 /// media_kit (mpv) for development on Windows.
 final class WindowsPlayer implements BiliPlayer {
-  WindowsPlayer._(this._player, this._controller, this._mode, this._defaultUserAgent) {
+  WindowsPlayer._(this._player, this._controller, this._mode, this._defaultUserAgent, this._muted) {
     final stream = _player.stream;
     _subscriptions.addAll([
       stream.playing.listen((playing) {
@@ -60,7 +60,7 @@ final class WindowsPlayer implements BiliPlayer {
     // media_kit turns the disk cache on but gives it no directory, so mpv logs an error and keeps it in memory.
     await native.setProperty('cache-on-disk', 'no');
     final userAgent = await native.getProperty('user-agent');
-    return WindowsPlayer._(player, controller, source, userAgent);
+    return WindowsPlayer._(player, controller, source, userAgent, muted);
   }
 
   static const _bufferedEvery = 5;
@@ -92,6 +92,7 @@ final class WindowsPlayer implements BiliPlayer {
   List<({double start, double end})> _buffered = const [];
   String? _lastError;
   double? _volumeBeforeMute;
+  bool _muted;
   int _ticks = 0;
   bool _ticking = false;
   bool _disposed = false;
@@ -148,6 +149,25 @@ final class WindowsPlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> unload() async {
+    _check();
+    _generation++;
+    _source = null;
+    _opening = false;
+    _ready = false;
+    _duration = 0;
+    _position = null;
+    _size = null;
+    _lastError = null;
+    _updateStatus();
+    if (_buffered.isNotEmpty) {
+      _buffered = const [];
+      _emit(const BufferedChanged([]));
+    }
+    await _player.stop();
+  }
+
+  @override
   Future<void> play() async {
     _check();
     await _player.play();
@@ -176,6 +196,7 @@ final class WindowsPlayer implements BiliPlayer {
   @override
   Future<void> setMuted(bool muted) async {
     _check();
+    _muted = muted;
     if (muted) {
       _volumeBeforeMute ??= _player.state.volume;
       await _player.setVolume(0);
@@ -186,6 +207,9 @@ final class WindowsPlayer implements BiliPlayer {
     _volumeBeforeMute = null;
     await _player.setVolume(volume);
   }
+
+  @override
+  bool get muted => _muted;
 
   /// The PC's screen saver is the user's business.
   @override

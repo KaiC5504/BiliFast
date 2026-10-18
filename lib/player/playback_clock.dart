@@ -92,6 +92,12 @@ final class PlaybackClock {
     _fresh = true;
   }
 
+  /// Nothing is loaded: the clock stands at 0 until the next item plays.
+  void clear() {
+    _running = false;
+    reset(0);
+  }
+
   void _rebase() {
     _seconds = seconds;
     _atMs = _clock.nowMs();

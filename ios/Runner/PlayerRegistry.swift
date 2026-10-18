@@ -62,7 +62,7 @@ final class NativePlayer {
   private var itemObservations: [NSKeyValueObservation] = []
   private var itemTokens: [NSObjectProtocol] = []
   private var item: AVPlayerItem?
-  /// Bumped by every load and by dispose; callbacks of an older item do nothing.
+  /// Bumped by every load, unload and dispose; callbacks of an older item do nothing.
   private var generation = 0
   /// Whether playback should run once the start seek lands; a pause during it wins.
   private var wantsPlay = false
@@ -132,6 +132,17 @@ final class NativePlayer {
     } else if autoplay {
       player.play()
     }
+  }
+
+  /// Without an item AVPlayer stops filling its 30 s forward buffer; the layer and picture in picture stay attached.
+  func unload() {
+    generation += 1
+    pendingSeeks = 0
+    wantsPlay = false
+    player.pause()
+    detachItem()
+    player.replaceCurrentItem(with: nil)
+    updateStatus()
   }
 
   func play() {

@@ -22,9 +22,10 @@ void main() {
     logs = MemorySink();
   });
 
-  SpeedTestRunner make({int Function()? seed, int Function()? rss}) => SpeedTestRunner(
+  SpeedTestRunner make({int Function()? seed, int Function()? rss, bool shared = false}) => SpeedTestRunner(
         target: target,
         hooks: hooks.hooks,
+        sharedTarget: shared,
         logger: Logger(session: 'test')..add(logs),
         newSeed: seed,
         rss: rss ?? () => 100 * 1024 * 1024,
@@ -374,6 +375,38 @@ void main() {
       async.elapse(const Duration(minutes: 1));
       expect(target.calls.skip(calls), isNot(contains('useEngine')));
       expect(hooks.engines, ['A', 'A'], reason: 'the warm-up open and the first pass, not the app\'s');
+    });
+  });
+
+  test('on a shared player, a page that goes away mid-run puts the app engine, quality and mode back once', () {
+    onFakeClock((async) {
+      target
+        ..selectedQuality = 80
+        ..mode = PlaybackMode.direct;
+      final runner = make(shared: true);
+      runner.start(links: [video]);
+      async.elapse(const Duration(milliseconds: 1500));
+      final calls = target.calls.length;
+      runner.dispose();
+      async.flushMicrotasks();
+      expect(target.calls.skip(calls),
+          containsAllInOrder(['muted false', 'awake false', 'useEngine', 'quality 80', 'mode direct']));
+      expect(hooks.engines.last, 'app');
+      expect(target.selectedQuality, 80);
+      expect(target.mode, PlaybackMode.direct);
+      async.elapse(const Duration(minutes: 1));
+      expect(target.calls.skip(calls).where((call) => call == 'useEngine'), hasLength(1));
+      expect(hooks.engines.where((engine) => engine == 'app'), hasLength(1));
+    });
+  });
+
+  test('the sound is left as the run found it: a muted player stays muted', () {
+    onFakeClock((async) {
+      target.muted = true;
+      make().start(links: [video]);
+      async.elapse(const Duration(minutes: 5));
+      expect(target.calls.where((call) => call.startsWith('muted')), ['muted true', 'muted true']);
+      expect(target.muted, isTrue);
     });
   });
 

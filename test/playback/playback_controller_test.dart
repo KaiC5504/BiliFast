@@ -740,6 +740,31 @@ void main() {
     controller.dispose();
   });
 
+  test('a BV link whose signed view times out fails as a network error, without asking the unsigned view', () async {
+    http.errors[Canned.signedViewPath] = TimeoutException('no answer');
+    final controller = make();
+    await controller.open(bv);
+    expect(controller.phase, PlaybackPhase.failed);
+    expect(controller.error, '网络连接失败，请检查网络后重试');
+    expect(http.to(Canned.viewPath), isEmpty);
+    controller.dispose();
+  });
+
+  test('a video whose view redirects (番剧) is not played, and says so', () async {
+    http.routes[Canned.signedViewPath] = (
+      200,
+      '{"code":0,"data":{"bvid":"$bv","aid":1,"title":"番剧","owner":{"mid":1,"name":"UP"},'
+          '"redirect_url":"https://www.bilibili.com/bangumi/play/ep1","pages":[{"cid":1,"page":1,"part":"","duration":1420}]}}'
+    );
+    final controller = make();
+    await controller.open(bv);
+    expect(controller.phase, PlaybackPhase.failed);
+    expect(controller.error, '暂不支持播放此类视频');
+    expect(http.to(Canned.viewPath), isEmpty);
+    expect(http.to(Canned.playUrlPath), isEmpty);
+    controller.dispose();
+  });
+
   test('a BV link the signed view calls gone fails without asking the unsigned view', () async {
     http.routes[Canned.signedViewPath] = (200, '{"code":-404,"message":"啥都木有","ttl":1}');
     final controller = make();
@@ -760,6 +785,32 @@ void main() {
     await controller.open('av80433022');
     expect(http.to(Canned.signedViewPath).single.url.queryParameters['aid'], '80433022');
     expect(controller.video?.title, '测试视频');
+    controller.dispose();
+  });
+
+  test('engine swaps finish in the order asked, and nothing is prepared on an engine about to go', () async {
+    final first = Completer<void>();
+    final slow = FakeEngine();
+    final fast = FakeEngine();
+    final controller = make();
+    final swaps = [
+      controller.useEngine(() async {
+        await first.future;
+        return slow;
+      }),
+      controller.useEngine(() async => fast),
+    ];
+    final opening = controller.open(bv);
+    await settle();
+    expect(engine.prepared, isEmpty);
+    expect(slow.prepared, isEmpty);
+    first.complete();
+    await Future.wait([...swaps, opening]);
+    expect(controller.engine, same(fast));
+    expect(slow.disposed, isTrue);
+    expect(fast.disposed, isFalse);
+    expect(fast.prepared, hasLength(1));
+    expect(player.loaded?.master, FakeEngine.masterOf('tok1'));
     controller.dispose();
   });
 
