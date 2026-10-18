@@ -8,6 +8,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'app/app_environment.dart';
 import 'app/app_scope.dart';
 import 'app/phone_frame.dart';
+import 'app/reduce_motion.dart';
+import 'app/route_observer.dart';
 import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_forwarder.dart';
@@ -145,7 +147,9 @@ class BiliFastApp extends StatelessWidget {
           // iOS has no ripples; rows show their own press highlight.
           splashFactory: NoSplash.splashFactory,
         ),
-        builder: (context, child) => AppScope(services: services, child: PhoneFrame.wrap(context, child!)),
+        navigatorObservers: [pageRoutes],
+        builder: (context, child) =>
+            AppScope(services: services, child: PhoneFrame.wrap(context, ReduceMotion(child: child!))),
         home: HomePage(
           initialLink: initialLink,
           developerPage: services.logs == null

@@ -666,7 +666,10 @@ void main() {
     await other;
   });
 
-  test('holding 2× through an autoplay part change leaves the next part at the chosen rate when let go', () async {
+  String lastRate() => player.calls.lastWhere((call) => call.startsWith('rate'));
+
+  test('holding 2× through an autoplay part change plays the next part at 2×, and at the chosen rate when let go',
+      () async {
     final session = makeSession();
     await controller.openVideo(bv, cid: p1);
     await session.setRate(1.5);
@@ -675,12 +678,73 @@ void main() {
     expect(player.calls.last, 'rate 2.0');
     await ended();
     expect(controller.page?.cid, p2);
+    playing();
+    await settle();
+    expect(lastRate(), 'rate 2.0', reason: 'the finger is still down');
+    expect(session.speedingUp, isTrue);
     player.calls.clear();
     session.speedUp(false);
     await settle();
     expect(player.calls, ['rate 1.5']);
     expect(session.rate, 1.5);
     expect(session.speedingUp, isFalse);
+  });
+
+  test('a quality reload under a held finger stays at 2×, and a reload without one keeps the chosen rate', () async {
+    final session = makeSession();
+    await controller.openVideo(bv, cid: p1);
+    await session.setRate(1.25);
+    playing();
+    session.speedUp(true);
+    await session.setQuality(80);
+    await settle();
+    playing();
+    await settle();
+    expect(callsAfterLastLoad(), contains('rate 1.25'), reason: 'the controller puts the chosen rate back');
+    expect(lastRate(), 'rate 2.0');
+    session.speedUp(false);
+    expect(lastRate(), 'rate 1.25');
+
+    await session.setQuality(120);
+    await settle();
+    playing();
+    await settle();
+    expect(lastRate(), 'rate 1.25');
+  });
+
+  group('a timestamp', () {
+    test('seeks and plays a paused video', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      player.calls.clear();
+      await session.seekAndPlay(30);
+      expect(player.calls, containsAllInOrder(['seek 30.0', 'play']));
+    });
+
+    test('just seeks a playing video', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      player.calls.clear();
+      await session.seekAndPlay(30);
+      expect(player.calls, contains('seek 30.0'));
+      expect(player.calls, isNot(contains('play')));
+    });
+
+    test('after the end plays from the timestamp, not from the start', () async {
+      final session = makeSession()..setAutoplayNext(false);
+      await controller.openVideo(bv, cid: p2);
+      playing();
+      await ended();
+      expect(session.ended, isTrue);
+      player.calls.clear();
+      await session.seekAndPlay(50);
+      expect(player.calls, containsAllInOrder(['seek 50.0', 'play']));
+      expect(player.calls, isNot(contains('seek 0.0 precise')));
+      expect(session.ended, isFalse);
+    });
   });
 
   group('setters', () {

@@ -26,6 +26,21 @@ typedef SessionOpen = void Function(String bvid, {int? cid});
 
 typedef PeriodicTimer = Timer Function(Duration period, void Function() tick);
 
+/// A timestamp in the description seeks there and plays, as Swift's `activate(.timestamp)` does.
+extension SeekAndPlay on PlayerSession {
+  /// Plays once the seek has landed, unless already playing. Not [PlayerSession.togglePlay], which would play an
+  /// ended video again from the start.
+  Future<void> seekAndPlay(double seconds) async {
+    await commitSeek(seconds);
+    if (readout.wantsPlay) return;
+    try {
+      await player.play();
+    } catch (error) {
+      Logger.shared.warn(LogCategory.player, 'play failed', {'error': '$error'});
+    }
+  }
+}
+
 /// The video page's [PlayerSession] over the shared controller, one per page. [onSeeked] hears every seek the
 /// session makes, for the page's watch reports.
 PlayerSession createPageSession({
@@ -313,6 +328,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     final phase = _controller.phase;
     // Another open began: the end screen gives way to its spinner rather than waiting for the new part.
     if (phase == PlaybackPhase.loading && _phaseSeen != PlaybackPhase.loading) _ended = false;
+    // A part change or reload under a held finger: the load put the chosen rate back, and the hold's end restores it.
+    if (_speedingUp && phase == PlaybackPhase.playing && _phaseSeen == PlaybackPhase.loading) {
+      _quietly(() => player.setRate(speedUpRate), 'speed up');
+    }
     _phaseSeen = phase;
     if (video != null && video.bvid != _relatedFor) {
       _relatedFor = video.bvid;
