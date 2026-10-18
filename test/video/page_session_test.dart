@@ -31,7 +31,20 @@ const related =
     '"owner":{"mid":7,"name":"UP"},"stat":{"view":1,"danmaku":0,"like":0}}]}';
 
 String _episode(String bvid, int cid, String title) =>
-    '{"aid":1,"cid":$cid,"title":"$title","bvid":"$bvid","arc":{"aid":1,"title":"$title","duration":100}}';
+    '{"aid":1,"cid":$cid,"title":"$title","bvid":"$bvid","arc":{"aid":1,"title":"$title","duration":100,'
+    '"pic":"https://i0.hdslb.com/$cid.jpg","pubdate":1700000000,"stat":{"view":12000,"danmaku":34}}}';
+
+Episode _seasonEpisode(String bvid, int cid, String title, {required bool current}) => Episode(
+      bvid: bvid,
+      cid: cid,
+      title: title,
+      current: current,
+      cover: 'https://i0.hdslb.com/$cid.jpg',
+      duration: 100,
+      pubdate: 1700000000,
+      views: 12000,
+      danmaku: 34,
+    );
 
 /// A one-part video [bvid] in a 合集 of two sections: 第一集 and 第二集, then 番外.
 String seasonView(String bvid, int cid) =>
@@ -71,6 +84,8 @@ void main() {
   late PlayerPrefs prefs;
   late List<String> opened;
   late PlaybackController controller;
+  late Set<String> refused;
+  late MemorySink logs;
   final sessions = <PagePlayerSession>[];
   final controllers = <PlaybackController>[];
 
@@ -85,6 +100,8 @@ void main() {
     timers = FakeTimers();
     prefs = PlayerPrefs.memory();
     opened = [];
+    refused = {};
+    logs = MemorySink();
   });
 
   tearDown(() {
@@ -105,7 +122,7 @@ void main() {
     controller = PlaybackController(
       client: client,
       engine: engine,
-      player: player,
+      player: RefusingPlayer(player, refused),
       clock: time.clock,
       now: () => now,
       startTimer: FakeTimers().start,
@@ -115,9 +132,10 @@ void main() {
     return controller;
   }
 
-  /// A session as the video page makes it: `open` plays on the same controller.
-  PagePlayerSession makeSession() {
-    final controller = makeController();
+  /// A session as the video page makes it: `open` plays on the same controller. [on] is a controller another page's
+  /// session already has.
+  PagePlayerSession makeSession({PlaybackController? on}) {
+    final controller = on ?? makeController();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     final session = PagePlayerSession(
       controller: controller,
@@ -131,7 +149,7 @@ void main() {
       clock: time.clock,
       periodic: periodic.start,
       startTimer: timers.start,
-      logger: Logger(session: 'test'),
+      logger: Logger(session: 'test')..add(logs),
     );
     sessions.add(session);
     return session;
@@ -146,6 +164,8 @@ void main() {
     player.emit(const StatusChanged(PlayerStatus.ended));
     await settle();
   }
+
+  int pauses() => player.calls.where((call) => call == 'pause').length;
 
   List<String> callsAfterLastLoad() => player.calls.sublist(player.calls.lastIndexWhere((c) => c.startsWith('load')));
 
@@ -215,7 +235,7 @@ void main() {
     test('自动连播 opens the next part through the page', () async {
       final session = makeSession();
       await controller.openVideo(bv, cid: p1);
-      expect(session.next, const Episode(bvid: bv, cid: p2, title: 'P2 第二集', current: false));
+      expect(session.next, const Episode(bvid: bv, cid: p2, title: 'P2 第二集', current: false, duration: 100));
       playing();
       await ended();
       expect(opened, ['$bv $p2']);
@@ -281,11 +301,11 @@ void main() {
     final session = makeSession();
     await controller.openVideo('BV1AA411a1aa');
     expect(session.episodesAreParts, isFalse);
-    expect(session.episodes, const [
-      Episode(bvid: 'BV1AA411a1aa', cid: 1001, title: '第一集', current: true),
-      Episode(bvid: 'BV1BB411b1bb', cid: 1002, title: '第二集', current: false),
+    expect(session.episodes, [
+      _seasonEpisode('BV1AA411a1aa', 1001, '第一集', current: true),
+      _seasonEpisode('BV1BB411b1bb', 1002, '第二集', current: false),
     ]);
-    expect(session.next, const Episode(bvid: 'BV1BB411b1bb', cid: 1002, title: '第二集', current: false));
+    expect(session.next, _seasonEpisode('BV1BB411b1bb', 1002, '第二集', current: false));
     expect(session.title, '合集里的视频');
     playing();
     await ended();
@@ -296,7 +316,11 @@ void main() {
     final session = makeSession();
     await controller.openVideo(bv, cid: p2);
     expect(session.episodesAreParts, isTrue);
-    expect(session.episodes.map((e) => (e.title, e.current)), [('P1 第一集', false), ('P2 第二集', true)]);
+    expect(session.episodes.map((e) => (e.title, e.current, e.duration)), [
+      ('P1 第一集', false, 712),
+      ('P2 第二集', true, 100),
+    ]);
+    expect(session.episodes.map((e) => e.cover), [null, null], reason: 'parts have no cover of their own');
     expect(session.title, '第二集');
     expect(session.shareLink.toString(), 'https://www.bilibili.com/video/$bv?p=2');
     await controller.openVideo(bv, cid: p1);
@@ -406,10 +430,11 @@ void main() {
     expect(opened, ['BV1EF411e9oF -']);
   });
 
-  test('once its page closed the player, the session ignores the next page\'s video', () async {
+  test('once its page left, the session ignores the next page\'s video', () async {
     final session = makeSession();
     await controller.openVideo(bv, cid: p1);
     await settle();
+    session.active = false;
     controller.close();
     http.routes[Canned.signedViewPath] = (200, seasonView('BV1AA411a1aa', 1001));
     await controller.openVideo('BV1AA411a1aa');
@@ -419,6 +444,239 @@ void main() {
     playing();
     await ended();
     expect(opened, isEmpty);
+  });
+
+  group('inactive (covered by another video page, or left)', () {
+    test('a page left before its video arrived follows nothing of the next page\'s', () async {
+      final gate = http.gates[Canned.signedViewPath] = Completer<void>();
+      final first = makeSession();
+      unawaited(controller.openVideo(bv, cid: p1));
+      await settle();
+      first.active = false;
+      controller.close();
+      final second = makeSession(on: controller);
+      unawaited(controller.openVideo(bv, cid: p2));
+      gate.complete();
+      await settle();
+      expect(controller.page?.cid, p2);
+      expect(http.to(relatedPath), hasLength(1));
+      expect(http.to(playerInfoPath), hasLength(1));
+      expect(first.related, isEmpty);
+      expect(second.related.single.bvid, 'BV1EF411e9oF');
+    });
+
+    test('a covered page runs no end rules: 单集循环 seeks once when the page above ends', () async {
+      final first = makeSession()..setLoop(LoopMode.single);
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      first.active = false;
+      final opening = controller.openVideo(bv, cid: p2);
+      final second = makeSession(on: controller);
+      await opening;
+      playing();
+      player.calls.clear();
+      await ended();
+      expect(player.calls.where((call) => call == 'seek 0.0 precise'), hasLength(1));
+      expect(second.ended, isFalse);
+    });
+
+    test('a covered page\'s 定时关闭 stops counting, then counts on from where it was', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.setSleepTimer(const Duration(minutes: 1));
+      time.advance(20000);
+      periodic.tick();
+      session.active = false;
+      player.calls.clear();
+      time.advance(120000);
+      periodic.tick();
+      expect(player.calls, isEmpty);
+      expect(session.sleepRemaining.value, const Duration(seconds: 40));
+      session.active = true;
+      time.advance(39000);
+      periodic.tick();
+      expect(session.sleepRemaining.value, const Duration(seconds: 1));
+      time.advance(1000);
+      periodic.tick();
+      expect(player.calls, ['pause']);
+    });
+
+    test('a covered page leaves the background alone', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.active = false;
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      expect(timers.active, isEmpty);
+      session.active = true;
+      player.calls.clear();
+      timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+      expect(player.calls, ['pause'], reason: 'active again in the background, it checks again');
+    });
+
+    test('active again, it follows the player only once it plays this page\'s video again', () async {
+      final first = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await settle();
+      first.active = false;
+      http.routes[Canned.signedViewPath] = (200, seasonView('BV1AA411a1aa', 1001));
+      // As the page does: its open first, then its session.
+      final opening = controller.openVideo('BV1AA411a1aa');
+      final second = makeSession(on: controller);
+      await opening;
+      await settle();
+      expect(http.to(relatedPath), hasLength(2));
+
+      first.active = true;
+      await settle();
+      expect(http.to(relatedPath), hasLength(2), reason: "the page above's video is still on the player");
+
+      second.active = false;
+      controller.close();
+      http.routes[Canned.signedViewPath] = (200, Canned.view);
+      await controller.openVideo(bv, cid: p1);
+      await settle();
+      expect(http.to(relatedPath), hasLength(2), reason: 'its own video, whose related videos it has');
+      playing();
+      await ended();
+      expect(opened, ['$bv $p2'], reason: 'its end rules apply again');
+    });
+  });
+
+  group('the end screen', () {
+    test('gives way as soon as another open starts, before its video arrives', () async {
+      final session = makeSession()..setAutoplayNext(false);
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await ended();
+      expect(session.ended, isTrue);
+      final view = http.gates[Canned.signedViewPath] = Completer<void>();
+      session.playEpisode(session.episodes[1]);
+      expect(session.ended, isFalse);
+      view.complete();
+      await settle();
+
+      playing();
+      await ended();
+      expect(session.ended, isTrue, reason: 'P2 is the last part');
+      final again = http.gates[Canned.signedViewPath] = Completer<void>();
+      unawaited(controller.openVideo(bv, cid: p1));
+      expect(session.ended, isFalse, reason: "the page's own open");
+      again.complete();
+      await settle();
+    });
+  });
+
+  group('backgrounded during a load', () {
+    test('the load is paused as soon as it starts playing, once', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+      player.calls.clear();
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      expect(pauses(), 1);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(pauses(), 1);
+    });
+
+    test('back in front first, or in picture in picture, it plays', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+      session.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      player.calls.clear();
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(pauses(), 0);
+
+      await controller.openVideo(bv, cid: p2);
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+      player.emit(const PictureInPictureChanged(true));
+      player.calls.clear();
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(pauses(), 0);
+    });
+  });
+
+  test('isVertical: the stream\'s shape once known, the signed view\'s before, nothing of the last video', () async {
+    http.routes[Canned.signedViewPath] = (
+      200,
+      Canned.view.replaceFirst('"pages"', '"dimension":{"width":1080,"height":1920,"rotate":0},"pages"'),
+    );
+    final session = makeSession();
+    final playUrl = http.gates[Canned.playUrlPath] = Completer<void>();
+    final opening = controller.openVideo(bv, cid: p1);
+    await settle();
+    expect(session.detail?.bvid, bv);
+    expect(session.isVertical, isTrue, reason: 'no stream yet');
+    playUrl.complete();
+    await opening;
+    expect(session.isVertical, isFalse, reason: 'the chosen stream is 3840×2160');
+    player.emit(const SizeChanged(width: 1080, height: 1920));
+    expect(session.isVertical, isTrue);
+
+    http.routes[Canned.signedViewPath] = (200, seasonView('BV1AA411a1aa', 1001));
+    final next = http.gates[Canned.playUrlPath] = Completer<void>();
+    final other = controller.openVideo('BV1AA411a1aa');
+    await settle();
+    expect(session.video?.bvid, 'BV1AA411a1aa');
+    expect(session.isVertical, isFalse);
+    next.complete();
+    await other;
+  });
+
+  test('holding 2× through an autoplay part change leaves the next part at the chosen rate when let go', () async {
+    final session = makeSession();
+    await controller.openVideo(bv, cid: p1);
+    await session.setRate(1.5);
+    playing();
+    session.speedUp(true);
+    expect(player.calls.last, 'rate 2.0');
+    await ended();
+    expect(controller.page?.cid, p2);
+    player.calls.clear();
+    session.speedUp(false);
+    await settle();
+    expect(player.calls, ['rate 1.5']);
+    expect(session.rate, 1.5);
+    expect(session.speedingUp, isFalse);
+  });
+
+  group('setters', () {
+    test('one the player refuses answers with its toast, keeps the old value and logs why', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      expect(await session.setRate(1.5), isNull);
+      refused.addAll({'rate', 'fit', 'mirrored', 'pip'});
+      expect(await session.setRate(2), '切换倍速失败');
+      expect(session.rate, 1.5);
+      expect(await session.setFit(FitMode.fill), '切换画面尺寸失败');
+      expect(session.fit, FitMode.fit);
+      expect(prefs.fit, FitMode.fit, reason: 'the next page does not start with it');
+      expect(await session.setMirrored(true), '切换镜像失败');
+      expect(session.mirrored, isFalse);
+      expect(await session.startPictureInPicture(), '小窗播放启动失败');
+      expect(logs.events.map((event) => event.msg),
+          containsAll(['rate failed', 'fit failed', 'mirror failed', 'pip start failed']));
+    });
+
+    test('a switch that throws answers with its toast', () async {
+      final refusing = _RefusingController(
+        client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies)),
+        engine: engine,
+        player: player,
+      );
+      controllers.add(refusing);
+      final session = makeSession(on: refusing);
+      expect(await session.setBtr(false), '切换 BTR 加速失败');
+      expect(await session.setQuality(80), '切换清晰度失败');
+      expect(await session.setCodec(VideoCodec.avc), '切换编码失败');
+    });
   });
 
   test('稍后再看 toasts what happened', () async {
@@ -491,6 +749,30 @@ void main() {
       expect(session.scrubbing.value, isNull);
       expect(player.calls.where((c) => c.startsWith('seek')), isEmpty);
     });
+
+    test('a drag whose duration went away lets go of the bar and takes its hint back', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.scrub(50);
+      session.hint(50);
+      controller.duration.value = 0;
+      await session.commitSeek(60);
+      expect(session.scrubbing.value, isNull);
+      expect(engine.hints.last.seconds, isNull);
+      expect(player.calls.where((c) => c.startsWith('seek')), isEmpty);
+    });
+
+    test('a seek the player refuses is logged and lets go of the bar', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      refused.add('seek');
+      session.scrub(90);
+      await session.commitSeek(100);
+      expect(session.scrubbing.value, isNull);
+      expect(logs.events.map((event) => event.msg), contains('seek failed'));
+    });
   });
 
   test('settings that Swift kept are saved and applied to the next page', () async {
@@ -536,4 +818,18 @@ void main() {
     expect(next.loop, LoopMode.list);
     controllers.add(fresh);
   });
+}
+
+/// A controller whose switches fail outright.
+final class _RefusingController extends PlaybackController {
+  _RefusingController({required super.client, required super.engine, required super.player});
+
+  @override
+  Future<void> setMode(PlaybackMode mode) => Future.error(StateError('mode refused'));
+
+  @override
+  Future<void> setQuality(int quality) => Future.error(StateError('quality refused'));
+
+  @override
+  Future<void> setCodec(VideoCodec codec) => Future.error(StateError('codec refused'));
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show max;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -121,9 +122,15 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   bool _ended = false;
   bool _background = false;
   Timer? _backgroundCheck;
+
+  /// In the background, waiting for a load to start playing so it can be paused.
+  bool _watchingLoad = false;
   Duration? _sleepTimer;
   double _sleepDeadlineMs = 0;
   Timer? _sleepTicker;
+
+  /// What 定时关闭 had left when the page was covered; it counts on from there once the page is active again.
+  double? _sleepLeftMs;
   List<Chapter> _chapters = const [];
   List<VideoCard> _related = const [];
 
@@ -131,8 +138,13 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   logic.PlayItem? _chaptersFor;
   String? _relatedFor;
   logic.PlayItem? _current;
+  PlaybackPhase? _phaseSeen;
   bool _disposed = false;
-  bool _detached = false;
+  bool _active = true;
+
+  /// The controller's open count when the page was covered: the same count once it is active again means no other
+  /// page opened anything meanwhile.
+  int? _opensWhenCovered;
 
   /// What a new page starts with: the saved settings, at 1× and unmirrored (Swift kept those per page). Before the
   /// part is chosen none of these restarts anything.
@@ -178,10 +190,12 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     return video?.title ?? '';
   }
 
+  /// The stream's shape once known, before that the signed view's.
   @override
   bool get isVertical {
     final size = _controller.videoSize;
-    return size != null && size.height > size.width;
+    if (size != null) return size.height > size.width;
+    return detail?.isVertical ?? false;
   }
 
   @override
@@ -200,18 +214,38 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     if (video == null) return const [];
     final cid = part?.cid;
     if (_inParts) {
-      return [
-        for (final page in video.pages)
-          Episode(bvid: video.bvid, cid: page.cid, title: _partTitle(page), current: page.cid == cid),
-      ];
+      return [for (final page in video.pages) _partEpisode(video, page, current: page.cid == cid)];
     }
     return [
       for (final episode in _section(video)?.episodes ?? const <SeasonEpisode>[])
-        Episode(bvid: episode.bvid, cid: episode.cid, title: episode.title, current: episode.bvid == video.bvid),
+        _seasonEpisode(episode, current: episode.bvid == video.bvid),
     ];
   }
 
   static String _partTitle(VideoPage page) => 'P${page.page} ${page.part}';
+
+  Episode _partEpisode(VideoView video, VideoPage page, {required bool current}) => Episode(
+        bvid: video.bvid,
+        cid: page.cid,
+        title: _inParts ? _partTitle(page) : video.title,
+        current: current,
+        duration: _known(page.duration),
+      );
+
+  static Episode _seasonEpisode(SeasonEpisode episode, {required bool current}) => Episode(
+        bvid: episode.bvid,
+        cid: episode.cid,
+        title: episode.title,
+        current: current,
+        cover: episode.cover.isEmpty ? null : episode.cover,
+        duration: _known(episode.duration),
+        pubdate: _known(episode.pubdate),
+        views: episode.views,
+        danmaku: episode.danmaku,
+      );
+
+  /// The API models read a missing duration or date as 0.
+  static int? _known(int value) => value > 0 ? value : null;
 
   /// The 合集 section holding [video], else the first.
   SeasonSection? _section(VideoView video) {
@@ -249,15 +283,14 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     final video = this.video;
     if (video != null && item.bvid == video.bvid) {
       final page = video.pages.where((page) => page.cid == item.cid).firstOrNull;
-      if (page != null) {
-        return Episode(bvid: item.bvid, cid: item.cid, title: _inParts ? _partTitle(page) : video.title, current: false);
-      }
+      if (page != null) return _partEpisode(video, page, current: false);
     }
     final episode = _controller.season?.sections
         .expand((section) => section.episodes)
         .where((episode) => episode.bvid == item.bvid && episode.cid == item.cid)
         .firstOrNull;
-    return Episode(bvid: item.bvid, cid: item.cid, title: episode?.title ?? '', current: false);
+    if (episode != null) return _seasonEpisode(episode, current: false);
+    return Episode(bvid: item.bvid, cid: item.cid, title: '', current: false);
   }
 
   @override
@@ -268,18 +301,19 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     return Uri.parse('https://www.bilibili.com/video/${video.bvid}${page > 1 ? '?p=$page' : ''}');
   }
 
-  /// Follows the controller's video: 看点 once per part, related videos once per video.
   void _controllerChanged() {
-    if (_disposed || _detached) return;
+    if (_disposed || !_active) return;
+    _follow();
+  }
+
+  /// Follows the controller's video: 看点 once per part, related videos once per video.
+  void _follow() {
     final video = _controller.video;
     final page = _controller.page;
-    // The page closed the player at its pop, before it disposes this session: the next page's video is not ours.
-    if (_current != null && video == null && _controller.phase == PlaybackPhase.idle) {
-      _detached = true;
-      _sleepTicker?.cancel();
-      _backgroundCheck?.cancel();
-      return;
-    }
+    final phase = _controller.phase;
+    // Another open began: the end screen gives way to its spinner rather than waiting for the new part.
+    if (phase == PlaybackPhase.loading && _phaseSeen != PlaybackPhase.loading) _ended = false;
+    _phaseSeen = phase;
     if (video != null && video.bvid != _relatedFor) {
       _relatedFor = video.bvid;
       _related = const [];
@@ -360,17 +394,23 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   @override
   Future<void> commitSeek(double seconds) async {
+    // No duration yet, or it went with the video under the finger: the bar lets go rather than holding a target.
+    if (duration.value <= 0) {
+      cancelScrub();
+      return;
+    }
     _hinted = false;
-    if (duration.value <= 0) return;
     final count = ++_seekCount;
     scrubbing.value = seconds;
     _setEnded(false);
-    final seeked = player.seek(seconds, precise: false);
-    _controller.userSeeked(seconds, precise: false);
-    _onSeeked?.call(seconds);
-    readout.refresh();
     try {
+      final seeked = player.seek(seconds, precise: false);
+      _controller.userSeeked(seconds, precise: false);
+      _onSeeked?.call(seconds);
+      readout.refresh();
       await seeked;
+    } catch (error) {
+      _logger.warn(LogCategory.player, 'seek failed', {'error': '$error'});
     } finally {
       // The bar holds the target until the seek lands, so it doesn't jump back to the old position first.
       if (!_disposed && _seekCount == count) scrubbing.value = null;
@@ -381,10 +421,9 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   double get rate => _controller.rate;
 
   @override
-  Future<String?> setRate(double rate) async {
+  Future<String?> setRate(double rate) {
     _speedingUp = false;
-    await _controller.setRate(rate);
-    return null;
+    return _attempt(() => _controller.setRate(rate), 'rate', '切换倍速失败');
   }
 
   @override
@@ -403,19 +442,17 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   @override
   Future<String?> setFit(FitMode fit) async {
-    _prefs.fit = fit;
-    await _controller.setFit(fit);
-    return null;
+    final failure = await _attempt(() => _controller.setFit(fit), 'fit', '切换画面尺寸失败');
+    // The controller put the old fit back, and the next page shouldn't start with the refused one.
+    if (failure == null) _prefs.fit = fit;
+    return failure;
   }
 
   @override
   bool get mirrored => _controller.mirrored;
 
   @override
-  Future<String?> setMirrored(bool on) async {
-    await _controller.setMirrored(on);
-    return null;
-  }
+  Future<String?> setMirrored(bool on) => _attempt(() => _controller.setMirrored(on), 'mirror', '切换镜像失败');
 
   @override
   LoopMode get loop => _prefs.loop;
@@ -442,6 +479,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   void setSleepTimer(Duration? after) {
     _sleepTicker?.cancel();
     _sleepTicker = null;
+    _sleepLeftMs = null;
     if (after == null || after <= Duration.zero) {
       _sleepTimer = null;
       sleepRemaining.value = null;
@@ -449,15 +487,36 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       return;
     }
     _sleepTimer = after;
-    _sleepDeadlineMs = _monotonic.nowMs() + after.inMilliseconds;
     sleepRemaining.value = after;
     _logger.info(LogCategory.ui, 'sleep timer', {'minutes': after.inMinutes});
-    _sleepTicker = _periodic(const Duration(seconds: 1), _sleepTick);
+    if (_active) {
+      _sleepDeadlineMs = _monotonic.nowMs() + after.inMilliseconds;
+      _sleepTicker = _periodic(const Duration(seconds: 1), _sleepTick);
+    } else {
+      _sleepLeftMs = after.inMilliseconds.toDouble();
+    }
     notifyListeners();
   }
 
+  /// A covered page's 定时关闭 would pause the newer page's video.
+  void _pauseSleepTimer() {
+    final ticker = _sleepTicker;
+    if (ticker == null) return;
+    ticker.cancel();
+    _sleepTicker = null;
+    _sleepLeftMs = max(0.0, _sleepDeadlineMs - _monotonic.nowMs());
+  }
+
+  void _resumeSleepTimer() {
+    final left = _sleepLeftMs;
+    _sleepLeftMs = null;
+    if (left == null || _sleepTimer == null) return;
+    _sleepDeadlineMs = _monotonic.nowMs() + left;
+    _sleepTicker = _periodic(const Duration(seconds: 1), _sleepTick);
+  }
+
   void _sleepTick() {
-    if (_disposed) return;
+    if (_disposed || !_active) return;
     final left = _sleepDeadlineMs - _monotonic.nowMs();
     if (left > 0) {
       sleepRemaining.value = Duration(milliseconds: left.round());
@@ -490,10 +549,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   bool get btr => _controller.mode == PlaybackMode.btr;
 
   @override
-  Future<String?> setBtr(bool on) async {
+  Future<String?> setBtr(bool on) {
     _prefs.btr = on;
-    await _controller.setMode(on ? PlaybackMode.btr : PlaybackMode.direct);
-    return null;
+    final mode = on ? PlaybackMode.btr : PlaybackMode.direct;
+    return _attempt(() => _controller.setMode(mode), 'btr switch', '切换 BTR 加速失败');
   }
 
   @override
@@ -512,20 +571,18 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   bool get isVip => _isVip();
 
   @override
-  Future<String?> setQuality(int qn) async {
+  Future<String?> setQuality(int qn) {
     _prefs.quality = qn;
-    await _controller.setQuality(qn);
-    return null;
+    return _attempt(() => _controller.setQuality(qn), 'quality', '切换清晰度失败');
   }
 
   @override
   VideoCodec get codec => _controller.codec;
 
   @override
-  Future<String?> setCodec(VideoCodec codec) async {
+  Future<String?> setCodec(VideoCodec codec) {
     _prefs.codec = codec;
-    await _controller.setCodec(codec);
-    return null;
+    return _attempt(() => _controller.setCodec(codec), 'codec', '切换编码失败');
   }
 
   @override
@@ -539,7 +596,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   Future<void> _handleEnd() async {
     final current = _current;
-    if (_disposed || _detached || current == null) return;
+    if (_disposed || !_active || current == null) return;
     final step = logic.Autoplay.next(
       after: current,
       parts: _partItems,
@@ -587,11 +644,15 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   @override
   void playEpisode(Episode episode) {
     if (episode.current) return;
+    _setEnded(false);
     _open(episode.bvid, cid: episode.cid);
   }
 
   @override
-  void playRelated(VideoCard card) => _open(card.bvid);
+  void playRelated(VideoCard card) {
+    _setEnded(false);
+    _open(card.bvid);
+  }
 
   @override
   Future<ActionResult> watchLater() async {
@@ -610,10 +671,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   bool get pictureInPictureSupported => player.capabilities.pictureInPicture;
 
   @override
-  Future<String?> startPictureInPicture() async {
-    await _controller.startPictureInPicture();
-    return null;
-  }
+  Future<String?> startPictureInPicture() =>
+      _attempt(_controller.startPictureInPicture, 'pip start', '小窗播放启动失败');
 
   @override
   bool get canCaptureFrame => player.capabilities.frameCapture;
@@ -630,25 +689,79 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   }
 
   @override
-  VideoDetail? get detail => null;
+  VideoDetail? get detail => _controller.detail;
 
   @override
-  set active(bool value) {}
+  set active(bool value) {
+    if (_disposed || value == _active) return;
+    _active = value;
+    if (!value) {
+      _opensWhenCovered = _controller.opens;
+      _pauseSleepTimer();
+      _stopBackgroundChecks();
+      return;
+    }
+    _resumeSleepTimer();
+    if (_background) _startBackgroundCheck();
+    final video = _controller.video;
+    // A newer page's video can still be on the player; following it would fetch for it and run its end rules.
+    final ours = _controller.opens == _opensWhenCovered || (video != null && video.bvid == _current?.bvid);
+    if (ours) _follow();
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final background = state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
     if (background == _background) return;
     _background = background;
+    _stopBackgroundChecks();
+    if (background && _active) _startBackgroundCheck();
+  }
+
+  void _startBackgroundCheck() {
     _backgroundCheck?.cancel();
-    _backgroundCheck = null;
-    if (!background) return;
     _backgroundCheck = _startTimer(backgroundGrace, () {
       _backgroundCheck = null;
-      if (_disposed || _detached || !_background || _controller.pictureInPicture || !readout.wantsPlay) return;
-      _logger.info(LogCategory.ui, 'paused in the background');
-      _quietly(player.pause, 'pause');
+      if (_disposed || !_active || !_background || _controller.pictureInPicture) return;
+      if (readout.wantsPlay) {
+        _pauseInBackground();
+      } else if (_controller.phase == PlaybackPhase.loading || readout.status.value == PlayerStatus.loading) {
+        // The load would start playing, with sound, after this check.
+        _watchingLoad = true;
+        readout.status.addListener(_loadStatusChanged);
+      }
     });
+  }
+
+  void _loadStatusChanged() {
+    if (!readout.wantsPlay) return;
+    _stopBackgroundChecks();
+    if (_disposed || !_active || !_background || _controller.pictureInPicture) return;
+    _pauseInBackground();
+  }
+
+  void _stopBackgroundChecks() {
+    _backgroundCheck?.cancel();
+    _backgroundCheck = null;
+    if (!_watchingLoad) return;
+    _watchingLoad = false;
+    readout.status.removeListener(_loadStatusChanged);
+  }
+
+  void _pauseInBackground() {
+    _logger.info(LogCategory.ui, 'paused in the background');
+    _quietly(player.pause, 'pause');
+  }
+
+  /// A setter's work: a failure is logged and answered with [toast].
+  Future<String?> _attempt(Future<void> Function() action, String what, String toast) async {
+    try {
+      await action();
+      return null;
+    } catch (error) {
+      _logger.warn(LogCategory.player, '$what failed', {'error': '$error'});
+      return toast;
+    }
   }
 
   void _quietly(Future<void> Function() action, String what) {
@@ -666,7 +779,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _accountChanges?.removeListener(notifyListeners);
     unawaited(_endings.cancel());
     _sleepTicker?.cancel();
-    _backgroundCheck?.cancel();
+    _stopBackgroundChecks();
     if (_speedingUp) _quietly(() => player.setRate(_controller.rate), 'speed up');
     readout.dispose();
     scrubbing.dispose();

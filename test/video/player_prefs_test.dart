@@ -78,6 +78,14 @@ void main() {
     expect(prefs.fit, FitMode.fill);
     expect(prefs.quality, isNull);
     expect(prefs.codec, VideoCodec.hevc);
+    final ignored = logs.events.where((event) => event.msg == 'player prefs value ignored').toList();
+    expect(ignored.map((event) => event.f['key']), const [
+      LogString('autoplay'),
+      LogString('loop'),
+      LogString('quality'),
+    ]);
+    expect(ignored.every((event) => event.level == LogLevel.warn), isTrue);
+    expect(ignored.map((event) => event.f.keys.toList()), everyElement(['key']), reason: 'never the value');
   });
 
   test('in memory nothing touches the disk', () async {

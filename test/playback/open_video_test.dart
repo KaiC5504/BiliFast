@@ -25,6 +25,13 @@ String playUrlSaved({required int seconds, required int cid}) => Canned.playUrl(
 const onePartView = '{"code":0,"data":{"bvid":"$bv","aid":1,"title":"单P","owner":{"mid":1,"name":"UP"},'
     '"pages":[{"cid":137649199,"page":1,"part":"","duration":712}]}}';
 
+/// [onePartView] in a 合集 of one episode.
+final seasonView = onePartView.replaceFirst(
+  '"pages"',
+  '"ugc_season":{"id":1,"title":"合集","sections":[{"id":1,"title":"正片","episodes":['
+      '{"aid":1,"cid":137649199,"title":"单P","bvid":"$bv"}]}]},"pages"',
+);
+
 void main() {
   late CannedHttp http;
   late FakeEngine engine;
@@ -40,14 +47,14 @@ void main() {
     logs = MemorySink();
   });
 
-  PlaybackController make() {
+  PlaybackController make({BiliPlayer? using}) {
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     final logger = Logger(session: 'test')..add(logs);
     final client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), now: () => now, logger: logger);
     return PlaybackController(
       client: client,
       engine: engine,
-      player: player,
+      player: using ?? player,
       clock: time.clock,
       now: () => now,
       startTimer: FakeTimers().start,
@@ -208,20 +215,70 @@ void main() {
   });
 
   test('the 合集 comes from the signed view; a view handed in has none', () async {
-    http.routes[Canned.signedViewPath] = (
-      200,
-      onePartView.replaceFirst(
-        '"pages"',
-        '"ugc_season":{"id":1,"title":"合集","sections":[{"id":1,"title":"正片","episodes":['
-            '{"aid":1,"cid":137649199,"title":"单P","bvid":"$bv"}]}]},"pages"',
-      ),
-    );
+    http.routes[Canned.signedViewPath] = (200, seasonView);
     final controller = make();
     await controller.openVideo(bv);
     expect(controller.season?.sections.single.episodes.single.bvid, bv);
     const view = VideoView(bvid: bv, pages: [VideoPage(cid: 137649199, page: 1, part: '', duration: 712)]);
     await controller.openVideo(bv, view: view);
     expect(controller.season, isNull);
+  });
+
+  test('a view handed in with its signed detail keeps the 合集, a detail alone gives the view, neither asks', () async {
+    http.routes[Canned.signedViewPath] = (200, seasonView);
+    final controller = make();
+    await controller.openVideo(bv);
+    final view = controller.video!;
+    final detail = controller.detail!;
+    expect(detail.bvid, bv);
+    await controller.openVideo(bv, view: view, detail: detail);
+    expect(controller.season?.sections.single.episodes.single.bvid, bv);
+    expect(controller.detail, same(detail));
+    await controller.openVideo(bv, detail: detail);
+    expect(controller.video?.title, '单P');
+    expect(controller.season, isNotNull);
+    expect(http.to(Canned.signedViewPath), hasLength(1));
+
+    await controller.openVideo('BV1AA411a1aa', detail: detail);
+    expect(http.to(Canned.signedViewPath), hasLength(2), reason: "another video's detail is no use");
+    controller.close();
+    expect(controller.detail, isNull);
+  });
+
+  test('the shape is forgotten with the video, and kept for another part until its stream gives one', () async {
+    final controller = make();
+    await controller.openVideo(bv, cid: 137649199);
+    player.emit(const SizeChanged(width: 1080, height: 1920));
+    expect(controller.videoSize, (width: 1080, height: 1920));
+
+    final playUrl = http.gates[Canned.playUrlPath] = Completer<void>();
+    final part = controller.openVideo(bv, cid: 137649200);
+    await settle();
+    expect(controller.page?.cid, 137649200);
+    expect(controller.videoSize, (width: 1080, height: 1920), reason: 'another part of the same video');
+    playUrl.complete();
+    await part;
+    expect(controller.videoSize, (width: 3840, height: 2160), reason: "the chosen stream's");
+
+    final view = http.gates[Canned.signedViewPath] = Completer<void>();
+    final other = controller.openVideo('BV1AA411a1aa');
+    expect(controller.videoSize, isNull);
+    view.complete();
+    await other;
+  });
+
+  test('a rate, fit or mirroring the player refuses is put back, and the caller hears why', () async {
+    final controller = make(using: RefusingPlayer(player, {'rate', 'fit', 'mirrored'}));
+    await controller.openVideo(bv, cid: 137649199);
+    var notified = 0;
+    controller.addListener(() => notified++);
+    await expectLater(controller.setRate(1.5), throwsStateError);
+    expect(controller.rate, 1);
+    await expectLater(controller.setFit(FitMode.fill), throwsStateError);
+    expect(controller.fit, FitMode.fit);
+    await expectLater(controller.setMirrored(true), throwsStateError);
+    expect(controller.mirrored, isFalse);
+    expect(notified, 6, reason: 'the new value at once, then the old one back');
   });
 
   test('the end of the playing item is announced once; a dropped load\'s is not', () async {
