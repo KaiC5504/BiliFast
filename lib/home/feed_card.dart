@@ -6,10 +6,10 @@ import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
+import '../shared/menu.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../video/video_route.dart';
-import 'avatar_menu.dart';
 
 /// Card sizes that depend on the text size, so the grid can give every card the same height.
 abstract final class FeedCardSize {

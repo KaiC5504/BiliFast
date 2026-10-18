@@ -70,6 +70,15 @@ abstract final class BiliColors {
   static const shimmerBase = Color(0xFFEDEEF0);
   static const shimmerHighlight = Color(0xFFF8F9FA);
 
+  /// The menus' frosted glass, and the highlight under a pressed row.
+  static const glassFill = Color(0xB8FFFFFF);
+  static const glassBorder = Color(0x99FFFFFF);
+  static const glassShadow = Color(0x26000000);
+  static const pressedFill = Color(0x14000000);
+
+  /// The 最近打开 tile runs from this down to [pink], one hue as Swift's `Theme.pink.gradient`.
+  static const recentsTileTop = Color(0xFFFF8AB2);
+
   /// The stats overlay's node dots (iOS system green, orange, red and grey).
   static const nodeHealthy = Color(0xFF34C759);
   static const nodeBlocked = Color(0xFFFF9500);
@@ -182,18 +191,11 @@ abstract final class BiliMetrics {
   static const recentsTileRadius = 10.0;
   static const recentsTileIcon = 26.0;
 
-  /// The menus' frosted glass, and the highlight under a pressed row.
+  /// The menus' frosted glass.
   static const glassBlur = 24.0;
   static const glassHairline = 0.5;
-  static const glassFill = Color(0xB8FFFFFF);
-  static const glassBorder = Color(0x99FFFFFF);
-  static const glassShadow = Color(0x26000000);
   static const glassShadowBlur = 24.0;
   static const glassShadowDrop = 8.0;
-  static const pressedFill = Color(0x14000000);
-
-  /// The 最近打开 tile runs from this down to [BiliColors.pink], one hue as Swift's `Theme.pink.gradient`.
-  static const recentsTileTop = Color(0xFFFF8AB2);
 
   /// Danmaku text at the normal size (25); an elem's own size scales it.
   static const danmakuFont = 17.0;

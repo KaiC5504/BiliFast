@@ -2,9 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../app/app_scope.dart';
+import '../shared/menu.dart';
 import '../shared/theme.dart';
 import '../video/video_route.dart';
-import 'avatar_menu.dart';
 import 'recent_store.dart';
 
 /// 最近打开 (port of RecentsView in HomeView.swift): the parts opened from links, newest first, with 清空.
@@ -103,7 +103,7 @@ class _RecentRow extends StatelessWidget {
                     gradient: const LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [BiliMetrics.recentsTileTop, BiliColors.pink],
+                      colors: [BiliColors.recentsTileTop, BiliColors.pink],
                     ),
                     borderRadius: BorderRadius.circular(BiliMetrics.recentsTileRadius),
                   ),

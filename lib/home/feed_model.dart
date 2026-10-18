@@ -5,10 +5,13 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
-/// The words for a failed request: the BiliError's message, a network message when the connection failed or timed
-/// out, otherwise [fallback].
+import '../playback/playback_controller.dart' show PlaybackFailure;
+
+/// The words for a failed request: the BiliError's or PlaybackFailure's message (a 番剧 link), a network message
+/// when the connection failed or timed out, otherwise [fallback].
 String requestFailureMessage(Object error, {String fallback = '加载失败，请稍后重试'}) {
   if (error is BiliError) return error.userMessage;
+  if (error is PlaybackFailure) return error.userMessage;
   // package:http's ClientException, which the app does not import, from both transports.
   if (error is IOException || error is TimeoutException || '$error'.startsWith('ClientException')) {
     return '网络连接失败，请检查网络后重试';

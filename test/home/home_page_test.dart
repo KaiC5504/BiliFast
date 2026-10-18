@@ -6,10 +6,10 @@ import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
-import 'package:bilifast/home/avatar_menu.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/shared/menu.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -69,11 +69,9 @@ void main() {
       logger: logger,
     );
     recents = await RecentStore.load(null, logger: logger);
-    final services = AppServices(
-      environment: environment,
-      playback: AppPlayback(() async => controller),
-      recents: recents,
-    );
+    final playback = AppPlayback(() async => controller);
+    addTearDown(playback.dispose);
+    final services = AppServices(environment: environment, playback: playback, recents: recents);
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => AppScope(services: services, child: child!),
