@@ -62,6 +62,20 @@ abstract final class BiliColors {
   static const danmakuOutlineLight = Color(0xD9FFFFFF);
   static const danmakuOwnBox = Color(0xFFFFFFFF);
 
+  /// The full-screen controls and end screen (BiliNative `ChromeTheme.swift`, sampled on 04, 09 and 27).
+  static const chromeFaint = Color(0x80FFFFFF);
+  static const chromeSecondary = Color(0x99FFFFFF);
+  static const chromeViews = Color(0xD9FFFFFF);
+  static const chromeDivider = Color(0x26FFFFFF);
+  static const chromeDarkField = Color(0xFF262626);
+  static const chromeBadgeFill = Color(0x40000000);
+  static const chromeBadgeBorder = Color(0x80FFFFFF);
+  static const chromeBadgeText = Color(0xE6FFFFFF);
+  static const landscapeEndDim = Color(0x9E000000);
+  static const landscapeEndRule = Color(0x12FFFFFF);
+  static const landscapeEndPlaceholder = Color(0x38FFFFFF);
+  static const landscapeEndCoverShade = Color(0x8C000000);
+
   /// The speed test's comparison with the first variant.
   static const faster = Color(0xFF34C759);
   static const slower = Color(0xFFF2453D);
@@ -137,6 +151,123 @@ abstract final class BiliMetrics {
   static const statsLineGap = 2.0;
   static const statsDot = 5.0;
   static const statsDotGap = 4.0;
+
+  /// The full-screen controls, measured on 04 (landscape, 956 × 440 pt) and 09 (竖屏, 440 × 956 pt) at 3 px per pt.
+  static const chromeTopShade = 120.0;
+  static const chromeBottomShade = 140.0;
+  static const landscapeEdge = 5.0;
+  static const chromeTitleTop = 27.0;
+  static const chromeTitleRow = 30.0;
+  static const chromeMoreTop = 20.0;
+
+  /// 点赞 评论 收藏 投币 充电 分享, 44 pt apart by 8, and the 24 pt before them.
+  static const chromeActionsRoom = 336.0;
+  static const chromeMoreDotSize = 3.7;
+  static const chromeMoreDotSpacing = 2.8;
+  static const chromeBackWidth = 9.3;
+  static const chromeBackHeight = 18.0;
+  static const chromeBackStroke = 1.5;
+  static const chromeLineStroke = 1.4;
+  static const chromeSideGap = 9.0;
+  static const chromeSideLift = 15.0;
+  static const chromeCameraWidth = 20.0;
+  static const chromeCameraHeight = 17.0;
+  static const chromeLockWidth = 21.0;
+  static const chromeLockHeight = 20.5;
+  static const chromeLockKey = 1.7;
+  static const chromeTimeBox = 16.0;
+  static const chromeTimeInset = 1.0;
+  static const chromeBarTop = 15.0;
+  static const chromeRowTop = 4.0;
+  static const chromeRowTrailing = 15.0;
+  static const chromePlayWidth = 21.5;
+  static const chromePlayHeight = 25.0;
+  static const chromePlayCorner = 2.5;
+  static const chromePauseBar = 6.0;
+  static const chromePauseGap = 5.0;
+  static const chromePauseShare = 0.8;
+  static const chromeDanmakuWidth = 21.0;
+  static const chromeDanmakuHeight = 20.0;
+  static const chromeDanmakuText = 10.5;
+
+  /// 弹幕设置 and the 3 pt before the danmaku field.
+  static const chromeSettingsRoom = 52.0;
+  static const chromeSpeedGap = 14.0;
+  static const chromeQualityGap = 23.0;
+  static const chromeEpisodesGap = 15.0;
+  static const chromeTextPad = 8.0;
+  static const chromeQualityText = 14.0;
+
+  /// How far a bar slides in, as a share of its own size.
+  static const chromeSlide = 0.4;
+  static const fullScreenPressedScale = 0.86;
+  static const verticalTopLift = 8.0;
+  static const verticalBackWidth = 8.3;
+  static const verticalBackHeight = 15.3;
+  static const verticalInfoInset = 12.0;
+
+  /// The action column: 44 pt wide, 6 from the edge, 12 from the title.
+  static const verticalColumnRoom = 62.0;
+  static const verticalTitleText = 16.0;
+  static const verticalTitleLeading = 1.4;
+
+  /// The search suggestion row between the title and the bar.
+  static const verticalSearchRoom = 34.0;
+  static const verticalRowLift = 4.5;
+  static const verticalFieldHeight = 32.0;
+  static const verticalToggleWidth = 50.0;
+  static const verticalDividerWidth = 1.0;
+  static const verticalDividerHeight = 18.0;
+  static const verticalDetailGap = 3.0;
+  static const verticalLandscapeGap = 1.0;
+  static const verticalGlyphStroke = 1.7;
+  static const verticalCornersWidth = 13.5;
+  static const verticalCornersHeight = 15.0;
+  static const verticalFullScreenGlyph = 14.0;
+  static const verticalBadgeText = 8.5;
+  static const verticalBadgeHeight = 11.5;
+  static const verticalBadgePad = 3.5;
+  static const verticalBadgeBorder = 0.7;
+  static const verticalBadgeX = 9.0;
+  static const verticalBadgeY = -18.0;
+
+  /// The full-screen end screen, measured on 27.
+  static const landscapeEndBackTop = 2.0;
+  static const landscapeEndBackHeight = 40.0;
+  static const landscapeEndRule = 0.6;
+  static const landscapeEndRow = 96.0;
+  static const landscapeEndActionWidth = 59.0;
+  static const landscapeEndActionIcon = 22.0;
+  static const landscapeEndActionText = 14.0;
+  static const landscapeEndActionGap = 12.0;
+  static const landscapeEndShareWidth = 20.0;
+  static const landscapeEndShareHeight = 17.0;
+  static const landscapeEndDividerHeight = 60.0;
+  static const landscapeEndDividerGap = 12.5;
+  static const landscapeEndInset = 13.0;
+  static const landscapeEndHeaderText = 16.0;
+  static const landscapeEndHeaderTop = 18.0;
+  static const landscapeEndRowTop = 12.0;
+  static const landscapeEndCardWidth = 201.0;
+  static const landscapeEndCoverHeight = 113.0;
+  static const landscapeEndCardGap = 13.0;
+  static const landscapeEndCardTitle = 15.0;
+  static const landscapeEndCardTitleTop = 7.0;
+  static const landscapeEndUploaderText = 13.0;
+  static const landscapeEndUploaderTop = 5.0;
+  static const landscapeEndUpBadgePad = 2.0;
+  static const landscapeEndUpBadgeRadius = 2.5;
+  static const landscapeEndCoverRadius = 5.0;
+  static const landscapeEndCoverShadeHeight = 30.0;
+  static const landscapeEndCoverInset = 7.0;
+  static const landscapeEndCoverBottom = 5.0;
+  static const landscapeEndCountText = 12.0;
+  static const landscapeEndCountIcon = 13.0;
+  static const landscapeEndCountGap = 3.0;
+  static const landscapeEndCountSpacing = 7.0;
+
+  /// How far a related card rises as it fades in.
+  static const landscapeEndRise = 24.0;
 
   /// 首页's feed cards (BiliNative FeedMetrics, measured on 01 at 3 px per point).
   static const feedSpacing = 6.0;
