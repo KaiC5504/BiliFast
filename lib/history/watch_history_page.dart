@@ -20,7 +20,7 @@ import 'history_glyphs.dart';
 import 'history_model.dart';
 import 'history_sheet.dart';
 
-/// 历史记录 (28, 45-48), pushed from the avatar menu: the title bar and the list grouped 今天, 昨天, 更早, without the
+/// 历史记录 (28, 45-48), pushed from the avatar page's 历史记录 shortcut (49): the title bar and the list grouped 今天, 昨天, 更早, without the
 /// official 🔍, ⋮ and tab row (the app only plays videos). A row's ⋮ opens 48's sheet over the page.
 class WatchHistoryPage extends StatefulWidget {
   const WatchHistoryPage({super.key, this.model, this.loginGate, this.share = shareThroughSystem, this.open});
@@ -30,6 +30,8 @@ class WatchHistoryPage extends StatefulWidget {
 
   /// Tests hand in a fake; otherwise [AppScope]'s.
   final LoginGate? loginGate;
+
+  /// Hands 分享's link to the system share sheet; tests record it instead.
   final ShareLink share;
 
   /// Opens a row's video; [openVideoPage] unless a test watches it instead.
@@ -88,7 +90,9 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
   Future<void> _login() async {
     final gate = widget.loginGate ?? AppScope.of(context).loginGate;
     final loggedIn = await gate.request(context);
-    if (loggedIn && mounted) await _model?.reload();
+    // The account change has usually reloaded the list already.
+    final model = _model;
+    if (loggedIn && mounted && model != null && model.needsLogin) await model.reload();
   }
 
   Future<void> _refresh() async {
@@ -137,32 +141,37 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
       ),
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
-        child: ColoredBox(
-          color: BiliColors.card,
-          child: Stack(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: top),
-                  const _TitleBar(),
-                  const SizedBox(
-                    height: HistoryTheme.barHairline,
-                    child: ColoredBox(color: HistoryTheme.divider),
-                  ),
-                  Expanded(
-                    child: ListenableBuilder(listenable: model, builder: (context, _) => _body(model)),
-                  ),
-                ],
-              ),
-              Positioned.fill(
-                child: HistorySheet(
-                  item: _menu,
-                  onShare: (item) => unawaited(_share(item)),
-                  onDelete: (item) => unawaited(_delete(item)),
+        // Pushed on a plain page route with no Material above it, the words would otherwise inherit the app's
+        // fallback style, a synthetic w900.
+        child: DefaultTextStyle(
+          style: _style(HistoryTheme.stateText, BiliColors.text),
+          child: ColoredBox(
+            color: BiliColors.card,
+            child: Stack(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(height: top),
+                    const _TitleBar(),
+                    const SizedBox(
+                      height: HistoryTheme.barHairline,
+                      child: ColoredBox(color: HistoryTheme.divider),
+                    ),
+                    Expanded(
+                      child: ListenableBuilder(listenable: model, builder: (context, _) => _body(model)),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                Positioned.fill(
+                  child: HistorySheet(
+                    item: _menu,
+                    onShare: (item) => unawaited(_share(item)),
+                    onDelete: (item) => unawaited(_delete(item)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -223,7 +232,7 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
   }
 }
 
-TextStyle _style(double size, Color color, {FontWeight? weight, double? height}) => TextStyle(
+TextStyle _style(double size, Color color, {FontWeight weight = HistoryTheme.textWeight, double? height}) => TextStyle(
   fontFamily: BiliFonts.family,
   fontSize: size,
   fontWeight: weight,
@@ -255,6 +264,8 @@ class _TitleBar extends StatelessWidget {
           child: Semantics(
             button: true,
             label: '返回',
+            onTap: () => unawaited(Navigator.of(context).maybePop()),
+            excludeSemantics: true,
             child: GestureDetector(
               key: const ValueKey('history-back'),
               behavior: HitTestBehavior.opaque,
@@ -324,6 +335,7 @@ class _HistoryRow extends StatelessWidget {
             child: Semantics(
               button: true,
               label: '${item.title}，${item.ownerName}，${HistoryModel.progressLabel(item)}',
+              onTap: onOpen,
               excludeSemantics: true,
               child: PressHighlight(onTap: onOpen, child: const SizedBox.expand()),
             ),
@@ -375,6 +387,8 @@ class _HistoryRow extends StatelessWidget {
             child: Semantics(
               button: true,
               label: '更多操作',
+              onTap: onMore,
+              excludeSemantics: true,
               child: GestureDetector(
                 key: ValueKey('history-more-${item.id}'),
                 behavior: HitTestBehavior.opaque,
@@ -508,6 +522,7 @@ class _PinkButton extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: true,
     label: label,
+    onTap: onTap,
     excludeSemantics: true,
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -515,9 +530,11 @@ class _PinkButton extends StatelessWidget {
       child: Container(
         height: height,
         padding: EdgeInsets.symmetric(horizontal: padX),
-        alignment: Alignment.center,
         decoration: const ShapeDecoration(color: BiliColors.pink, shape: StadiumBorder()),
-        child: Text(label, style: _style(text, BiliColors.onPink, weight: FontWeight.w500)),
+        child: Center(
+          widthFactor: 1,
+          child: Text(label, style: _style(text, BiliColors.onPink, weight: HistoryTheme.buttonWeight)),
+        ),
       ),
     ),
   );
@@ -597,6 +614,7 @@ class _Footer extends StatelessWidget {
         key: const ValueKey('history-footer-retry'),
         button: true,
         label: '加载失败，点击重试',
+        onTap: onRetry,
         excludeSemantics: true,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,

@@ -153,10 +153,7 @@ class HistoryModel extends ChangeNotifier {
     } on BiliError catch (error) {
       if (mine != _generation || _disposed) return null;
       if (error.needsLogin) {
-        _needsLogin = true;
-        _items = const [];
-        _cursor = null;
-        _isEnd = false;
+        _loggedOut();
         return null;
       }
       return _failed(error, replacing: replacing);
@@ -172,6 +169,13 @@ class HistoryModel extends ChangeNotifier {
     }
   }
 
+  void _loggedOut() {
+    _needsLogin = true;
+    _items = const [];
+    _cursor = null;
+    _isEnd = false;
+  }
+
   String? _failed(Object error, {required bool replacing}) {
     _logger.warn(LogCategory.ui, 'history failed', {'error': '$error'});
     final message = requestFailureMessage(error);
@@ -181,7 +185,7 @@ class HistoryModel extends ChangeNotifier {
   }
 
   /// Takes [item] off at once and deletes it on the server; if that fails the row comes back where it was and the
-  /// words for a toast are returned (null on success).
+  /// words for a toast are returned (null on success). A -101 instead turns the page to its login state.
   Future<String?> delete(HistoryItem item) async {
     final index = _items.indexWhere((row) => row.id == item.id);
     if (index < 0) return null;
@@ -195,6 +199,15 @@ class HistoryModel extends ChangeNotifier {
       _logger.warn(LogCategory.ui, 'history delete failed', {'error': '$error'});
       _deleted.remove(item.id);
       if (_disposed) return deleteFailed;
+      if (error is BiliError && error.needsLogin) {
+        // A page still loading would land in a list that is gone.
+        _generation++;
+        _loading = false;
+        _refreshing = false;
+        _loggedOut();
+        _notify();
+        return null;
+      }
       if (!_items.any((row) => row.id == item.id)) {
         // Rows may have come and gone meanwhile; the list is newest first, so it goes back before the first older one.
         final at = _items.indexWhere((row) => row.viewAt < item.viewAt);

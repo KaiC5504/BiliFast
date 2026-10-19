@@ -60,7 +60,10 @@ extension BiliClientFeed on BiliClient {
     return payload ?? const HistoryPage(items: [], next: null);
   }
 
-  /// Removes one video from 历史记录.
-  Future<void> deleteHistory({required int aid}) =>
-      postVoid('/x/v2/history/delete', form: {'kid': 'archive_$aid', 'jsonp': 'jsonp'});
+  /// Posts `kid=archive_<aid>` to /x/v2/history/delete with the csrf. A row decoded without an aid fails here
+  /// instead of asking the server to delete `archive_0`.
+  Future<void> deleteHistory({required int aid}) async {
+    if (aid <= 0) throw const BiliError.decoding('history row without an aid');
+    await postVoid('/x/v2/history/delete', form: {'kid': 'archive_$aid', 'jsonp': 'jsonp'});
+  }
 }

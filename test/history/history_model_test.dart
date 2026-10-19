@@ -281,6 +281,17 @@ void main() {
       expect(history.items.map((item) => item.aid), [1, 2, 3]);
     });
 
+    test('a -101 answer turns the page to its login state without a toast', () async {
+      api.historyItems = historyRows(3, from: wall(18, 22, 0));
+      final history = model();
+      await history.start();
+      api.failures['deleteHistory'] = const BiliError.api(code: -101, message: '账号未登录');
+      expect(await history.delete(history.items[1]), isNull);
+      expect(history.needsLogin, isTrue);
+      expect(history.items, isEmpty);
+      expect(history.loading, isFalse);
+    });
+
     test('a deleted row does not come back with a later page', () async {
       final rows = historyRows(2, from: wall(18, 22, 0));
       final pages = [

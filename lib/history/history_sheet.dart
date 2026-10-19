@@ -21,8 +21,8 @@ class HistorySheet extends StatefulWidget {
 class _HistorySheetState extends State<HistorySheet> with SingleTickerProviderStateMixin {
   late final AnimationController _motion = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 280),
-    reverseDuration: const Duration(milliseconds: 220),
+    duration: HistoryTheme.sheetIn,
+    reverseDuration: HistoryTheme.sheetOut,
   );
   late final CurvedAnimation _curve = CurvedAnimation(
     parent: _motion,
@@ -49,8 +49,8 @@ class _HistorySheetState extends State<HistorySheet> with SingleTickerProviderSt
     super.didChangeDependencies();
     final still = MediaQuery.disableAnimationsOf(context);
     _motion
-      ..duration = still ? Duration.zero : const Duration(milliseconds: 280)
-      ..reverseDuration = still ? Duration.zero : const Duration(milliseconds: 220);
+      ..duration = still ? Duration.zero : HistoryTheme.sheetIn
+      ..reverseDuration = still ? Duration.zero : HistoryTheme.sheetOut;
   }
 
   @override
@@ -89,33 +89,40 @@ class _HistorySheetState extends State<HistorySheet> with SingleTickerProviderSt
     final open = widget.item.value != null;
     return IgnorePointer(
       ignoring: !open,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              key: const ValueKey('history-sheet-dim'),
-              behavior: HitTestBehavior.opaque,
-              onTap: _close,
-              child: FadeTransition(
-                opacity: _curve,
-                child: const ColoredBox(color: HistoryTheme.sheetDim),
+      child: ExcludeSemantics(
+        excluding: !open,
+        // Up, it is modal: VoiceOver reads only it, not the rows under it.
+        child: BlockSemantics(
+          blocking: open,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  key: const ValueKey('history-sheet-dim'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _close,
+                  child: FadeTransition(
+                    opacity: _curve,
+                    child: const ColoredBox(color: HistoryTheme.sheetDim),
+                  ),
+                ),
               ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SlideTransition(
-              position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(_curve),
-              child: _Sheet(
-                onShare: () => widget.onShare(item),
-                onDelete: () => widget.onDelete(item),
-                onCancel: _close,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SlideTransition(
+                  position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(_curve),
+                  child: _Sheet(
+                    onShare: () => widget.onShare(item),
+                    onDelete: () => widget.onDelete(item),
+                    onCancel: _close,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -129,6 +136,7 @@ Widget _text(String text, double size, Color color) => Transform.translate(
 TextStyle _style(double size, Color color) => TextStyle(
   fontFamily: BiliFonts.family,
   fontSize: size,
+  fontWeight: HistoryTheme.textWeight,
   color: color,
   height: 1,
   letterSpacing: 0,
@@ -249,6 +257,7 @@ class _Button extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: true,
     label: label,
+    onTap: onTap,
     excludeSemantics: true,
     child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: child),
   );

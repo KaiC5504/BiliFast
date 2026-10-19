@@ -179,7 +179,7 @@ class _DevicePainter extends CustomPainter {
     canvas.drawRRect(RRect.fromRectAndRadius(screen, const Radius.circular(HistoryTheme.pcRadius - stroke / 2)), paint);
     final base = top + height - stroke / 2;
     canvas
-      ..drawLine(Offset(centre.dx, screen.bottom), Offset(centre.dx, base), _stroke(HistoryTheme.meta, 1.6))
+      ..drawLine(Offset(centre.dx, screen.bottom), Offset(centre.dx, base), _stroke(HistoryTheme.meta, HistoryTheme.pcStandStroke))
       ..drawLine(
         Offset(centre.dx - (HistoryTheme.pcBaseWidth - stroke) / 2, base),
         Offset(centre.dx + (HistoryTheme.pcBaseWidth - stroke) / 2, base),
@@ -242,7 +242,7 @@ class HistorySharePainter extends CustomPainter {
     const height = HistoryTheme.sheetShareGlyphHeight;
     canvas.save();
     canvas.translate((size.width - width) / 2, (size.height - height) / 2);
-    final paint = _stroke(HistoryTheme.sheetCircleGlyph, 1.6);
+    final paint = _stroke(HistoryTheme.sheetCircleGlyph, HistoryTheme.sheetShareStroke);
     const boxTop = height * 0.4;
     const mid = width / 2;
     canvas

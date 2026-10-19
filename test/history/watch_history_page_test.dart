@@ -2,14 +2,22 @@ import 'dart:async';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
+import 'package:bilifast/account/keychain_store.dart';
+import 'package:bilifast/app/app_environment.dart';
+import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/history/history_model.dart';
 import 'package:bilifast/history/watch_history_page.dart';
+import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../app/fake_keychain.dart';
+import '../playback/fakes.dart';
 import 'history_fakes.dart';
 
 void main() {
@@ -258,5 +266,152 @@ void main() {
     expect(api.calls, contains('history after=20'));
     await tester.dragUntilVisible(find.text('视频30'), find.byKey(const ValueKey('history-list')), const Offset(0, -300));
     expect(find.text('视频30'), findsOneWidget);
+  });
+
+  testWidgets('the page and its sheet draw regular words, the title alone bold', (tester) async {
+    await show(tester);
+    FontWeight? weight(Finder text) => tester.renderObject<RenderParagraph>(text).text.style?.fontWeight;
+    expect(weight(find.text('今天')), FontWeight.w400);
+    expect(weight(find.text('今天看的一')), FontWeight.w400);
+    expect(weight(find.text('UP1')), FontWeight.w400);
+    expect(weight(find.text('历史记录')), FontWeight.w600);
+    await openMenu(tester, today[0]);
+    expect(weight(find.text('删除')), FontWeight.w400);
+    expect(weight(find.text('分享链接')), FontWeight.w400);
+  });
+
+  testWidgets('the row, ⋮, back and the sheet answer a VoiceOver press', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await show(tester);
+    const rowLabel = '今天看的一，UP1，00:02/07:27';
+    for (final label in ['返回', rowLabel]) {
+      final node = find.semantics.byLabel(label).evaluate().single;
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue, reason: label);
+    }
+    tester.semantics.tap(find.semantics.byLabel(rowLabel));
+    await tester.pump();
+    expect(opened.single.bvid, 'BV1test1');
+
+    final more = find.semantics.byLabel('更多操作');
+    expect(more.evaluate(), hasLength(4));
+    expect(more.evaluate().first.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    tester.semantics.tap(find.semantics.byLabel('更多操作').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('history-sheet')), findsOneWidget);
+    expect(find.semantics.byLabel(rowLabel).evaluate(), isEmpty, reason: 'the sheet hides the rows from VoiceOver');
+    for (final label in ['分享链接', '删除', '取消']) {
+      final node = find.semantics.byLabel(label).evaluate().single;
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue, reason: label);
+    }
+    tester.semantics.tap(find.semantics.byLabel('取消'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('history-sheet')), findsNothing);
+    expect(find.semantics.byLabel(rowLabel).evaluate(), hasLength(1));
+
+    tester.semantics.tap(find.semantics.byLabel('更多操作').first);
+    await tester.pumpAndSettle();
+    tester.semantics.tap(find.semantics.byLabel('分享链接'));
+    await tester.pumpAndSettle();
+    expect(shared, [Uri.parse('https://www.bilibili.com/video/BV1test1')]);
+
+    tester.semantics.tap(find.semantics.byLabel('更多操作').first);
+    await tester.pumpAndSettle();
+    tester.semantics.tap(find.semantics.byLabel('删除'));
+    await tester.pumpAndSettle();
+    expect(api.calls.last, 'deleteHistory aid=1');
+    semantics.dispose();
+  });
+
+  testWidgets('登录 answers a VoiceOver press', (tester) async {
+    final semantics = tester.ensureSemantics();
+    loggedIn = false;
+    await show(tester);
+    tester.semantics.tap(find.semantics.byLabel('登录'));
+    await tester.pumpAndSettle();
+    expect(gate.requests, 1);
+    expect(find.text('今天看的一'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('a failed first page retries on a VoiceOver press', (tester) async {
+    final semantics = tester.ensureSemantics();
+    api.failures['history'] = const BiliError.http(502);
+    await show(tester);
+    api.failures.remove('history');
+    tester.semantics.tap(find.semantics.byLabel('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('今天看的一'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('a failed next page retries from the footer on a VoiceOver press', (tester) async {
+    final semantics = tester.ensureSemantics();
+    api.historyPageSize = 2;
+    final model = await show(tester);
+    api.failures['history'] = const BiliError.http(502);
+    await model.loadMore();
+    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.byKey(const ValueKey('history-footer-retry')),
+      find.byKey(const ValueKey('history-list')),
+      const Offset(0, -300),
+    );
+    api.failures.remove('history');
+    final footer = find.semantics.byLabel('加载失败，点击重试');
+    expect(footer.evaluate().single.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    tester.semantics.tap(footer);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('history-footer-retry')), findsNothing);
+    expect(model.items, hasLength(4));
+    semantics.dispose();
+  });
+
+  testWidgets('the 登录 pill hugs its words, centred', (tester) async {
+    loggedIn = false;
+    await show(tester);
+    final pill = tester.getRect(find.byKey(const ValueKey('history-login')));
+    final words = tester.getSize(find.text('登录')).width;
+    expect(pill.width, closeTo(words + 2 * 36, 0.5));
+    expect(pill.center.dx, closeTo(220, 0.5));
+  });
+
+  testWidgets('logging in from the page loads the first page once', (tester) async {
+    tester.view
+      ..physicalSize = const Size(440, 956)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final logger = Logger(session: 'test');
+    final environment = await AppEnvironment.load(
+      keychain: FakeKeychain(const StoredCookies({'buvid3': 'b3', 'buvid4': 'b4'})),
+      http: Canned.http(loggedIn: false),
+      logger: logger,
+    );
+    await environment.refreshAccount();
+    expect(environment.account, isA<LoggedOut>());
+    api.historyItems = [...today];
+    final playback = AppPlayback(() => Completer<PlaybackController>().future);
+    addTearDown(playback.dispose);
+    final services = AppServices(
+      environment: environment,
+      playback: playback,
+      recents: await RecentStore.load(null, logger: logger),
+      pageApi: api,
+      loginGate: gate..onRequest = environment.useFakeAccount,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        builder: (context, child) => AppScope(services: services, child: child!),
+        home: const Text('home'),
+      ),
+    );
+    unawaited(navigator.currentState!.push(CupertinoPageRoute<void>(builder: (_) => const WatchHistoryPage())));
+    await tester.pumpAndSettle();
+    expect(find.text('登录后查看历史记录'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('history-login')));
+    await tester.pumpAndSettle();
+    expect(find.text('今天看的一'), findsOneWidget);
+    expect(api.calls.where((call) => call == 'history after=0'), hasLength(1));
   });
 }
