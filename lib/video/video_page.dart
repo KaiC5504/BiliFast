@@ -643,7 +643,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     if (mounted) showToast(context, message);
   }
 
-  /// The send bar closes before anything else under it.
+  /// On back, the send bar closes before anything under it.
   bool _closeDanmakuSend() {
     final danmaku = _danmaku;
     if (danmaku == null || !danmaku.sendOpen.value) return false;

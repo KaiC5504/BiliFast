@@ -17,6 +17,7 @@ import 'package:bili_core/api.dart'
         VideoOwner,
         VideoStat;
 import 'package:bili_core/api.dart' as core show VideoPage, VideoView;
+import 'package:bili_core/danmaku.dart' show DisplayDanmaku;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
@@ -2379,6 +2380,145 @@ void main() {
       expect(tester.getRect(find.byKey(const ValueKey('panel-sheet-dim'))).top, closeTo(bottom, 0.01));
       ui(tester).panels.close();
       await frames(tester);
+      await back(tester);
+    });
+  });
+
+  group('danmaku through the page', () {
+    /// Everything the page's feed holds, played from the start.
+    List<DisplayDanmaku> feedItems() {
+      final timeline = controller.danmaku.timeline;
+      if (timeline == null) return const [];
+      timeline.seek(-1);
+      return [for (var ms = 999; ms < 20000; ms += 1000) ...timeline.advance(ms)];
+    }
+
+    Future<void> openPage(WidgetTester tester, {bool loggedIn = true, FakePageApi? api}) async {
+      await host(tester, pageApi: api ?? FakePageApi(), loggedIn: loggedIn);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+    }
+
+    testWidgets("点我发弹幕 sends to the page's video and part, and the danmaku shows boxed on the stage", (tester) async {
+      final api = FakePageApi();
+      await openPage(tester, api: api);
+      await tester.tap(find.byKey(const ValueKey('danmaku-send')));
+      await frames(tester, 2);
+      final danmaku = ui(tester).danmaku!;
+      expect(danmaku.sendOpen.value, isTrue);
+      expect(find.text('弹幕输入中'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const ValueKey('danmaku-send-input')), '页面弹幕');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('danmaku-send-button')));
+      await frames(tester, 4);
+      final posted = api.postedDanmaku.single;
+      expect((posted.text, posted.bvid, posted.cid), ('页面弹幕', bv, p1));
+      expect(danmaku.sendOpen.value, isFalse);
+      expect(feedItems().singleWhere((item) => item.text == '页面弹幕').isOwn, isTrue);
+      final layer = tester.widget<DanmakuLayer>(find.byKey(const ValueKey('video-danmaku')));
+      expect(layer.timeline, same(controller.danmaku.timeline));
+      await back(tester);
+    });
+
+    testWidgets('logged out, 点我发弹幕 toasts 请先登录 and opens no bar', (tester) async {
+      await openPage(tester, loggedIn: false);
+      await tester.tap(find.byKey(const ValueKey('danmaku-send')));
+      await tester.pump();
+      expect(find.text('请先登录'), findsOneWidget);
+      expect(ui(tester).danmaku!.sendOpen.value, isFalse);
+      expect(find.byKey(const ValueKey('danmaku-send-bar')), findsNothing);
+      await frames(tester, 80);
+      await back(tester);
+    });
+
+    testWidgets('⋮ has the 弹幕设置 row in portrait and 竖屏, not in landscape', (tester) async {
+      await openPage(tester);
+      final row = find.byKey(const ValueKey('more-danmaku-settings'));
+      Future<void> more(Presentation presentation, Matcher rows) async {
+        await rotate(tester, presentation);
+        expect(orientation.presentation, presentation);
+        ui(tester).panels.open(PlayerPanel.more);
+        await frames(tester);
+        expect(row, rows, reason: '$presentation');
+        ui(tester).panels.close();
+        await frames(tester);
+      }
+
+      await more(Presentation.inline, findsOneWidget);
+      await more(Presentation.landscape, findsNothing);
+      sessions.first
+        ..isVertical = true
+        ..changed();
+      await more(Presentation.vertical, findsOneWidget);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets("⋮'s 弹幕设置 row opens the panel, and its 滚动 square reaches the page's feed", (tester) async {
+      await openPage(tester);
+      ui(tester).panels.open(PlayerPanel.more);
+      await frames(tester);
+      final row = find.byKey(const ValueKey('more-danmaku-settings'));
+      await tester.ensureVisible(row);
+      await frames(tester, 4);
+      await tester.tap(row);
+      await frames(tester);
+      expect(ui(tester).panels.value, PlayerPanel.danmakuSettings);
+
+      final square = find.byKey(const ValueKey('danmaku-type-scroll'));
+      await tester.ensureVisible(square);
+      await frames(tester, 4);
+      await tester.tap(square);
+      await frames(tester, 2);
+      expect(controller.danmaku.options.blockScroll, isTrue);
+      ui(tester).panels.close();
+      await frames(tester);
+      await back(tester);
+    });
+
+    testWidgets('back closes the send bar, then 弹幕设置, then leaves the page', (tester) async {
+      await openPage(tester);
+      final panels = ui(tester).panels;
+      final danmaku = ui(tester).danmaku!;
+      panels.open(PlayerPanel.danmakuSettings);
+      await frames(tester, 4);
+      danmaku.openSend();
+      await frames(tester, 2);
+
+      await back(tester);
+      expect(danmaku.sendOpen.value, isFalse);
+      expect(panels.value, PlayerPanel.danmakuSettings);
+      await back(tester);
+      expect(panels.value, isNull);
+      expect(find.byType(VideoPage), findsOneWidget);
+      await back(tester);
+      expect(find.byType(VideoPage), findsNothing);
+    });
+
+    testWidgets("landscape's back arrow closes the send bar and stays in full screen", (tester) async {
+      await openPage(tester);
+      await rotate(tester, Presentation.landscape);
+      final danmaku = ui(tester).danmaku!..openSend();
+      await frames(tester, 2);
+      ui(tester).onBack();
+      await frames(tester, 2);
+      expect(danmaku.sendOpen.value, isFalse);
+      expect(orientation.presentation, Presentation.landscape);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets('the open send bar keeps the chrome from hiding', (tester) async {
+      await openPage(tester);
+      final chrome = ui(tester).chrome;
+      final danmaku = ui(tester).danmaku!;
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(chrome.autoHide, isTrue);
+      danmaku.openSend();
+      expect(chrome.autoHide, isFalse);
+      danmaku.closeSend();
+      expect(chrome.autoHide, isTrue);
       await back(tester);
     });
   });
