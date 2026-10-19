@@ -459,7 +459,7 @@ void main() {
       async.flushMicrotasks();
       final first = r.model.actions;
       r.model.active = false;
-      // A newer page's video on the shared player.
+      // Another video on the session while inactive.
       r.show(_detail(_bvB, owner: 43, cids: [21]), cid: 21);
       async.flushMicrotasks();
       expect(r.model.actions, same(first));

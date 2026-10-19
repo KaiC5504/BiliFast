@@ -10,10 +10,10 @@ import '../player/bili_player.dart';
 
 /// Tells Bilibili how far the video page got, so it shows in the official app's 历史记录 and the next open resumes
 /// there (VideoPageModel.swift's heartbeats): once playback starts, while playing whenever the position is 15 s on from
-/// the last report, on pause, after a seek, at the end (-1) and when the page goes, while [canReport] allows. It
-/// belongs to the open the page made just before building it: once a newer open has the player it hears nothing more,
-/// and leaving reports its own video at the last position it saw. The speed test plays without one, so it reports
-/// nothing.
+/// the last report, on pause, after a seek, at the end (-1) and when the playback closes, while [canReport] allows.
+/// It belongs to the open made just before it: once a newer open (another part, 自动连播) moves the controller on, it
+/// hears nothing more, and leaving reports its own video at the last position it saw. The speed test plays without
+/// one, so it reports nothing.
 class WatchReporter {
   WatchReporter({
     required PlaybackController controller,

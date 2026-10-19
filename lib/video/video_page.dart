@@ -489,7 +489,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   }
 
   /// The route's playback, or the one the restore button brought back (started over if it was released meanwhile).
-  /// Its first show releases a playback the small window kept, before this page's video loads.
+  /// Its first show releases any other playback the small window kept, before this page's video loads.
   void _takePlayback() {
     final services = _services!;
     final route = widget.route;
@@ -514,10 +514,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     playback
       ..attach(this, requestLogin: _askLogin)
       ..addListener(_playbackChanged);
-    services.pipKeeper.pageShown(playback, opened: true);
-    if (playback.session == null) {
-      playback.start();
-    } else {
+    final starting = playback.session == null;
+    // Not in this build: the release reports the kept video's progress, and 最近打开 notifies its listeners. The
+    // controller is asked for only after it, so the small window closes before this video loads.
+    scheduleMicrotask(() {
+      services.pipKeeper.pageShown(playback, opened: true);
+      if (starting) playback.start();
+    });
+    if (!starting) {
       // Built in this first frame, so the small window has the player view to fly into; what notifies other pages
       // (the orientation) waits until the frame is done.
       _attachSession(playback, follow: false);
@@ -550,6 +554,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       logins: _logins,
     );
     _details = details;
+    if (_covered) details.active = false;
     final environment = services.environment;
     final danmaku = DanmakuSession(
       feed: controller.danmaku,
@@ -597,14 +602,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (follow) _sessionChanged();
   }
 
-  /// The page has built its player around the playback and hasn't left.
-  bool get _mine => !_left && _session != null;
+  bool get _attached => !_left && _session != null;
 
   void _follow() {
     final controller = _controller;
     if (controller == null) return;
     setState(() {
-      if (!_mine) return;
+      if (!_attached) return;
       if (_session case final session?) _intro = IntroContent.of(session);
       if (controller.phase == PlaybackPhase.playing) _played = true;
     });
@@ -616,7 +620,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _sessionChanged() {
     _syncCollapse();
     final session = _session;
-    if (session == null || !_mine) return;
+    if (session == null || !_attached) return;
     final intro = IntroContent.of(session);
     if (intro != _intro && mounted) setState(() => _intro = intro);
     _syncComments();
@@ -637,7 +641,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _syncComments() {
     if (_left || !mounted) return;
     final detail = _intro.detail;
-    final view = _mine ? _controller?.video : null;
+    final view = _attached ? _controller?.video : null;
     final aid = detail?.aid ?? (view?.bvid == _playback?.bvid ? view?.aid : null);
     if (aid == null) return;
     if (_comments case final comments? when comments.aid == aid) {
@@ -773,7 +777,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final controller = _controller;
     if (session == null || controller == null) return;
     // Another part opening on the page keeps the last one's status until its own load starts, so the phase counts.
-    _chrome.autoHide = _mine &&
+    _chrome.autoHide = _attached &&
         controller.phase == PlaybackPhase.playing &&
         session.readout.wantsPlay &&
         session.scrubbing.value == null &&
@@ -790,7 +794,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _collapse.paused =
         controller != null &&
         session != null &&
-        _mine &&
+        _attached &&
         controller.phase == PlaybackPhase.playing &&
         session.readout.status.value == PlayerStatus.paused &&
         !session.ended;
@@ -1121,7 +1125,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _laidOut.value = layout;
     final fullScreen = layout.fullScreen;
     final controller = _controller;
-    final mine = controller != null && _mine;
+    final mine = controller != null && _attached;
     final ui = mine ? _ui : null;
     _collapse.still = MediaQuery.disableAnimationsOf(context);
     return PopScope<Object?>(

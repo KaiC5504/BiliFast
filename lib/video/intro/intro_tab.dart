@@ -14,8 +14,7 @@ import 'tag_chips.dart';
 import 'title_block.dart';
 import 'uploader_row.dart';
 
-/// What 简介 shows of the session's video. The page takes it only while the shared player is its own, so a page
-/// sliding away under a newer one keeps showing its own video rather than the newer one's.
+/// What 简介 shows of the session's video; the page stops taking it once it leaves.
 @immutable
 final class IntroContent {
   const IntroContent({

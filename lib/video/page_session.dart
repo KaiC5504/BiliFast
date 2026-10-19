@@ -20,8 +20,7 @@ import '../player_ui/player_readout.dart';
 import 'player_prefs.dart';
 import 'player_session.dart';
 
-/// Plays another part or video on the same page: the page opens it, so its own bookkeeping (watch reports, which open
-/// is its) stays right.
+/// Plays another part or video on the same playback: PagePlayback opens it, so its watch reports stay right.
 typedef SessionOpen = void Function(String bvid, {int? cid});
 
 typedef PeriodicTimer = Timer Function(Duration period, void Function() tick);
@@ -109,6 +108,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _endings = controller.endings.listen((_) => unawaited(_handleEnd()));
     _applyPrefs();
     _controllerChanged();
+    // Made after the app went to the background (the controller comes asynchronously), no lifecycle change follows.
+    if (_background && _active) _startBackgroundCheck();
   }
 
   /// Hold to speed up plays at this rate.

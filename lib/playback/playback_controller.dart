@@ -268,6 +268,9 @@ class PlaybackController extends ChangeNotifier {
   /// Whether a load starts playback; reloading a player the user paused leaves it paused.
   bool _playWhenLoaded = true;
 
+  /// The page is covered: every load starts paused, and [_playWhenLoaded] keeps whether it would have played.
+  bool _autoplayHeld = false;
+
   /// Set by an [openVideo] without a start until the playurl answer's saved progress has placed it.
   bool _resumeFromHistory = false;
 
@@ -411,7 +414,7 @@ class PlaybackController extends ChangeNotifier {
   String qualityName(int qn) =>
       QualityNames.full(qn: qn, serverText: _qualities.where((option) => option.id == qn).firstOrNull?.name);
 
-  /// Counts [open] and [openVideo] calls, so a page that closes late can tell a newer page has the player.
+  /// Counts [open] and [openVideo] calls, so a watch reporter can tell a newer open moved the controller on.
   int get opens => _opens;
   int _opens = 0;
 
@@ -482,7 +485,7 @@ class PlaybackController extends ChangeNotifier {
     }, start: start);
   }
 
-  /// A page on the shared player went away: playback stops and nothing of it stays.
+  /// Its playback closed: playback stops and nothing of it stays.
   void close() {
     _clearVideo();
     _error = null;
@@ -517,6 +520,8 @@ class PlaybackController extends ChangeNotifier {
   Future<void> _openWith(Future<(VideoView, VideoPage)?> Function(int current) pick, {required double? start}) async {
     final current = _advance();
     _phase = PlaybackPhase.loading;
+    // Its load autoplays; until then a covered page reads this as about to play.
+    _playWhenLoaded = true;
     _error = null;
     _playerFailure = null;
     _notify();
@@ -576,6 +581,7 @@ class PlaybackController extends ChangeNotifier {
     final current = _advance();
     _teardownPlayback();
     _phase = PlaybackPhase.loading;
+    _playWhenLoaded = true;
     _error = null;
     _playerFailure = null;
     _notify();
@@ -669,7 +675,6 @@ class PlaybackController extends ChangeNotifier {
   void setAutoPictureInPicture(bool on) {
     _autoPipWanted = on;
     if (!player.capabilities.pictureInPicture) return;
-    // Before the first play the player hasn't been told at all; that play tells it.
     if (!on || _autoPipSet) {
       _autoPipSet = on || _autoPipSet;
       _quietly(() => player.setAutoPictureInPicture(on), 'auto pip');
@@ -679,6 +684,17 @@ class PlaybackController extends ChangeNotifier {
   /// The small window's restore button was tapped.
   Stream<void> get restoreRequests => _restores.stream;
   final _restores = StreamController<void>.broadcast(sync: true);
+
+  /// While [hold] (its page covered), every load starts paused: an open, a reload, a URL refresh, a codec fallback,
+  /// a server restart. [loadWillPlay] still says whether it would have played. Lifted, a load still to come plays
+  /// only if [play].
+  void holdAutoplay(bool hold, {bool play = true}) {
+    _autoplayHeld = hold;
+    if (!hold) _playWhenLoaded = play;
+  }
+
+  /// A load is under way that starts playing when it lands, or would were it not held.
+  bool get loadWillPlay => _phase == PlaybackPhase.loading && _playWhenLoaded;
 
   /// The page was covered: this playback's prefetched segments go, as Swift's cover() did, and the player keeps
   /// what it has.
@@ -1044,8 +1060,9 @@ class PlaybackController extends ChangeNotifier {
   Future<void> _load(PreparedSource source, double time, int current) async {
     _seekTimer.reloadBegan();
     _itemPlayed = false;
+    final autoplay = _playWhenLoaded && !_autoplayHeld;
     // Loaded paused, the first frame waits on the user: that wait is not startup time.
-    if (!_playWhenLoaded && !_sawFirstFrame) _firstFrameTimed = false;
+    if (!autoplay && !_sawFirstFrame) _firstFrameTimed = false;
     clock.reset(time);
     _buffered = const [];
     _jumpedTo(time);
@@ -1056,14 +1073,14 @@ class PlaybackController extends ChangeNotifier {
       audio: source.audio,
       headers: source.mode == PlaybackMode.direct ? source.mediaHeaders : const {},
       startSeconds: time,
-      autoplay: _playWhenLoaded,
+      autoplay: autoplay,
     ));
     _ensureCurrent(current);
     _applyLook();
-    if (!_playWhenLoaded) _phase = PlaybackPhase.playing;
+    if (!autoplay) _phase = PlaybackPhase.playing;
     _updateModeStats();
     _notify();
-    _logger.info(LogCategory.player, 'load', {'mode': modeLabel, 'at': time, 'play': _playWhenLoaded});
+    _logger.info(LogCategory.player, 'load', {'mode': modeLabel, 'at': time, 'play': autoplay});
   }
 
   /// The rate, fit and mirroring chosen outlive the item; the defaults need no call.

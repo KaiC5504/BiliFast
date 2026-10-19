@@ -22,8 +22,7 @@ typedef PageSessionFactory = PlayerSession Function({
   required VoidCallback willPlay,
 });
 
-/// The app's session for a video page. [onSeeked] reaches the watch reporter: every seek the session commits.
-/// [willPlay] runs before the session plays, so another page's small window closes first.
+/// The app's session for a video page.
 PlayerSession pageSession({
   required PlaybackController controller,
   required AppServices services,
@@ -147,9 +146,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     }
     _controller = controller;
     controller.addListener(_controllerChanged);
-    _restores = controller.restoreRequests.listen((_) => _services.pipKeeper.restore(this));
+    _restores = controller.restoreRequests.listen((_) => _restore());
+    if (_covered) controller.holdAutoplay(true);
     _open();
-    _session = _createSession(
+    final session = _session = _createSession(
       controller: controller,
       services: _services,
       open: openOnPage,
@@ -157,8 +157,22 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
       requestLogin: () => _requestLogin?.call(),
       willPlay: willPlay,
     );
-    if (_covered) _hold();
+    if (_covered) {
+      session.active = false;
+      _hold();
+    }
     notifyListeners();
+  }
+
+  /// The small window's restore button. Refused, the window ends at once rather than waiting on a page that won't
+  /// come.
+  void _restore() {
+    final keeper = _services.pipKeeper;
+    if (keeper.restore(this)) return;
+    final reason = !identical(keeper.kept, this) ? 'not kept' : (_closed ? 'closed' : 'no navigator');
+    Logger.shared.warn(LogCategory.ui, 'restore refused', {'bvid': _bvid, 'reason': reason});
+    final controller = _controller;
+    if (controller != null) _quietly(() => controller.setRestorable(false), 'restorable');
   }
 
   void _open() {
@@ -236,17 +250,18 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     final session = _session;
     session?.active = false;
     // A start or a load still under way reports nothing playing, though it is about to.
-    _resumeOnShow =
-        controller == null || controller.phase == PlaybackPhase.loading || (session?.readout.wantsPlay ?? false);
+    _resumeOnShow = controller == null || controller.loadWillPlay || (session?.readout.wantsPlay ?? false);
     if (controller == null) return;
     _quietly(controller.stopPictureInPicture, 'pip stop');
     controller.dropPrefetch();
     _hold();
   }
 
-  /// Paused while covered, and kept so: a load under way would otherwise start playing by itself.
+  /// Paused while covered, and kept so: every load starts paused until shown.
   void _hold() {
-    _quietly(_controller!.player.pause, 'pause');
+    final controller = _controller!;
+    controller.holdAutoplay(true);
+    _quietly(controller.player.pause, 'pause');
     _setAutoPictureInPicture(false);
     _session?.readout.status.addListener(_stillCovered);
   }
@@ -269,8 +284,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     _resumeOnShow = false;
     final controller = _controller;
     if (controller == null) return;
+    final play = resume && resuming;
+    controller.holdAutoplay(false, play: play);
     _setAutoPictureInPicture(true);
-    if (resume && resuming) {
+    if (play) {
       willPlay();
       _quietly(controller.player.play, 'play');
     }
