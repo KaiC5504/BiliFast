@@ -64,27 +64,31 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
-    child: Align(
-      alignment: const Alignment(0, 0.6),
-      child: FadeTransition(
-        opacity: _fade,
-        child: Container(
-          key: const ValueKey('toast'),
-          margin: const EdgeInsets.symmetric(horizontal: BiliMetrics.sectionGap * 2),
-          padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.sectionGap, vertical: BiliMetrics.gutter),
-          decoration: BoxDecoration(
-            color: BiliColors.toastFill,
-            borderRadius: BorderRadius.circular(BiliMetrics.toastRadius),
-          ),
-          child: Text(
-            widget.message,
-            textAlign: TextAlign.center,
-            // The root overlay sits outside any Material, whose text style would otherwise be missing.
-            style: TextStyle(
-              fontFamily: BiliFonts.family,
-              fontSize: BiliMetrics.bodyText,
-              color: BiliColors.panelText,
-              decoration: TextDecoration.none,
+    // Over the keyboard when one is up, or a failed post's reason would land behind the composer's.
+    child: Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Align(
+        alignment: const Alignment(0, 0.6),
+        child: FadeTransition(
+          opacity: _fade,
+          child: Container(
+            key: const ValueKey('toast'),
+            margin: const EdgeInsets.symmetric(horizontal: BiliMetrics.sectionGap * 2),
+            padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.sectionGap, vertical: BiliMetrics.gutter),
+            decoration: BoxDecoration(
+              color: BiliColors.toastFill,
+              borderRadius: BorderRadius.circular(BiliMetrics.toastRadius),
+            ),
+            child: Text(
+              widget.message,
+              textAlign: TextAlign.center,
+              // The root overlay sits outside any Material, whose text style would otherwise be missing.
+              style: TextStyle(
+                fontFamily: BiliFonts.family,
+                fontSize: BiliMetrics.bodyText,
+                color: BiliColors.panelText,
+                decoration: TextDecoration.none,
+              ),
             ),
           ),
         ),

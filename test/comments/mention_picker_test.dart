@@ -279,4 +279,27 @@ void main() {
     expect(avatar.left - row.left, MentionTheme.gutter);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
   });
+
+  testWidgets('an avatar with no face, still loading or failed shows Bilibili\'s default face', (tester) async {
+    await mount(
+      tester,
+      answers: {
+        '': const [
+          MentionCandidate(mid: 1, name: '没有头像'),
+          MentionCandidate(mid: 2, name: '有头像', face: 'https://i0.hdslb.com/bfs/face/a.jpg'),
+        ],
+      },
+    );
+    await tester.pump();
+    for (final mid in [1, 2]) {
+      final images = tester.widgetList<Image>(
+        find.descendant(of: find.byKey(ValueKey('mention-$mid')), matching: find.byType(Image)),
+      );
+      expect(
+        images.map((image) => image.image).whereType<AssetImage>().map((asset) => asset.assetName),
+        [noFaceAsset],
+        reason: 'row $mid',
+      );
+    }
+  });
 }

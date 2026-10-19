@@ -113,8 +113,10 @@ void main() {
           file([0xFF, 0xD8, 1], 'b.jpg'),
         ],
       );
-      final picked = await pickPictures(limit: 9, picker: picker);
+      final pick = await pickPictures(limit: 9, picker: picker);
       expect(picker.calls.single, (limit: 9, imageQuality: 90, maxWidth: null, maxHeight: null, fullMetadata: false));
+      expect(pick.failure, isNull);
+      final picked = pick.pictures;
       expect(picked.map((picture) => picture.name), ['image_picker_1.png', 'b.jpg']);
       expect(picked[0].bytes, pngBytes);
       expect(picked[1].bytes, [0xFF, 0xD8, 1]);
@@ -126,28 +128,55 @@ void main() {
           for (var index = 0; index < 4; index++) file([index], 'p$index.jpg'),
         ],
       );
-      final picked = await pickPictures(limit: 2, picker: picker);
+      final picked = (await pickPictures(limit: 2, picker: picker)).pictures;
       expect(picked.map((picture) => picture.name), ['p0.jpg', 'p1.jpg']);
 
-      expect(await pickPictures(limit: 0, picker: picker), isEmpty);
+      expect((await pickPictures(limit: 0, picker: picker)).pictures, isEmpty);
       expect(picker.calls.length, 1);
     });
 
-    test('a cancel is an empty list', () async {
-      expect(await pickPictures(limit: 9, picker: FakePicker(() async => [])), isEmpty);
+    test('a cancel is nothing, with no failure', () async {
+      final pick = await pickPictures(limit: 9, picker: FakePicker(() async => []));
+      expect(pick.pictures, isEmpty);
+      expect(pick.failure, isNull);
       expect(sink.events, isEmpty);
     });
 
-    test('a failure is logged and comes back empty', () async {
+    test('a failure is logged and told apart from a cancel', () async {
       final picker = FakePicker(
         () async => throw PlatformException(code: 'invalid_image', message: 'Could not decode'),
       );
-      expect(await pickPictures(limit: 9, picker: picker), isEmpty);
+      final pick = await pickPictures(limit: 9, picker: picker);
+      expect(pick.pictures, isEmpty);
+      expect(pick.failure, PickFailure.failed);
       final event = sink.events.single;
       expect(event.level, LogLevel.warn);
       expect(event.cat, LogCategory.ui);
       expect(event.msg, 'pick pictures failed');
       expect(event.encode(), contains('invalid_image'));
+    });
+
+    test('photo access denied or restricted is its own failure', () async {
+      for (final code in ['photo_access_denied', 'photo_access_restricted']) {
+        final pick = await pickPictures(limit: 9, picker: FakePicker(() async => throw PlatformException(code: code)));
+        expect(pick.failure, PickFailure.noAccess, reason: code);
+      }
+      final memory = await pickPictures(limit: 9, picker: FakePicker(() async => throw OutOfMemoryError()));
+      expect(memory.failure, PickFailure.failed);
+    });
+
+    test('a file that can\'t be read stops there, keeping what was read, and is a failure', () async {
+      final picker = FakePicker(
+        () async => [
+          file([0xFF, 0xD8, 1], 'a.jpg'),
+          XFile('no/such/picture.jpg'),
+          file([0xFF, 0xD8, 2], 'c.jpg'),
+        ],
+      );
+      final pick = await pickPictures(limit: 9, picker: picker);
+      expect(pick.pictures.map((picture) => picture.name), ['a.jpg']);
+      expect(pick.failure, PickFailure.failed);
+      expect(sink.events.map((event) => event.msg), contains('read picked picture failed'));
     });
 
     test('a name without an extension gets one from the bytes', () async {
@@ -162,15 +191,15 @@ void main() {
           file([1, 2, 3], 'e'),
         ],
       );
-      final picked = await pickPictures(limit: 9, picker: picker);
+      final picked = (await pickPictures(limit: 9, picker: picker)).pictures;
       expect(picked.map((picture) => picture.name), ['a.png', 'b.gif', 'c.webp', 'd.jpg', 'e.jpg']);
     });
 
     test('a picked photo loses its location', () async {
       final photo = jpeg([exif(tiff(Endian.little))]);
-      final picked = await pickPictures(limit: 9, picker: FakePicker(() async => [file(photo, 'p.jpg')]));
-      expect(picked.single.bytes, withoutLocation(photo));
-      expect(picked.single.bytes, isNot(photo));
+      final pick = await pickPictures(limit: 9, picker: FakePicker(() async => [file(photo, 'p.jpg')]));
+      expect(pick.pictures.single.bytes, withoutLocation(photo));
+      expect(pick.pictures.single.bytes, isNot(photo));
     });
   });
 
@@ -202,23 +231,42 @@ void main() {
       expect(identical(withoutLocation(plain), plain), isTrue);
     });
 
-    test('anything that is not a well-formed JPEG comes back as it came', () {
+    test('a file that is not a JPEG comes back as it came, logged as not checked', () {
       expect(identical(withoutLocation(pngBytes), pngBytes), isTrue);
       final short = Uint8List.fromList([0xFF, 0xD8]);
       expect(identical(withoutLocation(short), short), isTrue);
+      expect(sink.events.map((event) => event.msg), ['picture location not checked', 'picture location not checked']);
+      expect(sink.events.first.level, LogLevel.warn);
+      expect(sink.events.first.encode(), contains('png'));
+    });
 
-      final overrun = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE1, 0x7F, 0xFF, 0x45, 0x78]);
-      expect(identical(withoutLocation(overrun), overrun), isTrue);
-
+    test('an EXIF block whose TIFF can\'t be followed is dropped whole, and logged', () {
+      final jfif = segment(0xE0, ascii.encode('JFIF\x00\x01\x01'));
       final badPointer = tiff(Endian.little);
       ByteData.sublistView(badPointer).setUint32(30, 5000, Endian.little);
-      final photo = jpeg([exif(badPointer)]);
-      expect(identical(withoutLocation(photo), photo), isTrue);
+      expect(withoutLocation(jpeg([jfif, exif(badPointer)])), jpeg([jfif]));
 
       final badRational = tiff(Endian.little);
       ByteData.sublistView(badRational).setUint32(60, 90, Endian.little);
-      final second = jpeg([exif(badRational)]);
-      expect(identical(withoutLocation(second), second), isTrue);
+      expect(withoutLocation(jpeg([exif(badRational), jfif])), jpeg([jfif]));
+
+      final badOrder = tiff(Endian.big)..[0] = 0x41;
+      expect(withoutLocation(jpeg([exif(badOrder)])), jpeg([]));
+      expect(sink.events.map((event) => event.msg), everyElement('picture EXIF does not parse, dropped'));
+      expect(sink.events, hasLength(3));
+    });
+
+    test('segments that stop parsing end the walk, logged; what was cleared before stays cleared', () {
+      final overrun = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE1, 0x7F, 0xFF, 0x45, 0x78]);
+      expect(identical(withoutLocation(overrun), overrun), isTrue);
+      expect(sink.events.single.msg, 'picture location check stopped: JPEG segments do not parse');
+
+      final photo = jpeg([exif(tiff(Endian.little))]);
+      final broken = Uint8List.fromList([...photo.sublist(0, photo.length - 11), 0xFF, 0xE2, 0x7F, 0xFF]);
+      final after = withoutLocation(broken);
+      final start = 2 + 4 + 6;
+      expect(after.sublist(start + 38, start + 92), everyElement(0));
+      expect(after.length, broken.length);
     });
 
     test('XMP that mentions GPS is dropped; other XMP stays', () {

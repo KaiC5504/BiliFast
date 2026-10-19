@@ -1653,9 +1653,9 @@ abstract final class ComposerTheme {
   static const publishSpinnerRadius = 7.0;
 
   /// The emote panel takes the keyboard's place at its height; before the keyboard has been seen, the grid is 14's
-  /// 226 pt over the tab bar and the home indicator's strip.
-  static const panelHeight = 226.0;
-  static const tabHeight = 44.0;
+  /// 224 pt over its 46 pt tab bar and the home indicator's strip.
+  static const panelHeight = 224.0;
+  static const tabHeight = 46.0;
   static const tabWidth = 50.0;
   static const tabIcon = 28.0;
 
