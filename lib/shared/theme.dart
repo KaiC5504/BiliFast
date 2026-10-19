@@ -1931,7 +1931,170 @@ abstract final class BlockWordsTheme {
 }
 
 /// The send bar and the style panel (22, 23, 36-39).
-abstract final class DanmakuSendTheme {}
+abstract final class DanmakuSendTheme {
+  /// Landscape's dark bar over its darker area (22, 23); portrait's white bar with a hairline over a grey panel (36-39).
+  static const darkBar = Color(0xFF242627);
+  static const darkArea = Color(0xFF1A1B1C);
+  static const lightBar = BiliColors.card;
+  static const lightArea = BiliColors.pageGrey;
+  static const hairline = Color(0xFFE3E5E7);
+  static const hairlineWidth = 1 / 3;
+
+  /// Landscape's pink is deeper than the light pages'; 竖屏's send arrow turns it too (37), while A and the options
+  /// take the page pink there (38).
+  static const darkAccent = Color(0xFFED7098);
+  static const lightAccent = BiliColors.pink;
+  static const sendReady = darkAccent;
+  static const darkGlyph = Color(0xFFFFFFFF);
+  static const lightGlyph = Color(0xFF62666C);
+  static const hintDot = Color(0xFFD04B44);
+
+  /// 39's empty arrow is the dark glyph grey, 36's the placeholder grey.
+  static const verticalSendIdle = Color(0xFFC9CCCF);
+
+  /// The page under the small player (39).
+  static const dim = BiliColors.scrim;
+
+  /// The bar is 42 pt: on the small player and in landscape A is centred 21 pt in, the field runs from 42 pt to 42 pt
+  /// short of the far edge and the arrow is centred 21 pt from it, inside the safe areas (22, 39). 竖屏 sets them
+  /// wider: A at 24, the field from 48 to 58 short, a larger arrow centred 30.5 pt from the edge (36).
+  static const barHeight = 42.0;
+  static const aCell = 42.0;
+  static const sendCell = 42.0;
+  static const verticalACell = 48.0;
+  static const verticalSendCell = 55.0;
+  static const verticalSendTrailing = 3.0;
+
+  /// 竖屏's bar is a sheet with rounded top corners (36).
+  static const verticalBarRadius = 8.5;
+
+  /// The A glyph and its red dot, 9 pt up and right of its middle until A is first pressed (22).
+  static const aWidth = 14.6;
+  static const aHeight = 17.75;
+  static const aStroke = 1.4;
+  static const hintDotSize = 5.5;
+  static const hintDotOffset = 9.0;
+
+  /// The paper plane, outlined at 1.5 pt; 竖屏's is 18% larger and filled once there is text (36, 37).
+  static const sendWidth = 18.0;
+  static const sendHeight = 17.5;
+  static const sendStroke = 1.5;
+  static const verticalSendScale = 1.18;
+  static const sendSpinnerRadius = 7.0;
+
+  /// The 30 pt pill: white in landscape, grey on the light bar, with a hairline in 竖屏. Text starts 8 pt in (12 in
+  /// 竖屏) behind a 20 pt pink cursor.
+  static const fieldHeight = 30.0;
+  static const darkField = Color(0xFFFFFFFF);
+  static const lightField = BiliColors.pageGrey;
+  static const fieldText = BiliColors.text;
+  static const fieldFont = 15.0;
+  static const fieldPad = 8.0;
+  static const verticalFieldPad = 12.0;
+  static const placeholder = Color(0xFFC9CCCF);
+
+  /// MiSans sets Chinese about 5% wider than the official PingFang.
+  static double get placeholderSpacing => BiliFonts.nudged ? -0.75 : 0;
+
+  /// 竖屏's placeholder is smaller and darker than the text it gives way to (36, 37).
+  static const verticalPlaceholder = Color(0xFF95999F);
+  static const verticalPlaceholderFont = 13.0;
+  static const cursorHeight = 20.0;
+  static const cursorWidth = 2.0;
+
+  /// The clear ⓧ, centred 15 pt in from the field's end (37).
+  static const clearSize = 14.0;
+  static const clearCell = 30.0;
+  static const clearFill = Color(0xFFC9CCCF);
+  static const clearGlyph = Color(0xFFFFFFFF);
+  static const clearArm = 2.2;
+  static const clearStroke = 1.1;
+
+  /// The keyboard's height in the official shots, which the style panel takes until a keyboard has been seen: 22's
+  /// landscape one and 36's portrait one with the home indicator's strip.
+  static const landscapePanelHeight = 224.0;
+  static const portraitPanelHeight = 347.0;
+
+  /// How long the panel waits for the keyboard it gave way to before going anyway: a hardware keyboard shows none.
+  static const keyboardWait = Duration(milliseconds: 600);
+
+  /// The panel: a 64 pt label column 12 pt in, then rows 54 pt apart from 7 pt down in landscape (23) and 12 pt in
+  /// portrait (38). Options are 94 pt apart in landscape and 121 pt in portrait.
+  static const panelGutter = BiliMetrics.gutter;
+  static const panelTop = 7.0;
+  static const portraitPanelTop = 12.0;
+  static const rowHeight = 54.0;
+  static const labelWidth = 64.0;
+  static const labelFont = 12.0;
+  static double get labelSpacing => BiliFonts.nudged ? -0.4 : 0;
+  static const darkSecondary = Color(0xFF95999F);
+  static const lightSecondary = Color(0xFF9499A0);
+  static const option = 94.0;
+  static const portraitOption = 121.0;
+  static const optionHeight = 44.0;
+  static const optionFont = 13.0;
+  static const optionIconLead = 1.5;
+  static const optionIconWidth = 21.1;
+  static const optionIconHeight = 17.1;
+  static const optionIconRadius = 5.5;
+  static const optionIconStroke = 1.6;
+  static const optionGap = 6.8;
+  static const sizeGlyphStroke = 1.6;
+  static const smallSizeGlyphStroke = 1.4;
+  static const modeDot = 0.9;
+  static const modeStroke = 1.5;
+
+  /// 弹幕颜色: 26×22 swatches in a ring, one row of 46 pt cells in landscape starting 13 pt into the label column; two
+  /// rows 44 pt apart of 49.67 pt cells in portrait, seven then six, starting 14.8 pt into it (23, 38).
+  static const swatchCell = 46.0;
+  static const swatchLead = -13.0;
+  static const portraitSwatchCell = 49.67;
+  static const portraitSwatchLead = -14.83;
+  static const portraitSwatchesPerRow = 7;
+  static const secondSwatchRow = 34.0;
+  static const swatchWidth = 26.0;
+  static const swatchHeight = 22.0;
+  static const swatchRadius = 7.0;
+  static const swatchFillRadius = 5.0;
+  static const swatchFillInset = 2.2;
+  static const swatchRingWidth = 1.4;
+  static const lightSwatchRingWidth = 1.1;
+  static const darkSwatchRing = Color(0xFF46494C);
+  static const lightSwatchRing = Color(0xFFC9CCD0);
+
+  /// The dark picker shows the colours dimmed, in the same order as `DanmakuStyle.colors` (23 against 38).
+  static const darkSwatches = [
+    Color(0xFFFFFFFF), Color(0xFFD42D25), Color(0xFFFCF150), Color(0xFF42954C), Color(0xFF469DE4), //
+    Color(0xFFCF2C7D), Color(0xFF9AC143), Color(0xFF102859), Color(0xFFE6AE48), Color(0xFF613C77), //
+    Color(0xFF91BEC9), Color(0xFF8E7A43),
+  ];
+
+  /// The 会员 chip: the gradient ring around a white middle, with its pink 会员 pill over the top right corner.
+  static const darkVipLeading = Color(0xFFD896D5);
+  static const darkVipTrailing = Color(0xFF7AB2E6);
+  static const lightVipLeading = Color(0xFFE492D9);
+  static const lightVipTrailing = Color(0xFF71B2EA);
+  static const vipInsetX = 5.0;
+  static const vipInsetY = 4.5;
+  static const vipInnerRadius = 4.0;
+  static const vipWidth = 24.6;
+  static const vipHeight = 20.7;
+  static const vipShift = 1.0;
+  static const vipBadgeWidth = 22.7;
+  static const vipBadgeHeight = 10.3;
+  static const vipBadgeFont = 7.0;
+  static const vipBadgeX = 8.7;
+  static const vipBadgeY = -9.2;
+  static const vipBadgeBorder = Color(0xD9FFFFFF);
+  static const vipBadgeBorderWidth = 0.5;
+
+  /// The tick on the chosen swatch: a pink 11 pt disc in a white ring over its bottom right corner.
+  static const tickSize = 11.0;
+  static const tickRing = 1.0;
+  static const tickOffset = 0.5;
+  static const tickStroke = 1.1;
+  static const tickColour = Color(0xFFFFFFFF);
+}
 
 /// 当前弹幕列表 (31, 32). Positions across the row count from the panel's content edge, [BiliMetrics.panelTrailing]
 /// before the safe area.

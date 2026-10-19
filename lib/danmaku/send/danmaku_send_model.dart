@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+
+import '../../video/player_prefs.dart';
 
 /// 弹幕字号.
 enum DanmakuSize {
@@ -31,11 +33,11 @@ final class DanmakuStyle {
     this.gradient = false,
   });
 
-  /// White, then the colours of the official picker in its order (23). The 会员 gradient chip sits between white and
-  /// red and is not a colour value.
+  /// White, then the colours of the official picker in its order, as its light picker shows them (38): the dark one
+  /// dims them (23). The 会员 gradient chip sits between white and red and is not a colour value.
   static const colors = [
-    0xFFFFFF, 0xD42D25, 0xFCF150, 0x42954C, 0x469DE4, 0xCF2C7D, //
-    0x9AC143, 0x0F2D6E, 0xE6AE48, 0x613C77, 0x91BEC9, 0x8E7A43,
+    0xFFFFFF, 0xE70012, 0xFEF102, 0x009843, 0x00A0EA, 0xE2027F, //
+    0x90C320, 0x002E72, 0xF0AB2A, 0x683A7B, 0x84C0CB, 0x927939,
   ];
 
   final DanmakuSize size;
@@ -70,21 +72,74 @@ final class DanmakuStyle {
 typedef DanmakuPost = Future<String?> Function(String text, DanmakuStyle style);
 
 /// The draft in the send bar: its text (100 characters at most), its style and whether it is going out.
-// Contracts stub: slice 5's send agent writes it.
 class DanmakuSendModel extends ChangeNotifier {
-  DanmakuSendModel(this._post);
+  DanmakuSendModel(this._post, {this._prefs});
 
   static const maxLength = 100;
 
   final DanmakuPost _post;
 
-  String text = '';
-  DanmakuStyle style = const DanmakuStyle();
+  /// Read when asked rather than kept: the app swaps in the loaded prefs at launch.
+  final PlayerPrefs? _prefs;
 
-  bool get sending => false;
+  String _text = '';
+  DanmakuStyle _style = const DanmakuStyle();
+  bool _sending = false;
+  bool _disposed = false;
+
+  PlayerPrefs get _shared => _prefs ?? PlayerPrefs.shared;
+
+  String get text => _text;
+
+  /// Cut to [maxLength] characters as the user sees them, so an emoji is never split.
+  set text(String value) {
+    final characters = value.characters;
+    final capped = characters.length > maxLength ? characters.take(maxLength).string : value;
+    if (capped == _text) return;
+    _text = capped;
+    notifyListeners();
+  }
+
+  DanmakuStyle get style => _style;
+
+  set style(DanmakuStyle value) {
+    if (value == _style) return;
+    _style = value;
+    notifyListeners();
+  }
+
+  bool get sending => _sending;
 
   bool get canSend => !sending && text.trim().isNotEmpty;
 
-  /// The message to show, or null once it went out (or there was nothing to send).
-  Future<String?> send() => _post(text, style);
+  /// A's red dot shows until A is first pressed, once for the app (BiliNative `danmaku.styleHintSeen`).
+  bool get styleHintSeen => _shared.danmakuStyleHintSeen;
+
+  void sawStyleHint() {
+    if (styleHintSeen) return;
+    _shared.danmakuStyleHintSeen = true;
+    notifyListeners();
+  }
+
+  /// The message to show, or null once it went out (or there was nothing to send). The text clears only once it went.
+  Future<String?> send() async {
+    final message = _text.trim();
+    if (message.isEmpty || _sending) return null;
+    _sending = true;
+    notifyListeners();
+    try {
+      final failure = await _post(message, _style);
+      if (failure == null) _text = '';
+      return failure;
+    } finally {
+      _sending = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 }
