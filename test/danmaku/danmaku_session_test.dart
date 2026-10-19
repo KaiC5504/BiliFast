@@ -28,7 +28,10 @@ class Rules extends BlockRuleStore {
   }
 
   @override
-  Future<void> refresh({bool force = false}) async => refreshes++;
+  Future<String?> refresh({bool force = false}) async {
+    refreshes++;
+    return null;
+  }
 }
 
 final class Rig {
