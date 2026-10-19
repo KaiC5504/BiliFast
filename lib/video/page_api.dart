@@ -77,6 +77,12 @@ abstract interface class PageApi {
   Future<void> likeDanmaku({required int cid, required int dmid, required bool on});
 
   Future<Map<int, DanmakuLikeStat>> danmakuLikes({required int cid, required List<int> dmids});
+
+  /// 历史记录, newest first; [after] continues from the previous page's cursor.
+  Future<HistoryPage> history({HistoryCursor? after});
+
+  /// Removes [item] from 历史记录.
+  Future<void> deleteHistory(HistoryItem item);
 }
 
 class ClientPageApi implements PageApi {
@@ -204,4 +210,10 @@ class ClientPageApi implements PageApi {
   @override
   Future<Map<int, DanmakuLikeStat>> danmakuLikes({required int cid, required List<int> dmids}) =>
       _client.danmakuLikes(cid: cid, dmids: dmids);
+
+  @override
+  Future<HistoryPage> history({HistoryCursor? after}) => _client.history(after: after);
+
+  @override
+  Future<void> deleteHistory(HistoryItem item) => throw UnimplementedError('slice 8: history');
 }

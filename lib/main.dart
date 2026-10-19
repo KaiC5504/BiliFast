@@ -14,6 +14,7 @@ import 'comments/emote_store.dart';
 import 'danmaku/danmaku_settings_store.dart';
 import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
+import 'devtools/log_files.dart';
 import 'devtools/log_forwarder.dart';
 import 'home/home_page.dart';
 import 'home/recent_store.dart';
@@ -29,6 +30,7 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   CrashLog.install();
   final logs = devToolsEnabled ? LogForwarder() : null;
+  final logFiles = LogFiles.platform();
   Logger.shared.info(LogCategory.app, 'launch', {
     'platform': Platform.operatingSystem,
     'os': Platform.operatingSystemVersion,
@@ -74,6 +76,7 @@ Future<void> main(List<String> args) async {
       fonts: fonts,
       pageApi: fakeAccount ? FakePageApi.demo() : null,
       danmakuSettings: danmakuSettings,
+      logFiles: logFiles,
       logs: logs,
     ),
     initialLink: _argument(args, '--play='),

@@ -2327,3 +2327,12 @@ abstract final class DanmakuListTheme {
     decoration: TextDecoration.none,
   );
 }
+
+/// 历史记录 (28).
+abstract final class HistoryTheme {}
+
+/// The login page and its bar.
+abstract final class LoginTheme {}
+
+/// 设置's sections beyond 字体, and its confirms.
+abstract final class SettingsTheme {}

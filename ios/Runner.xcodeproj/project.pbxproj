@@ -22,6 +22,7 @@
 		B1F0A5E12F0000000000B102 /* PasteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000B101 /* PasteControl.swift */; };
 		B1F0A5E12F0000000000C102 /* DeviceApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000C101 /* DeviceApi.g.swift */; };
 		B1F0A5E12F0000000000C104 /* DeviceChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000C103 /* DeviceChannel.swift */; };
+		B1F0A5E12F0000000000D102 /* WebCookies.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000D101 /* WebCookies.swift */; };
 		B1F0A5E12F0000000000C106 /* DeviceControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000C105 /* DeviceControls.swift */; };
 		B1F0A5E12F0000000000B104 /* LegacyDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000B103 /* LegacyDefaults.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
@@ -72,6 +73,7 @@
 		B1F0A5E12F0000000000B101 /* PasteControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteControl.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000C101 /* DeviceApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceApi.g.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000C103 /* DeviceChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceChannel.swift; sourceTree = "<group>"; };
+		B1F0A5E12F0000000000D101 /* WebCookies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebCookies.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000C105 /* DeviceControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceControls.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000B103 /* LegacyDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyDefaults.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
@@ -157,6 +159,7 @@
 				B1F0A5E12F0000000000B101 /* PasteControl.swift */,
 				B1F0A5E12F0000000000C101 /* DeviceApi.g.swift */,
 				B1F0A5E12F0000000000C103 /* DeviceChannel.swift */,
+				B1F0A5E12F0000000000D101 /* WebCookies.swift */,
 				B1F0A5E12F0000000000C105 /* DeviceControls.swift */,
 				B1F0A5E12F0000000000B103 /* LegacyDefaults.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
@@ -330,6 +333,7 @@
 				B1F0A5E12F0000000000B102 /* PasteControl.swift in Sources */,
 				B1F0A5E12F0000000000C102 /* DeviceApi.g.swift in Sources */,
 				B1F0A5E12F0000000000C104 /* DeviceChannel.swift in Sources */,
+				B1F0A5E12F0000000000D102 /* WebCookies.swift in Sources */,
 				B1F0A5E12F0000000000C106 /* DeviceControls.swift in Sources */,
 				B1F0A5E12F0000000000B104 /* LegacyDefaults.swift in Sources */,
 			);

@@ -421,6 +421,12 @@ class FakePageApi implements PageApi {
             for (final id in dmids) id: ?danmakuLikeStats[id],
           });
 
+  @override
+  Future<HistoryPage> history({HistoryCursor? after}) => throw UnimplementedError('slice 8: history');
+
+  @override
+  Future<void> deleteHistory(HistoryItem item) => throw UnimplementedError('slice 8: history');
+
   /// The comment with [rpid] wherever the fake holds it: the list, the pinned comment, a preview or a thread.
   Comment? _find(int rpid) {
     for (final comment in [?pinnedComment, ...commentList, for (final replies in threadReplies.values) ...replies]) {

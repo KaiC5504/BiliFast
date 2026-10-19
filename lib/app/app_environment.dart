@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 
 import '../account/cookie_persistence.dart';
 import '../account/keychain_store.dart';
+import '../account/web_cookies.dart';
 
 sealed class Account {
   const Account();
@@ -37,28 +38,47 @@ final class LoginExpired extends Account {
 /// iPhone the jar starts from the Swift app's keychain item, so the app opens logged in with no login screen;
 /// Windows has no keychain and runs logged out.
 class AppEnvironment extends ChangeNotifier {
-  AppEnvironment._({required this.cookies, required this.client, required this._persistence, required this._logger});
+  AppEnvironment._(
+      {required this.cookies,
+      required this.client,
+      required this._persistence,
+      required this._keychain,
+      required this.webCookies,
+      required this._logger});
 
-  /// `http`, `httpFactory` and `keychain` are for tests; the app passes none.
+  /// `http`, `httpFactory`, `keychain` and `webCookies` are for tests; the app passes none.
   static Future<AppEnvironment> load(
       {KeychainStore? keychain,
+      WebCookies? webCookies,
       HTTPTransport? http,
       HTTPTransport Function() httpFactory = platformHttpTransport,
       Logger? logger}) async {
     final log = logger ?? Logger.shared;
-    final persistence = CookiePersistence(_GuardedKeychain(keychain ?? KeychainStore.platform(), log));
+    final guarded = _GuardedKeychain(keychain ?? KeychainStore.platform(), log);
+    final persistence = CookiePersistence(guarded);
     final jar = CookieJar(await persistence.load());
     if (persistence.blocked) log.warn(LogCategory.app, 'keychain read failed, cookie writes held back');
     jar.onChange = (_) => unawaited(persistence.save(jar.all).catchError((Object error) {
           log.warn(LogCategory.app, 'cookie save failed', {'error': '$error'});
         }));
     final client = BiliClient(transport: http ?? httpTransportOrFallback(httpFactory, log), cookies: jar, logger: log);
-    return AppEnvironment._(cookies: jar, client: client, persistence: persistence, logger: log);
+    return AppEnvironment._(
+        cookies: jar,
+        client: client,
+        persistence: persistence,
+        keychain: guarded,
+        webCookies: webCookies ?? WebCookies.platform(),
+        logger: log);
   }
 
   final CookieJar cookies;
   final BiliClient client;
   final CookiePersistence _persistence;
+  // ignore: unused_field
+  final KeychainStore _keychain;
+
+  /// The login web view's store, read by the login page and cleared on logout.
+  final WebCookies webCookies;
   final Logger _logger;
   Account _account = const AccountUnknown();
   int? _mid;
@@ -105,6 +125,14 @@ class AppEnvironment extends ChangeNotifier {
   }
 
   Future<bool>? _checking;
+
+  /// The login page's cookies once Bilibili set SESSDATA (BiliNative `AppEnvironment.didLogin`): they join the jar
+  /// and the keychain, and the account is checked again, up to 3 times. Completes with whether it is now logged in.
+  Future<bool> didLogin(Map<String, String> cookies) => throw UnimplementedError('slice 8: login');
+
+  /// 退出登录 (BiliNative `AppEnvironment.logout`): empties the jar, deletes the keychain cookies and app token, and
+  /// clears the web view's data.
+  Future<void> logout() => throw UnimplementedError('slice 8: login');
 
   Future<bool> _checkAccount() async {
     await _retryBlockedKeychainLoad();
