@@ -57,7 +57,7 @@ final class DanmakuOnScreen {
 final class _Item {
   _Item({
     required this.sprite,
-    required this.text,
+    required this.danmaku,
     required this.kind,
     required this.reverse,
     required this.start,
@@ -68,7 +68,7 @@ final class _Item {
   });
 
   final DanmakuSprite sprite;
-  final String text;
+  final DisplayDanmaku danmaku;
   final LaneKind kind;
   final bool reverse;
 
@@ -84,6 +84,8 @@ final class _Item {
 
   /// Left the screen before a re-lay; kept, undrawn, only while the re-lay places the danmaku that met it.
   final bool gone;
+
+  String get text => danmaku.text;
 }
 
 /// The clock scrolling danmaku move by. It runs with the video at [reference]'s pace over the current crossing
@@ -141,7 +143,9 @@ final class _Travel {
 /// The player's own clock drives it, so pausing, the rate, stalls and seeks carry over without any events.
 ///
 /// The 弹幕设置 values apply mid-flight, where Swift clears the screen: 弹幕速度 bends the travel clock, and
-/// 显示区域 and 字体大小 re-lay what is showing at once, from the danmaku of the last moments.
+/// 显示区域 and 字体大小 re-lay what is showing at once, from the danmaku of the last moments. A bigger 字体大小 can
+/// leave fewer lanes than were showing; what does not fit flies on rows past the area until it leaves, rather than
+/// vanishing, and nothing that was not showing appears.
 final class DanmakuScene extends ChangeNotifier {
   DanmakuScene({DanmakuSprites? sprites}) : sprites = sprites ?? DanmakuSprites();
 
@@ -162,7 +166,16 @@ final class DanmakuScene extends ChangeNotifier {
 
   /// Handed out by the timeline, in time order, and not placed yet.
   final List<DisplayDanmaku> _backlog = [];
-  Object? _geometry;
+
+  /// While a 字体大小 re-lay runs: the danmaku that were showing and have no place yet.
+  Set<DisplayDanmaku>? _keep;
+
+  /// ...and those waiting in the backlog then, which may still take a lane if one is free. Anything else from
+  /// before [_shownUntil] had its chance and was dropped.
+  Set<DisplayDanmaku> _waiting = const {};
+  double _shownUntil = 0;
+
+  (Size, bool, double, double)? _geometry;
   int _lanes = 0;
   double _laneHeight = 0;
   double _basePointSize = BiliMetrics.danmakuFont;
@@ -170,7 +183,7 @@ final class DanmakuScene extends ChangeNotifier {
   DanmakuTimeline? _timeline;
 
   /// Danmaku from a seek are still being laid out, so frames are needed even while the clock stands still.
-  bool get catchingUp => _backlog.isNotEmpty;
+  bool get catchingUp => _backlog.isNotEmpty || _keep != null;
 
   List<DanmakuOnScreen> get visible => [
     for (final item in _items)
@@ -223,8 +236,11 @@ final class DanmakuScene extends ChangeNotifier {
       _travel.bend(time, options.scrollDuration);
     }
     var relay = jumped;
+    var scaled = false;
     final geometry = (size, options.fullScreen, options.area, options.scale);
     if (geometry != _geometry) {
+      final old = _geometry;
+      scaled = !jumped && old != null && old.$1 == size && old.$2 == options.fullScreen && old.$3 == options.area;
       _geometry = geometry;
       _configure(options);
       relay = true;
@@ -232,12 +248,24 @@ final class DanmakuScene extends ChangeNotifier {
     final ms = (time * 1000).floor();
     final hadItems = _items.isNotEmpty;
     if (relay) {
+      if (scaled) {
+        // One already running keeps its own idea of what was waiting.
+        if (_keep == null) {
+          _waiting = Set<DisplayDanmaku>.identity()..addAll(_backlog);
+          _shownUntil = last ?? time;
+        }
+        _keep = Set<DisplayDanmaku>.identity()
+          ..addAll(_keep ?? const [])
+          ..addAll([for (final item in _items) if (!item.gone) item.danmaku]);
+      } else {
+        _keep = null;
+      }
       _clear();
       _backlog.addAll(_catchUp(timeline, ms));
     } else {
       _backlog.addAll(timeline.advance(ms));
     }
-    if (!relay && _backlog.isEmpty && time == _lastTime) return;
+    if (!relay && !catchingUp && time == _lastTime) return;
     _lastTime = time;
     _placeBacklog(time);
     _move(time);
@@ -249,6 +277,7 @@ final class DanmakuScene extends ChangeNotifier {
   void reset() {
     _lastTime = null;
     _backlog.clear();
+    _keep = null;
     if (_items.isEmpty) return;
     _items.clear();
     notifyListeners();
@@ -314,25 +343,49 @@ final class DanmakuScene extends ChangeNotifier {
       placed += 1;
     }
     _backlog.removeRange(0, placed);
+    final keep = _keep;
+    if (keep == null || _backlog.isNotEmpty) return;
+    final left = keep.toList()..sort((a, b) => a.elem.progressMs.compareTo(b.elem.progressMs));
+    for (final danmaku in left) {
+      if (sprites.layouts >= budget) break;
+      _overflow(danmaku, time);
+      keep.remove(danmaku);
+    }
+    if (keep.isEmpty) _keep = null;
   }
+
+  static LaneKind _kindOf(DanmakuElem elem) => switch (elem.mode) {
+    4 => LaneKind.bottom,
+    5 => LaneKind.top,
+    _ => LaneKind.scroll,
+  };
+
+  DanmakuSprite _spriteOf(DisplayDanmaku danmaku) {
+    final fontSize = danmaku.elem.fontSize > 0 ? danmaku.elem.fontSize : 25;
+    return sprites.of(danmaku, pointSize: _basePointSize * fontSize / 25);
+  }
+
+  bool _goneBy(double time, {required LaneKind kind, required double start, required double travel}) =>
+      kind == LaneKind.scroll ? _travel.at(time) - travel >= _travel.reference : time - start >= staticDuration;
 
   void _place(DisplayDanmaku danmaku, double time) {
     final elem = danmaku.elem;
     final start = elem.progressMs / 1000;
-    final kind = switch (elem.mode) {
-      4 => LaneKind.bottom,
-      5 => LaneKind.top,
-      _ => LaneKind.scroll,
-    };
+    final kind = _kindOf(elem);
     final travel = _travel.at(start);
-    final gone = kind == LaneKind.scroll
-        ? _travel.at(time) - travel >= _travel.reference
-        : time - start >= staticDuration;
+    final gone = _goneBy(time, kind: kind, start: start, travel: travel);
+    final keep = _keep;
+    if (keep != null) {
+      if (gone) {
+        keep.remove(danmaku);
+      } else if (start <= _shownUntil && !keep.contains(danmaku) && !_waiting.contains(danmaku)) {
+        return;
+      }
+    }
     final at = kind == LaneKind.scroll ? travel : start;
     // Most of a dense catch-up finds every lane taken; those are dropped before their text is laid out.
     if (!_layout.hasRoom(kind, at: at)) return;
-    final fontSize = elem.fontSize > 0 ? elem.fontSize : 25;
-    final sprite = sprites.of(danmaku, pointSize: _basePointSize * fontSize / 25);
+    final sprite = _spriteOf(danmaku);
     final width = sprite.size.width;
     int? placed;
     if (kind == LaneKind.scroll) {
@@ -353,10 +406,11 @@ final class DanmakuScene extends ChangeNotifier {
     // A scrolling one that has left needs nothing more than its lane; a static one stays, undrawn, for the
     // scrolling ones placed after it to keep clear of.
     if (placed == null || (gone && kind == LaneKind.scroll)) return;
+    keep?.remove(danmaku);
     final top = kind == LaneKind.bottom ? size.height - (_lanes - placed) * _laneHeight : placed * _laneHeight;
     _items.add(_Item(
       sprite: sprite,
-      text: danmaku.text,
+      danmaku: danmaku,
       kind: kind,
       reverse: elem.mode == 6,
       start: start,
@@ -366,6 +420,70 @@ final class DanmakuScene extends ChangeNotifier {
       gone: gone,
     ));
   }
+
+  /// A danmaku that was showing before 字体大小 grew and has no lane now. It takes the first row past the area,
+  /// counted from its own edge, where it meets nothing until it leaves; then a free row inside the area; on a
+  /// screen too full for either, the row where it meets the fewest. LaneLayout never hands out the rows past the
+  /// area, so what enters later keeps clear of it.
+  void _overflow(DisplayDanmaku danmaku, double time) {
+    final elem = danmaku.elem;
+    final start = elem.progressMs / 1000;
+    final kind = _kindOf(elem);
+    final travel = _travel.at(start);
+    if (_goneBy(time, kind: kind, start: start, travel: travel)) return;
+    final sprite = _spriteOf(danmaku);
+    final now = _travel.at(time);
+    final rows = math.max((size.height / _laneHeight).floor(), 1);
+    _Item? best;
+    var fewest = 0;
+    for (final row in [for (var r = _lanes; r < rows; r++) r, for (var r = 0; r < math.min(_lanes, rows); r++) r]) {
+      final top = kind == LaneKind.bottom ? size.height - (row + 1) * _laneHeight : row * _laneHeight;
+      final candidate = _Item(
+        sprite: sprite,
+        danmaku: danmaku,
+        kind: kind,
+        reverse: elem.mode == 6,
+        start: start,
+        travel: travel,
+        y: top + _laneHeight / 2,
+        x: (size.width - sprite.size.width) / 2,
+      );
+      var meets = 0;
+      for (final item in _items) {
+        if (!item.gone && _meet(candidate, item, now)) meets += 1;
+      }
+      if (best == null || meets < fewest) {
+        best = candidate;
+        fewest = meets;
+      }
+      if (meets == 0) break;
+    }
+    if (best != null) _items.add(best);
+  }
+
+  /// Whether two danmaku on overlapping rows touch between travel time [now] and when the first of them leaves.
+  /// Each moves at a steady pace, so apart in the same order at both ends means apart throughout.
+  bool _meet(_Item a, _Item b, double now) {
+    if ((a.y - b.y).abs() >= (a.sprite.size.height + b.sprite.size.height) / 2) return false;
+    final end = math.max(math.min(_endOf(a), _endOf(b)), now);
+    if (_gap(a, b, now) > 0) return _gap(a, b, end) <= 0;
+    if (_gap(b, a, now) > 0) return _gap(b, a, end) <= 0;
+    return true;
+  }
+
+  /// How far [b]'s left edge is right of [a]'s right edge at travel time [at].
+  double _gap(_Item a, _Item b, double at) => _xAt(b, at) - (_xAt(a, at) + a.sprite.size.width);
+
+  double _xAt(_Item item, double at) {
+    final width = item.sprite.size.width;
+    if (item.kind != LaneKind.scroll) return (size.width - width) / 2;
+    final travelled = (at - item.travel) / _travel.reference * (size.width + width);
+    return item.reverse ? travelled - width : size.width - travelled;
+  }
+
+  /// When it leaves, on the travel clock.
+  double _endOf(_Item item) =>
+      item.kind == LaneKind.scroll ? item.travel + _travel.reference : _travel.at(item.start + staticDuration);
 
   /// Whether a scrolling danmaku entering at [travel] on row [y] reaches a centred top or bottom one on that row
   /// before it disappears.

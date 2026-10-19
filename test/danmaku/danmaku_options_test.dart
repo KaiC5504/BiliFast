@@ -134,7 +134,7 @@ void main() {
 
     rig.store.update(rig.store.value.copyWith(opacity: 0.4));
     await tester.pump();
-    expect(painter(), isNot(same(first)));
+    expect(painter(), same(first), reason: 'only the Opacity above it rebuilds');
     expect(tester.widget<Opacity>(inLayer(Opacity)).opacity, 0.4);
   });
 
@@ -147,15 +147,19 @@ void main() {
     await rig.run(tester, 0.05);
     final before = rig.rects(tester);
     final layouts = rig.sprites.layouts;
+    final opacity = tester.renderObject<RenderOpacity>(
+      find.descendant(of: find.byType(DanmakuLayer), matching: find.byType(Opacity)),
+    );
+    final picture = opacity.debugLayer!.firstChild;
+    expect(picture, isA<PictureLayer>());
 
     rig.store.update(rig.store.value.copyWith(opacity: 0.3));
     await rig.run(tester, 0.1);
     expect(rig.rects(tester), before);
     expect(rig.sprites.layouts, layouts);
-    final opacity = tester.renderObject<RenderOpacity>(
-      find.descendant(of: find.byType(DanmakuLayer), matching: find.byType(Opacity)),
-    );
     expect(opacity.opacity, 0.3);
+    expect((opacity.debugLayer! as OpacityLayer).alpha, (0.3 * 255).round());
+    expect(opacity.debugLayer!.firstChild, same(picture), reason: 'not repainted');
   });
 
   testWidgets('弹幕速度 changes the pace of what is flying from where it is, without a jump', (tester) async {
@@ -239,6 +243,65 @@ void main() {
       }
     }
     expect(rig.state(tester).scene.laneHeight, closeTo(22 * 1.5 * BiliMetrics.danmakuLaneHeight, 2));
+  });
+
+  group('a bigger 字体大小 keeps everything that was showing', () {
+    /// Every lane busy: mixed lengths every [every] ms, with top and bottom ones among them.
+    void crowd(Rig rig, int every) => rig.timeline.add([
+      for (var i = 0; i < 10000 ~/ every; i++)
+        item('${'密集' * (1 + i % 5)}$i', 250 + i * every, mode: i % 9 == 4 ? 5 : (i % 9 == 7 ? 4 : 1)),
+    ]);
+
+    Future<void> grow(WidgetTester tester, Rig rig, {
+      required double area,
+      required double scale,
+      required int every,
+    }) async {
+      rig.store.update(rig.store.value.copyWith(area: area));
+      crowd(rig, every);
+      await rig.mount(tester);
+      rig.play(0);
+      await rig.run(tester, 6);
+      rig.pause();
+      await rig.run(tester, 0.05);
+      final before = rig.visible(tester).map((shown) => shown.text).toSet();
+      expect(before.length, greaterThan(15));
+
+      rig.store.update(rig.store.value.copyWith(scale: scale));
+      await rig.run(tester, 0.5);
+      final after = rig.visible(tester);
+      expect(after.map((shown) => shown.text).toSet(), before);
+      expect(after, hasLength(before.length));
+      for (final shown in after) {
+        expect(shown.rect.top >= 0 && shown.rect.bottom <= Rig.size.height, isTrue, reason: '$shown is on screen');
+      }
+      expect(rig.state(tester).ticking, isFalse, reason: 'paused, the ticker sleeps again once re-laid');
+    }
+
+    testWidgets('paused, at 1.25 the ones without a lane fly past the area', (tester) async {
+      final rig = Rig();
+      await grow(tester, rig, area: 0.5, scale: 1.25, every: 200);
+      final area = Rig.size.height * 0.5;
+      final lanes = (area / rig.state(tester).scene.laneHeight).floor();
+      final past = rig.visible(tester).where((shown) => shown.kind == LaneKind.scroll && shown.rect.bottom > area);
+      expect(past, isNotEmpty, reason: 'more were showing than $lanes lanes hold');
+      for (final a in past) {
+        for (final b in past) {
+          if (!identical(a, b)) expect(a.rect.overlaps(b.rect), isFalse, reason: '$a and $b');
+        }
+      }
+
+      // Once the old ones have left, new ones keep to the area again.
+      rig.timeline.add([for (var i = 0; i < 20; i++) item('之后$i', 12000 + i * 400)]);
+      rig.play(6.05);
+      await rig.run(tester, 9);
+      expect(rig.visible(tester), isNotEmpty);
+      expect(rig.visible(tester).every((shown) => shown.rect.bottom <= area + 0.01), isTrue);
+    });
+
+    testWidgets('a screen too full for rows of their own still keeps them all', (tester) async {
+      await grow(tester, Rig(), area: 1, scale: 2, every: 125);
+    });
   });
 
   testWidgets('the page\'s player feeds its danmaku the 弹幕设置 store, for the presentation it is in', (tester) async {
