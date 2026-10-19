@@ -57,11 +57,6 @@ class AppPlayback with WidgetsBindingObserver {
   final bool muted;
   final Logger _logger;
   late final StreamSubscription<bool> _network;
-  Future<PlaybackController>? _starting;
-  PlaybackController? _ready;
-
-  /// The controller [obtain] started, once it has.
-  PlaybackController? get ready => _ready;
 
   final Set<PlaybackController> _pages = {};
 
@@ -90,27 +85,6 @@ class AppPlayback with WidgetsBindingObserver {
   /// Page controllers made and not yet released, for the leak checks.
   int get live => _pages.length;
 
-  /// The one controller pages shared before each made its own: started on first use and never released. After a
-  /// failed start, the next call starts it again (a page's 重试).
-  Future<PlaybackController> obtain() {
-    final starting = _starting;
-    if (starting != null) return starting;
-    final started = _start().then(
-      (controller) async {
-        _ready = controller;
-        await _muteIfAsked(controller);
-        return controller;
-      },
-      onError: (Object error, StackTrace stack) {
-        CrashLog.report(error, stack, source: 'player start', logger: _logger);
-        _starting = null;
-        Error.throwWithStackTrace(error, stack);
-      },
-    );
-    _starting = started;
-    return started;
-  }
-
   Future<void> _muteIfAsked(PlaybackController controller) async {
     if (!muted) return;
     try {
@@ -126,8 +100,6 @@ class AppPlayback with WidgetsBindingObserver {
   /// 设置's 重置编码记忆: codecs the player refused are tried again, whether a page is open or not.
   void resetCodecMemory() => codecMemory?.reset();
 
-  Set<PlaybackController> get _controllers => {?_ready, ..._pages};
-
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_network.cancel());
@@ -139,7 +111,7 @@ class AppPlayback with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     onResumed?.call();
-    for (final controller in _controllers) {
+    for (final controller in List.of(_pages)) {
       unawaited(controller.appResumed());
     }
   }
@@ -148,7 +120,7 @@ class AppPlayback with WidgetsBindingObserver {
   @override
   void didHaveMemoryPressure() {
     engine?.dropCache();
-    for (final controller in _controllers) {
+    for (final controller in List.of(_pages)) {
       controller.memoryPressure();
     }
   }

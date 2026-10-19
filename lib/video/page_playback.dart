@@ -255,8 +255,6 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     if (!_covered || !(_session?.readout.wantsPlay ?? false)) return;
     _resumeOnShow = true;
     _quietly(_controller!.player.pause, 'pause');
-    // The controller turns auto picture in picture on at its first play.
-    _setAutoPictureInPicture(false);
   }
 
   /// Shown again after the page above left. [resuming] is the keeper's answer: false while another page's video is
@@ -278,11 +276,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     }
   }
 
-  void _setAutoPictureInPicture(bool on) {
-    final player = _controller?.player;
-    if (player == null || !player.capabilities.pictureInPicture) return;
-    _quietly(() => player.setAutoPictureInPicture(on), 'auto pip');
-  }
+  void _setAutoPictureInPicture(bool on) => _controller?.setAutoPictureInPicture(on);
 
   void _controllerChanged() {
     final controller = _controller;

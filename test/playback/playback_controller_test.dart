@@ -403,6 +403,28 @@ void main() {
     controller.dispose();
   });
 
+  test('a page covered before its first play keeps auto picture in picture off until it is shown', () async {
+    final controller = make();
+    await controller.open(bv);
+    controller.setAutoPictureInPicture(false);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    await settle();
+    expect(player.calls.where((call) => call.startsWith('pip auto')), ['pip auto false']);
+    controller.setAutoPictureInPicture(true);
+    await settle();
+    expect(player.calls.where((call) => call.startsWith('pip auto')), ['pip auto false'],
+        reason: 'the player hears it at the next play');
+    player.emit(const StatusChanged(PlayerStatus.paused));
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    await settle();
+    expect(player.calls.where((call) => call.startsWith('pip auto')), ['pip auto false', 'pip auto true']);
+    controller.setAutoPictureInPicture(false);
+    controller.setAutoPictureInPicture(true);
+    await settle();
+    expect(player.calls.where((call) => call.startsWith('pip auto')).skip(2), ['pip auto false', 'pip auto true']);
+    controller.dispose();
+  });
+
   test('the playhead fetches the danmaku segment of the playing part', () async {
     final controller = make();
     await controller.open(bv);

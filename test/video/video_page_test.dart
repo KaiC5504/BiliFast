@@ -1109,13 +1109,14 @@ void main() {
       await frames(tester, 5);
       expect(firstPlayer.loaded?.autoplay, isTrue, reason: 'the load itself is the controller\'s');
       firstPlayer.calls.clear();
-      // A player that starts anyway is paused again at once, and the auto picture in picture the controller turns on at
-      // its first play goes off again.
+      // A player that starts anyway is paused again at once, and gets no auto picture in picture while covered.
       firstPlayer.emit(const StatusChanged(PlayerStatus.playing));
-      expect(firstPlayer.calls, ['pip auto true', 'pause', 'pip auto false']);
+      expect(firstPlayer.calls, ['pause']);
       firstPlayer.calls.clear();
       await back(tester);
-      expect(firstPlayer.calls, ['pip auto true', 'play']);
+      expect(firstPlayer.calls, ['play']);
+      firstPlayer.emit(const StatusChanged(PlayerStatus.playing));
+      expect(firstPlayer.calls, ['play', 'pip auto true'], reason: 'its first play shown turns it on');
       await back(tester);
     });
 

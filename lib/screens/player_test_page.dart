@@ -73,7 +73,6 @@ class PlayerTestPage extends StatefulWidget {
     this.stageBuilder = playerStage,
     this.initialLink,
     this.speedTestHooks = appSpeedTestHooks,
-    this.ownsController = true,
     this.releasePlayback,
     this.shareFile = shareFileThroughSystem,
     this.prefs,
@@ -90,13 +89,8 @@ class PlayerTestPage extends StatefulWidget {
   final String? initialLink;
   final SpeedTestHooks speedTestHooks;
 
-  /// False when the controller is shared (AppPlayback.obtain): leaving never disposes it, and closes the
-  /// video only if no other page has opened one since this page's last open (its speed test's included). The app
-  /// then hears lifecycle and memory events for it.
-  final bool ownsController;
-
   /// Takes the controller back when the page leaves (the app's AppPlayback.release, which also hears lifecycle and
-  /// memory events for it); [ownsController] then means nothing.
+  /// memory events for it); without it the page disposes the controller itself.
   final void Function(PlaybackController controller)? releasePlayback;
 
   /// Tests pass their own so nothing reaches the platform.
@@ -123,13 +117,10 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   bool _danmakuEnabled = true;
   bool _exporting = false;
 
-  /// The controller's open count after this page's last open; a later one means another page has the player.
-  int? _open;
-
   PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
 
   /// The page owns its controller and nothing else hears the app's events for it.
-  bool get _standalone => widget.ownsController && widget.releasePlayback == null;
+  bool get _standalone => widget.releasePlayback == null;
 
   /// PlayerDevice.platform gives the rotation a host, and so turns to take over, only on iOS.
   static bool get _canTakeOverTurns => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -141,13 +132,12 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
       _lifecycle = AppLifecycleListener(onResume: () => unawaited(_controller?.appResumed()));
       WidgetsBinding.instance.addObserver(this);
     }
-    final owns = widget.ownsController;
     final release = widget.releasePlayback;
     widget.startPlayback().then((controller) {
       if (!mounted) {
         if (release != null) {
           release(controller);
-        } else if (owns) {
+        } else {
           controller.dispose();
         }
         return;
@@ -156,9 +146,8 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
         _controller = controller;
         if (widget.logs != null) {
           _speedTest = SpeedTestRunner(
-            target: ControllerTarget(controller, opened: () => _open = controller.opens),
+            target: ControllerTarget(controller),
             hooks: widget.speedTestHooks,
-            sharedTarget: !owns && release == null,
           );
         }
       });
@@ -185,14 +174,8 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     final release = widget.releasePlayback;
     if (release != null) {
       if (controller != null) release(controller);
-    } else if (widget.ownsController) {
+    } else {
       controller?.dispose();
-    } else if (controller != null && _open != null) {
-      final open = _open;
-      // close() notifies the controller's listeners, which can't happen while this tree is torn down.
-      scheduleMicrotask(() {
-        if (controller.opens == open) controller.close();
-      });
     }
     _link.dispose();
     _testLinks.dispose();
@@ -219,7 +202,6 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
 
   void _openLink(PlaybackController controller, String text) {
     unawaited(controller.open(text));
-    _open = controller.opens;
   }
 
   /// From the next turn on; the controller logs a host that fails.

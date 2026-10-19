@@ -243,9 +243,6 @@ void main() {
     final b = await playback.create();
     expect(a.player.muted, isTrue);
     expect(b.player.muted, isTrue);
-    final obtained = await playback.obtain();
-    addTearDown(obtained.dispose);
-    expect(obtained.player.muted, isTrue);
   });
 
   testWidgets('设置\'s node and codec memory changes need no page open', (tester) async {
@@ -266,7 +263,7 @@ void main() {
     expect(playback.live, 0);
   });
 
-  testWidgets("after a failed start the next obtain starts the player again, as a page's 重试 does", (tester) async {
+  testWidgets("after a failed start the next create starts a player again, as a page's 重试 does", (tester) async {
     await loadEnvironment();
     var failing = true;
     final playback = AppPlayback(() async {
@@ -274,14 +271,13 @@ void main() {
       return startController();
     });
     addTearDown(playback.dispose);
-    await expectLater(playback.obtain(), throwsStateError);
-    expect(playback.ready, isNull);
+    await expectLater(playback.create(), throwsStateError);
+    expect(playback.live, 0);
     failing = false;
-    final controller = await playback.obtain();
-    addTearDown(controller.dispose);
-    expect(playback.ready, same(controller));
-    expect(await playback.obtain(), same(controller));
-    expect(players, hasLength(1), reason: 'a started player is not started again');
+    final controller = await playback.create();
+    expect(playback.live, 1);
+    playback.release(controller);
+    expect(playback.live, 0);
   });
 
   testWidgets('coming back re-checks an account the launch could not confirm, and only then', (tester) async {

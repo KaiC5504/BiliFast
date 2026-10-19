@@ -279,6 +279,9 @@ class PlaybackController extends ChangeNotifier {
   bool _firstFrameTimed = true;
   bool _loggedPlayUrl = false;
   bool _autoPipSet = false;
+
+  /// Off while the page is covered: auto picture in picture belongs to the page on top.
+  bool _autoPipWanted = true;
   bool _seekPrecise = true;
   double _startedAtMs = 0;
 
@@ -659,6 +662,18 @@ class PlaybackController extends ChangeNotifier {
   Future<void> setRestorable(bool restorable) async {
     if (!player.capabilities.pictureInPicture) return;
     await player.setRestorable(restorable);
+  }
+
+  /// Whether the small window starts by itself when the app leaves while this plays. It is first turned on at the
+  /// first play, so a page covered before then never gets it.
+  void setAutoPictureInPicture(bool on) {
+    _autoPipWanted = on;
+    if (!player.capabilities.pictureInPicture) return;
+    // Before the first play the player hasn't been told at all; that play tells it.
+    if (!on || _autoPipSet) {
+      _autoPipSet = on || _autoPipSet;
+      _quietly(() => player.setAutoPictureInPicture(on), 'auto pip');
+    }
   }
 
   /// The small window's restore button was tapped.
@@ -1416,7 +1431,7 @@ class PlaybackController extends ChangeNotifier {
         }
         final seekMs = _seekTimer.playing(atMs: now);
         if (seekMs != null) _seekResumed(seekMs, 'status');
-        if (!_autoPipSet && player.capabilities.pictureInPicture) {
+        if (!_autoPipSet && _autoPipWanted && player.capabilities.pictureInPicture) {
           _autoPipSet = true;
           _quietly(() => player.setAutoPictureInPicture(true), 'auto pip');
         }
