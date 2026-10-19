@@ -1,6 +1,8 @@
 import 'dart:ui' as ui;
 
+import 'package:bili_core/api.dart' show CommentMember;
 import 'package:bilifast/comments/comment_badges.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
@@ -66,6 +68,25 @@ void main() {
       final at = await _draw(tester, LevelBadge(level: level));
       expect(at(const Offset(0.6, 8.5)), CommentRowTheme.levels[level], reason: 'LV$level fill');
       expect(at(const Offset(1.3 * 28 / 27 + 0.5, 5)), CommentRowTheme.levelInk, reason: 'LV$level L');
+    }
+  });
+
+  test('LV5 and LV6 take the fills sampled on 10 and 13', () {
+    expect(CommentRowTheme.levels[5], const Color(0xFFDF6729));
+    expect(CommentRowTheme.levels[6], const Color(0xFFE3524E));
+  });
+
+  testWidgets('an avatar without a face, or one still loading, is Bilibili\'s default', (tester) async {
+    for (final face in ['', 'https://i0.hdslb.com/bfs/face/a.jpg']) {
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: CommentAvatar(member: CommentMember(mid: 1, name: 'a', face: face)),
+          ),
+        ),
+      );
+      expect(find.byType(DefaultAvatar), findsOneWidget, reason: face);
     }
   });
 

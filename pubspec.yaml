@@ -37,6 +37,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/paycoins/
+    - assets/images/noface.jpeg
   fonts:
     - family: MiSans
       fonts:

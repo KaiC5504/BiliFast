@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/intro/uploader_row.dart';
 import 'package:flutter/rendering.dart';
@@ -7,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_video_actions.dart';
 
-/// No face addresses, so the avatars stay grey and nothing is fetched.
+/// No face addresses, so the avatars are the default face and nothing is fetched.
 VideoDetail _detail({List<StaffMember> staff = const []}) => VideoDetail(
   bvid: 'BV1xx411c7mD',
   aid: 1,
@@ -233,6 +234,12 @@ void main() {
 
     await tester.tap(find.text('关注'));
     expect(actions.calls, ['tapFollow']);
+    expect(find.byType(DefaultAvatar), findsNWidgets(staff.length), reason: 'no faces');
+  });
+
+  testWidgets('an avatar without a face is Bilibili\'s default', (tester) async {
+    await _mount(tester, UploaderRow(detail: _detail(), card: _card()));
+    expect(find.byType(DefaultAvatar), findsOneWidget);
   });
 
   testWidgets('a lone staff member is just the uploader', (tester) async {

@@ -187,6 +187,25 @@ void main() {
       expect(find.text('评论区已关闭'), findsOneWidget);
     });
 
+    testWidgets('kept alive behind 简介, a new video waits until 评论 shows to load', (tester) async {
+      final first = FakeComments(loaded: false, loadingValue: true);
+      final second = FakeComments(loaded: false, loadingValue: true);
+      final replies = Replies();
+      Widget tab(FakeComments model, {required bool shown}) =>
+          TickerMode(enabled: shown, child: CommentsTab(model: model, callbacks: replies.callbacks));
+
+      await host(tester, tab(first, shown: false));
+      expect(first.calls, isEmpty);
+      await host(tester, tab(first, shown: true));
+      expect(first.calls, ['ensureLoaded']);
+
+      await host(tester, tab(first, shown: false));
+      await host(tester, tab(second, shown: false));
+      expect(second.calls, isEmpty, reason: '自动连播 while 简介 shows');
+      await host(tester, tab(second, shown: true));
+      expect(second.calls, ['ensureLoaded']);
+    });
+
     testWidgets('shows what the model has as it changes', (tester) async {
       final model = FakeComments(loaded: false, loadingValue: true);
       await show(tester, model);
@@ -335,6 +354,16 @@ void main() {
       expect(model.pages, 1);
     });
 
+    testWidgets('the server\'s reason shows over 加载失败，点击重试, and is read with it', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await show(tester, FakeComments(comments: [comment(1)], errorValue: '请求过于频繁，请稍后再试'));
+      final reason = tester.getRect(find.byKey(const ValueKey('comments-error')));
+      expect(find.text('请求过于频繁，请稍后再试'), findsOneWidget);
+      expect(reason.bottom, lessThan(tester.getRect(find.text('加载失败，点击重试', findRichText: true)).top));
+      expect(find.semantics.byLabel('请求过于频繁，请稍后再试，加载失败，点击重试'), findsOne);
+      semantics.dispose();
+    });
+
     testWidgets('a closed section shows its words in place of the list', (tester) async {
       final model = FakeComments(comments: [comment(1)], closedValue: 'UP主已关闭评论区');
       await show(tester, model, reserve: 200);
@@ -344,6 +373,7 @@ void main() {
       expect(find.byType(CommentListFooter), findsNothing);
       expect(tester.getTopLeft(find.byKey(const ValueKey('comments-closed'))).dy, 200);
       expect(model.pages, 0);
+      expect(find.byKey(const ValueKey('comment-bar')), findsNothing, reason: 'a post there can only fail');
     });
   });
 
@@ -471,7 +501,7 @@ void main() {
       await show(tester, model, replies: replies);
       tester.semantics.tap(find.semantics.byLabel(CommentWriteBar.placeholder));
       tester.semantics.tap(find.semantics.byLabel('表情'));
-      tester.semantics.tap(find.semantics.byLabel('加载失败，点击重试'));
+      tester.semantics.tap(find.semantics.byLabel('失败，加载失败，点击重试'));
       expect(replies.calls, [(const ReplyToVideo(), false), (const ReplyToVideo(), true)]);
       expect(model.pages, 1);
       semantics.dispose();

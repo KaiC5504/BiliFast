@@ -159,11 +159,19 @@ void main() {
   tearDown(() => primary.dispose());
 
   group('the header (13)', () {
-    testWidgets('评论详情 over a hairline, 40 tall where the tab row was', (tester) async {
+    testWidgets('评论详情 where the tab row was, over a 1 pt hairline at 40', (tester) async {
       await show(tester, FakeThread(loaded(isEnd: true)));
       final header = tester.getRect(find.byKey(const ValueKey('thread-header')));
       expect(header.top, threadTop);
-      expect(header.height, CommentListTheme.threadHeaderHeight);
+      expect(header.height, 41);
+      final decoration =
+          tester
+                  .widget<DecoratedBox>(
+                    find.descendant(of: find.byKey(const ValueKey('thread-header')), matching: find.byType(DecoratedBox)),
+                  )
+                  .decoration
+              as BoxDecoration;
+      expect((decoration.border! as Border).bottom.width, 1);
       final title = tester.getRect(find.text('评论详情'));
       expect(title.left, CommentListTheme.gutter);
       expect(title.center.dy, closeTo(header.center.dy, 0.01));
@@ -312,6 +320,7 @@ void main() {
       expect(model.pages, 1);
       await tester.pump();
       expect(find.text('加载失败，点击重试', findRichText: true), findsOneWidget);
+      expect(find.text('网络连接失败，请稍后再试'), findsOneWidget, reason: 'the reason over it');
 
       for (var i = 0; i < 3; i++) {
         await tester.drag(find.byType(CustomScrollView), const Offset(0, -200));

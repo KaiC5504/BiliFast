@@ -1292,17 +1292,20 @@ abstract final class CommentRowTheme {
   static const vipMarkInk = Color(0xFFFFFFFF);
   static const vipMarkRim = Color(0xFFFFFFFF);
 
-  /// The name's Chinese is centred 28.8 down, the LV badge 29.
-  static const nameCentre = 173 / 6;
-  static const nameLine = 18.0;
+  /// The name and the LV badge centre 28.8-30 down on 10 and 13, lower in the first row under a header than in the
+  /// rows after it; 29.5 is within 0.7 of each.
+  static const nameCentre = 29.5;
+
+  /// Short enough to end above the text's line at [textTop].
+  static const nameLine = 16.0;
   static const nameText = 13.0;
   static const name = BiliColors.secondaryText;
   static const vipName = Color(0xFFFB7299);
   static const badgeGap = 5.0;
   static const upGap = 4.0;
 
-  /// LV0 to LV6, 56 × 28 px: the LV block 1 pt shorter than the digit's. LV5 and LV6 are sampled on 13, the rest
-  /// follow Bilibili's level colours.
+  /// LV0 to LV6, 56 × 28 px: the LV block 1 pt shorter than the digit's. LV5 and LV6 are the fills' mode on 10 and
+  /// 13, the rest follow Bilibili's level colours.
   static const levelWidth = 56 / 3;
   static const levelHeight = 28 / 3;
   static const levels = [
@@ -1311,8 +1314,8 @@ abstract final class CommentRowTheme {
     Color(0xFF8BD29B),
     Color(0xFF7BCDEF),
     Color(0xFFFEBB8B),
-    Color(0xFFE46A2D),
-    Color(0xFFEB4E4D),
+    Color(0xFFDF6729),
+    Color(0xFFE3524E),
   ];
   static const levelInk = Color(0xFFFFFFFF);
   static const upFill = BiliColors.pink;
@@ -1354,8 +1357,8 @@ abstract final class CommentRowTheme {
   /// The meta line centres 16 below a picture's bottom.
   static const pictureGap = 4.0;
 
-  /// The meta line: time and place, 回复 8 after them, 👍 N with the count's end 73.7 from the right edge, 👎 centred
-  /// 49 from it and ⋮ 17.
+  /// The meta line: time and place, 回复 8 after them, 👍 N with the count's box ending 73 from the right edge (its ink
+  /// 73.7, as on 10), 👎 centred 49 from it and ⋮ 17.
   static const metaHeight = 24.0;
   static const metaText = 12.0;
   static const meta = Color(0xFFC9CCD0);
@@ -1363,7 +1366,7 @@ abstract final class CommentRowTheme {
   static const liked = BiliColors.pink;
   static const replyGap = 8.0;
   static const replyTrailing = 10.0;
-  static const likeTrailing = 221 / 3;
+  static const likeTrailing = 73.0;
   static const thumbInk = 14.0;
 
   /// 👎 sits 4 px lower than 👍.
@@ -1388,10 +1391,10 @@ abstract final class CommentRowTheme {
   static const upLikedGap = 3.0;
   static const upLiked = BiliColors.secondaryText;
 
-  /// The replies box: 20.3 below the meta line's centre, 54 from the left and 12 from the right, 8 round. 12's preview
-  /// lines are 23.5 apart, rounded to 24 as [textLine] is, the first centred 16.7 down; 共N条回复 centres in a 36 pt
-  /// slot at the bottom, which starts 55.2 down under two lines as on 12.
-  static const boxGap = 61 / 3 - metaHeight / 2;
+  /// The replies box: 19.8 below the meta text's centre on 10, which is 21.2 below the meta line's; 54 from the left
+  /// and 12 from the right, 8 round. 12's preview lines are 23.5 apart, rounded to 24 as [textLine] is, the first
+  /// centred 16.7 down; 共N条回复 centres in a 36 pt slot at the bottom, which starts 55.2 down under two lines as on 12.
+  static const boxGap = 127 / 6 - metaHeight / 2;
   static const boxLeading = 54.0;
   static const boxRadius = 8.0;
   static const box = BiliColors.softGrey;
@@ -1508,6 +1511,9 @@ abstract final class CommentListTheme {
   static const emptyPadding = 48.0;
   static const retryInk = BiliColors.secondaryText;
   static const retryAction = BiliColors.link;
+
+  /// The server's reason over 加载失败，点击重试, as the Swift app showed it.
+  static const retryGap = 6.0;
   static const spinnerRadius = 10.0;
 
   /// The section the uploader closed: a bubble over the server's words.
@@ -1532,9 +1538,9 @@ abstract final class CommentListTheme {
   static const faceStroke = 1.28;
   static const faceInk = BiliColors.secondaryText;
 
-  /// 评论详情's header over the thread, as tall as the tab row it covers, its hairline inside at the bottom (13).
-  static const threadHeaderHeight = 40.0;
-  static const threadHairline = 0.5;
+  /// 评论详情's header over the thread: 40 as the tab row it covers, then its 1 pt hairline (3 px at 239.7 on 13).
+  static const threadHeaderHeight = 41.0;
+  static const threadHairline = 1.0;
   static const threadTitleText = 15.0;
   static const threadTitleInk = BiliColors.text;
 
