@@ -103,6 +103,7 @@ void main() {
     expect(
         first.items[0],
         const HistoryItem(
+            aid: 90000001,
             bvid: 'BV1HA411a1aA',
             cid: 137650101,
             title: '历史视频一',
@@ -113,6 +114,7 @@ void main() {
             viewAt: 1760700000,
             device: 1,
             part: '第二集'));
+    expect(first.items[1].aid, 90000002, reason: 'without a kid, the aid comes from history.oid');
     expect(first.items[1].progress, -1);
     expect(first.items[1].part, isNull);
     expect(first.items.map((item) => item.device), [1, 2, 33]);
@@ -171,8 +173,21 @@ void main() {
     await expectLater(client.history(), throwsA(isA<BiliError>().having((error) => error.needsLogin, 'needsLogin', isTrue)));
   });
 
+  test('deleting a history row posts its archive kid with the csrf', () async {
+    const deletePath = '/x/v2/history/delete';
+    fakeHTTP.routes[deletePath] = (200, '{"code":0,"message":"0","ttl":1}');
+    await client.deleteHistory(aid: 90000001);
+    final request = fakeHTTP.requestsTo(deletePath).single;
+    expect(request.method, 'POST');
+    expect(formFields(fakeHTTP.bodyText(request)), {'kid': 'archive_90000001', 'jsonp': 'jsonp', 'csrf': 'T'});
+
+    fakeHTTP.routes[deletePath] = (200, '{"code":-111,"message":"csrf 校验失败","ttl":1}');
+    await expectLater(client.deleteHistory(aid: 1), throwsA(isA<BiliAPIError>().having((error) => error.code, 'code', -111)));
+  });
+
   test('device kind follows the dt code', () {
     HistoryDeviceKind kind(int dt) => HistoryItem(
+            aid: 1,
             bvid: 'BV1',
             cid: 0,
             title: '',

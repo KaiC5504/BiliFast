@@ -91,6 +91,7 @@ enum HistoryDeviceKind { phone, pc, padOrTV }
 
 final class HistoryItem {
   const HistoryItem({
+    required this.aid,
     required this.bvid,
     required this.cid,
     required this.title,
@@ -115,6 +116,8 @@ final class HistoryItem {
     }
     final part = history?.string('part');
     return HistoryItem(
+      // `kid` is the row's id for 删除; for a video it is the aid, as `history.oid` is.
+      aid: object.integer('kid') ?? history?.integer('oid') ?? 0,
       bvid: bvid,
       cid: history?.integer('cid') ?? 0,
       title: object.string('title') ?? '',
@@ -128,6 +131,7 @@ final class HistoryItem {
     );
   }
 
+  final int aid;
   final String bvid;
   final int cid;
   final String title;
@@ -155,6 +159,7 @@ final class HistoryItem {
   @override
   bool operator ==(Object other) =>
       other is HistoryItem &&
+      other.aid == aid &&
       other.bvid == bvid &&
       other.cid == cid &&
       other.title == title &&
@@ -167,7 +172,8 @@ final class HistoryItem {
       other.part == part;
 
   @override
-  int get hashCode => Object.hash(bvid, cid, title, cover, ownerName, progress, duration, viewAt, device, part);
+  int get hashCode =>
+      Object.hash(aid, bvid, cid, title, cover, ownerName, progress, duration, viewAt, device, part);
 }
 
 /// Where the next page of history starts: the last row's target id and view time.
