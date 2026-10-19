@@ -8,7 +8,8 @@ screen by screen.
 A personal project. Not affiliated with Bilibili.
 
 - `lib/`: the app.
-- `packages/bili_core/`: pure Dart: API client, logging, danmaku, app rules (and later the download engine).
+- `packages/bili_core/`: pure Dart: the API client, the download engine and its local HLS server, logging, danmaku,
+  app rules.
 - `docs/flutter-move-spec.md`: how and why the move happens.
 
 Build and test: see `CLAUDE.md`, "How to test". The BTR port keeps BTR's MIT notice.

@@ -2,7 +2,7 @@
 
 How this repo (`KaiC5504/BiliFast`) ships as the next BiliFast builds. Read the global `ios-testflight` skill before
 touching any of this (`C:\Users\KaiChuan\.claude\skills\ios-testflight\SKILL.md`); its pipeline-critical settings apply
-to Flutter too. Rewritten 2026-10-17 in slice 0, when the app moved here from the planned `BiliNative/app/`.
+to Flutter too.
 
 ## App identity (unchanged from the Swift app)
 
@@ -16,7 +16,8 @@ to Flutter too. Rewritten 2026-10-17 in slice 0, when the app moved here from th
 
 - `ios/Runner/Info.plist`: display name BiliFast, `CFBundleIconName` AppIcon (the pink Bolt, 1024 px, no alpha),
   `ITSAppUsesNonExemptEncryption` false, `UIBackgroundModes` [audio], `NSAllowsLocalNetworking` (the in-app 127.0.0.1
-  server), `NSPhotoLibraryAddUsageDescription` 用于把视频截图保存到相册。, `NSLocalNetworkUsageDescription`
+  server), `NSPhotoLibraryAddUsageDescription` 用于把视频截图保存到相册。, `NSPhotoLibraryUsageDescription` and
+  `NSCameraUsageDescription` (comment pictures), `NSLocalNetworkUsageDescription`
   用于把调试日志发送到你电脑上的日志服务器。, `NSBonjourServices` [`_bilinative-log._tcp`], portrait and both
   landscapes on iPhone plus the four iPad entries upload validation wants, `CADisableMinimumFrameDurationOnPhone` (120 Hz).
 - Xcode project: `TARGETED_DEVICE_FAMILY = 1`, iOS 26.0, automatic signing with no team (`use-profiles` fills it in).
@@ -32,7 +33,6 @@ to Flutter too. Rewritten 2026-10-17 in slice 0, when the app moved here from th
     beta-reports-active); the JSON manifest is the only artifact.
   - On uploads, the last step waits for Apple's `VALID` (every 15 s, up to an hour).
 - No other workflow (KaiC, 2026-10-18). Tests run locally in `scripts/gate.py`; a dry run is the iOS compile check.
-  The compile check (`app-compile.yml`) existed until then and was removed.
 - `test_ci/test_testflight_workflow.py`: Kazumi's static workflow tests, adapted. Also checks Flutter is pinned the
   same in `.fvmrc`, the pubspec and the workflow, and that `testflight.yml` is the only workflow.
 - `test_ci/test_testflight_script.py`: `testflight.py` against a fake `gh`, including how many calls it makes.
@@ -49,10 +49,9 @@ The ios-testflight skill's manual-steps §5 for repo `BiliFast`: the three `gh a
 ## The loop
 
 1. `python scripts/gate.py` on the committed tree (records the commit), then push. Nothing runs on push.
-2. `python scripts/testflight.py start` (`--dry-run` whenever the workflow or scripts change, or to check a native
-   change compiles). It refuses unless the gate passed on that commit. 6 GitHub calls;
+2. `python scripts/testflight.py start` (`--dry-run` only when the workflow or scripts change). It refuses unless the gate passed on that commit. 6 GitHub calls;
    `test_ci/test_testflight_script.py` pins the count.
-3. `python scripts/testflight.py status` once (1 call): about 10 minutes after a dry run, 20 after an upload. Never
+3. `python scripts/testflight.py status` once (1 call): about 7 minutes after a dry run, 11 after an upload. Never
    `gh run watch` and never poll: on 2026-10-17 polling tripped GitHub's rate limit and blocked KaiC's own requests.
 4. Report the build number, what changed and phone steps.
 

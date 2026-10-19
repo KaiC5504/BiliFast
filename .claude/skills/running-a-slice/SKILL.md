@@ -111,7 +111,7 @@ Fix small findings directly.
 1. Add the CLAUDE.md status entry, and update the layout section for any new folders.
 2. Run `python scripts/gate.py` on the committed tree.
 3. Push main, then `python scripts/testflight.py start`.
-4. Check once: a background `sleep 1200 && python scripts/testflight.py status`. No polling, no watching.
+4. Check once: a background `sleep 660 && python scripts/testflight.py status`. No polling, no watching.
 5. Start `uv run tools/logserver.py` in the background unless it's already running (`NonUniqueNameException` means it
    is).
 6. Report: the build number, what changed, how it works, the numbered phone steps from the plan, and what to watch.
