@@ -103,6 +103,9 @@ class CommentDrafts extends ChangeNotifier {
   /// A composer closed while posting must not let a reopened one post the same text again.
   bool isPosting(String key) => _posting.contains(key);
 
+  /// A composer is posting somewhere on the page, so closing it now would hide how the post went.
+  bool get anyPosting => _posting.isNotEmpty;
+
   void setPosting(String key, bool on) {
     final changed = on ? _posting.add(key) : _posting.remove(key);
     if (changed) notifyListeners();
@@ -176,7 +179,7 @@ class ThreadState {
 class CommentsModel extends ChangeNotifier {
   CommentsModel({
     required this.aid,
-    required this.upMid,
+    required this._upMid,
     required this.api,
     required this.drafts,
     required this._isLoggedIn,
@@ -196,7 +199,15 @@ class CommentsModel extends ChangeNotifier {
   final int aid;
 
   /// The uploader's mid, for the UP mark on their comments.
-  final int upMid;
+  int _upMid;
+
+  /// Set again once the video's detail arrives, for a page opened from a view without one.
+  int get upMid => _upMid;
+  set upMid(int value) {
+    if (value == _upMid) return;
+    _upMid = value;
+    notifyListeners();
+  }
   final PageApi api;
   final CommentDrafts drafts;
 

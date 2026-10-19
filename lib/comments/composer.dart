@@ -19,12 +19,15 @@ import 'picture_attach.dart';
 /// The composer (14): a white sheet over the dimmed page that rides on the keyboard, with the field, ⤢ to make it
 /// tall, 转到动态, the keyboard / emote switch, @, ⊕ and 发布, and the emote panel in the keyboard's place.
 class Composer extends StatefulWidget {
-  const Composer({super.key, required this.model, required this.onClose, this.pick = pickPictures});
+  const Composer({super.key, required this.model, required this.onClose, this.pick = pickPictures, this.top});
 
   final ComposerModel model;
 
   /// A tap on the dimmed page, or a successful post.
   final VoidCallback onClose;
+
+  /// The small player's live bottom edge, where the @ picker's box starts; the full 16:9 player's when null.
+  final double? top;
 
   /// ⊕'s picker; tests stand in for the photo library.
   final Future<List<PickedPicture>> Function({required int limit}) pick;
