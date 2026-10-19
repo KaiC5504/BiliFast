@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_core/engine.dart';
@@ -6,6 +7,7 @@ import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/settings/font_page.dart';
 import 'package:bilifast/settings/node_page.dart';
 import 'package:bilifast/settings/settings_page.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,16 +20,28 @@ void main() {
 
   setUp(() => prefs = PlayerPrefs.memory());
 
-  Future<void> show(WidgetTester tester, {Account account = const LoggedOut(), WidgetBuilder? developerPage}) async {
+  Future<void> show(
+    WidgetTester tester, {
+    Account account = const LoggedOut(),
+    WidgetBuilder? developerPage,
+    Completer<void>? startGate,
+    bool reduceMotion = false,
+  }) async {
     tester.view
       ..physicalSize = const Size(440, 956) * 3
       ..devicePixelRatio = 3;
     addTearDown(tester.view.reset);
-    world = await SettingsWorld.create(account: account);
+    world = await SettingsWorld.create(account: account, startGate: startGate);
     addTearDown(world.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        builder: (context, child) => AppScope(services: world.services, child: child!),
+        builder: (context, child) => AppScope(
+          services: world.services,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: reduceMotion),
+            child: child!,
+          ),
+        ),
         home: Builder(
           builder: (context) => Center(
             child: GestureDetector(
@@ -88,6 +102,36 @@ void main() {
       expect(rows.last.title, '退出登录');
     });
 
+    testWidgets('大会员: the name is pink with the pink 大会员 pill after it; anyone else\'s is grey without one', (
+      tester,
+    ) async {
+      await show(tester, account: const LoggedIn(name: '小明', vip: true));
+      final name = tester.widget<Text>(find.descendant(of: row('settings-account'), matching: find.text('小明')));
+      expect(name.style?.color, SettingsTheme.vipName);
+      final badge = find.descendant(of: row('settings-account'), matching: find.byKey(const ValueKey('settings-vip')));
+      expect(find.descendant(of: badge, matching: find.text('大会员')), findsOneWidget);
+      expect(tester.getRect(badge).left, greaterThan(tester.getRect(find.text('小明')).right));
+      expect(tester.getRect(badge).right, lessThanOrEqualTo(440 - SettingsTheme.chevronRight));
+
+      world.environment.account = const LoggedIn(name: '小明', vip: false);
+      await tester.pump();
+      expect(tester.widget<Text>(find.text('小明')).style?.color, SettingsTheme.value);
+      expect(find.byKey(const ValueKey('settings-vip')), findsNothing);
+    });
+
+    testWidgets('a failed account check offers a retry that asks Bilibili again', (tester) async {
+      await show(tester, account: const AccountUnknown());
+      world.environment
+        ..accountCheckFailed = true
+        ..account = const AccountUnknown();
+      await tester.pump();
+      expect(find.descendant(of: row('settings-account'), matching: find.text('无法获取账号信息，点按重试')), findsOneWidget);
+      expect(find.text('账号确认失败'), findsNothing);
+      await tapRow(tester, 'settings-account');
+      expect(world.environment.refreshes, 1);
+      expect(world.gate.requests, 0);
+    });
+
     testWidgets('unknown: 账号 says it is checking', (tester) async {
       await show(tester, account: const AccountUnknown());
       expect(find.descendant(of: row('settings-account'), matching: find.text('正在确认账号…')), findsOneWidget);
@@ -134,6 +178,23 @@ void main() {
       expect(world.engine.nodeModes.last, isA<OverseasNodes>());
     });
 
+    testWidgets('a change while the player is still starting reaches it once it has started, starting nothing', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      await show(tester, startGate: gate);
+      expect(world.services.playback.ready, isNull);
+      await tapRow(tester, 'settings-node');
+      await tester.tap(row('node-mainland'));
+      await tester.pumpAndSettle();
+      expect(prefs.node, NodeChoice.mainland);
+      expect(world.engine.nodeModes, isEmpty);
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(world.services.playback.ready, same(world.controller));
+      expect(world.engine.nodeModes.single, isA<MainlandNodes>());
+    });
+
     testWidgets('picking the node already in use changes nothing', (tester) async {
       await show(tester);
       await tapRow(tester, 'settings-node');
@@ -165,6 +226,20 @@ void main() {
       expect(confirm, findsNothing);
     });
 
+    testWidgets('重置编码记忆 before the player has started applies once it has', (tester) async {
+      final gate = Completer<void>();
+      await show(tester, startGate: gate);
+      world.memory.markFailed('av1');
+      await tapRow(tester, 'settings-codec-memory');
+      await tester.tap(confirmButton('重置'));
+      await tester.pumpAndSettle();
+      expect(confirm, findsNothing);
+      expect(world.memory.failedKinds, {'av1'});
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(world.memory.failedKinds, isEmpty);
+    });
+
     testWidgets('清除最近观看 is off while 最近打开 is empty', (tester) async {
       await show(tester);
       expect(tester.widget<SettingsRow>(row('settings-recents')).enabled, isFalse);
@@ -178,7 +253,7 @@ void main() {
       await tester.pump();
       await tapRow(tester, 'settings-recents');
       expect(find.descendant(of: confirm, matching: find.text('清除最近观看？')), findsOneWidget);
-      expect(find.descendant(of: confirm, matching: find.text('首页的最近观看列表会被清空。')), findsOneWidget);
+      expect(find.descendant(of: confirm, matching: find.text('「最近在看的视频」列表会被清空。')), findsOneWidget);
       await tester.tap(confirmButton('清除'));
       await tester.pumpAndSettle();
       expect(world.services.recents.items, isEmpty);
@@ -281,6 +356,38 @@ void main() {
       expect(find.byType(SettingsPage), findsOneWidget);
       expect(world.environment.account, isA<LoggedIn>());
     });
+  });
+
+  testWidgets('an open confirm hides the rows behind it from accessibility', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await show(tester);
+    expect(find.semantics.byLabel('重置编码记忆'), findsOne);
+    await tapRow(tester, 'settings-logs');
+    expect(find.semantics.byLabel('重置编码记忆'), findsNothing);
+    expect(find.semantics.byLabel('清除'), findsOne);
+    await tester.tap(confirmButton('取消'));
+    await tester.pumpAndSettle();
+    expect(find.semantics.byLabel('重置编码记忆'), findsOne);
+    semantics.dispose();
+  });
+
+  testWidgets('Reduce Motion: the confirm and the switch change at once', (tester) async {
+    await show(tester, reduceMotion: true);
+    await tester.tap(row('settings-logs'));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.hasRunningAnimations, isFalse);
+    final opacity = tester.widget<Opacity>(find.ancestor(of: confirm, matching: find.byType(Opacity)).first);
+    expect(opacity.opacity, 1);
+    await tester.tap(confirmButton('取消'));
+    await tester.pump();
+    await tester.pump();
+    expect(confirm, findsNothing);
+
+    await tester.tap(row('settings-btr'));
+    await tester.pump();
+    expect(tester.widget<AnimatedContainer>(find.byKey(const ValueKey('settings-switch'))).duration, Duration.zero);
+    expect(tester.hasRunningAnimations, isFalse);
   });
 
   testWidgets('every row presses through accessibility, as the Windows test driver does', (tester) async {

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
+import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/playback/playback_setup.dart';
@@ -11,6 +14,7 @@ import '../support/fake_player.dart';
 import 'fakes.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late FakeEngine engine;
   late CodecMemory memory;
   late PlaybackController controller;
@@ -63,5 +67,65 @@ void main() {
     PlayerPrefs.shared.node = NodeChoice.mainland;
     expect(appEngineOptions().nodeMode, isA<MainlandNodes>());
     expect(appEngineOptions(config: const RipperConfig()).nodeMode, isA<MainlandNodes>(), reason: 'the speed test too');
+  });
+
+  test('the codec memory lives in the support folder as codec_memory.json', () {
+    final path = codecMemoryPath();
+    if (path != null) expect(path, endsWith('codec_memory.json'));
+  });
+
+  group('AppPlayback.whenStarted', () {
+    test('runs at once on a started controller', () async {
+      final playback = AppPlayback(() async => controller);
+      addTearDown(playback.dispose);
+      await playback.obtain();
+      playback.whenStarted('test', (started) => started.setNodeMode(NodeMode.mainland));
+      expect(engine.nodeModes.single, isA<MainlandNodes>());
+    });
+
+    test('waits for a start in flight, in order, without starting another', () async {
+      final gate = Completer<void>();
+      var starts = 0;
+      final playback = AppPlayback(() async {
+        starts += 1;
+        await gate.future;
+        return controller;
+      });
+      addTearDown(playback.dispose);
+      playback
+        ..whenStarted('test', (started) => started.setNodeMode(NodeMode.mainland))
+        ..whenStarted('test', (started) => started.setNodeMode(NodeMode.overseas));
+      await pumpEventQueue();
+      expect(engine.nodeModes, isEmpty);
+      gate.complete();
+      await playback.obtain();
+      expect(starts, 1);
+      expect(engine.nodeModes.map((mode) => mode.runtimeType), [MainlandNodes, OverseasNodes]);
+    });
+
+    test('a failed start keeps the change for the next one', () async {
+      var fail = true;
+      final playback = AppPlayback(() async {
+        if (fail) throw StateError('no player');
+        return controller;
+      });
+      addTearDown(playback.dispose);
+      playback.whenStarted('test', (started) => started.setNodeMode(NodeMode.mainland));
+      await expectLater(playback.obtain(), throwsStateError);
+      expect(engine.nodeModes, isEmpty);
+      fail = false;
+      await playback.obtain();
+      expect(engine.nodeModes.single, isA<MainlandNodes>());
+    });
+
+    test('a change that throws is reported and the rest still run', () async {
+      final playback = AppPlayback(() async => controller);
+      addTearDown(playback.dispose);
+      playback
+        ..whenStarted('test', (_) => throw StateError('broken'))
+        ..whenStarted('test', (started) => started.setNodeMode(NodeMode.mainland));
+      expect(await playback.obtain(), same(controller));
+      expect(engine.nodeModes.single, isA<MainlandNodes>());
+    });
   });
 }

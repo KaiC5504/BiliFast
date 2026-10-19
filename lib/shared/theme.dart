@@ -669,13 +669,10 @@ abstract final class BiliMetrics {
   static const tabText = 16.0;
   static const tabIndicatorWidth = 18.0;
   static const tabIndicatorHeight = 3.0;
-  static const menuWidth = 248.0;
   static const menuRowHeight = 46.0;
-  static const menuAvatar = 40.0;
   static const menuRadius = 12.0;
   static const menuIconBox = 24.0;
   static const menuIcon = 20.0;
-  static const menuSpinnerRadius = 9.0;
   static const vipBadgeHeight = 16.0;
   static const vipBadgeText = 10.0;
   static const toastRadius = 16.0;
@@ -2694,4 +2691,11 @@ abstract final class SettingsTheme {
   static const confirmIn = CommentOverlayTheme.confirmIn;
   static const confirmOut = CommentOverlayTheme.confirmOut;
   static const confirmStartScale = FavouriteTheme.alertStartScale;
+
+  /// 大会员 on the 账号 row: the name in pink and the avatar menu's pink pill after it.
+  static const vipName = BiliColors.pink;
+  static const vipBadge = BiliColors.pink;
+  static const vipBadgeLabel = BiliColors.card;
+  static const vipBadgePadding = 6.0;
+  static const vipBadgeGap = 6.0;
 }

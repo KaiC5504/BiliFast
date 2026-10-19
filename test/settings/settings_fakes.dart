@@ -23,6 +23,10 @@ class FakeEnvironment extends ChangeNotifier implements AppEnvironment {
 
   Account _account;
   int logouts = 0;
+  int refreshes = 0;
+
+  @override
+  bool accountCheckFailed = false;
 
   /// Thrown by the next [logout].
   Object? logoutError;
@@ -40,8 +44,14 @@ class FakeEnvironment extends ChangeNotifier implements AppEnvironment {
     LoggedIn(:final name) => name,
     LoggedOut() => '未登录',
     LoginExpired() => '登录已失效',
-    AccountUnknown() => '正在确认账号…',
+    AccountUnknown() => accountCheckFailed ? '账号确认失败' : '正在确认账号…',
   };
+
+  @override
+  Future<bool> refreshAccount() async {
+    refreshes += 1;
+    return false;
+  }
 
   @override
   Future<void> logout() async {
@@ -78,11 +88,12 @@ class FakeLogFiles implements LogFiles {
   Future<String?> export() async => null;
 }
 
-/// 设置's world: a ready shared controller on [engine], its codec [memory], an empty 最近打开 and the fakes above.
+/// 设置's world: a shared controller on [engine] with its codec [memory], an empty 最近打开 and the fakes above. The
+/// controller is ready unless a [startGate] holds its start until the test completes it.
 class SettingsWorld {
   SettingsWorld._(this.services, this.environment, this.gate, this.logFiles, this.engine, this.memory, this.controller);
 
-  static Future<SettingsWorld> create({Account account = const LoggedOut()}) async {
+  static Future<SettingsWorld> create({Account account = const LoggedOut(), Completer<void>? startGate}) async {
     final environment = FakeEnvironment(account);
     final gate = FakeLoginGate();
     final logFiles = FakeLogFiles();
@@ -97,8 +108,11 @@ class SettingsWorld {
       startTimer: FakeTimers().start,
       logger: logger,
     );
-    final playback = AppPlayback(() async => controller);
-    await playback.obtain();
+    final playback = AppPlayback(() async {
+      await startGate?.future;
+      return controller;
+    });
+    if (startGate == null) await playback.obtain();
     final services = AppServices(
       environment: environment,
       playback: playback,
