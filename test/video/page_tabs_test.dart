@@ -241,7 +241,7 @@ void main() {
       expect(ticking('评论 0'), isTrue);
       // Let go early: back on 评论, and 简介 stops again.
       await gesture.up();
-      await settle(tester);
+      await tester.pumpAndSettle();
       expect(ticking('简介 0'), isFalse);
       expect(ticking('评论 0'), isTrue);
     });
