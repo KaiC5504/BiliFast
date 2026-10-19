@@ -335,7 +335,11 @@ class PageTabRow extends StatelessWidget {
                 Text(label, style: _labelStyle(color)),
                 if (count != null) ...[
                   const SizedBox(width: PageTheme.tabCountGap),
-                  Text(count, style: _countStyle(color)),
+                  Transform.translate(
+                    key: const ValueKey('tab-count'),
+                    offset: const Offset(0, -PageTheme.tabCountRise),
+                    child: Text(count, style: _countStyle(color)),
+                  ),
                 ],
               ],
             ),

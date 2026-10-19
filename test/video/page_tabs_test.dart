@@ -84,7 +84,7 @@ void main() {
       expect(comments.left, closeTo(intro.right + PageTheme.tabSpacing, 0.01));
     });
 
-    testWidgets('评论 carries the reply count, shortened, on the label\'s baseline; none before the detail', (
+    testWidgets('评论 carries the reply count, shortened, raised off the label\'s baseline; none before the detail', (
       tester,
     ) async {
       await host(tester, row(replyCount: null));
@@ -98,6 +98,8 @@ void main() {
       final count = tester.getRect(find.text('1.2万'));
       expect(count.left, closeTo(label.right + PageTheme.tabCountGap, 0.01));
       expect(count.height, lessThan(label.height));
+      final rise = tester.widget<Transform>(find.byKey(const ValueKey('tab-count')));
+      expect(rise.transform.getTranslation().y, -PageTheme.tabCountRise);
     });
 
     testWidgets('the selected tab is pink, the other 61666D, and the underline spans 评论 with its count', (

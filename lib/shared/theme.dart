@@ -732,6 +732,9 @@ abstract final class PageTheme {
   static const tabCountText = 10.5;
   static const tabCountGap = 3.5;
 
+  /// Off the shared baseline the count sat ⅔ pt low; on 10 its middle is level with 评论's.
+  static const tabCountRise = 2 / 3;
+
   /// Where 简介's label starts, and the room between the labels; each tab's touch area takes half that room.
   static const tabFirstLabel = 33.2;
   static const tabSpacing = 48.6;
