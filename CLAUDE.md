@@ -42,14 +42,18 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 - Slice 5, danmaku, 1.0.0 (9): 弹幕设置 (landscape strip, portrait light sheet; every change live mid-flight), 屏蔽词
   synced with the account, 当前弹幕列表 with 👍 and 屏蔽弹幕, sending with styles from every entry point, own danmaku
   boxed, the small player's danmaku at the official 12.5 pt. The app icon became the pink sprinting TV.
+- Slice 8, the rest of the app, 1.0.0 (10): the login page (Bilibili's own, in a web view) and 退出登录, every
+  logged-out action opening it (turning upright first), the avatar page (49) in place of the menu, 历史记录 (45-48),
+  the full 设置 (50-51: account, 字体, 加速 with the CDN node, 数据, 开发者, 版本, 退出登录), 开发者's log export and
+  test crash, the phone's 20 MB log, codec memory kept across launches.
 
-Next, KaiC's order: 8 and 9.
+Next: 9.
 
 Open items, each waiting on its slice:
-- 不喜欢 is grey (此版本不支持不喜欢) until `BILI_APP_KEYS` is in the `testflight` environment and slice 8 brings the
-  TV login. KaiC adds it: `gh secret set BILI_APP_KEYS -R KaiC5504/BiliFast --env testflight`, value `appkey:appsec` of
-  the 云视听小电视 pair from bilibili-API-collect.
-- Slice 8: logged-out actions open the login page (点我发弹幕 and the danmaku fields toast 请先登录 until then).
+- 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
+  account and a borrowed app key).
+- Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
+  the logged-out paths.
 - Follow-up slice: 人像防挡 (the mask file from `/x/v2/dm/web/view`); its switch is drawn off and toasts until then.
 - Left out by KaiC: 举报 on danmaku, 互动弹幕列表.
 - Later: 竖屏 search, 充电鸣谢, the player box following a 16:10 video's height.
@@ -63,8 +67,9 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/app/`: routes, `AppScope` (the services every page reaches, the shared player and `PageApi` among them), the
     page-route observer (a page counts as covered only when a page route is pushed over it), Reduce Motion, and
     `phone_frame.dart` (Windows only: the window as KaiC's iPhone).
-  - `lib/account/`: keychain and cookie persistence.
-  - `lib/home/`: home, the feed, the avatar menu and 最近打开.
+  - `lib/account/`: keychain and cookie persistence, the login page and `LoginGate`, the web view's cookies.
+  - `lib/home/`: home, the feed, the avatar page (49) and 最近打开.
+  - `lib/history/`: 历史记录, its model and the row's ⋮ sheet.
   - `lib/player/`: the `BiliPlayer` interface and its iOS and Windows players. `lib/playback/`: the engine's setup,
     the playback controller, codec memory, the danmaku feed.
   - `lib/danmaku/`: the danmaku layer, scene and painter; `DanmakuSession` (one per page, on `PlayerUi`), the
@@ -79,16 +84,17 @@ Update this section when a slice ships: one short entry, and any rule it adds go
       sheet, the unfollow confirm and their overlays.
   - `lib/comments/`: 评论, 评论详情, the composer with its emote panel, @ picker and pictures, and
     `comment_overlays.dart`, the in-page layers the page's Stack holds.
-  - `lib/settings/`: 设置 and 字体, and the font store.
-  - `lib/devtools/`: crash log, log forwarding and discovery of the PC's log server.
+  - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
+  - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server.
   - `lib/speedtest/`: the speed test (dev builds only).
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
-    `font.json`, `emotes_recent.json`, `node_memory.json`, `danmaku_settings.json`).
+    `font.json`, `emotes_recent.json`, `node_memory.json`, `danmaku_settings.json`, `codec_memory.json`); the log
+    is in the caches folder.
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`: `shared`, `devlog`,
   `danmaku`, `api`, `logic`, `dash_hls`, `local_http`, `engine`, and `bin/ripper_bench.dart`.
-- `ios/Runner/`: native Swift (player registry and host view, keychain, device controls, frame capture, paste
-  control, log-server discovery, the one-time carry-over of the Swift app's 最近打开). Pigeon definitions are in
+- `ios/Runner/`: native Swift (player registry and host view, keychain, the login web view's cookies, device
+  controls, frame capture, paste control, log-server discovery, the one-time carry-over of the Swift app's 最近打开). Pigeon definitions are in
   `pigeons/`. New Swift files must be added to `ios/Runner.xcodeproj/project.pbxproj` by hand (four entries, see
   `KeychainChannel.swift`'s).
 - `assets/`: MiSans, and assets taken from PiliPlus (`assets/README.md`).
@@ -154,6 +160,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   MiSans nudges in `BiliMetrics` apply only while MiSans is on.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
+- A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the
+  phone upright first), never a 请先登录 toast. The login replays nothing; the gate always shows the page, since a
+  -101 can come while the app still thinks it is logged in.
 - 弹幕设置 is one set for every presentation. 添加屏蔽词 and 当前弹幕列表 are landscape only (the portrait sheet, 40
   and 41, has no rows for them); turning to portrait with either open goes back to 弹幕设置.
 - Danmaku block-word regexes run on Dart's (ECMAScript) `RegExp`, not ICU as in Swift: `(?i)`, possessive and atomic

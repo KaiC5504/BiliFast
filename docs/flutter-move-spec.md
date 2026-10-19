@@ -130,8 +130,9 @@ One Dart interface (`BiliPlayer`) with iOS and Windows implementations, over Pig
   `AppSettings.swift` (`app-inventory.md`, "Settings"). Swift's `UserDefaults` values are carried over once through
   `LegacyDefaults.swift` where worth it (最近打开; KaiC had no Swift danmaku settings worth carrying).
 - **Fresh install / logged out (slice 8):** a web view on `https://passport.bilibili.com/login`. Clear stale bilibili
-  cookies first; once a non-empty `SESSDATA` appears, take every bilibili-domain cookie into the jar. Needs a web view
-  that can read cookies (`flutter_inappwebview`, Apache-2.0, or a native `WKHTTPCookieStore` call).
+  cookies first; once a non-empty `SESSDATA` appears, take every bilibili-domain cookie into the jar. Built on
+  `webview_flutter` (the Flutter team's) with `WebCookies.swift` reading and clearing `WKWebsiteDataStore.default()`.
+  The TV token is only ever deleted (on logout); KaiC left the TV login out.
 - **On the PC, no account.** The Windows app runs logged out, or with `--fake-account` against `FakePageApi`.
 
 ### 4.6 Logs and crash reports
@@ -191,13 +192,14 @@ reference screens, and the phone checklist items (numbers in `BiliNative/docs/m2
 | 6 The page body | 1.0.0 (6), (7) |
 | 7 Comments | 1.0.0 (8) |
 | 5 Danmaku | 1.0.0 (9); 人像防挡 is a follow-up, 举报 and 互动弹幕列表 left out (KaiC) |
+| 8 The rest of the app | 1.0.0 (10); the avatar page (49) replaced the menu; history without 🔍, ⋮ and the type tabs; the TV login and 不喜欢 left out (KaiC) |
 
 ### Slice 8: the rest of the app
 
 | | |
 |---|---|
-| Port | `App/History/` (cursor paging, 今天/昨天/date groups, 已看完, resume from progress), `App/Settings/SettingsView.swift` (加速: node, BTR; 数据: reset codec memory, clear recents, clear logs; 开发者 in dev builds: 发送日志到电脑, the Bonjour list or manual IP, export logs, 测试崩溃), the login web view and logout (clears the jar, the keychain items, the token and the web view data), the TV login for 不喜欢 (needs `BILI_APP_KEYS`), logged-out actions opening the login page. |
-| Reference | Screen 28 (history), 02 (我的, later). |
+| Port | `App/History/` (cursor paging, 今天/昨天/date groups, 已看完, resume from progress), `App/Settings/SettingsView.swift` (加速: node, BTR; 数据: reset codec memory, clear recents, clear logs; 开发者 in dev builds: 发送日志到电脑, the Bonjour list or manual IP, export logs, 测试崩溃), the login web view and logout (clears the jar, the keychain items, the token and the web view data), logged-out actions opening the login page. The TV login for 不喜欢 was left out (KaiC). |
+| Reference | Screens 28 and 45-48 (history), 49 (the avatar page), 50-51 (设置, 退出登录). |
 | Phone check | Items 44, 46, 59. Logging out and back in is the one extra login this allows; skip it unless KaiC wants it tested. |
 
 ### Slice 9: page lifecycle and cutover
