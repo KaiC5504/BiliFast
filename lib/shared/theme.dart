@@ -99,9 +99,11 @@ abstract final class BiliColors {
   static const endPlayGlyph = Color(0xF2FFFFFF);
   static const endCoverShade = Color(0x8C000000);
 
-  /// Danmaku outlines: very dark text gets the light one, or it would vanish inside it.
-  static const danmakuOutline = Color(0xD9000000);
-  static const danmakuOutlineLight = Color(0xD9FFFFFF);
+  /// Danmaku outlines: very dark text gets the light one, or it would vanish inside it. 44, at 不透明度 70%, has
+  /// its white text at 70% over black and its outlines at 70% black over light pictures: both are drawn opaque and
+  /// the layer's opacity fades them together.
+  static const danmakuOutline = Color(0xFF000000);
+  static const danmakuOutlineLight = Color(0xFFFFFFFF);
   static const danmakuOwnBox = Color(0xFFFFFFFF);
 
   /// The full-screen controls and end screen (BiliNative `ChromeTheme.swift`, sampled on 04, 09 and 27).
@@ -702,14 +704,20 @@ abstract final class BiliMetrics {
   static const glassShadowBlur = 24.0;
   static const glassShadowDrop = 8.0;
 
-  /// Danmaku text at the normal size (25); an elem's own size scales it.
-  static const danmakuFont = 17.0;
+  /// Danmaku text at the normal size (25); an elem's own size scales it. 44's full screen is 22 pt, as in Swift;
+  /// the small player's, read off 10 (CJK advances of 37–38 px), is 12.5 pt where Swift had 17: the official app
+  /// sizes them about by the player's height (22 × 247.5 / 440).
+  static const danmakuFont = 12.5;
   static const danmakuFontFullScreen = 22.0;
   static const danmakuOutline = 1.0;
   static const danmakuPad = 1.0;
   static const danmakuOwnPadX = 5.0;
   static const danmakuOwnPadY = 1.5;
   static const danmakuOwnRadius = 3.0;
+
+  /// Lane spacing per point of the font size: 44's lanes are about 95 px apart at 22 pt, as Swift's 1.2 line
+  /// heights of the system font are.
+  static const danmakuLaneHeight = 1.44;
 }
 
 /// The tab row under the player (简介 / 评论 N, the 弹 toggle and 点我发弹幕) and the 简介 page's spacing (03, 18).

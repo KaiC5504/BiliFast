@@ -7,6 +7,7 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 import '../danmaku/danmaku_layer.dart';
+import '../danmaku/danmaku_settings.dart';
 import '../playback/overlay_stats.dart';
 import '../player/bili_player.dart';
 import '../player/playback_clock.dart';
@@ -27,6 +28,7 @@ class PlayerStage extends StatefulWidget {
     required this.duration,
     this.danmaku,
     this.danmakuEnabled = true,
+    this.danmakuSettings,
     this.onSeek,
     this.onHint,
   });
@@ -42,6 +44,9 @@ class PlayerStage extends StatefulWidget {
   /// Danmaku handed out as the playhead passes them; null while none are loaded.
   final DanmakuTimeline? danmaku;
   final bool danmakuEnabled;
+
+  /// The 弹幕设置 values the danmaku follow; null draws them with the defaults.
+  final ValueListenable<DanmakuSettings>? danmakuSettings;
 
   /// A seek the user made on the bar, after the player was told; the controller times it. Bar seeks are not
   /// [precise]: the player starts at the keyframe nearest the spot, without decoding its way up to it.
@@ -223,6 +228,7 @@ class _PlayerStageState extends State<PlayerStage> {
             timeline: widget.danmaku,
             enabled: widget.danmakuEnabled,
             wake: _readout.any,
+            settings: widget.danmakuSettings,
           ),
           if (widget.showStats)
             Align(

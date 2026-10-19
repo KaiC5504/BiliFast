@@ -5,6 +5,7 @@ import 'package:bilifast/danmaku/danmaku_scene.dart';
 import 'package:bilifast/danmaku/danmaku_sprites.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -248,7 +249,8 @@ void main() {
 
     scene.step(37, timeline: timeline, options: options);
     expect(sprites.layouts, DanmakuScene.maxLayoutsPerFrame);
-    expect(scene.visible, hasLength(DanmakuScene.maxLayoutsPerFrame));
+    // The first one, 7 s in, has just left: it only takes its lane.
+    expect(scene.visible, hasLength(DanmakuScene.maxLayoutsPerFrame - 1));
     expect(scene.catchingUp, isTrue);
 
     var frames = 0;
@@ -273,6 +275,27 @@ void main() {
     expect(scene.visible, isNotEmpty);
     expect(scene.visible.length, lessThan(30));
     expect(sprites.layouts, scene.visible.length);
+  });
+
+  testWidgets('own danmaku get a white rounded box around them, as Swift draws it', (tester) async {
+    final sprites = DanmakuSprites();
+    final plain = sprites.of(item('自己的', 0), pointSize: 22);
+    final own = sprites.of(item('自己的', 0, own: true), pointSize: 22);
+    Future<List<int>> pixel(DanmakuSprite sprite, int x, int y) async {
+      final bytes = (await tester.runAsync(() async {
+        final image = await sprite.picture.toImage(sprite.size.width.ceil(), sprite.size.height.ceil());
+        return image.toByteData();
+      }))!;
+      final at = (y * sprite.size.width.ceil() + x) * 4;
+      return [for (var i = 0; i < 4; i++) bytes.getUint8(at + i)];
+    }
+
+    // The box's left edge, half a point in, where the plain sprite has only its 1 pt of padding.
+    expect(await pixel(own, 0, own.size.height ~/ 2), [255, 255, 255, 255]);
+    expect((await pixel(plain, 0, plain.size.height ~/ 2))[3], lessThan(40));
+    // Its corners are rounded: the very corner stays clear.
+    expect((await pixel(own, 0, 0))[3], lessThan(200));
+    expect(own.size.height, plain.size.height + (BiliMetrics.danmakuOwnPadY - BiliMetrics.danmakuPad) * 2);
   });
 
   test('sprites: own danmaku get a wider box, and dark text still gets a sprite', () {
