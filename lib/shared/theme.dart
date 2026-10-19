@@ -1268,9 +1268,205 @@ abstract final class VerticalActionTheme {
   static const sheetPlaying = sheetPill;
 }
 
-/// A comment row and its badges (10, 12, 13).
+/// A comment row and its badges (10, 12, 13), measured at 3× on KaiC's phone. Heights count down from the row's top,
+/// which is the hairline above it.
 abstract final class CommentRowTheme {
   static const gutter = BiliMetrics.gutter;
+
+  /// The name and the text start here; the avatar sits in the gutter before it.
+  static const textLeading = 56.0;
+  static const avatarTop = 62 / 3;
+  static const avatar = 30.0;
+
+  /// Under a pendant the face shrinks to 24 and the frame is 1.75 times that, centred on the same point.
+  static const pendantAvatar = 24.0;
+  static const pendantScale = 1.75;
+
+  /// 大会员's pink 大: 10 across, 5/3 in from the avatar's right and 2 up from its bottom, in a ring of white.
+  static const vipMark = 10.0;
+  static const vipMarkRing = 1.0;
+  static const vipMarkRight = 5 / 3;
+  static const vipMarkBottom = 2.0;
+  static const vipMarkText = 7.0;
+  static const vipMarkFill = BiliColors.pink;
+  static const vipMarkInk = Color(0xFFFFFFFF);
+  static const vipMarkRim = Color(0xFFFFFFFF);
+
+  /// The name's Chinese is centred 28.8 down, the LV badge 29.
+  static const nameCentre = 173 / 6;
+  static const nameLine = 18.0;
+  static const nameText = 13.0;
+  static const name = BiliColors.secondaryText;
+  static const vipName = Color(0xFFFB7299);
+  static const badgeGap = 5.0;
+  static const upGap = 4.0;
+
+  /// LV0 to LV6, 56 × 28 px: the LV block 1 pt shorter than the digit's. LV5 and LV6 are sampled on 13, the rest
+  /// follow Bilibili's level colours.
+  static const levelWidth = 56 / 3;
+  static const levelHeight = 28 / 3;
+  static const levels = [
+    Color(0xFFC0C4CC),
+    Color(0xFFC0C4CC),
+    Color(0xFF8BD29B),
+    Color(0xFF7BCDEF),
+    Color(0xFFFEBB8B),
+    Color(0xFFE46A2D),
+    Color(0xFFEB4E4D),
+  ];
+  static const levelInk = Color(0xFFFFFFFF);
+  static const upFill = BiliColors.pink;
+  static const upInk = Color(0xFFFFFFFF);
+  static const upText = 8.0;
+  static const upPadding = 3.0;
+  static const upRadius = 2.0;
+
+  /// 置顶 before a pinned comment's text.
+  static const pinnedText = 11.0;
+  static const pinnedInk = BiliColors.pink;
+  static const pinnedBorder = 0.8;
+  static const pinnedRadius = 3.0;
+  static const pinnedPadding = 4.0;
+
+  /// The text's first line is centred 50.2 down. 12 sets lines 24.3 apart, but Flutter rounds a line's height to
+  /// whole points, so ours are 24, which leaves 13's three-line reply within a point of its meta line. A single
+  /// line still leaves the pictures or the meta line [textMinBottom] down, as 13's 没人看的 does; longer text pushes
+  /// them on without a gap.
+  static const textFirstCentre = 50.2;
+  static const textLine = 24.0;
+  static const textText = 15.0;
+  static const textMinBottom = 200 / 3;
+  static const text = BiliColors.text;
+  static const textTop = textFirstCentre - textLine / 2;
+
+  /// One picture: a tall one 162 wide, cut at 3:4, a wide one 240; 135 and 200 in 评论详情 (13). Long pictures show
+  /// their top.
+  static const pictureTall = 162.0;
+  static const pictureWide = 240.0;
+  static const threadPictureTall = 135.0;
+  static const threadPictureWide = 200.0;
+  static const tallestRatio = 4 / 3;
+  static const flattestRatio = 9 / 16;
+  static const pictureRadius = 4.0;
+  static const pictureSpacing = 4.0;
+  static const picturePlaceholder = BiliColors.pageGrey;
+
+  /// The meta line centres 16 below a picture's bottom.
+  static const pictureGap = 4.0;
+
+  /// The meta line: time and place, 回复 8 after them, 👍 N with the count's end 73.7 from the right edge, 👎 centred
+  /// 49 from it and ⋮ 17.
+  static const metaHeight = 24.0;
+  static const metaText = 12.0;
+  static const meta = Color(0xFFC9CCD0);
+  static const action = Color(0xFF61666D);
+  static const liked = BiliColors.pink;
+  static const replyGap = 8.0;
+  static const replyTrailing = 10.0;
+  static const likeTrailing = 221 / 3;
+  static const thumbInk = 14.0;
+
+  /// 👎 sits 4 px lower than 👍.
+  static const dislikeDrop = 4 / 3;
+  static const thumbCountGap = 17 / 3;
+
+  /// The widest count, 999.9万.
+  static const countRoom = 48.0;
+  static const dislikeCentre = 49.0;
+  static const moreCentre = 17.0;
+  static const moreDot = 8 / 3;
+  static const morePitch = 13 / 3;
+  static const likeTarget = 6.0;
+  static const dislikeTarget = 32.0;
+  static const moreTarget = 30.0;
+  static const likePop = 1.3;
+  static const likePopDuration = Duration(milliseconds: 320);
+
+  /// UP主觉得很赞 under the meta line.
+  static const upLikedHeight = 18.0;
+  static const upLikedIcon = 12.0;
+  static const upLikedGap = 3.0;
+  static const upLiked = BiliColors.secondaryText;
+
+  /// The replies box: 20.3 below the meta line's centre, 54 from the left and 12 from the right, 8 round. 12's preview
+  /// lines are 23.5 apart, rounded to 24 as [textLine] is, the first centred 16.7 down; 共N条回复 centres in a 36 pt
+  /// slot at the bottom, which starts 55.2 down under two lines as on 12.
+  static const boxGap = 61 / 3 - metaHeight / 2;
+  static const boxLeading = 54.0;
+  static const boxRadius = 8.0;
+  static const box = BiliColors.softGrey;
+  static const boxPadding = 10.0;
+  static const previewTop = 16.67 - previewLine / 2;
+  static const previewLine = 24.0;
+  static const previewText = 13.0;
+  static const previewSpacing = 6.0;
+  static const preview = Color(0xFF2F3238);
+  static const previewName = BiliColors.secondaryText;
+  static const previewRuleGap = 7.0;
+  static const previewRuleWidth = 1.0;
+  static const previewRuleHeight = 10.0;
+  static const moreSlot = 36.0;
+  static const moreSlotGap = 2.5;
+  static const moreText = 12.0;
+  static const moreLink = BiliColors.link;
+  static const chevronGap = 7.0;
+  static const chevronWidth = 14 / 3;
+  static const chevronHeight = 28 / 3;
+  static const chevronStroke = 1.0;
+
+  /// The hairline under a row, 2 px of [BiliColors.divider] from 54 to the edge, 20.3 below the meta line's centre or
+  /// 12 below the replies box.
+  static const dividerLeading = 54.0;
+  static const divider = 2 / 3;
+  static const dividerColour = BiliColors.divider;
+  static const bottom = 61 / 3 - metaHeight / 2;
+  static const boxBottom = 12.0;
+
+  /// The fan card's art 36.3 tall, 0.7 down, its left 81 from the right edge; the two lines of its number start 31
+  /// into it, the first 13 down.
+  static const fanCardTop = 2 / 3;
+  static const fanCardHeight = 109 / 3;
+  static const fanCardLeft = 81.0;
+  static const fanNumberLead = 31.0;
+  static const fanNumberTop = 13.0 - fanCardTop;
+  static const fanGlyphWidth = 4.5;
+  static const fanGlyphHeight = 5.1;
+  static const fanGlyphWeight = 1.15;
+  static const fanGlyphGap = 1.0;
+  static const fanLineGap = 2.05;
+
+  /// A card whose colour the server left out.
+  static const fanNumber = Color(0xFF998245);
+
+  /// The name stops this far before the card's art.
+  static const fanCardClearance = 4.0;
+
+  static TextStyle get textStyle => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: textText,
+    height: textLine / textText,
+    leadingDistribution: TextLeadingDistribution.even,
+    color: text,
+  );
+
+  static TextStyle get previewStyle => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: previewText,
+    height: previewLine / previewText,
+    leadingDistribution: TextLeadingDistribution.even,
+    color: preview,
+  );
+
+  static TextStyle metaStyle(Color color) => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: metaText,
+    height: metaHeight / metaText,
+    leadingDistribution: TextLeadingDistribution.even,
+    color: color,
+  );
+
+  /// MiSans sets the meta line's text a point higher in its line than PingFang does on 13.
+  static double get metaDrop => BiliFonts.nudged ? 1 : 0;
 }
 
 /// 评论's list, its sort header, footers and 发条评论 bar, and 评论详情's header and band (10-13), measured at 3 px per
