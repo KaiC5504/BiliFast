@@ -97,7 +97,7 @@ void main() {
     expect(find.byType(LandscapeChrome), findsNothing);
 
     final stack = tester.widget<Stack>(
-      find.descendant(of: find.byType(VideoPlayerArea), matching: find.byType(Stack)).first,
+      find.descendant(of: find.byKey(const ValueKey('video-pinned')), matching: find.byType(Stack)).first,
     );
     final order = stack.children.map((child) => child.key).toList();
     expect(
