@@ -263,7 +263,6 @@ void main() {
       isLoggedIn: () => false,
       isVip: () => false,
       accountMid: () => 0,
-      toast: (_) {},
       requestLogin: () {},
     );
     addTearDown(() {

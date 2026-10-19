@@ -59,7 +59,6 @@ Future<Rig> pumpView(WidgetTester tester, {bool loggedIn = true}) async {
     isLoggedIn: () => loggedIn,
     isVip: () => false,
     accountMid: () => 0,
-    toast: (_) {},
     requestLogin: () {},
   );
   final session = FakePlayerSession();

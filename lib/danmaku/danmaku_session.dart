@@ -27,7 +27,6 @@ class DanmakuSession extends ChangeNotifier {
     required this._isLoggedIn,
     required this._isVip,
     required int Function() accountMid,
-    required this._toast,
     required this._requestLogin,
     Logger? logger,
   }) : _logger = logger ?? Logger.shared {
@@ -38,8 +37,11 @@ class DanmakuSession extends ChangeNotifier {
     settings.addListener(_applyFilter);
     rules.addListener(_applyFilter);
     _feed.addListener(_feedChanged);
-    if (loggedIn) unawaited(rules.refresh());
+    if (loggedIn) unawaited(_refreshRules());
   }
+
+  /// How long after a failed page-open refresh of the 屏蔽词 it is tried once more.
+  static const rulesRetryDelay = Duration(seconds: 15);
 
   final DanmakuFeed _feed;
   final DanmakuSettingsStore settings;
@@ -49,11 +51,11 @@ class DanmakuSession extends ChangeNotifier {
   final double Function() _position;
   final bool Function() _isLoggedIn;
   final bool Function() _isVip;
-  // ignore: unused_field
-  final void Function(String message) _toast;
   final VoidCallback _requestLogin;
   final Logger _logger;
   bool _closed = false;
+  bool _disposed = false;
+  Timer? _rulesRetry;
 
   /// The send bar's draft, kept while the bar is closed.
   late final DanmakuSendModel sender;
@@ -81,11 +83,12 @@ class DanmakuSession extends ChangeNotifier {
 
   void closeSend() => sendOpen.value = false;
 
-  /// Posts a danmaku at the playhead and shows it at once: the message to show, or null once it went out.
+  /// Posts a danmaku at the playhead and shows it at once: the message to show, or null once it went out or the
+  /// login was asked for (that shows its own message).
   Future<String?> send(String text, DanmakuStyle style) async {
     if (!loggedIn) {
       _requestLogin();
-      return '需要登录';
+      return null;
     }
     final message = text.trim();
     if (message.isEmpty) return null;
@@ -110,9 +113,9 @@ class DanmakuSession extends ChangeNotifier {
       _logger.warn(LogCategory.api, 'danmaku post failed', {'error': '$error'});
       if (error.needsLogin) {
         _requestLogin();
-        return '需要登录';
+        return null;
       }
-      // Bilibili words its refusals for the user (frequency, banned words, level); they show as sent.
+      // Bilibili words its refusals for the user (frequency, banned words, level); they're shown word for word.
       if (error case BiliAPIError(:final message) when message.isNotEmpty) return message;
       return '发送失败，请检查网络后重试';
     } catch (error) {
@@ -129,6 +132,15 @@ class DanmakuSession extends ChangeNotifier {
   /// 当前弹幕列表's 屏蔽弹幕.
   void hide(DanmakuElem elem) => _feed.hide(elem);
 
+  /// Failing, the account's 屏蔽词 would be off until the next page, so it is tried once more.
+  Future<void> _refreshRules() async {
+    final failure = await rules.refresh();
+    if (failure == null || _disposed || !loggedIn) return;
+    _rulesRetry = Timer(rulesRetryDelay, () {
+      if (loggedIn) unawaited(rules.refresh());
+    });
+  }
+
   void _applyFilter() => _feed.setFilter(settings.value.filter, rules.rules);
 
   void _feedChanged() {
@@ -139,6 +151,8 @@ class DanmakuSession extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _rulesRetry?.cancel();
     settings.removeListener(_applyFilter);
     rules.removeListener(_applyFilter);
     _feed.removeListener(_feedChanged);

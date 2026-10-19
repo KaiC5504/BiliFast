@@ -27,7 +27,6 @@ class _Session extends DanmakuSession {
         isLoggedIn: () => true,
         isVip: () => false,
         accountMid: () => 7,
-        toast: (_) {},
         requestLogin: () {},
       );
 
