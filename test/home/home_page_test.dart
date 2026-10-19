@@ -6,6 +6,7 @@ import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
@@ -293,6 +294,29 @@ void main() {
     await settle(tester, 20);
     expect(controller.video?.title, '测试视频');
     expect(shownTitle(tester), '测试视频', reason: 'the page shows the video it opened');
+  });
+
+  testWidgets("a card opens the page that swipes back into it, with the card's rect; a pasted link does not", (
+    tester,
+  ) async {
+    await show(tester);
+    await settle(tester);
+    final resting = tester.getRect(card('BV1aaa'));
+    await tester.tap(card('BV1aaa'));
+    await settle(tester, 20);
+    final source = tester.widget<VideoPage>(find.byType(VideoPage)).route.zoomSource!;
+    expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isA<ZoomBackPageRoute<void>>());
+    // Under the page home is slid a third of the way aside, as the card's rect is.
+    expect(source(), tester.getRect(find.byKey(const ValueKey('feed-card-BV1aaa'), skipOffstage: false)));
+    expect(source()!.size, resting.size);
+
+    await tester.tap(find.byKey(const ValueKey('video-back')));
+    await settle(tester, 20);
+    expect(source(), resting, reason: 'back where it was once the page has gone');
+    await tester.enterText(find.byKey(const ValueKey('home-link')), 'https://www.bilibili.com/video/BV1GJ411x7h7?p=2');
+    await settle(tester, 20);
+    expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.zoomSource, isNull);
+    expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isNot(isA<ZoomBackPageRoute<void>>()));
   });
 
   testWidgets('⋮ opens a frosted menu beside it whose 稍后再看 adds the video', (tester) async {

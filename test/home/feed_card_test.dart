@@ -21,7 +21,7 @@ void main() {
               alignment: Alignment.topLeft,
               child: SizedBox(
                 width: width,
-                child: FeedCardView(card: card, onOpen: () {}, onWatchLater: () {}),
+                child: FeedCardView(card: card, onOpen: (_) {}, onWatchLater: () {}),
               ),
             ),
           ),
