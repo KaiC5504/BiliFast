@@ -7,7 +7,8 @@ import 'package:flutter/foundation.dart';
 import '../shared/theme.dart';
 import 'danmaku_sprites.dart';
 
-/// What the danmaku are drawn with (BiliNative `DanmakuSettings.swift`); the 弹幕设置 panel comes in slice 5.
+/// What the danmaku are drawn with (BiliNative `DanmakuSettings.swift`); `DanmakuSettings.display` makes them from
+/// the 弹幕设置 values.
 @immutable
 final class DanmakuOptions {
   const DanmakuOptions({
@@ -60,8 +61,10 @@ final class _Item {
     required this.kind,
     required this.reverse,
     required this.start,
+    required this.travel,
     required this.y,
     required this.x,
+    this.gone = false,
   });
 
   final DanmakuSprite sprite;
@@ -72,13 +75,73 @@ final class _Item {
   /// Video time, in seconds, at which it entered.
   final double start;
 
+  /// [start] on the travel clock, which scrolling danmaku move by.
+  final double travel;
+
   /// The centre of its lane.
   final double y;
   double x;
+
+  /// Left the screen before a re-lay; kept, undrawn, only while the re-lay places the danmaku that met it.
+  final bool gone;
+}
+
+/// The clock scrolling danmaku move by. It runs with the video at [reference]'s pace over the current crossing
+/// time, so a 弹幕速度 change bends it from that moment on: what is flying carries on from where it is, faster or
+/// slower, and the lanes, kept in travel time, stay right.
+final class _Travel {
+  /// Remembered long enough for a re-lay to place everything it looks back over the way it was placed.
+  static const _memory = 30.0;
+
+  double reference = 7;
+  double current = 7;
+
+  /// (video time, travel time, travel seconds per video second), oldest first.
+  final List<(double, double, double)> _bends = [(0, 0, 1)];
+
+  void reset(double time, double duration) {
+    reference = duration;
+    current = duration;
+    _bends
+      ..clear()
+      ..add((time, time, 1));
+  }
+
+  void bend(double time, double duration) {
+    final travel = at(time);
+    current = duration;
+    while (_bends.isNotEmpty && _bends.last.$1 >= time) {
+      _bends.removeLast();
+    }
+    _bends.add((time, travel, reference / duration));
+    while (_bends.length > 1 && _bends[1].$1 < time - _memory) {
+      _bends.removeAt(0);
+    }
+  }
+
+  double at(double time) {
+    var bend = _bends.first;
+    for (var i = 1; i < _bends.length && _bends[i].$1 <= time; i++) {
+      bend = _bends[i];
+    }
+    return bend.$2 + (time - bend.$1) * bend.$3;
+  }
+
+  /// The longest crossing in the remembered stretch, in video seconds.
+  double get longest {
+    var slowest = _bends.first.$3;
+    for (final bend in _bends) {
+      slowest = math.min(slowest, bend.$3);
+    }
+    return reference / slowest;
+  }
 }
 
 /// Port of DanmakuView.swift: which danmaku are on screen and where, for the video time each [step] is given.
 /// The player's own clock drives it, so pausing, the rate, stalls and seeks carry over without any events.
+///
+/// The 弹幕设置 values apply mid-flight, where Swift clears the screen: 弹幕速度 bends the travel clock, and
+/// 显示区域 and 字体大小 re-lay what is showing at once, from the danmaku of the last moments.
 final class DanmakuScene extends ChangeNotifier {
   DanmakuScene({DanmakuSprites? sprites}) : sprites = sprites ?? DanmakuSprites();
 
@@ -95,6 +158,7 @@ final class DanmakuScene extends ChangeNotifier {
 
   final LaneLayout _layout = LaneLayout(lanes: 0, width: 0, scrollDuration: 7);
   final List<_Item> _items = [];
+  final _Travel _travel = _Travel();
 
   /// Handed out by the timeline, in time order, and not placed yet.
   final List<DisplayDanmaku> _backlog = [];
@@ -102,7 +166,6 @@ final class DanmakuScene extends ChangeNotifier {
   int _lanes = 0;
   double _laneHeight = 0;
   double _basePointSize = BiliMetrics.danmakuFont;
-  double _scrollDuration = 7;
   double? _lastTime;
   DanmakuTimeline? _timeline;
 
@@ -111,18 +174,22 @@ final class DanmakuScene extends ChangeNotifier {
 
   List<DanmakuOnScreen> get visible => [
     for (final item in _items)
-      DanmakuOnScreen(
-        text: item.text,
-        kind: item.kind,
-        rect: Rect.fromLTWH(
-          item.x,
-          item.y - item.sprite.size.height / 2,
-          item.sprite.size.width,
-          item.sprite.size.height,
+      if (!item.gone)
+        DanmakuOnScreen(
+          text: item.text,
+          kind: item.kind,
+          rect: Rect.fromLTWH(
+            item.x,
+            item.y - item.sprite.size.height / 2,
+            item.sprite.size.width,
+            item.sprite.size.height,
+          ),
+          start: item.start,
         ),
-        start: item.start,
-      ),
   ];
+
+  /// The height of one lane, in points (tests).
+  double get laneHeight => _laneHeight;
 
   /// One frame at video time [seconds]. Listeners hear about it only when something on screen moved or changed.
   void step(double seconds, {required DanmakuTimeline timeline, DanmakuOptions options = const DanmakuOptions()}) {
@@ -131,13 +198,7 @@ final class DanmakuScene extends ChangeNotifier {
       return;
     }
     var time = math.max(seconds, 0.0);
-    var relay = _lastTime == null;
-    final geometry = (size, options.fullScreen, options.area, options.scale, options.scrollDuration);
-    if (geometry != _geometry) {
-      _geometry = geometry;
-      _configure(options);
-      relay = true;
-    }
+    var jumped = _lastTime == null;
     final last = _lastTime;
     if (last != null) {
       if (time < last) {
@@ -145,15 +206,27 @@ final class DanmakuScene extends ChangeNotifier {
         if (last - time < 0.2) {
           time = last;
         } else {
-          relay = true;
+          jumped = true;
         }
       } else if (time - last > 0.9) {
         // Under the timeline's 1 s jump limit, so a jump is always re-laid rather than skipped.
-        relay = true;
+        jumped = true;
       }
     }
     if (!identical(timeline, _timeline)) {
       _timeline = timeline;
+      jumped = true;
+    }
+    if (jumped) {
+      _travel.reset(time, options.scrollDuration);
+    } else if (options.scrollDuration != _travel.current) {
+      _travel.bend(time, options.scrollDuration);
+    }
+    var relay = jumped;
+    final geometry = (size, options.fullScreen, options.area, options.scale);
+    if (geometry != _geometry) {
+      _geometry = geometry;
+      _configure(options);
       relay = true;
     }
     final ms = (time * 1000).floor();
@@ -184,10 +257,10 @@ final class DanmakuScene extends ChangeNotifier {
   void paint(Canvas canvas) {
     // Top and bottom danmaku stay readable over the ones that were already passing when they appeared.
     for (final item in _items) {
-      if (item.kind == LaneKind.scroll) _draw(canvas, item);
+      if (item.kind == LaneKind.scroll && !item.gone) _draw(canvas, item);
     }
     for (final item in _items) {
-      if (item.kind != LaneKind.scroll) _draw(canvas, item);
+      if (item.kind != LaneKind.scroll && !item.gone) _draw(canvas, item);
     }
   }
 
@@ -200,25 +273,29 @@ final class DanmakuScene extends ChangeNotifier {
   }
 
   void _configure(DanmakuOptions options) {
-    _scrollDuration = options.scrollDuration;
     _basePointSize =
         options.scale * (options.fullScreen ? BiliMetrics.danmakuFontFullScreen : BiliMetrics.danmakuFont);
     final lineHeight = sprites.lineHeight(_basePointSize);
     // Tiny fonts: the outline and own box padding must still fit, or neighbouring lanes would touch.
-    _laneHeight = math.max(lineHeight * 1.2, lineHeight.ceilToDouble() + BiliMetrics.danmakuOwnPadY * 2);
+    _laneHeight = math.max(
+      _basePointSize * BiliMetrics.danmakuLaneHeight,
+      lineHeight.ceilToDouble() + BiliMetrics.danmakuOwnPadY * 2,
+    );
     _lanes = _laneHeight > 0 ? math.max((size.height * options.area / _laneHeight).floor(), 0) : 0;
   }
 
   void _clear() {
     _items.clear();
     _backlog.clear();
-    _layout.reset(lanes: _lanes, width: size.width, scrollDuration: _scrollDuration);
+    _layout.reset(lanes: _lanes, width: size.width, scrollDuration: _travel.reference);
   }
 
-  /// After a seek, what would still be on screen, each with its own start so it is placed mid-flight. The
-  /// timeline counts any step over a second as a jump and hands out nothing, so it is walked in steps.
+  /// For a re-lay, the danmaku of the last moments, each placed with its own start so it shows mid-flight. Those
+  /// that have left by now still take their lanes, as they did while showing, so a re-lay for 显示区域 keeps
+  /// everything else in its lane. The timeline counts any step over a second as a jump and hands out nothing, so
+  /// it is walked in steps.
   List<DisplayDanmaku> _catchUp(DanmakuTimeline timeline, int ms) {
-    final lookbackMs = (math.max(_scrollDuration, staticDuration) * 1000).round();
+    final lookbackMs = (math.max(_travel.longest, staticDuration) * 2000).round();
     var cursor = math.max(ms - lookbackMs, -1);
     timeline.seek(cursor);
     final items = <DisplayDanmaku>[];
@@ -247,10 +324,13 @@ final class DanmakuScene extends ChangeNotifier {
       5 => LaneKind.top,
       _ => LaneKind.scroll,
     };
-    // Re-laid after a seek: one that would already have left is not drawn at all.
-    if (time - start >= (kind == LaneKind.scroll ? _scrollDuration : staticDuration)) return;
+    final travel = _travel.at(start);
+    final gone = kind == LaneKind.scroll
+        ? _travel.at(time) - travel >= _travel.reference
+        : time - start >= staticDuration;
+    final at = kind == LaneKind.scroll ? travel : start;
     // Most of a dense catch-up finds every lane taken; those are dropped before their text is laid out.
-    if (!_layout.hasRoom(kind, at: start)) return;
+    if (!_layout.hasRoom(kind, at: at)) return;
     final fontSize = elem.fontSize > 0 ? elem.fontSize : 25;
     final sprite = sprites.of(danmaku, pointSize: _basePointSize * fontSize / 25);
     final width = sprite.size.width;
@@ -260,17 +340,19 @@ final class DanmakuScene extends ChangeNotifier {
       // still showing is left marked as taken, which keeps the next few off it as well, and the next lane
       // is tried.
       for (var attempt = 0; attempt <= _lanes; attempt++) {
-        final lane = _layout.place(LaneKind.scroll, width: width, at: start);
+        final lane = _layout.place(LaneKind.scroll, width: width, at: at);
         if (lane == null) break;
-        if (!_runsIntoStatic(y: lane * _laneHeight + _laneHeight / 2, sprite: sprite.size, start: start)) {
+        if (!_runsIntoStatic(y: lane * _laneHeight + _laneHeight / 2, sprite: sprite.size, travel: travel)) {
           placed = lane;
           break;
         }
       }
     } else {
-      placed = _layout.place(kind, width: width, at: start);
+      placed = _layout.place(kind, width: width, at: at);
     }
-    if (placed == null) return;
+    // A scrolling one that has left needs nothing more than its lane; a static one stays, undrawn, for the
+    // scrolling ones placed after it to keep clear of.
+    if (placed == null || (gone && kind == LaneKind.scroll)) return;
     final top = kind == LaneKind.bottom ? size.height - (_lanes - placed) * _laneHeight : placed * _laneHeight;
     _items.add(_Item(
       sprite: sprite,
@@ -278,41 +360,45 @@ final class DanmakuScene extends ChangeNotifier {
       kind: kind,
       reverse: elem.mode == 6,
       start: start,
+      travel: travel,
       y: top + _laneHeight / 2,
       x: (size.width - width) / 2,
+      gone: gone,
     ));
   }
 
-  /// Whether a scrolling danmaku entering at [start] on row [y] reaches a centred top or bottom one on that
-  /// row before it disappears.
-  bool _runsIntoStatic({required double y, required Size sprite, required double start}) {
+  /// Whether a scrolling danmaku entering at [travel] on row [y] reaches a centred top or bottom one on that row
+  /// before it disappears.
+  bool _runsIntoStatic({required double y, required Size sprite, required double travel}) {
     final screen = size.width;
-    final speed = (screen + sprite.width) / _scrollDuration;
+    final speed = (screen + sprite.width) / _travel.reference;
     for (final item in _items) {
       if (item.kind == LaneKind.scroll) continue;
       if ((item.y - y).abs() >= (item.sprite.size.height + sprite.height) / 2) continue;
-      final reaches = start + (screen - item.sprite.size.width) / 2 / speed;
-      if (reaches < item.start + staticDuration) return true;
+      final reaches = travel + (screen - item.sprite.size.width) / 2 / speed;
+      if (reaches < _travel.at(item.start + staticDuration)) return true;
     }
     return false;
   }
 
-  /// x = W - (t - start) × (W + w) / D for a scrolling danmaku, mirrored for reverse ones.
+  /// x = W - (t - start) × (W + w) / D for a scrolling danmaku on the travel clock, mirrored for reverse ones.
   void _move(double time) {
     final width = size.width;
+    final travel = _travel.at(time);
     var index = 0;
     while (index < _items.length) {
       final item = _items[index];
-      final age = time - item.start;
-      final lifetime = item.kind == LaneKind.scroll ? _scrollDuration : staticDuration;
+      final scrolls = item.kind == LaneKind.scroll;
+      final age = scrolls ? travel - item.travel : time - item.start;
+      final lifetime = scrolls ? _travel.reference : staticDuration;
       // At exactly its lifetime a static danmaku's lane is already handed to the next one.
-      if (age < 0 || age >= lifetime) {
+      if (item.gone ? _backlog.isEmpty : age < 0 || age >= lifetime) {
         _items[index] = _items.last;
         _items.removeLast();
         continue;
       }
-      if (item.kind == LaneKind.scroll) {
-        final travelled = age / _scrollDuration * (width + item.sprite.size.width);
+      if (scrolls) {
+        final travelled = age / _travel.reference * (width + item.sprite.size.width);
         item.x = item.reverse ? travelled - item.sprite.size.width : width - travelled;
       }
       index += 1;

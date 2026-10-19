@@ -2,12 +2,16 @@ import 'package:bili_core/danmaku.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/danmaku/danmaku_layer.dart';
+import 'package:bilifast/danmaku/danmaku_scene.dart';
+import 'package:bilifast/danmaku/danmaku_settings.dart';
+import 'package:bilifast/danmaku/danmaku_settings_store.dart';
 import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
 import 'package:bilifast/player_ui/player_stage.dart';
 import 'package:bilifast/player_ui/stats_overlay.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,7 +37,12 @@ final class Rig {
     this.precise.add(precise);
   }
 
-  Future<void> mount(WidgetTester tester, {bool showStats = false, DanmakuTimeline? danmaku}) => tester.pumpWidget(
+  Future<void> mount(
+    WidgetTester tester, {
+    bool showStats = false,
+    DanmakuTimeline? danmaku,
+    ValueListenable<DanmakuSettings>? settings,
+  }) => tester.pumpWidget(
     Directionality(
       textDirection: TextDirection.ltr,
       child: Center(
@@ -47,6 +56,7 @@ final class Rig {
             showStats: showStats,
             duration: duration,
             danmaku: danmaku,
+            danmakuSettings: settings,
             onSeek: seek,
             onHint: hints.add,
           ),
@@ -410,6 +420,20 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(layer.scene.visible, isEmpty);
+  });
+
+  testWidgets('the danmaku follow the 弹幕设置 store it is given, and the defaults without one', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester, danmaku: DanmakuTimeline());
+    DanmakuOptions options() => tester.state<DanmakuLayerState>(find.byType(DanmakuLayer)).options;
+    expect(options(), const DanmakuOptions());
+
+    final store = DanmakuSettingsStore.memory(const DanmakuSettings(area: 0.75, opacity: 0.5, scale: 0.8, speed: 1));
+    await rig.mount(tester, danmaku: DanmakuTimeline(), settings: store);
+    expect(options(), store.value.display(fullScreen: false));
+    store.update(store.value.copyWith(speed: 3));
+    await tester.pump();
+    expect(options().scrollDuration, 5.5);
   });
 
   testWidgets('the video sits under everything and is built once', (tester) async {

@@ -120,6 +120,8 @@ class VideoPlayerArea extends StatelessWidget {
                           // The end screens show no danmaku over the last frame.
                           enabled: session.danmakuOn && !ended,
                           wake: session.readout.any,
+                          settings: ui?.danmaku?.settings,
+                          fullScreen: presentation.fullScreen,
                         ),
                       ),
                     ),
