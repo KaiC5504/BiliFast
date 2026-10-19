@@ -1829,8 +1829,81 @@ abstract final class MentionTheme {
 /// 弹幕设置 (07, 08, 24, 29, 33, 40, 41).
 abstract final class DanmakuPanelTheme {}
 
-/// 添加屏蔽词 (30).
-abstract final class BlockWordsTheme {}
+/// 添加屏蔽词 (30). Across, sizes count from the safe area's left edge (62 pt on the Pro Max); the top row ends at its
+/// right edge.
+abstract final class BlockWordsTheme {
+  /// 30's white slide comes out at about 40 of 255.
+  static const dim = Color(0xD6000000);
+
+  /// The selected tab and its underline are Bilibili's #FB7299, not the app's [BiliColors.pink].
+  static const pink = Color(0xFFFB7299);
+  static const text = Color(0xFFFFFFFF);
+  static const grey = Color(0xFF999999);
+
+  static const closeCentreX = 27.0;
+  static const closeHitBox = 44.0;
+
+  /// From the ✕'s centre to the end of each stroke, along each axis.
+  static const closeArm = 5.8;
+  static const closeStroke = 2.1;
+
+  static const rowTop = 7.0;
+  static const rowHeight = 30.0;
+  static const fieldLeft = 54.17;
+  static const fieldFill = Color(0xFFFFFFFF);
+  static const fieldInk = BiliColors.text;
+  static const fieldRadius = 3.5;
+  static const fieldPadX = 10.0;
+  static const fieldText = 12.0;
+
+  /// MiSans's Chinese is about 5% wider than 30's PingFang at 12 pt; this brings the placeholder and the tabs to its
+  /// widths.
+  static double get smallSpacing => BiliFonts.nudged ? -0.35 : 0;
+
+  /// 添加 and 同步: white at 20% over the dim.
+  static const buttonFill = Color(0x33FFFFFF);
+  static const buttonGap = 12.33;
+  static const buttonWidth = 77.67;
+  static const buttonText = 14.0;
+  static const addIcon = 17.0;
+  static const addIconLeft = 13.6;
+  static const addIconGap = 6.67;
+
+  /// The pencil sits a point above the row's centre in 30.
+  static const addIconLift = 1.0;
+  static const addStroke = 1.33;
+  static const syncIcon = 19.0;
+  static const syncIconLeft = 8.17;
+  static const syncIconGap = 5.0;
+  static const syncStroke = 1.5;
+
+  /// 关键词 / 正则 / 举报屏蔽用户 sit 4 pt in, their row from the top row's bottom to the list.
+  static const tabsLeft = 4.0;
+  static const tabsTop = 44.0;
+  static const tabsHeight = 30.0;
+  static const tabText = 12.0;
+  static const tabGap = 22.33;
+  static const underline = 2.0;
+
+  /// The two columns split at the screen's centre by a third-of-a-point line down to the safe area's bottom.
+  static const dividerWidth = 1 / 3;
+  static const divider = Color(0x1AFFFFFF);
+  static const listPad = 20.0;
+
+  /// 30 has a single row; the gap between rows is the top row's button gap.
+  static const rowGap = 12.0;
+
+  static const chipHeight = 32.0;
+  static const chipRadius = 4.0;
+  static const chipFill = Color(0x0DFFFFFF);
+  static const chipText = 14.0;
+  static const chipPadLeft = 12.0;
+  static const chipGlyphGap = 13.0;
+  static const chipPadRight = 11.0;
+  static const chipGlyph = 14.0;
+  static const chipGlyphInset = 0.6;
+  static const chipStroke = 1.65;
+}
 
 /// The send bar and the style panel (22, 23, 36-39).
 abstract final class DanmakuSendTheme {}
