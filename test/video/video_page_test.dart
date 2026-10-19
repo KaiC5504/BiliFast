@@ -10,6 +10,7 @@ import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
+import 'package:bilifast/comments/comments_tab.dart';
 import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
@@ -1203,8 +1204,7 @@ void main() {
       await frames(tester, 4);
       expect(orientation.presentation, Presentation.inline);
       expect(pager(tester).page, 1);
-      expect(find.byType(CommentsPlaceholder), findsOneWidget);
-      expect(find.text('评论将在下个版本推出'), findsOneWidget);
+      expect(find.byWidgetPredicate((widget) => widget is CommentsTab || widget is CommentsSlot), findsOneWidget);
       await back(tester);
     });
 

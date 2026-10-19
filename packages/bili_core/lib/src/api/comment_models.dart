@@ -466,3 +466,46 @@ Comment decodePostedComment(Object? json) {
   if (reply == null) throw const DecodeError('missing reply');
   return Comment.fromJson(reply);
 }
+
+/// Someone the viewer follows, offered by the composer's @ picker.
+final class MentionCandidate {
+  const MentionCandidate({required this.mid, required this.name, this.face = ''});
+
+  final int mid;
+  final String name;
+  final String face;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MentionCandidate && other.mid == mid && other.name == name && other.face == face;
+
+  @override
+  int get hashCode => Object.hash(mid, name, face);
+
+  @override
+  String toString() => 'MentionCandidate($mid, $name)';
+}
+
+/// A picture uploaded for a comment, as `/x/v2/reply/add`'s `pictures` takes it back.
+final class UploadedPicture {
+  const UploadedPicture({required this.url, required this.width, required this.height, required this.sizeKb});
+
+  final String url;
+  final int width;
+  final int height;
+  final double sizeKb;
+
+  @override
+  bool operator ==(Object other) =>
+      other is UploadedPicture &&
+      other.url == url &&
+      other.width == width &&
+      other.height == height &&
+      other.sizeKb == sizeKb;
+
+  @override
+  int get hashCode => Object.hash(url, width, height, sizeKb);
+
+  @override
+  String toString() => 'UploadedPicture($url, $width x $height, $sizeKb KB)';
+}

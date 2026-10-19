@@ -10,6 +10,7 @@ import 'app/app_scope.dart';
 import 'app/phone_frame.dart';
 import 'app/reduce_motion.dart';
 import 'app/route_observer.dart';
+import 'comments/emote_store.dart';
 import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_forwarder.dart';
@@ -40,6 +41,7 @@ Future<void> main(List<String> args) async {
     recents = await RecentStore.load(supportFilePath('recents.json'));
     PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
     fonts = await FontStore.load(supportFilePath('font.json'));
+    RecentEmotes.shared = await RecentEmotes.load(supportFilePath('emotes_recent.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
     CrashLog.report(error, stack, source: 'launch');

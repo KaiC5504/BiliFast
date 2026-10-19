@@ -1269,3 +1269,38 @@ abstract final class VerticalActionTheme {
   /// The playing episode's title and bars in the light 选集 sheet: 19 draws them in 收藏's pink, not the app's.
   static const sheetPlaying = sheetPill;
 }
+
+/// A comment row and its badges (10, 12, 13).
+abstract final class CommentRowTheme {
+  static const gutter = BiliMetrics.gutter;
+}
+
+/// 评论's list, its sort header, footers and 发条评论 bar, and 评论详情's header and band (10-13).
+abstract final class CommentListTheme {
+  static const gutter = BiliMetrics.gutter;
+}
+
+/// A comment's rich text and the picture viewer.
+abstract final class CommentTextTheme {
+  static const link = Color(0xFF008AC5);
+}
+
+/// The composer and its emote panel (14).
+abstract final class ComposerTheme {
+  static const gutter = BiliMetrics.gutter;
+}
+
+/// The comment overlays: the rising thread and the delete confirm.
+abstract final class CommentOverlayTheme {
+  static const threadRise = Duration(milliseconds: 300);
+}
+
+/// The paused player shrinking to the 继续播放 bar (11, 12).
+abstract final class CollapseTheme {
+  static const barHeight = 56.0;
+}
+
+/// The composer's @ picker and attached pictures.
+abstract final class MentionTheme {
+  static const gutter = BiliMetrics.gutter;
+}

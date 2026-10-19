@@ -9,6 +9,10 @@ import 'package:flutter/services.dart';
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/route_observer.dart';
+import '../comments/comment_callbacks.dart';
+import '../comments/comment_overlays.dart';
+import '../comments/comments_model.dart';
+import '../comments/comments_tab.dart';
 import '../device/orientation.dart';
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_controller.dart';
@@ -76,7 +80,7 @@ typedef VideoPageOpener = Future<void> Function(BuildContext context, VideoRoute
 /// player alone over the whole screen in full screen, which is this page laid out again rather than a route of its
 /// own. It opens the route's video on the shared player, reports watch progress while logged in, and gives the player
 /// back when it is popped. A page shown again after a newer video page took the player opens its video again where
-/// it was covered. The comments come in slice 7.
+/// it was covered.
 class VideoPage extends StatefulWidget {
   const VideoPage({
     super.key,
@@ -139,6 +143,22 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
   final _tabs = PageTabsController();
   final _areaKey = GlobalKey();
 
+  /// The comments of the video the page shows, replaced when another video opens on it; the drafts stay with the page.
+  CommentsModel? _comments;
+  final _drafts = CommentDrafts();
+  final _commentOverlays = CommentOverlayController();
+  bool _threadOpen = false;
+  late final _commentCallbacks = CommentCallbacks(
+    reply: (target, emotes) {
+      if (_comments?.requireLogin() ?? false) _commentOverlays.compose(target, emotes: emotes);
+    },
+    openThread: (root) => unawaited(_comments?.openThread(root)),
+    viewPictures: _commentOverlays.viewPictures,
+    confirmDelete: _commentOverlays.confirmDelete,
+    seek: (seconds) => unawaited(_session?.seekAndPlay(seconds.toDouble())),
+    openVideo: (id) => unawaited(_openVideoId(id)),
+  );
+
   /// This page's begin is the orientation's latest, so the presentation is this page's.
   bool _owning = false;
 
@@ -168,6 +188,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     _overlays
       ..addListener(_panelChanged)
       ..addListener(_standAside);
+    _commentOverlays.addListener(_panelChanged);
   }
 
   @override
@@ -328,6 +349,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
       if (_session case final session?) _intro = IntroContent.of(session);
       if (controller.phase == PlaybackPhase.playing) _played = true;
     });
+    _syncComments();
     _syncAutoHide();
   }
 
@@ -338,6 +360,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     if (session == null || controller == null || !_isMine(controller)) return;
     final intro = IntroContent.of(session);
     if (intro != _intro && mounted) setState(() => _intro = intro);
+    _syncComments();
     if (session.video == null) return;
     final vertical = session.isVertical;
     final changed = vertical != _vertical;
@@ -347,6 +370,52 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     } else if (changed) {
       _orientation.setVideoIsVertical(vertical, owner: this);
     }
+  }
+
+  /// A new model for each video the page shows, once its aid is known. Nothing loads until 评论 first shows.
+  void _syncComments() {
+    final detail = _intro.detail;
+    if (detail == null || detail.aid == _comments?.aid || _left || !mounted) return;
+    final services = _services!;
+    final environment = services.environment;
+    final old = _comments;
+    _commentOverlays.close();
+    final comments = CommentsModel(
+      aid: detail.aid,
+      upMid: detail.owner.mid,
+      api: services.pageApi,
+      drafts: _drafts,
+      isLoggedIn: () => environment.account is LoggedIn,
+      accountMid: () => environment.mid,
+      requestLogin: () => _toast('请先登录'),
+      toast: _toast,
+    )..addListener(_commentsChanged);
+    setState(() {
+      _comments = comments;
+      _threadOpen = false;
+    });
+    old
+      ?..removeListener(_commentsChanged)
+      ..dispose();
+  }
+
+  /// Rebuilds the PopScope when the thread opens or closes, which back then closes first.
+  void _commentsChanged() {
+    final open = _comments?.thread != null;
+    if (open != _threadOpen && mounted) setState(() => _threadOpen = open);
+  }
+
+  /// Closes the composer, the picture viewer or the delete confirm, else 评论详情. False when none is up.
+  bool _closeComments() {
+    if (_commentOverlays.value != null) {
+      _commentOverlays.close();
+      return true;
+    }
+    if (_comments case final comments? when comments.thread != null) {
+      comments.closeThread();
+      return true;
+    }
+    return false;
   }
 
   /// Once the video is known, and again each time the page is shown after one above it: the latest begin wins.
@@ -408,8 +477,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     if (mounted) setState(() {});
   }
 
-  /// Back closes an open overlay first, then a panel, in every presentation.
+  /// Back closes the comments' overlays and thread first on the small player, then an action overlay, then a panel.
   void _back() {
+    if (!_presentation.fullScreen && _closeComments()) return;
     if (_overlays.value != null) {
       _overlays.close();
     } else if (_panels.value != null) {
@@ -521,6 +591,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     _overlays
       ..removeListener(_panelChanged)
       ..removeListener(_standAside);
+    _commentOverlays
+      ..removeListener(_panelChanged)
+      ..dispose();
+    _comments
+      ?..removeListener(_commentsChanged)
+      ..dispose();
     _autoHideInputs?.removeListener(_syncAutoHide);
     final session = _session;
     session?.removeListener(_sessionChanged);
@@ -542,10 +618,16 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     final mine = controller != null && _isMine(controller);
     final ui = mine ? _ui : null;
     return PopScope<Object?>(
-      canPop: !fullScreen && _panels.value == null && _overlays.value == null,
+      canPop: !fullScreen &&
+          _panels.value == null &&
+          _overlays.value == null &&
+          _commentOverlays.value == null &&
+          !_threadOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           setState(_leave);
+        } else if (!fullScreen && _closeComments()) {
+          return;
         } else if (_overlays.value != null) {
           _overlays.close();
         } else if (_panels.value != null) {
@@ -612,6 +694,21 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
                       ),
                     ),
                   ),
+                  Positioned.fill(
+                    key: const ValueKey('comment-overlays'),
+                    child: Offstage(
+                      offstage: fullScreen,
+                      child: TickerMode(
+                        enabled: !fullScreen,
+                        child: CommentOverlays(
+                          model: _comments,
+                          controller: _commentOverlays,
+                          callbacks: _commentCallbacks,
+                          threadTop: box,
+                        ),
+                      ),
+                    ),
+                  ),
                   if (ui != null) Positioned.fill(key: const ValueKey('video-panels'), child: PanelLayer(ui: ui)),
                   if ((ui, _details) case (final ui?, final details?))
                     Positioned.fill(
@@ -671,7 +768,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
                       onOpenRelated: _openRelated,
                       onWatchLater: (card) => unawaited(_watchLater(card)),
                     ),
-              comments: const CommentsPlaceholder(),
+              comments: switch (_comments) {
+                final comments? => CommentsTab(
+                  key: ObjectKey(comments),
+                  model: comments,
+                  callbacks: _commentCallbacks,
+                ),
+                null => const CommentsSlot(),
+              },
             ),
           ),
         ),

@@ -186,6 +186,78 @@ class FakePageApi implements PageApi {
   @override
   Future<void> addToWatchLater({required int aid}) => _answer('addToWatchLater', 'addToWatchLater aid=$aid', () {});
 
+  /// 评论's first page; later pages come back empty.
+  CommentPage commentPage = const CommentPage(comments: []);
+
+  List<EmotePackage> emotes = const [];
+
+  List<MentionCandidate> followed = const [];
+
+  var _nextRpid = 1000;
+
+  @override
+  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset}) =>
+      _answer('comments', 'comments sort=${sort.name} offset=${offset ?? ''}', () {
+        return offset == null ? commentPage : const CommentPage(comments: []);
+      });
+
+  @override
+  Future<ThreadPage> thread({required int aid, required int root, required int page, required CommentSort sort}) =>
+      _answer('thread', 'thread root=$root page=$page sort=${sort.name}', () {
+        final rootComment = [?commentPage.pinned, ...commentPage.comments].firstWhere(
+          (comment) => comment.rpid == root,
+          orElse: () => Comment(rpid: root, member: const CommentMember(mid: 0), message: ''),
+        );
+        return ThreadPage(root: rootComment, replies: rootComment.previewReplies, total: rootComment.replyCount, isEnd: true);
+      });
+
+  @override
+  Future<Comment> postComment({
+    required int aid,
+    required String message,
+    int root = 0,
+    int parent = 0,
+    bool syncToDynamic = false,
+    Map<String, int> mentions = const {},
+    List<UploadedPicture> pictures = const [],
+  }) => _answer('postComment', 'postComment root=$root parent=$parent message=$message', () {
+    return Comment(
+      rpid: _nextRpid++,
+      oid: aid,
+      root: root,
+      parent: parent,
+      member: const CommentMember(mid: 1, name: 'BiliFast'),
+      message: message,
+    );
+  });
+
+  @override
+  Future<void> likeComment({required int aid, required int rpid, required bool on}) =>
+      _answer('likeComment', 'likeComment rpid=$rpid on=$on', () {});
+
+  @override
+  Future<void> hateComment({required int aid, required int rpid, required bool on}) =>
+      _answer('hateComment', 'hateComment rpid=$rpid on=$on', () {});
+
+  @override
+  Future<void> deleteComment({required int aid, required int rpid}) =>
+      _answer('deleteComment', 'deleteComment rpid=$rpid', () {});
+
+  @override
+  Future<List<EmotePackage>> emotePackages() => _answer('emotePackages', 'emotePackages', () => emotes);
+
+  @override
+  Future<List<MentionCandidate>> mentionCandidates({required int mid, String query = ''}) =>
+      _answer('mentionCandidates', 'mentionCandidates query=$query', () {
+        return [for (final who in followed) if (who.name.contains(query)) who];
+      });
+
+  @override
+  Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename}) =>
+      _answer('uploadCommentPicture', 'uploadCommentPicture $filename', () {
+        return UploadedPicture(url: 'https://i0.hdslb.com/bfs/new_dyn/$filename', width: 100, height: 100, sizeKb: bytes.length / 1024);
+      });
+
   VideoRelation _relation({bool? like, bool? dislike, bool? favorite, bool? attention, int? coins, bool? seasonFav}) =>
       VideoRelation(
         like: like ?? relationValue.like,

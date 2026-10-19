@@ -44,6 +44,8 @@ extension BiliClientComments on BiliClient {
     int root = 0,
     int parent = 0,
     bool syncToDynamic = false,
+    Map<String, int> mentions = const {},
+    List<UploadedPicture> pictures = const [],
   }) {
     final form = {'oid': '$aid', 'type': '1', 'message': message};
     if (root != 0) form['root'] = '$root';
@@ -65,6 +67,14 @@ extension BiliClientComments on BiliClient {
 
   Future<void> deleteComment({required int aid, required int rpid}) =>
       postVoid('/x/v2/reply/del', form: {'oid': '$aid', 'type': '1', 'rpid': '$rpid'});
+
+  /// The people [mid] follows whose names match [query]; an empty query lists the most recently followed.
+  Future<List<MentionCandidate>> followings({required int mid, String query = ''}) =>
+      throw UnimplementedError('followings');
+
+  /// Uploads one picture for a comment; [bytes] is the file as picked, [filename] its name with the extension.
+  Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename}) =>
+      throw UnimplementedError('uploadCommentPicture');
 
   Future<List<EmotePackage>> emotePackages() =>
       get('/x/emote/user/panel/web', query: {'business': 'reply'}, signed: false, decode: decodeEmotePanel);

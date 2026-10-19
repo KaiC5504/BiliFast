@@ -4,7 +4,17 @@ export 'src/api/bili_client.dart';
 export 'src/api/bili_error.dart';
 export 'src/api/bili_hosts.dart';
 export 'src/api/comment_models.dart'
-    show CommentSort, CommentMember, CommentPicture, Comment, CommentPage, ThreadPage, Emote, EmotePackage;
+    show
+        CommentSort,
+        CommentMember,
+        CommentPicture,
+        Comment,
+        CommentPage,
+        ThreadPage,
+        Emote,
+        EmotePackage,
+        MentionCandidate,
+        UploadedPicture;
 export 'src/api/cookie_jar.dart';
 export 'src/api/feed_models.dart';
 export 'src/api/http.dart';

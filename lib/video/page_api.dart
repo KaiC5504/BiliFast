@@ -33,6 +33,35 @@ abstract interface class PageApi {
   Future<void> favSeason({required int seasonId, required bool on});
 
   Future<void> addToWatchLater({required int aid});
+
+  /// 评论's pages: [offset] is the last page's `nextOffset`, null for the first.
+  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset});
+
+  Future<ThreadPage> thread({required int aid, required int root, required int page, required CommentSort sort});
+
+  /// [root] and [parent] stay 0 for a comment on the video; [mentions] maps each @name in [message] to its mid.
+  Future<Comment> postComment({
+    required int aid,
+    required String message,
+    int root = 0,
+    int parent = 0,
+    bool syncToDynamic = false,
+    Map<String, int> mentions = const {},
+    List<UploadedPicture> pictures = const [],
+  });
+
+  Future<void> likeComment({required int aid, required int rpid, required bool on});
+
+  Future<void> hateComment({required int aid, required int rpid, required bool on});
+
+  Future<void> deleteComment({required int aid, required int rpid});
+
+  Future<List<EmotePackage>> emotePackages();
+
+  /// The composer's @ picker: people [mid] follows, matching [query] when it isn't empty.
+  Future<List<MentionCandidate>> mentionCandidates({required int mid, String query = ''});
+
+  Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename});
 }
 
 class ClientPageApi implements PageApi {
@@ -90,4 +119,53 @@ class ClientPageApi implements PageApi {
 
   @override
   Future<void> addToWatchLater({required int aid}) => _client.addToWatchLater(aid: aid);
+
+  @override
+  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset}) =>
+      _client.comments(aid: aid, sort: sort, offset: offset);
+
+  @override
+  Future<ThreadPage> thread({required int aid, required int root, required int page, required CommentSort sort}) =>
+      _client.thread(aid: aid, root: root, page: page, sort: sort);
+
+  @override
+  Future<Comment> postComment({
+    required int aid,
+    required String message,
+    int root = 0,
+    int parent = 0,
+    bool syncToDynamic = false,
+    Map<String, int> mentions = const {},
+    List<UploadedPicture> pictures = const [],
+  }) => _client.postComment(
+    aid: aid,
+    message: message,
+    root: root,
+    parent: parent,
+    syncToDynamic: syncToDynamic,
+    mentions: mentions,
+    pictures: pictures,
+  );
+
+  @override
+  Future<void> likeComment({required int aid, required int rpid, required bool on}) =>
+      _client.likeComment(aid: aid, rpid: rpid, on: on);
+
+  @override
+  Future<void> hateComment({required int aid, required int rpid, required bool on}) =>
+      _client.hateComment(aid: aid, rpid: rpid, on: on);
+
+  @override
+  Future<void> deleteComment({required int aid, required int rpid}) => _client.deleteComment(aid: aid, rpid: rpid);
+
+  @override
+  Future<List<EmotePackage>> emotePackages() => _client.emotePackages();
+
+  @override
+  Future<List<MentionCandidate>> mentionCandidates({required int mid, String query = ''}) =>
+      _client.followings(mid: mid, query: query);
+
+  @override
+  Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename}) =>
+      _client.uploadCommentPicture(bytes: bytes, filename: filename);
 }
