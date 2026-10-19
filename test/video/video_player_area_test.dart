@@ -14,6 +14,7 @@ import 'package:bilifast/player_ui/stats_overlay.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/video_player_area.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -57,6 +58,7 @@ void main() {
     String? failure,
     Widget? cover,
     Size size = const Size(440, 956),
+    ValueListenable<bool>? turning,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -73,6 +75,7 @@ void main() {
           loading: loading,
           failure: failure,
           onRetry: () {},
+          turning: turning,
         ),
       ),
     );
@@ -182,6 +185,45 @@ void main() {
     expect(band.width, 440);
     expect(band.height, closeTo(440 / BiliMetrics.videoAspect, 0.01));
     expect(band.center.dy, closeTo(956 * BiliMetrics.verticalVideoCentre, 0.01));
+  });
+
+  testWidgets('while the page turns the player, the chrome, the HUD and the end screen are out of sight and take no '
+      'touches, kept as they were; the gestures and the danmaku stay', (tester) async {
+    final turning = ValueNotifier(false);
+    addTearDown(turning.dispose);
+    await show(tester, Presentation.inline, turning: turning);
+    bool drawn(Type type) =>
+        tester.widget<Visibility>(find.ancestor(of: find.byType(type), matching: find.byType(Visibility)).first).visible;
+    bool backTouched() => tester
+        .hitTestOnBinding(tester.getCenter(find.byKey(const ValueKey('video-back'))))
+        .path
+        .any((entry) => entry.target == tester.renderObject(find.byKey(const ValueKey('video-back'))));
+    expect(drawn(PortraitControls), isTrue);
+    expect(drawn(PlayerHud), isTrue);
+    expect(backTouched(), isTrue);
+    final controls = tester.element(find.byType(PortraitControls));
+
+    turning.value = true;
+    await tester.pump();
+    expect(drawn(PortraitControls), isFalse);
+    expect(drawn(PlayerHud), isFalse);
+    expect(backTouched(), isFalse);
+    expect(find.byType(PlayerGestureLayer), findsOneWidget);
+    expect(find.byType(DanmakuLayer), findsOneWidget);
+    expect(identical(tester.element(find.byType(PortraitControls)), controls), isTrue);
+
+    turning.value = false;
+    await tester.pump();
+    expect(drawn(PortraitControls), isTrue);
+    expect(backTouched(), isTrue);
+
+    session.ended = true;
+    turning.value = true;
+    await show(tester, Presentation.inline, turning: turning);
+    expect(drawn(EndScreenPortrait), isFalse);
+    turning.value = false;
+    await tester.pump();
+    expect(drawn(EndScreenPortrait), isTrue);
   });
 
   testWidgets('the end screens show no danmaku, and the danmaku switch reaches the layer', (tester) async {
