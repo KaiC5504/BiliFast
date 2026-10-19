@@ -52,12 +52,9 @@ abstract interface class SpeedTestTarget {
 }
 
 final class ControllerTarget implements SpeedTestTarget {
-  ControllerTarget(this.controller, {this.opened});
+  ControllerTarget(this.controller);
 
   final PlaybackController controller;
-
-  /// Called as each [open] starts, once the controller has counted it.
-  final void Function()? opened;
 
   @override
   Stream<PlaybackMark> get marks => controller.marks;
@@ -113,11 +110,7 @@ final class ControllerTarget implements SpeedTestTarget {
   Future<void> setQuality(int quality) => controller.setQuality(quality);
 
   @override
-  Future<void> open(String link) {
-    final opening = controller.open(link);
-    opened?.call();
-    return opening;
-  }
+  Future<void> open(String link) => controller.open(link);
 
   @override
   Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality}) =>
@@ -164,7 +157,6 @@ class SpeedTestRunner extends ChangeNotifier {
   SpeedTestRunner({
     required this.target,
     required this.hooks,
-    this.sharedTarget = false,
     Logger? logger,
     int Function()? newSeed,
     int Function()? rss,
@@ -184,10 +176,6 @@ class SpeedTestRunner extends ChangeNotifier {
 
   final SpeedTestTarget target;
   final SpeedTestHooks hooks;
-
-  /// The target outlives the runner (the app's shared player), so a run cut short by [dispose] still puts the app's
-  /// engine, quality and mode back for the next page.
-  final bool sharedTarget;
   final Logger _logger;
   final int Function() _newSeed;
   final int Function() _rss;
@@ -674,16 +662,13 @@ class SpeedTestRunner extends ChangeNotifier {
 
   static String _rate(double value) => value == value.roundToDouble() ? '${value.round()}' : '$value';
 
-  /// The page is going away: sound and screen are put back now, while the player can still hear it. A shared target
-  /// also gets the app's engine, quality and mode back, in a microtask: the swap notifies the controller's listeners,
-  /// which must not happen while the page's tree is torn down, yet it has to stop the run's video before another page
-  /// can open one. A target that goes with the page is left alone.
+  /// The page is going away: sound and screen are put back now, while the player can still hear it. The target goes
+  /// with the page, so its engine, quality and mode are left alone.
   @override
   void dispose() {
     _disposed = true;
     stop();
     _restoreSoundAndScreen();
-    if (sharedTarget) scheduleMicrotask(() => unawaited(_putBack()));
     super.dispose();
   }
 }

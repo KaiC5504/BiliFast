@@ -64,6 +64,9 @@ final class FakeEngine implements PlaybackEngine {
   /// As IsolatePlaybackEngine once its isolate exited: every call fails with RipperError(closed).
   bool closed = false;
 
+  /// Thrown by every release while set.
+  Object? releaseError;
+
   /// Holds prepares until the test completes it.
   Completer<void>? prepareGate;
 
@@ -107,7 +110,10 @@ final class FakeEngine implements PlaybackEngine {
   }
 
   @override
-  Future<void> release(String token) async => released.add(token);
+  Future<void> release(String token) async {
+    if (releaseError case final error?) throw error;
+    released.add(token);
+  }
 
   @override
   Future<void> replaceUrls(String token, TrackKind track, {required String primary, required List<String> backups}) async =>

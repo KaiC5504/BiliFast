@@ -21,10 +21,8 @@ import '../video/page_api.dart';
 import '../video/pip_keeper.dart';
 import 'app_environment.dart';
 
-/// Every video page's player: each page gets a controller and player of its own (BiliNative's one AVPlayer per page),
-/// all playing through one [SharedEngine] with one [CodecMemory]. It hears the app come back to the foreground, the
-/// system run short of memory and the network path change, tells the engine once and each live controller, and
-/// tells [onResumed] of the first.
+/// Hands each page a controller and player of its own (BiliNative's one AVPlayer per page), all on one [SharedEngine]
+/// and [CodecMemory], and passes on the app's foreground, memory and network events.
 class AppPlayback with WidgetsBindingObserver {
   AppPlayback(
     this._start, {
@@ -85,12 +83,15 @@ class AppPlayback with WidgetsBindingObserver {
   /// Page controllers made and not yet released, for the leak checks.
   int get live => _pages.length;
 
+  /// A player that can't be muted isn't handed out: under `--mute` it would play out loud.
   Future<void> _muteIfAsked(PlaybackController controller) async {
     if (!muted) return;
     try {
       await controller.player.setMuted(true);
     } catch (error) {
-      _logger.warn(LogCategory.player, 'mute failed', {'error': '$error'});
+      _logger.error(LogCategory.player, 'mute failed', {'error': '$error'});
+      release(controller);
+      rethrow;
     }
   }
 
