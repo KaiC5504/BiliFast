@@ -19,6 +19,7 @@ class WatchReporter {
     required PlaybackController controller,
     required this._client,
     required this._loggedIn,
+    this.onProgress,
     Logger? logger,
   }) : _controller = controller,
        _open = controller.opens,
@@ -39,6 +40,9 @@ class WatchReporter {
   final PlaybackController _controller;
   final BiliClient _client;
   final bool Function() _loggedIn;
+
+  /// Every position reported, logged in or not, in seconds; a finished video reports its whole length.
+  final void Function(String bvid, int cid, int seconds)? onProgress;
   final Logger _logger;
   final int _open;
   late final StreamSubscription<PlayerEvent> _events;
@@ -126,6 +130,8 @@ class WatchReporter {
 
   /// One after another, so a late answer never reorders the history Bilibili keeps.
   void _send(({String bvid, int cid}) item, int played) {
+    final duration = _controller.page?.duration ?? 0;
+    onProgress?.call(item.bvid, item.cid, played == HeartbeatSchedule.finished ? duration : played);
     if (!_loggedIn()) return;
     _sending = _sending.then((_) async {
       try {

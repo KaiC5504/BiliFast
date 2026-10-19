@@ -84,6 +84,23 @@ void main() {
     expect(sent().map((each) => each.$1).toSet(), {'137649199'});
   });
 
+  test('every report reaches onProgress, logged out too, and the end as the whole length', () async {
+    loggedIn = false;
+    final seen = <int>[];
+    final reporter = WatchReporter(
+      controller: controller,
+      client: client,
+      loggedIn: () => loggedIn,
+      onProgress: (bvid, cid, seconds) => seen.add(seconds),
+    );
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    position(20);
+    player.emit(const StatusChanged(PlayerStatus.ended));
+    await settle(reporter);
+    expect(sent(), isEmpty);
+    expect(seen, [0, 20, controller.page!.duration]);
+  });
+
   test('leaving mid-video reports where it stopped; logged out, nothing is sent', () async {
     final reporter = make();
     player.emit(const StatusChanged(PlayerStatus.playing));

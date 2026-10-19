@@ -338,6 +338,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       controller: controller,
       client: services.environment.client,
       loggedIn: () => WatchReporter.canReport(services.environment),
+      onProgress: (bvid, cid, seconds) => services.recents.recordProgress(bvid: bvid, cid: cid, seconds: seconds),
     );
     setState(() => _open = controller.opens);
     if (_session == null) _makeSession(controller);
