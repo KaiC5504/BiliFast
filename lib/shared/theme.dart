@@ -1826,8 +1826,143 @@ abstract final class MentionTheme {
   static const removeGlyphColor = Color(0xFFFFFFFF);
 }
 
-/// 弹幕设置 (07, 08, 24, 29, 33, 40, 41).
-abstract final class DanmakuPanelTheme {}
+/// 弹幕设置 (07, 08, 24, 29, 33, 40, 41). Landscape is a hard-edged dark strip at the right, portrait the light
+/// sheet; both lay out the same, measured from the top of the scrolling content and the left of the cards.
+abstract final class DanmakuPanelTheme {
+  /// The strip's share of the screen's width (382 of 956 pt) and the portrait sheet's height when it isn't hung
+  /// from the small player (497 of 956).
+  static const width = 382 / 956;
+  static const sheetHeight = 497 / 956;
+
+  /// No ramp into the video in front of it, unlike the other panels: 07, 24 and 29 cut straight to this.
+  static const shade = Color(0xE1000000);
+
+  /// The cards lie [inset] in from the strip's left and the safe area's edge, and their rows another [inset].
+  static const inset = 16.0;
+  static const cardRadius = 8.0;
+
+  /// From the top of the content to the first card; the title and 查看更多 are centred [headerCentre] down.
+  static const headerHeight = 48.0;
+  static const headerCentre = 26.2;
+  static const titleText = 14.0;
+  static const detailText = 12.0;
+
+  /// The box a line of text is centred in.
+  static const labelBox = 20.0;
+  static const moreGap = 5.5;
+  static const moreTrailing = 2.0;
+
+  /// A slider row: label and value centred [sliderLabelCentre] down, the track centred [sliderTrackCentre] down,
+  /// [sliderTrackInset] in from the card, the thumb's centre travelling to [sliderThumbInset] from the track's
+  /// ends and the stop dots [sliderDotInset].
+  static const sliderRow = 68.0;
+  static const sliderLabelCentre = 22.0;
+  static const sliderTrackCentre = 46.3;
+  static const sliderTrackInset = 14.0;
+  static const sliderTrack = 6.0;
+  static const sliderThumb = 14.0;
+  static const sliderThumbInset = 4.0;
+  static const sliderDot = 3.7;
+  static const sliderDotInset = 5.6;
+
+  /// Section titles sit between cards [sectionHeight] apart, centred [sectionCentre] below the card above.
+  static const sectionHeight = 56.0;
+  static const sectionCentre = 34.2;
+
+  /// 按弹幕类型屏蔽: its label, the row of squares and their labels, then the hairline at the block's foot.
+  static const typeBlock = 140.0;
+  static const typeLabelCentre = 26.2;
+  static const squareTop = 52.0;
+  static const squareHeight = 48.0;
+  static const squareGap = 6.0;
+  static const squareRadius = 12.0;
+  static const squareLabelCentre = 13.2;
+
+  /// The type glyphs' box, and the ⊘ on a blocked type: its centre in the box, its radius to the stroke's middle,
+  /// and how far round it the screen's outline is cut away.
+  static const glyphWidth = 26.0;
+  static const glyphHeight = 22.2;
+  static const glyphStroke = 1.5;
+  static const markStroke = 1.5;
+  static const badgeCentre = Offset(21.8, 17.5);
+  static const badgeRadius = 5.4;
+  static const badgeClear = 8.3;
+
+  /// A row with a switch: its title and subtitle centred [toggleTitleCentre] and [toggleSubtitleCentre] down.
+  static const toggleRow = 72.0;
+  static const toggleTitleCentre = 27.7;
+  static const toggleSubtitleCentre = 48.8;
+
+  /// 添加屏蔽词's button under 弹幕观看屏蔽词, then the gap to 当前弹幕列表's hairline.
+  static const buttonHeight = 36.0;
+  static const buttonRadius = 8.0;
+  static const buttonTextInset = 16.0;
+  static const buttonChevronTrailing = 20.3;
+  static const buttonGap = 15.0;
+  static const listRow = 51.0;
+  static const listChevronTrailing = 21.0;
+
+  /// ↻ 重置弹幕设置 under the last card: centred [resetCentre] below it, its text ending [resetTrailing] short of
+  /// the cards' right edge, and the content ending [endGap] below its row (portrait adds the safe area).
+  static const resetCentre = 24.0;
+  static const resetHeight = 20.0;
+  static const resetGap = 4.0;
+  static const resetTrailing = 1.0;
+  static const endGap = 6.0;
+
+  /// The portrait sheet's content starts this far under its grabber.
+  static const sheetTop = 8.0;
+
+  static const chevronDownWidth = 11.3;
+  static const chevronDownHeight = 6.0;
+  static const buttonChevronWidth = 6.7;
+  static const buttonChevronHeight = 11.3;
+  static const listChevronWidth = 5.7;
+  static const listChevronHeight = 11.7;
+  static const chevronStroke = 1.1;
+  static const resetGlyphWidth = 13.3;
+  static const resetGlyphHeight = 12.3;
+  static const resetStroke = 1.0;
+
+  /// The reset confirm (33): over the whole screen, dimming everything, the panel included.
+  static const dialogWidth = 280.0;
+  static const dialogTitleHeight = 67.3;
+  static const dialogButtonHeight = 44.0;
+  static const dialogRadius = 8.0;
+  static const dialogTitleText = 16.0;
+  static const dialogButtonText = 14.0;
+
+  /// 我再想想 and 确定 are centred this far either side of the dialog's middle.
+  static const dialogButtonSpread = 66.0;
+  static const dialogDim = BiliColors.sheetDim;
+  static const dialog = Color(0xFF242628);
+  static const dialogText = Color(0xFFE7E9EB);
+  static const dialogConfirm = Color(0xFFD44E7D);
+  static const dialogDivider = Color(0xFF2F3134);
+
+  /// Landscape, over the video: the cards and squares let a little of it through.
+  static const card = Color(0xB32F3238);
+  static const square = Color(0x0DFFFFFF);
+  static const track = Color(0x26FFFFFF);
+  static const hairline = BiliColors.panelHairline;
+  static const text = BiliColors.panelText;
+  static const value = Color(0xFFC9CCD0);
+  static const secondary = BiliColors.panelSecondary;
+  static const reset = Color(0xFFC9CCD0);
+
+  /// Portrait's light sheet (40, 41): the fill left of the thumb is half pink, the thumb and dots pink.
+  static const lightBackground = Color(0xFFF6F7F8);
+  static const lightCard = BiliColors.card;
+  static const lightSquare = Color(0xFFF6F7F8);
+  static const lightTrack = Color(0xFFE3E5E7);
+  static const lightFill = Color(0xFFFFB3CA);
+  static const lightHairline = Color(0xFFE3E5E7);
+  static const lightText = BiliColors.text;
+  static const lightSecondary = BiliColors.secondaryText;
+  static const lightReset = Color(0xFF61666D);
+  static const lightSwitchOff = Color(0xFFE9E9EA);
+  static const lightKnobShadow = Color(0x29000000);
+}
 
 /// 添加屏蔽词 (30).
 abstract final class BlockWordsTheme {}

@@ -27,6 +27,8 @@ final class PanelFrame {
     this.column = false,
     this.light = false,
     this.full = false,
+    this.solid = false,
+    this.sheetColor = BiliColors.card,
   });
 
   final double width;
@@ -38,6 +40,12 @@ final class PanelFrame {
 
   /// Over the whole screen, drawing its own backdrop (添加屏蔽词, 30).
   final bool full;
+
+  /// 弹幕设置's strip (07): a hard edge with no ramp into the video, and the content ending its own scroll.
+  final bool solid;
+
+  /// The light sheet's ground.
+  final Color sheetColor;
 
   static PanelFrame of(PlayerPanel panel) => switch (panel) {
     PlayerPanel.quality || PlayerPanel.codec => const PanelFrame(
@@ -60,9 +68,11 @@ final class PanelFrame {
     ),
     // Portrait's 弹幕设置 is the light sheet of 40.
     PlayerPanel.danmakuSettings => const PanelFrame(
-      width: BiliMetrics.panelWidth,
-      sheetHeight: BiliMetrics.panelSheetHeight,
+      width: DanmakuPanelTheme.width,
+      sheetHeight: DanmakuPanelTheme.sheetHeight,
       light: true,
+      solid: true,
+      sheetColor: DanmakuPanelTheme.lightBackground,
     ),
     PlayerPanel.blockWords => const PanelFrame(width: 1, sheetHeight: 1, full: true),
     PlayerPanel.danmakuList => const PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
@@ -75,10 +85,12 @@ final class PanelFrame {
       other.sheetHeight == sheetHeight &&
       other.column == column &&
       other.light == light &&
-      other.full == full;
+      other.full == full &&
+      other.solid == solid &&
+      other.sheetColor == sheetColor;
 
   @override
-  int get hashCode => Object.hash(width, sheetHeight, column, light, full);
+  int get hashCode => Object.hash(width, sheetHeight, column, light, full, solid, sheetColor);
 }
 
 /// The open panel, if any (BiliNative `PanelLayer.swift` and `SidePanel.swift`): from the right in landscape, a
@@ -119,6 +131,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
   /// What shows: the open panel, or the one sliding out after a close.
   PlayerPanel? _shown;
 
+  /// A confirm the open panel asked for, over everything; it goes with the panel.
+  final _confirm = ValueNotifier<PanelConfirm?>(null);
+
   @override
   void initState() {
     super.initState();
@@ -158,6 +173,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     _motion.dispose();
     _dragBack.dispose();
     _drag.dispose();
+    _confirm.dispose();
     super.dispose();
   }
 
@@ -166,6 +182,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
   }
 
   void _panelChanged() {
+    _confirm.value = null;
     final next = widget.ui.panels.value;
     if (next == null) {
       if (_shown == null) return;
@@ -239,13 +256,28 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                   if (frame.full)
                     _full(content)
                   else if (!landscape && light)
-                    ..._lightSheet(size, insets, content)
+                    ..._lightSheet(size, insets, frame, content)
                   else if (!landscape)
                     _sheet(size, insets, frame, content)
                   else if (frame.column)
                     _column(size, insets, frame, content)
                   else
                     _side(size, insets, frame, content),
+                  Positioned.fill(
+                    child: ValueListenableBuilder(
+                      valueListenable: _confirm,
+                      builder: (context, request, _) => AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: request == null
+                            ? const SizedBox.shrink()
+                            : PanelConfirmDialog(
+                                key: ValueKey(request),
+                                request: request,
+                                dismiss: () => _confirm.value = null,
+                              ),
+                      ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -300,6 +332,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               light: light,
               toast: _toast,
               close: _close,
+              confirm: (request) => _confirm.value = request,
             ),
             PlayerPanel.blockWords => BlockWordsView(
               ui: widget.ui,
@@ -325,7 +358,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   Widget _side(Size size, EdgeInsets insets, PanelFrame frame, Widget content) {
     final width = size.width * frame.width;
-    final reach = size.width * BiliMetrics.panelFadeFraction;
+    final reach = frame.solid ? 0.0 : size.width * BiliMetrics.panelFadeFraction;
     return Positioned(
       top: 0,
       bottom: 0,
@@ -339,11 +372,13 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
           children: [
             Positioned.fill(
               child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: panelBackdrop(reach: reach, length: width + reach),
-                  ),
-                ),
+                child: frame.solid
+                    ? const ColoredBox(color: DanmakuPanelTheme.shade)
+                    : DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: panelBackdrop(reach: reach, length: width + reach),
+                        ),
+                      ),
               ),
             ),
             Positioned(
@@ -355,7 +390,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                 child: SingleChildScrollView(
                   padding: EdgeInsets.only(
                     top: insets.top,
-                    bottom: insets.bottom + BiliMetrics.panelBottom,
+                    bottom: frame.solid ? 0 : insets.bottom + BiliMetrics.panelBottom,
                     right: insets.right + BiliMetrics.panelTrailing,
                   ),
                   child: content,
@@ -501,10 +536,10 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   /// The official 合集 list (19): white, rounded at the top, from the player's bottom down; [EpisodesPanel] fills it
   /// below the grabber. The page under it dims, the player above it doesn't.
-  List<Widget> _lightSheet(Size size, EdgeInsets insets, Widget content) {
+  List<Widget> _lightSheet(Size size, EdgeInsets insets, PanelFrame frame, Widget content) {
     final height = widget.ui.presentation == Presentation.inline
         ? math.max(0.0, size.height - (widget.playerBottom ?? insets.top + size.width / BiliMetrics.videoAspect))
-        : size.height * BiliMetrics.panelSheetHeight;
+        : size.height * frame.sheetHeight;
     final hidden = height + insets.bottom;
     return [
       Positioned(
@@ -527,9 +562,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
         hidden: hidden,
         child: _body(
           child: DecoratedBox(
-            decoration: const BoxDecoration(
-              color: BiliColors.card,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
+            decoration: BoxDecoration(
+              color: frame.sheetColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
             ),
             child: Column(
               children: [

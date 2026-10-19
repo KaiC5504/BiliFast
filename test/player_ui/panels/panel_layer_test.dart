@@ -1215,4 +1215,59 @@ void main() {
       expect(share, findsNothing);
     });
   });
+
+  group('the danmaku frames', () {
+    testWidgets("弹幕设置 in landscape is 07's strip: 382 of 956 wide, full height, cut straight with no ramp", (
+      tester,
+    ) async {
+      final rig = await pumpLayer(tester, Shape.landscape);
+      await open(tester, rig, PlayerPanel.danmakuSettings);
+      expect(tester.getRect(frame), const Rect.fromLTWH(574, 0, 382, 440));
+      final shade = find.byWidgetPredicate((widget) => widget is ColoredBox && widget.color == DanmakuPanelTheme.shade);
+      expect(shade, findsOneWidget);
+      expect(tester.getRect(shade), tester.getRect(frame));
+      final ramps = tester.widgetList<DecoratedBox>(find.byType(DecoratedBox));
+      expect(ramps.where((box) => (box.decoration as BoxDecoration?)?.gradient != null), isEmpty);
+    });
+
+    testWidgets("当前弹幕列表 in landscape is 31's side panel, with the usual ramp into the video", (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape);
+      await open(tester, rig, PlayerPanel.danmakuList);
+      expect(tester.getSize(frame), Size(landscapeSize.width * BiliMetrics.panelWidth, landscapeSize.height));
+      expect(tester.getTopRight(frame), Offset(landscapeSize.width, 0));
+      final ramps = tester.widgetList<DecoratedBox>(find.byType(DecoratedBox));
+      expect(ramps.where((box) => (box.decoration as BoxDecoration?)?.gradient != null), hasLength(1));
+    });
+
+    testWidgets('添加屏蔽词 covers the whole screen', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape);
+      await open(tester, rig, PlayerPanel.blockWords);
+      expect(tester.getRect(frame), Offset.zero & landscapeSize);
+    });
+
+    testWidgets("弹幕设置 in portrait is 40's light sheet on grey from the player down, in 竖屏 497 of 956 tall", (
+      tester,
+    ) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      await open(tester, rig, PlayerPanel.danmakuSettings);
+      final player = portraitSize.width / BiliMetrics.videoAspect;
+      expect(tester.getTopLeft(frame), Offset(0, player));
+      expect(tester.getBottomLeft(frame).dy, portraitSize.height);
+      final sheet = tester.widget<DecoratedBox>(find.descendant(of: frame, matching: find.byType(DecoratedBox)).first);
+      expect((sheet.decoration as BoxDecoration).color, DanmakuPanelTheme.lightBackground);
+      expect(find.byKey(const ValueKey('panel-sheet-dim')), findsOneWidget);
+
+      final vertical = await pumpLayer(tester, Shape.vertical);
+      await open(tester, vertical, PlayerPanel.danmakuSettings);
+      expect(tester.getSize(frame).height, closeTo(portraitSize.height * DanmakuPanelTheme.sheetHeight, 0.01));
+      expect(tester.getSize(frame).height, closeTo(497, 0.01));
+    });
+
+    testWidgets('选集 keeps its white sheet', (tester) async {
+      final rig = await pumpLayer(tester, Shape.portrait);
+      await open(tester, rig, PlayerPanel.episodes);
+      final sheet = tester.widget<DecoratedBox>(find.descendant(of: frame, matching: find.byType(DecoratedBox)).first);
+      expect((sheet.decoration as BoxDecoration).color, BiliColors.card);
+    });
+  });
 }
