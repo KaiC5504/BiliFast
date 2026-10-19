@@ -1282,7 +1282,29 @@ abstract final class CommentListTheme {
 
 /// A comment's rich text and the picture viewer.
 abstract final class CommentTextTheme {
-  static const link = Color(0xFF008AC5);
+  /// The only blue the official comments show (12's 共N条回复) is the app's link blue.
+  static const link = BiliColors.link;
+
+  /// An emote's side per step of its `size`, as a share of the text's size: 12's 😑 is 20 pt beside 15 pt text.
+  static const emoteScale = 4 / 3;
+
+  /// How far an emote's middle sits above the baseline, as a share of the text's size: on the middle of the Chinese
+  /// glyphs beside it, as on 12.
+  static const emoteRise = 0.35;
+
+  static const viewerBackground = Color(0xFF000000);
+  static const viewerText = Color(0xFFFFFFFF);
+  static const viewerCountText = 15.0;
+
+  /// The "2/5" count, below the safe area.
+  static const viewerCountTop = 12.0;
+
+  /// The invisible 关闭 target in the top corner, for VoiceOver; a tap anywhere closes the viewer anyway.
+  static const viewerCloseTarget = 44.0;
+  static const viewerFadeIn = Duration(milliseconds: 200);
+  static const viewerZoomDuration = Duration(milliseconds: 250);
+  static const viewerDoubleTapScale = 2.5;
+  static const viewerMaxScale = 4.0;
 }
 
 /// The composer and its emote panel (14).
