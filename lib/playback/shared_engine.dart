@@ -51,7 +51,7 @@ final class SharedEngine {
     }
   }
 
-  /// A controller on the shared engine.
+  /// One controller's hold on the running engine, started first when none runs.
   Future<EngineLease> lease() async => EngineLease._(this, await current());
 
   void _gone(PlaybackEngine engine) {
@@ -114,7 +114,7 @@ final class EngineLease implements PlaybackEngine {
 
   final SharedEngine _shared;
 
-  /// The shared engine this lease was given.
+  /// The engine running when the lease was taken.
   final PlaybackEngine engine;
   final _tokens = <String>{};
   bool _released = false;
@@ -135,7 +135,7 @@ final class EngineLease implements PlaybackEngine {
   @override
   Future<PreparedSource> prepare(PlaybackRequest request) async {
     final source = await _call(() => engine.prepare(request));
-    // Let go while it was preparing: the controller that asked has moved on and drops the source itself.
+    // Let go while it was preparing: nothing will release this source through the lease now, so it goes at once.
     if (_released) {
       unawaited(engine.release(source.token).catchError((Object _) {}));
     } else {
@@ -146,6 +146,7 @@ final class EngineLease implements PlaybackEngine {
 
   @override
   Future<void> release(String token) {
+    if (_released) return Future.value();
     _tokens.remove(token);
     return _call(() => engine.release(token));
   }
@@ -215,8 +216,10 @@ final class EngineLease implements PlaybackEngine {
     for (final token in tokens) {
       try {
         await engine.release(token);
-      } catch (_) {
+      } catch (error) {
         // A gone engine took them with it.
+        if (error is RipperError && error.kind == RipperErrorKind.closed) continue;
+        _shared._logger.warn(LogCategory.engine, 'release failed', {'error': '$error'});
       }
     }
   }

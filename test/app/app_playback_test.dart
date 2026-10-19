@@ -41,6 +41,7 @@ void main() {
   late MemorySink logs;
   late Logger logger;
   Completer<void>? engineGate;
+  Object? muteError;
 
   setUp(() {
     http = Canned.http();
@@ -52,6 +53,7 @@ void main() {
     logs = MemorySink();
     logger = Logger(session: 'test')..add(logs);
     engineGate = null;
+    muteError = null;
     shared = SharedEngine(() async {
       await engineGate?.future;
       final engine = FakeEngine();
@@ -68,7 +70,7 @@ void main() {
 
   /// startPlaybackController's wiring, with fakes: a new player on a lease of the shared engine.
   Future<PlaybackController> startController() async {
-    final player = FakePlayer();
+    final player = FakePlayer()..muteError = muteError;
     players.add(player);
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     final controller = PlaybackController(
@@ -243,6 +245,22 @@ void main() {
     final b = await playback.create();
     expect(a.player.muted, isTrue);
     expect(b.player.muted, isTrue);
+  });
+
+  testWidgets('--mute: a player that can\'t be muted is released, and the page gets none', (tester) async {
+    await loadEnvironment();
+    final playback = appPlayback(muted: true);
+    muteError = StateError('no audio session');
+    await expectLater(playback.create(), throwsStateError);
+    expect(playback.live, 0);
+    expect(players.single.disposed, isTrue);
+    expect(players.single.calls, isNot(contains('play')));
+    expect(logged('mute failed'), hasLength(1));
+
+    muteError = null;
+    final next = await playback.create();
+    expect(next.player.muted, isTrue);
+    expect(playback.live, 1);
   });
 
   testWidgets('设置\'s node and codec memory changes need no page open', (tester) async {

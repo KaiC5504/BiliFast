@@ -189,6 +189,39 @@ void main() {
     expect(shared.running, same(engines.single));
   });
 
+  test('a page closed while its source was preparing releases it once, and logs no failure', () async {
+    final a = await make();
+    final engine = engines.single;
+    final gate = engine.prepareGate = Completer<void>();
+    final opening = a.open(bv);
+    await settle();
+    made.remove(a);
+    a.dispose();
+    await settle();
+    gate.complete();
+    await opening;
+    await settle();
+    expect(engine.released, ['tok1']);
+    expect(logs.events.where((event) => event.msg == 'release failed'), isEmpty);
+  });
+
+  test('a lease that has let go takes a release as done, without asking the engine', () async {
+    final lease = await shared.lease();
+    await lease.dispose();
+    await lease.release('tok1');
+    expect(engines.single.released, isEmpty);
+    expect(shared.running, same(engines.single));
+  });
+
+  test('a release that fails for another reason while letting go is logged', () async {
+    final a = await make();
+    await a.open(bv);
+    final engine = engines.single;
+    engine.releaseError = StateError('busy');
+    await (a.engine as EngineLease).dispose();
+    expect(logs.events.where((event) => event.msg == 'release failed'), hasLength(1));
+  });
+
   test('a start that fails is tried again by the next lease', () async {
     startError = StateError('no isolate');
     await expectLater(shared.lease(), throwsStateError);

@@ -185,8 +185,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
 
   bool _speedTestStopped = false;
 
-  /// With the shared player this runs at the pop, not at dispose half a second later: a video page opened during the
-  /// slide must find the app's engine, not the run still seeking or a put-back clearing its video.
+  /// Runs at the pop, not at dispose half a second later, so the run stops with the swipe.
   void _stopSpeedTest() {
     if (_speedTestStopped) return;
     _speedTestStopped = true;

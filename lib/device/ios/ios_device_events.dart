@@ -30,7 +30,7 @@ final class IosDeviceEvents implements DeviceEventApi {
 
   Stream<TurnStart> get turns => _turns.stream;
 
-  /// Each change of the phone's network path, true when its interfaces changed.
+  /// NetworkMonitor.swift's changes to a path that is up: true when its interfaces or gateways changed.
   Stream<bool> get networkChanges => _network.stream;
 
   @override

@@ -67,7 +67,6 @@ Future<void> main(List<String> args) async {
     () => startPlaybackController(environment.client, engine: engine, codecMemory: codecMemory),
     engine: engine,
     codecMemory: codecMemory,
-    // Checks run on the PC play silently.
     muted: args.contains('--mute'),
     onResumed: () => recheckUnknownAccount(environment),
   );

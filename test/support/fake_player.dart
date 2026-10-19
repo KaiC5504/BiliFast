@@ -50,9 +50,13 @@ final class FakePlayer implements BiliPlayer {
   @override
   Future<void> setRate(double rate) async => _record('rate $rate');
 
+  /// Thrown by every setMuted while set.
+  Object? muteError;
+
   @override
   Future<void> setMuted(bool muted) async {
     _record('muted $muted');
+    if (muteError case final error?) throw error;
     this.muted = muted;
   }
 
