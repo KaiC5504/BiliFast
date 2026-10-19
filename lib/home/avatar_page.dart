@@ -235,8 +235,12 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
   late final Listenable _changes;
   PageRoute<dynamic>? _route;
 
-  /// Logged out since the list last loaded: the next login loads that account's list.
-  bool _missedLogin = false;
+  /// The account changed since the list last loaded: the next login (or coming back to the page) loads its list.
+  bool _reloadDue = false;
+  bool _wasLoggedIn = false;
+
+  /// A page route is pushed over this one.
+  bool _covered = false;
 
   AppEnvironment get _environment => _services!.environment;
 
@@ -245,8 +249,6 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
     LoggedIn() || AccountUnknown() => false,
   };
 
-  bool get _showsHistory => !_signedOut && !_history.needsLogin;
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -254,7 +256,8 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
       final services = _services = AppScope.of(context);
       _history = HistoryModel(api: services.pageApi, isLoggedIn: () => !_signedOut);
       _changes = Listenable.merge([services.environment, _history, services.recents]);
-      _missedLogin = _signedOut;
+      _reloadDue = _signedOut;
+      _wasLoggedIn = services.environment.account is LoggedIn;
       services.environment.addListener(_accountChanged);
       unawaited(_history.start());
     }
@@ -265,20 +268,37 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
     }
   }
 
+  /// The environment also tells of every account check that only confirms the login; those load nothing.
   void _accountChanged() {
+    final account = _environment.account;
+    final wasLoggedIn = _wasLoggedIn;
+    _wasLoggedIn = account is LoggedIn;
     if (_signedOut) {
-      _missedLogin = true;
-    } else if (_environment.account is LoggedIn && (_missedLogin || _history.needsLogin)) {
-      _missedLogin = false;
-      unawaited(_history.reload());
+      _history.signOut();
+      _reloadDue = true;
+      return;
     }
+    if (account is! LoggedIn) {
+      // A login over one that read logged in passes through here, and may be another account.
+      if (wasLoggedIn) _reloadDue = true;
+      return;
+    }
+    // Covered (设置 or the login page on top), the page coming back loads it, once.
+    if (!_reloadDue || _covered) return;
+    _reloadDue = false;
+    unawaited(_history.reload());
   }
+
+  @override
+  void didPushNext() => _covered = true;
 
   /// Back from a video (or 历史记录, 设置): the account's list may have changed meanwhile.
   @override
   void didPopNext() {
+    _covered = false;
     if (_signedOut) return;
-    _missedLogin = false;
+    if (!_reloadDue && (_history.loading || _history.needsLogin)) return;
+    _reloadDue = false;
     unawaited(_history.reload());
   }
 
@@ -296,9 +316,18 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
   }
 
   Future<void> _delete(HistoryItem item) async {
-    if (_environment.account is! LoggedIn) return;
     final failure = await _history.delete(item);
     if (failure != null && mounted) showToast(context, failure);
+  }
+
+  /// As 历史记录's 登录: the account change has usually reloaded the list by the time the gate answers.
+  Future<bool> _login() async {
+    final loggedIn = await _services!.loginGate.request(context);
+    if (loggedIn && mounted && _history.needsLogin) {
+      _reloadDue = false;
+      unawaited(_history.reload());
+    }
+    return loggedIn && mounted;
   }
 
   @override
@@ -308,13 +337,26 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
       color: BiliColors.card,
       child: ListenableBuilder(
         listenable: _changes,
-        builder: (context, _) => _showsHistory ? _historyList(context) : _recentsList(context),
+        builder: (context, _) => _signedOut ? _recentsList(context) : _historyList(context),
       ),
     ),
   );
 
+  /// Bilibili answered -101 while the app still reads logged in: the card asks for a login, as 历史记录 does, and
+  /// opens the login page only when pressed.
+  Widget _needsLogin(BuildContext context) => _list(
+    context,
+    onAll: () => unawaited(() async {
+      if (await _login() && mounted) widget.push((_) => const WatchHistoryPage());
+    }()),
+    note: '登录后查看历史记录',
+    action: _LoginButton(onTap: () => unawaited(_login())),
+    rows: const [],
+  );
+
   Widget _historyList(BuildContext context) {
     final history = _history;
+    if (history.needsLogin) return _needsLogin(context);
     final now = _services!.recents.now();
     String? note;
     if (history.items.isEmpty && !history.loading) {
@@ -387,6 +429,7 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
     required VoidCallback onAll,
     Future<void> Function()? onRefresh,
     required String? note,
+    Widget? action,
     required List<Widget> rows,
   }) => CustomScrollView(
     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
@@ -397,15 +440,19 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: AvatarPageTheme.rowExtent / 2),
-            child: Center(
-              child: Text(
-                note,
-                style: TextStyle(
-                  fontFamily: BiliFonts.family,
-                  fontSize: BiliMetrics.bodyText,
-                  color: BiliColors.secondaryText,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  note,
+                  style: TextStyle(
+                    fontFamily: BiliFonts.family,
+                    fontSize: BiliMetrics.bodyText,
+                    color: BiliColors.secondaryText,
+                  ),
                 ),
-              ),
+                if (action != null) ...[const SizedBox(height: HistoryTheme.stateGap), action],
+              ],
             ),
           ),
         ),
@@ -482,7 +529,45 @@ class _Header extends StatelessWidget {
   );
 }
 
-/// One of 49's rows: the cover with its duration and progress, two lines of title, when it was opened, and ✕.
+/// 历史记录's pink 登录, for the card's -101 state.
+class _LoginButton extends StatelessWidget {
+  const _LoginButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    button: true,
+    label: '登录',
+    excludeSemantics: true,
+    onTap: onTap,
+    child: GestureDetector(
+      key: const ValueKey('avatar-login'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: HistoryTheme.loginHeight,
+        padding: const EdgeInsets.symmetric(horizontal: HistoryTheme.loginPadX),
+        decoration: const ShapeDecoration(color: BiliColors.pink, shape: StadiumBorder()),
+        child: Center(
+          widthFactor: 1,
+          child: Text(
+            '登录',
+            style: TextStyle(
+              fontFamily: BiliFonts.family,
+              fontSize: HistoryTheme.loginText,
+              fontWeight: HistoryTheme.buttonWeight,
+              color: BiliColors.onPink,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// One of 49's rows: the cover with its duration and progress, two lines of title, when it was last played, and ✕.
 class _VideoRow extends StatelessWidget {
   const _VideoRow({
     super.key,

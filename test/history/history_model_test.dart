@@ -224,6 +224,32 @@ void main() {
       expect(history.needsLogin, isFalse);
       expect(history.items.length, 3);
     });
+
+    test('signing out drops the rows, a page still loading, and a late answer to a delete', () async {
+      api.historyItems = historyRows(25, from: wall(18, 22, 0));
+      final history = model();
+      await history.start();
+      final pageHold = Completer<void>();
+      api.holds['history'] = pageHold;
+      final more = history.loadMore();
+      final deleteHold = Completer<void>();
+      api.holds['deleteHistory'] = deleteHold;
+      final deleting = history.delete(history.items.first);
+      await Future<void>.delayed(Duration.zero);
+
+      history.signOut();
+      expect(history.items, isEmpty);
+      expect(history.needsLogin, isTrue);
+      expect(history.loading, isFalse);
+
+      api.failures['deleteHistory'] = const BiliError.http(500);
+      deleteHold.complete();
+      pageHold.complete();
+      expect(await deleting, isNull, reason: 'no toast for the account that left');
+      await more;
+      expect(history.items, isEmpty);
+      expect(history.needsLogin, isTrue);
+    });
   });
 
   group('rows', () {

@@ -53,6 +53,9 @@ class HistoryModel extends ChangeNotifier {
 
   /// Bumped by a reload, so a load more still running cannot append to the new list.
   int _generation = 0;
+
+  /// Bumped by [signOut], so a delete answering for the account that left changes nothing in the next one's list.
+  int _signOuts = 0;
   bool _disposed = false;
 
   List<HistoryItem> get items => _items;
@@ -169,6 +172,19 @@ class HistoryModel extends ChangeNotifier {
     }
   }
 
+  /// The account logged out: its rows go at once, a page still loading lands nowhere, and [needsLogin] holds until
+  /// the next [reload].
+  void signOut() {
+    _generation++;
+    _signOuts++;
+    _loading = false;
+    _refreshing = false;
+    _error = null;
+    _deleted.clear();
+    _loggedOut();
+    _notify();
+  }
+
   void _loggedOut() {
     _needsLogin = true;
     _items = const [];
@@ -192,11 +208,13 @@ class HistoryModel extends ChangeNotifier {
     _items = [..._items]..removeAt(index);
     _deleted.add(item.id);
     _notify();
+    final signOuts = _signOuts;
     try {
       await api.deleteHistory(item);
       return null;
     } catch (error) {
       _logger.warn(LogCategory.ui, 'history delete failed', {'error': '$error'});
+      if (signOuts != _signOuts) return null;
       _deleted.remove(item.id);
       if (_disposed) return deleteFailed;
       if (error is BiliError && error.needsLogin) {
