@@ -145,6 +145,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   final _panels = PanelController();
   final _overlays = ActionOverlayController();
   final _tabs = PageTabsController();
+
+  /// Attached to nothing: the status bar's tap scrolls nothing while 评论详情 is up.
+  final _noScroll = ScrollController();
   final _areaKey = GlobalKey();
   late final _collapse = CollapsingPlayer(tabs: _tabs, vsync: this);
 
@@ -409,6 +412,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       if (detail != null) comments.upMid = detail.owner.mid;
       return;
     }
+    // A post still out keeps its composer and model until it lands, so a failure is still shown.
+    if (_drafts.anyPosting) {
+      _drafts
+        ..removeListener(_postLanded)
+        ..addListener(_postLanded);
+      return;
+    }
     final services = _services!;
     final environment = services.environment;
     final old = _comments;
@@ -433,6 +443,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       ..dispose();
   }
 
+  void _postLanded() {
+    if (_drafts.anyPosting) return;
+    _drafts.removeListener(_postLanded);
+    if (mounted && !_left) _syncComments();
+  }
+
   /// Rebuilds the PopScope when the thread opens or closes, which back then closes first.
   void _commentsChanged() {
     final open = _comments?.thread != null;
@@ -443,9 +459,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   void _syncListCount() {
     final comments = _comments;
     final loaded = comments != null && (comments.comments.isNotEmpty || comments.pinned != null || comments.isEnd);
-    final count = loaded ? comments.total : null;
+    // A reload (another sort) keeps the last count until its first page is in; a new video's model starts at null.
+    if (!loaded) return;
+    final count = comments.total;
     if (count == _listCount.value || !mounted) return;
-    // The tab loads its first page from its initState, mid-build, where the row can't rebuild yet.
+    // The tab asks for its first page while it builds, where the row can't rebuild yet.
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
       SchedulerBinding.instance.addPostFrameCallback((_) => _syncListCount());
     } else {
@@ -711,6 +729,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     _panels.dispose();
     _overlays.dispose();
     _tabs.dispose();
+    _noScroll.dispose();
+    _drafts.removeListener(_postLanded);
     super.dispose();
   }
 
@@ -748,8 +768,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
         // its list its own, and nothing else in the body takes one, so the composer's lists and the panels stay off it.
         child: ListenableBuilder(
           listenable: _tabs,
-          builder: (context, scaffold) =>
-              PrimaryScrollController(controller: _tabs.scrollOf(_tabs.selected), child: scaffold!),
+          // 评论详情 covers the tabs and scrolls on its own: a tap then reaches nothing rather than the list under it.
+          builder: (context, scaffold) => PrimaryScrollController(
+            controller: _threadOpen ? _noScroll : _tabs.scrollOf(_tabs.selected),
+            child: scaffold!,
+          ),
           child: Scaffold(
             backgroundColor: fullScreen ? BiliColors.videoBackground : BiliColors.card,
             // The comment composer rides on the keyboard by itself, and the full-screen player keeps its size under it.

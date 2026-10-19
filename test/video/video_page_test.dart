@@ -6,6 +6,7 @@ import 'package:bili_core/api.dart'
     show
         Comment,
         CommentMember,
+        CommentSort,
         CommentPicture,
         OfficialKind,
         RichRun,
@@ -2110,6 +2111,48 @@ void main() {
       expect(find.bySemanticsLabel('评论 2'), findsOneWidget);
       await back(tester);
     });
+
+    testWidgets('another sort keeps 评论 N while its first page loads', (tester) async {
+      await host(tester, pageApi: api);
+      api.commentList = [comment(100), comment(101)];
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      sessions.first
+        ..detail = detail(bv, reply: 27)
+        ..changed();
+      await tester.pump();
+      await showComments(tester);
+      expect(find.bySemanticsLabel('评论 2'), findsOneWidget);
+      final hold = api.holds['comments'] = Completer<void>();
+      unawaited(model(tester).setSort(CommentSort.time));
+      await frames(tester);
+      expect(find.bySemanticsLabel('评论 2'), findsOneWidget, reason: 'not back to the video\'s 27');
+      hold.complete();
+      await frames(tester, 10);
+      await back(tester);
+    });
+
+    testWidgets('the status bar\'s tap leaves the list under 评论详情 where it is', (tester) async {
+      await onComments(tester);
+      await openThread(tester);
+      final list = tester
+          .state<ScrollableState>(
+            find.descendant(of: find.byType(CommentsTab), matching: find.byType(Scrollable), skipOffstage: false).first,
+          )
+          .position
+        ..jumpTo(200);
+      await tester.pump();
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.statusBar.name,
+        SystemChannels.statusBar.codec.encodeMethodCall(const MethodCall('handleScrollToTop')),
+        (_) {},
+      );
+      await frames(tester, 30);
+      expect(list.pixels, 200);
+      expect(find.byType(ThreadView), findsOneWidget);
+      await back(tester);
+      await back(tester);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('with no detail, 评论 opens on the view\'s aid; the detail\'s uploader then marks the same model', (
       tester,

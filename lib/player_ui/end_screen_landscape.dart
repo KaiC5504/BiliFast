@@ -275,11 +275,7 @@ class _Uploader extends StatelessWidget {
           border: Border.all(color: BiliColors.onVideo, width: BiliMetrics.landscapeEndAvatarRing),
         ),
         child: ClipOval(
-          child: RemoteImage(
-            owner.face,
-            size: const Size.square(BiliMetrics.landscapeEndAvatar),
-            placeholder: const ColoredBox(color: BiliColors.landscapeEndPlaceholder),
-          ),
+          child: RemoteImage.avatar(owner.face, size: const Size.square(BiliMetrics.landscapeEndAvatar)),
         ),
       ),
       const SizedBox(width: BiliMetrics.landscapeEndAvatarGap),
