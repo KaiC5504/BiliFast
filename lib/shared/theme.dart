@@ -1931,8 +1931,11 @@ abstract final class DanmakuPanelTheme {
   /// the cards' right edge, and the content ending [endGap] below its row (portrait adds the safe area).
   static const resetCentre = 24.0;
   static const resetHeight = 20.0;
-  static const resetGap = 4.0;
+  static const resetGap = 3.0;
   static const resetTrailing = 1.0;
+
+  /// MiSans sets 重置弹幕设置 a point wider than 08's PingFang, which would push ↻ left of where 08 has it.
+  static double get resetSpacing => BiliFonts.nudged ? -0.2 : 0;
   static const endGap = 6.0;
 
   /// The portrait sheet's content starts this far under its grabber.
@@ -1987,6 +1990,8 @@ abstract final class DanmakuPanelTheme {
   static const lightReset = Color(0xFF61666D);
   static const lightSwitchOff = Color(0xFFE9E9EA);
   static const lightKnobShadow = Color(0x29000000);
+  static const lightKnobShadowBlur = 1.5;
+  static const lightKnobShadowOffset = Offset(0, 0.5);
 }
 
 /// 添加屏蔽词 (30). Across, sizes count from the safe area's left edge (62 pt on the Pro Max); the top row ends at its

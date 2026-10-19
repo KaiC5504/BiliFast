@@ -1263,6 +1263,34 @@ void main() {
       expect(tester.getSize(frame).height, closeTo(497, 0.01));
     });
 
+    for (final panel in [PlayerPanel.blockWords, PlayerPanel.danmakuList]) {
+      for (final upright in [Presentation.inline, Presentation.vertical]) {
+        testWidgets("${panel.name} turned to ${upright.name} gives way to 弹幕设置's sheet", (tester) async {
+          final rig = await pumpLayer(tester, Shape.landscape);
+          await open(tester, rig, panel);
+          if (upright == Presentation.inline) {
+            rig.ui.orientation.exitToInline();
+          } else {
+            rig.ui.orientation.enterVertical();
+          }
+          tester.view.physicalSize = portraitSize;
+          await tester.pumpAndSettle();
+          expect(rig.panels.value, PlayerPanel.danmakuSettings);
+          expect(find.byKey(const ValueKey('panel-sheet-dim')), findsOneWidget);
+          expect(tester.getBottomLeft(frame), Offset(0, portraitSize.height));
+          expect(tester.getSize(frame).width, portraitSize.width);
+        });
+      }
+    }
+
+    testWidgets('turned upright, other panels stay as they are', (tester) async {
+      final rig = await pumpLayer(tester, Shape.landscape);
+      await open(tester, rig, PlayerPanel.quality);
+      rig.ui.orientation.exitToInline();
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.quality);
+    });
+
     testWidgets('选集 keeps its white sheet', (tester) async {
       final rig = await pumpLayer(tester, Shape.portrait);
       await open(tester, rig, PlayerPanel.episodes);
