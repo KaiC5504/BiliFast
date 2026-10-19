@@ -70,6 +70,9 @@ final class Rig {
   }
 
   final FakePageApi api;
+
+  /// The calls the list makes; the session's own block-rule refresh is left out.
+  List<String> get likeCalls => [for (final call in api.calls) if (!call.startsWith('danmakuBlockRules')) call];
   late final ListSession session;
   bool loggedIn;
   final toasts = <String>[];
@@ -151,7 +154,7 @@ void main() {
       expect(find.text(elem.content), findsOneWidget);
     }
     expect(rig.session.reads, 1);
-    expect(rig.api.calls, ['danmakuLikes 3']);
+    expect(rig.likeCalls, ['danmakuLikes 3']);
     expect(countOf(tester, '第一个'), '1');
     expect(countOf(tester, '秒赤'), '1.2万');
     expect(countOf(tester, rows[2].content), isNull, reason: 'no count at 0');
@@ -184,7 +187,7 @@ void main() {
     );
     await rig.mount(tester);
     await tester.pump();
-    expect(rig.api.calls, ['danmakuLikes 50', 'danmakuLikes 50', 'danmakuLikes 20']);
+    expect(rig.likeCalls, ['danmakuLikes 50', 'danmakuLikes 50', 'danmakuLikes 20']);
   });
 
   testWidgets('a 👍 shows at once, and a second tap takes it back', (tester) async {
@@ -311,7 +314,7 @@ void main() {
     final rig = Rig(shown: const []);
     await rig.mount(tester);
     expect(find.text('暂无弹幕'), findsOneWidget);
-    expect(rig.api.calls, isEmpty);
+    expect(rig.likeCalls, isEmpty);
   });
 
   testWidgets('every control answers an accessibility press', (tester) async {
