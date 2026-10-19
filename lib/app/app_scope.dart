@@ -28,16 +28,44 @@ class AppPlayback with WidgetsBindingObserver {
   final VoidCallback? onResumed;
   Future<PlaybackController>? _starting;
   PlaybackController? _ready;
+  final List<(String, void Function(PlaybackController))> _pending = [];
 
   /// The controller once it has started.
   PlaybackController? get ready => _ready;
+
+  /// Runs [action] on the started controller, or once a start succeeds, without starting one. A failed [action] is
+  /// reported with [what] as its source.
+  void whenStarted(String what, void Function(PlaybackController controller) action) {
+    final ready = _ready;
+    if (ready == null) {
+      _pending.add((what, action));
+    } else {
+      _run(what, action, ready);
+    }
+  }
+
+  static void _run(String what, void Function(PlaybackController) action, PlaybackController controller) {
+    try {
+      action(controller);
+    } catch (error, stack) {
+      CrashLog.report(error, stack, source: what);
+    }
+  }
 
   /// The shared controller; after a failed start, the next call starts it again (a page's 重试).
   Future<PlaybackController> obtain() {
     final starting = _starting;
     if (starting != null) return starting;
     final started = _start().then(
-      (controller) => _ready = controller,
+      (controller) {
+        _ready = controller;
+        final pending = List.of(_pending);
+        _pending.clear();
+        for (final (what, action) in pending) {
+          _run(what, action, controller);
+        }
+        return controller;
+      },
       onError: (Object error, StackTrace stack) {
         CrashLog.report(error, stack, source: 'player start');
         _starting = null;

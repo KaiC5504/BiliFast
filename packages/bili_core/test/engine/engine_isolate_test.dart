@@ -437,6 +437,19 @@ void main() {
       expect(second.requests, before.second + 1);
     });
 
+    test('preconnect after setNodeMode warms only the new mode\'s nodes', () async {
+      final before = (first: first.requests, second: second.requests);
+      // Another host name, so the playurl's own 127.0.0.1 address is out of the mode too.
+      fast.setNodeMode(CustomNodes([NodeAddress('localhost', port: second.port)]));
+      fast.preconnect([request(PlaybackMode.btr).choice.video.baseURL]);
+      expect(await _eventually(() => named('preconnect').isNotEmpty), isTrue);
+      final event = named('preconnect').single;
+      expect(event.f['nodes'], const LogInt(1));
+      expect(event.f['answered'], const LogInt(1));
+      expect(first.requests, before.first, reason: 'the old mode\'s other node is left cold');
+      expect(second.requests, before.second + 1);
+    });
+
     test('the engine\'s debug events reach this isolate when asked', () async {
       final source = await fast.prepare(request(PlaybackMode.btr));
       await _get(source.video, range: 'bytes=0-${video.bytes.length - 1}');

@@ -19,7 +19,7 @@ import 'settings_confirm.dart';
 /// What 设置 asks before doing (BiliNative SettingsView's `ClearAction`, and 51's 退出登录).
 enum SettingsConfirmKind {
   codecMemory('重置编码记忆？', '本机播放失败过的编码会重新参与尝试。', '重置'),
-  recents('清除最近观看？', '首页的最近观看列表会被清空。', '清除'),
+  recents('清除最近观看？', '「最近在看的视频」列表会被清空。', '清除'),
   logs('清除日志？', '手机上保存的调试日志会被删除，已发送到电脑的不受影响。', '清除'),
   logout('退出登录', null, '确定');
 
@@ -75,6 +75,15 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final still = MediaQuery.disableAnimationsOf(context);
+    _confirmMotion
+      ..duration = still ? Duration.zero : SettingsTheme.confirmIn
+      ..reverseDuration = still ? Duration.zero : SettingsTheme.confirmOut;
+  }
+
+  @override
   void dispose() {
     _confirmCurve.dispose();
     _confirmMotion.dispose();
@@ -102,7 +111,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     Logger.shared.info(LogCategory.ui, 'settings clear', {'what': kind.name});
     switch (kind) {
       case SettingsConfirmKind.codecMemory:
-        services.playback.ready?.resetCodecMemory();
+        services.playback.whenStarted('settings codec memory', (controller) => controller.resetCodecMemory());
       case SettingsConfirmKind.recents:
         services.recents.clear();
       case SettingsConfirmKind.logs:
@@ -140,12 +149,9 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     _prefs.node = choice;
     if (mounted) setState(() {});
     Logger.shared.info(LogCategory.ui, 'settings node', {'node': choice.name});
-    // A controller still starting may have built its engine before the change.
-    unawaited(
-      AppScope.of(context).playback
-          .obtain()
-          .then((controller) => controller.setNodeMode(_prefs.node.mode), onError: (Object _) {}),
-    );
+    // A cold start reads the saved node; one already started, or starting now, is told.
+    final mode = choice.mode;
+    AppScope.of(context).playback.whenStarted('settings node', (controller) => controller.setNodeMode(mode));
   }
 
   void _push(WidgetBuilder builder) =>
@@ -185,7 +191,20 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                           title: '重新登录',
                           onTap: () => unawaited(services.loginGate.request(context)),
                         ),
-                        LoggedIn() || AccountUnknown() => SettingsRow(
+                        AccountUnknown() when environment.accountCheckFailed => SettingsRow(
+                          key: const ValueKey('settings-account'),
+                          title: '账号',
+                          value: '无法获取账号信息，点按重试',
+                          onTap: () => unawaited(environment.refreshAccount()),
+                        ),
+                        LoggedIn(:final vip) => SettingsRow(
+                          key: const ValueKey('settings-account'),
+                          title: '账号',
+                          value: environment.accountLabel,
+                          valueColor: vip ? SettingsTheme.vipName : SettingsTheme.value,
+                          badge: vip ? const VipBadge() : null,
+                        ),
+                        AccountUnknown() => SettingsRow(
                           key: const ValueKey('settings-account'),
                           title: '账号',
                           value: environment.accountLabel,
@@ -277,13 +296,20 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
             Positioned.fill(
               child: IgnorePointer(
                 ignoring: _confirm == null,
-                child: SettingsConfirm(
-                  title: shown.title,
-                  message: shown.message,
-                  action: shown.action,
-                  motion: _confirmCurve,
-                  onConfirm: () => unawaited(_perform(shown)),
-                  onCancel: _dismiss,
+                child: ExcludeSemantics(
+                  excluding: _confirm == null,
+                  // Up, it is modal: VoiceOver reads only it, not the rows under it.
+                  child: BlockSemantics(
+                    blocking: _confirm != null,
+                    child: SettingsConfirm(
+                      title: shown.title,
+                      message: shown.message,
+                      action: shown.action,
+                      motion: _confirmCurve,
+                      onConfirm: () => unawaited(_perform(shown)),
+                      onCancel: _dismiss,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -446,13 +472,23 @@ class SettingsSection extends StatelessWidget {
   );
 }
 
-/// A row: its title, the value in grey when there is one, and a › when it does something. A row that is not
-/// [enabled] greys its title and ignores taps.
+/// A row: its title, the value in grey when there is one (with a [badge] after it), and a › when it does something.
+/// A row that is not [enabled] greys its title and ignores taps.
 class SettingsRow extends StatelessWidget {
-  const SettingsRow({super.key, required this.title, this.value, this.onTap, this.enabled = true});
+  const SettingsRow({
+    super.key,
+    required this.title,
+    this.value,
+    this.valueColor = SettingsTheme.value,
+    this.badge,
+    this.onTap,
+    this.enabled = true,
+  });
 
   final String title;
   final String? value;
+  final Color valueColor;
+  final Widget? badge;
   final VoidCallback? onTap;
   final bool enabled;
 
@@ -489,15 +525,23 @@ class SettingsRow extends StatelessWidget {
                   if (value != null)
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: BiliMetrics.settingsValueWidth),
-                      child: Text(
-                        value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: BiliFonts.family,
-                          fontSize: BiliMetrics.settingsValueText,
-                          color: SettingsTheme.value,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              value,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: BiliFonts.family,
+                                fontSize: BiliMetrics.settingsValueText,
+                                color: valueColor,
+                              ),
+                            ),
+                          ),
+                          if (badge case final badge?) ...[const SizedBox(width: SettingsTheme.vipBadgeGap), badge],
+                        ],
                       ),
                     ),
                   if (onTap != null) ...[
@@ -557,9 +601,10 @@ class _Switch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const inset = (BiliMetrics.panelSwitchHeight - BiliMetrics.panelSwitchKnob) / 2;
+    final motion = MediaQuery.disableAnimationsOf(context) ? Duration.zero : SettingsTheme.switchMotion;
     return AnimatedContainer(
       key: const ValueKey('settings-switch'),
-      duration: SettingsTheme.switchMotion,
+      duration: motion,
       curve: Curves.easeOutCubic,
       width: BiliMetrics.panelSwitchWidth,
       height: BiliMetrics.panelSwitchHeight,
@@ -569,7 +614,7 @@ class _Switch extends StatelessWidget {
         borderRadius: BorderRadius.circular(BiliMetrics.panelSwitchHeight / 2),
       ),
       child: AnimatedAlign(
-        duration: SettingsTheme.switchMotion,
+        duration: motion,
         curve: Curves.easeOutBack,
         alignment: on ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
@@ -586,4 +631,28 @@ class _Switch extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 大会员's pink pill after the account's name, as the avatar menu drew it.
+class VipBadge extends StatelessWidget {
+  const VipBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('settings-vip'),
+    height: BiliMetrics.vipBadgeHeight,
+    padding: const EdgeInsets.symmetric(horizontal: SettingsTheme.vipBadgePadding),
+    alignment: Alignment.center,
+    decoration: const ShapeDecoration(color: SettingsTheme.vipBadge, shape: StadiumBorder()),
+    child: Text(
+      '大会员',
+      style: TextStyle(
+        fontFamily: BiliFonts.family,
+        fontSize: BiliMetrics.vipBadgeText,
+        fontWeight: FontWeight.w600,
+        color: SettingsTheme.vipBadgeLabel,
+        height: 1,
+      ),
+    ),
+  );
 }

@@ -6,6 +6,7 @@ import 'package:bili_core/engine.dart';
 import '../devtools/log_forwarder.dart';
 import '../player/player_factory.dart';
 import '../video/player_prefs.dart';
+import 'codec_memory.dart';
 import 'cupertino_transport.dart';
 import 'playback_controller.dart';
 
@@ -50,6 +51,9 @@ EngineOptions appEngineOptions({RipperConfig config = appRipperConfig}) => Engin
 
 String? nodeMemoryPath() => supportFilePath('node_memory.json');
 
+/// Where the codecs this phone's player refused are kept (Swift's `playback.failedCodecs`).
+String? codecMemoryPath() => supportFilePath('codec_memory.json');
+
 /// [name] in the app's support folder, kept across launches; null on other platforms or without HOME/APPDATA.
 String? supportFilePath(String name) {
   final env = Platform.environment;
@@ -81,13 +85,15 @@ RangeTransport Function() _transportFactory(int connectionsPerHost) => Platform.
 /// What the overlay shows until the engine's first stats arrive.
 String get platformTransportName => Platform.isIOS ? 'URLSession' : 'dart:io';
 
-/// The engine isolate, the platform's player and the controller that owns both.
+/// The engine isolate, the platform's player and the controller that owns both, with the codec memory read again.
 Future<PlaybackController> startPlaybackController(BiliClient client) async {
+  final memory = CodecMemory.load(codecMemoryPath());
   final engine = await startPlatformEngine();
   try {
     final player = await createPlayer();
     return PlaybackController(
       client: client,
+      codecMemory: await memory,
       engine: engine,
       startEngine: startPlatformEngine,
       player: player,
