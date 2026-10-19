@@ -1,11 +1,18 @@
-import 'package:bili_core/api.dart' show UploaderCard, VideoDetail;
+import 'package:bili_core/api.dart'
+    show BiliClient, CookieJar, HTTPRequest, HTTPResponse, HTTPTransport, UploaderCard, VideoDetail;
+import 'package:bili_core/devlog.dart' show Logger;
+import 'package:bilifast/danmaku/block_rule_store.dart';
+import 'package:bilifast/danmaku/danmaku_session.dart';
+import 'package:bilifast/danmaku/danmaku_settings_store.dart';
 import 'package:bilifast/device/orientation.dart';
+import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -34,6 +41,9 @@ final class Rig {
   /// Set before [mount]; null is a player outside a video page.
   FakePageDetails? details;
 
+  /// Set before [mount]; null is a player outside a video page.
+  DanmakuRig? danmaku;
+
   late final ui = PlayerUi(
     session: session,
     chrome: chrome,
@@ -43,6 +53,7 @@ final class Rig {
     onBack: () => backs += 1,
     details: details,
     onComments: () => comments += 1,
+    danmaku: danmaku?.session,
   );
 
   Future<void> mount(WidgetTester tester, {bool still = false}) async {
@@ -57,6 +68,7 @@ final class Rig {
       orientation.dispose();
       session.dispose();
       details?.dispose();
+      danmaku?.dispose();
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -106,6 +118,53 @@ Color iconColour(WidgetTester tester, String key) =>
 
 Color? textColour(WidgetTester tester, Finder text) =>
     tester.widget<RichText>(find.descendant(of: text, matching: find.byType(RichText)).first).text.style?.color;
+
+final class _NoNetwork implements HTTPTransport {
+  @override
+  Future<HTTPResponse> send(HTTPRequest request) => throw StateError('tests never reach the network');
+}
+
+final class _Feed extends DanmakuFeed {
+  _Feed() : super(client: BiliClient(transport: _NoNetwork(), cookies: CookieJar(), logger: _logger), logger: _logger);
+
+  static final _logger = Logger(session: 'test');
+
+  bool uploaderClosed = false;
+
+  @override
+  bool get closed => uploaderClosed;
+}
+
+/// The page's danmaku as the video page makes it, over the fake page API and memory stores.
+final class DanmakuRig {
+  DanmakuRig({bool closed = false, this.loggedIn = true}) {
+    feed.uploaderClosed = closed;
+  }
+
+  final feed = _Feed();
+  final api = FakePageApi();
+  bool loggedIn;
+  int logins = 0;
+
+  late final session = DanmakuSession(
+    feed: feed,
+    settings: DanmakuSettingsStore.memory(),
+    rules: BlockRuleStore(api: api, isLoggedIn: () => loggedIn),
+    api: api,
+    target: () => (bvid: 'BV1', cid: 1),
+    position: () => 0,
+    isLoggedIn: () => loggedIn,
+    isVip: () => false,
+    accountMid: () => 1,
+    toast: (_) {},
+    requestLogin: () => logins += 1,
+  );
+
+  void dispose() {
+    session.dispose();
+    feed.dispose();
+  }
+}
 
 Offset centre(WidgetTester tester, String key) => tester.getCenter(find.byKey(ValueKey(key)));
 
@@ -211,6 +270,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(rig.session.calls, ['setDanmakuOn false']);
     expect(find.bySemanticsLabel('开启弹幕'), findsOneWidget);
+  });
+
+  group('发弹幕 (09, 35)', () {
+    Finder field() => find.byKey(const ValueKey('vertical-danmaku-field'));
+
+    testWidgets('reads 发弹幕 at the field\'s left, as on 09, and opens the send bar', (tester) async {
+      final rig = Rig()..danmaku = DanmakuRig();
+      await rig.mount(tester);
+
+      final text = find.text('发弹幕');
+      expect(text, findsOneWidget);
+      expect(tester.getTopLeft(text).dx, closeTo(27, 1));
+      // Centred on the field, then dropped to put MiSans's ink where 09's is.
+      expect(tester.getCenter(text).dy, closeTo(901 + VerticalActionTheme.fieldDrop, 0.5));
+      await tester.tap(field());
+      expect(rig.danmaku!.session.sendOpen.value, isTrue);
+      expect(rig.chrome.shows, 1);
+    });
+
+    testWidgets('answers an accessibility press by its name', (tester) async {
+      final rig = Rig()..danmaku = DanmakuRig();
+      await rig.mount(tester);
+      tester.semantics.tap(find.semantics.byLabel('发弹幕'));
+      expect(rig.danmaku!.session.sendOpen.value, isTrue);
+    });
+
+    testWidgets('logged out it asks for the login instead', (tester) async {
+      final rig = Rig()..danmaku = DanmakuRig(loggedIn: false);
+      await rig.mount(tester);
+      await tester.tap(field());
+      expect(rig.danmaku!.logins, 1);
+      expect(rig.danmaku!.session.sendOpen.value, isFalse);
+    });
+
+    testWidgets('with danmaku off it reads 已关闭弹幕 and opens nothing, as on 35', (tester) async {
+      final rig = Rig()..danmaku = DanmakuRig();
+      await rig.mount(tester);
+      await tester.tap(find.byKey(const ValueKey('vertical-danmaku')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('已关闭弹幕'), findsOneWidget);
+      expect(find.text('发弹幕'), findsNothing);
+      await tester.tap(field());
+      expect(rig.danmaku!.session.sendOpen.value, isFalse);
+      expect(centre(tester, 'vertical-danmaku'), within(distance: 1, from: const Offset(318, 900)));
+    });
+
+    testWidgets('with the uploader\'s danmaku closed it reads UP主已关闭弹幕 and opens nothing', (tester) async {
+      final rig = Rig()..danmaku = DanmakuRig(closed: true);
+      await rig.mount(tester);
+
+      expect(find.text('UP主已关闭弹幕'), findsOneWidget);
+      await tester.tap(field());
+      expect(rig.danmaku!.session.sendOpen.value, isFalse);
+      expect(rig.chrome.shows, 1, reason: 'a tap still keeps the controls up');
+    });
   });
 
   testWidgets('the bar scrubs and seeks', (tester) async {

@@ -19,8 +19,8 @@ import 'seek_bar.dart';
 
 /// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back, N人正在看 and ⋮ at
 /// the top, the action column down the right, the uploader with 粉丝 and 关注, the title and its plays over the bar,
-/// then the 弹 toggle, 详情页 and 横屏全屏. The search button, the search row and the 发弹幕 field have their room kept
-/// so nothing else moves when they come; so does whatever the page details haven't brought yet.
+/// then the 发弹幕 field with the 弹 toggle, 详情页 and 横屏全屏. The search button and the search row have their room
+/// kept so nothing else moves when they come; so does whatever the page details haven't brought yet.
 class VerticalChrome extends StatelessWidget {
   const VerticalChrome({super.key, required this.ui});
 
@@ -31,7 +31,7 @@ class VerticalChrome extends StatelessWidget {
     final insets = MediaQuery.paddingOf(context);
     final bottom = math.max(insets.bottom - BiliMetrics.verticalBottomDrop, 0.0);
     return ListenableBuilder(
-      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session]),
+      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.danmaku]),
       builder: (context, _) {
         final shown = ui.chrome.visible && ui.panels.value == null;
         return IgnorePointer(
@@ -216,15 +216,54 @@ class VerticalChrome extends StatelessWidget {
     );
   }
 
-  /// The dark capsule of 09's 发弹幕 field, with the 弹 toggle at its right end; the field itself is slice 5.
+  /// The dark capsule of 09's 发弹幕 field, with the 弹 toggle at its right end. With danmaku off it reads 已关闭弹幕
+  /// (35), with the uploader's closed UP主已关闭弹幕, and either way opens nothing.
   Widget _field() {
     final session = ui.session;
+    final closed = ui.danmaku?.closed ?? false;
+    final send = switch (ui.danmaku) {
+      final danmaku? when session.danmakuOn && !closed => _touch(danmaku.openSend),
+      _ => null,
+    };
+    final text = closed ? 'UP主已关闭弹幕' : (session.danmakuOn ? '发弹幕' : '已关闭弹幕');
     return Container(
       height: BiliMetrics.verticalFieldHeight,
       decoration: const ShapeDecoration(color: BiliColors.chromeDarkField, shape: StadiumBorder()),
       child: Row(
         children: [
-          const Spacer(),
+          Expanded(
+            child: Semantics(
+              key: const ValueKey('vertical-danmaku-field'),
+              button: send != null,
+              label: text,
+              onTap: send,
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: send ?? ui.chrome.show,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: VerticalActionTheme.fieldInset),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Transform.translate(
+                      offset: Offset(0, VerticalActionTheme.fieldDrop),
+                      child: Text(
+                        text,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.clip,
+                        style: const TextStyle(
+                          color: VerticalActionTheme.fieldInk,
+                          fontSize: VerticalActionTheme.fieldText,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
           Container(
             width: BiliMetrics.verticalDividerWidth,
             height: BiliMetrics.verticalDividerHeight,

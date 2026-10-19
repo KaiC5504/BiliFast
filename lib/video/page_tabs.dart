@@ -278,7 +278,8 @@ class PageTabRow extends StatelessWidget {
                     child: _DanmakuCapsule(
                       on: danmakuOn,
                       onToggle: onToggleDanmaku,
-                      onSend: onSendDanmaku,
+                      onSend: danmakuClosed ? null : onSendDanmaku,
+                      text: danmakuClosed ? 'UP主已关闭弹幕' : (danmakuInputOpen ? '弹幕输入中' : '点我发弹幕'),
                       duration: still ? Duration.zero : _fade,
                     ),
                   ),
@@ -370,11 +371,20 @@ class PageTabRow extends StatelessWidget {
 
 /// The toggle alone in a small grey capsule, or grown leftwards into 点我发弹幕 with the toggle on white.
 class _DanmakuCapsule extends StatelessWidget {
-  const _DanmakuCapsule({required this.on, required this.onToggle, required this.onSend, required this.duration});
+  const _DanmakuCapsule({
+    required this.on,
+    required this.onToggle,
+    required this.onSend,
+    required this.text,
+    required this.duration,
+  });
 
   final bool on;
   final VoidCallback? onToggle;
-  final VoidCallback onSend;
+
+  /// Null while the uploader has danmaku closed.
+  final VoidCallback? onSend;
+  final String text;
   final Duration duration;
 
   static const _curve = Curves.easeOutCubic;
@@ -422,23 +432,27 @@ class _DanmakuCapsule extends StatelessWidget {
           excluding: !on,
           child: Semantics(
             key: const ValueKey('danmaku-send'),
-            button: true,
-            label: '点我发弹幕',
+            button: onSend != null,
+            label: text,
             onTap: on ? onSend : null,
             excludeSemantics: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: on ? onSend : null,
               child: Center(
-                child: Text(
-                  '点我发弹幕',
-                  maxLines: 1,
-                  softWrap: false,
-                  style: TextStyle(
-                    fontFamily: BiliFonts.family,
-                    fontSize: PageTheme.danmakuFieldText,
-                    color: BiliColors.secondaryText,
-                    letterSpacing: 0,
+                child: AnimatedSwitcher(
+                  duration: duration,
+                  child: Text(
+                    text,
+                    key: ValueKey(text),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      fontFamily: BiliFonts.family,
+                      fontSize: PageTheme.danmakuFieldText,
+                      color: BiliColors.secondaryText,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ),
               ),
