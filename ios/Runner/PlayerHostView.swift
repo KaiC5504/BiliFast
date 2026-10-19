@@ -25,6 +25,9 @@ final class PlayerHostView: UIView, AVPictureInPictureControllerDelegate {
   var onRestore: (() -> Bool)?
   var onLog: ((String, [String: Any]) -> Void)?
   private var pendingRestore: RestoreWaiter?
+  /// From a stop asked for here until picture in picture has stopped. AVKit asks for the restore on that stop too,
+  /// and it must not reach Dart as the restore button: a covered page or a released kept page would come back.
+  private var stopping = false
 
   var playerLayer: AVPlayerLayer { videoView.playerLayer }
 
@@ -102,6 +105,7 @@ final class PlayerHostView: UIView, AVPictureInPictureControllerDelegate {
 
   func stopPiP() {
     guard let pip, pip.isPictureInPictureActive else { return }
+    stopping = true
     pip.stopPictureInPicture()
   }
 
@@ -119,13 +123,21 @@ final class PlayerHostView: UIView, AVPictureInPictureControllerDelegate {
 
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    if window != nil { finishRestore(true) }
+    guard window != nil, pendingRestore != nil else { return }
+    // A new platform view enters the window with its frame just set by the engine, before the layout pass that
+    // sizes the video to it, and AVKit animates the small window into the video's frame.
+    layoutIfNeeded()
+    finishRestore(true)
   }
 
-  /// The small window's restore button. AVKit waits on the handler before it animates the window back, so it
-  /// is always called, within 3 s.
+  /// The small window's restore button, or a stop asked for here. AVKit waits on the handler before it animates the
+  /// window back, so it is always called, within 3 s.
   func restoreForPiPStop(_ completion: @escaping (Bool) -> Void) {
     finishRestore(false)
+    if stopping {
+      completion(window != nil)
+      return
+    }
     let comingBack = onRestore?() ?? false
     if window != nil {
       completion(true)
@@ -190,6 +202,7 @@ final class PlayerHostView: UIView, AVPictureInPictureControllerDelegate {
 
   nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
     Task { @MainActor in
+      self.stopping = false
       self.onLog?("picture in picture stopped", [:])
       self.onPiPActive?(false)
     }

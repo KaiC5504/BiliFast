@@ -16,7 +16,9 @@ final class PlayerRegistry {
   func create() -> Int64 {
     let id = nextId
     nextId += 1
-    players[id] = NativePlayer(id: id, events: events)
+    let player = NativePlayer(id: id, events: events)
+    players[id] = player
+    player.log("native player created", ["live": players.count])
     return id
   }
 
@@ -40,7 +42,9 @@ final class PlayerRegistry {
   }
 
   func dispose(_ id: Int64) {
-    players.removeValue(forKey: id)?.dispose()
+    guard let player = players.removeValue(forKey: id) else { return }
+    player.log("native player disposed", ["live": players.count])
+    player.dispose()
   }
 }
 
