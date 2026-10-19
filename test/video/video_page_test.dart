@@ -2256,8 +2256,9 @@ void main() {
       await frames(tester, 2);
     }
 
-    ScrollPosition scrollIn(WidgetTester tester, Type tab) =>
-        tester.state<ScrollableState>(find.descendant(of: find.byType(tab), matching: find.byType(Scrollable)).first).position;
+    ScrollPosition scrollIn(WidgetTester tester, Type tab) => tester
+        .state<ScrollableState>(find.descendant(of: find.byType(tab), matching: find.byType(Scrollable)).first)
+        .position;
 
     Future<void> tapStatusBar(WidgetTester tester) async {
       await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
@@ -2412,18 +2413,24 @@ final class _RecordingHttpClient implements HttpClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Comment comment(int rpid, {int root = 0, int parent = 0, int replyCount = 0, int mid = 2001, List<Comment> preview = const []}) =>
-    Comment(
-      rpid: rpid,
-      oid: 1,
-      mid: mid,
-      root: root,
-      parent: parent,
-      ctime: rpid,
-      likes: 10,
-      replyCount: replyCount,
-      member: CommentMember(mid: mid, name: '测试用户$rpid', level: 5),
-      message: '第$rpid条评论',
-      runs: [TextRun('第$rpid条评论')],
-      previewReplies: preview,
-    );
+Comment comment(
+  int rpid, {
+  int root = 0,
+  int parent = 0,
+  int replyCount = 0,
+  int mid = 2001,
+  List<Comment> preview = const [],
+}) => Comment(
+  rpid: rpid,
+  oid: 1,
+  mid: mid,
+  root: root,
+  parent: parent,
+  ctime: rpid,
+  likes: 10,
+  replyCount: replyCount,
+  member: CommentMember(mid: mid, name: '测试用户$rpid', level: 5),
+  message: '第$rpid条评论',
+  runs: [TextRun('第$rpid条评论')],
+  previewReplies: preview,
+);
