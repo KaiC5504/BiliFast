@@ -2411,7 +2411,7 @@ abstract final class DevToolsTheme {
 /// 历史记录 (28).
 abstract final class HistoryTheme {
   /// The title bar under the status bar, measured on 45 at 3 px per pt: ‹ is #484C52, 7 × 15 with 1.5 strokes, its
-  /// tip 26.7 in; 历史记录 is bold and centred. We leave out the 🔍, ⋮ and the tab row, so the hairline that ends the
+  /// tip 26.7 in; 历史记录 is bold and centred. The 🔍, ⋮ and the tab row are left out, so the hairline that ends the
   /// tab row ends the bar.
   static const barHeight = 44.0;
   static const barHairline = 1 / 3;
@@ -2424,6 +2424,9 @@ abstract final class HistoryTheme {
   static const back = Color(0xFF484C52);
   static const titleText = 20.0;
   static const titleWeight = FontWeight.w600;
+
+  /// Every other word on the page and its sheet is regular (45, 47, 48).
+  static const textWeight = FontWeight.w400;
 
   /// MiSans sets 历史记录 1 pt lower in the bar than 45's.
   static double get titleDrop => BiliFonts.nudged ? -1 : 0;
@@ -2490,6 +2493,7 @@ abstract final class HistoryTheme {
   static const phoneNotch = 3.0;
   static const phoneBar = 2.0;
   static const phoneMark = 1.2;
+  static const pcStandStroke = 1.6;
 
   /// ⋮: three 2 pt dots 4.3 apart, centred 20 from the right and on the device line.
   static const moreDot = 2.0;
@@ -2514,7 +2518,7 @@ abstract final class HistoryTheme {
   /// The pink line along the cover's bottom; a few seconds in still shows this much of it.
   static const progressHeight = 2.0;
   static const progressMin = 23 / 3;
-  static const progress = BiliColors.pink;
+  static const progress = Color(0xFFEA6E96);
 
   /// The page's own states: logged out, empty, failed.
   static const stateText = 15.0;
@@ -2526,6 +2530,7 @@ abstract final class HistoryTheme {
   static const retryText = 14.0;
   static const retryPadX = 20.0;
   static const retryHeight = 30.0;
+  static const buttonWeight = FontWeight.w500;
   static const footerText = 12.0;
   static const footerPad = 16.0;
   static const footerInk = Color(0xFFC9CCD0);
@@ -2533,6 +2538,8 @@ abstract final class HistoryTheme {
 
   /// ⋮'s sheet (48): the page dimmed to 30 %, a white sheet 291 tall over the home indicator's inset.
   static const sheetDim = Color(0xB3000000);
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
   static const sheetFill = BiliColors.card;
   static const sheetHeaderHeight = 44.0;
   static const sheetHeaderText = 14.0;
@@ -2544,6 +2551,7 @@ abstract final class HistoryTheme {
   static const sheetCircleGlyph = BiliColors.onPink;
   static const sheetShareGlyphWidth = 17.0;
   static const sheetShareGlyphHeight = 20.0;
+  static const sheetShareStroke = 1.6;
   static const sheetLabelText = 12.0;
   static const sheetLabelGap = 6.0;
   static const sheetLabelInk = Color(0xFF999999);

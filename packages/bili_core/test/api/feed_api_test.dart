@@ -185,6 +185,13 @@ void main() {
     await expectLater(client.deleteHistory(aid: 1), throwsA(isA<BiliAPIError>().having((error) => error.code, 'code', -111)));
   });
 
+  test('a history row without an aid fails before posting archive_0', () async {
+    const deletePath = '/x/v2/history/delete';
+    fakeHTTP.routes[deletePath] = (200, '{"code":0,"message":"0","ttl":1}');
+    await expectLater(client.deleteHistory(aid: 0), throwsA(isA<BiliDecodingError>()));
+    expect(fakeHTTP.requestsTo(deletePath), isEmpty);
+  });
+
   test('device kind follows the dt code', () {
     HistoryDeviceKind kind(int dt) => HistoryItem(
             aid: 1,
