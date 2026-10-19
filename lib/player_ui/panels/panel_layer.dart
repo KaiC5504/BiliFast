@@ -317,7 +317,8 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               session: session,
               toast: _toast,
               close: () => _closeIf(PlayerPanel.more),
-              openDanmakuSettings: widget.ui.danmaku == null
+              // Landscape's bar has its own 弹幕设置 button, and its ⋮ (20, 21) has no such row.
+              openDanmakuSettings: widget.ui.danmaku == null || widget.ui.presentation == Presentation.landscape
                   ? null
                   : () => widget.ui.panels.open(PlayerPanel.danmakuSettings),
             ),
