@@ -1293,6 +1293,40 @@ abstract final class ComposerTheme {
 /// The comment overlays: the rising thread and the delete confirm.
 abstract final class CommentOverlayTheme {
   static const threadRise = Duration(milliseconds: 300);
+
+  /// ✕, back or a released swipe slide 评论详情 off the bottom; part of the way takes its share of this.
+  static const threadFall = Duration(milliseconds: 300);
+
+  /// Behind 评论详情, so the list under it never shows through and touches stop there.
+  static const threadFill = BiliColors.card;
+
+  /// A released swipe closes 评论详情 once it is this share of its height down, or when the finger moves right faster
+  /// than [threadFlingWidths] screen widths a second (Flutter's Cupertino back swipe's `_kMinFlingVelocity`).
+  static const threadCloseShare = 1 / 3;
+  static const threadFlingWidths = 1.0;
+
+  /// The picture viewer fades in and out (BiliNative's 0.2 s ease out).
+  static const viewerFade = Duration(milliseconds: 200);
+
+  /// The delete confirm comes and goes as the unfollow confirm does, in the same alert with a message under the
+  /// title (Swift's 删除评论 alert).
+  static const confirmIn = Duration(milliseconds: 300);
+  static const confirmOut = Duration(milliseconds: 220);
+  static const alertWidth = FavouriteTheme.alertWidth;
+  static const alertRadius = FavouriteTheme.alertRadius;
+  static const alertTitleText = FavouriteTheme.alertTitleText;
+  static const alertButtonHeight = FavouriteTheme.alertButtonHeight;
+  static const alertButtonText = FavouriteTheme.alertButtonText;
+  static const alertDim = FavouriteTheme.alertDim;
+  static const alertStartScale = FavouriteTheme.alertStartScale;
+  static const alertTitlePadTop = 22.0;
+  static const alertMessageText = 14.0;
+  static const alertMessageGap = 6.0;
+  static const alertMessagePadBottom = 20.0;
+  static const alertTitle = BiliColors.text;
+  static const alertMessage = BiliColors.secondaryText;
+  static const alertCancel = BiliColors.secondaryText;
+  static const alertDelete = BiliColors.pink;
 }
 
 /// The paused player shrinking to the 继续播放 bar (11, 12).
