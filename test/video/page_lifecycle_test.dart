@@ -27,6 +27,7 @@ import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/video/video_player_area.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
@@ -713,7 +714,87 @@ void main() {
     expect(onlineAsks(p1), greaterThan(asked), reason: 'shown, it polls');
     await back(tester);
     expect(playback.live, 0);
-  }, skip: true); // Fails: the cover came before the session and details existed, so both are made active.
+  });
+
+  testWidgets('a page the user paused, covered while a quality change reloads it, stays paused when shown',
+      (tester) async {
+    await host(tester);
+    final first = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+    ui(tester).session.togglePlay();
+    first.emit(const StatusChanged(PlayerStatus.paused));
+    final controller = controllers.single;
+    final gate = http.gates[Canned.playUrlPath] = Completer<void>();
+    unawaited(controller.setQuality(controller.selectedQuality == 64 ? 80 : 64));
+    await tester.pump();
+    expect(controller.phase, PlaybackPhase.loading);
+    push(const VideoRoute(bvid: bv, cid: p2, start: 0));
+    await frames(tester, 20);
+    gate.complete();
+    await frames(tester, 20);
+    expect(first.loaded?.autoplay, isFalse);
+
+    first.calls.clear();
+    await back(tester);
+    expect(first.calls, isNot(contains('play')));
+    await back(tester);
+    expect(playback.live, 0);
+  });
+
+  testWidgets('a restore the keeper refuses ends the small window at once', (tester) async {
+    await host(tester);
+    final first = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+    first.emit(const PictureInPictureChanged(true));
+    await tester.pump();
+    first.calls.clear();
+    first.emit(const PictureInPictureRestore());
+    await tester.pump();
+    expect(first.calls, ['restorable false'], reason: 'its page never left, so nothing is kept to restore');
+    await back(tester);
+  });
+
+  testWidgets('a page made after the app went to the background pauses its load once it plays', (tester) async {
+    await host(tester);
+    final gate = createGate = Completer<void>();
+    push(const VideoRoute(bvid: bv, cid: p1, start: 0));
+    await frames(tester, 2);
+    toBackground(tester);
+    gate.complete();
+    await frames(tester, 20);
+    final player = players.single;
+    expect(player.loaded?.autoplay, isTrue);
+    await tester.pump(PagePlayerSession.backgroundGrace);
+    player.calls.clear();
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    expect(player.calls, ['pip auto true', 'pause'], reason: 'no sound from a page the user left for home');
+    toForeground(tester);
+    await back(tester);
+    expect(playback.live, 0);
+  });
+
+  testWidgets('the small window\'s video is released after the next page\'s first build, before its video loads',
+      (tester) async {
+    await host(tester);
+    services.recents.add(const RecentVideo(bvid: bv, cid: p1, title: '测试视频', part: '', page: 1, pageCount: 2));
+    final first = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+    // An older position in 最近打开, so the release's report changes it.
+    services.recents.recordProgress(bvid: bv, cid: p1, seconds: 300);
+    await popIntoPip(tester, first);
+    expect(services.pipKeeper.kept, isNotNull);
+
+    final heard = <(SchedulerPhase, int)>[];
+    void listener() => heard.add((SchedulerBinding.instance.schedulerPhase, players.length));
+    services.recents.addListener(listener);
+    addTearDown(() => services.recents.removeListener(listener));
+    push(const VideoRoute(bvid: other, start: 0));
+    await frames(tester, 20);
+    expect(heard, isNotEmpty);
+    expect(heard.first.$1, isNot(SchedulerPhase.persistentCallbacks), reason: 'not while the new page builds');
+    expect(heard.first.$2, 1, reason: 'before the new page asked for its player');
+    expect(services.recents.items.single.progress, isNot(300));
+    expect(first.disposed, isTrue);
+    expect(players.last.loaded, isNotNull);
+    await back(tester);
+  });
 
   testWidgets('item 37: the part 自动连播 opens in the small window reports its own watch progress', (tester) async {
     prefs.autoplay = true;

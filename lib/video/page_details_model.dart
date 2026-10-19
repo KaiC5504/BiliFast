@@ -139,9 +139,8 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
     if (owed != null && detail != null) unawaited(_loadRelation(detail, owed));
   }
 
-  /// A covered page's session can be looking at the newer page's video on the shared player, so only an active page
-  /// follows it. A part switch empties the session's detail for a moment; the actions stay until a new video's
-  /// detail comes.
+  /// Only an active page follows its session; it catches up when shown again. A part switch empties the session's
+  /// detail for a moment; the actions stay until a new video's detail comes.
   void _sessionChanged() {
     if (_disposed || !_active) return;
     final detail = _session.detail;

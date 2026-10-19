@@ -1107,7 +1107,8 @@ void main() {
       expect(firstPlayer.calls, contains('pause'));
       http.gates[Canned.playUrlPath]!.complete();
       await frames(tester, 5);
-      expect(firstPlayer.loaded?.autoplay, isTrue, reason: 'the load itself is the controller\'s');
+      expect(firstPlayer.loaded?.autoplay, isFalse, reason: 'covered, it loads paused');
+      expect(firstPlayer.calls, isNot(contains('play')));
       firstPlayer.calls.clear();
       // A player that starts anyway is paused again at once, and gets no auto picture in picture while covered.
       firstPlayer.emit(const StatusChanged(PlayerStatus.playing));

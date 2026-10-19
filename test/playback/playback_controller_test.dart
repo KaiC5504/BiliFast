@@ -242,6 +242,52 @@ void main() {
     controller.dispose();
   });
 
+  test('held, every load starts paused and is still about to play; lifted, a load plays only if told to', () async {
+    final controller = make();
+    controller.holdAutoplay(true);
+    final opening = controller.open(bv);
+    expect(controller.loadWillPlay, isTrue, reason: 'what a covered page resumes on show');
+    await opening;
+    expect(player.loaded!.autoplay, isFalse);
+    expect(player.calls, isNot(contains('play')));
+
+    await controller.setMode(PlaybackMode.direct);
+    expect(loads(), 2);
+    expect(player.loaded!.autoplay, isFalse, reason: 'a reload while held loads paused too');
+
+    controller.holdAutoplay(false, play: false);
+    await controller.setMode(PlaybackMode.btr);
+    expect(player.loaded!.autoplay, isFalse);
+
+    controller.holdAutoplay(false);
+    await controller.setMode(PlaybackMode.direct);
+    expect(player.loaded!.autoplay, isTrue);
+    expect(player.calls, isNot(contains('play')));
+    controller.dispose();
+  });
+
+  test('a reload of a player the user paused is not about to play; a new open is', () async {
+    final controller = make();
+    await controller.open(bv);
+    player
+      ..emit(const StatusChanged(PlayerStatus.playing))
+      ..emit(const StatusChanged(PlayerStatus.paused));
+    final gate = http.gates[Canned.playUrlPath] = Completer<void>();
+    final quality = controller.setQuality(80);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.phase, PlaybackPhase.loading);
+    expect(controller.loadWillPlay, isFalse);
+    gate.complete();
+    await quality;
+    expect(player.loaded!.autoplay, isFalse);
+
+    player.emit(const StatusChanged(PlayerStatus.ended));
+    final opening = controller.openVideo(bv);
+    expect(controller.loadWillPlay, isTrue, reason: 'an ended video before it does not hold back the next open');
+    await opening;
+    controller.dispose();
+  });
+
   test('the URL refresh is scheduled 300 s before the deadline and swaps the engine URLs in BTR', () async {
     final controller = make();
     await controller.open(bv);

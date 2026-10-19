@@ -119,7 +119,7 @@ void main() {
     expect(sent(), isEmpty);
   });
 
-  test('once a newer open has the player, its events are ignored and leaving reports this video where it was',
+  test('once a newer open moved the controller on, its events are ignored and leaving reports this video where it was',
       () async {
     final reporter = make();
     player.emit(const StatusChanged(PlayerStatus.playing));
