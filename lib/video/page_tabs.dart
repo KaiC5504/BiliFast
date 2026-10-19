@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
@@ -8,15 +9,46 @@ import '../shared/custom_icons.dart';
 import '../shared/theme.dart';
 import 'page_details.dart';
 
-/// Which tab the page shows, and the pager both tabs live in. The row reads [position] through a swipe, so the
-/// underline and the colours follow the finger.
+/// Which tab the page shows, the pager both tabs live in, and each tab's own scroll controller, which [PageTabs]
+/// hands the tab as its primary one. The row reads [position] through a swipe, so the underline and the colours
+/// follow the finger; the page reads each tab's offset to shrink the paused player.
 class PageTabsController extends ChangeNotifier {
   final PageController pager = PageController();
+  final _introScroll = ScrollController();
+  final _commentsScroll = ScrollController();
   PageTab _selected = PageTab.intro;
 
   static const _slide = Duration(milliseconds: 300);
 
+  /// Fires on a tab change, a sideways swipe and either tab's scrolling.
+  late final Listenable motion = Listenable.merge([this, pager, _introScroll, _commentsScroll]);
+
   PageTab get selected => _selected;
+
+  ScrollController scrollOf(PageTab tab) => switch (tab) {
+    PageTab.intro => _introScroll,
+    PageTab.comments => _commentsScroll,
+  };
+
+  /// How far [tab]'s list has scrolled; 0 before it is laid out.
+  double offsetOf(PageTab tab) {
+    final positions = scrollOf(tab).positions;
+    if (positions.isEmpty) return 0;
+    // A list replaced for another video attaches its position before the old one detaches.
+    final position = positions.last;
+    return position.hasPixels ? position.pixels : 0;
+  }
+
+  /// Back to the top of the shown tab; [animate] false jumps.
+  void scrollToTop({bool animate = true}) {
+    final scroll = scrollOf(_selected);
+    if (!scroll.hasClients) return;
+    if (animate) {
+      unawaited(scroll.animateTo(0, duration: CollapseTheme.resume, curve: Curves.easeOutCubic));
+    } else {
+      scroll.jumpTo(0);
+    }
+  }
 
   /// 0 on 简介, 1 on 评论, in between during a swipe.
   double get position {
@@ -44,12 +76,15 @@ class PageTabsController extends ChangeNotifier {
   @override
   void dispose() {
     pager.dispose();
+    _introScroll.dispose();
+    _commentsScroll.dispose();
     super.dispose();
   }
 }
 
-/// 简介 and 评论 side by side in a pager; a sideways swipe switches, and each keeps its scroll position. The route's
-/// edge swipe stays the route's: its detector sits over the page and wins the drag before the pager sees it.
+/// 简介 and 评论 side by side in a pager; a sideways swipe switches, and each keeps its scroll position. Each tab's
+/// list takes its scroll controller as the primary one. The route's edge swipe stays the route's: its detector sits
+/// over the page and wins the drag before the pager sees it.
 class PageTabs extends StatefulWidget {
   const PageTabs({super.key, required this.controller, required this.intro, required this.comments});
 
@@ -85,10 +120,17 @@ class _PageTabsState extends State<PageTabs> {
       physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
       onPageChanged: (index) => widget.controller._set(PageTab.values[index]),
       children: [
-        _KeepAlive(child: widget.intro),
-        _KeepAlive(child: widget.comments),
+        _KeepAlive(child: _primary(PageTab.intro, widget.intro)),
+        _KeepAlive(child: _primary(PageTab.comments, widget.comments)),
       ],
     ),
+  );
+
+  // Every platform, so a list that doesn't say `primary` takes it on Windows as it does on the phone.
+  Widget _primary(PageTab tab, Widget child) => PrimaryScrollController(
+    controller: widget.controller.scrollOf(tab),
+    automaticallyInheritForPlatforms: TargetPlatform.values.toSet(),
+    child: child,
   );
 }
 
@@ -110,23 +152,6 @@ class _KeepAliveState extends State<_KeepAlive> with AutomaticKeepAliveClientMix
     super.build(context);
     return widget.child;
   }
-}
-
-/// 评论 until slice 7 brings the comments.
-class CommentsPlaceholder extends StatelessWidget {
-  const CommentsPlaceholder({super.key});
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Text(
-      '评论将在下个版本推出',
-      style: TextStyle(
-        fontFamily: BiliFonts.family,
-        fontSize: PageTheme.placeholderText,
-        color: BiliColors.secondaryText,
-      ),
-    ),
-  );
 }
 
 /// The row under the player (03, 10, 18): 简介 and 评论 N with the pink underline that slides between them, and at

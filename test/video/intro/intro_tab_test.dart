@@ -1,6 +1,7 @@
 import 'package:bili_core/api.dart'
     show UgcSeason, UploaderCard, OfficialKind, VideoCard, VideoDetail, VideoOwner, VideoStat, VideoTag, VideoTagKind;
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/intro/action_row.dart';
 import 'package:bilifast/video/intro/collection_row.dart';
 import 'package:bilifast/video/intro/intro_tab.dart';
@@ -87,10 +88,27 @@ void main() {
 
   tearDown(() => details.dispose());
 
-  Future<void> host(WidgetTester tester, IntroContent content, {bool still = false}) async {
+  Future<void> host(
+    WidgetTester tester,
+    IntroContent content, {
+    bool still = false,
+    double reserve = 0,
+    ScrollController? scroll,
+  }) async {
     tester.view.physicalSize = const Size(440, 956);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
+    Widget tab = IntroTab(
+      content: content,
+      details: details,
+      onSeek: (seconds) => calls.add('seek $seconds'),
+      onOpenVideo: (id) => calls.add('open $id'),
+      onPlayEpisode: (episode) => calls.add('play ${episode.cid}'),
+      onOpenEpisodes: () => calls.add('episodes'),
+      onOpenRelated: (card) => calls.add('related ${card.bvid}'),
+      onWatchLater: (card) => calls.add('later ${card.bvid}'),
+    );
+    if (scroll != null) tab = PrimaryScrollController(controller: scroll, child: tab);
     await tester.pumpWidget(
       MaterialApp(
         home: MediaQuery(
@@ -100,16 +118,7 @@ void main() {
             disableAnimations: still,
           ),
           child: Scaffold(
-            body: IntroTab(
-              content: content,
-              details: details,
-              onSeek: (seconds) => calls.add('seek $seconds'),
-              onOpenVideo: (id) => calls.add('open $id'),
-              onPlayEpisode: (episode) => calls.add('play ${episode.cid}'),
-              onOpenEpisodes: () => calls.add('episodes'),
-              onOpenRelated: (card) => calls.add('related ${card.bvid}'),
-              onWatchLater: (card) => calls.add('later ${card.bvid}'),
-            ),
+            body: PlayerReserve(height: reserve, child: tab),
           ),
         ),
       ),
@@ -255,6 +264,24 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('the list starts the player\'s reserve below its top and scrolls with the page\'s primary controller', (
+    tester,
+  ) async {
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    await host(
+      tester,
+      IntroContent(detail: detail(), related: [for (var i = 0; i < 10; i++) card('BV1x$i')]),
+      reserve: 180,
+      scroll: scroll,
+    );
+    expect(tester.getTopLeft(find.byType(UploaderRow)).dy, 180);
+    await tester.drag(find.byType(UploaderRow), const Offset(0, -150));
+    await tester.pump();
+    expect(scroll.offset, greaterThan(100));
+    expect(tester.getTopLeft(find.byType(UploaderRow)).dy, closeTo(180 - scroll.offset, 0.01));
   });
 
   testWidgets('the list ends with room for the home indicator', (tester) async {

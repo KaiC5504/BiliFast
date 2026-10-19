@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../shared/theme.dart';
+import '../collapsing_player.dart';
 import '../page_details.dart';
 import '../player_session.dart';
 import 'action_row.dart';
@@ -46,7 +47,8 @@ final class IntroContent {
 
 /// 简介 (03, 18): the uploader, the title block, the action row once the actions exist, the parts or the 合集, the
 /// topic and BGM chips, and the related videos. Each section keeps its own gap above and its own gutters. Nothing
-/// shows, and nothing spins, until the video's detail arrives; then the column fades up into place.
+/// shows, and nothing spins, until the video's detail arrives; then the column fades up into place. Its list scrolls
+/// with the page's primary scroll controller and starts [PlayerReserve] below its top.
 class IntroTab extends StatelessWidget {
   const IntroTab({
     super.key,
@@ -77,11 +79,14 @@ class IntroTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final detail = content.detail;
     final bottom = MediaQuery.paddingOf(context).bottom + PageTheme.introBottom;
+    final reserve = PlayerReserve.of(context);
     return ListenableBuilder(
       listenable: details,
       builder: (context, _) => CustomScrollView(
         key: const PageStorageKey('intro-scroll'),
+        primary: true,
         slivers: [
+          SliverToBoxAdapter(child: SizedBox(height: reserve)),
           if (detail != null) ...[
             SliverToBoxAdapter(
               child: _Arrival(

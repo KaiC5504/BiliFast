@@ -10,6 +10,7 @@ import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
+import 'package:bilifast/comments/comment_overlays.dart';
 import 'package:bilifast/comments/comments_tab.dart';
 import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/device/device_controls.dart';
@@ -31,8 +32,10 @@ import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/actions/action_overlays.dart';
 import 'package:bilifast/video/actions/video_actions.dart';
+import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/intro/intro_tab.dart';
+import 'package:bilifast/video/intro/uploader_row.dart';
 import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_details_model.dart';
 import 'package:bilifast/video/page_session.dart';
@@ -43,6 +46,7 @@ import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/video/video_player_area.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -488,7 +492,13 @@ void main() {
       expect(tester.getRect(find.byType(PageTabRow)), const Rect.fromLTWH(0, 62 + 247.5, 440, PageTheme.tabRowHeight));
       expect(
         tester.getRect(find.byType(PageTabs)),
-        const Rect.fromLTRB(0, 62 + 247.5 + PageTheme.tabRowHeight, 440, 956),
+        const Rect.fromLTRB(0, 62 + CollapseTheme.barHeight + PageTheme.tabRowHeight, 440, 956),
+        reason: 'laid out as if the player were the bar',
+      );
+      expect(
+        PlayerReserve.of(tester.element(find.byType(IntroTab))),
+        247.5 - CollapseTheme.barHeight,
+        reason: 'so each tab\'s content starts right under the tab row',
       );
       expect(find.byType(PortraitControls), findsOneWidget);
       expect(
@@ -1518,8 +1528,239 @@ void main() {
       await frames(tester, 20);
       expect(find.byType(VideoPage), findsNothing, reason: 'the edge swipe went back, not to the other tab');
     }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    testWidgets('the page doesn\'t resize for the keyboard: the composer rides on it by itself', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      expect(tester.widget<Scaffold>(find.byType(Scaffold).last).resizeToAvoidBottomInset, isFalse);
+      final tabs = tester.getRect(find.byType(PageTabs));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 336);
+      await frames(tester, 2);
+      expect(area(tester), const Rect.fromLTWH(0, 62, 440, 247.5));
+      expect(tester.getRect(find.byType(PageTabs)), tabs);
+      await back(tester);
+    });
+  });
+
+  group('the paused player shrinking to the 继续播放 bar (11, 12)', () {
+    const full = 440 / BiliMetrics.videoAspect;
+    const bar = CollapseTheme.barHeight;
+
+    /// A page with a long 简介 and its video loaded and playing.
+    Future<void> longPage(WidgetTester tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      sessions[0]
+        ..detail = detail(bv)
+        ..related = [for (var i = 0; i < 20; i++) quietCard('BV1r$i')]
+        ..changed();
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 10);
+    }
+
+    Future<void> pause(WidgetTester tester) async {
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 2);
+    }
+
+    ScrollPosition intro(WidgetTester tester) => tester
+        .state<ScrollableState>(find.descendant(of: find.byType(IntroTab), matching: find.byType(Scrollable)).first)
+        .position;
+
+    Rect row(WidgetTester tester) => tester.getRect(find.byType(PageTabRow));
+
+    double threadTop(WidgetTester tester) => tester.widget<CommentOverlays>(find.byType(CommentOverlays)).threadTop;
+
+    double cornerOpacity(WidgetTester tester, String key) => tester
+        .widget<AnimatedOpacity>(find.ancestor(of: find.byKey(ValueKey(key)), matching: find.byType(AnimatedOpacity)).first)
+        .opacity;
+
+    void press(WidgetTester tester, String key) {
+      final node = tester.getSemantics(find.byKey(ValueKey(key)));
+      node.owner!.performAction(node.id, SemanticsAction.tap);
+    }
+
+    Future<void> collapse(WidgetTester tester) async {
+      await tester.timedDragFrom(const Offset(220, 800), const Offset(0, -500), const Duration(milliseconds: 300));
+      await frames(tester, 10);
+    }
+
+    testWidgets('paused, a drag up shrinks the player finger for finger to the bar with 继续播放, the tab row and the '
+        'content riding under it', (tester) async {
+      await longPage(tester);
+      await pause(tester);
+      final gesture = await tester.startGesture(const Offset(220, 800));
+      await gesture.moveBy(const Offset(0, -30));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -60));
+      await tester.pump();
+      final scrolled = intro(tester).pixels;
+      expect(scrolled, inExclusiveRange(30, 90));
+      expect(area(tester), Rect.fromLTWH(0, 62, 440, full - scrolled));
+      expect(row(tester).top, closeTo(62 + full - scrolled, 0.01), reason: 'attached under the player (11)');
+      expect(tester.getTopLeft(find.byType(UploaderRow)).dy, closeTo(row(tester).bottom, 0.01));
+      expect(threadTop(tester), closeTo(62 + full - scrolled, 0.01), reason: '评论详情 rises to the live height');
+      expect(find.text('继续播放'), findsOneWidget);
+      expect(cornerOpacity(tester, 'collapse-back'), 0, reason: '‹ and ⋮ only once it is the bar');
+
+      await gesture.moveBy(const Offset(0, -400));
+      await tester.pump();
+      await gesture.up();
+      await frames(tester, 10);
+      expect(area(tester).top, 62);
+      expect(area(tester).height, closeTo(bar, 1e-9));
+      expect(row(tester).top, closeTo(62 + bar, 0.01));
+      expect(threadTop(tester), closeTo(62 + bar, 0.01));
+      expect(cornerOpacity(tester, 'collapse-back'), 1);
+      expect(cornerOpacity(tester, 'collapse-more'), 1);
+      expect(find.byType(PortraitControls), findsNothing, reason: 'the small player\'s own controls are away');
+      expect(ui(tester).chrome.visible, isFalse);
+      expect(find.byType(VideoPage), findsOneWidget);
+      await back(tester);
+    });
+
+    testWidgets('playing, the player never shrinks: the page scrolls under it', (tester) async {
+      await longPage(tester);
+      await collapse(tester);
+      expect(intro(tester).pixels, greaterThan(300));
+      expect(area(tester), const Rect.fromLTWH(0, 62, 440, full));
+      expect(row(tester).top, 62 + full);
+      expect(threadTop(tester), 62 + full);
+      expect(find.text('继续播放'), findsNothing);
+      await back(tester);
+    });
+
+    testWidgets('at the end the player keeps its height, so the end screen stays seen', (tester) async {
+      await longPage(tester);
+      await pause(tester);
+      sessions[0]
+        ..ended = true
+        ..changed();
+      await frames(tester, 2);
+      await collapse(tester);
+      expect(intro(tester).pixels, greaterThan(300));
+      expect(area(tester).height, full);
+      expect(find.byType(EndScreenPortrait), findsOneWidget);
+      expect(find.text('继续播放'), findsNothing);
+      await back(tester);
+    });
+
+    testWidgets('paused halfway down the page, it shrinks only by what is scrolled after', (tester) async {
+      await longPage(tester);
+      intro(tester).jumpTo(400);
+      await pause(tester);
+      expect(area(tester).height, full);
+      intro(tester).jumpTo(450);
+      await tester.pump();
+      expect(area(tester).height, full - 50);
+      expect(threadTop(tester), 62 + full - 50);
+      await back(tester);
+    });
+
+    testWidgets('a tap on the bar scrolls the tab back to its top and plays; the player grows back with it', (
+      tester,
+    ) async {
+      await longPage(tester);
+      await pause(tester);
+      await collapse(tester);
+      expect(area(tester).height, closeTo(bar, 1e-9));
+      final calls = sessions[0].calls.length;
+      await tester.tap(find.byKey(const ValueKey('collapse-resume')));
+      await tester.pump();
+      expect(sessions[0].calls.sublist(calls), ['togglePlay']);
+      await tester.pump(CollapseTheme.resume ~/ 2);
+      final halfway = intro(tester).pixels;
+      expect(halfway, greaterThan(0), reason: 'on its way up');
+      expect(area(tester).height, greaterThan(bar));
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 10);
+      expect(intro(tester).pixels, 0);
+      expect(area(tester), const Rect.fromLTWH(0, 62, 440, full));
+      expect(row(tester).top, 62 + full);
+      expect(find.text('继续播放'), findsNothing);
+      expect(ui(tester).chrome.visible, isTrue, reason: 'the controls come back as they were when it shrank');
+      await back(tester);
+    });
+
+    testWidgets('with Reduce Motion 继续播放 goes back to the top at once', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await longPage(tester);
+      await pause(tester);
+      await collapse(tester);
+      await tester.tap(find.byKey(const ValueKey('collapse-resume')));
+      await tester.pump();
+      expect(intro(tester).pixels, 0);
+      expect(area(tester).height, full);
+      await back(tester);
+    });
+
+    testWidgets('on the bar ⋮ opens the small player\'s ⋮ panel and ‹ leaves the page; each answers an accessibility '
+        'press', (tester) async {
+      final handle = tester.ensureSemantics();
+      await longPage(tester);
+      await pause(tester);
+      await collapse(tester);
+      await tester.tap(find.byKey(const ValueKey('collapse-more')));
+      await frames(tester, 4);
+      expect(ui(tester).panels.value, PlayerPanel.more);
+      ui(tester).panels.close();
+      await frames(tester, 10);
+
+      final calls = sessions[0].calls.length;
+      press(tester, 'collapse-resume');
+      await tester.pump();
+      expect(sessions[0].calls.sublist(calls), ['togglePlay']);
+      await frames(tester, 10);
+      expect(intro(tester).pixels, 0);
+
+      await collapse(tester);
+      press(tester, 'collapse-more');
+      await frames(tester, 4);
+      expect(ui(tester).panels.value, PlayerPanel.more);
+      ui(tester).panels.close();
+      await frames(tester, 10);
+      press(tester, 'collapse-back');
+      await frames(tester, 20);
+      expect(find.byType(VideoPage), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('full screen is unchanged: the player fills it with no bar, and is the bar again back inline', (
+      tester,
+    ) async {
+      await longPage(tester);
+      await pause(tester);
+      await collapse(tester);
+      await rotate(tester, Presentation.landscape);
+      expect(area(tester), const Rect.fromLTWH(0, 0, 956, 440));
+      expect(find.text('继续播放'), findsNothing);
+      expect(find.byType(LandscapeChrome), findsOneWidget);
+      await rotate(tester, Presentation.inline);
+      await frames(tester, 2);
+      expect(area(tester).height, closeTo(bar, 1e-9));
+      expect(find.text('继续播放'), findsOneWidget);
+      await back(tester);
+    });
   });
 }
+
+/// A related video without a cover to download.
+VideoCard quietCard(String bvid) => VideoCard(
+  aid: 2,
+  bvid: bvid,
+  cid: 3,
+  title: '相关视频',
+  cover: '',
+  duration: 60,
+  ownerMid: 4,
+  ownerName: 'UP',
+  views: 1,
+  danmaku: 1,
+  likes: 1,
+);
 
 VideoDetail detail(String bvid, {int reply = 0}) => VideoDetail(
   bvid: bvid,

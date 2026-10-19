@@ -101,10 +101,65 @@ void main() {
     );
     final order = stack.children.map((child) => child.key).toList();
     expect(
-      order.indexOf(const ValueKey('video-gestures')),
-      lessThan(order.indexOf(const ValueKey('chrome-vertical'))),
+      find.descendant(of: find.byKey(const ValueKey('video-chrome')), matching: find.byType(VerticalChrome)),
+      findsOneWidget,
     );
-    expect(order.indexOf(const ValueKey('chrome-vertical')), lessThan(order.indexOf(const ValueKey('video-hud'))));
+    expect(
+      order.indexOf(const ValueKey('video-gestures')),
+      lessThan(order.indexOf(const ValueKey('video-chrome'))),
+    );
+    expect(order.indexOf(const ValueKey('video-chrome')), lessThan(order.indexOf(const ValueKey('video-hud'))));
+  });
+
+  testWidgets('shrinking to the 继续播放 bar: the controls take no touches, and once it is the bar nothing of them '
+      'shows (12); the danmaku keep laying out at the full height, clipped', (tester) async {
+    const full = 440 / BiliMetrics.videoAspect;
+    Future<void> shrink(double height, {bool shrunk = true, bool barred = false}) async {
+      tester.view.physicalSize = const Size(440, 956);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              height: height,
+              child: VideoPlayerArea(
+                key: areaKey,
+                presentation: Presentation.inline,
+                onBack: () {},
+                ui: ui,
+                video: video,
+                shrunk: shrunk,
+                barred: barred,
+                danmakuHeight: full,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    IgnorePointer chrome() => tester.widget<IgnorePointer>(find.byKey(const ValueKey('video-chrome')));
+    await shrink(full, shrunk: false);
+    expect(chrome().ignoring, isFalse);
+    expect(tester.getSize(find.byType(DanmakuLayer)), const Size(440, full));
+    final first = tester.element(find.byType(DanmakuLayer));
+
+    await shrink(150);
+    expect(chrome().ignoring, isTrue);
+    expect(find.byType(PortraitControls), findsOneWidget, reason: 'the thin line still runs along the bottom (11)');
+    expect(tester.getSize(find.byType(DanmakuLayer)), const Size(440, full), reason: 'not re-laid at 150');
+    expect(identical(tester.element(find.byType(DanmakuLayer)), first), isTrue);
+    final clip = tester.widget<ClipRect>(
+      find.ancestor(of: find.byType(DanmakuLayer), matching: find.byType(ClipRect)).first,
+    );
+    expect(clip.clipBehavior, Clip.hardEdge);
+    expect(tester.getSize(find.byKey(const ValueKey('fake-video'))), const Size(440, 150), reason: 'letterboxed');
+
+    await shrink(CollapseTheme.barHeight, barred: true);
+    expect(find.byType(PortraitControls), findsNothing);
+    expect(find.byType(PortraitControls, skipOffstage: false), findsOneWidget, reason: 'kept for when it grows');
   });
 
   testWidgets('the end screen takes the chrome\'s place: the small one inline and in 竖屏, the full one in landscape',
