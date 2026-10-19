@@ -149,9 +149,10 @@ final class PlayerHostView: UIView, AVPictureInPictureControllerDelegate {
     }
     let waiter = RestoreWaiter(completion, log: onLog)
     pendingRestore = waiter
-    // Holds the waiter, not the view: the handler is called even if the player is disposed meanwhile.
+    // Holds the waiter, not the view: the handler is called even if the player is disposed meanwhile. Short of 3 s, so
+    // the main actor hop after it still lands inside AVKit's limit.
     Task {
-      try? await Task.sleep(for: .seconds(3))
+      try? await Task.sleep(for: .milliseconds(2500))
       waiter.finish(false)
     }
   }
@@ -193,7 +194,11 @@ final class PlayerHostView: UIView, AVPictureInPictureControllerDelegate {
   }
 
   nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
-    Task { @MainActor in self.onPiPActive?(true) }
+    // A stop asked for while the window was still starting may never reach didStop.
+    Task { @MainActor in
+      self.stopping = false
+      self.onPiPActive?(true)
+    }
   }
 
   nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
@@ -212,6 +217,7 @@ final class PlayerHostView: UIView, AVPictureInPictureControllerDelegate {
                                               failedToStartPictureInPictureWithError error: Error) {
     let detail = String(describing: error)
     Task { @MainActor in
+      self.stopping = false
       self.onLog?("picture in picture failed to start", ["error": detail])
       self.onPiPActive?(false)
     }
