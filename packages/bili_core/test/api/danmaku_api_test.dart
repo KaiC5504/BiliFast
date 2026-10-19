@@ -16,6 +16,8 @@ const rulesPath = '/x/dm/filter/user';
 const addPath = '/x/dm/filter/user/add';
 const delPath = '/x/dm/filter/user/del';
 const postPath = '/x/v2/dm/post';
+const likePath = '/x/v2/dm/thumbup/add';
+const likesPath = '/x/v2/dm/thumbup/stats';
 
 List<int> varint(int value) {
   final bytes = <int>[];
@@ -249,5 +251,88 @@ void main() {
     await expectLater(makeTestClient(http).postDanmaku(draft()),
         throwsA(isA<BiliError>().having((error) => error.needsLogin, 'needsLogin', isTrue)));
     expect(http.requests, isEmpty);
+  });
+
+  test('likeDanmaku form, on and taken back', () async {
+    final http = FakeHTTP();
+    http.routes[likePath] = (200, '{"code":0,"message":"0","ttl":1}');
+    final client = makeTestClient(http, cookies: {'bili_jct': 'T', 'SESSDATA': 's'});
+    await client.likeDanmaku(cid: 145928946, dmid: 35600074482384899, on: true);
+    await client.likeDanmaku(cid: 145928946, dmid: 35600074482384899, on: false);
+    final [like, unlike] = http.requestsTo(likePath);
+    expect(like.method, 'POST');
+    expect(form(like),
+        {'op': '1', 'dmid': '35600074482384899', 'oid': '145928946', 'platform': 'web_player', 'csrf': 'T'});
+    expect(form(unlike)['op'], '2');
+  });
+
+  test('likeDanmaku takes already-there as done and throws the rest', () async {
+    final http = FakeHTTP();
+    final client = makeTestClient(http, cookies: {'bili_jct': 'T'});
+    http.routes[likePath] = (200, '{"code":65006,"message":"已赞过"}');
+    await client.likeDanmaku(cid: 1, dmid: 2, on: true);
+    await expectLater(client.likeDanmaku(cid: 1, dmid: 2, on: false),
+        throwsA(const BiliError.api(code: 65006, message: '已赞过')));
+    http.routes[likePath] = (200, '{"code":65004,"message":"取消赞失败 未点赞过"}');
+    await client.likeDanmaku(cid: 1, dmid: 2, on: false);
+    http.routes[likePath] = (200, '{"code":36106,"message":"该弹幕已被删除"}');
+    await expectLater(client.likeDanmaku(cid: 1, dmid: 2, on: true),
+        throwsA(const BiliError.api(code: 36106, message: '该弹幕已被删除')));
+  });
+
+  test('likeDanmaku without login sends nothing', () async {
+    final http = FakeHTTP();
+    await expectLater(makeTestClient(http, cookies: {'SESSDATA': 's'}).likeDanmaku(cid: 1, dmid: 2, on: true),
+        throwsA(isA<BiliError>().having((error) => error.needsLogin, 'needsLogin', isTrue)));
+    expect(http.requests, isEmpty);
+  });
+
+  test('danmakuLikes query and decoding, missing ids left out', () async {
+    final http = FakeHTTP();
+    http.routes[likesPath] = (
+      200,
+      r'''
+{"code":0,"message":"0","ttl":1,"data":{
+"1318231376180646144":{"likes":12,"user_like":1,"id_str":"1318231376180646144","show_threshold":10,"reply_count":0,
+"gray_release_control":{"show_dm_reply":false}},
+"1318231518484950784":{"likes":0,"user_like":0,"id_str":"1318231518484950784"},
+"77":{"id_str":"77"},
+"bad":{"likes":3},
+"78":"not an object"}}'''
+    );
+    final client = makeTestClient(http, cookies: {'SESSDATA': 's', 'buvid3': 'b', 'buvid4': 'b'});
+    final likes = await client.danmakuLikes(
+      cid: 1131648710,
+      dmids: [1318231376180646144, 1318231518484950784, 1318231736680887808, 77],
+    );
+    expect(likes, {
+      1318231376180646144: (likes: 12, liked: true),
+      1318231518484950784: (likes: 0, liked: false),
+      77: (likes: 0, liked: false),
+    });
+    final request = http.requestsTo(likesPath).single;
+    expect(request.method, 'GET');
+    expect(http.query(request), {
+      'oid': '1131648710',
+      'ids': '1318231376180646144,1318231518484950784,1318231736680887808,77',
+    });
+  });
+
+  test('danmakuLikes with a null or empty answer is empty, and no ids send nothing', () async {
+    final http = FakeHTTP();
+    final client = makeTestClient(http, cookies: {'buvid3': 'b', 'buvid4': 'b'});
+    expect(await client.danmakuLikes(cid: 1, dmids: const []), isEmpty);
+    expect(http.requests, isEmpty);
+    http.routes[likesPath] = (200, '{"code":0,"message":"0","data":null}');
+    expect(await client.danmakuLikes(cid: 1, dmids: [5]), isEmpty);
+    http.routes[likesPath] = (200, '{"code":0,"message":"0","data":{}}');
+    expect(await client.danmakuLikes(cid: 1, dmids: [5]), isEmpty);
+  });
+
+  test('a danmakuLikes refusal throws', () async {
+    final http = FakeHTTP();
+    http.routes[likesPath] = (200, '{"code":-400,"message":"请求错误"}');
+    await expectLater(makeTestClient(http, cookies: {'buvid3': 'b', 'buvid4': 'b'}).danmakuLikes(cid: 1, dmids: [5]),
+        throwsA(const BiliError.api(code: -400, message: '请求错误')));
   });
 }

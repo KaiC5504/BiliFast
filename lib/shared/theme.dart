@@ -961,7 +961,7 @@ abstract final class IntroListTheme {
   static const durationFill = Color(0x8C000000);
 
   /// ⋮: three 2.67 dots 1.33 apart, their column centred 20 from the right edge on the counts' line.
-  static const moreDot = 8 / 3;
+  static const moreDot = 8.6 / 3;
   static const moreDotGap = 4 / 3;
   static const moreCentreFromRight = 20.0;
   static const moreTarget = 36.0;
@@ -1377,7 +1377,7 @@ abstract final class CommentRowTheme {
   static const countRoom = 48.0;
   static const dislikeCentre = 49.0;
   static const moreCentre = 17.0;
-  static const moreDot = 8 / 3;
+  static const moreDot = 8.6 / 3;
   static const morePitch = 13 / 3;
   static const likeTarget = 6.0;
   static const dislikeTarget = 32.0;
@@ -1835,5 +1835,91 @@ abstract final class BlockWordsTheme {}
 /// The send bar and the style panel (22, 23, 36-39).
 abstract final class DanmakuSendTheme {}
 
-/// 当前弹幕列表 (31, 32).
-abstract final class DanmakuListTheme {}
+/// 当前弹幕列表 (31, 32). Positions across the row count from the panel's content edge, [BiliMetrics.panelTrailing]
+/// before the safe area.
+abstract final class DanmakuListTheme {
+  /// A one-line row is 49 tall; longer text grows it by whole lines, the same 16.3 above and below.
+  static const rowPadY = 49 / 3;
+  static const rowMinHeight = 49.0;
+  static const text = 14.0;
+  static const textLine = 49 / 3;
+  static const textColor = Color(0xFFFFFFFF);
+
+  /// Between the text's widest and the 👍's box: 31's long danmaku wraps after 15 characters.
+  static const textGap = 12.0;
+
+  /// The 👍's ink is 16.5 square (an action icon's ink spans 0.84 of its box), centred 54 in from the
+  /// content's edge.
+  static const thumbIcon = 16.5 / 0.84;
+  static const thumbCentre = 54.0;
+  static const thumbTarget = 40.0;
+
+  /// 31's 👍 sits 2 px above the row's middle.
+  static const thumbRise = 2 / 3;
+  static const thumb = Color(0xFFFFFFFF);
+  static const liked = BiliColors.pink;
+
+  /// The count sits off the 👍's top right: its left 1.5 past the ink, its middle 9 above the row's.
+  static const countText = 10.0;
+  static const countGap = 1.5;
+  static const countRise = 9.0;
+
+  static const dividerCentre = 28.8;
+  static const dividerWidth = 2 / 3;
+  static const dividerHeight = 16.0;
+  static const divider = Color(0xFF2F3237);
+
+  /// ⋮: three 8 px dots 16 px apart, centred 3.8 in from the content's edge.
+  static const moreCentre = 3.8;
+  static const moreDot = 8.6 / 3;
+  static const morePitch = 16 / 3;
+  static const more = Color(0xFFFFFFFF);
+
+  /// While the popover is up, the other rows fade (32's white text reads 140).
+  static const dimmed = 0.53;
+
+  /// 32's popover, one 60.3 wide cell now that 举报 is gone: its right edge on the safe area, the arrow under ⋮.
+  static const popoverCell = 60.3;
+  static const popoverPadX = 7.5;
+  static const popoverHeight = 67.3;
+  static const popoverRadius = 9.0;
+  static const popoverFill = Color(0xF72C2F33);
+  static const popoverArrowWidth = 12.0;
+  static const popoverArrowHeight = 7.7;
+
+  /// The arrow's tip rises this far into the row above it.
+  static const popoverOverlap = 4.0;
+  static const popoverIconWidth = 22.0;
+  static const popoverIconHeight = 17.8;
+  static const popoverIconStroke = 1.3;
+  static const popoverIconCentre = 26.0;
+  static const popoverLabelCentre = 49.0;
+  static const popoverText = 10.0;
+  static const popoverInk = Color(0xFFFFFFFF);
+
+  static const emptyColor = BiliColors.panelSecondary;
+
+  static TextStyle get textStyle => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: text,
+    height: textLine / text,
+    color: textColor,
+    decoration: TextDecoration.none,
+  );
+
+  static TextStyle countStyle(Color color) => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: countText,
+    height: 1,
+    color: color,
+    decoration: TextDecoration.none,
+  );
+
+  static TextStyle get popoverStyle => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: popoverText,
+    height: 1,
+    color: popoverInk,
+    decoration: TextDecoration.none,
+  );
+}
