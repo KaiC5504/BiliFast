@@ -5,6 +5,7 @@ import 'package:bili_core/engine.dart';
 
 import '../devtools/log_forwarder.dart';
 import '../player/player_factory.dart';
+import '../video/player_prefs.dart';
 import 'cupertino_transport.dart';
 import 'playback_controller.dart';
 
@@ -39,9 +40,10 @@ const appRipperConfig = RipperConfig(
 );
 
 /// Dev builds also send the engine's per-piece debug events to the log, for timing it from the phone. Node speeds are
-/// remembered between launches in the app's support folder.
-final appEngineOptions = EngineOptions(
-  config: appRipperConfig,
+/// remembered between launches in the app's support folder. The engine starts on 设置's CDN 节点 as saved now.
+EngineOptions appEngineOptions({RipperConfig config = appRipperConfig}) => EngineOptions(
+  nodeMode: PlayerPrefs.shared.node.mode,
+  config: config,
   forwardDebugLogs: devToolsEnabled,
   nodeMemoryPath: nodeMemoryPath(),
 );
@@ -68,9 +70,7 @@ String? supportFilePath(String name) {
 Future<PlaybackEngine> startPlatformEngine({RipperConfig config = appRipperConfig, int connectionsPerHost = 8}) =>
     PlaybackEngine.start(
       transportFactory: _transportFactory(connectionsPerHost),
-      options: identical(config, appRipperConfig)
-          ? appEngineOptions
-          : EngineOptions(config: config, forwardDebugLogs: devToolsEnabled, nodeMemoryPath: nodeMemoryPath()),
+      options: appEngineOptions(config: config),
     );
 
 /// The factory is sent to the engine isolate, so it captures nothing but the count.

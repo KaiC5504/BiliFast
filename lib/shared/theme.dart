@@ -685,12 +685,12 @@ abstract final class BiliMetrics {
   static const recentsTileRadius = 10.0;
   static const recentsTileIcon = 26.0;
 
-  /// 设置 and its pages, as iOS grouped lists.
-  static const settingsRowHeight = 50.0;
-  static const settingsSectionGap = 10.0;
+  /// 设置 and its pages (50): a row with the hairline under it is 130 or 131 px, kept at 130 so every hairline lands on a
+  /// whole pixel; the grey between sections is 41 px and the grey values 14 pt. [SettingsTheme] has the rest.
+  static const settingsRowHeight = 43 + 1 / 3;
+  static const settingsSectionGap = 41 / 3;
   static const settingsValueText = 14.0;
-  static const settingsValueWidth = 200.0;
-  static const settingsChevron = 20.0;
+  static const settingsValueWidth = 240.0;
   static const fontRowPadding = 12.0;
   static const fontSampleGap = 4.0;
   static const fontCheck = 20.0;
@@ -2334,5 +2334,89 @@ abstract final class HistoryTheme {}
 /// The login page and its bar.
 abstract final class LoginTheme {}
 
-/// 设置's sections beyond 字体, and its confirms.
-abstract final class SettingsTheme {}
+/// 设置's sections beyond 字体, and its confirms: 50 and 51, measured at 3 px per pt.
+abstract final class SettingsTheme {
+  /// The white bar under the status bar, its bold title and the ‹ whose ink starts 79 px in.
+  static const bar = BiliColors.card;
+  static const barHeight = 44.0;
+  static const barTitleText = 20.0;
+  static const barTitleWeight = FontWeight.w600;
+  static const barTitle = BiliColors.text;
+
+  /// MiSans sits lower than 50's PingFang: the bar's title rides up 1.5 px and the rows' titles 2.5 px.
+  static double get barTitleDrop => BiliFonts.nudged ? -1.5 / 3 : 0;
+  static double get rowTitleDrop => BiliFonts.nudged ? -2.5 / 3 : 0;
+  static const backLeft = 79 / 3;
+  static const backGlyphWidth = 25 / 3;
+  static const backGlyphHeight = 47 / 3;
+  static const backStroke = 1.6;
+  static const backGlyph = Color(0xFF484C53);
+  static const backTarget = 44.0;
+
+  static const page = BiliColors.pageGrey;
+  static const row = BiliColors.card;
+  static const rowTitleText = 16.0;
+  static const rowTitle = BiliColors.text;
+  static const rowDisabled = BiliColors.secondaryText;
+  static const value = BiliColors.secondaryText;
+
+  /// The titles and the hairlines under every row, the last included, start 15 pt in; a full-width one tops each
+  /// section.
+  static const rowInset = 15.0;
+  static const hairline = 1 / 3;
+  static const hairlineColor = BiliColors.divider;
+
+  /// The grey ›'s ink ends 48 px from the right, the value's 24 px before it.
+  static const chevronWidth = 20 / 3;
+  static const chevronHeight = 12.0;
+  static const chevronStroke = 2.5 / 3;
+  static const chevronRight = 47 / 3;
+  static const chevron = BiliColors.secondaryText;
+  static const valueGap = 7.0;
+
+  /// The BTR 加速 switch, the light sheets' shape.
+  static const switchRight = 16.0;
+  static const switchOn = BiliColors.pink;
+  static const switchOff = FavouriteTheme.switchOffLight;
+  static const switchKnob = BiliColors.panelKnob;
+  static const switchKnobShadow = FavouriteTheme.knobShadow;
+  static const switchKnobShadowBlur = FavouriteTheme.knobShadowBlur;
+  static const switchMotion = Duration(milliseconds: 200);
+
+  /// Grey notes under a section: CDN 节点's and the BTR licence.
+  static const footerText = 12.0;
+  static const footer = BiliColors.secondaryText;
+  static const footerTop = 8.0;
+  static const footerBottom = 4.0;
+
+  /// 51's alert: 280 pt wide with 8 pt corners over a 70% dim, the title's middle 35.8 pt down, the grey line's
+  /// 74.4 pt, a 2 px rule 28 pt below that, and two 44 pt buttons with no rule between them.
+  static const confirmWidth = 280.0;
+  static const confirmRadius = 8.0;
+  static const confirmDim = Color(0xB3000000);
+  static const confirm = BiliColors.card;
+  static const confirmTitleText = 16.0;
+  static const confirmTitleLine = 22.0;
+  static const confirmTitleWeight = FontWeight.w500;
+  static const confirmTitle = BiliColors.text;
+  static const confirmTitleTop = 35.8 - confirmTitleLine / 2;
+  static const confirmMessageText = 13.0;
+  static const confirmMessageLine = 18.0;
+  static const confirmMessage = BiliColors.secondaryText;
+  static const confirmMessageGap = 74.4 - 35.8 - (confirmTitleLine + confirmMessageLine) / 2;
+  static const confirmMessageBottom = 28.0 - confirmMessageLine / 2;
+  static const confirmSide = 20.0;
+  static const confirmRule = 2 / 3;
+  static const confirmRuleColor = BiliColors.divider;
+  static const confirmButtonHeight = 44.0;
+  static const confirmButtonText = 16.0;
+  static const confirmCancel = BiliColors.text;
+  static const confirmAction = BiliColors.pink;
+  static const confirmPressed = BiliColors.pressedFill;
+  static const confirmPressMotion = Duration(milliseconds: 120);
+
+  /// It comes and goes as the other alerts do, settling from slightly large.
+  static const confirmIn = CommentOverlayTheme.confirmIn;
+  static const confirmOut = CommentOverlayTheme.confirmOut;
+  static const confirmStartScale = FavouriteTheme.alertStartScale;
+}

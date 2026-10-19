@@ -93,7 +93,7 @@ class _FontPageState extends State<FontPage> {
                     key: const ValueKey('font-import'),
                     onTap: _importing ? null : () => unawaited(_import()),
                     child: SizedBox(
-                      height: BiliMetrics.settingsRowHeight,
+                      height: SettingsSection.rowHeight,
                       child: Center(
                         child: Text(
                           fonts.imported == null ? '导入字体' : '导入其他字体',

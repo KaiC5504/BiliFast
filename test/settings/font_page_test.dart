@@ -147,7 +147,7 @@ void main() {
     expect(find.byType(FontPage), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('font-system')));
     await tester.pump();
-    await tester.pageBack();
+    await tester.tap(find.byKey(const ValueKey('settings-back')));
     await tester.pumpAndSettle();
     expect(find.text('系统字体'), findsOneWidget);
   });

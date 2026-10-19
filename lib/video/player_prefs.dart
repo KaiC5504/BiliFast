@@ -3,12 +3,25 @@ import 'dart:io';
 
 import 'package:bili_core/api.dart' show VideoCodec;
 import 'package:bili_core/devlog.dart';
+import 'package:bili_core/engine.dart' show NodeMode;
 
 import '../player/bili_player.dart';
 import 'player_session.dart';
 
-/// The player settings Swift's AppSettings kept in UserDefaults (自动连播, 循环播放, 画面尺寸, BTR 加速, 显示统计,
-/// the quality and codec asked for, and danmaku on or off), as a small JSON file in the support folder.
+/// 设置's CDN 节点 (Swift `AppSettings.NodeChoice`).
+enum NodeChoice {
+  overseas('海外节点'),
+  mainland('大陆节点');
+
+  const NodeChoice(this.label);
+
+  final String label;
+
+  NodeMode get mode => this == overseas ? NodeMode.overseas : NodeMode.mainland;
+}
+
+/// The player settings Swift's AppSettings kept in UserDefaults (自动连播, 循环播放, 画面尺寸, BTR 加速, CDN 节点,
+/// 显示统计, the quality and codec asked for, and danmaku on or off), as a small JSON file in the support folder.
 class PlayerPrefs {
   PlayerPrefs._(this._path, Map<String, Object?> values, this._logger) {
     _read(values);
@@ -51,6 +64,7 @@ class PlayerPrefs {
   LoopMode _loop = LoopMode.off;
   FitMode _fit = FitMode.fit;
   bool _btr = true;
+  NodeChoice _node = NodeChoice.overseas;
   bool _showStats = false;
   bool _danmakuOn = true;
   bool _coinAlsoLike = true;
@@ -69,6 +83,9 @@ class PlayerPrefs {
 
   bool get btr => _btr;
   set btr(bool value) => _set(() => _btr = value);
+
+  NodeChoice get node => _node;
+  set node(NodeChoice value) => _set(() => _node = value);
 
   bool get showStats => _showStats;
   set showStats(bool value) => _set(() => _showStats = value);
@@ -112,6 +129,7 @@ class PlayerPrefs {
     _loop = named('loop', LoopMode.values) ?? _loop;
     _fit = named('fit', FitMode.values) ?? _fit;
     _btr = pick<bool>('btr') ?? _btr;
+    _node = named('node', NodeChoice.values) ?? _node;
     _showStats = pick<bool>('showStats') ?? _showStats;
     _danmakuOn = pick<bool>('danmakuOn') ?? _danmakuOn;
     _coinAlsoLike = pick<bool>('coinAlsoLike') ?? _coinAlsoLike;
@@ -125,6 +143,7 @@ class PlayerPrefs {
     'loop': _loop.name,
     'fit': _fit.name,
     'btr': _btr,
+    if (_node != NodeChoice.overseas) 'node': _node.name,
     'showStats': _showStats,
     'danmakuOn': _danmakuOn,
     'coinAlsoLike': _coinAlsoLike,

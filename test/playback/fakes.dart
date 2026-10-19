@@ -126,6 +126,11 @@ final class FakeEngine implements PlaybackEngine {
   @override
   void preconnect(List<String> urls) => preconnects.add(urls);
 
+  final nodeModes = <NodeMode>[];
+
+  @override
+  void setNodeMode(NodeMode mode) => nodeModes.add(mode);
+
   @override
   Stream<FatalReport> get fatals => fatalController.stream;
 
