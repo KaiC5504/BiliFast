@@ -1,3 +1,4 @@
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:flutter/services.dart';
 
@@ -7,7 +8,9 @@ import 'player_api.g.dart';
 /// The native players' events, routed to each IosPlayer by id. Positions get the host clock time on arrival,
 /// which danmaku extrapolates from.
 final class IosPlayerEvents implements PlayerEventApi {
-  IosPlayerEvents({MonotonicClock? clock}) : _clock = clock ?? MonotonicClock.system;
+  IosPlayerEvents({MonotonicClock? clock, Logger? logger})
+      : _clock = clock ?? MonotonicClock.system,
+        _logger = logger ?? Logger.shared;
 
   static IosPlayerEvents? _shared;
 
@@ -15,6 +18,7 @@ final class IosPlayerEvents implements PlayerEventApi {
   static IosPlayerEvents get shared => _shared ??= IosPlayerEvents()..connect();
 
   final MonotonicClock _clock;
+  final Logger _logger;
   final _sinks = <int, void Function(PlayerEvent event)>{};
 
   void connect({BinaryMessenger? binaryMessenger}) => PlayerEventApi.setUp(this, binaryMessenger: binaryMessenger);
@@ -58,9 +62,20 @@ final class IosPlayerEvents implements PlayerEventApi {
   @override
   Future<void> onPictureInPictureRestore(int playerId) async => _emit(playerId, const PictureInPictureRestore());
 
+  /// The registry's created and disposed lines come before the player is attached and after it is detached, so a line
+  /// with no player to take it goes to the log directly.
   @override
-  Future<void> onLog(int playerId, String kind, Map<String, Object?> fields) async =>
-      _emit(playerId, PlayerLog(kind, fields));
+  Future<void> onLog(int playerId, String kind, Map<String, Object?> fields) async {
+    final sink = _sinks[playerId];
+    if (sink != null) {
+      sink(PlayerLog(kind, fields));
+      return;
+    }
+    _logger.info(LogCategory.player, kind, {
+      'playerId': playerId,
+      for (final MapEntry(:key, :value) in fields.entries) key: ?value,
+    });
+  }
 
   static PlayerStatus _status(NativePlayerStatus status) => switch (status) {
         NativePlayerStatus.idle => PlayerStatus.idle,
