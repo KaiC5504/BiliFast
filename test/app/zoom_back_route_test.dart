@@ -102,9 +102,13 @@ void main() {
       )
       .opacity;
 
+  /// The card's cover is drawn, not left Offstage in the Hero's placeholder from the push's flight.
+  void expectCover() => expect(find.byKey(cardKey), findsOneWidget, reason: "the card's cover is back");
+
   Future<void> expectHome(WidgetTester tester) async {
     expect(find.text('视频页'), findsNothing);
     expect(cardOpacity(tester), 1, reason: 'the card is back');
+    expectCover();
     var done = false;
     unawaited(opened.then((_) => done = true));
     await tester.pump();
@@ -236,6 +240,28 @@ void main() {
       expect(flights, 1, reason: 'the cover never flew back on its own');
     });
 
+    testWidgets("the card's picture is in on the first frame, over the page dropped to 0.3 and fading out", (
+      tester,
+    ) async {
+      await open(tester);
+      final gesture = await dragOut(tester, const Offset(250, 0));
+      await gesture.up(timeStamp: const Duration(milliseconds: 176));
+      await tester.pump();
+      double opacityOver(Finder finder) =>
+          tester.widget<Opacity>(find.ancestor(of: finder, matching: find.byType(Opacity)).first).opacity;
+
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(opacityOver(find.byType(RawImage)), 1);
+      final first = opacityOver(find.byKey(pageKey));
+      expect(first, inInclusiveRange(0.2, ZoomBackTheme.pageUnder));
+      await tester.pump(const Duration(milliseconds: 34));
+      expect(opacityOver(find.byKey(pageKey)), inExclusiveRange(0, first));
+      await tester.pump(ZoomBackTheme.fly * ZoomBackTheme.pageOut - const Duration(milliseconds: 50));
+      expect(opacityOver(find.byKey(pageKey)), closeTo(0, 0.02), reason: 'gone by 0.7 of the fly');
+      await tester.pumpAndSettle();
+      await expectHome(tester);
+    });
+
     testWidgets('the cover Hero does not fly while dragging or landing', (tester) async {
       await open(tester);
       final gesture = await dragOut(tester, const Offset(120, 0));
@@ -334,6 +360,88 @@ void main() {
       expect(page.left, greaterThan(0), reason: 'sliding off to the right');
       await tester.pumpAndSettle();
       expect(find.text('视频页'), findsNothing);
+    });
+  });
+
+  group('fling', () {
+    testWidgets('a quick flick right with little travel still goes back', (tester) async {
+      await open(tester);
+      // 60 pt (under 0.24 of the width) in 40 ms: 1500 pt/s, above one width a second.
+      final gesture = await tester.startGesture(const Offset(5, 478));
+      for (var i = 1; i <= 4; i++) {
+        await gesture.moveTo(Offset(5 + 15.0 * i, 478), timeStamp: Duration(milliseconds: 10 * i));
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      await gesture.up(timeStamp: const Duration(milliseconds: 44));
+      await tester.pumpAndSettle();
+      await expectHome(tester);
+    });
+
+    testWidgets('past the travel but flung back left, it springs back', (tester) async {
+      await open(tester);
+      final gesture = await dragOut(tester, const Offset(250, 0));
+      // Back left fast, still past 0.24 of the width (106 pt) when let go.
+      for (var i = 1; i <= 4; i++) {
+        await gesture.moveBy(const Offset(-25, 0), timeStamp: Duration(milliseconds: 160 + 10 * i));
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      await gesture.up(timeStamp: const Duration(milliseconds: 204));
+      await tester.pumpAndSettle();
+      expect(find.text('视频页'), findsOneWidget);
+      expectRect(pageRect(tester), Offset.zero & screen);
+    });
+  });
+
+  group("the card's cover comes back", () {
+    testWidgets('after 〈 flies into it, and the picture it turns into has the cover', (tester) async {
+      await open(tester);
+      await tester.tap(find.text('〈'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(ZoomBackTheme.flyFromFull ~/ 2);
+      final picture = tester.widget<RawImage>(find.byType(RawImage)).image!;
+      final bytes = (await tester.runAsync(() => picture.toByteData()))!;
+      // The middle pixel of the card's picture, RGBA: the cover's blue, not the empty placeholder.
+      final middle = ((picture.height ~/ 2) * picture.width + picture.width ~/ 2) * 4;
+      expect([bytes.getUint8(middle), bytes.getUint8(middle + 1), bytes.getUint8(middle + 2)], [0x21, 0x96, 0xF3]);
+      await tester.pumpAndSettle();
+      await expectHome(tester);
+    });
+
+    testWidgets('after a swipe dismiss', (tester) async {
+      await open(tester);
+      await tester.timedDragFrom(const Offset(5, 478), const Offset(300, 0), const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      await expectHome(tester);
+    });
+
+    testWidgets('after a spring back and a later 〈', (tester) async {
+      await open(tester);
+      final gesture = await dragOut(tester, const Offset(60, 0));
+      await gesture.up(timeStamp: const Duration(milliseconds: 1000));
+      await tester.pumpAndSettle();
+      expect(find.text('视频页'), findsOneWidget);
+      await tester.tap(find.text('〈'));
+      await tester.pumpAndSettle();
+      await expectHome(tester);
+      expect(flights, 1);
+    });
+
+    testWidgets('after 〈 with Reduce Motion', (tester) async {
+      await open(tester, still: true);
+      await tester.tap(find.text('〈'));
+      await tester.pumpAndSettle();
+      await expectHome(tester);
+    });
+
+    testWidgets('after the page is removed without an animation', (tester) async {
+      await open(tester);
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator.removeRoute(ModalRoute.of(tester.element(find.byKey(pageKey)))!);
+      await tester.pumpAndSettle();
+      expect(find.text('视频页'), findsNothing);
+      expect(cardOpacity(tester), 1);
+      expectCover();
     });
   });
 

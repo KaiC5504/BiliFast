@@ -13,6 +13,7 @@ import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/shared/menu.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/video/intro/title_block.dart';
 import 'package:bilifast/video/video_page.dart';
@@ -104,6 +105,12 @@ void main() {
   Future<void> toastGone(WidgetTester tester) => settle(tester, 60);
 
   Finder card(String bvid) => find.byKey(ValueKey('feed-card-$bvid'));
+
+  /// The card's cover picture, only while drawn: not left Offstage in the Hero's placeholder from the push's flight.
+  Finder cover(String bvid) => find.descendant(
+    of: find.descendant(of: card(bvid), matching: find.byType(Hero)),
+    matching: find.byType(RemoteImage),
+  );
 
   Finder entrance(String bvid) => find.descendant(of: card(bvid), matching: find.byType(SlideTransition));
 
@@ -306,17 +313,66 @@ void main() {
     await settle(tester, 20);
     final source = tester.widget<VideoPage>(find.byType(VideoPage)).route.zoomSource!;
     expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isA<ZoomBackPageRoute<void>>());
-    // Under the page home is slid a third of the way aside, as the card's rect is.
-    expect(source(), tester.getRect(find.byKey(const ValueKey('feed-card-BV1aaa'), skipOffstage: false)));
     expect(source()!.size, resting.size);
+
+    // Once the page shrinks home stops being slid aside, so the card is where the page lands.
+    final gesture = await tester.startGesture(const Offset(5, 600));
+    for (var i = 1; i <= 4; i++) {
+      await gesture.moveTo(Offset(5 + 10.0 * i, 600), timeStamp: Duration(milliseconds: 16 * i));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(tester.getRect(find.byType(VideoPage)).width, lessThan(440), reason: 'the page is shrunk');
+    expect(source(), resting);
+    // Held still before letting go, so it springs back.
+    await gesture.moveTo(const Offset(45, 600), timeStamp: const Duration(milliseconds: 200));
+    await gesture.up(timeStamp: const Duration(milliseconds: 300));
+    await settle(tester, 20);
+    expect(find.byType(VideoPage), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('video-back')));
     await settle(tester, 20);
     expect(source(), resting, reason: 'back where it was once the page has gone');
+    expect(cover('BV1aaa'), findsOneWidget, reason: "the card's cover is back after a spring back and 〈");
     await tester.enterText(find.byKey(const ValueKey('home-link')), 'https://www.bilibili.com/video/BV1GJ411x7h7?p=2');
     await settle(tester, 20);
     expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.zoomSource, isNull);
     expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isNot(isA<ZoomBackPageRoute<void>>()));
+  });
+
+  testWidgets("〈 straight from a card's page flies back into it, and the card shows its cover again", (tester) async {
+    await show(tester);
+    await settle(tester);
+    await tester.tap(card('BV1aaa'));
+    await settle(tester, 20);
+    await tester.tap(find.byKey(const ValueKey('video-back')));
+    await settle(tester, 20);
+    expect(find.byType(VideoPage), findsNothing);
+    expect(cover('BV1aaa'), findsOneWidget, reason: 'not left Offstage in the Hero placeholder from the push');
+  });
+
+  group('swipe back on the real video page', () {
+    for (final (where, y) in [('over the player', 150.0), ('over the body', 600.0)]) {
+      testWidgets('from the left edge $where it flies back into the card', (tester) async {
+        await show(tester);
+        await settle(tester);
+        final resting = tester.getRect(card('BV1aaa'));
+        await tester.tap(card('BV1aaa'));
+        await settle(tester, 20);
+        expect(find.byType(VideoPage), findsOneWidget);
+        final gesture = await tester.startGesture(Offset(5, y));
+        for (var i = 1; i <= 10; i++) {
+          await gesture.moveTo(Offset(5 + 25.0 * i, y), timeStamp: Duration(milliseconds: 16 * i));
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        final shrunk = tester.getRect(find.byType(VideoPage));
+        expect(shrunk.width, lessThan(440), reason: 'the page shrinks under the finger');
+        await gesture.up(timeStamp: const Duration(milliseconds: 176));
+        await settle(tester, 20);
+        expect(find.byType(VideoPage), findsNothing);
+        expect(tester.getRect(card('BV1aaa')), resting);
+        expect(cover('BV1aaa'), findsOneWidget, reason: "the card's cover is back");
+      });
+    }
   });
 
   testWidgets('⋮ opens a frosted menu beside it whose 稍后再看 adds the video', (tester) async {
