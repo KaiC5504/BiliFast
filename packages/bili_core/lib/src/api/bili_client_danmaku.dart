@@ -92,15 +92,34 @@ extension BiliClientDanmaku on BiliClient {
 
   Future<void> deleteBlockRule({required int id}) => postVoid('/x/dm/filter/user/del', form: {'ids': '$id'});
 
-  // Contracts stubs: slice 5's 当前弹幕列表 agent writes these two.
-
   /// 当前弹幕列表's 👍: on, or taken back.
-  Future<void> likeDanmaku({required int cid, required int dmid, required bool on}) =>
-      throw UnimplementedError('likeDanmaku');
+  Future<void> likeDanmaku({required int cid, required int dmid, required bool on}) async {
+    try {
+      await postVoid(
+        '/x/v2/dm/thumbup/add',
+        form: {'op': on ? '1' : '2', 'dmid': '$dmid', 'oid': '$cid', 'platform': 'web_player'},
+      );
+    } on BiliAPIError catch (error) {
+      // 65006 already liked, 65004 never liked: the server is where the tap wanted it.
+      if (error.code != (on ? 65006 : 65004)) rethrow;
+    }
+  }
 
   /// The 👍 counts of [dmids], keyed by danmaku id; an id the server doesn't answer for is left out.
-  Future<Map<int, DanmakuLikeStat>> danmakuLikes({required int cid, required List<int> dmids}) =>
-      throw UnimplementedError('danmakuLikes');
+  Future<Map<int, DanmakuLikeStat>> danmakuLikes({required int cid, required List<int> dmids}) async {
+    if (dmids.isEmpty) return {};
+    final stats = await _getIfPresent(
+      '/x/v2/dm/thumbup/stats',
+      query: {'oid': '$cid', 'ids': dmids.join(',')},
+      signed: false,
+      decode: (json) => JsonObject.from(json).map,
+    );
+    return {
+      for (final MapEntry(:key, :value) in (stats ?? const {}).entries)
+        if ((int.tryParse(key), value) case (final int id, final Map<String, Object?> stat))
+          id: (likes: JsonObject(stat).count('likes'), liked: JsonObject(stat).flag('user_like')),
+    };
+  }
 
   /// Returns the new danmaku's id, or 0 when the server accepted it without one.
   Future<int> postDanmaku(DanmakuDraft draft) {
