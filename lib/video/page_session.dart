@@ -727,6 +727,11 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   @override
   VideoDetail? get detail => _controller.detail;
 
+  /// The ask for [detail] and its retries failed; 简介 shows 点击重试.
+  bool get detailFailed => _controller.detailFailed;
+
+  void retryDetail() => _controller.retryDetail();
+
   @override
   set active(bool value) {
     if (_disposed || value == _active) return;
