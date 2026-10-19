@@ -326,7 +326,8 @@ void main() {
     expect(http.canned.to(_watchLaterPath), hasLength(1));
   });
 
-  testWidgets('the avatar opens its page, whose 全部 lists 最近打开 and back returns home', (tester) async {
+  testWidgets('the avatar opens its page, whose 全部 lists 最近打开 while logged out, and back returns home', (tester) async {
+    http = FeedHttp(loggedIn: false);
     await show(tester, developer: true);
     await settle(tester);
     recents.add(const RecentVideo(bvid: 'BV1x', cid: 3, title: '最近的视频', part: '', page: 1, pageCount: 1));

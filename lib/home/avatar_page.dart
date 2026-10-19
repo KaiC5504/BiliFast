@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:bili_core/api.dart' show HistoryItem;
 import 'package:bili_core/logic.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app/app_environment.dart';
 import '../app/app_scope.dart';
+import '../app/route_observer.dart';
 import '../app/swipe_back_route.dart';
+import '../history/history_model.dart';
 import '../history/watch_history_page.dart';
 import '../player_ui/portrait_controls.dart';
 import '../settings/settings_page.dart';
@@ -17,11 +21,10 @@ import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/video_route.dart';
 import 'feed_card.dart';
-import 'recent_store.dart';
 import 'recents_page.dart';
 
 /// What the avatar opens (49): back, the one tab 最近 (49's 看视频 and 听视频 are left out), ⚙ for 设置, the four
-/// shortcuts, and the last few of 最近打开 in a white card. The account, logging in and out, and 开发者 are in 设置.
+/// shortcuts, and the last few videos watched in a white card. The account, logging in and out, and 开发者 are in 设置.
 class AvatarPage extends StatelessWidget {
   const AvatarPage({super.key, this.developerPage});
 
@@ -59,7 +62,7 @@ class AvatarPage extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(child: _RecentCard(onAll: () => _push(context, (_) => const RecentsPage()))),
+            Expanded(child: _RecentCard(push: (builder) => _push(context, builder))),
           ],
         ),
       ),
@@ -215,58 +218,201 @@ class _Shortcut extends StatelessWidget {
   );
 }
 
-/// 最近在看的视频: the newest few of 最近打开, with 全部 for the whole list.
-class _RecentCard extends StatelessWidget {
-  const _RecentCard({required this.onAll});
+/// 最近在看的视频: the newest few of the account's 历史记录, asked for as the page opens and whenever it shows again.
+/// Logged out, the newest few of 最近打开 instead, so the card isn't empty.
+class _RecentCard extends StatefulWidget {
+  const _RecentCard({required this.push});
 
-  final VoidCallback onAll;
+  final void Function(WidgetBuilder builder) push;
 
   @override
-  Widget build(BuildContext context) {
-    final recents = AppScope.of(context).recents;
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(AvatarPageTheme.cardRadius)),
-      child: ColoredBox(
-        color: BiliColors.card,
-        child: ListenableBuilder(
-          listenable: recents,
-          builder: (context, _) {
-            final items = recents.items.take(AvatarPageTheme.shown).toList();
-            final now = recents.now();
-            return ListView(
-              padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
-              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-              children: [
-                _Header(onAll: onAll),
-                if (items.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AvatarPageTheme.rowExtent / 2),
-                    child: Center(
-                      child: Text(
-                        '还没有打开过视频',
-                        style: TextStyle(
-                          fontFamily: BiliFonts.family,
-                          fontSize: BiliMetrics.bodyText,
-                          color: BiliColors.secondaryText,
-                        ),
-                      ),
-                    ),
-                  ),
-                for (final item in items)
-                  _RecentRow(
-                    key: ValueKey('avatar-recent-${item.id}'),
-                    item: item,
-                    now: now,
-                    onOpen: () => recents.add(item),
-                    onRemove: () => recents.remove(item),
-                  ),
-              ],
-            );
-          },
-        ),
+  State<_RecentCard> createState() => _RecentCardState();
+}
+
+class _RecentCardState extends State<_RecentCard> with RouteAware {
+  AppServices? _services;
+  late final HistoryModel _history;
+  late final Listenable _changes;
+  PageRoute<dynamic>? _route;
+
+  /// Logged out since the list last loaded: the next login loads that account's list.
+  bool _missedLogin = false;
+
+  AppEnvironment get _environment => _services!.environment;
+
+  bool get _signedOut => switch (_environment.account) {
+    LoggedOut() || LoginExpired() => true,
+    LoggedIn() || AccountUnknown() => false,
+  };
+
+  bool get _showsHistory => !_signedOut && !_history.needsLogin;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_services == null) {
+      final services = _services = AppScope.of(context);
+      _history = HistoryModel(api: services.pageApi, isLoggedIn: () => !_signedOut);
+      _changes = Listenable.merge([services.environment, _history, services.recents]);
+      _missedLogin = _signedOut;
+      services.environment.addListener(_accountChanged);
+      unawaited(_history.start());
+    }
+    if (ModalRoute.of(context) case final PageRoute<dynamic> route when route != _route) {
+      pageRoutes.unsubscribe(this);
+      _route = route;
+      pageRoutes.subscribe(this, route);
+    }
+  }
+
+  void _accountChanged() {
+    if (_signedOut) {
+      _missedLogin = true;
+    } else if (_environment.account is LoggedIn && (_missedLogin || _history.needsLogin)) {
+      _missedLogin = false;
+      unawaited(_history.reload());
+    }
+  }
+
+  /// Back from a video (or 历史记录, 设置): the account's list may have changed meanwhile.
+  @override
+  void didPopNext() {
+    if (_signedOut) return;
+    _missedLogin = false;
+    unawaited(_history.reload());
+  }
+
+  @override
+  void dispose() {
+    pageRoutes.unsubscribe(this);
+    _services?.environment.removeListener(_accountChanged);
+    _history.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final message = await _history.reload();
+    if (message != null && mounted) showToast(context, message);
+  }
+
+  Future<void> _delete(HistoryItem item) async {
+    if (_environment.account is! LoggedIn) return;
+    final failure = await _history.delete(item);
+    if (failure != null && mounted) showToast(context, failure);
+  }
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: const BorderRadius.vertical(top: Radius.circular(AvatarPageTheme.cardRadius)),
+    child: ColoredBox(
+      color: BiliColors.card,
+      child: ListenableBuilder(
+        listenable: _changes,
+        builder: (context, _) => _showsHistory ? _historyList(context) : _recentsList(context),
       ),
+    ),
+  );
+
+  Widget _historyList(BuildContext context) {
+    final history = _history;
+    final now = _services!.recents.now();
+    String? note;
+    if (history.items.isEmpty && !history.loading) {
+      if (history.error != null) {
+        note = '加载失败，下拉重试';
+      } else if (history.isEnd) {
+        note = '还没有看过视频';
+      }
+    }
+    return _list(
+      context,
+      onAll: () => widget.push((_) => const WatchHistoryPage()),
+      onRefresh: _refresh,
+      note: note,
+      rows: [
+        for (final item in history.items.take(AvatarPageTheme.shown))
+          _VideoRow(
+            key: ValueKey('avatar-recent-${item.id}'),
+            id: item.id,
+            title: item.title,
+            cover: item.cover,
+            duration: item.duration,
+            progress: HistoryModel.progressFraction(item),
+            time: '${TimeFormat.relative(item.viewAt, now: now)}播放',
+            onOpen: () => unawaited(openVideoPage(context, HistoryModel.route(item))),
+            onRemove: () => unawaited(_delete(item)),
+          ),
+      ],
     );
   }
+
+  Widget _recentsList(BuildContext context) {
+    final recents = _services!.recents;
+    final items = recents.items.take(AvatarPageTheme.shown).toList();
+    final now = recents.now();
+    return _list(
+      context,
+      onAll: () => widget.push((_) => const RecentsPage()),
+      note: items.isEmpty ? '还没有打开过视频' : null,
+      rows: [
+        for (final item in items)
+          _VideoRow(
+            key: ValueKey('avatar-recent-${item.id}'),
+            id: item.id,
+            title: item.title,
+            cover: item.cover,
+            duration: item.duration,
+            progress: switch (item.progress) {
+              final progress? when progress > 0 && item.duration > 0 => math.min(1.0, progress / item.duration),
+              _ => 0,
+            },
+            time: switch (item.openedAt) {
+              final openedAt? => '${TimeFormat.relative(openedAt, now: now)}播放',
+              null => null,
+            },
+            onOpen: () {
+              // Stamps the part as opened now and puts it first, as opening a link does.
+              recents.add(item);
+              final route = VideoRoute(bvid: item.bvid, cid: item.cid, title: item.title, cover: item.cover);
+              unawaited(openVideoPage(context, route));
+            },
+            onRemove: () => recents.remove(item),
+          ),
+      ],
+    );
+  }
+
+  Widget _list(
+    BuildContext context, {
+    required VoidCallback onAll,
+    Future<void> Function()? onRefresh,
+    required String? note,
+    required List<Widget> rows,
+  }) => CustomScrollView(
+    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+    slivers: [
+      if (onRefresh != null) CupertinoSliverRefreshControl(onRefresh: onRefresh),
+      SliverToBoxAdapter(child: _Header(onAll: onAll)),
+      if (note != null)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AvatarPageTheme.rowExtent / 2),
+            child: Center(
+              child: Text(
+                note,
+                style: TextStyle(
+                  fontFamily: BiliFonts.family,
+                  fontSize: BiliMetrics.bodyText,
+                  color: BiliColors.secondaryText,
+                ),
+              ),
+            ),
+          ),
+        ),
+      SliverList.list(children: rows),
+      SliverToBoxAdapter(child: SizedBox(height: MediaQuery.paddingOf(context).bottom)),
+    ],
+  );
 }
 
 class _Header extends StatelessWidget {
@@ -337,30 +483,40 @@ class _Header extends StatelessWidget {
 }
 
 /// One of 49's rows: the cover with its duration and progress, two lines of title, when it was opened, and ✕.
-class _RecentRow extends StatelessWidget {
-  const _RecentRow({super.key, required this.item, required this.now, required this.onOpen, required this.onRemove});
+class _VideoRow extends StatelessWidget {
+  const _VideoRow({
+    super.key,
+    required this.id,
+    required this.title,
+    required this.cover,
+    required this.duration,
+    required this.progress,
+    required this.time,
+    required this.onOpen,
+    required this.onRemove,
+  });
 
-  final RecentVideo item;
-  final DateTime now;
+  final String id;
+  final String title;
+  final String? cover;
 
-  /// Stamps the part as opened now and puts it first, as opening a link does.
+  /// Seconds; 0 when unknown.
+  final int duration;
+
+  /// How much of the pink line under the cover is filled, 0 to 1.
+  final double progress;
+
+  /// `2小时前播放`; null when unknown.
+  final String? time;
   final VoidCallback onOpen;
   final VoidCallback onRemove;
-
-  void _open(BuildContext context) {
-    onOpen();
-    final route = VideoRoute(bvid: item.bvid, cid: item.cid, title: item.title, cover: item.cover);
-    unawaited(openVideoPage(context, route));
-  }
 
   @override
   Widget build(BuildContext context) {
     const coverTop = AvatarPageTheme.rowCoverTop;
     const coverBottom = coverTop + AvatarPageTheme.coverHeight;
-    final cover = item.cover;
-    final progress = item.progress;
-    final duration = item.duration;
-    final openedAt = item.openedAt;
+    final cover = this.cover;
+    final time = this.time;
     return SizedBox(
       height: AvatarPageTheme.rowExtent,
       child: Stack(
@@ -369,10 +525,10 @@ class _RecentRow extends StatelessWidget {
             child: Semantics(
               container: true,
               button: true,
-              label: item.title,
+              label: title,
               excludeSemantics: true,
-              onTap: () => _open(context),
-              child: PressHighlight(onTap: () => _open(context), child: const SizedBox.expand()),
+              onTap: onOpen,
+              child: PressHighlight(onTap: onOpen, child: const SizedBox.expand()),
             ),
           ),
           Positioned(
@@ -414,12 +570,12 @@ class _RecentRow extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (progress != null && progress > 0 && duration > 0)
+                    if (progress > 0)
                       Positioned(
                         left: 0,
                         bottom: 0,
                         height: AvatarPageTheme.progressHeight,
-                        width: AvatarPageTheme.coverWidth * math.min(1, progress / duration),
+                        width: AvatarPageTheme.coverWidth * progress,
                         child: const ColoredBox(key: ValueKey('avatar-recent-progress'), color: BiliColors.pink),
                       ),
                   ],
@@ -433,7 +589,7 @@ class _RecentRow extends StatelessWidget {
             top: coverTop - AvatarPageTheme.titleLift,
             child: IgnorePointer(
               child: Text(
-                item.title,
+                title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -445,14 +601,14 @@ class _RecentRow extends StatelessWidget {
               ),
             ),
           ),
-          if (openedAt != null)
+          if (time != null)
             Positioned(
               left: AvatarPageTheme.textLeft,
               right: AvatarPageTheme.removeCentreFromRight + AvatarPageTheme.tapTarget / 2,
               bottom: AvatarPageTheme.rowExtent - coverBottom - AvatarPageTheme.timeDrop,
               child: IgnorePointer(
                 child: Text(
-                  '${TimeFormat.relative(openedAt, now: now)}播放',
+                  time,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -475,7 +631,7 @@ class _RecentRow extends StatelessWidget {
               excludeSemantics: true,
               onTap: onRemove,
               child: GestureDetector(
-                key: ValueKey('avatar-remove-${item.id}'),
+                key: ValueKey('avatar-remove-$id'),
                 behavior: HitTestBehavior.opaque,
                 onTap: onRemove,
                 child: const Center(

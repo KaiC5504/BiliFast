@@ -1,14 +1,20 @@
+import 'dart:async';
+
+import 'package:bili_core/api.dart' show HistoryItem, BiliError;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/settings_page.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -33,25 +39,50 @@ RecentVideo _video(int index, {int duration = 0, String? cover}) => RecentVideo(
   cover: cover,
 );
 
+/// A history row watched [ago] before [_now].
+HistoryItem _watched(int aid, Duration ago, {int progress = 30, int duration = 300}) => HistoryItem(
+  aid: aid,
+  bvid: 'BV1h$aid',
+  cid: 2000 + aid,
+  title: '看过 $aid',
+  cover: 'https://i0.hdslb.com/bfs/archive/cover$aid.jpg',
+  ownerName: 'UP$aid',
+  progress: progress,
+  duration: duration,
+  viewAt: _now.subtract(ago).millisecondsSinceEpoch ~/ 1000,
+  device: 2,
+  part: null,
+);
+
 void main() {
   late RecentStore recents;
   late PlaybackController controller;
   late FakeLoginGate gate;
+  late FakePageApi api;
   var clock = _now;
 
-  Future<void> show(WidgetTester tester, {List<RecentVideo> opened = const []}) async {
+  /// Logged out (cookies Bilibili no longer takes) unless [loggedIn]; the page's calls go to [api].
+  Future<void> show(
+    WidgetTester tester, {
+    List<RecentVideo> opened = const [],
+    bool loggedIn = false,
+    List<HistoryItem> history = const [],
+    bool settleFirst = true,
+    bool fakeAccount = false,
+  }) async {
     tester.view.physicalSize = const Size(440, 956);
     tester.view.devicePixelRatio = 1;
     tester.view.padding = const FakeViewPadding(top: 62, bottom: 34);
     addTearDown(tester.view.reset);
     final logger = Logger(session: 'test');
-    final http = Canned.http();
+    final http = Canned.http(loggedIn: loggedIn);
     final environment = await AppEnvironment.load(
       keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
       http: http,
       logger: logger,
     );
     await environment.refreshAccount();
+    if (fakeAccount) environment.useFakeAccount();
     recents = await RecentStore.load(null, logger: logger, now: () => clock);
     for (final video in opened.reversed) {
       recents.add(video);
@@ -69,9 +100,17 @@ void main() {
     final playback = AppPlayback(() async => controller);
     addTearDown(playback.dispose);
     gate = FakeLoginGate();
-    final services = AppServices(environment: environment, playback: playback, recents: recents, loginGate: gate);
+    api = fakeAccount ? FakePageApi.demo(now: _now) : (FakePageApi()..historyItems = [...history]);
+    final services = AppServices(
+      environment: environment,
+      playback: playback,
+      recents: recents,
+      loginGate: gate,
+      pageApi: api,
+    );
     await tester.pumpWidget(
       MaterialApp(
+        navigatorObservers: [pageRoutes],
         builder: (context, child) => AppScope(services: services, child: child!),
         home: const Scaffold(body: Center(child: Text('首页'))),
       ),
@@ -79,8 +118,10 @@ void main() {
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
     final pushed = navigator.push(MaterialPageRoute<void>(builder: (_) => const AvatarPage()));
     pushed.ignore();
-    await settle(tester);
+    if (settleFirst) await settle(tester);
   }
+
+  int historyCalls() => api.calls.where((call) => call.startsWith('history')).length;
 
   setUp(() => clock = _now);
 
@@ -139,6 +180,7 @@ void main() {
     await settle(tester);
     expect(find.text('视频 1'), findsNothing);
     expect([for (final item in recents.items) item.bvid], ['BV1v0', 'BV1v2']);
+    expect(api.calls, isEmpty, reason: "logged out, the account's history is never asked");
   });
 
   testWidgets('with nothing opened yet the card says so, in the 字体 chosen', (tester) async {
@@ -225,6 +267,152 @@ void main() {
     await settle(tester, 20);
     expect(find.byType(AvatarPage), findsNothing);
     expect(find.text('首页'), findsOneWidget);
+  });
+
+  group('logged in', () {
+    final watched = [
+      _watched(1, const Duration(minutes: 5), progress: 25, duration: 100),
+      _watched(2, const Duration(hours: 2), progress: -1, duration: 133),
+      _watched(3, const Duration(hours: 26)),
+      _watched(4, const Duration(days: 3)),
+      _watched(5, const Duration(days: 4)),
+      _watched(6, const Duration(days: 5)),
+      _watched(7, const Duration(days: 6)),
+    ];
+    Finder row(HistoryItem item) => find.byKey(ValueKey('avatar-recent-${item.id}'));
+
+    testWidgets("the rows are the newest five of the account's history: cover, duration, progress, title, when", (
+      tester,
+    ) async {
+      await show(tester, loggedIn: true, history: watched, opened: [_video(0)]);
+      expect(historyCalls(), 1);
+      for (var i = 1; i <= 5; i++) {
+        expect(find.text('看过 $i'), findsOneWidget);
+      }
+      expect(find.text('看过 6'), findsNothing, reason: 'five at most');
+      expect(find.text('视频 0'), findsNothing, reason: '最近打开 is for logged out');
+      expect(find.text('5分钟前播放'), findsOneWidget);
+      expect(find.text('2小时前播放'), findsOneWidget);
+      expect(find.text('昨天 19:00播放'), findsOneWidget);
+      expect(find.text('10-16播放'), findsOneWidget);
+      expect(find.text('1:40'), findsOneWidget);
+      expect(find.text('2:13'), findsOneWidget);
+      final cover = find.descendant(of: row(watched[0]), matching: find.byType(RemoteImage));
+      expect(tester.widget<RemoteImage>(cover).url, 'https://i0.hdslb.com/bfs/archive/cover1.jpg');
+      final lines = find.byKey(const ValueKey('avatar-recent-progress'));
+      Size line(int index) => tester.getSize(find.descendant(of: row(watched[index]), matching: lines));
+      expect(line(0), const Size(34, 2));
+      expect(line(1), const Size(AvatarPageTheme.coverWidth, 2), reason: 'a finished one is full');
+      expect(tester.getTopLeft(row(watched[0])).dy + 14, closeTo(252, 0.5), reason: "the first cover's top on 49");
+      expect(tester.getTopLeft(row(watched[1])).dy - tester.getTopLeft(row(watched[0])).dy, 104);
+    });
+
+    testWidgets('the first load shows only the header; a failed one says so and a pull asks again', (tester) async {
+      final hold = Completer<void>();
+      await show(tester, loggedIn: true, history: watched, settleFirst: false);
+      api.holds['history'] = hold;
+      await settle(tester);
+      expect(find.text('最近在看的视频'), findsOneWidget);
+      expect(find.text('还没有看过视频'), findsNothing);
+      expect(find.text('还没有打开过视频'), findsNothing);
+      expect(find.textContaining('看过'), findsNothing);
+      api
+        ..failures['history'] = const BiliError.http(500)
+        ..holds.clear();
+      hold.complete();
+      await settle(tester);
+      expect(find.text('加载失败，下拉重试'), findsOneWidget);
+      api.failures.clear();
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
+      await settle(tester, 30);
+      expect(find.text('加载失败，下拉重试'), findsNothing);
+      expect(find.text('看过 1'), findsOneWidget);
+    });
+
+    testWidgets('with no history the card says so', (tester) async {
+      await show(tester, loggedIn: true);
+      expect(find.text('还没有看过视频'), findsOneWidget);
+    });
+
+    testWidgets('coming back to the page asks again; a failure then keeps the rows', (tester) async {
+      await show(tester, loggedIn: true, history: watched.sublist(1));
+      expect(find.text('看过 1'), findsNothing);
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      Future<void> visitAnotherPage() async {
+        navigator.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('别处')))).ignore();
+        await settle(tester, 20);
+        navigator.pop();
+        await settle(tester, 20);
+      }
+
+      api.historyItems = [...watched];
+      await visitAnotherPage();
+      expect(historyCalls(), 2);
+      expect(find.text('看过 1'), findsOneWidget);
+      expect(find.text('看过 6'), findsNothing);
+
+      api.failures['history'] = const BiliError.http(500);
+      await visitAnotherPage();
+      expect(historyCalls(), 3);
+      expect(find.text('看过 1'), findsOneWidget);
+      expect(find.text('加载失败，下拉重试'), findsNothing);
+    });
+
+    testWidgets('a row opens the video where it was left, as 历史记录 does', (tester) async {
+      await show(tester, loggedIn: true, history: watched);
+      await tester.tap(row(watched[0]));
+      await settle(tester, 20);
+      final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
+      expect(route.bvid, 'BV1h1');
+      expect(route.cid, 2001);
+      expect(route.start, 25);
+      expect(route.title, '看过 1');
+    });
+
+    testWidgets("✕ deletes from the account's history at once; a failed delete comes back with a toast", (
+      tester,
+    ) async {
+      await show(tester, loggedIn: true, history: watched);
+      final hold = Completer<void>();
+      api.holds['deleteHistory'] = hold;
+      await tester.tap(find.byKey(ValueKey('avatar-remove-${watched[1].id}')));
+      await tester.pump();
+      expect(api.calls.last, 'deleteHistory aid=2');
+      expect(find.text('看过 2'), findsNothing, reason: 'gone before the server answers');
+      expect(find.text('看过 6'), findsOneWidget, reason: 'the next one moves up');
+      api.failures['deleteHistory'] = const BiliError.http(500);
+      hold.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('删除失败，请稍后重试'), findsOneWidget);
+      await settle(tester, 60);
+      expect(find.text('看过 2'), findsOneWidget);
+      expect(find.text('看过 6'), findsNothing);
+
+      api
+        ..failures.clear()
+        ..holds.clear();
+      await tester.tap(find.byKey(ValueKey('avatar-remove-${watched[1].id}')));
+      await settle(tester);
+      expect(find.text('看过 2'), findsNothing);
+      expect([for (final item in api.historyItems) item.aid], isNot(contains(2)));
+    });
+
+    testWidgets('全部 opens 历史记录', (tester) async {
+      await show(tester, loggedIn: true, history: watched, opened: [_video(0)]);
+      await tester.tap(find.byKey(const ValueKey('avatar-all')));
+      await settle(tester, 20);
+      expect(find.byType(WatchHistoryPage), findsOneWidget);
+      expect(find.text('最近打开'), findsNothing);
+    });
+
+    testWidgets("--fake-account shows the fake's history", (tester) async {
+      await show(tester, fakeAccount: true, settleFirst: false);
+      await settle(tester, 20);
+      expect(find.text('一口气看完系列：三分钟带你了解城市夜景延时摄影的全部流程'), findsOneWidget);
+      expect(find.text('3小时前播放'), findsOneWidget);
+      expect(find.byKey(const ValueKey('avatar-recent-progress')), findsNWidgets(AvatarPageTheme.shown));
+    });
   });
 
   testWidgets('every control is a button VoiceOver can press', (tester) async {
