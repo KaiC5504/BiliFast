@@ -526,6 +526,29 @@ void main() {
     expect(scaleOf(tester, 'landscape-like'), 1);
   });
 
+  testWidgets('with animations off 弹 swaps its mark without the fade', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    Duration fade() => tester
+        .widget<AnimatedSwitcher>(
+          find.descendant(of: find.byType(DanmakuGlyph), matching: find.byType(AnimatedSwitcher)),
+        )
+        .duration;
+    expect(fade(), greaterThan(Duration.zero));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: LandscapeChrome(ui: rig.ui),
+          ),
+        ),
+      ),
+    );
+    expect(fade(), Duration.zero);
+  });
+
   testWidgets('N人正在看 sits under the title as on 04, follows the count, and is gone while unknown', (tester) async {
     final details = FakePageDetails(actions: FakeVideoActions());
     final rig = Rig(details: details);

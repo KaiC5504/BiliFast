@@ -932,7 +932,7 @@ class DanmakuGlyph extends StatelessWidget {
     width: BiliMetrics.chromeDanmakuWidth,
     height: BiliMetrics.chromeDanmakuHeight,
     child: AnimatedSwitcher(
-      duration: _fade,
+      duration: _motion(context),
       layoutBuilder: (current, previous) => Stack(clipBehavior: Clip.none, children: [...previous, ?current]),
       child: on
           ? const _MarkedTv(key: ValueKey(true), mark: _TickPainter())
@@ -989,7 +989,6 @@ class _MarkedTv extends StatelessWidget {
                 child: Center(
                   child: Text(
                     '弹',
-                    textScaler: TextScaler.noScaling,
                     style: TextStyle(
                       color: BiliColors.onVideo,
                       fontSize: BiliMetrics.chromeDanmakuText,
@@ -1134,7 +1133,8 @@ Path _hexagon(Offset Function(double x, double y) p, double radius, {double roun
   return path..close();
 }
 
-// A hexagon's sides sit cos 30° of its corner radius from the centre, so growing them by a gap grows that by more.
+// A hexagon's sides sit cos 30° of its corner radius from the centre, so a gap g past the sides grows the corner
+// radius by g / cos 30°.
 Path _nutClearance(Offset Function(double x, double y) p) =>
     _hexagon(p, _nutRadius + (BiliMetrics.chromeLineStroke / 2 + _markGap) / math.cos(math.pi / 6));
 

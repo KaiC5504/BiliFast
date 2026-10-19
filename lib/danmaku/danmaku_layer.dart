@@ -10,8 +10,8 @@ import 'danmaku_sprites.dart';
 
 /// Danmaku over the video. While the clock runs, a ticker reads it every frame and only the painter repaints;
 /// nothing rebuilds per frame. While it stands still the ticker sleeps, and [wake] (player events, a seek)
-/// brings it back for a frame or for good. A 弹幕设置 change shows at once, mid-flight, rebuilding nothing but the
-/// layer's opacity.
+/// brings it back for a frame or for good. A 弹幕设置 change shows at once, mid-flight; only 不透明度 rebuilds
+/// anything, and then just the Opacity above the painter.
 class DanmakuLayer extends StatefulWidget {
   const DanmakuLayer({
     super.key,
@@ -126,21 +126,23 @@ class DanmakuLayerState extends State<DanmakuLayer> with SingleTickerProviderSta
     if (!widget.clock.running && !_scene.catchingUp) _ticker.stop();
   }
 
+  /// Built once: a rebuild for 不透明度 hands Opacity the same child, so the builder doesn't run again.
+  late final Widget _layer = LayoutBuilder(
+    builder: (context, constraints) {
+      final size = constraints.biggest.isFinite ? constraints.biggest : Size.zero;
+      if (size != _scene.size) {
+        _scene.size = size;
+        _wake();
+      }
+      return CustomPaint(size: size, painter: _DanmakuPainter(_scene), willChange: true);
+    },
+  );
+
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled) return const SizedBox.expand();
-    final layer = LayoutBuilder(
-      builder: (context, constraints) {
-        final size = constraints.biggest.isFinite ? constraints.biggest : Size.zero;
-        if (size != _scene.size) {
-          _scene.size = size;
-          _wake();
-        }
-        return CustomPaint(size: size, painter: _DanmakuPainter(_scene), willChange: true);
-      },
-    );
     // Always there, even at 1, so a 不透明度 change only sets the layer's alpha: nothing is laid out or repainted.
-    return IgnorePointer(child: RepaintBoundary(child: Opacity(opacity: _options.opacity, child: layer)));
+    return IgnorePointer(child: RepaintBoundary(child: Opacity(opacity: _options.opacity, child: _layer)));
   }
 }
 

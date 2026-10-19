@@ -354,7 +354,7 @@ abstract final class BiliMetrics {
   /// 04 sets the TV 1 pt further from play than [landscapeEdge]; 09's 竖屏 row has it where it is.
   static const landscapeDanmakuLead = 6.0;
 
-  /// 弹幕设置's 44 pt button between the 弹 toggle and the danmaku field (04).
+  /// The gaps either side of 弹幕设置's 44 pt button, between the 弹 toggle and the field (04).
   static const chromeSettingsGap = 4.0;
   static const chromeFieldGap = 4.0;
 
@@ -704,7 +704,7 @@ abstract final class BiliMetrics {
   static const glassShadowBlur = 24.0;
   static const glassShadowDrop = 8.0;
 
-  /// Danmaku text at the normal size (25); an elem's own size scales it. 44's full screen is 22 pt, as in Swift;
+  /// Danmaku text at an elem's normal fontSize of 25, which other sizes scale. 44's full screen is 22 pt, as in Swift;
   /// the small player's, read off 10 (CJK advances of 37–38 px), is 12.5 pt where Swift had 17: the official app
   /// sizes them about by the player's height (22 × 247.5 / 440).
   static const danmakuFont = 12.5;
