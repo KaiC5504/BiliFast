@@ -173,6 +173,34 @@ void main() {
     expect(api.calls, isEmpty);
   });
 
+  test('a rule added while a refresh was on its way stays, and the list is asked for again', () async {
+    final stale = List.of(api.blockRules);
+    final hold = api.holds['danmakuBlockRules'] = Completer<void>();
+    final refresh = store.refresh();
+    expect(await store.add(BlockRuleKind.keyword, '剧透'), isNull);
+    api.blockRules = stale;
+    hold.complete();
+    await refresh;
+    expect(store.rules.map((rule) => rule.filter), ['剧透']);
+
+    api.blockRules = [...stale, store.rules.single];
+    await store.refresh();
+    expect(fetches(), 2, reason: 'the dropped answer is not cached');
+    expect(store.rules.map((rule) => rule.filter), ['CA', '/^6+\$/', '剧透']);
+  });
+
+  test('a rule removed while a refresh was on its way stays gone', () async {
+    await store.refresh();
+    final stale = List.of(api.blockRules);
+    final hold = api.holds['danmakuBlockRules'] = Completer<void>();
+    final refresh = store.refresh(force: true);
+    expect(await store.remove(store.rules.first), isNull);
+    api.blockRules = stale;
+    hold.complete();
+    await refresh;
+    expect(store.rules.map((rule) => rule.id), [2]);
+  });
+
   test('an answer that lands after logging out is dropped', () async {
     final hold = api.holds['danmakuBlockRules'] = Completer<void>();
     final refresh = store.refresh();

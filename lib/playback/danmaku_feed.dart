@@ -6,7 +6,7 @@ import 'package:bili_core/danmaku.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
-/// One video's danmaku (the fetching half of DanmakuController.swift): `seg.so` segments fetched as the
+/// One video's danmaku (the data half of DanmakuController.swift): `seg.so` segments fetched as the
 /// playhead reaches them, filtered, and added to one timeline that the player stage draws from. At most the
 /// next segment is fetched ahead, and only while playing. A segment holds thousands of danmaku, so it is decoded
 /// and filtered in a short-lived isolate rather than between frames.
@@ -43,7 +43,16 @@ class DanmakuFeed extends ChangeNotifier {
   final List<DisplayDanmaku> _own = [];
   final List<DanmakuElem> _hidden = [];
   Future<void>? _refilterRun;
-  bool _refilterAgain = false;
+
+  /// The last re-filter failed: the next segment or change tries again.
+  bool _refilterFailed = false;
+
+  /// Re-filtered segments the timeline doesn't hold yet.
+  bool _refilterPending = false;
+
+  /// Tests: awaited before each trip to an isolate (`decode` or `refilter`), so a test can hold it or make it fail.
+  @visibleForTesting
+  Future<void> Function(String step)? debugBeforeIsolate;
 
   int _lastSegment = 0;
   DanmakuTimeline? _timeline;
@@ -76,7 +85,8 @@ class DanmakuFeed extends ChangeNotifier {
     _own.clear();
     _hidden.clear();
     _refilterRun = null;
-    _refilterAgain = false;
+    _refilterFailed = false;
+    _refilterPending = false;
     _lastSegment = 0;
     _timeline = null;
     _closed = false;
@@ -128,7 +138,8 @@ class DanmakuFeed extends ChangeNotifier {
 
   /// A danmaku the user just sent, shown at once in its white box.
   void addOwn(DanmakuDraft draft, {required int dmid}) {
-    if (_cid == 0 || _closed) return;
+    // The post is awaited, so the page may have moved to another video or part by now.
+    if (_cid == 0 || _closed || draft.cid != _cid) return;
     // At the playhead rather than where the send began, as Swift's showOwn does, so it enters from the edge.
     final elem = DanmakuElem(
       id: dmid,
@@ -207,7 +218,9 @@ class DanmakuFeed extends ChangeNotifier {
       final data = await _client.danmakuSegmentData(cid: cid, index: index);
       if (load != _loads || _disposed) return;
       final version = _filterVersion;
-      final segment = await _decode(data, index, _filter);
+      final filter = _filter;
+      await debugBeforeIsolate?.call('decode');
+      final segment = await _decode(data, index, filter);
       if (load != _loads || _disposed) return;
       _received(segment, data, index, version);
     } catch (error) {
@@ -249,7 +262,7 @@ class DanmakuFeed extends ChangeNotifier {
     _shown[index] = (version: version, items: items);
     _logger.info(LogCategory.player, 'danmaku segment', {'index': index, 'count': segment.count, 'shown': items.length});
     // Filtered under a filter that changed while it was on its way: shown as it is for now, and filtered again.
-    if (version != _filterVersion) _refilter();
+    if (version != _filterVersion || _refilterFailed) _refilter();
     final visible = _hidden.isEmpty ? items : [for (final item in items) if (!_isHidden(item.elem)) item];
     final timeline = _timeline;
     if (timeline != null) {
@@ -268,42 +281,53 @@ class DanmakuFeed extends ChangeNotifier {
     if (_data.isNotEmpty) _refilter();
   }
 
-  /// One re-filter at a time; a change while one runs asks for another once it is done.
+  /// One re-filter at a time; what changed while one ran is picked up when it ends, from the segments' versions.
   void _refilter() {
-    if (_refilterRun != null) {
-      _refilterAgain = true;
-      return;
-    }
+    if (_refilterRun != null) return;
+    _refilterFailed = false;
     final load = _loads;
     final version = _filterVersion;
+    final data = Map.of(_data);
+    final filter = _filter;
+    var failed = false;
     late final Future<void> run;
     run = () async {
       try {
-        final shown = await _refilterAll(Map.of(_data), _filter);
+        await debugBeforeIsolate?.call('refilter');
+        final shown = await _refilterAll(data, filter);
         if (load != _loads || _disposed) return;
         if (version == _filterVersion) {
           for (final MapEntry(key: index, value: items) in shown.entries) {
             _shown[index] = (version: version, items: items);
           }
+          _refilterPending = true;
         }
       } catch (error) {
         if (load != _loads || _disposed) return;
         _logger.warn(LogCategory.player, 'danmaku re-filter failed', {'error': '$error'});
+        failed = true;
       } finally {
         if (identical(_refilterRun, run)) _refilterRun = null;
       }
       if (load != _loads || _disposed) return;
-      if (_refilterAgain || _shown.values.any((segment) => segment.version != _filterVersion)) {
-        _refilterAgain = false;
+      // After a failure the versions stay stale, so only a change made meanwhile runs it again; anything else waits
+      // for the next change or segment rather than looping.
+      final again = failed
+          ? version != _filterVersion
+          : _shown.values.any((segment) => segment.version != _filterVersion);
+      if (failed && !again) _refilterFailed = true;
+      if (again) {
+        // The next run swaps the timeline once for both.
         _refilter();
-        if (version != _filterVersion) return;
+        return;
       }
-      if (!_closed) _rebuild();
+      if (_refilterPending && !_closed) _rebuild();
     }();
     _refilterRun = run;
   }
 
   void _rebuild() {
+    _refilterPending = false;
     final timeline = DanmakuTimeline();
     for (final index in _shown.keys.toList()..sort()) {
       final items = _shown[index]!.items;
@@ -333,7 +357,7 @@ class DanmakuFeed extends ChangeNotifier {
     return low;
   }
 
-  /// List.sort isn't stable; ties keep their order.
+  /// List.sort isn't stable, so ties fall back to their original index.
   static List<DisplayDanmaku> _stableByTime(List<DisplayDanmaku> items) {
     final indexed = [for (var i = 0; i < items.length; i++) (i, items[i])];
     indexed.sort((a, b) {

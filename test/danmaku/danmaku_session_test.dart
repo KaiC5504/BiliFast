@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/danmaku.dart';
 import 'package:bili_core/devlog.dart';
@@ -8,16 +10,20 @@ import 'package:bilifast/danmaku/send/danmaku_send_model.dart';
 import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/page_api.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
 
 /// The account's 屏蔽词 as a test sets them.
 class Rules extends BlockRuleStore {
-  Rules(PageApi api) : super(api: api, isLoggedIn: () => true);
+  Rules(PageApi api, this.answers) : super(api: api, isLoggedIn: () => true);
 
   List<BlockRule> value = const [];
   int refreshes = 0;
+
+  /// What each refresh answers, in order; null (it worked) once they run out.
+  final List<String?> answers;
 
   @override
   List<BlockRule> get rules => value;
@@ -30,15 +36,15 @@ class Rules extends BlockRuleStore {
   @override
   Future<String?> refresh({bool force = false}) async {
     refreshes++;
-    return null;
+    return answers.isEmpty ? null : answers.removeAt(0);
   }
 }
 
 final class Rig {
-  Rig({this.loggedIn = true, this.vip = false, this.mid = 12345}) {
+  Rig({this.loggedIn = true, this.vip = false, this.mid = 12345, List<String?>? ruleAnswers}) {
     final logger = Logger(session: 'test')..add(logs);
     feed = DanmakuFeed(client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: logger), logger: logger);
-    rules = Rules(api);
+    rules = Rules(api, [...?ruleAnswers]);
     session = DanmakuSession(
       feed: feed,
       settings: settings,
@@ -49,7 +55,6 @@ final class Rig {
       isLoggedIn: () => loggedIn,
       isVip: () => vip,
       accountMid: () => mid,
-      toast: toasts.add,
       requestLogin: () => loginRequests++,
       logger: logger,
     );
@@ -63,7 +68,6 @@ final class Rig {
   final api = FakePageApi();
   final settings = DanmakuSettingsStore.memory();
   final logs = MemorySink();
-  final toasts = <String>[];
   late final DanmakuFeed feed;
   late final Rules rules;
   late final DanmakuSession session;
@@ -153,6 +157,44 @@ void main() {
     expect(rig.rules.refreshes, 0);
   });
 
+  group('a failed rules refresh', () {
+    test('is tried once more after 15 s', () {
+      fakeAsync((async) {
+        rig = Rig(ruleAnswers: [BlockRuleStore.syncFailed, BlockRuleStore.syncFailed]);
+        async.elapse(const Duration(seconds: 14));
+        expect(rig.rules.refreshes, 1);
+        async.elapse(const Duration(seconds: 1));
+        expect(rig.rules.refreshes, 2);
+        async.elapse(const Duration(minutes: 5));
+        expect(rig.rules.refreshes, 2, reason: 'once, not in a loop');
+      });
+    });
+
+    test('is not tried again after a success, a logout or dispose', () {
+      fakeAsync((async) {
+        rig = Rig();
+        async.elapse(const Duration(minutes: 1));
+        expect(rig.rules.refreshes, 1);
+        rig.dispose();
+
+        rig = Rig(ruleAnswers: [BlockRuleStore.syncFailed]);
+        async.flushMicrotasks();
+        rig.loggedIn = false;
+        async.elapse(const Duration(minutes: 1));
+        expect(rig.rules.refreshes, 1);
+        rig.dispose();
+
+        rig = Rig(ruleAnswers: [BlockRuleStore.syncFailed]);
+        async.flushMicrotasks();
+        rig.dispose();
+        async.elapse(const Duration(minutes: 1));
+        expect(rig.rules.refreshes, 1);
+        expect(async.pendingTimers, isEmpty);
+        rig = Rig();
+      });
+    });
+  });
+
   test('the session tells its listeners when the uploader closed danmaku', () async {
     rig = Rig();
     rig.http.dataRoutes[Canned.segmentPath] = (200, danmakuSegmentBytes(const [], closed: true));
@@ -193,9 +235,9 @@ void main() {
       expect((draft.color, draft.gradient), (0xFFFFFF, true));
     });
 
-    test('logged out asks for the login', () async {
+    test('logged out asks for the login, and only that says anything', () async {
       rig = Rig(loggedIn: false);
-      expect(await rig.session.send('你好', const DanmakuStyle()), '需要登录');
+      expect(await rig.session.send('你好', const DanmakuStyle()), isNull);
       expect(rig.loginRequests, 1);
       expect(rig.api.calls, isEmpty);
     });
@@ -226,11 +268,11 @@ void main() {
       expect(rig.api.calls, isEmpty);
     });
 
-    test('the server wanting a login asks for it', () async {
+    test('the server wanting a login asks for it, and only that says anything', () async {
       rig = Rig();
       await rig.load();
       rig.api.failures['postDanmaku'] = const BiliError.api(code: -101, message: '账号未登录');
-      expect(await rig.session.send('你好', const DanmakuStyle()), '需要登录');
+      expect(await rig.session.send('你好', const DanmakuStyle()), isNull);
       expect(rig.loginRequests, 1);
       expect(rig.shown(), isNot(contains('你好')));
     });
@@ -242,6 +284,20 @@ void main() {
       expect(await rig.session.send('你好', const DanmakuStyle()), '弹幕发送频率过快');
       expect(rig.shown(), isNot(contains('你好')));
       expect([for (final event in rig.logs.events) event.msg], contains('danmaku post failed'));
+    });
+
+    test('one whose post lands after the page moved to another part is not shown there', () async {
+      rig = Rig();
+      await rig.load();
+      final hold = rig.api.holds['postDanmaku'] = Completer<void>();
+      final sent = rig.session.send('你好', const DanmakuStyle());
+      rig.feed.load(cid: 43, durationMs: 300000);
+      rig.feed.update(positionMs: 1000, playing: true);
+      await rig.feed.settle();
+      hold.complete();
+      expect(await sent, isNull);
+      expect(rig.api.postedDanmaku.single.cid, 42);
+      expect(rig.shown(), ['前方高能', '来了']);
     });
 
     test('anything else is the network message', () async {

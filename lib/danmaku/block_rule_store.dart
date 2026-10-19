@@ -35,6 +35,9 @@ class BlockRuleStore extends ChangeNotifier {
   /// Bumped when the account goes away, so an answer already on its way for the old one is dropped.
   int _generation = 0;
 
+  /// Bumped by every add and remove that lands, so a list fetched while one landed doesn't undo it.
+  int _mutations = 0;
+
   List<BlockRule> get rules => _rules;
 
   bool get loading => _loading;
@@ -60,10 +63,12 @@ class BlockRuleStore extends ChangeNotifier {
 
   Future<String?> _fetch() async {
     final started = _generation;
+    final mutations = _mutations;
     _setLoading(true);
     try {
       final fetched = await _api.danmakuBlockRules();
-      if (started != _generation) return null;
+      // Left uncached, so the next refresh asks again.
+      if (started != _generation || mutations != _mutations) return null;
       _rules = List.unmodifiable(fetched);
       _lastSuccess = _now();
       return null;
@@ -81,7 +86,7 @@ class BlockRuleStore extends ChangeNotifier {
   }
 
   /// The message to show, or null once it is added. A user rule's text is a uid, stored as the CRC-32 that rides on
-  /// each danmaku; a regex rule keeps the slashes it was typed with, as BiliNative sends it and the matcher expects.
+  /// each danmaku, or that hash typed directly; a regex rule keeps the slashes it was typed with, as BiliNative sends it and the matcher expects.
   Future<String?> add(BlockRuleKind kind, String filter) async {
     if (!_isLoggedIn()) return needLogin;
     final text = filter.trim();
@@ -113,6 +118,7 @@ class BlockRuleStore extends ChangeNotifier {
     try {
       final rule = await _api.addBlockRule(kind, filter: stored);
       if (generation != _generation) return null;
+      _mutations++;
       _rules = List.unmodifiable([
         for (final each in _rules)
           if (each.id != rule.id) each,
@@ -132,6 +138,7 @@ class BlockRuleStore extends ChangeNotifier {
     try {
       await _api.deleteBlockRule(id: rule.id);
       if (generation != _generation) return null;
+      _mutations++;
       _rules = List.unmodifiable([
         for (final each in _rules)
           if (each.id != rule.id) each,
@@ -143,7 +150,7 @@ class BlockRuleStore extends ChangeNotifier {
     }
   }
 
-  /// Bilibili words its refusals for the user (too many rules, already there); those are shown as sent.
+  /// Bilibili words its refusals for the user (too many rules, already there); those are shown word for word.
   String _failed(String what, Object error, StackTrace stack, String fallback, [BlockRuleKind? kind]) {
     _logger.warn(LogCategory.api, what, {
       'kind': ?kind?.name,

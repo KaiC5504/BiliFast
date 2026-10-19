@@ -156,7 +156,6 @@ final class DanmakuRig {
     isLoggedIn: () => loggedIn,
     isVip: () => false,
     accountMid: () => 1,
-    toast: (_) {},
     requestLogin: () => logins += 1,
   );
 

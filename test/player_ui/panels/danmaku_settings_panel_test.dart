@@ -80,7 +80,6 @@ Future<SettingsRig> pumpSettings(
     isLoggedIn: () => loggedIn,
     isVip: () => false,
     accountMid: () => 0,
-    toast: (_) {},
     requestLogin: () {},
   );
   final ui = PlayerUi(

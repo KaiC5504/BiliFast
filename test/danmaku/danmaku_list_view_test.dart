@@ -38,7 +38,6 @@ class ListSession extends DanmakuSession {
          isLoggedIn: loggedIn ?? () => true,
          isVip: () => false,
          accountMid: () => 0,
-         toast: (_) {},
          requestLogin: () {},
        );
 

@@ -264,6 +264,93 @@ void main() {
       await feed.settle();
       expect([for (final item in walk(feed.timeline!, 5000)) item.isOwn], [false, false]);
     });
+
+    test('a failed re-filter is not retried in a loop; the next change tries again', () async {
+      await loaded(elems);
+      final before = feed.timeline;
+      var runs = 0;
+      feed.debugBeforeIsolate = (step) async {
+        if (step != 'refilter') return;
+        runs++;
+        if (runs == 1) throw StateError('isolate failed');
+      };
+
+      feed.setFilter(const DanmakuFilterOptions(blockColored: true), const []);
+      await feed.settle();
+      expect(runs, 1, reason: 'not asked again at once');
+      expect(feed.timeline, same(before));
+      expect(texts(feed.timeline), ['前方高能', '来了', '彩色']);
+
+      feed.setFilter(const DanmakuFilterOptions(blockColored: true), const [
+        BlockRule(id: 1, kind: BlockRuleKind.keyword, filter: '来'),
+      ]);
+      await feed.settle();
+      expect(runs, 2);
+      expect(texts(feed.timeline), ['前方高能']);
+    });
+
+    test('after a failed re-filter the next segment tries again', () async {
+      http.dataRoutes[Canned.segmentPath] = (200, segmentOf(elems));
+      feed.load(cid: 42, durationMs: 700000);
+      feed.update(positionMs: 1000, playing: false);
+      await feed.settle();
+      var runs = 0;
+      feed.debugBeforeIsolate = (step) async {
+        if (step != 'refilter') return;
+        runs++;
+        if (runs == 1) throw StateError('isolate failed');
+      };
+      feed.setFilter(const DanmakuFilterOptions(blockColored: true), const []);
+      await feed.settle();
+      expect(runs, 1);
+
+      http.dataRoutes[Canned.segmentPath] = (200, segmentOf(const [DanmakuElem(id: 4, progressMs: 361000, content: '下一段')]));
+      feed.update(positionMs: 340000, playing: true);
+      await feed.settle();
+      expect(runs, 2);
+      expect(texts(feed.timeline, 400000), ['前方高能', '来了', '下一段']);
+    });
+
+    test('a segment filtered under the old filter while a re-filter ran swaps the timeline once', () async {
+      http.dataRoutes[Canned.segmentPath] = (200, segmentOf(elems));
+      feed.load(cid: 42, durationMs: 700000);
+      feed.update(positionMs: 1000, playing: false);
+      await feed.settle();
+
+      final decodeHeld = Completer<void>();
+      final decode = Completer<void>();
+      final refilterHeld = Completer<void>();
+      final refilter = Completer<void>();
+      feed.debugBeforeIsolate = (step) async {
+        if (step == 'decode' && !decodeHeld.isCompleted) {
+          decodeHeld.complete();
+          await decode.future;
+        } else if (step == 'refilter' && !refilterHeld.isCompleted) {
+          refilterHeld.complete();
+          await refilter.future;
+        }
+      };
+      http.dataRoutes[Canned.segmentPath] = (200, segmentOf(const [
+        DanmakuElem(id: 4, progressMs: 361000, content: '下一段'),
+        DanmakuElem(id: 5, progressMs: 362000, content: '彩色二', color: 0xFF0000),
+      ]));
+      feed.update(positionMs: 340000, playing: true);
+      await decodeHeld.future;
+      feed.setFilter(const DanmakuFilterOptions(blockColored: true), const []);
+      await refilterHeld.future;
+      decode.complete();
+      for (var i = 0; i < 500 && feed.recent(400000).length < 5; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(feed.recent(400000), hasLength(5), reason: 'the second segment arrived, under the old filter');
+
+      var swaps = 0;
+      feed.addListener(() => swaps++);
+      refilter.complete();
+      await feed.settle();
+      expect(swaps, 1);
+      expect(texts(feed.timeline, 400000), ['前方高能', '来了', '下一段']);
+    });
   });
 
   group('a sent danmaku', () {
@@ -311,6 +398,14 @@ void main() {
       feed.setFilter(const DanmakuFilterOptions(blockScroll: true), const []);
       await feed.settle();
       expect(texts(feed.timeline), ['抢先'], reason: 'own danmaku are not filtered, as in Swift');
+    });
+
+    test('is dropped when the feed has moved to another video or part', () async {
+      await loaded(const [DanmakuElem(progressMs: 1000, content: '前方高能')], cid: 43);
+      feed.update(positionMs: 1500, playing: false);
+      feed.addOwn(draft('发给42的'), dmid: 7);
+      expect(texts(feed.timeline), ['前方高能']);
+      expect([for (final elem in feed.recent(5000)) elem.content], ['前方高能']);
     });
 
     test('a gradient one carries the colourful flag', () async {
