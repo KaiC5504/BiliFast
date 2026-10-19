@@ -366,6 +366,8 @@ class CommentsModel extends ChangeNotifier {
       _notify();
       return;
     }
+    // all_count counts replies too.
+    _total += 1;
     if (_thread case final thread? when thread.root.rpid == comment.root) {
       if (!thread.replies.any((reply) => reply.rpid == comment.rpid)) {
         _thread = thread.copyWith(replies: [comment, ...thread.replies], total: thread.total + 1);
@@ -440,7 +442,12 @@ class CommentsModel extends ChangeNotifier {
       for (final shown in _comments)
         if (shown.rpid != rpid) shown,
     ];
-    if (_comments.length + (_pinned == null ? 0 : 1) < before) _total = max(0, _total - 1);
+    // all_count counts replies too: a comment goes with its replies, a reply alone.
+    if (comment.root != 0) {
+      _total = max(0, _total - 1);
+    } else if (_comments.length + (_pinned == null ? 0 : 1) < before) {
+      _total = max(0, _total - 1 - comment.replyCount);
+    }
     if (_thread case final thread? when thread.replies.any((reply) => reply.rpid == rpid)) {
       _thread = thread.copyWith(
         replies: [

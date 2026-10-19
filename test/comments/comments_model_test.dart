@@ -518,7 +518,7 @@ void main() {
       expect(rig.model.thread!.root.replyCount, 24);
       expect(rig.model.comments.first.replyCount, 24);
       expect(rpids(rig.model.comments.first.previewReplies), [102, 103]);
-      expect(rig.model.total, 27, reason: 'as in Swift, only top-level comments move the total');
+      expect(rig.model.total, 26, reason: 'all_count counts replies, so 评论 N loses the reply too');
     });
   });
 
@@ -561,7 +561,7 @@ void main() {
       rig.model.inserted(comment(70, root: 2, parent: 2));
       expect(rig.model.comments[1].replyCount, 1);
       expect(rig.model.thread, isNull);
-      expect(rig.model.total, 4);
+      expect(rig.model.total, 5, reason: 'all_count counts replies');
     });
   });
 
