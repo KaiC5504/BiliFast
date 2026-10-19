@@ -152,8 +152,7 @@ void main() {
   late ManualClock time;
   late AppEnvironment environment;
 
-  /// Every controller started, each with a player of its own: the one a test's own start hands out, the app's shared
-  /// one, then each page's.
+  /// Every controller started, each with a player of its own: the one a test's own start hands out, then each page's.
   late List<PlaybackController> controllers;
 
   /// The newest controller and its player: the top page's once its own has started.
@@ -472,8 +471,7 @@ void main() {
   testWidgets('重试 starts the player again after a failed start, then plays', (tester) async {
     final failing = Completer<PlaybackController>();
     var attempts = 0;
-    // The app's shared player and the page's own both fail to start.
-    await host(tester, start: () => attempts++ < 2 ? failing.future : Future.value(controller));
+    await host(tester, start: () => attempts++ == 0 ? failing.future : Future.value(controller));
     pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
     await frames(tester, 2);
     failing.completeError(StateError('no engine'));
@@ -481,7 +479,7 @@ void main() {
     expect(find.textContaining('播放器启动失败'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('video-retry')));
     await frames(tester, 20);
-    expect(attempts, 3);
+    expect(attempts, 2);
     expect(find.byKey(const ValueKey('video-error')), findsNothing);
     expect(controller.video?.bvid, bv);
     expect(player.loaded, isNotNull);

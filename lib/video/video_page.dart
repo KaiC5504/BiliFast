@@ -503,8 +503,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
             services: services,
             route: brought?.restartRoute ?? route,
             createSession: createSession,
-            restorePage: (route) => VideoPage(
-              route: route,
+            restorePage: (restored) => VideoPage(
+              route: restored,
               createSession: createSession,
               createDetails: createDetails,
               openPage: openPage,
@@ -518,7 +518,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (playback.session == null) {
       playback.start();
     } else {
-      _attachSession(playback);
+      // Built in this first frame, so the small window has the player view to fly into; what notifies other pages
+      // (the orientation) waits until the frame is done.
+      _attachSession(playback, follow: false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_left) _sessionChanged();
+      });
     }
   }
 
@@ -529,8 +534,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     setState(() {});
   }
 
-  /// The page's player, panels, details and danmaku, around the playback's session.
-  void _attachSession(PagePlayback playback) {
+  /// The page's player, panels, details and danmaku, around the playback's session. [follow] reads the session at
+  /// once.
+  void _attachSession(PagePlayback playback, {bool follow = true}) {
     final services = _services!;
     final controller = playback.controller!;
     final session = playback.session!;
@@ -588,7 +594,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _autoHideInputs = Listenable.merge([session.readout.status, session.scrubbing, _panels, _overlays, danmaku.sendOpen])
       ..addListener(_syncAutoHide);
     _syncAutoHide();
-    _sessionChanged();
+    if (follow) _sessionChanged();
   }
 
   /// The page has built its player around the playback and hasn't left.

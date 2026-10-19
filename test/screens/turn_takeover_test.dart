@@ -112,9 +112,9 @@ void main() {
         builder: (context, child) => AppScope(services: services, child: child!),
         home: PlayerTestPage(
           environment: environment,
-          startPlayback: playback.obtain,
+          startPlayback: playback.create,
+          releasePlayback: playback.release,
           stageBuilder: stageStandIn,
-          ownsController: false,
           prefs: prefs,
         ),
       ));
