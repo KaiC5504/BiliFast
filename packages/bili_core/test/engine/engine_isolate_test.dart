@@ -209,6 +209,30 @@ void main() {
     expect(snapshots.length, count, reason: 'no stats without a BTR playback');
   });
 
+  test('setNodeMode moves the sessions prepared after it to the new nodes', () async {
+    final snapshots = <EngineSnapshot>[];
+    final subscription = engine.stats.listen(snapshots.add);
+    addTearDown(subscription.cancel);
+    Set<String> latestNodes() => {for (final status in snapshots.last.nodeStates) status.node};
+
+    final before = await engine.prepare(request(PlaybackMode.btr));
+    await _get(before.video, range: 'bytes=0-${video.bytes.length - 1}');
+    expect(await _eventually(() => snapshots.isNotEmpty && latestNodes().length == 2), isTrue);
+    await engine.release(before.token);
+
+    // Another host name, so the request's own 127.0.0.1 address is out of the mode too.
+    engine.setNodeMode(CustomNodes([NodeAddress('localhost', port: second.port)]));
+    snapshots.clear();
+    final after = await engine.prepare(request(PlaybackMode.btr));
+    final whole = await _get(after.video, range: 'bytes=0-${video.bytes.length - 1}');
+    expect(whole.body, video.bytes);
+    expect(await _eventually(() => snapshots.isNotEmpty), isTrue);
+    expect(latestNodes(), hasLength(1), reason: 'only the new mode\'s node');
+    expect(latestNodes().single, 'localhost:${second.port}');
+    bool logged(LogEvent event) => event.msg == 'node mode' && event.f['mode'] == const LogString('custom 1');
+    expect(await _eventually(() => log.events.any(logged)), isTrue);
+  });
+
   test('release forgets the playlists, and releasing again or an unknown token is a no-op', () async {
     final source = await engine.prepare(request(PlaybackMode.btr));
     await engine.release(source.token);

@@ -1,5 +1,6 @@
 import '../api/track_selector.dart';
 import 'engine_isolate.dart';
+import 'node_catalog.dart';
 import 'transport.dart';
 
 enum TrackKind { video, audio }
@@ -217,6 +218,9 @@ abstract interface class PlaybackEngine {
   /// Opens a connection to every node a playurl's [urls] can be fetched from, before the header requests need
   /// one: on the phone the headers arrived 0.78 s after the open. Errors only lose the head start.
   void preconnect(List<String> urls);
+
+  /// The nodes for the sessions prepared after this (设置's CDN 节点); playbacks already running keep theirs.
+  void setNodeMode(NodeMode mode);
 
   /// Ends when the engine does.
   Stream<FatalReport> get fatals;

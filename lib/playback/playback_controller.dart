@@ -208,6 +208,7 @@ class PlaybackController extends ChangeNotifier {
   final Future<PlaybackEngine> Function()? _startEngine;
   bool _engineClosed = false;
   Future<void>? _swapping;
+  NodeMode? _nodeMode;
   final CodecMemory _memory;
   final String _transportName;
   final MonotonicClock _monotonic;
@@ -596,6 +597,16 @@ class PlaybackController extends ChangeNotifier {
     _engine.hint(token, seconds);
     _logger.info(LogCategory.player, 'seek hint', {'at': seconds?.round() ?? -1});
   }
+
+  /// 设置's CDN 节点: the next video's sessions use [mode], on this engine and on any that replaces it. The video
+  /// playing now keeps its nodes.
+  void setNodeMode(NodeMode mode) {
+    _nodeMode = mode;
+    _engine.setNodeMode(mode);
+  }
+
+  /// 设置's 重置编码记忆: codecs the player refused are tried again.
+  void resetCodecMemory() => _memory.reset();
 
   /// The system is short of memory: the engine drops its prefetched segments and playback goes on.
   void memoryPressure() {
@@ -988,6 +999,7 @@ class PlaybackController extends ChangeNotifier {
     _engineStats = _listenToStats(next);
     _engineFatals = _listenToFatals(next);
     _engineClosed = false;
+    if (_nodeMode case final mode?) next.setNodeMode(mode);
     _quietly(old.dispose, 'old engine dispose');
     _logger.info(LogCategory.engine, 'engine replaced');
   }

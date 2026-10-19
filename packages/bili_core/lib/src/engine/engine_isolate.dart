@@ -29,7 +29,7 @@ final class EngineOptions {
     this.nodeMemoryPath,
   });
 
-  /// The Swift app's default node setting; there is no setting yet.
+  /// The nodes sessions start on; [PlaybackEngine.setNodeMode] changes them for the sessions prepared after it.
   final NodeMode nodeMode;
   final MediaURLPolicy policy;
   final RipperConfig config;
@@ -124,6 +124,9 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
 
   @override
   void preconnect(List<String> urls) => _notify(_Preconnect(List.of(urls)));
+
+  @override
+  void setNodeMode(NodeMode mode) => _notify(_SetNodeMode(mode));
 
   @override
   Future<bool> ensureServing() async => await _call(_EnsureServing.new) as bool;
@@ -302,6 +305,12 @@ final class _Preconnect extends _Notice {
   final List<String> urls;
 }
 
+final class _SetNodeMode extends _Notice {
+  const _SetNodeMode(this.mode);
+
+  final NodeMode mode;
+}
+
 final class _Ready {
   const _Ready(this.commands);
 
@@ -402,6 +411,7 @@ final class _EngineHost {
   };
   late final NodeMemory? _memory = _store?.load();
   var _ticks = 0;
+  late NodeMode _nodeMode = _options.nodeMode;
 
   EngineOptions get _options => _boot.options;
 
@@ -465,6 +475,15 @@ final class _EngineHost {
         _sessions[token]?.hint(seconds);
       case _Preconnect(:final urls):
         _preconnect(urls);
+      case _SetNodeMode(:final mode):
+        _nodeMode = mode;
+        Logger.shared.info(LogCategory.engine, 'node mode', {
+          'mode': switch (mode) {
+            MainlandNodes() => 'mainland',
+            OverseasNodes() => 'overseas',
+            CustomNodes(:final nodes) => 'custom ${nodes.length}',
+          },
+        });
     }
   }
 
@@ -473,7 +492,7 @@ final class _EngineHost {
   void _preconnect(List<String> urls) {
     if (urls.isEmpty) return;
     final policy = _options.policy;
-    final mode = _options.nodeMode;
+    final mode = _nodeMode;
     final all = [
       if (mode is! CustomNodes) ...urls.where(policy.allowsURL),
       ...NodeCatalog.representationURLs(
@@ -538,7 +557,7 @@ final class _EngineHost {
         TrackKind.video: (primary: choice.video.baseURL, backups: choice.video.backupURLs),
         TrackKind.audio: (primary: choice.audio.baseURL, backups: choice.audio.backupURLs),
       },
-      mode: _options.nodeMode,
+      mode: _nodeMode,
       transport: _transport,
       auto: _auto,
       config: _options.config,

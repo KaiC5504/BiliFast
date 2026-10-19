@@ -145,8 +145,8 @@ void main() {
     expect(config.prefetchVideoMaxBytes, greaterThan(config.prefetchVideoBytes));
     expect(config.keepBehindSeconds, 30);
     expect(config.keepBehindBytes, greaterThan(0));
-    expect(appEngineOptions.config, same(appRipperConfig));
-    expect(appEngineOptions.forwardDebugLogs, devToolsEnabled);
+    expect(appEngineOptions().config, same(appRipperConfig));
+    expect(appEngineOptions().forwardDebugLogs, devToolsEnabled);
     expect(appRipperConfig.exploreInHurry, isFalse);
     expect(appRipperConfig.tailBackups, isTrue);
     expect(appRipperConfig.banProbation, isTrue);
