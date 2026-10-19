@@ -1,15 +1,21 @@
+import 'dart:async';
+
 import 'package:bilifast/account/keychain_store.dart';
 
-/// Hands out [next] (or throws [throws]) and records every write.
+/// Hands out [next] (or throws [throws]), after [loadGate] when one is set, and records every write, answering
+/// [saveOk].
 class FakeKeychain implements KeychainStore {
   FakeKeychain(this.next);
 
   CookieLoad next;
   Object? throws;
+  Completer<void>? loadGate;
+  bool saveOk = true;
   final saved = <Map<String, String>>[];
 
   @override
   Future<CookieLoad> loadCookies() async {
+    await loadGate?.future;
     final error = throws;
     if (error != null) throw error;
     return next;
@@ -18,7 +24,7 @@ class FakeKeychain implements KeychainStore {
   @override
   Future<bool> saveCookies(Map<String, String> cookies) async {
     saved.add(cookies);
-    return true;
+    return saveOk;
   }
 
   @override

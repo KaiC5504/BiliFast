@@ -12,11 +12,14 @@ enum WebCookies {
         switch call.method {
         case "bilibili":
           bilibiliCookies { cookies in
-            var byName: [String: String] = [:]
-            for cookie in cookies where byName[cookie.name] == nil {
-              byName[cookie.name] = cookie.value
+            // A name set on both bilibili.com and a subdomain (say a stale passport.bilibili.com SESSDATA) is
+            // read from bilibili.com, the one api.bilibili.com receives.
+            var byName: [String: HTTPCookie] = [:]
+            for cookie in cookies {
+              if let kept = byName[cookie.name], isTopLevel(kept.domain) || !isTopLevel(cookie.domain) { continue }
+              byName[cookie.name] = cookie
             }
-            result(byName)
+            result(byName.mapValues(\.value))
           }
         case "clearBilibili":
           bilibiliCookies { cookies in
@@ -55,8 +58,17 @@ enum WebCookies {
 
   /// bilibili.com and its subdomains, as BiliNative's `BiliHosts.isBilibili`.
   private static func isBilibili(_ domain: String) -> Bool {
+    let name = bareDomain(domain)
+    return name == "bilibili.com" || name.hasSuffix(".bilibili.com")
+  }
+
+  private static func isTopLevel(_ domain: String) -> Bool {
+    bareDomain(domain) == "bilibili.com"
+  }
+
+  private static func bareDomain(_ domain: String) -> String {
     var name = domain.lowercased()
     if name.hasPrefix(".") { name.removeFirst() }
-    return name == "bilibili.com" || name.hasSuffix(".bilibili.com")
+    return name
   }
 }

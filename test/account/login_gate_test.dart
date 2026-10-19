@@ -31,12 +31,15 @@ void main() {
     return environment;
   }
 
-  testWidgets('logged in, it answers true at once with no page', (tester) async {
+  testWidgets('reading logged in (Bilibili said the login is gone mid-session), it still shows the page', (tester) async {
     final environment = await mount(tester);
     environment.useFakeAccount();
-    expect(await LoginPageGate(environment).request(host), isTrue);
+    final answer = LoginPageGate(environment).request(host);
     await tester.pumpAndSettle();
-    expect(find.byType(LoginPage), findsNothing);
+    expect(find.byType(LoginPage), findsOneWidget);
+    Navigator.of(tester.element(find.byType(LoginPage))).pop(true);
+    await tester.pumpAndSettle();
+    expect(await answer, isTrue);
   });
 
   testWidgets('logged out, it pushes the login page once and closing it answers false', (tester) async {

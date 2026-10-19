@@ -2,9 +2,10 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/services.dart';
 
-/// The login web view's cookie store (`WKWebsiteDataStore.default()`, which `webview_flutter`'s WKWebView uses). The
-/// package can clear it but not read it, and Bilibili's SESSDATA is HttpOnly, so the page's own script can't see it
-/// either; `WebCookies.swift` reads it.
+/// The login web view's cookie store (`WKWebsiteDataStore.default()`, which `webview_flutter`'s WKWebView uses).
+/// Bilibili's SESSDATA is HttpOnly, so the page's own script can't see it. `WebViewCookieManager` could read it, but
+/// its clear removes cookies only, and logout must also drop the web view's other stored data, so one native channel
+/// (`WebCookies.swift`) does the read, the bilibili.com clear and the full clear.
 abstract interface class WebCookies {
   factory WebCookies.platform() => Platform.isIOS ? ChannelWebCookies() : const NoWebCookies();
 

@@ -9,7 +9,9 @@ abstract interface class LoginGate {
   Future<bool> request(BuildContext context);
 }
 
-/// Pushes the login page over whatever is showing.
+/// Pushes the login page over whatever is showing, even when the app reads logged in: callers ask for plain
+/// logged-out taps only when logged out, and otherwise only after Bilibili answered that the login is gone (as
+/// Swift's LoginGate, which always shows the page).
 class LoginPageGate implements LoginGate {
   const LoginPageGate(this.environment);
 
@@ -20,7 +22,6 @@ class LoginPageGate implements LoginGate {
 
   @override
   Future<bool> request(BuildContext context) {
-    if (environment.account is LoggedIn) return Future.value(true);
     if (_showing[environment] case final showing?) return showing;
     final shown = Navigator.of(context, rootNavigator: true)
         .push<bool>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const LoginPage()))

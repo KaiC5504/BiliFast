@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/services.dart';
 
 sealed class CookieLoad {
@@ -28,11 +29,14 @@ abstract interface class KeychainStore {
 
   /// An empty map deletes the item. Returns whether the keychain took it.
   Future<bool> saveCookies(Map<String, String> cookies);
+
+  /// Throws when the keychain refused the delete; an item that wasn't there counts as deleted.
   Future<void> deleteCookies();
 
   /// The app-API access token 不喜欢 needs; null when absent or unreadable.
   Future<String?> loadAppToken();
   Future<bool> saveAppToken(String token);
+  /// Throws as [deleteCookies].
   Future<void> deleteAppToken();
 
   /// The iOS keychain on the phone; elsewhere (the Windows development build) nothing is stored and the app
@@ -40,10 +44,14 @@ abstract interface class KeychainStore {
   factory KeychainStore.platform() => Platform.isIOS ? ChannelKeychainStore() : const NoKeychainStore();
 }
 
+/// A refused delete comes back as a `FlutterError`, which the channel throws as a [PlatformException].
 class ChannelKeychainStore implements KeychainStore {
-  ChannelKeychainStore([MethodChannel? channel]) : _channel = channel ?? const MethodChannel('bilifast/keychain');
+  ChannelKeychainStore([MethodChannel? channel, Logger? logger])
+    : _channel = channel ?? const MethodChannel('bilifast/keychain'),
+      _logger = logger ?? Logger.shared;
 
   final MethodChannel _channel;
+  final Logger _logger;
 
   @override
   Future<CookieLoad> loadCookies() async {
@@ -65,7 +73,11 @@ class ChannelKeychainStore implements KeychainStore {
   @override
   Future<bool> saveCookies(Map<String, String> cookies) async {
     final reply = await _channel.invokeMapMethod<String, Object?>('saveCookies', {'cookies': cookies});
-    return reply?['ok'] == true;
+    if (reply?['ok'] == true) return true;
+    // The OSStatus goes no further than this reply.
+    final code = reply?['code'];
+    _logger.error(LogCategory.app, 'keychain cookie write failed', {'status': code is int ? code : 0});
+    return false;
   }
 
   @override
@@ -93,8 +105,9 @@ class NoKeychainStore implements KeychainStore {
 
   @override
   Future<CookieLoad> loadCookies() async => const NoStoredCookies();
+  /// Nothing to store is not a failed write.
   @override
-  Future<bool> saveCookies(Map<String, String> cookies) async => false;
+  Future<bool> saveCookies(Map<String, String> cookies) async => true;
   @override
   Future<void> deleteCookies() async {}
   @override

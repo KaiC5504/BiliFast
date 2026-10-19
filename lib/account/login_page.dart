@@ -84,16 +84,8 @@ class _WebLoginState extends State<_WebLogin> {
   static const _ignoredErrors = {-999, 102};
 
   final _web = WebViewController();
-  late final _watcher = LoginWatcher(
-    cookies: widget.environment.webCookies,
-    onSession: (cookies) => unawaited(_signIn(cookies)),
-  );
+  late final _flow = LoginFlow(environment: widget.environment, load: _load, onLoggedIn: widget.onLoggedIn);
   var _loading = true;
-  String? _loadError;
-  var _signingIn = false;
-
-  /// The cookies of a login that didn't take, kept for 重试.
-  Map<String, String>? _rejected;
 
   @override
   void initState() {
@@ -103,7 +95,7 @@ class _WebLoginState extends State<_WebLogin> {
 
   @override
   void dispose() {
-    _watcher.dispose();
+    _flow.dispose();
     super.dispose();
   }
 
@@ -115,44 +107,23 @@ class _WebLoginState extends State<_WebLogin> {
           onNavigationRequest: _allow,
           onPageStarted: (_) => _setLoading(true),
           onPageFinished: _finished,
-          onUrlChange: (_) => unawaited(_watcher.check()),
+          onUrlChange: (_) => unawaited(_flow.watcher.check()),
           onWebResourceError: _failed,
         ),
       );
     } catch (error) {
       Logger.shared.error(LogCategory.ui, 'login web view setup failed', {'error': '$error'});
     }
-    await _start();
-  }
-
-  /// A SESSDATA left from an expired login would count as a fresh login at once (LoginView.swift :65-84), so the
-  /// page loads only after the old bilibili.com cookies are gone.
-  Future<void> _start() async {
-    try {
-      await widget.environment.webCookies.clearBilibili();
-    } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'login cookies not cleared', {'error': '$error'});
-    }
-    if (!mounted) return;
-    _watcher.start();
-    await _load();
+    await _flow.start();
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _loadError = null;
-    });
+    _setLoading(true);
     try {
       await _web.loadRequest(_loginPage);
-    } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'login page load failed', {'error': '$error'});
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _loadError = '页面加载失败';
-        });
-      }
+    } catch (_) {
+      _setLoading(false);
+      rethrow;
     }
   }
 
@@ -174,69 +145,146 @@ class _WebLoginState extends State<_WebLogin> {
     final page = Uri.tryParse(url);
     Logger.shared.info(LogCategory.ui, 'login page', {'host': page?.host ?? '', 'path': page?.path ?? ''});
     _setLoading(false);
-    unawaited(_watcher.check());
+    unawaited(_flow.watcher.check());
   }
 
   void _failed(WebResourceError error) {
     if (error.isForMainFrame == false || _ignoredErrors.contains(error.errorCode)) return;
-    Logger.shared.warn(LogCategory.ui, 'login page failed', {'code': error.errorCode});
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _loadError = error.description.isEmpty ? '页面加载失败' : error.description;
-    });
+    _setLoading(false);
+    _flow.pageFailed(error.errorCode, error.description);
   }
 
-  Future<void> _signIn(Map<String, String> cookies) async {
-    setState(() {
-      _signingIn = true;
-      _rejected = null;
-    });
-    final loggedIn = await widget.environment.didLogin(cookies);
-    if (!mounted) return;
-    if (loggedIn) {
-      widget.onLoggedIn();
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _flow,
+    builder: (context, _) {
+      final problem = _flow.problem;
+      final Widget? cover = _flow.signingIn
+          ? const CupertinoActivityIndicator(key: ValueKey('login-signing-in'), radius: LoginTheme.spinnerRadius)
+          : problem != null
+          ? _Retry(message: problem.message, onRetry: problem.retry)
+          : null;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          WebViewWidget(controller: _web),
+          if (cover != null)
+            ColoredBox(color: LoginTheme.page, child: Center(child: cover))
+          else if (_loading)
+            const Center(child: CupertinoActivityIndicator(radius: LoginTheme.spinnerRadius)),
+        ],
+      );
+    },
+  );
+}
+
+/// What covers Bilibili's page when the login can't go on, and what its 重试 does.
+class LoginProblem {
+  const LoginProblem(this.message, this.retry);
+
+  final String message;
+  final VoidCallback retry;
+}
+
+/// The login page's steps, kept apart from the web view so the PC can test them: clear the old bilibili.com
+/// cookies, load Bilibili's page through [load], watch for its login and hand that to the account.
+class LoginFlow extends ChangeNotifier {
+  LoginFlow({
+    required this.environment,
+    required this.load,
+    required this.onLoggedIn,
+    Duration interval = const Duration(seconds: 1),
+  }) {
+    watcher = LoginWatcher(
+      cookies: environment.webCookies,
+      interval: interval,
+      onSession: (cookies) => unawaited(_signIn(cookies)),
+      onUnreadable: () => _show(LoginProblem('无法读取登录状态', _watchAgain)),
+    );
+  }
+
+  final AppEnvironment environment;
+
+  /// Loads Bilibili's login page; throws when it couldn't.
+  final Future<void> Function() load;
+  final VoidCallback onLoggedIn;
+  late final LoginWatcher watcher;
+  bool _signingIn = false;
+  LoginProblem? _problem;
+  bool _disposed = false;
+
+  bool get signingIn => _signingIn;
+  LoginProblem? get problem => _problem;
+
+  /// A SESSDATA left from an expired login would count as a fresh login at once (LoginView.swift :65-84), so the
+  /// page loads only after the old bilibili.com cookies are gone, and not while they can't be removed.
+  Future<void> start() async {
+    _show(null);
+    try {
+      await environment.webCookies.clearBilibili();
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'login cookies not cleared', {'error': '$error'});
+      _show(LoginProblem('无法清除旧的登录状态', () => unawaited(start())));
       return;
     }
-    setState(() {
-      _signingIn = false;
-      _rejected = cookies;
-    });
+    if (_disposed) return;
+    watcher.start();
+    await reload();
+  }
+
+  Future<void> reload() async {
+    _show(null);
+    try {
+      await load();
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'login page load failed', {'error': '$error'});
+      _show(LoginProblem('页面加载失败', () => unawaited(reload())));
+    }
+  }
+
+  /// WebKit's description can be English, so it goes to the log and the page says 页面加载失败.
+  void pageFailed(int code, String description) {
+    Logger.shared.warn(LogCategory.ui, 'login page failed', {'code': code, 'description': description});
+    _show(LoginProblem('页面加载失败', () => unawaited(reload())));
+  }
+
+  void _watchAgain() {
+    _show(null);
+    watcher.start();
   }
 
   /// A check that couldn't reach Bilibili asks again with the same cookies; cookies Bilibili turned down need a
   /// fresh login on a cleared page.
-  void _retrySignIn() {
-    final cookies = _rejected;
-    if (cookies == null) return;
-    if (widget.environment.accountCheckFailed) {
-      unawaited(_signIn(cookies));
+  Future<void> _signIn(Map<String, String> cookies) async {
+    if (_disposed) return;
+    _signingIn = true;
+    _problem = null;
+    notifyListeners();
+    final loggedIn = await environment.didLogin(cookies);
+    if (_disposed) return;
+    if (loggedIn) {
+      onLoggedIn();
       return;
     }
-    setState(() => _rejected = null);
-    unawaited(_start());
+    _signingIn = false;
+    _show(
+      environment.accountCheckFailed
+          ? LoginProblem('网络错误，请重试', () => unawaited(_signIn(cookies)))
+          : LoginProblem('登录失败', () => unawaited(start())),
+    );
+  }
+
+  void _show(LoginProblem? problem) {
+    if (_disposed) return;
+    _problem = problem;
+    notifyListeners();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final error = _loadError;
-    final Widget? cover = _signingIn
-        ? const CupertinoActivityIndicator(key: ValueKey('login-signing-in'), radius: LoginTheme.spinnerRadius)
-        : _rejected != null
-        ? _Retry(message: '登录失败', onRetry: _retrySignIn)
-        : error != null
-        ? _Retry(message: error, onRetry: () => unawaited(_load()))
-        : null;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        WebViewWidget(controller: _web),
-        if (cover != null)
-          ColoredBox(color: LoginTheme.page, child: Center(child: cover))
-        else if (_loading)
-          const Center(child: CupertinoActivityIndicator(radius: LoginTheme.spinnerRadius)),
-      ],
-    );
+  void dispose() {
+    _disposed = true;
+    watcher.dispose();
+    super.dispose();
   }
 }
 
@@ -273,20 +321,31 @@ class _Retry extends StatelessWidget {
 
 /// Watches the web view's cookie store for Bilibili's SESSDATA and hands over every bilibili.com cookie the first
 /// time a non-empty one is there. BiliNative observed `WKHTTPCookieStore`; webview_flutter has no such hook, so this
-/// reads on every page finish and URL change and once a second in between.
+/// reads on every page finish and URL change and once a second in between. After [failureLimit] failed reads in a
+/// row it stops and calls [onUnreadable].
 class LoginWatcher {
-  LoginWatcher({required this.cookies, required this.onSession, this.interval = const Duration(seconds: 1)});
+  LoginWatcher({
+    required this.cookies,
+    required this.onSession,
+    this.onUnreadable,
+    this.interval = const Duration(seconds: 1),
+  });
+
+  static const failureLimit = 3;
 
   final WebCookies cookies;
   final void Function(Map<String, String> cookies) onSession;
+  final VoidCallback? onUnreadable;
   final Duration interval;
   Timer? _timer;
   bool _watching = false;
   bool _reading = false;
+  int _failures = 0;
 
-  /// Also after a login Bilibili turned down, once the page is cleared again.
+  /// Also after a login Bilibili turned down, once the page is cleared again, and after [onUnreadable].
   void start() {
     _watching = true;
+    _failures = 0;
     _timer?.cancel();
     _timer = Timer.periodic(interval, (_) => unawaited(check()));
   }
@@ -299,10 +358,15 @@ class LoginWatcher {
       found = await cookies.bilibili();
     } catch (error) {
       Logger.shared.warn(LogCategory.ui, 'login cookies unreadable', {'error': '$error'});
+      if (_watching && ++_failures >= failureLimit) {
+        _stop();
+        onUnreadable?.call();
+      }
       return;
     } finally {
       _reading = false;
     }
+    _failures = 0;
     final session = found['SESSDATA'];
     if (!_watching || session == null || session.isEmpty) return;
     _stop();
