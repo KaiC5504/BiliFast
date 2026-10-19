@@ -59,6 +59,14 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   bool episodesAreParts = true;
 
   @override
+  bool detailFailed = false;
+
+  int detailRetries = 0;
+
+  @override
+  void retryDetail() => detailRetries += 1;
+
+  @override
   Uri? shareLink;
 
   @override

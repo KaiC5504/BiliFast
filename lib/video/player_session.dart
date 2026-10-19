@@ -109,6 +109,11 @@ abstract interface class PlayerSession implements Listenable {
 
   bool get episodesAreParts;
 
+  /// The ask for [detail] and its retries failed; 简介 shows 点击重试.
+  bool get detailFailed;
+
+  void retryDetail();
+
   /// What 分享 hands the share sheet.
   Uri? get shareLink;
 

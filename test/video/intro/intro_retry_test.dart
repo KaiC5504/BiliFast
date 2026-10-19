@@ -193,12 +193,15 @@ void main() {
       expect(seen.last, filled);
     });
 
-    test('a session without the controller behind it offers no retry', () {
+    test("any session's failure and retry reach the content", () {
       final fake = FakePlayerSession();
       addTearDown(fake.dispose);
+      expect(IntroContent.of(fake).detailFailed, isFalse);
+      fake.detailFailed = true;
       final content = IntroContent.of(fake);
-      expect(content.detailFailed, isFalse);
-      expect(content.onRetryDetail, isNull);
+      expect(content.detailFailed, isTrue);
+      content.onRetryDetail!();
+      expect(fake.detailRetries, 1);
     });
   });
 }

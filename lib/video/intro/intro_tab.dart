@@ -5,7 +5,6 @@ import 'package:flutter/widgets.dart';
 import '../../shared/theme.dart';
 import '../collapsing_player.dart';
 import '../page_details.dart';
-import '../page_session.dart';
 import '../player_session.dart';
 import 'action_row.dart';
 import 'collection_row.dart';
@@ -34,8 +33,8 @@ final class IntroContent {
         related: session.related,
         episodes: session.episodes,
         episodesAreParts: session.episodesAreParts,
-        detailFailed: session is PagePlayerSession && session.detailFailed,
-        onRetryDetail: session is PagePlayerSession ? session.retryDetail : null,
+        detailFailed: session.detailFailed,
+        onRetryDetail: session.retryDetail,
       );
 
   final VideoDetail? detail;
