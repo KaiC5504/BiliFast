@@ -35,6 +35,7 @@ extension SeekAndPlay on PlayerSession {
     if (duration.value <= 0) return;
     await commitSeek(seconds);
     if (readout.wantsPlay) return;
+    if (this case final PagePlayerSession session) session._willPlay?.call();
     try {
       await player.play();
     } catch (error) {
@@ -43,14 +44,16 @@ extension SeekAndPlay on PlayerSession {
   }
 }
 
-/// The video page's [PlayerSession] over the shared controller, one per page. [onSeeked] hears every seek the
-/// session makes, for the page's watch reports; ⋮'s 稍后再看 goes to [requestLogin] without an account.
+/// The video page's [PlayerSession] over the page's own controller. [onSeeked] hears every seek the session makes,
+/// for the page's watch reports; ⋮'s 稍后再看 goes to [requestLogin] without an account; [willPlay] runs before it
+/// plays.
 PlayerSession createPageSession({
   required PlaybackController controller,
   required AppServices services,
   required SessionOpen open,
   required VoidCallback requestLogin,
   void Function(double seconds)? onSeeked,
+  VoidCallback? willPlay,
   PlayerPrefs? prefs,
 }) {
   final environment = services.environment;
@@ -66,12 +69,14 @@ PlayerSession createPageSession({
     requestLogin: requestLogin,
     accountChanges: environment,
     onSeeked: onSeeked,
+    willPlay: willPlay,
     prefs: prefs,
   );
 }
 
 /// The player half of BiliNative's VideoPageModel: seeks, speed, the end rules (单集循环, 自动连播, 列表循环), 定时关闭,
-/// 看点 and related videos, and the panels' switches, over the shared [PlaybackController].
+/// 看点 and related videos, and the panels' switches, over the page's [PlaybackController]. [willPlay] runs before every
+/// play it starts (play, 重播, a timestamp), so another page's small window closes first.
 class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver implements PlayerSession {
   PagePlayerSession({
     required PlaybackController controller,
@@ -82,6 +87,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     required this._requestLogin,
     Listenable? accountChanges,
     this._onSeeked,
+    this._willPlay,
     PlayerPrefs? prefs,
     MonotonicClock? clock,
     PeriodicTimer? periodic,
@@ -121,6 +127,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   final VoidCallback _requestLogin;
   final Listenable? _accountChanges;
   final void Function(double seconds)? _onSeeked;
+  final VoidCallback? _willPlay;
   final PlayerPrefs _prefs;
   final MonotonicClock _monotonic;
   final PeriodicTimer _periodic;
@@ -165,10 +172,6 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   PlaybackPhase? _phaseSeen;
   bool _disposed = false;
   bool _active = true;
-
-  /// The controller's open count when the page was covered: the same count once it is active again means no other
-  /// page opened anything meanwhile.
-  int? _opensWhenCovered;
 
   /// What a new page starts with: the saved settings, at 1× and unmirrored (Swift kept those per page). Before the
   /// part is chosen none of these restarts anything.
@@ -393,6 +396,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       unawaited(replay());
       return;
     }
+    _willPlay?.call();
     _quietly(player.play, 'play');
   }
 
@@ -526,7 +530,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     notifyListeners();
   }
 
-  /// A covered page's 定时关闭 would pause the newer page's video.
+  /// A covered page's 定时关闭 waits for it to show again.
   void _pauseSleepTimer() {
     final ticker = _sleepTicker;
     if (ticker == null) return;
@@ -655,6 +659,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   @override
   Future<void> replay() async {
+    _willPlay?.call();
     _setEnded(false);
     unawaited(player.seek(0, precise: true).catchError((Object error) {
       _logger.warn(LogCategory.player, 'seek failed', {'error': '$error'});
@@ -738,17 +743,13 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     if (_disposed || value == _active) return;
     _active = value;
     if (!value) {
-      _opensWhenCovered = _controller.opens;
       _pauseSleepTimer();
       _stopBackgroundChecks();
       return;
     }
     _resumeSleepTimer();
     if (_background) _startBackgroundCheck();
-    final video = _controller.video;
-    // A newer page's video can still be on the player; following it would fetch for it and run its end rules.
-    final ours = _controller.opens == _opensWhenCovered || (video != null && video.bvid == _current?.bvid);
-    if (ours) _follow();
+    _follow();
   }
 
   @override

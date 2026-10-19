@@ -231,7 +231,8 @@ abstract interface class PlayerSession implements Listenable {
   /// The screenshot button: 已保存到相册, or why not.
   Future<ActionResult> captureFrame();
 
-  /// False while the page is covered by another video page or has left: the shared player is someone else's, so
-  /// the session stops acting on it (end rules, 定时关闭, background pause, fetches) and ignores its events.
+  /// False while another page covers the page (paused) and once its playback has closed: the session stops acting
+  /// on the player (end rules, 定时关闭, background pause, fetches) and ignores its events. A playback the small window
+  /// keeps after its page left stays active.
   set active(bool value);
 }

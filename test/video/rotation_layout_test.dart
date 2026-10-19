@@ -82,6 +82,7 @@ void main() {
     required SessionOpen open,
     required void Function(double seconds) onSeeked,
     required VoidCallback requestLogin,
+    required VoidCallback willPlay,
   }) {
     final session = FakePlayerSession(player: player);
     sessions.add(session);

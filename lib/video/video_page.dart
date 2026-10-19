@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' show pi;
 
 import 'package:bili_core/api.dart' as bili
-    show AidLink, BvidLink, LinkParser, VideoCard, VideoDetail, VideoPage, VideoView;
+    show AidLink, BvidLink, LinkParser, VideoCard, VideoView;
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -34,36 +34,13 @@ import 'collapsing_player.dart';
 import 'intro/intro_tab.dart';
 import 'page_details.dart';
 import 'page_details_model.dart';
+import 'page_playback.dart';
 import 'page_session.dart';
 import 'page_tabs.dart';
 import 'player_prefs.dart';
 import 'player_session.dart';
 import 'video_player_area.dart';
 import 'video_route.dart';
-import 'watch_reporter.dart';
-
-typedef PageSessionFactory = PlayerSession Function({
-  required PlaybackController controller,
-  required AppServices services,
-  required SessionOpen open,
-  required void Function(double seconds) onSeeked,
-  required VoidCallback requestLogin,
-});
-
-/// The app's session for a video page. [onSeeked] reaches the watch reporter: every seek the session commits.
-PlayerSession pageSession({
-  required PlaybackController controller,
-  required AppServices services,
-  required SessionOpen open,
-  required void Function(double seconds) onSeeked,
-  required VoidCallback requestLogin,
-}) => createPageSession(
-  controller: controller,
-  services: services,
-  open: open,
-  onSeeked: onSeeked,
-  requestLogin: requestLogin,
-);
 
 typedef PageDetailsFactory = PageDetails Function({
   required PlayerSession session,
@@ -100,9 +77,9 @@ typedef VideoPageOpener = Future<void> Function(BuildContext context, VideoRoute
 /// The video page: the player at 16:9 under a black status bar with the tab row and 简介 | 评论 below it, or the
 /// player alone over the whole screen in full screen, which is this page laid out again rather than a route of its
 /// own. Paused, the small player shrinks to the 继续播放 bar as the shown tab scrolls, the tab row riding under it.
-/// It opens the route's video on the shared player, reports watch progress while logged in, and gives the player
-/// back when it is popped. A page shown again after a newer video page took the player opens its video again where
-/// it was covered.
+/// It plays the route's video on a controller of its own ([PagePlayback]), reports watch progress while logged in, and
+/// hands the playback to the [PipKeeper] when popped, which frees it unless the small window plays it. Covered by
+/// another page it pauses, and shown again it resumes where it was, without a reload.
 class VideoPage extends StatefulWidget {
   const VideoPage({
     super.key,
@@ -125,36 +102,25 @@ class VideoPage extends StatefulWidget {
 
 class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderStateMixin {
   AppServices? _services;
-  PlaybackController? _controller;
-  WatchReporter? _reporter;
-  String? _startError;
 
-  /// The controller's open count once this page opened its video; a later one means a newer page has the player.
-  int? _open;
+  /// What the page plays: the route's, or the one the small window's restore button brought back.
+  PagePlayback? _playback;
 
-  /// Popped, or disposed without a pop: the last position went out and the player was given back.
+  PlaybackController? get _controller => _playback?.controller;
+
+  /// Popped, or disposed without a pop: the playback went to the keeper, and the page acts on it no more.
   bool _left = false;
 
   /// This page's video has played, so a fallback, reload or replay shows the player rather than the cover again.
   bool _played = false;
 
-  /// What this page plays: the route's video at first, then whatever the session opens on the page. Only the
-  /// route's own open starts at its position; another part of the same video reuses the view and detail it has.
-  late String _bvid = widget.route.bvid;
-  late int? _cid = widget.route.cid;
-  late double? _startAt = widget.route.start;
-  late bili.VideoView? _view = widget.route.view;
-  late bili.VideoDetail? _detail = widget.route.detail;
-
+  /// The playback's session, once the page has built its player around it.
   PlayerSession? _session;
   PageDetails? _details;
   PlayerUi? _ui;
 
-  /// 简介's video, taken from the session only while the player is this page's.
+  /// 简介's video, taken from the session until the page leaves.
   IntroContent _intro = const IntroContent();
-
-  /// Where this page's video stood when another page covered it, for opening it again once shown.
-  ({double seconds, bili.VideoView? view, bili.VideoPage? part, bili.VideoDetail? detail})? _coveredAt;
 
   /// The native view: built once, so no layout switch or chrome change recreates it.
   Widget? _videoView;
@@ -479,7 +445,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _services = AppScope.of(context);
       _orientation.addListener(_presentationChanged);
       _turns = _orientation.turns.listen(_turnStarted);
-      _start();
+      _takePlayback();
     }
     // Only another page covers this one. A popup on top (the ⋮ menu, a dialog) makes the route not current as well,
     // so ModalRoute.isCurrentOf would stop the end rules and the background pause under a menu.
@@ -499,16 +465,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     // with no page to draw it. A newer begin first makes this a no-op.
     final orientation = _orientation;
     scheduleMicrotask(() => orientation.end(this));
-    final controller = _controller;
-    if (controller != null && _isMine(controller)) {
-      _coveredAt = (
-        seconds: controller.currentSeconds,
-        view: controller.video,
-        part: controller.page,
-        detail: controller.detail,
-      );
+    if (!_left) {
+      _playback?.cover();
+      _details?.active = false;
     }
-    _setActive(false);
     if (mounted) setState(() {});
   }
 
@@ -521,77 +481,61 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _left || _covered) return;
       _claimOrientation();
-      final controller = _controller;
-      if (controller == null) return;
-      if (_isMine(controller)) {
-        _coveredAt = null;
-        _setActive(true);
-      } else if (_session != null) {
-        _reopen(controller);
-      }
+      final playback = _playback;
+      if (playback == null) return;
+      playback.show(resuming: _services!.pipKeeper.pageShown(playback, opened: false));
+      _details?.active = true;
     });
   }
 
-  void _setActive(bool active) {
-    _session?.active = active;
-    _details?.active = active;
-  }
-
-  /// The page above had the player and gave it back closed: this page plays its own video again from where it was
-  /// covered. A stopgap: resuming without a reload would avoid the restart.
-  void _reopen(PlaybackController controller) {
-    if (_coveredAt case final covered?) {
-      _coveredAt = null;
-      _startAt = covered.seconds;
-      if (covered.part case final part?) _cid = part.cid;
-      if (covered.view case final view? when view.bvid == _bvid) _view = view;
-      if (covered.detail case final detail? when detail.bvid == _bvid) _detail = detail;
+  /// The route's playback, or the one the restore button brought back (started over if it was released meanwhile).
+  /// Its first show releases a playback the small window kept, before this page's video loads.
+  void _takePlayback() {
+    final services = _services!;
+    final route = widget.route;
+    final createSession = widget.createSession;
+    final createDetails = widget.createDetails;
+    final openPage = widget.openPage;
+    final brought = route.playback;
+    final playback = brought != null && !brought.closed
+        ? brought
+        : PagePlayback(
+            services: services,
+            route: brought?.restartRoute ?? route,
+            createSession: createSession,
+            restorePage: (route) => VideoPage(
+              route: route,
+              createSession: createSession,
+              createDetails: createDetails,
+              openPage: openPage,
+            ),
+          );
+    _playback = playback;
+    playback
+      ..attach(this, requestLogin: _askLogin)
+      ..addListener(_playbackChanged);
+    services.pipKeeper.pageShown(playback, opened: true);
+    if (playback.session == null) {
+      playback.start();
+    } else {
+      _attachSession(playback);
     }
-    _openVideo(controller);
-    _setActive(true);
   }
 
-  void _start() {
-    _services!.playback.obtain().then(
-      _begin,
-      onError: (Object error) {
-        if (mounted && !_left) setState(() => _startError = '$error');
-      },
-    );
+  void _playbackChanged() {
+    final playback = _playback;
+    if (!mounted || _left || playback == null) return;
+    if (_session == null && playback.session != null) _attachSession(playback);
+    setState(() {});
   }
 
-  void _begin(PlaybackController controller) {
-    if (!mounted || _left) return;
-    _controller = controller;
-    _startError = null;
-    controller.addListener(_follow);
-    _openVideo(controller);
-  }
-
-  void _openVideo(PlaybackController controller) {
+  /// The page's player, panels, details and danmaku, around the playback's session.
+  void _attachSession(PagePlayback playback) {
     final services = _services!;
-    unawaited(_reporter?.leave());
-    unawaited(controller.openVideo(_bvid, cid: _cid, start: _startAt, view: _view, detail: _detail));
-    _reporter = WatchReporter(
-      controller: controller,
-      client: services.environment.client,
-      loggedIn: () => WatchReporter.canReport(services.environment),
-      onProgress: (bvid, cid, seconds) => services.recents.recordProgress(bvid: bvid, cid: cid, seconds: seconds),
-    );
-    setState(() => _open = controller.opens);
-    if (_session == null) _makeSession(controller);
-  }
-
-  void _makeSession(PlaybackController controller) {
-    final services = _services!;
-    final session = widget.createSession(
-      controller: controller,
-      services: services,
-      open: _openOnPage,
-      onSeeked: (seconds) => _reporter?.seeked(seconds),
-      requestLogin: _askLogin,
-    );
+    final controller = playback.controller!;
+    final session = playback.session!;
     _session = session;
+    controller.addListener(_follow);
     final details = widget.createDetails(
       session: session,
       services: services,
@@ -609,7 +553,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       target: () {
         final video = controller.video;
         final part = controller.page;
-        if (!_isMine(controller) || video == null || part == null) return null;
+        if (_left || video == null || part == null) return null;
         return (bvid: video.bvid, cid: part.cid);
       },
       position: () => session.position,
@@ -647,27 +591,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _sessionChanged();
   }
 
-  /// Another part or video, from 选集, 自动连播 or the end screen: opened here, on the same page.
-  void _openOnPage(String bvid, {int? cid}) {
-    final controller = _controller;
-    if (controller == null || !_isMine(controller)) return;
-    final samePart = bvid == _bvid;
-    // Another part of this video needs no second signed view.
-    _view = samePart ? controller.video : null;
-    _detail = samePart ? controller.detail : null;
-    _bvid = bvid;
-    _cid = cid;
-    _startAt = null;
-    _openVideo(controller);
-  }
-
-  bool _isMine(PlaybackController controller) => !_left && controller.opens == _open;
+  /// The page has built its player around the playback and hasn't left.
+  bool get _mine => !_left && _session != null;
 
   void _follow() {
     final controller = _controller;
     if (controller == null) return;
     setState(() {
-      if (!_isMine(controller)) return;
+      if (!_mine) return;
       if (_session case final session?) _intro = IntroContent.of(session);
       if (controller.phase == PlaybackPhase.playing) _played = true;
     });
@@ -679,9 +610,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _sessionChanged() {
     _syncCollapse();
     final session = _session;
-    final controller = _controller;
-    // A covered page's session hears the newer page's video on the shared controller.
-    if (session == null || controller == null || !_isMine(controller)) return;
+    if (session == null || !_mine) return;
     final intro = IntroContent.of(session);
     if (intro != _intro && mounted) setState(() => _intro = intro);
     _syncComments();
@@ -702,9 +631,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _syncComments() {
     if (_left || !mounted) return;
     final detail = _intro.detail;
-    final controller = _controller;
-    final view = controller != null && _isMine(controller) ? controller.video : null;
-    final aid = detail?.aid ?? (view?.bvid == _bvid ? view?.aid : null);
+    final view = _mine ? _controller?.video : null;
+    final aid = detail?.aid ?? (view?.bvid == _playback?.bvid ? view?.aid : null);
     if (aid == null) return;
     if (_comments case final comments? when comments.aid == aid) {
       if (detail != null) comments.upMid = detail.owner.mid;
@@ -839,7 +767,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final controller = _controller;
     if (session == null || controller == null) return;
     // Another part opening on the page keeps the last one's status until its own load starts, so the phase counts.
-    _chrome.autoHide = _isMine(controller) &&
+    _chrome.autoHide = _mine &&
         controller.phase == PlaybackPhase.playing &&
         session.readout.wantsPlay &&
         session.scrubbing.value == null &&
@@ -856,7 +784,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _collapse.paused =
         controller != null &&
         session != null &&
-        _isMine(controller) &&
+        _mine &&
         controller.phase == PlaybackPhase.playing &&
         session.readout.status.value == PlayerStatus.paused &&
         !session.ended;
@@ -884,7 +812,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _resume() {
     _tabs.scrollToTop(animate: !MediaQuery.disableAnimationsOf(context));
     final session = _session;
-    if (session != null && session.readout.status.value == PlayerStatus.paused) session.togglePlay();
+    if (session == null || session.readout.status.value != PlayerStatus.paused) return;
+    _playback?.willPlay();
+    session.togglePlay();
   }
 
   /// Rebuilds the PopScope, which lets a pop through only with no overlay or panel open.
@@ -1064,7 +994,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   Future<void> _openVideoId(String id) async {
     switch (bili.LinkParser.parse(id)) {
       case bili.BvidLink(id: final bvid):
-        if (bvid == _bvid) return;
+        if (bvid == _playback?.bvid) return;
         await widget.openPage(context, VideoRoute(bvid: bvid));
       case final bili.AidLink link:
         if (_resolvingId || link.id == _intro.detail?.aid) return;
@@ -1080,7 +1010,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           _resolvingId = false;
         }
         // The lookup may answer after a related page or a menu went up over this one.
-        if (!mounted || _left || !(ModalRoute.isCurrentOf(context) ?? false) || view.bvid == _bvid) return;
+        if (!mounted || _left || !(ModalRoute.isCurrentOf(context) ?? false) || view.bvid == _playback?.bvid) return;
         await widget.openPage(context, VideoRoute(bvid: view.bvid, title: view.title, view: view));
       default:
         break;
@@ -1088,26 +1018,31 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   }
 
   VoidCallback? get _retry {
-    if (_startError != null) {
-      return () {
-        setState(() => _startError = null);
-        _start();
-      };
-    }
-    final controller = _controller;
-    return controller == null ? null : () => _openVideo(controller);
+    final playback = _playback;
+    if (playback == null || (playback.startError == null && playback.controller == null)) return null;
+    return playback.retry;
   }
 
-  /// Runs at the pop, not at dispose 500 ms later: a card opened during the transition would by then have the
-  /// player, and this page would report and close the newer page's video.
+  /// Runs at the pop, not at dispose 500 ms later: the sound stops with the swipe, and the page below, shown at once,
+  /// finds the small window kept.
   void _leave({bool fromDispose = false}) {
     if (_left) return;
     _left = true;
     _owning = false;
-    _setActive(false);
-    final controller = _controller;
-    controller?.removeListener(_follow);
-    unawaited(_reporter?.leave());
+    _details?.active = false;
+    _controller?.removeListener(_follow);
+    // The session outlives the page when the small window keeps it.
+    final session = _session;
+    session?.removeListener(_sessionChanged);
+    session?.readout.status.removeListener(_syncCollapse);
+    _autoHideInputs?.removeListener(_syncAutoHide);
+    final playback = _playback;
+    if (playback != null) {
+      playback
+        ..removeListener(_playbackChanged)
+        ..detach(this);
+      _services!.pipKeeper.pageRemoved(playback);
+    }
     if (_services != null) {
       _applySystemUi();
       // A newer page's begin makes this a no-op. Disposal runs while the tree is locked, and end() notifies the
@@ -1119,21 +1054,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         _orientation.end(this);
       }
     }
-    if (controller == null || controller.opens != _open) return;
-    // close() notifies the other pages listening to the player as well.
-    if (fromDispose) {
-      final open = _open;
-      scheduleMicrotask(() {
-        if (controller.opens == open) controller.close();
-      });
-    } else {
-      controller.close();
-    }
   }
 
   @override
   void dispose() {
     _leave(fromDispose: true);
+    _playback?.letGo(this);
     _stopFollowingSignIn();
     pageRoutes.unsubscribe(this);
     _services?.device.orientation.removeListener(_presentationChanged);
@@ -1162,17 +1088,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _verticalTurn.dispose();
     _pin.dispose();
     _laidOut.dispose();
-    final session = _session;
-    session?.removeListener(_sessionChanged);
-    session?.readout.status.removeListener(_syncCollapse);
     _details?.dispose();
     _turnWait?.cancel();
     _logins.dispose();
     _danmaku
       ?..sendOpen.removeListener(_panelChanged)
       ..dispose();
-    // PlayerSession declares no dispose; the app's session is a ChangeNotifier that frees what it holds.
-    if (session case final ChangeNotifier notifier) notifier.dispose();
     _chrome.dispose();
     _panels.dispose();
     _overlays.dispose();
@@ -1194,7 +1115,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _laidOut.value = layout;
     final fullScreen = layout.fullScreen;
     final controller = _controller;
-    final mine = controller != null && _isMine(controller);
+    final mine = controller != null && _mine;
     final ui = mine ? _ui : null;
     _collapse.still = MediaQuery.disableAnimationsOf(context);
     return PopScope<Object?>(
@@ -1494,13 +1415,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   }
 
   bool _loading(PlaybackController? controller, bool mine) {
-    if (_startError != null) return false;
+    if (_playback?.startError != null) return false;
     if (mine) return controller!.phase == PlaybackPhase.loading;
     return !_left;
   }
 
   String? _failure(PlaybackController? controller, bool mine) {
-    if (_startError case final error?) return '播放器启动失败：$error';
+    if (_playback?.startError case final error?) return '播放器启动失败：$error';
     if (mine && controller!.phase == PlaybackPhase.failed) return controller.error ?? '播放失败';
     return null;
   }

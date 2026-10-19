@@ -149,10 +149,18 @@ class FakeLoginGate implements LoginGate {
 
 void main() {
   late CannedHttp http;
-  late FakePlayer player;
   late ManualClock time;
-  late PlaybackController controller;
   late AppEnvironment environment;
+
+  /// Every controller started, each with a player of its own: the one a test's own start hands out, the app's shared
+  /// one, then each page's.
+  late List<PlaybackController> controllers;
+
+  /// The newest controller and its player: the top page's once its own has started.
+  late PlaybackController controller;
+  late FakePlayer player;
+  late AppPlayback playback;
+  late AppServices services;
   late GlobalKey<NavigatorState> nav;
   late SpyOrientation orientation;
   late FakeLoginGate gate;
@@ -172,7 +180,7 @@ void main() {
 
   setUp(() {
     http = Canned.http()..routes[heartbeatPath] = (200, '{"code":0,"message":"0"}');
-    player = FakePlayer();
+    controllers = [];
     time = ManualClock(10000);
     nav = GlobalKey<NavigatorState>();
     orientation = SpyOrientation();
@@ -191,8 +199,9 @@ void main() {
     required SessionOpen open,
     required void Function(double seconds) onSeeked,
     required VoidCallback requestLogin,
+    required VoidCallback willPlay,
   }) {
-    final session = FakePlayerSession(player: player);
+    final session = FakePlayerSession(player: controller.player as FakePlayer);
     sessions.add(session);
     sessionOpens.add(open);
     askLogin = requestLogin;
@@ -224,18 +233,25 @@ void main() {
     );
     if (checkAccount) await environment.refreshAccount();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
-    controller = PlaybackController(
-      client: environment.client,
-      engine: FakeEngine(),
-      player: player,
-      clock: time.clock,
-      now: () => now,
-      startTimer: FakeTimers().start,
-      logger: logger,
-    );
-    final playback = AppPlayback(start ?? () async => controller);
+    PlaybackController make() {
+      player = FakePlayer();
+      controller = PlaybackController(
+        client: environment.client,
+        engine: FakeEngine(),
+        player: player,
+        clock: time.clock,
+        now: () => now,
+        startTimer: FakeTimers().start,
+        logger: logger,
+      );
+      controllers.add(controller);
+      return controller;
+    }
+
+    make();
+    playback = AppPlayback(start ?? () async => make());
     addTearDown(playback.dispose);
-    final services = AppServices(
+    services = AppServices(
       environment: environment,
       playback: playback,
       recents: recents = await RecentStore.load(null, logger: logger),
@@ -243,6 +259,8 @@ void main() {
       pageApi: pageApi,
       loginGate: gate,
     );
+    // The small window's restore button pushes on the app's navigator.
+    nav = services.navigator;
     await tester.pumpWidget(
       MaterialApp(
         navigatorKey: nav,
@@ -454,7 +472,8 @@ void main() {
   testWidgets('重试 starts the player again after a failed start, then plays', (tester) async {
     final failing = Completer<PlaybackController>();
     var attempts = 0;
-    await host(tester, start: () => attempts++ == 0 ? failing.future : Future.value(controller));
+    // The app's shared player and the page's own both fail to start.
+    await host(tester, start: () => attempts++ < 2 ? failing.future : Future.value(controller));
     pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
     await frames(tester, 2);
     failing.completeError(StateError('no engine'));
@@ -462,7 +481,7 @@ void main() {
     expect(find.textContaining('播放器启动失败'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('video-retry')));
     await frames(tester, 20);
-    expect(attempts, 2);
+    expect(attempts, 3);
     expect(find.byKey(const ValueKey('video-error')), findsNothing);
     expect(controller.video?.bvid, bv);
     expect(player.loaded, isNotNull);
@@ -973,8 +992,7 @@ void main() {
       expect(controller.opens, opens, reason: 'a page that left opens nothing');
     });
 
-    testWidgets('简介 follows the session\'s video while the player is the page\'s, and keeps it under a newer page',
-        (tester) async {
+    testWidgets('简介 follows the page\'s own session, and a newer page\'s video never reaches it', (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
       await opened(tester);
@@ -994,11 +1012,12 @@ void main() {
 
       pushVideo(const VideoRoute(bvid: 'BV1xx411c7mD', start: 0));
       await opened(tester, page: 1);
-      sessions.first
+      sessions.last
         ..detail = detail('BV1xx411c7mD')
         ..changed();
       await tester.pump();
-      expect(intro().detail?.bvid, bv, reason: 'the covered page\'s session hears the newer video; its 简介 does not');
+      expect(intro().detail?.bvid, bv);
+      expect(sessions.first.player, isNot(same(sessions.last.player)), reason: 'each page plays on its own player');
       await back(tester);
       await back(tester);
     });
@@ -1019,34 +1038,87 @@ void main() {
       expect(session.active, isFalse, reason: 'the page left');
     });
 
-    testWidgets('is inactive under a newer video page, then opens its own video again where it was covered',
+    testWidgets('paused and inactive under a newer video page, then resumes where it was, with no reload',
         (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
       await opened(tester);
-      player.emit(const StatusChanged(PlayerStatus.playing));
+      final first = controller;
+      final firstPlayer = player;
+      firstPlayer.emit(const StatusChanged(PlayerStatus.playing));
       position(42);
+      final opens = first.opens;
+      firstPlayer.calls.clear();
       pushVideo(const VideoRoute(bvid: 'BV1xx411c7mD', start: 0));
       await opened(tester, page: 1);
+      expect(controller, isNot(same(first)), reason: 'the newer page plays on a controller of its own');
       expect(sessions.first.active, isFalse);
       expect(detailsMade.first.activeSet, isFalse);
       expect(sessions.last.active, isTrue);
-      final opens = controller.opens;
+      expect(firstPlayer.calls, ['pause', 'pip auto false']);
+      expect(playback.live, 2);
 
+      firstPlayer.calls.clear();
       await back(tester);
       expect(sessions.last.active, isFalse, reason: 'the page on top left');
-      expect(controller.opens, opens + 1, reason: 'the first page opened its video again');
-      expect(controller.video?.bvid, bv);
-      expect(controller.page?.cid, p1);
-      expect(player.loaded?.startSeconds, closeTo(42, 0.5));
+      expect(playback.live, 1, reason: 'its controller went with it');
+      expect(first.opens, opens, reason: 'nothing opened again');
+      expect(first.video?.bvid, bv);
+      expect(first.page?.cid, p1);
+      expect(firstPlayer.calls, ['pip auto true', 'play']);
+      expect(firstPlayer.calls.where((call) => call.startsWith('load')), isEmpty);
+      expect(first.currentSeconds, closeTo(42, 0.5));
       expect(sessions.first.active, isTrue);
       expect(detailsMade.first.activeSet, isTrue);
-      player.emit(const StatusChanged(PlayerStatus.playing));
+      firstPlayer.emit(const StatusChanged(PlayerStatus.playing));
       await frames(tester);
       expect(find.byKey(const ValueKey('video-loading')), findsNothing, reason: 'it plays rather than spinning');
       expect(find.byType(PortraitControls), findsOneWidget);
       await back(tester);
-      expect(controller.video, isNull);
+      expect(first.video, isNull);
+      expect(playback.live, 0);
+    });
+
+    testWidgets('a page the user paused stays paused when shown again', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      final firstPlayer = player;
+      firstPlayer
+        ..emit(const StatusChanged(PlayerStatus.playing))
+        ..emit(const StatusChanged(PlayerStatus.paused));
+      pushVideo(const VideoRoute(bvid: 'BV1xx411c7mD', start: 0));
+      await opened(tester, page: 1);
+      firstPlayer.calls.clear();
+      await back(tester);
+      expect(firstPlayer.calls, ['pip auto true'], reason: 'no play');
+      await back(tester);
+    });
+
+    testWidgets('a page covered while its video loads comes back playing, and doesn\'t play while covered',
+        (tester) async {
+      http.gates[Canned.playUrlPath] = Completer<void>();
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await frames(tester, 20);
+      final first = controller;
+      final firstPlayer = player;
+      expect(first.phase, PlaybackPhase.loading);
+      unawaited(nav.currentState!.push(SwipeBackPageRoute<void>(builder: (_) => const SizedBox())));
+      await frames(tester, 20);
+      expect(firstPlayer.calls, contains('pause'));
+      http.gates[Canned.playUrlPath]!.complete();
+      await frames(tester, 5);
+      expect(firstPlayer.loaded?.autoplay, isTrue, reason: 'the load itself is the controller\'s');
+      firstPlayer.calls.clear();
+      // A player that starts anyway is paused again at once, and the auto picture in picture the controller turns on at
+      // its first play goes off again.
+      firstPlayer.emit(const StatusChanged(PlayerStatus.playing));
+      expect(firstPlayer.calls, ['pip auto true', 'pause', 'pip auto false']);
+      firstPlayer.calls.clear();
+      await back(tester);
+      expect(firstPlayer.calls, ['pip auto true', 'play']);
+      await back(tester);
     });
 
     testWidgets('the app\'s own session across a part change: P2 plays on the page after P1, then the end screen',
@@ -1182,6 +1254,8 @@ void main() {
         ),
       );
       await frames(tester, 20);
+      final first = controller;
+      final firstPlayer = player;
       player.emit(const StatusChanged(PlayerStatus.playing));
       position(42);
       await frames(tester);
@@ -1207,14 +1281,14 @@ void main() {
 
       http.routes[Canned.signedViewPath] = (200, Canned.view);
       await back(tester);
-      player.emit(const StatusChanged(PlayerStatus.playing));
+      firstPlayer.emit(const StatusChanged(PlayerStatus.playing));
       await frames(tester, 20);
-      expect(controller.video?.bvid, bv);
-      expect(controller.page?.cid, p1);
+      expect(first.video?.bvid, bv);
+      expect(first.page?.cid, p1);
       expect(model!.actions, same(actions));
       expect(api.calls.skip(4), ['onlineCount cid=$p1']);
       await back(tester);
-      expect(controller.video, isNull);
+      expect(first.video, isNull);
     });
 
     testWidgets('is made once the player is the page\'s and disposed when the page leaves', (tester) async {
@@ -1609,32 +1683,37 @@ void main() {
       await frames(tester, 20);
     });
 
-    testWidgets('a related video opens a page on top, and back returns to the first video playing', (tester) async {
+    testWidgets('item 38: a related video opens a page on top, pausing the first; back resumes it with no reload',
+        (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p2, start: 0));
       await opened(tester);
+      final first = controller;
+      final firstPlayer = player;
       player.emit(const StatusChanged(PlayerStatus.playing));
       position(30);
+      final opens = first.opens;
       intro(tester).onOpenRelated(card('BV1xx411c7mD'));
       await frames(tester, 20);
       expect(find.byType(VideoPage, skipOffstage: false), findsNWidgets(2));
       expect(sessions, hasLength(2));
-      final opens = controller.opens;
+      expect(firstPlayer.calls.last, 'pip auto false');
+      expect(firstPlayer.calls, contains('pause'));
       final top = tester.widget<VideoPage>(find.byType(VideoPage).last).route;
       expect((top.bvid, top.title, top.cover), ('BV1xx411c7mD', '相关视频', cover));
 
       await back(tester);
       expect(find.byType(VideoPage), findsOneWidget);
-      expect(controller.opens, opens + 1, reason: 'the first page opened its video again');
+      expect(first.opens, opens, reason: 'nothing opened again');
       expect(sessions.first.active, isTrue);
-      expect(controller.page?.cid, p2, reason: 'the part it was on');
-      expect(player.loaded?.startSeconds, closeTo(30, 0.5));
-      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(first.page?.cid, p2, reason: 'the part it was on');
+      expect(firstPlayer.calls.last, 'play');
+      firstPlayer.emit(const StatusChanged(PlayerStatus.playing));
       await frames(tester);
-      expect(controller.phase, PlaybackPhase.playing);
+      expect(first.phase, PlaybackPhase.playing);
       expect(find.byKey(const ValueKey('fake-video')), findsOneWidget);
       await back(tester);
-      expect(controller.video, isNull);
+      expect(first.video, isNull);
     });
 
     testWidgets('a sideways swipe over the tabs switches them; only the left edge goes back', (tester) async {
@@ -2526,6 +2605,7 @@ void main() {
       required SessionOpen open,
       required void Function(double seconds) onSeeked,
       required VoidCallback requestLogin,
+      required VoidCallback willPlay,
     }) {
       sessionLogin = requestLogin;
       return fakeSession(
@@ -2534,6 +2614,7 @@ void main() {
         open: open,
         onSeeked: onSeeked,
         requestLogin: requestLogin,
+        willPlay: willPlay,
       );
     }
 

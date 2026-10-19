@@ -73,17 +73,20 @@ void main() {
     environment = await AppEnvironment.load(keychain: FakeKeychain(StoredCookies(cookies)), http: http, logger: logger);
     await environment.refreshAccount();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
-    controller = PlaybackController(
-      client: environment.client,
-      engine: FakeEngine(),
-      player: player,
-      clock: ManualClock(10000).clock,
-      now: () => now,
-      startTimer: FakeTimers().start,
-      logger: logger,
-    );
+    // Each video page gets a controller and player of its own; [controller] is the newest.
+    final playback = AppPlayback(() async {
+      player = FakePlayer();
+      return controller = PlaybackController(
+        client: environment.client,
+        engine: FakeEngine(),
+        player: player,
+        clock: ManualClock(10000).clock,
+        now: () => now,
+        startTimer: FakeTimers().start,
+        logger: logger,
+      );
+    });
     recents = await RecentStore.load(null, logger: logger);
-    final playback = AppPlayback(() async => controller);
     addTearDown(playback.dispose);
     final services = AppServices(environment: environment, playback: playback, recents: recents, loginGate: gate);
     await tester.pumpWidget(

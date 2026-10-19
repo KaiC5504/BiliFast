@@ -559,33 +559,20 @@ void main() {
       expect(player.calls, ['pause'], reason: 'active again in the background, it checks again');
     });
 
-    test('active again, it follows the player only once it plays this page\'s video again', () async {
-      final first = makeSession();
-      await controller.openVideo(bv, cid: p1);
-      playing();
-      await settle();
-      first.active = false;
-      http.routes[Canned.signedViewPath] = (200, seasonView('BV1AA411a1aa', 1001));
-      // As the page does: its open first, then its session.
-      final opening = controller.openVideo('BV1AA411a1aa');
-      final second = makeSession(on: controller);
-      await opening;
-      await settle();
-      expect(http.to(relatedPath), hasLength(2));
-
-      first.active = true;
-      await settle();
-      expect(http.to(relatedPath), hasLength(2), reason: "the page above's video is still on the player");
-
-      second.active = false;
-      controller.close();
-      http.routes[Canned.signedViewPath] = (200, Canned.view);
+    test('active again, it catches up with its player at once', () async {
+      final session = makeSession();
       await controller.openVideo(bv, cid: p1);
       await settle();
-      expect(http.to(relatedPath), hasLength(2), reason: 'its own video, whose related videos it has');
+      session.active = false;
+      await controller.openVideo(bv, cid: p2);
+      await settle();
+      final asked = http.to(playerInfoPath).length;
+      session.active = true;
+      await settle();
+      expect(http.to(playerInfoPath), hasLength(asked + 1), reason: "P2's 看点");
       playing();
       await ended();
-      expect(opened, ['$bv $p2'], reason: 'its end rules apply again');
+      expect(session.ended, isTrue, reason: 'its end rules apply again: nothing plays after the last part');
     });
   });
 

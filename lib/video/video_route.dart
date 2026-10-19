@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 import '../app/swipe_back_route.dart';
 import '../app/zoom_back_route.dart';
+import 'page_playback.dart';
 import 'video_page.dart';
 
 /// What opens a video page (port of VideoRoute.swift). Without a [cid] the page plays the part Bilibili saw this
@@ -11,7 +12,8 @@ import 'video_page.dart';
 /// arrives; [cover] (from cards and 最近打开 rows) flies in from the card and covers the player until the video first
 /// plays. [view] is the video a pasted link already resolved, so the page doesn't ask Bilibili for it again, and
 /// [detail] the signed view that resolved it, when that one answered (its 合集 and counts). [zoomSource] (推荐 cards
-/// only) is the card the swipe back, 〈 and system back fly the page into.
+/// only) is the card the swipe back, 〈 and system back fly the page into. [playback] is a closed page's, brought back
+/// by the small window's restore button: the page takes it over instead of opening the video.
 @immutable
 final class VideoRoute {
   const VideoRoute({
@@ -23,6 +25,7 @@ final class VideoRoute {
     this.view,
     this.detail,
     this.zoomSource,
+    this.playback,
   });
 
   final String bvid;
@@ -33,6 +36,7 @@ final class VideoRoute {
   final VideoView? view;
   final VideoDetail? detail;
   final ZoomSource? zoomSource;
+  final PagePlayback? playback;
 
   /// The feed card's cover and the page's player box share it, so the cover flies into the player.
   static String coverTag(String bvid) => 'cover-$bvid';
