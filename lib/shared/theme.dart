@@ -718,6 +718,12 @@ abstract final class BiliMetrics {
   /// Lane spacing per point of the font size: 44's lanes are about 95 px apart at 22 pt, as Swift's 1.2 line
   /// heights of the system font are.
   static const danmakuLaneHeight = 1.44;
+
+  /// The avatar menu's 登录 and 重新登录 pill, as BiliNative's AvatarMenu draws it.
+  static const menuPillHeight = 28.0;
+  static const menuPillPadding = 14.0;
+  static const menuPillText = 13.0;
+  static const menuPillGap = 10.0;
 }
 
 /// The tab row under the player (简介 / 评论 N, the 弹 toggle and 点我发弹幕) and the 简介 page's spacing (03, 18).

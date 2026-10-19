@@ -6,6 +6,7 @@ import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -20,9 +21,13 @@ import 'package:flutter_test/flutter_test.dart';
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
+import 'fake_login_gate.dart';
 import 'feed_fakes.dart';
 
 const _watchLaterPath = '/x/v2/history/toview/add';
+
+/// The fingerprint cookies alone: logged out, with no `spi` call.
+const _loggedOutCookies = {'buvid3': 'b3', 'buvid4': 'b4'};
 
 void main() {
   late FeedHttp http;
@@ -30,16 +35,24 @@ void main() {
   late PlaybackController controller;
   late RecentStore recents;
   late AppEnvironment environment;
+  late FakeLoginGate gate;
 
   setUp(() {
     http = FeedHttp();
     http.pages[1] = [feedItem('BV1aaa', reason: '1万点赞'), feedItem('BV1bbb')];
     player = FakePlayer();
+    gate = FakeLoginGate();
   });
 
   List<Map<String, Object?>> twenty() => [for (var i = 0; i < 20; i++) feedItem('BV1c$i')];
 
-  Future<void> show(WidgetTester tester, {bool developer = false, double scale = 1, bool still = false}) async {
+  Future<void> show(
+    WidgetTester tester, {
+    bool developer = false,
+    double scale = 1,
+    bool still = false,
+    Map<String, String> cookies = Canned.cookies,
+  }) async {
     tester.view.physicalSize = const Size(440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -54,11 +67,7 @@ void main() {
       addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     }
     final logger = Logger(session: 'test');
-    environment = await AppEnvironment.load(
-      keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
-      http: http,
-      logger: logger,
-    );
+    environment = await AppEnvironment.load(keychain: FakeKeychain(StoredCookies(cookies)), http: http, logger: logger);
     await environment.refreshAccount();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     controller = PlaybackController(
@@ -73,7 +82,7 @@ void main() {
     recents = await RecentStore.load(null, logger: logger);
     final playback = AppPlayback(() async => controller);
     addTearDown(playback.dispose);
-    final services = AppServices(environment: environment, playback: playback, recents: recents);
+    final services = AppServices(environment: environment, playback: playback, recents: recents, loginGate: gate);
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => AppScope(services: services, child: child!),
@@ -396,6 +405,153 @@ void main() {
     expect(http.canned.to(Canned.navPath), hasLength(asked + 1), reason: 'a known account is not asked again');
   });
 
+  Future<void> openMenu(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('home-avatar')));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('avatar-menu')), findsOneWidget);
+  }
+
+  testWidgets('logged out, the account row says 未登录 and its 登录 pill opens the login page', (tester) async {
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+    await show(tester, cookies: _loggedOutCookies);
+    await settle(tester);
+    expect(environment.account, isA<LoggedOut>());
+    await openMenu(tester);
+    expect(find.text('未登录'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('menu-login')), matching: find.text('登录')), findsOneWidget);
+    expect(find.text('退出'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('menu-login')));
+    await settle(tester);
+    expect(gate.requests, 1);
+    expect(find.byKey(const ValueKey('avatar-menu')), findsNothing, reason: 'the menu closes on the way');
+  });
+
+  testWidgets('expired, the account row says 登录已过期 and its 重新登录 pill opens the login page', (tester) async {
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+    await show(tester);
+    await settle(tester);
+    expect(environment.account, isA<LoginExpired>());
+    await openMenu(tester);
+    expect(find.text('登录已过期'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('menu-login')), matching: find.text('重新登录')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('menu-login')));
+    await settle(tester);
+    expect(gate.requests, 1);
+    expect(find.byKey(const ValueKey('avatar-menu')), findsNothing);
+  });
+
+  testWidgets('logged in, the account row has the name and no pill or 退出', (tester) async {
+    await show(tester);
+    await settle(tester);
+    await openMenu(tester);
+    expect(find.byKey(const ValueKey('menu-account-name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-login')), findsNothing);
+    expect(find.text('退出'), findsNothing);
+    expect(find.text('未登录'), findsNothing);
+  });
+
+  testWidgets('a failed account check says so in the row, and a tap asks again', (tester) async {
+    http.canned.routes[Canned.navPath] = (500, '');
+    await show(tester);
+    await settle(tester);
+    await openMenu(tester);
+    expect(find.byKey(const ValueKey('menu-login')), findsNothing);
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+    await tester.tap(find.text('无法获取账号信息，点按重试'));
+    await settle(tester);
+    expect(environment.account, isA<LoggedIn>());
+    expect(find.text('测试用户'), findsOneWidget);
+    expect(gate.requests, 0);
+  });
+
+  testWidgets('历史记录 in the avatar menu opens 历史记录, and back returns home', (tester) async {
+    await show(tester);
+    await settle(tester);
+    await openMenu(tester);
+    expect(find.text('即将推出'), findsNothing);
+    await tester.tap(find.text('历史记录'));
+    await settle(tester, 20);
+    expect(find.byType(WatchHistoryPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('avatar-menu')), findsNothing);
+    await tester.binding.handlePopRoute();
+    await settle(tester, 20);
+    expect(find.byType(WatchHistoryPage), findsNothing);
+    expect(find.text('推荐'), findsOneWidget);
+  });
+
+  testWidgets('推荐 refreshes once when the account logs in or out, and not on other account news', (tester) async {
+    http.pages[1] = twenty();
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+    await show(tester, cookies: _loggedOutCookies);
+    await settle(tester, 20);
+    expect(environment.account, isA<LoggedOut>());
+    expect(http.asked, [1]);
+
+    Future<void> check() async {
+      await environment.refreshAccount();
+      await settle(tester, 20);
+    }
+
+    await check();
+    expect(http.asked, [1], reason: 'still logged out');
+
+    http.canned.errors[Canned.navPath] = Exception('offline');
+    await check();
+    expect(environment.account, isA<LoggedOut>());
+    expect(http.asked, [1], reason: 'a failed check changes nothing');
+    http.canned.errors.remove(Canned.navPath);
+
+    environment.cookies.set('SESSDATA', 's');
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+    await check();
+    expect(environment.account, isA<LoggedIn>());
+    expect(http.asked, [1, 1], reason: 'logged in');
+
+    await check();
+    expect(http.asked, [1, 1], reason: 'still logged in');
+
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+    await check();
+    expect(environment.account, isA<LoginExpired>());
+    expect(http.asked, [1, 1, 1], reason: 'expired');
+
+    environment.cookies.remove('SESSDATA');
+    await check();
+    expect(environment.account, isA<LoggedOut>());
+    expect(http.asked, [1, 1, 1], reason: 'expired to logged out is no flip');
+  });
+
+  for (final (state, cookies) in [('logged out', _loggedOutCookies), ('expired', Canned.cookies)]) {
+    testWidgets('$state, ⋮ 稍后再看 opens the login page and sends nothing', (tester) async {
+      http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+      http.canned.routes[_watchLaterPath] = (200, '{"code":0,"message":"0","ttl":1}');
+      await show(tester, cookies: cookies);
+      await settle(tester);
+      expect(environment.account, anyOf(isA<LoggedOut>(), isA<LoginExpired>()));
+      await tester.tap(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more'))));
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('card-watch-later')));
+      await settle(tester);
+      expect(gate.requests, 1);
+      expect(http.canned.to(_watchLaterPath), isEmpty);
+      expect(find.text('已添加至稍后再看'), findsNothing);
+    });
+  }
+
+  testWidgets('logged in, a needs-login answer to 稍后再看 opens the login page instead of a toast', (tester) async {
+    http.canned.routes[_watchLaterPath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
+    await show(tester);
+    await settle(tester);
+    expect(environment.account, isA<LoggedIn>());
+    await tester.tap(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more'))));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('card-watch-later')));
+    await settle(tester);
+    expect(http.canned.to(_watchLaterPath), hasLength(1));
+    expect(gate.requests, 1);
+    expect(find.text('需要登录'), findsNothing);
+  });
+
   testWidgets('cards are buttons named by their title, with 稍后再看 as their action', (tester) async {
     final semantics = tester.ensureSemantics();
     await show(tester);
@@ -426,7 +582,7 @@ void main() {
     );
     expect(
       tester.getSemantics(find.text('历史记录')),
-      isSemantics(isButton: true, hasEnabledState: true, isEnabled: false),
+      isSemantics(isButton: true, hasEnabledState: true, isEnabled: true, hasTapAction: true),
     );
     expect(
       tester.getSemantics(find.text('最近打开')),

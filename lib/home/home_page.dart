@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
+import '../history/watch_history_page.dart';
 import '../playback/playback_controller.dart';
 import '../settings/settings_page.dart';
 import '../shared/paste_button.dart';
@@ -24,7 +25,7 @@ import 'recent_store.dart';
 import 'recents_page.dart';
 
 /// 首页 (01, port of HomeView.swift): the avatar and the link field, the 推荐 tab and its feed. A pasted link opens
-/// its video page; the avatar drops down the account, 最近打开 and, in dev builds, 开发者.
+/// its video page; the avatar drops down the account, 历史记录, 最近打开, 设置 and, in dev builds, 开发者.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.developerPage, this.initialLink});
 
@@ -115,6 +116,12 @@ class _HomePageState extends State<HomePage> {
   void _menuSelected(AvatarMenuItem item) {
     _closeMenu();
     switch (item) {
+      case AvatarMenuItem.login:
+        unawaited(_services.loginGate.request(context));
+      case AvatarMenuItem.history:
+        unawaited(
+          _visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const WatchHistoryPage()))),
+        );
       case AvatarMenuItem.recents:
         unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const RecentsPage()))));
       case AvatarMenuItem.settings:
@@ -122,8 +129,6 @@ class _HomePageState extends State<HomePage> {
       case AvatarMenuItem.developer:
         final page = widget.developerPage;
         if (page != null) unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: page))));
-      case AvatarMenuItem.history:
-        break;
     }
   }
 
@@ -220,11 +225,21 @@ class _HomePageState extends State<HomePage> {
   void _openCard(FeedCard card) =>
       unawaited(_visit(openVideoPage(context, VideoRoute(bvid: card.bvid, title: card.title, cover: card.cover))));
 
+  /// Logged out it goes to the login page and sends nothing; an account still being checked tries, and goes there
+  /// only if Bilibili answers that it needs a login.
   Future<void> _watchLater(FeedCard card) async {
+    if (_environment.account case LoggedOut() || LoginExpired()) {
+      await _services.loginGate.request(context);
+      return;
+    }
     try {
       await _environment.client.addToWatchLater(aid: card.aid);
       if (mounted) showToast(context, '已添加至稍后再看');
     } catch (error) {
+      if (error is BiliError && error.needsLogin) {
+        if (mounted) await _services.loginGate.request(context);
+        return;
+      }
       Logger.shared.warn(LogCategory.ui, 'watch later failed', {'error': '$error'});
       if (mounted) showToast(context, requestFailureMessage(error));
     }
