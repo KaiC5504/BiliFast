@@ -11,25 +11,23 @@ import 'package:flutter/services.dart';
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
-import '../history/watch_history_page.dart';
 import '../playback/playback_controller.dart';
-import '../settings/settings_page.dart';
 import '../shared/paste_button.dart';
+import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/video_route.dart';
-import 'avatar_menu.dart';
+import 'avatar_page.dart';
 import 'feed_card.dart';
 import 'feed_model.dart';
 import 'recent_store.dart';
-import 'recents_page.dart';
 
 /// 首页 (01, port of HomeView.swift): the avatar and the link field, the 推荐 tab and its feed. A pasted link opens
-/// its video page; the avatar drops down the account, 历史记录, 最近打开, 设置 and, in dev builds, 开发者.
+/// its video page; the avatar opens its page (49), with 设置, the shortcuts and the last of 最近打开.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.developerPage, this.initialLink});
 
-  /// Builds the developer page (dev builds); null leaves 开发者 out of the menu.
+  /// Builds the developer page (dev builds), passed on to 设置 through the avatar's page; null leaves 开发者 out.
   final WidgetBuilder? developerPage;
 
   /// Opened as if pasted once home is up (`--play=<BV or link>` on the PC).
@@ -46,7 +44,6 @@ class _HomePageState extends State<HomePage> {
   final _focus = FocusNode();
   String _lastText = '';
   bool _opening = false;
-  bool _menuOpen = false;
 
   /// Whether the feed on screen was fetched logged in; null until the first account check has answered.
   bool? _feedSignedIn;
@@ -107,29 +104,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _toggleMenu() => setState(() => _menuOpen = !_menuOpen);
-
-  void _closeMenu() {
-    if (_menuOpen) setState(() => _menuOpen = false);
-  }
-
-  void _menuSelected(AvatarMenuItem item) {
-    _closeMenu();
-    switch (item) {
-      case AvatarMenuItem.login:
-        unawaited(_services.loginGate.request(context));
-      case AvatarMenuItem.history:
-        unawaited(
-          _visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const WatchHistoryPage()))),
-        );
-      case AvatarMenuItem.recents:
-        unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const RecentsPage()))));
-      case AvatarMenuItem.settings:
-        unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const SettingsPage()))));
-      case AvatarMenuItem.developer:
-        final page = widget.developerPage;
-        if (page != null) unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: page))));
-    }
+  void _openAvatarPage() {
+    final page = SwipeBackPageRoute<void>(builder: (_) => AvatarPage(developerPage: widget.developerPage));
+    unawaited(_visit(Navigator.of(context).push(page)));
   }
 
   void _textChanged(String text) {
@@ -216,6 +193,8 @@ class _HomePageState extends State<HomePage> {
         part: page.part,
         page: page.page,
         pageCount: view.pages.length,
+        cover: detail?.cover,
+        duration: page.duration,
       ),
     );
     final route = VideoRoute(bvid: view.bvid, cid: page.cid, title: view.title, view: view, detail: detail);
@@ -247,7 +226,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final top = MediaQuery.paddingOf(context).top;
     final still = MediaQuery.disableAnimationsOf(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
@@ -271,7 +249,7 @@ class _HomePageState extends State<HomePage> {
                             focus: _focus,
                             face: _environment.face,
                             opening: _opening,
-                            onAvatar: _toggleMenu,
+                            onAvatar: _openAvatarPage,
                             onChanged: _textChanged,
                             onSubmit: _open,
                             onPaste: _pasted,
@@ -287,57 +265,6 @@ class _HomePageState extends State<HomePage> {
                   child: _FeedGrid(feed: _feed!, onOpen: _openCard, onWatchLater: _watchLater, onRefresh: _refreshFeed),
                 ),
               ],
-            ),
-            _Presence(
-              visible: _menuOpen,
-              duration: still ? Duration.zero : const Duration(milliseconds: 200),
-              builder: (context, animation) => FadeTransition(
-                opacity: animation,
-                // While the menu is open VoiceOver reaches only the menu and this way out, not the cards behind.
-                child: BlockSemantics(
-                  child: Semantics(
-                    label: '关闭菜单',
-                    button: true,
-                    onTap: _closeMenu,
-                    onDismiss: _closeMenu,
-                    child: GestureDetector(
-                      key: const ValueKey('menu-scrim'),
-                      behavior: HitTestBehavior.opaque,
-                      excludeFromSemantics: true,
-                      onTap: _closeMenu,
-                      child: const ColoredBox(color: BiliColors.scrim, child: SizedBox.expand()),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: BiliMetrics.topRowMargin,
-              top: top + BiliMetrics.topRowHeight + 2,
-              child: _Presence(
-                visible: _menuOpen,
-                duration: still ? Duration.zero : const Duration(milliseconds: 240),
-                reverseDuration: still ? Duration.zero : const Duration(milliseconds: 180),
-                curve: Curves.easeOutBack,
-                builder: (context, animation) => IgnorePointer(
-                  ignoring: !_menuOpen,
-                  child: ScaleTransition(
-                    scale: Tween(begin: 0.6, end: 1.0).animate(animation),
-                    alignment: Alignment.topLeft,
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: ListenableBuilder(
-                        listenable: _environment,
-                        builder: (context, _) => AvatarMenu(
-                          environment: _environment,
-                          developer: widget.developerPage != null,
-                          onSelect: _menuSelected,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ),
             IgnorePointer(
               child: Center(
@@ -380,14 +307,12 @@ class _Presence extends StatefulWidget {
     required this.visible,
     required this.duration,
     this.reverseDuration,
-    this.curve = Curves.easeOut,
     required this.builder,
   });
 
   final bool visible;
   final Duration duration;
   final Duration? reverseDuration;
-  final Curve curve;
   final Widget Function(BuildContext context, Animation<double> animation) builder;
 
   @override
@@ -403,7 +328,7 @@ class _PresenceState extends State<_Presence> with SingleTickerProviderStateMixi
   )..addStatusListener(_statusChanged);
   late final CurvedAnimation _curved = CurvedAnimation(
     parent: _controller,
-    curve: widget.curve,
+    curve: Curves.easeOut,
     reverseCurve: Curves.easeIn,
   );
 
@@ -436,6 +361,30 @@ class _PresenceState extends State<_Presence> with SingleTickerProviderStateMixi
   @override
   Widget build(BuildContext context) =>
       _controller.isDismissed ? const SizedBox.shrink() : widget.builder(context, _curved);
+}
+
+/// The account's avatar; a grey head until the account has a face.
+class _AccountAvatar extends StatelessWidget {
+  const _AccountAvatar({required this.face, required this.size});
+
+  final String? face;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = face;
+    return ClipOval(
+      child: SizedBox.square(
+        dimension: size,
+        child: url != null && url.isNotEmpty
+            ? RemoteImage.avatar(url)
+            : ColoredBox(
+                color: BiliColors.pageGrey,
+                child: Icon(Icons.person, size: size * 0.55, color: BiliColors.divider),
+              ),
+      ),
+    );
+  }
 }
 
 /// The avatar and the rounded link field (01's search field).
@@ -479,7 +428,7 @@ class _TopRow extends StatelessWidget {
             child: GestureDetector(
               key: const ValueKey('home-avatar'),
               onTap: onAvatar,
-              child: AccountAvatar(face: face, size: BiliMetrics.homeAvatar),
+              child: _AccountAvatar(face: face, size: BiliMetrics.homeAvatar),
             ),
           ),
           const SizedBox(width: 12),

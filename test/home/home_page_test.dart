@@ -7,6 +7,7 @@ import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/history/watch_history_page.dart';
+import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -325,158 +326,86 @@ void main() {
     expect(http.canned.to(_watchLaterPath), hasLength(1));
   });
 
-  testWidgets('the avatar opens the account menu: 最近打开, and 开发者 in dev builds', (tester) async {
+  testWidgets('the avatar opens its page, whose 全部 lists 最近打开 and back returns home', (tester) async {
     await show(tester, developer: true);
     await settle(tester);
     recents.add(const RecentVideo(bvid: 'BV1x', cid: 3, title: '最近的视频', part: '', page: 1, pageCount: 1));
     await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    expect(find.byKey(const ValueKey('menu-account-name')), findsOneWidget);
-    expect(find.text('测试用户'), findsOneWidget);
-    expect(find.text('大会员'), findsOneWidget);
-    expect(find.text('开发者'), findsOneWidget);
-    expect(find.text('设置'), findsOneWidget);
-    expect(find.descendant(of: find.byType(GlassPanel), matching: find.byType(BackdropFilter)), findsOneWidget);
-    await tester.tap(find.text('最近打开'));
     await settle(tester, 20);
-    expect(find.text('最近的视频'), findsOneWidget);
+    expect(find.byType(AvatarPage), findsOneWidget);
+    expect(find.text('最近的视频'), findsOneWidget, reason: 'in the card on the page');
+    expect(find.text('开发者'), findsNothing, reason: '开发者 is in 设置');
+    await tester.tap(find.byKey(const ValueKey('avatar-all')));
+    await settle(tester, 20);
+    expect(find.text('最近打开'), findsOneWidget);
     expect(
       find.descendant(of: find.byType(ListView), matching: find.byType(InkWell)),
       findsNothing,
       reason: 'recents rows highlight instead of rippling',
     );
-
     await tester.tap(find.byKey(const ValueKey('recents-clear')));
     await settle(tester, 20);
     await tester.tap(find.byKey(const ValueKey('recents-clear-confirm')));
     await settle(tester, 20);
-    expect(find.text('还没有打开过视频'), findsOneWidget);
     expect(recents.items, isEmpty);
+
+    await tester.pageBack();
+    await settle(tester, 20);
+    expect(find.text('还没有打开过视频'), findsOneWidget, reason: 'the avatar page follows the store');
+    await tester.tap(find.byKey(const ValueKey('avatar-back')));
+    await settle(tester, 20);
+    expect(find.byType(AvatarPage), findsNothing);
+    expect(find.text('推荐'), findsOneWidget);
   });
 
-  testWidgets('设置 in the avatar menu opens 设置 with the font in use', (tester) async {
+  testWidgets('⚙ on the avatar page opens 设置 with the font in use', (tester) async {
     await show(tester);
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    await tester.tap(find.text('设置'));
+    await settle(tester, 20);
+    await tester.tap(find.byKey(const ValueKey('avatar-settings')));
     await settle(tester, 20);
     expect(find.byKey(const ValueKey('settings-font')), findsOneWidget);
     expect(find.text('MiSans'), findsOneWidget);
   });
 
-  testWidgets('a tap outside closes the menu, which then leaves the tree; release builds have no 开发者', (tester) async {
-    await show(tester);
-    await settle(tester);
-    await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    expect(find.byKey(const ValueKey('avatar-menu')), findsOneWidget);
-    expect(find.text('开发者'), findsNothing);
-    await tester.tapAt(const Offset(400, 800));
-    await settle(tester);
-    expect(find.byKey(const ValueKey('avatar-menu')), findsNothing);
-    expect(find.byKey(const ValueKey('menu-scrim')), findsNothing);
-  });
-
-  testWidgets('back on home from 最近打开, an account check that failed is tried again', (tester) async {
+  testWidgets('back on home from the avatar page, an account check that failed is tried again', (tester) async {
     http.canned.routes[Canned.navPath] = (500, '');
     await show(tester);
     await settle(tester);
     expect(environment.account, isA<AccountUnknown>());
     expect(environment.accountCheckFailed, isTrue);
 
-    Future<void> visitRecents() async {
+    Future<void> visit() async {
       await tester.tap(find.byKey(const ValueKey('home-avatar')));
-      await settle(tester);
-      await tester.tap(find.text('最近打开'));
       await settle(tester, 20);
-      expect(find.text('还没有打开过视频'), findsOneWidget);
-      await tester.pageBack();
+      expect(find.byType(AvatarPage), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('avatar-back')));
       await settle(tester, 20);
     }
 
     http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn);
     final asked = http.canned.to(Canned.navPath).length;
-    await visitRecents();
+    await visit();
     expect(environment.account, isA<LoggedIn>());
     expect(http.canned.to(Canned.navPath), hasLength(asked + 1));
 
-    await visitRecents();
+    await visit();
     expect(http.canned.to(Canned.navPath), hasLength(asked + 1), reason: 'a known account is not asked again');
   });
 
-  Future<void> openMenu(WidgetTester tester) async {
+  testWidgets('历史记录 on the avatar page opens 历史记录, and back returns to the page', (tester) async {
+    await show(tester);
+    await settle(tester);
     await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    expect(find.byKey(const ValueKey('avatar-menu')), findsOneWidget);
-  }
-
-  testWidgets('logged out, the account row says 未登录 and its 登录 pill opens the login page', (tester) async {
-    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
-    await show(tester, cookies: _loggedOutCookies);
-    await settle(tester);
-    expect(environment.account, isA<LoggedOut>());
-    await openMenu(tester);
-    expect(find.text('未登录'), findsOneWidget);
-    expect(find.descendant(of: find.byKey(const ValueKey('menu-login')), matching: find.text('登录')), findsOneWidget);
-    expect(find.text('退出'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('menu-login')));
-    await settle(tester);
-    expect(gate.requests, 1);
-    expect(find.byKey(const ValueKey('avatar-menu')), findsNothing, reason: 'the menu closes on the way');
-  });
-
-  testWidgets('expired, the account row says 登录已过期 and its 重新登录 pill opens the login page', (tester) async {
-    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
-    await show(tester);
-    await settle(tester);
-    expect(environment.account, isA<LoginExpired>());
-    await openMenu(tester);
-    expect(find.text('登录已过期'), findsOneWidget);
-    expect(find.descendant(of: find.byKey(const ValueKey('menu-login')), matching: find.text('重新登录')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('menu-login')));
-    await settle(tester);
-    expect(gate.requests, 1);
-    expect(find.byKey(const ValueKey('avatar-menu')), findsNothing);
-  });
-
-  testWidgets('logged in, the account row has the name and no pill or 退出', (tester) async {
-    await show(tester);
-    await settle(tester);
-    await openMenu(tester);
-    expect(find.byKey(const ValueKey('menu-account-name')), findsOneWidget);
-    expect(find.byKey(const ValueKey('menu-login')), findsNothing);
-    expect(find.text('退出'), findsNothing);
-    expect(find.text('未登录'), findsNothing);
-  });
-
-  testWidgets('a failed account check says so in the row, and a tap asks again', (tester) async {
-    http.canned.routes[Canned.navPath] = (500, '');
-    await show(tester);
-    await settle(tester);
-    await openMenu(tester);
-    expect(find.byKey(const ValueKey('menu-login')), findsNothing);
-    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn);
-    await tester.tap(find.text('无法获取账号信息，点按重试'));
-    await settle(tester);
-    expect(environment.account, isA<LoggedIn>());
-    expect(find.text('测试用户'), findsOneWidget);
-    expect(gate.requests, 0);
-  });
-
-  testWidgets('历史记录 in the avatar menu opens 历史记录, and back returns home', (tester) async {
-    await show(tester);
-    await settle(tester);
-    await openMenu(tester);
-    expect(find.text('即将推出'), findsNothing);
-    await tester.tap(find.text('历史记录'));
+    await settle(tester, 20);
+    await tester.tap(find.byKey(const ValueKey('avatar-history')));
     await settle(tester, 20);
     expect(find.byType(WatchHistoryPage), findsOneWidget);
-    expect(find.byKey(const ValueKey('avatar-menu')), findsNothing);
     await tester.binding.handlePopRoute();
     await settle(tester, 20);
     expect(find.byType(WatchHistoryPage), findsNothing);
-    expect(find.text('推荐'), findsOneWidget);
+    expect(find.byType(AvatarPage), findsOneWidget);
   });
 
   testWidgets('推荐 refreshes once when the account logs in or out, and not on other account news', (tester) async {
@@ -568,37 +497,14 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('with the menu open VoiceOver reaches the menu and a way out, not the cards behind', (tester) async {
-    final semantics = tester.ensureSemantics();
-    await show(tester);
-    await settle(tester);
-    expect(find.semantics.byLabel('视频 BV1aaa'), findsOne);
-    await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    expect(find.semantics.byLabel('视频 BV1aaa'), findsNothing);
-    expect(
-      tester.getSemantics(find.byKey(const ValueKey('menu-scrim'))),
-      isSemantics(label: '关闭菜单', isButton: true, hasTapAction: true, hasDismissAction: true),
-    );
-    expect(
-      tester.getSemantics(find.text('历史记录')),
-      isSemantics(isButton: true, hasEnabledState: true, isEnabled: true, hasTapAction: true),
-    );
-    expect(
-      tester.getSemantics(find.text('最近打开')),
-      isSemantics(isButton: true, hasEnabledState: true, isEnabled: true, hasTapAction: true),
-    );
-    semantics.dispose();
-  });
-
   for (final scale in [2.0, 3.0]) {
-    testWidgets('nothing overflows at text scale $scale, with the account menu open', (tester) async {
+    testWidgets('nothing overflows at text scale $scale, on home or the avatar page', (tester) async {
       await show(tester, scale: scale);
       await settle(tester);
       expect(card('BV1aaa'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('home-avatar')));
-      await settle(tester);
-      expect(find.byKey(const ValueKey('avatar-menu')), findsOneWidget);
+      await settle(tester, 20);
+      expect(find.byType(AvatarPage), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

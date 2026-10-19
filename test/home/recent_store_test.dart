@@ -229,4 +229,66 @@ void main() {
       expect(reads, 0);
     });
   });
+
+  test('an opened part is stamped with the time and keeps the progress it had', () async {
+    var clock = DateTime.utc(2026, 10, 19, 10);
+    final store = await RecentStore.load(null, logger: Logger(session: 'test'), now: () => clock);
+    store.add(video('BV1'));
+    expect(store.items.single.openedAt, clock.millisecondsSinceEpoch ~/ 1000);
+    store.recordProgress(bvid: 'BV1', cid: 1, seconds: 42);
+    store.recordProgress(bvid: 'BV9', cid: 1, seconds: 7);
+    expect(store.items.single.progress, 42);
+    clock = clock.add(const Duration(hours: 3));
+    store.add(video('BV1'));
+    expect(store.items.single.openedAt, clock.millisecondsSinceEpoch ~/ 1000);
+    expect(store.items.single.progress, 42);
+  });
+
+  test('✕ removes just that part, and the file follows', () async {
+    final store = await RecentStore.load(path, logger: Logger(session: 'test'));
+    store
+      ..add(video('BV1'))
+      ..add(video('BV2'))
+      ..add(video('BV1', cid: 2));
+    var changes = 0;
+    store.addListener(() => changes++);
+    store.remove(video('BV1'));
+    store.remove(video('BV3'));
+    expect([for (final item in store.items) item.id], ['BV1#2', 'BV2#1']);
+    expect(changes, 1, reason: 'removing what is not there changes nothing');
+    await store.settle();
+    final again = await RecentStore.load(path, logger: Logger(session: 'test'));
+    expect([for (final item in again.items) item.id], ['BV1#2', 'BV2#1']);
+  });
+
+  test('cover, duration, time and progress survive a launch; older entries load without them', () async {
+    final store = await RecentStore.load(path, logger: Logger(session: 'test'));
+    store.add(
+      const RecentVideo(
+        bvid: 'BV1',
+        cid: 1,
+        title: '标题',
+        part: '',
+        page: 1,
+        pageCount: 1,
+        cover: 'https://i0.hdslb.com/bfs/archive/a.jpg',
+        duration: 133,
+      ),
+    );
+    store.recordProgress(bvid: 'BV1', cid: 1, seconds: 60);
+    await store.settle();
+    final item = (await RecentStore.load(path, logger: Logger(session: 'test'))).items.single;
+    expect(item.cover, 'https://i0.hdslb.com/bfs/archive/a.jpg');
+    expect(item.duration, 133);
+    expect(item.openedAt, isNotNull);
+    expect(item.progress, 60);
+
+    final fresh = '${folder.path}${Platform.pathSeparator}fresh.json';
+    final loaded = await RecentStore.load(fresh, logger: Logger(session: 'test'), readSwift: () async => swiftRecents);
+    await loaded.settle();
+    final old = loaded.items;
+    expect(old.first.cover, isNull);
+    expect(old.first.duration, 0);
+    expect(old.first.openedAt, isNull);
+  });
 }
