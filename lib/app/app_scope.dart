@@ -84,6 +84,24 @@ class AppServices {
        danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
     this.blockRules =
         blockRules ?? BlockRuleStore(api: this.pageApi, isLoggedIn: () => environment.account is LoggedIn);
+    environment.addListener(_accountChanged);
+  }
+
+  Account _account = const AccountUnknown();
+
+  /// A login fetches the new account's 屏蔽词 at once (Swift's didLogin) and a logout drops the old ones; the launch's
+  /// check is left to the first page, which refreshes them itself.
+  void _accountChanged() {
+    final now = environment.account;
+    // didLogin passes through unknown on its way to logged in.
+    if (now is AccountUnknown) return;
+    final was = _account;
+    _account = now;
+    if (now is LoggedIn && (was is LoggedOut || was is LoginExpired)) {
+      unawaited(blockRules.refresh(force: true));
+    } else if (was is LoggedIn && (now is LoggedOut || now is LoginExpired)) {
+      unawaited(blockRules.refresh());
+    }
   }
 
   final AppEnvironment environment;
