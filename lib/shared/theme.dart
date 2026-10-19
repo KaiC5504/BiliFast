@@ -1569,6 +1569,10 @@ abstract final class CommentTextTheme {
   /// glyphs beside it, as on 12.
   static const emoteRise = 0.35;
 
+  /// A line holding an emote reaches this much further below its text than a plain line: on 12 the meta under a line
+  /// ending in 😑 sits 2 pt lower than under plain text.
+  static const emoteLineGrowth = 2.0;
+
   static const viewerBackground = Color(0xFF000000);
   static const viewerText = Color(0xFFFFFFFF);
   static const viewerCountText = 15.0;
@@ -1582,6 +1586,13 @@ abstract final class CommentTextTheme {
   static const viewerZoomDuration = Duration(milliseconds: 250);
   static const viewerDoubleTapScale = 2.5;
   static const viewerMaxScale = 4.0;
+
+  /// While a picture loads, the list's thumbnail under a spinner; a failed one shows a picture glyph at half white.
+  static const viewerSpinnerRadius = 14.0;
+  static const viewerFailedGlyph = 48.0;
+  static const viewerFailedGlyphStroke = 2.0;
+  static const viewerFailedGlyphColor = Color(0x80FFFFFF);
+  static const viewerCrossFade = Duration(milliseconds: 200);
 }
 
 /// The composer and its emote panel (14), measured at 3 px per pt.
