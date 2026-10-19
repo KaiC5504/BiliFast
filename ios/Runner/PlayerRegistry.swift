@@ -502,11 +502,14 @@ final class NativePlayer {
     events.onPictureInPicture(playerId: id, active: active, completion: ignoreReply)
   }
 
-  /// No page can come back for a player yet, so an off-screen restore ends at once instead of AVKit waiting 3 s;
-  /// a view still on screen completes the restore by itself (PlayerHostView).
+  /// Set while Dart keeps this player's closed page for the small window (PipKeeper).
+  var restorable = false
+
+  /// Without a kept page an off-screen restore ends at once instead of AVKit waiting 3 s; with one, the restore waits
+  /// for the page Dart pushes back. A view still on screen completes the restore by itself (PlayerHostView).
   private func restoreRequested() -> Bool {
     events.onPictureInPictureRestore(playerId: id, completion: ignoreReply)
-    return false
+    return restorable
   }
 
   enum FailureKind: String {

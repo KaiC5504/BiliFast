@@ -75,6 +75,9 @@ final class FakePlayer implements BiliPlayer {
   Future<void> setAutoPictureInPicture(bool enabled) async => _record('pip auto $enabled');
 
   @override
+  Future<void> setRestorable(bool restorable) async => _record('restorable $restorable');
+
+  @override
   Future<bool> captureFrame() async {
     _record('capture');
     return capabilities.frameCapture;

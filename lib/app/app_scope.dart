@@ -13,6 +13,7 @@ import '../home/recent_store.dart';
 import '../playback/playback_controller.dart';
 import '../settings/font_store.dart';
 import '../video/page_api.dart';
+import '../video/pip_keeper.dart';
 import 'app_environment.dart';
 
 /// The one player and engine, started at launch and shared by the video page and the developer page. It hears the
@@ -32,6 +33,24 @@ class AppPlayback with WidgetsBindingObserver {
 
   /// The controller once it has started.
   PlaybackController? get ready => _ready;
+
+  final Set<PlaybackController> _pages = {};
+
+  /// A controller of its own for one video page (BiliNative's one AVPlayer per page), on the shared engine.
+  Future<PlaybackController> create() async {
+    final controller = await _start();
+    _pages.add(controller);
+    return controller;
+  }
+
+  /// The page is done with [controller]: it stops and everything it holds is freed.
+  void release(PlaybackController controller) {
+    if (!_pages.remove(controller)) return;
+    controller.dispose();
+  }
+
+  /// Page controllers made and not yet released, for the leak checks.
+  int get live => _pages.length;
 
   /// Runs [action] on the started controller, or once a start succeeds, without starting one. A failed [action] is
   /// reported with [what] as its source.
@@ -83,10 +102,18 @@ class AppPlayback with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) return;
     onResumed?.call();
     unawaited(_ready?.appResumed());
+    for (final controller in List.of(_pages)) {
+      unawaited(controller.appResumed());
+    }
   }
 
   @override
-  void didHaveMemoryPressure() => _ready?.memoryPressure();
+  void didHaveMemoryPressure() {
+    _ready?.memoryPressure();
+    for (final controller in _pages) {
+      controller.memoryPressure();
+    }
+  }
 }
 
 /// What every page reaches: the account and API client, the shared player, 最近打开, the phone's rotation and levels,
@@ -103,9 +130,11 @@ class AppServices {
     DanmakuSettingsStore? danmakuSettings,
     BlockRuleStore? blockRules,
     LoginGate? loginGate,
+    PipKeeper? pipKeeper,
     this.logFiles = const NoLogFiles(),
     this.logs,
   }) : device = device ?? PlayerDevice.inWindow(),
+       pipKeeper = pipKeeper ?? PipKeeper(),
        loginGate = loginGate ?? LoginPageGate(environment),
        fonts = fonts ?? FontStore.memory(),
        pageApi = pageApi ?? ClientPageApi(environment.client),
@@ -151,6 +180,12 @@ class AppServices {
 
   /// Where every logged-out action goes.
   final LoginGate loginGate;
+
+  /// The app's navigator, for pages pushed from outside a page's context (the small window's restore).
+  final navigator = GlobalKey<NavigatorState>();
+
+  /// The closed page the small window is playing, if any.
+  final PipKeeper pipKeeper;
   final LogFiles logFiles;
   final LogForwarder? logs;
 }

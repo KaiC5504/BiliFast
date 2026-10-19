@@ -18,6 +18,7 @@ final class IosDeviceEvents implements DeviceEventApi {
   final _refusals = StreamController<OrientationRefusal>.broadcast();
   final _volumes = StreamController<double>.broadcast();
   final _turns = StreamController<TurnStart>.broadcast();
+  final _network = StreamController<bool>.broadcast();
 
   void connect({BinaryMessenger? binaryMessenger}) => DeviceEventApi.setUp(this, binaryMessenger: binaryMessenger);
 
@@ -29,6 +30,9 @@ final class IosDeviceEvents implements DeviceEventApi {
 
   Stream<TurnStart> get turns => _turns.stream;
 
+  /// Each change of the phone's network path, true when its interfaces changed.
+  Stream<bool> get networkChanges => _network.stream;
+
   @override
   void onDeviceOrientation(NativeDeviceOrientation orientation) => _orientations.add(orientation);
 
@@ -37,6 +41,9 @@ final class IosDeviceEvents implements DeviceEventApi {
 
   @override
   void onHardwareVolume(double volume) => _volumes.add(volume);
+
+  @override
+  void onNetworkChanged(bool interfaceChanged) => _network.add(interfaceChanged);
 
   @override
   void onTurn(double angle, double seconds) =>

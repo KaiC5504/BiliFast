@@ -505,6 +505,26 @@ class PlayerHostApi {
     ;
   }
 
+  /// A page kept for the small window can come back for this player: the restore button then waits for its view to be
+  /// back in a window (up to 3 s) rather than ending at once.
+  Future<void> setRestorable(int playerId, bool restorable) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.setRestorable$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[playerId, restorable]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   /// Saves the current frame to the photo library; false without a frame or without access.
   Future<bool> captureFrame(int playerId) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.captureFrame$pigeonVar_messageChannelSuffix';

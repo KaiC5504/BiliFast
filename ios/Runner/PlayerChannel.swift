@@ -104,6 +104,11 @@ final class PlayerHostApiImpl: PlayerHostApi {
     try MainActor.assumeIsolated { try registry.player(playerId).setAutoPiP(enabled) }
   }
 
+  func setRestorable(playerId: Int64, restorable: Bool) throws {
+    let registry = self.registry
+    try MainActor.assumeIsolated { try registry.player(playerId).restorable = restorable }
+  }
+
   func captureFrame(playerId: Int64, completion: @escaping (Result<Bool, Error>) -> Void) {
     let registry = self.registry
     let reply = CaptureReply(call: completion)

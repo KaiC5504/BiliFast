@@ -57,6 +57,10 @@ abstract class PlayerHostApi {
 
   void setAutoPiP(int playerId, bool enabled);
 
+  /// A page kept for the small window can come back for this player: the restore button then waits for its view to be
+  /// back in a window (up to 3 s) rather than ending at once.
+  void setRestorable(int playerId, bool restorable);
+
   /// Saves the current frame to the photo library; false without a frame or without access.
   @asyncCallback
   bool captureFrame(int playerId);

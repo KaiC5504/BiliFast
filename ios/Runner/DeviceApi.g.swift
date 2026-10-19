@@ -413,6 +413,9 @@ protocol DeviceEventApiProtocol {
   /// A taken-over turn began: [angle] is the rotation in radians the scene would have animated (its coordinator's
   /// target transform), [seconds] how long it would have taken.
   @MainActor func onTurn(angle angleArg: Double, seconds secondsArg: Double) async throws
+  /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
+  /// differ from the last path that was up, so the engine's speed measurements no longer hold.
+  @MainActor func onNetworkChanged(interfaceChanged interfaceChangedArg: Bool) async throws
 }
 class DeviceEventApi: DeviceEventApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -492,6 +495,28 @@ class DeviceEventApi: DeviceEventApiProtocol {
       let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onTurn\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([angleArg, secondsArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: DeviceApiError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
+  /// differ from the last path that was up, so the engine's speed measurements no longer hold.
+  @MainActor func onNetworkChanged(interfaceChanged interfaceChangedArg: Bool) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onNetworkChanged\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([interfaceChangedArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

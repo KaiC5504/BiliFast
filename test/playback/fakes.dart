@@ -227,6 +227,9 @@ final class RefusingPlayer implements BiliPlayer {
   Future<void> setAutoPictureInPicture(bool enabled) => inner.setAutoPictureInPicture(enabled);
 
   @override
+  Future<void> setRestorable(bool restorable) => inner.setRestorable(restorable);
+
+  @override
   Future<bool> captureFrame() => inner.captureFrame();
 
   @override

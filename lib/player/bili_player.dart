@@ -173,6 +173,9 @@ abstract interface class BiliPlayer {
   /// Start picture in picture by itself when the app goes to the background while playing.
   Future<void> setAutoPictureInPicture(bool enabled);
 
+  /// A page kept for the small window can come back for this player, so its restore button waits for the page.
+  Future<void> setRestorable(bool restorable);
+
   /// Saves the current frame to the photo library.
   Future<bool> captureFrame();
 

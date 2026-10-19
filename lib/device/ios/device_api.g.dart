@@ -409,6 +409,10 @@ abstract class DeviceEventApi {
   /// target transform), [seconds] how long it would have taken.
   void onTurn(double angle, double seconds);
 
+  /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
+  /// differ from the last path that was up, so the engine's speed measurements no longer hold.
+  void onNetworkChanged(bool interfaceChanged);
+
   static void setUp(DeviceEventApi? api, {
     BinaryMessenger? binaryMessenger, 
     String messageChannelSuffix = '',
@@ -492,6 +496,27 @@ abstract class DeviceEventApi {
           final double arg_seconds = args[1]! as double;
           try {
             api.onTurn(arg_angle, arg_seconds);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.DeviceEventApi.onNetworkChanged$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final bool arg_interfaceChanged = args[0]! as bool;
+          try {
+            api.onNetworkChanged(arg_interfaceChanged);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

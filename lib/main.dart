@@ -163,6 +163,7 @@ class BiliFastApp extends StatelessWidget {
           // iOS has no ripples; rows show their own press highlight.
           splashFactory: NoSplash.splashFactory,
         ),
+        navigatorKey: services.navigator,
         navigatorObservers: [pageRoutes],
         // The official app keeps its sizes whatever iOS Text Size says, and every size here is measured off it.
         builder: (context, child) => AppScope(

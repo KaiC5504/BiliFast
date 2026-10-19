@@ -648,6 +648,26 @@ class PlaybackController extends ChangeNotifier {
     await player.startPictureInPicture();
   }
 
+  Future<void> stopPictureInPicture() async {
+    if (!player.capabilities.pictureInPicture || !_pictureInPicture) return;
+    _logger.info(LogCategory.ui, 'pip stop');
+    await player.stopPictureInPicture();
+  }
+
+  /// Whether the small window's restore button waits for a page to come back for this player (PipKeeper).
+  Future<void> setRestorable(bool restorable) async {
+    if (!player.capabilities.pictureInPicture) return;
+    await player.setRestorable(restorable);
+  }
+
+  /// The small window's restore button was tapped.
+  Stream<void> get restoreRequests => _restores.stream;
+  final _restores = StreamController<void>.broadcast(sync: true);
+
+  /// The page was covered: this playback's prefetched segments go, as Swift's cover() did, and the player keeps
+  /// what it has.
+  void dropPrefetch() {}
+
   /// iOS can take a suspended app's listening socket: once back in the foreground the local server is probed,
   /// and a playback prepared before a restart is prepared again where it was. A detail whose asks ran out (likely
   /// while the network was away) is asked for once more.
@@ -1352,7 +1372,7 @@ class PlaybackController extends ChangeNotifier {
         _logger.info(LogCategory.player, 'pip', {'active': active});
         _notify();
       case PictureInPictureRestore():
-        break;
+        _restores.add(null);
       case BufferedChanged(:final ranges):
         _buffered = ranges;
       case PlayerLog(:final kind, :final fields):
@@ -1608,6 +1628,7 @@ class PlaybackController extends ChangeNotifier {
     duration.dispose();
     unawaited(_marks.close());
     unawaited(_endings.close());
+    unawaited(_restores.close());
     super.dispose();
   }
 }

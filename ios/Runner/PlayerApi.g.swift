@@ -321,6 +321,9 @@ protocol PlayerHostApi {
   func startPiP(playerId: Int64) throws
   func stopPiP(playerId: Int64) throws
   func setAutoPiP(playerId: Int64, enabled: Bool) throws
+  /// A page kept for the small window can come back for this player: the restore button then waits for its view to be
+  /// back in a window (up to 3 s) rather than ending at once.
+  func setRestorable(playerId: Int64, restorable: Bool) throws
   /// Saves the current frame to the photo library; false without a frame or without access.
   func captureFrame(playerId: Int64, completion: @escaping (Result<Bool, Error>) -> Void)
   func dispose(playerId: Int64) throws
@@ -565,6 +568,24 @@ class PlayerHostApiSetup {
       }
     } else {
       setAutoPiPChannel.setMessageHandler(nil)
+    }
+    /// A page kept for the small window can come back for this player: the restore button then waits for its view to be
+    /// back in a window (up to 3 s) rather than ending at once.
+    let setRestorableChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.setRestorable\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setRestorableChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let playerIdArg = args[0] as! Int64
+        let restorableArg = args[1] as! Bool
+        do {
+          try api.setRestorable(playerId: playerIdArg, restorable: restorableArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setRestorableChannel.setMessageHandler(nil)
     }
     /// Saves the current frame to the photo library; false without a frame or without access.
     let captureFrameChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.captureFrame\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)

@@ -71,4 +71,8 @@ abstract class DeviceEventApi {
   /// A taken-over turn began: [angle] is the rotation in radians the scene would have animated (its coordinator's
   /// target transform), [seconds] how long it would have taken.
   void onTurn(double angle, double seconds);
+
+  /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
+  /// differ from the last path that was up, so the engine's speed measurements no longer hold.
+  void onNetworkChanged(bool interfaceChanged);
 }

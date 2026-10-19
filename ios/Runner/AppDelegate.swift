@@ -42,6 +42,7 @@ import UIKit
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "DeviceChannel") {
       DeviceChannel.register(with: registrar.messenger())
+      NetworkMonitor.start()
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "WebCookies") {
       WebCookies.register(with: registrar.messenger())

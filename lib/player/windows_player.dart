@@ -237,6 +237,9 @@ final class WindowsPlayer implements BiliPlayer {
   Future<void> setAutoPictureInPicture(bool enabled) async => _check();
 
   @override
+  Future<void> setRestorable(bool restorable) async => _check();
+
+  @override
   Future<bool> captureFrame() async {
     _check();
     return false;

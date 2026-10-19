@@ -152,6 +152,12 @@ final class IosPlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> setRestorable(bool restorable) async {
+    _check();
+    if (capabilities.pictureInPicture) await _host.setRestorable(nativeId, restorable);
+  }
+
+  @override
   Future<bool> captureFrame() async {
     _check();
     if (!capabilities.frameCapture) return false;
