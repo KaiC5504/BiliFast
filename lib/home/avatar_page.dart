@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:bili_core/logic.dart';
@@ -104,7 +105,7 @@ class _Bar extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: BiliFonts.family,
                     fontSize: AvatarPageTheme.tabText,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: AvatarPageTheme.tabWeight,
                     color: BiliColors.pink,
                   ),
                 ),
@@ -238,12 +239,16 @@ class _RecentCard extends StatelessWidget {
               children: [
                 _Header(onAll: onAll),
                 if (items.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: AvatarPageTheme.rowExtent / 2),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AvatarPageTheme.rowExtent / 2),
                     child: Center(
                       child: Text(
                         '还没有打开过视频',
-                        style: TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.secondaryText),
+                        style: TextStyle(
+                          fontFamily: BiliFonts.family,
+                          fontSize: BiliMetrics.bodyText,
+                          color: BiliColors.secondaryText,
+                        ),
                       ),
                     ),
                   ),
@@ -252,6 +257,7 @@ class _RecentCard extends StatelessWidget {
                     key: ValueKey('avatar-recent-${item.id}'),
                     item: item,
                     now: now,
+                    onOpen: () => recents.add(item),
                     onRemove: () => recents.remove(item),
                   ),
               ],
@@ -283,7 +289,7 @@ class _Header extends StatelessWidget {
               style: TextStyle(
                 fontFamily: BiliFonts.family,
                 fontSize: AvatarPageTheme.headerText,
-                fontWeight: FontWeight.w500,
+                fontWeight: AvatarPageTheme.headerWeight,
                 color: BiliColors.text,
               ),
             ),
@@ -332,14 +338,20 @@ class _Header extends StatelessWidget {
 
 /// One of 49's rows: the cover with its duration and progress, two lines of title, when it was opened, and ✕.
 class _RecentRow extends StatelessWidget {
-  const _RecentRow({super.key, required this.item, required this.now, required this.onRemove});
+  const _RecentRow({super.key, required this.item, required this.now, required this.onOpen, required this.onRemove});
 
   final RecentVideo item;
   final DateTime now;
+
+  /// Stamps the part as opened now and puts it first, as opening a link does.
+  final VoidCallback onOpen;
   final VoidCallback onRemove;
 
-  void _open(BuildContext context) =>
-      openVideoPage(context, VideoRoute(bvid: item.bvid, cid: item.cid, title: item.title, cover: item.cover));
+  void _open(BuildContext context) {
+    onOpen();
+    final route = VideoRoute(bvid: item.bvid, cid: item.cid, title: item.title, cover: item.cover);
+    unawaited(openVideoPage(context, route));
+  }
 
   @override
   Widget build(BuildContext context) {

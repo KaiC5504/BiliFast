@@ -1863,6 +1863,7 @@ abstract final class AvatarPageTheme {
   static const backLeft = 19.5;
   static const tabCentreX = 132.3;
   static const tabText = 16.0;
+  static const tabWeight = FontWeight.w600;
   static const tabUnderlineTop = 34.0;
   static const tabUnderlineWidth = 12.0;
   static const tabUnderlineHeight = 2.0;
@@ -1887,6 +1888,7 @@ abstract final class AvatarPageTheme {
   static const headerHeight = 36.0;
   static const headerCentre = 26.0;
   static const headerText = 14.0;
+  static const headerWeight = FontWeight.w500;
   static const allText = 12.0;
   static const allChevronWidth = 4.7;
   static const allChevronHeight = 9.0;

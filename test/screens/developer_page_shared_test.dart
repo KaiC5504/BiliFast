@@ -18,6 +18,7 @@ import 'package:bilifast/speedtest/speed_test_runner.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
@@ -27,7 +28,7 @@ import '../support/fake_player.dart';
 
 const bv = 'BV1GJ411x7h7';
 
-/// 开发者 on the app's shared player (ownsController: false), as the avatar menu opens it.
+/// 开发者 on the app's shared player (ownsController: false), as 设置 opens it.
 void main() {
   late CannedHttp http;
   late FakePlayer player;
@@ -167,6 +168,26 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(controller.video, isNull);
     expect(player.calls.last, 'unload');
+  });
+
+  testWidgets('‹ in the bar leaves 开发者, pressed or through VoiceOver', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await host(tester);
+    pushDeveloper();
+    await frames(tester);
+    expect(find.text('开发者'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('developer-back')));
+    await frames(tester, 20);
+    expect(find.byType(PlayerTestPage), findsNothing);
+
+    pushDeveloper();
+    await frames(tester);
+    final back = find.semantics.byLabel('返回');
+    expect(back.evaluate().single.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    tester.semantics.tap(back);
+    await frames(tester, 20);
+    expect(find.byType(PlayerTestPage), findsNothing);
+    semantics.dispose();
   });
 
   testWidgets('leaving 开发者 without playing anything closes nothing', (tester) async {

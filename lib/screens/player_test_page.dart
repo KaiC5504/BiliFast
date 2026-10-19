@@ -17,6 +17,7 @@ import '../playback/playback_setup.dart';
 import '../player_ui/player_stage.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../video/intro/collection_row.dart' show Chevron;
 import '../speedtest/speed_test_plan.dart';
 import '../speedtest/speed_test_results.dart';
 import '../speedtest/speed_test_runner.dart';
@@ -52,7 +53,7 @@ Future<void> shareFileThroughSystem(String path, Rect? origin) async {
   await SharePlus.instance.share(ShareParams(files: [XFile(path)], sharePositionOrigin: origin));
 }
 
-/// Slice 1's whole app, now 开发者 in the avatar menu: the account the keychain login gave, a BV field, the player and
+/// Slice 1's whole app, now 开发者 in 设置 (dev builds): the account the keychain login gave, a BV field, the player and
 /// its switches, the log forwarder with 导出日志 and 测试崩溃, and the speed test.
 class PlayerTestPage extends StatefulWidget {
   const PlayerTestPage({
@@ -268,11 +269,13 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     return Scaffold(
       backgroundColor: BiliColors.pageGrey,
       body: SafeArea(
+        top: false,
         child: ListenableBuilder(
           listenable: Listenable.merge([widget.environment, ?controller, ?controller?.danmaku]),
           builder: (context, _) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const _Bar(),
               Padding(
                 padding: const EdgeInsets.all(BiliMetrics.gutter),
                 child: Column(
@@ -860,4 +863,66 @@ class _SpeedTestTable extends StatelessWidget {
             ? BiliColors.text
             : (difference < 0 ? BiliColors.faster : BiliColors.slower),
       );
+}
+
+/// 设置's white bar with ‹, so the page can be left without the edge swipe (Windows has none).
+class _Bar extends StatelessWidget {
+  const _Bar();
+
+  @override
+  Widget build(BuildContext context) {
+    void back() => unawaited(Navigator.of(context).maybePop());
+    return ColoredBox(
+      color: SettingsTheme.bar,
+      child: Padding(
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
+        child: SizedBox(
+          height: SettingsTheme.barHeight,
+          child: Stack(
+            children: [
+              Center(
+                child: Text(
+                  '开发者',
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontFamily: BiliFonts.family,
+                    fontSize: SettingsTheme.barTitleText,
+                    fontWeight: SettingsTheme.barTitleWeight,
+                    color: SettingsTheme.barTitle,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: SettingsTheme.backLeft - (SettingsTheme.backTarget - SettingsTheme.backGlyphWidth) / 2,
+                top: 0,
+                bottom: 0,
+                width: SettingsTheme.backTarget,
+                child: Semantics(
+                  button: true,
+                  label: '返回',
+                  onTap: back,
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    key: const ValueKey('developer-back'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: back,
+                    child: Center(
+                      child: Transform.flip(
+                        flipX: true,
+                        child: const Chevron(
+                          size: Size(SettingsTheme.backGlyphWidth, SettingsTheme.backGlyphHeight),
+                          stroke: SettingsTheme.backStroke,
+                          color: SettingsTheme.backGlyph,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

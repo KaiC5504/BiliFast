@@ -8,6 +8,7 @@ import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/settings_page.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -140,9 +141,30 @@ void main() {
     expect([for (final item in recents.items) item.bvid], ['BV1v0', 'BV1v2']);
   });
 
-  testWidgets('with nothing opened yet the card says so', (tester) async {
+  testWidgets('with nothing opened yet the card says so, in the 字体 chosen', (tester) async {
     await show(tester);
     expect(find.text('还没有打开过视频'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, BiliFonts.miSans);
+    BiliFonts.family = null;
+    addTearDown(() => BiliFonts.family = BiliFonts.miSans);
+    recents.clear();
+    await settle(tester);
+    expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, isNull);
+  });
+
+  testWidgets('a row opened again is stamped now and goes first, its progress kept', (tester) async {
+    clock = _now.subtract(const Duration(hours: 3));
+    await show(tester, opened: [_video(0), _video(1, duration: 100)]);
+    recents.recordProgress(bvid: 'BV1v1', cid: 1, seconds: 40);
+    await settle(tester);
+    expect(find.text('3小时前播放'), findsNWidgets(2));
+    await tester.tap(find.byKey(const ValueKey('avatar-recent-BV1v1#1')));
+    await settle(tester, 20);
+    expect([for (final item in recents.items) item.bvid], ['BV1v1', 'BV1v0']);
+    final reopened = recents.items.first;
+    expect(reopened.openedAt, _now.millisecondsSinceEpoch ~/ 1000);
+    expect(reopened.progress, 40);
+    expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, 'BV1v1');
   });
 
   testWidgets('a row opens its video', (tester) async {
@@ -160,6 +182,18 @@ void main() {
     await settle(tester, 20);
     expect(find.text('最近打开'), findsOneWidget);
     expect(find.byKey(const ValueKey('recent-BV1v0#0')), findsOneWidget);
+  });
+
+  testWidgets('a part opened again from 最近打开 is stamped now and goes first', (tester) async {
+    clock = _now.subtract(const Duration(hours: 3));
+    await show(tester, opened: [_video(0), _video(1)]);
+    await tester.tap(find.byKey(const ValueKey('avatar-all')));
+    await settle(tester, 20);
+    await tester.tap(find.byKey(const ValueKey('recent-BV1v1#1')));
+    await settle(tester, 20);
+    expect([for (final item in recents.items) item.bvid], ['BV1v1', 'BV1v0']);
+    expect(recents.items.first.openedAt, _now.millisecondsSinceEpoch ~/ 1000);
+    expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, 'BV1v1');
   });
 
   testWidgets('⚙ opens 设置', (tester) async {

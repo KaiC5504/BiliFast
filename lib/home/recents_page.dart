@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -91,7 +93,10 @@ class _RecentRow extends StatelessWidget {
         color: BiliColors.card,
         child: PressHighlight(
           key: ValueKey('recent-${item.id}'),
-          onTap: () => openVideoPage(context, VideoRoute(bvid: item.bvid, cid: item.cid, title: item.title)),
+          onTap: () {
+            AppScope.of(context).recents.add(item);
+            unawaited(openVideoPage(context, VideoRoute(bvid: item.bvid, cid: item.cid, title: item.title)));
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.sectionGap, vertical: BiliMetrics.gutter),
             child: Row(

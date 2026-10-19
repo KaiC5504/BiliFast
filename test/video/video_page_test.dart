@@ -127,11 +127,15 @@ class FakeLoginGate implements LoginGate {
   /// Runs as the gate answers true, as the login page sets the account before it pops.
   VoidCallback? onLogin;
 
+  /// Thrown by the next ask instead of showing the page.
+  Object? failure;
+
   bool get open => _open != null;
 
   @override
   Future<bool> request(BuildContext context) {
     asks.add((presentation: orientation.presentation, screen: MediaQuery.sizeOf(context)));
+    if (failure case final failure?) throw failure;
     return (_open = Completer<bool>()).future;
   }
 
@@ -152,6 +156,7 @@ void main() {
   late GlobalKey<NavigatorState> nav;
   late SpyOrientation orientation;
   late FakeLoginGate gate;
+  late RecentStore recents;
 
   /// Each page's session and the open it was handed, in the order the pages made them.
   late List<FakePlayerSession> sessions;
@@ -159,6 +164,10 @@ void main() {
 
   /// Each page's details, in the order the pages made them.
   late List<FakePageDetails> detailsMade;
+
+  /// The newest page's login ask and its count of logins, as its session and details were handed them.
+  VoidCallback? askLogin;
+  Listenable? pageLogins;
   late FakePageDetails Function() makeDetails;
 
   setUp(() {
@@ -172,6 +181,8 @@ void main() {
     sessionOpens = [];
     detailsMade = [];
     makeDetails = FakePageDetails.new;
+    askLogin = null;
+    pageLogins = null;
   });
 
   PlayerSession fakeSession({
@@ -184,6 +195,7 @@ void main() {
     final session = FakePlayerSession(player: player);
     sessions.add(session);
     sessionOpens.add(open);
+    askLogin = requestLogin;
     return session;
   }
 
@@ -226,7 +238,7 @@ void main() {
     final services = AppServices(
       environment: environment,
       playback: playback,
-      recents: await RecentStore.load(null, logger: logger),
+      recents: recents = await RecentStore.load(null, logger: logger),
       device: PlayerDevice(orientation: orientation, controls: NoDeviceControls()),
       pageApi: pageApi,
       loginGate: gate,
@@ -256,6 +268,7 @@ void main() {
   }) {
     final details = makeDetails();
     detailsMade.add(details);
+    pageLogins = logins;
     return details;
   }
 
@@ -357,6 +370,38 @@ void main() {
     player.emit(const StatusChanged(PlayerStatus.playing));
     await back(tester);
     expect(heartbeats(), isEmpty);
+  });
+
+  const recent = RecentVideo(bvid: bv, cid: p1, title: '测试视频', part: '第一集', page: 1, pageCount: 2, duration: 712);
+
+  testWidgets('a login Bilibili no longer accepts still records 最近打开\'s progress, with no heartbeats',
+      (tester) async {
+    http = Canned.http(loggedIn: false)..routes[heartbeatPath] = (200, '{"code":0}');
+    await host(tester);
+    expect(environment.account, isA<LoginExpired>());
+    recents.add(recent);
+    pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+    await frames(tester, 20);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    position(30);
+    await back(tester);
+    expect(recents.items.single.progress, 30);
+    expect(heartbeats(), isEmpty);
+  });
+
+  testWidgets('played to the end, 最近打开\'s progress is the part\'s length, and stays so after back', (tester) async {
+    await host(tester);
+    recents.add(recent);
+    pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+    await frames(tester, 20);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    position(700);
+    player.emit(const StatusChanged(PlayerStatus.ended));
+    await frames(tester, 4);
+    expect(recents.items.single.progress, 712);
+    await back(tester);
+    expect(recents.items.single.progress, 712);
+    expect(heartbeats().last, '-1');
   });
 
   testWidgets('heartbeats go out while the launch account check failed with a session in the jar', (tester) async {
@@ -2678,6 +2723,91 @@ void main() {
       await frames(tester, 3);
       expect(relations(), 2);
       expect(sent(), ['like on=true'], reason: 'not replayed');
+      await back(tester);
+    });
+
+    /// A page with the test's session and details, counting the logins it hands its details.
+    Future<int Function()> countingLogins(WidgetTester tester) async {
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      var logins = 0;
+      pageLogins!.addListener(() => logins += 1);
+      return () => logins;
+    }
+
+    testWidgets('a -101 on a login the app still holds, its login page closed, is no new login', (tester) async {
+      await host(tester);
+      final logins = await countingLogins(tester);
+      askLogin!();
+      await frames(tester, 3);
+      expect(gate.asks, hasLength(1), reason: 'the login page shows though the app thinks it is logged in');
+      gate.answer(false);
+      await frames(tester, 3);
+      expect(environment.account, isA<LoggedIn>());
+      expect(logins(), 0);
+
+      askLogin!();
+      await frames(tester, 3);
+      gate.answer(true);
+      await frames(tester, 3);
+      expect(logins(), 1, reason: 'logging in again there is one');
+      // The danmaku's block rules, asked again for the login, give up after 15 s with no route.
+      await tester.pump(const Duration(seconds: 16));
+      await back(tester);
+    });
+
+    testWidgets('the login page closed while it signs in: the login that lands still reaches the page',
+        (tester) async {
+      http = Canned.http(loggedIn: false)..routes[heartbeatPath] = (200, '{"code":0}');
+      await host(tester);
+      final logins = await countingLogins(tester);
+      askLogin!();
+      await frames(tester, 3);
+      expect(gate.asks, hasLength(1));
+      http.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+      final signingIn = environment.didLogin(Canned.cookies);
+      expect(environment.account, isA<AccountUnknown>());
+      gate.answer(false);
+      await frames(tester, 2);
+      expect(await signingIn, isTrue);
+      await frames(tester, 3);
+      expect(environment.account, isA<LoggedIn>());
+      expect(logins(), 1);
+      await tester.pump(const Duration(seconds: 16));
+      await back(tester);
+    });
+
+    testWidgets('the login page closed with the sign-in turned down is no login', (tester) async {
+      http = Canned.http(loggedIn: false)..routes[heartbeatPath] = (200, '{"code":0}');
+      await host(tester);
+      final logins = await countingLogins(tester);
+      askLogin!();
+      await frames(tester, 3);
+      final signingIn = environment.didLogin(Canned.cookies);
+      gate.answer(false);
+      await frames(tester, 2);
+      // didLogin's two retries wait 1 s and 2 s.
+      await tester.pump(const Duration(seconds: 4));
+      expect(await signingIn, isFalse);
+      await frames(tester, 3);
+      expect(logins(), 0);
+      await back(tester);
+    });
+
+    testWidgets('a login page that can\'t open is logged and toasted', (tester) async {
+      await openReal(tester);
+      gate.failure = StateError('no navigator');
+      await tester.tap(find.byKey(const ValueKey('action-like')));
+      await frames(tester, 3);
+      expect(gate.asks, hasLength(1));
+      expect(find.text('无法打开登录'), findsOneWidget);
+      gate.failure = null;
+      await frames(tester, 60);
+      await tester.tap(find.byKey(const ValueKey('action-like')));
+      await frames(tester, 3);
+      expect(gate.asks, hasLength(2), reason: 'the page can ask again');
+      gate.answer(false);
+      await frames(tester, 2);
       await back(tester);
     });
 

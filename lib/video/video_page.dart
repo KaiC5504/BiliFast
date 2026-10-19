@@ -300,7 +300,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   }
 
   /// The page above had the player and gave it back closed: this page plays its own video again from where it was
-  /// covered. A stopgap until slice 9 resumes without a reload.
+  /// covered. A stopgap: resuming without a reload would avoid the restart.
   void _reopen(PlaybackController controller) {
     if (_coveredAt case final covered?) {
       _coveredAt = null;
@@ -693,21 +693,56 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       if (!mounted || _left || _covered) return;
       _owning = false;
       _orientation.end(this);
-      final bool loggedIn;
+      final environment = services.environment;
+      final before = environment.account;
+      final bool answer;
       try {
-        loggedIn = await services.loginGate.request(context);
+        answer = await services.loginGate.request(context);
       } finally {
         if (mounted) _claimOrientation();
       }
-      if (!loggedIn || !mounted || _left) return;
-      _logins.value += 1;
-      _comments?.refreshAccount();
-      _danmaku?.refreshAccount();
+      if (!mounted || _left) return;
+      // Closing the login page while it signs in still logs in, after the page has answered false. A -101 asked
+      // from a stale login and closed leaves that same LoggedIn, which isn't a new login.
+      final account = environment.account;
+      if (account is AccountUnknown) {
+        _followSignIn(environment);
+      } else if (account is LoggedIn && (answer || !identical(account, before))) {
+        _loggedIn();
+      }
     } catch (error) {
       Logger.shared.warn(LogCategory.ui, 'login failed', {'error': '$error'});
+      _toast('无法打开登录');
     } finally {
       _askingLogin = false;
     }
+  }
+
+  void _loggedIn() {
+    _logins.value += 1;
+    _comments?.refreshAccount();
+    _danmaku?.refreshAccount();
+  }
+
+  VoidCallback? _signInWatch;
+
+  /// Waits out the account check of a sign-in the login page left running.
+  void _followSignIn(AppEnvironment environment) {
+    _stopFollowingSignIn();
+    void check() {
+      final account = environment.account;
+      if (account is AccountUnknown) return;
+      _stopFollowingSignIn();
+      if (account is LoggedIn && mounted && !_left) _loggedIn();
+    }
+
+    environment.addListener(check);
+    _signInWatch = () => environment.removeListener(check);
+  }
+
+  void _stopFollowingSignIn() {
+    _signInWatch?.call();
+    _signInWatch = null;
   }
 
   /// How long the turn back upright may take before the login page goes up anyway, as in BiliNative's InlineFirst.
@@ -841,6 +876,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   @override
   void dispose() {
     _leave(fromDispose: true);
+    _stopFollowingSignIn();
     pageRoutes.unsubscribe(this);
     _services?.device.orientation.removeListener(_presentationChanged);
     _panels.removeListener(_panelChanged);
