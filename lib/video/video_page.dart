@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show pi;
 
 import 'package:bili_core/api.dart' as bili
     show AidLink, BvidLink, LinkParser, VideoCard, VideoDetail, VideoPage, VideoView;
@@ -17,6 +18,7 @@ import '../danmaku/danmaku_session.dart';
 import '../comments/comments_model.dart';
 import '../comments/comments_tab.dart';
 import '../device/orientation.dart';
+import '../device/orientation_host.dart' show TurnStart;
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_controller.dart';
 import '../player/bili_player.dart' show PlayerStatus;
@@ -180,6 +182,29 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   late final _grow = AnimationController(vsync: this, duration: RotationTheme.grow);
   bool _turnedFull = false;
 
+  /// While the page draws the turns itself (旋转动画, iOS): the screen's shape a change of presentation was made on.
+  /// The player waits for the system's turn to start, or for [RotationTheme.takeoverWait] to run out.
+  bool? _turnFrom;
+  Timer? _turnTimeout;
+  StreamSubscription<TurnStart>? _turns;
+
+  /// A turn the system started, waiting for a build at its new shape: iOS hands over the size first, but the order
+  /// isn't relied on. One not [draw]n (stale, or under Reduce Motion) is still reported drawn.
+  ({TurnStart start, bool wide, bool draw})? _pendingTurn;
+
+  /// The page turns from [_spinFrom] back to upright as it runs.
+  late final _spin = AnimationController(vsync: this);
+  double _spinFrom = 0;
+
+  /// Turns the host hasn't heard were drawn: its still picture covers the screen until it does.
+  int _drawnOwed = 0;
+
+  /// The screen's shape at the last build.
+  bool? _drawnWide;
+
+  /// Whether the player's chrome is put away for a turn, a grow or a shrink.
+  final _turningPlayer = ValueNotifier<bool>(false);
+
   /// The page's size and top inset when last laid out upright: the body keeps them while the player grows over it.
   ({Size size, double top})? _uprightFrame;
 
@@ -257,19 +282,109 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   }
 
   /// A turn between the small player and landscape full screen grows the player box, or shrinks it back, from
-  /// wherever it is; a turn reversed midway goes back from there. 竖屏 doesn't grow.
-  void _followTurn(Presentation presentation) {
+  /// wherever it is; a turn reversed midway goes back from there. 竖屏 doesn't grow. While the page draws the turns,
+  /// the box holds still until the system's turn starts, made on the screen's shape [wide].
+  void _followTurn(Presentation presentation, bool wide) {
     final full = presentation == Presentation.landscape;
     if (full == _turnedFull) return;
     _turnedFull = full;
-    if (presentation == Presentation.vertical ||
-        _laidOut.value == Presentation.vertical ||
-        MediaQuery.disableAnimationsOf(context)) {
+    final upright = presentation == Presentation.vertical || _laidOut.value == Presentation.vertical;
+    // Back before its turn started (a refusal): already where it is going, and no turn will come.
+    final settled = !_spin.isAnimating && !_grow.isAnimating && _grow.value == (full ? 1 : 0);
+    if (_pendingTurn case final turn?) _pendingTurn = (start: turn.start, wide: turn.wide, draw: false);
+    _turnTimeout?.cancel();
+    _turnTimeout = null;
+    _turnFrom = _orientation.turnTakeover && _owning && !_left && !upright && !settled ? wide : null;
+    if (_turnFrom != null || _pendingTurn != null) _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
+    if (upright || MediaQuery.disableAnimationsOf(context)) {
       _grow.value = full ? 1 : 0;
+    } else if (_turnFrom != null) {
+      _grow.stop();
     } else if (full) {
       _grow.forward();
     } else {
       _grow.reverse();
+    }
+  }
+
+  /// The turned size is already in (or about to be): the turn waits for a build at it. One the page didn't ask for, or
+  /// the other way's, is only reported drawn.
+  void _turnStarted(TurnStart start) {
+    if (!mounted || !_owning || _left || _covered) return;
+    _drawnOwed += 1;
+    final from = _turnFrom ?? _drawnWide ?? false;
+    final quarter = (start.angle.abs() % pi - pi / 2).abs() < pi / 4;
+    final wide = quarter ? !from : from;
+    final draw = _turnFrom != null && quarter && wide == (_presentation == Presentation.landscape);
+    _pendingTurn = (start: start, wide: wide, draw: draw);
+    _turnTimeout?.cancel();
+    _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
+    setState(() {});
+  }
+
+  /// From the build that has the turn's new shape: the page drawn turned by −angle, so it sits where it was before
+  /// the turn, and back to upright as the box grows or shrinks, both over the system's duration. A turn that reverses
+  /// one under way starts from the angle the page is drawn at.
+  void _beginTurn(({TurnStart start, bool wide, bool draw}) turn) {
+    _pendingTurn = null;
+    _turnTimeout?.cancel();
+    _turnTimeout = null;
+    if (!turn.draw) {
+      // The screen has that shape now, which the turn being waited for will start from.
+      if (_turnFrom != null) {
+        _turnFrom = turn.wide;
+        _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
+      }
+    } else {
+      _turnFrom = null;
+      if (!MediaQuery.disableAnimationsOf(context)) {
+        final duration = turn.start.duration;
+        _spinFrom = _rotation - turn.start.angle;
+        _spin
+          ..duration = duration
+          ..forward(from: 0);
+        if (_turnedFull && _grow.value != 1) {
+          _grow.animateTo(1, duration: duration);
+        } else if (!_turnedFull && _grow.value != 0) {
+          _grow.animateBack(0, duration: duration);
+        }
+      }
+    }
+    _reportDrawn();
+  }
+
+  /// No turn came, or not its new shape: the player grows as it does when the system turns the screen itself.
+  void _turnLate() {
+    _turnTimeout = null;
+    if (!mounted) return;
+    _turnFrom = null;
+    _pendingTurn = null;
+    if (!_grow.isAnimating) {
+      if (_turnedFull) {
+        _grow.forward();
+      } else {
+        _grow.reverse();
+      }
+    }
+    _flushDrawn();
+    setState(() {});
+  }
+
+  double get _rotation => _spinFrom * (1 - RotationTheme.curve.transform(_spin.value));
+
+  /// The host's still picture goes once the turn's first frame, the one being built, is on the screen: after it and
+  /// the next.
+  void _reportDrawn() {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      SchedulerBinding.instance
+        ..addPostFrameCallback((_) => _flushDrawn())
+        ..scheduleFrame();
+    });
+  }
+
+  void _flushDrawn() {
+    for (; _drawnOwed > 0; _drawnOwed--) {
+      _services?.device.orientation.turnDrawn();
     }
   }
 
@@ -311,6 +426,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (_services == null) {
       _services = AppScope.of(context);
       _orientation.addListener(_presentationChanged);
+      _turns = _orientation.turns.listen(_turnStarted);
       _start();
     }
     // Only another page covers this one. A popup on top (the ⋮ menu, a dialog) makes the route not current as well,
@@ -982,6 +1098,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..removeListener(_collapseChanged)
       ..dispose();
     _grow.dispose();
+    unawaited(_turns?.cancel());
+    _turnTimeout?.cancel();
+    _flushDrawn();
+    _spin.dispose();
+    _turningPlayer.dispose();
     _pin.dispose();
     _laidOut.dispose();
     final session = _session;
@@ -1007,8 +1128,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   @override
   Widget build(BuildContext context) {
     final presentation = _presentation;
-    final layout = _layoutFor(MediaQuery.sizeOf(context));
-    _followTurn(presentation);
+    final size = MediaQuery.sizeOf(context);
+    final wide = size.width > size.height;
+    final layout = _layoutFor(size);
+    _followTurn(presentation, _drawnWide ?? wide);
+    if (_pendingTurn case final turn? when turn.wide == wide) _beginTurn(turn);
+    _drawnWide = wide;
     _laidOut.value = layout;
     final fullScreen = layout.fullScreen;
     final controller = _controller;
@@ -1099,6 +1224,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                         barred: _barred && !fullScreen,
                         danmakuHeight: fullScreen ? null : _collapse.full,
                         pin: _pin,
+                        turning: _turningPlayer,
                       ),
                     ),
                   );
@@ -1114,30 +1240,40 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                     ),
                     _ => null,
                   };
-                  // Only the player's box follows the scrolling and the grow; everything else is built once per page
-                  // build.
+                  // Only the player's box follows the scrolling, the grow and the turn; everything else is built once
+                  // per page build.
                   return ListenableBuilder(
-                    listenable: Listenable.merge([_collapse, _grow]),
+                    listenable: Listenable.merge([_collapse, _grow, _spin]),
                     builder: (context, _) {
                       final height = fullScreen ? constraints.maxHeight : _collapse.height;
                       final box = fullScreen ? height : top + height;
                       final progress = fullScreen ? 0.0 : _collapse.progress;
                       final turn = _turning(constraints.biggest, layout, upright.top);
+                      final spinning = _spin.isAnimating;
                       final hidden = fullScreen && turn == null;
                       final player = turn?.box ?? Rect.fromLTWH(0, 0, constraints.maxWidth, box);
                       _pin.value = turn == null ? null : Size(constraints.maxWidth, height);
+                      // The chrome goes from the change of presentation, so the host's still picture has none either.
+                      _turningPlayer.value = turn != null || spinning || _turnFrom != null || _pendingTurn != null;
                       // The tab row and the list ride on the player's bottom edge, at their upright size.
                       final body = turn?.body ?? Offset.zero;
                       final uprightBox = upright.top + _collapse.height;
                       final tabsTop = upright.top + CollapseTheme.barHeight + PageTheme.tabRowHeight;
-                      return Stack(
+                      final screen = Offset.zero & constraints.biggest;
+                      // Turned, a backdrop the screen's size would bare its corners.
+                      final reach = constraints.biggest.bottomRight(Offset.zero).distance;
+                      final backdrop = spinning
+                          ? Rect.fromCenter(center: screen.center, width: reach, height: reach)
+                          : screen;
+                      final page = Stack(
                         // The growing box overflows the upright page; a clip here would also mask the native view.
                         clipBehavior: Clip.none,
                         children: [
-                          if (turn != null)
-                            const Positioned.fill(
-                              key: ValueKey('page-turn-backdrop'),
-                              child: ColoredBox(color: BiliColors.videoBackground),
+                          if (turn != null || spinning)
+                            Positioned.fromRect(
+                              key: const ValueKey('page-turn-backdrop'),
+                              rect: backdrop,
+                              child: const ColoredBox(color: BiliColors.videoBackground),
                             ),
                           Positioned(
                             key: const ValueKey('page-tabs-area'),
@@ -1226,6 +1362,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                               ),
                             ),
                         ],
+                      );
+                      // The whole page turns about the screen's centre; nothing clips it but the screen.
+                      return IgnorePointer(
+                        ignoring: spinning,
+                        child: Transform.rotate(key: const ValueKey('page-turn'), angle: _rotation, child: page),
                       );
                     },
                   );

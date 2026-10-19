@@ -1976,7 +1976,14 @@ abstract final class ZoomBackTheme {
 /// 60 fps either way.
 abstract final class RotationTheme {
   static const grow = Duration(milliseconds: 280);
+
+  /// The official page's angle, measured frame by frame both ways, fits this over 280 ms to within 2% of the turn,
+  /// as close as a free cubic does. A turn the page draws itself (旋转动画) turns and grows on it too.
   static const curve = Curves.easeInOut;
+
+  /// While the page draws the turns, how long a change of presentation waits for the system's turn before the player
+  /// grows without one, as a refused or lost turn would leave it.
+  static const takeoverWait = Duration(milliseconds: 250);
 }
 
 /// 弹幕设置 (07, 08, 24, 29, 33, 40, 41). Landscape is a hard-edged dark strip at the right, portrait the light

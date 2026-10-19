@@ -39,6 +39,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.barred = false,
     this.danmakuHeight,
     this.pin,
+    this.turning,
   });
 
   final Presentation presentation;
@@ -79,13 +80,18 @@ class VideoPlayerArea extends StatelessWidget {
   /// follows the box.
   final ValueListenable<Size?>? pin;
 
+  /// While true the page is turning the player, or growing or shrinking it: the chrome, the end screen and the HUD
+  /// are out of sight and take no touches, kept as they were for when it ends. Scaled to the box they would stretch
+  /// up to 1.6×.
+  final ValueListenable<bool>? turning;
+
   @override
   Widget build(BuildContext context) {
     final session = ui?.session;
     return ColoredBox(
       color: BiliColors.videoBackground,
       child: ListenableBuilder(
-        listenable: Listenable.merge([?session, ?danmaku, ?pin]),
+        listenable: Listenable.merge([?session, ?danmaku, ?pin, ?turning]),
         builder: (context, _) => Stack(fit: StackFit.expand, children: _layers()),
       ),
     );
@@ -165,6 +171,7 @@ class VideoPlayerArea extends StatelessWidget {
     final ui = this.ui;
     final ended = ui?.session.ended ?? false;
     final failed = failure != null;
+    final aside = turning?.value ?? false;
     return [
       if (ui != null && !failed) ...[
         if (!ended) PlayerGestureLayer(key: const ValueKey('video-gestures'), ui: ui),
@@ -174,16 +181,16 @@ class VideoPlayerArea extends StatelessWidget {
             ignoring: endScreenAside,
             child: ExcludeSemantics(
               excluding: endScreenAside,
-              child: ChromeSlide(shown: !endScreenAside, from: Offset.zero, child: _endScreen(ui)),
+              child: _unseen(aside, ChromeSlide(shown: !endScreenAside, from: Offset.zero, child: _endScreen(ui))),
             ),
           )
         else
           IgnorePointer(
             key: const ValueKey('video-chrome'),
             ignoring: shrunk,
-            child: Offstage(offstage: barred, child: _chrome(ui)),
+            child: Offstage(offstage: barred, child: _unseen(aside, _chrome(ui))),
           ),
-        if (!ended) PlayerHud(key: const ValueKey('video-hud'), ui: ui),
+        if (!ended) _unseen(aside, PlayerHud(ui: ui), key: const ValueKey('video-hud')),
       ],
       if (failure case final failure?)
         _Failure(key: const ValueKey('video-failure'), message: failure, onRetry: onRetry)
@@ -213,6 +220,16 @@ class VideoPlayerArea extends StatelessWidget {
         ),
     ];
   }
+
+  /// Not painted while [unseen], and deaf to touches, but laid out and animating, so it comes back as it was.
+  static Widget _unseen(bool unseen, Widget child, {Key? key}) => Visibility(
+    key: key,
+    visible: !unseen,
+    maintainState: true,
+    maintainAnimation: true,
+    maintainSize: true,
+    child: child,
+  );
 
   Widget _chrome(PlayerUi ui) => switch (presentation) {
     Presentation.inline => PortraitControls(key: const ValueKey('chrome-inline'), ui: ui),

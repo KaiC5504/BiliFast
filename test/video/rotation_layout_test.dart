@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show atan2, pi;
 
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart' show ManualClock;
@@ -31,6 +32,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
+import '../device/fake_orientation_host.dart' show FakeOrientationHost;
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
 import '../support/fake_player_session.dart';
@@ -437,6 +439,13 @@ void main() {
   PlayerUi ui(WidgetTester tester) => tester.widget<PanelLayer>(find.byType(PanelLayer)).ui;
   bool panelLandscape(WidgetTester tester) => tester.widget<PanelScope>(find.byType(PanelScope)).landscape;
 
+  /// Whether the player's chrome is painted; it stays laid out either way.
+  bool chromeDrawn(WidgetTester tester) => tester
+      .widget<Visibility>(
+        find.descendant(of: find.byKey(const ValueKey('video-chrome')), matching: find.byType(Visibility)).first,
+      )
+      .visible;
+
   testWidgets('a panel open in the small player stays the portrait sheet until the screen is landscape', (
     tester,
   ) async {
@@ -459,6 +468,273 @@ void main() {
     expect(find.byKey(const ValueKey('panel-grabber')), findsNothing);
     ui(tester).panels.close();
     await tester.pump(const Duration(milliseconds: 400));
+    await leave(tester);
+  });
+
+  group('turns the page draws itself (旋转动画)', () {
+    late FakeOrientationHost host;
+
+    /// The page with the system's turns taken over, as the 开发者 switch leaves it on iOS.
+    Future<void> openTakenOver(WidgetTester tester, {bool takeover = true}) async {
+      host = FakeOrientationHost();
+      orientation = OrientationController(host: host);
+      await orientation.setTurnTakeover(takeover);
+      await openPage(tester);
+    }
+
+    double angle(WidgetTester tester) {
+      final matrix = tester.widget<Transform>(find.byKey(const ValueKey('page-turn'))).transform;
+      return atan2(matrix.entry(1, 0), matrix.entry(0, 0));
+    }
+
+    /// Where [rect] on the screen of size [from] is on the glass once the screen is [to] and the page is drawn turned
+    /// by [by] about its centre.
+    Rect onTurned(Rect rect, {required Size from, required Size to, required double by}) => MatrixUtils.transformRect(
+      Matrix4.translationValues(to.width / 2, to.height / 2, 0)
+          .multiplied(Matrix4.rotationZ(by))
+          .multiplied(Matrix4.translationValues(-from.width / 2, -from.height / 2, 0)),
+      rect,
+    );
+
+    /// A touch on the player reaches it.
+    bool touches(WidgetTester tester) => tester
+        .hitTestOnBinding(box(tester).center)
+        .path
+        .any((entry) => entry.target == tester.renderObject(find.byType(VideoPlayerArea)));
+
+    /// The turn into landscape full screen as iOS takes it over: the turned size first, then the turn.
+    Future<void> turnToLandscape(WidgetTester tester) async {
+      orientation.enterLandscape();
+      await tester.pump();
+      screen(tester, landscape, landscapeInsets);
+      await tester.pump();
+      host.startTurn(pi / 2);
+      await tester.pump();
+    }
+
+    testWidgets('the size flips at once and the first frame is the upright page drawn turned by −angle where it sat; '
+        'it turns upright as the player grows to full screen, reported drawn once', (tester) async {
+      await openTakenOver(tester);
+      final box0 = box(tester);
+      final row0 = tabRow(tester);
+      orientation.enterLandscape();
+      await tester.pump();
+      for (var i = 0; i < 4; i++) {
+        await frame(tester);
+      }
+      expectRect(box(tester), box0, reason: "the player waits for the system's turn");
+      expect(angle(tester), 0);
+
+      screen(tester, landscape, landscapeInsets);
+      await tester.pump();
+      expect(host.drawn, 0, reason: 'nothing turned is drawn before the turn is known');
+      host.startTurn(pi / 2);
+      await tester.pump();
+      expect(angle(tester), closeTo(-pi / 2, 1e-9));
+      expectRect(box(tester), onTurned(box0, from: portrait, to: landscape, by: -pi / 2), reason: 'the box');
+      expectRect(tabRow(tester), onTurned(row0, from: portrait, to: landscape, by: -pi / 2), reason: 'the tab row');
+      expect(tester.getSize(find.byType(PageTabRow)), row0.size, reason: 'the body keeps its upright size');
+      expect(backdrop(), findsOneWidget);
+      expect(host.drawn, 0, reason: 'not before the frame is on the screen');
+      await frame(tester);
+      expect(host.drawn, 1);
+
+      var last = angle(tester).abs();
+      var width = box(tester).width;
+      for (var i = 0; i < 10; i++) {
+        await frame(tester);
+        final now = angle(tester).abs();
+        expect(now, lessThan(last), reason: 'frame $i turns upright');
+        expect(box(tester).width, isNot(width), reason: 'frame $i grows');
+        last = now;
+        width = box(tester).width;
+      }
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expect(angle(tester), 0);
+      expect(area(tester), full);
+      expect(find.byType(PageTabRow), findsNothing);
+      expect(backdrop(), findsNothing);
+      expect(find.byType(LandscapeChrome), findsOneWidget);
+      expect(host.drawn, 1, reason: 'once per turn');
+      await leave(tester);
+    });
+
+    testWidgets('turned back, the landscape page is drawn turned where it sat and shrinks to the small player as it '
+        'turns upright', (tester) async {
+      await openTakenOver(tester);
+      await turnToLandscape(tester);
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expect(area(tester), full);
+
+      orientation.exitToInline();
+      await tester.pump();
+      await frame(tester);
+      expect(area(tester), full, reason: "the player waits for the system's turn");
+      screen(tester, portrait, portraitInsets);
+      await tester.pump();
+      host.startTurn(-pi / 2);
+      await tester.pump();
+      expect(angle(tester), closeTo(pi / 2, 1e-9));
+      expectRect(box(tester), onTurned(full, from: landscape, to: portrait, by: pi / 2), reason: 'the box');
+      expect(tester.getRect(find.byType(PageTabRow)).intersect(Offset.zero & portrait).isEmpty, isTrue,
+          reason: 'the body is off the glass, beside the full-screen player');
+      await frame(tester);
+      expect(host.drawn, 2);
+
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expect(angle(tester), 0);
+      expect(area(tester), small);
+      expect(tabRow(tester).top, small.bottom);
+      expect(backdrop(), findsNothing);
+      expect(background(tester), BiliColors.card);
+      expect(host.drawn, 2);
+      await leave(tester);
+    });
+
+    testWidgets('the chrome is put away from the change of presentation to the end of the turn and comes back as it '
+        'was; touches reach nothing while the page turns', (tester) async {
+      await openTakenOver(tester);
+      ui(tester).chrome.show();
+      await tester.pump();
+      expect(chromeDrawn(tester), isTrue);
+      expect(touches(tester), isTrue);
+
+      orientation.enterLandscape();
+      await tester.pump();
+      expect(chromeDrawn(tester), isFalse, reason: "so the host's still picture has none either");
+      screen(tester, landscape, landscapeInsets);
+      await tester.pump();
+      host.startTurn(pi / 2);
+      await tester.pump();
+      expect(chromeDrawn(tester), isFalse);
+      expect(find.byType(DanmakuLayer), findsOneWidget, reason: 'the danmaku keep flowing');
+      expect(touches(tester), isFalse);
+      await tester.pump(const Duration(milliseconds: 140));
+      expect(touches(tester), isFalse);
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expect(chromeDrawn(tester), isTrue);
+      expect(ui(tester).chrome.visible, isTrue, reason: 'shown before, shown after');
+      expect(touches(tester), isTrue);
+
+      ui(tester).chrome.hide();
+      orientation.exitToInline();
+      await tester.pump();
+      screen(tester, portrait, portraitInsets);
+      await tester.pump();
+      host.startTurn(-pi / 2);
+      await tester.pump();
+      expect(chromeDrawn(tester), isFalse);
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expect(chromeDrawn(tester), isTrue);
+      expect(ui(tester).chrome.visible, isFalse, reason: 'hidden before, hidden after');
+      await leave(tester);
+    });
+
+    testWidgets('a turn the page did not ask for is not drawn, only reported drawn', (tester) async {
+      await openTakenOver(tester);
+      host.startTurn(pi / 2);
+      await tester.pump();
+      expect(angle(tester), 0);
+      expectRect(box(tester), smallBox);
+      await tester.pump(RotationTheme.takeoverWait);
+      await tester.pump();
+      expect(angle(tester), 0);
+      expect(host.drawn, 1, reason: "the host's picture never stays up");
+
+      // Refused: back to the small player before its turn, which comes late.
+      orientation.enterLandscape();
+      await tester.pump();
+      orientation.exitToInline();
+      await tester.pump();
+      expect(chromeDrawn(tester), isTrue, reason: 'no turn to wait for');
+      host.startTurn(pi / 2);
+      await tester.pump();
+      await frame(tester);
+      expect(angle(tester), 0);
+      expectRect(box(tester), smallBox);
+      await tester.pump(RotationTheme.takeoverWait);
+      await tester.pump();
+      expect(host.drawn, 2);
+      await leave(tester);
+    });
+
+    testWidgets('with no turn from the system the player grows on its own after a short wait', (tester) async {
+      await openTakenOver(tester);
+      orientation.enterLandscape();
+      await tester.pump();
+      await tester.pump(RotationTheme.takeoverWait - const Duration(milliseconds: 20));
+      expectRect(box(tester), smallBox, reason: 'still waiting');
+      await tester.pump(const Duration(milliseconds: 40));
+      await frame(tester);
+      final growing = box(tester);
+      expect(growing.width, greaterThan(smallBox.width));
+      expect(angle(tester), 0);
+      screen(tester, landscape, landscapeInsets);
+      await settle(tester);
+      expect(area(tester), full);
+      expect(chromeDrawn(tester), isTrue);
+      expect(host.drawn, 0);
+      await leave(tester);
+    });
+
+    testWidgets('with Reduce Motion the turn jumps, and is still reported drawn', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await openTakenOver(tester);
+      await turnToLandscape(tester);
+      expect(angle(tester), 0);
+      expect(area(tester), full);
+      expect(backdrop(), findsNothing);
+      await frame(tester);
+      expect(host.drawn, 1);
+
+      orientation.exitToInline();
+      await tester.pump();
+      screen(tester, portrait, portraitInsets);
+      await tester.pump();
+      host.startTurn(-pi / 2);
+      await tester.pump();
+      expect(angle(tester), 0);
+      expect(area(tester), small);
+      await frame(tester);
+      expect(host.drawn, 2);
+      expect(chromeDrawn(tester), isTrue);
+      await leave(tester);
+    });
+
+    testWidgets('with the switch off the player grows from the change of presentation, as before', (tester) async {
+      await openTakenOver(tester, takeover: false);
+      orientation.enterLandscape();
+      await tester.pump();
+      await frame(tester);
+      expect(box(tester).width, greaterThan(smallBox.width));
+      expect(angle(tester), 0);
+      screen(tester, landscape, landscapeInsets);
+      await settle(tester);
+      expect(area(tester), full);
+      expect(host.drawn, 0);
+      await leave(tester);
+    });
+  });
+
+  testWidgets("the system's grow puts the chrome away, stretched as it would be, and brings it back", (tester) async {
+    await openPage(tester);
+    expect(chromeDrawn(tester), isTrue);
+    orientation.enterLandscape();
+    await tester.pump();
+    expect(chromeDrawn(tester), isFalse);
+    expect(find.byType(PortraitControls), findsOneWidget, reason: 'kept laid out');
+    screen(tester, landscape, landscapeInsets);
+    await tester.pump();
+    expect(chromeDrawn(tester), isFalse);
+    await settle(tester);
+    await frame(tester);
+    expect(chromeDrawn(tester), isTrue);
     await leave(tester);
   });
 
