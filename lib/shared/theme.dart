@@ -1273,9 +1273,92 @@ abstract final class CommentRowTheme {
   static const gutter = BiliMetrics.gutter;
 }
 
-/// 评论's list, its sort header, footers and 发条评论 bar, and 评论详情's header and band (10-13).
+/// 评论's list, its sort header, footers and 发条评论 bar, and 评论详情's header and band (10-13), measured at 3 px per
+/// pt.
 abstract final class CommentListTheme {
   static const gutter = BiliMetrics.gutter;
+
+  /// Always white, as the official page.
+  static const background = BiliColors.card;
+
+  /// The hairlines over the 发条评论 bar and under 评论详情's header.
+  static const rule = BiliColors.divider;
+
+  /// 热门评论 (13 pt) and ≡ 按热度 (12 pt) centre 16.5 below the list's top in a 28 pt header, so the first row's fan
+  /// card starts 31 below it (10). 评论详情's 相关回复共N条 sits lower in 35 pt under the band (13).
+  static const sortHeight = 28.0;
+  static const sortCentre = 16.5;
+  static const threadSortHeight = 35.0;
+  static const threadSortCentre = 55 / 3;
+  static const sortLine = 18.0;
+  static const sortTitleText = 13.0;
+  static const sortText = 12.0;
+  static const sortInk = BiliColors.secondaryText;
+
+  /// ≡: three bars 1 pt thick and 4 apart, 35/3 wide, 4 before 按热度.
+  static const sortIconWidth = 35 / 3;
+  static const sortIconBar = 1.0;
+  static const sortIconPitch = 4.0;
+  static const sortIconGap = 4.0;
+
+  /// The sort button's touch reaches this far left of ≡.
+  static const sortTouchLead = 16.0;
+
+  /// The footer under a list: 没有更多了 and the empty and failed lines, more room when the list is empty.
+  static const footerText = 12.0;
+  static const footerLine = 17.0;
+  static const footerInk = Color(0xFFC9CCD0);
+  static const footerPadding = 20.0;
+  static const emptyPadding = 48.0;
+  static const retryInk = BiliColors.secondaryText;
+  static const retryAction = BiliColors.link;
+  static const spinnerRadius = 10.0;
+
+  /// The section the uploader closed: a bubble over the server's words.
+  static const closedTop = 80.0;
+  static const closedIcon = 34.0;
+  static const closedGap = 10.0;
+  static const closedText = 14.0;
+  static const closedInk = BiliColors.secondaryText;
+
+  /// The 发条评论 bar (10, 13): a hairline over it, the 34 pt pill 17/3 below the hairline and 5 above the home
+  /// indicator, 12 in from the left and 44 short of the right, where the 20 pt emote face centres 22 in.
+  static const barHairline = 0.5;
+  static const barTop = 17 / 3;
+  static const barBottom = 5.0;
+  static const fieldHeight = 34.0;
+  static const fieldFill = BiliColors.pageGrey;
+  static const fieldPadding = 13.0;
+  static const fieldText = 15.0;
+  static const fieldInk = BiliColors.secondaryText;
+  static const faceBox = 44.0;
+  static const face = 20.0;
+  static const faceStroke = 1.28;
+  static const faceInk = BiliColors.secondaryText;
+
+  /// 评论详情's header over the thread, as tall as the tab row it covers, its hairline inside at the bottom (13).
+  static const threadHeaderHeight = 40.0;
+  static const threadHairline = 0.5;
+  static const threadTitleText = 15.0;
+  static const threadTitleInk = BiliColors.text;
+
+  /// ✕: 38/3 pt square, 1.2 pt strokes, centred 26 in from the right edge in a 44 pt button.
+  static const close = 38 / 3;
+  static const closeStroke = 1.2;
+  static const closeBox = 44.0;
+  static const closeTrailing = 4.0;
+  static const closeInk = BiliColors.secondaryText;
+
+  /// The grey band between the thread's root and its replies, straight under the root's meta line.
+  static const bandHeight = 10.0;
+  static const band = BiliColors.pageGrey;
+
+  /// MiSans sets Chinese wider than the official PingFang (热门评论 37.3 px a character on 10, MiSans 38.7; 按热度 33
+  /// against 36); these close most of it without crowding the glyphs.
+  static double get sortTitleSpacing => BiliFonts.nudged ? -0.4 : 0;
+  static double get sortSpacing => BiliFonts.nudged ? -0.6 : 0;
+  static double get fieldSpacing => BiliFonts.nudged ? -0.6 : 0;
+  static double get threadTitleSpacing => BiliFonts.nudged ? -0.4 : 0;
 }
 
 /// A comment's rich text and the picture viewer.
