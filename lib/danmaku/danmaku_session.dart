@@ -83,13 +83,12 @@ class DanmakuSession extends ChangeNotifier {
 
   void closeSend() => sendOpen.value = false;
 
-  /// Posts a danmaku at the playhead and shows it at once: the message to show, or null once it went out or the
-  /// login was asked for (that shows its own message).
+  static const needLogin = '请先登录';
+
+  /// Posts a danmaku at the playhead and shows it at once: the message to show, or null once it went out. A login
+  /// problem comes back as a message too, so the bar stays up with the draft rather than closing as if it went.
   Future<String?> send(String text, DanmakuStyle style) async {
-    if (!loggedIn) {
-      _requestLogin();
-      return null;
-    }
+    if (!loggedIn) return needLogin;
     final message = text.trim();
     if (message.isEmpty) return null;
     if (closed) return 'UP主已关闭弹幕';
@@ -111,10 +110,7 @@ class DanmakuSession extends ChangeNotifier {
       dmid = await api.postDanmaku(draft);
     } on BiliError catch (error) {
       _logger.warn(LogCategory.api, 'danmaku post failed', {'error': '$error'});
-      if (error.needsLogin) {
-        _requestLogin();
-        return null;
-      }
+      if (error.needsLogin) return needLogin;
       // Bilibili words its refusals for the user (frequency, banned words, level); they're shown word for word.
       if (error case BiliAPIError(:final message) when message.isNotEmpty) return message;
       return '发送失败，请检查网络后重试';

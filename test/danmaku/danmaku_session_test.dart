@@ -235,10 +235,10 @@ void main() {
       expect((draft.color, draft.gradient), (0xFFFFFF, true));
     });
 
-    test('logged out asks for the login, and only that says anything', () async {
+    test('logged out says 请先登录 and keeps the bar up', () async {
       rig = Rig(loggedIn: false);
-      expect(await rig.session.send('你好', const DanmakuStyle()), isNull);
-      expect(rig.loginRequests, 1);
+      expect(await rig.session.send('你好', const DanmakuStyle()), '请先登录');
+      expect(rig.loginRequests, 0);
       expect(rig.api.calls, isEmpty);
     });
 
@@ -268,12 +268,12 @@ void main() {
       expect(rig.api.calls, isEmpty);
     });
 
-    test('the server wanting a login asks for it, and only that says anything', () async {
+    test('the server wanting a login says 请先登录 and keeps the bar up', () async {
       rig = Rig();
       await rig.load();
       rig.api.failures['postDanmaku'] = const BiliError.api(code: -101, message: '账号未登录');
-      expect(await rig.session.send('你好', const DanmakuStyle()), isNull);
-      expect(rig.loginRequests, 1);
+      expect(await rig.session.send('你好', const DanmakuStyle()), '请先登录');
+      expect(rig.loginRequests, 0);
       expect(rig.shown(), isNot(contains('你好')));
     });
 
