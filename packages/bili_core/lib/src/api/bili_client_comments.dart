@@ -51,6 +51,8 @@ extension BiliClientComments on BiliClient {
     if (root != 0) form['root'] = '$root';
     if (parent != 0) form['parent'] = '$parent';
     if (syncToDynamic) form['sync_to_dynamic'] = '1';
+    if (mentions.isNotEmpty) form['at_name_to_mid'] = jsonEncode(mentions);
+    if (pictures.isNotEmpty) form['pictures'] = jsonEncode([for (final picture in pictures) picture.toJson()]);
     return post(
       '/x/v2/reply/add',
       form: form,
@@ -69,12 +71,45 @@ extension BiliClientComments on BiliClient {
       postVoid('/x/v2/reply/del', form: {'oid': '$aid', 'type': '1', 'rpid': '$rpid'});
 
   /// The people [mid] follows whose names match [query]; an empty query lists the most recently followed.
-  Future<List<MentionCandidate>> followings({required int mid, String query = ''}) =>
-      throw UnimplementedError('followings');
+  Future<List<MentionCandidate>> followings({required int mid, String query = ''}) async {
+    if (mid <= 0) throw const BiliError.api(code: -101, message: '账号未登录');
+    final name = query.trim();
+    final List<MentionCandidate>? found;
+    if (name.isEmpty) {
+      found = await _getIfPresent(
+        '/x/relation/followings',
+        query: {'vmid': '$mid', 'pn': '1', 'ps': '50', 'order': 'desc', 'order_type': ''},
+        signed: false,
+        decode: decodeMentionCandidates,
+      );
+    } else {
+      // The search is signed and carries the website's own fields, as the website sends it.
+      found = await _getIfPresent(
+        '/x/relation/followings/search',
+        query: {
+          'vmid': '$mid',
+          'pn': '1',
+          'ps': '20',
+          'order': 'desc',
+          'order_type': 'attention',
+          'gaia_source': 'main_web',
+          'name': name,
+          'web_location': '333.999',
+        },
+        signed: true,
+        decode: decodeMentionCandidates,
+      );
+    }
+    return found ?? const [];
+  }
 
   /// Uploads one picture for a comment; [bytes] is the file as picked, [filename] its name with the extension.
-  Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename}) =>
-      throw UnimplementedError('uploadCommentPicture');
+  Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename}) => _postFile(
+    '/x/dynamic/feed/draw/upload_bfs',
+    form: {'biz': 'new_dyn', 'category': 'daily'},
+    file: (field: 'file_up', filename: filename, contentType: _imageType(filename), bytes: bytes),
+    decode: UploadedPicture.fromJson,
+  );
 
   Future<List<EmotePackage>> emotePackages() =>
       get('/x/emote/user/panel/web', query: {'business': 'reply'}, signed: false, decode: decodeEmotePanel);
@@ -85,6 +120,18 @@ extension BiliClientComments on BiliClient {
     'rpid': '$rpid',
     'action': on ? '1' : '0',
   };
+
+  static String _imageType(String filename) {
+    final dot = filename.lastIndexOf('.');
+    return switch (dot < 0 ? '' : filename.substring(dot + 1).toLowerCase()) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      'heic' => 'image/heic',
+      _ => 'application/octet-stream',
+    };
+  }
 
   /// The signed route is the newer one; risk control sometimes refuses it while the plain route still answers.
   static bool _isRiskControl(BiliError error) => switch (error) {

@@ -1337,4 +1337,53 @@ abstract final class CollapseTheme {
 /// The composer's @ picker and attached pictures.
 abstract final class MentionTheme {
   static const gutter = BiliMetrics.gutter;
+
+  /// How long typing must rest before the picker searches.
+  static const debounce = Duration(milliseconds: 300);
+
+  /// The search pill under the header, filled as 14's emote panel.
+  static const fieldHeight = 36.0;
+  static const fieldFill = BiliColors.pageGrey;
+  static const fieldText = 15.0;
+  static const fieldIcon = 18.0;
+  static const fieldIconGap = 6.0;
+  static const fieldPadX = 12.0;
+  static const fieldBottom = 4.0;
+  static const fieldSpinnerRadius = 7.0;
+  static const clearSize = 16.0;
+  static const clearGlyph = 11.0;
+  static const clearFill = BiliColors.sheetHint;
+  static const clearGlyphColor = BiliColors.card;
+
+  /// 最近关注 over the list, in 14's 最近使用 grey.
+  static const sectionHeight = 36.0;
+  static const sectionText = 13.0;
+  static const sectionColour = BiliColors.sheetCloseGlyph;
+
+  static const rowHeight = 60.0;
+  static const avatar = 40.0;
+  static const avatarGap = 12.0;
+  static const nameText = 15.0;
+
+  /// The part of a name that matches the search.
+  static const match = BiliColors.pink;
+
+  /// Loading, no matches and 加载失败.
+  static const statePad = 40.0;
+  static const stateText = 14.0;
+  static const spinnerRadius = 10.0;
+
+  /// The attached pictures: square thumbnails under the field, each with a ✕ in its top right corner.
+  static const thumb = 72.0;
+  static const thumbGap = 8.0;
+  static const thumbRadius = BiliMetrics.cardRadius;
+  static const thumbBottom = 8.0;
+  static const thumbBorder = BiliColors.divider;
+  static const thumbBorderWidth = 0.5;
+  static const removeHitBox = 28.0;
+  static const removeSize = 18.0;
+  static const removeGlyph = 11.0;
+  static const removeInset = 4.0;
+  static const removeFill = Color(0x8C000000);
+  static const removeGlyphColor = Color(0xFFFFFFFF);
 }
