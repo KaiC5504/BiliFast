@@ -15,6 +15,7 @@ import '../devtools/log_forwarder.dart';
 import '../devtools/log_server_discovery.dart';
 import '../playback/playback_controller.dart';
 import '../playback/playback_setup.dart';
+import '../playback/shared_engine.dart';
 import '../player_ui/player_stage.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -48,6 +49,12 @@ const appSpeedTestHooks =
 Future<PlaybackEngine> _startVariantEngine(SpeedTestVariant variant) =>
     startPlatformEngine(config: variant.config, connectionsPerHost: variant.connectionsPerHost);
 
+/// The app's: each variant runs on an engine of its own, so the pages' [shared] engine is never swapped, and a run
+/// ends back on a lease of [shared].
+SpeedTestHooks appSpeedTestHooksOn(SharedEngine? shared) => shared == null
+    ? appSpeedTestHooks
+    : SpeedTestHooks(choosePlan: choosePlan, startEngine: _startVariantEngine, appEngine: shared.lease);
+
 /// Hands a file to the share sheet, which on an iPad points at [origin].
 typedef ShareFile = Future<void> Function(String path, Rect? origin);
 
@@ -67,6 +74,7 @@ class PlayerTestPage extends StatefulWidget {
     this.initialLink,
     this.speedTestHooks = appSpeedTestHooks,
     this.ownsController = true,
+    this.releasePlayback,
     this.shareFile = shareFileThroughSystem,
     this.prefs,
   });
@@ -82,10 +90,14 @@ class PlayerTestPage extends StatefulWidget {
   final String? initialLink;
   final SpeedTestHooks speedTestHooks;
 
-  /// False when the controller is the app's shared one (opened from 开发者): leaving never disposes it, and closes the
+  /// False when the controller is shared (AppPlayback.obtain): leaving never disposes it, and closes the
   /// video only if no other page has opened one since this page's last open (its speed test's included). The app
   /// then hears lifecycle and memory events for it.
   final bool ownsController;
+
+  /// Takes the controller back when the page leaves (the app's AppPlayback.release, which also hears lifecycle and
+  /// memory events for it); [ownsController] then means nothing.
+  final void Function(PlaybackController controller)? releasePlayback;
 
   /// Tests pass their own so nothing reaches the platform.
   final ShareFile shareFile;
@@ -116,20 +128,28 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
 
   PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
 
+  /// The page owns its controller and nothing else hears the app's events for it.
+  bool get _standalone => widget.ownsController && widget.releasePlayback == null;
+
   /// PlayerDevice.platform gives the rotation a host, and so turns to take over, only on iOS.
   static bool get _canTakeOverTurns => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   @override
   void initState() {
     super.initState();
-    if (widget.ownsController) {
+    if (_standalone) {
       _lifecycle = AppLifecycleListener(onResume: () => unawaited(_controller?.appResumed()));
       WidgetsBinding.instance.addObserver(this);
     }
     final owns = widget.ownsController;
+    final release = widget.releasePlayback;
     widget.startPlayback().then((controller) {
       if (!mounted) {
-        if (owns) controller.dispose();
+        if (release != null) {
+          release(controller);
+        } else if (owns) {
+          controller.dispose();
+        }
         return;
       }
       setState(() {
@@ -138,7 +158,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
           _speedTest = SpeedTestRunner(
             target: ControllerTarget(controller, opened: () => _open = controller.opens),
             hooks: widget.speedTestHooks,
-            sharedTarget: !owns,
+            sharedTarget: !owns && release == null,
           );
         }
       });
@@ -157,12 +177,15 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
 
   @override
   void dispose() {
-    if (widget.ownsController) WidgetsBinding.instance.removeObserver(this);
+    if (_standalone) WidgetsBinding.instance.removeObserver(this);
     _lifecycle?.dispose();
     // Before the controller, so sound and screen are put back while the player is still there.
     _stopSpeedTest();
     final controller = _controller;
-    if (widget.ownsController) {
+    final release = widget.releasePlayback;
+    if (release != null) {
+      if (controller != null) release(controller);
+    } else if (widget.ownsController) {
       controller?.dispose();
     } else if (controller != null && _open != null) {
       final open = _open;
@@ -276,7 +299,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) => PopScope<Object?>(
         onPopInvokedWithResult: (didPop, _) {
-          if (didPop && !widget.ownsController) _stopSpeedTest();
+          if (didPop && !_standalone) _stopSpeedTest();
         },
         child: _page(context),
       );

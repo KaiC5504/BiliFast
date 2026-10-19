@@ -421,6 +421,29 @@ final class RipperSession {
     }
   }
 
+  /// The page was covered (Swift's `dropCache()` from `cover()`): every cached segment, the back buffer too, and
+  /// every prime, hint and prefetch still downloading go; the player's own reads go on. A reader that took a
+  /// prefetch over doesn't hand it back.
+  void dropPrefetch() {
+    var dropped = 0;
+    for (final entry in _cache.values) {
+      dropped += entry.bytes.length;
+    }
+    _cache.clear();
+    _deferred.clear();
+    _hints.clear();
+    for (final track in _resolvers.keys) {
+      _seekGeneration[track] = (_seekGeneration[track] ?? 0) + 1;
+    }
+    final prefetches = _inflight.values.toList();
+    _inflight.clear();
+    for (final prefetch in prefetches) {
+      dropped += prefetch.received;
+      prefetch.token.cancel();
+    }
+    _ctx.logger.info(LogCategory.engine, 'prefetch dropped', {'droppedBytes': dropped, 'cancelled': prefetches.length});
+  }
+
   static const _trimBehindSeconds = 5.0;
 
   void _trimCache() {
@@ -449,11 +472,12 @@ final class RipperSession {
     _ctx.logger.info(LogCategory.engine, 'cache trimmed', {'keptBytes': kept, 'droppedBytes': dropped});
   }
 
-  EngineSnapshot stats({double downloadBps = 0, String transport = ''}) => _ctx.stats.snapshot(
+  EngineSnapshot stats({double downloadBps = 0, String transport = '', String? token}) => _ctx.stats.snapshot(
     concurrency: _ctx.pool.limit,
     nodeStates: _resolvers[TrackKind.video]?.status() ?? const [],
     downloadBps: downloadBps,
     transport: transport,
+    token: token,
   );
 
   void close() {

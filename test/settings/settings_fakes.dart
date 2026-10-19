@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
@@ -9,13 +8,13 @@ import 'package:bilifast/devtools/log_files.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/playback/shared_engine.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
 import '../playback/fakes.dart';
-import '../support/fake_player.dart';
 
 /// The account half 设置 reads, without a keychain or a network: the state is set by the test, and [logout] records
 /// the call and ends logged out, as the real one does.
@@ -100,10 +99,11 @@ class FakeLogFiles implements LogFiles {
   Future<String?> export() async => null;
 }
 
-/// 设置's world: a shared controller on [engine] with its codec [memory], an empty 最近打开 and the fakes above. The
-/// controller is ready unless a [startGate] holds its start until the test completes it.
+/// 设置's world: the app's players, with no page open, on the [shared] engine (the fake [engine], running unless a
+/// [startGate] holds its start until the test completes it) and the codec [memory]; an empty 最近打开 and the fakes
+/// above.
 class SettingsWorld {
-  SettingsWorld._(this.services, this.environment, this.gate, this.logFiles, this.engine, this.memory, this.controller);
+  SettingsWorld._(this.services, this.environment, this.gate, this.logFiles, this.engine, this.shared, this.memory);
 
   static Future<SettingsWorld> create({Account account = const LoggedOut(), Completer<void>? startGate}) async {
     final environment = FakeEnvironment(account);
@@ -112,19 +112,17 @@ class SettingsWorld {
     final engine = FakeEngine();
     final memory = CodecMemory();
     final logger = Logger(session: 'test');
-    final controller = PlaybackController(
-      client: BiliClient(transport: CannedHttp(), cookies: CookieJar(), logger: logger),
-      engine: engine,
-      player: FakePlayer(),
+    final shared = SharedEngine(() async {
+      await startGate?.future;
+      return engine;
+    }, logger: logger);
+    final playback = AppPlayback(
+      () => Completer<PlaybackController>().future,
+      engine: shared,
       codecMemory: memory,
-      startTimer: FakeTimers().start,
       logger: logger,
     );
-    final playback = AppPlayback(() async {
-      await startGate?.future;
-      return controller;
-    });
-    if (startGate == null) await playback.obtain();
+    if (startGate == null) await shared.current();
     final services = AppServices(
       environment: environment,
       playback: playback,
@@ -134,7 +132,7 @@ class SettingsWorld {
       loginGate: gate,
       logFiles: logFiles,
     );
-    return SettingsWorld._(services, environment, gate, logFiles, engine, memory, controller);
+    return SettingsWorld._(services, environment, gate, logFiles, engine, shared, memory);
   }
 
   final AppServices services;
@@ -142,13 +140,10 @@ class SettingsWorld {
   final FakeLoginGate gate;
   final FakeLogFiles logFiles;
   final FakeEngine engine;
+  final SharedEngine shared;
   final CodecMemory memory;
-  final PlaybackController controller;
 
-  void dispose() {
-    services.playback.dispose();
-    controller.dispose();
-  }
+  void dispose() => services.playback.dispose();
 }
 
 const sampleRecent = RecentVideo(bvid: 'BV1GJ411x7h7', cid: 1, title: '一个视频', part: '', page: 1, pageCount: 1);

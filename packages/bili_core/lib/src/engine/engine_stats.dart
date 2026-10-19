@@ -49,6 +49,7 @@ final class EngineStats {
     required List<NodeStatus> nodeStates,
     double downloadBps = 0,
     String transport = '',
+    String? token,
   }) {
     final nodes = _timings.keys.toList()..sort();
     return EngineSnapshot(
@@ -71,6 +72,7 @@ final class EngineStats {
       nodeStates: nodeStates,
       downloadBps: downloadBps,
       transport: transport,
+      token: token,
     );
   }
 }

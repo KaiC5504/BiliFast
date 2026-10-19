@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:bili_core/devlog.dart';
-import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
@@ -10,13 +9,12 @@ import 'package:bilifast/devtools/log_forwarder.dart';
 import 'package:bilifast/devtools/log_server_discovery.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/playback/shared_engine.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
 import 'package:bilifast/screens/player_test_page.dart';
 import 'package:bilifast/speedtest/speed_test_plan.dart';
 import 'package:bilifast/speedtest/speed_test_runner.dart';
-import 'package:bilifast/video/video_page.dart';
-import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,46 +26,71 @@ import '../support/fake_player.dart';
 
 const bv = 'BV1GJ411x7h7';
 
-/// 开发者 on the app's shared player (ownsController: false), as 设置 opens it.
+/// 开发者 as 设置 opens it: a player of its own from AppPlayback.create on the pages' shared engine, released when
+/// the page leaves; the speed test's variants run on engines of their own.
 void main() {
   late CannedHttp http;
-  late FakePlayer player;
-  late FakeEngine engine;
   late ManualClock time;
-  late PlaybackController controller;
   late AppEnvironment environment;
   late GlobalKey<NavigatorState> nav;
+  late List<FakeEngine> engines;
+  late List<FakePlayer> players;
+  late List<PlaybackController> controllers;
+  late SharedEngine shared;
+  late AppPlayback playback;
+  late Logger logger;
+  Completer<void>? startGate;
 
   setUp(() {
-    http = Canned.http()..routes['/x/click-interface/web/heartbeat'] = (200, '{"code":0,"message":"0"}');
-    player = FakePlayer();
-    engine = FakeEngine();
+    http = Canned.http();
     time = ManualClock(10000);
     nav = GlobalKey<NavigatorState>();
+    engines = [];
+    players = [];
+    controllers = [];
+    logger = Logger(session: 'test');
+    startGate = null;
+    shared = SharedEngine(() async {
+      final engine = FakeEngine();
+      engines.add(engine);
+      return engine;
+    }, logger: logger);
   });
 
-  /// [home] is built under the pushed pages, as home is under 开发者 in the app.
-  Future<void> host(WidgetTester tester,
-      {Future<PlaybackController> Function()? start, WidgetBuilder? home, double height = 900}) async {
-    tester.view.physicalSize = Size(440, height);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final logger = Logger(session: 'test');
-    environment = await AppEnvironment.load(
-        keychain: FakeKeychain(const StoredCookies(Canned.cookies)), http: http, logger: logger);
-    await environment.refreshAccount();
+  /// The app's start, with fakes: a new player on a lease of the shared engine.
+  Future<PlaybackController> start() async {
+    await startGate?.future;
+    final player = FakePlayer();
+    players.add(player);
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
-    controller = PlaybackController(
+    final controller = PlaybackController(
       client: environment.client,
-      engine: engine,
+      engine: await shared.lease(),
+      startEngine: shared.lease,
       player: player,
       clock: time.clock,
       now: () => now,
       startTimer: FakeTimers().start,
       logger: logger,
     );
-    final playback = AppPlayback(start ?? () async => controller);
-    addTearDown(playback.dispose);
+    controllers.add(controller);
+    return controller;
+  }
+
+  Future<void> host(WidgetTester tester, {double height = 900}) async {
+    tester.view.physicalSize = Size(440, height);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    environment = await AppEnvironment.load(
+        keychain: FakeKeychain(const StoredCookies(Canned.cookies)), http: http, logger: logger);
+    await environment.refreshAccount();
+    playback = AppPlayback(start, engine: shared, logger: logger);
+    addTearDown(() {
+      for (final controller in controllers) {
+        playback.release(controller);
+      }
+      playback.dispose();
+    });
     final services = AppServices(
       environment: environment,
       playback: playback,
@@ -76,7 +99,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       navigatorKey: nav,
       builder: (context, child) => AppScope(services: services, child: child!),
-      home: Builder(builder: home ?? (_) => const SizedBox()),
+      home: const SizedBox(),
     ));
   }
 
@@ -86,19 +109,16 @@ void main() {
     }
   }
 
-  void pushDeveloper({Future<PlaybackController> Function()? start, LogForwarder? logs, SpeedTestHooks? hooks}) =>
+  void pushDeveloper({LogForwarder? logs, SpeedTestHooks? hooks}) =>
       unawaited(nav.currentState!.push(MaterialPageRoute<void>(
         builder: (_) => PlayerTestPage(
           environment: environment,
-          startPlayback: start ?? () async => controller,
+          startPlayback: playback.create,
+          releasePlayback: playback.release,
           logs: logs,
-          speedTestHooks: hooks ?? appSpeedTestHooks,
-          ownsController: false,
+          speedTestHooks: hooks ?? appSpeedTestHooksOn(shared),
         ),
       )));
-
-  void pushVideo(VideoRoute route) =>
-      unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => VideoPage(route: route))));
 
   Future<void> play(WidgetTester tester, String text) async {
     await tester.enterText(find.byKey(const ValueKey('link-field')), text);
@@ -129,45 +149,36 @@ void main() {
     await frames(tester, 20);
   }
 
-  testWidgets('leaving 开发者 before the shared player is ready leaves it alive', (tester) async {
-    final ready = Completer<PlaybackController>();
-    await host(tester, start: () => ready.future);
-    pushDeveloper(start: () => ready.future);
-    await frames(tester);
-    nav.currentState!.pop();
-    await frames(tester, 20);
-    ready.complete(controller);
-    await frames(tester);
-    expect(player.disposed, isFalse);
-    expect(engine.disposed, isFalse);
-  });
-
-  testWidgets('a video page opened while 开发者 is leaving keeps playing', (tester) async {
+  testWidgets('开发者 plays on a player of its own; leaving releases it and the engine runs on', (tester) async {
     await host(tester);
     pushDeveloper();
     await frames(tester);
+    expect(playback.live, 1);
     await play(tester, bv);
-    nav.currentState!.pop();
-    await tester.pump();
-    pushVideo(const VideoRoute(bvid: bv, cid: 137649199, start: 0));
-    await frames(tester, 30);
-    expect(controller.video?.bvid, bv);
-    expect(controller.phase, isNot(PlaybackPhase.idle));
-    expect(player.calls, isNot(contains('unload')));
-  });
+    expect(controllers.single.video?.bvid, bv);
+    expect(engines.single.prepared, hasLength(1));
 
-  testWidgets('leaving 开发者 closes and unloads its own video after the tree is torn down', (tester) async {
-    // A page still listening below, as home may: a close inside dispose would rebuild it while the tree is locked.
-    await host(tester, home: (_) => ListenableBuilder(listenable: controller, builder: (_, _) => const SizedBox()));
-    pushDeveloper();
-    await frames(tester);
-    await play(tester, bv);
-    expect(controller.video?.bvid, bv);
     nav.currentState!.pop();
     await frames(tester, 20);
     expect(tester.takeException(), isNull);
-    expect(controller.video, isNull);
-    expect(player.calls.last, 'unload');
+    expect(playback.live, 0);
+    expect(players.single.disposed, isTrue);
+    expect(engines.single.released, ['tok1']);
+    expect(engines.single.disposed, isFalse);
+  });
+
+  testWidgets('leaving 开发者 before its player is ready releases the player once it arrives', (tester) async {
+    await host(tester);
+    final gate = startGate = Completer<void>();
+    pushDeveloper();
+    await frames(tester);
+    nav.currentState!.pop();
+    await frames(tester, 20);
+    gate.complete();
+    await frames(tester);
+    expect(players.single.disposed, isTrue);
+    expect(playback.live, 0);
+    expect(engines.single.disposed, isFalse);
   });
 
   testWidgets('‹ in the bar leaves 开发者, pressed or through VoiceOver', (tester) async {
@@ -179,6 +190,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('developer-back')));
     await frames(tester, 20);
     expect(find.byType(PlayerTestPage), findsNothing);
+    expect(playback.live, 0);
 
     pushDeveloper();
     await frames(tester);
@@ -187,16 +199,8 @@ void main() {
     tester.semantics.tap(back);
     await frames(tester, 20);
     expect(find.byType(PlayerTestPage), findsNothing);
+    expect(playback.live, 0);
     semantics.dispose();
-  });
-
-  testWidgets('leaving 开发者 without playing anything closes nothing', (tester) async {
-    await host(tester);
-    pushDeveloper();
-    await frames(tester);
-    nav.currentState!.pop();
-    await frames(tester, 20);
-    expect(player.calls, isNot(contains('unload')));
   });
 
   testWidgets('a new video reads 0 s on the bar from the start, not the last one\'s time', (tester) async {
@@ -204,6 +208,8 @@ void main() {
     pushDeveloper();
     await frames(tester);
     await play(tester, bv);
+    final player = players.single;
+    final controller = controllers.single;
     player.emit(const StatusChanged(PlayerStatus.playing));
     time.advance(PlaybackClock.jumpSettleMs);
     player.emit(PositionChanged(seconds: 45, hostMs: time.clock.nowMs(), rate: 1));
@@ -219,72 +225,71 @@ void main() {
     await frames(tester);
   });
 
-  testWidgets('leaving 开发者 mid speed test puts the app engine, quality and sound back on the shared player',
-      (tester) async {
-    final engines = <String>[];
+  testWidgets('a speed test swaps only 开发者\'s engine; leaving mid run releases it and its variant, and a video '
+      'page\'s player stays on the shared engine', (tester) async {
+    final variants = <FakeEngine>[];
+    var putBacks = 0;
     final hooks = SpeedTestHooks(
       choosePlan: (server) async => quickPlan(),
       startEngine: (variant) async {
-        engines.add(variant.name);
-        return FakeEngine();
+        final started = FakeEngine();
+        variants.add(started);
+        return started;
       },
-      appEngine: () async {
-        engines.add('app');
-        return FakeEngine();
+      appEngine: () {
+        putBacks += 1;
+        return shared.lease();
       },
     );
     await host(tester, height: 1600);
-    // Checks on the PC run with --mute.
-    await player.setMuted(true);
+    final page = await playback.create();
+    await page.open(bv);
     pushDeveloper(logs: devLogs(), hooks: hooks);
     await frames(tester);
     await startSpeedTest(tester);
-    expect(engines, isNotEmpty);
-    expect(controller.selectedQuality, 120);
+    final developer = controllers.last;
+    expect(variants, isNotEmpty);
+    expect(developer.engine, same(variants.last));
+    expect((page.engine as EngineLease).engine, same(engines.single));
+
     nav.currentState!.pop();
     await frames(tester, 30);
-    expect(engines.last, 'app', reason: 'the next video page must not play on a speed test variant');
-    expect(controller.video, isNull);
-    expect(controller.selectedQuality, PlaybackController.defaultQuality);
-    expect(controller.mode, PlaybackMode.btr);
-    expect(player.muted, isTrue, reason: 'the run found it muted');
-    expect(player.calls.where((call) => call.startsWith('muted')).last, 'muted true');
+    expect(playback.live, 1, reason: 'the video page\'s');
+    expect(players.last.disposed, isTrue);
+    expect(variants.every((variant) => variant.disposed), isTrue);
+    expect(putBacks, 0, reason: 'nothing to put back on a player that went with the page');
+    expect(engines, hasLength(1));
+    expect(engines.single.disposed, isFalse);
+    expect((page.engine as EngineLease).engine, same(engines.single));
+    expect(page.phase, isNot(PlaybackPhase.failed));
   });
 
-  testWidgets('an engine swap still starting when 开发者 goes ends on the app engine', (tester) async {
+  testWidgets('an engine swap still starting when 开发者 goes is dropped with its player', (tester) async {
     final gate = Completer<void>();
-    final engines = <String>[];
     final variants = <FakeEngine>[];
-    final app = FakeEngine();
     final hooks = SpeedTestHooks(
       choosePlan: (server) async => quickPlan(),
       startEngine: (variant) async {
-        engines.add(variant.name);
         final started = FakeEngine();
         variants.add(started);
         // The first pass's own engine, for its replay.
-        if (engines.length == 2) await gate.future;
+        if (variants.length == 2) await gate.future;
         return started;
       },
-      appEngine: () async {
-        engines.add('app');
-        return app;
-      },
+      appEngine: shared.lease,
     );
     await host(tester, height: 1600);
     pushDeveloper(logs: devLogs(), hooks: hooks);
     await frames(tester);
     await startSpeedTest(tester);
-    expect(engines, ['A', 'A']);
+    expect(variants, hasLength(2));
     nav.currentState!.pop();
     await frames(tester, 30);
-    expect(engines, ['A', 'A'], reason: 'the app engine waits for the swap in flight');
     gate.complete();
     await frames(tester, 10);
-    expect(engines, ['A', 'A', 'app']);
-    expect(controller.engine, same(app));
     expect(variants.every((variant) => variant.disposed), isTrue);
-    expect(app.disposed, isFalse);
     expect(variants.last.prepared, isEmpty, reason: 'the replay that asked for it was overtaken');
+    expect(playback.live, 0);
+    expect(engines.single.disposed, isFalse);
   });
 }

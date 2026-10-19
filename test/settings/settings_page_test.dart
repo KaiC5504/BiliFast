@@ -178,12 +178,12 @@ void main() {
       expect(world.engine.nodeModes.last, isA<OverseasNodes>());
     });
 
-    testWidgets('a change while the player is still starting reaches it once it has started, starting nothing', (
+    testWidgets('a change while the engine is still starting reaches it once it has started, with no player made', (
       tester,
     ) async {
       final gate = Completer<void>();
       await show(tester, startGate: gate);
-      expect(world.services.playback.ready, isNull);
+      expect(world.shared.running, isNull);
       await tapRow(tester, 'settings-node');
       await tester.tap(row('node-mainland'));
       await tester.pumpAndSettle();
@@ -191,8 +191,9 @@ void main() {
       expect(world.engine.nodeModes, isEmpty);
       gate.complete();
       await tester.pumpAndSettle();
-      expect(world.services.playback.ready, same(world.controller));
+      expect(world.shared.running, same(world.engine));
       expect(world.engine.nodeModes.single, isA<MainlandNodes>());
+      expect(world.services.playback.live, 0);
     });
 
     testWidgets('picking the node already in use changes nothing', (tester) async {
@@ -226,7 +227,7 @@ void main() {
       expect(confirm, findsNothing);
     });
 
-    testWidgets('重置编码记忆 before the player has started applies once it has', (tester) async {
+    testWidgets('重置编码记忆 needs neither a page open nor the engine started', (tester) async {
       final gate = Completer<void>();
       await show(tester, startGate: gate);
       world.memory.markFailed('av1');
@@ -234,10 +235,9 @@ void main() {
       await tester.tap(confirmButton('重置'));
       await tester.pumpAndSettle();
       expect(confirm, findsNothing);
-      expect(world.memory.failedKinds, {'av1'});
-      gate.complete();
-      await tester.pumpAndSettle();
       expect(world.memory.failedKinds, isEmpty);
+      expect(world.services.playback.live, 0);
+      gate.complete();
     });
 
     testWidgets('清除最近观看 is off while 最近打开 is empty', (tester) async {

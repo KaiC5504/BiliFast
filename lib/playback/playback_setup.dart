@@ -9,6 +9,7 @@ import '../video/player_prefs.dart';
 import 'codec_memory.dart';
 import 'cupertino_transport.dart';
 import 'playback_controller.dart';
+import 'shared_engine.dart';
 
 /// dart:io with Bilibili's media headers, 8 connections per host by default. Top-level: it runs in the engine
 /// isolate.
@@ -85,22 +86,26 @@ RangeTransport Function() _transportFactory(int connectionsPerHost) => Platform.
 /// What the overlay shows until the engine's first stats arrive.
 String get platformTransportName => Platform.isIOS ? 'URLSession' : 'dart:io';
 
-/// The engine isolate, the platform's player and the controller that owns both, with the codec memory read again.
-Future<PlaybackController> startPlaybackController(BiliClient client) async {
-  final memory = CodecMemory.load(codecMemoryPath());
-  final engine = await startPlatformEngine();
+/// One page's controller: a player of its own on a lease of the app's [engine], which is also where it goes for a new
+/// one once the engine isolate is gone.
+Future<PlaybackController> startPlaybackController(
+  BiliClient client, {
+  required SharedEngine engine,
+  required CodecMemory codecMemory,
+}) async {
+  final lease = await engine.lease();
   try {
     final player = await createPlayer();
     return PlaybackController(
       client: client,
-      codecMemory: await memory,
-      engine: engine,
-      startEngine: startPlatformEngine,
+      codecMemory: codecMemory,
+      engine: lease,
+      startEngine: engine.lease,
       player: player,
       transportName: platformTransportName,
     );
   } catch (_) {
-    await engine.dispose();
+    await lease.dispose();
     rethrow;
   }
 }
