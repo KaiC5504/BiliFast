@@ -2,6 +2,7 @@ import 'package:bili_core/api.dart' show VideoDetail, VideoView;
 import 'package:flutter/widgets.dart';
 
 import '../app/swipe_back_route.dart';
+import '../app/zoom_back_route.dart';
 import 'video_page.dart';
 
 /// What opens a video page (port of VideoRoute.swift). Without a [cid] the page plays the part Bilibili saw this
@@ -9,10 +10,20 @@ import 'video_page.dart';
 /// and not within 5 s of the end. [title] (from the card, link or 最近打开) shows until the video's own arrives;
 /// [cover] (feed cards only) flies in from the card and covers the player until the video first plays. [view] is the
 /// video a pasted link already resolved, so the page doesn't ask Bilibili for it again, and [detail] the signed view
-/// that resolved it, when that one answered (its 合集 and counts).
+/// that resolved it, when that one answered (its 合集 and counts). [zoomSource] (推荐 cards only) is where a swipe back
+/// shrinks the page to.
 @immutable
 final class VideoRoute {
-  const VideoRoute({required this.bvid, this.cid, this.start, this.title, this.cover, this.view, this.detail});
+  const VideoRoute({
+    required this.bvid,
+    this.cid,
+    this.start,
+    this.title,
+    this.cover,
+    this.view,
+    this.detail,
+    this.zoomSource,
+  });
 
   final String bvid;
   final int? cid;
@@ -21,6 +32,7 @@ final class VideoRoute {
   final String? cover;
   final VideoView? view;
   final VideoDetail? detail;
+  final ZoomSource? zoomSource;
 
   /// The feed card's cover and the page's player box share it, so the cover flies into the player.
   static String coverTag(String bvid) => 'cover-$bvid';
@@ -29,5 +41,10 @@ final class VideoRoute {
 }
 
 /// Every way of opening a video page (feed cards, pasted links, 最近打开) comes through here.
-Future<void> openVideoPage(BuildContext context, VideoRoute route) =>
-    Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => VideoPage(route: route)));
+Future<void> openVideoPage(BuildContext context, VideoRoute route) {
+  Widget page(BuildContext _) => VideoPage(route: route);
+  return Navigator.of(context).push(switch (route.zoomSource) {
+    final source? => ZoomBackPageRoute<void>(builder: page, source: source),
+    null => SwipeBackPageRoute<void>(builder: page),
+  });
+}

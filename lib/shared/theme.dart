@@ -1926,6 +1926,21 @@ abstract final class AvatarPageTheme {
   static const shown = 5;
 }
 
+/// The swipe back from a 推荐 card (03, 04 in local/differences): the page shrinks into a floating card over the
+/// dimmed home and flies into the card it came from.
+abstract final class ZoomBackTheme {
+  static const dim = Color(0x4D000000);
+  static const minScale = 0.4;
+  static const cornerRadius = 20.0;
+  static const settle = Duration(milliseconds: 350);
+}
+
+/// Turning to landscape full screen and back (01 in local/differences): the video grows from its small spot to full
+/// screen over the second half of the turn, once the screen has its new shape.
+abstract final class RotationTheme {
+  static const grow = Duration(milliseconds: 220);
+}
+
 /// 弹幕设置 (07, 08, 24, 29, 33, 40, 41). Landscape is a hard-edged dark strip at the right, portrait the light
 /// sheet; both lay out the same, measured from the top of the scrolling content and the left of the cards.
 abstract final class DanmakuPanelTheme {
