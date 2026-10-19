@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show Random;
 import 'dart:typed_data';
 
 import '../danmaku/danmaku_filter.dart';
@@ -28,6 +29,8 @@ part 'bili_client_feed.dart';
 part 'bili_client_video.dart';
 
 typedef _Sent = ({HTTPResponse response, double ms});
+
+typedef _FilePart = ({String field, String filename, String contentType, List<int> bytes});
 
 final class BiliClient {
   BiliClient({required this._transport, required this.cookies, DateTime Function()? now, Logger? logger})
@@ -202,6 +205,25 @@ final class BiliClient {
     if (envelope.code != 0) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');
   }
 
+  /// An upload: [form] and [file] as multipart/form-data, with the csrf field as [post] adds it.
+  Future<T> _postFile<T>(
+    String path, {
+    Map<String, String> form = const {},
+    required _FilePart file,
+    required JsonDecode<T> decode,
+  }) async {
+    final sent = await _send(
+      method: 'POST',
+      path: path,
+      signed: false,
+      host: api,
+      form: form,
+      file: file,
+      accept: 'application/json',
+    );
+    return _checked(_decodeEnvelope(sent, path, decode));
+  }
+
   Future<BiliEnvelope<T>> _getEnvelope<T>(
     String path, {
     Map<String, String> query = const {},
@@ -267,6 +289,7 @@ final class BiliClient {
     required bool signed,
     required String host,
     Map<String, String>? form,
+    _FilePart? file,
     String? referer,
     required String accept,
     bool sendCookies = true,
@@ -282,8 +305,14 @@ final class BiliClient {
         fields['csrf'] = token;
         headers['Origin'] = _origin;
       }
-      body = FormEncoding.encode(fields);
-      headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
+      if (file == null) {
+        body = FormEncoding.encode(fields);
+        headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
+      } else {
+        final boundary = _boundary();
+        body = _multipart(fields, file, boundary);
+        headers['Content-Type'] = 'multipart/form-data; boundary=$boundary';
+      }
     }
     final String queryString;
     if (signed) {
@@ -328,6 +357,7 @@ final class BiliClient {
           signed: signed,
           host: host,
           form: form,
+          file: file,
           referer: referer,
           accept: accept,
           sendCookies: sendCookies,
@@ -338,4 +368,31 @@ final class BiliClient {
     }
     return (response: response, ms: ms);
   }
+
+  static final _random = Random.secure();
+
+  static String _boundary() =>
+      'BiliFast${[for (var i = 0; i < 16; i++) _random.nextInt(256).toRadixString(16).padLeft(2, '0')].join()}';
+
+  static Uint8List _multipart(Map<String, String> fields, _FilePart file, String boundary) {
+    final out = BytesBuilder(copy: false);
+    void line(String text) => out.add(utf8.encode('$text\r\n'));
+    for (final MapEntry(:key, :value) in fields.entries) {
+      line('--$boundary');
+      line('Content-Disposition: form-data; name="${_quoted(key)}"');
+      line('');
+      line(value);
+    }
+    line('--$boundary');
+    line('Content-Disposition: form-data; name="${_quoted(file.field)}"; filename="${_quoted(file.filename)}"');
+    line('Content-Type: ${file.contentType}');
+    line('');
+    out.add(file.bytes);
+    line('');
+    line('--$boundary--');
+    return out.takeBytes();
+  }
+
+  /// As browsers escape a name in the header: a quote or line break would end it early.
+  static String _quoted(String text) => text.replaceAll('\r', '%0D').replaceAll('\n', '%0A').replaceAll('"', '%22');
 }

@@ -471,6 +471,15 @@ Comment decodePostedComment(Object? json) {
 final class MentionCandidate {
   const MentionCandidate({required this.mid, required this.name, this.face = ''});
 
+  /// One entry of `/x/relation/followings` or its search.
+  factory MentionCandidate.fromJson(Object? json) {
+    final object = JsonObject.from(json);
+    final mid = object.count('mid');
+    final name = object.text('uname') ?? '';
+    if (mid == 0 || name.isEmpty) throw const DecodeError('missing mid or uname');
+    return MentionCandidate(mid: mid, name: name, face: object.text('face') ?? '');
+  }
+
   final int mid;
   final String name;
   final String face;
@@ -490,10 +499,26 @@ final class MentionCandidate {
 final class UploadedPicture {
   const UploadedPicture({required this.url, required this.width, required this.height, required this.sizeKb});
 
+  /// `/x/dynamic/feed/draw/upload_bfs`'s data.
+  factory UploadedPicture.fromJson(Object? json) {
+    final object = JsonObject.from(json);
+    final url = object.text('image_url');
+    if (url == null || url.isEmpty) throw const DecodeError('missing image_url');
+    return UploadedPicture(
+      url: url,
+      width: object.count('image_width'),
+      height: object.count('image_height'),
+      sizeKb: attempt(() => object.number('img_size')) ?? 0,
+    );
+  }
+
   final String url;
   final int width;
   final int height;
   final double sizeKb;
+
+  /// One entry of `/x/v2/reply/add`'s `pictures`.
+  Map<String, Object> toJson() => {'img_src': url, 'img_width': width, 'img_height': height, 'img_size': sizeKb};
 
   @override
   bool operator ==(Object other) =>
@@ -509,3 +534,7 @@ final class UploadedPicture {
   @override
   String toString() => 'UploadedPicture($url, $width x $height, $sizeKb KB)';
 }
+
+/// A search that matches no one can answer without a list.
+List<MentionCandidate> decodeMentionCandidates(Object? json) =>
+    JsonObject.from(json).lenientList('list', MentionCandidate.fromJson);
