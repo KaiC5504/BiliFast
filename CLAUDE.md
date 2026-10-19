@@ -141,6 +141,11 @@ with what was built, how it works and numbered test steps. For phone slices, inc
     don't pause anything. iOS Reduce Motion reaches `MediaQuery.disableAnimationsOf` (`lib/app/reduce_motion.dart`).
   - Left: 竖屏 search, 充电鸣谢, the official player box's height following a 16:10 video, logged-out actions
     opening the login page (slice 8).
+- 2026-10-19, after slice 6 (KaiC's phone shot against the official app, `local/differences/`): his iPhone has a
+  larger Text Size, which our labels followed (tabs, 点我发弹幕, the action counts 1.4×) and the official app ignores.
+  Text scaling is now off at the app's root (`main.dart`), so sizes are the official pt whatever iOS says; don't add
+  per-widget clamps. Also: PingFang's room between digits and Chinese in 粉丝/视频 (system font only), and the solid
+  action glyphs' corners rounded like the official icons. 1.0.0 (7).
 - Next, KaiC's order: slice 7 (comments), then 5 (danmaku).
 - Update this section when a slice finishes.
 
