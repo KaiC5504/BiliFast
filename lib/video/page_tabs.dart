@@ -120,11 +120,21 @@ class _PageTabsState extends State<PageTabs> {
       physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
       onPageChanged: (index) => widget.controller._set(PageTab.values[index]),
       children: [
-        _KeepAlive(child: _primary(PageTab.intro, widget.intro)),
-        _KeepAlive(child: _primary(PageTab.comments, widget.comments)),
+        _KeepAlive(child: _onScreen(PageTab.intro, _primary(PageTab.intro, widget.intro))),
+        _KeepAlive(child: _onScreen(PageTab.comments, _primary(PageTab.comments, widget.comments))),
       ],
     ),
   );
+
+  /// A kept tab out of sight stops its tickers, so a spinner there doesn't keep a core busy.
+  Widget _onScreen(PageTab tab, Widget child) {
+    final controller = widget.controller;
+    return ListenableBuilder(
+      listenable: Listenable.merge([controller, controller.pager]),
+      builder: (context, child) => TickerMode(enabled: (controller.position - tab.index).abs() < 1, child: child!),
+      child: child,
+    );
+  }
 
   // Every platform, so a list that doesn't say `primary` takes it on Windows as it does on the phone.
   Widget _primary(PageTab tab, Widget child) => PrimaryScrollController(

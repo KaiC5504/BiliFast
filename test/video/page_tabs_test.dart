@@ -226,6 +226,26 @@ void main() {
       expect(underline(tester).left, closeTo(start.left, 0.01));
     });
 
+    testWidgets('a kept tab out of sight stops its tickers; both run during a swipe', (tester) async {
+      await host(tester, page(comments: scrolling('评论')));
+      bool ticking(String text) => TickerMode.valuesOf(tester.element(find.text(text, skipOffstage: false))).enabled;
+      tabs.select(PageTab.comments);
+      await settle(tester);
+      expect(ticking('评论 0'), isTrue);
+      expect(ticking('简介 0'), isFalse);
+      final gesture = await tester.startGesture(const Offset(220, 600));
+      await gesture.moveBy(const Offset(20, 0));
+      await gesture.moveBy(const Offset(100, 0));
+      await tester.pump();
+      expect(ticking('简介 0'), isTrue);
+      expect(ticking('评论 0'), isTrue);
+      // Let go early: back on 评论, and 简介 stops again.
+      await gesture.up();
+      await settle(tester);
+      expect(ticking('简介 0'), isFalse);
+      expect(ticking('评论 0'), isTrue);
+    });
+
     testWidgets('each tab keeps its scroll position through a switch', (tester) async {
       await host(tester, page(comments: scrolling('评论')));
       await tester.drag(find.text('简介 3'), const Offset(0, -600));
