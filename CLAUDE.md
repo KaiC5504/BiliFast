@@ -146,7 +146,8 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   Text scaling is now off at the app's root (`main.dart`), so sizes are the official pt whatever iOS says; don't add
   per-widget clamps. Also: PingFang's room between digits and Chinese in 粉丝/视频 (system font only), and the solid
   action glyphs' corners rounded like the official icons. 1.0.0 (7).
-- 2026-10-19/20: slice 7 (comments), shipped as 1.0.0 (8). 8 builders, 8 checkers, 6 fixers, a final round.
+- 2026-10-19/20: slice 7 (comments), shipped as 1.0.0 (8); phone check passed (KaiC). 8 builders, 8 checkers, 6
+  fixers, a final round.
   - 评论 (`lib/comments/`): 热门/最新 with ≡ 按热度/按时间, offset paging (never re-asks page 1; empty pages bounded),
     the pinned comment, closed sections (12002/12061), rows as 10/12/13 (pendant, 大, LV drawn, UP, 置顶, fan card,
     pictures, 👍/👎/⋮ with 复制 and 删除 on your own, the replies box), rich text (emotes, @, links, BV/av, timestamps,
