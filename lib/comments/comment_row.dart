@@ -5,7 +5,7 @@ import 'package:bili_core/api.dart' show BiliClient, Comment, CommentPicture;
 import 'package:bili_core/logic.dart' show CountFormat, TimeFormat;
 import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart' show Icons, Material, MaterialType;
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -52,9 +52,12 @@ class CommentRow extends StatelessWidget {
     callbacks.reply(target, false);
   }
 
-  void _openMenu(BuildContext context, BuildContext anchor) {
+  void _openMenuAt(BuildContext context, BuildContext anchor) {
     final box = anchor.findRenderObject()! as RenderBox;
-    final rect = box.localToGlobal(Offset.zero) & box.size;
+    _openMenu(context, box.localToGlobal(Offset.zero) & box.size);
+  }
+
+  void _openMenu(BuildContext context, Rect rect) {
     final own = model.isOwn(comment);
     unawaited(
       Navigator.of(context).push(
@@ -105,24 +108,26 @@ class CommentRow extends StatelessWidget {
                   padding: textLeft,
                   child: Align(
                     alignment: Alignment.topLeft,
-                    child: Builder(
-                      builder: (anchor) => GestureDetector(
-                        onLongPress: () => _openMenu(context, anchor),
-                        child: CommentText(
-                          runs: runs,
-                          style: CommentRowTheme.textStyle,
-                          leading: comment.isPinned
-                              ? const WidgetSpan(
-                                  alignment: PlaceholderAlignment.middle,
-                                  child: Padding(
-                                    padding: EdgeInsets.only(right: CommentRowTheme.pinnedPadding),
-                                    child: PinnedTag(),
-                                  ),
-                                )
-                              : null,
-                          onSeek: callbacks.seek,
-                          onOpenVideo: callbacks.openVideo,
-                        ),
+                    child: GestureDetector(
+                      // A long comment's top can be under the player, so the menu opens where the finger is.
+                      onLongPressStart: (details) {
+                        unawaited(HapticFeedback.selectionClick());
+                        _openMenu(context, Rect.fromLTWH(details.globalPosition.dx, details.globalPosition.dy, 0, 0));
+                      },
+                      child: CommentText(
+                        runs: runs,
+                        style: CommentRowTheme.textStyle,
+                        leading: comment.isPinned
+                            ? const WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: Padding(
+                                  padding: EdgeInsets.only(right: CommentRowTheme.pinnedPadding),
+                                  child: PinnedTag(),
+                                ),
+                              )
+                            : null,
+                        onSeek: callbacks.seek,
+                        onOpenVideo: callbacks.openVideo,
                       ),
                     ),
                   ),
@@ -149,7 +154,7 @@ class CommentRow extends StatelessWidget {
                 onReply: _reply,
                 onLike: () => unawaited(model.toggleLike(comment)),
                 onHate: () => unawaited(model.toggleHate(comment)),
-                onMore: (anchor) => _openMenu(context, anchor),
+                onMore: (anchor) => _openMenuAt(context, anchor),
               ),
             ),
             if (showsReplies && comment.upLiked) const _UpLiked(),
@@ -764,7 +769,7 @@ class CommentPictures extends StatelessWidget {
   /// 评论详情's smaller single picture (13).
   final bool compact;
 
-  /// Bilibili's image servers scale on request ("@480w.webp"); the viewer still loads the original.
+  /// Bilibili's image servers scale on request ("@480w.webp"); the viewer asks for its own screen-sized copy.
   static String thumbnail(String url, {required int width}) {
     final secure = secureImageUrl(url);
     if (!secure.contains('hdslb.com/bfs/') || secure.contains('@') || secure.contains('?')) return secure;
@@ -903,8 +908,13 @@ class _CommentMenuRoute extends PopupRoute<void> {
     final padding = MediaQuery.paddingOf(context);
     final delete = onDelete;
     final height = BiliMetrics.menuRowHeight * (delete == null ? 1 : 2);
-    final below =
-        anchor.bottom + BiliMetrics.cardMenuGap + height <= screen.height - padding.bottom - BiliMetrics.gutter;
+    final lowest = screen.height - padding.bottom - BiliMetrics.gutter - height;
+    final below = anchor.bottom + BiliMetrics.cardMenuGap <= lowest;
+    final top = clampDouble(
+      below ? anchor.bottom + BiliMetrics.cardMenuGap : anchor.top - BiliMetrics.cardMenuGap - height,
+      padding.top + BiliMetrics.gutter,
+      math.max(padding.top + BiliMetrics.gutter, lowest),
+    );
     final left = clampDouble(
       anchor.right - BiliMetrics.cardMenuWidth,
       BiliMetrics.gutter,
@@ -919,7 +929,7 @@ class _CommentMenuRoute extends PopupRoute<void> {
       children: [
         Positioned(
           left: left,
-          top: below ? anchor.bottom + BiliMetrics.cardMenuGap : anchor.top - BiliMetrics.cardMenuGap - height,
+          top: top,
           child: ScaleTransition(
             alignment: below ? Alignment.topRight : Alignment.bottomRight,
             scale: Tween(begin: 0.8, end: 1.0).animate(animation),

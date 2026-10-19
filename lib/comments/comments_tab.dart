@@ -31,9 +31,13 @@ class _CommentsTabState extends State<CommentsTab> {
   @override
   void initState() {
     super.initState();
-    // The first build reads the model as it is, so a change ensureLoaded makes before the listener is on is not lost.
-    unawaited(widget.model.ensureLoaded());
     widget.model.addListener(_changed);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadIfShown();
   }
 
   @override
@@ -43,8 +47,14 @@ class _CommentsTabState extends State<CommentsTab> {
     oldWidget.model.removeListener(_changed);
     _paging.dispose();
     _paging = _pagingFor(widget.model);
-    unawaited(widget.model.ensureLoaded());
     widget.model.addListener(_changed);
+    _loadIfShown();
+  }
+
+  /// The tab is kept alive beside 简介, where the pager turns its tickers off; a new video there (自动连播) waits for
+  /// 评论 to show before asking for its first page.
+  void _loadIfShown() {
+    if (TickerMode.valuesOf(context).enabled) unawaited(widget.model.ensureLoaded());
   }
 
   @override
@@ -122,7 +132,7 @@ class _CommentsTabState extends State<CommentsTab> {
               ),
             ),
           ),
-          CommentWriteBar(onWrite: (emotes) => callbacks.reply(const ReplyToVideo(), emotes)),
+          if (closed == null) CommentWriteBar(onWrite: (emotes) => callbacks.reply(const ReplyToVideo(), emotes)),
         ],
       ),
     );
@@ -343,11 +353,12 @@ class CommentListFooter extends StatelessWidget {
     final padding = EdgeInsets.symmetric(
       vertical: isEmpty ? CommentListTheme.emptyPadding : CommentListTheme.footerPadding,
     );
-    if (error != null && !loading) {
+    final reason = error;
+    if (reason != null && !loading) {
       return Semantics(
         key: const ValueKey('comments-retry'),
         button: true,
-        label: '加载失败，点击重试',
+        label: reason.isEmpty ? '加载失败，点击重试' : '$reason，加载失败，点击重试',
         onTap: onRetry,
         excludeSemantics: true,
         child: GestureDetector(
@@ -355,14 +366,28 @@ class CommentListFooter extends StatelessWidget {
           onTap: onRetry,
           child: Padding(
             padding: padding,
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: '加载失败，', style: _style(CommentListTheme.retryInk)),
-                  TextSpan(text: '点击重试', style: _style(CommentListTheme.retryAction)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (reason.isNotEmpty) ...[
+                  Text(
+                    reason,
+                    key: const ValueKey('comments-error'),
+                    textAlign: TextAlign.center,
+                    style: _style(CommentListTheme.retryInk),
+                  ),
+                  const SizedBox(height: CommentListTheme.retryGap),
                 ],
-              ),
-              textAlign: TextAlign.center,
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '加载失败，', style: _style(CommentListTheme.retryInk)),
+                      TextSpan(text: '点击重试', style: _style(CommentListTheme.retryAction)),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
         ),

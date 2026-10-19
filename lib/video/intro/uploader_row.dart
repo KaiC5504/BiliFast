@@ -74,7 +74,7 @@ class _Avatar extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(child: ClipOval(child: RemoteImage(face))),
+          Positioned.fill(child: ClipOval(child: RemoteImage.avatar(face))),
           if (badge != null)
             Positioned(
               right: -IntroTheme.badgeRing,
@@ -218,7 +218,7 @@ class _StaffRow extends StatelessWidget {
                         children: [
                           SizedBox.square(
                             dimension: IntroTheme.staffAvatar,
-                            child: ClipOval(child: RemoteImage(member.face)),
+                            child: ClipOval(child: RemoteImage.avatar(member.face)),
                           ),
                           const SizedBox(height: IntroTheme.staffNameTop),
                           Text(

@@ -41,6 +41,32 @@ void main() {
     expect(find.byType(ColoredBox), findsNothing);
   });
 
+  testWidgets('a fallback shows for an empty url, while loading and after a failure, with no grey', (tester) async {
+    await show(tester, const [
+      RemoteImage('', fallback: Text('none', key: ValueKey('empty'))),
+      RemoteImage('https://i7.hdslb.com/bfs/face/a.jpg', fallback: Text('none', key: ValueKey('loading'))),
+    ]);
+    expect(find.byKey(const ValueKey('empty')), findsOneWidget);
+    expect(find.byKey(const ValueKey('loading')), findsOneWidget);
+    expect(find.byType(ColoredBox), findsNothing);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.byKey(const ValueKey('loading')), findsOneWidget, reason: 'the test server answers 400');
+  });
+
+  testWidgets('without a fallback a failure leaves the grey, as before', (tester) async {
+    await show(tester, const [RemoteImage('')]);
+    expect(find.byType(ColoredBox), findsOneWidget);
+  });
+
+  testWidgets('an avatar falls back to Bilibili\'s default face', (tester) async {
+    await show(tester, const [RemoteImage.avatar(null), RemoteImage.avatar('https://i6.hdslb.com/bfs/face/b.jpg')]);
+    expect(find.byType(DefaultAvatar), findsNWidgets(2));
+    final asset = tester.widget<Image>(find.byKey(const ValueKey('default-avatar')).first).image as AssetImage;
+    expect(asset.assetName, 'assets/images/noface.jpeg');
+  });
+
   testWidgets('a failure is logged once per host and status, with the path and never the query', (tester) async {
     final sink = MemorySink();
     Logger.shared.add(sink);

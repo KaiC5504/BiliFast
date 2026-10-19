@@ -139,7 +139,7 @@ class _LevelPainter extends CustomPainter {
   bool shouldRepaint(_LevelPainter oldDelegate) => oldDelegate.level != level;
 }
 
-/// The uploader's own comment, after the LV badge.
+/// UP, after the LV badge on the uploader's own comments.
 class UpBadge extends StatelessWidget {
   const UpBadge({super.key});
 
@@ -209,7 +209,7 @@ class CommentAvatar extends StatelessWidget {
           children: [
             SizedBox.square(
               dimension: face,
-              child: ClipOval(child: RemoteImage(member.face)),
+              child: ClipOval(child: RemoteImage.avatar(member.face)),
             ),
             if (pendant != null)
               OverflowBox(

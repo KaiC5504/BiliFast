@@ -446,7 +446,7 @@ void main() {
       expect(_colour(tester, '60'), CommentRowTheme.action);
     });
 
-    testWidgets('the count ends 73.7 from the right edge, 👎 and ⋮ at their places (10)', (tester) async {
+    testWidgets('the count ends 73 from the right edge, 👎 and ⋮ at their places (10)', (tester) async {
       await _mount(tester, _row(_comment(likes: 12000), _Model(), _Calls()));
       expect(find.text('1.2万'), findsOneWidget);
       expect(_rect(tester, find.text('1.2万')).right, closeTo(440 - CommentRowTheme.likeTrailing, 0.01));
@@ -519,11 +519,55 @@ void main() {
       expect(find.text('复制'), findsNothing, reason: 'the menu closed');
     });
 
-    testWidgets('a long press on the text opens the same menu', (tester) async {
+    testWidgets('a long press on the text opens the same menu with a selection tick', (tester) async {
+      final haptics = <Object?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'HapticFeedback.vibrate') haptics.add(call.arguments);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
       await _mount(tester, _row(_comment(), _Model(), _Calls()));
       await tester.longPress(find.byType(CommentText));
       await tester.pumpAndSettle();
       expect(find.text('复制'), findsOneWidget);
+      expect(haptics, ['HapticFeedbackType.selectionClick']);
+    });
+
+    testWidgets('a long comment\'s menu opens at the finger and stays on screen', (tester) async {
+      // Scrolled so the text's top is far above the screen, as under the player.
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(440, 956), padding: EdgeInsets.only(top: 62, bottom: 34)),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: Navigator(
+              onGenerateRoute: (_) => PageRouteBuilder<void>(
+                pageBuilder: (context, _, _) => OverflowBox(
+                  alignment: Alignment.topLeft,
+                  maxHeight: double.infinity,
+                  child: Transform.translate(
+                    offset: const Offset(0, -2000),
+                    child: SizedBox(width: 440, child: _row(_comment(message: '字' * 6000), _Model(), _Calls())),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.longPressAt(const Offset(200, 300));
+      await tester.pumpAndSettle();
+      final menu = tester.getRect(find.byKey(const ValueKey('comment-copy')));
+      expect(menu.top, greaterThan(300));
+      expect(menu.top, lessThan(400));
+
+      await tester.tapAt(const Offset(20, 900));
+      await tester.pumpAndSettle();
+      await tester.longPressAt(const Offset(200, 940));
+      await tester.pumpAndSettle();
+      final low = tester.getRect(find.byKey(const ValueKey('comment-copy')));
+      expect(low.bottom, lessThanOrEqualTo(956 - 34));
+      expect(low.top, greaterThanOrEqualTo(62));
     });
   });
 
@@ -644,13 +688,23 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('a liked 👍 and a disliked 👎 read as selected', (tester) async {
+    testWidgets('a liked 👍 and a disliked 👎 read as selected, and not otherwise', (tester) async {
       final handle = tester.ensureSemantics();
-      await _mount(tester, _row(_comment(likes: 1, action: 1), _Model(), _Calls()));
-      expect(
-        tester.getSemantics(find.bySemanticsLabel('点赞 1')),
-        isSemantics(label: '点赞 1', isButton: true, hasTapAction: true, isSelected: true),
+      Matcher reads(String label, {required bool selected}) => isSemantics(
+        label: label,
+        isButton: true,
+        hasTapAction: true,
+        hasSelectedState: true,
+        isSelected: selected,
       );
+
+      await _mount(tester, _row(_comment(likes: 1, action: 1), _Model(), _Calls()));
+      expect(tester.getSemantics(find.bySemanticsLabel('点赞 1')), reads('点赞 1', selected: true));
+      expect(tester.getSemantics(find.bySemanticsLabel('点踩')), reads('点踩', selected: false));
+
+      await _mount(tester, _row(_comment(likes: 1, action: 2), _Model(), _Calls()));
+      expect(tester.getSemantics(find.bySemanticsLabel('点赞 1')), reads('点赞 1', selected: false));
+      expect(tester.getSemantics(find.bySemanticsLabel('点踩')), reads('点踩', selected: true));
       handle.dispose();
     });
   });
