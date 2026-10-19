@@ -20,6 +20,7 @@ final class PlayerUi {
     this.details,
     this.onComments,
     this.overlay,
+    this.edgeTaken,
   });
 
   final PlayerSession session;
@@ -40,6 +41,10 @@ final class PlayerUi {
 
   /// What the page's action overlays have up, null when nothing; the chrome stands aside while it isn't.
   final ValueListenable<Object?>? overlay;
+
+  /// True while something on the page (评论详情) closes on the left-edge swipe in place of the route: the small
+  /// player's drag leaves that edge to it, as it does to the route's own swipe back.
+  final ValueListenable<bool>? edgeTaken;
 
   Presentation get presentation => orientation.presentation;
 }

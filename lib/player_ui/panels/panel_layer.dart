@@ -64,9 +64,13 @@ final class PanelFrame {
 /// bottom sheet in portrait, closed by a tap outside it. The page puts it over everything, filling the page. It is
 /// part of the page rather than a route, so rotation, swipe back and picture in picture never see it.
 class PanelLayer extends StatefulWidget {
-  const PanelLayer({super.key, required this.ui});
+  const PanelLayer({super.key, required this.ui, this.playerBottom});
 
   final PlayerUi ui;
+
+  /// Where the small player ends on the page as it is now, shrunk or not; the portrait 合集 sheet starts there. Null
+  /// takes the full 16:9 player under the status bar.
+  final double? playerBottom;
 
   @override
   State<PanelLayer> createState() => _PanelLayerState();
@@ -446,7 +450,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
   /// below the grabber. The page under it dims, the player above it doesn't.
   List<Widget> _lightSheet(Size size, EdgeInsets insets, Widget content) {
     final height = widget.ui.presentation == Presentation.inline
-        ? size.height - insets.top - size.width / BiliMetrics.videoAspect
+        ? math.max(0.0, size.height - (widget.playerBottom ?? insets.top + size.width / BiliMetrics.videoAspect))
         : size.height * BiliMetrics.panelSheetHeight;
     final hidden = height + insets.bottom;
     return [

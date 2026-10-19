@@ -2,7 +2,20 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:bili_core/api.dart' show OfficialKind, UploaderCard, VideoCard, VideoDetail, VideoOwner, VideoStat;
+import 'package:bili_core/api.dart'
+    show
+        Comment,
+        CommentMember,
+        CommentPicture,
+        OfficialKind,
+        RichRun,
+        TextRun,
+        UploaderCard,
+        VideoCard,
+        VideoDetail,
+        VideoOwner,
+        VideoStat;
+import 'package:bili_core/api.dart' as core show VideoPage, VideoView;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
@@ -11,7 +24,12 @@ import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/comments/comment_overlays.dart';
+import 'package:bilifast/comments/comment_row.dart';
+import 'package:bilifast/comments/comments_model.dart';
 import 'package:bilifast/comments/comments_tab.dart';
+import 'package:bilifast/comments/composer.dart';
+import 'package:bilifast/comments/picture_viewer.dart';
+import 'package:bilifast/comments/thread_view.dart';
 import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
@@ -36,6 +54,7 @@ import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/intro/intro_tab.dart';
 import 'package:bilifast/video/intro/uploader_row.dart';
+import 'package:bilifast/video/page_api.dart';
 import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_details_model.dart';
 import 'package:bilifast/video/page_session.dart';
@@ -141,12 +160,14 @@ void main() {
     Widget home = const SizedBox(),
     Future<PlaybackController> Function()? start,
     bool checkAccount = true,
+    bool loggedIn = true,
+    PageApi? pageApi,
   }) async {
     screen(tester, portrait, portraitInsets);
     addTearDown(tester.view.reset);
     final logger = Logger(session: 'test');
     environment = await AppEnvironment.load(
-      keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
+      keychain: FakeKeychain(loggedIn ? const StoredCookies(Canned.cookies) : const NoStoredCookies()),
       http: http,
       logger: logger,
     );
@@ -168,6 +189,7 @@ void main() {
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
       device: PlayerDevice(orientation: orientation, controls: NoDeviceControls()),
+      pageApi: pageApi,
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -1745,6 +1767,574 @@ void main() {
       await back(tester);
     });
   });
+
+  group('评论 in the page', () {
+    late FakePageApi api;
+
+    setUp(() {
+      final reply1 = comment(201, root: 100, parent: 100);
+      final reply2 = comment(202, root: 100, parent: 100);
+      api = FakePageApi()
+        ..commentList = [
+          comment(100, replyCount: 2, preview: [reply1, reply2]),
+          for (var i = 1; i <= 25; i++) comment(300 + i),
+        ]
+        ..threadReplies = {
+          100: [reply1, reply2],
+        };
+    });
+
+    Future<void> showComments(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 20);
+    }
+
+    /// A page with its detail in, shown on 评论 with the first page loaded.
+    Future<void> onComments(WidgetTester tester, {bool loggedIn = true}) async {
+      await host(tester, loggedIn: loggedIn, pageApi: api);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      sessions.first
+        ..detail = detail(bv, reply: 27)
+        ..changed();
+      await tester.pump();
+      await showComments(tester);
+    }
+
+    CommentsModel model(WidgetTester tester) =>
+        tester.widget<CommentsTab>(find.byType(CommentsTab, skipOffstage: false)).model;
+    Finder row(int rpid) => find.byKey(ValueKey(rpid));
+    Finder inRow(int rpid, String key) => find.descendant(of: row(rpid), matching: find.byKey(ValueKey(key)));
+    PageController pager(WidgetTester tester) =>
+        tester.widget<PageView>(find.byKey(const ValueKey('page-tabs')).last).controller!;
+
+    Future<void> type(WidgetTester tester, String text) async {
+      await tester.enterText(find.byKey(const ValueKey('composer-field')), text);
+      await tester.pump();
+    }
+
+    Future<void> publish(WidgetTester tester) async {
+      await tester.tap(find.bySemanticsLabel('发布'));
+      await frames(tester, 20);
+    }
+
+    Future<void> openBar(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('comment-bar')).first);
+      await frames(tester);
+    }
+
+    Future<void> openThread(WidgetTester tester) async {
+      await tester.tap(inRow(100, 'comment-replies'));
+      await frames(tester, 20);
+      expect(find.byType(ThreadView), findsOneWidget);
+    }
+
+    Future<void> deleteRow(WidgetTester tester, int rpid) async {
+      await tester.tap(inRow(rpid, 'comment-more'));
+      await frames(tester);
+      await tester.tap(find.byKey(const ValueKey('comment-delete')));
+      await frames(tester);
+      expect(find.text('确定删除这条评论吗？'), findsOneWidget);
+      expect(row(rpid), findsOneWidget, reason: 'nothing goes before the answer');
+      await tester.tap(find.byKey(const ValueKey('comment-delete-删除')));
+      await frames(tester);
+    }
+
+    bool disposed(ChangeNotifier notifier) {
+      try {
+        ChangeNotifier.debugAssertNotDisposed(notifier);
+        return false;
+      } catch (_) {
+        return true;
+      }
+    }
+
+    testWidgets('回复 on a row opens the composer for it; the reply posts with root and parent the row', (tester) async {
+      await onComments(tester);
+      await tester.tap(inRow(100, 'comment-reply').first);
+      await frames(tester);
+      expect(find.byType(Composer), findsOneWidget);
+      expect(find.text('回复 测试用户100 :'), findsOneWidget);
+      await type(tester, '你好');
+      await publish(tester);
+      expect((api.posts.single.root, api.posts.single.parent), (100, 100));
+      expect(find.byType(Composer), findsNothing);
+      expect(model(tester).comments.first.replyCount, 3);
+      await back(tester);
+    });
+
+    testWidgets('the 发条评论 bar posts to the video and the comment lands first', (tester) async {
+      await onComments(tester);
+      await openBar(tester);
+      await type(tester, '第一');
+      await publish(tester);
+      expect(api.posts.single.root, 0);
+      final first = model(tester).comments.first;
+      expect(first.message, '第一');
+      expect(tester.widgetList<CommentRow>(find.byType(CommentRow)).first.comment.rpid, first.rpid);
+      await back(tester);
+    });
+
+    testWidgets('共N条回复 opens 评论详情; a reply there says 回复 @name : and lands in the thread', (tester) async {
+      await onComments(tester);
+      await openThread(tester);
+      final inThread = find.descendant(of: find.byType(ThreadView), matching: row(202));
+      await tester.tap(find.descendant(of: inThread, matching: find.byKey(const ValueKey('comment-reply'))));
+      await frames(tester);
+      expect(find.text('回复 测试用户202 :'), findsOneWidget);
+      await type(tester, '同意');
+      await publish(tester);
+      expect(
+        (api.posts.single.message, api.posts.single.root, api.posts.single.parent),
+        ('回复 @测试用户202 :同意', 100, 202),
+      );
+      expect(model(tester).thread!.replies.first.message, '回复 @测试用户202 :同意');
+      expect(find.byType(ThreadView), findsOneWidget, reason: 'the thread stays open');
+
+      await tester.tap(
+        find.descendant(of: find.byType(ThreadView), matching: find.byKey(const ValueKey('comment-bar'))),
+      );
+      await frames(tester);
+      expect(find.text('回复 测试用户100 :'), findsOneWidget);
+      await type(tester, '楼主好');
+      await publish(tester);
+      expect((api.posts.last.root, api.posts.last.parent, api.posts.last.message), (100, 100, '楼主好'));
+      expect(model(tester).thread!.replies.first.message, '楼主好');
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('a draft survives a tap on the dim and back, and back closes the composer, not the page', (
+      tester,
+    ) async {
+      await onComments(tester);
+      await openBar(tester);
+      await type(tester, '草稿');
+      await tester.tap(find.byKey(const ValueKey('composer-dim')), warnIfMissed: false);
+      await frames(tester);
+      expect(find.byType(Composer), findsNothing);
+      await openBar(tester);
+      expect(find.text('草稿'), findsOneWidget);
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester);
+      expect(find.byType(Composer), findsNothing);
+      expect(find.byType(VideoPage), findsOneWidget);
+      await openBar(tester);
+      expect(find.text('草稿'), findsOneWidget);
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('back while a post is out leaves the composer up; a failed post then shows with its text', (
+      tester,
+    ) async {
+      await onComments(tester);
+      await openBar(tester);
+      final hold = api.holds['postComment'] = Completer<void>();
+      api.failures['postComment'] = StateError('down');
+      await type(tester, '你好');
+      await tester.tap(find.bySemanticsLabel('发布'));
+      await frames(tester, 2);
+      expect(model(tester).drafts.anyPosting, isTrue);
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester, 2);
+      ui(tester).onBack();
+      await frames(tester, 2);
+      expect(find.byType(Composer), findsOneWidget);
+      expect(find.byType(VideoPage), findsOneWidget);
+      hold.complete();
+      await frames(tester);
+      expect(find.byType(Composer), findsOneWidget);
+      expect(find.text('你好'), findsOneWidget, reason: 'the text stays for another try');
+      await frames(tester, 60);
+      await back(tester);
+      expect(find.byType(Composer), findsNothing, reason: 'with nothing posting, back closes it');
+      await back(tester);
+    });
+
+    testWidgets('turning sideways with the composer up puts it and the keyboard away; the draft is kept', (
+      tester,
+    ) async {
+      await onComments(tester);
+      await openBar(tester);
+      expect(tester.testTextInput.isVisible, isTrue, reason: 'it opens with the keyboard');
+      await type(tester, '横屏前');
+      await rotate(tester, Presentation.landscape);
+      await frames(tester);
+      expect(orientation.presentation, Presentation.landscape);
+      expect(tester.testTextInput.isVisible, isFalse, reason: 'no keyboard over the full-screen video');
+      expect(find.byType(Composer, skipOffstage: false), findsNothing);
+      await rotate(tester, Presentation.inline);
+      await frames(tester);
+      await openBar(tester);
+      expect(find.text('横屏前'), findsOneWidget);
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('a picture opens the viewer, which pages at a thumb\'s speed and closes on a tap', (tester) async {
+      api.commentList = [
+        Comment(
+          rpid: 100,
+          member: const CommentMember(mid: 2001, name: '测试用户100', level: 5),
+          message: '两张图',
+          pictures: const [
+            CommentPicture(url: '', width: 100, height: 100),
+            CommentPicture(url: '', width: 100, height: 100),
+          ],
+        ),
+      ];
+      await onComments(tester);
+      await tester.tap(find.byKey(const ValueKey('comment-picture-0')));
+      await frames(tester);
+      expect(find.byType(PictureViewer), findsOneWidget);
+      expect(find.text('1/2'), findsOneWidget);
+      await tester.timedDragFrom(const Offset(300, 478), const Offset(-300, 0), const Duration(milliseconds: 200));
+      await frames(tester, 20);
+      expect(find.text('2/2'), findsOneWidget);
+      expect(pager(tester).page, 1, reason: 'the tabs behind it stayed');
+      // The tap closes only once the double tap's window (~300 ms) and the fade (200 ms) have passed.
+      await tester.tapAt(const Offset(220, 478));
+      await frames(tester, 20);
+      expect(find.byType(PictureViewer), findsNothing);
+      expect(find.byType(VideoPage), findsOneWidget);
+      await back(tester);
+    });
+
+    testWidgets('⋮ → 删除 on your own comment asks first, then removes it', (tester) async {
+      await host(tester, pageApi: api);
+      api.commentList = [comment(100, mid: environment.mid!), comment(101)];
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await showComments(tester);
+      await deleteRow(tester, 100);
+      expect(row(100), findsNothing);
+      expect(api.calls, contains('deleteComment rpid=100'));
+      await back(tester);
+    });
+
+    testWidgets('logged out, 回复 asks for the login and opens nothing', (tester) async {
+      await onComments(tester, loggedIn: false);
+      await tester.tap(inRow(100, 'comment-reply').first);
+      await frames(tester, 5);
+      expect(find.byType(Composer), findsNothing);
+      expect(find.text('请先登录'), findsOneWidget);
+      // The toast's own 2 s timer.
+      await frames(tester, 60);
+      await back(tester);
+    });
+
+    testWidgets('a timestamp in a comment seeks the page\'s player; a BV id opens a page on top', (tester) async {
+      api.commentList = [
+        Comment(
+          rpid: 100,
+          member: const CommentMember(mid: 2001, name: '测试用户100', level: 5),
+          message: '看 1:02 和 BV1xx411c7mD',
+          runs: const [
+            RichRun.text('看 '),
+            RichRun.timestamp(label: '1:02', seconds: 62),
+            RichRun.text(' 和 '),
+            RichRun.video(id: 'BV1xx411c7mD'),
+          ],
+        ),
+      ];
+      await onComments(tester);
+      sessions.first.duration.value = 712;
+      await tester.tapOnText(find.textRange.ofSubstring('1:02'));
+      await frames(tester, 5);
+      expect(sessions.first.calls, contains('commitSeek 62.0'));
+      await tester.tapOnText(find.textRange.ofSubstring('BV1xx411c7mD'));
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsNWidgets(2));
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('the model goes with the page when it is popped', (tester) async {
+      await onComments(tester);
+      final comments = model(tester);
+      await back(tester);
+      expect(find.byType(VideoPage), findsNothing);
+      expect(disposed(comments), isTrue);
+    });
+
+    testWidgets('another video on the page frees the old model and closes its thread and composer; drafts stay', (
+      tester,
+    ) async {
+      await onComments(tester);
+      final first = model(tester);
+      await openThread(tester);
+      await tester.tap(find.byKey(const ValueKey('comment-bar')).last);
+      await frames(tester);
+      await type(tester, '给第一个视频');
+      sessions.first
+        ..detail = detail('BV1xx411c7mD', aid: 2)
+        ..changed();
+      await frames(tester);
+      expect(disposed(first), isTrue);
+      expect(model(tester).aid, 2);
+      expect(find.byType(ThreadView), findsNothing);
+      expect(find.byType(Composer), findsNothing);
+      sessions.first
+        ..detail = detail(bv)
+        ..changed();
+      await frames(tester);
+      await openThread(tester);
+      await tester.tap(find.byKey(const ValueKey('comment-bar')).last);
+      await frames(tester);
+      expect(find.text('给第一个视频'), findsOneWidget, reason: 'the thread bar\'s draft is kept by its root');
+      await back(tester);
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('评论 N shows the video\'s count, then the list\'s once loaded, following a post and a delete', (
+      tester,
+    ) async {
+      await host(tester, pageApi: api);
+      api.commentList = [comment(100, mid: environment.mid!), comment(101)];
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      sessions.first
+        ..detail = detail(bv, reply: 27)
+        ..changed();
+      await tester.pump();
+      expect(find.bySemanticsLabel('评论 27'), findsOneWidget);
+      await showComments(tester);
+      expect(find.bySemanticsLabel('评论 2'), findsOneWidget);
+      await openBar(tester);
+      await type(tester, '第三条');
+      await publish(tester);
+      expect(find.bySemanticsLabel('评论 3'), findsOneWidget);
+      await deleteRow(tester, 100);
+      expect(find.bySemanticsLabel('评论 2'), findsOneWidget);
+      await back(tester);
+    });
+
+    testWidgets('with no detail, 评论 opens on the view\'s aid; the detail\'s uploader then marks the same model', (
+      tester,
+    ) async {
+      await host(tester, pageApi: api);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      expect(sessions.first.detail, isNull);
+      expect(controller.video?.aid, 80433022);
+      await showComments(tester);
+      expect(find.byType(CommentsSlot), findsNothing, reason: 'no endless spinner');
+      final comments = model(tester);
+      expect((comments.aid, comments.upMid), (80433022, 0));
+      expect(row(100), findsOneWidget);
+      sessions.first
+        ..detail = detail(bv, aid: 80433022, ownerMid: 77)
+        ..changed();
+      await tester.pump();
+      expect(model(tester), same(comments));
+      expect(comments.upMid, 77);
+      await back(tester);
+    });
+
+    testWidgets('the app\'s own session with a view and no signed detail (an av id, a pasted av link): 评论 loads', (
+      tester,
+    ) async {
+      await host(tester, pageApi: api);
+      const view = core.VideoView(
+        bvid: bv,
+        aid: 80433022,
+        title: '测试视频',
+        owner: 'UP主',
+        pages: [core.VideoPage(cid: p1, page: 1, part: '第一集', duration: 712)],
+      );
+      unawaited(
+        nav.currentState!.push(
+          SwipeBackPageRoute<void>(
+            builder: (_) => VideoPage(
+              route: const VideoRoute(bvid: bv, cid: p1, start: 0, view: view),
+              createDetails: fakeDetails,
+            ),
+          ),
+        ),
+      );
+      await frames(tester, 30);
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 30);
+      expect(find.byType(CommentsSlot), findsNothing);
+      expect(model(tester).aid, 80433022);
+      await back(tester);
+    });
+
+    group('gestures at a thumb\'s speed (about 1500 px/s)', () {
+      testWidgets('item 74: on 评论 a swipe over a row pages to 简介 and back; item 76: only the left edge leaves', (
+        tester,
+      ) async {
+        await onComments(tester);
+        expect(pager(tester).page, 1);
+        await tester.timedDragFrom(const Offset(150, 600), const Offset(300, 0), const Duration(milliseconds: 200));
+        await frames(tester, 20);
+        expect(find.byType(VideoPage), findsOneWidget);
+        expect(pager(tester).page, 0);
+        await tester.timedDragFrom(const Offset(250, 600), const Offset(-300, 0), const Duration(milliseconds: 200));
+        await frames(tester, 20);
+        expect(pager(tester).page, 1);
+        await tester.timedDragFrom(const Offset(5, 600), const Offset(300, 0), const Duration(milliseconds: 200));
+        await frames(tester, 20);
+        expect(find.byType(VideoPage), findsNothing);
+      }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+      testWidgets('评论详情: a swipe from the middle does nothing; from the edge it closes and the page stays', (
+        tester,
+      ) async {
+        await onComments(tester);
+        await openThread(tester);
+        await tester.timedDragFrom(const Offset(150, 700), const Offset(300, 0), const Duration(milliseconds: 200));
+        await frames(tester, 20);
+        expect(model(tester).thread, isNotNull);
+        expect(pager(tester).page, 1, reason: 'the tabs behind it did not page');
+        await tester.timedDragFrom(const Offset(5, 700), const Offset(300, 0), const Duration(milliseconds: 200));
+        await frames(tester, 20);
+        expect(model(tester).thread, isNull);
+        expect(find.byType(ThreadView), findsNothing);
+        expect(find.byType(VideoPage), findsOneWidget);
+        expect(pager(tester).page, 1);
+        await back(tester);
+      }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+      testWidgets('评论详情 open: a left-edge drag on the small player leaves the seek alone; one from inside seeks', (
+        tester,
+      ) async {
+        await onComments(tester);
+        sessions.first.duration.value = 712;
+        await openThread(tester);
+        Iterable<String> scrubs() => sessions.first.calls.where((call) => call.startsWith('scrub'));
+        await tester.timedDragFrom(const Offset(5, 180), const Offset(300, 0), const Duration(milliseconds: 200));
+        await frames(tester, 20);
+        expect(scrubs(), isEmpty);
+        expect(find.byType(VideoPage), findsOneWidget);
+        await tester.timedDragFrom(const Offset(100, 180), const Offset(200, 0), const Duration(milliseconds: 200));
+        await frames(tester, 20);
+        expect(scrubs(), isNotEmpty);
+        await back(tester);
+        await back(tester);
+      });
+    });
+
+    testWidgets('item 50: paused, scrolling 评论详情 leaves the player its height; scrolling 评论 shrinks it', (
+      tester,
+    ) async {
+      api.threadReplies = {
+        100: [for (var i = 0; i < 20; i++) comment(500 + i, root: 100, parent: 100)],
+      };
+      api.commentList = [
+        comment(100, replyCount: 20, preview: api.threadReplies[100]!.take(2).toList()),
+        for (var i = 1; i <= 25; i++) comment(300 + i),
+      ];
+      await onComments(tester);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 2);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 2);
+      final full = area(tester).height;
+      await openThread(tester);
+      await tester.timedDragFrom(const Offset(220, 800), const Offset(0, -500), const Duration(milliseconds: 300));
+      await frames(tester, 20);
+      expect(area(tester).height, full, reason: 'the thread scrolls under a player of full height');
+      await back(tester);
+      expect(model(tester).thread, isNull);
+      await tester.timedDragFrom(const Offset(220, 800), const Offset(0, -500), const Duration(milliseconds: 300));
+      await frames(tester, 20);
+      expect(area(tester).height, lessThan(full));
+      expect(find.text('继续播放'), findsOneWidget);
+      await back(tester);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+  });
+
+  group('the page around the tabs', () {
+    Future<void> longIntro(WidgetTester tester) async {
+      sessions.first
+        ..detail = detail(bv)
+        ..related = [for (var i = 0; i < 20; i++) quietCard('BV1r$i')]
+        ..changed();
+      await frames(tester, 2);
+    }
+
+    ScrollPosition scrollIn(WidgetTester tester, Type tab) =>
+        tester.state<ScrollableState>(find.descendant(of: find.byType(tab), matching: find.byType(Scrollable)).first).position;
+
+    Future<void> tapStatusBar(WidgetTester tester) async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.statusBar.name,
+        SystemChannels.statusBar.codec.encodeMethodCall(const MethodCall('handleScrollToTop')),
+        (_) {},
+      );
+      await frames(tester, 30);
+    }
+
+    testWidgets('a tap on the status bar scrolls the shown tab back to its top', (tester) async {
+      final api = FakePageApi()..commentList = [for (var i = 1; i <= 25; i++) comment(300 + i)];
+      await host(tester, pageApi: api);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await longIntro(tester);
+      final intro = scrollIn(tester, IntroTab)..jumpTo(400);
+      await tester.pump();
+      await tapStatusBar(tester);
+      expect(intro.pixels, 0);
+
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 20);
+      final comments = scrollIn(tester, CommentsTab)..jumpTo(300);
+      intro.jumpTo(200);
+      await tester.pump();
+      await tapStatusBar(tester);
+      expect(comments.pixels, 0);
+      expect(intro.pixels, 200, reason: 'only the shown tab');
+      await back(tester);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('the composer and the panels take no primary scroll controller', (tester) async {
+      await host(tester, pageApi: FakePageApi());
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      ui(tester).panels.open(PlayerPanel.more);
+      await frames(tester);
+      expect(PrimaryScrollController.maybeOf(tester.element(find.byKey(const ValueKey('panel-frame')))), isNull);
+      ui(tester).panels.close();
+      await frames(tester);
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 20);
+      await tester.tap(find.byKey(const ValueKey('comment-bar')).first);
+      await frames(tester);
+      expect(PrimaryScrollController.maybeOf(tester.element(find.byType(Composer))), isNull);
+      expect(
+        PrimaryScrollController.maybeOf(tester.element(find.byType(Scaffold).last)),
+        same(tester.widget<PageTabs>(find.byType(PageTabs)).controller.scrollOf(PageTab.comments)),
+      );
+      await back(tester);
+      await back(tester);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('the 合集 sheet starts at the shrunk player\'s bottom, so nothing undimmed shows between them', (
+      tester,
+    ) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await longIntro(tester);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 2);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 2);
+      scrollIn(tester, IntroTab).jumpTo(100);
+      await tester.pump();
+      final bottom = area(tester).bottom;
+      expect(bottom, closeTo(62 + 440 / BiliMetrics.videoAspect - 100, 0.01));
+      ui(tester).panels.open(PlayerPanel.episodes);
+      await frames(tester);
+      expect(tester.getRect(find.byKey(const ValueKey('panel-sheet-dim'))).top, closeTo(bottom, 0.01));
+      ui(tester).panels.close();
+      await frames(tester);
+      await back(tester);
+    });
+  });
 }
 
 /// A related video without a cover to download.
@@ -1762,9 +2352,9 @@ VideoCard quietCard(String bvid) => VideoCard(
   likes: 1,
 );
 
-VideoDetail detail(String bvid, {int reply = 0}) => VideoDetail(
+VideoDetail detail(String bvid, {int aid = 1, int reply = 0, int ownerMid = 0}) => VideoDetail(
   bvid: bvid,
-  aid: 1,
+  aid: aid,
   title: '测试视频',
   cover: '',
   pubdate: 0,
@@ -1772,7 +2362,7 @@ VideoDetail detail(String bvid, {int reply = 0}) => VideoDetail(
   desc: '',
   descParts: const [],
   copyright: 1,
-  owner: VideoOwner.empty,
+  owner: ownerMid == 0 ? VideoOwner.empty : VideoOwner(mid: ownerMid, name: 'UP主', face: ''),
   stat: VideoStat(view: 0, danmaku: 0, reply: reply, favorite: 0, coin: 0, share: 0, like: 0),
   pages: const [],
   season: null,
@@ -1821,3 +2411,19 @@ final class _RecordingHttpClient implements HttpClient {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+Comment comment(int rpid, {int root = 0, int parent = 0, int replyCount = 0, int mid = 2001, List<Comment> preview = const []}) =>
+    Comment(
+      rpid: rpid,
+      oid: 1,
+      mid: mid,
+      root: root,
+      parent: parent,
+      ctime: rpid,
+      likes: 10,
+      replyCount: replyCount,
+      member: CommentMember(mid: mid, name: '测试用户$rpid', level: 5),
+      message: '第$rpid条评论',
+      runs: [TextRun('第$rpid条评论')],
+      previewReplies: preview,
+    );

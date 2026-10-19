@@ -1735,7 +1735,10 @@ abstract final class CollapseTheme {
   static const rowLift = 2.5 / 3;
   static const playGlyphWidth = 40 / 3;
   static const playGlyphHeight = 44 / 3;
-  static const labelGap = 3.5;
+
+  /// 12 sets ▶ 17.4 pt before 继续播放 and the pair 1.5 pt right of the bar's middle.
+  static const labelGap = 3.3;
+  static const labelShift = 1.5;
   static const labelText = 16.0;
   static const label = BiliColors.onVideo;
 

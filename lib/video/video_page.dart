@@ -4,6 +4,7 @@ import 'package:bili_core/api.dart' as bili
     show AidLink, BvidLink, LinkParser, VideoCard, VideoDetail, VideoPage, VideoView;
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../app/app_environment.dart';
@@ -159,6 +160,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   final _drafts = CommentDrafts();
   final _commentOverlays = CommentOverlayController();
   bool _threadOpen = false;
+
+  /// 评论详情 holds the left edge, over the small player too, so the player's drag leaves it alone.
+  final _threadEdge = ValueNotifier<bool>(false);
+
+  /// The list's count once its first page is in, for 评论 N to follow a post or a delete; null before.
+  final _listCount = ValueNotifier<int?>(null);
   late final _commentCallbacks = CommentCallbacks(
     reply: (target, emotes) {
       if (_comments?.requireLogin() ?? false) _commentOverlays.compose(target, emotes: emotes);
@@ -328,6 +335,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       details: details,
       onComments: _showComments,
       overlay: _overlays,
+      edgeTaken: _threadEdge,
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
@@ -387,17 +395,27 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     }
   }
 
-  /// A new model for each video the page shows, once its aid is known. Nothing loads until 评论 first shows.
+  /// A new model for each video the page shows, once its aid is known: from the detail, or from the view for a video
+  /// opened without a signed detail (an av id, an unsigned link), whose uploader mark waits for the detail. Nothing
+  /// loads until 评论 first shows.
   void _syncComments() {
+    if (_left || !mounted) return;
     final detail = _intro.detail;
-    if (detail == null || detail.aid == _comments?.aid || _left || !mounted) return;
+    final controller = _controller;
+    final view = controller != null && _isMine(controller) ? controller.video : null;
+    final aid = detail?.aid ?? (view?.bvid == _bvid ? view?.aid : null);
+    if (aid == null) return;
+    if (_comments case final comments? when comments.aid == aid) {
+      if (detail != null) comments.upMid = detail.owner.mid;
+      return;
+    }
     final services = _services!;
     final environment = services.environment;
     final old = _comments;
     _commentOverlays.close();
     final comments = CommentsModel(
-      aid: detail.aid,
-      upMid: detail.owner.mid,
+      aid: aid,
+      upMid: detail?.owner.mid ?? 0,
       api: services.pageApi,
       drafts: _drafts,
       isLoggedIn: () => environment.account is LoggedIn,
@@ -407,8 +425,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     )..addListener(_commentsChanged);
     setState(() {
       _comments = comments;
-      _threadOpen = false;
+      _setThreadOpen(false);
     });
+    _listCount.value = null;
     old
       ?..removeListener(_commentsChanged)
       ..dispose();
@@ -417,13 +436,33 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   /// Rebuilds the PopScope when the thread opens or closes, which back then closes first.
   void _commentsChanged() {
     final open = _comments?.thread != null;
-    if (open != _threadOpen && mounted) setState(() => _threadOpen = open);
+    if (open != _threadOpen && mounted) setState(() => _setThreadOpen(open));
+    _syncListCount();
   }
 
-  /// Closes the composer, the picture viewer or the delete confirm, else 评论详情. False when none is up.
+  void _syncListCount() {
+    final comments = _comments;
+    final loaded = comments != null && (comments.comments.isNotEmpty || comments.pinned != null || comments.isEnd);
+    final count = loaded ? comments.total : null;
+    if (count == _listCount.value || !mounted) return;
+    // The tab loads its first page from its initState, mid-build, where the row can't rebuild yet.
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => _syncListCount());
+    } else {
+      _listCount.value = count;
+    }
+  }
+
+  void _setThreadOpen(bool open) {
+    _threadOpen = open;
+    _threadEdge.value = open;
+  }
+
+  /// Closes the composer, the picture viewer or the delete confirm, else 评论详情. False when none is up. A composer
+  /// that is posting stays: closed, a failed post would never show and its text would be lost with the page.
   bool _closeComments() {
-    if (_commentOverlays.value != null) {
-      _commentOverlays.close();
+    if (_commentOverlays.value case final overlay?) {
+      if (overlay is! ComposeOverlay || !_drafts.anyPosting) _commentOverlays.close();
       return true;
     }
     if (_comments case final comments? when comments.thread != null) {
@@ -443,6 +482,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
 
   void _presentationChanged() {
     if (!mounted) return;
+    // As BiliNative's page: full screen puts the composer away (its draft is kept), or the keyboard would cover the
+    // video and type into a field out of sight.
+    if (_presentation.fullScreen && _commentOverlays.value is ComposeOverlay && !_drafts.anyPosting) {
+      _commentOverlays.close();
+    }
     setState(() {});
     _applySystemUi();
     _standAside();
@@ -648,6 +692,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     _commentOverlays
       ..removeListener(_panelChanged)
       ..dispose();
+    _threadEdge.dispose();
+    _listCount.dispose();
     _comments
       ?..removeListener(_commentsChanged)
       ..dispose();
@@ -677,7 +723,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     final ui = mine ? _ui : null;
     _collapse.still = MediaQuery.disableAnimationsOf(context);
     return PopScope<Object?>(
-      canPop: !fullScreen &&
+      canPop:
+          !fullScreen &&
           _panels.value == null &&
           _overlays.value == null &&
           _commentOverlays.value == null &&
@@ -697,146 +744,161 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
-        child: Scaffold(
-          backgroundColor: fullScreen ? BiliColors.videoBackground : BiliColors.card,
-          // The comment composer rides on the keyboard by itself, and the full-screen player keeps its size under it.
-          resizeToAvoidBottomInset: false,
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              final media = MediaQuery.of(context);
-              final top = media.padding.top;
-              if (!fullScreen) _collapse.full = constraints.maxWidth / BiliMetrics.videoAspect;
-              Widget belowPlayer(Widget child) => Offstage(
-                offstage: fullScreen,
-                child: TickerMode(
-                  enabled: !fullScreen,
-                  // 评论详情 covers the tab row and the list, for VoiceOver too.
-                  child: ExcludeSemantics(
-                    excluding: _threadOpen,
-                    child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
-                  ),
-                ),
-              );
-              // Laid out as if the player were already the bar; each tab leaves the rest of the full height free.
-              final pager = belowPlayer(PlayerReserve(height: _collapse.reserve, child: _pager(context)));
-              final tabRow = belowPlayer(_tabRow(context));
-              final player = ColoredBox(
-                color: BiliColors.videoBackground,
-                child: Padding(
-                  padding: EdgeInsets.only(top: fullScreen ? 0 : top),
-                  // Full screen runs under the notch and the home indicator, so its chrome keeps clear of
-                  // them itself; the small player sits below the status bar with no insets of its own.
-                  child: MediaQuery(
-                    data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
-                    // An open panel covers the player for VoiceOver too, as landscape's panel already does.
-                    child: ExcludeSemantics(
-                      excluding: _panels.value != null,
-                      child: VideoPlayerArea(
-                        key: _areaKey,
-                        presentation: presentation,
-                        onBack: _back,
-                        ui: ui,
-                        video: mine ? _videoView : null,
-                        danmaku: mine ? controller.danmaku : null,
-                        cover: _cover(context),
-                        loading: _loading(controller, mine),
-                        failure: _failure(controller, mine),
-                        onRetry: _retry,
-                        endScreenAside: _overlayAside,
-                        shrunk: _shrunk && !fullScreen,
-                        barred: _barred && !fullScreen,
-                        danmakuHeight: fullScreen ? null : _collapse.full,
+        // A tap on the status bar scrolls the Scaffold's primary controller to the top: the shown tab's. Each tab hands
+        // its list its own, and nothing else in the body takes one, so the composer's lists and the panels stay off it.
+        child: ListenableBuilder(
+          listenable: _tabs,
+          builder: (context, scaffold) =>
+              PrimaryScrollController(controller: _tabs.scrollOf(_tabs.selected), child: scaffold!),
+          child: Scaffold(
+            backgroundColor: fullScreen ? BiliColors.videoBackground : BiliColors.card,
+            // The comment composer rides on the keyboard by itself, and the full-screen player keeps its size under it.
+            resizeToAvoidBottomInset: false,
+            body: PrimaryScrollController.none(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final media = MediaQuery.of(context);
+                  final top = media.padding.top;
+                  if (!fullScreen) _collapse.full = constraints.maxWidth / BiliMetrics.videoAspect;
+                  Widget belowPlayer(Widget child) => Offstage(
+                    offstage: fullScreen,
+                    child: TickerMode(
+                      enabled: !fullScreen,
+                      // 评论详情 covers the tab row and the list, for VoiceOver too.
+                      child: ExcludeSemantics(
+                        excluding: _threadOpen,
+                        child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
                       ),
                     ),
-                  ),
-                ),
-              );
-              final panels = ui == null ? null : PanelLayer(ui: ui);
-              final actionOverlays = switch ((ui, _details)) {
-                (final ui?, final details?) => ListenableBuilder(
-                  listenable: details,
-                  builder: (context, _) => ActionOverlays(
-                    actions: details.actions,
-                    controller: _overlays,
-                    landscape: presentation == Presentation.landscape,
-                    shareLink: ui.session.shareLink,
-                  ),
-                ),
-                _ => null,
-              };
-              // Only the player's height follows the scrolling; everything else is built once per page build.
-              return ListenableBuilder(
-                listenable: _collapse,
-                builder: (context, _) {
-                  final height = fullScreen ? constraints.maxHeight : _collapse.height;
-                  final box = fullScreen ? height : top + height;
-                  final progress = fullScreen ? 0.0 : _collapse.progress;
-                  return Stack(
-                    children: [
-                      Positioned(
-                        key: const ValueKey('page-tabs-area'),
-                        left: 0,
-                        right: 0,
-                        top: top + CollapseTheme.barHeight + PageTheme.tabRowHeight,
-                        bottom: 0,
-                        child: pager,
-                      ),
-                      Positioned(
-                        key: const ValueKey('page-tab-row'),
-                        left: 0,
-                        right: 0,
-                        top: box,
-                        height: PageTheme.tabRowHeight,
-                        child: tabRow,
-                      ),
-                      Positioned(
-                        key: const ValueKey('page-player'),
-                        left: 0,
-                        right: 0,
-                        top: 0,
-                        height: box,
-                        child: player,
-                      ),
-                      if (progress > 0)
-                        Positioned(
-                          key: const ValueKey('collapse-bar'),
-                          left: 0,
-                          right: 0,
-                          top: top,
-                          height: height,
-                          child: ExcludeSemantics(
-                            excluding: _panels.value != null,
-                            child: CollapsedPlayerBar(
-                              progress: progress,
-                              onResume: _resume,
-                              onBack: _back,
-                              onMore: () => _panels.open(PlayerPanel.more),
-                            ),
-                          ),
-                        ),
-                      Positioned.fill(
-                        key: const ValueKey('comment-overlays'),
-                        child: Offstage(
-                          offstage: fullScreen,
-                          child: TickerMode(
-                            enabled: !fullScreen,
-                            child: CommentOverlays(
-                              model: _comments,
-                              controller: _commentOverlays,
-                              callbacks: _commentCallbacks,
-                              threadTop: box,
-                            ),
+                  );
+                  // Laid out as if the player were already the bar; each tab leaves the rest of the full height free.
+                  final pager = belowPlayer(PlayerReserve(height: _collapse.reserve, child: _pager(context)));
+                  final tabRow = belowPlayer(_tabRow(context));
+                  final player = ColoredBox(
+                    color: BiliColors.videoBackground,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: fullScreen ? 0 : top),
+                      // Full screen runs under the notch and the home indicator, so its chrome keeps clear of
+                      // them itself; the small player sits below the status bar with no insets of its own.
+                      child: MediaQuery(
+                        data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
+                        // An open panel covers the player for VoiceOver too, as landscape's panel does.
+                        child: ExcludeSemantics(
+                          excluding: _panels.value != null,
+                          child: VideoPlayerArea(
+                            key: _areaKey,
+                            presentation: presentation,
+                            onBack: _back,
+                            ui: ui,
+                            video: mine ? _videoView : null,
+                            danmaku: mine ? controller.danmaku : null,
+                            cover: _cover(context),
+                            loading: _loading(controller, mine),
+                            failure: _failure(controller, mine),
+                            onRetry: _retry,
+                            endScreenAside: _overlayAside,
+                            shrunk: _shrunk && !fullScreen,
+                            barred: _barred && !fullScreen,
+                            danmakuHeight: fullScreen ? null : _collapse.full,
                           ),
                         ),
                       ),
-                      if (panels != null) Positioned.fill(key: const ValueKey('video-panels'), child: panels),
-                      if (actionOverlays != null)
-                        Positioned.fill(key: const ValueKey('video-overlays'), child: actionOverlays),
-                    ],
+                    ),
+                  );
+                  final actionOverlays = switch ((ui, _details)) {
+                    (final ui?, final details?) => ListenableBuilder(
+                      listenable: details,
+                      builder: (context, _) => ActionOverlays(
+                        actions: details.actions,
+                        controller: _overlays,
+                        landscape: presentation == Presentation.landscape,
+                        shareLink: ui.session.shareLink,
+                      ),
+                    ),
+                    _ => null,
+                  };
+                  // Only the player's height follows the scrolling; everything else is built once per page build.
+                  return ListenableBuilder(
+                    listenable: _collapse,
+                    builder: (context, _) {
+                      final height = fullScreen ? constraints.maxHeight : _collapse.height;
+                      final box = fullScreen ? height : top + height;
+                      final progress = fullScreen ? 0.0 : _collapse.progress;
+                      return Stack(
+                        children: [
+                          Positioned(
+                            key: const ValueKey('page-tabs-area'),
+                            left: 0,
+                            right: 0,
+                            top: top + CollapseTheme.barHeight + PageTheme.tabRowHeight,
+                            bottom: 0,
+                            child: pager,
+                          ),
+                          Positioned(
+                            key: const ValueKey('page-tab-row'),
+                            left: 0,
+                            right: 0,
+                            top: box,
+                            height: PageTheme.tabRowHeight,
+                            child: tabRow,
+                          ),
+                          Positioned(
+                            key: const ValueKey('page-player'),
+                            left: 0,
+                            right: 0,
+                            top: 0,
+                            height: box,
+                            child: player,
+                          ),
+                          if (progress > 0)
+                            Positioned(
+                              key: const ValueKey('collapse-bar'),
+                              left: 0,
+                              right: 0,
+                              top: top,
+                              height: height,
+                              child: ExcludeSemantics(
+                                excluding: _panels.value != null,
+                                child: CollapsedPlayerBar(
+                                  progress: progress,
+                                  onResume: _resume,
+                                  onBack: _back,
+                                  onMore: () => _panels.open(PlayerPanel.more),
+                                ),
+                              ),
+                            ),
+                          Positioned.fill(
+                            key: const ValueKey('comment-overlays'),
+                            child: Offstage(
+                              offstage: fullScreen,
+                              child: TickerMode(
+                                enabled: !fullScreen,
+                                child: ExcludeFocus(
+                                  excluding: fullScreen,
+                                  child: CommentOverlays(
+                                    model: _comments,
+                                    controller: _commentOverlays,
+                                    callbacks: _commentCallbacks,
+                                    threadTop: box,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (ui != null)
+                            Positioned.fill(
+                              key: const ValueKey('video-panels'),
+                              child: PanelLayer(ui: ui, playerBottom: fullScreen ? null : box),
+                            ),
+                          if (actionOverlays != null)
+                            Positioned.fill(key: const ValueKey('video-overlays'), child: actionOverlays),
+                        ],
+                      );
+                    },
                   );
                 },
-              );
-            },
+              ),
+            ),
           ),
         ),
       ),
@@ -847,10 +909,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   Widget _tabRow(BuildContext context) {
     final session = _session;
     return ListenableBuilder(
-      listenable: session ?? _tabs,
+      listenable: Listenable.merge([session ?? _tabs, _listCount]),
       builder: (context, _) => PageTabRow(
         controller: _tabs,
-        replyCount: _intro.detail?.stat.reply,
+        replyCount: _listCount.value ?? _intro.detail?.stat.reply,
         danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
         onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
         onSendDanmaku: () => _toast('发弹幕将在下个版本推出'),
