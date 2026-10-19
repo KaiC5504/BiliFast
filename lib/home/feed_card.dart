@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
+import '../app/zoom_back_route.dart';
 import '../shared/menu.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -26,12 +27,13 @@ abstract final class FeedCardSize {
 }
 
 /// One 推荐 card (01, port of FeedCard.swift): the cover with counts and duration, a two-line title, and the tag,
-/// uploader and ⋮ footer. It gives a little under the finger.
+/// uploader and ⋮ footer. It gives a little under the finger. [onOpen] gets the card's [ZoomSource], for the swipe
+/// back into it.
 class FeedCardView extends StatefulWidget {
   const FeedCardView({super.key, required this.card, required this.onOpen, required this.onWatchLater});
 
   final FeedCard card;
-  final VoidCallback onOpen;
+  final ValueChanged<ZoomSource> onOpen;
   final VoidCallback onWatchLater;
 
   /// Covers say 0:18, not 00:18 (01).
@@ -52,14 +54,16 @@ class _FeedCardViewState extends State<FeedCardView> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ZoomSourceBox(builder: _card);
+
+  Widget _card(BuildContext context, ZoomSource source) {
     final card = widget.card;
     final scaler = MediaQuery.textScalerOf(context);
     // One element for VoiceOver, named by the title; ⋮'s 稍后再看 is its action.
     return Semantics(
       button: true,
       label: card.title,
-      onTap: widget.onOpen,
+      onTap: () => widget.onOpen(source),
       customSemanticsActions: {const CustomSemanticsAction(label: '稍后再看'): widget.onWatchLater},
       excludeSemantics: true,
       child: GestureDetector(
@@ -67,7 +71,7 @@ class _FeedCardViewState extends State<FeedCardView> {
         onTapDown: (_) => _press(true),
         onTapUp: (_) => _press(false),
         onTapCancel: () => _press(false),
-        onTap: widget.onOpen,
+        onTap: () => widget.onOpen(source),
         child: AnimatedScale(
           scale: _pressed ? BiliMetrics.pressedScale : 1,
           duration: const Duration(milliseconds: 120),

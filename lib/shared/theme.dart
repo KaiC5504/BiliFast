@@ -1926,13 +1926,44 @@ abstract final class AvatarPageTheme {
   static const shown = 5;
 }
 
-/// The swipe back from a 推荐 card (03, 04 in local/differences): the page shrinks into a floating card over the
-/// dimmed home and flies into the card it came from.
+/// The swipe back from a 推荐 card (03, 04 in local/differences, measured frame by frame): the page shrinks into a
+/// floating card over the dimmed home and flies into the card it came from.
 abstract final class ZoomBackTheme {
-  static const dim = Color(0x4D000000);
-  static const minScale = 0.4;
-  static const cornerRadius = 20.0;
+  /// Over home while the page is still full size, lightening to [dimShrunk] as it reaches [minScale].
+  static const dim = Color(0x8C000000);
+  static const dimShrunk = Color(0x57000000);
+
+  /// Shares of the screen's width the finger has moved right. The page shrinks slowly to [kneeScale] by
+  /// [kneeTravel], then quickly to [minScale] by [minScaleTravel] while its centre holds still, then only moves.
+  static const kneeTravel = 0.366;
+  static const kneeScale = 0.8;
+  static const minScaleTravel = 0.477;
+  static const minScale = 0.6;
+
+  /// In the page's own points, so it shrinks with the page (6.5 pt on screen at 0.6).
+  static const cornerRadius = 11.0;
+
+  /// Let go past this share of the width, or flung right at [flingSpeed] widths a second or more, and the page goes;
+  /// otherwise it springs back over [settle].
+  static const completeTravel = 0.24;
+  static const flingSpeed = 1.0;
   static const settle = Duration(milliseconds: 350);
+
+  /// Let go, the page flies into its card in about ten frames, the dim lifting with it. The card's picture is in by
+  /// [pictureIn] of the way and the page gone by [pageOut], so most of the way it is the card that flies.
+  static const fly = Duration(milliseconds: 170);
+  static const flyCurve = Curves.easeOut;
+  static const pictureIn = 0.15;
+  static const pageOut = 0.35;
+
+  /// The 〈 button and system back fly the full page into its card.
+  static const flyFromFull = Duration(milliseconds: 350);
+
+  /// With its card gone, the page shrinks this much more towards the middle as it fades.
+  static const lostScale = 0.5;
+
+  /// Reduce Motion: let go, the page fades where it is.
+  static const fade = Duration(milliseconds: 150);
 }
 
 /// Turning to landscape full screen and back (01 in local/differences): the video grows from its small spot to full

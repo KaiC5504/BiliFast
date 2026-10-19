@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
+import '../app/zoom_back_route.dart';
 import '../playback/playback_controller.dart';
 import '../shared/paste_button.dart';
 import '../shared/remote_image.dart';
@@ -201,8 +202,11 @@ class _HomePageState extends State<HomePage> {
     unawaited(_visit(openVideoPage(context, route)));
   }
 
-  void _openCard(FeedCard card) =>
-      unawaited(_visit(openVideoPage(context, VideoRoute(bvid: card.bvid, title: card.title, cover: card.cover))));
+  void _openCard(FeedCard card, ZoomSource source) => unawaited(
+    _visit(
+      openVideoPage(context, VideoRoute(bvid: card.bvid, title: card.title, cover: card.cover, zoomSource: source)),
+    ),
+  );
 
   /// Logged out it goes to the login page and sends nothing; an account still being checked tries, and goes there
   /// only if Bilibili answers that it needs a login.
@@ -528,7 +532,7 @@ class _FeedGrid extends StatefulWidget {
   const _FeedGrid({required this.feed, required this.onOpen, required this.onWatchLater, required this.onRefresh});
 
   final FeedModel feed;
-  final void Function(FeedCard card) onOpen;
+  final void Function(FeedCard card, ZoomSource source) onOpen;
   final void Function(FeedCard card) onWatchLater;
   final Future<void> Function() onRefresh;
 
@@ -679,7 +683,7 @@ class _FeedGridState extends State<_FeedGrid> {
                                   delay: enter ? _nextStagger() : null,
                                   child: FeedCardView(
                                     card: card,
-                                    onOpen: () => widget.onOpen(card),
+                                    onOpen: (source) => widget.onOpen(card, source),
                                     onWatchLater: () => widget.onWatchLater(card),
                                   ),
                                 );
