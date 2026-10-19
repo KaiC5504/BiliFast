@@ -35,7 +35,6 @@ final class Seam {
       isLoggedIn: () => true,
       isVip: () => false,
       accountMid: () => 12345,
-      toast: (_) {},
       requestLogin: () {},
       logger: logger,
     );
