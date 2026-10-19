@@ -121,7 +121,7 @@ class VideoPage extends StatefulWidget {
   State<VideoPage> createState() => _VideoPageState();
 }
 
-class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProviderStateMixin {
+class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderStateMixin {
   AppServices? _services;
   PlaybackController? _controller;
   WatchReporter? _reporter;
@@ -169,6 +169,21 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   final _noScroll = ScrollController();
   final _areaKey = GlobalKey();
   late final _collapse = CollapsingPlayer(tabs: _tabs, vsync: this);
+
+  /// What the page last laid out, which follows the screen's shape rather than the presentation: iOS hands Flutter
+  /// the turned size only halfway through the rotation, so until then the upright page turns as one piece.
+  Presentation _laidOut = Presentation.inline;
+
+  /// The player box as last drawn, and where the grow started; both with the box's top inset.
+  _PlayerBox? _drawnPlayer;
+  _PlayerBox? _growFrom;
+  late final _grow = AnimationController(vsync: this, duration: RotationTheme.grow, value: 1);
+
+  /// The page's size and top inset when last laid out upright: the body keeps them while the player grows over it.
+  ({Size size, double top})? _uprightFrame;
+
+  /// What the player area lays out at while its box grows or shrinks: the box's size at the end.
+  final _pin = ValueNotifier<Size?>(null);
 
   /// The small player has shrunk from its full height, and [_barred] once it is the bar.
   bool _shrunk = false;
@@ -227,6 +242,32 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   OrientationController get _orientation => _services!.device.orientation;
 
   Presentation get _presentation => _owning && !_left ? _orientation.presentation : Presentation.inline;
+
+  /// Landscape full screen is laid out once the screen is landscape, and stays until it is upright again.
+  Presentation _layoutFor(Size size) {
+    final wide = size.width > size.height;
+    return switch (_presentation) {
+      Presentation.vertical => Presentation.vertical,
+      Presentation.landscape => wide ? Presentation.landscape : Presentation.inline,
+      Presentation.inline => wide && _laidOut == Presentation.landscape ? Presentation.landscape : Presentation.inline,
+    };
+  }
+
+  /// A turn between the small player and landscape full screen grows the player box from where it was drawn into
+  /// its new place, or shrinks it back.
+  void _followLayout(Presentation layout) {
+    final was = _laidOut;
+    _laidOut = layout;
+    if (layout == was) return;
+    final drawn = _drawnPlayer;
+    final turned = was != Presentation.vertical && layout != Presentation.vertical;
+    if (turned && drawn != null && !MediaQuery.disableAnimationsOf(context)) {
+      _growFrom = drawn;
+      _grow.forward(from: 0);
+    } else if (_grow.value != 1) {
+      _grow.value = 1;
+    }
+  }
 
   @override
   void initState() {
@@ -910,6 +951,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     _collapse
       ..removeListener(_collapseChanged)
       ..dispose();
+    _grow.dispose();
+    _pin.dispose();
     final session = _session;
     session?.removeListener(_sessionChanged);
     session?.readout.status.removeListener(_syncCollapse);
@@ -933,14 +976,16 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   @override
   Widget build(BuildContext context) {
     final presentation = _presentation;
-    final fullScreen = presentation.fullScreen;
+    final layout = _layoutFor(MediaQuery.sizeOf(context));
+    _followLayout(layout);
+    final fullScreen = layout.fullScreen;
     final controller = _controller;
     final mine = controller != null && _isMine(controller);
     final ui = mine ? _ui : null;
     _collapse.still = MediaQuery.disableAnimationsOf(context);
     return PopScope<Object?>(
       canPop:
-          !fullScreen &&
+          !presentation.fullScreen &&
           !(_danmaku?.sendOpen.value ?? false) &&
           _panels.value == null &&
           _overlays.value == null &&
@@ -951,7 +996,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
           setState(_leave);
         } else if (_closeDanmakuSend()) {
           return;
-        } else if (!fullScreen && _closeComments()) {
+        } else if (!presentation.fullScreen && _closeComments()) {
           return;
         } else if (_overlays.value != null) {
           _overlays.close();
@@ -981,49 +1026,45 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
                 builder: (context, constraints) {
                   final media = MediaQuery.of(context);
                   final top = media.padding.top;
-                  if (!fullScreen) _collapse.full = constraints.maxWidth / BiliMetrics.videoAspect;
-                  Widget belowPlayer(Widget child) => Offstage(
-                    offstage: fullScreen,
-                    child: TickerMode(
-                      enabled: !fullScreen,
-                      // 评论详情 covers the tab row and the list, for VoiceOver too.
-                      child: ExcludeSemantics(
-                        excluding: _threadOpen,
-                        child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
-                      ),
-                    ),
+                  if (!fullScreen) {
+                    _collapse.full = constraints.maxWidth / BiliMetrics.videoAspect;
+                    _uprightFrame = (size: constraints.biggest, top: top);
+                  }
+                  final upright = _uprightFrame ?? (size: constraints.biggest, top: top);
+                  // 评论详情 covers the tab row and the list, for VoiceOver too.
+                  Widget belowPlayer(Widget child) => ExcludeSemantics(
+                    excluding: _threadOpen,
+                    child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
                   );
+                  // Out of sight in full screen, except while the player grows over it or shrinks back.
+                  Widget hideable(bool hidden, Widget child) =>
+                      Offstage(offstage: hidden, child: TickerMode(enabled: !hidden, child: child));
                   // Laid out as if the player were already the bar; each tab leaves the rest of the full height free.
                   final pager = belowPlayer(PlayerReserve(height: _collapse.reserve, child: _pager(context)));
                   final tabRow = belowPlayer(_tabRow(context));
-                  final player = ColoredBox(
-                    color: BiliColors.videoBackground,
-                    child: Padding(
-                      padding: EdgeInsets.only(top: fullScreen ? 0 : top),
-                      // Full screen runs under the notch and the home indicator, so its chrome keeps clear of
-                      // them itself; the small player sits below the status bar with no insets of its own.
-                      child: MediaQuery(
-                        data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
-                        // An open panel covers the player for VoiceOver too, as landscape's panel does.
-                        child: ExcludeSemantics(
-                          excluding: _panels.value != null,
-                          child: VideoPlayerArea(
-                            key: _areaKey,
-                            presentation: presentation,
-                            onBack: _back,
-                            ui: ui,
-                            video: mine ? _videoView : null,
-                            danmaku: mine ? controller.danmaku : null,
-                            cover: _cover(context),
-                            loading: _loading(controller, mine),
-                            failure: _failure(controller, mine),
-                            onRetry: _retry,
-                            endScreenAside: _overlayAside,
-                            shrunk: _shrunk && !fullScreen,
-                            barred: _barred && !fullScreen,
-                            danmakuHeight: fullScreen ? null : _collapse.full,
-                          ),
-                        ),
+                  // Full screen runs under the notch and the home indicator, so its chrome keeps clear of them itself;
+                  // the small player sits below the status bar with no insets of its own.
+                  final area = MediaQuery(
+                    data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
+                    // An open panel covers the player for VoiceOver too, as landscape's panel does.
+                    child: ExcludeSemantics(
+                      excluding: _panels.value != null,
+                      child: VideoPlayerArea(
+                        key: _areaKey,
+                        presentation: layout,
+                        onBack: _back,
+                        ui: ui,
+                        video: mine ? _videoView : null,
+                        danmaku: mine ? controller.danmaku : null,
+                        cover: _cover(context),
+                        loading: _loading(controller, mine),
+                        failure: _failure(controller, mine),
+                        onRetry: _retry,
+                        endScreenAside: _overlayAside,
+                        shrunk: _shrunk && !fullScreen,
+                        barred: _barred && !fullScreen,
+                        danmakuHeight: fullScreen ? null : _collapse.full,
+                        pin: _pin,
                       ),
                     ),
                   );
@@ -1033,46 +1074,63 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
                       builder: (context, _) => ActionOverlays(
                         actions: details.actions,
                         controller: _overlays,
-                        landscape: presentation == Presentation.landscape,
+                        landscape: layout == Presentation.landscape,
                         shareLink: ui.session.shareLink,
                       ),
                     ),
                     _ => null,
                   };
-                  // Only the player's height follows the scrolling; everything else is built once per page build.
+                  // Only the player's box follows the scrolling and the grow; everything else is built once per page
+                  // build.
                   return ListenableBuilder(
-                    listenable: _collapse,
+                    listenable: Listenable.merge([_collapse, _grow]),
                     builder: (context, _) {
+                      final growing = _grow.isAnimating;
+                      final hidden = fullScreen && !growing;
                       final height = fullScreen ? constraints.maxHeight : _collapse.height;
                       final box = fullScreen ? height : top + height;
                       final progress = fullScreen ? 0.0 : _collapse.progress;
+                      final target = _PlayerBox(Size(constraints.maxWidth, box), fullScreen ? 0 : top);
+                      final from = _growFrom;
+                      final drawn = growing && from != null
+                          ? _PlayerBox.lerp(from, target, RotationTheme.curve.transform(_grow.value))
+                          : target;
+                      _drawnPlayer = drawn;
+                      _pin.value = growing ? Size(target.size.width, target.size.height - target.inset) : null;
+                      // The tab row and the list ride on the player's bottom edge, at their upright size.
+                      final uprightBox = upright.top + _collapse.height;
+                      final shift = drawn.size.height - uprightBox;
+                      final tabsTop = upright.top + CollapseTheme.barHeight + PageTheme.tabRowHeight;
                       return Stack(
                         children: [
                           Positioned(
                             key: const ValueKey('page-tabs-area'),
                             left: 0,
-                            right: 0,
-                            top: top + CollapseTheme.barHeight + PageTheme.tabRowHeight,
-                            bottom: 0,
-                            child: pager,
+                            top: shift + tabsTop,
+                            width: upright.size.width,
+                            height: upright.size.height - tabsTop,
+                            child: hideable(hidden, pager),
                           ),
                           Positioned(
                             key: const ValueKey('page-tab-row'),
                             left: 0,
-                            right: 0,
-                            top: box,
+                            top: shift + uprightBox,
+                            width: upright.size.width,
                             height: PageTheme.tabRowHeight,
-                            child: tabRow,
+                            child: hideable(hidden, tabRow),
                           ),
                           Positioned(
                             key: const ValueKey('page-player'),
                             left: 0,
-                            right: 0,
                             top: 0,
-                            height: box,
-                            child: player,
+                            width: drawn.size.width,
+                            height: drawn.size.height,
+                            child: ColoredBox(
+                              color: BiliColors.videoBackground,
+                              child: Padding(padding: EdgeInsets.only(top: drawn.inset), child: area),
+                            ),
                           ),
-                          if (progress > 0)
+                          if (progress > 0 && !growing)
                             Positioned(
                               key: const ValueKey('collapse-bar'),
                               left: 0,
@@ -1089,19 +1147,23 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
                                 ),
                               ),
                             ),
-                          Positioned.fill(
+                          Positioned(
                             key: const ValueKey('comment-overlays'),
+                            left: 0,
+                            top: shift,
+                            width: upright.size.width,
+                            height: upright.size.height,
                             child: Offstage(
-                              offstage: fullScreen,
+                              offstage: hidden,
                               child: TickerMode(
-                                enabled: !fullScreen,
+                                enabled: !hidden,
                                 child: ExcludeFocus(
-                                  excluding: fullScreen,
+                                  excluding: hidden,
                                   child: CommentOverlays(
                                     model: _comments,
                                     controller: _commentOverlays,
                                     callbacks: _commentCallbacks,
-                                    threadTop: box,
+                                    threadTop: uprightBox,
                                   ),
                                 ),
                               ),
@@ -1119,7 +1181,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
                               key: const ValueKey('danmaku-overlays'),
                               child: DanmakuOverlays(
                                 session: _danmaku!,
-                                presentation: presentation,
+                                presentation: layout,
                                 playerBottom: box,
                                 toast: _toast,
                               ),
@@ -1250,4 +1312,15 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       placeholder: cardSize == null ? null : RemoteImage(cover, size: cardSize),
     );
   }
+}
+
+/// The player box at the top of the page, and the status bar's height inside it that the player sits below.
+class _PlayerBox {
+  const _PlayerBox(this.size, this.inset);
+
+  final Size size;
+  final double inset;
+
+  static _PlayerBox lerp(_PlayerBox a, _PlayerBox b, double t) =>
+      _PlayerBox(Size.lerp(a.size, b.size, t)!, a.inset + (b.inset - a.inset) * t);
 }

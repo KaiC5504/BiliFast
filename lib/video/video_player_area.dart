@@ -1,5 +1,7 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../danmaku/danmaku_layer.dart';
 import '../device/orientation.dart';
@@ -36,6 +38,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.shrunk = false,
     this.barred = false,
     this.danmakuHeight,
+    this.pin,
   });
 
   final Presentation presentation;
@@ -70,13 +73,18 @@ class VideoPlayerArea extends StatelessWidget {
   /// where they were rather than re-laying out every frame. Null in full screen.
   final double? danmakuHeight;
 
+  /// While the page grows the player into full screen or shrinks it back, the size the danmaku, the chrome and the
+  /// end screen lay out at (the box's at the end), scaled to the box meanwhile. Laid out at every frame's size the
+  /// danmaku would start over each frame, and the chrome wouldn't fit the small box. The video follows the box.
+  final ValueListenable<Size?>? pin;
+
   @override
   Widget build(BuildContext context) {
     final session = ui?.session;
     return ColoredBox(
       color: BiliColors.videoBackground,
       child: ListenableBuilder(
-        listenable: Listenable.merge([?session, ?danmaku]),
+        listenable: Listenable.merge([?session, ?danmaku, ?pin]),
         builder: (context, _) => Stack(fit: StackFit.expand, children: _layers()),
       ),
     );
@@ -86,7 +94,6 @@ class VideoPlayerArea extends StatelessWidget {
     final ui = this.ui;
     final session = ui?.session;
     final ended = session?.ended ?? false;
-    final failed = failure != null;
     // 竖屏 sets a landscape video above the middle of the screen (screen 09); a vertical one fills the height.
     final banded = presentation == Presentation.vertical && session?.isVertical != true;
     return [
@@ -109,19 +116,22 @@ class VideoPlayerArea extends StatelessWidget {
                     bottom: false,
                     child: ClipRect(
                       clipBehavior: shrunk ? Clip.hardEdge : Clip.none,
-                      child: OverflowBox(
-                        alignment: Alignment.topCenter,
-                        minHeight: danmakuHeight,
-                        maxHeight: danmakuHeight,
-                        child: DanmakuLayer(
-                          key: const ValueKey('video-danmaku'),
-                          clock: session.clock,
-                          timeline: danmaku?.timeline,
-                          // The end screens show no danmaku over the last frame.
-                          enabled: session.danmakuOn && !ended,
-                          wake: session.readout.any,
-                          settings: ui?.danmaku?.settings,
-                          fullScreen: presentation.fullScreen,
+                      child: _Pinned(
+                        size: pin?.value,
+                        child: OverflowBox(
+                          alignment: Alignment.topCenter,
+                          minHeight: danmakuHeight,
+                          maxHeight: danmakuHeight,
+                          child: DanmakuLayer(
+                            key: const ValueKey('video-danmaku'),
+                            clock: session.clock,
+                            timeline: danmaku?.timeline,
+                            // The end screens show no danmaku over the last frame.
+                            enabled: session.danmakuOn && !ended,
+                            wake: session.readout.any,
+                            settings: ui?.danmaku?.settings,
+                            fullScreen: presentation.fullScreen,
+                          ),
                         ),
                       ),
                     ),
@@ -142,6 +152,19 @@ class VideoPlayerArea extends StatelessWidget {
           ),
         ),
       ?cover,
+      _Pinned(
+        key: const ValueKey('video-pinned'),
+        size: pin?.value,
+        child: Stack(fit: StackFit.expand, children: _controls()),
+      ),
+    ];
+  }
+
+  List<Widget> _controls() {
+    final ui = this.ui;
+    final ended = ui?.session.ended ?? false;
+    final failed = failure != null;
+    return [
       if (ui != null && !failed) ...[
         if (!ended) PlayerGestureLayer(key: const ValueKey('video-gestures'), ui: ui),
         if (ended)
@@ -258,4 +281,85 @@ class _Failure extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Lays its child out at [size] and scales it to its own size; with no [size] it is just its child.
+class _Pinned extends SingleChildRenderObjectWidget {
+  const _Pinned({super.key, required this.size, required super.child});
+
+  final Size? size;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderPinned(size);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderPinned renderObject) => renderObject.pinned = size;
+}
+
+class _RenderPinned extends RenderProxyBox {
+  _RenderPinned(this._pinned);
+
+  Size? _pinned;
+
+  set pinned(Size? value) {
+    if (value == _pinned) return;
+    _pinned = value;
+    markNeedsLayout();
+  }
+
+  Size? get _active {
+    final pinned = _pinned;
+    return pinned == null || pinned.isEmpty || child == null ? null : pinned;
+  }
+
+  Matrix4 _scale(Size pinned) => Matrix4.diagonal3Values(size.width / pinned.width, size.height / pinned.height, 1);
+
+  Size _sizeFor(BoxConstraints constraints, Size pinned) =>
+      constraints.biggest.isFinite ? constraints.biggest : constraints.constrain(pinned);
+
+  @override
+  Size computeDryLayout(covariant BoxConstraints constraints) {
+    final pinned = _active;
+    return pinned == null ? super.computeDryLayout(constraints) : _sizeFor(constraints, pinned);
+  }
+
+  @override
+  void performLayout() {
+    final pinned = _active;
+    if (pinned == null) return super.performLayout();
+    child!.layout(BoxConstraints.tight(pinned));
+    size = _sizeFor(constraints, pinned);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final pinned = _active;
+    if (pinned == null) {
+      layer = null;
+      return super.paint(context, offset);
+    }
+    layer = context.pushTransform(
+      needsCompositing,
+      offset,
+      _scale(pinned),
+      super.paint,
+      oldLayer: layer is TransformLayer ? layer! as TransformLayer : null,
+    );
+  }
+
+  @override
+  void applyPaintTransform(RenderBox child, Matrix4 transform) {
+    if (_active case final pinned?) transform.multiply(_scale(pinned));
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    final pinned = _active;
+    if (pinned == null) return super.hitTestChildren(result, position: position);
+    return result.addWithPaintTransform(
+      transform: _scale(pinned),
+      position: position,
+      hitTest: (result, position) => child!.hitTest(result, position: position),
+    );
+  }
 }

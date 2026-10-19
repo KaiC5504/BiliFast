@@ -333,6 +333,8 @@ void main() {
         orientation.enterVertical();
     }
     await frames(tester, 2);
+    // The player grows into its new place once the screen has turned.
+    await tester.pump(RotationTheme.grow);
   }
 
   testWidgets('S7 重试 after a failed open plays, and back still gives the player back', (tester) async {
