@@ -136,6 +136,40 @@ void main() {
     expect(logs.events.where((event) => event.msg == 'shared engine replaced'), hasLength(1));
   });
 
+  test('a page that finds its engine gone only after another page moved onto the replacement leaves that one running, '
+      'and moves onto it too', () async {
+    final a = await make();
+    final b = await make();
+    await a.open(bv);
+    await b.open(bv);
+    await kill(engines.single);
+    await b.open(bv);
+    await b.open(bv);
+    final replacement = engines.last;
+    expect(engines, hasLength(2));
+    expect(engineOf(b), same(replacement));
+
+    // The covered page comes back to the foreground still on the dead engine.
+    await a.appResumed();
+    expect(a.phase, PlaybackPhase.failed);
+    expect(shared.running, same(replacement), reason: 'the stale lease\'s closed error is not the replacement\'s');
+    expect(replacement.disposed, isFalse);
+    expect(b.phase, isNot(PlaybackPhase.failed));
+
+    await a.open(bv);
+    expect(engines, hasLength(2), reason: 'no third engine');
+    expect(engineOf(a), same(replacement));
+    expect(a.phase, isNot(PlaybackPhase.failed));
+  });
+
+  test('a network change that finds the engine gone is logged, not thrown', () async {
+    await shared.lease();
+    engines.single.closed = true;
+    await shared.networkChanged(interfaceChanged: true);
+    expect(logs.events.where((event) => event.msg == 'network change not taken'), hasLength(1));
+    expect(engines.single.networkChanges, isEmpty);
+  });
+
   test('a call that finds the engine closed is enough to start a new one for the next lease', () async {
     final a = await make();
     await a.open(bv);
