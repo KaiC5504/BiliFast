@@ -137,9 +137,10 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
       _ui.presentation.fullScreen && !(Offset.zero & _screen).deflate(GestureMath.edgeInset).contains(global);
 
   bool _inBackSwipeEdge(Offset global) {
+    if (_ui.presentation.fullScreen) return false;
     final route = _route;
-    if (_ui.presentation.fullScreen || route is! PageRoute<Object?> || !route.popGestureEnabled) return false;
-    return global.dx < math.max(BiliMetrics.swipeBackEdge, _padding.left);
+    final edgeSwipes = (_ui.edgeTaken?.value ?? false) || (route is PageRoute<Object?> && route.popGestureEnabled);
+    return edgeSwipes && global.dx < math.max(BiliMetrics.swipeBackEdge, _padding.left);
   }
 
   bool _allowsTouch(PointerDownEvent event) => !_inSystemEdge(event.position);

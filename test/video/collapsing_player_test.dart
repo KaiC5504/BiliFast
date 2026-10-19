@@ -283,7 +283,11 @@ void main() {
       expect(play.width, closeTo(CollapseTheme.playGlyphWidth, 0.01));
       expect(play.height, closeTo(CollapseTheme.playGlyphHeight, 0.01));
       expect(tester.getRect(label).left - play.right, closeTo(CollapseTheme.labelGap, 0.01));
-      expect((play.left + tester.getRect(label).right) / 2, closeTo(220, 0.01));
+      expect(
+        (play.left + tester.getRect(label).right) / 2,
+        closeTo(220 + CollapseTheme.labelShift, 0.01),
+        reason: '12 sets the pair right of the middle',
+      );
       expect(play.center.dy, closeTo(middle, 0.01));
     });
 

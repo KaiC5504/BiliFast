@@ -215,28 +215,30 @@ class _Label extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CustomPaint(
-          size: const Size(CollapseTheme.playGlyphWidth, CollapseTheme.playGlyphHeight),
-          painter: PlayPausePainter(kAlwaysDismissedAnimation, color: CollapseTheme.label),
+    child: Transform.translate(offset: const Offset(CollapseTheme.labelShift, 0), child: _row()),
+  );
+
+  Widget _row() => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      CustomPaint(
+        size: const Size(CollapseTheme.playGlyphWidth, CollapseTheme.playGlyphHeight),
+        painter: PlayPausePainter(kAlwaysDismissedAnimation, color: CollapseTheme.label),
+      ),
+      const SizedBox(width: CollapseTheme.labelGap),
+      Text(
+        '继续播放',
+        maxLines: 1,
+        softWrap: false,
+        style: TextStyle(
+          fontFamily: BiliFonts.family,
+          fontSize: CollapseTheme.labelText,
+          color: CollapseTheme.label,
+          height: 1.2,
+          letterSpacing: 0,
         ),
-        const SizedBox(width: CollapseTheme.labelGap),
-        Text(
-          '继续播放',
-          maxLines: 1,
-          softWrap: false,
-          style: TextStyle(
-            fontFamily: BiliFonts.family,
-            fontSize: CollapseTheme.labelText,
-            color: CollapseTheme.label,
-            height: 1.2,
-            letterSpacing: 0,
-          ),
-        ),
-      ],
-    ),
+      ),
+    ],
   );
 }
 
