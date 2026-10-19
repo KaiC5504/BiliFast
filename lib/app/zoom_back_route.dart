@@ -158,7 +158,8 @@ class ZoomBackPageRoute<T> extends SwipeBackPageRoute<T> {
     final travel = _zoom.drag.dx;
     final fling = ZoomBackTheme.flingSpeed * screen.width;
     final complete = velocity >= fling || (velocity > -fling && travel >= ZoomBackTheme.completeTravel * screen.width);
-    if (!complete || !isCurrent) {
+    // A turn mid-drag can close the page to pops (full screen), which the drag's start couldn't know.
+    if (!complete || !isCurrent || popDisposition == RoutePopDisposition.doNotPop) {
       _springBack();
       return;
     }

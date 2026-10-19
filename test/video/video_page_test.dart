@@ -896,8 +896,11 @@ void main() {
       expect(find.byType(VideoPage), findsOneWidget);
       expect(orientation.presentation, Presentation.inline);
       expect(controller.video, isNotNull, reason: 'the page kept the player');
-      expect(tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop, isTrue);
+      expect(tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop, isFalse,
+          reason: 'still laid out landscape until the screen is upright');
       screen(tester, portrait, portraitInsets);
+      await tester.pump();
+      expect(tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop, isTrue);
       await back(tester);
       expect(find.byType(VideoPage), findsNothing);
     });
@@ -1312,7 +1315,12 @@ void main() {
       ui(tester).onBack();
       await frames(tester, 2);
       expect(orientation.presentation, Presentation.inline);
+      expect(canPop(), isFalse, reason: 'the landscape layout is still drawn until the screen is upright');
+      ui(tester).onBack();
+      await frames(tester, 2);
+      expect(find.byType(VideoPage), findsOneWidget, reason: "the landscape 〈 doesn't take the page mid-turn");
       screen(tester, portrait, portraitInsets);
+      await tester.pump();
       expect(canPop(), isTrue);
       ui(tester).onBack();
       await frames(tester, 20);

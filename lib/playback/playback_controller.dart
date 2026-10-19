@@ -291,6 +291,9 @@ class PlaybackController extends ChangeNotifier {
   FitMode _fit = FitMode.fit;
   bool _mirrored = false;
   VideoDetail? _detail;
+
+  /// The video whose signed view was refused on its last resolve: another part or a reopen doesn't ask it again.
+  String? _signedRefused;
   ({String bvid, Future<VideoDetail> answer})? _detailFetch;
 
   /// The open whose detail is being asked for, and its video; any open, close or engine change forgets it. Kept after
@@ -423,6 +426,7 @@ class PlaybackController extends ChangeNotifier {
       if (current != _epoch) return null;
       _detail = resolved;
       // A BV link without a detail had its signed view refused just now; asking again would only be refused again.
+      if (resolved == null && link is BvidLink) _signedRefused = view.bvid;
       if (resolved == null && link is! BvidLink) _fetchDetail(view.bvid);
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
@@ -446,7 +450,8 @@ class PlaybackController extends ChangeNotifier {
       final view = known ?? (await _resolve(BvidLink(bvid), onDetail: (detail) => resolved = detail)).$1;
       if (current != _epoch) return null;
       _detail = resolved;
-      if (known != null && resolved == null) _fetchDetail(view.bvid);
+      if (known == null && resolved == null) _signedRefused = view.bvid;
+      if (known != null && resolved == null && view.bvid != _signedRefused) _fetchDetail(view.bvid);
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
       if (cid != null) {

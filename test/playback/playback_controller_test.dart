@@ -740,6 +740,18 @@ void main() {
     controller.dispose();
   });
 
+  test('a video whose signed view was refused is not asked again when another part or a reopen hands its view', () async {
+    http.routes[Canned.signedViewPath] = (500, '');
+    final controller = make();
+    await controller.open(bv);
+    final view = controller.video!;
+    expect(controller.detail, isNull);
+    await controller.openVideo(view.bvid, view: view);
+    await settle();
+    expect(http.to(Canned.signedViewPath), hasLength(1), reason: 'only the refused resolve');
+    controller.dispose();
+  });
+
   test('a BV link whose signed view times out fails as a network error, without asking the unsigned view', () async {
     http.errors[Canned.signedViewPath] = TimeoutException('no answer');
     final controller = make();

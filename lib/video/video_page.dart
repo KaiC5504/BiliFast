@@ -707,7 +707,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _panels.close();
     } else if (_presentation.fullScreen) {
       _orientation.exitToInline();
-    } else {
+    } else if (!_laidOut.value.fullScreen) {
       unawaited(Navigator.of(context).maybePop());
     }
   }
@@ -994,6 +994,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return PopScope<Object?>(
       canPop:
           !presentation.fullScreen &&
+          // Turning back, the landscape chrome is still drawn; its 〈 must not take the page with it.
+          !fullScreen &&
           !(_danmaku?.sendOpen.value ?? false) &&
           _panels.value == null &&
           _overlays.value == null &&

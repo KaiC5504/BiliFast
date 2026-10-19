@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,8 +21,9 @@ void main() {
     return (to.widget as Hero).child;
   }
 
-  Widget page({bool canPop = true}) => PopScope(
-    canPop: canPop,
+  Widget page({bool canPop = true, ValueListenable<bool>? allowed}) => ValueListenableBuilder<bool>(
+    valueListenable: allowed ?? ValueNotifier(canPop),
+    builder: (context, allowed, child) => PopScope(canPop: allowed, child: child!),
     child: Scaffold(
       key: pageKey,
       backgroundColor: Colors.white,
@@ -42,7 +44,13 @@ void main() {
   );
 
   /// Home with one card at [cardRect]; opens the page from it unless [source] stands in for the card's own.
-  Future<void> open(WidgetTester tester, {bool canPop = true, ZoomSource? source, bool still = false}) async {
+  Future<void> open(
+    WidgetTester tester, {
+    bool canPop = true,
+    ValueListenable<bool>? allowed,
+    ZoomSource? source,
+    bool still = false,
+  }) async {
     flights = 0;
     tester.view.physicalSize = screen;
     tester.view.devicePixelRatio = 1;
@@ -61,7 +69,7 @@ void main() {
                   builder: (context, own) => GestureDetector(
                     onTap: () => opened = Navigator.of(
                       context,
-                    ).push(ZoomBackPageRoute<void>(builder: (_) => page(canPop: canPop), source: source ?? own)),
+                    ).push(ZoomBackPageRoute<void>(builder: (_) => page(canPop: canPop, allowed: allowed), source: source ?? own)),
                     child: Hero(
                       tag: 'cover',
                       flightShuttleBuilder: countFlights,
@@ -215,6 +223,20 @@ void main() {
   });
 
   group('letting go', () {
+    testWidgets('a page that stops allowing pops mid-drag (turned to full screen) springs back on release', (tester) async {
+      final allowed = ValueNotifier(true);
+      addTearDown(allowed.dispose);
+      await open(tester, allowed: allowed);
+      final gesture = await dragOut(tester, const Offset(250, 0));
+      expect(pageRect(tester).width, lessThan(screen.width), reason: 'the drag started');
+      allowed.value = false;
+      await tester.pump();
+      await gesture.up(timeStamp: const Duration(milliseconds: 176));
+      await tester.pumpAndSettle();
+      expect(find.text('视频页'), findsOneWidget);
+      expectRect(pageRect(tester), Offset.zero & screen);
+    });
+
     testWidgets('flies into the card it came from, then pops with no second animation', (tester) async {
       await open(tester);
       final gesture = await dragOut(tester, const Offset(250, 0));
