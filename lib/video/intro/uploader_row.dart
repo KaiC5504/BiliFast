@@ -165,8 +165,8 @@ class _NameAndCounts extends StatelessWidget {
             opacity: card == null ? 0 : 1,
             duration: animate ? const Duration(milliseconds: 220) : Duration.zero,
             curve: Curves.easeOut,
-            child: Text(
-              counts,
+            child: Text.rich(
+              _apartFromHan(counts, BiliFonts.nudged ? 0 : IntroTheme.fansHanGap),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -379,3 +379,25 @@ class _PlusPainter extends CustomPainter {
 
 /// A card can come back with an empty name or face; the view's owner then stands in.
 String _or(String? fromCard, String fromView) => fromCard == null || fromCard.isEmpty ? fromView : fromCard;
+
+/// PingFang on iOS sets digits and Latin letters a little apart from the Chinese they meet ("9815 粉丝"); Flutter's
+/// layout sets them touching, so each meeting gets [gap] more.
+TextSpan _apartFromHan(String text, double gap) {
+  if (gap == 0) return TextSpan(text: text);
+  bool han(int unit) => (unit >= 0x4E00 && unit <= 0x9FFF) || (unit >= 0x3400 && unit <= 0x4DBF);
+  bool latin(int unit) =>
+      (unit >= 0x30 && unit <= 0x39) || (unit >= 0x41 && unit <= 0x5A) || (unit >= 0x61 && unit <= 0x7A);
+  final spans = <TextSpan>[];
+  var start = 0;
+  for (var i = 0; i + 1 < text.length; i++) {
+    final a = text.codeUnitAt(i), b = text.codeUnitAt(i + 1);
+    if ((latin(a) && han(b)) || (han(a) && latin(b))) {
+      spans
+        ..add(TextSpan(text: text.substring(start, i)))
+        ..add(TextSpan(text: text[i], style: TextStyle(letterSpacing: gap)));
+      start = i + 1;
+    }
+  }
+  spans.add(TextSpan(text: text.substring(start)));
+  return TextSpan(children: spans);
+}

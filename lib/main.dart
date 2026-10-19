@@ -148,8 +148,11 @@ class BiliFastApp extends StatelessWidget {
           splashFactory: NoSplash.splashFactory,
         ),
         navigatorObservers: [pageRoutes],
-        builder: (context, child) =>
-            AppScope(services: services, child: PhoneFrame.wrap(context, ReduceMotion(child: child!))),
+        // The official app keeps its sizes whatever iOS Text Size says, and every size here is measured off it.
+        builder: (context, child) => AppScope(
+          services: services,
+          child: PhoneFrame.wrap(context, ReduceMotion(child: MediaQuery.withNoTextScaling(child: child!))),
+        ),
         home: HomePage(
           initialLink: initialLink,
           developerPage: services.logs == null

@@ -61,9 +61,9 @@ class ActionGlyphPainter extends CustomPainter {
       case ActionGlyph.coin:
         _coin(canvas, box);
       case ActionGlyph.favourite:
-        _shape(canvas, box, _star, extent: const Size(1, 0.98));
+        _shape(canvas, box, _star, extent: const Size(1, 0.98), soften: 0.045);
       case ActionGlyph.share:
-        _shape(canvas, box, _share, extent: const Size(1, 0.833), soften: 0.07);
+        _shape(canvas, box, _share, extent: const Size(1, 0.833), soften: 0.065);
       case ActionGlyph.comment:
         _comment(canvas, box);
       case ActionGlyph.charge:
@@ -96,14 +96,38 @@ class ActionGlyphPainter extends CustomPainter {
 
   void _shape(Canvas canvas, Rect box, Path Function() unit, {required Size extent, double soften = 0}) {
     if (solid) {
-      final inset = soften * box.width;
-      final path = _place(unit(), box, extent, inset: inset);
-      canvas.drawPath(path, _fill);
-      if (inset > 0) canvas.drawPath(path, _stroke(inset));
+      _fillSoft(canvas, unit(), box, extent, soften);
     } else {
       final line = _line * box.width;
       canvas.drawPath(_place(unit(), box, extent, inset: line), _stroke(line));
     }
+  }
+
+  /// Fills [unit] with its corners rounded [radius] (of the glyph) as the official icons' are: the shape shrinks by
+  /// that much on every side, then a round-joined stroke brings its edges back out, round at the corners.
+  void _fillSoft(Canvas canvas, Path unit, Rect box, Size extent, double radius) {
+    if (radius <= 0) {
+      canvas.drawPath(_place(unit, box, extent), _fill);
+      return;
+    }
+    final bounds = unit.getBounds();
+    final sx = (bounds.width - 2 * radius) / bounds.width;
+    final sy = (bounds.height - 2 * radius) / bounds.height;
+    final shrink = Float64List.fromList([
+      sx, 0, 0, 0, //
+      0, sy, 0, 0,
+      0, 0, 1, 0,
+      bounds.center.dx * (1 - sx), bounds.center.dy * (1 - sy), 0, 1,
+    ]);
+    final path = _place(unit.transform(shrink), box, extent);
+    final opaque = color.withValues(alpha: 1);
+    // The fill and the stroke overlap, so a see-through colour goes on as one layer or the overlap shows.
+    final layered = color.a < 1;
+    if (layered) canvas.saveLayer(box.inflate(box.width), Paint()..color = Color.fromRGBO(0, 0, 0, color.a));
+    canvas
+      ..drawPath(path, _fill..color = opaque)
+      ..drawPath(path, _stroke(2 * radius * box.width)..color = opaque);
+    if (layered) canvas.restore();
   }
 
   void _thumb(Canvas canvas, Rect box, {required bool down}) {
@@ -112,9 +136,8 @@ class ActionGlyphPainter extends CustomPainter {
         : (Path path) => path;
     const extent = Size(1, 1);
     if (solid) {
-      canvas
-        ..drawPath(_place(flip(_hand()), box, extent), _fill)
-        ..drawPath(_place(flip(_cuff()), box, extent), _fill);
+      _fillSoft(canvas, flip(_hand()), box, extent, 0.05);
+      _fillSoft(canvas, flip(_cuff()), box, extent, 0.04);
     } else {
       final line = _line * box.width;
       canvas
@@ -261,7 +284,7 @@ class ActionGlyphPainter extends CustomPainter {
 
   /// The official star is a little taller than a regular one, with short plump arms and soft tips.
   static Path _star() {
-    const tips = 0.1, valleys = 0.05;
+    const tips = 0.13, valleys = 0.05;
     const outer = 0.568, inner = 0.33, stretch = 1.04;
     const centre = Offset(0.5, 0.553);
     final points = <(Offset, double)>[];

@@ -759,6 +759,9 @@ abstract final class IntroTheme {
   static const nameText = 13.0;
   static const fansText = 10.0;
 
+  /// The extra room PingFang leaves where the counts' digits meet 粉丝 and 视频 (03).
+  static const fansHanGap = 1.8;
+
   /// Where the name's and the counts' lines centre, down from the avatar's top.
   static const nameCentre = 7.8;
   static const fansCentre = 24.8;

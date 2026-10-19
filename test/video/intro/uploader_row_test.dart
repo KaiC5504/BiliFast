@@ -79,6 +79,29 @@ void main() {
     expect(find.text('47.5万粉丝  410视频'), findsOneWidget);
   });
 
+  testWidgets('with the system font, digits meeting 粉丝 and 视频 stand a little apart, as PingFang sets them', (
+    tester,
+  ) async {
+    List<String> spaced() {
+      final text = tester.renderObject<RenderParagraph>(find.text('47.5万粉丝  410视频')).text;
+      final apart = <String>[];
+      text.visitChildren((span) {
+        if (span is TextSpan && span.style?.letterSpacing == IntroTheme.fansHanGap) apart.add(span.text!);
+        return true;
+      });
+      return apart;
+    }
+
+    await _mount(tester, UploaderRow(detail: _detail(), card: _card()));
+    expect(spaced(), isEmpty, reason: 'MiSans has its own nudge');
+
+    final family = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = family);
+    BiliFonts.family = null;
+    await _mount(tester, UploaderRow(detail: _detail(), card: _card()));
+    expect(spaced(), ['5', '0']);
+  });
+
   testWidgets('the name stays put when the counts arrive', (tester) async {
     await _mount(tester, UploaderRow(detail: _detail()));
     final before = tester.getTopLeft(find.text('视频里的名字'));
