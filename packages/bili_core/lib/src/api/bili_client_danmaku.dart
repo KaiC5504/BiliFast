@@ -29,7 +29,7 @@ final class DanmakuDraft {
 /// A danmaku's 👍 count, and whether this account gave one.
 typedef DanmakuLikeStat = ({int likes, bool liked});
 
-typedef _BlockRuleItem =({int id, int? type, String? filter});
+typedef _BlockRuleItem = ({int id, int? type, String? filter});
 
 _BlockRuleItem _blockRuleItem(Object? json) {
   final object = JsonObject.from(json);

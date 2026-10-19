@@ -135,7 +135,9 @@ class _DanmakuListViewState extends State<DanmakuListView> {
       Logger.shared.warn(LogCategory.api, 'danmaku like failed', {'on': after.liked, 'error': _describe(error)});
       if (!mounted) return;
       setState(() => _stats[id] = before);
-      widget.toast(ActionsModel.failureMessage(error));
+      widget.toast(
+        error is BiliError && error.needsLogin ? DanmakuSession.needLogin : ActionsModel.failureMessage(error),
+      );
     } finally {
       _pending.remove(id);
     }

@@ -230,6 +230,14 @@ void main() {
     expect(find.text('置底'), findsOneWidget);
   });
 
+  testWidgets('置底 chosen in landscape sends as 滚动 from the small player', (tester) async {
+    session.sender.style = const DanmakuStyle(position: DanmakuPosition.bottom);
+    await pumpLayer(tester);
+    await open(tester);
+    await tester.pump();
+    expect(session.sender.style.position, DanmakuPosition.scroll);
+  });
+
   for (final presentation in [Presentation.inline, Presentation.vertical]) {
     testWidgets('no 置底 in the ${presentation.name} panel', (tester) async {
       await pumpLayer(tester, presentation: presentation);

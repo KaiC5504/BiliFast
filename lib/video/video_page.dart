@@ -352,6 +352,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
         _ => false,
       },
       accountMid: () => environment.mid ?? 0,
+      accountChanges: environment,
       requestLogin: () => _toast('请先登录'),
     );
     _danmaku = danmaku;
@@ -458,7 +459,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       api: services.pageApi,
       drafts: _drafts,
       isLoggedIn: () => environment.account is LoggedIn,
-      accountMid: () => environment.mid ?? 0,
+      accountMid: () => environment.mid,
       requestLogin: () => _toast('请先登录'),
       toast: _toast,
     )..addListener(_commentsChanged);

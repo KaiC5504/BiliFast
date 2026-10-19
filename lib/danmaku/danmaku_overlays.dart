@@ -7,6 +7,7 @@ import '../device/orientation.dart';
 import '../shared/theme.dart';
 import 'danmaku_session.dart';
 import 'send/danmaku_send_bar.dart';
+import 'send/danmaku_send_model.dart';
 import 'send/danmaku_style_panel.dart';
 
 /// The send bar riding on the keyboard, with the style panel in the keyboard's place after A (22, 23, 36-39), as a
@@ -175,6 +176,15 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
     final inset = media.viewInsets.bottom;
     final panel = _panelHeight;
     _trackKeyboard(inset, panel);
+    // 置底 picked in landscape isn't offered in portrait or 竖屏; there it sends as 滚动. Changed after the frame,
+    // since the style's listeners rebuild.
+    if (!_landscape && session.sender.style.position == DanmakuPosition.bottom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final sender = widget.session.sender;
+        if (!mounted || _landscape || sender.style.position != DanmakuPosition.bottom) return;
+        sender.style = sender.style.copyWith(position: DanmakuPosition.scroll);
+      });
+    }
     final dark = _landscape;
     final inline = widget.presentation == Presentation.inline;
     final below = _styleShown

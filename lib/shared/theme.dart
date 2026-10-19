@@ -980,7 +980,7 @@ abstract final class IntroListTheme {
   static const durationFill = Color(0x8C000000);
 
   /// ⋮: three 2.67 dots 1.33 apart, their column centred 20 from the right edge on the counts' line.
-  static const moreDot = 8.6 / 3;
+  static const moreDot = 8 / 3;
   static const moreDotGap = 4 / 3;
   static const moreCentreFromRight = 20.0;
   static const moreTarget = 36.0;
@@ -1402,7 +1402,7 @@ abstract final class CommentRowTheme {
   static const countRoom = 48.0;
   static const dislikeCentre = 49.0;
   static const moreCentre = 17.0;
-  static const moreDot = 8.6 / 3;
+  static const moreDot = 8 / 3;
   static const morePitch = 13 / 3;
   static const likeTarget = 6.0;
   static const dislikeTarget = 32.0;

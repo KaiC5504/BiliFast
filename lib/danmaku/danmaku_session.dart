@@ -26,12 +26,15 @@ class DanmakuSession extends ChangeNotifier {
     required this._position,
     required this._isLoggedIn,
     required this._isVip,
-    required int Function() accountMid,
+    required this._accountMid,
     required this._requestLogin,
+    this._accountChanges,
     Logger? logger,
   }) : _logger = logger ?? Logger.shared {
     sender = DanmakuSendModel(send);
-    _feed.ownMid = accountMid();
+    _feed.ownMid = _accountMid();
+    _wasLoggedIn = loggedIn;
+    _accountChanges?.addListener(_accountChanged);
     _applyFilter();
     _closed = _feed.closed;
     settings.addListener(_applyFilter);
@@ -51,8 +54,14 @@ class DanmakuSession extends ChangeNotifier {
   final double Function() _position;
   final bool Function() _isLoggedIn;
   final bool Function() _isVip;
+  final int Function() _accountMid;
   final VoidCallback _requestLogin;
+
+  /// Fires when the account may have changed; a page opened before the launch's account check answered learns the
+  /// account here.
+  final Listenable? _accountChanges;
   final Logger _logger;
+  bool _wasLoggedIn = false;
   bool _closed = false;
   bool _disposed = false;
   Timer? _rulesRetry;
@@ -145,9 +154,17 @@ class DanmakuSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _accountChanged() {
+    _feed.ownMid = _accountMid();
+    final now = loggedIn;
+    if (now && !_wasLoggedIn) unawaited(_refreshRules());
+    _wasLoggedIn = now;
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    _accountChanges?.removeListener(_accountChanged);
     _rulesRetry?.cancel();
     settings.removeListener(_applyFilter);
     rules.removeListener(_applyFilter);

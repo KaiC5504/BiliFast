@@ -9,6 +9,7 @@ import 'package:bilifast/danmaku/danmaku_settings_store.dart';
 import 'package:bilifast/danmaku/send/danmaku_send_model.dart';
 import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:flutter/foundation.dart';
 import 'package:bilifast/video/page_api.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -56,9 +57,13 @@ final class Rig {
       isVip: () => vip,
       accountMid: () => mid,
       requestLogin: () => loginRequests++,
+      accountChanges: account,
       logger: logger,
     );
   }
+
+  /// The app's account notifier.
+  final account = _Account();
 
   final http = Canned.http()
     ..dataRoutes[Canned.segmentPath] = (
@@ -96,6 +101,7 @@ final class Rig {
   void dispose() {
     session.dispose();
     feed.dispose();
+    account.dispose();
   }
 }
 
@@ -155,6 +161,16 @@ void main() {
     rig.dispose();
     rig = Rig(loggedIn: false);
     expect(rig.rules.refreshes, 0);
+  });
+
+  test('a page opened before the account was known asks for the rules once it is', () {
+    rig = Rig(loggedIn: false);
+    expect(rig.rules.refreshes, 0);
+    rig.loggedIn = true;
+    rig.account.changed();
+    expect(rig.rules.refreshes, 1);
+    rig.account.changed();
+    expect(rig.rules.refreshes, 1, reason: 'only on becoming logged in');
   });
 
   group('a failed rules refresh', () {
@@ -326,4 +342,8 @@ void main() {
     expect([for (final elem in rig.session.recent()) elem.content], ['来了']);
     expect(rig.shown(), ['来了']);
   });
+}
+
+final class _Account extends ChangeNotifier {
+  void changed() => notifyListeners();
 }
