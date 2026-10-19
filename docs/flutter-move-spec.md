@@ -128,7 +128,7 @@ One Dart interface (`BiliPlayer`) with iOS and Windows implementations, over Pig
   failure can't wipe the login.
 - **Settings and stores:** JSON files in the app's support folder (`CLAUDE.md`, "Layout"). Keys and defaults follow
   `AppSettings.swift` (`app-inventory.md`, "Settings"). Swift's `UserDefaults` values are carried over once through
-  `LegacyDefaults.swift` where worth it (最近打开 so far; `danmaku.settings` is slice 5's to decide).
+  `LegacyDefaults.swift` where worth it (最近打开; KaiC had no Swift danmaku settings worth carrying).
 - **Fresh install / logged out (slice 8):** a web view on `https://passport.bilibili.com/login`. Clear stale bilibili
   cookies first; once a non-empty `SESSDATA` appears, take every bilibili-domain cookie into the jar. Needs a web view
   that can read cookies (`flutter_inappwebview`, Apache-2.0, or a native `WKHTTPCookieStore` call).
@@ -190,16 +190,7 @@ reference screens, and the phone checklist items (numbers in `BiliNative/docs/m2
 | 4 Player interaction | 1.0.0 (5) |
 | 6 The page body | 1.0.0 (6), (7) |
 | 7 Comments | 1.0.0 (8) |
-
-### Slice 5: danmaku
-
-| | |
-|---|---|
-| Already in the app | The danmaku layer and painter (`lib/danmaku/`, fed by `lib/playback/danmaku_feed.dart`) from slice 1; the 弹 toggle and the 点我发弹幕 field (a toast for now) from slice 6. |
-| Port | `App/Danmaku/` (DanmakuController: segments ahead of the playhead, the filter, block rules, the uploader-closed notice, your own danmaku in a white box; DanmakuSettingsPanel with 显示区域 5 stops, 不透明度, 字体大小, 弹幕速度 [11, 9, 7, 5.5, 4] s, the type blocks, 重复弹幕隐藏, 底部字幕区域防挡, 重置; BlockRuleStore cached 10 min, synced with the server; BlockWordsView; DanmakuSendBar following the keyboard by hand, 100 chars; DanmakuStylePanel 25/18, modes 1/5/4, 12 colours + the VIP gradient). |
-| PiliPlus | `lib/plugin/pl_player/utils/danmaku_options.dart`, `lib/http/danmaku_block.dart`, `lib/http/danmaku.dart`: endpoints and behaviour only, never its layout. |
-| Reference | Screens 07-08, 22-24. Any state they don't show (the block-word list, the style panel's colours, …): ask KaiC for a screenshot. |
-| Phone check | Items 26-30, 52. |
+| 5 Danmaku | 1.0.0 (9); 人像防挡 is a follow-up, 举报 and 互动弹幕列表 left out (KaiC) |
 
 ### Slice 8: the rest of the app
 

@@ -39,14 +39,19 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   favourites, 合集 and parts, related videos, full screen's actions and end screens.
 - Slice 7, comments, 1.0.0 (8): 评论 and 评论详情, rich text, the picture viewer, the composer (emotes, @, pictures,
   drafts), the paused player shrinking to the 67 pt 继续播放 bar.
+- Slice 5, danmaku, 1.0.0 (9): 弹幕设置 (landscape strip, portrait light sheet; every change live mid-flight), 屏蔽词
+  synced with the account, 当前弹幕列表 with 👍 and 屏蔽弹幕, sending with styles from every entry point, own danmaku
+  boxed, the small player's danmaku at the official 12.5 pt. The app icon became the pink sprinting TV.
 
-Next, KaiC's order: slice 5 (danmaku). Then 8 and 9.
+Next, KaiC's order: 8 and 9.
 
 Open items, each waiting on its slice:
 - 不喜欢 is grey (此版本不支持不喜欢) until `BILI_APP_KEYS` is in the `testflight` environment and slice 8 brings the
   TV login. KaiC adds it: `gh secret set BILI_APP_KEYS -R KaiC5504/BiliFast --env testflight`, value `appkey:appsec` of
   the 云视听小电视 pair from bilibili-API-collect.
-- Slice 8: logged-out actions open the login page. Slice 5: 点我发弹幕 is a toast until then.
+- Slice 8: logged-out actions open the login page (点我发弹幕 and the danmaku fields toast 请先登录 until then).
+- Follow-up slice: 人像防挡 (the mask file from `/x/v2/dm/web/view`); its switch is drawn off and toasts until then.
+- Left out by KaiC: 举报 on danmaku, 互动弹幕列表.
 - Later: 竖屏 search, 充电鸣谢, the player box following a 16:10 video's height.
 - Known limit: Flutter rounds a line to whole points, so comment lines are 24 pt where the official app's are 24.33.
 
@@ -62,7 +67,9 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/home/`: home, the feed, the avatar menu and 最近打开.
   - `lib/player/`: the `BiliPlayer` interface and its iOS and Windows players. `lib/playback/`: the engine's setup,
     the playback controller, codec memory, the danmaku feed.
-  - `lib/danmaku/`: the danmaku layer and its painter.
+  - `lib/danmaku/`: the danmaku layer, scene and painter; `DanmakuSession` (one per page, on `PlayerUi`), the
+    settings and block-rule stores, 添加屏蔽词, 当前弹幕列表, and `send/` (the send bar and style panel) with
+    `danmaku_overlays.dart`, the send layer in the page's Stack. The 弹幕设置 panel is in `lib/player_ui/panels/`.
   - `lib/player_ui/`: the player's controls for each presentation, gestures, the HUD, the end screens, `panels/`.
   - `lib/device/`: rotation (`orientation.dart`, the rules) and brightness/volume, over `DeviceChannel.swift`.
   - `lib/video/`: the video page, its player session (`page_session.dart`, `player_prefs.dart`), the tab row
@@ -77,7 +84,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/speedtest/`: the speed test (dev builds only).
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
-    `font.json`, `emotes_recent.json`, `node_memory.json`).
+    `font.json`, `emotes_recent.json`, `node_memory.json`, `danmaku_settings.json`).
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`: `shared`, `devlog`,
   `danmaku`, `api`, `logic`, `dash_hls`, `local_http`, `engine`, and `bin/ripper_bench.dart`.
 - `ios/Runner/`: native Swift (player registry and host view, keychain, device controls, frame capture, paste
@@ -85,6 +92,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   `pigeons/`. New Swift files must be added to `ios/Runner.xcodeproj/project.pbxproj` by hand (four entries, see
   `KeychainChannel.swift`'s).
 - `assets/`: MiSans, and assets taken from PiliPlus (`assets/README.md`).
+- `design/icon-options/`: the app icon's five candidates and `make_icons.py`; A is the app's.
 - `test_ci/`: static tests of the workflow (pins, secrets only in step env, nothing leaks into the public log).
 - `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
   test plan; `phone_report.py` reads a session. Run `uv run tools/logserver.py` in the background before KaiC tests.
@@ -146,6 +154,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   MiSans nudges in `BiliMetrics` apply only while MiSans is on.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
+- 弹幕设置 is one set for every presentation. 添加屏蔽词 and 当前弹幕列表 are landscape only (the portrait sheet, 40
+  and 41, has no rows for them); turning to portrait with either open goes back to 弹幕设置.
 - Danmaku block-word regexes run on Dart's (ECMAScript) `RegExp`, not ICU as in Swift: `(?i)`, possessive and atomic
   groups throw (the rule is skipped), and `\p{Han}` or `\A` mean something else.
 - ghosthand first for screen and browser work; always `--mute`. Flutter windows often have a thin accessibility tree;
