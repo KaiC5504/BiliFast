@@ -1285,9 +1285,101 @@ abstract final class CommentTextTheme {
   static const link = Color(0xFF008AC5);
 }
 
-/// The composer and its emote panel (14).
+/// The composer and its emote panel (14), measured at 3 px per pt.
 abstract final class ComposerTheme {
   static const gutter = BiliMetrics.gutter;
+
+  /// 14's page shows through at 80%: its white reads #CCCCCC.
+  static const dim = BiliColors.scrim;
+  static const sheet = BiliColors.card;
+
+  /// The keyboard toggle and 发布 are a deeper pink than [BiliColors.pink]; 发布 with nothing to post is it at about
+  /// 30% on white.
+  static const accent = Color(0xFFED7098);
+  static const accentFaded = Color(0xFFF8D3DF);
+  static const publishText = Color(0xFFFFFFFF);
+  static const text = BiliColors.text;
+  static const placeholder = Color(0xFFC9CCCF);
+
+  /// @, ⊕, ⤢ and the emote face.
+  static const tool = Color(0xFF95999F);
+  static const syncText = Color(0xFF62666C);
+  static const syncRing = placeholder;
+  static const panel = BiliColors.pageGrey;
+  static const tabBar = BiliColors.card;
+  static const tabSelected = BiliColors.pageGrey;
+  static const sectionTitle = syncText;
+  static const kaomoji = BiliColors.text;
+  static const kaomojiTab = Color(0xFFA7A7A7);
+
+  /// The sheet rises as the page dims, and falls when it closes itself; ⤢ grows the field.
+  static const rise = Duration(milliseconds: 250);
+  static const fall = Duration(milliseconds: 200);
+  static const expand = Duration(milliseconds: 250);
+
+  /// How long the emote panel waits for the keyboard it gave way to before going anyway: a hardware keyboard shows no
+  /// software one.
+  static const keyboardWait = Duration(milliseconds: 600);
+
+  /// The sheet is 115 pt over the emote panel's top: the field, then the toolbar. The first line's ink is centred
+  /// 24.7 pt under the sheet's top and 13 pt in; ⤢'s 10.7 pt arrows are centred 24 pt down and 20 pt from the right.
+  static const sheetRadius = 4.0;
+  static const editorHeight = 67.0;
+  static const expandedEditorHeight = 260.0;
+  static const editorTop = 13.5;
+  static const editorLeading = 12.0;
+  static const editorTrailing = 40.0;
+  static const editorFont = 15.0;
+  static const expandCellHeight = 48.0;
+  static const expandIcon = 32 / 3;
+  static const expandStroke = 4 / 3;
+
+  /// The toolbar's row, everything on its middle: ○ 11 pt in with 转到动态 5 pt after it, the keyboard toggle, @ and
+  /// ⊕ in 44 pt cells centred at 96, 140 and 184 pt, and 发布 12 pt from the right.
+  static const toolbarHeight = 48.0;
+  static const syncLeading = 11.0;
+  static const syncRingSize = 10.0;
+  static const syncRingStroke = 1.0;
+  static const syncGap = 5.0;
+  static const syncWidth = 74.0;
+  static const syncFont = 10.0;
+  static const toolCell = 44.0;
+  static const toolIcon = 20.0;
+  static const keyboardIconHeight = 52 / 3;
+  static const toolStroke = 1.5;
+  static const publishWidth = 56.0;
+  static const publishHeight = 24.0;
+  static const publishTrailing = 12.0;
+  static const publishFont = 13.0;
+  static const publishSpinnerRadius = 7.0;
+
+  /// The emote panel takes the keyboard's place at its height; before the keyboard has been seen, the grid is 14's
+  /// 226 pt over the tab bar and the home indicator's strip.
+  static const panelHeight = 226.0;
+  static const tabHeight = 44.0;
+  static const tabWidth = 50.0;
+  static const tabIcon = 28.0;
+
+  /// 14's section titles sit 1.5 pt under the middle of their band. A row's emote is centred 31 pt down; 最近使用's
+  /// row is cut short under it.
+  static const sectionHeight = 34.0;
+  static const sectionTitleTop = 3.0;
+  static const sectionFont = 12.0;
+  static const gridSide = 3.0;
+  static const columns = 7;
+  static const emote = 28.0;
+  static const row = 62.0;
+  static const recentRow = 53.0;
+  static const largeColumns = 4;
+  static const largeEmote = 52.0;
+  static const largeRow = 80.0;
+  static const textColumns = 3;
+  static const textRow = 44.0;
+  static const kaomojiFont = 13.0;
+  static const kaomojiPad = 4.0;
+  static const kaomojiTabFont = 9.0;
+  static const kaomojiTabPad = 3.0;
+  static const spinnerRadius = 10.0;
 }
 
 /// The comment overlays: the rising thread and the delete confirm.
