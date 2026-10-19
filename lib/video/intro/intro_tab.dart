@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../../shared/theme.dart';
 import '../collapsing_player.dart';
 import '../page_details.dart';
+import '../page_session.dart';
 import '../player_session.dart';
 import 'action_row.dart';
 import 'collection_row.dart';
@@ -18,7 +19,14 @@ import 'uploader_row.dart';
 /// sliding away under a newer one keeps showing its own video rather than the newer one's.
 @immutable
 final class IntroContent {
-  const IntroContent({this.detail, this.related = const [], this.episodes = const [], this.episodesAreParts = false});
+  const IntroContent({
+    this.detail,
+    this.related = const [],
+    this.episodes = const [],
+    this.episodesAreParts = false,
+    this.detailFailed = false,
+    this.onRetryDetail,
+  });
 
   IntroContent.of(PlayerSession session)
     : this(
@@ -26,6 +34,8 @@ final class IntroContent {
         related: session.related,
         episodes: session.episodes,
         episodesAreParts: session.episodesAreParts,
+        detailFailed: session is PagePlayerSession && session.detailFailed,
+        onRetryDetail: session is PagePlayerSession ? session.retryDetail : null,
       );
 
   final VideoDetail? detail;
@@ -33,22 +43,36 @@ final class IntroContent {
   final List<Episode> episodes;
   final bool episodesAreParts;
 
+  /// The detail never came: 简介 offers 加载失败，点击重试, which calls [onRetryDetail].
+  final bool detailFailed;
+  final VoidCallback? onRetryDetail;
+
   @override
   bool operator ==(Object other) =>
       other is IntroContent &&
       other.detail == detail &&
       identical(other.related, related) &&
       listEquals(other.episodes, episodes) &&
-      other.episodesAreParts == episodesAreParts;
+      other.episodesAreParts == episodesAreParts &&
+      other.detailFailed == detailFailed &&
+      other.onRetryDetail == onRetryDetail;
 
   @override
-  int get hashCode => Object.hash(detail, identityHashCode(related), Object.hashAll(episodes), episodesAreParts);
+  int get hashCode => Object.hash(
+    detail,
+    identityHashCode(related),
+    Object.hashAll(episodes),
+    episodesAreParts,
+    detailFailed,
+    onRetryDetail,
+  );
 }
 
 /// 简介 (03, 18): the uploader, the title block, the action row once the actions exist, the parts or the 合集, the
 /// topic and BGM chips, and the related videos. Each section keeps its own gap above and its own gutters. Nothing
-/// shows, and nothing spins, until the video's detail arrives; then the column fades up into place. Its list scrolls
-/// with the page's primary scroll controller and starts [PlayerReserve] below its top.
+/// shows, and nothing spins, until the video's detail arrives; then the column fades up into place. A detail that
+/// never came leaves 加载失败，点击重试 in the middle instead. Its list scrolls with the page's primary scroll
+/// controller and starts [PlayerReserve] below its top.
 class IntroTab extends StatelessWidget {
   const IntroTab({
     super.key,
@@ -95,7 +119,11 @@ class IntroTab extends StatelessWidget {
               ),
             ),
             RelatedSliver(cards: content.related, onOpen: onOpenRelated, onWatchLater: onWatchLater),
-          ],
+          ] else if (content.detailFailed && content.onRetryDetail != null)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: _RetryLine(onRetry: content.onRetryDetail!)),
+            ),
           SliverToBoxAdapter(child: SizedBox(height: bottom)),
         ],
       ),
@@ -116,6 +144,46 @@ class IntroTab extends StatelessWidget {
       TagChips(tags: details.tags),
     ];
   }
+}
+
+class _RetryLine extends StatelessWidget {
+  const _RetryLine({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  TextStyle _style(Color color) => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: CommentListTheme.footerText,
+    color: color,
+    height: CommentListTheme.footerLine / CommentListTheme.footerText,
+    leadingDistribution: TextLeadingDistribution.even,
+    letterSpacing: 0,
+  );
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    key: const ValueKey('intro-retry'),
+    button: true,
+    label: '加载失败，点击重试',
+    onTap: onRetry,
+    excludeSemantics: true,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onRetry,
+      child: Padding(
+        padding: const EdgeInsets.all(CommentListTheme.footerPadding),
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: '加载失败，', style: _style(CommentListTheme.retryInk)),
+              TextSpan(text: '点击重试', style: _style(CommentListTheme.retryAction)),
+            ],
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    ),
+  );
 }
 
 /// Fades the column in and lifts it the last few points, once per video, as the official page settles.

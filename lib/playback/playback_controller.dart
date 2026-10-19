@@ -185,6 +185,9 @@ class PlaybackController extends ChangeNotifier {
   /// A network failure in direct mode restarts with fresh URLs at most this often.
   static const networkRestartSeconds = 60.0;
 
+  /// The waits before asking again for a detail that failed; after the last ask fails, [detailFailed] is set.
+  static const detailRetryGaps = [Duration(seconds: 2), Duration(seconds: 6)];
+
   /// The engine hears the playhead at most this often, as Swift's 0.25 s time observer fed the session; the
   /// players report about ten times a second.
   static const engineFeedMs = 250.0;
@@ -290,8 +293,11 @@ class PlaybackController extends ChangeNotifier {
   VideoDetail? _detail;
   ({String bvid, Future<VideoDetail> answer})? _detailFetch;
 
-  /// The open whose detail is being asked for; any open, close or engine change forgets it.
-  int? _detailFor;
+  /// The open whose detail is being asked for, and its video; any open, close or engine change forgets it. Kept after
+  /// the asks run out, so [retryDetail] knows what to ask for.
+  ({int open, String bvid})? _detailFor;
+  Timer? _detailRetry;
+  bool _detailFailed = false;
   ({int cid, PlayerInfo info})? _playerInfo;
   final _endings = StreamController<void>.broadcast();
   bool _disposed = false;
@@ -339,8 +345,11 @@ class PlaybackController extends ChangeNotifier {
   bool get mirrored => _mirrored;
 
   /// The signed view's detail: resolved here, handed to [openVideo] with the view, or asked for after a view came
-  /// without one; null until then, and when the signed view refused a BV link.
+  /// without one; null until then, and when the signed view was refused or the follow-up ask failed.
   VideoDetail? get detail => _detail;
+
+  /// The follow-up ask for [detail] failed, its retries too; [retryDetail] asks once more.
+  bool get detailFailed => _detailFailed;
 
   /// The 合集 holding the video, from [detail].
   UgcSeason? get season => _detail?.season;
@@ -482,6 +491,9 @@ class PlaybackController extends ChangeNotifier {
     _page = null;
     _detail = null;
     _detailFor = null;
+    _detailFailed = false;
+    _detailRetry?.cancel();
+    _detailRetry = null;
     if (!keepSize) _videoSize = null;
     _playerInfo = null;
     _qualities = const [];
@@ -632,8 +644,10 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// iOS can take a suspended app's listening socket: once back in the foreground the local server is probed,
-  /// and a playback prepared before a restart is prepared again where it was.
+  /// and a playback prepared before a restart is prepared again where it was. A detail whose asks ran out (likely
+  /// while the network was away) is asked for once more.
   Future<void> appResumed() async {
+    retryDetail();
     if (_choice == null || _token == null) return;
     final current = _epoch;
     final bool restarted;
@@ -652,11 +666,12 @@ class PlaybackController extends ChangeNotifier {
       resolveVideoLink(_client, link, logger: _logger, onDetail: onDetail);
 
   /// A video that opened with only a view (a b23.tv or av link, a view handed in alone) plays at once, and its signed
-  /// detail (简介, the 合集, the actions) follows when it lands, if the same open is still showing it. A failure is only
-  /// logged; the next open asks again. Another part opened while the call is out waits on the same call.
-  void _fetchDetail(String bvid) {
+  /// detail (简介, the 合集, the actions) follows when it lands, if the same open is still showing it. A failed ask is
+  /// tried again after each of [detailRetryGaps] while the open stands, then [detailFailed] is set. Another part
+  /// opened while the call is out waits on the same call.
+  void _fetchDetail(String bvid, {int attempt = 0}) {
     final open = _opens;
-    _detailFor = open;
+    _detailFor = (open: open, bvid: bvid);
     var pending = _detailFetch;
     if (pending == null || pending.bvid != bvid) {
       Future<VideoDetail> ask() async {
@@ -668,17 +683,44 @@ class PlaybackController extends ChangeNotifier {
       pending = fetch;
       _detailFetch = fetch;
       unawaited(fetch.answer.then((_) {}, onError: (Object error) {
-        _logger.warn(LogCategory.player, 'detail failed, playing without it', {'bvid': bvid, 'error': '$error'});
+        _logger.warn(LogCategory.player, 'detail failed, playing without it',
+            {'bvid': bvid, 'attempt': attempt, 'error': '$error'});
       }).whenComplete(() {
         if (identical(_detailFetch, fetch)) _detailFetch = null;
       }));
     }
     unawaited(pending.answer.then((detail) {
-      if (_disposed || _detailFor != open || detail.bvid != bvid || detail.redirectURL != null) return;
+      if (_disposed || _detailFor?.open != open) return;
       _detailFor = null;
+      if (detail.bvid != bvid || detail.redirectURL != null) {
+        _logger.info(LogCategory.player, 'detail dropped',
+            {'bvid': bvid, 'answered': detail.bvid, 'redirects': detail.redirectURL != null});
+        return;
+      }
       _detail = detail;
       _notify();
-    }, onError: (Object _) {}));
+    }, onError: (Object _) {
+      if (_disposed || _detailFor?.open != open) return;
+      if (attempt >= detailRetryGaps.length) {
+        _detailFailed = true;
+        _notify();
+        return;
+      }
+      _detailRetry = _startTimer(detailRetryGaps[attempt], () {
+        _detailRetry = null;
+        if (_disposed || _detailFor?.open != open) return;
+        _fetchDetail(bvid, attempt: attempt + 1);
+      });
+    }));
+  }
+
+  /// 简介's 点击重试: one more ask for a detail whose asks ran out, with no retries of its own.
+  void retryDetail() {
+    final wanted = _detailFor;
+    if (_disposed || !_detailFailed || wanted == null) return;
+    _detailFailed = false;
+    _notify();
+    _fetchDetail(wanted.bvid, attempt: detailRetryGaps.length);
   }
 
   Future<PlayURLInfo> _playUrl() async {
@@ -1550,6 +1592,7 @@ class PlaybackController extends ChangeNotifier {
     _disposed = true;
     _advance();
     _teardownPlayback();
+    _detailRetry?.cancel();
     unawaited(_playerEvents.cancel());
     unawaited(_engineStats.cancel());
     unawaited(_engineFatals.cancel());
