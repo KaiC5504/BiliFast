@@ -55,12 +55,10 @@ class AppEnvironment extends ChangeNotifier {
       Logger? logger}) async {
     final log = logger ?? Logger.shared;
     final guarded = _GuardedKeychain(keychain ?? KeychainStore.platform(), log);
-    final persistence = CookiePersistence(guarded);
+    final persistence = CookiePersistence(guarded, logger: log);
     final jar = CookieJar(await persistence.load());
     if (persistence.blocked) log.warn(LogCategory.app, 'keychain read failed, cookie writes held back');
-    jar.onChange = (_) => unawaited(persistence.save(jar.all).catchError((Object error) {
-          log.warn(LogCategory.app, 'cookie save failed', {'error': '$error'});
-        }));
+    jar.onChange = (_) => unawaited(persistence.save(jar.all));
     final client = BiliClient(transport: http ?? httpTransportOrFallback(httpFactory, log), cookies: jar, logger: log);
     return AppEnvironment._(
         cookies: jar,
@@ -94,6 +92,11 @@ class AppEnvironment extends ChangeNotifier {
 
   /// The last nav call failed (network, not a verdict), so [account] is still unknown.
   bool get accountCheckFailed => _accountCheckFailed;
+
+  /// Counts the logins [didLogin] completed. A login over an account that already read logged in leaves [account]
+  /// where it was, so what belongs to the account listens here rather than to its changes.
+  ValueListenable<int> get logins => _logins;
+  final _logins = ValueNotifier<int>(0);
 
   String get accountLabel => switch (_account) {
         LoggedIn(:final name) => name.isEmpty ? '已登录' : name,
@@ -141,6 +144,7 @@ class AppEnvironment extends ChangeNotifier {
     _fake = false;
     _persistence.unblock();
     this.cookies.replaceAll({...this.cookies.all, ...cookies});
+    final saved = _persistence.flush();
     _account = const AccountUnknown();
     _accountCheckFailed = false;
     notifyListeners();
@@ -152,12 +156,19 @@ class AppEnvironment extends ChangeNotifier {
     }
     final loggedIn = _account is LoggedIn;
     _logger.info(LogCategory.app, 'login', {'count': cookies.length, 'loggedIn': loggedIn});
+    // The session works from the jar either way; only the next launch would find itself logged out.
+    if (!await saved) _logger.error(LogCategory.app, 'login not saved to the keychain', {'loggedIn': loggedIn});
+    if (loggedIn && epoch == _epoch) _logins.value += 1;
     return loggedIn;
   }
 
   /// 退出登录 (BiliNative `AppEnvironment.logout`): empties the jar, deletes the keychain cookies and app token, and
   /// clears the web view's data. A step that fails is logged and the rest still run. A `--fake-account` run, which
   /// stored nothing, just stops being fake.
+  ///
+  /// Throws [LogoutIncomplete] when the jar or the keychain cookies couldn't be emptied. The account still reads
+  /// logged out, which is true of this run (the jar sends no login), but the keychain may hold the login for the
+  /// next launch, so the caller hears of it instead of a logout that only seemed to work.
   Future<void> logout() async {
     _epoch += 1;
     _checking = null;
@@ -167,8 +178,8 @@ class AppEnvironment extends ChangeNotifier {
       return;
     }
     _persistence.unblock();
-    await _logoutStep('jar', () async => cookies.removeAll());
-    await _logoutStep('keychain cookies', _keychain.deleteCookies);
+    final jarEmptied = await _logoutStep('jar', () async => cookies.removeAll());
+    final keychainEmptied = await _logoutStep('keychain cookies', _keychain.deleteCookies);
     await _logoutStep('app token', _keychain.deleteAppToken);
     await _logoutStep('web data', webCookies.clearAll);
     _signedOut();
@@ -176,13 +187,16 @@ class AppEnvironment extends ChangeNotifier {
     unawaited(client.ensureRiskCookies().catchError((Object error) {
       _logger.warn(LogCategory.app, 'risk cookies failed', {'error': '$error'});
     }));
+    if (!jarEmptied || !keychainEmptied) throw const LogoutIncomplete();
   }
 
-  Future<void> _logoutStep(String step, Future<void> Function() run) async {
+  Future<bool> _logoutStep(String step, Future<void> Function() run) async {
     try {
       await run();
+      return true;
     } catch (error) {
       _logger.warn(LogCategory.app, 'logout step failed', {'step': step, 'error': '$error'});
+      return false;
     }
   }
 
@@ -235,10 +249,24 @@ class AppEnvironment extends ChangeNotifier {
   /// After a failed read the stored cookies may still be there; once a read works they join the jar.
   Future<void> _retryBlockedKeychainLoad(int epoch) async {
     if (!_persistence.blocked) return;
-    final stored = await _persistence.load();
-    if (_persistence.blocked || epoch != _epoch) return;
+    final stored = await _persistence.reload();
+    if (stored == null || _persistence.blocked || epoch != _epoch) return;
     cookies.replaceAll({...stored, ...cookies.all});
   }
+
+  @override
+  void dispose() {
+    _logins.dispose();
+    super.dispose();
+  }
+}
+
+/// [AppEnvironment.logout] couldn't empty the jar or delete the keychain's cookies.
+final class LogoutIncomplete implements Exception {
+  const LogoutIncomplete();
+
+  @override
+  String toString() => 'LogoutIncomplete';
 }
 
 /// URLSession on the iPhone, as the Swift app's API client: ephemeral, with its own cookie store off, since

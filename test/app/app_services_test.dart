@@ -14,17 +14,36 @@ import '../account/fake_web_cookies.dart';
 import '../playback/fakes.dart';
 import 'fake_keychain.dart';
 
+/// A login whose fingerprint cookies are already there, so no `spi` call is needed.
+const _login = {
+  'SESSDATA': 'page-sess',
+  'bili_jct': 'page-jct',
+  'buvid3': 'b3',
+  'buvid4': 'b4',
+};
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('a login fetches the 屏蔽词 again and a logout drops them; the launch\'s check leaves them to the page', () async {
+  late FakePageApi api;
+
+  Future<(AppEnvironment, AppServices)> build({
+    CookieLoad stored = const NoStoredCookies(),
+    CannedHttp? http,
+    bool fake = false,
+  }) async {
     final environment = await AppEnvironment.load(
-      keychain: FakeKeychain(const NoStoredCookies()),
-      http: Canned.http(),
+      keychain: FakeKeychain(stored),
+      http: http ?? Canned.http(),
       webCookies: FakeWebCookies(),
       logger: Logger(session: 'test'),
     );
-    final api = FakePageApi()..blockRules = [const BlockRule(id: 1, kind: BlockRuleKind.keyword, filter: 'spoiler')];
+    // As main.dart: a --fake-account run is set up before the services exist.
+    if (fake) environment.useFakeAccount();
+    api = FakePageApi()
+      ..blockRules = [
+        const BlockRule(id: 1, kind: BlockRuleKind.keyword, filter: 'spoiler'),
+      ];
     final services = AppServices(
       environment: environment,
       playback: AppPlayback(() => Completer<PlaybackController>().future),
@@ -32,20 +51,61 @@ void main() {
       pageApi: api,
     );
     addTearDown(services.playback.dispose);
-    int fetches() => api.calls.where((call) => call == 'danmakuBlockRules').length;
+    return (environment, services);
+  }
 
-    environment.useFakeAccount();
+  int fetches() =>
+      api.calls.where((call) => call == 'danmakuBlockRules').length;
+
+  test('the launch\'s check leaves the 屏蔽词 to the page', () async {
+    final (environment, _) = await build(stored: const StoredCookies(_login));
+    await environment.refreshAccount();
     await pumpEventQueue();
+    expect(environment.account, isA<LoggedIn>());
     expect(fetches(), 0);
+  });
+
+  test('every login fetches the 屏蔽词 again, also one over an account that already read logged in', () async {
+    final (environment, services) = await build();
+    expect(await environment.didLogin(_login), isTrue);
+    await pumpEventQueue();
+    expect(fetches(), 1);
+    expect(services.blockRules.rules.single.filter, 'spoiler');
+
+    expect(await environment.didLogin(_login), isTrue);
+    await pumpEventQueue();
+    expect(
+      fetches(),
+      2,
+      reason: 'LoggedIn → unknown → LoggedIn is still a login',
+    );
+  });
+
+  test('a login Bilibili turns down fetches nothing', () async {
+    final (environment, _) = await build(http: Canned.http(loggedIn: false));
+    final login = environment.didLogin(_login);
+    await pumpEventQueue();
+    // The second and third checks wait 1 s and 2 s.
+    await Future<void>.delayed(const Duration(seconds: 3, milliseconds: 100));
+    expect(await login, isFalse);
+    expect(fetches(), 0);
+  });
+
+  test('logging out of a --fake-account run drops its 屏蔽词', () async {
+    final (environment, services) = await build(fake: true);
+    await services.blockRules.refresh();
+    expect(services.blockRules.rules, isNotEmpty);
 
     await environment.logout();
     await pumpEventQueue();
     expect(services.blockRules.rules, isEmpty);
-    expect(fetches(), 0);
+  });
 
-    environment.useFakeAccount();
+  test('once disposed it hears neither logins nor logouts', () async {
+    final (environment, services) = await build();
+    services.dispose();
+    expect(await environment.didLogin(_login), isTrue);
     await pumpEventQueue();
-    expect(fetches(), 1);
-    expect(services.blockRules.rules.single.filter, 'spoiler');
+    expect(fetches(), 0);
   });
 }

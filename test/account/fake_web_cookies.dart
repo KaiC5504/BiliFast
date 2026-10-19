@@ -4,6 +4,7 @@ import 'package:bilifast/account/web_cookies.dart';
 class FakeWebCookies implements WebCookies {
   final jar = <String, String>{};
   Object? readError;
+  Object? clearBilibiliError;
   Object? clearAllError;
   int reads = 0;
   int bilibiliClears = 0;
@@ -20,6 +21,8 @@ class FakeWebCookies implements WebCookies {
   @override
   Future<void> clearBilibili() async {
     bilibiliClears += 1;
+    final error = clearBilibiliError;
+    if (error != null) throw error;
     jar.clear();
   }
 

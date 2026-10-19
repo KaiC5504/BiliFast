@@ -11,6 +11,7 @@ import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
 import '../playback/fakes.dart';
@@ -33,6 +34,10 @@ class FakeEnvironment extends ChangeNotifier implements AppEnvironment {
 
   @override
   Account get account => _account;
+
+  @override
+  ValueListenable<int> get logins => _logins;
+  final _logins = ValueNotifier<int>(0);
 
   set account(Account value) {
     _account = value;

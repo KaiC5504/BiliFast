@@ -112,24 +112,30 @@ class AppServices {
        danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
     this.blockRules =
         blockRules ?? BlockRuleStore(api: this.pageApi, isLoggedIn: () => environment.account is LoggedIn);
+    _account = environment.account;
     environment.addListener(_accountChanged);
+    environment.logins.addListener(_loggedIn);
   }
 
-  Account _account = const AccountUnknown();
+  late Account _account;
 
-  /// A login fetches the new account's 屏蔽词 at once (Swift's didLogin) and a logout drops the old ones; the launch's
-  /// check is left to the first page, which refreshes them itself.
+  /// Every login fetches the account's 屏蔽词 at once (Swift's didLogin); the launch's check is left to the first
+  /// page, which refreshes them itself.
+  void _loggedIn() => unawaited(blockRules.refresh(force: true));
+
+  /// A logout, or a login Bilibili no longer accepts, drops the old account's 屏蔽词.
   void _accountChanged() {
     final now = environment.account;
     // didLogin passes through unknown on its way to logged in.
     if (now is AccountUnknown) return;
     final was = _account;
     _account = now;
-    if (now is LoggedIn && (was is LoggedOut || was is LoginExpired)) {
-      unawaited(blockRules.refresh(force: true));
-    } else if (was is LoggedIn && (now is LoggedOut || now is LoginExpired)) {
-      unawaited(blockRules.refresh());
-    }
+    if (was is LoggedIn && (now is LoggedOut || now is LoginExpired)) unawaited(blockRules.refresh());
+  }
+
+  void dispose() {
+    environment.removeListener(_accountChanged);
+    environment.logins.removeListener(_loggedIn);
   }
 
   final AppEnvironment environment;

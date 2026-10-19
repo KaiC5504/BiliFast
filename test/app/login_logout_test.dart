@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
@@ -38,6 +40,23 @@ class _Keychain extends FakeKeychain {
   Future<void> deleteAppToken() async => deletes.add('app token');
 }
 
+/// Holds every nav call until the test answers it, each with its own body; the rest goes to [inner].
+class _HeldNav implements HTTPTransport {
+  _HeldNav(this.inner);
+
+  final CannedHttp inner;
+  final held = <Completer<String>>[];
+
+  @override
+  Future<HTTPResponse> send(HTTPRequest request) async {
+    if (request.url.path != Canned.navPath) return inner.send(request);
+    final answer = Completer<String>();
+    held.add(answer);
+    final body = await answer.future;
+    return HTTPResponse(status: 200, headers: {}, body: utf8.encode(body), finalURL: request.url);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -72,6 +91,20 @@ void main() {
       expect(seen.first, isA<AccountUnknown>(), reason: 'checking the new login, as Swift');
       final event = memory.events.singleWhere((event) => event.msg == 'login');
       expect(event.f['count']?.toJson(), 3);
+      expect(log(), isNot(contains('page-sess')));
+    });
+
+    test('a keychain that refuses the login still comes back logged in, with an error in the log', () async {
+      final keychain = _Keychain(const NoStoredCookies())..saveOk = false;
+      final environment = await load(keychain, Canned.http()..routes[_spiPath] = (200, _spi));
+      expect(await environment.didLogin(_page), isTrue);
+      expect(environment.account, isA<LoggedIn>());
+      final errors = [
+        for (final event in memory.events)
+          if (event.level == LogLevel.error) event.msg,
+      ];
+      expect(errors, contains('login not saved to the keychain'));
+      expect(errors, contains('cookie save refused'));
       expect(log(), isNot(contains('page-sess')));
     });
 
@@ -141,6 +174,80 @@ void main() {
     });
   });
 
+  group('races', () {
+    for (final staleFirst in [true, false]) {
+      test('a login made while the launch check is out never reads expired from its stale answer '
+          '(stale answer ${staleFirst ? 'first' : 'last'})', () async {
+        final held = _HeldNav(Canned.http());
+        final environment = await AppEnvironment.load(
+          keychain: _Keychain(const StoredCookies(_stored)),
+          http: held,
+          webCookies: FakeWebCookies(),
+          logger: Logger(session: 'test'),
+        );
+        final seen = <Account>[];
+        environment.addListener(() => seen.add(environment.account));
+        final launch = environment.refreshAccount();
+        await pumpEventQueue();
+        expect(held.held, hasLength(1));
+
+        final login = environment.didLogin(_page);
+        await pumpEventQueue();
+        expect(held.held, hasLength(2), reason: 'the login asks for itself rather than waiting on the old check');
+        final (stale, fresh) = (held.held[0], held.held[1]);
+        if (staleFirst) {
+          stale.complete(Canned.navLoggedOut);
+          await pumpEventQueue();
+          fresh.complete(Canned.navLoggedIn);
+        } else {
+          fresh.complete(Canned.navLoggedIn);
+          await pumpEventQueue();
+          stale.complete(Canned.navLoggedOut);
+        }
+        await launch;
+        expect(await login, isTrue);
+        await pumpEventQueue();
+        expect(seen.whereType<LoginExpired>(), isEmpty);
+        expect(environment.account, isA<LoggedIn>());
+        expect(environment.cookies.value('SESSDATA'), 'page-sess');
+      });
+    }
+
+    test('a logout during a blocked keychain re-read doesn\'t bring the old SESSDATA back', () async {
+      final keychain = _Keychain(const CookieLoadFailed(-25308));
+      final environment = await load(keychain, Canned.http());
+      keychain
+        ..next = const StoredCookies(_stored)
+        ..loadGate = Completer<void>();
+      final check = environment.refreshAccount();
+      await pumpEventQueue();
+
+      await environment.logout();
+      keychain.loadGate!.complete();
+      await check;
+      await pumpEventQueue();
+      expect(environment.cookies.value('SESSDATA'), isNull);
+      expect(environment.account, isA<LoggedOut>());
+      expect(keychain.saved.where((saved) => saved.containsKey('SESSDATA')), isEmpty);
+    });
+
+    test('a re-read that fails after a login doesn\'t hold the new login\'s writes back', () async {
+      final keychain = _Keychain(const CookieLoadFailed(-25308));
+      final environment = await load(keychain, Canned.http());
+      keychain.loadGate = Completer<void>();
+      final check = environment.refreshAccount();
+      await pumpEventQueue();
+
+      expect(await environment.didLogin({..._page, 'buvid3': 'b3', 'buvid4': 'b4'}), isTrue);
+      keychain.loadGate!.complete();
+      await check;
+      environment.cookies.set('bili_ticket', 't');
+      await pumpEventQueue();
+      expect(keychain.saved.last['bili_ticket'], 't');
+      expect(keychain.saved.last['SESSDATA'], 'page-sess');
+    });
+  });
+
   group('logout', () {
     Future<AppEnvironment> loggedIn(FakeKeychain keychain, CannedHttp http, FakeWebCookies web) async {
       final environment = await load(keychain, http, web: web);
@@ -174,13 +281,21 @@ void main() {
       final web = FakeWebCookies()..clearAllError = PlatformException(code: 'webkit');
       final environment = await loggedIn(keychain, Canned.http(), web);
 
-      await environment.logout();
+      await expectLater(environment.logout(), throwsA(isA<LogoutIncomplete>()));
       expect(keychain.deletes, ['cookies', 'app token']);
       expect(web.allClears, 1);
-      expect(environment.account, isA<LoggedOut>());
+      expect(environment.account, isA<LoggedOut>(), reason: 'the jar is empty, so this run is logged out');
       final failed = memory.events.where((event) => event.msg == 'logout step failed');
       expect([for (final event in failed) event.f['step']?.toJson()], ['keychain cookies', 'web data']);
       expect(log(), isNot(contains('stored-sess')));
+    });
+
+    test('the web view\'s data failing alone doesn\'t fail it', () async {
+      final keychain = _Keychain(const StoredCookies(_stored));
+      final web = FakeWebCookies()..clearAllError = PlatformException(code: 'webkit');
+      final environment = await loggedIn(keychain, Canned.http(), web);
+      await environment.logout();
+      expect(environment.account, isA<LoggedOut>());
     });
 
     test('after a failed keychain read the emptied jar still reaches the keychain', () async {

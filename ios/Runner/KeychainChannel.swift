@@ -21,15 +21,13 @@ enum KeychainChannel {
         let cookies = arguments?["cookies"] as? [String: String] ?? [:]
         result(saveCookies(cookies))
       case "deleteCookies":
-        SecItemDelete(query(cookieService) as CFDictionary)
-        result(nil)
+        result(deleteError(delete(cookieService)))
       case "loadAppToken":
         result(loadAppToken())
       case "saveAppToken":
         result(saveAppToken(arguments?["token"] as? String ?? ""))
       case "deleteAppToken":
-        SecItemDelete(query(tokenService) as CFDictionary)
-        result(nil)
+        result(deleteError(delete(tokenService)))
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -40,6 +38,19 @@ enum KeychainChannel {
     [kSecClass as String: kSecClassGenericPassword,
      kSecAttrService as String: service,
      kSecAttrAccount as String: account]
+  }
+
+  /// An item that isn't there counts as deleted.
+  private static func delete(_ service: String) -> OSStatus {
+    let status = SecItemDelete(query(service) as CFDictionary)
+    return status == errSecItemNotFound ? errSecSuccess : status
+  }
+
+  /// nil (Dart's void) once deleted; otherwise an error Dart throws as a PlatformException.
+  private static func deleteError(_ status: OSStatus) -> FlutterError? {
+    status == errSecSuccess
+      ? nil
+      : FlutterError(code: "keychain", message: "delete failed", details: Int(status))
   }
 
   private static func load(_ service: String) -> (OSStatus, Data?) {
@@ -66,8 +77,8 @@ enum KeychainChannel {
 
   private static func saveCookies(_ cookies: [String: String]) -> [String: Any] {
     if cookies.isEmpty {
-      SecItemDelete(query(cookieService) as CFDictionary)
-      return ["ok": true]
+      let status = delete(cookieService)
+      return status == errSecSuccess ? ["ok": true] : ["ok": false, "code": Int(status)]
     }
     guard let data = try? JSONEncoder().encode(cookies) else {
       return ["ok": false, "code": Int(errSecParam)]
@@ -86,8 +97,8 @@ enum KeychainChannel {
 
   private static func saveAppToken(_ token: String) -> [String: Any] {
     guard !token.isEmpty else {
-      SecItemDelete(query(tokenService) as CFDictionary)
-      return ["ok": true]
+      let status = delete(tokenService)
+      return status == errSecSuccess ? ["ok": true] : ["ok": false, "code": Int(status)]
     }
     return save(Data(token.utf8), service: tokenService)
   }
