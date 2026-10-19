@@ -146,12 +146,12 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   void _listen(PlayerUi ui) {
     ui.panels.addListener(_panelChanged);
-    ui.orientation.addListener(_rebuild);
+    ui.orientation.addListener(_presentationChanged);
   }
 
   void _unlisten(PlayerUi ui) {
     ui.panels.removeListener(_panelChanged);
-    ui.orientation.removeListener(_rebuild);
+    ui.orientation.removeListener(_presentationChanged);
   }
 
   @override
@@ -179,6 +179,16 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   void _rebuild() {
     if (mounted) setState(() {});
+  }
+
+  /// 添加屏蔽词 and 当前弹幕列表 are laid out for landscape only; turned upright they give way to 弹幕设置's sheet.
+  void _presentationChanged() {
+    final panels = widget.ui.panels;
+    if (widget.ui.presentation != Presentation.landscape &&
+        (panels.value == PlayerPanel.blockWords || panels.value == PlayerPanel.danmakuList)) {
+      panels.open(PlayerPanel.danmakuSettings);
+    }
+    _rebuild();
   }
 
   void _panelChanged() {
@@ -267,7 +277,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                     child: ValueListenableBuilder(
                       valueListenable: _confirm,
                       builder: (context, request, _) => AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 180),
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 180),
                         child: request == null
                             ? const SizedBox.shrink()
                             : PanelConfirmDialog(

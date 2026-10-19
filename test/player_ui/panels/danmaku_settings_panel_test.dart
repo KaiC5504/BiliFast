@@ -452,4 +452,58 @@ void main() {
       expect(rig.settings, const DanmakuSettings());
     });
   });
+
+  group('Reduce Motion', () {
+    /// Taps [key] once it is in view, then draws one frame.
+    Future<void> tapOnce(WidgetTester tester, String key) async {
+      await tester.ensureVisible(find.byKey(ValueKey(key)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey(key)));
+      await tester.pump();
+    }
+
+    testWidgets('查看更多, a switch, a snapping slider and the reset confirm land in one frame', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(
+        disableAnimations: true,
+      );
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      final rig = await pumpSettings(tester, landscape: true);
+
+      await tapOnce(tester, 'danmaku-more');
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(find.text('查看更多'), findsNothing);
+      expect(find.text('字体大小'), findsOneWidget);
+      final fades = tester.widgetList<Opacity>(find.ancestor(of: find.text('字体大小'), matching: find.byType(Opacity)));
+      expect(fades.map((fade) => fade.opacity), everyElement(1));
+
+      await tapOnce(tester, 'danmaku-toggle-重复弹幕隐藏');
+      expect(rig.settings.filter.dedupe, isTrue);
+      expect(tester.hasRunningAnimations, isFalse);
+
+      await tester.ensureVisible(slider('显示区域'));
+      await tester.pumpAndSettle();
+      final box = tester.getRect(slider('显示区域'));
+      await tester.tapAt(Offset(box.left + DanmakuPanelTheme.sliderThumbInset, box.center.dy));
+      await tester.pump();
+      expect(rig.settings.area, DanmakuSettings.areas.first);
+      expect(tester.hasRunningAnimations, isFalse);
+
+      await tapOnce(tester, 'danmaku-reset');
+      expect(find.byKey(const ValueKey('panel-confirm')), findsOneWidget);
+      expect(tester.hasRunningAnimations, isFalse);
+    });
+
+    testWidgets('without it, the same changes animate', (tester) async {
+      await pumpSettings(tester, landscape: true);
+      await tapOnce(tester, 'danmaku-more');
+      expect(tester.hasRunningAnimations, isTrue);
+      await tester.pumpAndSettle();
+      await tapOnce(tester, 'danmaku-toggle-重复弹幕隐藏');
+      expect(tester.hasRunningAnimations, isTrue);
+      await tester.pumpAndSettle();
+      await tapOnce(tester, 'danmaku-reset');
+      expect(tester.hasRunningAnimations, isTrue);
+      await tester.pumpAndSettle();
+    });
+  });
 }

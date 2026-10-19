@@ -225,20 +225,24 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
         ),
       ],
     ];
+    final sliderColumn = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: sliders);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        PanelReveal(order: 0, child: _header(look)),
+        PanelReveal(order: 0, child: _header(context, look)),
         PanelReveal(
           order: 1,
           child: _Card(
             look: look,
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: sliders),
-            ),
+            // AnimatedSize throws on a zero duration, so Reduce Motion leaves it out.
+            child: MediaQuery.disableAnimationsOf(context)
+                ? sliderColumn
+                : AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: sliderColumn,
+                  ),
           ),
         ),
         PanelReveal(order: 2, child: _Section('画面防挡', look: look)),
@@ -310,7 +314,7 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
     );
   }
 
-  Widget _header(_Look look) {
+  Widget _header(BuildContext context, _Look look) {
     final style = TextStyle(fontSize: DanmakuPanelTheme.titleText, fontWeight: FontWeight.w600, color: look.text);
     return SizedBox(
       height: DanmakuPanelTheme.headerHeight,
@@ -331,7 +335,7 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
               top: DanmakuPanelTheme.headerCentre - BiliMetrics.panelHitBox / 2,
               height: BiliMetrics.panelHitBox,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
+                duration: _motion(context, const Duration(milliseconds: 200)),
                 child: _expanded ? const SizedBox.shrink() : _more(look),
               ),
             ),
@@ -511,7 +515,11 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
                   const SizedBox(width: DanmakuPanelTheme.resetGap),
                   Text(
                     '重置弹幕设置',
-                    style: TextStyle(fontSize: DanmakuPanelTheme.detailText, color: look.reset),
+                    style: TextStyle(
+                      fontSize: DanmakuPanelTheme.detailText,
+                      letterSpacing: DanmakuPanelTheme.resetSpacing,
+                      color: look.reset,
+                    ),
                   ),
                   const SizedBox(width: DanmakuPanelTheme.resetTrailing),
                 ],
@@ -539,6 +547,9 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
       ((low + position * (high - low)) * 100).round() / 100;
 }
 
+Duration _motion(BuildContext context, Duration duration) =>
+    MediaQuery.disableAnimationsOf(context) ? Duration.zero : duration;
+
 /// Fades a row in when 查看更多 adds it.
 class _Appear extends StatelessWidget {
   const _Appear({required this.animate, required this.child});
@@ -548,7 +559,7 @@ class _Appear extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!animate) return child;
+    if (!animate || MediaQuery.disableAnimationsOf(context)) return child;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 300),
@@ -743,7 +754,7 @@ class _Slider extends StatelessWidget {
         onHorizontalDragUpdate: (details) => at(details.localPosition.dx),
         child: TweenAnimationBuilder<double>(
           tween: Tween(end: position),
-          duration: stops == null ? Duration.zero : const Duration(milliseconds: 150),
+          duration: stops == null ? Duration.zero : _motion(context, const Duration(milliseconds: 150)),
           curve: Curves.easeOutCubic,
           builder: (context, shown, _) => CustomPaint(
             size: Size(width, BiliMetrics.panelHitBox),
@@ -922,8 +933,9 @@ class _Switch extends StatelessWidget {
   Widget build(BuildContext context) {
     const inset = (BiliMetrics.panelSwitchHeight - BiliMetrics.panelSwitchKnob) / 2;
     final shadow = look.knobShadow;
+    final motion = _motion(context, const Duration(milliseconds: 200));
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: motion,
       curve: Curves.easeOutCubic,
       width: BiliMetrics.panelSwitchWidth,
       height: BiliMetrics.panelSwitchHeight,
@@ -933,7 +945,7 @@ class _Switch extends StatelessWidget {
         borderRadius: BorderRadius.circular(BiliMetrics.panelSwitchHeight / 2),
       ),
       child: AnimatedAlign(
-        duration: const Duration(milliseconds: 200),
+        duration: motion,
         curve: Curves.easeOutBack,
         alignment: on ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
@@ -942,7 +954,14 @@ class _Switch extends StatelessWidget {
           decoration: BoxDecoration(
             color: BiliColors.panelKnob,
             shape: BoxShape.circle,
-            boxShadow: [if (shadow != null) BoxShadow(color: shadow, blurRadius: 1.5, offset: const Offset(0, 0.5))],
+            boxShadow: [
+              if (shadow != null)
+                BoxShadow(
+                  color: shadow,
+                  blurRadius: DanmakuPanelTheme.lightKnobShadowBlur,
+                  offset: DanmakuPanelTheme.lightKnobShadowOffset,
+                ),
+            ],
           ),
         ),
       ),
@@ -1022,7 +1041,7 @@ class PanelConfirmDialog extends StatelessWidget {
                         request.title,
                         style: base.copyWith(
                           fontSize: DanmakuPanelTheme.dialogTitleText,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: DanmakuPanelTheme.dialogText,
                         ),
                       ),

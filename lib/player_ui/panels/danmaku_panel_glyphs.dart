@@ -186,8 +186,8 @@ class _DanmakuGlyphPainter extends CustomPainter {
   /// 计数: ×99, the 99 heavy and slanted. Drawn rather than set in a font, since MiSans has no heavy italic.
   void _count(Canvas canvas) {
     final cross = _line(1.3);
-    canvas.drawLine(const Offset(4.5, 11.15), const Offset(7.5, 13.85), cross);
-    canvas.drawLine(const Offset(7.5, 11.15), const Offset(4.5, 13.85), cross);
+    canvas.drawLine(const Offset(6.5, 11.4), const Offset(9.5, 14.1), cross);
+    canvas.drawLine(const Offset(9.5, 11.4), const Offset(6.5, 14.1), cross);
     final stroke = _line(2.0);
     for (final left in const [10.85, 16.2]) {
       // Each nine upright from (left, 6.83), then slanted 0.15 of its height.
@@ -225,27 +225,32 @@ class _DanmakuGlyphPainter extends CustomPainter {
     canvas.drawLine(centre - Offset(reach, reach), centre + Offset(reach, reach), paint..strokeCap = StrokeCap.butt);
   }
 
-  /// ↻: two arcs round the middle, each ending in a corner.
+  /// ↻: two arcs on one circle, each ending in a right-angled head whose corner sits on the circle, the pair
+  /// point-symmetric about the middle.
   void _reset(Canvas canvas) {
-    const centre = Offset(6.0, 6.16);
-    const radius = 5.3;
-    final paint = _line(DanmakuPanelTheme.resetStroke);
+    const centre = Offset(6.5, 6.15);
+    const radius = 5.7;
+    const arm = 2.7;
     const degree = math.pi / 180;
+    const tip = -127 * degree;
+    final paint = _line(DanmakuPanelTheme.resetStroke);
     final circle = Rect.fromCircle(center: centre, radius: radius);
-    canvas.drawArc(circle, -113 * degree, -175 * degree, false, paint);
-    canvas.drawArc(circle, -84 * degree, 132 * degree, false, paint);
+    canvas.drawArc(circle, tip, -139 * degree, false, paint);
+    canvas.drawArc(circle, tip + 40 * degree, 140 * degree, false, paint);
+    final upper = centre + Offset(math.cos(tip), math.sin(tip)) * radius;
+    final lower = centre * 2 - upper;
     canvas.drawPath(
       Path()
-        ..moveTo(0.9, 1.5)
-        ..lineTo(4.0, 1.5)
-        ..lineTo(4.0, 4.6),
+        ..moveTo(upper.dx - arm, upper.dy)
+        ..lineTo(upper.dx, upper.dy)
+        ..lineTo(upper.dx, upper.dy + arm),
       paint,
     );
     canvas.drawPath(
       Path()
-        ..moveTo(10.0, 7.7)
-        ..lineTo(10.0, 10.8)
-        ..lineTo(13.1, 10.8),
+        ..moveTo(lower.dx, lower.dy - arm)
+        ..lineTo(lower.dx, lower.dy)
+        ..lineTo(lower.dx + arm, lower.dy),
       paint,
     );
   }
