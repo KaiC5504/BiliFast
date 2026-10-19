@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+    <stop offset="0" stop-color="#2A1F2A"/><stop offset="0.5" stop-color="#1A141C"/><stop offset="1" stop-color="#0E0B10"/>
+  </linearGradient>
+  <radialGradient id="glow" cx="300" cy="170" r="760" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FF6699" stop-opacity="0.26"/><stop offset="1" stop-color="#FF6699" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="ink" x1="0" y1="180" x2="0" y2="860" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FF94BA"/><stop offset="1" stop-color="#FF5C93"/>
+  </linearGradient>
+  <linearGradient id="blue" x1="0" y1="300" x2="0" y2="780" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#5AD6FF"/><stop offset="1" stop-color="#1FA8F0"/>
+  </linearGradient>
+  <filter id="lift" x="-30%" y="-30%" width="160%" height="160%">
+    <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.55"/>
+  </filter>
+  
+</defs>
+<rect width="1024" height="1024" fill="url(#bg)"/><rect width="1024" height="1024" fill="url(#glow)"/>
+<g filter="url(#lift)"><path d="M233.7 464 L329.7 464" stroke="url(#ink)" stroke-opacity="0.75" stroke-width="44" stroke-linecap="round"/><path d="M169.4 568 L309.4 568" stroke="url(#ink)" stroke-opacity="1.00" stroke-width="44" stroke-linecap="round"/><path d="M220.0 668 L290.0 668" stroke="url(#ink)" stroke-opacity="0.55" stroke-width="44" stroke-linecap="round"/><g transform="translate(626 560) skewX(-11) translate(-626 -560)">
+  <rect x="406.0" y="388.0" width="440" height="344" rx="108" fill="none" stroke="url(#ink)" stroke-width="62"/>
+  <path d="M568 388.0 L476 276.0" stroke="url(#ink)" stroke-width="48" stroke-linecap="round"/>
+  <path d="M688 388.0 L632 260.0" stroke="url(#ink)" stroke-width="48" stroke-linecap="round"/>
+  <rect x="531" y="502" width="54" height="104" rx="27" fill="url(#ink)"/>
+  <rect x="667" y="502" width="54" height="104" rx="27" fill="url(#ink)"/>
+</g></g>
+</svg>

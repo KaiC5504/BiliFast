@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+    <stop offset="0" stop-color="#2A1F2A"/><stop offset="0.5" stop-color="#1A141C"/><stop offset="1" stop-color="#0E0B10"/>
+  </linearGradient>
+  <radialGradient id="glow" cx="300" cy="170" r="760" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FF6699" stop-opacity="0.26"/><stop offset="1" stop-color="#FF6699" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="ink" x1="0" y1="180" x2="0" y2="860" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FF94BA"/><stop offset="1" stop-color="#FF5C93"/>
+  </linearGradient>
+  <linearGradient id="blue" x1="0" y1="300" x2="0" y2="780" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#5AD6FF"/><stop offset="1" stop-color="#1FA8F0"/>
+  </linearGradient>
+  <filter id="lift" x="-30%" y="-30%" width="160%" height="160%">
+    <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.55"/>
+  </filter>
+  
+</defs>
+<rect width="1024" height="1024" fill="url(#bg)"/><rect width="1024" height="1024" fill="url(#glow)"/>
+<g filter="url(#lift)"><rect x="268.0" y="390.0" width="488" height="392" rx="116" fill="none" stroke="url(#ink)" stroke-width="60"/>
+<path d="M428 390.0 L354 278.0" stroke="url(#ink)" stroke-width="48" stroke-linecap="round"/><g transform="translate(604 396.0) rotate(14) scale(1.12)"><polygon points="20,-220 70,-220 38,-140 80,-140 0,0 18,-100 -25,-100" fill="url(#ink)" stroke="url(#ink)" stroke-width="18" stroke-linejoin="round"/></g><circle cx="430" cy="562" r="36" fill="url(#ink)"/><circle cx="594" cy="562" r="36" fill="url(#ink)"/><path d="M458 626 H566 A54 54 0 0 1 458 626 Z" fill="url(#ink)" stroke="url(#ink)" stroke-width="10" stroke-linejoin="round"/></g>
+</svg>

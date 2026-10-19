@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+    <stop offset="0" stop-color="#FF8DB4"/><stop offset="0.5" stop-color="#FF6699"/><stop offset="1" stop-color="#EE4C82"/>
+  </linearGradient>
+  <radialGradient id="glow" cx="300" cy="170" r="760" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.3"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="ink" x1="0" y1="180" x2="0" y2="860" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFF1F6"/>
+  </linearGradient>
+  <linearGradient id="blue" x1="0" y1="300" x2="0" y2="780" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#5AD6FF"/><stop offset="1" stop-color="#1FA8F0"/>
+  </linearGradient>
+  <filter id="lift" x="-30%" y="-30%" width="160%" height="160%">
+    <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#B3164C" flood-opacity="0.32"/>
+  </filter>
+  <linearGradient id="gbase" x1="0" y1="0" x2="0.35" y2="1">
+    <stop offset="0" stop-color="#FF8DB4"/><stop offset="0.5" stop-color="#FF6699"/><stop offset="1" stop-color="#EE4C82"/>
+  </linearGradient>
+  <radialGradient id="gsheen" cx="300" cy="170" r="760" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.3"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="gorb" x1="0" y1="0" x2="0.7" y2="1">
+    <stop offset="0" stop-color="#8FE6FF"/><stop offset="1" stop-color="#139FEE"/>
+  </linearGradient>
+  <linearGradient id="gorb2" x1="0" y1="0" x2="0.7" y2="1">
+    <stop offset="0" stop-color="#FFC2D7"/><stop offset="1" stop-color="#FF4F8E"/>
+  </linearGradient>
+  <linearGradient id="gfrost" x1="0" y1="360.0" x2="0" y2="788.0" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.4"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0.16"/>
+  </linearGradient>
+  <linearGradient id="grim" x1="232.0" y1="360.0" x2="792.0" y2="788.0" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/><stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.35"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0.71"/>
+  </linearGradient>
+  <filter id="frosted" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="34"/></filter>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="28"/></filter>
+  <filter id="halo" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="16" result="b"/>
+    <feFlood flood-color="#FFFFFF" flood-opacity="0.5"/><feComposite in2="b" operator="in" result="g"/>
+    <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <clipPath id="body"><rect x="232.0" y="360.0" width="560" height="428" rx="150"/></clipPath>
+  <mask id="outside"><rect width="1024" height="1024" fill="#FFFFFF"/><rect x="232.0" y="360.0" width="560" height="428" rx="150" fill="#000000"/></mask>
+  <g id="backdrop">
+    <rect width="1024" height="1024" fill="url(#gbase)"/>
+    <rect width="1024" height="1024" fill="url(#gsheen)"/>
+    <circle cx="702" cy="710" r="164" fill="url(#gorb)"/>
+    
+  </g>
+</defs>
+<use href="#backdrop"/>
+<path d="M416 348.0 L354 252.0" stroke="#FFFFFF" stroke-opacity="0.92" stroke-width="34" stroke-linecap="round"/><circle cx="354" cy="252.0" r="30" fill="#FFFFFF" filter="url(#halo)"/><path d="M608 348.0 L670 252.0" stroke="#FFFFFF" stroke-opacity="0.92" stroke-width="34" stroke-linecap="round"/><circle cx="670" cy="252.0" r="30" fill="#FFFFFF" filter="url(#halo)"/><g mask="url(#outside)"><rect x="232.0" y="390.0" width="560" height="428" rx="150" fill="#9C1446" opacity="0.3" filter="url(#soft)"/></g><g clip-path="url(#body)"><use href="#backdrop" filter="url(#frosted)"/><rect width="1024" height="1024" fill="url(#gfrost)"/><ellipse cx="392" cy="350.0" rx="300" ry="96" fill="#FFFFFF" opacity="0.35" filter="url(#soft)"/></g><rect x="238.0" y="366.0" width="548" height="416" rx="144" fill="none" stroke="url(#grim)" stroke-width="12"/><g filter="url(#halo)"><polygon points="455.0,488.0 605.0,574.0 455.0,660.0" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="52" stroke-linejoin="round"/></g>
+</svg>
