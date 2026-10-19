@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:bili_core/api.dart' show BiliClient, Comment, CommentPicture, RichRun, TextRun;
+import 'package:bili_core/api.dart' show BiliClient, Comment, CommentPicture;
 import 'package:bili_core/logic.dart' show CountFormat, TimeFormat;
 import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart' show Icons, Material, MaterialType;
@@ -44,25 +44,6 @@ class CommentRow extends StatelessWidget {
   /// The hairline under the row, indented to the text.
   final bool showsDivider;
 
-  /// A reply's "回复 @name :" that the server sent without a mention entry still shows the name as one.
-  static List<RichRun> markingReplyTarget(List<RichRun> runs) {
-    const lead = '回复 @';
-    final first = runs.firstOrNull;
-    if (first is! TextRun || !first.text.startsWith(lead)) return runs;
-    final rest = first.text.substring(lead.length);
-    final colon = rest.indexOf(RegExp('[:：]'));
-    if (colon < 0) return runs;
-    final name = rest.substring(0, colon).trim();
-    if (name.isEmpty) return runs;
-    final trailing = rest.substring(0, colon).endsWith(' ') ? ' ' : '';
-    return [
-      const RichRun.text('回复 '),
-      RichRun.mention(name: name, mid: 0),
-      RichRun.text(trailing + rest.substring(colon)),
-      ...runs.skip(1),
-    ];
-  }
-
   void _reply() {
     final root = thread;
     final target = root == null || root.rpid == comment.rpid
@@ -94,7 +75,8 @@ class CommentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final member = comment.member;
     final card = member.fanCardImage;
-    final runs = comment.root == 0 ? comment.runs : markingReplyTarget(comment.runs);
+    // CommentText makes a reply's leading "回复 @name :" a mention itself.
+    final runs = comment.runs;
     final hasText = runs.isNotEmpty || comment.isPinned;
     final repliesBox = showsReplies && (comment.replyCount > 0 || comment.previewReplies.isNotEmpty);
     const nameTop = CommentRowTheme.nameCentre - CommentRowTheme.nameLine / 2;
@@ -574,7 +556,7 @@ class _PreviewLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = CommentText(
-      runs: CommentRow.markingReplyTarget(reply.runs),
+      runs: reply.runs,
       style: CommentRowTheme.previewStyle,
       leading: TextSpan(
         children: [

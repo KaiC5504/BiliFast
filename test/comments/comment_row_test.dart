@@ -302,34 +302,13 @@ void main() {
 
     testWidgets('a reply\'s 回复 @name : shows the name as a mention', (tester) async {
       await _mount(tester, _row(_comment(root: 9, message: '回复 @Wormkids :没人看的'), _Model(), _Calls()));
-      expect(tester.widget<CommentText>(find.byType(CommentText)).runs, const [
+      final text = tester.widget<CommentText>(find.byType(CommentText));
+      expect(text.marksReplyTarget, isTrue);
+      expect(markingReplyTarget(text.runs), const [
         RichRun.text('回复 '),
         RichRun.mention(name: 'Wormkids', mid: 0),
         RichRun.text(' :没人看的'),
       ]);
-    });
-
-    test('marking a reply target leaves anything else alone', () {
-      expect(CommentRow.markingReplyTarget(const [RichRun.text('回复 @甲 : 好')]), const [
-        RichRun.text('回复 '),
-        RichRun.mention(name: '甲', mid: 0),
-        RichRun.text(' : 好'),
-      ]);
-      expect(CommentRow.markingReplyTarget(const [RichRun.text('回复 @乙：嗯'), RichRun.text('!')]), const [
-        RichRun.text('回复 '),
-        RichRun.mention(name: '乙', mid: 0),
-        RichRun.text('：嗯'),
-        RichRun.text('!'),
-      ]);
-      for (final runs in const [
-        [RichRun.text('普通评论')],
-        [RichRun.text('回复 @没有冒号')],
-        [RichRun.text('回复 @ :空名')],
-        [RichRun.mention(name: '甲', mid: 1), RichRun.text(' 好')],
-        <RichRun>[],
-      ]) {
-        expect(CommentRow.markingReplyTarget(runs), same(runs));
-      }
     });
   });
 
