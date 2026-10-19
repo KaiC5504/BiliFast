@@ -214,14 +214,120 @@ void main() {
     expect(controller.playerInfoFor(137649199), isNull, reason: 'not asked for in this open');
   });
 
-  test('the 合集 comes from the signed view; a view handed in has none', () async {
+  test('the 合集 comes from the signed view; a view handed in alone gets it once the detail follows', () async {
     http.routes[Canned.signedViewPath] = (200, seasonView);
     final controller = make();
     await controller.openVideo(bv);
     expect(controller.season?.sections.single.episodes.single.bvid, bv);
     const view = VideoView(bvid: bv, pages: [VideoPage(cid: 137649199, page: 1, part: '', duration: 712)]);
+    final gate = http.gates[Canned.signedViewPath] = Completer<void>();
     await controller.openVideo(bv, view: view);
     expect(controller.season, isNull);
+    gate.complete();
+    await settle();
+    expect(controller.season?.sections.single.episodes.single.bvid, bv);
+  });
+
+  group('a video opened without its detail', () {
+    const view =
+        VideoView(bvid: bv, aid: 1, title: '单P', pages: [VideoPage(cid: 137649199, page: 1, part: '', duration: 712)]);
+
+    test('plays at once, asks for the detail once, and tells its listeners when it lands', () async {
+      http.routes[Canned.signedViewPath] = (200, seasonView);
+      final gate = http.gates[Canned.signedViewPath] = Completer<void>();
+      final controller = make();
+      final seen = <VideoDetail?>[];
+      controller.addListener(() => seen.add(controller.detail));
+      await controller.openVideo(bv, cid: 137649199, view: view);
+      expect(player.loaded, isNotNull, reason: 'the stream started while the detail is out');
+      expect(http.to(Canned.playUrlPath), hasLength(1));
+      expect(controller.detail, isNull);
+      gate.complete();
+      await settle();
+      expect(controller.detail?.bvid, bv);
+      expect(seen.last, same(controller.detail));
+      expect(http.to(Canned.signedViewPath).single.url.queryParameters['bvid'], bv);
+      expect(http.to(Canned.viewPath), isEmpty);
+    });
+
+    test('with its detail in the route, asks for nothing', () async {
+      http.routes[Canned.signedViewPath] = (200, seasonView);
+      final controller = make();
+      await controller.openVideo(bv);
+      final detail = controller.detail!;
+      await controller.openVideo(bv, cid: 137649199, view: view, detail: detail);
+      await settle();
+      expect(http.to(Canned.signedViewPath), hasLength(1), reason: 'the first open only');
+      expect(controller.detail, same(detail));
+    });
+
+    test('keeps playing when the detail fails, and asks again on the next open only', () async {
+      http.errors[Canned.signedViewPath] = TimeoutException('no answer');
+      final controller = make();
+      await controller.openVideo(bv, cid: 137649199, view: view);
+      await settle();
+      expect(controller.phase, isNot(PlaybackPhase.failed));
+      expect(player.loaded, isNotNull);
+      expect(controller.detail, isNull);
+      expect(fieldsOf('detail failed, playing without it'), containsPair('bvid', bv));
+      expect(http.to(Canned.signedViewPath), hasLength(1));
+
+      http.errors.remove(Canned.signedViewPath);
+      await controller.openVideo(bv, cid: 137649199, view: view);
+      await settle();
+      expect(http.to(Canned.signedViewPath), hasLength(2));
+      expect(controller.detail?.bvid, bv);
+    });
+
+    test('drops a detail that lands after another open or a close', () async {
+      http.routes[Canned.signedViewPath] = (200, seasonView);
+      final controller = make();
+      await controller.openVideo(bv);
+      final detail = controller.detail!;
+
+      var gate = http.gates[Canned.signedViewPath] = Completer<void>();
+      await controller.openVideo(bv, cid: 137649199, view: view);
+      await controller.openVideo(bv, cid: 137649199, view: view, detail: detail);
+      gate.complete();
+      await settle();
+      expect(controller.detail, same(detail), reason: "the newer open's own");
+
+      gate = http.gates[Canned.signedViewPath] = Completer<void>();
+      await controller.openVideo(bv, cid: 137649199, view: view);
+      controller.close();
+      gate.complete();
+      await settle();
+      expect(controller.detail, isNull);
+    });
+
+    test('another part opened while the detail is out waits on the same call', () async {
+      final gate = http.gates[Canned.signedViewPath] = Completer<void>();
+      final controller = make();
+      const parts = VideoView(bvid: bv, pages: [
+        VideoPage(cid: 137649199, page: 1, part: '', duration: 712),
+        VideoPage(cid: 137649200, page: 2, part: '', duration: 100),
+      ]);
+      await controller.openVideo(bv, cid: 137649199, view: parts);
+      await controller.openVideo(bv, cid: 137649200, view: parts);
+      gate.complete();
+      await settle();
+      expect(http.to(Canned.signedViewPath), hasLength(1));
+      expect(controller.page?.page, 2);
+      expect(controller.detail?.bvid, bv);
+    });
+
+    test('a short link resolved through the unsigned view ends with its detail', () async {
+      http.routes[Canned.signedViewPath] = (200, seasonView);
+      http.redirects['/abc'] = Uri.parse('https://www.bilibili.com/video/$bv');
+      final controller = make();
+      await controller.open('https://b23.tv/abc');
+      await settle();
+      expect(http.to(Canned.viewPath), hasLength(1));
+      expect(controller.video?.title, '测试视频', reason: 'the unsigned view resolved it');
+      expect(http.to(Canned.signedViewPath).single.url.queryParameters['bvid'], bv);
+      expect(controller.detail?.bvid, bv);
+      expect(controller.season, isNotNull);
+    });
   });
 
   test('a view handed in with its signed detail keeps the 合集, a detail alone gives the view, neither asks', () async {

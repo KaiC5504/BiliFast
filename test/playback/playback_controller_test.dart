@@ -777,13 +777,17 @@ void main() {
   test('an av link uses the unsigned view, and the signed one when that answers 412', () async {
     final controller = make();
     await controller.open('av80433022');
+    await settle();
     expect(http.to(Canned.viewPath).single.url.queryParameters['aid'], '80433022');
-    expect(http.to(Canned.signedViewPath), isEmpty);
+    expect(http.to(Canned.signedViewPath).single.url.queryParameters['bvid'], 'BV1GJ411x7h7',
+        reason: 'only for the detail, once the unsigned view resolved it');
 
     http.routes[Canned.viewPath] = (412, '');
     http.routes['/x/frontend/finger/spi'] = (200, '{"code":0,"message":"ok","data":{"b_3":"B3","b_4":"B4"}}');
     await controller.open('av80433022');
-    expect(http.to(Canned.signedViewPath).single.url.queryParameters['aid'], '80433022');
+    await settle();
+    expect(http.to(Canned.signedViewPath).last.url.queryParameters['aid'], '80433022');
+    expect(http.to(Canned.signedViewPath), hasLength(2), reason: 'the signed view that resolved it gave the detail');
     expect(controller.video?.title, '测试视频');
     controller.dispose();
   });

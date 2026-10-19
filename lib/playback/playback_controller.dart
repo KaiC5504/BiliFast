@@ -288,6 +288,10 @@ class PlaybackController extends ChangeNotifier {
   FitMode _fit = FitMode.fit;
   bool _mirrored = false;
   VideoDetail? _detail;
+  ({String bvid, Future<VideoDetail> answer})? _detailFetch;
+
+  /// The open whose detail is being asked for; any open, close or engine change forgets it.
+  int? _detailFor;
   ({int cid, PlayerInfo info})? _playerInfo;
   final _endings = StreamController<void>.broadcast();
   bool _disposed = false;
@@ -334,8 +338,8 @@ class PlaybackController extends ChangeNotifier {
 
   bool get mirrored => _mirrored;
 
-  /// The signed view's detail: resolved here, or handed to [openVideo] with the view; null when only the unsigned view
-  /// answered or a view came without one.
+  /// The signed view's detail: resolved here, handed to [openVideo] with the view, or asked for after a view came
+  /// without one; null until then, and when the signed view refused a BV link.
   VideoDetail? get detail => _detail;
 
   /// The 合集 holding the video, from [detail].
@@ -409,6 +413,8 @@ class PlaybackController extends ChangeNotifier {
       final (view, pageNumber) = await _resolve(link, onDetail: (detail) => resolved = detail);
       if (current != _epoch) return null;
       _detail = resolved;
+      // A BV link without a detail had its signed view refused just now; asking again would only be refused again.
+      if (resolved == null && link is! BvidLink) _fetchDetail(view.bvid);
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
       return (view, pages.where((page) => page.page == pageNumber).firstOrNull ?? pages.first);
@@ -418,7 +424,8 @@ class PlaybackController extends ChangeNotifier {
   /// The video page's open: part [cid], or without one the part Bilibili saw this account watch last, or the first;
   /// from [start] seconds, or without one from where Bilibili saw it last (`ResumePoint`), which only arrives with
   /// the playurl answer. A [view] already resolved (a pasted link, another part) saves asking for it again, and the
-  /// signed [detail] that came with it keeps the 合集; a [detail] alone gives the view as well.
+  /// signed [detail] that came with it keeps the 合集; a [detail] alone gives the view as well. A [view] without its
+  /// detail plays at once and the detail is asked for alongside.
   Future<void> openVideo(String bvid, {int? cid, double? start, VideoView? view, VideoDetail? detail}) async {
     _opens += 1;
     // Another part keeps the video's shape until its stream gives its own, so the layout doesn't flip meanwhile.
@@ -430,6 +437,7 @@ class PlaybackController extends ChangeNotifier {
       final view = known ?? (await _resolve(BvidLink(bvid), onDetail: (detail) => resolved = detail)).$1;
       if (current != _epoch) return null;
       _detail = resolved;
+      if (known != null && resolved == null) _fetchDetail(view.bvid);
       final pages = view.pages;
       if (pages.isEmpty) throw const BiliError.decoding('view has no pages');
       if (cid != null) {
@@ -473,6 +481,7 @@ class PlaybackController extends ChangeNotifier {
     _video = null;
     _page = null;
     _detail = null;
+    _detailFor = null;
     if (!keepSize) _videoSize = null;
     _playerInfo = null;
     _qualities = const [];
@@ -641,6 +650,36 @@ class PlaybackController extends ChangeNotifier {
 
   Future<(VideoView, int?)> _resolve(VideoLink link, {void Function(VideoDetail detail)? onDetail}) =>
       resolveVideoLink(_client, link, logger: _logger, onDetail: onDetail);
+
+  /// A video that opened with only a view (a b23.tv or av link, a view handed in alone) plays at once, and its signed
+  /// detail (简介, the 合集, the actions) follows when it lands, if the same open is still showing it. A failure is only
+  /// logged; the next open asks again. Another part opened while the call is out waits on the same call.
+  void _fetchDetail(String bvid) {
+    final open = _opens;
+    _detailFor = open;
+    var pending = _detailFetch;
+    if (pending == null || pending.bvid != bvid) {
+      Future<VideoDetail> ask() async {
+        await _client.ensureRiskCookies();
+        return _client.videoDetail(bvid: bvid);
+      }
+
+      final fetch = (bvid: bvid, answer: ask());
+      pending = fetch;
+      _detailFetch = fetch;
+      unawaited(fetch.answer.then((_) {}, onError: (Object error) {
+        _logger.warn(LogCategory.player, 'detail failed, playing without it', {'bvid': bvid, 'error': '$error'});
+      }).whenComplete(() {
+        if (identical(_detailFetch, fetch)) _detailFetch = null;
+      }));
+    }
+    unawaited(pending.answer.then((detail) {
+      if (_disposed || _detailFor != open || detail.bvid != bvid || detail.redirectURL != null) return;
+      _detailFor = null;
+      _detail = detail;
+      _notify();
+    }, onError: (Object _) {}));
+  }
 
   Future<PlayURLInfo> _playUrl() async {
     final page = _page;

@@ -24,6 +24,9 @@ final class CannedHttp implements HTTPTransport {
   /// Thrown instead of answering (a timeout, a lost connection), keyed by path.
   final Map<String, Object> errors = {};
 
+  /// Where a short link lands after its redirects, keyed by path.
+  final Map<String, Uri> redirects = {};
+
   @override
   Future<HTTPResponse> send(HTTPRequest request) async {
     requests.add(request);
@@ -31,6 +34,8 @@ final class CannedHttp implements HTTPTransport {
     await gates[path]?.future;
     final error = errors[path];
     if (error != null) throw error;
+    final landed = redirects[path];
+    if (landed != null) return HTTPResponse(status: 200, headers: {}, body: Uint8List(0), finalURL: landed);
     final data = dataRoutes[path];
     if (data != null) return HTTPResponse(status: data.$1, headers: {}, body: data.$2, finalURL: request.url);
     final route = routes[path];
