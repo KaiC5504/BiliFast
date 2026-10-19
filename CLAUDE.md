@@ -146,7 +146,26 @@ with what was built, how it works and numbered test steps. For phone slices, inc
   Text scaling is now off at the app's root (`main.dart`), so sizes are the official pt whatever iOS says; don't add
   per-widget clamps. Also: PingFang's room between digits and Chinese in 粉丝/视频 (system font only), and the solid
   action glyphs' corners rounded like the official icons. 1.0.0 (7).
-- Next, KaiC's order: slice 7 (comments), then 5 (danmaku).
+- 2026-10-19/20: slice 7 (comments), shipped as 1.0.0 (8). 8 builders, 8 checkers, 6 fixers, a final round.
+  - 评论 (`lib/comments/`): 热门/最新 with ≡ 按热度/按时间, offset paging (never re-asks page 1; empty pages bounded),
+    the pinned comment, closed sections (12002/12061), rows as 10/12/13 (pendant, 大, LV drawn, UP, 置顶, fan card,
+    pictures, 👍/👎/⋮ with 复制 and 删除 on your own, the replies box), rich text (emotes, @, links, BV/av, timestamps,
+    投票, [笔记]), the picture viewer (pinch, long pictures full width), the 发条评论 bar. Nothing loads until 评论 shows.
+  - 评论详情 rises from the bottom over the tab row; a left-edge swipe (the player's edge too) lowers it top to bottom
+    with the finger (KaiC's call: the gesture stays left to right). ✕ and back close it first.
+  - The composer (14): rides the keyboard by hand (the page's Scaffold doesn't resize), ⤢, 转到动态, emotes (最近使用,
+    packages, 颜文字; no ⚙/🔍 tabs, KaiC), @ from the people you follow, ⊕ pictures (image_picker, no library
+    permission prompt, GPS stripped, uploaded at 发布), "回复 @name :" for a reply in a thread, drafts per target that
+    survive closing and other videos. Back and rotation leave a posting composer alone.
+  - The paused player shrinks to the 67 pt 继续播放 bar (12 measures 202 px, not Swift's 56) as the shown tab scrolls;
+    each tab keeps its own pause point; playing or ended keeps full height.
+  - Avatars show Bilibili's default face (`assets/images/noface.jpeg`, from PiliPlus) loading, failed or missing
+    (`RemoteImage.avatar`). Toasts sit above the keyboard. 评论 N follows the list's all_count (replies included).
+  - `--fake-account` serves a demo comment section with real CDN images (official accounts only); posts stay in memory.
+  - Windows checks: the 956 pt window is taller than this PC's screen, so captures' bottom ~10 pt is stale; ghosthand
+    can't scroll or drag (the shrink, the edge swipe and page 2 are covered by widget tests at ~1500 px/s).
+  - Known: Flutter rounds a line to whole points, so comment lines are 24 pt where the official app's are 24.33.
+- Next, KaiC's order: slice 5 (danmaku).
 - Update this section when a slice finishes.
 
 ## Layout
@@ -162,6 +181,10 @@ with what was built, how it works and numbered test steps. For phone slices, inc
     - `lib/video/intro/`: 简介's pieces (uploader, title, action row, 合集, parts, chips, related).
     - `lib/video/actions/`: the actions model, the coin dialog, the favourites sheet, the unfollow confirm and the
       overlays that put them up.
+  - `lib/comments/`: 评论 and 评论详情 (`comments_model.dart`, the list, rows and badges, rich text, the picture
+    viewer), the composer with its emote panel, @ picker and pictures (`composer_model.dart`, `emote_store.dart`), and
+    `comment_overlays.dart`, the in-page layers the page's Stack holds. `lib/video/collapsing_player.dart` is the
+    shrinking player.
   - `lib/player_ui/`: the player's controls for each presentation, gestures, the HUD, the end screens, and
     `panels/`.
   - `lib/device/`: rotation (`orientation.dart`, the rules) and brightness/volume, over `DeviceChannel.swift`.
