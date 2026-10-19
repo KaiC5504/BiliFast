@@ -216,8 +216,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   shows them all.
 - GitHub calls only when the answer is needed (KaiC gets rate-limited): no polling, no extra runs to measure
   things, one `status` per run.
-- Don't watch the run: `python scripts/testflight.py status` once (1 call), about 10 minutes after a dry run and 20
-  after an upload. There is no watch command on purpose.
+- Don't watch the run: `python scripts/testflight.py status` once (1 call), about 7 minutes after a dry run and 11
+  after an upload (uploads finish in 8-11 minutes, KaiC 2026-10-19). There is no watch command on purpose.
 - Report the build number, what changed and phone test steps.
 - Commit, push and Actions runs (signed builds included) are authorised on `main`.
 
