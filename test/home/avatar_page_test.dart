@@ -4,6 +4,7 @@ import 'package:bili_core/api.dart' show HistoryItem, BiliError;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
+import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
@@ -59,9 +60,11 @@ void main() {
   late PlaybackController controller;
   late FakeLoginGate gate;
   late FakePageApi api;
+  late AppEnvironment environment;
   var clock = _now;
 
-  /// Logged out (cookies Bilibili no longer takes) unless [loggedIn]; the page's calls go to [api].
+  /// Logged out (cookies Bilibili no longer takes) unless [loggedIn], or still unknown without [checkAccount]; the page's
+  /// calls go to [api].
   Future<void> show(
     WidgetTester tester, {
     List<RecentVideo> opened = const [],
@@ -69,6 +72,8 @@ void main() {
     List<HistoryItem> history = const [],
     bool settleFirst = true,
     bool fakeAccount = false,
+    bool checkAccount = true,
+    LoginGate? loginGate,
   }) async {
     tester.view.physicalSize = const Size(440, 956);
     tester.view.devicePixelRatio = 1;
@@ -76,12 +81,12 @@ void main() {
     addTearDown(tester.view.reset);
     final logger = Logger(session: 'test');
     final http = Canned.http(loggedIn: loggedIn);
-    final environment = await AppEnvironment.load(
+    environment = await AppEnvironment.load(
       keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
       http: http,
       logger: logger,
     );
-    await environment.refreshAccount();
+    if (checkAccount) await environment.refreshAccount();
     if (fakeAccount) environment.useFakeAccount();
     recents = await RecentStore.load(null, logger: logger, now: () => clock);
     for (final video in opened.reversed) {
@@ -105,7 +110,7 @@ void main() {
       environment: environment,
       playback: playback,
       recents: recents,
-      loginGate: gate,
+      loginGate: loginGate ?? gate,
       pageApi: api,
     );
     await tester.pumpWidget(
@@ -425,8 +430,162 @@ void main() {
     }
     semantics.dispose();
   });
+
+  group('account changes while the page is open', () {
+    final watched = [_watched(1, const Duration(minutes: 5)), _watched(2, const Duration(hours: 2))];
+    const expired = BiliError.api(code: -101, message: '账号未登录');
+
+    testWidgets('logged out at open, a login turns the card into the account history', (tester) async {
+      await show(tester, history: watched, opened: [_video(0)]);
+      expect(find.text('视频 0'), findsOneWidget);
+      expect(historyCalls(), 0);
+      environment.useFakeAccount();
+      await settle(tester);
+      expect(historyCalls(), 1);
+      expect(find.text('看过 1'), findsOneWidget);
+      expect(find.text('视频 0'), findsNothing);
+    });
+
+    testWidgets('a logout turns it back into 最近打开', (tester) async {
+      await show(tester, loggedIn: true, history: watched, opened: [_video(0)]);
+      expect(find.text('看过 1'), findsOneWidget);
+      try {
+        await environment.logout();
+      } on LogoutIncomplete catch (_) {}
+      await settle(tester);
+      expect(find.text('看过 1'), findsNothing);
+      expect(find.text('视频 0'), findsOneWidget);
+    });
+
+    testWidgets("logged out then in again, the previous account's rows are not shown when the new list fails", (
+      tester,
+    ) async {
+      await show(tester, loggedIn: true, history: watched, opened: [_video(0)]);
+      expect(find.text('看过 1'), findsOneWidget);
+      try {
+        await environment.logout();
+      } on LogoutIncomplete catch (_) {}
+      await settle(tester);
+      api.failures['history'] = const BiliError.http(500);
+      environment.useFakeAccount();
+      await settle(tester);
+      expect(find.text('看过 1'), findsNothing, reason: "the last account's history");
+      expect(find.text('加载失败，下拉重试'), findsOneWidget);
+    });
+
+    testWidgets('a logout and a login under 设置 ask for the history once, as 设置 closes', (tester) async {
+      await show(tester, loggedIn: true, history: watched);
+      expect(historyCalls(), 1);
+      await tester.tap(find.byKey(const ValueKey('avatar-settings')));
+      await settle(tester, 20);
+      try {
+        await environment.logout();
+      } on LogoutIncomplete catch (_) {}
+      environment.useFakeAccount();
+      await settle(tester);
+      expect(historyCalls(), 1, reason: 'covered by 设置');
+      tester.state<NavigatorState>(find.byType(Navigator)).pop();
+      await settle(tester, 20);
+      expect(historyCalls(), 2);
+      expect(find.text('看过 1'), findsOneWidget);
+    });
+
+    testWidgets('✕ deletes while the account is still being checked', (tester) async {
+      await show(tester, checkAccount: false, history: watched);
+      expect(environment.account, isA<AccountUnknown>());
+      await tester.tap(find.byKey(ValueKey('avatar-remove-${watched[1].id}')));
+      await settle(tester);
+      expect(api.calls.last, 'deleteHistory aid=2');
+      expect(find.text('看过 2'), findsNothing);
+    });
+
+    testWidgets('a -101 on the load asks for a login in the card; the login page opens only when pressed', (
+      tester,
+    ) async {
+      await show(tester, loggedIn: true, history: watched, opened: [_video(0)], settleFirst: false);
+      api.failures['history'] = expired;
+      await settle(tester);
+      expect(find.text('登录后查看历史记录'), findsOneWidget);
+      expect(find.text('视频 0'), findsNothing, reason: 'not 最近打开 under the history header');
+      expect(gate.requests, 0);
+
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('别处')))).ignore();
+      await settle(tester, 20);
+      navigator.pop();
+      await settle(tester, 20);
+      expect(historyCalls(), 1, reason: 'no login since, so nothing to ask');
+
+      api.failures.clear();
+      gate.answer = true;
+      await tester.tap(find.byKey(const ValueKey('avatar-login')));
+      await settle(tester);
+      expect(gate.requests, 1);
+      expect(historyCalls(), 2);
+      expect(find.text('看过 1'), findsOneWidget);
+    });
+
+    testWidgets('全部 while a login is needed goes through the login gate, then opens 历史记录', (tester) async {
+      await show(tester, loggedIn: true, history: watched, settleFirst: false);
+      api.failures['history'] = expired;
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('avatar-all')));
+      await settle(tester, 20);
+      expect(gate.requests, 1);
+      expect(find.byType(WatchHistoryPage), findsNothing, reason: 'the login was cancelled');
+      api.failures.clear();
+      gate.answer = true;
+      await tester.tap(find.byKey(const ValueKey('avatar-all')));
+      await settle(tester, 20);
+      expect(gate.requests, 2);
+      expect(find.byType(WatchHistoryPage), findsOneWidget);
+    });
+
+    testWidgets('a -101 on ✕ turns the card to its login state, with no toast', (tester) async {
+      await show(tester, loggedIn: true, history: watched);
+      api.failures['deleteHistory'] = expired;
+      await tester.tap(find.byKey(ValueKey('avatar-remove-${watched[1].id}')));
+      await settle(tester);
+      expect(find.text('登录后查看历史记录'), findsOneWidget);
+      expect(find.text('看过 1'), findsNothing);
+      expect(find.text('删除失败，请稍后重试'), findsNothing);
+      expect(gate.requests, 0);
+    });
+
+    testWidgets('after a -101, a login through the login page asks for the history once', (tester) async {
+      final login = _PageGate();
+      await show(tester, loggedIn: true, history: watched, settleFirst: false, loginGate: login);
+      api.failures['history'] = expired;
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('avatar-login')));
+      await settle(tester, 20);
+      expect(find.text('登录页'), findsOneWidget);
+      api.failures.clear();
+      expect(await environment.didLogin(Canned.cookies), isTrue);
+      await settle(tester);
+      expect(historyCalls(), 1, reason: 'covered by the login page');
+      login.close(loggedIn: true);
+      await settle(tester, 20);
+      expect(historyCalls(), 2);
+      expect(find.text('看过 1'), findsOneWidget);
+    });
+  });
 }
 
+/// Pushes a stand-in login page and answers when the test closes it.
+final class _PageGate implements LoginGate {
+  late NavigatorState _navigator;
+
+  @override
+  Future<bool> request(BuildContext context) {
+    _navigator = Navigator.of(context);
+    return _navigator
+        .push<bool>(MaterialPageRoute(builder: (_) => const Scaffold(body: Text('登录页'))))
+        .then((loggedIn) => loggedIn ?? false);
+  }
+
+  void close({required bool loggedIn}) => _navigator.pop(loggedIn);
+}
 Future<void> settle(WidgetTester tester, [int frames = 10]) async {
   for (var i = 0; i < frames; i++) {
     await tester.pump(const Duration(milliseconds: 50));
