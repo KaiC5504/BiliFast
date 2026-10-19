@@ -2329,7 +2329,166 @@ abstract final class DanmakuListTheme {
 }
 
 /// 历史记录 (28).
-abstract final class HistoryTheme {}
+abstract final class HistoryTheme {
+  /// The title bar under the status bar, measured on 45 at 3 px per pt: ‹ is #484C52, 7 × 15 with 1.5 strokes, its
+  /// tip 26.7 in; 历史记录 is bold and centred. We leave out the 🔍, ⋮ and the tab row, so the hairline that ends the
+  /// tab row ends the bar.
+  static const barHeight = 44.0;
+  static const barHairline = 1 / 3;
+  static const backTarget = 44.0;
+  static const backTipX = 27.0;
+  static const backWidth = 7.0;
+  static const backHalfHeight = 7.35;
+  static const backStroke = 1.4;
+  static const backDrop = -0.33;
+  static const back = Color(0xFF484C52);
+  static const titleText = 20.0;
+  static const titleWeight = FontWeight.w600;
+
+  /// MiSans sets 历史记录 1 pt lower in the bar than 45's.
+  static double get titleDrop => BiliFonts.nudged ? -1 : 0;
+
+  /// 今天, 昨天 and 更早: 46 tall, pinned while their rows scroll under them.
+  static const headerHeight = 46.0;
+  static const headerText = 16.0;
+  static const headerInset = 12.0;
+
+  /// Where the title's box starts, which puts its ink 21.3 below the header's top as on 45.
+  static const headerTextTop = 20.5;
+
+  /// A row is 100: the 136 × 76 cover 12 down, then a hairline (none after a section's last row) from the gutter
+  /// to the right edge.
+  static const rowHeight = 100.0;
+  static const rowPadTop = 12.0;
+  static const gutter = 12.0;
+  static const coverWidth = 136.0;
+  static const coverHeight = 76.0;
+  static const coverRadius = 14 / 3;
+  static const textGap = 9.0;
+  static const hairline = 1 / 3;
+  static const divider = BiliColors.divider;
+
+  /// The title: two lines 19.3 apart.
+  static const rowTitleText = 14.0;
+  static const rowTitleLine = 58 / 3;
+  static const rowTitleTop = -1.27;
+
+  /// Where a title wraps: 45's lines end past 420.4 but never reach 422.
+  static const titleRight = 18.0;
+  static const rowTitle = BiliColors.text;
+
+  /// The UP and device lines, their ink ending level with the cover's bottom.
+  static const metaText = 12.0;
+  static const metaLine = 16.0;
+  static const metaGap = 2.3;
+  static const metaBottom = 1.6;
+
+  /// MiSans digits are narrower than PingFang's, so the time would end 9 pt short of 45's.
+  static double get timeSpacing => BiliFonts.nudged ? 0.55 : 0;
+  static const meta = BiliColors.secondaryText;
+  static const glyphBox = 41 / 3;
+  static const glyphGap = 3.3;
+  static const glyphStroke = 1.0;
+
+  /// The UP glyph's frame and letters.
+  static const upWidth = 13.0;
+  static const upHeight = 11.2;
+  static const upRadius = 2.7;
+  static const upLetterWidth = 3.5;
+  static const upLetterHeight = 5.0;
+  static const upDrop = 0.5;
+
+  /// The PC's screen and stand, and the phone with its notch and bar.
+  static const pcWidth = 13.2;
+  static const pcHeight = 9.5;
+  static const pcRadius = 2.3;
+  static const pcBaseWidth = 5.8;
+  static const pcStand = 2.0;
+  static const phoneWidth = 8.7;
+  static const phoneHeight = 12.0;
+  static const phoneRadius = 2.3;
+  static const phoneNotch = 3.0;
+  static const phoneBar = 2.0;
+  static const phoneMark = 1.2;
+
+  /// ⋮: three 2 pt dots 4.3 apart, centred 20 from the right and on the device line.
+  static const moreDot = 2.0;
+  static const morePitch = 13 / 3;
+  static const moreCentreRight = 20.0;
+  static const moreTarget = 44.0;
+  static const more = Color(0xFFC9CCCF);
+
+  /// The time on the cover: a 14 tall pill of half black, 3.7 from the right and 4 from the bottom.
+  static const pillText = 11.0;
+
+  /// MiSans digits stand taller and wider than the official app's; this size matches 45's ink.
+  static double get pillFont => BiliFonts.nudged ? 10.5 : pillText;
+  static const pillHeight = 14.0;
+  static const pillPadX = 14 / 3;
+  static const pillRight = 11 / 3;
+  static const pillBottom = 4.0;
+  static const pillRadius = 2.0;
+  static const pillFill = BiliColors.coverShade;
+  static const pillInk = BiliColors.onCover;
+
+  /// The pink line along the cover's bottom; a few seconds in still shows this much of it.
+  static const progressHeight = 2.0;
+  static const progressMin = 23 / 3;
+  static const progress = BiliColors.pink;
+
+  /// The page's own states: logged out, empty, failed.
+  static const stateText = 15.0;
+  static const stateGap = 16.0;
+  static const stateInk = BiliColors.secondaryText;
+  static const loginText = 15.0;
+  static const loginHeight = 36.0;
+  static const loginPadX = 36.0;
+  static const retryText = 14.0;
+  static const retryPadX = 20.0;
+  static const retryHeight = 30.0;
+  static const footerText = 12.0;
+  static const footerPad = 16.0;
+  static const footerInk = Color(0xFFC9CCD0);
+  static const spinnerRadius = 10.0;
+
+  /// ⋮'s sheet (48): the page dimmed to 30 %, a white sheet 291 tall over the home indicator's inset.
+  static const sheetDim = Color(0xB3000000);
+  static const sheetFill = BiliColors.card;
+  static const sheetHeaderHeight = 44.0;
+  static const sheetHeaderText = 14.0;
+  static const sheetHeaderInset = 12.7;
+  static const sheetHeaderInk = Color(0xFF505050);
+  static const sheetItemCentre = 33.0;
+  static const sheetCircle = 44.0;
+  static const sheetCircleFill = BiliColors.pink;
+  static const sheetCircleGlyph = BiliColors.onPink;
+  static const sheetShareGlyphWidth = 17.0;
+  static const sheetShareGlyphHeight = 20.0;
+  static const sheetLabelText = 12.0;
+  static const sheetLabelGap = 6.0;
+  static const sheetLabelInk = Color(0xFF999999);
+  static const sheetItemWidth = 66.0;
+  static const sheetShareBottom = 127.0;
+  static const sheetDivider = 1.0;
+  static const sheetDividerInk = BiliColors.divider;
+
+  /// 删除: the trash glyph centred 42 below the divider, its label under it.
+  static const sheetDeleteHeight = 102.7;
+  static const sheetTrashWidth = 30.0;
+  static const sheetTrashHeight = 28.0;
+  static const sheetTrashTop = 28.0;
+  static const sheetTrashStroke = 1.5;
+  static const sheetDeleteLabelGap = 14.2;
+  static const sheetDeleteInk = Color(0xFF61666D);
+  static const sheetBand = 16 / 3;
+  static const sheetBandFill = Color(0xFFF4F4F4);
+  static const sheetCancelHeight = 55.0;
+  static const sheetCancelText = 16.0;
+  static const sheetCancelInk = Color(0xFF505050);
+
+  /// MiSans sets its text higher in the line than PingFang; this brings the sheet's words level with 48's.
+  static double get sheetTextDrop => BiliFonts.nudged ? 1.5 : 0;
+}
 
 /// The login page and its bar.
 abstract final class LoginTheme {}
