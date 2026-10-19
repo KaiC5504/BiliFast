@@ -188,8 +188,8 @@ class ComposerModel extends ChangeNotifier {
       if (_draft == sent) _load(CommentDraft.empty);
       if (drafts[key] == sent) drafts.clear(key);
       return true;
-    } catch (error) {
-      comments.fail(error);
+    } catch (error, stack) {
+      comments.fail(error, stack);
       return false;
     } finally {
       _posting = false;

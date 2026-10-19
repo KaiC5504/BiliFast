@@ -76,7 +76,7 @@ void main() {
       }
     });
 
-    test('fetches nothing: every picture and emote is on example.invalid', () {
+    test('draws from Bilibili\'s public CDN alone: every avatar, decoration, emote and picture', () {
       final api = demo();
       final urls = [
         for (final comment in everyComment(api)) ...[
@@ -90,8 +90,15 @@ void main() {
       ];
       expect(urls, isNotEmpty);
       for (final url in urls.where((url) => url.isNotEmpty)) {
-        expect(Uri.parse(url).host, 'example.invalid', reason: url);
+        final uri = Uri.parse(url);
+        expect((uri.scheme, uri.host.endsWith('.hdslb.com'), uri.hasQuery), ('https', true, false), reason: url);
       }
+      final members = [for (final comment in everyComment(api)) comment.member];
+      expect(members.where((member) => member.face.isEmpty), isEmpty, reason: 'no blank avatars on the PC');
+      expect(members.where((member) => member.pendant != null), isNotEmpty);
+      expect(members.where((member) => member.fanCardImage != null), isNotEmpty);
+      final kaomoji = api.emotes.where((package) => package.isText).single;
+      expect(urls.where((url) => url.isEmpty), hasLength(kaomoji.emotes.length + 1), reason: '颜文字 alone has none');
     });
 
     test('has a thread that pages in both sorts, with a reply to a reply', () async {

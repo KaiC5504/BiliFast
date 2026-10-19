@@ -206,7 +206,12 @@ class FakePageApi implements PageApi {
   final List<PostedArguments> posts = [];
 
   /// Who a posted comment is written as: `--fake-account`'s 测试账号.
-  static const accountMember = CommentMember(mid: 1, name: '测试账号', level: 4);
+  static const accountMember = CommentMember(
+    mid: 1,
+    name: '测试账号',
+    face: '${_DemoComments._cdn}/face/member/noface.jpg',
+    level: 4,
+  );
 
   static const _offsetPrefix = 'demo-offset-';
 
@@ -358,7 +363,7 @@ class FakePageApi implements PageApi {
   @override
   Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename}) =>
       _answer('uploadCommentPicture', 'uploadCommentPicture $filename', () {
-        // Never fetched: on the PC a posted picture shows as one that failed to load.
+        // example.invalid never resolves, so on the PC a posted picture shows as one that failed to load.
         return UploadedPicture(
           url: 'https://example.invalid/bfs/new_dyn/$filename',
           width: 1080,
@@ -418,8 +423,9 @@ class FakePageApi implements PageApi {
 
   /// 评论 for the PC run: a pinned comment and 25 more over two pages, VIP and plain names at levels 2-6, pictures,
   /// timestamps, a BV id and an @, threads that page in both sorts, a comment and a reply of 测试账号's to delete,
-  /// three emote packages (one of 颜文字) and people to @. Picture and emote URLs are on example.invalid, which never
-  /// resolves, so nothing is fetched from Bilibili.
+  /// three emote packages (one of 颜文字) and people to @. The images are public ones on Bilibili's CDN, asked for with
+  /// no cookies so the PC run looks like the phone: Bilibili's own accounts' avatars, its emotes and decorations, and
+  /// game studios' video covers. Tests never draw them.
   void _fillDemoComments(DateTime now) {
     final demo = _DemoComments(now.millisecondsSinceEpoch ~/ 1000);
     emotes = _DemoComments.emotes;
@@ -462,31 +468,100 @@ final class _DemoComments {
   List<Comment> comments = [];
   final Map<int, List<Comment>> threads = {};
 
-  static const _up = CommentMember(mid: 2, name: '演示UP主', level: 6, isVip: true);
-  static const _ming = CommentMember(mid: 3003, name: '小明', level: 5);
-  static const _hong = CommentMember(mid: 3004, name: '小红', level: 4, isVip: true);
+  static const _cdn = 'https://i0.hdslb.com/bfs';
+
+  static const _up = CommentMember(
+    mid: 2,
+    name: '演示UP主',
+    face: '$_cdn/face/0c84b9f4ad546d3f20324809d45fc439a2a8ddab.jpg',
+    level: 6,
+    isVip: true,
+  );
+  static const _ming = CommentMember(
+    mid: 3003,
+    name: '小明',
+    face: 'https://i1.hdslb.com/bfs/face/040528a1ec634b9907ba3a9ba957819bb07def06.jpg',
+    level: 5,
+  );
+  static const _hong = CommentMember(
+    mid: 3004,
+    name: '小红',
+    face: '$_cdn/face/8f6a614a48a3813d90da7a11894ae56a59396fcd.jpg',
+    level: 4,
+    isVip: true,
+  );
   static const _hoshino = CommentMember(
     mid: 3005,
     name: '星野',
+    face: 'https://i1.hdslb.com/bfs/face/2254162161a60b528cfec449f3450409a81ebc37.jpg',
     level: 6,
     isVip: true,
-    fanCardImage: 'https://example.invalid/fan-card.png',
+    fanCardImage: '$_cdn/garb/item/66b16c3dd13072c9f906ec27e218802385f97c71.png',
     fanCardNumber: '031467',
     fanCardColor: '#f35543',
   );
-  static const _nino = CommentMember(mid: 3006, name: '二乃', level: 3);
-  static const _passer = CommentMember(mid: 3007, name: '路过的观众', level: 2);
-  static const _early = CommentMember(mid: 3008, name: '今天也要早睡', level: 5, isVip: true);
-  static const _kirito = CommentMember(mid: 3009, name: 'kirito_0423', level: 4);
-  static const _fish = CommentMember(mid: 3010, name: '一只咸鱼', level: 6, pendant: 'https://example.invalid/pendant.png');
+  static const _nino = CommentMember(
+    mid: 3006,
+    name: '二乃',
+    face: 'https://i2.hdslb.com/bfs/face/d655b5efeb97cb4ca5d4926bc53cddee66f429a5.jpg',
+    level: 3,
+  );
+  static const _passer = CommentMember(
+    mid: 3007,
+    name: '路过的观众',
+    face: 'https://i2.hdslb.com/bfs/face/bc7498227fea0d11a455e4c2587c86466515623d.jpg',
+    level: 2,
+  );
+  static const _early = CommentMember(
+    mid: 3008,
+    name: '今天也要早睡',
+    face: 'https://i2.hdslb.com/bfs/face/ae8149db0fe146563cdbf7ff346eb9bb3dc25a12.jpg',
+    level: 5,
+    isVip: true,
+  );
+  static const _kirito = CommentMember(
+    mid: 3009,
+    name: 'kirito_0423',
+    face: 'https://i1.hdslb.com/bfs/face/c6712277697434a6dc40c0185c0108c39b2fc6fa.jpg',
+    level: 4,
+  );
+  static const _fish = CommentMember(
+    mid: 3010,
+    name: '一只咸鱼',
+    face: '$_cdn/baselabs/b3283b94df495648262ce268bcaf4c7853efc7ea.png',
+    level: 6,
+    pendant: 'https://i2.hdslb.com/bfs/garb/item/f8bb9af4f245cce0fcba5df248069f1eedd8cbb7.png',
+  );
   static const _members = [_ming, _hong, _hoshino, _nino, _passer, _early, _kirito, _fish];
   static const _places = ['广东', '上海', '北京', '浙江', '四川', '江苏', '湖北', '福建', '海外'];
 
+  /// Each emote's name and the file Bilibili serves it as.
   static const _faces = [
-    'doge', '笑哭', '妙啊', '吃瓜', '打call', '脱单doge', '喜欢', 'OK', '星星眼', '呲牙', '大哭', '歪嘴', '思考', '捂脸',
-    '辣眼睛', '藏狐',
+    ('doge', '3087d273a78ccaff4bb1e9972e2ba2a7583c9f11'),
+    ('笑哭', 'c3043ba94babf824dea03ce500d0e73763bf4f40'),
+    ('妙啊', 'b4cb77159d58614a9b787b91b1cd22a81f383535'),
+    ('吃瓜', '4191ce3c44c2b3df8fd97c33f85d3ab15f4f3c84'),
+    ('打call', '431432c43da3ee5aab5b0e4f8931953e649e9975'),
+    ('脱单doge', 'bf7e00ecab02171f8461ee8cf439c73db9797748'),
+    ('喜欢', '8a10a4d73a89f665feff3d46ca56e83dc68f9eb8'),
+    ('OK', '4683fd9ffc925fa6423110979d7dcac5eda297f4'),
+    ('星星眼', '63c9d1a31c0da745b61cdb35e0ecb28635675db2'),
+    ('呲牙', 'b5a5898491944a4268360f2e7a84623149672eb6'),
+    ('大哭', '2caafee2e5db4db72104650d87810cc2c123fc86'),
+    ('歪嘴', '4384050fbab0586259acdd170b510fe262f08a17'),
+    ('思考', 'cfa9b7e89e4bfe04bbcd34ccb1b0df37f4fa905c'),
+    ('捂脸', '6921bb43f0c634870b92f4a8ad41dada94a5296d'),
+    ('辣眼睛', '35d62c496d1e4ea9e091243fa812866f5fecc101'),
+    ('藏狐', 'ba0937ef6f3ccca85e2e0047e6263f3b4da37201'),
   ];
-  static const _tv = ['tv_doge', 'tv_微笑', 'tv_大哭', 'tv_点赞', 'tv_疑问', 'tv_害羞'];
+  static const _tv = [
+    ('小电视_笑', 'f80d384875183dfe2e24be13011c595c0210d273'),
+    ('小电视_赞', '86ccf6d0b5480169bf80f3582fae09d7ed455c06'),
+    ('小电视_害羞', 'de3aee88f7b6cc20ba9480c96c02f83a844381a9'),
+    ('小电视_哭泣', '938bdf98df945576ae88e2a22931db07ded9e663'),
+    ('小电视_吃惊', '05188008ea84c70d94e0076e28de15bf56f4c441'),
+    ('小电视_太太喜欢', 'eb41a8c04840e4f77e76a4bff7a29ac89c432f4e'),
+  ];
   static const _kaomoji = [
     '(⌒▽⌒)', '（￣▽￣）', '(=・ω・=)', '(｀・ω・´)', '(〜￣△￣)〜', '(･∀･)', '(°∀°)ﾉ', '(￣3￣)', '╮(￣▽￣)╭',
     '_(:3」∠)_', '(；¬＿¬)', '(ﾟДﾟ≡ﾟдﾟ)!?',
@@ -496,12 +571,9 @@ final class _DemoComments {
     EmotePackage(
       id: 1,
       name: '小黄脸',
-      icon: 'https://example.invalid/emote/face.png',
+      icon: '$_cdn/emote/3087d273a78ccaff4bb1e9972e2ba2a7583c9f11.png',
       isText: false,
-      emotes: [
-        for (final (index, name) in _faces.indexed)
-          Emote(token: '[$name]', url: 'https://example.invalid/emote/face$index.png', large: false),
-      ],
+      emotes: [for (final (name, file) in _faces) Emote(token: '[$name]', url: '$_cdn/emote/$file.png', large: false)],
     ),
     EmotePackage(
       id: 2,
@@ -513,12 +585,9 @@ final class _DemoComments {
     EmotePackage(
       id: 3,
       name: '小电视',
-      icon: 'https://example.invalid/emote/tv.png',
+      icon: '$_cdn/emote/ce49073ff96606a1a2674b3b4ef8e15fb0a399ff.png',
       isText: false,
-      emotes: [
-        for (final (index, name) in _tv.indexed)
-          Emote(token: '[$name]', url: 'https://example.invalid/emote/tv$index.png', large: true),
-      ],
+      emotes: [for (final (name, file) in _tv) Emote(token: '[$name]', url: '$_cdn/emote/$file.png', large: true)],
     ),
   ];
 
@@ -536,8 +605,29 @@ final class _DemoComments {
     '有没有人知道这是用什么剪的', '这个转场我学会了(=・ω・=)', '路过，顺便点个赞',
   ];
 
-  static CommentPicture _picture(int index, double width, double height) =>
-      CommentPicture(url: 'https://example.invalid/pictures/$index.jpg', width: width, height: height);
+  /// Portrait and square ones are cropped by the CDN (`@…_1c`), so each size is the one served.
+  static const _pictures = [
+    CommentPicture(
+      url: 'https://i2.hdslb.com/bfs/archive/6b29c1cf3a9efa4049f84d93a7a3e770187bf550.jpg@810w_1080h_1c.jpg',
+      width: 810,
+      height: 1080,
+    ),
+    CommentPicture(
+      url: 'https://i1.hdslb.com/bfs/archive/0f25a7ea7fc3b6dd99fbd0fc450b040f5f681084.jpg',
+      width: 1920,
+      height: 1080,
+    ),
+    CommentPicture(
+      url: 'https://i1.hdslb.com/bfs/archive/355a71a4759258731ba3e6d6bd942b77d92af83d.jpg@900w_900h_1c.jpg',
+      width: 900,
+      height: 900,
+    ),
+    CommentPicture(
+      url: 'https://i2.hdslb.com/bfs/archive/6b29c1cf3a9efa4049f84d93a7a3e770187bf550.jpg',
+      width: 1920,
+      height: 1080,
+    ),
+  ];
 
   void build() {
     pinned = _thread(
@@ -615,7 +705,7 @@ final class _DemoComments {
         likes: 987,
         minutesAgo: 90,
         place: 2,
-        pictures: [_picture(1, 1080, 1440), _picture(2, 1440, 1080), _picture(3, 1080, 1080)],
+        pictures: _pictures.take(3).toList(),
       ),
       _comment('好', member: _passer, likes: 860, minutesAgo: 45),
       _comment(
@@ -627,9 +717,9 @@ final class _DemoComments {
         mentions: {_ming.name: _ming.mid},
       ),
       _comment('1:02:33 的彩蛋有人发现吗？', member: _kirito, likes: 655, minutesAgo: 3000, place: 8),
-      _comment('截图留念[doge]', member: _fish, likes: 540, minutesAgo: 150, place: 6, pictures: [_picture(4, 1920, 1080)]),
+      _comment('截图留念[doge]', member: _fish, likes: 540, minutesAgo: 150, place: 6, pictures: [_pictures[3]]),
       _comment('(｀・ω・´) 冲冲冲', member: _early, likes: 430, minutesAgo: 400),
-      _comment('[tv_doge][tv_doge][tv_doge]', member: _hoshino, likes: 401, minutesAgo: 75, place: 1),
+      _comment('[小电视_笑][小电视_笑][小电视_笑]', member: _hoshino, likes: 401, minutesAgo: 75, place: 1),
       _comment('UP主的声音好好听', member: _hong, likes: 377, minutesAgo: 5000, place: 3),
       _comment('每次看都有新收获，收藏了', member: _ming, likes: 350, minutesAgo: 820),
       _comment('这期质量太高了，建议全站推荐', member: _fish, likes: 322, minutesAgo: 60, place: 7),

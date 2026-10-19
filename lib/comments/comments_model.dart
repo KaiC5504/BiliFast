@@ -174,8 +174,8 @@ class ThreadState {
 }
 
 /// One video's comments (BiliNative `CommentsModel`): 评论's list in either sort, paged by offset, the pinned comment
-/// on the first page, a section the uploader closed, reactions and deletes rolled back on failure, and the open
-/// 评论详情. Nothing loads until [ensureLoaded], which the 评论 tab calls when it first shows.
+/// on the first page, a section the uploader closed, reactions rolled back on failure, deletes made once the server
+/// agrees, and the open 评论详情. Nothing loads until [ensureLoaded], which the 评论 tab calls when it first shows.
 class CommentsModel extends ChangeNotifier {
   CommentsModel({
     required this.aid,
@@ -230,11 +230,14 @@ class CommentsModel extends ChangeNotifier {
   String? _nextOffset;
   int _emptyPages = 0;
 
+  /// A first page came back, even one with nothing on it, so the list is shown rather than spun for.
+  bool _answered = false;
+
   /// Bumped by every reset, so an answer for the old sort or an old thread is dropped.
   int _generation = 0;
   int _threadGeneration = 0;
 
-  /// Comments with a 点赞 or 踩 on its way; another tap on one waits for the answer.
+  /// Comments with a 点赞 or 踩 on its way; another tap on one is ignored until the answer.
   final Set<int> _reacting = {};
   bool _disposed = false;
 
@@ -248,12 +251,12 @@ class CommentsModel extends ChangeNotifier {
   String? get closedMessage => _closedMessage;
   bool get loading => _loading;
 
-  /// Why the last page failed. Nothing asks again by itself: the footer's 重试 calls [loadMore] (or [reload] when
-  /// the first page failed).
+  /// Why the last page failed. Nothing asks again by itself: the footer's 重试 calls [loadMore].
   String? get error => _error;
   ThreadState? get thread => _thread;
 
-  bool get hasLoaded => _comments.isNotEmpty || _pinned != null || _isEnd || _closedMessage != null || _error != null;
+  bool get hasLoaded =>
+      _answered || _comments.isNotEmpty || _pinned != null || _isEnd || _closedMessage != null || _error != null;
 
   int? get accountMid => _accountMid();
 
@@ -280,7 +283,8 @@ class CommentsModel extends ChangeNotifier {
     if (_isEnd || _loading || _closedMessage != null || _disposed) return;
     final started = _generation;
     final offset = _nextOffset;
-    final first = offset == null && _comments.isEmpty;
+    final first = !_answered;
+    var again = false;
     _loading = true;
     _error = null;
     _notify();
@@ -288,6 +292,7 @@ class CommentsModel extends ChangeNotifier {
       final page = await api.comments(aid: aid, sort: _sort, offset: offset);
       if (started != _generation || _disposed) return;
       _loading = false;
+      _answered = true;
       if (first) {
         _pinned = page.pinned;
         _total = page.total;
@@ -300,11 +305,14 @@ class CommentsModel extends ChangeNotifier {
       _comments = [..._comments, ...added];
       _nextOffset = page.nextOffset;
       _emptyPages = added.isEmpty ? _emptyPages + 1 : 0;
-      final stuck = page.nextOffset == offset || _emptyPages >= _emptyPagesAllowed;
+      // No next offset would ask for the first page again.
+      final stuck = page.nextOffset == null || page.nextOffset == offset || _emptyPages >= _emptyPagesAllowed;
       if (!page.isEnd && stuck) {
         _logger.warn(LogCategory.api, 'comments stopped paging', {'emptyPages': _emptyPages});
       }
       _isEnd = page.isEnd || stuck;
+      // The list scrolls on only when its content grows, so a page that adds nothing asks for the next itself.
+      again = !_isEnd && added.isEmpty;
     } catch (error, stack) {
       if (started != _generation || _disposed) return;
       _loading = false;
@@ -319,6 +327,7 @@ class CommentsModel extends ChangeNotifier {
       }
     }
     _notify();
+    if (again) await loadMore();
   }
 
   Future<void> setSort(CommentSort sort) async {
@@ -327,7 +336,7 @@ class CommentsModel extends ChangeNotifier {
     await loadMore();
   }
 
-  /// Pull to refresh, and 重试 after a first page that failed.
+  /// Starts the list again from its first page.
   Future<void> reload() async {
     _resetList();
     await loadMore();
@@ -340,6 +349,7 @@ class CommentsModel extends ChangeNotifier {
     _total = 0;
     _nextOffset = null;
     _emptyPages = 0;
+    _answered = false;
     _isEnd = false;
     _closedMessage = null;
     _loading = false;
@@ -404,9 +414,9 @@ class CommentsModel extends ChangeNotifier {
     _notify();
     try {
       await call();
-    } catch (error) {
+    } catch (error, stack) {
       _update(before.rpid, (target) => target.copyWith(likes: before.likes, action: before.action));
-      fail(error);
+      fail(error, stack);
     } finally {
       _reacting.remove(before.rpid);
       _notify();
@@ -418,8 +428,8 @@ class CommentsModel extends ChangeNotifier {
     if (!requireLogin()) return false;
     try {
       await api.deleteComment(aid: aid, rpid: comment.rpid);
-    } catch (error) {
-      fail(error);
+    } catch (error, stack) {
+      fail(error, stack);
       return false;
     }
     final rpid = comment.rpid;
@@ -457,9 +467,12 @@ class CommentsModel extends ChangeNotifier {
   }
 
   /// Toasts what went wrong in words for the viewer; an expired login gets the login prompt alone. Also the
-  /// composer's.
-  void fail(Object error) {
-    _logger.warn(LogCategory.api, 'comment action failed', {'error': '$error'});
+  /// composer's. Anything but a [BiliError] is logged with its stack, so a bug in the app isn't read as the network.
+  void fail(Object error, [StackTrace? stack]) {
+    _logger.warn(LogCategory.api, 'comment action failed', {
+      'error': '$error',
+      if (error is! BiliError) 'stack': '${stack ?? StackTrace.current}',
+    });
     if (_disposed) return;
     if (error is BiliError && error.needsLogin) {
       _requestLogin();

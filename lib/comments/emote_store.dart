@@ -94,7 +94,8 @@ class RecentEmotes {
   Future<void> settle() => _writing;
 }
 
-/// The emote panel's packages, asked for once per launch and shared by every composer.
+/// The emote panel's packages, shared by every composer: kept once they arrive, asked for again after a failure or an
+/// empty answer.
 class EmoteCatalog {
   EmoteCatalog({Logger? logger}) : _logger = logger ?? Logger.shared;
 
