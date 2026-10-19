@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -16,7 +17,8 @@ enum _Phase { idle, dragging, settling, flying }
 /// A video page opened from a 推荐 card (03, 04 in local/differences): a swipe from the left edge shrinks the page
 /// into a floating card that follows the finger over the dimmed home; let go and it springs back, or flies into
 /// [source]. Opening is the plain push. The 〈 button and system back fly into the card too, as iOS's zoom
-/// transitions do, and fall back to the plain slide when the card is gone.
+/// transitions do; with the card gone or off screen they fall back to the plain slide, and under Reduce Motion they
+/// fade.
 class ZoomBackPageRoute<T> extends SwipeBackPageRoute<T> {
   ZoomBackPageRoute({required super.builder, required this.source, super.settings});
 
@@ -247,7 +249,7 @@ class ZoomBackPageRoute<T> extends SwipeBackPageRoute<T> {
     return popped;
   }
 
-  /// The 〈 button and system back. With the card gone (or never shown), the plain slide.
+  /// The 〈 button and system back. With the card gone or off screen, the plain slide; under Reduce Motion, a fade.
   void _flyFromFull() {
     final card = _card;
     final screen = _frame?.size;
@@ -330,7 +332,8 @@ class _Zoom extends ChangeNotifier {
   void changed() => notifyListeners();
 }
 
-/// The left-edge swipe, as wide as the Cupertino route's. It follows the finger both ways once it has the drag.
+/// The left-edge swipe, as wide as the Cupertino route's. Once it has the drag it follows the finger up and down as
+/// well as sideways.
 class _EdgeDrag extends StatefulWidget {
   const _EdgeDrag({required this.route, required this.child});
 
@@ -472,10 +475,10 @@ class _ZoomFrame extends StatelessWidget {
           if (zoom.picture != null) {
             backing = BiliColors.card;
             pictureOpacity = const Interval(0, ZoomBackTheme.pictureIn).transform(t);
-            pageOpacity = 1 - const Interval(0, ZoomBackTheme.pageOut).transform(t);
+            pageOpacity = ZoomBackTheme.pageUnder * (1 - const Interval(0, ZoomBackTheme.pageOut).transform(t));
           } else {
             // No picture to turn into: the page lands on the card, which shows through as it fades.
-            pageOpacity = 1 - const Interval(ZoomBackTheme.pageOut, 1).transform(t);
+            pageOpacity = 1 - const Interval(ZoomBackTheme.fadeOntoCard, 1).transform(t);
           }
         }
     }
@@ -533,9 +536,10 @@ class _PageClip extends CustomClipper<RRect> {
   bool shouldReclip(_PageClip oldClipper) => oldClipper.height != height || oldClipper.radius != radius;
 }
 
-/// Wraps what a [ZoomBackPageRoute] page was opened from, and hands [builder] the [ZoomSource] to open it with. While
-/// the page is away the box stays empty, as the official card's spot does, and its picture is what the page turns
-/// into as it lands; its Hero is off meanwhile, so the cover doesn't fly back on its own.
+/// Wraps what a [ZoomBackPageRoute] page was opened from, and hands [builder] the [ZoomSource] to open it with. From
+/// the swipe's start (or the 〈 fly) until the page lands, the box stays empty as the official card's spot does, and
+/// its picture is what the page turns into as it lands. Its Hero is off meanwhile, so the cover doesn't fly back on
+/// its own.
 class ZoomSourceBox extends StatefulWidget {
   const ZoomSourceBox({super.key, required this.builder});
 
@@ -557,6 +561,10 @@ class _ZoomSourceBoxState extends State<ZoomSourceBox> {
   final _boundary = GlobalKey();
   bool _lent = false;
   bool _hidden = false;
+
+  /// Bumped to build the card afresh when lent. A Hero the push flew from keeps an empty placeholder until a pop
+  /// flight ends it, and with the Hero off no pop flight comes.
+  int _builds = 0;
 
   @override
   void initState() {
@@ -586,10 +594,14 @@ class _ZoomSourceBoxState extends State<ZoomSourceBox> {
     return rect.overlaps(visible) ? rect : null;
   }
 
-  /// Hero off at once; with [onPicture], after home's next frame, the picture taken and the box emptied.
+  /// Hero off and the card built afresh at once; with [onPicture], after home's next frame, the picture taken and the
+  /// box emptied.
   void _lend({required ValueChanged<ui.Image?>? onPicture}) {
     if (_lent) return;
-    setState(() => _lent = true);
+    setState(() {
+      _lent = true;
+      _builds++;
+    });
     if (onPicture == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_lent) return;
@@ -607,13 +619,17 @@ class _ZoomSourceBoxState extends State<ZoomSourceBox> {
     });
   }
 
+  /// Null when home hasn't drawn the card since it was covered: the page then lands without turning into the card.
   ui.Image? _picture() {
     final boundary = _boundary.currentContext?.findRenderObject();
     if (boundary is! RenderRepaintBoundary || !boundary.attached) return null;
     try {
       return boundary.toImageSync(pixelRatio: View.of(context).devicePixelRatio);
-    } catch (_) {
-      // Not painted yet (home never drew since it was covered): the page lands without turning into the card.
+    } catch (error) {
+      // Unpainted, debug builds trip toImageSync's assert and release builds its null layer; anything else is news.
+      if (error is! AssertionError && error is! TypeError) {
+        Logger.shared.warn(LogCategory.ui, 'zoom picture failed', {'error': '$error'});
+      }
       return null;
     }
   }
@@ -623,7 +639,10 @@ class _ZoomSourceBoxState extends State<ZoomSourceBox> {
     enabled: !_lent,
     child: Opacity(
       opacity: _hidden ? 0 : 1,
-      child: RepaintBoundary(key: _boundary, child: widget.builder(context, _source)),
+      child: RepaintBoundary(
+        key: _boundary,
+        child: KeyedSubtree(key: ValueKey(_builds), child: widget.builder(context, _source)),
+      ),
     ),
   );
 }

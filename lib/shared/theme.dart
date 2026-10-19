@@ -1940,7 +1940,7 @@ abstract final class ZoomBackTheme {
   static const minScaleTravel = 0.477;
   static const minScale = 0.6;
 
-  /// In the page's own points, so it shrinks with the page (6.5 pt on screen at 0.6).
+  /// In the page's own points, so it shrinks with the page (6.6 pt on screen at 0.6).
   static const cornerRadius = 11.0;
 
   /// Let go past this share of the width, or flung right at [flingSpeed] widths a second or more, and the page goes;
@@ -1950,16 +1950,21 @@ abstract final class ZoomBackTheme {
   static const settle = Duration(milliseconds: 350);
 
   /// Let go, the page flies into its card in about ten frames, the dim lifting with it. The card's picture is in by
-  /// [pictureIn] of the way and the page gone by [pageOut], so most of the way it is the card that flies.
+  /// [pictureIn] of the way, from the first frame; under it the page drops at once to [pageUnder] and fades out by
+  /// [pageOut], so it is the card that flies.
   static const fly = Duration(milliseconds: 170);
   static const flyCurve = Curves.easeOut;
-  static const pictureIn = 0.15;
-  static const pageOut = 0.35;
+  static const pictureIn = 0.05;
+  static const pageUnder = 0.3;
+  static const pageOut = 0.7;
+
+  /// With no picture of the card to turn into, the page fades onto the card itself from this share of the way.
+  static const fadeOntoCard = 0.35;
 
   /// The 〈 button and system back fly the full page into its card.
   static const flyFromFull = Duration(milliseconds: 350);
 
-  /// With its card gone, the page shrinks this much more towards the middle as it fades.
+  /// With its card off screen or gone, the page shrinks this much more towards the middle as it fades.
   static const lostScale = 0.5;
 
   /// Reduce Motion: let go, the page fades where it is.
