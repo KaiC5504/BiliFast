@@ -12,6 +12,7 @@ import 'app/reduce_motion.dart';
 import 'app/route_observer.dart';
 import 'comments/emote_store.dart';
 import 'danmaku/danmaku_settings_store.dart';
+import 'device/orientation.dart';
 import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_files.dart';
@@ -66,6 +67,7 @@ Future<void> main(List<String> args) async {
     unawaited(playback.obtain().then((controller) => controller.player.setMuted(true), onError: (Object _) {}));
   }
   final device = PlayerDevice.platform();
+  applyTurnTakeover(device.orientation, PlayerPrefs.shared);
   PhoneFrame.follow(device.orientation);
   runApp(BiliFastApp(
     services: AppServices(
@@ -88,6 +90,11 @@ Future<void> main(List<String> args) async {
 void recheckUnknownAccount(AppEnvironment environment) {
   if (environment.account is AccountUnknown) unawaited(environment.refreshAccount());
 }
+
+/// 开发者's 旋转动画 as last chosen, from the first turn. Not awaited, so the first frame doesn't wait on the host;
+/// the controller logs a host that fails.
+void applyTurnTakeover(OrientationController orientation, PlayerPrefs prefs) =>
+    unawaited(orientation.setTurnTakeover(prefs.turnTakeover));
 
 /// What the app shows when it could not start.
 class LaunchFailedApp extends StatelessWidget {

@@ -4,6 +4,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -18,6 +19,7 @@ import '../player_ui/player_stage.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/intro/collection_row.dart' show Chevron;
+import '../video/player_prefs.dart';
 import '../speedtest/speed_test_plan.dart';
 import '../speedtest/speed_test_results.dart';
 import '../speedtest/speed_test_runner.dart';
@@ -54,7 +56,7 @@ Future<void> shareFileThroughSystem(String path, Rect? origin) async {
 }
 
 /// Slice 1's whole app, now 开发者 in 设置 (dev builds): the account the keychain login gave, a BV field, the player and
-/// its switches, the log forwarder with 导出日志 and 测试崩溃, and the speed test.
+/// its switches, 旋转动画, the log forwarder with 导出日志 and 测试崩溃, and the speed test.
 class PlayerTestPage extends StatefulWidget {
   const PlayerTestPage({
     super.key,
@@ -66,6 +68,7 @@ class PlayerTestPage extends StatefulWidget {
     this.speedTestHooks = appSpeedTestHooks,
     this.ownsController = true,
     this.shareFile = shareFileThroughSystem,
+    this.prefs,
   });
 
   final AppEnvironment environment;
@@ -87,6 +90,9 @@ class PlayerTestPage extends StatefulWidget {
   /// Tests pass their own so nothing reaches the platform.
   final ShareFile shareFile;
 
+  /// [PlayerPrefs.shared] unless a test passes its own.
+  final PlayerPrefs? prefs;
+
   @override
   State<PlayerTestPage> createState() => _PlayerTestPageState();
 }
@@ -107,6 +113,11 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
 
   /// The controller's open count after this page's last open; a later one means another page has the player.
   int? _open;
+
+  PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
+
+  /// PlayerDevice.platform gives the rotation a host, and so turns to take over, only on iOS.
+  static bool get _canTakeOverTurns => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   @override
   void initState() {
@@ -186,6 +197,12 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   void _openLink(PlaybackController controller, String text) {
     unawaited(controller.open(text));
     _open = controller.opens;
+  }
+
+  /// From the next turn on; the controller logs a host that fails.
+  void _setTurnTakeover(bool drawn) {
+    setState(() => _prefs.turnTakeover = drawn);
+    unawaited(AppScope.of(context).device.orientation.setTurnTakeover(drawn));
   }
 
   void _startSpeedTest() {
@@ -296,6 +313,22 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
                   padding: const EdgeInsets.all(BiliMetrics.gutter),
                   children: [
                     if (controller != null) ..._playbackSection(controller),
+                    _Card(children: [
+                      _Row(
+                        label: _canTakeOverTurns ? '旋转动画' : '旋转动画（仅 iPhone）',
+                        trailing: SegmentedButton<bool>(
+                          key: const ValueKey('turn-takeover'),
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment(value: true, label: Text('自绘')),
+                            ButtonSegment(value: false, label: Text('系统')),
+                          ],
+                          selected: {_prefs.turnTakeover},
+                          onSelectionChanged: _canTakeOverTurns ? (selected) => _setTurnTakeover(selected.first) : null,
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: BiliMetrics.sectionGap),
                     if (widget.logs case final logs?) ...[
                       _LogSection(
                         logs: logs,

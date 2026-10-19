@@ -22,7 +22,7 @@ void main() {
 
   tearDown(() => folder.deleteSync(recursive: true));
 
-  test('without a file the defaults apply: 自动连播 on, 不循环, 适应, BTR on, stats off, danmaku on', () async {
+  test('without a file the defaults apply: 自动连播 on, 不循环, 适应, BTR on, stats off, danmaku on, 旋转动画 自绘', () async {
     final prefs = await PlayerPrefs.load(path, logger: logger);
     expect(prefs.autoplay, isTrue);
     expect(prefs.loop, LoopMode.off);
@@ -31,6 +31,7 @@ void main() {
     expect(prefs.showStats, isFalse);
     expect(prefs.danmakuOn, isTrue);
     expect(prefs.coinAlsoLike, isTrue);
+    expect(prefs.turnTakeover, isTrue);
     expect(prefs.quality, isNull);
     expect(prefs.codec, isNull);
     expect(File(path).existsSync(), isFalse, reason: 'nothing is written until something changes');
@@ -46,6 +47,7 @@ void main() {
       ..showStats = true
       ..danmakuOn = false
       ..coinAlsoLike = false
+      ..turnTakeover = false
       ..quality = 127
       ..codec = VideoCodec.av1;
     await prefs.settle();
@@ -58,8 +60,17 @@ void main() {
     expect(again.showStats, isTrue);
     expect(again.danmakuOn, isFalse);
     expect(again.coinAlsoLike, isFalse);
+    expect(again.turnTakeover, isFalse);
     expect(again.quality, 127);
     expect(again.codec, VideoCodec.av1);
+  });
+
+  test('旋转动画 put back on 自绘 stays there', () async {
+    final prefs = await PlayerPrefs.load(path, logger: logger)
+      ..turnTakeover = false
+      ..turnTakeover = true;
+    await prefs.settle();
+    expect((await PlayerPrefs.load(path, logger: logger)).turnTakeover, isTrue);
   });
 
   test('a file that is not JSON is set aside and the defaults apply', () async {
@@ -74,17 +85,20 @@ void main() {
   });
 
   test('a value of the wrong type or an unknown name falls back alone', () async {
-    File(path).writeAsStringSync('{"autoplay":"yes","loop":"forever","fit":"fill","quality":"high","codec":"hevc"}');
+    File(path).writeAsStringSync(
+        '{"autoplay":"yes","loop":"forever","fit":"fill","quality":"high","codec":"hevc","turnTakeover":0}');
     final prefs = await PlayerPrefs.load(path, logger: logger);
     expect(prefs.autoplay, isTrue);
     expect(prefs.loop, LoopMode.off);
     expect(prefs.fit, FitMode.fill);
     expect(prefs.quality, isNull);
     expect(prefs.codec, VideoCodec.hevc);
+    expect(prefs.turnTakeover, isTrue);
     final ignored = logs.events.where((event) => event.msg == 'player prefs value ignored').toList();
     expect(ignored.map((event) => event.f['key']), const [
       LogString('autoplay'),
       LogString('loop'),
+      LogString('turnTakeover'),
       LogString('quality'),
     ]);
     expect(ignored.every((event) => event.level == LogLevel.warn), isTrue);

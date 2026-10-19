@@ -69,6 +69,7 @@ class PlayerPrefs {
   bool _danmakuOn = true;
   bool _coinAlsoLike = true;
   bool _danmakuStyleHintSeen = false;
+  bool _turnTakeover = true;
   int? _quality;
   VideoCodec? _codec;
 
@@ -100,6 +101,10 @@ class PlayerPrefs {
   /// The send bar's A has been pressed once, so its red dot is gone for good.
   bool get danmakuStyleHintSeen => _danmakuStyleHintSeen;
   set danmakuStyleHintSeen(bool value) => _set(() => _danmakuStyleHintSeen = value);
+
+  /// 开发者's 旋转动画: turns drawn by Flutter (自绘) rather than animated by iOS (系统).
+  bool get turnTakeover => _turnTakeover;
+  set turnTakeover(bool value) => _set(() => _turnTakeover = value);
 
   /// Null until the user picks one: the controller's own default applies.
   int? get quality => _quality;
@@ -134,6 +139,7 @@ class PlayerPrefs {
     _danmakuOn = pick<bool>('danmakuOn') ?? _danmakuOn;
     _coinAlsoLike = pick<bool>('coinAlsoLike') ?? _coinAlsoLike;
     _danmakuStyleHintSeen = pick<bool>('danmakuStyleHintSeen') ?? _danmakuStyleHintSeen;
+    _turnTakeover = pick<bool>('turnTakeover') ?? _turnTakeover;
     _quality = pick<int>('quality');
     _codec = named('codec', VideoCodec.values);
   }
@@ -148,6 +154,7 @@ class PlayerPrefs {
     'danmakuOn': _danmakuOn,
     'coinAlsoLike': _coinAlsoLike,
     if (_danmakuStyleHintSeen) 'danmakuStyleHintSeen': true,
+    if (!_turnTakeover) 'turnTakeover': false,
     'quality': ?_quality,
     'codec': ?_codec?.name,
   };
