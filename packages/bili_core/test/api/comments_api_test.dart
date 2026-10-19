@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bili_core/api.dart';
 import 'package:test/test.dart';
 
@@ -159,6 +161,41 @@ void main() {
     expect(pinned.rpid, 9100);
     expect(pinned.isPinned, isTrue);
     expect(pinned.location, '北京');
+  });
+
+  test('a 笔记 link leads the text and a vote reads 投票 with its title', () {
+    // Shaped after a note comment's content as the web API sends it; ids and text invented.
+    const json = r'''
+{"rpid":9200,"oid":80433022,"type":1,"mid":1001,"member":{"mid":"1001","uname":"测试用户甲"},
+"content":{"message":"我的笔记 https://www.bilibili.com/h5/note-app/view?cvid=1234&pagefrom=comment 选一个{vote:4321}，再看蓝链",
+"jump_url":{
+"https://www.bilibili.com/h5/note-app/view?cvid=1234&pagefrom=comment":{"title":"笔记标题","state":0,"pc_url":"","prefix_icon":"",
+"app_url_schema":"","click_report":"{\"cvid\":\"1234\",\"oid\":\"80433022\"}","extra":{"is_word_search":false}},
+"蓝链":{"title":"链接标题","pc_url":"//search.bilibili.com/all?keyword=x","click_report":"","extra":{"is_word_search":true}}},
+"vote":{"id":4321,"title":"选哪个","cnt":12,"desc":"","deleted":false},"members":[]}}''';
+    final comment = Comment.fromJson(jsonDecode(json));
+    expect(comment.runs, const [
+      RichRun.link(
+        title: '笔记标题',
+        url: 'https://www.bilibili.com/h5/note-app/view?cvid=1234&pagefrom=comment',
+        note: true,
+      ),
+      RichRun.text('我的笔记  选一个'),
+      RichRun.link(title: '投票: 选哪个', url: 'https://t.bilibili.com/vote/h5/index?vote_id=4321#/result'),
+      RichRun.text('，再看'),
+      RichRun.link(title: '链接标题', url: 'https://search.bilibili.com/all?keyword=x'),
+    ]);
+  });
+
+  test('a vote with no title reads 投票, and with no vote the token stays text', () {
+    Comment decode(String content) => Comment.fromJson(jsonDecode(
+        '{"rpid":1,"member":{"mid":"1","uname":"甲"},"content":{"message":"投{vote:7}"$content}}'));
+    expect(decode(',"vote":{"id":7,"title":""}').runs, const [
+      RichRun.text('投'),
+      RichRun.link(title: '投票', url: 'https://t.bilibili.com/vote/h5/index?vote_id=7#/result'),
+    ]);
+    expect(decode('').runs, const [RichRun.text('投{vote:7}')]);
+    expect(decode(',"vote":{"id":0}').runs, const [RichRun.text('投{vote:7}')]);
   });
 
   test('preview replies and a renamed reply target', () async {

@@ -206,5 +206,29 @@ void main() {
       await expectLater(
           transport.send(HTTPRequest(url: Uri.parse('https://api.bilibili.com/x'))), throwsA(isA<TimeoutException>()));
     });
+
+    test("a request's own timeout replaces the transport's, for that request and its redirects only", () async {
+      final client = MockClient((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        if (request.url.path == '/a') return http.Response('', 302, headers: {'location': '/b'});
+        return http.Response('done', 200);
+      });
+      final transport = ClientHTTPTransport(client: client, timeout: const Duration(milliseconds: 50));
+      final response = await transport.send(HTTPRequest(
+        url: Uri.parse('https://api.bilibili.com/a'),
+        method: 'POST',
+        body: utf8.encode('x=1'),
+        timeout: const Duration(seconds: 5),
+      ));
+      expect(utf8.decode(response.body), 'done');
+      await expectLater(
+          transport.send(HTTPRequest(url: Uri.parse('https://api.bilibili.com/b'))), throwsA(isA<TimeoutException>()));
+      expect(
+        ClientHTTPTransport.redirectedRequest(
+          HTTPRequest(url: Uri.parse('https://evil.example/'), timeout: const Duration(seconds: 7)),
+        ).timeout,
+        const Duration(seconds: 7),
+      );
+    });
   });
 }

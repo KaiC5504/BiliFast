@@ -1,3 +1,5 @@
+import '../devlog/log_event.dart';
+import '../devlog/logger.dart';
 import 'json.dart';
 import 'rich_text.dart';
 
@@ -167,12 +169,28 @@ final class Comment {
       mentions = content.table('at_name_to_mid', (json) => asRequiredInt(json, 'at_name_to_mid'));
       final jumps = content.table('jump_url', (json) {
         final entry = JsonObject.from(json);
-        return (title: entry.text('title') ?? '', pcURL: entry.text('pc_url') ?? '');
+        return (
+          title: entry.text('title') ?? '',
+          pcURL: entry.text('pc_url') ?? '',
+          // As PiliPlus tells them apart: only a note's jump link reports a cvid.
+          note: (entry.text('click_report') ?? '').startsWith('{"cvid'),
+        );
       });
       for (final MapEntry(:key, value: entry) in jumps.entries) {
         links[key] = LinkRef(
           title: entry.title.isEmpty ? key : entry.title,
           url: _absolute(entry.pcURL, orElse: key),
+          note: entry.note,
+        );
+      }
+      // The message carries "{vote:id}" where the comment's poll goes.
+      final vote = content.nested('vote');
+      final voteID = vote?.count('id') ?? 0;
+      if (voteID > 0) {
+        final title = vote?.text('title') ?? '';
+        links['{vote:$voteID}'] = LinkRef(
+          title: title.isEmpty ? '投票' : '投票: $title',
+          url: 'https://t.bilibili.com/vote/h5/index?vote_id=$voteID#/result',
         );
       }
       pictures = content.lenientList('pictures', CommentPicture.fromJson);
@@ -495,7 +513,7 @@ final class MentionCandidate {
   String toString() => 'MentionCandidate($mid, $name)';
 }
 
-/// A picture uploaded for a comment, as `/x/v2/reply/add`'s `pictures` takes it back.
+/// A picture uploaded for a comment, sent again in `/x/v2/reply/add`'s `pictures`.
 final class UploadedPicture {
   const UploadedPicture({required this.url, required this.width, required this.height, required this.sizeKb});
 
@@ -535,6 +553,17 @@ final class UploadedPicture {
   String toString() => 'UploadedPicture($url, $width x $height, $sizeKb KB)';
 }
 
-/// A search that matches no one can answer without a list.
-List<MentionCandidate> decodeMentionCandidates(Object? json) =>
-    JsonObject.from(json).lenientList('list', MentionCandidate.fromJson);
+/// A search that matches no one can answer without a list. Entries that fail are logged by count only, so a changed
+/// response shows in the log instead of as an empty picker.
+List<MentionCandidate> decodeMentionCandidates(Object? json, {Logger? logger}) {
+  final object = JsonObject.from(json);
+  final raw = object.map['list'];
+  final found = object.lenientList('list', MentionCandidate.fromJson);
+  final log = logger ?? Logger.shared;
+  if (raw != null && raw is! List) {
+    log.warn(LogCategory.api, 'followings list unreadable', {'type': '${raw.runtimeType}'});
+  } else if (raw is List && found.length < raw.length) {
+    log.warn(LogCategory.api, 'followings entries dropped', {'dropped': raw.length - found.length, 'of': raw.length});
+  }
+  return found;
+}

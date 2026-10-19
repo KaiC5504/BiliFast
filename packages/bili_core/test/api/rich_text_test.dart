@@ -71,6 +71,21 @@ void main() {
     ]);
   });
 
+  test('a note link moves to the front and the text around where it was joins up', () {
+    final links = {
+      'cv1': const LinkRef(title: '笔记', url: 'https://www.bilibili.com/read/cv1', note: true),
+      '蓝链': const LinkRef(title: '蓝链', url: 'https://search.bilibili.com/all?keyword=x'),
+    };
+    expect(runs('看 cv1 在 03:15 蓝链', links: links), const [
+      RichRun.link(title: '笔记', url: 'https://www.bilibili.com/read/cv1', note: true),
+      RichRun.text('看  在 '),
+      RichRun.timestamp(label: '03:15', seconds: 195),
+      RichRun.text(' '),
+      RichRun.link(title: '蓝链', url: 'https://search.bilibili.com/all?keyword=x'),
+    ]);
+    expect(const RichRun.link(title: 't', url: 'u'), isNot(const RichRun.link(title: 't', url: 'u', note: true)));
+  });
+
   test('link keys beat video ids and emotes beat links', () {
     final links = {'BV1GJ411x7h7': const LinkRef(title: '某个视频', url: 'https://www.bilibili.com/video/BV1GJ411x7h7')};
     expect(runs('看 BV1GJ411x7h7 和 BV1AB411c7mD', links: links), const [

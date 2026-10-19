@@ -132,7 +132,7 @@ void main() {
       semantics.dispose();
     });
 
-    testWidgets('an emote is centred on the Chinese glyphs beside it, and a small one leaves its line as tall', (
+    testWidgets('an emote is centred on the Chinese glyphs beside it, and its line grows 2 pt below the text', (
       tester,
     ) async {
       final rig = Rig();
@@ -140,8 +140,8 @@ void main() {
       final plainHeight = tester.getSize(_paragraph).height;
 
       await rig.mount(tester, const [RichRun.text('重打了'), RichRun.emote(token: '[无语]', url: _emoteUrl, size: 1)]);
-      expect(tester.getSize(_paragraph).height, plainHeight);
-      // The line is as tall as the text alone, so its baseline is the text's.
+      expect(tester.getSize(_paragraph).height, moreOrLessEquals(plainHeight + CommentTextTheme.emoteLineGrowth));
+      // The line grows below its text only, so its baseline is the text's.
       final painter = TextPainter(
         text: const TextSpan(text: '重打了', style: _style),
         textDirection: TextDirection.ltr,
@@ -156,6 +156,59 @@ void main() {
       await rig.mount(tester, const [RichRun.emote(token: '[大]', url: _emoteUrl, size: 2), RichRun.text('大')]);
       expect(tester.getRect(find.byType(RemoteImage)).top, moreOrLessEquals(tester.getTopLeft(_paragraph).dy));
       expect(tester.getSize(_paragraph).height, moreOrLessEquals(40));
+    });
+
+    testWidgets('only the line holding the emote grows; plain lines keep their height', (tester) async {
+      final rig = Rig();
+      final line = '回溯' * 10;
+      // The first character of each line: 0, 21 and, after the emote's placeholder and the line break, 43.
+      List<double> lineTops(List<int> starts) => [
+        for (final start in starts)
+          tester
+              .renderObject<RenderParagraph>(_paragraph)
+              .getBoxesForSelection(TextSelection(baseOffset: start, extentOffset: start + 1))
+              .single
+              .top,
+      ];
+      await rig.mount(tester, [RichRun.text('$line\n$line\n$line')]);
+      final plain = tester.getSize(_paragraph).height;
+      expect(plain, moreOrLessEquals(75));
+      final plainTops = lineTops([0, 21, 42]);
+
+      await rig.mount(tester, [
+        RichRun.text('$line\n$line'),
+        const RichRun.emote(token: '[无语]', url: _emoteUrl, size: 1),
+        RichRun.text('\n$line'),
+      ]);
+      expect(tester.getSize(_paragraph).height, moreOrLessEquals(plain + CommentTextTheme.emoteLineGrowth));
+      final tops = lineTops([0, 21, 43]);
+      expect(tops[0], moreOrLessEquals(plainTops[0]));
+      expect(tops[1], moreOrLessEquals(plainTops[1]));
+      expect(tops[2], moreOrLessEquals(plainTops[2] + CommentTextTheme.emoteLineGrowth));
+
+      await rig.mount(tester, [RichRun.text(line), const RichRun.emote(token: '[空]', url: '', size: 1)]);
+      expect(tester.getSize(_paragraph).height, moreOrLessEquals(25));
+    });
+  });
+
+  group('votes and notes', () {
+    testWidgets('a vote is a 投票 link to its page; a 笔记 link reads [笔记] and opens the note', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester, const [
+        RichRun.link(title: '笔记标题', url: 'https://www.bilibili.com/h5/note-app/view?cvid=1234', note: true),
+        RichRun.text('选一个'),
+        RichRun.link(title: '投票: 选哪个', url: 'https://t.bilibili.com/vote/h5/index?vote_id=4321#/result'),
+      ]);
+      expect(find.text('[笔记] 选一个投票: 选哪个', findRichText: true), findsOneWidget);
+      expect(_span(tester, '[笔记] ').style?.color, CommentTextTheme.link);
+      expect(_span(tester, '投票: 选哪个').style?.color, CommentTextTheme.link);
+
+      await _tapText(tester, '[笔记]');
+      await _tapText(tester, '投票');
+      expect(rig.links, [
+        Uri.parse('https://www.bilibili.com/h5/note-app/view?cvid=1234'),
+        Uri.parse('https://t.bilibili.com/vote/h5/index?vote_id=4321#/result'),
+      ]);
     });
   });
 
