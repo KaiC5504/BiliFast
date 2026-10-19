@@ -41,6 +41,10 @@ class DanmakuSendBar extends StatefulWidget {
 class _DanmakuSendBarState extends State<DanmakuSendBar> {
   late final TextEditingController _text = TextEditingController.fromValue(_valueAtEnd(widget.model.text));
 
+  /// The draft's text as the field last agreed with it. Half-typed pinyin stays in the field alone, so the model
+  /// notifying for anything else (sending, style) must not write its older text over the composition.
+  late String _synced = widget.model.text;
+
   static TextEditingValue _valueAtEnd(String text) => TextEditingValue(
     text: text,
     selection: TextSelection.collapsed(offset: text.length),
@@ -77,12 +81,23 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
 
   void _modelChanged() {
     final text = widget.model.text;
-    if (text != _text.text) _text.value = _valueAtEnd(text);
+    if (text != _synced) {
+      _synced = text;
+      if (text != _text.text) _text.value = _valueAtEnd(text);
+    }
     if (mounted) setState(() {});
   }
 
+  bool get _composing => _text.value.composing.isValid;
+
+  /// Pinyin still being typed stays out of the draft: cutting it at 100 there would write back a value without its
+  /// composing range and drop the candidates. The formatter cuts once the composition ends.
   void _textChanged() {
-    if (_text.text != widget.model.text) widget.model.text = _text.text;
+    if (!_composing && _text.text != widget.model.text) {
+      _synced = _text.text;
+      widget.model.text = _text.text;
+    }
+    if (mounted) setState(() {});
   }
 
   bool get _dark => widget.presentation == Presentation.landscape;
@@ -181,9 +196,7 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
   }
 
   Widget _field() {
-    final model = widget.model;
-    final hasText = model.text.isNotEmpty;
-    final clear = !_dark && hasText && !widget.closed;
+    final clear = !_dark && _text.text.isNotEmpty && !widget.closed;
     final pad = _vertical ? DanmakuSendTheme.verticalFieldPad : DanmakuSendTheme.fieldPad;
     final textStyle = TextStyle(
       fontFamily: BiliFonts.family,
@@ -223,7 +236,12 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
                 maxLines: 1,
                 textInputAction: TextInputAction.send,
                 keyboardAppearance: _dark ? Brightness.dark : Brightness.light,
-                inputFormatters: [LengthLimitingTextInputFormatter(DanmakuSendModel.maxLength)],
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(
+                    DanmakuSendModel.maxLength,
+                    maxLengthEnforcement: MaxLengthEnforcement.truncateAfterCompositionEnds,
+                  ),
+                ],
                 cursorColor: DanmakuSendTheme.darkAccent,
                 cursorHeight: DanmakuSendTheme.cursorHeight,
                 cursorWidth: DanmakuSendTheme.cursorWidth,
@@ -233,7 +251,9 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
                 textAlignVertical: TextAlignVertical.center,
                 // Sending from the keyboard keeps it up; the bar closes itself once the danmaku went.
                 onEditingComplete: () {},
-                onSubmitted: (_) => widget.onSend(),
+                onSubmitted: (_) {
+                  if (!_composing) widget.onSend();
+                },
                 decoration: InputDecoration(
                   isCollapsed: true,
                   border: InputBorder.none,
@@ -274,12 +294,13 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
     );
   }
 
-  void _clear() => widget.model.text = '';
+  void _clear() => _text.value = _valueAtEnd('');
 
   Widget _sendButton() {
     final model = widget.model;
-    final ready = model.canSend && !widget.closed;
-    final hasText = model.text.trim().isNotEmpty;
+    // Closed, a press still reaches onSend, which says why nothing goes.
+    final ready = model.canSend && !_composing;
+    final hasText = model.text.trim().isNotEmpty && !_composing;
     final scale = _vertical ? DanmakuSendTheme.verticalSendScale : 1.0;
     final Color colour;
     var filled = false;

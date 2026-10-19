@@ -2128,8 +2128,8 @@ abstract final class DanmakuSendTheme {
   static const verticalFieldPad = 12.0;
   static const placeholder = Color(0xFFC9CCCF);
 
-  /// MiSans sets Chinese about 5% wider than the official PingFang.
-  static double get placeholderSpacing => BiliFonts.nudged ? -0.75 : 0;
+  /// MiSans sets Chinese a touch wider than the official PingFang: this ends the placeholder where 22's and 36's do.
+  static double get placeholderSpacing => BiliFonts.nudged ? -0.15 : 0;
 
   /// 竖屏's placeholder is smaller and darker than the text it gives way to (36, 37).
   static const verticalPlaceholder = Color(0xFF95999F);
