@@ -6,7 +6,7 @@ sealed class RichRun {
   const factory RichRun.text(String text) = TextRun;
   const factory RichRun.emote({required String token, required String url, required int size}) = EmoteRun;
   const factory RichRun.mention({required String name, required int mid}) = MentionRun;
-  const factory RichRun.link({required String title, required String url}) = LinkRun;
+  const factory RichRun.link({required String title, required String url, bool note}) = LinkRun;
   const factory RichRun.video({required String id}) = VideoRun;
   const factory RichRun.timestamp({required String label, required int seconds}) = TimestampRun;
 }
@@ -60,19 +60,22 @@ final class MentionRun extends RichRun {
 }
 
 final class LinkRun extends RichRun {
-  const LinkRun({required this.title, required this.url});
+  const LinkRun({required this.title, required this.url, this.note = false});
 
   final String title;
   final String url;
 
-  @override
-  bool operator ==(Object other) => other is LinkRun && other.title == title && other.url == url;
+  /// A 笔记 (a note on the video) the comment links to, shown as a "[笔记]" lead.
+  final bool note;
 
   @override
-  int get hashCode => Object.hash(title, url);
+  bool operator ==(Object other) => other is LinkRun && other.title == title && other.url == url && other.note == note;
 
   @override
-  String toString() => 'link($title, $url)';
+  int get hashCode => Object.hash(title, url, note);
+
+  @override
+  String toString() => note ? 'note($title, $url)' : 'link($title, $url)';
 }
 
 final class VideoRun extends RichRun {
@@ -120,16 +123,17 @@ final class EmoteRef {
 }
 
 final class LinkRef {
-  const LinkRef({required this.title, required this.url});
+  const LinkRef({required this.title, required this.url, this.note = false});
 
   final String title;
   final String url;
+  final bool note;
 
   @override
-  bool operator ==(Object other) => other is LinkRef && other.title == title && other.url == url;
+  bool operator ==(Object other) => other is LinkRef && other.title == title && other.url == url && other.note == note;
 
   @override
-  int get hashCode => Object.hash(title, url);
+  int get hashCode => Object.hash(title, url, note);
 }
 
 typedef _Match = ({int length, RichRun run});
@@ -142,7 +146,8 @@ typedef _Piece = ({List<String>? pending, RichRun? done});
 /// Everything works on grapheme clusters, so an emoji or a combining mark is never cut in half.
 abstract final class RichText {
   /// Each kind is searched in the text the earlier kinds left over, so an emote key wins over a mention,
-  /// a mention over a link, and a link key over a bare BV number inside it.
+  /// a mention over a link, and a link key over a bare BV number inside it. A 笔记 link moves to the front, where the
+  /// official app puts its "[笔记]" lead.
   static List<RichRun> runs(
     String message, {
     required Map<String, EmoteRef> emotes,
@@ -169,13 +174,19 @@ abstract final class RichText {
       pieces,
       _literals([
         for (final MapEntry(:key, :value) in links.entries)
-          (token: key, run: RichRun.link(title: value.title, url: value.url)),
+          (token: key, run: RichRun.link(title: value.title, url: value.url, note: value.note)),
       ], once: true),
     );
     pieces = _split(pieces, _videoID);
     pieces = _split(pieces, _timestamp);
-    return _merged(pieces);
+    final merged = _merged(pieces);
+    bool isNote(RichRun run) => run is LinkRun && run.note;
+    if (!merged.any(isNote)) return merged;
+    return [...merged.where(isNote), ..._merged([for (final run in merged.where((run) => !isNote(run))) _piece(run)])];
   }
+
+  static _Piece _piece(RichRun run) =>
+      run is TextRun ? (pending: graphemes(run.text), done: null) : (pending: null, done: run);
 
   /// Extended grapheme clusters (UAX #29), as Swift splits a String into Characters.
   static List<String> graphemes(String text) => text.characters.toList();

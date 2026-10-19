@@ -6,13 +6,16 @@ import 'package:http/http.dart' as http;
 import 'bili_hosts.dart';
 
 final class HTTPRequest {
-  HTTPRequest({required this.url, Map<String, String>? headers, this.method = 'GET', this.body})
+  HTTPRequest({required this.url, Map<String, String>? headers, this.method = 'GET', this.body, this.timeout})
     : headers = headers ?? {};
 
   final Uri url;
   final Map<String, String> headers;
   final String method;
   final Uint8List? body;
+
+  /// Overrides the transport's timeout for this request only.
+  final Duration? timeout;
 }
 
 final class HTTPResponse {
@@ -52,7 +55,7 @@ final class ClientHTTPTransport implements HTTPTransport {
   static HTTPRequest redirectedRequest(HTTPRequest request) {
     if (BiliHosts.isBilibili(request.url.host)) return request;
     final headers = Map.of(request.headers)..removeWhere((name, _) => name.toLowerCase() == 'cookie');
-    return HTTPRequest(url: request.url, headers: headers, method: request.method);
+    return HTTPRequest(url: request.url, headers: headers, method: request.method, timeout: request.timeout);
   }
 
   @override
@@ -66,11 +69,12 @@ final class ClientHTTPTransport implements HTTPTransport {
         ..headers.addAll(current.headers);
       final body = current.body;
       if (body != null) outgoing.bodyBytes = body;
+      final wait = current.timeout ?? timeout;
       final http.StreamedResponse streamed;
       final Uint8List bytes;
       try {
-        streamed = await _client.send(outgoing).timeout(timeout);
-        bytes = await http.ByteStream(streamed.stream.timeout(timeout)).toBytes();
+        streamed = await _client.send(outgoing).timeout(wait);
+        bytes = await http.ByteStream(streamed.stream.timeout(wait)).toBytes();
       } on TimeoutException {
         if (!abort.isCompleted) abort.complete();
         rethrow;
@@ -95,9 +99,15 @@ final class ClientHTTPTransport implements HTTPTransport {
   static HTTPRequest _follow(HTTPRequest request, int status, Uri next) {
     final keepsMethod = status == 307 || status == 308 || (request.method == 'GET' || request.method == 'HEAD');
     if (keepsMethod && status != 303) {
-      return HTTPRequest(url: next, headers: request.headers, method: request.method, body: request.body);
+      return HTTPRequest(
+        url: next,
+        headers: request.headers,
+        method: request.method,
+        body: request.body,
+        timeout: request.timeout,
+      );
     }
     final headers = Map.of(request.headers)..removeWhere((name, _) => name.toLowerCase() == 'content-type');
-    return HTTPRequest(url: next, headers: headers);
+    return HTTPRequest(url: next, headers: headers, timeout: request.timeout);
   }
 }

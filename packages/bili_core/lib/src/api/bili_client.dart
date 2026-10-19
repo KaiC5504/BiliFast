@@ -205,6 +205,9 @@ final class BiliClient {
     if (envelope.code != 0) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');
   }
 
+  /// The transport's timeout counts the whole body going out, so a picture of a few MB over a slow uplink needs longer.
+  static const uploadTimeout = Duration(seconds: 60);
+
   /// An upload: [form] and [file] as multipart/form-data, with the csrf field as [post] adds it.
   Future<T> _postFile<T>(
     String path, {
@@ -220,6 +223,7 @@ final class BiliClient {
       form: form,
       file: file,
       accept: 'application/json',
+      timeout: uploadTimeout,
     );
     return _checked(_decodeEnvelope(sent, path, decode));
   }
@@ -293,6 +297,7 @@ final class BiliClient {
     String? referer,
     required String accept,
     bool sendCookies = true,
+    Duration? timeout,
     bool retried = false,
   }) async {
     Uint8List? body;
@@ -337,7 +342,9 @@ final class BiliClient {
     final watch = Stopwatch()..start();
     final HTTPResponse response;
     try {
-      response = await _transport.send(HTTPRequest(url: url, headers: headers, method: method, body: body));
+      response = await _transport.send(
+        HTTPRequest(url: url, headers: headers, method: method, body: body, timeout: timeout),
+      );
     } catch (error) {
       _logger.error(LogCategory.api, path, {'error': '$error'});
       rethrow;
@@ -361,6 +368,7 @@ final class BiliClient {
           referer: referer,
           accept: accept,
           sendCookies: sendCookies,
+          timeout: timeout,
           retried: true,
         );
       }

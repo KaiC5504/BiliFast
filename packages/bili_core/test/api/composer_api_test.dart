@@ -195,6 +195,34 @@ void main() {
     expect(file.body, bytes);
   });
 
+  test('an upload waits longer than other requests, since the timeout counts the body going out', () async {
+    http.routes['POST $uploadPath'] = (200, ComposerFixtures.uploaded);
+    http.routes[followingsPath] = (200, ComposerFixtures.followings);
+    await client.uploadCommentPicture(bytes: [1], filename: 'a.jpg');
+    await client.followings(mid: 1001);
+    expect(BiliClient.uploadTimeout, const Duration(seconds: 60));
+    expect(http.requestsTo(uploadPath).single.timeout, BiliClient.uploadTimeout);
+    expect(http.requestsTo(followingsPath).single.timeout, isNull);
+  });
+
+  test('followings entries that fail, or a list that is not one, are logged by count with no names', () async {
+    String log() => sink.events.map((event) => event.encode()).join('\n');
+    http.routes[searchPath] = (200, '{"code":0,"data":{"list":[{"mid":2001,"uname":"关注甲"}],"total":1}}');
+    await client.followings(mid: 1001, query: '甲');
+    expect(log(), isNot(contains('followings entries')));
+
+    http.routes[followingsPath] = (200, ComposerFixtures.followings);
+    await client.followings(mid: 1001);
+    expect(log(), contains('followings entries dropped'));
+    expect(log(), contains('"dropped":2'));
+    expect(log(), contains('"of":5'));
+    expect(log(), isNot(contains('没有编号')));
+
+    http.routes[followingsPath] = (200, '{"code":0,"data":{"list":{"mid":2001},"total":1}}');
+    expect(await client.followings(mid: 1001), isEmpty);
+    expect(log(), contains('followings list unreadable'));
+  });
+
   test('each upload gets its own boundary', () async {
     http.routes['POST $uploadPath'] = (200, ComposerFixtures.uploaded);
     await client.uploadCommentPicture(bytes: [1], filename: 'a.jpg');

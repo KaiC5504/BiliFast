@@ -80,7 +80,7 @@ extension BiliClientComments on BiliClient {
         '/x/relation/followings',
         query: {'vmid': '$mid', 'pn': '1', 'ps': '50', 'order': 'desc', 'order_type': ''},
         signed: false,
-        decode: decodeMentionCandidates,
+        decode: (json) => decodeMentionCandidates(json, logger: _logger),
       );
     } else {
       // The search is signed and carries the website's own fields, as the website sends it.
@@ -97,7 +97,7 @@ extension BiliClientComments on BiliClient {
           'web_location': '333.999',
         },
         signed: true,
-        decode: decodeMentionCandidates,
+        decode: (json) => decodeMentionCandidates(json, logger: _logger),
       );
     }
     return found ?? const [];
