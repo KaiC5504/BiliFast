@@ -710,7 +710,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
                 offstage: fullScreen,
                 child: TickerMode(
                   enabled: !fullScreen,
-                  child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
+                  // 评论详情 covers the tab row and the list, for VoiceOver too.
+                  child: ExcludeSemantics(
+                    excluding: _threadOpen,
+                    child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
+                  ),
                 ),
               );
               // Laid out as if the player were already the bar; each tab leaves the rest of the full height free.

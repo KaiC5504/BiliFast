@@ -737,8 +737,6 @@ abstract final class PageTheme {
   static const danmakuTickLeft = 0.5;
   static const danmakuTickTop = 0.588;
 
-  static const placeholderText = 14.0;
-
   /// Below the related list, above the home indicator.
   static const introBottom = 12.0;
 
