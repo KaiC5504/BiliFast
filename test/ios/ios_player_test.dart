@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/ios/ios_player_events.dart';
@@ -45,6 +46,21 @@ void main() {
   });
 
   Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+  test("the registry's lines for a player not attached yet, or gone, still reach the log", () async {
+    final logger = Logger(session: 'test');
+    final sink = MemorySink();
+    logger.add(sink);
+    final events = IosPlayerEvents(logger: logger);
+    await events.onLog(9, 'native player disposed', {'live': 0});
+    final event = sink.events.single;
+    expect((event.cat, event.msg), (LogCategory.player, 'native player disposed'));
+    expect(event.f['playerId'], const LogInt(9));
+    expect(event.f['live'], const LogInt(0));
+
+    await hub.onLog(player.nativeId, 'item ready', {});
+    expect(seen.whereType<PlayerLog>().single.kind, 'item ready');
+  });
 
   group('commands', () {
     test('create asks the registry for a player and whether it can do picture in picture', () async {

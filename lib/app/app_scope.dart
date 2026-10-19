@@ -1,45 +1,82 @@
 import 'dart:async';
 
+import 'package:bili_core/devlog.dart';
+import 'package:bili_core/engine.dart' show NodeMode;
 import 'package:flutter/widgets.dart';
 
 import '../account/login_gate.dart';
 import '../danmaku/block_rule_store.dart';
 import '../danmaku/danmaku_settings_store.dart';
+import '../device/network_monitor.dart';
 import '../device/player_device.dart';
 import '../devtools/crash_log.dart';
 import '../devtools/log_files.dart';
 import '../devtools/log_forwarder.dart';
 import '../home/recent_store.dart';
+import '../playback/codec_memory.dart';
 import '../playback/playback_controller.dart';
+import '../playback/shared_engine.dart';
 import '../settings/font_store.dart';
 import '../video/page_api.dart';
 import '../video/pip_keeper.dart';
 import 'app_environment.dart';
 
-/// The one player and engine, started at launch and shared by the video page and the developer page. It hears the
-/// app come back to the foreground and the system run short of memory for whichever page is playing, and tells
-/// [onResumed] of the first.
+/// Every video page's player: each page gets a controller and player of its own (BiliNative's one AVPlayer per page),
+/// all playing through one [SharedEngine] with one [CodecMemory]. It hears the app come back to the foreground, the
+/// system run short of memory and the network path change, tells the engine once and each live controller, and
+/// tells [onResumed] of the first.
 class AppPlayback with WidgetsBindingObserver {
-  AppPlayback(this._start, {this.onResumed}) {
-    unawaited(obtain().then((_) {}, onError: (Object _) {}));
+  AppPlayback(
+    this._start, {
+    this.onResumed,
+    this.engine,
+    this.codecMemory,
+    NetworkMonitor? network,
+    this.muted = false,
+    Logger? logger,
+  }) : _logger = logger ?? Logger.shared {
     WidgetsBinding.instance.addObserver(this);
+    // At launch, so the first page doesn't wait for the isolate and its server; a failed start is tried again by the
+    // first page.
+    unawaited(engine?.current().then((_) {}, onError: (Object error, StackTrace stack) {
+      CrashLog.report(error, stack, source: 'engine start', logger: _logger);
+    }));
+    _network = (network ?? NetworkMonitor.platform()).changes.listen(_networkChanged);
   }
 
   final Future<PlaybackController> Function() _start;
   final VoidCallback? onResumed;
+
+  /// What the controllers [_start] makes play through; null in tests whose controllers bring their own engines.
+  final SharedEngine? engine;
+
+  /// The codecs this phone's player refused, one memory for every page.
+  final CodecMemory? codecMemory;
+
+  /// `--mute`: every player made here starts muted, so checks on the PC play silently.
+  final bool muted;
+  final Logger _logger;
+  late final StreamSubscription<bool> _network;
   Future<PlaybackController>? _starting;
   PlaybackController? _ready;
-  final List<(String, void Function(PlaybackController))> _pending = [];
 
-  /// The controller once it has started.
+  /// The controller [obtain] started, once it has.
   PlaybackController? get ready => _ready;
 
   final Set<PlaybackController> _pages = {};
 
   /// A controller of its own for one video page (BiliNative's one AVPlayer per page), on the shared engine.
   Future<PlaybackController> create() async {
-    final controller = await _start();
+    final PlaybackController controller;
+    try {
+      controller = await _start();
+    } catch (error, stack) {
+      CrashLog.report(error, stack, source: 'player start', logger: _logger);
+      rethrow;
+    }
     _pages.add(controller);
+    await _muteIfAsked(controller);
+    _logger.info(LogCategory.player, 'player created', {'live': live});
     return controller;
   }
 
@@ -47,46 +84,25 @@ class AppPlayback with WidgetsBindingObserver {
   void release(PlaybackController controller) {
     if (!_pages.remove(controller)) return;
     controller.dispose();
+    _logger.info(LogCategory.player, 'player released', {'live': live});
   }
 
   /// Page controllers made and not yet released, for the leak checks.
   int get live => _pages.length;
 
-  /// Runs [action] on the started controller, or once a start succeeds, without starting one. A failed [action] is
-  /// reported with [what] as its source.
-  void whenStarted(String what, void Function(PlaybackController controller) action) {
-    final ready = _ready;
-    if (ready == null) {
-      _pending.add((what, action));
-    } else {
-      _run(what, action, ready);
-    }
-  }
-
-  static void _run(String what, void Function(PlaybackController) action, PlaybackController controller) {
-    try {
-      action(controller);
-    } catch (error, stack) {
-      CrashLog.report(error, stack, source: what);
-    }
-  }
-
-  /// The shared controller; after a failed start, the next call starts it again (a page's 重试).
+  /// The one controller pages shared before each made its own: started on first use and never released. After a
+  /// failed start, the next call starts it again (a page's 重试).
   Future<PlaybackController> obtain() {
     final starting = _starting;
     if (starting != null) return starting;
     final started = _start().then(
-      (controller) {
+      (controller) async {
         _ready = controller;
-        final pending = List.of(_pending);
-        _pending.clear();
-        for (final (what, action) in pending) {
-          _run(what, action, controller);
-        }
+        await _muteIfAsked(controller);
         return controller;
       },
       onError: (Object error, StackTrace stack) {
-        CrashLog.report(error, stack, source: 'player start');
+        CrashLog.report(error, stack, source: 'player start', logger: _logger);
         _starting = null;
         Error.throwWithStackTrace(error, stack);
       },
@@ -95,28 +111,55 @@ class AppPlayback with WidgetsBindingObserver {
     return started;
   }
 
-  void dispose() => WidgetsBinding.instance.removeObserver(this);
+  Future<void> _muteIfAsked(PlaybackController controller) async {
+    if (!muted) return;
+    try {
+      await controller.player.setMuted(true);
+    } catch (error) {
+      _logger.warn(LogCategory.player, 'mute failed', {'error': '$error'});
+    }
+  }
 
+  /// 设置's CDN 节点: the engine running now and any that replaces it. Playbacks already prepared keep their nodes.
+  void setNodeMode(NodeMode mode) => engine?.setNodeMode(mode);
+
+  /// 设置's 重置编码记忆: codecs the player refused are tried again, whether a page is open or not.
+  void resetCodecMemory() => codecMemory?.reset();
+
+  Set<PlaybackController> get _controllers => {?_ready, ..._pages};
+
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_network.cancel());
+  }
+
+  /// The controllers' probes of the server go to the shared engine as one ([SharedEngine]): when it had to restart,
+  /// each controller with a prepared source prepares it again.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     onResumed?.call();
-    unawaited(_ready?.appResumed());
-    for (final controller in List.of(_pages)) {
+    for (final controller in _controllers) {
       unawaited(controller.appResumed());
     }
   }
 
+  /// The shared engine trims its prefetch once; each controller logs and marks the warning.
   @override
   void didHaveMemoryPressure() {
-    _ready?.memoryPressure();
-    for (final controller in _pages) {
+    engine?.dropCache();
+    for (final controller in _controllers) {
       controller.memoryPressure();
     }
   }
+
+  void _networkChanged(bool interfaceChanged) {
+    _logger.info(LogCategory.player, 'network changed', {'interfaceChanged': interfaceChanged, 'live': live});
+    unawaited(engine?.networkChanged(interfaceChanged: interfaceChanged));
+  }
 }
 
-/// What every page reaches: the account and API client, the shared player, 最近打开, the phone's rotation and levels,
+/// What every page reaches: the account and API client, the players, 最近打开, the phone's rotation and levels,
 /// the font, the page body's calls, the login page, the log kept on the phone, and the log forwarder in dev builds
 /// (null otherwise).
 class AppServices {

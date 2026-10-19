@@ -19,7 +19,9 @@ import 'devtools/log_files.dart';
 import 'devtools/log_forwarder.dart';
 import 'home/home_page.dart';
 import 'home/recent_store.dart';
+import 'playback/codec_memory.dart';
 import 'playback/playback_setup.dart';
+import 'playback/shared_engine.dart';
 import 'screens/player_test_page.dart';
 import 'settings/follow_font.dart';
 import 'settings/font_store.dart';
@@ -41,6 +43,7 @@ Future<void> main(List<String> args) async {
   final RecentStore recents;
   final FontStore fonts;
   final DanmakuSettingsStore danmakuSettings;
+  final CodecMemory codecMemory;
   try {
     environment = await AppEnvironment.load();
     recents = await RecentStore.load(supportFilePath('recents.json'));
@@ -48,6 +51,7 @@ Future<void> main(List<String> args) async {
     fonts = await FontStore.load(supportFilePath('font.json'));
     danmakuSettings = await DanmakuSettingsStore.load(supportFilePath('danmaku_settings.json'));
     RecentEmotes.shared = await RecentEmotes.load(supportFilePath('emotes_recent.json'));
+    codecMemory = await CodecMemory.load(codecMemoryPath());
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
     CrashLog.report(error, stack, source: 'launch');
@@ -58,14 +62,15 @@ Future<void> main(List<String> args) async {
   final fakeAccount = !Platform.isIOS && args.contains('--fake-account');
   if (fakeAccount) environment.useFakeAccount();
   unawaited(environment.refreshAccount());
+  final engine = SharedEngine(startPlatformEngine);
   final playback = AppPlayback(
-    () => startPlaybackController(environment.client),
+    () => startPlaybackController(environment.client, engine: engine, codecMemory: codecMemory),
+    engine: engine,
+    codecMemory: codecMemory,
+    // Checks run on the PC play silently.
+    muted: args.contains('--mute'),
     onResumed: () => recheckUnknownAccount(environment),
   );
-  // Checks run on the PC play silently.
-  if (args.contains('--mute')) {
-    unawaited(playback.obtain().then((controller) => controller.player.setMuted(true), onError: (Object _) {}));
-  }
   final device = PlayerDevice.platform();
   applyTurnTakeover(device.orientation, PlayerPrefs.shared);
   PhoneFrame.follow(device.orientation);
@@ -176,9 +181,10 @@ class BiliFastApp extends StatelessWidget {
               ? null
               : (context) => PlayerTestPage(
                     environment: services.environment,
-                    startPlayback: services.playback.obtain,
+                    startPlayback: services.playback.create,
+                    releasePlayback: services.playback.release,
                     logs: services.logs,
-                    ownsController: false,
+                    speedTestHooks: appSpeedTestHooksOn(services.playback.engine),
                   ),
         ),
       ),

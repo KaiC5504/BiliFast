@@ -66,6 +66,9 @@ final class FakeEngine implements PlaybackEngine {
 
   /// Holds prepares until the test completes it.
   Completer<void>? prepareGate;
+
+  /// Holds probes of the server until the test completes it.
+  Completer<void>? ensureGate;
   String? sourceEntry = 'hvc1';
   bool rewroteHEV1 = false;
   bool disposed = false;
@@ -77,6 +80,8 @@ final class FakeEngine implements PlaybackEngine {
   final hints = <({String token, double? seconds})>[];
   final preconnects = <List<String>>[];
   int cacheDrops = 0;
+  final prefetchDrops = <String>[];
+  final networkChanges = <bool>[];
   int _next = 0;
 
   static Uri masterOf(String token) => Uri.parse('http://127.0.0.1:5555/$token/master.m3u8');
@@ -109,7 +114,10 @@ final class FakeEngine implements PlaybackEngine {
       replaced.add((token: token, track: track, primary: primary, backups: backups));
 
   @override
-  Future<void> networkChanged({required bool interfaceChanged}) async {}
+  Future<void> networkChanged({required bool interfaceChanged}) async {
+    if (closed) throw const RipperError(RipperErrorKind.closed);
+    networkChanges.add(interfaceChanged);
+  }
 
   @override
   void updatePlayhead(String token, {required double seconds, required double rate}) =>
@@ -124,6 +132,9 @@ final class FakeEngine implements PlaybackEngine {
 
   @override
   void dropCache() => cacheDrops += 1;
+
+  @override
+  void dropPrefetch(String token) => prefetchDrops.add(token);
 
   @override
   void hint(String token, double? seconds) => hints.add((token: token, seconds: seconds));
@@ -142,6 +153,7 @@ final class FakeEngine implements PlaybackEngine {
   @override
   Future<bool> ensureServing() async {
     ensureCalls += 1;
+    await ensureGate?.future;
     if (closed) throw const RipperError(RipperErrorKind.closed);
     final error = ensureError;
     if (error != null) throw error;

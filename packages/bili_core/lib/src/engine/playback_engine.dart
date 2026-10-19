@@ -136,7 +136,12 @@ final class EngineSnapshot {
     this.nodeStates = const [],
     this.downloadBps = 0,
     this.transport = '',
+    this.token,
   });
+
+  /// The playback the session figures describe, so a controller sharing the engine shows only its own; null from
+  /// engines that don't say.
+  final String? token;
 
   final int deliveredBytes;
 
@@ -210,6 +215,10 @@ abstract interface class PlaybackEngine {
 
   /// Memory pressure: every BTR playback drops its cached and still-downloading prefetched segments.
   void dropCache();
+
+  /// The page playing [token] was covered: that playback drops everything it cached or is still prefetching, kept
+  /// back buffer included (Swift's `session.dropCache()` on cover). Its reads go on; the others are untouched.
+  void dropPrefetch(String token);
 
   /// The user is about to seek to [seconds] (a finger resting on the seek bar): the playback starts the segments
   /// there, and the seek's reads take them over. A newer hint replaces the last; null cancels it.
