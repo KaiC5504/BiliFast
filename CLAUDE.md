@@ -53,6 +53,9 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 Next: 9.
 
 Open items, each waiting on its slice:
+- Built, not shipped (KaiC's call): the drawn turn. With 开发者 → 旋转动画 自绘 (the default) the video page draws the
+  whole turn to landscape and back, as the official app's 01 clip; 系统 leaves it to iOS. Native code only syntax
+  checked: its first CI build and phone check are still to come (`local/differences/07-ours-rotate-v2.mov` is before).
 - 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
   account and a borrowed app key).
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
@@ -169,6 +172,10 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - The video page lays out by the screen's shape, not the orientation's presentation: Flutter's iOS engine keeps the
   old size for the first half of a turn, so landscape is laid out only once the size is wide (`_laidOut`, which
   `PlayerUi`'s panels and gestures follow). Code that acts on what the user asked for reads the presentation.
+- The drawn turn (旋转动画 自绘): `TurnTakeover.swift` switches off iOS's rotation animation and hands Flutter the turned
+  size at once, covering the screen with a still picture; the video page draws the turn from −angle to 0 and calls
+  `turnDrawn()`, or the picture lifts after 0.5 s. It is armed only while a video page owns the orientation; a page
+  that is covered or leaves gives it up first.
 - 弹幕设置 is one set for every presentation. 添加屏蔽词 and 当前弹幕列表 are landscape only (the portrait sheet, 40
   and 41, has no rows for them); turning to portrait with either open goes back to 弹幕设置.
 - Danmaku block-word regexes run on Dart's (ECMAScript) `RegExp`, not ICU as in Swift: `(?i)`, possessive and atomic

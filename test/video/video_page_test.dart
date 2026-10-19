@@ -842,16 +842,17 @@ void main() {
 
       pushVideo(const VideoRoute(bvid: bv, cid: p2, start: 0));
       await opened(tester, page: 1, vertical: true);
-      expect(orientation.log, ['begin page1', 'begin page2 vertical']);
+      expect(orientation.log, ['begin page1', 'end page1', 'begin page2 vertical'],
+          reason: 'covered, the page gives the orientation up before the page above has its video');
       sessions.first
         ..isVertical = true
         ..video = null
         ..changed();
       await tester.pump();
-      expect(orientation.log, hasLength(2), reason: 'the covered page leaves the orientation alone');
+      expect(orientation.log, hasLength(3), reason: 'the covered page leaves the orientation alone');
 
       await back(tester);
-      expect(orientation.log, ['begin page1', 'begin page2 vertical', 'end page2', 'begin page1']);
+      expect(orientation.log, ['begin page1', 'end page1', 'begin page2 vertical', 'end page2', 'begin page1']);
       expect(orientation.videoIsVertical, isFalse, reason: 'the page below begins with its own video\'s shape');
       await back(tester);
       expect(orientation.log.last, 'end page1');
@@ -1135,7 +1136,8 @@ void main() {
       await back(tester);
       expect(session.active, isTrue);
       expect(details.activeSet, isTrue);
-      expect(orientation.log, [...log, 'begin page1'], reason: 'shown again, it takes the orientation back');
+      expect(orientation.log, [...log, 'end page1', 'begin page1'],
+          reason: 'covered it gives the orientation up, and shown again it takes it back');
       await back(tester);
     });
 

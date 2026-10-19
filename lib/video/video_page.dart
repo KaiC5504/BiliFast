@@ -495,6 +495,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (_covered) return;
     _covered = true;
     _owning = false;
+    // The page above claims the orientation only once its video is known; until then a turn must not be taken over
+    // with no page to draw it. A newer begin first makes this a no-op.
+    final orientation = _orientation;
+    scheduleMicrotask(() => orientation.end(this));
     final controller = _controller;
     if (controller != null && _isMine(controller)) {
       _coveredAt = (
