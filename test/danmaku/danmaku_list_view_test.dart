@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/danmaku.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/danmaku/block_rule_store.dart';
 import 'package:bilifast/danmaku/danmaku_list_view.dart';
 import 'package:bilifast/danmaku/danmaku_session.dart';
@@ -54,6 +55,13 @@ class ListSession extends DanmakuSession {
 
   @override
   void hide(DanmakuElem elem) => hidden.add(elem);
+}
+
+final class _Logs implements LogSink {
+  final events = <LogEvent>[];
+
+  @override
+  void receive(LogEvent event) => events.add(event);
 }
 
 const rows = [
@@ -295,6 +303,76 @@ void main() {
     await tester.tapAt(tester.getTopLeft(find.byType(DanmakuListView)) + const Offset(10, 400));
     await tester.pump();
     expect(find.byKey(const ValueKey('danmaku-list-menu')), findsNothing);
+  });
+
+  testWidgets('the popover takes taps past the list\'s edge, and a tap in the margin closes it', (tester) async {
+    final rig = Rig();
+    await rig.mount(tester);
+    final list = tester.getRect(find.byType(DanmakuListView));
+    await tester.tap(inRow('秒赤', 'danmaku-list-more'));
+    await tester.pump();
+    var menu = tester.getRect(find.byKey(const ValueKey('danmaku-list-menu')));
+    expect(menu.right, greaterThan(list.right));
+
+    await tester.tapAt(Offset(menu.right - 2, menu.center.dy));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('danmaku-list-menu')), findsOneWidget, reason: 'its padding is still the popover');
+    expect(rig.session.hidden, isEmpty);
+
+    await tester.tapAt(Offset(list.right + 4, menu.bottom + 40));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('danmaku-list-menu')), findsNothing);
+    expect(opacityOf(tester, '第一个'), 1);
+
+    await tester.tap(inRow('秒赤', 'danmaku-list-more'));
+    await tester.pump();
+    menu = tester.getRect(find.byKey(const ValueKey('danmaku-list-menu')));
+    await tester.tapAt(Offset((list.right + menu.right - DanmakuListTheme.popoverPadX) / 2, menu.center.dy));
+    await tester.pump();
+    expect(rig.session.hidden, [rows[1]]);
+    expect(find.text('秒赤'), findsNothing);
+  });
+
+  testWidgets('the popover goes when the panel closes', (tester) async {
+    final rig = Rig();
+    rig.panels.open(PlayerPanel.danmakuList);
+    await rig.mount(tester);
+    await tester.tap(inRow('秒赤', 'danmaku-list-more'));
+    await tester.pump();
+    rig.panels.close();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('danmaku-list-menu')), findsNothing);
+    expect(opacityOf(tester, '第一个'), 1);
+  });
+
+  testWidgets('Reduce Motion: the rows dim at once', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await Rig().mount(tester);
+    final row = find.ancestor(of: find.text('第一个'), matching: find.byType(AnimatedOpacity));
+    expect(tester.widget<AnimatedOpacity>(row).duration, Duration.zero);
+  });
+
+  testWidgets('a failed 👍 or count load is logged: a BiliError by its text, anything else by type', (tester) async {
+    final logs = _Logs();
+    Logger.shared.add(logs);
+    addTearDown(() => Logger.shared.remove(logs));
+    final rig = Rig()
+      ..api.failures['danmakuLikes'] = const BiliError.api(code: -400, message: '请求错误')
+      ..api.failures['likeDanmaku'] = const BiliError.api(code: 36106, message: '该弹幕已被删除');
+    await rig.mount(tester);
+    await tester.tap(inRow('秒赤', 'danmaku-list-like'));
+    await tester.pump();
+    rig.api.failures['likeDanmaku'] = StateError('https://api.bilibili.com/x?SESSDATA=secret');
+    await tester.tap(inRow('秒赤', 'danmaku-list-like'));
+    await tester.pump();
+    final events = [for (final event in logs.events) if (event.msg.startsWith('danmaku like')) event];
+    expect(events.map((event) => event.msg), ['danmaku likes failed', 'danmaku like failed', 'danmaku like failed']);
+    expect(events.every((event) => event.level == LogLevel.warn), isTrue);
+    expect(events[0].f['error'], LogString('${const BiliError.api(code: -400, message: '请求错误')}'));
+    expect(events[1].f['error'], LogString('${const BiliError.api(code: 36106, message: '该弹幕已被删除')}'));
+    expect(events[2].f['error'], const LogString('StateError'));
+    expect(logs.events.map((event) => '${event.f}'), everyElement(isNot(contains('SESSDATA'))));
   });
 
   testWidgets('the popover opens upwards from a row too low for it', (tester) async {

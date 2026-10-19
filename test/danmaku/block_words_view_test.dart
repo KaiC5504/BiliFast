@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show Tristate;
 
 import 'package:bili_core/api.dart';
@@ -167,14 +168,49 @@ void main() {
     expect(rig.toasts, isEmpty);
   });
 
-  testWidgets('text between slashes is added as a regex, slashes kept, and shows under 正则', (tester) async {
+  testWidgets('text between slashes is added as a regex, slashes kept, and 正则 shows it', (tester) async {
     final rig = await pumpView(tester);
     await type(tester, '/^哈+\$/');
     await tap(tester, 'block-words-add');
     expect(rig.api.calls.last, 'addBlockRule regex=/^哈+\$/');
-    expect(find.text('/^哈+\$/'), findsNothing);
-    await tap(tester, 'block-words-tab-regex');
     expect(find.text('/^哈+\$/'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('正则')).style?.color, BlockWordsTheme.pink);
+    expect(find.text('CA'), findsNothing);
+  });
+
+  testWidgets('plain text added on another tab is a keyword, and 关键词 shows it', (tester) async {
+    final rig = await pumpView(tester);
+    for (final tab in ['block-words-tab-regex', 'block-words-tab-user']) {
+      await tap(tester, tab);
+      await type(tester, '新词 $tab');
+      await tap(tester, 'block-words-add');
+      expect(rig.api.calls.last, 'addBlockRule keyword=新词 $tab');
+      expect(fieldText(tester), isEmpty);
+      expect(find.text('新词 $tab'), findsOneWidget);
+      expect(tester.widget<Text>(find.text('关键词')).style?.color, BlockWordsTheme.pink);
+    }
+  });
+
+  testWidgets('a failure toasts through the panel even after the view has gone', (tester) async {
+    final rig = await pumpView(tester);
+    final add = Completer<void>(), remove = Completer<void>(), sync = Completer<void>();
+    rig.api
+      ..holds['addBlockRule'] = add
+      ..holds['deleteBlockRule'] = remove
+      ..holds['danmakuBlockRules'] = sync
+      ..failures['addBlockRule'] = const BiliError.api(code: 36701, message: '屏蔽词数量已达上限')
+      ..failures['deleteBlockRule'] = const BiliError.http(500)
+      ..failures['danmakuBlockRules'] = const BiliError.http(500);
+    await type(tester, '新词');
+    await tap(tester, 'block-words-add');
+    await tap(tester, 'block-rule-remove-1');
+    await tap(tester, 'block-words-sync');
+    await tester.pumpWidget(const SizedBox());
+    add.complete();
+    remove.complete();
+    sync.complete();
+    await tester.pump();
+    expect(rig.toasts, ['屏蔽词数量已达上限', BlockRuleStore.removeFailed, BlockRuleStore.syncFailed]);
   });
 
   testWidgets('添加 with an empty field does nothing', (tester) async {
@@ -257,6 +293,37 @@ void main() {
       expect(find.bySemanticsLabel(label), findsOneWidget, reason: label);
     }
     expect(tester.getSemantics(find.bySemanticsLabel('关键词')).flagsCollection.isSelected, Tristate.isTrue);
+    handle.dispose();
+  });
+
+  testWidgets('every control answers an accessibility press', (tester) async {
+    final handle = tester.ensureSemantics();
+    final rig = await pumpView(tester);
+    Future<void> press(String label) async {
+      tester.semantics.tap(find.semantics.byLabel(label));
+      await tester.pumpAndSettle();
+    }
+
+    await press('正则');
+    expect(find.text('/^6+\$/'), findsOneWidget);
+    await press('举报屏蔽用户');
+    expect(find.text('a1b2c3d4'), findsOneWidget);
+    await press('关键词');
+    expect(find.text('CA'), findsOneWidget);
+    expect(tester.getSemantics(find.bySemanticsLabel('关键词')).flagsCollection.isSelected, Tristate.isTrue);
+
+    await type(tester, '剧场版');
+    await press('添加');
+    expect(rig.api.calls.last, 'addBlockRule keyword=剧场版');
+    expect(find.text('剧场版'), findsOneWidget);
+
+    await press('同步');
+    expect(rig.fetches, 2);
+
+    await press('删除 CA');
+    expect(rig.api.calls.last, 'deleteBlockRule id=1');
+    expect(find.text('CA'), findsNothing);
+    expect(rig.toasts, isEmpty);
     handle.dispose();
   });
 }
