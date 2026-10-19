@@ -175,15 +175,16 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// player's panels and gestures follow it too.
   final _laidOut = ValueNotifier<Presentation>(Presentation.inline);
 
-  /// The player box as last drawn, and where the grow started; both with the box's top inset.
-  _PlayerBox? _drawnPlayer;
-  _PlayerBox? _growFrom;
-  late final _grow = AnimationController(vsync: this, duration: RotationTheme.grow, value: 1);
+  /// From the small player (0) to landscape full screen (1). It runs over the whole turn, from the presentation's
+  /// change, while the layout waits for the screen's new shape.
+  late final _grow = AnimationController(vsync: this, duration: RotationTheme.grow);
+  bool _turnedFull = false;
 
   /// The page's size and top inset when last laid out upright: the body keeps them while the player grows over it.
   ({Size size, double top})? _uprightFrame;
 
-  /// What the player area lays out at while its box grows or shrinks: its size at the end, below the box's top inset.
+  /// What the player area lays out at while its box grows or shrinks: its size at rest in the current layout, below
+  /// the box's top inset.
   final _pin = ValueNotifier<Size?>(null);
 
   /// The small player has shrunk from its full height, and [_barred] once it is the bar.
@@ -255,20 +256,42 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     };
   }
 
-  /// A turn between the small player and landscape full screen grows the player box from where it was drawn into
-  /// its new place, or shrinks it back.
-  void _followLayout(Presentation layout) {
-    final was = _laidOut.value;
-    _laidOut.value = layout;
-    if (layout == was) return;
-    final drawn = _drawnPlayer;
-    final turned = was != Presentation.vertical && layout != Presentation.vertical;
-    if (turned && drawn != null && !MediaQuery.disableAnimationsOf(context)) {
-      _growFrom = drawn;
-      _grow.forward(from: 0);
-    } else if (_grow.value != 1) {
-      _grow.value = 1;
+  /// A turn between the small player and landscape full screen grows the player box, or shrinks it back, from
+  /// wherever it is; a turn reversed midway goes back from there. 竖屏 doesn't grow.
+  void _followTurn(Presentation presentation) {
+    final full = presentation == Presentation.landscape;
+    if (full == _turnedFull) return;
+    _turnedFull = full;
+    if (presentation == Presentation.vertical ||
+        _laidOut.value == Presentation.vertical ||
+        MediaQuery.disableAnimationsOf(context)) {
+      _grow.value = full ? 1 : 0;
+    } else if (full) {
+      _grow.forward();
+    } else {
+      _grow.reverse();
     }
+  }
+
+  /// Mid-turn, the player box with its top inset and where the upright body sits, or null at rest. The box goes from
+  /// the small player, about the upright screen's centre, to the whole landscape screen, about its centre, and is
+  /// placed about the centre of the screen as it is now: iOS keeps the view's centre as it hands over the turned size
+  /// halfway through, so nothing moves then. Before that the box grows past the upright page's sides.
+  ({Rect box, double inset, Offset body})? _turning(Size screen, Presentation layout, double uprightTop) {
+    final value = _grow.value;
+    final rest = !_grow.isAnimating && value == (layout == Presentation.landscape ? 1 : 0);
+    if (rest || layout == Presentation.vertical || MediaQuery.disableAnimationsOf(context)) return null;
+    final short = screen.shortestSide;
+    final long = screen.longestSide;
+    final small = uprightTop + _collapse.height;
+    final t = RotationTheme.curve.transform(value);
+    final centre = screen.center(Offset.zero);
+    final box = Rect.lerp(
+      Rect.fromLTWH(-short / 2, -long / 2, short, small),
+      Rect.fromCenter(center: Offset.zero, width: long, height: short),
+      t,
+    )!.shift(centre);
+    return (box: box, inset: uprightTop * (1 - t), body: Offset(centre.dx - short / 2, box.bottom - small));
   }
 
   @override
@@ -985,7 +1008,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   Widget build(BuildContext context) {
     final presentation = _presentation;
     final layout = _layoutFor(MediaQuery.sizeOf(context));
-    _followLayout(layout);
+    _followTurn(presentation);
+    _laidOut.value = layout;
     final fullScreen = layout.fullScreen;
     final controller = _controller;
     final mine = controller != null && _isMine(controller);
@@ -1095,52 +1119,57 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   return ListenableBuilder(
                     listenable: Listenable.merge([_collapse, _grow]),
                     builder: (context, _) {
-                      final growing = _grow.isAnimating;
-                      final hidden = fullScreen && !growing;
                       final height = fullScreen ? constraints.maxHeight : _collapse.height;
                       final box = fullScreen ? height : top + height;
                       final progress = fullScreen ? 0.0 : _collapse.progress;
-                      final target = _PlayerBox(Size(constraints.maxWidth, box), fullScreen ? 0 : top);
-                      final from = _growFrom;
-                      final drawn = growing && from != null
-                          ? _PlayerBox.lerp(from, target, RotationTheme.curve.transform(_grow.value))
-                          : target;
-                      _drawnPlayer = drawn;
-                      _pin.value = growing ? Size(target.size.width, target.size.height - target.inset) : null;
+                      final turn = _turning(constraints.biggest, layout, upright.top);
+                      final hidden = fullScreen && turn == null;
+                      final player = turn?.box ?? Rect.fromLTWH(0, 0, constraints.maxWidth, box);
+                      _pin.value = turn == null ? null : Size(constraints.maxWidth, height);
                       // The tab row and the list ride on the player's bottom edge, at their upright size.
+                      final body = turn?.body ?? Offset.zero;
                       final uprightBox = upright.top + _collapse.height;
-                      final shift = drawn.size.height - uprightBox;
                       final tabsTop = upright.top + CollapseTheme.barHeight + PageTheme.tabRowHeight;
                       return Stack(
+                        // The growing box overflows the upright page; a clip here would also mask the native view.
+                        clipBehavior: Clip.none,
                         children: [
+                          if (turn != null)
+                            const Positioned.fill(
+                              key: ValueKey('page-turn-backdrop'),
+                              child: ColoredBox(color: BiliColors.videoBackground),
+                            ),
                           Positioned(
                             key: const ValueKey('page-tabs-area'),
-                            left: 0,
-                            top: shift + tabsTop,
+                            left: body.dx,
+                            top: body.dy + tabsTop,
                             width: upright.size.width,
                             height: upright.size.height - tabsTop,
                             child: hideable(hidden, pager),
                           ),
                           Positioned(
                             key: const ValueKey('page-tab-row'),
-                            left: 0,
-                            top: shift + uprightBox,
+                            left: body.dx,
+                            top: body.dy + uprightBox,
                             width: upright.size.width,
                             height: PageTheme.tabRowHeight,
                             child: hideable(hidden, tabRow),
                           ),
                           Positioned(
                             key: const ValueKey('page-player'),
-                            left: 0,
-                            top: 0,
-                            width: drawn.size.width,
-                            height: drawn.size.height,
+                            left: player.left,
+                            top: player.top,
+                            width: player.width,
+                            height: player.height,
                             child: ColoredBox(
                               color: BiliColors.videoBackground,
-                              child: Padding(padding: EdgeInsets.only(top: drawn.inset), child: area),
+                              child: Padding(
+                                padding: EdgeInsets.only(top: turn?.inset ?? (fullScreen ? 0 : top)),
+                                child: area,
+                              ),
                             ),
                           ),
-                          if (progress > 0 && !growing)
+                          if (progress > 0 && turn == null)
                             Positioned(
                               key: const ValueKey('collapse-bar'),
                               left: 0,
@@ -1159,8 +1188,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             ),
                           Positioned(
                             key: const ValueKey('comment-overlays'),
-                            left: 0,
-                            top: shift,
+                            left: body.dx,
+                            top: body.dy,
                             width: upright.size.width,
                             height: upright.size.height,
                             child: Offstage(
@@ -1322,15 +1351,4 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       placeholder: cardSize == null ? null : RemoteImage(cover, size: cardSize),
     );
   }
-}
-
-/// The player box at the top of the page, and the status bar's height inside it that the player sits below.
-class _PlayerBox {
-  const _PlayerBox(this.size, this.inset);
-
-  final Size size;
-  final double inset;
-
-  static _PlayerBox lerp(_PlayerBox a, _PlayerBox b, double t) =>
-      _PlayerBox(Size.lerp(a.size, b.size, t)!, a.inset + (b.inset - a.inset) * t);
 }

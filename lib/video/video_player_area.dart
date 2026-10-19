@@ -74,8 +74,9 @@ class VideoPlayerArea extends StatelessWidget {
   final double? danmakuHeight;
 
   /// While the page grows the player into full screen or shrinks it back, the size the danmaku, the chrome and the
-  /// end screen lay out at (the box's at the end), scaled to the box meanwhile. Laid out at every frame's size the
-  /// danmaku would start over each frame, and the chrome wouldn't fit the small box. The video follows the box.
+  /// end screen lay out at (the box's at rest in [presentation]), scaled to the box meanwhile. Laid out at every
+  /// frame's size the danmaku would start over each frame, and the chrome wouldn't fit the small box. The video
+  /// follows the box.
   final ValueListenable<Size?>? pin;
 
   @override

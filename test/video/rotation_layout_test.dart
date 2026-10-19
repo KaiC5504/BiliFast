@@ -45,8 +45,14 @@ const landscapeInsets = FakeViewPadding(left: 62, right: 62, bottom: 21);
 const small = Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect);
 const full = Rect.fromLTWH(0, 0, 956, 440);
 
-/// iOS sends the turned size only halfway through the rotation, so the page lays out by the screen's shape and grows
-/// the player from its small spot to full screen once the size has come (01 in local/differences).
+/// The small player's box, with the status bar above it.
+const smallBox = Rect.fromLTWH(0, 0, 440, 62 + 440 / BiliMetrics.videoAspect);
+
+/// Frames of the turn before iOS hands over the turned size, about half of it.
+const half = 8;
+
+/// The player grows over the whole turn from the presentation's change, while the page lays out by the screen's
+/// shape, which iOS hands over only halfway through the rotation (01 in local/differences).
 void main() {
   late FakePlayer player;
   late OrientationController orientation;
@@ -154,110 +160,171 @@ void main() {
   }
 
   Rect area(WidgetTester tester) => tester.getRect(find.byType(VideoPlayerArea));
+  Rect box(WidgetTester tester) => tester.getRect(find.byKey(const ValueKey('page-player')));
   Rect tabRow(WidgetTester tester) => tester.getRect(find.byType(PageTabRow));
   Color background(WidgetTester tester) =>
       tester.widget<Scaffold>(find.ancestor(of: find.byType(VideoPlayerArea), matching: find.byType(Scaffold))).backgroundColor!;
+  Finder backdrop() => find.byKey(const ValueKey('page-turn-backdrop'));
 
-  /// The turn's second half: the screen has its new size, and the player grows.
+  Offset centre(WidgetTester tester) =>
+      (tester.view.physicalSize / tester.view.devicePixelRatio).center(Offset.zero);
+
+  /// The box about the screen's centre: where it is on the glass, whichever size iOS has handed over.
+  Rect onGlass(WidgetTester tester) => box(tester).shift(-centre(tester));
+
+  void expectRect(Rect actual, Rect expected, {String? reason}) {
+    for (final (a, b) in [
+      (actual.left, expected.left),
+      (actual.top, expected.top),
+      (actual.right, expected.right),
+      (actual.bottom, expected.bottom),
+    ]) {
+      expect(a, closeTo(b, 0.01), reason: '$reason: $actual, not $expected');
+    }
+  }
+
+  /// The tab row rides on the box's bottom edge at its upright width, centred under it.
+  void expectBodyRides(WidgetTester tester, {String? reason}) {
+    final row = tabRow(tester);
+    expect(row.top, closeTo(box(tester).bottom, 0.01), reason: reason);
+    expect(row.width, portrait.width, reason: reason);
+    expect(row.center.dx, closeTo(centre(tester).dx, 0.01), reason: reason);
+  }
+
+  Future<void> frame(WidgetTester tester) => tester.pump(const Duration(milliseconds: 16));
+
+  /// The rest of the turn.
   Future<void> settle(WidgetTester tester) async {
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(RotationTheme.grow);
     await tester.pump();
   }
 
-  testWidgets('landscape while the screen is still upright keeps the upright page: the small player, the tab row and '
-      'the list, which then turn as one piece', (tester) async {
+  testWidgets('the player grows from the start of the turn while the screen is still upright: past the upright '
+      "page's sides, over the upright layout, with the body riding its bottom edge", (tester) async {
     await openPage(tester);
     orientation.enterLandscape();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
     expect(orientation.presentation, Presentation.landscape);
-    expect(area(tester), small);
-    expect(tabRow(tester).top, small.bottom);
-    expect(find.byType(PageTabs), findsOneWidget);
-    expect(find.byType(PortraitControls), findsOneWidget);
-    expect(find.byType(LandscapeChrome), findsNothing);
-    expect(background(tester), BiliColors.card);
-    await leave(tester);
-  });
+    expectRect(box(tester), smallBox, reason: 'the first frame starts where the player was');
 
-  testWidgets('once the screen is landscape, full screen is laid out: the player fills it and the body is out of '
-      'sight', (tester) async {
-    await openPage(tester);
-    orientation.enterLandscape();
-    await tester.pump();
+    var last = box(tester);
+    for (var i = 0; i < half; i++) {
+      await frame(tester);
+      final now = box(tester);
+      expect(now.width, greaterThan(last.width), reason: 'frame $i grows');
+      expect(now.height, greaterThan(last.height), reason: 'frame $i grows');
+      expectBodyRides(tester, reason: 'frame $i');
+      last = now;
+    }
+    expect(last.width, greaterThan(portrait.width), reason: "past the upright page's sides");
+    expect(last.center.dy, greaterThan(smallBox.center.dy), reason: "on its way to the screen's centre");
+    expect(find.byType(PortraitControls), findsOneWidget, reason: 'laid out upright while the screen is');
+    expect(find.byType(LandscapeChrome), findsNothing);
+    expect(find.byType(PageTabs), findsOneWidget);
+    expect(backdrop(), findsOneWidget, reason: 'black where the box has moved off');
     screen(tester, landscape, landscapeInsets);
     await settle(tester);
-    expect(area(tester), full);
-    expect(find.byType(LandscapeChrome), findsOneWidget);
-    expect(find.byType(PortraitControls), findsNothing);
-    expect(find.byType(PageTabRow), findsNothing, reason: 'offstage');
-    expect(background(tester), BiliColors.videoBackground);
     await leave(tester);
   });
 
-  testWidgets('the player grows from its small spot to full screen with the tab row on its bottom edge, keeping the '
-      'native view, the danmaku and the area', (tester) async {
+  testWidgets('nothing moves as the turned size comes, and the player grows on to full screen, keeping the native '
+      'view, the danmaku and the area', (tester) async {
     await openPage(tester);
     final video = tester.element(find.byKey(const ValueKey('fake-video')));
     final danmaku = tester.element(find.byType(DanmakuLayer));
     final areaElement = tester.element(find.byType(VideoPlayerArea));
     orientation.enterLandscape();
     await tester.pump();
+    for (var i = 0; i < half; i++) {
+      await frame(tester);
+    }
+    final before = onGlass(tester);
+
     screen(tester, landscape, landscapeInsets);
     await tester.pump();
-    expect(area(tester), small, reason: 'the first frame at the new size starts where the player was');
-    expect(tabRow(tester).top, small.bottom);
-
-    var last = area(tester);
-    for (var i = 0; i < 4; i++) {
-      await tester.pump(const Duration(milliseconds: 25));
-      final now = area(tester);
-      expect(now.width, greaterThan(last.width), reason: 'frame $i moves');
-      expect(now.height, greaterThan(last.height), reason: 'frame $i moves');
-      expect(tabRow(tester).top, now.bottom, reason: 'the body rides on the player');
-      expect(tabRow(tester).width, 440, reason: 'at its upright size');
-      last = now;
-    }
-    expect(last.width, lessThan(full.width));
-    expect(last.height, lessThan(full.height));
+    expectRect(onGlass(tester), before, reason: 'centre-anchored across the size flip');
+    expectBodyRides(tester, reason: 'at the size flip');
+    expect(find.byType(LandscapeChrome), findsOneWidget, reason: "laid out for the screen's new shape");
     expect(
       tester.getSize(find.byType(DanmakuLayer)),
       full.size,
       reason: 'the danmaku lay out once at the size they end at, scaled to the box meanwhile',
     );
 
+    var last = before;
+    for (var i = 0; i < 6; i++) {
+      await frame(tester);
+      final now = onGlass(tester);
+      expect(now.width, greaterThan(last.width), reason: 'frame $i grows');
+      expect(now.height, greaterThan(last.height), reason: 'frame $i grows');
+      expectBodyRides(tester, reason: 'frame $i');
+      last = now;
+    }
+    expect(last.width, lessThan(full.width));
+
     await tester.pump(RotationTheme.grow);
     await tester.pump();
     expect(area(tester), full);
-    expect(find.byType(PageTabRow), findsNothing);
+    expect(find.byType(PageTabRow), findsNothing, reason: 'offstage');
+    expect(backdrop(), findsNothing);
+    expect(background(tester), BiliColors.videoBackground);
     expect(identical(tester.element(find.byKey(const ValueKey('fake-video'))), video), isTrue);
     expect(identical(tester.element(find.byType(DanmakuLayer)), danmaku), isTrue);
     expect(identical(tester.element(find.byType(VideoPlayerArea)), areaElement), isTrue);
     await leave(tester);
   });
 
-  testWidgets('with Reduce Motion the player is full screen at once', (tester) async {
+  testWidgets('a window that flips at once (Windows) grows the player from the small spot mapped about the centre to '
+      'full screen', (tester) async {
+    await openPage(tester);
+    orientation.enterLandscape();
+    screen(tester, landscape, landscapeInsets);
+    await tester.pump();
+    expectRect(onGlass(tester), smallBox.shift(-portrait.center(Offset.zero)), reason: 'the first frame');
+    expectBodyRides(tester, reason: 'the first frame');
+    expect(find.byType(LandscapeChrome), findsOneWidget);
+
+    var last = box(tester);
+    for (var i = 0; i < 12; i++) {
+      await frame(tester);
+      final now = box(tester);
+      expect(now.width, greaterThan(last.width), reason: 'frame $i grows');
+      expectBodyRides(tester, reason: 'frame $i');
+      last = now;
+    }
+    await settle(tester);
+    expect(area(tester), full);
+    expect(find.byType(PageTabRow), findsNothing);
+    await leave(tester);
+  });
+
+  testWidgets('with Reduce Motion nothing grows: the small player until the screen is landscape, then full screen',
+      (tester) async {
     tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     await openPage(tester);
     orientation.enterLandscape();
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(area(tester), small);
+    expect(backdrop(), findsNothing);
     screen(tester, landscape, landscapeInsets);
     await tester.pump();
     expect(area(tester), full);
     expect(find.byType(PageTabRow), findsNothing);
 
     orientation.exitToInline();
+    await tester.pump();
+    expect(area(tester), full);
     screen(tester, portrait, portraitInsets);
     await tester.pump();
     expect(area(tester), small);
     await leave(tester);
   });
 
-  testWidgets('going back, landscape stays laid out until the screen is upright, then the player shrinks back over '
-      'the body', (tester) async {
+  testWidgets('going back, the player shrinks from the start of the turn over the landscape layout, the body riding '
+      'in on its bottom edge, and on across the size flip to the small player', (tester) async {
     await openPage(tester);
     orientation.enterLandscape();
     await tester.pump();
@@ -266,48 +333,61 @@ void main() {
 
     orientation.exitToInline();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
     expect(orientation.presentation, Presentation.inline);
-    expect(area(tester), full);
-    expect(find.byType(LandscapeChrome), findsOneWidget);
-    expect(find.byType(PageTabRow), findsNothing);
+    expect(area(tester), full, reason: 'the first frame starts at full screen');
+    var last = box(tester);
+    for (var i = 0; i < half; i++) {
+      await frame(tester);
+      final now = box(tester);
+      expect(now.width, lessThan(last.width), reason: 'frame $i shrinks');
+      expect(now.height, lessThan(last.height), reason: 'frame $i shrinks');
+      expectBodyRides(tester, reason: 'frame $i');
+      last = now;
+    }
+    expect(find.byType(LandscapeChrome), findsOneWidget, reason: 'laid out for landscape while the screen is');
+    expect(background(tester), BiliColors.videoBackground);
+    final before = onGlass(tester);
 
     screen(tester, portrait, portraitInsets);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 16));
-    await tester.pump(const Duration(milliseconds: 50));
-    final mid = area(tester);
-    expect(mid.height, allOf(lessThan(full.height), greaterThan(small.height)));
+    expectRect(onGlass(tester), before, reason: 'centre-anchored across the size flip');
+    expectBodyRides(tester, reason: 'at the size flip');
     expect(find.byType(PortraitControls), findsOneWidget);
-    expect(tabRow(tester).top, mid.bottom);
+    expect(backdrop(), findsOneWidget);
 
     await tester.pump(RotationTheme.grow);
     await tester.pump();
     expect(area(tester), small);
     expect(tabRow(tester).top, small.bottom);
+    expect(backdrop(), findsNothing);
     expect(background(tester), BiliColors.card);
     await leave(tester);
   });
 
-  testWidgets('turned back upright halfway through the grow, the player shrinks from where it is drawn', (
-    tester,
-  ) async {
+  testWidgets('turned back upright after the size flip, the player shrinks from where it is drawn', (tester) async {
     await openPage(tester);
     orientation.enterLandscape();
     await tester.pump();
+    for (var i = 0; i < half; i++) {
+      await frame(tester);
+    }
     screen(tester, landscape, landscapeInsets);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    final mid = area(tester);
+    await frame(tester);
+    await frame(tester);
+    final mid = onGlass(tester);
     expect(mid.width, allOf(greaterThan(small.width), lessThan(full.width)));
 
     orientation.exitToInline();
+    await tester.pump();
+    expectRect(onGlass(tester), mid, reason: 'no jump to full screen or to the small spot');
+    await frame(tester);
+    final shrinking = onGlass(tester);
+    expect(shrinking.width, lessThan(mid.width));
+
     screen(tester, portrait, portraitInsets);
     await tester.pump();
-    final first = area(tester);
-    expect(first.width, closeTo(mid.width, 0.5), reason: 'no jump to full screen or to the small spot');
-    expect(first.height, closeTo(mid.height, 0.5));
-    await tester.pump(const Duration(milliseconds: 16));
+    expectRect(onGlass(tester), shrinking, reason: 'centre-anchored across the size flip back');
     await tester.pump(RotationTheme.grow);
     await tester.pump();
     expect(area(tester), small);
@@ -316,18 +396,39 @@ void main() {
     await leave(tester);
   });
 
-  testWidgets('turned to landscape and back before the screen turned, nothing grows', (tester) async {
+  testWidgets('a turn refused before the screen turned goes back from where the player is, and a wide screen then '
+      'stays inline', (tester) async {
     await openPage(tester);
     orientation.enterLandscape();
     await tester.pump();
+    for (var i = 0; i < 6; i++) {
+      await frame(tester);
+    }
+    final mid = box(tester);
+    expect(mid.width, greaterThan(portrait.width));
+
     orientation.exitToInline();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 16));
+    expectRect(box(tester), mid, reason: 'no jump');
+    var last = mid;
+    for (var i = 0; i < 4; i++) {
+      await frame(tester);
+      final now = box(tester);
+      expect(now.width, lessThan(last.width), reason: 'frame $i shrinks back');
+      expectBodyRides(tester, reason: 'frame $i');
+      expect(find.byType(LandscapeChrome), findsNothing);
+      last = now;
+    }
+    await settle(tester);
+    expectRect(box(tester), smallBox, reason: 'back at the small player');
     expect(area(tester), small);
+    expect(backdrop(), findsNothing);
+
     screen(tester, landscape, landscapeInsets);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(LandscapeChrome), findsNothing, reason: 'inline stays inline on a wide screen');
+    expect(backdrop(), findsNothing);
     screen(tester, portrait, portraitInsets);
     await tester.pump();
     await leave(tester);

@@ -1972,13 +1972,11 @@ abstract final class ZoomBackTheme {
 }
 
 /// Turning to landscape full screen and back (01 in local/differences): the video grows from its small spot to full
-/// screen over the second half of the turn, once the screen has its new shape. The official turn takes about 15
-/// frames at 60 fps and ours gets its new size about halfway, so the grow ends with the turn.
+/// screen over the whole turn, starting as the presentation changes. The official turn moves for 16 to 17 frames at
+/// 60 fps either way.
 abstract final class RotationTheme {
-  static const grow = Duration(milliseconds: 125);
-
-  /// The back half of the turn's ease-in-out.
-  static const curve = Curves.easeOut;
+  static const grow = Duration(milliseconds: 280);
+  static const curve = Curves.easeInOut;
 }
 
 /// 弹幕设置 (07, 08, 24, 29, 33, 40, 41). Landscape is a hard-edged dark strip at the right, portrait the light
