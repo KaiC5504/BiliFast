@@ -621,11 +621,7 @@ class _UploaderBlock extends StatelessWidget {
                       key: const ValueKey('landscape-avatar'),
                       child: SizedBox.square(
                         dimension: LandscapeActionTheme.avatar,
-                        child: RemoteImage(
-                          face,
-                          size: const Size.square(LandscapeActionTheme.avatar),
-                          placeholder: const ColoredBox(color: BiliColors.landscapeEndPlaceholder),
-                        ),
+                        child: RemoteImage.avatar(face, size: const Size.square(LandscapeActionTheme.avatar)),
                       ),
                     ),
                     if (actions != null) _Follow(actions: actions, touch: touch),

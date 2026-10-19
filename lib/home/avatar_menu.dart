@@ -20,7 +20,7 @@ class AccountAvatar extends StatelessWidget {
       child: SizedBox.square(
         dimension: size,
         child: url != null && url.isNotEmpty
-            ? RemoteImage(url)
+            ? RemoteImage.avatar(url)
             : ColoredBox(
                 color: BiliColors.pageGrey,
                 child: Icon(Icons.person, size: size * 0.55, color: BiliColors.divider),

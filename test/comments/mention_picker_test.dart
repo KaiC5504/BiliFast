@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_core/api.dart' show BiliError, MentionCandidate;
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/comments/mention_picker.dart';
+import 'package:bilifast/shared/remote_image.dart' show DefaultAvatar;
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -297,7 +298,7 @@ void main() {
       );
       expect(
         images.map((image) => image.image).whereType<AssetImage>().map((asset) => asset.assetName),
-        [noFaceAsset],
+        [DefaultAvatar.asset],
         reason: 'row $mid',
       );
     }
