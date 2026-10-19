@@ -29,7 +29,7 @@ import 'video/player_prefs.dart';
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   CrashLog.install();
-  final logs = devToolsEnabled ? LogForwarder() : null;
+  final logs = devToolsEnabled ? await LogForwarder.load(supportFilePath('log_server.json')) : null;
   final logFiles = LogFiles.platform();
   Logger.shared.info(LogCategory.app, 'launch', {
     'platform': Platform.operatingSystem,

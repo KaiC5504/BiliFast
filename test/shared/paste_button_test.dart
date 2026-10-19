@@ -109,7 +109,7 @@ void main() {
       expect(recognizer, isA<EagerGestureRecognizer>());
       recognizer.dispose();
       expect(find.byType(IconButton), findsNothing);
-      expect(tester.getSize(find.byType(UiKitView)), const Size.square(BiliMetrics.pasteControl));
+      expect(tester.getSize(find.byType(UiKitView)), const Size(BiliMetrics.pasteControlWidth, BiliMetrics.pasteControlHeight));
       final field = tester.getRect(find.byType(Row).first);
       final control = tester.getRect(find.byType(UiKitView));
       expect(control.top, greaterThan(field.top), reason: 'inside the field, not over its edge');

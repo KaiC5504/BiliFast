@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
@@ -10,7 +12,8 @@ import 'log_server_discovery.dart';
 const devToolsEnabled = bool.fromEnvironment('DEV_TOOLS', defaultValue: true);
 
 /// Sends Logger.shared to the PC's `tools/logserver.py` while switched on (port of DevLogSetup.swift's network
-/// half). Off by default and kept in memory for now; `--dart-define=LOG_SERVER=host:port` starts it on.
+/// half). Off by default; the switch, the typed address and the picked PC are kept in [prefsPath] across launches, as
+/// Swift kept `settings.log.*`. `--dart-define=LOG_SERVER=host:port` starts it on.
 ///
 /// From launch it keeps the last [historyLimit] events in memory, and a sink that starts sends those it has not
 /// sent yet first, so a crash or a failed playback before the switch was turned on still reaches the PC.
@@ -21,6 +24,8 @@ class LogForwarder extends ChangeNotifier {
     LogPoster Function(LogServerEndpoint endpoint)? poster,
     String initialTarget = defineTarget,
     this._statusInterval = const Duration(seconds: 1),
+    this.prefsPath,
+    LogServerPrefs? saved,
   })  : _logger = logger ?? Logger.shared,
         _discovery = discovery ?? LogServerDiscovery.platform(),
         _poster = poster ?? _httpPoster {
@@ -28,8 +33,19 @@ class LogForwarder extends ChangeNotifier {
     if (initialTarget.trim().isNotEmpty) {
       _manual = initialTarget.trim();
       setEnabled(true);
+    } else if (saved != null) {
+      _manual = saved.manual;
+      _service = saved.service;
+      if (saved.enabled) setEnabled(true);
     }
   }
+
+  /// The forwarder with the switch as the last launch left it.
+  static Future<LogForwarder> load(String? path, {Logger? logger}) async =>
+      LogForwarder(logger: logger, prefsPath: path, saved: await LogServerPrefs.read(path, logger ?? Logger.shared));
+
+  final String? prefsPath;
+  Future<void> _saving = Future.value();
 
   static const defineTarget = String.fromEnvironment('LOG_SERVER');
   static const historyLimit = 5000;
@@ -124,6 +140,7 @@ class LogForwarder extends ChangeNotifier {
   }
 
   void _apply() {
+    _save();
     final wanted = _enabled ? target : null;
     if (_sink != null && _same(wanted, _applied)) {
       notifyListeners();
@@ -145,6 +162,26 @@ class LogForwarder extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  void _save() {
+    final path = prefsPath;
+    if (path == null) return;
+    final text = jsonEncode(LogServerPrefs(enabled: _enabled, manual: _manual, service: _service).toJson());
+    // One write after another, so an older state never lands last.
+    _saving = _saving.then((_) async {
+      try {
+        final file = File(path);
+        await file.parent.create(recursive: true);
+        await file.writeAsString(text, flush: true);
+      } catch (error) {
+        _logger.warn(LogCategory.app, 'log server prefs not saved', {'error': '$error'});
+      }
+    });
+  }
+
+  /// The pending write; for tests.
+  @visibleForTesting
+  Future<void> settle() => _saving;
 
   void _refreshStatus() {
     final now = status;
@@ -176,5 +213,47 @@ class LogForwarder extends ChangeNotifier {
     unawaited(_browsing?.cancel());
     _browsing = null;
     super.dispose();
+  }
+}
+
+/// What the 发送日志到电脑 card keeps between launches.
+@immutable
+final class LogServerPrefs {
+  const LogServerPrefs({required this.enabled, required this.manual, this.service});
+
+  final bool enabled;
+  final String manual;
+  final LogServerEndpoint? service;
+
+  Map<String, Object?> toJson() => {
+    'enabled': enabled,
+    'manual': manual,
+    if (service case final service?) 'service': {'name': service.name, 'host': service.host, 'port': service.port},
+  };
+
+  /// Null when there is no file yet or it can't be read; a bad file just starts the card off.
+  static Future<LogServerPrefs?> read(String? path, Logger logger) async {
+    if (path == null) return null;
+    try {
+      final file = File(path);
+      if (!await file.exists()) return null;
+      final json = jsonDecode(await file.readAsString());
+      if (json is! Map) return null;
+      final service = json['service'];
+      return LogServerPrefs(
+        enabled: json['enabled'] == true,
+        manual: json['manual'] is String ? json['manual'] as String : '',
+        service: service is Map && service['host'] is String && service['port'] is int
+            ? LogServerEndpoint(
+                name: service['name'] is String ? service['name'] as String : service['host'] as String,
+                host: service['host'] as String,
+                port: service['port'] as int,
+              )
+            : null,
+      );
+    } catch (error) {
+      logger.warn(LogCategory.app, 'log server prefs unreadable', {'error': '$error'});
+      return null;
+    }
   }
 }

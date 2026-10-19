@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/devtools/crash_log.dart';
@@ -38,6 +39,40 @@ void main() {
     });
 
     tearDown(() => forwarder.dispose());
+
+    test('the switch, the address and the picked PC come back on the next launch', () async {
+      final folder = Directory.systemTemp.createTempSync('log_server_prefs');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      final path = '${folder.path}${Platform.pathSeparator}log_server.json';
+      Future<LogForwarder> launch() async => LogForwarder(
+        logger: logger,
+        discovery: discovery,
+        poster: (endpoint) => (body) async => posted.add((endpoint, utf8.decode(body))),
+        initialTarget: '',
+        prefsPath: path,
+        saved: await LogServerPrefs.read(path, logger),
+      );
+
+      final first = await launch();
+      expect(first.enabled, isFalse, reason: 'no file yet');
+      first
+        ..setEnabled(true)
+        ..selectService(const LogServerEndpoint(name: 'PC', host: '192.168.50.201', port: 47321));
+      await first.settle();
+      first.dispose();
+
+      final second = await launch();
+      addTearDown(second.dispose);
+      expect(second.enabled, isTrue);
+      expect(second.target?.host, '192.168.50.201');
+      expect(second.sink, isNotNull, reason: 'it sends again without a tap');
+      second.setEnabled(false);
+      await second.settle();
+      expect((await LogServerPrefs.read(path, logger))!.enabled, isFalse);
+
+      File(path).writeAsStringSync('{not json');
+      expect(await LogServerPrefs.read(path, logger), isNull);
+    });
 
     test('reads host:port, or a bare host on the default port', () {
       final full = LogForwarder.parseManual(' 192.168.1.5:5000 ')!;

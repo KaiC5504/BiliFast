@@ -85,8 +85,9 @@ class _NativePasteControlState extends State<_NativePasteControl> {
   @override
   Widget build(BuildContext context) => IgnorePointer(
     ignoring: !widget.enabled,
-    child: SizedBox.square(
-      dimension: BiliMetrics.pasteControl,
+    child: SizedBox(
+      width: BiliMetrics.pasteControlWidth,
+      height: BiliMetrics.pasteControlHeight,
       child: UiKitView(
         viewType: _NativePasteControl.viewType,
         creationParams: <String, Object?>{

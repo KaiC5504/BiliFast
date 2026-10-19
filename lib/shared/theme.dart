@@ -663,7 +663,10 @@ abstract final class BiliMetrics {
   static const linkFieldHeight = 34.0;
 
   /// The system paste control inside the link field, with a little of the field showing above and below it.
-  static const pasteControl = 28.0;
+  /// The room UIPasteControl asks for at its smallest text size on iOS 27 (logged from KaiC's phone): squeezed
+  /// below it, it drops its glyph and turns itself off, a pale empty square in the 34 pt field.
+  static const pasteControlWidth = 38.0;
+  static const pasteControlHeight = 31.0;
   static const linkFieldIcon = 17.0;
   static const linkClearIcon = 18.0;
   static const tabText = 16.0;

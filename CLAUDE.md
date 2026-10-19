@@ -89,8 +89,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/speedtest/`: the speed test (dev builds only).
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
-    `font.json`, `emotes_recent.json`, `node_memory.json`, `danmaku_settings.json`, `codec_memory.json`); the log
-    is in the caches folder.
+    `font.json`, `emotes_recent.json`, `node_memory.json`, `danmaku_settings.json`, `codec_memory.json`,
+    `log_server.json`); the log is in the caches folder.
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`: `shared`, `devlog`,
   `danmaku`, `api`, `logic`, `dash_hls`, `local_http`, `engine`, and `bin/ripper_bench.dart`.
 - `ios/Runner/`: native Swift (player registry and host view, keychain, the login web view's cookies, device
