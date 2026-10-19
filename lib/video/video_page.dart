@@ -373,7 +373,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
     session.readout.status.addListener(_syncCollapse);
-    _autoHideInputs = Listenable.merge([session.readout.status, session.scrubbing, _panels, _overlays])
+    _autoHideInputs = Listenable.merge([session.readout.status, session.scrubbing, _panels, _overlays, danmaku.sendOpen])
       ..addListener(_syncAutoHide);
     _syncAutoHide();
     _sessionChanged();
@@ -576,7 +576,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
         session.readout.wantsPlay &&
         session.scrubbing.value == null &&
         _panels.value == null &&
-        _overlays.value == null;
+        _overlays.value == null &&
+        !(_danmaku?.sendOpen.value ?? false);
   }
 
   /// Only the page's own video, loaded, paused and not at its end, lets the tabs' scrolling shrink the player: the end
