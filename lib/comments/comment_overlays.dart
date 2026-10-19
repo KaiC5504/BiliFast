@@ -95,7 +95,7 @@ class _CommentOverlaysState extends State<CommentOverlays> with TickerProviderSt
   /// The model's thread was open when last seen, so its next one rises even if the last is still sliding away.
   bool _modelOpen = false;
 
-  /// Sliding off the bottom: the model closed it, or a released swipe is taking it down before closing it.
+  /// Sliding off the bottom after the model closed it.
   bool _away = false;
   bool _swiping = false;
 
@@ -207,15 +207,12 @@ class _CommentOverlaysState extends State<CommentOverlays> with TickerProviderSt
     unawaited(_thread.animateTo(1, curve: Curves.easeOutCubic));
   }
 
-  /// Takes the thread off the bottom, then closes it in the model if a released swipe started this.
   void _slideDown() {
     _swiping = false;
     if (!_away) setState(() => _away = true);
-    final model = widget.model;
     _thread.animateBack(0, curve: Curves.easeOutCubic).whenCompleteOrCancel(() {
-      // Turned around, or caught by a finger on the way.
+      // Turned around by a thread opened on the way.
       if (!mounted || _thread.value > 0 || !_away) return;
-      if (model != null && identical(model, widget.model) && model.thread != null) model.closeThread();
       if (widget.model?.thread == null && _shownThread != null) setState(_dropThread);
     });
   }
@@ -247,7 +244,14 @@ class _CommentOverlaysState extends State<CommentOverlays> with TickerProviderSt
     final close = speed.abs() >= CommentOverlayTheme.threadFlingWidths
         ? speed > 0
         : 1 - _thread.value > CommentOverlayTheme.threadCloseShare;
-    close ? _slideDown() : _rise();
+    if (!close) {
+      _rise();
+      return;
+    }
+    // Closed in the model now rather than once it is down: replies tapped through the sliding thread open a thread
+    // of their own, which must rise instead of being closed by this slide's end.
+    widget.model?.closeThread();
+    if (!_away) _slideDown();
   }
 
   void _swipeCancelled() {
@@ -357,10 +361,11 @@ class _CommentOverlaysState extends State<CommentOverlays> with TickerProviderSt
             ),
           ),
           if (!_away)
+            // The whole left edge, the player's included: with the thread open the edge swipe closes it first.
             Positioned(
               key: const ValueKey('comment-thread-edge'),
               left: 0,
-              top: widget.threadTop,
+              top: 0,
               bottom: 0,
               width: math.max(BiliMetrics.swipeBackEdge, MediaQuery.paddingOf(context).left),
               child: Listener(behavior: HitTestBehavior.translucent, onPointerDown: _edgeDown),
@@ -375,7 +380,7 @@ class _CommentOverlaysState extends State<CommentOverlays> with TickerProviderSt
     void close() => _closeIf(shown);
     final Widget? child = switch (shown) {
       ComposeOverlay() => switch (_composer) {
-        final composer? => Composer(key: ObjectKey(composer), model: composer, onClose: close),
+        final composer? => Composer(key: ObjectKey(composer), model: composer, onClose: close, top: widget.threadTop),
         null => null,
       },
       PicturesOverlay(:final pictures, :final index) => FadeTransition(

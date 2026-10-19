@@ -6,11 +6,12 @@ import 'package:bilifast/comments/comments_model.dart';
 import 'package:bilifast/comments/composer.dart';
 import 'package:bilifast/comments/picture_viewer.dart';
 import 'package:bilifast/comments/thread_view.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The thread opens over everything below this, the small player's bottom edge on a 440 pt wide phone.
+/// Where the thread's top is put for these tests.
 const threadTop = 280.0;
 const screen = Size(440, 956);
 const threadHeight = 956 - threadTop;
@@ -108,9 +109,10 @@ Widget host({
   required List<Offset> below,
   required ScrollController scroll,
   bool still = false,
+  EdgeInsets padding = EdgeInsets.zero,
 }) => MaterialApp(
   home: MediaQuery(
-    data: MediaQueryData(size: screen, disableAnimations: still),
+    data: MediaQueryData(size: screen, disableAnimations: still, padding: padding, viewPadding: padding),
     child: Scaffold(
       body: SingleChildScrollView(
         controller: scroll,
@@ -146,7 +148,12 @@ Widget host({
   ),
 );
 
-Future<Rig> pumpOverlays(WidgetTester tester, CommentsModel? model, {bool still = false}) async {
+Future<Rig> pumpOverlays(
+  WidgetTester tester,
+  CommentsModel? model, {
+  bool still = false,
+  EdgeInsets padding = EdgeInsets.zero,
+}) async {
   tester.view.physicalSize = screen;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -155,7 +162,9 @@ Future<Rig> pumpOverlays(WidgetTester tester, CommentsModel? model, {bool still 
   final scroll = ScrollController();
   addTearDown(scroll.dispose);
   final below = <Offset>[];
-  await tester.pumpWidget(host(model: model, controller: controller, below: below, scroll: scroll, still: still));
+  await tester.pumpWidget(
+    host(model: model, controller: controller, below: below, scroll: scroll, still: still, padding: padding),
+  );
   await tester.pumpAndSettle();
   return Rig(controller, below, scroll);
 }
@@ -337,13 +346,31 @@ void main() {
       final rig = await pumpOverlays(tester, model);
       await openThread(tester, model);
       await tester.timedDragFrom(const Offset(5, 600), const Offset(300, 0), const Duration(milliseconds: 200));
-      // It finishes sliding down before the model closes it.
-      expect(model.calls, isEmpty);
+      // Closed in the model at release, while it is still sliding down.
+      expect(model.calls, ['closeThread']);
+      await tester.pump(frame);
+      expect(find.byType(ThreadView), findsOneWidget);
       await tester.pumpAndSettle();
       expect(model.calls, ['closeThread']);
       expect(find.byType(ThreadView), findsNothing);
       await tester.tapAt(const Offset(220, 600));
       expect(rig.below, hasLength(1));
+    });
+
+    testWidgets('a thread opened while a released swipe takes the last one down rises and stays', (tester) async {
+      final model = testComments();
+      final rig = await pumpOverlays(tester, model);
+      await openThread(tester, model);
+      await tester.timedDragFrom(const Offset(5, 600), const Offset(300, 0), const Duration(milliseconds: 200));
+      await tester.pump(frame);
+      // Taps pass through the sliding thread, so one on another comment's replies opens its thread now.
+      await tester.tapAt(const Offset(220, 900));
+      expect(rig.below, hasLength(1));
+      model.show(threadOf(2));
+      await tester.pumpAndSettle();
+      expect(threadTopNow(tester), threadTop);
+      expect(tester.widget<ThreadView>(find.byType(ThreadView)).thread.root.rpid, 2);
+      expect(model.calls, ['closeThread']);
     });
 
     testWidgets('a short slow swipe springs back', (tester) async {
@@ -417,11 +444,29 @@ void main() {
       expect(model.calls, ['closeThread']);
     });
 
-    testWidgets('a swipe from the middle, or from the edge above the thread, does nothing', (tester) async {
+    testWidgets('a quick swipe from the edge over the player closes it; taps there still reach the player', (
+      tester,
+    ) async {
       final model = testComments();
       final rig = await pumpOverlays(tester, model);
       await openThread(tester, model);
-      for (final start in [const Offset(220, 600), const Offset(60, 600), const Offset(5, 150)]) {
+      await tester.tapAt(const Offset(10, 150));
+      expect(rig.below, [const Offset(10, 150)]);
+      // About 1500 px/s, as a thumb swipes.
+      await tester.timedDragFrom(const Offset(5, 150), const Offset(300, 0), const Duration(milliseconds: 200));
+      expect(model.calls, ['closeThread']);
+      await tester.pumpAndSettle();
+      expect(find.byType(ThreadView), findsNothing);
+      // Closed, it leaves the edge to the page.
+      await tester.tapAt(const Offset(10, 150));
+      expect(rig.below, hasLength(2));
+    });
+
+    testWidgets('a swipe from the middle does nothing', (tester) async {
+      final model = testComments();
+      final rig = await pumpOverlays(tester, model);
+      await openThread(tester, model);
+      for (final start in [const Offset(220, 600), const Offset(60, 600), const Offset(220, 150)]) {
         await tester.timedDragFrom(start, const Offset(300, 0), const Duration(milliseconds: 200));
         await tester.pumpAndSettle();
         expect(threadTopNow(tester), threadTop, reason: 'from $start');
@@ -525,6 +570,36 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
   });
 
+  group('with the home indicator\'s 34 pt inset', () {
+    const inset = EdgeInsets.only(top: 62, bottom: 34);
+
+    testWidgets('the thread\'s fill reaches the bottom edge', (tester) async {
+      final model = testComments();
+      await pumpOverlays(tester, model, padding: inset);
+      await openThread(tester, model);
+      final fill = find.ancestor(of: find.byType(ThreadView), matching: find.byType(ColoredBox)).first;
+      expect(tester.widget<ColoredBox>(fill).color, CommentOverlayTheme.threadFill);
+      expect(tester.getRect(fill), const Rect.fromLTRB(0, threadTop, 440, 956));
+      // The thread keeps the inset for its own bottom bar.
+      expect(MediaQuery.paddingOf(tester.element(find.byType(ThreadView))).bottom, 34);
+    });
+
+    testWidgets('the delete confirm\'s dim, the composer and the viewer cover the whole screen', (tester) async {
+      final model = testComments();
+      final rig = await pumpOverlays(tester, model, padding: inset);
+      await openThread(tester, model);
+      rig.controller.confirmDelete(comment(7));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byKey(const ValueKey('comment-delete-dim'))), Offset.zero & screen);
+      rig.controller.compose(const ReplyToVideo());
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byType(Composer)), Offset.zero & screen);
+      rig.controller.viewPictures(pictures, 0);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byType(PictureViewer)), Offset.zero & screen);
+    });
+  });
+
   group('the composer', () {
     testWidgets('opens over the whole page with a model for its target, on the emote panel when asked', (tester) async {
       final model = testComments();
@@ -538,6 +613,7 @@ void main() {
       expect(composer.model.target, target);
       expect(composer.model.showingEmotes, isTrue);
       expect(tester.getRect(find.byType(Composer)), Offset.zero & screen);
+      expect(composer.top, threadTop);
       // Over the thread it replies in.
       final stack = tester.widget<Stack>(
         find.descendant(of: find.byType(CommentOverlays), matching: find.byType(Stack)).first,
