@@ -41,7 +41,7 @@ class AvatarPage extends StatelessWidget {
         body: Column(
           children: [
             SizedBox(height: top),
-            _Bar(onSettings: () => _push(context, (_) => const SettingsPage())),
+            _Bar(onSettings: () => _push(context, (_) => SettingsPage(developerPage: developerPage))),
             SizedBox(
               height: AvatarPageTheme.shortcutsHeight,
               child: Row(
