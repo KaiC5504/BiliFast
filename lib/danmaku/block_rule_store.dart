@@ -13,6 +13,9 @@ class BlockRuleStore extends ChangeNotifier {
       _logger = logger ?? Logger.shared;
 
   static const cacheAge = Duration(minutes: 10);
+
+  /// The answer when the account is missing or Bilibili no longer takes it; the views send it to the page's login
+  /// rather than showing it.
   static const needLogin = '请先登录';
   static const emptyMessage = '请输入内容';
   static const invalidUserMessage = '请输入正确的用户 UID';

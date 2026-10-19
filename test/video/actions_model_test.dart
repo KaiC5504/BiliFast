@@ -403,6 +403,15 @@ void main() {
       expect(await r.model.coinBalance(), 873);
       r.api.failures['coinBalance'] = const BiliError.http(500);
       await expectLater(r.model.coinBalance(), throwsA(isA<BiliError>()));
+      expect(r.logins, 0);
+    });
+
+    test('a balance Bilibili refuses for want of a login asks for the login, and still fails the ask', () async {
+      final r = rig();
+      r.api.failures['coinBalance'] = const BiliError.api(code: -101, message: '账号未登录');
+      await expectLater(r.model.coinBalance(), throwsA(isA<BiliError>()));
+      expect(r.logins, 1);
+      expect(r.toasts, isEmpty);
     });
   });
 

@@ -95,7 +95,8 @@ abstract interface class FavouriteFolders implements Listenable {
 
   void toggle(int folderId);
 
-  /// 新建收藏夹: the new folder joins the list ticked. Completes with the failure's toast text, or null.
+  /// 新建收藏夹: the new folder joins the list ticked. Completes with the failure's toast text, empty when it asked
+  /// for the login instead, or null.
   Future<String?> create(String title, {required bool isPrivate});
 
   /// 完成: sends the difference through the actions, which roll back by themselves if it fails.

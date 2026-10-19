@@ -173,6 +173,17 @@ void main() {
     expect(rig.rules.refreshes, 1, reason: 'only on becoming logged in');
   });
 
+  test('a login from the page asks for the rules again, though the account looked logged in', () {
+    rig = Rig(mid: 0);
+    expect(rig.rules.refreshes, 1);
+    rig.mid = 777;
+    rig.session.refreshAccount();
+    expect(rig.rules.refreshes, 2);
+    rig.loggedIn = false;
+    rig.session.refreshAccount();
+    expect(rig.rules.refreshes, 2, reason: 'a gate that answered without a login asks nothing');
+  });
+
   group('a failed rules refresh', () {
     test('is tried once more after 15 s', () {
       fakeAsync((async) {
@@ -251,11 +262,13 @@ void main() {
       expect((draft.color, draft.gradient), (0xFFFFFF, true));
     });
 
-    test('logged out says 请先登录 and keeps the bar up', () async {
+    test('logged out asks the page for the login once, sends nothing and keeps the draft', () async {
       rig = Rig(loggedIn: false);
-      expect(await rig.session.send('你好', const DanmakuStyle()), '请先登录');
-      expect(rig.loginRequests, 0);
+      rig.session.sender.text = '你好';
+      expect(await rig.session.sender.send(), '');
+      expect(rig.loginRequests, 1);
       expect(rig.api.calls, isEmpty);
+      expect(rig.session.sender.text, '你好');
     });
 
     test('blank sends nothing and says nothing', () async {
@@ -284,12 +297,14 @@ void main() {
       expect(rig.api.calls, isEmpty);
     });
 
-    test('the server wanting a login says 请先登录 and keeps the bar up', () async {
+    test('the server wanting a login asks the page for the login instead of a message, the draft kept', () async {
       rig = Rig();
       await rig.load();
       rig.api.failures['postDanmaku'] = const BiliError.api(code: -101, message: '账号未登录');
-      expect(await rig.session.send('你好', const DanmakuStyle()), '请先登录');
-      expect(rig.loginRequests, 0);
+      rig.session.sender.text = '你好';
+      expect(await rig.session.sender.send(), '');
+      expect(rig.loginRequests, 1);
+      expect(rig.session.sender.text, '你好');
       expect(rig.shown(), isNot(contains('你好')));
     });
 

@@ -24,11 +24,14 @@ import '../../support/fake_player_session.dart';
 
 /// Everything the panel reaches, and what it asked for.
 class SettingsRig {
-  SettingsRig(this.ui, this.store, this.toasts);
+  SettingsRig(this.ui, this.store, this.toasts, this.logins);
 
   final PlayerUi ui;
   final DanmakuSettingsStore store;
   final List<String> toasts;
+
+  /// One entry per login asked for.
+  final List<void> logins;
 
   PanelController get panels => ui.panels;
 
@@ -70,6 +73,7 @@ Future<SettingsRig> pumpSettings(
     logger: logger,
   );
   final rules = BlockRuleStore(api: api, isLoggedIn: () => loggedIn);
+  final logins = <void>[];
   final danmaku = DanmakuSession(
     feed: feed,
     settings: store,
@@ -80,7 +84,7 @@ Future<SettingsRig> pumpSettings(
     isLoggedIn: () => loggedIn,
     isVip: () => false,
     accountMid: () => 0,
-    requestLogin: () {},
+    requestLogin: () => logins.add(null),
   );
   final ui = PlayerUi(
     session: session,
@@ -119,7 +123,7 @@ Future<SettingsRig> pumpSettings(
   });
   panels.open(PlayerPanel.danmakuSettings);
   await tester.pumpAndSettle();
-  return SettingsRig(ui, store, toasts);
+  return SettingsRig(ui, store, toasts, logins);
 }
 
 Finder get panelFrame => find.byKey(const ValueKey('panel-frame'));
@@ -323,12 +327,12 @@ void main() {
       expect(rig.panels.value, PlayerPanel.blockWords);
     });
 
-    testWidgets('logged out, 添加屏蔽词 asks to log in and stays', (tester) async {
+    testWidgets('logged out, 添加屏蔽词 asks the page for the login, toasts nothing and stays', (tester) async {
       final rig = await pumpSettings(tester, landscape: true, loggedIn: false);
       await tapKey(tester, 'danmaku-block-words');
-      expect(find.text(DanmakuSettingsPanel.loginFirst), findsOneWidget);
+      expect(rig.logins, hasLength(1));
+      expect(find.text('请先登录'), findsNothing);
       expect(rig.panels.value, PlayerPanel.danmakuSettings);
-      await clearToast(tester);
     });
 
     testWidgets('当前弹幕列表 opens its panel', (tester) async {

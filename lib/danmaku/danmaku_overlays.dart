@@ -159,10 +159,10 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
     }
     if (!sender.canSend) return;
     final message = await sender.send();
-    if (message != null) {
+    if (message == null) {
+      if (mounted && identical(widget.session, session)) session.closeSend();
+    } else if (message.isNotEmpty) {
       toast(message);
-    } else if (mounted && identical(widget.session, session)) {
-      session.closeSend();
     }
   }
 

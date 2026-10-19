@@ -45,6 +45,7 @@ typedef PageSessionFactory = PlayerSession Function({
   required AppServices services,
   required SessionOpen open,
   required void Function(double seconds) onSeeked,
+  required VoidCallback requestLogin,
 });
 
 /// The app's session for a video page. [onSeeked] reaches the watch reporter: every seek the session commits.
@@ -53,19 +54,31 @@ PlayerSession pageSession({
   required AppServices services,
   required SessionOpen open,
   required void Function(double seconds) onSeeked,
-}) => createPageSession(controller: controller, services: services, open: open, onSeeked: onSeeked);
+  required VoidCallback requestLogin,
+}) => createPageSession(
+  controller: controller,
+  services: services,
+  open: open,
+  onSeeked: onSeeked,
+  requestLogin: requestLogin,
+);
 
 typedef PageDetailsFactory = PageDetails Function({
   required PlayerSession session,
   required AppServices services,
   required void Function(String message) toast,
+  required VoidCallback requestLogin,
+  required Listenable logins,
 });
 
-/// The app's page details. Logging in comes in slice 8; until then an action that needs it says so.
+/// The app's page details. An action that needs the account goes to [requestLogin], and [logins] fires for each login
+/// made from the page.
 PageDetails pageDetails({
   required PlayerSession session,
   required AppServices services,
   required void Function(String message) toast,
+  required VoidCallback requestLogin,
+  required Listenable logins,
 }) {
   final environment = services.environment;
   return VideoPageDetailsModel(
@@ -73,9 +86,10 @@ PageDetails pageDetails({
     api: services.pageApi,
     isLoggedIn: () => environment.account is LoggedIn,
     accountMid: () => environment.mid,
-    requestLogin: () => toast('请先登录'),
+    requestLogin: requestLogin,
     toast: toast,
     accountChanges: environment,
+    logins: logins,
   );
 }
 
@@ -203,6 +217,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   bool _overlayAside = false;
   bool _chromeShownBefore = false;
 
+  /// The login page is being asked for or is up; another ask meanwhile is the same one.
+  bool _askingLogin = false;
+
+  /// Counts the logins made from this page, for what holds the account's state to ask again.
+  final _logins = ValueNotifier<int>(0);
+  Timer? _turnWait;
+
   OrientationController get _orientation => _services!.device.orientation;
 
   Presentation get _presentation => _owning && !_left ? _orientation.presentation : Presentation.inline;
@@ -329,9 +350,16 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       services: services,
       open: _openOnPage,
       onSeeked: (seconds) => _reporter?.seeked(seconds),
+      requestLogin: _askLogin,
     );
     _session = session;
-    final details = widget.createDetails(session: session, services: services, toast: _toast);
+    final details = widget.createDetails(
+      session: session,
+      services: services,
+      toast: _toast,
+      requestLogin: _askLogin,
+      logins: _logins,
+    );
     _details = details;
     final environment = services.environment;
     final danmaku = DanmakuSession(
@@ -353,7 +381,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       },
       accountMid: () => environment.mid ?? 0,
       accountChanges: environment,
-      requestLogin: () => _toast('请先登录'),
+      requestLogin: _askLogin,
     );
     _danmaku = danmaku;
     danmaku.sendOpen.addListener(_panelChanged);
@@ -460,7 +488,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       drafts: _drafts,
       isLoggedIn: () => environment.account is LoggedIn,
       accountMid: () => environment.mid,
-      requestLogin: () => _toast('请先登录'),
+      requestLogin: _askLogin,
       toast: _toast,
     )..addListener(_commentsChanged);
     setState(() {
@@ -643,6 +671,77 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     if (mounted) showToast(context, message);
   }
 
+  void _askLogin() => unawaited(_requestLogin());
+
+  /// Every logged-out action and every answer of Bilibili's that wants a login comes here (BiliNative's presentLogin
+  /// and InlineFirst): the send bar, the composer and the action overlays go, full screen turns back to the upright
+  /// small player, and the login page goes up once the turn is over, with the phone's turning off until it closes.
+  /// Nothing pressed is sent afterwards; a login made there has what holds the account's state ask again.
+  Future<void> _requestLogin() async {
+    final services = _services;
+    if (_askingLogin || services == null || _left || _covered || !mounted) return;
+    _askingLogin = true;
+    try {
+      // A model can ask while a widget builds, and what closes here rebuilds the page.
+      await Future<void>.value();
+      if (!mounted || _left) return;
+      _danmaku?.closeSend();
+      if (_commentOverlays.value is ComposeOverlay && !_drafts.anyPosting) _commentOverlays.close();
+      _overlays.close();
+      await _inlineFirst();
+      if (!mounted || _left || _covered) return;
+      _owning = false;
+      _orientation.end(this);
+      final bool loggedIn;
+      try {
+        loggedIn = await services.loginGate.request(context);
+      } finally {
+        if (mounted) _claimOrientation();
+      }
+      if (!loggedIn || !mounted || _left) return;
+      _logins.value += 1;
+      _comments?.refreshAccount();
+      _danmaku?.refreshAccount();
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'login failed', {'error': '$error'});
+    } finally {
+      _askingLogin = false;
+    }
+  }
+
+  /// How long the turn back upright may take before the login page goes up anyway, as in BiliNative's InlineFirst.
+  static const _turnLimit = Duration(seconds: 3);
+  static const _turnPoll = Duration(milliseconds: 20);
+
+  /// The rotation's animation, which runs on after the screen has its upright size.
+  static const _turnSettle = Duration(milliseconds: 400);
+
+  /// Back to the small player from full screen. From landscape it waits for the screen to turn upright and the turn
+  /// to end: a page pushed mid-turn would be laid out sideways. 竖屏 is upright already.
+  Future<void> _inlineFirst() async {
+    if (!_presentation.fullScreen) return;
+    _orientation.exitToInline();
+    final turning = !_upright;
+    var waited = Duration.zero;
+    while (mounted && !_upright && waited < _turnLimit) {
+      await _wait(_turnPoll);
+      waited += _turnPoll;
+    }
+    if (turning && mounted) await _wait(_turnSettle);
+    if (mounted) await SchedulerBinding.instance.endOfFrame;
+  }
+
+  bool get _upright {
+    final size = MediaQuery.sizeOf(context);
+    return size.width <= size.height;
+  }
+
+  Future<void> _wait(Duration duration) {
+    final done = Completer<void>();
+    _turnWait = Timer(duration, done.complete);
+    return done.future;
+  }
+
   /// On back, the send bar closes before anything under it.
   bool _closeDanmakuSend() {
     final danmaku = _danmaku;
@@ -763,6 +862,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     session?.removeListener(_sessionChanged);
     session?.readout.status.removeListener(_syncCollapse);
     _details?.dispose();
+    _turnWait?.cancel();
+    _logins.dispose();
     _danmaku
       ?..sendOpen.removeListener(_panelChanged)
       ..dispose();

@@ -205,7 +205,14 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   }
 
   @override
-  Future<double> coinBalance() => _api.coinBalance();
+  Future<double> coinBalance() async {
+    try {
+      return await _api.coinBalance();
+    } on BiliError catch (error) {
+      if (error.needsLogin) _login();
+      rethrow;
+    }
+  }
 
   /// Without [inAnyFolder], adding means favourited and removing means not.
   @override
@@ -220,8 +227,14 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   }
 
   @override
-  FavouriteFolders openFolders() =>
-      FavouritesModel(api: _api, aid: detail.aid, mid: _accountMid, actions: this, logger: _logger);
+  FavouriteFolders openFolders() => FavouritesModel(
+        api: _api,
+        aid: detail.aid,
+        mid: _accountMid,
+        actions: this,
+        requestLogin: _login,
+        logger: _logger,
+      );
 
   @override
   void tapFollow() {

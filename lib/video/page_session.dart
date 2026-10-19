@@ -44,11 +44,12 @@ extension SeekAndPlay on PlayerSession {
 }
 
 /// The video page's [PlayerSession] over the shared controller, one per page. [onSeeked] hears every seek the
-/// session makes, for the page's watch reports.
+/// session makes, for the page's watch reports; ⋮'s 稍后再看 goes to [requestLogin] without an account.
 PlayerSession createPageSession({
   required PlaybackController controller,
   required AppServices services,
   required SessionOpen open,
+  required VoidCallback requestLogin,
   void Function(double seconds)? onSeeked,
   PlayerPrefs? prefs,
 }) {
@@ -61,6 +62,8 @@ PlayerSession createPageSession({
       LoggedIn(:final vip) => vip,
       _ => false,
     },
+    isLoggedIn: () => environment.account is LoggedIn,
+    requestLogin: requestLogin,
     accountChanges: environment,
     onSeeked: onSeeked,
     prefs: prefs,
@@ -75,6 +78,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     required this._client,
     required this._open,
     required this._isVip,
+    required this._isLoggedIn,
+    required this._requestLogin,
     Listenable? accountChanges,
     this._onSeeked,
     PlayerPrefs? prefs,
@@ -112,6 +117,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   final BiliClient _client;
   final SessionOpen _open;
   final bool Function() _isVip;
+  final bool Function() _isLoggedIn;
+  final VoidCallback _requestLogin;
   final Listenable? _accountChanges;
   final void Function(double seconds)? _onSeeked;
   final PlayerPrefs _prefs;
@@ -675,8 +682,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _open(card.bvid);
   }
 
+  /// Empty when it asked for the login instead.
   @override
   Future<ActionResult> watchLater() async {
+    if (!_isLoggedIn()) return _login();
     final aid = video?.aid ?? 0;
     if (aid == 0) return const ActionResult('视频还没有加载完', ok: false);
     try {
@@ -684,8 +693,14 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       return const ActionResult('已添加至稍后再看', ok: true);
     } catch (error) {
       _logger.warn(LogCategory.ui, 'watch later failed', {'error': '$error'});
+      if (error is BiliError && error.needsLogin) return _login();
       return ActionResult(requestFailureMessage(error), ok: false);
     }
+  }
+
+  ActionResult _login() {
+    if (!_disposed) _requestLogin();
+    return const ActionResult('', ok: false);
   }
 
   @override

@@ -92,12 +92,18 @@ class DanmakuSession extends ChangeNotifier {
 
   void closeSend() => sendOpen.value = false;
 
-  static const needLogin = '请先登录';
+  /// The page's login, for whatever on the page needs the account: the danmaku list's 👍, 添加屏蔽词.
+  void requestLogin() {
+    if (!_disposed) _requestLogin();
+  }
 
-  /// Posts a danmaku at the playhead and shows it at once: the message to show, or null once it went out. A login
-  /// problem comes back as a message too, so the bar stays up with the draft rather than closing as if it went.
+  /// Posts a danmaku at the playhead and shows it at once: the message to show, empty when the login was asked for
+  /// instead, or null once it went out. Only null clears the draft, so it is still there after a login.
   Future<String?> send(String text, DanmakuStyle style) async {
-    if (!loggedIn) return needLogin;
+    if (!loggedIn) {
+      requestLogin();
+      return '';
+    }
     final message = text.trim();
     if (message.isEmpty) return null;
     if (closed) return 'UP主已关闭弹幕';
@@ -119,7 +125,10 @@ class DanmakuSession extends ChangeNotifier {
       dmid = await api.postDanmaku(draft);
     } on BiliError catch (error) {
       _logger.warn(LogCategory.api, 'danmaku post failed', {'error': '$error'});
-      if (error.needsLogin) return needLogin;
+      if (error.needsLogin) {
+        requestLogin();
+        return '';
+      }
       // Bilibili words its refusals for the user (frequency, banned words, level); they're shown word for word.
       if (error case BiliAPIError(:final message) when message.isNotEmpty) return message;
       return '发送失败，请检查网络后重试';
@@ -159,6 +168,16 @@ class DanmakuSession extends ChangeNotifier {
     final now = loggedIn;
     if (now && !_wasLoggedIn) unawaited(_refreshRules());
     _wasLoggedIn = now;
+  }
+
+  /// After a login from the page. The account may have been logged in all along with cookies Bilibili stopped
+  /// taking, so this doesn't wait for the account to change; the store's 10-minute cache and its one ask in flight
+  /// keep it from asking twice.
+  void refreshAccount() {
+    if (_disposed) return;
+    _feed.ownMid = _accountMid();
+    _wasLoggedIn = loggedIn;
+    if (loggedIn) unawaited(_refreshRules());
   }
 
   @override

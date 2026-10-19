@@ -86,6 +86,8 @@ void main() {
   late PlaybackController controller;
   late Set<String> refused;
   late MemorySink logs;
+  late bool loggedIn;
+  late int logins;
   final sessions = <PagePlayerSession>[];
   final controllers = <PlaybackController>[];
 
@@ -102,6 +104,8 @@ void main() {
     opened = [];
     refused = {};
     logs = MemorySink();
+    loggedIn = true;
+    logins = 0;
   });
 
   tearDown(() {
@@ -145,6 +149,8 @@ void main() {
         unawaited(controller.openVideo(bvid, cid: cid));
       },
       isVip: () => false,
+      isLoggedIn: () => loggedIn,
+      requestLogin: () => logins += 1,
       prefs: prefs,
       clock: time.clock,
       periodic: periodic.start,
@@ -187,6 +193,8 @@ void main() {
       client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies)),
       open: (_, {cid}) {},
       isVip: () => false,
+      isLoggedIn: () => true,
+      requestLogin: () {},
       prefs: prefs,
     );
     sessions.add(next);
@@ -785,8 +793,29 @@ void main() {
     await controller.openVideo(bv, cid: p1);
     expect((await session.watchLater()).message, '已添加至稍后再看');
     expect(http.to(watchLaterPath), hasLength(1));
+    http.routes[watchLaterPath] = (200, '{"code":-412,"message":""}');
+    expect((await session.watchLater()).ok, isFalse);
+    expect(logins, 0);
+  });
+
+  test('稍后再看 logged out asks for the login once and sends nothing', () async {
+    final session = makeSession();
+    await controller.openVideo(bv, cid: p1);
+    loggedIn = false;
+    final result = await session.watchLater();
+    expect((result.message, result.ok), ('', false));
+    expect(logins, 1);
+    expect(http.to(watchLaterPath), isEmpty);
+  });
+
+  test('稍后再看 that Bilibili answers with -101 asks for the login instead of toasting', () async {
+    final session = makeSession();
+    await controller.openVideo(bv, cid: p1);
     http.routes[watchLaterPath] = (200, '{"code":-101,"message":"账号未登录"}');
-    expect((await session.watchLater()).message, '需要登录');
+    final result = await session.watchLater();
+    expect((result.message, result.ok), ('', false));
+    expect(logins, 1);
+    expect(http.to(watchLaterPath), hasLength(1));
   });
 
   test('the screenshot toasts 已保存到相册, or 保存失败 when the player cannot', () async {
@@ -907,6 +936,8 @@ void main() {
       client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies)),
       open: (_, {cid}) {},
       isVip: () => true,
+      isLoggedIn: () => true,
+      requestLogin: () {},
       prefs: prefs,
     );
     sessions.add(next);

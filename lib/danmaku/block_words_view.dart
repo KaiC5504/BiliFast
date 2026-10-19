@@ -62,7 +62,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
     final kind = text.length >= 2 && text.startsWith('/') && text.endsWith('/')
         ? BlockRuleKind.regex
         : BlockRuleKind.keyword;
-    final toast = widget.toast;
+    final answer = _answer();
     setState(() => _adding = true);
     final message = await store.add(kind, text);
     if (mounted) {
@@ -74,21 +74,34 @@ class _BlockWordsViewState extends State<BlockWordsView> {
         }
       });
     }
-    if (message != null) toast(message);
+    answer(message);
   }
 
   Future<void> _sync() async {
     final store = _store;
     if (store == null || store.loading) return;
-    final toast = widget.toast;
-    final message = await store.refresh(force: true);
-    if (message != null) toast(message);
+    final answer = _answer();
+    answer(await store.refresh(force: true));
   }
 
   Future<void> _remove(BlockRule rule) async {
+    final answer = _answer();
+    answer(await _store?.remove(rule));
+  }
+
+  /// Shows a store's answer: a login it wants goes to the page's login, anything else is toasted. Taken before the
+  /// store is asked, so it still works once this view has closed.
+  ValueChanged<String?> _answer() {
     final toast = widget.toast;
-    final message = await _store?.remove(rule);
-    if (message != null) toast(message);
+    final danmaku = widget.ui.danmaku;
+    return (message) {
+      if (message == null) return;
+      if (message == BlockRuleStore.needLogin) {
+        danmaku?.requestLogin();
+      } else {
+        toast(message);
+      }
+    };
   }
 
   void _select(BlockRuleKind kind) => setState(() => _kind = kind);

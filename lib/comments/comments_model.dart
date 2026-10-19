@@ -273,6 +273,9 @@ class CommentsModel extends ChangeNotifier {
     return false;
   }
 
+  /// After a login from the page: the rows ask [isOwn] again, so the viewer's own comments offer 删除.
+  void refreshAccount() => _notify();
+
   /// Loads the first page once.
   Future<void> ensureLoaded() async {
     if (hasLoaded || _loading) return;

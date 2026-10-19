@@ -76,7 +76,7 @@ class _MorePanelState extends State<MorePanel> {
 
   Future<void> _watchLater() async {
     final result = await _session.watchLater();
-    widget.toast(result.message);
+    if (result.message.isNotEmpty) widget.toast(result.message);
     if (result.ok) widget.close();
   }
 

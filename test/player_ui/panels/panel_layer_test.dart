@@ -623,6 +623,19 @@ void main() {
       await clearToast(tester);
     });
 
+    testWidgets('稍后再看 that went to the login page instead toasts nothing and stays open', (tester) async {
+      final rig = await more(
+        tester,
+        session: FakePlayerSession()..watchLaterResult = const ActionResult('', ok: false),
+      );
+      await tester.tap(find.text('稍后再看'));
+      await tester.pump();
+      await tester.pump();
+      expect(rig.session.calls, ['watchLater']);
+      expect(find.byKey(const ValueKey('toast')), findsNothing);
+      expect(rig.panels.value, PlayerPanel.more);
+    });
+
     testWidgets('稍后再看 answering after another panel opened leaves that one open', (tester) async {
       final session = SlowWatchLater();
       final rig = await more(tester, session: session);
