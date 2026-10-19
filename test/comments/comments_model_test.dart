@@ -1,8 +1,12 @@
 import 'dart:async';
 
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
+import 'package:bilifast/comments/comment_callbacks.dart';
 import 'package:bilifast/comments/comments_model.dart';
+import 'package:bilifast/comments/comments_tab.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'comment_fixtures.dart';
@@ -19,6 +23,36 @@ FakePageApi threadApi() {
   return FakePageApi()
     ..commentList = [comment(1, replyCount: 25, preview: replies.take(3).toList()), comment(2)]
     ..threadReplies = {1: replies};
+}
+
+/// The real 评论 tab over [model] on KaiC's phone, pumped until its pages have landed.
+Future<void> hostTab(WidgetTester tester, CommentsModel model) async {
+  tester.view.physicalSize = const Size(440, 956);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final primary = ScrollController();
+  addTearDown(primary.dispose);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: PrimaryScrollController(
+        controller: primary,
+        child: CommentsTab(
+          model: model,
+          callbacks: CommentCallbacks(
+            reply: (_, _) {},
+            openThread: (_) {},
+            viewPictures: (_, _) {},
+            confirmDelete: (_) {},
+            seek: (_) {},
+            openVideo: (_) {},
+          ),
+        ),
+      ),
+    ),
+  );
+  for (var i = 0; i < 5; i++) {
+    await tester.pump();
+  }
 }
 
 void main() {
@@ -206,6 +240,70 @@ void main() {
       expect(model.isEnd, isTrue);
     });
 
+    test('a first page with nothing on it but more to come counts as loaded and asks for the next', () async {
+      final api = ScriptedApi()
+        ..pages = (sort, offset) => switch (offset) {
+          null => const CommentPage(comments: [], nextOffset: 'o1', isEnd: false, total: 2),
+          _ => CommentPage(comments: [comment(1), comment(2)], nextOffset: 'o2', isEnd: false),
+        };
+      final model = CommentsRig(api: api).model;
+      await model.ensureLoaded();
+      expect(model.hasLoaded, isTrue);
+      expect(rpids(model.comments), [1, 2]);
+      expect(model.isEnd, isFalse);
+      expect(model.total, 2, reason: 'the total is the first page\'s');
+      expect(api.calls, ['comments sort=hot offset=', 'comments sort=hot offset=o1']);
+    });
+
+    test('a first page with nothing on it and no offset is an empty list, asked for once', () async {
+      final api = ScriptedApi()..pages = (sort, offset) => const CommentPage(comments: [], isEnd: false);
+      final model = CommentsRig(api: api).model;
+      await model.ensureLoaded();
+      await model.ensureLoaded();
+      await model.loadMore();
+      expect(model.hasLoaded, isTrue);
+      expect(model.isEnd, isTrue);
+      expect(model.comments, isEmpty);
+      expect(api.calls, hasLength(1));
+    });
+
+    test('a later page with no next offset ends the list instead of asking for the first page again', () async {
+      final api = ScriptedApi()
+        ..pages = (sort, offset) => offset == null
+            ? CommentPage(comments: [comment(1), comment(2)], nextOffset: 'o1', isEnd: false)
+            : CommentPage(comments: [comment(3)], isEnd: false);
+      final model = CommentsRig(api: api).model;
+      for (var tap = 0; tap < 5; tap++) {
+        await model.loadMore();
+      }
+      expect(api.calls, ['comments sort=hot offset=', 'comments sort=hot offset=o1']);
+      expect(rpids(model.comments), [1, 2, 3]);
+      expect(model.isEnd, isTrue);
+    });
+
+    testWidgets('评论 over an empty first page with more to come shows the next page, not a spinner', (tester) async {
+      final api = ScriptedApi()
+        ..pages = (sort, offset) => switch (offset) {
+          null => const CommentPage(comments: [], nextOffset: 'o1', isEnd: false),
+          _ => CommentPage(comments: [comment(1)], isEnd: true),
+        };
+      await hostTab(tester, CommentsRig(api: api).model);
+      expect(find.text('第1条评论'), findsOneWidget);
+      expect(find.text('没有更多了'), findsOneWidget);
+      expect(find.byKey(const ValueKey('comments-loading')), findsNothing);
+      expect(api.calls, ['comments sort=hot offset=', 'comments sort=hot offset=o1']);
+    });
+
+    testWidgets('评论 over empty pages that never end shows 还没有评论 after three', (tester) async {
+      var asked = 0;
+      final api = ScriptedApi()
+        ..pages = (sort, offset) => CommentPage(comments: const [], nextOffset: 'o${++asked}', isEnd: false);
+      await hostTab(tester, CommentsRig(api: api).model);
+      expect(find.text('还没有评论，快来抢沙发吧'), findsOneWidget);
+      expect(find.byKey(const ValueKey('comments-loading')), findsNothing);
+      expect(api.calls, hasLength(3));
+    });
+
     test('tells its listeners when a page starts and when it lands', () async {
       final model = CommentsRig(api: pagedApi()).model;
       final seen = <bool>[];
@@ -341,6 +439,23 @@ void main() {
       expect(CommentsModel.messageFor(const BiliError.api(code: 12022, message: '')), 'B 站返回错误 12022：');
       expect(CommentsModel.messageFor(const BiliError.http(500)), '网络请求失败（HTTP 500）');
       expect(CommentsModel.messageFor(StateError('bug')), '网络连接失败，请稍后再试');
+    });
+
+    test('a failure that isn\'t Bilibili\'s is logged with its stack, so a bug isn\'t read as the network', () async {
+      final logs = MemorySink();
+      final rig = CommentsRig(api: pagedApi(), logger: Logger(session: 'test')..add(logs));
+      await rig.model.loadMore();
+      rig.api.failures['likeComment'] = StateError('bug');
+      await rig.model.toggleLike(rig.model.comments.first);
+      rig.api.failures['likeComment'] = const BiliError.api(code: 12015, message: '点赞过于频繁');
+      await rig.model.toggleLike(rig.model.comments.first);
+      rig.model.fail(StateError('composer bug'));
+
+      final failed = [for (final event in logs.events) if (event.msg == 'comment action failed') event.f];
+      expect(failed, hasLength(3));
+      expect(failed[0]['stack']?.toJson(), contains('comments_model'));
+      expect(failed[1].containsKey('stack'), isFalse);
+      expect(failed[2]['stack']?.toJson(), isNotEmpty, reason: 'a caller with no stack gets where it was called');
     });
 
     test('isOwn compares the comment\'s mids with the account\'s', () {

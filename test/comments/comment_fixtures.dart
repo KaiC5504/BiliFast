@@ -74,8 +74,14 @@ class ScriptedApi extends FakePageApi {
 
 /// One video's [CommentsModel] over [api], with what it toasted and how often it asked for the login.
 class CommentsRig {
-  CommentsRig({FakePageApi? api, this.loggedIn = true, this.mid = 1, CommentDrafts? drafts, int aid = testAid})
-    : api = api ?? FakePageApi(),
+  CommentsRig({
+    FakePageApi? api,
+    this.loggedIn = true,
+    this.mid = 1,
+    CommentDrafts? drafts,
+    int aid = testAid,
+    Logger? logger,
+  }) : api = api ?? FakePageApi(),
       drafts = drafts ?? CommentDrafts() {
     model = CommentsModel(
       aid: aid,
@@ -86,7 +92,7 @@ class CommentsRig {
       accountMid: () => mid,
       requestLogin: () => logins++,
       toast: toasts.add,
-      logger: Logger(session: 'test'),
+      logger: logger ?? Logger(session: 'test'),
     );
   }
 
