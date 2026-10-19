@@ -49,13 +49,15 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 - Fixes from KaiC's clips (`local/differences/`), 1.0.0 (11): the turn to landscape keeps the upright page until the
   screen is landscape, then grows the player; the zoom swipe back into the 推荐 card it came from; 最近在看的视频 from
   the account's history; 简介 for b23.tv and av links (the detail fetched alongside playback, retried).
+- Slice 9, page lifecycle, 1.0.0 (12): a player per page on one shared engine; a covered page pauses and resumes
+  without a reload; PipKeeper (a closed page lives on in the small window, restore pushes it back, ✕ or another
+  video releases it); network changes reset the engine's node health; the drawn turn (开发者 → 旋转动画 自绘 / 系统).
 
-Next: 9.
+Next: the phone runs both checklists (M1 and M2) in full; then the cutover (spec, slice 9).
 
 Open items, each waiting on its slice:
-- Built, not shipped (KaiC's call): the drawn turn. With 开发者 → 旋转动画 自绘 (the default) the video page draws the
-  whole turn to landscape and back, as the official app's 01 clip; 系统 leaves it to iOS. Native code only syntax
-  checked: its first CI build and phone check are still to come (`local/differences/07-ours-rotate-v2.mov` is before).
+- The drawn turn's first phone check (1.0.0 (12)): with 自绘 the page draws the whole turn as the official 01 clip;
+  系统 leaves it to iOS (`local/differences/07-ours-rotate-v2.mov` is before).
 - 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
   account and a borrowed app key).
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
@@ -70,20 +72,24 @@ Update this section when a slice ships: one short entry, and any rule it adds go
 ## Layout
 
 - `lib/`: the Flutter app.
-  - `lib/app/`: routes (the plain swipe back, and `zoom_back_route.dart` for 推荐 cards), `AppScope` (the services every page reaches, the shared player and `PageApi` among them), the
+  - `lib/app/`: routes (the plain swipe back, and `zoom_back_route.dart` for 推荐 cards), `AppScope` (the services every page reaches: `AppPlayback`, which hands each page a player, `PageApi`, the
+    `PipKeeper` and the navigator key), the
     page-route observer (a page counts as covered only when a page route is pushed over it), Reduce Motion, and
     `phone_frame.dart` (Windows only: the window as KaiC's iPhone).
   - `lib/account/`: keychain and cookie persistence, the login page and `LoginGate`, the web view's cookies.
   - `lib/home/`: home, the feed, the avatar page (49) and 最近打开.
   - `lib/history/`: 历史记录, its model and the row's ⋮ sheet.
   - `lib/player/`: the `BiliPlayer` interface and its iOS and Windows players. `lib/playback/`: the engine's setup,
-    the playback controller, codec memory, the danmaku feed.
+    the shared engine (`shared_engine.dart`: one isolate, a lease per controller), the playback controller, codec
+    memory, the danmaku feed.
   - `lib/danmaku/`: the danmaku layer, scene and painter; `DanmakuSession` (one per page, on `PlayerUi`), the
     settings and block-rule stores, 添加屏蔽词, 当前弹幕列表, and `send/` (the send bar and style panel) with
     `danmaku_overlays.dart`, the send layer in the page's Stack. The 弹幕设置 panel is in `lib/player_ui/panels/`.
   - `lib/player_ui/`: the player's controls for each presentation, gestures, the HUD, the end screens, `panels/`.
   - `lib/device/`: rotation (`orientation.dart`, the rules) and brightness/volume, over `DeviceChannel.swift`.
-  - `lib/video/`: the video page, its player session (`page_session.dart`, `player_prefs.dart`), the tab row
+  - `lib/video/`: the video page, its playback (`page_playback.dart`: the controller, session and watch reporter, which
+    outlive the page for the small window), `pip_keeper.dart`, its player session (`page_session.dart`,
+    `player_prefs.dart`), the tab row
     (`page_tabs.dart`), the page body's model (`page_details_model.dart` over `page_api.dart`; `fake_page_api.dart`
     for tests and `--fake-account`), the watch-progress reporter and `collapsing_player.dart`.
     - `lib/video/intro/`: 简介's pieces. `lib/video/actions/`: the actions model, the coin dialog, the favourites
@@ -176,6 +182,11 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   size at once, covering the screen with a still picture; the video page draws the turn from −angle to 0 and calls
   `turnDrawn()`, or the picture lifts after 0.5 s. It is armed only while a video page owns the orientation; a page
   that is covered or leaves gives it up first.
+- One player per page (BiliNative's one AVPlayer per page), all on one engine isolate. A covered page pauses, stops
+  its small window, drops its prefetch and gives up auto PiP; its loads start paused while covered. It resumes when
+  shown only if it was playing, and not while another page's video is in the small window. A page popped while its
+  small window plays goes to `PipKeeper` (`PagePlayback` lives on); any other popped page releases its player.
+  The restored page is pushed without a slide, or AVKit flies the window off screen.
 - 弹幕设置 is one set for every presentation. 添加屏蔽词 and 当前弹幕列表 are landscape only (the portrait sheet, 40
   and 41, has no rows for them); turning to portrait with either open goes back to 弹幕设置.
 - Danmaku block-word regexes run on Dart's (ECMAScript) `RegExp`, not ICU as in Swift: `(?i)`, possessive and atomic
