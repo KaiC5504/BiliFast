@@ -46,6 +46,9 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   logged-out action opening it (turning upright first), the avatar page (49) in place of the menu, 历史记录 (45-48),
   the full 设置 (50-51: account, 字体, 加速 with the CDN node, 数据, 开发者, 版本, 退出登录), 开发者's log export and
   test crash, the phone's 20 MB log, codec memory kept across launches.
+- Fixes from KaiC's clips (`local/differences/`), 1.0.0 (11): the turn to landscape keeps the upright page until the
+  screen is landscape, then grows the player; the zoom swipe back into the 推荐 card it came from; 最近在看的视频 from
+  the account's history; 简介 for b23.tv and av links (the detail fetched alongside playback, retried).
 
 Next: 9.
 
@@ -64,7 +67,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
 ## Layout
 
 - `lib/`: the Flutter app.
-  - `lib/app/`: routes, `AppScope` (the services every page reaches, the shared player and `PageApi` among them), the
+  - `lib/app/`: routes (the plain swipe back, and `zoom_back_route.dart` for 推荐 cards), `AppScope` (the services every page reaches, the shared player and `PageApi` among them), the
     page-route observer (a page counts as covered only when a page route is pushed over it), Reduce Motion, and
     `phone_frame.dart` (Windows only: the window as KaiC's iPhone).
   - `lib/account/`: keychain and cookie persistence, the login page and `LoginGate`, the web view's cookies.
@@ -163,6 +166,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the
   phone upright first), never a 请先登录 toast. The login replays nothing; the gate always shows the page, since a
   -101 can come while the app still thinks it is logged in.
+- The video page lays out by the screen's shape, not the orientation's presentation: Flutter's iOS engine keeps the
+  old size for the first half of a turn, so landscape is laid out only once the size is wide (`_laidOut`, which
+  `PlayerUi`'s panels and gestures follow). Code that acts on what the user asked for reads the presentation.
 - 弹幕设置 is one set for every presentation. 添加屏蔽词 and 当前弹幕列表 are landscape only (the portrait sheet, 40
   and 41, has no rows for them); turning to portrait with either open goes back to 弹幕设置.
 - Danmaku block-word regexes run on Dart's (ECMAScript) `RegExp`, not ICU as in Swift: `(?i)`, possessive and atomic
