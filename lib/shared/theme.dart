@@ -1825,3 +1825,15 @@ abstract final class MentionTheme {
   static const removeFill = Color(0x8C000000);
   static const removeGlyphColor = Color(0xFFFFFFFF);
 }
+
+/// 弹幕设置 (07, 08, 24, 29, 33, 40, 41).
+abstract final class DanmakuPanelTheme {}
+
+/// 添加屏蔽词 (30).
+abstract final class BlockWordsTheme {}
+
+/// The send bar and the style panel (22, 23, 36-39).
+abstract final class DanmakuSendTheme {}
+
+/// 当前弹幕列表 (31, 32).
+abstract final class DanmakuListTheme {}

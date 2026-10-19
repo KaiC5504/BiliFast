@@ -12,6 +12,8 @@ import '../app/app_scope.dart';
 import '../app/route_observer.dart';
 import '../comments/comment_callbacks.dart';
 import '../comments/comment_overlays.dart';
+import '../danmaku/danmaku_overlays.dart';
+import '../danmaku/danmaku_session.dart';
 import '../comments/comments_model.dart';
 import '../comments/comments_tab.dart';
 import '../device/orientation.dart';
@@ -145,6 +147,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   final _panels = PanelController();
   final _overlays = ActionOverlayController();
   final _tabs = PageTabsController();
+
+  /// The page's danmaku, made with the session.
+  DanmakuSession? _danmaku;
 
   /// Attached to nothing: the status bar's tap scrolls nothing while 评论详情 is up.
   final _noScroll = ScrollController();
@@ -328,6 +333,30 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     _session = session;
     final details = widget.createDetails(session: session, services: services, toast: _toast);
     _details = details;
+    final environment = services.environment;
+    final danmaku = DanmakuSession(
+      feed: controller.danmaku,
+      settings: services.danmakuSettings,
+      rules: services.blockRules,
+      api: services.pageApi,
+      target: () {
+        final video = controller.video;
+        final part = controller.page;
+        if (!_isMine(controller) || video == null || part == null) return null;
+        return (bvid: video.bvid, cid: part.cid);
+      },
+      position: () => session.position,
+      isLoggedIn: () => environment.account is LoggedIn,
+      isVip: () => switch (environment.account) {
+        LoggedIn(:final vip) => vip,
+        _ => false,
+      },
+      accountMid: () => environment.mid ?? 0,
+      toast: _toast,
+      requestLogin: () => _toast('请先登录'),
+    );
+    _danmaku = danmaku;
+    danmaku.sendOpen.addListener(_panelChanged);
     _ui = PlayerUi(
       session: session,
       chrome: _chrome,
@@ -339,6 +368,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       onComments: _showComments,
       overlay: _overlays,
       edgeTaken: _threadEdge,
+      danmaku: danmaku,
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
@@ -429,7 +459,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       api: services.pageApi,
       drafts: _drafts,
       isLoggedIn: () => environment.account is LoggedIn,
-      accountMid: () => environment.mid,
+      accountMid: () => environment.mid ?? 0,
       requestLogin: () => _toast('请先登录'),
       toast: _toast,
     )..addListener(_commentsChanged);
@@ -595,6 +625,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
 
   /// Back closes the comments' overlays and thread first on the small player, then an action overlay, then a panel.
   void _back() {
+    if (_closeDanmakuSend()) return;
     if (!_presentation.fullScreen && _closeComments()) return;
     if (_overlays.value != null) {
       _overlays.close();
@@ -609,6 +640,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
 
   void _toast(String message) {
     if (mounted) showToast(context, message);
+  }
+
+  /// The send bar closes before anything else under it.
+  bool _closeDanmakuSend() {
+    final danmaku = _danmaku;
+    if (danmaku == null || !danmaku.sendOpen.value) return false;
+    danmaku.closeSend();
+    return true;
   }
 
   /// 评论 in full screen: back to the small player on the 评论 tab.
@@ -723,6 +762,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     session?.removeListener(_sessionChanged);
     session?.readout.status.removeListener(_syncCollapse);
     _details?.dispose();
+    _danmaku
+      ?..sendOpen.removeListener(_panelChanged)
+      ..dispose();
     // PlayerSession declares no dispose; the app's session is a ChangeNotifier that frees what it holds.
     if (session case final ChangeNotifier notifier) notifier.dispose();
     _chrome.dispose();
@@ -745,6 +787,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
     return PopScope<Object?>(
       canPop:
           !fullScreen &&
+          !(_danmaku?.sendOpen.value ?? false) &&
           _panels.value == null &&
           _overlays.value == null &&
           _commentOverlays.value == null &&
@@ -752,6 +795,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           setState(_leave);
+        } else if (_closeDanmakuSend()) {
+          return;
         } else if (!fullScreen && _closeComments()) {
           return;
         } else if (_overlays.value != null) {
@@ -915,6 +960,16 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
                             ),
                           if (actionOverlays != null)
                             Positioned.fill(key: const ValueKey('video-overlays'), child: actionOverlays),
+                          if (ui != null && _danmaku != null)
+                            Positioned.fill(
+                              key: const ValueKey('danmaku-overlays'),
+                              child: DanmakuOverlays(
+                                session: _danmaku!,
+                                presentation: presentation,
+                                playerBottom: box,
+                                toast: _toast,
+                              ),
+                            ),
                         ],
                       );
                     },
@@ -931,14 +986,17 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
   /// The tab row under the small player. Before the session exists it shows the saved danmaku switch.
   Widget _tabRow(BuildContext context) {
     final session = _session;
+    final danmaku = _danmaku;
     return ListenableBuilder(
-      listenable: Listenable.merge([session ?? _tabs, _listCount]),
+      listenable: Listenable.merge([session ?? _tabs, _listCount, ?danmaku, ?danmaku?.sendOpen]),
       builder: (context, _) => PageTabRow(
         controller: _tabs,
         replyCount: _listCount.value ?? _intro.detail?.stat.reply,
         danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
         onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
-        onSendDanmaku: () => _toast('发弹幕将在下个版本推出'),
+        onSendDanmaku: () => danmaku?.openSend(),
+        danmakuInputOpen: danmaku?.sendOpen.value ?? false,
+        danmakuClosed: danmaku?.closed ?? false,
       ),
     );
   }

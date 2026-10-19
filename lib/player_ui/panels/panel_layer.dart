@@ -10,6 +10,9 @@ import 'episodes_panel.dart';
 import 'more_panel.dart';
 import 'panel_controller.dart';
 import 'panel_parts.dart';
+import '../../danmaku/block_words_view.dart';
+import '../../danmaku/danmaku_list_view.dart';
+import 'danmaku_settings_panel.dart';
 import 'quality_panel.dart';
 import 'speed_panel.dart';
 
@@ -18,7 +21,13 @@ import 'speed_panel.dart';
 /// swaps the content without sliding again.
 @immutable
 final class PanelFrame {
-  const PanelFrame({required this.width, required this.sheetHeight, this.column = false, this.light = false});
+  const PanelFrame({
+    required this.width,
+    required this.sheetHeight,
+    this.column = false,
+    this.light = false,
+    this.full = false,
+  });
 
   final double width;
   final double sheetHeight;
@@ -26,6 +35,9 @@ final class PanelFrame {
 
   /// The portrait 选集 list is the official app's light sheet, its top at the player's bottom.
   final bool light;
+
+  /// Over the whole screen, drawing its own backdrop (添加屏蔽词, 30).
+  final bool full;
 
   static PanelFrame of(PlayerPanel panel) => switch (panel) {
     PlayerPanel.quality || PlayerPanel.codec => const PanelFrame(
@@ -46,6 +58,14 @@ final class PanelFrame {
       sheetHeight: BiliMetrics.panelSheetHeight,
       light: true,
     ),
+    // Portrait's 弹幕设置 is the light sheet of 40.
+    PlayerPanel.danmakuSettings => const PanelFrame(
+      width: BiliMetrics.panelWidth,
+      sheetHeight: BiliMetrics.panelSheetHeight,
+      light: true,
+    ),
+    PlayerPanel.blockWords => const PanelFrame(width: 1, sheetHeight: 1, full: true),
+    PlayerPanel.danmakuList => const PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
   };
 
   @override
@@ -54,10 +74,11 @@ final class PanelFrame {
       other.width == width &&
       other.sheetHeight == sheetHeight &&
       other.column == column &&
-      other.light == light;
+      other.light == light &&
+      other.full == full;
 
   @override
-  int get hashCode => Object.hash(width, sheetHeight, column, light);
+  int get hashCode => Object.hash(width, sheetHeight, column, light, full);
 }
 
 /// The open panel, if any (BiliNative `PanelLayer.swift` and `SidePanel.swift`): from the right in landscape, a
@@ -215,7 +236,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  if (!landscape && light)
+                  if (frame.full)
+                    _full(content)
+                  else if (!landscape && light)
                     ..._lightSheet(size, insets, content)
                   else if (!landscape)
                     _sheet(size, insets, frame, content)
@@ -258,12 +281,37 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               close: _close,
             ),
             PlayerPanel.speed => SpeedPanel(session: session, toast: _toast, close: _close),
-            PlayerPanel.more => MorePanel(session: session, toast: _toast, close: () => _closeIf(PlayerPanel.more)),
+            PlayerPanel.more => MorePanel(
+              session: session,
+              toast: _toast,
+              close: () => _closeIf(PlayerPanel.more),
+              openDanmakuSettings: widget.ui.danmaku == null
+                  ? null
+                  : () => widget.ui.panels.open(PlayerPanel.danmakuSettings),
+            ),
             PlayerPanel.episodes => EpisodesPanel(
               session: session,
               details: widget.ui.details,
               close: _close,
               light: light,
+            ),
+            PlayerPanel.danmakuSettings => DanmakuSettingsPanel(
+              ui: widget.ui,
+              light: light,
+              toast: _toast,
+              close: _close,
+            ),
+            PlayerPanel.blockWords => BlockWordsView(
+              ui: widget.ui,
+              toast: _toast,
+              back: () => widget.ui.panels.open(PlayerPanel.danmakuSettings),
+              close: _close,
+            ),
+            PlayerPanel.danmakuList => DanmakuListView(
+              ui: widget.ui,
+              toast: _toast,
+              back: () => widget.ui.panels.open(PlayerPanel.danmakuSettings),
+              close: _close,
             ),
           },
         ),
@@ -319,6 +367,11 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
       ),
     );
   }
+
+  /// Over the whole screen; the content draws its own backdrop and takes every touch.
+  Widget _full(Widget content) => Positioned.fill(
+    child: FadeTransition(opacity: _slide, child: _body(child: content)),
+  );
 
   /// 倍速: no panel, a column of values on a dark strip at the right edge.
   Widget _column(Size size, EdgeInsets insets, PanelFrame frame, Widget content) => Positioned(

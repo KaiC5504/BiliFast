@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../danmaku/block_rule_store.dart';
+import '../danmaku/danmaku_settings_store.dart';
 import '../device/player_device.dart';
 import '../devtools/crash_log.dart';
 import '../devtools/log_forwarder.dart';
@@ -67,10 +69,16 @@ class AppServices {
     PlayerDevice? device,
     FontStore? fonts,
     PageApi? pageApi,
+    DanmakuSettingsStore? danmakuSettings,
+    BlockRuleStore? blockRules,
     this.logs,
   }) : device = device ?? PlayerDevice.inWindow(),
        fonts = fonts ?? FontStore.memory(),
-       pageApi = pageApi ?? ClientPageApi(environment.client);
+       pageApi = pageApi ?? ClientPageApi(environment.client),
+       danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
+    this.blockRules =
+        blockRules ?? BlockRuleStore(api: this.pageApi, isLoggedIn: () => environment.account is LoggedIn);
+  }
 
   final AppEnvironment environment;
   final AppPlayback playback;
@@ -78,6 +86,10 @@ class AppServices {
   final PlayerDevice device;
   final FontStore fonts;
   final PageApi pageApi;
+  final DanmakuSettingsStore danmakuSettings;
+
+  /// The account's 弹幕屏蔽词, shared by every page.
+  late final BlockRuleStore blockRules;
   final LogForwarder? logs;
 }
 

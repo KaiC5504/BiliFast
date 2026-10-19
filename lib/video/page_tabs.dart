@@ -174,6 +174,8 @@ class PageTabRow extends StatelessWidget {
     required this.danmakuOn,
     required this.onToggleDanmaku,
     required this.onSendDanmaku,
+    this.danmakuInputOpen = false,
+    this.danmakuClosed = false,
   });
 
   final PageTabsController controller;
@@ -185,6 +187,12 @@ class PageTabRow extends StatelessWidget {
   /// Null before the page has its session.
   final VoidCallback? onToggleDanmaku;
   final VoidCallback onSendDanmaku;
+
+  /// The send bar is up: the field reads 弹幕输入中 (39).
+  final bool danmakuInputOpen;
+
+  /// The uploader closed danmaku: the field reads UP主已关闭弹幕.
+  final bool danmakuClosed;
 
   static const _fade = Duration(milliseconds: 250);
 

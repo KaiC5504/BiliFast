@@ -82,6 +82,23 @@ class DanmakuFeed extends ChangeNotifier {
     _retryFailed();
   }
 
+  // Contracts stubs: slice 5's feed agent writes these.
+
+  /// The 弹幕设置 filter and the 屏蔽词 to apply; what is loaded already is filtered again, off the UI isolate.
+  void setFilter(DanmakuFilterOptions options, List<BlockRule> rules) {}
+
+  /// The signed-in account, whose own danmaku get the white box; 0 when logged out.
+  set ownMid(int mid) {}
+
+  /// A danmaku the user just sent, shown at once in its white box.
+  void addOwn(DanmakuDraft draft, {required int dmid}) {}
+
+  /// 当前弹幕列表's 屏蔽弹幕: this danmaku goes, for this video.
+  void hide(DanmakuElem elem) {}
+
+  /// 当前弹幕列表: the danmaku shown up to [ms], latest last, at most [limit].
+  List<DanmakuElem> recent(int ms, {int limit = 100}) => const [];
+
   /// Waits for the segment requests in flight (tests).
   Future<void> settle() async {
     while (_inFlight.isNotEmpty) {

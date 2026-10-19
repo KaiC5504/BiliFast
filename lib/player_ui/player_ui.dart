@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../device/device_controls.dart';
+import '../danmaku/danmaku_session.dart';
 import '../device/orientation.dart';
 import '../video/page_details.dart';
 import '../video/player_session.dart';
@@ -21,6 +22,7 @@ final class PlayerUi {
     this.onComments,
     this.overlay,
     this.edgeTaken,
+    this.danmaku,
   });
 
   final PlayerSession session;
@@ -45,6 +47,9 @@ final class PlayerUi {
   /// True while something on the page (评论详情) closes on the left-edge swipe in place of the route: the small
   /// player's drag leaves that edge to it, as it does to the route's own swipe back.
   final ValueListenable<bool>? edgeTaken;
+
+  /// The page's danmaku: settings, 屏蔽词, sending; null outside a video page.
+  final DanmakuSession? danmaku;
 
   Presentation get presentation => orientation.presentation;
 }

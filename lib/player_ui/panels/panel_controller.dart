@@ -2,7 +2,20 @@ import 'package:flutter/foundation.dart';
 
 /// The panels over the player (BiliNative `Player/Panels/`): a right-side panel in landscape, a bottom sheet in
 /// portrait, both inside the page.
-enum PlayerPanel { quality, codec, speed, more, episodes }
+enum PlayerPanel {
+  quality,
+  codec,
+  speed,
+  more,
+  episodes,
+  danmakuSettings,
+
+  /// 添加屏蔽词 (30), over the whole screen; landscape only.
+  blockWords,
+
+  /// 当前弹幕列表 (31); landscape only.
+  danmakuList,
+}
 
 /// The open panel, or null. Opening one replaces the last.
 class PanelController extends ValueNotifier<PlayerPanel?> {

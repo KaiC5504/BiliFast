@@ -21,8 +21,12 @@ class MorePanel extends StatefulWidget {
     required this.session,
     required this.toast,
     required this.close,
+    this.openDanmakuSettings,
     this.devTools = devToolsEnabled,
   });
+
+  /// 弹幕设置's row (42, 43); null leaves the row out.
+  final VoidCallback? openDanmakuSettings;
 
   final PlayerSession session;
   final ValueChanged<String> toast;

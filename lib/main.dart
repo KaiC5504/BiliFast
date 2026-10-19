@@ -11,6 +11,7 @@ import 'app/phone_frame.dart';
 import 'app/reduce_motion.dart';
 import 'app/route_observer.dart';
 import 'comments/emote_store.dart';
+import 'danmaku/danmaku_settings_store.dart';
 import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_forwarder.dart';
@@ -36,11 +37,13 @@ Future<void> main(List<String> args) async {
   final AppEnvironment environment;
   final RecentStore recents;
   final FontStore fonts;
+  final DanmakuSettingsStore danmakuSettings;
   try {
     environment = await AppEnvironment.load();
     recents = await RecentStore.load(supportFilePath('recents.json'));
     PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
     fonts = await FontStore.load(supportFilePath('font.json'));
+    danmakuSettings = await DanmakuSettingsStore.load(supportFilePath('danmaku_settings.json'));
     RecentEmotes.shared = await RecentEmotes.load(supportFilePath('emotes_recent.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
@@ -70,6 +73,7 @@ Future<void> main(List<String> args) async {
       device: device,
       fonts: fonts,
       pageApi: fakeAccount ? FakePageApi.demo() : null,
+      danmakuSettings: danmakuSettings,
       logs: logs,
     ),
     initialLink: _argument(args, '--play='),

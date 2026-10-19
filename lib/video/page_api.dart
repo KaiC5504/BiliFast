@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart';
+import 'package:bili_core/danmaku.dart';
 
 /// The calls the page body makes besides playback: its side loads and the actions. The app asks Bilibili
 /// ([ClientPageApi]); tests and `--fake-account` runs on the PC answer from memory (`FakePageApi`).
@@ -62,6 +63,20 @@ abstract interface class PageApi {
   Future<List<MentionCandidate>> mentionCandidates({required int mid, String query = ''});
 
   Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename});
+
+  /// The account's 弹幕屏蔽词.
+  Future<List<BlockRule>> danmakuBlockRules();
+
+  Future<BlockRule> addBlockRule(BlockRuleKind kind, {required String filter});
+
+  Future<void> deleteBlockRule({required int id});
+
+  /// The new danmaku's id, or 0 when the server accepted it without one.
+  Future<int> postDanmaku(DanmakuDraft draft);
+
+  Future<void> likeDanmaku({required int cid, required int dmid, required bool on});
+
+  Future<Map<int, DanmakuLikeStat>> danmakuLikes({required int cid, required List<int> dmids});
 }
 
 class ClientPageApi implements PageApi {
@@ -168,4 +183,25 @@ class ClientPageApi implements PageApi {
   @override
   Future<UploadedPicture> uploadCommentPicture({required List<int> bytes, required String filename}) =>
       _client.uploadCommentPicture(bytes: bytes, filename: filename);
+
+  @override
+  Future<List<BlockRule>> danmakuBlockRules() => _client.danmakuBlockRules();
+
+  @override
+  Future<BlockRule> addBlockRule(BlockRuleKind kind, {required String filter}) =>
+      _client.addBlockRule(kind, filter: filter);
+
+  @override
+  Future<void> deleteBlockRule({required int id}) => _client.deleteBlockRule(id: id);
+
+  @override
+  Future<int> postDanmaku(DanmakuDraft draft) => _client.postDanmaku(draft);
+
+  @override
+  Future<void> likeDanmaku({required int cid, required int dmid, required bool on}) =>
+      _client.likeDanmaku(cid: cid, dmid: dmid, on: on);
+
+  @override
+  Future<Map<int, DanmakuLikeStat>> danmakuLikes({required int cid, required List<int> dmids}) =>
+      _client.danmakuLikes(cid: cid, dmids: dmids);
 }

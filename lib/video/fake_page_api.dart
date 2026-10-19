@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' show max, min;
 
 import 'package:bili_core/api.dart';
+import 'package:bili_core/danmaku.dart';
 
 import 'page_api.dart';
 
@@ -371,6 +372,54 @@ class FakePageApi implements PageApi {
           sizeKb: bytes.length / 1024,
         );
       });
+
+  /// The account's 弹幕屏蔽词 as the fake server holds them.
+  List<BlockRule> blockRules = [];
+  int _nextRuleId = 1;
+
+  /// Every danmaku [postDanmaku] was sent.
+  final List<DanmakuDraft> postedDanmaku = [];
+  int _nextDmid = 9000;
+
+  /// 👍 counts by danmaku id; one not here has none.
+  final Map<int, DanmakuLikeStat> danmakuLikeStats = {};
+
+  @override
+  Future<List<BlockRule>> danmakuBlockRules() =>
+      _answer('danmakuBlockRules', 'danmakuBlockRules', () => List.of(blockRules));
+
+  @override
+  Future<BlockRule> addBlockRule(BlockRuleKind kind, {required String filter}) =>
+      _answer('addBlockRule', 'addBlockRule ${kind.name}=$filter', () {
+        final rule = BlockRule(id: _nextRuleId++, kind: kind, filter: filter);
+        blockRules = [...blockRules, rule];
+        return rule;
+      });
+
+  @override
+  Future<void> deleteBlockRule({required int id}) => _answer('deleteBlockRule', 'deleteBlockRule id=$id', () {
+        blockRules = [for (final rule in blockRules) if (rule.id != id) rule];
+      });
+
+  @override
+  Future<int> postDanmaku(DanmakuDraft draft) => _answer('postDanmaku', 'postDanmaku ${draft.text}', () {
+        postedDanmaku.add(draft);
+        return _nextDmid++;
+      });
+
+  @override
+  Future<void> likeDanmaku({required int cid, required int dmid, required bool on}) =>
+      _answer('likeDanmaku', 'likeDanmaku dmid=$dmid on=$on', () {
+        final stat = danmakuLikeStats[dmid] ?? (likes: 0, liked: false);
+        if (stat.liked == on) return;
+        danmakuLikeStats[dmid] = (likes: max(0, stat.likes + (on ? 1 : -1)), liked: on);
+      });
+
+  @override
+  Future<Map<int, DanmakuLikeStat>> danmakuLikes({required int cid, required List<int> dmids}) =>
+      _answer('danmakuLikes', 'danmakuLikes ${dmids.length}', () => {
+            for (final id in dmids) id: ?danmakuLikeStats[id],
+          });
 
   /// The comment with [rpid] wherever the fake holds it: the list, the pinned comment, a preview or a thread.
   Comment? _find(int rpid) {

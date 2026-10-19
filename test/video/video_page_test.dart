@@ -31,6 +31,7 @@ import 'package:bilifast/comments/comments_tab.dart';
 import 'package:bilifast/comments/composer.dart';
 import 'package:bilifast/comments/picture_viewer.dart';
 import 'package:bilifast/comments/thread_view.dart';
+import 'package:bilifast/danmaku/danmaku_overlays.dart';
 import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
@@ -651,9 +652,9 @@ void main() {
         find.ancestor(of: find.byType(PanelLayer), matching: find.byType(Stack)).first,
       );
       expect(
-        [for (final child in stack.children.skip(stack.children.length - 2)) child.key],
-        const [ValueKey('video-panels'), ValueKey('video-overlays')],
-        reason: 'above the player and the tabs, with the action overlays over the panels',
+        [for (final child in stack.children.skip(stack.children.length - 3)) child.key],
+        const [ValueKey('video-panels'), ValueKey('video-overlays'), ValueKey('danmaku-overlays')],
+        reason: 'above the player and the tabs, with the action overlays over the panels and the send bar on top',
       );
       await rotate(tester, Presentation.inline);
       await back(tester);
@@ -1159,7 +1160,7 @@ void main() {
       expect(detailsMade, hasLength(1));
     });
 
-    testWidgets('the row: 评论 shows the reply count, the 弹 toggle switches danmaku, 点我发弹幕 says it comes next',
+    testWidgets('the row: 评论 shows the reply count, the 弹 toggle switches danmaku, 点我发弹幕 opens the send bar, which back closes first',
         (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
@@ -1180,8 +1181,10 @@ void main() {
       await frames(tester, 8);
       await tester.tap(find.byKey(const ValueKey('danmaku-send')));
       await tester.pump();
-      expect(find.text('发弹幕将在下个版本推出'), findsOneWidget);
-      await frames(tester, 70);
+      final overlays = tester.widget<DanmakuOverlays>(find.byType(DanmakuOverlays));
+      expect(overlays.session.sendOpen.value, isTrue);
+      await back(tester);
+      expect(overlays.session.sendOpen.value, isFalse);
       await back(tester);
     });
 

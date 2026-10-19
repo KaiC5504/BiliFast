@@ -26,7 +26,10 @@ final class DanmakuDraft {
   final int progressMs;
 }
 
-typedef _BlockRuleItem = ({int id, int? type, String? filter});
+/// A danmaku's 👍 count, and whether this account gave one.
+typedef DanmakuLikeStat = ({int likes, bool liked});
+
+typedef _BlockRuleItem =({int id, int? type, String? filter});
 
 _BlockRuleItem _blockRuleItem(Object? json) {
   final object = JsonObject.from(json);
@@ -88,6 +91,16 @@ extension BiliClientDanmaku on BiliClient {
   }
 
   Future<void> deleteBlockRule({required int id}) => postVoid('/x/dm/filter/user/del', form: {'ids': '$id'});
+
+  // Contracts stubs: slice 5's 当前弹幕列表 agent writes these two.
+
+  /// 当前弹幕列表's 👍: on, or taken back.
+  Future<void> likeDanmaku({required int cid, required int dmid, required bool on}) =>
+      throw UnimplementedError('likeDanmaku');
+
+  /// The 👍 counts of [dmids], keyed by danmaku id; an id the server doesn't answer for is left out.
+  Future<Map<int, DanmakuLikeStat>> danmakuLikes({required int cid, required List<int> dmids}) =>
+      throw UnimplementedError('danmakuLikes');
 
   /// Returns the new danmaku's id, or 0 when the server accepted it without one.
   Future<int> postDanmaku(DanmakuDraft draft) {
