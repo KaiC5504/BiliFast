@@ -278,7 +278,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                       ),
                     ],
                   ),
-                  if (account is LoggedIn)
+                  if (account is LoggedIn || environment.logoutIncomplete)
                     SettingsSection(
                       children: [
                         SettingsRow(

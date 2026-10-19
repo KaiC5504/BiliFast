@@ -686,6 +686,22 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       // A model can ask while a widget builds, and what closes here rebuilds the page.
       await Future<void>.value();
       if (!mounted || _left) return;
+      // An account still being checked (or whose check failed) may well be logged in: the login page would invite a
+      // second login, so it is asked again first and the page shows only for a verdict of logged out.
+      final environment = services.environment;
+      if (environment.account is AccountUnknown) {
+        await environment.refreshAccount();
+        if (!mounted || _left) return;
+        switch (environment.account) {
+          case LoggedIn():
+            return;
+          case AccountUnknown():
+            _toast('账号确认失败，请稍后重试');
+            return;
+          case LoggedOut() || LoginExpired():
+            break;
+        }
+      }
       _danmaku?.closeSend();
       if (_commentOverlays.value is ComposeOverlay && !_drafts.anyPosting) _commentOverlays.close();
       _overlays.close();
@@ -693,7 +709,6 @@ class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProv
       if (!mounted || _left || _covered) return;
       _owning = false;
       _orientation.end(this);
-      final environment = services.environment;
       final before = environment.account;
       final bool answer;
       try {

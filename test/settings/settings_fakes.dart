@@ -59,14 +59,21 @@ class FakeEnvironment extends ChangeNotifier implements AppEnvironment {
   }
 
   @override
+  bool logoutIncomplete = false;
+
+  /// As the real one: every step runs and the account ends logged out, then a keychain that kept the login throws.
+  @override
   Future<void> logout() async {
     logouts += 1;
+    logoutIncomplete = false;
     final error = logoutError;
+    account = const LoggedOut();
     if (error != null) {
       logoutError = null;
+      logoutIncomplete = true;
+      notifyListeners();
       throw error;
     }
-    account = const LoggedOut();
   }
 
   @override

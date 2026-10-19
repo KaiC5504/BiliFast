@@ -150,8 +150,9 @@ class DanmakuSession extends ChangeNotifier {
   Future<void> _refreshRules() async {
     final failure = await rules.refresh();
     if (failure == null || _disposed || !loggedIn) return;
+    _rulesRetry?.cancel();
     _rulesRetry = Timer(rulesRetryDelay, () {
-      if (loggedIn) unawaited(rules.refresh());
+      if (!_disposed && loggedIn) unawaited(rules.refresh());
     });
   }
 

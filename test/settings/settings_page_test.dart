@@ -342,9 +342,10 @@ void main() {
       expect(find.text('home'), findsOneWidget);
     });
 
-    testWidgets('a failed logout stays on 设置 and says so', (tester) async {
+    testWidgets('a logout that left the login in the keychain stays on 设置, says so and offers 退出登录 again',
+        (tester) async {
       await show(tester, account: const LoggedIn(name: '小明', vip: false));
-      world.environment.logoutError = const SocketException('down');
+      world.environment.logoutError = const LogoutIncomplete();
       await tapRow(tester, 'settings-logout');
       await tester.tap(confirmButton('确定'));
       await tester.pump();
@@ -354,7 +355,14 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
       }
       expect(find.byType(SettingsPage), findsOneWidget);
-      expect(world.environment.account, isA<LoggedIn>());
+      expect(world.environment.account, isA<LoggedOut>());
+      expect(find.byKey(const ValueKey('settings-logout')), findsOneWidget);
+
+      await tapRow(tester, 'settings-logout');
+      await tester.tap(confirmButton('确定'));
+      await tester.pumpAndSettle();
+      expect(world.environment.logouts, 2);
+      expect(find.byType(SettingsPage), findsNothing);
     });
   });
 

@@ -142,6 +142,7 @@ class AppEnvironment extends ChangeNotifier {
     final epoch = ++_epoch;
     _checking = null;
     _fake = false;
+    _logoutIncomplete = false;
     _persistence.unblock();
     this.cookies.replaceAll({...this.cookies.all, ...cookies});
     final saved = _persistence.flush();
@@ -172,6 +173,7 @@ class AppEnvironment extends ChangeNotifier {
   Future<void> logout() async {
     _epoch += 1;
     _checking = null;
+    _logoutIncomplete = false;
     if (_fake) {
       _fake = false;
       _signedOut();
@@ -187,8 +189,17 @@ class AppEnvironment extends ChangeNotifier {
     unawaited(client.ensureRiskCookies().catchError((Object error) {
       _logger.warn(LogCategory.app, 'risk cookies failed', {'error': '$error'});
     }));
-    if (!jarEmptied || !keychainEmptied) throw const LogoutIncomplete();
+    if (!jarEmptied || !keychainEmptied) {
+      _logoutIncomplete = true;
+      notifyListeners();
+      throw const LogoutIncomplete();
+    }
   }
+
+  bool _logoutIncomplete = false;
+
+  /// The last 退出登录 left the login in the keychain: 设置 keeps offering it so it can be tried again.
+  bool get logoutIncomplete => _logoutIncomplete;
 
   Future<bool> _logoutStep(String step, Future<void> Function() run) async {
     try {

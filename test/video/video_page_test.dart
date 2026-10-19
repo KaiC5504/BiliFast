@@ -2528,10 +2528,15 @@ void main() {
     /// The page with the app's own details, actions and comments over [api], its video's detail in, on 简介. Not
     /// logged in, the jar keeps cookies Bilibili no longer takes, so the video still opens and the page owns the
     /// orientation.
-    Future<void> openReal(WidgetTester tester, {bool loggedIn = false, bool vertical = false}) async {
+    Future<void> openReal(
+      WidgetTester tester, {
+      bool loggedIn = false,
+      bool vertical = false,
+      bool checkAccount = true,
+    }) async {
       if (!loggedIn) http.routes[Canned.navPath] = (200, Canned.navLoggedOut);
-      await host(tester, pageApi: api);
-      expect(environment.account, loggedIn ? isA<LoggedIn>() : isA<LoginExpired>());
+      await host(tester, pageApi: api, checkAccount: checkAccount);
+      if (checkAccount) expect(environment.account, loggedIn ? isA<LoggedIn>() : isA<LoginExpired>());
       unawaited(
         nav.currentState!.push(
           SwipeBackPageRoute<void>(
@@ -2591,6 +2596,29 @@ void main() {
       expect(sent(), isEmpty);
       expect(relations(), 0);
       expect(find.text('此版本不支持不喜欢'), findsNothing);
+      await back(tester);
+    });
+
+    testWidgets('an account still unknown is asked again before the login page, which shows only for logged out',
+        (tester) async {
+      await openReal(tester, loggedIn: true, checkAccount: false);
+      expect(environment.account, isA<AccountUnknown>());
+      await tester.tap(find.byKey(const ValueKey('action-like')));
+      await frames(tester, 3);
+      expect(gate.asks, isEmpty, reason: 'the check found the login');
+      expect(environment.account, isA<LoggedIn>());
+      await back(tester);
+    });
+
+    testWidgets('an account check that still fails says so instead of offering a second login', (tester) async {
+      await openReal(tester, loggedIn: true, checkAccount: false);
+      http.routes.remove(Canned.navPath);
+      await tester.tap(find.byKey(const ValueKey('action-like')));
+      await frames(tester, 3);
+      expect(gate.asks, isEmpty);
+      expect(find.text('账号确认失败，请稍后重试'), findsOneWidget);
+      expect(sent(), isEmpty);
+      await frames(tester, 60);
       await back(tester);
     });
 
