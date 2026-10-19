@@ -53,33 +53,45 @@ class _BlockWordsViewState extends State<BlockWordsView> {
   }
 
   /// Text typed between slashes is a regex rule, kept with its slashes; anything else a keyword, whichever tab shows.
+  /// Once added, its tab shows, so the new chip is in view. [BlockWordsView.toast] is the panel layer's, so a failure
+  /// here or in [_sync] and [_remove] still shows after this view has closed.
   Future<void> _add() async {
     final store = _store;
     final text = _field.text.trim();
     if (store == null || text.isEmpty || _adding) return;
-    final regex = text.length >= 2 && text.startsWith('/') && text.endsWith('/');
+    final kind = text.length >= 2 && text.startsWith('/') && text.endsWith('/')
+        ? BlockRuleKind.regex
+        : BlockRuleKind.keyword;
+    final toast = widget.toast;
     setState(() => _adding = true);
-    final message = await store.add(regex ? BlockRuleKind.regex : BlockRuleKind.keyword, text);
-    if (!mounted) return;
-    setState(() => _adding = false);
-    if (message != null) {
-      widget.toast(message);
-    } else {
-      _field.clear();
+    final message = await store.add(kind, text);
+    if (mounted) {
+      setState(() {
+        _adding = false;
+        if (message == null) {
+          _kind = kind;
+          _field.clear();
+        }
+      });
     }
+    if (message != null) toast(message);
   }
 
   Future<void> _sync() async {
     final store = _store;
     if (store == null || store.loading) return;
+    final toast = widget.toast;
     final message = await store.refresh(force: true);
-    if (mounted && message != null) widget.toast(message);
+    if (message != null) toast(message);
   }
 
   Future<void> _remove(BlockRule rule) async {
+    final toast = widget.toast;
     final message = await _store?.remove(rule);
-    if (mounted && message != null) widget.toast(message);
+    if (message != null) toast(message);
   }
+
+  void _select(BlockRuleKind kind) => setState(() => _kind = kind);
 
   TextStyle _style(double size, Color color, {double spacing = 0}) => TextStyle(
     fontFamily: BiliFonts.family,
@@ -240,6 +252,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
   }) => Semantics(
     button: true,
     label: label,
+    onTap: onTap,
     excludeSemantics: true,
     child: GestureDetector(
       key: key,
@@ -273,11 +286,12 @@ class _BlockWordsViewState extends State<BlockWordsView> {
       button: true,
       selected: selected,
       label: title,
+      onTap: () => _select(kind),
       excludeSemantics: true,
       child: GestureDetector(
         key: ValueKey('block-words-tab-${kind.name}'),
         behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _kind = kind),
+        onTap: () => _select(kind),
         child: SizedBox(
           height: BlockWordsTheme.tabsHeight,
           child: Stack(
@@ -362,6 +376,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
         Semantics(
           button: true,
           label: '删除 ${rule.filter}',
+          onTap: () => _remove(rule),
           excludeSemantics: true,
           child: GestureDetector(
             key: ValueKey('block-rule-remove-${rule.id}'),

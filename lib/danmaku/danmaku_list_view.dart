@@ -7,6 +7,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/widgets.dart';
 
+import '../player_ui/panels/panel_controller.dart';
 import '../player_ui/player_ui.dart';
 import '../shared/action_glyphs.dart';
 import '../shared/theme.dart';
@@ -38,10 +39,16 @@ final class _Row {
   final key = GlobalKey();
 }
 
-typedef _Menu = ({_Row row, double top, double bottom});
+/// The ⋮ row's top and bottom and the list's size, in the list's own coordinates.
+typedef _Menu = ({_Row row, double top, double bottom, Size list});
 
 class _DanmakuListViewState extends State<DanmakuListView> {
   final _stack = GlobalKey();
+  final _link = LayerLink();
+
+  /// The popover reaches into the panel's right margin, past the list's own box, where the list gets no taps; in the
+  /// app's overlay it takes all of its own and a tap anywhere else closes it.
+  final _portal = OverlayPortalController();
 
   /// Read once: the list stays as it opened while the video plays on behind it.
   late final List<_Row> _rows = [for (final elem in widget.ui.danmaku?.recent() ?? const <DanmakuElem>[]) _Row(elem)];
@@ -54,8 +61,31 @@ class _DanmakuListViewState extends State<DanmakuListView> {
   @override
   void initState() {
     super.initState();
+    widget.ui.panels.addListener(_panelsChanged);
     unawaited(_loadLikes());
   }
+
+  @override
+  void didUpdateWidget(DanmakuListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.ui.panels, widget.ui.panels)) return;
+    oldWidget.ui.panels.removeListener(_panelsChanged);
+    widget.ui.panels.addListener(_panelsChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.ui.panels.removeListener(_panelsChanged);
+    super.dispose();
+  }
+
+  /// The popover is outside the panel's layer, so the panel sliding out or giving way to another must take it down.
+  void _panelsChanged() {
+    if (_menu != null && widget.ui.panels.value != PlayerPanel.danmakuList) _closeMenu();
+  }
+
+  /// A [BiliError]'s text carries no URL or cookie; anything else is logged by type only.
+  static String _describe(Object error) => error is BiliError ? '$error' : '${error.runtimeType}';
 
   Future<void> _loadLikes() async {
     final session = _session;
@@ -77,7 +107,7 @@ class _DanmakuListViewState extends State<DanmakuListView> {
         });
       } on Object catch (error) {
         // The counts are extra: without them every 👍 still works, from zero.
-        Logger.shared.warn(LogCategory.api, 'danmaku likes failed', {'error': '${error.runtimeType}'});
+        Logger.shared.warn(LogCategory.api, 'danmaku likes failed', {'error': _describe(error)});
         return;
       }
     }
@@ -102,6 +132,7 @@ class _DanmakuListViewState extends State<DanmakuListView> {
     try {
       await session.api.likeDanmaku(cid: cid, dmid: id, on: after.liked);
     } on Object catch (error) {
+      Logger.shared.warn(LogCategory.api, 'danmaku like failed', {'on': after.liked, 'error': _describe(error)});
       if (!mounted) return;
       setState(() => _stats[id] = before);
       widget.toast(ActionsModel.failureMessage(error));
@@ -115,125 +146,153 @@ class _DanmakuListViewState extends State<DanmakuListView> {
     final box = row.key.currentContext?.findRenderObject() as RenderBox?;
     if (stack == null || box == null) return;
     final top = box.localToGlobal(Offset.zero, ancestor: stack).dy;
-    setState(() => _menu = (row: row, top: top, bottom: top + box.size.height));
+    setState(() => _menu = (row: row, top: top, bottom: top + box.size.height, list: stack.size));
+    _portal.show();
   }
 
-  void _closeMenu() => setState(() => _menu = null);
+  void _closeMenu() {
+    setState(() => _menu = null);
+    _portal.hide();
+  }
 
   void _hide(_Row row) {
     _session?.hide(row.elem);
-    setState(() {
-      _rows.remove(row);
-      _menu = null;
-    });
+    _rows.remove(row);
+    _closeMenu();
   }
 
   @override
   Widget build(BuildContext context) {
-    // At least the panel's height, so the popover under a low row and the tap that closes it stay inside the list.
+    // At least the panel's height, so a row low in it opens the popover upwards rather than past the panel's bottom.
     final fill = MediaQuery.sizeOf(context).height - MediaQuery.paddingOf(context).vertical - BiliMetrics.panelBottom;
+    final fade = MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 150);
     final menu = _menu;
-    return ConstrainedBox(
-      constraints: BoxConstraints(minHeight: math.max(0, fill)),
-      child: LayoutBuilder(
-        builder: (context, constraints) => Stack(
-          key: _stack,
-          clipBehavior: Clip.none,
-          children: [
-            if (_rows.isEmpty)
-              SizedBox(
-                height: DanmakuListTheme.rowMinHeight,
-                child: Center(
-                  child: Text('暂无弹幕', style: DanmakuListTheme.textStyle.copyWith(color: DanmakuListTheme.emptyColor)),
-                ),
-              )
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final row in _rows)
-                    AnimatedOpacity(
-                      key: row.key,
-                      opacity: menu == null || identical(menu.row, row) ? 1 : DanmakuListTheme.dimmed,
-                      duration: const Duration(milliseconds: 150),
-                      child: _DanmakuRow(
-                        elem: row.elem,
-                        stat: _stats[row.elem.id],
-                        onLike: () => _like(row.elem),
-                        onMore: () => _openMenu(row),
+    return OverlayPortal(
+      controller: _portal,
+      overlayChildBuilder: _overlay,
+      child: CompositedTransformTarget(
+        link: _link,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: math.max(0, fill)),
+          child: Stack(
+            key: _stack,
+            children: [
+              if (_rows.isEmpty)
+                SizedBox(
+                  height: DanmakuListTheme.rowMinHeight,
+                  child: Center(
+                    child: Text('暂无弹幕', style: DanmakuListTheme.textStyle.copyWith(color: DanmakuListTheme.emptyColor)),
+                  ),
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final row in _rows)
+                      AnimatedOpacity(
+                        key: row.key,
+                        opacity: menu == null || identical(menu.row, row) ? 1 : DanmakuListTheme.dimmed,
+                        duration: fade,
+                        child: _DanmakuRow(
+                          elem: row.elem,
+                          stat: _stats[row.elem.id],
+                          onLike: () => _like(row.elem),
+                          onMore: () => _openMenu(row),
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            if (menu != null) ...[
-              Positioned.fill(
-                child: GestureDetector(
-                  key: const ValueKey('danmaku-list-menu-dismiss'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _closeMenu,
+                  ],
                 ),
-              ),
-              _popover(menu, constraints.maxWidth),
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _popover(_Menu menu, double width) {
+  Widget _overlay(BuildContext context) {
+    final menu = _menu;
+    if (menu == null) return const SizedBox.shrink();
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            key: const ValueKey('danmaku-list-menu-dismiss'),
+            behavior: HitTestBehavior.opaque,
+            onTap: _closeMenu,
+          ),
+        ),
+        _popover(menu),
+      ],
+    );
+  }
+
+  /// Follows the list, so it stays under ⋮ wherever the panel is.
+  Widget _popover(_Menu menu) {
     const height = DanmakuListTheme.popoverHeight + DanmakuListTheme.popoverArrowHeight;
     const boxWidth = DanmakuListTheme.popoverCell + DanmakuListTheme.popoverPadX * 2;
-    final right = width + BiliMetrics.panelTrailing;
-    final arrowX = width - DanmakuListTheme.moreCentre - (right - boxWidth);
-    final stackHeight = (_stack.currentContext?.findRenderObject() as RenderBox?)?.size.height ?? double.infinity;
+    const arrowX = boxWidth - BiliMetrics.panelTrailing - DanmakuListTheme.moreCentre;
     final belowTop = menu.bottom - DanmakuListTheme.popoverOverlap;
-    final up = belowTop + height > stackHeight && menu.top + DanmakuListTheme.popoverOverlap - height >= 0;
+    final up = belowTop + height > menu.list.height && menu.top + DanmakuListTheme.popoverOverlap - height >= 0;
     return Positioned(
-      left: right - boxWidth,
-      top: up ? menu.top + DanmakuListTheme.popoverOverlap - height : belowTop,
-      width: boxWidth,
-      height: height,
-      child: CustomPaint(
-        key: const ValueKey('danmaku-list-menu'),
-        painter: _PopoverPainter(arrowX: arrowX, up: up),
-        child: Padding(
-          padding: EdgeInsets.only(
-            top: up ? 0 : DanmakuListTheme.popoverArrowHeight,
-            bottom: up ? DanmakuListTheme.popoverArrowHeight : 0,
-            left: DanmakuListTheme.popoverPadX,
-            right: DanmakuListTheme.popoverPadX,
-          ),
-          child: Semantics(
-            button: true,
-            label: '屏蔽弹幕',
-            onTap: () => _hide(menu.row),
-            excludeSemantics: true,
-            child: GestureDetector(
-              key: const ValueKey('danmaku-list-hide'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _hide(menu.row),
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: DanmakuListTheme.popoverIconCentre - DanmakuListTheme.popoverIconHeight / 2,
-                    child: const Center(
-                      child: CustomPaint(
-                        size: Size(DanmakuListTheme.popoverIconWidth, DanmakuListTheme.popoverIconHeight),
-                        painter: _EyeSlashPainter(),
-                      ),
+      left: 0,
+      top: 0,
+      child: CompositedTransformFollower(
+        link: _link,
+        showWhenUnlinked: false,
+        offset: Offset(
+          menu.list.width + BiliMetrics.panelTrailing - boxWidth,
+          up ? menu.top + DanmakuListTheme.popoverOverlap - height : belowTop,
+        ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          excludeFromSemantics: true,
+          onTap: () {},
+          child: CustomPaint(
+            key: const ValueKey('danmaku-list-menu'),
+            painter: _PopoverPainter(arrowX: arrowX, up: up),
+            child: SizedBox(
+              width: boxWidth,
+              height: height,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: up ? 0 : DanmakuListTheme.popoverArrowHeight,
+                  bottom: up ? DanmakuListTheme.popoverArrowHeight : 0,
+                  left: DanmakuListTheme.popoverPadX,
+                  right: DanmakuListTheme.popoverPadX,
+                ),
+                child: Semantics(
+                  button: true,
+                  label: '屏蔽弹幕',
+                  onTap: () => _hide(menu.row),
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    key: const ValueKey('danmaku-list-hide'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _hide(menu.row),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: DanmakuListTheme.popoverIconCentre - DanmakuListTheme.popoverIconHeight / 2,
+                          child: const Center(
+                            child: CustomPaint(
+                              size: Size(DanmakuListTheme.popoverIconWidth, DanmakuListTheme.popoverIconHeight),
+                              painter: _EyeSlashPainter(),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: DanmakuListTheme.popoverLabelCentre - DanmakuListTheme.popoverText / 2,
+                          height: DanmakuListTheme.popoverText,
+                          child: Center(child: Text('屏蔽弹幕', style: DanmakuListTheme.popoverStyle)),
+                        ),
+                      ],
                     ),
                   ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: DanmakuListTheme.popoverLabelCentre - DanmakuListTheme.popoverText / 2,
-                    height: DanmakuListTheme.popoverText,
-                    child: Center(child: Text('屏蔽弹幕', style: DanmakuListTheme.popoverStyle)),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

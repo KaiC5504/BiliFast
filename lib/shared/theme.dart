@@ -2274,7 +2274,7 @@ abstract final class DanmakuListTheme {
   /// While the popover is up, the other rows fade (32's white text reads 140).
   static const dimmed = 0.53;
 
-  /// 32's popover, one 60.3 wide cell now that 举报 is gone: its right edge on the safe area, the arrow under ⋮.
+  /// 32's popover, one 60.3 wide cell (we offer no 举报): its right edge on the safe area, the arrow under ⋮.
   static const popoverCell = 60.3;
   static const popoverPadX = 7.5;
   static const popoverHeight = 67.3;
