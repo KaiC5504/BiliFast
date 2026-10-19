@@ -467,6 +467,20 @@ void main() {
       rig.mid = null;
       expect(rig.model.isOwn(comment(1)), isFalse);
     });
+
+    test('a login from the page has the rows ask isOwn again', () {
+      final rig = CommentsRig(loggedIn: false, mid: null);
+      var notified = 0;
+      rig.model.addListener(() => notified += 1);
+      expect(rig.model.isOwn(comment(1)), isFalse);
+      rig
+        ..loggedIn = true
+        ..mid = 2001;
+      rig.model.refreshAccount();
+      expect(notified, 1);
+      expect(rig.model.isOwn(comment(1)), isTrue);
+      expect(rig.api.calls, isEmpty, reason: 'the list is not loaded again');
+    });
   });
 
   group('delete', () {

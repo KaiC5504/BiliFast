@@ -38,12 +38,14 @@ void main() {
   late FakePageApi api;
   late FakeVideoActions actions;
   late MemorySink logs;
+  late int logins;
   final models = <FavouritesModel>[];
 
   setUp(() {
     api = FakePageApi(folders: _three());
     actions = FakeVideoActions();
     logs = MemorySink();
+    logins = 0;
   });
 
   tearDown(() {
@@ -60,6 +62,7 @@ void main() {
       aid: _aid,
       mid: () => mid,
       actions: actions,
+      requestLogin: () => logins += 1,
       logger: Logger(session: 'test')..add(logs),
     );
     models.add(model);
@@ -85,12 +88,30 @@ void main() {
     expect(notified, 1);
   });
 
-  test('logged out it asks nothing and says to log in', () async {
+  test('logged out it asks Bilibili nothing and asks for the login once', () async {
     final model = make(mid: null);
     await pumpEventQueue();
     expect(model.loading, isFalse);
     expect(model.error, '请先登录');
     expect(api.calls, isEmpty);
+    expect(logins, 1);
+  });
+
+  test('a list Bilibili refuses for want of a login asks for the login', () async {
+    api.failures['favouriteFolders'] = const BiliError.api(code: -101, message: '账号未登录');
+    final model = make();
+    await pumpEventQueue();
+    expect(model.error, isNotNull);
+    expect(logins, 1);
+  });
+
+  test('新建收藏夹 refused for want of a login asks for the login rather than toasting', () async {
+    final model = make();
+    await pumpEventQueue();
+    api.failures['createFolder'] = const BiliError.api(code: -101, message: '账号未登录');
+    expect(await model.create('新的', isPrivate: false), '');
+    expect(logins, 1);
+    expect(ids(model), [3001, 3002, 3003]);
   });
 
   test('a list that fails says why, and 重试 loads it', () async {

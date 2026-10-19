@@ -104,8 +104,13 @@ class _HeldApi extends FakePageApi {
 }
 
 class _Rig {
-  _Rig({FakePageApi? api, this.loggedIn = true, Listenable? accountChanges, PeriodicTimerSpy? periodic})
-    : api = api ?? FakePageApi(uploader: _card(42), tagsValue: _tagsA, online: '53') {
+  _Rig({
+    FakePageApi? api,
+    this.loggedIn = true,
+    Listenable? accountChanges,
+    Listenable? pageLogins,
+    PeriodicTimerSpy? periodic,
+  }) : api = api ?? FakePageApi(uploader: _card(42), tagsValue: _tagsA, online: '53') {
     model = VideoPageDetailsModel(
       session: session,
       api: this.api,
@@ -116,6 +121,7 @@ class _Rig {
       periodic: periodic?.start,
       logger: Logger(session: 'test')..add(logs),
       accountChanges: accountChanges,
+      logins: pageLogins,
     );
     model.addListener(() => notified += 1);
   }
@@ -726,6 +732,83 @@ void main() {
         expect(r.callsTo('relation'), hasLength(1));
         r.dispose();
         account.dispose();
+      });
+    });
+
+    test('made from the page asks again though the account looked logged in all along, over what was tapped', () {
+      fakeAsync((async) {
+        final logins = ValueNotifier(0);
+        final r = _Rig(pageLogins: logins);
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(1));
+        r.api.failures['like'] = const BiliError.api(code: -101, message: '账号未登录');
+        unawaited(r.actions!.toggleLike());
+        async.flushMicrotasks();
+        expect(r.logins, 1);
+
+        r.api.relationValue = const VideoRelation(
+          like: true,
+          dislike: false,
+          favorite: false,
+          attention: true,
+          coins: 0,
+        );
+        logins.value += 1;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(2));
+        expect(r.actions?.liked, isTrue);
+        expect(r.actions?.following, isTrue);
+        expect(r.callsTo('like'), hasLength(1), reason: 'nothing tapped is sent again');
+        r.dispose();
+        logins.dispose();
+      });
+    });
+
+    test('heard both as the account changing and from the page asks once while the first ask is out', () {
+      fakeAsync((async) {
+        final account = ValueNotifier(0);
+        final logins = ValueNotifier(0);
+        final api = _HeldApi({'relation'});
+        final r = _Rig(api: api, loggedIn: false, accountChanges: account, pageLogins: logins);
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        r.loggedIn = true;
+        account.value += 1;
+        async.flushMicrotasks();
+        logins.value += 1;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(1));
+        api.open('relation', 0);
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(1));
+        r.dispose();
+        account.dispose();
+        logins.dispose();
+      });
+    });
+
+    test('made from the page while covered asks once the page shows again; a gate answered logged out asks nothing',
+        () {
+      fakeAsync((async) {
+        final logins = ValueNotifier(0);
+        final r = _Rig(loggedIn: false, pageLogins: logins);
+        r.show(_detail(_bvA), cid: 11);
+        async.flushMicrotasks();
+        logins.value += 1;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), isEmpty);
+
+        r.model.active = false;
+        r.loggedIn = true;
+        logins.value += 1;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), isEmpty);
+        r.model.active = true;
+        async.flushMicrotasks();
+        expect(r.callsTo('relation'), hasLength(1));
+        r.dispose();
+        logins.dispose();
       });
     });
 

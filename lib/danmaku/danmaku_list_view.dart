@@ -117,7 +117,7 @@ class _DanmakuListViewState extends State<DanmakuListView> {
     final session = _session;
     if (session == null) return;
     if (!session.loggedIn) {
-      widget.toast('请先登录');
+      session.requestLogin();
       return;
     }
     final cid = session.target?.cid;
@@ -135,9 +135,11 @@ class _DanmakuListViewState extends State<DanmakuListView> {
       Logger.shared.warn(LogCategory.api, 'danmaku like failed', {'on': after.liked, 'error': _describe(error)});
       if (!mounted) return;
       setState(() => _stats[id] = before);
-      widget.toast(
-        error is BiliError && error.needsLogin ? DanmakuSession.needLogin : ActionsModel.failureMessage(error),
-      );
+      if (error is BiliError && error.needsLogin) {
+        session.requestLogin();
+      } else {
+        widget.toast(ActionsModel.failureMessage(error));
+      }
     } finally {
       _pending.remove(id);
     }

@@ -19,7 +19,8 @@ import 'player_session.dart';
 /// was there. A failed relation is asked again the next time the page shows or the app comes back, since without it
 /// the actions show defaults as the account's state.
 class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver implements PageDetails {
-  /// [accountChanges] hears logins, after which the relation is asked again for this account.
+  /// [accountChanges] hears the account change and [logins] each login made from the page; after either the relation
+  /// is asked again for this account.
   VideoPageDetailsModel({
     required this._session,
     required this._api,
@@ -31,6 +32,7 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
     PeriodicTimer? periodic,
     Logger? logger,
     this._accountChanges,
+    this._logins,
   })  : _periodic = periodic ?? _systemPeriodic,
         _logger = logger ?? Logger.shared {
     _loggedIn = _isLoggedIn();
@@ -38,6 +40,7 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
     WidgetsBinding.instance.addObserver(this);
     _session.addListener(_sessionChanged);
     _accountChanges?.addListener(_accountChanged);
+    _logins?.addListener(_loginMade);
     _sessionChanged();
   }
 
@@ -59,6 +62,7 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
   final PeriodicTimer _periodic;
   final Logger _logger;
   final Listenable? _accountChanges;
+  final Listenable? _logins;
 
   ActionsModel? _actions;
   UploaderCard? _uploader;
@@ -83,6 +87,10 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
   /// A relation ask for the current video still to make once the page shows and the app is in the foreground: one
   /// that failed, or a login's while the page was covered.
   _RelationAsk? _owed;
+
+  /// The video a login's relation ask is out for, so the account's change and the page's word of the same login ask
+  /// once.
+  int? _resetting;
   bool _disposed = false;
 
   @override
@@ -183,6 +191,7 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
   Future<void> _loadRelation(VideoDetail detail, _RelationAsk ask) async {
     if (!_isLoggedIn()) return;
     final video = _video;
+    if (ask == _RelationAsk.reset) _resetting = video;
     try {
       final relation = await _api.relation(aid: detail.aid, bvid: detail.bvid);
       if (_disposed || video != _video) return;
@@ -196,6 +205,8 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
       _logger.warn(LogCategory.api, 'relation failed', {'bvid': detail.bvid, 'error': '$error'});
       if (_disposed || video != _video) return;
       if (_owed != _RelationAsk.reset) _owed = ask;
+    } finally {
+      if (_resetting == video && ask == _RelationAsk.reset) _resetting = null;
     }
   }
 
@@ -258,10 +269,21 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
     final loggedIn = _isLoggedIn();
     if (_disposed || loggedIn == _loggedIn) return;
     _loggedIn = loggedIn;
-    if (!loggedIn) return;
+    if (loggedIn) _askAfterLogin();
+  }
+
+  /// The account may have looked logged in all along, with cookies Bilibili stopped taking, so a login from the page
+  /// asks again whatever the account did.
+  void _loginMade() {
+    if (_disposed) return;
+    _loggedIn = _isLoggedIn();
+    if (_loggedIn) _askAfterLogin();
+  }
+
+  void _askAfterLogin() {
     if (!_active) {
       _owed = _RelationAsk.reset;
-    } else if (_detail case final detail?) {
+    } else if (_detail case final detail? when _resetting != _video) {
       unawaited(_loadRelation(detail, _RelationAsk.reset));
     }
   }
@@ -295,6 +317,7 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
     WidgetsBinding.instance.removeObserver(this);
     _session.removeListener(_sessionChanged);
     _accountChanges?.removeListener(_accountChanged);
+    _logins?.removeListener(_loginMade);
     _actions?.dispose();
     _online.dispose();
     super.dispose();

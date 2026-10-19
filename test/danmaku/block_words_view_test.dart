@@ -22,12 +22,15 @@ import '../playback/fakes.dart';
 import '../support/fake_player_session.dart';
 
 class Rig {
-  Rig(this.api, this.store, this.toasts, this.backs);
+  Rig(this.api, this.store, this.toasts, this.backs, this.logins);
 
   final FakePageApi api;
   final BlockRuleStore store;
   final List<String> toasts;
   final List<int> backs;
+
+  /// One entry per login asked for.
+  final List<void> logins;
 
   int get fetches => api.calls.where((call) => call == 'danmakuBlockRules').length;
 }
@@ -50,6 +53,7 @@ Future<Rig> pumpView(WidgetTester tester, {bool loggedIn = true}) async {
     client: BiliClient(transport: Canned.http(), cookies: CookieJar(Canned.cookies)),
   );
   final settings = DanmakuSettingsStore.memory();
+  final logins = <void>[];
   final danmaku = DanmakuSession(
     feed: feed,
     settings: settings,
@@ -60,7 +64,7 @@ Future<Rig> pumpView(WidgetTester tester, {bool loggedIn = true}) async {
     isLoggedIn: () => loggedIn,
     isVip: () => false,
     accountMid: () => 0,
-    requestLogin: () {},
+    requestLogin: () => logins.add(null),
   );
   final session = FakePlayerSession();
   final chrome = ChromeState();
@@ -98,7 +102,7 @@ Future<Rig> pumpView(WidgetTester tester, {bool loggedIn = true}) async {
     orientation.dispose();
     session.dispose();
   });
-  return Rig(api, store, toasts, backs);
+  return Rig(api, store, toasts, backs, logins);
 }
 
 Finder key(String value) => find.byKey(ValueKey(value));
@@ -274,15 +278,29 @@ void main() {
     expect(rig.backs, [1]);
   });
 
-  testWidgets('logged out: nothing is asked and 添加 and 同步 toast 请先登录', (tester) async {
+  testWidgets('logged out: nothing is asked, and 添加 and 同步 each ask the page for the login', (tester) async {
     final rig = await pumpView(tester, loggedIn: false);
     expect(rig.api.calls, isEmpty);
     expect(find.text('CA'), findsNothing);
     await type(tester, '新词');
     await tap(tester, 'block-words-add');
+    expect(rig.logins, hasLength(1));
     await tap(tester, 'block-words-sync');
-    expect(rig.toasts, [BlockRuleStore.needLogin, BlockRuleStore.needLogin]);
+    expect(rig.logins, hasLength(2));
+    expect(rig.toasts, isEmpty);
     expect(rig.api.calls, isEmpty);
+  });
+
+  testWidgets('a rule Bilibili refuses for want of a login asks for the login rather than toasting', (tester) async {
+    final rig = await pumpView(tester);
+    rig.api.failures['addBlockRule'] = const BiliError.api(code: -101, message: '账号未登录');
+    rig.api.failures['deleteBlockRule'] = const BiliError.api(code: -101, message: '账号未登录');
+    await type(tester, '新词');
+    await tap(tester, 'block-words-add');
+    expect(rig.logins, hasLength(1));
+    await tap(tester, 'block-rule-remove-1');
+    expect(rig.logins, hasLength(2));
+    expect(rig.toasts, isEmpty);
   });
 
   testWidgets('every control has a label to press', (tester) async {

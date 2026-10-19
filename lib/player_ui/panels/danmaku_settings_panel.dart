@@ -43,7 +43,6 @@ class DanmakuSettingsPanel extends StatefulWidget {
   final ValueChanged<PanelConfirm> confirm;
 
   static const portraitSoon = '人像防挡将在后续版本推出';
-  static const loginFirst = '请先登录';
 
   @override
   State<DanmakuSettingsPanel> createState() => _DanmakuSettingsPanelState();
@@ -416,8 +415,10 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
 
   Widget _blockWordsButton(_Look look) {
     void open() {
-      if (widget.ui.danmaku?.loggedIn != true) {
-        widget.toast(DanmakuSettingsPanel.loginFirst);
+      final danmaku = widget.ui.danmaku;
+      if (danmaku == null) return;
+      if (!danmaku.loggedIn) {
+        danmaku.requestLogin();
         return;
       }
       widget.ui.panels.open(PlayerPanel.blockWords);

@@ -45,6 +45,10 @@ class ListSession extends DanmakuSession {
   final List<DanmakuElem> rows;
   final List<DanmakuElem> hidden = [];
   int reads = 0;
+  int logins = 0;
+
+  @override
+  void requestLogin() => logins += 1;
 
   @override
   List<DanmakuElem> recent() {
@@ -243,14 +247,25 @@ void main() {
     expect(thumbOf(tester, '秒赤').solid, isFalse);
   });
 
-  testWidgets('logged out, a 👍 asks for the login and sends nothing', (tester) async {
+  testWidgets('logged out, a 👍 asks the page for the login once and sends nothing', (tester) async {
     final rig = Rig(loggedIn: false);
     await rig.mount(tester);
     await tester.tap(inRow('第一个', 'danmaku-list-like'));
     await tester.pump();
-    expect(rig.toasts, ['请先登录']);
+    expect(rig.session.logins, 1);
+    expect(rig.toasts, isEmpty);
     expect(rig.api.calls.where((call) => call.startsWith('likeDanmaku')), isEmpty);
     expect(countOf(tester, '第一个'), isNull);
+  });
+
+  testWidgets('a 👍 Bilibili refuses for want of a login goes back and asks for the login, not a toast', (tester) async {
+    final rig = Rig()..api.failures['likeDanmaku'] = const BiliError.api(code: -101, message: '账号未登录');
+    await rig.mount(tester);
+    await tester.tap(inRow('秒赤', 'danmaku-list-like'));
+    await tester.pump();
+    expect(rig.session.logins, 1);
+    expect(rig.toasts, isEmpty);
+    expect(thumbOf(tester, '秒赤').solid, isFalse);
   });
 
   testWidgets('counts that fail to load leave every 👍 at zero, quietly', (tester) async {

@@ -10,10 +10,17 @@ import 'actions_model.dart';
 import 'video_actions.dart';
 
 /// The account's folders for one video (BiliNative `FavouriteSheet.swift`'s model): which hold it now, which the user
-/// has ticked, and folders made here. It starts loading when made.
+/// has ticked, and folders made here. It starts loading when made. Without an account, or with one Bilibili no longer
+/// takes, it asks the page for the login.
 class FavouritesModel extends ChangeNotifier implements FavouriteFolders {
-  FavouritesModel({required this._api, required this._aid, required this._mid, required this._actions, Logger? logger})
-    : _logger = logger ?? Logger.shared {
+  FavouritesModel({
+    required this._api,
+    required this._aid,
+    required this._mid,
+    required this._actions,
+    required this._requestLogin,
+    Logger? logger,
+  }) : _logger = logger ?? Logger.shared {
     unawaited(reload());
   }
 
@@ -21,6 +28,7 @@ class FavouritesModel extends ChangeNotifier implements FavouriteFolders {
   final int _aid;
   final int? Function() _mid;
   final VideoActions _actions;
+  final VoidCallback _requestLogin;
   final Logger _logger;
 
   bool _loading = true;
@@ -78,6 +86,7 @@ class FavouritesModel extends ChangeNotifier implements FavouriteFolders {
       _loading = false;
       _error = '请先登录';
       _notify();
+      _login();
       return;
     }
     try {
@@ -98,6 +107,7 @@ class FavouritesModel extends ChangeNotifier implements FavouriteFolders {
       if (_disposed || mine != _generation) return;
       _logger.warn(LogCategory.api, 'favourite folders failed', {'error': '$error'});
       _error = requestFailureMessage(error);
+      if (error is BiliError && error.needsLogin) _login();
     }
     _loading = false;
     _notify();
@@ -129,6 +139,10 @@ class FavouritesModel extends ChangeNotifier implements FavouriteFolders {
       return null;
     } catch (error) {
       _logger.warn(LogCategory.api, 'create folder failed', {'error': '$error'});
+      if (error is BiliError && error.needsLogin) {
+        _login();
+        return '';
+      }
       return ActionsModel.failureMessage(error);
     }
   }
@@ -144,6 +158,10 @@ class FavouritesModel extends ChangeNotifier implements FavouriteFolders {
     if (change.add.isEmpty && change.remove.isEmpty) return Future.value();
     final inAny = _folders.any((folder) => _ticked.contains(folder.id));
     return _actions.applyFavourites(add: change.add, remove: change.remove, inAnyFolder: inAny);
+  }
+
+  void _login() {
+    if (!_disposed) _requestLogin();
   }
 
   void _notify() {

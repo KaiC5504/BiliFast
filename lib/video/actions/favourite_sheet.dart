@@ -135,7 +135,7 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
       }
     });
     if (failure != null) {
-      showToast(context, failure);
+      if (failure.isNotEmpty) showToast(context, failure);
     } else {
       _focus.unfocus();
     }

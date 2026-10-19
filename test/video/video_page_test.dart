@@ -12,15 +12,18 @@ import 'package:bili_core/api.dart'
         RichRun,
         TextRun,
         UploaderCard,
+        BiliError,
         VideoCard,
         VideoDetail,
         VideoOwner,
+        VideoRelation,
         VideoStat;
 import 'package:bili_core/api.dart' as core show VideoPage, VideoView;
 import 'package:bili_core/danmaku.dart' show DisplayDanmaku;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
+import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
@@ -52,6 +55,8 @@ import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/actions/action_overlays.dart';
+import 'package:bilifast/video/actions/coin_dialog.dart';
+import 'package:bilifast/video/actions/favourite_sheet.dart';
 import 'package:bilifast/video/actions/video_actions.dart';
 import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/fake_page_api.dart';
@@ -110,6 +115,34 @@ class SpyOrientation extends OrientationController {
   }
 }
 
+/// The login page as the page asks for it: each ask with the presentation and the screen at that moment, answered when
+/// the test says.
+class FakeLoginGate implements LoginGate {
+  FakeLoginGate(this.orientation);
+
+  final OrientationController orientation;
+  final asks = <({Presentation presentation, Size screen})>[];
+  Completer<bool>? _open;
+
+  /// Runs as the gate answers true, as the login page sets the account before it pops.
+  VoidCallback? onLogin;
+
+  bool get open => _open != null;
+
+  @override
+  Future<bool> request(BuildContext context) {
+    asks.add((presentation: orientation.presentation, screen: MediaQuery.sizeOf(context)));
+    return (_open = Completer<bool>()).future;
+  }
+
+  void answer(bool loggedIn) {
+    if (loggedIn) onLogin?.call();
+    final open = _open!;
+    _open = null;
+    open.complete(loggedIn);
+  }
+}
+
 void main() {
   late CannedHttp http;
   late FakePlayer player;
@@ -118,6 +151,7 @@ void main() {
   late AppEnvironment environment;
   late GlobalKey<NavigatorState> nav;
   late SpyOrientation orientation;
+  late FakeLoginGate gate;
 
   /// Each page's session and the open it was handed, in the order the pages made them.
   late List<FakePlayerSession> sessions;
@@ -133,6 +167,7 @@ void main() {
     time = ManualClock(10000);
     nav = GlobalKey<NavigatorState>();
     orientation = SpyOrientation();
+    gate = FakeLoginGate(orientation);
     sessions = [];
     sessionOpens = [];
     detailsMade = [];
@@ -144,6 +179,7 @@ void main() {
     required AppServices services,
     required SessionOpen open,
     required void Function(double seconds) onSeeked,
+    required VoidCallback requestLogin,
   }) {
     final session = FakePlayerSession(player: player);
     sessions.add(session);
@@ -193,6 +229,7 @@ void main() {
       recents: await RecentStore.load(null, logger: logger),
       device: PlayerDevice(orientation: orientation, controls: NoDeviceControls()),
       pageApi: pageApi,
+      loginGate: gate,
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -214,6 +251,8 @@ void main() {
     required PlayerSession session,
     required AppServices services,
     required void Function(String message) toast,
+    required VoidCallback requestLogin,
+    required Listenable logins,
   }) {
     final details = makeDetails();
     detailsMade.add(details);
@@ -1074,15 +1113,17 @@ void main() {
           SwipeBackPageRoute<void>(
             builder: (_) => VideoPage(
               route: const VideoRoute(bvid: bv, cid: p1, start: 0),
-              createDetails: ({required session, required services, required toast}) => model = VideoPageDetailsModel(
-                session: session,
-                api: api,
-                isLoggedIn: () => true,
-                accountMid: () => 12345,
-                requestLogin: () {},
-                toast: toast,
-                periodic: FakeTimers().start,
-              ),
+              createDetails:
+                  ({required session, required services, required toast, required requestLogin, required logins}) =>
+                      model = VideoPageDetailsModel(
+                        session: session,
+                        api: api,
+                        isLoggedIn: () => true,
+                        accountMid: () => 12345,
+                        requestLogin: () {},
+                        toast: toast,
+                        periodic: FakeTimers().start,
+                      ),
               openPage: openPage,
             ),
           ),
@@ -2023,9 +2064,11 @@ void main() {
       await tester.tap(inRow(100, 'comment-reply').first);
       await frames(tester, 5);
       expect(find.byType(Composer), findsNothing);
-      expect(find.text('请先登录'), findsOneWidget);
-      // The toast's own 2 s timer.
-      await frames(tester, 60);
+      expect(gate.asks, hasLength(1));
+      expect(find.text('请先登录'), findsNothing);
+      gate.answer(false);
+      await frames(tester, 2);
+      expect(find.byType(Composer), findsNothing, reason: 'nothing pressed is replayed');
       await back(tester);
     });
 
@@ -2384,6 +2427,283 @@ void main() {
     });
   });
 
+  group('logging in from the page (BiliNative LoginGate, checklist item 59)', () {
+    late FakePageApi api;
+    VoidCallback? sessionLogin;
+    final reduceMotion = ValueVariant<bool>({false, true});
+
+    /// What went to Bilibili on the account's behalf, leaving out the page's own loads.
+    const accountCalls = [
+      'like',
+      'triple',
+      'coin',
+      'favourite',
+      'updateFavourites',
+      'createFolder',
+      'follow',
+      'favSeason',
+      'addToWatchLater',
+      'postComment',
+      'likeComment',
+      'hateComment',
+      'deleteComment',
+      'addBlockRule',
+      'deleteBlockRule',
+      'postDanmaku',
+      'likeDanmaku',
+    ];
+    List<String> sent() => [
+      for (final call in api.calls)
+        if (accountCalls.any(call.startsWith)) call,
+    ];
+    int relations() => api.calls.where((call) => call == 'relation').length;
+
+    setUp(() {
+      api = FakePageApi()..commentList = [comment(100), comment(101)];
+      sessionLogin = null;
+    });
+
+    PlayerSession recordingSession({
+      required PlaybackController controller,
+      required AppServices services,
+      required SessionOpen open,
+      required void Function(double seconds) onSeeked,
+      required VoidCallback requestLogin,
+    }) {
+      sessionLogin = requestLogin;
+      return fakeSession(
+        controller: controller,
+        services: services,
+        open: open,
+        onSeeked: onSeeked,
+        requestLogin: requestLogin,
+      );
+    }
+
+    /// The page with the app's own details, actions and comments over [api], its video's detail in, on 简介. Not
+    /// logged in, the jar keeps cookies Bilibili no longer takes, so the video still opens and the page owns the
+    /// orientation.
+    Future<void> openReal(WidgetTester tester, {bool loggedIn = false, bool vertical = false}) async {
+      if (!loggedIn) http.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+      await host(tester, pageApi: api);
+      expect(environment.account, loggedIn ? isA<LoggedIn>() : isA<LoginExpired>());
+      unawaited(
+        nav.currentState!.push(
+          SwipeBackPageRoute<void>(
+            builder: (_) => VideoPage(
+              route: const VideoRoute(bvid: bv, cid: p1, start: 0),
+              createSession: recordingSession,
+              openPage: openPage,
+            ),
+          ),
+        ),
+      );
+      await opened(tester, vertical: vertical);
+      sessions.first
+        ..detail = detail(bv, aid: 7, ownerMid: 9, reply: 2)
+        ..changed();
+      await frames(tester, 4);
+    }
+
+    VideoActions actions(WidgetTester tester) => ui(tester).details!.actions!;
+    Finder inRow(int rpid, String key) =>
+        find.descendant(of: find.byKey(ValueKey(rpid)), matching: find.byKey(ValueKey(key)));
+
+    testWidgets('logged out, each action asks the login page once, toasts nothing and sends nothing', (tester) async {
+      await openReal(tester);
+      var asked = 0;
+      Future<void> press(String what, FutureOr<void> Function() action) async {
+        await action();
+        await frames(tester, 3);
+        asked += 1;
+        expect(gate.asks, hasLength(asked), reason: what);
+        expect(gate.asks.last.presentation, Presentation.inline, reason: what);
+        expect(find.text('请先登录'), findsNothing, reason: what);
+        gate.answer(false);
+        await frames(tester, 2);
+      }
+
+      await press('点赞', () => tester.tap(find.byKey(const ValueKey('action-like'))));
+      await press('三连, the hold', () => actions(tester).triple());
+      await press('投币', () => tester.tap(find.byKey(const ValueKey('action-coin'))));
+      await press('收藏', () => tester.tap(find.byKey(const ValueKey('action-favourite'))));
+      await press('关注', () => actions(tester).tapFollow());
+      final intro = tester.widget<IntroTab>(find.byType(IntroTab));
+      await press('a related row\'s 稍后再看', () => intro.onWatchLater(card('BV1xx')));
+      await press('⋮\'s 稍后再看, through the session', () => sessionLogin!());
+      await press('点我发弹幕', () => tester.tap(find.byKey(const ValueKey('danmaku-send'))));
+      await press('当前弹幕列表\'s 👍 and 添加屏蔽词, through the danmaku', () => ui(tester).danmaku!.requestLogin());
+      expect(find.byType(CoinDialog), findsNothing);
+      expect(find.byType(FavouriteSheet), findsNothing);
+      expect(ui(tester).danmaku!.sendOpen.value, isFalse);
+
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 20);
+      await press('the composer', () => tester.tap(find.byKey(const ValueKey('comment-bar')).first));
+      expect(find.byType(Composer), findsNothing);
+      await press('a comment\'s 👍', () => tester.tap(inRow(100, 'comment-like').first));
+      await press('a comment\'s 踩', () => tester.tap(inRow(100, 'comment-dislike').first));
+      expect(sent(), isEmpty);
+      expect(relations(), 0);
+      expect(find.text('此版本不支持不喜欢'), findsNothing);
+      await back(tester);
+    });
+
+    testWidgets('不喜欢 stays grey: its toast, never the login', (tester) async {
+      await openReal(tester);
+      await tester.tap(find.byKey(const ValueKey('action-dislike')));
+      await frames(tester, 3);
+      expect(find.text('此版本不支持不喜欢'), findsOneWidget);
+      expect(gate.asks, isEmpty);
+      await frames(tester, 60);
+      await back(tester);
+    });
+
+    testWidgets('a second ask while the login page is up is the same ask', (tester) async {
+      await openReal(tester);
+      await tester.tap(find.byKey(const ValueKey('action-like')));
+      await frames(tester, 3);
+      await tester.tap(find.byKey(const ValueKey('danmaku-send')));
+      await frames(tester, 3);
+      expect(gate.asks, hasLength(1));
+      gate.answer(false);
+      await frames(tester, 2);
+      await back(tester);
+    });
+
+    testWidgets('from landscape full screen the page turns upright first, then the login page shows', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = FakeAccessibilityFeatures(
+        disableAnimations: reduceMotion.currentValue!,
+      );
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await openReal(tester);
+      await rotate(tester, Presentation.landscape);
+      expect(orientation.presentation, Presentation.landscape);
+      orientation.log.clear();
+      unawaited(actions(tester).toggleLike());
+      await frames(tester, 4);
+      expect(orientation.presentation, Presentation.inline);
+      expect(gate.asks, isEmpty, reason: 'the screen is still sideways');
+
+      screen(tester, portrait, portraitInsets);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(gate.asks, isEmpty, reason: 'the turn is still finishing');
+      await frames(tester, 10);
+      expect(gate.asks, [(presentation: Presentation.inline, screen: portrait)]);
+      expect(orientation.log, ['end page1'], reason: 'the phone stays upright while the login page is up');
+
+      gate.answer(false);
+      await frames(tester, 2);
+      expect(orientation.log, ['end page1', 'begin page1'], reason: 'turning works again once it closes');
+      expect(orientation.presentation, Presentation.inline);
+      expect(sent(), isEmpty);
+      await back(tester);
+    }, variant: reduceMotion);
+
+    testWidgets('a screen that never turns back still gets the login page, after 3 s', (tester) async {
+      await openReal(tester);
+      await rotate(tester, Presentation.landscape);
+      unawaited(actions(tester).toggleLike());
+      await frames(tester, 50);
+      expect(gate.asks, isEmpty);
+      await frames(tester, 20);
+      expect(gate.asks, hasLength(1));
+      gate.answer(false);
+      screen(tester, portrait, portraitInsets);
+      await frames(tester, 2);
+      await back(tester);
+    });
+
+    testWidgets('from 竖屏 the page goes back to the small player and the login page shows at once', (tester) async {
+      await openReal(tester, vertical: true);
+      await rotate(tester, Presentation.vertical);
+      expect(orientation.presentation, Presentation.vertical);
+      unawaited(actions(tester).toggleLike());
+      await frames(tester, 2);
+      expect(gate.asks, [(presentation: Presentation.inline, screen: portrait)]);
+      gate.answer(false);
+      await frames(tester, 2);
+      await back(tester);
+    });
+
+    testWidgets('Bilibili answering -101 asks the login page instead of a toast; the action goes back', (tester) async {
+      await openReal(tester, loggedIn: true);
+      const needsLogin = BiliError.api(code: -101, message: '账号未登录');
+      api.failures
+        ..['like'] = needsLogin
+        ..['postDanmaku'] = needsLogin
+        ..['likeComment'] = needsLogin;
+
+      await tester.tap(find.byKey(const ValueKey('action-like')));
+      await frames(tester, 3);
+      expect(gate.asks, hasLength(1));
+      expect(actions(tester).liked, isFalse);
+      gate.answer(false);
+      await frames(tester, 2);
+
+      await tester.tap(find.byKey(const ValueKey('danmaku-send')));
+      await frames(tester, 2);
+      await tester.enterText(find.byKey(const ValueKey('danmaku-send-input')), '页面弹幕');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('danmaku-send-button')));
+      await frames(tester, 4);
+      expect(gate.asks, hasLength(2));
+      expect(ui(tester).danmaku!.sendOpen.value, isFalse, reason: 'the send bar goes for the login page');
+      expect(ui(tester).danmaku!.sender.text, '页面弹幕', reason: 'the draft stays');
+      gate.answer(false);
+      await frames(tester, 2);
+
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 20);
+      await tester.tap(inRow(100, 'comment-like').first);
+      await frames(tester, 3);
+      expect(gate.asks, hasLength(3));
+      gate.answer(false);
+      await frames(tester, 2);
+      expect(find.text('需要登录'), findsNothing);
+      expect(find.text('账号未登录'), findsNothing);
+      await back(tester);
+    });
+
+    testWidgets('a login after a -101 asks the relation again, and the pressed action is not sent again',
+        (tester) async {
+      await openReal(tester, loggedIn: true);
+      expect(relations(), 1);
+      api.failures['like'] = const BiliError.api(code: -101, message: '账号未登录');
+      await tester.tap(find.byKey(const ValueKey('action-like')));
+      await frames(tester, 3);
+      expect(sent(), ['like on=true']);
+      api.failures.remove('like');
+      gate.answer(true);
+      await frames(tester, 3);
+      expect(relations(), 2);
+      expect(sent(), ['like on=true'], reason: 'not replayed');
+      await back(tester);
+    });
+
+    testWidgets('logged out, a login asks the relation once for the new account', (tester) async {
+      api.relationValue = const VideoRelation(like: true, dislike: false, favorite: false, attention: true, coins: 1);
+      await openReal(tester);
+      expect(relations(), 0);
+      await tester.tap(find.byKey(const ValueKey('action-favourite')));
+      await frames(tester, 3);
+      expect(gate.asks, hasLength(1));
+      // Bilibili answers slower than the login page pops.
+      final answering = api.holds['relation'] = Completer<void>();
+      gate.onLogin = environment.useFakeAccount;
+      gate.answer(true);
+      await frames(tester, 3);
+      answering.complete();
+      await frames(tester, 3);
+      expect(relations(), 1, reason: 'the account changing and the page hearing the login make one ask');
+      expect(actions(tester).liked, isTrue);
+      expect(actions(tester).following, isTrue);
+      expect(find.byType(FavouriteSheet), findsNothing, reason: 'nothing pressed is replayed');
+      expect(sent(), isEmpty);
+      await back(tester);
+    });
+  });
+
   group('danmaku through the page', () {
     /// Everything the page's feed holds, played from the start.
     List<DisplayDanmaku> feedItems() {
@@ -2421,14 +2741,17 @@ void main() {
       await back(tester);
     });
 
-    testWidgets('logged out, 点我发弹幕 toasts 请先登录 and opens no bar', (tester) async {
+    testWidgets('logged out, 点我发弹幕 asks for the login and opens no bar', (tester) async {
       await openPage(tester, loggedIn: false);
       await tester.tap(find.byKey(const ValueKey('danmaku-send')));
-      await tester.pump();
-      expect(find.text('请先登录'), findsOneWidget);
+      await frames(tester, 2);
+      expect(gate.asks, hasLength(1));
+      expect(find.text('请先登录'), findsNothing);
       expect(ui(tester).danmaku!.sendOpen.value, isFalse);
       expect(find.byKey(const ValueKey('danmaku-send-bar')), findsNothing);
-      await frames(tester, 80);
+      gate.answer(false);
+      await frames(tester, 2);
+      expect(ui(tester).danmaku!.sendOpen.value, isFalse);
       await back(tester);
     });
 
