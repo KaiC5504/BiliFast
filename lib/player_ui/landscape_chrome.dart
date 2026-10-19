@@ -20,8 +20,7 @@ const _fade = Duration(milliseconds: 220);
 /// The landscape full-screen controls, filling the screen (BiliNative `LandscapeChrome.swift`, measured on 04): back
 /// and the title with N人正在看 and the uploader under it, 点赞 评论 收藏 投币 充电 分享 and ⋮, 截图 and the rotation
 /// lock on the right edge, the time, the bar and the bottom row. The bars slide in from their edges as the controls
-/// show and stand aside while a panel is open. 弹幕设置 and the danmaku field (slice 5) have their room kept so nothing
-/// else moves when they come; so do the page details' parts until they arrive.
+/// show and stand aside while a panel is open. The page details' parts have their room kept until they arrive.
 class LandscapeChrome extends StatelessWidget {
   const LandscapeChrome({super.key, required this.ui});
 
@@ -38,7 +37,15 @@ class LandscapeChrome extends StatelessWidget {
   Widget build(BuildContext context) {
     final insets = MediaQuery.paddingOf(context);
     return ListenableBuilder(
-      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.orientation, ui.details, ui.overlay]),
+      listenable: Listenable.merge([
+        ui.chrome,
+        ui.panels,
+        ui.session,
+        ui.orientation,
+        ui.details,
+        ui.overlay,
+        ui.danmaku,
+      ]),
       builder: (context, _) {
         final shown = ui.chrome.visible && ui.panels.value == null;
         return Stack(
@@ -271,9 +278,24 @@ class LandscapeChrome extends StatelessWidget {
                     child: DanmakuGlyph(on: session.danmakuOn),
                   ),
                 ),
-                // 弹幕设置 and the danmaku field (slice 5) sit here.
-                const SizedBox(width: BiliMetrics.chromeSettingsRoom),
-                const Expanded(child: SizedBox.shrink()),
+                // With danmaku off, 34 closes the row up behind the toggle.
+                if (ui.danmaku case final danmaku? when session.danmakuOn) ...[
+                  const SizedBox(width: BiliMetrics.chromeSettingsGap),
+                  ChromeTap(
+                    key: const ValueKey('landscape-danmaku-settings'),
+                    label: '弹幕设置',
+                    onTap: _touch(() => ui.panels.open(PlayerPanel.danmakuSettings)),
+                    child: const DanmakuSettingsGlyph(),
+                  ),
+                  const SizedBox(width: BiliMetrics.chromeFieldGap),
+                  Expanded(
+                    child: _DanmakuField(
+                      closed: danmaku.closed,
+                      onTap: danmaku.closed ? ui.chrome.show : _touch(danmaku.openSend),
+                    ),
+                  ),
+                ] else
+                  const Expanded(child: SizedBox.shrink()),
                 const SizedBox(width: BiliMetrics.chromeSpeedGap),
                 _TextButton(
                   key: const ValueKey('landscape-speed'),
@@ -401,6 +423,55 @@ class _TextButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// 04's capsule, opening the send bar; with the uploader's danmaku closed it reads UP主已关闭弹幕 and opens nothing.
+class _DanmakuField extends StatelessWidget {
+  const _DanmakuField({required this.closed, required this.onTap});
+
+  final bool closed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = closed ? 'UP主已关闭弹幕' : '发个友善的弹幕见证当下';
+    return Semantics(
+      key: const ValueKey('landscape-danmaku-field'),
+      button: !closed,
+      label: text,
+      onTap: closed ? null : onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          height: BiliMetrics.chromeButton,
+          child: Center(
+            child: Container(
+              height: BiliMetrics.chromeFieldHeight,
+              padding: const EdgeInsets.only(left: BiliMetrics.chromeFieldInset),
+              alignment: Alignment.centerLeft,
+              decoration: const ShapeDecoration(color: BiliMetrics.chromeFieldFill, shape: StadiumBorder()),
+              child: Transform.translate(
+                offset: Offset(0, BiliMetrics.chromeFieldDrop),
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.clip,
+                  style: const TextStyle(
+                    color: BiliMetrics.chromeFieldInk,
+                    fontSize: BiliMetrics.chromeFieldText,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 typedef _Touch = VoidCallback Function(VoidCallback action);
@@ -850,7 +921,7 @@ class _OnlinePainter extends CustomPainter {
   bool shouldRepaint(_OnlinePainter oldDelegate) => oldDelegate.color != color || oldDelegate.stroke != stroke;
 }
 
-/// 弹 on a little TV: a pink tick in its corner while danmaku show, a cross while they are off.
+/// 弹 on a little TV: a pink tick in its corner while danmaku show, a crossed-out circle while they are off (34, 35).
 class DanmakuGlyph extends StatelessWidget {
   const DanmakuGlyph({super.key, required this.on});
 
@@ -860,41 +931,80 @@ class DanmakuGlyph extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: BiliMetrics.chromeDanmakuWidth,
     height: BiliMetrics.chromeDanmakuHeight,
-    child: Stack(
-      children: [
-        const Positioned.fill(child: CustomPaint(painter: _DanmakuTvPainter())),
-        // The box's centre, below the antennae.
-        const Positioned(
-          left: _DanmakuTvPainter.left,
-          top: _DanmakuTvPainter.top,
-          right: BiliMetrics.chromeDanmakuWidth - _DanmakuTvPainter.right,
-          bottom: BiliMetrics.chromeDanmakuHeight - _DanmakuTvPainter.bottom,
-          child: Center(
-            child: Text(
-              '弹',
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                color: BiliColors.onVideo,
-                fontSize: BiliMetrics.chromeDanmakuText,
-                fontWeight: FontWeight.w600,
-                height: 1,
-              ),
+    child: AnimatedSwitcher(
+      duration: _fade,
+      layoutBuilder: (current, previous) => Stack(clipBehavior: Clip.none, children: [...previous, ?current]),
+      child: on
+          ? const _MarkedTv(key: ValueKey(true), mark: _TickPainter())
+          : const _MarkedTv(
+              key: ValueKey(false),
+              mark: _NoEntryPainter(),
+              rightEnd: 10.2,
+              bottomEnd: 10.7,
+              clearance: _Clearance(_noEntryClearance),
             ),
-          ),
-        ),
-        Positioned.fill(
-          child: AnimatedSwitcher(
-            duration: _fade,
-            transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-            child: CustomPaint(
-              key: ValueKey(on),
-              size: const Size(BiliMetrics.chromeDanmakuWidth, BiliMetrics.chromeDanmakuHeight),
-              painter: _DanmakuMarkPainter(on: on),
-            ),
-          ),
-        ),
-      ],
     ),
+  );
+}
+
+/// 04's 弹幕设置: the same TV with a nut over its open corner, the strokes stopping short of it.
+class DanmakuSettingsGlyph extends StatelessWidget {
+  const DanmakuSettingsGlyph({super.key});
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: BiliMetrics.chromeDanmakuWidth,
+    height: BiliMetrics.chromeDanmakuHeight,
+    child: _MarkedTv(mark: _NutPainter(), rightEnd: 9.3, bottomEnd: 10.4, clearance: _Clearance(_nutClearance)),
+  );
+}
+
+/// The TV and its 弹 with [mark] over the open corner; [clearance], when set, keeps 弹 a gap away from the mark.
+class _MarkedTv extends StatelessWidget {
+  const _MarkedTv({super.key, required this.mark, this.rightEnd = 14.3, this.bottomEnd = 11.8, this.clearance});
+
+  final CustomPainter mark;
+  final double rightEnd;
+  final double bottomEnd;
+  final CustomClipper<Path>? clearance;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Positioned.fill(
+        child: ClipPath(
+          clipper: clearance,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(painter: _DanmakuTvPainter(rightEnd: rightEnd, bottomEnd: bottomEnd)),
+              ),
+              // The box's centre, below the antennae.
+              const Positioned(
+                left: _DanmakuTvPainter.left,
+                top: _DanmakuTvPainter.top,
+                right: BiliMetrics.chromeDanmakuWidth - _DanmakuTvPainter.right,
+                bottom: BiliMetrics.chromeDanmakuHeight - _DanmakuTvPainter.bottom,
+                child: Center(
+                  child: Text(
+                    '弹',
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      color: BiliColors.onVideo,
+                      fontSize: BiliMetrics.chromeDanmakuText,
+                      fontWeight: FontWeight.w600,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      Positioned.fill(child: CustomPaint(painter: mark)),
+    ],
   );
 }
 
@@ -956,26 +1066,29 @@ Radius _round(Size grid, Size size, double r) =>
 
 const _danmakuGrid = Size(BiliMetrics.chromeDanmakuWidth, BiliMetrics.chromeDanmakuHeight);
 
-/// The TV, traced on its 21 × 20 box.
+/// The TV, traced on its 21 × 20 box; its right side stops at [rightEnd] and its bottom at [bottomEnd].
 class _DanmakuTvPainter extends CustomPainter {
-  const _DanmakuTvPainter();
+  const _DanmakuTvPainter({this.rightEnd = 14.3, this.bottomEnd = 11.8});
 
   static const left = 1.5, top = 3.9, right = 19.9, bottom = 18.9, radius = 4.0;
+
+  final double rightEnd;
+  final double bottomEnd;
 
   @override
   void paint(Canvas canvas, Size size) {
     final p = _traced(_danmakuGrid, size);
     final corner = _round(_danmakuGrid, size, radius);
-    // The box leaves its bottom-right corner open for the tick or the cross.
+    // The box leaves its bottom-right corner open for the tick, the cross or the nut.
     final box = Path()
-      ..moveToPoint(p(right, 14.3))
+      ..moveToPoint(p(right, rightEnd))
       ..lineToPoint(p(right, top + radius))
       ..arcToPoint(p(right - radius, top), radius: corner, clockwise: false)
       ..lineToPoint(p(left + radius, top))
       ..arcToPoint(p(left, top + radius), radius: corner, clockwise: false)
       ..lineToPoint(p(left, bottom - radius))
       ..arcToPoint(p(left + radius, bottom), radius: corner, clockwise: false)
-      ..lineToPoint(p(11.8, bottom))
+      ..lineToPoint(p(bottomEnd, bottom))
       ..moveToPoint(p(5.5, 0.7))
       ..lineToPoint(p(7.4, top - 0.4))
       ..moveToPoint(p(13.9, 0.7))
@@ -984,32 +1097,123 @@ class _DanmakuTvPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_DanmakuTvPainter oldDelegate) => false;
+  bool shouldRepaint(_DanmakuTvPainter oldDelegate) =>
+      oldDelegate.rightEnd != rightEnd || oldDelegate.bottomEnd != bottomEnd;
 }
 
-class _DanmakuMarkPainter extends CustomPainter {
-  const _DanmakuMarkPainter({required this.on});
+const _nutCentre = Offset(16.75, 15.9);
+const _nutRadius = 4.5;
 
-  final bool on;
+/// 34's crossed-out circle, centred where 04's nut is.
+const _noEntryCentre = Offset(16.7, 15.8);
+const _noEntryRadius = 3.45;
+
+/// The gap the TV's 弹 keeps from a mark, beyond half the mark's stroke.
+const _markGap = 1.8;
+
+/// A hexagon standing on a corner around [_nutCentre], each corner cut [round] along its edges and curved.
+Path _hexagon(Offset Function(double x, double y) p, double radius, {double round = 0}) {
+  final corners = [
+    for (var i = 0; i < 6; i++)
+      _nutCentre + Offset.fromDirection(-math.pi / 2 + i * math.pi / 3, radius),
+  ];
+  final path = Path();
+  for (var i = 0; i < 6; i++) {
+    final corner = corners[i];
+    final before = corners[(i + 5) % 6], after = corners[(i + 1) % 6];
+    final into = corner + (before - corner) / radius * round;
+    final out = corner + (after - corner) / radius * round;
+    if (i == 0) {
+      path.moveToPoint(p(into.dx, into.dy));
+    } else {
+      path.lineToPoint(p(into.dx, into.dy));
+    }
+    final control = p(corner.dx, corner.dy), end = p(out.dx, out.dy);
+    path.quadraticBezierTo(control.dx, control.dy, end.dx, end.dy);
+  }
+  return path..close();
+}
+
+// A hexagon's sides sit cos 30° of its corner radius from the centre, so growing them by a gap grows that by more.
+Path _nutClearance(Offset Function(double x, double y) p) =>
+    _hexagon(p, _nutRadius + (BiliMetrics.chromeLineStroke / 2 + _markGap) / math.cos(math.pi / 6));
+
+Path _noEntryClearance(Offset Function(double x, double y) p) {
+  final centre = p(_noEntryCentre.dx, _noEntryCentre.dy);
+  final edge = p(_noEntryCentre.dx + _noEntryRadius + BiliMetrics.chromeLineStroke / 2 + _markGap, _noEntryCentre.dy);
+  return Path()..addOval(Rect.fromCircle(center: centre, radius: edge.dx - centre.dx));
+}
+
+/// Everything in the glyph's box but a mark's [shape], traced on the box.
+class _Clearance extends CustomClipper<Path> {
+  const _Clearance(this.shape);
+
+  final Path Function(Offset Function(double x, double y) p) shape;
+
+  @override
+  Path getClip(Size size) =>
+      Path.combine(PathOperation.difference, Path()..addRect(Offset.zero & size), shape(_traced(_danmakuGrid, size)));
+
+  @override
+  bool shouldReclip(_Clearance oldClipper) => oldClipper.shape != shape;
+}
+
+/// 04's nut, its corners rounded, with a dot at its centre.
+class _NutPainter extends CustomPainter {
+  const _NutPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
     final p = _traced(_danmakuGrid, size);
-    final path = on
-        ? (Path()
-            ..moveToPoint(p(13.8, 16.4))
-            ..lineToPoint(p(17.1, 18.6))
-            ..lineToPoint(p(21.8, 14.5)))
-        : (Path()
-            ..moveToPoint(p(14.2, 14.2))
-            ..lineToPoint(p(19.2, 19.2))
-            ..moveToPoint(p(19.2, 14.2))
-            ..lineToPoint(p(14.2, 19.2)));
-    canvas.drawPath(path, _line(on ? BiliColors.pink : BiliColors.onVideo));
+    final dot = p(_nutCentre.dx, _nutCentre.dy);
+    canvas
+      ..drawPath(_hexagon(p, _nutRadius, round: 0.8), _line(BiliColors.onVideo))
+      ..drawCircle(dot, p(1.25, 0).dx, Paint()..color = BiliColors.onVideo);
   }
 
   @override
-  bool shouldRepaint(_DanmakuMarkPainter oldDelegate) => oldDelegate.on != on;
+  bool shouldRepaint(_NutPainter oldDelegate) => false;
+}
+
+class _TickPainter extends CustomPainter {
+  const _TickPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = _traced(_danmakuGrid, size);
+    canvas.drawPath(
+      Path()
+        ..moveToPoint(p(13.8, 16.4))
+        ..lineToPoint(p(17.1, 18.6))
+        ..lineToPoint(p(21.8, 14.5)),
+      _line(BiliColors.pink),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TickPainter oldDelegate) => false;
+}
+
+/// The circle with its slash from top left to bottom right.
+class _NoEntryPainter extends CustomPainter {
+  const _NoEntryPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = _traced(_danmakuGrid, size);
+    final centre = p(_noEntryCentre.dx, _noEntryCentre.dy);
+    final reach = _noEntryRadius * math.sqrt1_2;
+    canvas.drawPath(
+      Path()
+        ..addOval(Rect.fromCircle(center: centre, radius: p(_noEntryRadius, 0).dx))
+        ..moveToPoint(p(_noEntryCentre.dx - reach, _noEntryCentre.dy - reach))
+        ..lineToPoint(p(_noEntryCentre.dx + reach, _noEntryCentre.dy + reach)),
+      _line(BiliColors.onVideo),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_NoEntryPainter oldDelegate) => false;
 }
 
 /// 04's camera, traced on its 20 × 17 box: the body with its hump, the lens, and the flash mark at the top right.

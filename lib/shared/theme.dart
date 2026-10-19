@@ -352,8 +352,19 @@ abstract final class BiliMetrics {
   /// 04 sets the TV 1 pt further from play than [landscapeEdge]; 09's 竖屏 row has it where it is.
   static const landscapeDanmakuLead = 6.0;
 
-  /// 弹幕设置 and the 3 pt before the danmaku field.
-  static const chromeSettingsRoom = 52.0;
+  /// 弹幕设置's 44 pt button between the 弹 toggle and the danmaku field (04).
+  static const chromeSettingsGap = 4.0;
+  static const chromeFieldGap = 4.0;
+
+  /// 04's 发个友善的弹幕见证当下: an 80% white capsule over the video, its text a 60% black.
+  static const chromeFieldHeight = 30.0;
+  static const chromeFieldInset = 8.0;
+  static const chromeFieldText = 12.0;
+  static const chromeFieldFill = Color(0xCCFFFFFF);
+  static const chromeFieldInk = Color(0x99000000);
+
+  /// MiSans sits higher in its line than PingFang; this brings the field's text level with 04's.
+  static double get chromeFieldDrop => BiliFonts.nudged ? 2 : 0;
   static const chromeSpeedGap = 14.0;
   static const chromeQualityGap = 23.0;
   static const chromeEpisodesGap = 15.0;
@@ -1185,8 +1196,14 @@ abstract final class LandscapeActionTheme {
   static const pop = 1.28;
 }
 
-/// 竖屏's action column, uploader, 粉丝 and 关注 (09), and the 选集 sheet's share circle and 收藏 (19).
+/// 竖屏's action column, uploader, 粉丝, 关注 and 发弹幕 (09), and the 选集 sheet's share circle and 收藏 (19).
 abstract final class VerticalActionTheme {
+  /// 发弹幕, 已关闭弹幕 (35) or UP主已关闭弹幕 in the bottom row's dark field (09).
+  static const fieldInset = 14.6;
+  static const fieldText = 12.0;
+  static const fieldInk = Color(0xFF939393);
+  static double get fieldDrop => BiliFonts.nudged ? 1.8 : 0;
+
   /// 09's column: 44 wide, centred 27 in from the right edge, items 69 apart with the icon centre 27.5 above its
   /// count's; the last count's line ends 62.5 above the bottom row's bottom, about where the bar's touch starts.
   static const columnWidth = 44.0;

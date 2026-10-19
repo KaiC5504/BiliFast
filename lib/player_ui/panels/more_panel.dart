@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show Icons;
 
 import '../../devtools/log_forwarder.dart';
 import '../../player/bili_player.dart';
+import '../../shared/custom_icons.dart';
 import '../../shared/theme.dart';
 import '../../video/player_session.dart';
 import 'panel_glyphs.dart';
@@ -192,6 +193,37 @@ class _MorePanelState extends State<MorePanel> {
                     onSelect: _session.setLoop,
                   ),
                 ),
+                // 42 and 43 have 弹幕设置 just above 镜像翻转.
+                if (widget.openDanmakuSettings case final open?)
+                  Semantics(
+                    button: true,
+                    label: '弹幕设置',
+                    onTap: open,
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      key: const ValueKey('more-danmaku-settings'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: open,
+                      child: const PanelRowFrame(
+                        icon: Icon(
+                          CustomIcons.danmakuSettings,
+                          size: BiliMetrics.panelRowIcon,
+                          color: BiliColors.panelText,
+                        ),
+                        title: '弹幕设置',
+                        trailing: Align(
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              PanelGlyph(PanelGlyphKind.chevron, color: BiliColors.panelSecondary),
+                              SizedBox(width: BiliMetrics.panelChevronTrailing),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 PanelToggleRow(
                   icon: const PanelGlyph(PanelGlyphKind.mirror),
                   title: '镜像翻转',

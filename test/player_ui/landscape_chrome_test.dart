@@ -1,5 +1,11 @@
-import 'package:bili_core/api.dart' show QualityOption, UploaderCard, VideoDetail;
+import 'package:bili_core/api.dart'
+    show BiliClient, CookieJar, HTTPRequest, HTTPResponse, HTTPTransport, QualityOption, UploaderCard, VideoDetail;
+import 'package:bili_core/devlog.dart' show Logger;
+import 'package:bilifast/danmaku/block_rule_store.dart';
+import 'package:bilifast/danmaku/danmaku_session.dart';
+import 'package:bilifast/danmaku/danmaku_settings_store.dart';
 import 'package:bilifast/device/orientation.dart';
+import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/landscape_chrome.dart';
@@ -7,6 +13,7 @@ import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,13 +34,14 @@ class CountingChrome extends ChromeState {
 /// The landscape chrome on an iPhone 17 Pro Max turned sideways (956 × 440 pt, the island's 62 pt each side, the
 /// home indicator's 21 below), the size 04 was taken at.
 final class Rig {
-  Rig({this.details});
+  Rig({this.details, this.danmaku});
 
   final session = FakePlayerSession();
   final chrome = CountingChrome();
   final panels = PanelController();
   final orientation = OrientationController()..enterLandscape();
   final FakePageDetails? details;
+  final DanmakuRig? danmaku;
   int backs = 0;
   int comments = 0;
 
@@ -46,6 +54,7 @@ final class Rig {
     onBack: () => backs += 1,
     details: details,
     onComments: () => comments += 1,
+    danmaku: danmaku?.session,
   );
 
   Future<void> mount(WidgetTester tester) async {
@@ -60,6 +69,7 @@ final class Rig {
       orientation.dispose();
       session.dispose();
       details?.dispose();
+      danmaku?.dispose();
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -69,6 +79,53 @@ final class Rig {
         ),
       ),
     );
+  }
+}
+
+final class _NoNetwork implements HTTPTransport {
+  @override
+  Future<HTTPResponse> send(HTTPRequest request) => throw StateError('tests never reach the network');
+}
+
+final class _Feed extends DanmakuFeed {
+  _Feed() : super(client: BiliClient(transport: _NoNetwork(), cookies: CookieJar(), logger: _logger), logger: _logger);
+
+  static final _logger = Logger(session: 'test');
+
+  bool uploaderClosed = false;
+
+  @override
+  bool get closed => uploaderClosed;
+}
+
+/// The page's danmaku as the video page makes it, over the fake page API and memory stores.
+final class DanmakuRig {
+  DanmakuRig({bool closed = false, this.loggedIn = true}) {
+    feed.uploaderClosed = closed;
+  }
+
+  final feed = _Feed();
+  final api = FakePageApi();
+  bool loggedIn;
+  int logins = 0;
+
+  late final session = DanmakuSession(
+    feed: feed,
+    settings: DanmakuSettingsStore.memory(),
+    rules: BlockRuleStore(api: api, isLoggedIn: () => loggedIn),
+    api: api,
+    target: () => (bvid: 'BV1', cid: 1),
+    position: () => 0,
+    isLoggedIn: () => loggedIn,
+    isVip: () => false,
+    accountMid: () => 1,
+    toast: (_) {},
+    requestLogin: () => logins += 1,
+  );
+
+  void dispose() {
+    session.dispose();
+    feed.dispose();
   }
 }
 
@@ -700,5 +757,101 @@ void main() {
     expect(speedLabel(1), '倍速');
     expect(speedLabel(3), '3.0X');
     expect(speedLabel(0.5), '0.5X');
+  });
+
+  group('danmaku (04, 34)', () {
+    Rect fieldRect(WidgetTester tester) => tester.getRect(
+      find.descendant(of: find.byKey(const ValueKey('landscape-danmaku-field')), matching: find.byType(Container)),
+    );
+
+    testWidgets('弹幕设置 and the field follow the toggle as on 04, the field running to 倍速', (tester) async {
+      final rig = Rig(danmaku: DanmakuRig());
+      await rig.mount(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(centre(tester, 'landscape-danmaku-settings'), within(distance: 1, from: const Offset(182, 396)));
+      expect(find.byType(DanmakuSettingsGlyph), findsOneWidget);
+      final field = fieldRect(tester);
+      expect(field.left, closeTo(208, 0.5));
+      expect(field.height, BiliMetrics.chromeFieldHeight);
+      expect(field.center.dy, closeTo(396, 1));
+      final speed = tester.getTopLeft(find.byKey(const ValueKey('landscape-speed'))).dx;
+      expect(field.right, closeTo(speed - BiliMetrics.chromeSpeedGap, 0.5));
+      expect(find.text('发个友善的弹幕见证当下'), findsOneWidget);
+    });
+
+    testWidgets('弹幕设置 opens its panel and the field the send bar, each keeping the controls up', (tester) async {
+      final danmaku = DanmakuRig();
+      final rig = Rig(danmaku: danmaku);
+      await rig.mount(tester);
+
+      await tester.tap(find.byKey(const ValueKey('landscape-danmaku-settings')));
+      expect(rig.panels.value, PlayerPanel.danmakuSettings);
+      expect(rig.chrome.shows, 1);
+
+      rig.panels.close();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('landscape-danmaku-field')));
+      expect(danmaku.session.sendOpen.value, isTrue);
+      expect(rig.chrome.shows, 2);
+    });
+
+    testWidgets('both answer accessibility presses by name', (tester) async {
+      final danmaku = DanmakuRig();
+      final rig = Rig(danmaku: danmaku);
+      await rig.mount(tester);
+
+      tester.semantics.tap(find.semantics.byLabel('弹幕设置'));
+      expect(rig.panels.value, PlayerPanel.danmakuSettings);
+      rig.panels.close();
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('发个友善的弹幕见证当下'));
+      expect(danmaku.session.sendOpen.value, isTrue);
+    });
+
+    testWidgets('logged out, the field asks for the login instead', (tester) async {
+      final danmaku = DanmakuRig(loggedIn: false);
+      await Rig(danmaku: danmaku).mount(tester);
+
+      await tester.tap(find.byKey(const ValueKey('landscape-danmaku-field')));
+      expect(danmaku.logins, 1);
+      expect(danmaku.session.sendOpen.value, isFalse);
+    });
+
+    testWidgets('with danmaku off both are gone and the row closes up behind the toggle, as on 34', (tester) async {
+      final rig = Rig(danmaku: DanmakuRig());
+      await rig.mount(tester);
+      final speed = centre(tester, 'landscape-speed');
+
+      await tester.tap(find.byKey(const ValueKey('landscape-danmaku')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('landscape-danmaku-settings')), findsNothing);
+      expect(find.byKey(const ValueKey('landscape-danmaku-field')), findsNothing);
+      expect(centre(tester, 'landscape-danmaku'), within(distance: 1, from: const Offset(134, 396)));
+      expect(centre(tester, 'landscape-speed'), speed);
+
+      await tester.tap(find.byKey(const ValueKey('landscape-danmaku')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('landscape-danmaku-field')), findsOneWidget);
+    });
+
+    testWidgets('with the uploader\'s danmaku closed the field reads UP主已关闭弹幕 and opens nothing', (tester) async {
+      final danmaku = DanmakuRig(closed: true);
+      final rig = Rig(danmaku: danmaku);
+      await rig.mount(tester);
+
+      expect(find.text('UP主已关闭弹幕'), findsOneWidget);
+      expect(find.text('发个友善的弹幕见证当下'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('landscape-danmaku-field')));
+      expect(danmaku.session.sendOpen.value, isFalse);
+      expect(rig.chrome.shows, 1, reason: 'a tap still keeps the controls up');
+      expect(find.byKey(const ValueKey('landscape-danmaku-settings')), findsOneWidget);
+    });
+
+    testWidgets('outside a video page neither shows', (tester) async {
+      await Rig().mount(tester);
+      expect(find.byKey(const ValueKey('landscape-danmaku-settings')), findsNothing);
+      expect(find.byKey(const ValueKey('landscape-danmaku-field')), findsNothing);
+    });
   });
 }
