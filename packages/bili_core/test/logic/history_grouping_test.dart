@@ -9,6 +9,7 @@ void main() {
       DateTime.utc(y, mo, d, h, mi).subtract(utc8).millisecondsSinceEpoch ~/ 1000;
 
   HistoryItem item(String bvid, {required int at}) => HistoryItem(
+    aid: 1,
     bvid: bvid,
     cid: 1,
     title: bvid,

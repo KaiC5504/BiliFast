@@ -215,5 +215,5 @@ class ClientPageApi implements PageApi {
   Future<HistoryPage> history({HistoryCursor? after}) => _client.history(after: after);
 
   @override
-  Future<void> deleteHistory(HistoryItem item) => throw UnimplementedError('slice 8: history');
+  Future<void> deleteHistory(HistoryItem item) => _client.deleteHistory(aid: item.aid);
 }

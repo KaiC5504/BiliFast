@@ -44,7 +44,9 @@ class FakePageApi implements PageApi {
           FavFolder(id: 12, title: '二乃', count: 8, isPrivate: true, contains: false, isDefault: false),
         ],
         delay: const Duration(milliseconds: 300),
-      ).._fillDemoComments(now ?? DateTime.now());
+      )
+        .._fillDemoComments(now ?? DateTime.now())
+        .._fillDemoHistory(now ?? DateTime.now());
 
   VideoRelation relationValue;
   UploaderCard? uploader;
@@ -421,11 +423,27 @@ class FakePageApi implements PageApi {
             for (final id in dmids) id: ?danmakuLikeStats[id],
           });
 
-  @override
-  Future<HistoryPage> history({HistoryCursor? after}) => throw UnimplementedError('slice 8: history');
+  /// 历史记录, newest first, answered [historyPageSize] at a time; the page after the last is empty, as Bilibili's.
+  List<HistoryItem> historyItems = [];
+  int historyPageSize = 20;
 
   @override
-  Future<void> deleteHistory(HistoryItem item) => throw UnimplementedError('slice 8: history');
+  Future<HistoryPage> history({HistoryCursor? after}) =>
+      _answer('history', 'history after=${after?.max ?? 0}', () {
+        final start = after == null
+            ? 0
+            : historyItems.indexWhere((item) => item.aid == after.max && item.viewAt == after.viewAt) + 1;
+        final rows = start <= 0 && after != null
+            ? const <HistoryItem>[]
+            : historyItems.skip(start).take(historyPageSize).toList();
+        final last = rows.isEmpty ? null : rows.last;
+        return HistoryPage(items: rows, next: last == null ? null : HistoryCursor(max: last.aid, viewAt: last.viewAt));
+      });
+
+  @override
+  Future<void> deleteHistory(HistoryItem item) => _answer('deleteHistory', 'deleteHistory aid=${item.aid}', () {
+        historyItems = [for (final row in historyItems) if (row.id != item.id) row];
+      });
 
   /// The comment with [rpid] wherever the fake holds it: the list, the pinned comment, a preview or a thread.
   Comment? _find(int rpid) {
@@ -481,6 +499,46 @@ class FakePageApi implements PageApi {
   /// three emote packages (one of 颜文字) and people to @. The images are public ones on Bilibili's CDN, asked for with
   /// no cookies so the PC run looks like the phone: Bilibili's own accounts' avatars, its emotes and decorations, and
   /// game studios' video covers. Tests never draw them.
+  /// About 30 rows over 今天, 昨天 and 更早 (two pages), watched on the phone and the PC, one to the end and one
+  /// hours long; no covers, so nothing is fetched.
+  void _fillDemoHistory(DateTime now) {
+    final midnight = DateTime(now.year, now.month, now.day);
+    final sinceMidnight = now.difference(midnight);
+    int unix(DateTime time) => time.millisecondsSinceEpoch ~/ 1000;
+    final times = [
+      for (var i = 1; i <= 6; i++) unix(midnight.add(sinceMidnight * (1 - i / 7))),
+      for (final (hour, minute) in const [(22, 33), (22, 30), (22, 30), (22, 18), (20, 35), (20, 4), (20, 4), (19, 12)])
+        unix(midnight.subtract(const Duration(days: 1)).add(Duration(hours: hour, minutes: minute))),
+      for (var i = 0; i < 16; i++)
+        unix(midnight.subtract(Duration(days: 2 + i ~/ 4)).add(Duration(hours: 23 - (i % 4) * 5, minutes: 10 + i))),
+    ];
+    const titles = [
+      '一口气看完系列：三分钟带你了解城市夜景延时摄影的全部流程',
+      '这期视频做了一年',
+      '新手也能学会的家常菜，十分钟上桌',
+      '【4K】雨后山间的清晨，白噪音放松向',
+      '我们把旧电脑改造成了家庭影院',
+      '周末骑行一百公里是什么体验？',
+    ];
+    const uploaders = ['夜景摄影师', '一年一更', '厨房小白', '山间录音', '折腾实验室', '周末骑行'];
+    historyItems = [
+      for (var i = 0; i < times.length; i++)
+        HistoryItem(
+          aid: 9100 + i,
+          bvid: i == 0 ? 'BV1GJ411x7h7' : 'BV1Demo${i.toString().padLeft(2, '0')}x7h7',
+          cid: 0,
+          title: titles[i % titles.length],
+          cover: '',
+          ownerName: uploaders[i % uploaders.length],
+          progress: i == 19 ? -1 : 2 + i * 7,
+          duration: i == 17 ? 13230 : 90 + i * 37,
+          viewAt: times[i],
+          device: i % 3 == 1 ? 1 : 2,
+          part: null,
+        ),
+    ];
+  }
+
   void _fillDemoComments(DateTime now) {
     final demo = _DemoComments(now.millisecondsSinceEpoch ~/ 1000);
     emotes = _DemoComments.emotes;

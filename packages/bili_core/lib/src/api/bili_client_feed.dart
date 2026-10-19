@@ -59,4 +59,8 @@ extension BiliClientFeed on BiliClient {
     );
     return payload ?? const HistoryPage(items: [], next: null);
   }
+
+  /// Removes one video from 历史记录.
+  Future<void> deleteHistory({required int aid}) =>
+      postVoid('/x/v2/history/delete', form: {'kid': 'archive_$aid', 'jsonp': 'jsonp'});
 }
