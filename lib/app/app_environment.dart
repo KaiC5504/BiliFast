@@ -74,7 +74,6 @@ class AppEnvironment extends ChangeNotifier {
   final CookieJar cookies;
   final BiliClient client;
   final CookiePersistence _persistence;
-  // ignore: unused_field
   final KeychainStore _keychain;
 
   /// The login web view's store, read by the login page and cleared on logout.
@@ -107,7 +106,12 @@ class AppEnvironment extends ChangeNotifier {
   /// already running answers every caller (launch, coming back to the app, returning to home) with one request.
   Future<bool> refreshAccount() {
     if (_fake) return Future.value(true);
-    return _checking ??= _checkAccount().whenComplete(() => _checking = null);
+    if (_checking case final running?) return running;
+    late final Future<bool> check;
+    check = _checkAccount().whenComplete(() {
+      if (identical(_checking, check)) _checking = null;
+    });
+    return _checking = check;
   }
 
   bool _fake = false;
@@ -126,19 +130,78 @@ class AppEnvironment extends ChangeNotifier {
 
   Future<bool>? _checking;
 
+  /// Bumped by every login and logout, so a check already on its way answers for cookies that are gone.
+  int _epoch = 0;
+
   /// The login page's cookies once Bilibili set SESSDATA (BiliNative `AppEnvironment.didLogin`): they join the jar
   /// and the keychain, and the account is checked again, up to 3 times. Completes with whether it is now logged in.
-  Future<bool> didLogin(Map<String, String> cookies) => throw UnimplementedError('slice 8: login');
+  Future<bool> didLogin(Map<String, String> cookies) async {
+    final epoch = ++_epoch;
+    _checking = null;
+    _fake = false;
+    _persistence.unblock();
+    this.cookies.replaceAll({...this.cookies.all, ...cookies});
+    _account = const AccountUnknown();
+    _accountCheckFailed = false;
+    notifyListeners();
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await Future<void>.delayed(Duration(seconds: attempt));
+      if (epoch != _epoch) break;
+      await refreshAccount();
+      if (_account is LoggedIn) break;
+    }
+    final loggedIn = _account is LoggedIn;
+    _logger.info(LogCategory.app, 'login', {'count': cookies.length, 'loggedIn': loggedIn});
+    return loggedIn;
+  }
 
   /// 退出登录 (BiliNative `AppEnvironment.logout`): empties the jar, deletes the keychain cookies and app token, and
-  /// clears the web view's data.
-  Future<void> logout() => throw UnimplementedError('slice 8: login');
+  /// clears the web view's data. A step that fails is logged and the rest still run. A `--fake-account` run, which
+  /// stored nothing, just stops being fake.
+  Future<void> logout() async {
+    _epoch += 1;
+    _checking = null;
+    if (_fake) {
+      _fake = false;
+      _signedOut();
+      return;
+    }
+    _persistence.unblock();
+    await _logoutStep('jar', () async => cookies.removeAll());
+    await _logoutStep('keychain cookies', _keychain.deleteCookies);
+    await _logoutStep('app token', _keychain.deleteAppToken);
+    await _logoutStep('web data', webCookies.clearAll);
+    _signedOut();
+    // The fingerprint cookies went with the jar, and the web API answers 412 without them.
+    unawaited(client.ensureRiskCookies().catchError((Object error) {
+      _logger.warn(LogCategory.app, 'risk cookies failed', {'error': '$error'});
+    }));
+  }
+
+  Future<void> _logoutStep(String step, Future<void> Function() run) async {
+    try {
+      await run();
+    } catch (error) {
+      _logger.warn(LogCategory.app, 'logout step failed', {'step': step, 'error': '$error'});
+    }
+  }
+
+  void _signedOut() {
+    _account = const LoggedOut();
+    _accountCheckFailed = false;
+    _mid = null;
+    _face = null;
+    _logger.info(LogCategory.app, 'logout');
+    notifyListeners();
+  }
 
   Future<bool> _checkAccount() async {
-    await _retryBlockedKeychainLoad();
+    final epoch = _epoch;
+    await _retryBlockedKeychainLoad(epoch);
     try {
       await client.ensureRiskCookies();
       final nav = await client.nav();
+      if (epoch != _epoch) return true;
       _accountCheckFailed = false;
       if (nav.isLogin) {
         _account = LoggedIn(name: nav.uname ?? '', vip: nav.isVip);
@@ -156,6 +219,7 @@ class AppEnvironment extends ChangeNotifier {
       return true;
     } catch (error) {
       _logger.warn(LogCategory.app, 'nav failed', {'error': '$error'});
+      if (epoch != _epoch) return false;
       if (_account is AccountUnknown) {
         if (cookies.value('SESSDATA') == null) {
           _account = const LoggedOut();
@@ -169,10 +233,10 @@ class AppEnvironment extends ChangeNotifier {
   }
 
   /// After a failed read the stored cookies may still be there; once a read works they join the jar.
-  Future<void> _retryBlockedKeychainLoad() async {
+  Future<void> _retryBlockedKeychainLoad(int epoch) async {
     if (!_persistence.blocked) return;
     final stored = await _persistence.load();
-    if (_persistence.blocked) return;
+    if (_persistence.blocked || epoch != _epoch) return;
     cookies.replaceAll({...stored, ...cookies.all});
   }
 }
