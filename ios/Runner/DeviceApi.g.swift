@@ -185,6 +185,11 @@ protocol DeviceHostApi {
   /// The hidden MPVolumeView, there only in full screen, which also keeps the system volume HUD away.
   func attachVolumeView() throws
   func detachVolumeView() throws
+  /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): the scene's own rotation animation
+  /// is off, Flutter gets the turned size at once, and each turn is reported through [DeviceEventApi.onTurn].
+  func setTurnTakeover(enabled: Bool) throws
+  /// Flutter has drawn the first frame of a taken-over turn; the still picture covering the screen can go.
+  func turnDrawn() throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -365,6 +370,37 @@ class DeviceHostApiSetup {
     } else {
       detachVolumeViewChannel.setMessageHandler(nil)
     }
+    /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): the scene's own rotation animation
+    /// is off, Flutter gets the turned size at once, and each turn is reported through [DeviceEventApi.onTurn].
+    let setTurnTakeoverChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.setTurnTakeover\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setTurnTakeoverChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let enabledArg = args[0] as! Bool
+        do {
+          try api.setTurnTakeover(enabled: enabledArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setTurnTakeoverChannel.setMessageHandler(nil)
+    }
+    /// Flutter has drawn the first frame of a taken-over turn; the still picture covering the screen can go.
+    let turnDrawnChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.turnDrawn\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      turnDrawnChannel.setMessageHandler { _, reply in
+        do {
+          try api.turnDrawn()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      turnDrawnChannel.setMessageHandler(nil)
+    }
   }
 }
 
@@ -374,6 +410,9 @@ protocol DeviceEventApiProtocol {
   @MainActor func onOrientationRefused(request requestArg: Int64, error errorArg: String) async throws
   /// A hardware button changed the volume while the volume view hides the system HUD.
   @MainActor func onHardwareVolume(volume volumeArg: Double) async throws
+  /// A taken-over turn began: [angle] is the rotation in radians the scene would have animated (its coordinator's
+  /// target transform), [seconds] how long it would have taken.
+  @MainActor func onTurn(angle angleArg: Double, seconds secondsArg: Double) async throws
 }
 class DeviceEventApi: DeviceEventApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -431,6 +470,28 @@ class DeviceEventApi: DeviceEventApiProtocol {
       let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onHardwareVolume\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([volumeArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: DeviceApiError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// A taken-over turn began: [angle] is the rotation in radians the scene would have animated (its coordinator's
+  /// target transform), [seconds] how long it would have taken.
+  @MainActor func onTurn(angle angleArg: Double, seconds secondsArg: Double) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onTurn\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([angleArg, secondsArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

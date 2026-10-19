@@ -19,6 +19,9 @@ enum OrientationMask { portrait, landscape, landscapeLeft, landscapeRight }
 
 typedef OrientationRefusal = ({int request, String error});
 
+/// A turn Flutter draws itself: the rotation in radians the system would have animated, and its length.
+typedef TurnStart = ({double angle, Duration duration});
+
 /// The native side of [OrientationController]: it applies masks and reports, and decides nothing.
 abstract interface class OrientationHost {
   /// Starts or stops [deviceOrientations].
@@ -35,4 +38,12 @@ abstract interface class OrientationHost {
   Future<void> requestOrientations(int request, OrientationMask mask);
 
   Stream<OrientationRefusal> get refusals;
+
+  /// While on, turns are not animated by the system: the screen takes its turned size at once and each turn is
+  /// reported on [turns] for Flutter to draw, with a still picture covering the screen until [turnDrawn].
+  Future<void> setTurnTakeover(bool enabled);
+
+  Stream<TurnStart> get turns;
+
+  Future<void> turnDrawn();
 }

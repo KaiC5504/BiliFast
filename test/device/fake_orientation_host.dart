@@ -18,6 +18,15 @@ final class FakeOrientationHost implements OrientationHost {
 
   final _orientations = StreamController<PhoneOrientation>.broadcast(sync: true);
   final _refusals = StreamController<OrientationRefusal>.broadcast(sync: true);
+  final _turns = StreamController<TurnStart>.broadcast(sync: true);
+
+  /// Every [setTurnTakeover] call, and how many times Flutter said a taken-over turn was drawn.
+  final takeovers = <bool>[];
+  int drawn = 0;
+
+  /// The system starting a taken-over turn of [angle] radians.
+  void startTurn(double angle, {Duration duration = const Duration(milliseconds: 280)}) =>
+      _turns.add((angle: angle, duration: duration));
 
   void turn(PhoneOrientation orientation) {
     phone = orientation;
@@ -53,6 +62,15 @@ final class FakeOrientationHost implements OrientationHost {
 
   @override
   Stream<OrientationRefusal> get refusals => _refusals.stream;
+
+  @override
+  Future<void> setTurnTakeover(bool enabled) async => takeovers.add(enabled);
+
+  @override
+  Stream<TurnStart> get turns => _turns.stream;
+
+  @override
+  Future<void> turnDrawn() async => drawn += 1;
 }
 
 /// Records full screen entered and left; levels as [NoDeviceControls].

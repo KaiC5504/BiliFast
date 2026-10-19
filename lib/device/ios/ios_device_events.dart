@@ -17,6 +17,7 @@ final class IosDeviceEvents implements DeviceEventApi {
   final _orientations = StreamController<NativeDeviceOrientation>.broadcast();
   final _refusals = StreamController<OrientationRefusal>.broadcast();
   final _volumes = StreamController<double>.broadcast();
+  final _turns = StreamController<TurnStart>.broadcast();
 
   void connect({BinaryMessenger? binaryMessenger}) => DeviceEventApi.setUp(this, binaryMessenger: binaryMessenger);
 
@@ -26,6 +27,8 @@ final class IosDeviceEvents implements DeviceEventApi {
 
   Stream<double> get hardwareVolume => _volumes.stream;
 
+  Stream<TurnStart> get turns => _turns.stream;
+
   @override
   void onDeviceOrientation(NativeDeviceOrientation orientation) => _orientations.add(orientation);
 
@@ -34,4 +37,8 @@ final class IosDeviceEvents implements DeviceEventApi {
 
   @override
   void onHardwareVolume(double volume) => _volumes.add(volume);
+
+  @override
+  void onTurn(double angle, double seconds) =>
+      _turns.add((angle: angle, duration: Duration(microseconds: (seconds * Duration.microsecondsPerSecond).round())));
 }

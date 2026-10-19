@@ -354,6 +354,45 @@ class DeviceHostApi {
     )
     ;
   }
+
+  /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): the scene's own rotation animation
+  /// is off, Flutter gets the turned size at once, and each turn is reported through [DeviceEventApi.onTurn].
+  Future<void> setTurnTakeover(bool enabled) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.setTurnTakeover$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// Flutter has drawn the first frame of a taken-over turn; the still picture covering the screen can go.
+  Future<void> turnDrawn() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.turnDrawn$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 abstract class DeviceEventApi {
@@ -365,6 +404,10 @@ abstract class DeviceEventApi {
 
   /// A hardware button changed the volume while the volume view hides the system HUD.
   void onHardwareVolume(double volume);
+
+  /// A taken-over turn began: [angle] is the rotation in radians the scene would have animated (its coordinator's
+  /// target transform), [seconds] how long it would have taken.
+  void onTurn(double angle, double seconds);
 
   static void setUp(DeviceEventApi? api, {
     BinaryMessenger? binaryMessenger, 
@@ -427,6 +470,28 @@ abstract class DeviceEventApi {
           final double arg_volume = args[0]! as double;
           try {
             api.onHardwareVolume(arg_volume);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.DeviceEventApi.onTurn$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final double arg_angle = args[0]! as double;
+          final double arg_seconds = args[1]! as double;
+          try {
+            api.onTurn(arg_angle, arg_seconds);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

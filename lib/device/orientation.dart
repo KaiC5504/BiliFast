@@ -50,6 +50,29 @@ class OrientationController extends ChangeNotifier {
   bool get videoIsVertical => _videoIsVertical;
   bool _videoIsVertical = false;
 
+  /// Whether turns are drawn by Flutter rather than animated by the system (the 开发者 switch 旋转动画). Always off
+  /// without a host.
+  bool get turnTakeover => _turnTakeover;
+  bool _turnTakeover = false;
+
+  /// The taken-over turns as the system starts them; empty without a host or while [turnTakeover] is off.
+  Stream<TurnStart> get turns => _host?.turns ?? const Stream.empty();
+
+  Future<void> setTurnTakeover(bool enabled) async {
+    final host = _host;
+    if (host == null) return;
+    _turnTakeover = enabled;
+    try {
+      await host.setTurnTakeover(enabled);
+    } catch (error) {
+      _turnTakeover = false;
+      _hostFailed(error);
+    }
+  }
+
+  /// The first frame of a taken-over turn is drawn, so the host can drop its still picture.
+  void turnDrawn() => _host?.turnDrawn().catchError(_hostFailed);
+
   Object? _owner;
   bool _observing = false;
   PhoneOrientation? _lastDeviceOrientation;

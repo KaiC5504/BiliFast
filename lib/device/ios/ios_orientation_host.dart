@@ -40,6 +40,15 @@ final class IosOrientationHost implements OrientationHost {
   @override
   Stream<OrientationRefusal> get refusals => _events.refusals;
 
+  @override
+  Future<void> setTurnTakeover(bool enabled) => _host.setTurnTakeover(enabled);
+
+  @override
+  Stream<TurnStart> get turns => _events.turns;
+
+  @override
+  Future<void> turnDrawn() => _host.turnDrawn();
+
   static PhoneOrientation _phone(NativeDeviceOrientation orientation) => switch (orientation) {
         NativeDeviceOrientation.portrait => PhoneOrientation.portrait,
         NativeDeviceOrientation.portraitUpsideDown => PhoneOrientation.portraitUpsideDown,

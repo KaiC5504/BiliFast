@@ -114,6 +114,14 @@ final class DeviceHostApiImpl: DeviceHostApi {
   func detachVolumeView() throws {
     MainActor.assumeIsolated { DeviceControls.detachVolumeView() }
   }
+
+  func setTurnTakeover(enabled: Bool) throws {
+    MainActor.assumeIsolated { TurnTakeover.enabled = enabled }
+  }
+
+  func turnDrawn() throws {
+    MainActor.assumeIsolated { TurnTakeover.drawn() }
+  }
 }
 
 /// UIDevice's orientation notifications, on only while a page with a player is open.

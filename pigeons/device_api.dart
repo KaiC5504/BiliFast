@@ -50,6 +50,13 @@ abstract class DeviceHostApi {
   void attachVolumeView();
 
   void detachVolumeView();
+
+  /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): the scene's own rotation animation
+  /// is off, Flutter gets the turned size at once, and each turn is reported through [DeviceEventApi.onTurn].
+  void setTurnTakeover(bool enabled);
+
+  /// Flutter has drawn the first frame of a taken-over turn; the still picture covering the screen can go.
+  void turnDrawn();
 }
 
 @FlutterApi()
@@ -60,4 +67,8 @@ abstract class DeviceEventApi {
 
   /// A hardware button changed the volume while the volume view hides the system HUD.
   void onHardwareVolume(double volume);
+
+  /// A taken-over turn began: [angle] is the rotation in radians the scene would have animated (its coordinator's
+  /// target transform), [seconds] how long it would have taken.
+  void onTurn(double angle, double seconds);
 }
