@@ -266,6 +266,25 @@ void main() {
     controller.dispose();
   });
 
+  test('a hold lifted with play: false while the video still resolves loads it paused', () async {
+    final controller = make();
+    final gates = [
+      http.gates[Canned.signedViewPath] = Completer<void>(),
+      http.gates[Canned.viewPath] = Completer<void>(),
+    ];
+    controller.holdAutoplay(true);
+    final opening = controller.open(bv);
+    await settle();
+    controller.holdAutoplay(false, play: false);
+    for (final gate in gates) {
+      gate.complete();
+    }
+    await opening;
+    expect(player.loaded!.autoplay, isFalse);
+    expect(player.calls, isNot(contains('play')));
+    controller.dispose();
+  });
+
   test('a reload of a player the user paused is not about to play; a new open is', () async {
     final controller = make();
     await controller.open(bv);

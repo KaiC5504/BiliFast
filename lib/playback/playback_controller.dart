@@ -538,7 +538,8 @@ class PlaybackController extends ChangeNotifier {
       danmaku.load(cid: page.cid, durationMs: page.duration * 1000);
       _logger.info(LogCategory.player, 'open', {'bvid': view.bvid, 'page': page.page, 'parts': view.pages.length});
       _resumeFromHistory = start == null;
-      await _startPlayback(start ?? 0, autoplay: true);
+      // A hold lifted with play: false while the video resolved has already said no.
+      await _startPlayback(start ?? 0, autoplay: _playWhenLoaded);
     } catch (error, stack) {
       if (current == _epoch) _fail(error, stack);
     }
