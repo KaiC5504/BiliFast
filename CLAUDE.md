@@ -131,12 +131,13 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   or `logs/` (both gitignored). The build log and artifacts are public too.
 - KaiC's Bilibili account: no second login, few live calls, no loops against the API. Tests never touch the network.
 - No Mac: iOS checks run in GitHub Actions and on his phone.
-- The UI matches the official app's screenshots (`local/official-app-reference/`, his iPhone 17 Pro Max, 440×956 pt).
-  Where they don't show something, follow PiliPlus's behaviour; the Swift app comes last.
-- PiliPlus (`D:\Repos\Apps\PiliPlus`) is the reference for how a feature works: read it before building
-  (`docs/reference/piliplus-map.md`). It and ATV-Bilibili-demo are GPL: write our own code, never copy theirs. Its
-  asset files may be taken when they help match the official look, never its logos (`assets/README.md`). Keep BTR's
-  MIT notice with the engine port.
+- Layout comes only from the official app's screenshots (`local/official-app-reference/`, his iPhone 17 Pro Max,
+  440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or
+  the Swift app.
+- PiliPlus (`D:\Repos\Apps\PiliPlus`) is a reference for functions only: the APIs and how a feature behaves, plus its
+  asset files of the official app's art (`assets/README.md`, never its logos). Never its layout or design. Read it
+  before building (`docs/reference/piliplus-map.md`). It and ATV-Bilibili-demo are GPL: write our own code, never
+  copy theirs. Keep BTR's MIT notice with the engine port.
 - Swipe back starts only from the left edge; a sideways drag elsewhere belongs to the page.
 - Nothing ships until every control the change touched has been pressed on Windows and its effect confirmed.
 - Text scaling is off at the app's root (`main.dart`), so sizes are the official pt whatever iOS's Text Size says.

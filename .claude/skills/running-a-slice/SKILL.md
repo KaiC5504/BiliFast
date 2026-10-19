@@ -15,7 +15,8 @@ Read the spec's section 0 and the slice's entry, `docs/reference/app-inventory.m
 Swift only where the plan needs a detail), PiliPlus through `docs/reference/piliplus-map.md` where the spec says it
 helps (GPL: read only), the slice's items in `D:\Repos\Apps\BiliNative\docs\m2-phone-checklist.md`, and for
 anything on screen the official app's screenshots in `local/official-app-reference/` (iPhone 17 Pro Max at 3×: 440×956
-pt portrait, 956×440 landscape). KaiC wants the layout identical to them; they win over the Swift app. `local/` is
+pt portrait, 956×440 landscape). KaiC wants the layout identical to them, and they are the only source of layout:
+PiliPlus gives APIs, behaviour and assets, never layout. `local/` is
 gitignored: never copy, commit or embed them. Show one screen:
 
 1. **Done:** the numbered phone test steps.
@@ -23,9 +24,11 @@ gitignored: never copy, commit or embed them. Show one screen:
 3. **Agent table:** agent | builds | owns (files) | tests. No file appears in two rows.
 4. **Rounds:** only where this slice differs from steps 3-7 (for example, no Windows run when Windows can't show it).
 5. **Only the phone can prove:** what KaiC should watch for.
-6. **Decisions for KaiC:** anything only he can settle (a spec rule that clashes with CLAUDE.md, a product choice),
+6. **Screenshots needed:** every screen or state the slice draws that the references don't show. KaiC takes them
+   from the official app before the build starts; never fill a gap from PiliPlus or the Swift app.
+7. **Decisions for KaiC:** anything only he can settle (a spec rule that clashes with CLAUDE.md, a product choice),
    each with your recommendation. He answers them with the go.
-7. **Build number:** the next one (the last shipped, from the status section or the last run, plus one).
+8. **Build number:** the next one (the last shipped, from the status section or the last run, plus one).
 
 Size the table by files, not features: one agent per set of files that can change without the others. A file every
 piece needs (such as `playback_controller.dart`) gets one owner; the others build against its new signatures, stubbed
@@ -53,8 +56,8 @@ are pieces). Each brief contains, in order:
    start on an old commit.
 2. Read CLAUDE.md. Rules: public repo, no secrets in code or logs, tests never touch the network, theme tokens only,
    PiliPlus read only, Flutter through `fvm`.
-3. The job, with its Swift and PiliPlus references, and for UI the reference screenshots it must match (by file
-   name), measured in pt (px/3).
+3. The job, with its Swift and PiliPlus references (PiliPlus for APIs, behaviour and assets only, never layout), and
+   for UI the reference screenshots it must match (by file name), measured in pt (px/3).
 4. **Your files:** the full list; edit nothing else, and report needs outside it. For a shared file such as
    `theme.dart`, name the exact spot to insert.
 5. Never `dart format` a whole file that wasn't formatted before; it rewraps everything.

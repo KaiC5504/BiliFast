@@ -11,8 +11,8 @@ covers Dart, its Swift and Java helpers, and its patched Flutter widgets. BiliFa
 - Write our own version from what it shows, next to BiliNative's Swift.
 - Its asset files (images, icon fonts) may be taken when they help match the official look (KaiC, 2026-10-19); what we
   took is listed in `assets/README.md`. Never its logos or branding.
-- The visual target is the official app's screenshots in `local/official-app-reference/`, never PiliPlus's screens.
-  Where the screenshots don't show something, PiliPlus's behaviour decides.
+- Functions only, never layout: the official app's screenshots in `local/official-app-reference/` are the only visual
+  target. When they don't show a screen or state, ask KaiC to screenshot it; never take PiliPlus's layout instead.
 
 ## Repo facts
 

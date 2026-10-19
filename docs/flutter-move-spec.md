@@ -30,8 +30,9 @@ BiliFast (KaiC's iOS Bilibili client, Swift/SwiftUI in `D:\Repos\Apps\BiliNative
 - **Everything milestone 1 and milestone 2 did in Swift keeps working:** BTR multi-node playback, picture quality, PiP,
   the official-style player and video page, danmaku, comments, actions, history.
 - **The UI looks like the official Bilibili app.** KaiC: "if Flutter can make it look exactly like Official app why
-  not." The target is his screenshots in `local/official-app-reference/` (gitignored; look only). Where they don't
-  show something, follow PiliPlus's behaviour.
+  not." The layout comes only from his screenshots in `local/official-app-reference/` (gitignored; look only). When
+  a screen or state isn't in them, ask KaiC to screenshot it from the official app. PiliPlus gives functions (APIs,
+  behaviour) and assets, never layout.
 - **One codebase can also become an Android app** later.
 
 **Done** = the Flutter build passes `BiliNative/docs/m1-phone-checklist.md` and `m2-phone-checklist.md` on KaiC's
@@ -54,10 +55,10 @@ iPhone 17 Pro Max. Then the Swift app retires and milestone 3 continues in Flutt
 
 | Path | What | Use it for |
 |---|---|---|
-| `D:\Repos\Apps\BiliNative` | The Swift app (public `KaiC5504/BiliNative`). Sources `ios/Sources/App/`, package `ios/Packages/BiliCore/`, docs `docs/`. | The reference for behaviour the screenshots and PiliPlus don't settle. |
+| `D:\Repos\Apps\BiliNative` | The Swift app (public `KaiC5504/BiliNative`). Sources `ios/Sources/App/`, package `ios/Packages/BiliCore/`, docs `docs/`. | A second reference for behaviour, after PiliPlus; never for layout. |
 | `D:\Repos\Apps\BiliNative\docs\background.md` | Real CDN behaviour, deviations from BTR, hurry mode. | Read before touching the engine. |
 | `D:\Repos\Apps\BiliNative\docs\superpowers\specs\` | M1 and M2 designs. | The *why* behind each Swift screen. |
-| `D:\Repos\Apps\PiliPlus` (GPL-3.0, `bb2d86ca`) | A mature Flutter Bilibili client. | How features work; read, never copy (`piliplus-map.md`). |
+| `D:\Repos\Apps\PiliPlus` (GPL-3.0, `bb2d86ca`) | A mature Flutter Bilibili client. | APIs, how features behave, and assets; never its layout. Read, never copy (`piliplus-map.md`). |
 | `D:\Repos\Apps\Kazumi` | KaiC's Flutter fork, shipped to TestFlight by GitHub Actions. | The model for the signed Flutter build. |
 | `D:\Repos\Apps\Bilibili-thread-ripper` | BTR, the JS engine the Swift engine was ported from (MIT). | Read at tag `2026.10.8.1` only. Port from the Swift version, which carries the phone fixes. |
 | `D:\Tools\Swift` | Swift 6.4.1 for Windows. | The Swift reference tests and `ripper-bench`: `swift test --package-path ios/Packages/BiliCore` in BiliNative. |
@@ -196,8 +197,8 @@ reference screens, and the phone checklist items (numbers in `BiliNative/docs/m2
 |---|---|
 | Already in the app | The danmaku layer and painter (`lib/danmaku/`, fed by `lib/playback/danmaku_feed.dart`) from slice 1; the 弹 toggle and the 点我发弹幕 field (a toast for now) from slice 6. |
 | Port | `App/Danmaku/` (DanmakuController: segments ahead of the playhead, the filter, block rules, the uploader-closed notice, your own danmaku in a white box; DanmakuSettingsPanel with 显示区域 5 stops, 不透明度, 字体大小, 弹幕速度 [11, 9, 7, 5.5, 4] s, the type blocks, 重复弹幕隐藏, 底部字幕区域防挡, 重置; BlockRuleStore cached 10 min, synced with the server; BlockWordsView; DanmakuSendBar following the keyboard by hand, 100 chars; DanmakuStylePanel 25/18, modes 1/5/4, 12 colours + the VIP gradient). |
-| PiliPlus | `lib/plugin/pl_player/utils/danmaku_options.dart`, `lib/http/danmaku_block.dart`, `lib/http/danmaku.dart`; the settings and send UI where the screenshots don't show something. |
-| Reference | Screens 07-08, 22-24. |
+| PiliPlus | `lib/plugin/pl_player/utils/danmaku_options.dart`, `lib/http/danmaku_block.dart`, `lib/http/danmaku.dart`: endpoints and behaviour only, never its layout. |
+| Reference | Screens 07-08, 22-24. Any state they don't show (the block-word list, the style panel's colours, …): ask KaiC for a screenshot. |
 | Phone check | Items 26-30, 52. |
 
 ### Slice 8: the rest of the app
