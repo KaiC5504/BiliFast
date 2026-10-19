@@ -1,6 +1,7 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../app/app_environment.dart';
+import 'login_page.dart';
 
 /// Where a logged-out action goes (BiliNative `LoginGate`): the login page, completing with whether the user came
 /// back logged in. The caller turns the phone upright first when it is in landscape full screen.
@@ -14,6 +15,20 @@ class LoginPageGate implements LoginGate {
 
   final AppEnvironment environment;
 
+  /// The page already up for an environment, so a second request waits on it instead of pushing another.
+  static final _showing = Expando<Future<bool>>();
+
   @override
-  Future<bool> request(BuildContext context) => throw UnimplementedError('slice 8: login');
+  Future<bool> request(BuildContext context) {
+    if (environment.account is LoggedIn) return Future.value(true);
+    if (_showing[environment] case final showing?) return showing;
+    final shown = Navigator.of(context, rootNavigator: true)
+        .push<bool>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const LoginPage()))
+        .then((loggedIn) => loggedIn ?? false)
+        .whenComplete(() {
+      _showing[environment] = null;
+    });
+    _showing[environment] = shown;
+    return shown;
+  }
 }

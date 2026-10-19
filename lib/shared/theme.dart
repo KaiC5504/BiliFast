@@ -2340,7 +2340,35 @@ abstract final class DevToolsTheme {
 abstract final class HistoryTheme {}
 
 /// The login page and its bar.
-abstract final class LoginTheme {}
+abstract final class LoginTheme {
+  /// No official screenshot shows this frame: it keeps 设置's white bar, and Bilibili's own page fills the rest.
+  static const bar = BiliColors.card;
+  static const page = BiliColors.card;
+  static const title = BiliColors.text;
+  static const titleText = BiliMetrics.titleText;
+
+  /// The ✕ that closes the page, in a 44 pt target.
+  static const close = BiliColors.text;
+  static const closeIcon = 24.0;
+  static const closeTarget = 44.0;
+
+  static const spinnerRadius = 14.0;
+
+  /// 请在手机上登录, a load error or a login that didn't take, with 重试 under the last two.
+  static const message = BiliColors.secondaryText;
+  static const messageText = BiliMetrics.bodyText;
+  static const inset = BiliMetrics.sectionGap;
+  static const gap = BiliMetrics.rowGap;
+  static const retry = BiliColors.pink;
+  static const retryHeight = BiliMetrics.pillHeight;
+  static const retryPadX = BiliMetrics.sectionGap;
+
+  static TextStyle get titleStyle => TextStyle(fontFamily: BiliFonts.family, fontSize: titleText, color: title);
+
+  static TextStyle get messageStyle => TextStyle(fontFamily: BiliFonts.family, fontSize: messageText, color: message);
+
+  static TextStyle get retryStyle => TextStyle(fontFamily: BiliFonts.family, fontSize: messageText, color: retry);
+}
 
 /// 设置's sections beyond 字体, and its confirms.
 abstract final class SettingsTheme {}

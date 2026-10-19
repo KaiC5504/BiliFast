@@ -21,17 +21,17 @@ abstract interface class WebCookies {
 class ChannelWebCookies implements WebCookies {
   ChannelWebCookies([MethodChannel? channel]) : _channel = channel ?? const MethodChannel('bilifast/web_cookies');
 
-  // ignore: unused_field
   final MethodChannel _channel;
 
   @override
-  Future<Map<String, String>> bilibili() => throw UnimplementedError('slice 8: login');
+  Future<Map<String, String>> bilibili() async =>
+      {...?await _channel.invokeMapMethod<String, String>('bilibili')};
 
   @override
-  Future<void> clearBilibili() => throw UnimplementedError('slice 8: login');
+  Future<void> clearBilibili() => _channel.invokeMethod<void>('clearBilibili');
 
   @override
-  Future<void> clearAll() => throw UnimplementedError('slice 8: login');
+  Future<void> clearAll() => _channel.invokeMethod<void>('clearAll');
 }
 
 /// The PC: no web view, nothing stored.
