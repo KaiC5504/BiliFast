@@ -348,4 +348,90 @@ void main() {
       expect(heard, greaterThan(afterMove));
     });
   });
+
+  group('the turn takeover (旋转动画)', () {
+    test('the host has it only while a page owns the orientation, the one page that draws the turns', () async {
+      await orientation.setTurnTakeover(true);
+      expect(host.takeovers, isEmpty);
+      expect(orientation.turnTakeover, isFalse);
+
+      orientation.begin(page, videoIsVertical: false);
+      expect(orientation.turnTakeover, isTrue);
+      await settle();
+      expect(host.takeovers, [true]);
+
+      orientation.end(page);
+      expect(orientation.turnTakeover, isFalse);
+      await settle();
+      expect(host.takeovers, [true, false]);
+    });
+
+    test('the switch flipped while a page owns the orientation reaches the host at once; off, nothing is armed',
+        () async {
+      orientation.begin(page, videoIsVertical: false);
+      await settle();
+      expect(host.takeovers, isEmpty);
+      await orientation.setTurnTakeover(true);
+      expect(host.takeovers, [true]);
+      await orientation.setTurnTakeover(false);
+      expect(host.takeovers, [true, false]);
+
+      orientation
+        ..end(page)
+        ..begin(page, videoIsVertical: false)
+        ..enterLandscape();
+      await settle();
+      expect(host.takeovers, [true, false]);
+      expect(orientation.turnTakeover, isFalse);
+    });
+
+    test("the owner's end hands the turns back before its exit to inline goes out, so the system turns it", () async {
+      await orientation.setTurnTakeover(true);
+      orientation
+        ..begin(page, videoIsVertical: false)
+        ..enterLandscape();
+      await settle();
+      expect(host.sent, ['takeover on', 'landscape']);
+
+      orientation.end(page);
+      await settle();
+      expect(host.sent, ['takeover on', 'landscape', 'takeover off', 'portrait']);
+    });
+
+    test("a page beginning over a full-screen one: the covered page's exit goes out unarmed, and the turns are taken "
+        "over again from the new page's first move", () async {
+      final covered = Object();
+      await orientation.setTurnTakeover(true);
+      orientation
+        ..begin(covered, videoIsVertical: false)
+        ..enterLandscape();
+      await settle();
+      host.sent.clear();
+
+      orientation.begin(page, videoIsVertical: false);
+      expect(orientation.turnTakeover, isFalse);
+      await settle();
+      expect(host.sent, ['takeover off', 'portrait']);
+
+      orientation.enterLandscape();
+      expect(orientation.turnTakeover, isTrue);
+      await settle();
+      expect(host.sent, ['takeover off', 'portrait', 'takeover on', 'landscape']);
+    });
+
+    test('a host that fails to take the turns over leaves them to the system, and the next move asks again', () async {
+      host.takeoverError = StateError('channel closed');
+      await orientation.setTurnTakeover(true);
+      orientation.begin(page, videoIsVertical: false);
+      await settle();
+      expect(orientation.turnTakeover, isFalse);
+      expect(logs.events.where((event) => event.msg == 'orientation host failed'), hasLength(1));
+
+      host.takeoverError = null;
+      orientation.enterLandscape();
+      expect(orientation.turnTakeover, isTrue);
+      await settle();
+      expect(host.sent, ['takeover on', 'landscape']);
+    });
+  });
 }

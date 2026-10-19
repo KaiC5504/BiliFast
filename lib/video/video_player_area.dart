@@ -40,6 +40,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.danmakuHeight,
     this.pin,
     this.turning,
+    this.verticalTurn,
   });
 
   final Presentation presentation;
@@ -85,13 +86,18 @@ class VideoPlayerArea extends StatelessWidget {
   /// up to 1.6×.
   final ValueListenable<bool>? turning;
 
+  /// While the page turns the player between 竖屏 and landscape full screen, how far it has got toward landscape (0 to
+  /// 1): the video's band goes from 竖屏's to the whole box, and the danmaku are put away, since pinned at one end's size
+  /// they would stretch to the other's shape.
+  final ValueListenable<double?>? verticalTurn;
+
   @override
   Widget build(BuildContext context) {
     final session = ui?.session;
     return ColoredBox(
       color: BiliColors.videoBackground,
       child: ListenableBuilder(
-        listenable: Listenable.merge([?session, ?danmaku, ?pin, ?turning]),
+        listenable: Listenable.merge([?session, ?danmaku, ?pin, ?turning, ?verticalTurn]),
         builder: (context, _) => Stack(fit: StackFit.expand, children: _layers()),
       ),
     );
@@ -102,42 +108,50 @@ class VideoPlayerArea extends StatelessWidget {
     final session = ui?.session;
     final ended = session?.ended ?? false;
     // 竖屏 sets a landscape video above the middle of the screen (screen 09); a vertical one fills the height.
-    final banded = presentation == Presentation.vertical && session?.isVertical != true;
+    final band = session?.isVertical != true ? BiliMetrics.verticalVideoCentre * 2 : 1.0;
+    final turn = verticalTurn?.value;
+    final heightFactor = switch (turn) {
+      final t? => band + (1 - band) * t,
+      null => presentation == Presentation.vertical ? band : 1.0,
+    };
     return [
       if (video case final video?)
         Align(
           key: const ValueKey('video-surface'),
           alignment: Alignment.topCenter,
           child: FractionallySizedBox(
-            heightFactor: banded ? BiliMetrics.verticalVideoCentre * 2 : 1,
+            heightFactor: heightFactor,
             child: Stack(
               fit: StackFit.expand,
               children: [
                 KeyedSubtree(key: const ValueKey('video-view'), child: video),
                 if (session != null)
                   // 竖屏's video runs under the status bar; its danmaku start below it.
-                  SafeArea(
-                    key: const ValueKey('video-danmaku-area'),
-                    left: false,
-                    right: false,
-                    bottom: false,
-                    child: ClipRect(
-                      clipBehavior: shrunk ? Clip.hardEdge : Clip.none,
-                      child: _Pinned(
-                        size: pin?.value,
-                        child: OverflowBox(
-                          alignment: Alignment.topCenter,
-                          minHeight: danmakuHeight,
-                          maxHeight: danmakuHeight,
-                          child: DanmakuLayer(
-                            key: const ValueKey('video-danmaku'),
-                            clock: session.clock,
-                            timeline: danmaku?.timeline,
-                            // The end screens show no danmaku over the last frame.
-                            enabled: session.danmakuOn && !ended,
-                            wake: session.readout.any,
-                            settings: ui?.danmaku?.settings,
-                            fullScreen: presentation.fullScreen,
+                  _unseen(
+                    turn != null,
+                    SafeArea(
+                      key: const ValueKey('video-danmaku-area'),
+                      left: false,
+                      right: false,
+                      bottom: false,
+                      child: ClipRect(
+                        clipBehavior: shrunk ? Clip.hardEdge : Clip.none,
+                        child: _Pinned(
+                          size: pin?.value,
+                          child: OverflowBox(
+                            alignment: Alignment.topCenter,
+                            minHeight: danmakuHeight,
+                            maxHeight: danmakuHeight,
+                            child: DanmakuLayer(
+                              key: const ValueKey('video-danmaku'),
+                              clock: session.clock,
+                              timeline: danmaku?.timeline,
+                              // The end screens show no danmaku over the last frame.
+                              enabled: session.danmakuOn && !ended,
+                              wake: session.readout.any,
+                              settings: ui?.danmaku?.settings,
+                              fullScreen: presentation.fullScreen,
+                            ),
                           ),
                         ),
                       ),

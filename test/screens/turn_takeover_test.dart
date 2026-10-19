@@ -12,8 +12,10 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/main.dart' show applyTurnTakeover;
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/screens/player_test_page.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
@@ -46,10 +48,15 @@ void main() {
 
     tearDown(() => folder.deleteSync(recursive: true));
 
-    test('a first launch takes turns over; the saved 系统 hands them back to iOS', () async {
+    test('a first launch takes turns over, from the first page that owns the orientation; the saved 系统 hands them '
+        'back to iOS', () async {
       final orientation = OrientationController(host: host, logger: logger);
       addTearDown(orientation.dispose);
       applyTurnTakeover(orientation, await PlayerPrefs.load(path, logger: logger));
+      await settle();
+      expect(host.takeovers, isEmpty, reason: 'no page to draw a turn yet');
+      expect(orientation.turnTakeover, isFalse);
+      orientation.begin(Object(), videoIsVertical: false);
       await settle();
       expect(host.takeovers, [true]);
       expect(orientation.turnTakeover, isTrue);
@@ -118,8 +125,13 @@ void main() {
     Finder segment(String label) => find.descendant(of: row, matching: find.text(label));
     Set<bool> selected(WidgetTester tester) => tester.widget<SegmentedButton<bool>>(row).selected;
 
-    testWidgets('on the phone, 系统 and 自绘 save the choice and reach the host at once', (tester) async {
+    testWidgets('on the phone, 系统 and 自绘 save the choice and reach the host at once while a page owns the '
+        'orientation', (tester) async {
       await show(tester, host: host);
+      applyTurnTakeover(orientation, prefs);
+      orientation.begin(Object(), videoIsVertical: false);
+      await tester.pump();
+      expect(host.takeovers, [true]);
       expect(find.text('旋转动画'), findsOneWidget);
       expect(selected(tester), {true});
 
@@ -127,7 +139,7 @@ void main() {
       await tester.pump();
       expect(selected(tester), {false});
       expect(prefs.turnTakeover, isFalse);
-      expect(host.takeovers, [false]);
+      expect(host.takeovers, [true, false]);
       expect(orientation.turnTakeover, isFalse);
 
       // As ghosthand presses it on the PC.
@@ -136,7 +148,7 @@ void main() {
       await tester.pump();
       expect(selected(tester), {true});
       expect(prefs.turnTakeover, isTrue);
-      expect(host.takeovers, [false, true]);
+      expect(host.takeovers, [true, false, true]);
       expect(orientation.turnTakeover, isTrue);
       semantics.dispose();
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
@@ -160,5 +172,30 @@ void main() {
       expect(prefs.turnTakeover, isTrue);
       expect(orientation.turnTakeover, isFalse);
     }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    /// The fill of a segment's button.
+    Color? fill(WidgetTester tester, String label) =>
+        tester.widget<Material>(find.ancestor(of: segment(label), matching: find.byType(Material)).first).color;
+
+    for (final drawn in [true, false]) {
+      final chosen = drawn ? '自绘' : '系统';
+      final other = drawn ? '系统' : '自绘';
+      testWidgets('on Windows the stored $chosen still shows chosen, and reads as it with nothing to press',
+          (tester) async {
+        prefs.turnTakeover = drawn;
+        await show(tester);
+        expect(fill(tester, chosen), BiliColors.divider);
+        expect(fill(tester, other), isNot(BiliColors.divider));
+
+        final semantics = tester.ensureSemantics();
+        expect(find.semantics.byLabel(chosen), findsOneWidget);
+        expect(find.semantics.byLabel(other), findsNothing);
+        final node = tester.getSemantics(row);
+        expect(node.label, chosen);
+        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
+        expect(node.getSemanticsData().flagsCollection.isButton, isFalse);
+        semantics.dispose();
+      }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+    }
   });
 }

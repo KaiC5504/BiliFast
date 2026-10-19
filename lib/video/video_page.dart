@@ -177,10 +177,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// player's panels and gestures follow it too.
   final _laidOut = ValueNotifier<Presentation>(Presentation.inline);
 
-  /// From the small player (0) to landscape full screen (1). It runs over the whole turn, from the presentation's
-  /// change, while the layout waits for the screen's new shape.
+  /// From the upright end of the turn (0) to landscape full screen (1). It runs over the whole turn, from the
+  /// presentation's change, while the layout waits for the screen's new shape.
   late final _grow = AnimationController(vsync: this, duration: RotationTheme.grow);
   bool _turnedFull = false;
+
+  /// The upright end of a turn to or from landscape full screen: the small player, or 竖屏.
+  Presentation _upright = Presentation.inline;
 
   /// While the page draws the turns itself (旋转动画, iOS): the screen's shape a change of presentation was made on.
   /// The player waits for the system's turn to start, or for [RotationTheme.takeoverWait] to run out.
@@ -188,9 +191,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   Timer? _turnTimeout;
   StreamSubscription<TurnStart>? _turns;
 
-  /// A turn the system started, waiting for a build at its new shape: iOS hands over the size first, but the order
-  /// isn't relied on. One not [draw]n (stale, or under Reduce Motion) is still reported drawn.
-  ({TurnStart start, bool wide, bool draw})? _pendingTurn;
+  /// The last change of presentation's wait ran out with no turn started: the screen never turned for it.
+  bool _turnMissed = false;
+
+  /// The turn being waited for, started by the system and waiting for a build at its new shape [wide]: iOS hands
+  /// over the size first, but the order isn't relied on.
+  ({TurnStart start, bool wide})? _pendingTurn;
 
   /// The page turns from [_spinFrom] back to upright as it runs.
   late final _spin = AnimationController(vsync: this);
@@ -204,6 +210,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   /// Whether the player's chrome is put away for a turn, a grow or a shrink.
   final _turningPlayer = ValueNotifier<bool>(false);
+
+  /// How far a turn between 竖屏 and landscape full screen has got, for the player's video band; null otherwise.
+  final _verticalTurn = ValueNotifier<double?>(null);
 
   /// The page's size and top inset when last laid out upright: the body keeps them while the player grows over it.
   ({Size size, double top})? _uprightFrame;
@@ -270,33 +279,50 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   Presentation get _presentation => _owning && !_left ? _orientation.presentation : Presentation.inline;
 
-  /// Landscape full screen is laid out once the screen is landscape, and stays until it is upright again.
+  /// Landscape full screen is laid out once the screen is landscape, and stays until it is upright again; 竖屏 stays
+  /// until the screen is landscape.
   Presentation _layoutFor(Size size) {
     final wide = size.width > size.height;
+    final was = _laidOut.value;
     return switch (_presentation) {
-      Presentation.vertical => Presentation.vertical,
-      Presentation.landscape => wide ? Presentation.landscape : Presentation.inline,
-      Presentation.inline =>
-        wide && _laidOut.value == Presentation.landscape ? Presentation.landscape : Presentation.inline,
+      Presentation.vertical => wide && was == Presentation.landscape ? Presentation.landscape : Presentation.vertical,
+      Presentation.landscape => wide
+          ? Presentation.landscape
+          : (was == Presentation.vertical ? Presentation.vertical : Presentation.inline),
+      Presentation.inline => wide && was == Presentation.landscape ? Presentation.landscape : Presentation.inline,
     };
   }
 
-  /// A turn between the small player and landscape full screen grows the player box, or shrinks it back, from
-  /// wherever it is; a turn reversed midway goes back from there. 竖屏 doesn't grow. While the page draws the turns,
-  /// the box holds still until the system's turn starts, made on the screen's shape [wide].
+  /// A turn between an upright layout (the small player or 竖屏) and landscape full screen grows the player box, or
+  /// shrinks it back, from wherever it is; a turn reversed midway goes back from there. While the page draws the
+  /// turns, the box holds still until the system's turn starts, made on the screen's shape [wide]. Turned by the
+  /// system, 竖屏 doesn't grow: the whole page turns.
   void _followTurn(Presentation presentation, bool wide) {
     final full = presentation == Presentation.landscape;
+    if (!full) _upright = presentation;
     if (full == _turnedFull) return;
     _turnedFull = full;
-    final upright = presentation == Presentation.vertical || _laidOut.value == Presentation.vertical;
-    // Back before its turn started (a refusal): already where it is going, and no turn will come.
-    final settled = !_spin.isAnimating && !_grow.isAnimating && _grow.value == (full ? 1 : 0);
-    if (_pendingTurn case final turn?) _pendingTurn = (start: turn.start, wide: turn.wide, draw: false);
+    // A turn this change overtook is not drawn, but leaves the screen its shape, and stays owed: the next drawn turn
+    // covers its picture.
+    final overtaken = _pendingTurn;
+    _pendingTurn = null;
+    // Back before its turn started (a refusal), or after the last change's turn never came: the screen is already
+    // where this one goes, and no turn will come. The box goes back from where it is.
+    final settled = overtaken == null &&
+        !_spin.isAnimating &&
+        ((_turnMissed && wide == full) || (!_grow.isAnimating && _grow.value == (full ? 1 : 0)));
+    _turnMissed = false;
     _turnTimeout?.cancel();
     _turnTimeout = null;
-    _turnFrom = _orientation.turnTakeover && _owning && !_left && !upright && !settled ? wide : null;
-    if (_turnFrom != null || _pendingTurn != null) _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
-    if (upright || MediaQuery.disableAnimationsOf(context)) {
+    // Under Reduce Motion the turn jumps, so there is nothing to wait for.
+    final still = MediaQuery.disableAnimationsOf(context);
+    _turnFrom = _orientation.turnTakeover && _owning && !_left && !settled && !still ? overtaken?.wide ?? wide : null;
+    if (_turnFrom != null) {
+      _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
+    } else if (overtaken != null) {
+      _reportDrawn();
+    }
+    if (still || (_turnFrom == null && _upright == Presentation.vertical)) {
       _grow.value = full ? 1 : 0;
     } else if (_turnFrom != null) {
       _grow.stop();
@@ -307,47 +333,50 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     }
   }
 
-  /// The turned size is already in (or about to be): the turn waits for a build at it. One the page didn't ask for, or
-  /// the other way's, is only reported drawn.
+  /// The turned size is already in (or about to be). The turn being waited for is drawn from the first build at its
+  /// new shape, whichever comes first; any other, one the page didn't ask for or a stale one the other way, is only
+  /// reported drawn, at once.
   void _turnStarted(TurnStart start) {
     if (!mounted || !_owning || _left || _covered) return;
     _drawnOwed += 1;
-    final from = _turnFrom ?? _drawnWide ?? false;
+    _turnMissed = false;
+    final from = _turnFrom;
     final quarter = (start.angle.abs() % pi - pi / 2).abs() < pi / 4;
-    final wide = quarter ? !from : from;
-    final draw = _turnFrom != null && quarter && wide == (_presentation == Presentation.landscape);
-    _pendingTurn = (start: start, wide: wide, draw: draw);
+    final target = _presentation == Presentation.landscape;
     _turnTimeout?.cancel();
-    _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
+    _turnTimeout = null;
+    if (from != null && quarter && from != target) {
+      _pendingTurn = (start: start, wide: target);
+      _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
+    } else {
+      if (from != null) {
+        // A stale turn leaves the screen the other shape, which the one being waited for will start from.
+        if (quarter) _turnFrom = !from;
+        _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
+      }
+      _reportDrawn();
+    }
     setState(() {});
   }
 
   /// From the build that has the turn's new shape: the page drawn turned by −angle, so it sits where it was before
   /// the turn, and back to upright as the box grows or shrinks, both over the system's duration. A turn that reverses
   /// one under way starts from the angle the page is drawn at.
-  void _beginTurn(({TurnStart start, bool wide, bool draw}) turn) {
+  void _beginTurn(({TurnStart start, bool wide}) turn) {
     _pendingTurn = null;
+    _turnFrom = null;
     _turnTimeout?.cancel();
     _turnTimeout = null;
-    if (!turn.draw) {
-      // The screen has that shape now, which the turn being waited for will start from.
-      if (_turnFrom != null) {
-        _turnFrom = turn.wide;
-        _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
-      }
-    } else {
-      _turnFrom = null;
-      if (!MediaQuery.disableAnimationsOf(context)) {
-        final duration = turn.start.duration;
-        _spinFrom = _rotation - turn.start.angle;
-        _spin
-          ..duration = duration
-          ..forward(from: 0);
-        if (_turnedFull && _grow.value != 1) {
-          _grow.animateTo(1, duration: duration);
-        } else if (!_turnedFull && _grow.value != 0) {
-          _grow.animateBack(0, duration: duration);
-        }
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      final duration = turn.start.duration;
+      _spinFrom = _rotation - turn.start.angle;
+      _spin
+        ..duration = duration
+        ..forward(from: 0);
+      if (_turnedFull && _grow.value != 1) {
+        _grow.animateTo(1, duration: duration);
+      } else if (!_turnedFull && _grow.value != 0) {
+        _grow.animateBack(0, duration: duration);
       }
     }
     _reportDrawn();
@@ -357,16 +386,27 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _turnLate() {
     _turnTimeout = null;
     if (!mounted) return;
+    _turnMissed = _pendingTurn == null;
     _turnFrom = null;
     _pendingTurn = null;
     if (!_grow.isAnimating) {
-      if (_turnedFull) {
+      if (_upright == Presentation.vertical) {
+        _grow.value = _turnedFull ? 1 : 0;
+      } else if (_turnedFull) {
         _grow.forward();
       } else {
         _grow.reverse();
       }
     }
     _flushDrawn();
+    setState(() {});
+  }
+
+  /// Rebuilds the PopScope, which holds the page while it turns.
+  void _spinStatus(AnimationStatus status) {
+    if (!status.isCompleted || !mounted) return;
+    // A turn of no length ends in the build that starts it, which reads it already.
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) return;
     setState(() {});
   }
 
@@ -388,25 +428,36 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     }
   }
 
-  /// Mid-turn, the player box with its top inset and where the upright body sits, or null at rest. The box goes from
-  /// the small player, about the upright screen's centre, to the whole landscape screen, about its centre, and is
-  /// placed about the centre of the screen as it is now: iOS keeps the view's centre as it hands over the turned size
-  /// halfway through, so nothing moves then. Before that the box grows past the upright page's sides.
-  ({Rect box, double inset, Offset body})? _turning(Size screen, Presentation layout, double uprightTop) {
+  /// Mid-turn, the player box with its top inset, where the upright body sits (竖屏 has none) and how far the turn has
+  /// got, or null at rest. The box goes from its upright place about the upright screen's centre, the small player or
+  /// 竖屏's whole screen, to the whole landscape screen about its centre, and is placed about the centre of the screen
+  /// as it is now: iOS keeps the view's centre as it hands over the turned size halfway through, so nothing moves
+  /// then. Before that the box grows past the upright page's sides.
+  ({Rect box, double inset, Offset? body, double t})? _turning(Size screen, Presentation layout, double uprightTop) {
+    if (MediaQuery.disableAnimationsOf(context)) return null;
     final value = _grow.value;
-    final rest = !_grow.isAnimating && value == (layout == Presentation.landscape ? 1 : 0);
-    if (rest || layout == Presentation.vertical || MediaQuery.disableAnimationsOf(context)) return null;
+    final vertical = _upright == Presentation.vertical;
+    if (vertical) {
+      // The system's 竖屏 turns jump; only one the page draws moves the box, from the change of presentation.
+      if (!_grow.isAnimating && !_spin.isAnimating && _turnFrom == null && _pendingTurn == null) return null;
+    } else if (layout == Presentation.vertical ||
+        !_grow.isAnimating && value == (layout == Presentation.landscape ? 1 : 0)) {
+      return null;
+    }
     final short = screen.shortestSide;
     final long = screen.longestSide;
     final small = uprightTop + _collapse.height;
     final t = RotationTheme.curve.transform(value);
     final centre = screen.center(Offset.zero);
     final box = Rect.lerp(
-      Rect.fromLTWH(-short / 2, -long / 2, short, small),
+      vertical
+          ? Rect.fromCenter(center: Offset.zero, width: short, height: long)
+          : Rect.fromLTWH(-short / 2, -long / 2, short, small),
       Rect.fromCenter(center: Offset.zero, width: long, height: short),
       t,
     )!.shift(centre);
-    return (box: box, inset: uprightTop * (1 - t), body: Offset(centre.dx - short / 2, box.bottom - small));
+    if (vertical) return (box: box, inset: 0, body: null, t: t);
+    return (box: box, inset: uprightTop * (1 - t), body: Offset(centre.dx - short / 2, box.bottom - small), t: t);
   }
 
   @override
@@ -418,6 +469,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..addListener(_standAside);
     _commentOverlays.addListener(_panelChanged);
     _collapse.addListener(_collapseChanged);
+    _spin.addStatusListener(_spinStatus);
   }
 
   @override
@@ -1103,6 +1155,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _flushDrawn();
     _spin.dispose();
     _turningPlayer.dispose();
+    _verticalTurn.dispose();
     _pin.dispose();
     _laidOut.dispose();
     final session = _session;
@@ -1145,6 +1198,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           !presentation.fullScreen &&
           // Turning back, the landscape chrome is still drawn; its 〈 must not take the page with it.
           !fullScreen &&
+          // Nor a swipe back while the page draws the turn: the upright size is in from its start.
+          _turnFrom == null &&
+          _pendingTurn == null &&
+          !_spin.isAnimating &&
           !(_danmaku?.sendOpen.value ?? false) &&
           _panels.value == null &&
           _overlays.value == null &&
@@ -1225,6 +1282,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                         danmakuHeight: fullScreen ? null : _collapse.full,
                         pin: _pin,
                         turning: _turningPlayer,
+                        verticalTurn: _verticalTurn,
                       ),
                     ),
                   );
@@ -1250,9 +1308,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       final progress = fullScreen ? 0.0 : _collapse.progress;
                       final turn = _turning(constraints.biggest, layout, upright.top);
                       final spinning = _spin.isAnimating;
-                      final hidden = fullScreen && turn == null;
+                      final hidden = fullScreen && turn?.body == null;
                       final player = turn?.box ?? Rect.fromLTWH(0, 0, constraints.maxWidth, box);
                       _pin.value = turn == null ? null : Size(constraints.maxWidth, height);
+                      _verticalTurn.value = turn != null && _upright == Presentation.vertical ? turn.t : null;
                       // The chrome goes from the change of presentation, so the host's still picture has none either.
                       _turningPlayer.value = turn != null || spinning || _turnFrom != null || _pendingTurn != null;
                       // The tab row and the list ride on the player's bottom edge, at their upright size.

@@ -50,24 +50,38 @@ class OrientationController extends ChangeNotifier {
   bool get videoIsVertical => _videoIsVertical;
   bool _videoIsVertical = false;
 
-  /// Whether turns are drawn by Flutter rather than animated by the system (the 开发者 switch 旋转动画). Always off
-  /// without a host.
+  /// Whether turns are drawn by Flutter rather than animated by the system: the 开发者 switch 旋转动画, armed only
+  /// while a page owns the orientation, since only that page draws them. Always off without a host.
   bool get turnTakeover => _turnTakeover;
   bool _turnTakeover = false;
+  bool _takeoverWanted = false;
+  int _takeoverSends = 0;
 
   /// The taken-over turns as the system starts them; empty without a host or while [turnTakeover] is off.
   Stream<TurnStart> get turns => _host?.turns ?? const Stream.empty();
 
-  Future<void> setTurnTakeover(bool enabled) async {
+  /// The 开发者 switch's choice; the host has it while a page owns the orientation.
+  Future<void> setTurnTakeover(bool enabled) {
+    _takeoverWanted = enabled;
+    return _syncTakeover();
+  }
+
+  /// Queued with the requests, so a request made after a change goes out after it: an exit with no page to draw it
+  /// gets the system's turn rather than a still picture.
+  Future<void> _syncTakeover() {
     final host = _host;
-    if (host == null) return;
-    _turnTakeover = enabled;
-    try {
-      await host.setTurnTakeover(enabled);
-    } catch (error) {
-      _turnTakeover = false;
-      _hostFailed(error);
-    }
+    final armed = _takeoverWanted && _owner != null;
+    if (host == null || armed == _turnTakeover) return Future.value();
+    _turnTakeover = armed;
+    final send = ++_takeoverSends;
+    return _hostQueue = _hostQueue.then((_) async {
+      try {
+        await host.setTurnTakeover(armed);
+      } catch (error) {
+        if (send == _takeoverSends) _turnTakeover = false;
+        _hostFailed(error);
+      }
+    });
   }
 
   /// The first frame of a taken-over turn is drawn, so the host can drop its still picture.
@@ -88,14 +102,23 @@ class OrientationController extends ChangeNotifier {
 
   /// The most recent begin wins. A page shown again calls it too, so its own vertical flag comes back.
   void begin(Object owner, {required bool videoIsVertical}) {
+    var exited = false;
     if (!identical(_owner, owner)) {
       if (_owner != null) {
-        // The previous page is covered or being popped: its lock and full screen are not this page's.
+        // The previous page is covered or being popped: its lock and full screen are not this page's. Neither page
+        // draws that exit, so it goes out unowned.
         _locked = false;
-        if (_presentation != Presentation.inline) exitToInline();
+        _owner = null;
+        if (_presentation != Presentation.inline) {
+          exitToInline();
+          exited = true;
+        }
       }
       _owner = owner;
     }
+    // After such an exit the takeover waits for this page's first move: armed now, it could reach the host before
+    // the exit's turn has started.
+    if (!exited) unawaited(_syncTakeover());
     _videoIsVertical = videoIsVertical;
     if (!_observing) {
       _observing = true;
@@ -114,6 +137,7 @@ class OrientationController extends ChangeNotifier {
   void end(Object owner) {
     if (!identical(_owner, owner)) return;
     _owner = null;
+    unawaited(_syncTakeover());
     if (_observing) {
       _observing = false;
       _lastDeviceOrientation = null;
@@ -174,6 +198,7 @@ class OrientationController extends ChangeNotifier {
 
   /// Asks the host again even when the presentation is unchanged, so a refused rotation can be retried.
   void _move(Presentation next) {
+    unawaited(_syncTakeover());
     final previous = _presentation;
     if (next != previous) {
       _logger.info(LogCategory.ui, 'presentation', {'from': previous.name, 'to': next.name});

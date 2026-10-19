@@ -21,6 +21,7 @@ import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/panels/panel_parts.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
+import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/page_session.dart' show SessionOpen;
 import 'package:bilifast/video/page_tabs.dart';
@@ -720,6 +721,225 @@ void main() {
       expect(host.drawn, 0);
       await leave(tester);
     });
+
+    Rect video(WidgetTester tester) => tester.getRect(find.byKey(const ValueKey('fake-video')));
+    bool danmakuShown(WidgetTester tester) => tester
+        .widget<Visibility>(
+          find.ancestor(of: find.byKey(const ValueKey('video-danmaku-area')), matching: find.byType(Visibility)).first,
+        )
+        .visible;
+    const upright = Rect.fromLTWH(0, 0, 440, 956);
+
+    testWidgets('竖屏 → 横屏全屏 turns the page from where 竖屏 sat, its box going from the upright screen to the '
+        'landscape one about the centre, the video in its band', (tester) async {
+      await openTakenOver(tester);
+      orientation.enterVertical();
+      await tester.pump();
+      expect(area(tester), upright);
+      final video0 = video(tester);
+      expect(video0.height, lessThan(upright.height), reason: "a landscape video sits in 竖屏's band (09)");
+      expect(danmakuShown(tester), isTrue);
+
+      orientation.enterLandscape();
+      await tester.pump();
+      expect(find.byType(VerticalChrome), findsOneWidget, reason: '竖屏 stays laid out while the screen is upright');
+      expect(find.byType(PortraitControls), findsNothing);
+      expectRect(box(tester), upright, reason: "the box waits for the system's turn where it is");
+      expectRect(video(tester), video0, reason: 'the video too');
+      expect(chromeDrawn(tester), isFalse);
+      expect(danmakuShown(tester), isFalse, reason: "put away from the change, so the host's picture has none either");
+      expect(find.byType(PageTabRow), findsNothing, reason: '竖屏 has no body to bare');
+
+      screen(tester, landscape, landscapeInsets);
+      await tester.pump();
+      host.startTurn(pi / 2);
+      await tester.pump();
+      expect(angle(tester), closeTo(-pi / 2, 1e-9));
+      expectRect(box(tester), onTurned(upright, from: portrait, to: landscape, by: -pi / 2), reason: 'the box');
+      expectRect(box(tester), full, reason: 'turned, the upright box covers the whole glass, as 竖屏 did');
+      expectRect(video(tester), onTurned(video0, from: portrait, to: landscape, by: -pi / 2), reason: 'the video');
+      expect(find.byType(PageTabRow), findsNothing);
+      await frame(tester);
+      expect(host.drawn, 1);
+
+      var last = angle(tester).abs();
+      for (var i = 0; i < 10; i++) {
+        await frame(tester);
+        final now = angle(tester).abs();
+        expect(now, lessThan(last), reason: 'frame $i turns upright');
+        expect(box(tester).center, offsetMoreOrLessEquals(landscape.center(Offset.zero)), reason: 'about the centre');
+        expect(danmakuShown(tester), isFalse);
+        last = now;
+      }
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expect(angle(tester), 0);
+      expect(area(tester), full);
+      expect(video(tester), full, reason: 'the band gone, the video fills full screen');
+      expect(find.byType(LandscapeChrome), findsOneWidget);
+      expect(chromeDrawn(tester), isTrue);
+      expect(danmakuShown(tester), isTrue);
+      expect(host.drawn, 1);
+
+      // And back, should 竖屏 be asked for from landscape.
+      orientation.enterVertical();
+      await tester.pump();
+      expectRect(box(tester), full, reason: 'the landscape layout holds while the screen is wide');
+      expect(find.byType(LandscapeChrome), findsOneWidget);
+      screen(tester, portrait, portraitInsets);
+      await tester.pump();
+      host.startTurn(-pi / 2);
+      await tester.pump();
+      expect(angle(tester), closeTo(pi / 2, 1e-9));
+      expectRect(box(tester), onTurned(full, from: landscape, to: portrait, by: pi / 2), reason: 'the box');
+      expectRect(video(tester), onTurned(full, from: landscape, to: portrait, by: pi / 2), reason: 'the video');
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expect(angle(tester), 0);
+      expect(area(tester), upright);
+      expectRect(video(tester), video0, reason: "back in 竖屏's band");
+      expect(find.byType(VerticalChrome), findsOneWidget);
+      expect(danmakuShown(tester), isTrue);
+      expect(host.drawn, 2);
+      await leave(tester);
+    });
+
+    testWidgets('turning back, the page takes no swipe back until its turn is over', (tester) async {
+      await openTakenOver(tester);
+      await turnToLandscape(tester);
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      bool canPop() => tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop;
+      bool swipe() => ModalRoute.of(tester.element(find.byType(VideoPage)))!.popGestureEnabled;
+
+      orientation.exitToInline();
+      await tester.pump();
+      expect(canPop(), isFalse);
+      screen(tester, portrait, portraitInsets);
+      await tester.pump();
+      expect(canPop(), isFalse, reason: 'upright already, with the turn still to come');
+      expect(swipe(), isFalse);
+      host.startTurn(-pi / 2);
+      await tester.pump();
+      expect(canPop(), isFalse);
+      await tester.pump(const Duration(milliseconds: 140));
+      expect(canPop(), isFalse, reason: 'mid-turn');
+      expect(swipe(), isFalse);
+      await tester.pump(RotationTheme.grow);
+      expect(canPop(), isTrue, reason: 'the page builds again as the turn ends');
+      expect(swipe(), isTrue);
+      await leave(tester);
+    });
+
+    testWidgets('a turn the page did not ask for, whose size a frame was already built at, is reported drawn at once',
+        (tester) async {
+      await openTakenOver(tester);
+      screen(tester, landscape, landscapeInsets);
+      await tester.pump();
+      await frame(tester);
+      host.startTurn(pi / 2);
+      await tester.pump();
+      await frame(tester);
+      expect(host.drawn, 1, reason: 'not after a wait for a shape it has already');
+      expect(angle(tester), 0);
+      screen(tester, portrait, portraitInsets);
+      await tester.pump();
+      await leave(tester);
+    });
+
+    testWidgets('the turn being waited for is drawn whichever comes first, its start or its size', (tester) async {
+      await openTakenOver(tester);
+      final box0 = box(tester);
+      orientation.enterLandscape();
+      await tester.pump();
+      host.startTurn(pi / 2);
+      await tester.pump();
+      await frame(tester);
+      expect(angle(tester), 0, reason: 'nothing turned before the size');
+      expectRect(box(tester), box0);
+      expect(host.drawn, 0);
+
+      screen(tester, landscape, landscapeInsets);
+      await tester.pump();
+      expect(angle(tester), closeTo(-pi / 2, 1e-9));
+      expectRect(box(tester), onTurned(box0, from: portrait, to: landscape, by: -pi / 2));
+      await frame(tester);
+      expect(host.drawn, 1);
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expect(area(tester), full);
+      await leave(tester);
+    });
+
+    testWidgets('with Reduce Motion the chrome stays through a change of presentation: there is no turn to wait for',
+        (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await openTakenOver(tester);
+      ui(tester).chrome.show();
+      await tester.pump();
+      orientation.enterLandscape();
+      await tester.pump();
+      expect(chromeDrawn(tester), isTrue);
+      expect(area(tester), small);
+      screen(tester, landscape, landscapeInsets);
+      await tester.pump();
+      host.startTurn(pi / 2);
+      await tester.pump();
+      await frame(tester);
+      expect(host.drawn, 1);
+      expect(chromeDrawn(tester), isTrue);
+      expect(area(tester), full);
+      await leave(tester);
+    });
+
+    testWidgets('a refusal after the player started growing without its turn shrinks it back at once, the chrome '
+        'back once it is small', (tester) async {
+      await openTakenOver(tester);
+      orientation.enterLandscape();
+      await tester.pump();
+      await tester.pump(RotationTheme.takeoverWait);
+      for (var i = 0; i < 4; i++) {
+        await frame(tester);
+      }
+      final grown = box(tester);
+      expect(grown.width, greaterThan(smallBox.width), reason: 'growing on its own');
+
+      host.refuse(host.lastRequest);
+      await tester.pump();
+      expect(orientation.presentation, Presentation.inline);
+      var last = grown;
+      for (var i = 0; i < 3; i++) {
+        await frame(tester);
+        final now = box(tester);
+        expect(now.width, lessThan(last.width), reason: 'frame $i shrinks: no turn to wait for');
+        last = now;
+      }
+      await tester.pump(RotationTheme.grow);
+      await frame(tester);
+      expectRect(box(tester), smallBox);
+      expect(chromeDrawn(tester), isTrue);
+      expect(host.drawn, 0);
+      await leave(tester);
+    });
+  });
+
+  testWidgets("竖屏 → 横屏全屏 turned by the system stays 竖屏 until the screen is landscape, then is full screen at once",
+      (tester) async {
+    await openPage(tester);
+    orientation.enterVertical();
+    await tester.pump();
+    orientation.enterLandscape();
+    await tester.pump();
+    await frame(tester);
+    expect(find.byType(VerticalChrome), findsOneWidget);
+    expect(area(tester), const Rect.fromLTWH(0, 0, 440, 956));
+    expect(find.byType(PageTabRow), findsNothing, reason: 'no body bared');
+    screen(tester, landscape, landscapeInsets);
+    await tester.pump();
+    expect(area(tester), full);
+    expect(find.byType(LandscapeChrome), findsOneWidget);
+    await leave(tester);
   });
 
   testWidgets("the system's grow puts the chrome away, stretched as it would be, and brings it back", (tester) async {

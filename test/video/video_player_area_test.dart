@@ -59,6 +59,7 @@ void main() {
     Widget? cover,
     Size size = const Size(440, 956),
     ValueListenable<bool>? turning,
+    ValueListenable<double?>? verticalTurn,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -76,6 +77,7 @@ void main() {
           failure: failure,
           onRetry: () {},
           turning: turning,
+          verticalTurn: verticalTurn,
         ),
       ),
     );
@@ -261,6 +263,45 @@ void main() {
       ..changed();
     await tester.pump();
     expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 956));
+  });
+
+  testWidgets('turning between 竖屏 and landscape, the video goes from 竖屏\'s band to the whole box, and the danmaku '
+      'are put away, kept as they were', (tester) async {
+    final turn = ValueNotifier<double?>(null);
+    addTearDown(turn.dispose);
+    await show(tester, Presentation.vertical, verticalTurn: turn);
+    bool danmakuDrawn() => tester
+        .widget<Visibility>(find.ancestor(of: find.byType(DanmakuLayer), matching: find.byType(Visibility)).first)
+        .visible;
+    const band = 956 * BiliMetrics.verticalVideoCentre * 2;
+    expect(videoRect(tester).height, closeTo(band, 0.01));
+    expect(danmakuDrawn(), isTrue);
+    final danmaku = tester.element(find.byType(DanmakuLayer));
+
+    turn.value = 0;
+    await tester.pump();
+    expect(videoRect(tester).height, closeTo(band, 0.01), reason: 'where it was in 竖屏');
+    expect(danmakuDrawn(), isFalse);
+    turn.value = 0.5;
+    await tester.pump();
+    expect(videoRect(tester).height, closeTo((band + 956) / 2, 0.01));
+
+    // Laid out for landscape at the end of the turn, at the box it ends at.
+    turn.value = 1;
+    await show(tester, Presentation.landscape, size: const Size(956, 440), verticalTurn: turn);
+    expect(videoRect(tester), const Rect.fromLTWH(0, 0, 956, 440));
+    turn.value = null;
+    await tester.pump();
+    expect(videoRect(tester), const Rect.fromLTWH(0, 0, 956, 440));
+    expect(danmakuDrawn(), isTrue);
+    expect(identical(tester.element(find.byType(DanmakuLayer)), danmaku), isTrue);
+
+    session
+      ..isVertical = true
+      ..changed();
+    turn.value = 0;
+    await show(tester, Presentation.vertical, verticalTurn: turn);
+    expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 956), reason: 'a vertical video has no band');
   });
 
   testWidgets('the video keeps its element through every presentation, the end and a failure', (tester) async {

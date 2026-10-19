@@ -24,6 +24,12 @@ final class FakeOrientationHost implements OrientationHost {
   final takeovers = <bool>[];
   int drawn = 0;
 
+  /// Takeover changes and requests in the order they reached the host.
+  final sent = <String>[];
+
+  /// Thrown by [setTurnTakeover] while set.
+  Object? takeoverError;
+
   /// The system starting a taken-over turn of [angle] radians.
   void startTurn(double angle, {Duration duration = const Duration(milliseconds: 280)}) =>
       _turns.add((angle: angle, duration: duration));
@@ -58,13 +64,18 @@ final class FakeOrientationHost implements OrientationHost {
   Future<void> requestOrientations(int request, OrientationMask mask) async {
     if (failing.contains(request)) throw StateError('channel closed');
     requests.add((request, mask));
+    sent.add(mask.name);
   }
 
   @override
   Stream<OrientationRefusal> get refusals => _refusals.stream;
 
   @override
-  Future<void> setTurnTakeover(bool enabled) async => takeovers.add(enabled);
+  Future<void> setTurnTakeover(bool enabled) async {
+    if (takeoverError case final error?) throw error;
+    takeovers.add(enabled);
+    sent.add(enabled ? 'takeover on' : 'takeover off');
+  }
 
   @override
   Stream<TurnStart> get turns => _turns.stream;

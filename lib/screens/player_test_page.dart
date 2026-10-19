@@ -316,16 +316,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
                     _Card(children: [
                       _Row(
                         label: _canTakeOverTurns ? '旋转动画' : '旋转动画（仅 iPhone）',
-                        trailing: SegmentedButton<bool>(
-                          key: const ValueKey('turn-takeover'),
-                          showSelectedIcon: false,
-                          segments: const [
-                            ButtonSegment(value: true, label: Text('自绘')),
-                            ButtonSegment(value: false, label: Text('系统')),
-                          ],
-                          selected: {_prefs.turnTakeover},
-                          onSelectionChanged: _canTakeOverTurns ? (selected) => _setTurnTakeover(selected.first) : null,
-                        ),
+                        trailing: _turnTakeoverChoice(),
                       ),
                     ]),
                     const SizedBox(height: BiliMetrics.sectionGap),
@@ -352,6 +343,34 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
           ),
         ),
       ),
+    );
+  }
+
+  /// Off-limits (Windows), it still shows the stored choice: Material leaves a disabled segment unfilled, chosen or
+  /// not. Accessibility reads it as that choice, with nothing to press.
+  Widget _turnTakeoverChoice() {
+    final choice = SegmentedButton<bool>(
+      key: const ValueKey('turn-takeover'),
+      showSelectedIcon: false,
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled) && states.contains(WidgetState.selected)
+              ? BiliColors.divider
+              : null,
+        ),
+      ),
+      segments: const [
+        ButtonSegment(value: true, label: Text('自绘')),
+        ButtonSegment(value: false, label: Text('系统')),
+      ],
+      selected: {_prefs.turnTakeover},
+      onSelectionChanged: _canTakeOverTurns ? (selected) => _setTurnTakeover(selected.first) : null,
+    );
+    if (_canTakeOverTurns) return choice;
+    return Semantics(
+      container: true,
+      label: _prefs.turnTakeover ? '自绘' : '系统',
+      child: ExcludeSemantics(child: choice),
     );
   }
 

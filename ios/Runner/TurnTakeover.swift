@@ -13,7 +13,12 @@ enum TurnTakeover {
   static var enabled = false
 
   private static var picture: UIView?
-  private static var holdingAnimations = false
+
+  /// Counts the turns: what one turn left to run later acts only while it is still the latest.
+  private static var turn = 0
+
+  /// UIView.areAnimationsEnabled as found before the turns held it off, to put back; nil while not holding.
+  private static var heldAnimations: Bool?
   private static let fallback = Duration.milliseconds(500)
   private static let fadeSeconds = 0.12
 
@@ -39,29 +44,29 @@ enum TurnTakeover {
       picture = still
     }
 
-    if !holdingAnimations {
-      holdingAnimations = true
-      UIView.setAnimationsEnabled(false)
-    }
+    turn += 1
+    let id = turn
+    holdAnimations()
     // Turned back inside the transition, as the window takes its new bounds; should the system still animate, the
     // two turns cancel and the picture holds still all the same.
     let queued = coordinator.animate(alongsideTransition: { _ in
       if let still { turnBack(still, to: size, angle: angle) }
     }, completion: { _ in
-      releaseAnimations()
+      releaseAnimations(for: id)
     })
     if !queued {
       if let still { turnBack(still, to: size, angle: angle) }
-      releaseAnimations()
+      releaseAnimations(for: id)
     }
 
     let seconds = coordinator.transitionDuration
     Task { @MainActor in try? await DeviceChannel.events?.onTurn(angle: angle, seconds: seconds) }
 
-    Task { @MainActor [weak still] in
+    Task { @MainActor in
       try? await Task.sleep(for: fallback)
-      releaseAnimations()
-      if let still, still === picture { fadeAway() }
+      guard id == turn else { return }
+      releaseAnimations(for: id)
+      fadeAway()
     }
   }
 
@@ -70,10 +75,19 @@ enum TurnTakeover {
     still.center = CGPoint(x: size.width / 2, y: size.height / 2)
   }
 
-  private static func releaseAnimations() {
-    guard holdingAnimations else { return }
-    holdingAnimations = false
-    UIView.setAnimationsEnabled(true)
+  /// Off already, they are someone else's to put back.
+  private static func holdAnimations() {
+    let enabled = UIView.areAnimationsEnabled
+    guard heldAnimations == nil, enabled else { return }
+    heldAnimations = enabled
+    UIView.setAnimationsEnabled(false)
+  }
+
+  /// Only for the latest turn: an earlier one's would put them back in the middle of the next.
+  private static func releaseAnimations(for id: Int) {
+    guard id == turn, let saved = heldAnimations else { return }
+    heldAnimations = nil
+    UIView.setAnimationsEnabled(saved)
   }
 
   private static func fadeAway() {
