@@ -21,7 +21,7 @@ class EmotePanel extends StatefulWidget {
     this.onRetry,
   });
 
-  /// Null while they load.
+  /// Null while they load or after a failure.
   final List<EmotePackage>? packages;
   final List<Emote> recent;
 

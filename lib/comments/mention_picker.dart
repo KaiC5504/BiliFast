@@ -11,6 +11,8 @@ import '../player_ui/panels/episodes_panel.dart' show EpisodesSheetHeader;
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 
+const noFaceAsset = 'assets/images/noface.jpeg';
+
 /// The composer's @: the people the viewer follows, searchable by name; a tap picks one. A light sheet that fills the
 /// box it's given, header and search field on top.
 class MentionPicker extends StatefulWidget {
@@ -332,7 +334,17 @@ class _CandidateRowState extends State<_CandidateRow> {
             ClipOval(
               child: SizedBox.square(
                 dimension: MentionTheme.avatar,
-                child: RemoteImage(widget.who.face, size: const Size.square(MentionTheme.avatar)),
+                // Bilibili's default face, as PiliPlus shows while one loads, when it fails or when there is none.
+                child: RemoteImage(
+                  widget.who.face,
+                  size: const Size.square(MentionTheme.avatar),
+                  placeholder: Image.asset(
+                    noFaceAsset,
+                    fit: BoxFit.cover,
+                    excludeFromSemantics: true,
+                    errorBuilder: (context, error, stack) => const ColoredBox(color: BiliColors.pageGrey),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: MentionTheme.avatarGap),

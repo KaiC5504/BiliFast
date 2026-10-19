@@ -10,7 +10,6 @@ import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
 import '../shared/toast.dart';
-import 'comments_model.dart';
 import 'composer_model.dart';
 import 'emote_panel.dart';
 import 'mention_picker.dart';
@@ -30,7 +29,7 @@ class Composer extends StatefulWidget {
   final double? top;
 
   /// ⊕'s picker; tests stand in for the photo library.
-  final Future<List<PickedPicture>> Function({required int limit}) pick;
+  final Future<PicturePick> Function({required int limit}) pick;
 
   /// Forgets the keyboard's height, which the emote panel takes from one composer to the next.
   @visibleForTesting
@@ -85,7 +84,6 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
     widget.model.addListener(_modelChanged);
     _text.addListener(_textChanged);
     _focus.addListener(_focusChanged);
-    _shown.forward();
     unawaited(_loadPackages());
   }
 
@@ -96,6 +94,8 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
     _shown
       ..duration = still ? Duration.zero : ComposerTheme.rise
       ..reverseDuration = still ? Duration.zero : ComposerTheme.fall;
+    // Started here rather than in initState, which can't read Reduce Motion yet.
+    if (_shown.isDismissed && !_closing) _shown.forward();
   }
 
   @override
@@ -159,9 +159,9 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
     _lastInset = inset;
   }
 
-  /// The small player's bottom edge, as the page lays it out: the @ picker sits below it, as the page's sheets do.
+  /// The small player's bottom edge: the @ picker sits below it, as the page's sheets do.
   double _playerBottom(BuildContext context) =>
-      MediaQuery.viewPaddingOf(context).top + MediaQuery.sizeOf(context).width / BiliMetrics.videoAspect;
+      widget.top ?? MediaQuery.viewPaddingOf(context).top + MediaQuery.sizeOf(context).width / BiliMetrics.videoAspect;
 
   double _panelHeight(double safeBottom) {
     final least = ComposerTheme.tabHeight + safeBottom + ComposerTheme.sectionHeight + ComposerTheme.row;
@@ -242,8 +242,15 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
       return;
     }
     final picked = await widget.pick(limit: room);
-    if (!mounted || picked.isEmpty) return;
-    widget.model.addPictures(picked);
+    if (!mounted) return;
+    if (picked.pictures.isNotEmpty) widget.model.addPictures(picked.pictures);
+    switch (picked.failure) {
+      case PickFailure.noAccess:
+        showToast(context, '无法访问照片，请在设置中允许BiliFast访问照片');
+      case PickFailure.failed:
+        showToast(context, picked.pictures.isEmpty ? '图片读取失败，请重试' : '部分图片读取失败');
+      case null:
+    }
   }
 
   Future<void> _publish() async {
@@ -437,18 +444,16 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
           ),
           _tool(
             key: const ValueKey('composer-mention'),
-            label: '@',
+            label: '提及好友',
             onTap: _openMentions,
             child: const _Glyph(_GlyphKind.at, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
           ),
-          // Bilibili takes pictures only on comments under the video, not on replies.
-          if (model.target is ReplyToVideo)
-            _tool(
-              key: const ValueKey('composer-pictures'),
-              label: '添加图片',
-              onTap: () => unawaited(_addPictures()),
-              child: const _Glyph(_GlyphKind.plus, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
-            ),
+          _tool(
+            key: const ValueKey('composer-pictures'),
+            label: '添加图片',
+            onTap: () => unawaited(_addPictures()),
+            child: const _Glyph(_GlyphKind.plus, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
+          ),
           const Spacer(),
           _publishButton(model),
         ],
@@ -654,7 +659,7 @@ class _GlyphPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
     final half = stroke / 2;
     final centre = size.center(Offset.zero);
-    // Coordinates are on a 20-unit grid across the icon's width, from 14's 60 px icons.
+    // The keyboard, @ and ⊕ are drawn on a 20-unit grid across the icon's width, from 14's 60 px icons.
     final unit = size.width / 20;
     Offset at(double x, double y) => centre + Offset(x * unit, y * unit);
     switch (kind) {

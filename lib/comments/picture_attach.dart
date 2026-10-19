@@ -3,42 +3,79 @@ import 'dart:typed_data';
 
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../shared/theme.dart';
 import 'composer_model.dart';
 
-/// The composer's ⊕: up to [limit] pictures from the photo library, without asking for library access. Empty when
-/// the viewer cancels.
-Future<List<PickedPicture>> pickPictures({required int limit, ImagePicker? picker}) async {
-  if (limit <= 0) return const [];
+/// Why ⊕'s picker came back short, when it wasn't the viewer cancelling.
+enum PickFailure {
+  /// Photo access is denied or restricted in 设置.
+  noAccess,
+
+  /// Anything else: the picker, reading a file, memory.
+  failed,
+}
+
+/// What ⊕'s picker brought back: nothing after a cancel, and a [failure] when it couldn't bring everything.
+class PicturePick {
+  const PicturePick(this.pictures, {this.failure});
+
+  const PicturePick.failed(PickFailure this.failure) : pictures = const [];
+
+  final List<PickedPicture> pictures;
+  final PickFailure? failure;
+}
+
+/// The composer's ⊕: up to [limit] pictures from the photo library, without asking for library access.
+Future<PicturePick> pickPictures({required int limit, ImagePicker? picker}) async {
+  if (limit <= 0) return const PicturePick([]);
+  final List<XFile> files;
   try {
-    final files = await (picker ?? ImagePicker()).pickMultiImage(
+    files = await (picker ?? ImagePicker()).pickMultiImage(
       limit: limit,
       // The system picker hands over only what was chosen, so iOS asks nothing; full metadata would need access.
       requestFullMetadata: false,
       // Every photo is re-encoded, at quality 1.0 unless told otherwise: well over 10 MB from the phone's camera.
       imageQuality: 90,
     );
-    final picked = <PickedPicture>[];
-    for (final file in files.take(limit)) {
-      final bytes = await file.readAsBytes();
-      picked.add(PickedPicture(bytes: withoutLocation(bytes), name: _name(file, bytes)));
-    }
-    return picked;
   } catch (error) {
     Logger.shared.warn(LogCategory.ui, 'pick pictures failed', {'error': '$error'});
-    return const [];
+    return PicturePick.failed(_accessDenied(error) ? PickFailure.noAccess : PickFailure.failed);
   }
+  final picked = <PickedPicture>[];
+  for (final file in files.take(limit)) {
+    try {
+      final bytes = await file.readAsBytes();
+      picked.add(PickedPicture(bytes: withoutLocation(bytes), name: _name(file, bytes)));
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'read picked picture failed', {
+        'error': '${error.runtimeType}',
+        'read': picked.length,
+        'of': files.length,
+      });
+      return PicturePick(picked, failure: PickFailure.failed);
+    }
+  }
+  return PicturePick(picked);
 }
+
+/// image_picker's iOS codes for a library the viewer, or a parental control, has shut.
+bool _accessDenied(Object error) =>
+    error is PlatformException && (error.code == 'photo_access_denied' || error.code == 'photo_access_restricted');
 
 /// The upload names the picture's type by its extension; a name without one gets it from the bytes.
 String _name(XFile file, Uint8List bytes) {
   final name = file.name.isEmpty ? 'picture' : file.name;
   if (name.contains('.')) return name;
+  return '$name.${_type(bytes) ?? 'jpg'}';
+}
+
+String? _type(Uint8List bytes) {
   final head = bytes.length < 12 ? '' : latin1.decode(bytes.sublist(0, 12));
-  final extension = bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8
+  return bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8
       ? 'jpg'
       : head.startsWith('\x89PNG')
       ? 'png'
@@ -46,14 +83,18 @@ String _name(XFile file, Uint8List bytes) {
       ? 'gif'
       : head.startsWith('RIFF') && head.substring(8) == 'WEBP'
       ? 'webp'
-      : 'jpg';
-  return '$name.$extension';
+      : null;
 }
 
 /// [bytes] with a JPEG's EXIF GPS block emptied and any XMP that mentions GPS dropped, so a photo doesn't post where
-/// it was taken. The orientation and the rest of the EXIF stay; anything that doesn't parse cleanly is returned as is.
+/// it was taken. The orientation and the rest of the EXIF stay; an EXIF block that doesn't parse is dropped whole.
 Uint8List withoutLocation(Uint8List bytes) {
-  if (bytes.length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) return bytes;
+  if (bytes.length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) {
+    // image_picker_ios (0.8.13) re-encodes every pick to JPEG, HEIC included, except PNG and GIF, which keep their
+    // format and the source's metadata: screenshots and GIFs, so this is rare.
+    Logger.shared.warn(LogCategory.ui, 'picture location not checked', {'type': _type(bytes) ?? 'unknown'});
+    return bytes;
+  }
   Uint8List? edited;
   final dropped = <(int, int)>[];
   var at = 2;
@@ -63,10 +104,20 @@ Uint8List withoutLocation(Uint8List bytes) {
     if (marker == 0xDA || marker == 0xD9) break;
     final length = (bytes[at + 2] << 8) | bytes[at + 3];
     final end = at + 2 + length;
-    if (length < 2 || end > bytes.length) return bytes;
+    if (length < 2 || end > bytes.length) {
+      // With no telling where this segment ends, the rest stays as it came; what was cleared before it stays cleared.
+      Logger.shared.warn(LogCategory.ui, 'picture location check stopped: JPEG segments do not parse', {
+        'at': at,
+        'size': bytes.length,
+      });
+      break;
+    }
     if (marker == 0xE1 && _startsWith(bytes, at + 4, _exifHeader)) {
       final copy = edited ??= Uint8List.fromList(bytes);
-      if (!_clearGps(ByteData.sublistView(copy, at + 4 + _exifHeader.length, end))) return bytes;
+      if (!_clearGps(ByteData.sublistView(copy, at + 4 + _exifHeader.length, end))) {
+        Logger.shared.warn(LogCategory.ui, 'picture EXIF does not parse, dropped', {'bytes': length});
+        dropped.add((at, end));
+      }
     } else if (marker == 0xE1 && _startsWith(bytes, at + 4, _xmpHeader)) {
       if (latin1.decode(bytes.sublist(at + 4, end)).contains('GPS')) dropped.add((at, end));
     }

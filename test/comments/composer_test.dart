@@ -113,22 +113,24 @@ class Rig {
   final FakeComposerModel model;
   int closes = 0;
   final pickLimits = <int>[];
-  List<PickedPicture> toPick = const [];
+  PicturePick toPick = const PicturePick([]);
 }
 
-Widget app(Rig rig, {double inset = 0}) => MaterialApp(
+Widget app(Rig rig, {double inset = 0, bool still = false, double? top}) => MaterialApp(
   home: MediaQuery(
     data: MediaQueryData(
       size: screen,
       padding: EdgeInsets.only(top: safeTop, bottom: inset > 0 ? 0 : safeBottom),
       viewPadding: const EdgeInsets.only(top: safeTop, bottom: safeBottom),
       viewInsets: EdgeInsets.only(bottom: inset),
+      disableAnimations: still,
     ),
     child: Scaffold(
       resizeToAvoidBottomInset: false,
       body: Composer(
         model: rig.model,
         onClose: () => rig.closes++,
+        top: top,
         pick: ({required limit}) async {
           rig.pickLimits.add(limit);
           return rig.toPick;
@@ -138,15 +140,28 @@ Widget app(Rig rig, {double inset = 0}) => MaterialApp(
   ),
 );
 
-Future<Rig> pumpComposer(WidgetTester tester, FakeComposerModel model, {double inset = 0}) async {
+Future<Rig> pumpComposer(
+  WidgetTester tester,
+  FakeComposerModel model, {
+  double inset = 0,
+  bool still = false,
+  double? top,
+}) async {
   tester.view.physicalSize = screen;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   addTearDown(model.dispose);
   final rig = Rig(model);
-  await tester.pumpWidget(app(rig, inset: inset));
+  await tester.pumpWidget(app(rig, inset: inset, still: still, top: top));
   await tester.pump(const Duration(milliseconds: 300));
   return rig;
+}
+
+/// Lets a toast run out, so no timer outlives the test.
+Future<void> outlastToast(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump(const Duration(seconds: 3));
+  await tester.pumpAndSettle();
 }
 
 Finder get field => find.byKey(const ValueKey('composer-field'));
@@ -191,6 +206,29 @@ void main() {
   testWidgets('the placeholder is the field\'s hint while it is empty', (tester) async {
     await pumpComposer(tester, FakeComposerModel(hint: '回复 殇泪丶丿 :'));
     expect(find.text('回复 殇泪丶丿 :'), findsOneWidget);
+  });
+
+  testWidgets('with Reduce Motion the sheet is up on the first frame, with no slide', (tester) async {
+    tester.view.physicalSize = screen;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final model = FakeComposerModel();
+    addTearDown(model.dispose);
+    await tester.pumpWidget(app(Rig(model), still: true));
+    expect(sheet(tester).bottom, screen.height);
+    expect(tester.hasRunningAnimations, isFalse);
+  });
+
+  testWidgets('without Reduce Motion the sheet slides up', (tester) async {
+    tester.view.physicalSize = screen;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final model = FakeComposerModel();
+    addTearDown(model.dispose);
+    await tester.pumpWidget(app(Rig(model)));
+    expect(sheet(tester).top, screen.height);
+    await tester.pump(ComposerTheme.rise);
+    expect(sheet(tester).bottom, screen.height);
   });
 
   testWidgets('the field and model.text follow each other', (tester) async {
@@ -259,6 +297,23 @@ void main() {
     expect(find.byType(EmotePanel), findsNothing);
     expect(sheet(tester).top, top);
     expect(find.bySemanticsLabel('表情'), findsOneWidget);
+  });
+
+  testWidgets('键盘 pressed through accessibility refocuses the field, and the panel gives way to the keyboard', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final rig = await pumpComposer(tester, FakeComposerModel(emotes: true, packages: const [faces]));
+    expect(focused(tester), isFalse);
+    tester.semantics.tap(find.semantics.byLabel('键盘'));
+    await tester.pump();
+    expect(focused(tester), isTrue);
+    await tester.pumpWidget(app(rig, inset: keyboard));
+    await tester.pump();
+    expect(rig.model.showingEmotes, isFalse);
+    expect(find.byType(EmotePanel), findsNothing);
+    expect(tester.getRect(find.byKey(const ValueKey('composer-keyboard'))).height, keyboard);
+    semantics.dispose();
   });
 
   testWidgets('the panel remembers the keyboard\'s height for the next composer', (tester) async {
@@ -420,7 +475,7 @@ void main() {
   ) async {
     final rig = await pumpComposer(tester, FakeComposerModel(text: '你好'), inset: keyboard);
     controllerOf(tester).selection = const TextSelection.collapsed(offset: 1);
-    await press(tester, '@');
+    await press(tester, '提及好友');
     final picker = find.byType(MentionPicker);
     expect(picker, findsOneWidget);
     final box = tester.getRect(picker);
@@ -435,9 +490,17 @@ void main() {
     expect(focused(tester), isTrue, reason: 'back on the keyboard it came from');
   });
 
+  testWidgets('the picker starts at the live player edge it is given', (tester) async {
+    await pumpComposer(tester, FakeComposerModel(), inset: keyboard, top: 130);
+    await press(tester, '提及好友');
+    final box = tester.getRect(find.byType(MentionPicker));
+    expect(box.top, 130);
+    expect(box.bottom, screen.height - keyboard);
+  });
+
   testWidgets('closing the picker from emotes stays on emotes', (tester) async {
     final rig = await pumpComposer(tester, FakeComposerModel(emotes: true));
-    await press(tester, '@');
+    await press(tester, '提及好友');
     tester.widget<MentionPicker>(find.byType(MentionPicker)).onClose();
     await tester.pump();
     expect(find.byType(MentionPicker), findsNothing);
@@ -448,7 +511,7 @@ void main() {
   testWidgets('⊕ picks as many as there is room for and attaches them over the toolbar', (tester) async {
     final rig = await pumpComposer(tester, FakeComposerModel(pictures: [picture('a.jpg')]));
     expect(find.byType(AttachedPictures), findsOneWidget);
-    rig.toPick = [picture('b.jpg'), picture('c.png')];
+    rig.toPick = PicturePick([picture('b.jpg'), picture('c.png')]);
     await press(tester, '添加图片');
     await tester.pump();
     expect(rig.pickLimits, [ComposerModel.maxPictures - 1]);
@@ -464,25 +527,71 @@ void main() {
     await press(tester, '添加图片');
     expect(rig.pickLimits, isEmpty);
     expect(find.text('最多添加9张图片'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pumpAndSettle();
+    await outlastToast(tester);
   });
 
-  testWidgets('replies have no ⊕', (tester) async {
+  testWidgets('a cancelled pick adds nothing and says nothing', (tester) async {
+    final rig = await pumpComposer(tester, FakeComposerModel());
+    await press(tester, '添加图片');
+    await tester.pump();
+    expect(rig.pickLimits, [ComposerModel.maxPictures]);
+    expect(rig.model.calls, isEmpty);
+    expect(find.byKey(const ValueKey('toast')), findsNothing);
+  });
+
+  testWidgets('a pick without photo access says to allow it in 设置', (tester) async {
+    final rig = await pumpComposer(tester, FakeComposerModel());
+    rig.toPick = const PicturePick.failed(PickFailure.noAccess);
+    await press(tester, '添加图片');
+    await tester.pump();
+    expect(rig.model.calls, isEmpty);
+    expect(find.text('无法访问照片，请在设置中允许BiliFast访问照片'), findsOneWidget);
+    await outlastToast(tester);
+  });
+
+  testWidgets('a pick that fails says so; one that fails part way keeps what it read', (tester) async {
+    final rig = await pumpComposer(tester, FakeComposerModel());
+    rig.toPick = const PicturePick.failed(PickFailure.failed);
+    await press(tester, '添加图片');
+    await tester.pump();
+    expect(rig.model.calls, isEmpty);
+    expect(find.text('图片读取失败，请重试'), findsOneWidget);
+    await outlastToast(tester);
+
+    rig.toPick = PicturePick([picture('a.jpg')], failure: PickFailure.failed);
+    await press(tester, '添加图片');
+    await tester.pump();
+    expect(rig.model.calls, ['add 1']);
+    expect(find.text('部分图片读取失败'), findsOneWidget);
+    await outlastToast(tester);
+  });
+
+  testWidgets('a failed pick\'s toast shows over the keyboard', (tester) async {
+    tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+    final rig = await pumpComposer(tester, FakeComposerModel(), inset: keyboard);
+    rig.toPick = const PicturePick.failed(PickFailure.failed);
+    await press(tester, '添加图片');
+    await tester.pump();
+    expect(tester.getRect(find.byKey(const ValueKey('toast'))).bottom, lessThanOrEqualTo(screen.height - keyboard));
+    await outlastToast(tester);
+  });
+
+  testWidgets('replies have ⊕ too, as on 14', (tester) async {
     final comment = Comment(
       rpid: 5,
       member: const CommentMember(mid: 6, name: '殇泪丶丿'),
       message: '拳头的规则',
     );
     await pumpComposer(tester, FakeComposerModel(target: ReplyToComment(comment)));
-    expect(find.bySemanticsLabel('添加图片'), findsNothing);
-    expect(find.bySemanticsLabel('@'), findsOneWidget);
+    expect(find.bySemanticsLabel('添加图片'), findsOneWidget);
+    expect(find.bySemanticsLabel('提及好友'), findsOneWidget);
+    // 14: ⊕ spans 174-194 pt.
+    expect(tester.getCenter(find.byKey(const ValueKey('composer-pictures'))).dx, 184);
   });
 
   testWidgets('every control is a button with a Chinese label', (tester) async {
     await pumpComposer(tester, FakeComposerModel());
-    for (final label in const ['转到动态', '表情', '@', '添加图片', '发布', '展开', '关闭']) {
+    for (final label in const ['转到动态', '表情', '提及好友', '添加图片', '发布', '展开', '关闭']) {
       final node = tester.getSemantics(find.bySemanticsLabel(label));
       expect(node.getSemanticsData().flagsCollection.isButton, isTrue, reason: label);
     }
