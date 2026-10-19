@@ -5,7 +5,8 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// A part opened from a pasted link, as 最近打开 lists it (port of PlayerRoute in RecentStore.swift).
+/// A part opened from a pasted link, as 最近打开 lists it (port of PlayerRoute in RecentStore.swift). The Swift app's
+/// entries, and ours from before the avatar page, have no cover, duration, time or progress.
 @immutable
 final class RecentVideo {
   const RecentVideo({
@@ -15,6 +16,10 @@ final class RecentVideo {
     required this.part,
     required this.page,
     required this.pageCount,
+    this.cover,
+    this.duration = 0,
+    this.openedAt,
+    this.progress,
   });
 
   factory RecentVideo.fromJson(Map<String, Object?> json) => RecentVideo(
@@ -24,6 +29,10 @@ final class RecentVideo {
     part: json['part'] as String? ?? '',
     page: json['page'] as int? ?? 1,
     pageCount: json['pageCount'] as int? ?? 1,
+    cover: json['cover'] as String?,
+    duration: json['duration'] as int? ?? 0,
+    openedAt: json['openedAt'] as int?,
+    progress: json['progress'] as int?,
   );
 
   final String bvid;
@@ -32,8 +41,31 @@ final class RecentVideo {
   final String part;
   final int page;
   final int pageCount;
+  final String? cover;
+
+  /// The part's length in seconds; 0 when unknown.
+  final int duration;
+
+  /// When it was last opened, in Unix seconds.
+  final int? openedAt;
+
+  /// How far it was watched, in seconds.
+  final int? progress;
 
   String get id => '$bvid#$cid';
+
+  RecentVideo _with({int? openedAt, int? progress}) => RecentVideo(
+    bvid: bvid,
+    cid: cid,
+    title: title,
+    part: part,
+    page: page,
+    pageCount: pageCount,
+    cover: cover,
+    duration: duration,
+    openedAt: openedAt ?? this.openedAt,
+    progress: progress ?? this.progress,
+  );
 
   Map<String, Object?> toJson() => {
     'bvid': bvid,
@@ -42,6 +74,10 @@ final class RecentVideo {
     'part': part,
     'page': page,
     'pageCount': pageCount,
+    'cover': ?cover,
+    if (duration > 0) 'duration': duration,
+    'openedAt': ?openedAt,
+    'progress': ?progress,
   };
 
   @override
@@ -61,25 +97,30 @@ Future<String?> readSwiftRecents() => const MethodChannel('bilifast/legacy_defau
 /// 最近打开: the last [limit] parts opened from links, newest first, kept in a JSON file in the support folder
 /// (Swift kept them in UserDefaults).
 class RecentStore extends ChangeNotifier {
-  RecentStore._(this._path, this._items, this._logger);
+  RecentStore._(this._path, this._items, this._logger, this._now);
 
   static const limit = 30;
 
   /// [path] null keeps the list in memory only. With no file yet, the list starts from the Swift app's on iOS and
   /// is saved, so that happens once; [readSwift] stands in for the channel in tests. An unreadable file is set
   /// aside as `.bad` and the list starts empty; entries that don't decode are dropped one by one.
-  static Future<RecentStore> load(String? path, {Logger? logger, SwiftRecentsReader? readSwift}) async {
+  static Future<RecentStore> load(
+    String? path, {
+    Logger? logger,
+    SwiftRecentsReader? readSwift,
+    DateTime Function() now = DateTime.now,
+  }) async {
     final log = logger ?? Logger.shared;
-    if (path == null) return RecentStore._(null, [], log);
+    if (path == null) return RecentStore._(null, [], log, now);
     final file = File(path);
     if (await file.exists()) {
       final items = await _readFile(file, log);
-      final store = RecentStore._(path, items ?? [], log);
+      final store = RecentStore._(path, items ?? [], log, now);
       // Saved empty, so a file set aside never lets the Swift list back in on the next launch.
       if (items == null) store._save();
       return store;
     }
-    final store = RecentStore._(path, [], log);
+    final store = RecentStore._(path, [], log, now);
     final reader = readSwift ?? (Platform.isIOS ? readSwiftRecents : null);
     if (reader != null) await store._importSwift(reader);
     return store;
@@ -166,12 +207,35 @@ class RecentStore extends ChangeNotifier {
   final String? _path;
   List<RecentVideo> _items;
   final Logger _logger;
+  final DateTime Function() _now;
   Future<void> _writing = Future.value();
 
   List<RecentVideo> get items => List.unmodifiable(_items);
 
+  /// The clock the entries are stamped by, which their 多久前播放 counts from.
+  DateTime now() => _now();
+
+  /// Puts [video] first, stamped with the time; a part opened again keeps the progress it had.
   void add(RecentVideo video) {
-    _items = [video, ..._items.where((item) => item.id != video.id)].take(limit).toList();
+    final earlier = _items.where((item) => item.id == video.id).firstOrNull;
+    final opened = video._with(openedAt: _now().millisecondsSinceEpoch ~/ 1000, progress: earlier?.progress);
+    _items = [opened, ..._items.where((item) => item.id != video.id)].take(limit).toList();
+    _changed();
+  }
+
+  /// The ✕ on the avatar page.
+  void remove(RecentVideo video) {
+    final kept = _items.where((item) => item.id != video.id).toList();
+    if (kept.length == _items.length) return;
+    _items = kept;
+    _changed();
+  }
+
+  /// Where the part [bvid]#[cid] got to, for its progress line; a part not in the list is left out.
+  void recordProgress({required String bvid, required int cid, required int seconds}) {
+    final index = _items.indexWhere((item) => item.bvid == bvid && item.cid == cid);
+    if (index < 0 || _items[index].progress == seconds) return;
+    _items = [..._items]..[index] = _items[index]._with(progress: seconds);
     _changed();
   }
 

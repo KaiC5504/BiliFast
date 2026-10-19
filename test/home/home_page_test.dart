@@ -6,6 +6,8 @@ import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/history/watch_history_page.dart';
+import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -20,9 +22,13 @@ import 'package:flutter_test/flutter_test.dart';
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
+import 'fake_login_gate.dart';
 import 'feed_fakes.dart';
 
 const _watchLaterPath = '/x/v2/history/toview/add';
+
+/// The fingerprint cookies alone: logged out, with no `spi` call.
+const _loggedOutCookies = {'buvid3': 'b3', 'buvid4': 'b4'};
 
 void main() {
   late FeedHttp http;
@@ -30,16 +36,24 @@ void main() {
   late PlaybackController controller;
   late RecentStore recents;
   late AppEnvironment environment;
+  late FakeLoginGate gate;
 
   setUp(() {
     http = FeedHttp();
     http.pages[1] = [feedItem('BV1aaa', reason: '1万点赞'), feedItem('BV1bbb')];
     player = FakePlayer();
+    gate = FakeLoginGate();
   });
 
   List<Map<String, Object?>> twenty() => [for (var i = 0; i < 20; i++) feedItem('BV1c$i')];
 
-  Future<void> show(WidgetTester tester, {bool developer = false, double scale = 1, bool still = false}) async {
+  Future<void> show(
+    WidgetTester tester, {
+    bool developer = false,
+    double scale = 1,
+    bool still = false,
+    Map<String, String> cookies = Canned.cookies,
+  }) async {
     tester.view.physicalSize = const Size(440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -54,11 +68,7 @@ void main() {
       addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     }
     final logger = Logger(session: 'test');
-    environment = await AppEnvironment.load(
-      keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
-      http: http,
-      logger: logger,
-    );
+    environment = await AppEnvironment.load(keychain: FakeKeychain(StoredCookies(cookies)), http: http, logger: logger);
     await environment.refreshAccount();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     controller = PlaybackController(
@@ -73,7 +83,7 @@ void main() {
     recents = await RecentStore.load(null, logger: logger);
     final playback = AppPlayback(() async => controller);
     addTearDown(playback.dispose);
-    final services = AppServices(environment: environment, playback: playback, recents: recents);
+    final services = AppServices(environment: environment, playback: playback, recents: recents, loginGate: gate);
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => AppScope(services: services, child: child!),
@@ -316,84 +326,159 @@ void main() {
     expect(http.canned.to(_watchLaterPath), hasLength(1));
   });
 
-  testWidgets('the avatar opens the account menu: 最近打开, and 开发者 in dev builds', (tester) async {
+  testWidgets('the avatar opens its page, whose 全部 lists 最近打开 and back returns home', (tester) async {
     await show(tester, developer: true);
     await settle(tester);
     recents.add(const RecentVideo(bvid: 'BV1x', cid: 3, title: '最近的视频', part: '', page: 1, pageCount: 1));
     await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    expect(find.byKey(const ValueKey('menu-account-name')), findsOneWidget);
-    expect(find.text('测试用户'), findsOneWidget);
-    expect(find.text('大会员'), findsOneWidget);
-    expect(find.text('开发者'), findsOneWidget);
-    expect(find.text('设置'), findsOneWidget);
-    expect(find.descendant(of: find.byType(GlassPanel), matching: find.byType(BackdropFilter)), findsOneWidget);
-    await tester.tap(find.text('最近打开'));
     await settle(tester, 20);
-    expect(find.text('最近的视频'), findsOneWidget);
+    expect(find.byType(AvatarPage), findsOneWidget);
+    expect(find.text('最近的视频'), findsOneWidget, reason: 'in the card on the page');
+    expect(find.text('开发者'), findsNothing, reason: '开发者 is in 设置');
+    await tester.tap(find.byKey(const ValueKey('avatar-all')));
+    await settle(tester, 20);
+    expect(find.text('最近打开'), findsOneWidget);
     expect(
       find.descendant(of: find.byType(ListView), matching: find.byType(InkWell)),
       findsNothing,
       reason: 'recents rows highlight instead of rippling',
     );
-
     await tester.tap(find.byKey(const ValueKey('recents-clear')));
     await settle(tester, 20);
     await tester.tap(find.byKey(const ValueKey('recents-clear-confirm')));
     await settle(tester, 20);
-    expect(find.text('还没有打开过视频'), findsOneWidget);
     expect(recents.items, isEmpty);
+
+    await tester.pageBack();
+    await settle(tester, 20);
+    expect(find.text('还没有打开过视频'), findsOneWidget, reason: 'the avatar page follows the store');
+    await tester.tap(find.byKey(const ValueKey('avatar-back')));
+    await settle(tester, 20);
+    expect(find.byType(AvatarPage), findsNothing);
+    expect(find.text('推荐'), findsOneWidget);
   });
 
-  testWidgets('设置 in the avatar menu opens 设置 with the font in use', (tester) async {
+  testWidgets('⚙ on the avatar page opens 设置 with the font in use', (tester) async {
     await show(tester);
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    await tester.tap(find.text('设置'));
+    await settle(tester, 20);
+    await tester.tap(find.byKey(const ValueKey('avatar-settings')));
     await settle(tester, 20);
     expect(find.byKey(const ValueKey('settings-font')), findsOneWidget);
     expect(find.text('MiSans'), findsOneWidget);
   });
 
-  testWidgets('a tap outside closes the menu, which then leaves the tree; release builds have no 开发者', (tester) async {
-    await show(tester);
-    await settle(tester);
-    await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    expect(find.byKey(const ValueKey('avatar-menu')), findsOneWidget);
-    expect(find.text('开发者'), findsNothing);
-    await tester.tapAt(const Offset(400, 800));
-    await settle(tester);
-    expect(find.byKey(const ValueKey('avatar-menu')), findsNothing);
-    expect(find.byKey(const ValueKey('menu-scrim')), findsNothing);
-  });
-
-  testWidgets('back on home from 最近打开, an account check that failed is tried again', (tester) async {
+  testWidgets('back on home from the avatar page, an account check that failed is tried again', (tester) async {
     http.canned.routes[Canned.navPath] = (500, '');
     await show(tester);
     await settle(tester);
     expect(environment.account, isA<AccountUnknown>());
     expect(environment.accountCheckFailed, isTrue);
 
-    Future<void> visitRecents() async {
+    Future<void> visit() async {
       await tester.tap(find.byKey(const ValueKey('home-avatar')));
-      await settle(tester);
-      await tester.tap(find.text('最近打开'));
       await settle(tester, 20);
-      expect(find.text('还没有打开过视频'), findsOneWidget);
-      await tester.pageBack();
+      expect(find.byType(AvatarPage), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('avatar-back')));
       await settle(tester, 20);
     }
 
     http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn);
     final asked = http.canned.to(Canned.navPath).length;
-    await visitRecents();
+    await visit();
     expect(environment.account, isA<LoggedIn>());
     expect(http.canned.to(Canned.navPath), hasLength(asked + 1));
 
-    await visitRecents();
+    await visit();
     expect(http.canned.to(Canned.navPath), hasLength(asked + 1), reason: 'a known account is not asked again');
+  });
+
+  testWidgets('历史记录 on the avatar page opens 历史记录, and back returns to the page', (tester) async {
+    await show(tester);
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('home-avatar')));
+    await settle(tester, 20);
+    await tester.tap(find.byKey(const ValueKey('avatar-history')));
+    await settle(tester, 20);
+    expect(find.byType(WatchHistoryPage), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await settle(tester, 20);
+    expect(find.byType(WatchHistoryPage), findsNothing);
+    expect(find.byType(AvatarPage), findsOneWidget);
+  });
+
+  testWidgets('推荐 refreshes once when the account logs in or out, and not on other account news', (tester) async {
+    http.pages[1] = twenty();
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+    await show(tester, cookies: _loggedOutCookies);
+    await settle(tester, 20);
+    expect(environment.account, isA<LoggedOut>());
+    expect(http.asked, [1]);
+
+    Future<void> check() async {
+      await environment.refreshAccount();
+      await settle(tester, 20);
+    }
+
+    await check();
+    expect(http.asked, [1], reason: 'still logged out');
+
+    http.canned.errors[Canned.navPath] = Exception('offline');
+    await check();
+    expect(environment.account, isA<LoggedOut>());
+    expect(http.asked, [1], reason: 'a failed check changes nothing');
+    http.canned.errors.remove(Canned.navPath);
+
+    environment.cookies.set('SESSDATA', 's');
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+    await check();
+    expect(environment.account, isA<LoggedIn>());
+    expect(http.asked, [1, 1], reason: 'logged in');
+
+    await check();
+    expect(http.asked, [1, 1], reason: 'still logged in');
+
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+    await check();
+    expect(environment.account, isA<LoginExpired>());
+    expect(http.asked, [1, 1, 1], reason: 'expired');
+
+    environment.cookies.remove('SESSDATA');
+    await check();
+    expect(environment.account, isA<LoggedOut>());
+    expect(http.asked, [1, 1, 1], reason: 'expired to logged out is no flip');
+  });
+
+  for (final (state, cookies) in [('logged out', _loggedOutCookies), ('expired', Canned.cookies)]) {
+    testWidgets('$state, ⋮ 稍后再看 opens the login page and sends nothing', (tester) async {
+      http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+      http.canned.routes[_watchLaterPath] = (200, '{"code":0,"message":"0","ttl":1}');
+      await show(tester, cookies: cookies);
+      await settle(tester);
+      expect(environment.account, anyOf(isA<LoggedOut>(), isA<LoginExpired>()));
+      await tester.tap(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more'))));
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('card-watch-later')));
+      await settle(tester);
+      expect(gate.requests, 1);
+      expect(http.canned.to(_watchLaterPath), isEmpty);
+      expect(find.text('已添加至稍后再看'), findsNothing);
+    });
+  }
+
+  testWidgets('logged in, a needs-login answer to 稍后再看 opens the login page instead of a toast', (tester) async {
+    http.canned.routes[_watchLaterPath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
+    await show(tester);
+    await settle(tester);
+    expect(environment.account, isA<LoggedIn>());
+    await tester.tap(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more'))));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('card-watch-later')));
+    await settle(tester);
+    expect(http.canned.to(_watchLaterPath), hasLength(1));
+    expect(gate.requests, 1);
+    expect(find.text('需要登录'), findsNothing);
   });
 
   testWidgets('cards are buttons named by their title, with 稍后再看 as their action', (tester) async {
@@ -412,37 +497,14 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('with the menu open VoiceOver reaches the menu and a way out, not the cards behind', (tester) async {
-    final semantics = tester.ensureSemantics();
-    await show(tester);
-    await settle(tester);
-    expect(find.semantics.byLabel('视频 BV1aaa'), findsOne);
-    await tester.tap(find.byKey(const ValueKey('home-avatar')));
-    await settle(tester);
-    expect(find.semantics.byLabel('视频 BV1aaa'), findsNothing);
-    expect(
-      tester.getSemantics(find.byKey(const ValueKey('menu-scrim'))),
-      isSemantics(label: '关闭菜单', isButton: true, hasTapAction: true, hasDismissAction: true),
-    );
-    expect(
-      tester.getSemantics(find.text('历史记录')),
-      isSemantics(isButton: true, hasEnabledState: true, isEnabled: false),
-    );
-    expect(
-      tester.getSemantics(find.text('最近打开')),
-      isSemantics(isButton: true, hasEnabledState: true, isEnabled: true, hasTapAction: true),
-    );
-    semantics.dispose();
-  });
-
   for (final scale in [2.0, 3.0]) {
-    testWidgets('nothing overflows at text scale $scale, with the account menu open', (tester) async {
+    testWidgets('nothing overflows at text scale $scale, on home or the avatar page', (tester) async {
       await show(tester, scale: scale);
       await settle(tester);
       expect(card('BV1aaa'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('home-avatar')));
-      await settle(tester);
-      expect(find.byKey(const ValueKey('avatar-menu')), findsOneWidget);
+      await settle(tester, 20);
+      expect(find.byType(AvatarPage), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

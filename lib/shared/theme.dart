@@ -1854,6 +1854,76 @@ abstract final class MentionTheme {
   static const removeGlyphColor = Color(0xFFFFFFFF);
 }
 
+/// The avatar's page (49), measured from the safe area's top: the bar, the four shortcuts, then the white card of
+/// 最近在看的视频 whose rows are [rowExtent] apart with the cover [rowCoverTop] into each.
+abstract final class AvatarPageTheme {
+  static const background = BiliColors.softGrey;
+  static const barHeight = 44.0;
+  static const barIcon = Color(0xFF61666D);
+  static const backLeft = 19.5;
+  static const tabCentreX = 132.3;
+  static const tabText = 16.0;
+  static const tabUnderlineTop = 34.0;
+  static const tabUnderlineWidth = 12.0;
+  static const tabUnderlineHeight = 2.0;
+  static const gearCentreX = 416.0;
+  static const gearBox = 22.0;
+  static const gearRadius = 9.4;
+  static const gearCorner = 2.0;
+  static const gearHole = 3.1;
+  static const gearStroke = 1.5;
+  static const tapTarget = 44.0;
+
+  /// The shortcuts: a quarter of the width each, their 32 pt icon box centred [shortcutIconCentre] below the bar and
+  /// the label's middle [shortcutLabelCentre] below it.
+  static const shortcutsHeight = 96.0;
+  static const shortcutIconBox = 32.0;
+  static const shortcutIconCentre = 37.0;
+  static const shortcutLabelCentre = 61.6;
+  static const shortcutStroke = 5 / 3;
+  static const shortcutText = 12.0;
+
+  static const cardRadius = 20.0;
+  static const headerHeight = 36.0;
+  static const headerCentre = 26.0;
+  static const headerText = 14.0;
+  static const allText = 12.0;
+  static const allChevronWidth = 4.7;
+  static const allChevronHeight = 9.0;
+  static const allChevronGap = 7.6;
+  static const allChevronStroke = 1.2;
+  static const allRight = 15.0;
+
+  static const rowExtent = 104.0;
+  static const rowCoverTop = 14.0;
+  static const coverWidth = 136.0;
+  static const coverHeight = 76.0;
+  static const coverRadius = 5.0;
+  static const progressHeight = 2.0;
+  static const durationHeight = IntroListTheme.durationHeight;
+  static const durationPad = 3.0;
+  static const durationRadius = IntroListTheme.durationRadius;
+  static const durationInset = IntroListTheme.durationInset;
+  static const durationText = IntroListTheme.durationText;
+  static const durationFill = IntroListTheme.durationFill;
+  static const textLeft = 156.0;
+  static const titleText = 14.0;
+  static const titleLine = 50 / 3;
+
+  /// How far the title's line box starts above the cover, so its ink lines up with the cover's top.
+  static const titleLift = 2.0;
+  static const timeText = 12.0;
+
+  /// How far the time's line box ends below the cover, so its ink ends a point above the cover's bottom.
+  static const timeDrop = 2.2;
+  static const removeCentreFromRight = 20.0;
+  static const removeCentreBelowCover = 70.0;
+  static const removeGlyph = 8.6;
+  static const removeStroke = 1.0;
+  static const remove = Color(0xFFC9CCD0);
+  static const shown = 5;
+}
+
 /// 弹幕设置 (07, 08, 24, 29, 33, 40, 41). Landscape is a hard-edged dark strip at the right, portrait the light
 /// sheet; both lay out the same, measured from the top of the scrolling content and the left of the cards.
 abstract final class DanmakuPanelTheme {
