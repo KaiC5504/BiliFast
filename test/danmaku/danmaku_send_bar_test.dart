@@ -1,9 +1,15 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:bilifast/danmaku/send/danmaku_send_bar.dart';
 import 'package:bilifast/danmaku/send/danmaku_send_model.dart';
 import 'package:bilifast/danmaku/send/danmaku_style_panel.dart';
 import 'package:bilifast/device/orientation.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
-import 'package:flutter/material.dart' show MaterialApp;
+import 'package:flutter/material.dart' show MaterialApp, TextField;
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -36,14 +42,17 @@ void main() {
     MaterialApp(
       home: Align(
         alignment: Alignment.bottomCenter,
-        child: DanmakuSendBar(
-          model: model,
-          presentation: presentation,
-          focusNode: focus,
-          styleShown: styleShown,
-          closed: closed,
-          onStyle: () => styles++,
-          onSend: () => sends++,
+        child: RepaintBoundary(
+          key: const ValueKey('danmaku-send-shot'),
+          child: DanmakuSendBar(
+            model: model,
+            presentation: presentation,
+            focusNode: focus,
+            styleShown: styleShown,
+            closed: closed,
+            onStyle: () => styles++,
+            onSend: () => sends++,
+          ),
         ),
       ),
     ),
@@ -137,16 +146,143 @@ void main() {
       expect(hint, findsNothing);
     });
 
-    testWidgets('closed by the uploader, the field says so and nothing sends', (tester) async {
+    testWidgets('closed by the uploader, the field says so and takes no text; a press is left to onSend to refuse', (
+      tester,
+    ) async {
       model.text = '发不出去';
       await pumpBar(tester, closed: true);
       model.text = '';
       await tester.pump();
       expect(find.text('UP主已关闭弹幕'), findsOneWidget);
+      expect(tester.widget<TextField>(input).readOnly, isTrue);
       model.text = '发不出去';
       await tester.pump();
+      expect(clear, findsNothing);
       await tester.tap(send);
+      expect(sends, 1);
+    });
+  });
+
+  group('typing pinyin', () {
+    TextEditingValue composing(String committed, String pinyin) => TextEditingValue(
+      text: committed + pinyin,
+      composing: TextRange(start: committed.length, end: committed.length + pinyin.length),
+      selection: TextSelection.collapsed(offset: committed.length + pinyin.length),
+    );
+
+    TextEditingValue committed(String text) => TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+
+    TextEditingValue field(WidgetTester tester) => tester.widget<TextField>(input).controller!.value;
+
+    bool sendEnabled(WidgetTester tester) =>
+        isSemantics(isEnabled: true).matches(tester.getSemantics(send), <dynamic, dynamic>{});
+
+    testWidgets('past the cap keeps its candidates, and the cut comes once it is committed', (tester) async {
+      model.text = '字' * 97;
+      await pumpBar(tester);
+      await tester.showKeyboard(input);
+
+      tester.testTextInput.updateEditingValue(composing('字' * 97, 'zhongwenzi'));
+      await tester.pump();
+      expect(model.text, '字' * 97, reason: 'the composition stays out of the draft');
+      expect(field(tester).text, '${'字' * 97}zhongwenzi');
+      expect(field(tester).composing.isValid, isTrue, reason: 'the candidates stay');
+
+      tester.testTextInput.updateEditingValue(committed('${'字' * 97}中文字词'));
+      await tester.pump();
+      expect(model.text, '${'字' * 97}中文字');
+      expect(field(tester).text, '${'字' * 97}中文字');
+    });
+
+    testWidgets('below the cap stays out of the draft and cannot be sent until it is committed', (tester) async {
+      await pumpBar(tester);
+      await tester.showKeyboard(input);
+
+      tester.testTextInput.updateEditingValue(composing('', 'ni'));
+      await tester.pump();
+      expect(model.text, isEmpty);
+      expect(sendEnabled(tester), isFalse);
+      await tester.tap(send);
+      await tester.testTextInput.receiveAction(TextInputAction.send);
       expect(sends, 0);
+
+      tester.testTextInput.updateEditingValue(committed('你'));
+      await tester.pump();
+      expect(model.text, '你');
+      expect(sendEnabled(tester), isTrue);
+      await tester.tap(send);
+      expect(sends, 1);
+    });
+
+    testWidgets('after committed text, keeps send off and outlasts the draft notifying', (tester) async {
+      model.text = '前方';
+      await pumpBar(tester);
+      await tester.showKeyboard(input);
+
+      tester.testTextInput.updateEditingValue(composing('前方', 'gao'));
+      await tester.pump();
+      expect(sendEnabled(tester), isFalse);
+      model.style = model.style.copyWith(size: DanmakuSize.small);
+      await tester.pump();
+      expect(field(tester).text, '前方gao');
+      expect(field(tester).composing.isValid, isTrue);
+
+      await tester.tap(clear);
+      await tester.pump();
+      expect(field(tester).text, isEmpty, reason: 'ⓧ clears the composition too');
+      expect(model.text, isEmpty);
+    });
+  });
+
+  group('the placeholder in MiSans', () {
+    setUpAll(() async {
+      final bytes = File('assets/fonts/MiSans-Regular.ttf').readAsBytesSync();
+      await (FontLoader(BiliFonts.miSans)..addFont(Future.value(ByteData.sublistView(bytes)))).load();
+    });
+
+    /// Where the placeholder's ink ends, in points, read off the bar drawn at 3x.
+    Future<double> inkEnd(WidgetTester tester, Presentation presentation, Size size, {double left = 0}) async {
+      tester.view
+        ..physicalSize = size * 3
+        ..devicePixelRatio = 3
+        ..padding = FakeViewPadding(left: left * 3);
+      addTearDown(tester.view.reset);
+      await pumpBar(tester, presentation: presentation);
+      final shot = find.byKey(const ValueKey('danmaku-send-shot'));
+      final pixels = await tester.runAsync(() async {
+        final image = await tester.renderObject<RenderRepaintBoundary>(shot).toImage(pixelRatio: 3);
+        final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+        return (image.width, data!);
+      });
+      final (width, data) = pixels!;
+      final origin = tester.getTopLeft(shot);
+      final field = tester.getRect(find.byKey(const ValueKey('danmaku-send-field'))).shift(-origin);
+      final threshold = presentation == Presentation.vertical ? 200 : 225;
+      // The pill's straight run short of where the ⓧ would be, so neither its round ends nor the bar count.
+      final top = (field.top * 3).round() + 6;
+      final bottom = (field.bottom * 3).round() - 6;
+      final from = ((field.left + field.height / 2) * 3).round();
+      final to = ((field.right - field.height) * 3).round();
+      var end = -1;
+      for (var y = top; y < bottom; y++) {
+        for (var x = from; x < to; x++) {
+          final i = (y * width + x) * 4;
+          final grey = (data.getUint8(i) + data.getUint8(i + 1) + data.getUint8(i + 2)) / 3;
+          if (grey < threshold && x > end) end = x;
+        }
+      }
+      return origin.dx + (end + 1) / 3;
+    }
+
+    testWidgets("ends where 22's does in landscape", (tester) async {
+      expect(await inkEnd(tester, Presentation.landscape, const Size(956, 440), left: 62), closeTo(274.3, 0.5));
+    });
+
+    testWidgets("ends where 36's does in 竖屏", (tester) async {
+      expect(await inkEnd(tester, Presentation.vertical, const Size(440, 956)), closeTo(200.7, 0.5));
     });
   });
 

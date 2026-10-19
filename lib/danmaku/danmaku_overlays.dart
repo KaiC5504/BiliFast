@@ -51,6 +51,7 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
     super.initState();
     widget.session.sendOpen.addListener(_openChanged);
     widget.session.sender.addListener(_changed);
+    widget.session.addListener(_changed);
     _focus.addListener(_focusChanged);
     if (widget.session.sendOpen.value) _focusSoon();
   }
@@ -61,8 +62,10 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
     if (!identical(oldWidget.session, widget.session)) {
       oldWidget.session.sendOpen.removeListener(_openChanged);
       oldWidget.session.sender.removeListener(_changed);
+      oldWidget.session.removeListener(_changed);
       widget.session.sendOpen.addListener(_openChanged);
       widget.session.sender.addListener(_changed);
+      widget.session.addListener(_changed);
       _openChanged();
     }
   }
@@ -71,6 +74,7 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
   void dispose() {
     widget.session.sendOpen.removeListener(_openChanged);
     widget.session.sender.removeListener(_changed);
+    widget.session.removeListener(_changed);
     _keyboardWait?.cancel();
     _focus.dispose();
     super.dispose();
@@ -146,12 +150,17 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
   Future<void> _send() async {
     final session = widget.session;
     final sender = session.sender;
-    if (!sender.canSend || session.closed) return;
+    // The page's toast outlives this layer, so an answer still shows after the bar has gone.
+    final toast = widget.toast;
+    if (session.closed) {
+      toast('UP主已关闭弹幕');
+      return;
+    }
+    if (!sender.canSend) return;
     final message = await sender.send();
-    if (!mounted) return;
     if (message != null) {
-      widget.toast(message);
-    } else if (identical(widget.session, session)) {
+      toast(message);
+    } else if (mounted && identical(widget.session, session)) {
       session.closeSend();
     }
   }

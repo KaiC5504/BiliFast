@@ -11,7 +11,7 @@ import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/player_prefs.dart';
-import 'package:flutter/material.dart' show MaterialApp;
+import 'package:flutter/material.dart' show MaterialApp, TextField;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,6 +31,15 @@ class _Session extends DanmakuSession {
       );
 
   Future<String?> Function(String text, DanmakuStyle style) post;
+  bool closedByUploader = false;
+
+  @override
+  bool get closed => closedByUploader;
+
+  void closeByUploader() {
+    closedByUploader = true;
+    notifyListeners();
+  }
 
   @override
   Future<String?> send(String text, DanmakuStyle style) => post(text, style);
@@ -351,5 +360,38 @@ void main() {
     answer.complete(null);
     await tester.pump();
     expect(session.sendOpen.value, isFalse);
+  });
+
+  testWidgets('an open bar learns the uploader closed danmaku, and a press says so', (tester) async {
+    await pumpLayer(tester);
+    await open(tester);
+    await tester.enterText(input, '一条');
+    await tester.pump();
+    expect(tester.widget<TextField>(input).readOnly, isFalse);
+
+    session.closeByUploader();
+    await tester.pump();
+    expect(tester.widget<TextField>(input).readOnly, isTrue);
+    await tester.tap(send);
+    await tester.pump();
+    expect(posted, isEmpty);
+    expect(toasts, ['UP主已关闭弹幕']);
+    expect(session.sendOpen.value, isTrue);
+  });
+
+  testWidgets('an answer that comes after the layer has gone is still toasted', (tester) async {
+    final answer = Completer<String?>();
+    session.post = (text, style) => answer.future;
+    await pumpLayer(tester);
+    await open(tester);
+    await tester.enterText(input, '一条');
+    await tester.pump();
+    await tester.tap(send);
+    await tester.pump();
+
+    await tester.pumpWidget(const SizedBox());
+    answer.complete('弹幕发送过于频繁');
+    await tester.pump();
+    expect(toasts, ['弹幕发送过于频繁']);
   });
 }
