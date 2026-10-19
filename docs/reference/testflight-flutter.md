@@ -14,7 +14,7 @@ to Flutter too.
 
 ## What is in the repo
 
-- `ios/Runner/Info.plist`: display name BiliFast, `CFBundleIconName` AppIcon (the pink Bolt, 1024 px, no alpha),
+- `ios/Runner/Info.plist`: display name BiliFast, `CFBundleIconName` AppIcon (the sprinting TV from `design/icon-options/` plus its dark-appearance version, 1024 px, no alpha),
   `ITSAppUsesNonExemptEncryption` false, `UIBackgroundModes` [audio], `NSAllowsLocalNetworking` (the in-app 127.0.0.1
   server), `NSPhotoLibraryAddUsageDescription` 用于把视频截图保存到相册。, `NSPhotoLibraryUsageDescription` and
   `NSCameraUsageDescription` (comment pictures), `NSLocalNetworkUsageDescription`
