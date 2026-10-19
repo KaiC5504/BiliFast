@@ -98,10 +98,10 @@ void main() {
       builder: (context, child) => AppScope(services: services, child: child!),
       home: PlayerTestPage(
         environment: environment,
-        startPlayback: playback.obtain,
+        startPlayback: playback.create,
+        releasePlayback: playback.release,
         logs: logs,
         stageBuilder: stageStandIn,
-        ownsController: false,
         shareFile: (path, origin) async => shared.add((path, origin)),
       ),
     ));

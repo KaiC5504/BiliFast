@@ -634,7 +634,8 @@ class PlaybackController extends ChangeNotifier {
   /// 设置's 重置编码记忆: codecs the player refused are tried again.
   void resetCodecMemory() => _memory.reset();
 
-  /// The system is short of memory: the engine drops its prefetched segments and playback goes on.
+  /// The system is short of memory: the engine drops its prefetched segments and playback goes on. On the shared
+  /// engine AppPlayback drops them once for every page, and the lease leaves the drop to it.
   void memoryPressure() {
     _engine.dropCache();
     final rss = ProcessInfo.currentRss;
@@ -666,7 +667,10 @@ class PlaybackController extends ChangeNotifier {
 
   /// The page was covered: this playback's prefetched segments go, as Swift's cover() did, and the player keeps
   /// what it has.
-  void dropPrefetch() {}
+  void dropPrefetch() {
+    final token = _btrToken;
+    if (token != null) _engine.dropPrefetch(token);
+  }
 
   /// iOS can take a suspended app's listening socket: once back in the foreground the local server is probed,
   /// and a playback prepared before a restart is prepared again where it was. A detail whose asks ran out (likely
@@ -1508,6 +1512,8 @@ class PlaybackController extends ChangeNotifier {
 
   void _onEngineStats(EngineSnapshot snapshot) {
     if (_disposed || _token == null || activeMode != PlaybackMode.btr) return;
+    // Another page's playback on the shared engine.
+    if (snapshot.token case final token? when token != _token) return;
     stats.value = stats.value.copyWith(
       engine: snapshot,
       downloadBps: snapshot.downloadBps,

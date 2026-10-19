@@ -111,7 +111,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     Logger.shared.info(LogCategory.ui, 'settings clear', {'what': kind.name});
     switch (kind) {
       case SettingsConfirmKind.codecMemory:
-        services.playback.whenStarted('settings codec memory', (controller) => controller.resetCodecMemory());
+        services.playback.resetCodecMemory();
       case SettingsConfirmKind.recents:
         services.recents.clear();
       case SettingsConfirmKind.logs:
@@ -149,9 +149,8 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     _prefs.node = choice;
     if (mounted) setState(() {});
     Logger.shared.info(LogCategory.ui, 'settings node', {'node': choice.name});
-    // A cold start reads the saved node; one already started, or starting now, is told.
-    final mode = choice.mode;
-    AppScope.of(context).playback.whenStarted('settings node', (controller) => controller.setNodeMode(mode));
+    // A cold start reads the saved node; the engine running now, or starting now, is told.
+    AppScope.of(context).playback.setNodeMode(choice.mode);
   }
 
   void _push(WidgetBuilder builder) =>

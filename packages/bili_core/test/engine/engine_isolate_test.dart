@@ -289,7 +289,8 @@ void main() {
       ..updatePlayhead('gone', seconds: 1, rate: 1)
       ..reportBuffer('gone', aheadSeconds: 1, playing: true)
       ..reportStall('gone')
-      ..dropCache();
+      ..dropCache()
+      ..dropPrefetch('gone');
     expect(await engine.fatals.isEmpty, isTrue, reason: 'the fatal reports end with the engine');
   });
 
@@ -342,6 +343,34 @@ void main() {
       await segment(1);
       final snapshot = await snapshotWithMisses(2);
       expect(snapshot.cacheHits, 0);
+    });
+
+    test('dropPrefetch empties only the named playback\'s cache; each snapshot names the playback it describes',
+        () async {
+      Future<void> read(PreparedSource from, int index) {
+        final start = video.index.end + 1 + index * _segmentBytes;
+        return _get(from.video, range: 'bytes=$start-${start + _segmentBytes - 1}');
+      }
+
+      await playFirstAndPrefetch();
+      final covered = source;
+      expect(snapshots.last.token, covered.token);
+      final shown = await engine.prepare(request(PlaybackMode.btr));
+      await read(shown, 0);
+      expect(
+          await _eventually(() => snapshots.any((snapshot) =>
+              snapshot.token == shown.token && snapshot.deliveredBytes >= _segments * _segmentBytes)),
+          isTrue);
+      engine.dropPrefetch(covered.token);
+      expect(await engine.ensureServing(), isFalse);
+      await read(shown, 1);
+      expect(await _eventually(() => snapshots.last.token == shown.token && snapshots.last.cacheHits == 1), isTrue,
+          reason: 'the playback on top kept its prefetch');
+
+      await engine.release(shown.token);
+      await read(covered, 1);
+      expect(await _eventually(() => snapshots.last.token == covered.token && snapshots.last.cacheMisses == 2), isTrue);
+      expect(snapshots.last.cacheHits, 0, reason: 'the covered playback\'s prefetch was dropped');
     });
 
     test('a BTR read that fails after every retry is reported with its token', () async {

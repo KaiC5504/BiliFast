@@ -120,6 +120,9 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
   void dropCache() => _notify(const _DropCache());
 
   @override
+  void dropPrefetch(String token) => _notify(_DropPrefetch(token));
+
+  @override
   void hint(String token, double? seconds) => _notify(_Hint(token, seconds));
 
   @override
@@ -290,6 +293,12 @@ final class _Stall extends _Notice {
 
 final class _DropCache extends _Notice {
   const _DropCache();
+}
+
+final class _DropPrefetch extends _Notice {
+  const _DropPrefetch(this.token);
+
+  final String token;
 }
 
 final class _Hint extends _Notice {
@@ -471,6 +480,8 @@ final class _EngineHost {
         for (final session in _sessions.values) {
           session.dropCache();
         }
+      case _DropPrefetch(:final token):
+        _sessions[token]?.dropPrefetch();
       case _Hint(:final token, :final seconds):
         _sessions[token]?.hint(seconds);
       case _Preconnect(:final urls):
@@ -674,7 +685,8 @@ final class _EngineHost {
 
   /// Download speed counts the engine's delivered bytes, as the Swift overlay did.
   void _tick() {
-    final newest = _sessions[_newest] ?? _sessions.values.lastOrNull;
+    final newestToken = _sessions.containsKey(_newest) ? _newest : _sessions.keys.lastOrNull;
+    final newest = _sessions[newestToken];
     if (newest == null) {
       _stopStats();
       return;
@@ -689,7 +701,7 @@ final class _EngineHost {
     final seconds = (now - _lastTickAt) / 1000;
     _lastTickAt = now;
     final bps = seconds > 0 ? delta / seconds : 0.0;
-    _boot.events.send(_Stats(newest.stats(downloadBps: bps, transport: _transport.name)));
+    _boot.events.send(_Stats(newest.stats(downloadBps: bps, transport: _transport.name, token: newestToken)));
     if (++_ticks % 30 == 0) _saveMemory();
   }
 

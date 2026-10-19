@@ -286,6 +286,60 @@ void main() {
     expect(session.prefetchedBytes(TrackKind.audio), 0);
   });
 
+  // BiliFast: VideoPageModel.swift's cover() called the session's dropCache(); here that is dropPrefetch(), since
+  // dropCache() trims for a memory warning.
+  group('dropPrefetch (a covered page)', () {
+    test('drops every cached segment, the back buffer too, where a memory warning keeps what is near', () async {
+      final config = TestEngine.config.copyWith(
+        prefetchVideoBytes: 3 * segmentLength,
+        keepBehindSeconds: 30,
+        keepBehindBytes: 8 << 20,
+        trimOnMemoryWarning: true,
+      );
+      final cdn = SimCDN(size: size);
+      final session = makeSession(cdn, config: config);
+      addTearDown(session.close);
+      session.setSegments(TrackKind.video, segments());
+      await read(session, segments()[0].range);
+      session.updatePlayhead(seconds: 2, rate: 1);
+      await read(session, segments()[1].range);
+      await waitUntil(() => session.prefetchesRunning(TrackKind.video) == 0);
+      expect(session.isCached(TrackKind.video, segments()[1].range), isTrue, reason: 'kept as back buffer');
+      expect(session.prefetchedBytes(TrackKind.video), greaterThan(0));
+
+      session.dropPrefetch();
+      expect(session.cachedBytes(TrackKind.video), 0);
+      expect(session.prefetchedBytes(TrackKind.video), 0);
+
+      final requests = session.mediaRequestCount;
+      expect(await read(session, segments()[2].range), bytesOf(cdn, segments()[2].range), reason: 'reads go on');
+      expect(session.mediaRequestCount, greaterThan(requests), reason: 'segment 2 came from the CDN again');
+    });
+
+    test('cancels a prefetch still downloading; the segment is fetched again when read', () async {
+      final (session, transport, all) = await makeSlowPrefetchSession();
+      addTearDown(session.close);
+      session.dropPrefetch();
+      expect(session.prefetchesRunning(TrackKind.video), 0);
+      expect(await read(session, all[1].range), bytesOf(transport.cdn, all[1].range));
+    });
+
+    test('a prefetch a reader took over and then left is not handed back', () async {
+      final (session, transport, all) = await makeSlowPrefetchSession();
+      addTearDown(session.close);
+      final reader = session.read(TrackKind.video, all[1].range).listen((_) {}, onError: (Object _) {});
+      await waitUntil(() => session.mediaRequestCount == 2);
+      expect(session.prefetchesRunning(TrackKind.video), 0, reason: 'the read took the prefetch over');
+      session.dropPrefetch();
+      await reader.cancel();
+      await waitUntil(() => session.readsRunning == 0);
+      expect(session.prefetchesRunning(TrackKind.video), 0);
+      await sleepMs(1200);
+      expect(session.cachedBytes(TrackKind.video), 0, reason: 'segment 1 was cancelled, not cached');
+      expect(deliveredBytes(transport), lessThan(2 * segmentLength));
+    });
+  });
+
   test('a seek replaces the track\'s prefetched segments', () async {
     final config = TestEngine.config.copyWith(prefetchVideoBytes: 3 * segmentLength);
     final session = makeSession(SimCDN(size: size), config: config);
