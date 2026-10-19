@@ -7,11 +7,11 @@ import 'video_page.dart';
 
 /// What opens a video page (port of VideoRoute.swift). Without a [cid] the page plays the part Bilibili saw this
 /// account watch last, or the first. Without a [start] it resumes per ResumePoint: only on the part it was saved on,
-/// and not within 5 s of the end. [title] (from the card, link or 最近打开) shows until the video's own arrives;
-/// [cover] (feed cards only) flies in from the card and covers the player until the video first plays. [view] is the
-/// video a pasted link already resolved, so the page doesn't ask Bilibili for it again, and [detail] the signed view
-/// that resolved it, when that one answered (its 合集 and counts). [zoomSource] (推荐 cards only) is where a swipe back
-/// shrinks the page to.
+/// and not within 5 s of the end. [title] (from the card, link, 最近打开 or 历史记录) shows until the video's own
+/// arrives; [cover] (from cards and 最近打开 rows) flies in from the card and covers the player until the video first
+/// plays. [view] is the video a pasted link already resolved, so the page doesn't ask Bilibili for it again, and
+/// [detail] the signed view that resolved it, when that one answered (its 合集 and counts). [zoomSource] (推荐 cards
+/// only) is the card the swipe back, 〈 and system back fly the page into.
 @immutable
 final class VideoRoute {
   const VideoRoute({

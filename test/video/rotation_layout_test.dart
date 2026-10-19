@@ -15,6 +15,10 @@ import 'package:bilifast/device/player_device.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player_ui/landscape_chrome.dart';
+import 'package:bilifast/player_ui/panels/panel_controller.dart';
+import 'package:bilifast/player_ui/panels/panel_layer.dart';
+import 'package:bilifast/player_ui/panels/panel_parts.dart';
+import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/page_session.dart' show SessionOpen;
@@ -210,14 +214,14 @@ void main() {
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 25));
       final now = area(tester);
-      expect(now.width, greaterThanOrEqualTo(last.width));
-      expect(now.height, greaterThanOrEqualTo(last.height));
+      expect(now.width, greaterThan(last.width), reason: 'frame $i moves');
+      expect(now.height, greaterThan(last.height), reason: 'frame $i moves');
       expect(tabRow(tester).top, now.bottom, reason: 'the body rides on the player');
       expect(tabRow(tester).width, 440, reason: 'at its upright size');
       last = now;
     }
-    expect(last.width, allOf(greaterThan(small.width), lessThan(full.width)));
-    expect(last.height, allOf(greaterThan(small.height), lessThan(full.height)));
+    expect(last.width, lessThan(full.width));
+    expect(last.height, lessThan(full.height));
     expect(
       tester.getSize(find.byType(DanmakuLayer)),
       full.size,
@@ -282,6 +286,126 @@ void main() {
     expect(area(tester), small);
     expect(tabRow(tester).top, small.bottom);
     expect(background(tester), BiliColors.card);
+    await leave(tester);
+  });
+
+  testWidgets('turned back upright halfway through the grow, the player shrinks from where it is drawn', (
+    tester,
+  ) async {
+    await openPage(tester);
+    orientation.enterLandscape();
+    await tester.pump();
+    screen(tester, landscape, landscapeInsets);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    final mid = area(tester);
+    expect(mid.width, allOf(greaterThan(small.width), lessThan(full.width)));
+
+    orientation.exitToInline();
+    screen(tester, portrait, portraitInsets);
+    await tester.pump();
+    final first = area(tester);
+    expect(first.width, closeTo(mid.width, 0.5), reason: 'no jump to full screen or to the small spot');
+    expect(first.height, closeTo(mid.height, 0.5));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(RotationTheme.grow);
+    await tester.pump();
+    expect(area(tester), small);
+    expect(tabRow(tester).top, small.bottom);
+    expect(find.byType(PortraitControls), findsOneWidget);
+    await leave(tester);
+  });
+
+  testWidgets('turned to landscape and back before the screen turned, nothing grows', (tester) async {
+    await openPage(tester);
+    orientation.enterLandscape();
+    await tester.pump();
+    orientation.exitToInline();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(area(tester), small);
+    screen(tester, landscape, landscapeInsets);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(LandscapeChrome), findsNothing, reason: 'inline stays inline on a wide screen');
+    screen(tester, portrait, portraitInsets);
+    await tester.pump();
+    await leave(tester);
+  });
+
+  PlayerUi ui(WidgetTester tester) => tester.widget<PanelLayer>(find.byType(PanelLayer)).ui;
+  bool panelLandscape(WidgetTester tester) => tester.widget<PanelScope>(find.byType(PanelScope)).landscape;
+
+  testWidgets('a panel open in the small player stays the portrait sheet until the screen is landscape', (
+    tester,
+  ) async {
+    await openPage(tester);
+    ui(tester).panels.open(PlayerPanel.quality);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey('panel-grabber')), findsOneWidget);
+
+    orientation.enterLandscape();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(ui(tester).presentation, Presentation.inline, reason: 'drawn upright while the screen is');
+    expect(panelLandscape(tester), isFalse);
+    expect(find.byKey(const ValueKey('panel-grabber')), findsOneWidget);
+
+    screen(tester, landscape, landscapeInsets);
+    await settle(tester);
+    expect(ui(tester).presentation, Presentation.landscape);
+    expect(panelLandscape(tester), isTrue);
+    expect(find.byKey(const ValueKey('panel-grabber')), findsNothing);
+    ui(tester).panels.close();
+    await tester.pump(const Duration(milliseconds: 400));
+    await leave(tester);
+  });
+
+  testWidgets('弹幕设置 open while turning back stays the landscape strip, then is the light sheet from the small '
+      "player's bottom", (tester) async {
+    await openPage(tester);
+    orientation.enterLandscape();
+    await tester.pump();
+    screen(tester, landscape, landscapeInsets);
+    await settle(tester);
+    ui(tester).panels.open(PlayerPanel.danmakuSettings);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(panelLandscape(tester), isTrue);
+
+    orientation.exitToInline();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(panelLandscape(tester), isTrue, reason: 'the screen is still sideways');
+    expect(find.byKey(const ValueKey('panel-sheet-dim')), findsNothing);
+
+    screen(tester, portrait, portraitInsets);
+    await tester.pump();
+    expect(panelLandscape(tester), isFalse);
+    expect(tester.getSize(find.byKey(const ValueKey('panel-sheet-dim'))).height, portrait.height - small.bottom);
+    await settle(tester);
+    expect(tester.getSize(find.byKey(const ValueKey('panel-sheet-dim'))).height, portrait.height - small.bottom);
+    ui(tester).panels.close();
+    await tester.pump(const Duration(milliseconds: 400));
+    await leave(tester);
+  });
+
+  testWidgets('添加屏蔽词 gives way to 弹幕设置 once the page is laid out upright, not before', (tester) async {
+    await openPage(tester);
+    orientation.enterLandscape();
+    await tester.pump();
+    screen(tester, landscape, landscapeInsets);
+    await settle(tester);
+    final panels = ui(tester).panels..open(PlayerPanel.blockWords);
+    await tester.pump(const Duration(milliseconds: 400));
+
+    orientation.exitToInline();
+    await tester.pump();
+    expect(panels.value, PlayerPanel.blockWords, reason: 'still laid out for landscape');
+    screen(tester, portrait, portraitInsets);
+    await tester.pump();
+    expect(panels.value, PlayerPanel.danmakuSettings);
+    panels.close();
+    await tester.pump(const Duration(milliseconds: 400));
     await leave(tester);
   });
 }

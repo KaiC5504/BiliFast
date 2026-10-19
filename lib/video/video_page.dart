@@ -171,8 +171,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   late final _collapse = CollapsingPlayer(tabs: _tabs, vsync: this);
 
   /// What the page last laid out, which follows the screen's shape rather than the presentation: iOS hands Flutter
-  /// the turned size only halfway through the rotation, so until then the upright page turns as one piece.
-  Presentation _laidOut = Presentation.inline;
+  /// the turned size only halfway through the rotation, so until then the upright page turns as one piece. The
+  /// player's panels and gestures follow it too.
+  final _laidOut = ValueNotifier<Presentation>(Presentation.inline);
 
   /// The player box as last drawn, and where the grow started; both with the box's top inset.
   _PlayerBox? _drawnPlayer;
@@ -182,7 +183,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// The page's size and top inset when last laid out upright: the body keeps them while the player grows over it.
   ({Size size, double top})? _uprightFrame;
 
-  /// What the player area lays out at while its box grows or shrinks: the box's size at the end.
+  /// What the player area lays out at while its box grows or shrinks: its size at the end, below the box's top inset.
   final _pin = ValueNotifier<Size?>(null);
 
   /// The small player has shrunk from its full height, and [_barred] once it is the bar.
@@ -249,15 +250,16 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return switch (_presentation) {
       Presentation.vertical => Presentation.vertical,
       Presentation.landscape => wide ? Presentation.landscape : Presentation.inline,
-      Presentation.inline => wide && _laidOut == Presentation.landscape ? Presentation.landscape : Presentation.inline,
+      Presentation.inline =>
+        wide && _laidOut.value == Presentation.landscape ? Presentation.landscape : Presentation.inline,
     };
   }
 
   /// A turn between the small player and landscape full screen grows the player box from where it was drawn into
   /// its new place, or shrinks it back.
   void _followLayout(Presentation layout) {
-    final was = _laidOut;
-    _laidOut = layout;
+    final was = _laidOut.value;
+    _laidOut.value = layout;
     if (layout == was) return;
     final drawn = _drawnPlayer;
     final turned = was != Presentation.vertical && layout != Presentation.vertical;
@@ -439,6 +441,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       overlay: _overlays,
       edgeTaken: _threadEdge,
       danmaku: danmaku,
+      layout: _laidOut,
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
@@ -809,13 +812,17 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   static const _turnSettle = Duration(milliseconds: 400);
 
   /// Back to the small player from full screen. From landscape it waits for the screen to turn upright and the turn
-  /// to end: a page pushed mid-turn would be laid out sideways. 竖屏 is upright already.
+  /// to end: a page pushed mid-turn would be laid out sideways. That holds for a turn back already under way, whose
+  /// landscape layout stays until the screen is upright. 竖屏 is upright already.
   Future<void> _inlineFirst() async {
-    if (!_presentation.fullScreen) return;
-    _orientation.exitToInline();
-    final turning = !_upright;
+    if (_presentation.fullScreen) {
+      _orientation.exitToInline();
+    } else if (_laidOutUpright) {
+      return;
+    }
+    final turning = !_laidOutUpright;
     var waited = Duration.zero;
-    while (mounted && !_upright && waited < _turnLimit) {
+    while (mounted && !_laidOutUpright && waited < _turnLimit) {
       await _wait(_turnPoll);
       waited += _turnPoll;
     }
@@ -823,9 +830,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (mounted) await SchedulerBinding.instance.endOfFrame;
   }
 
-  bool get _upright {
+  bool get _laidOutUpright {
     final size = MediaQuery.sizeOf(context);
-    return size.width <= size.height;
+    return size.width <= size.height && _laidOut.value != Presentation.landscape;
   }
 
   Future<void> _wait(Duration duration) {
@@ -953,6 +960,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..dispose();
     _grow.dispose();
     _pin.dispose();
+    _laidOut.dispose();
     final session = _session;
     session?.removeListener(_sessionChanged);
     session?.readout.status.removeListener(_syncCollapse);

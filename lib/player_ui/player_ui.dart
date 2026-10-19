@@ -23,6 +23,7 @@ final class PlayerUi {
     this.overlay,
     this.edgeTaken,
     this.danmaku,
+    this.layout,
   });
 
   final PlayerSession session;
@@ -51,5 +52,14 @@ final class PlayerUi {
   /// The page's danmaku: settings, 屏蔽词, sending; null outside a video page.
   final DanmakuSession? danmaku;
 
-  Presentation get presentation => orientation.presentation;
+  /// What the page has laid out, which trails the orientation through a turn until the screen has its new shape;
+  /// null outside a video page, where the orientation's presentation is the layout.
+  final ValueListenable<Presentation>? layout;
+
+  /// The presentation the player is drawn in: what panels and gestures fit themselves to. What the user asked for is
+  /// [orientation]'s.
+  Presentation get presentation => layout?.value ?? orientation.presentation;
+
+  /// Fires when [presentation] may have changed.
+  Listenable get presentationChanges => layout ?? orientation;
 }

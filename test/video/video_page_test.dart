@@ -2675,6 +2675,27 @@ void main() {
       await back(tester);
     }, variant: reduceMotion);
 
+    testWidgets('an action pressed while the screen is still turning back waits for upright before the login page', (
+      tester,
+    ) async {
+      await openReal(tester);
+      await rotate(tester, Presentation.landscape);
+      orientation.exitToInline();
+      await frames(tester, 2);
+      expect(find.byType(LandscapeChrome), findsOneWidget, reason: 'laid out sideways until the screen turns');
+      unawaited(actions(tester).toggleLike());
+      await frames(tester, 4);
+      expect(gate.asks, isEmpty, reason: 'the screen is still sideways');
+
+      screen(tester, portrait, portraitInsets);
+      await frames(tester, 12);
+      expect(gate.asks, [(presentation: Presentation.inline, screen: portrait)]);
+      gate.answer(false);
+      await frames(tester, 2);
+      expect(sent(), isEmpty);
+      await back(tester);
+    });
+
     testWidgets('a screen that never turns back still gets the login page, after 3 s', (tester) async {
       await openReal(tester);
       await rotate(tester, Presentation.landscape);

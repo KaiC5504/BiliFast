@@ -146,19 +146,19 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   void _listen(PlayerUi ui) {
     ui.panels.addListener(_panelChanged);
-    ui.orientation.addListener(_presentationChanged);
+    ui.presentationChanges.addListener(_presentationChanged);
   }
 
   void _unlisten(PlayerUi ui) {
     ui.panels.removeListener(_panelChanged);
-    ui.orientation.removeListener(_presentationChanged);
+    ui.presentationChanges.removeListener(_presentationChanged);
   }
 
   @override
   void didUpdateWidget(PanelLayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (identical(oldWidget.ui.panels, widget.ui.panels) &&
-        identical(oldWidget.ui.orientation, widget.ui.orientation)) {
+        identical(oldWidget.ui.presentationChanges, widget.ui.presentationChanges)) {
       return;
     }
     _unlisten(oldWidget.ui);
