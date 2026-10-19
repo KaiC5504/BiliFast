@@ -16,6 +16,7 @@ import '../comments/comments_tab.dart';
 import '../device/orientation.dart';
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_controller.dart';
+import '../player/bili_player.dart' show PlayerStatus;
 import '../player_ui/chrome_state.dart';
 import '../player_ui/panels/panel_controller.dart';
 import '../player_ui/panels/panel_layer.dart';
@@ -24,6 +25,7 @@ import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import 'actions/action_overlays.dart';
+import 'collapsing_player.dart';
 import 'intro/intro_tab.dart';
 import 'page_details.dart';
 import 'page_details_model.dart';
@@ -78,7 +80,8 @@ typedef VideoPageOpener = Future<void> Function(BuildContext context, VideoRoute
 
 /// The video page: the player at 16:9 under a black status bar with the tab row and 简介 | 评论 below it, or the
 /// player alone over the whole screen in full screen, which is this page laid out again rather than a route of its
-/// own. It opens the route's video on the shared player, reports watch progress while logged in, and gives the player
+/// own. Paused, the small player shrinks to the 继续播放 bar as the shown tab scrolls, the tab row riding under it.
+/// It opens the route's video on the shared player, reports watch progress while logged in, and gives the player
 /// back when it is popped. A page shown again after a newer video page took the player opens its video again where
 /// it was covered.
 class VideoPage extends StatefulWidget {
@@ -101,7 +104,7 @@ class VideoPage extends StatefulWidget {
   State<VideoPage> createState() => _VideoPageState();
 }
 
-class _VideoPageState extends State<VideoPage> with RouteAware {
+class _VideoPageState extends State<VideoPage> with RouteAware, SingleTickerProviderStateMixin {
   AppServices? _services;
   PlaybackController? _controller;
   WatchReporter? _reporter;
@@ -142,6 +145,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
   final _overlays = ActionOverlayController();
   final _tabs = PageTabsController();
   final _areaKey = GlobalKey();
+  late final _collapse = CollapsingPlayer(tabs: _tabs, vsync: this);
+
+  /// The small player has shrunk from its full height, and [_barred] once it is the bar.
+  bool _shrunk = false;
+  bool _barred = false;
+
+  /// Whether the controls showed when the player began to shrink, for when it is full again.
+  bool _chromeBeforeShrink = false;
 
   /// The comments of the video the page shows, replaced when another video opens on it; the drafts stay with the page.
   CommentsModel? _comments;
@@ -189,6 +200,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
       ..addListener(_panelChanged)
       ..addListener(_standAside);
     _commentOverlays.addListener(_panelChanged);
+    _collapse.addListener(_collapseChanged);
   }
 
   @override
@@ -319,6 +331,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
+    session.readout.status.addListener(_syncCollapse);
     _autoHideInputs = Listenable.merge([session.readout.status, session.scrubbing, _panels, _overlays])
       ..addListener(_syncAutoHide);
     _syncAutoHide();
@@ -351,9 +364,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     });
     _syncComments();
     _syncAutoHide();
+    _syncCollapse();
   }
 
   void _sessionChanged() {
+    _syncCollapse();
     final session = _session;
     final controller = _controller;
     // A covered page's session hears the newer page's video on the shared controller.
@@ -470,6 +485,45 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
         session.scrubbing.value == null &&
         _panels.value == null &&
         _overlays.value == null;
+  }
+
+  /// Only the page's own video, loaded, paused and not at its end, lets the tabs' scrolling shrink the player: the end
+  /// screen (26) is in the player and must stay seen.
+  void _syncCollapse() {
+    final controller = _controller;
+    final session = _session;
+    _collapse.paused =
+        controller != null &&
+        session != null &&
+        _isMine(controller) &&
+        controller.phase == PlaybackPhase.playing &&
+        session.readout.status.value == PlayerStatus.paused &&
+        !session.ended;
+  }
+
+  /// The controls go as the player starts to shrink, leaving the thin line as on 11, and come back as they were once
+  /// it is full again.
+  void _collapseChanged() {
+    final progress = _collapse.progress;
+    final shrunk = progress > 0;
+    final barred = progress >= 1;
+    if (shrunk == _shrunk && barred == _barred) return;
+    if (shrunk && !_shrunk) {
+      _chromeBeforeShrink = _chrome.visible;
+      _chrome.hide();
+    } else if (!shrunk && _shrunk && _chromeBeforeShrink) {
+      _chrome.show();
+    }
+    _shrunk = shrunk;
+    _barred = barred;
+    if (mounted) setState(() {});
+  }
+
+  /// 继续播放: the shown tab back to its top, where the player has its full height again, and play.
+  void _resume() {
+    _tabs.scrollToTop(animate: !MediaQuery.disableAnimationsOf(context));
+    final session = _session;
+    if (session != null && session.readout.status.value == PlayerStatus.paused) session.togglePlay();
   }
 
   /// Rebuilds the PopScope, which lets a pop through only with no overlay or panel open.
@@ -598,8 +652,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
       ?..removeListener(_commentsChanged)
       ..dispose();
     _autoHideInputs?.removeListener(_syncAutoHide);
+    _collapse
+      ..removeListener(_collapseChanged)
+      ..dispose();
     final session = _session;
     session?.removeListener(_sessionChanged);
+    session?.readout.status.removeListener(_syncCollapse);
     _details?.dispose();
     // PlayerSession declares no dispose; the app's session is a ChangeNotifier that frees what it holds.
     if (session case final ChangeNotifier notifier) notifier.dispose();
@@ -617,6 +675,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     final controller = _controller;
     final mine = controller != null && _isMine(controller);
     final ui = mine ? _ui : null;
+    _collapse.still = MediaQuery.disableAnimationsOf(context);
     return PopScope<Object?>(
       canPop: !fullScreen &&
           _panels.value == null &&
@@ -640,90 +699,138 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
         value: SystemUiOverlayStyle.light,
         child: Scaffold(
           backgroundColor: fullScreen ? BiliColors.videoBackground : BiliColors.card,
+          // The comment composer rides on the keyboard by itself, and the full-screen player keeps its size under it.
+          resizeToAvoidBottomInset: false,
           body: LayoutBuilder(
             builder: (context, constraints) {
               final media = MediaQuery.of(context);
               final top = media.padding.top;
-              final box = fullScreen ? constraints.maxHeight : top + constraints.maxWidth / BiliMetrics.videoAspect;
-              return Stack(
-                children: [
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: box,
-                    bottom: 0,
-                    child: Offstage(
-                      offstage: fullScreen,
-                      child: TickerMode(
-                        enabled: !fullScreen,
-                        child: MediaQuery.removePadding(context: context, removeTop: true, child: _body(context)),
+              if (!fullScreen) _collapse.full = constraints.maxWidth / BiliMetrics.videoAspect;
+              Widget belowPlayer(Widget child) => Offstage(
+                offstage: fullScreen,
+                child: TickerMode(
+                  enabled: !fullScreen,
+                  child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
+                ),
+              );
+              // Laid out as if the player were already the bar; each tab leaves the rest of the full height free.
+              final pager = belowPlayer(PlayerReserve(height: _collapse.reserve, child: _pager(context)));
+              final tabRow = belowPlayer(_tabRow(context));
+              final player = ColoredBox(
+                color: BiliColors.videoBackground,
+                child: Padding(
+                  padding: EdgeInsets.only(top: fullScreen ? 0 : top),
+                  // Full screen runs under the notch and the home indicator, so its chrome keeps clear of
+                  // them itself; the small player sits below the status bar with no insets of its own.
+                  child: MediaQuery(
+                    data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
+                    // An open panel covers the player for VoiceOver too, as landscape's panel already does.
+                    child: ExcludeSemantics(
+                      excluding: _panels.value != null,
+                      child: VideoPlayerArea(
+                        key: _areaKey,
+                        presentation: presentation,
+                        onBack: _back,
+                        ui: ui,
+                        video: mine ? _videoView : null,
+                        danmaku: mine ? controller.danmaku : null,
+                        cover: _cover(context),
+                        loading: _loading(controller, mine),
+                        failure: _failure(controller, mine),
+                        onRetry: _retry,
+                        endScreenAside: _overlayAside,
+                        shrunk: _shrunk && !fullScreen,
+                        barred: _barred && !fullScreen,
+                        danmakuHeight: fullScreen ? null : _collapse.full,
                       ),
                     ),
                   ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    height: box,
-                    child: ColoredBox(
-                      color: BiliColors.videoBackground,
-                      child: Padding(
-                        padding: EdgeInsets.only(top: fullScreen ? 0 : top),
-                        // Full screen runs under the notch and the home indicator, so its chrome keeps clear of
-                        // them itself; the small player sits below the status bar with no insets of its own.
-                        child: MediaQuery(
-                          data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
-                          // An open panel covers the player for VoiceOver too, as landscape's panel already does.
+                ),
+              );
+              final panels = ui == null ? null : PanelLayer(ui: ui);
+              final actionOverlays = switch ((ui, _details)) {
+                (final ui?, final details?) => ListenableBuilder(
+                  listenable: details,
+                  builder: (context, _) => ActionOverlays(
+                    actions: details.actions,
+                    controller: _overlays,
+                    landscape: presentation == Presentation.landscape,
+                    shareLink: ui.session.shareLink,
+                  ),
+                ),
+                _ => null,
+              };
+              // Only the player's height follows the scrolling; everything else is built once per page build.
+              return ListenableBuilder(
+                listenable: _collapse,
+                builder: (context, _) {
+                  final height = fullScreen ? constraints.maxHeight : _collapse.height;
+                  final box = fullScreen ? height : top + height;
+                  final progress = fullScreen ? 0.0 : _collapse.progress;
+                  return Stack(
+                    children: [
+                      Positioned(
+                        key: const ValueKey('page-tabs-area'),
+                        left: 0,
+                        right: 0,
+                        top: top + CollapseTheme.barHeight + PageTheme.tabRowHeight,
+                        bottom: 0,
+                        child: pager,
+                      ),
+                      Positioned(
+                        key: const ValueKey('page-tab-row'),
+                        left: 0,
+                        right: 0,
+                        top: box,
+                        height: PageTheme.tabRowHeight,
+                        child: tabRow,
+                      ),
+                      Positioned(
+                        key: const ValueKey('page-player'),
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        height: box,
+                        child: player,
+                      ),
+                      if (progress > 0)
+                        Positioned(
+                          key: const ValueKey('collapse-bar'),
+                          left: 0,
+                          right: 0,
+                          top: top,
+                          height: height,
                           child: ExcludeSemantics(
                             excluding: _panels.value != null,
-                            child: VideoPlayerArea(
-                              key: _areaKey,
-                              presentation: presentation,
+                            child: CollapsedPlayerBar(
+                              progress: progress,
+                              onResume: _resume,
                               onBack: _back,
-                              ui: ui,
-                              video: mine ? _videoView : null,
-                              danmaku: mine ? controller.danmaku : null,
-                              cover: _cover(context),
-                              loading: _loading(controller, mine),
-                              failure: _failure(controller, mine),
-                              onRetry: _retry,
-                              endScreenAside: _overlayAside,
+                              onMore: () => _panels.open(PlayerPanel.more),
+                            ),
+                          ),
+                        ),
+                      Positioned.fill(
+                        key: const ValueKey('comment-overlays'),
+                        child: Offstage(
+                          offstage: fullScreen,
+                          child: TickerMode(
+                            enabled: !fullScreen,
+                            child: CommentOverlays(
+                              model: _comments,
+                              controller: _commentOverlays,
+                              callbacks: _commentCallbacks,
+                              threadTop: box,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  Positioned.fill(
-                    key: const ValueKey('comment-overlays'),
-                    child: Offstage(
-                      offstage: fullScreen,
-                      child: TickerMode(
-                        enabled: !fullScreen,
-                        child: CommentOverlays(
-                          model: _comments,
-                          controller: _commentOverlays,
-                          callbacks: _commentCallbacks,
-                          threadTop: box,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (ui != null) Positioned.fill(key: const ValueKey('video-panels'), child: PanelLayer(ui: ui)),
-                  if ((ui, _details) case (final ui?, final details?))
-                    Positioned.fill(
-                      key: const ValueKey('video-overlays'),
-                      child: ListenableBuilder(
-                        listenable: details,
-                        builder: (context, _) => ActionOverlays(
-                          actions: details.actions,
-                          controller: _overlays,
-                          landscape: presentation == Presentation.landscape,
-                          shareLink: ui.session.shareLink,
-                        ),
-                      ),
-                    ),
-                ],
+                      if (panels != null) Positioned.fill(key: const ValueKey('video-panels'), child: panels),
+                      if (actionOverlays != null)
+                        Positioned.fill(key: const ValueKey('video-overlays'), child: actionOverlays),
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -732,54 +839,51 @@ class _VideoPageState extends State<VideoPage> with RouteAware {
     );
   }
 
-  /// The tab row and the pager under the small player. Before the session exists the row shows the saved danmaku
-  /// switch and 简介 stays empty.
-  Widget _body(BuildContext context) {
+  /// The tab row under the small player. Before the session exists it shows the saved danmaku switch.
+  Widget _tabRow(BuildContext context) {
+    final session = _session;
+    return ListenableBuilder(
+      listenable: session ?? _tabs,
+      builder: (context, _) => PageTabRow(
+        controller: _tabs,
+        replyCount: _intro.detail?.stat.reply,
+        danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
+        onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
+        onSendDanmaku: () => _toast('发弹幕将在下个版本推出'),
+      ),
+    );
+  }
+
+  /// 简介 | 评论. Before the session exists 简介 stays empty.
+  Widget _pager(BuildContext context) {
     final session = _session;
     final details = _details;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ListenableBuilder(
-          listenable: session ?? _tabs,
-          builder: (context, _) => PageTabRow(
-            controller: _tabs,
-            replyCount: _intro.detail?.stat.reply,
-            danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
-            onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
-            onSendDanmaku: () => _toast('发弹幕将在下个版本推出'),
+    // Leaving, a related row's cover would otherwise fly back to a feed card showing the same video.
+    return HeroMode(
+      enabled: !_left,
+      child: PageTabs(
+        controller: _tabs,
+        intro: session == null || details == null
+            ? const SizedBox.expand()
+            : IntroTab(
+                content: _intro,
+                details: details,
+                onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
+                onOpenVideo: (id) => unawaited(_openVideoId(id)),
+                onPlayEpisode: session.playEpisode,
+                onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
+                onOpenRelated: _openRelated,
+                onWatchLater: (card) => unawaited(_watchLater(card)),
+              ),
+        comments: switch (_comments) {
+          final comments? => CommentsTab(
+            key: ObjectKey(comments),
+            model: comments,
+            callbacks: _commentCallbacks,
           ),
-        ),
-        Expanded(
-          // Leaving, a related row's cover would otherwise fly back to a feed card showing the same video.
-          child: HeroMode(
-            enabled: !_left,
-            child: PageTabs(
-              controller: _tabs,
-              intro: session == null || details == null
-                  ? const SizedBox.expand()
-                  : IntroTab(
-                      content: _intro,
-                      details: details,
-                      onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
-                      onOpenVideo: (id) => unawaited(_openVideoId(id)),
-                      onPlayEpisode: session.playEpisode,
-                      onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
-                      onOpenRelated: _openRelated,
-                      onWatchLater: (card) => unawaited(_watchLater(card)),
-                    ),
-              comments: switch (_comments) {
-                final comments? => CommentsTab(
-                  key: ObjectKey(comments),
-                  model: comments,
-                  callbacks: _commentCallbacks,
-                ),
-                null => const CommentsSlot(),
-              },
-            ),
-          ),
-        ),
-      ],
+          null => const CommentsSlot(),
+        },
+      ),
     );
   }
 

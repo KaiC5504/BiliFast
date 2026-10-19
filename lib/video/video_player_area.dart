@@ -33,6 +33,9 @@ class VideoPlayerArea extends StatelessWidget {
     this.failure,
     this.onRetry,
     this.endScreenAside = false,
+    this.shrunk = false,
+    this.barred = false,
+    this.danmakuHeight,
   });
 
   final Presentation presentation;
@@ -57,6 +60,15 @@ class VideoPlayerArea extends StatelessWidget {
 
   /// An action overlay is up over the full-screen player: the end screen gets out of its way, as the chrome does.
   final bool endScreenAside;
+
+  /// The paused small player is shrinking to the 继续播放 bar: its controls take no touches, and once it is the bar
+  /// ([barred]) nothing of them shows, not even the thin line (12).
+  final bool shrunk;
+  final bool barred;
+
+  /// The small player's full height, at which the danmaku keep laying out while it shrinks, clipped, so they stay
+  /// where they were rather than re-laying out every frame. Null in full screen.
+  final double? danmakuHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -95,13 +107,21 @@ class VideoPlayerArea extends StatelessWidget {
                     left: false,
                     right: false,
                     bottom: false,
-                    child: DanmakuLayer(
-                      key: const ValueKey('video-danmaku'),
-                      clock: session.clock,
-                      timeline: danmaku?.timeline,
-                      // The end screens show no danmaku over the last frame.
-                      enabled: session.danmakuOn && !ended,
-                      wake: session.readout.any,
+                    child: ClipRect(
+                      clipBehavior: shrunk ? Clip.hardEdge : Clip.none,
+                      child: OverflowBox(
+                        alignment: Alignment.topCenter,
+                        minHeight: danmakuHeight,
+                        maxHeight: danmakuHeight,
+                        child: DanmakuLayer(
+                          key: const ValueKey('video-danmaku'),
+                          clock: session.clock,
+                          timeline: danmaku?.timeline,
+                          // The end screens show no danmaku over the last frame.
+                          enabled: session.danmakuOn && !ended,
+                          wake: session.readout.any,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -132,7 +152,11 @@ class VideoPlayerArea extends StatelessWidget {
             ),
           )
         else
-          _chrome(ui),
+          IgnorePointer(
+            key: const ValueKey('video-chrome'),
+            ignoring: shrunk,
+            child: Offstage(offstage: barred, child: _chrome(ui)),
+          ),
         if (!ended) PlayerHud(key: const ValueKey('video-hud'), ui: ui),
       ],
       if (failure case final failure?)

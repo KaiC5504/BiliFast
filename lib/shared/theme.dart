@@ -1353,7 +1353,34 @@ abstract final class CommentOverlayTheme {
 
 /// The paused player shrinking to the 继续播放 bar (11, 12).
 abstract final class CollapseTheme {
-  static const barHeight = 56.0;
+  /// 12's bar is 202 px tall; BiliNative's 56 pt was short of it.
+  static const barHeight = 202 / 3;
+
+  /// Over the bar at 12's darkness (its danmaku keep 11% of their white); it deepens with the shrink, as on 11.
+  static const shade = Color(0xE3000000);
+
+  /// ▶ 继续播放 is fully in once the player has gone this share of the way, then its opacity holds.
+  static const labelFade = 1.6;
+
+  /// 12 centres the bar's row 2.5 px above the bar's middle.
+  static const rowLift = 2.5 / 3;
+  static const playGlyphWidth = 40 / 3;
+  static const playGlyphHeight = 44 / 3;
+  static const labelGap = 3.5;
+  static const labelText = 16.0;
+  static const label = BiliColors.onVideo;
+
+  /// The chevron's left edge and the dots' right edge from the screen's sides.
+  static const backLeft = 17.0;
+  static const backGlyphWidth = 9.0;
+  static const backGlyphHeight = 16.0;
+  static const moreRight = 61 / 3;
+
+  /// ‹ and ⋮ joining the label once it is the bar.
+  static const controlsFade = Duration(milliseconds: 150);
+
+  /// 继续播放's scroll back to the top, and the player growing back to full once it plays.
+  static const resume = Duration(milliseconds: 300);
 }
 
 /// The composer's @ picker and attached pictures.

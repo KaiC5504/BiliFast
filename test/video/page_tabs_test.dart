@@ -52,7 +52,7 @@ void main() {
         child: PageTabs(
           controller: tabs,
           intro: intro ?? scrolling('简介'),
-          comments: comments ?? const CommentsPlaceholder(),
+          comments: comments ?? const Center(child: Text('评论列表')),
         ),
       ),
     ],
@@ -116,7 +116,7 @@ void main() {
       final bar = underline(tester);
       expect(bar.left, closeTo(tester.getRect(find.text('评论')).left, 0.01));
       expect(bar.right, closeTo(tester.getRect(find.text('213')).right, 0.01));
-      expect(find.text('评论将在下个版本推出'), findsOneWidget);
+      expect(find.text('评论列表'), findsOneWidget);
       expect(tester.getSemantics(find.byKey(const ValueKey('tab-comments'))), isSemantics(isSelected: true));
     });
 
@@ -244,6 +244,43 @@ void main() {
       expect(tester.getTopLeft(find.text('评论 8')).dy, commentsTop);
     });
 
+    testWidgets('each tab\'s list scrolls with its own controller, which the page reads; only the shown one goes back to '
+        'its top', (tester) async {
+      await host(tester, page(comments: scrolling('评论')));
+      var heard = 0;
+      void hear() => heard++;
+      tabs.motion.addListener(hear);
+      addTearDown(() => tabs.motion.removeListener(hear));
+      expect(tabs.offsetOf(PageTab.intro), 0);
+      expect(tabs.offsetOf(PageTab.comments), 0, reason: 'not laid out yet');
+
+      await tester.drag(find.text('简介 3'), const Offset(0, -300));
+      await settle(tester);
+      final intro = tabs.offsetOf(PageTab.intro);
+      expect(intro, greaterThan(200));
+      expect(tabs.scrollOf(PageTab.intro).offset, intro);
+      expect(heard, greaterThan(0));
+
+      tabs.select(PageTab.comments);
+      await settle(tester);
+      await tester.drag(find.text('评论 2'), const Offset(0, -200));
+      await settle(tester);
+      expect(tabs.offsetOf(PageTab.comments), greaterThan(100));
+      tabs.scrollToTop();
+      await tester.pump();
+      await tester.pump(CollapseTheme.resume ~/ 2);
+      expect(tabs.offsetOf(PageTab.comments), greaterThan(0), reason: 'on its way');
+      await tester.pump(CollapseTheme.resume);
+      expect(tabs.offsetOf(PageTab.comments), 0);
+      expect(tabs.offsetOf(PageTab.intro), intro, reason: 'the other tab stays where it was');
+
+      tabs.select(PageTab.intro, animate: false);
+      await tester.pump();
+      tabs.scrollToTop(animate: false);
+      await tester.pump();
+      expect(tabs.offsetOf(PageTab.intro), 0);
+    });
+
     testWidgets('with reduced motion a tap jumps straight to the tab', (tester) async {
       await host(tester, page(), still: true);
       await tester.tap(find.text('评论'));
@@ -258,7 +295,7 @@ void main() {
       await tester.pump();
       expect(tabs.selected, PageTab.comments);
       expect(tabs.position, 1);
-      expect(find.text('评论将在下个版本推出'), findsOneWidget);
+      expect(find.text('评论列表'), findsOneWidget);
     });
 
     testWidgets('the route\'s edge swipe goes back over the pager; a swipe from the middle only switches tabs', (
