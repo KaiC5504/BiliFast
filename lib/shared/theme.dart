@@ -2328,6 +2328,14 @@ abstract final class DanmakuListTheme {
   );
 }
 
+/// 开发者's log tools, in the dev page's own style (no official screen shows it).
+abstract final class DevToolsTheme {
+  static const crashInk = BiliColors.failure;
+
+  /// Between the log card and the note under it.
+  static const footnoteGap = BiliMetrics.rowGap;
+}
+
 /// 历史记录 (28).
 abstract final class HistoryTheme {}
 

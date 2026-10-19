@@ -120,3 +120,9 @@ abstract final class CrashLog {
     return high + low;
   }
 }
+
+/// What 开发者's 测试崩溃 throws (BiliNative `fatalError("开发者测试崩溃")`).
+final class DeveloperTestCrash extends Error {
+  @override
+  String toString() => '开发者测试崩溃';
+}

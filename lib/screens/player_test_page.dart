@@ -1,16 +1,22 @@
 import 'dart:async';
 
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bili_core/logic.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../app/app_environment.dart';
+import '../app/app_scope.dart';
+import '../devtools/crash_log.dart';
 import '../devtools/log_forwarder.dart';
 import '../devtools/log_server_discovery.dart';
 import '../playback/playback_controller.dart';
 import '../playback/playback_setup.dart';
 import '../player_ui/player_stage.dart';
 import '../shared/theme.dart';
+import '../shared/toast.dart';
 import '../speedtest/speed_test_plan.dart';
 import '../speedtest/speed_test_results.dart';
 import '../speedtest/speed_test_runner.dart';
@@ -39,8 +45,15 @@ const appSpeedTestHooks =
 Future<PlaybackEngine> _startVariantEngine(SpeedTestVariant variant) =>
     startPlatformEngine(config: variant.config, connectionsPerHost: variant.connectionsPerHost);
 
+/// Hands a file to the share sheet, which on an iPad points at [origin].
+typedef ShareFile = Future<void> Function(String path, Rect? origin);
+
+Future<void> shareFileThroughSystem(String path, Rect? origin) async {
+  await SharePlus.instance.share(ShareParams(files: [XFile(path)], sharePositionOrigin: origin));
+}
+
 /// Slice 1's whole app, now 开发者 in the avatar menu: the account the keychain login gave, a BV field, the player and
-/// its switches, the log forwarder and the speed test.
+/// its switches, the log forwarder with 导出日志 and 测试崩溃, and the speed test.
 class PlayerTestPage extends StatefulWidget {
   const PlayerTestPage({
     super.key,
@@ -51,6 +64,7 @@ class PlayerTestPage extends StatefulWidget {
     this.initialLink,
     this.speedTestHooks = appSpeedTestHooks,
     this.ownsController = true,
+    this.shareFile = shareFileThroughSystem,
   });
 
   final AppEnvironment environment;
@@ -69,6 +83,9 @@ class PlayerTestPage extends StatefulWidget {
   /// then hears lifecycle and memory events for it.
   final bool ownsController;
 
+  /// Tests pass their own so nothing reaches the platform.
+  final ShareFile shareFile;
+
   @override
   State<PlayerTestPage> createState() => _PlayerTestPageState();
 }
@@ -85,6 +102,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   String? _startError;
   bool _showStats = true;
   bool _danmakuEnabled = true;
+  bool _exporting = false;
 
   /// The controller's open count after this page's last open; a later one means another page has the player.
   int? _open;
@@ -181,6 +199,62 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     unawaited(runner.start(links: links, server: logs != null && logs.enabled ? logs.target : null));
   }
 
+  Future<void> _exportLogs(Rect? origin) async {
+    if (_exporting) return;
+    final files = AppScope.of(context).logFiles;
+    setState(() => _exporting = true);
+    String? path;
+    var failed = false;
+    try {
+      path = await files.export();
+    } catch (_) {
+      // The export logged why.
+      failed = true;
+    }
+    if (!mounted) return;
+    setState(() => _exporting = false);
+    if (path == null) {
+      showToast(context, failed ? '导出日志失败' : '没有可导出的日志');
+      return;
+    }
+    try {
+      await widget.shareFile(path, origin);
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'log share failed', {'error': '$error'});
+      if (mounted) showToast(context, '无法打开分享');
+    }
+  }
+
+  /// A Dart error the app doesn't catch, thrown from the next frame's callbacks, so the framework hands it to
+  /// CrashLog as it would any other. Native crashes aren't captured yet, so the app carries on.
+  Future<void> _confirmCrash() async {
+    final crash = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('让应用立即崩溃？'),
+        message: const Text('会抛出一个未捕获的 Dart 错误，崩溃报告作为 crash 事件发送到电脑。'),
+        actions: [
+          CupertinoActionSheetAction(
+            key: const ValueKey('crash-confirm'),
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('崩溃'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          key: const ValueKey('crash-cancel'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
+        ),
+      ),
+    );
+    if (crash != true) return;
+    Logger.shared.warn(LogCategory.ui, 'test crash');
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) => throw DeveloperTestCrash())
+      ..scheduleFrame();
+  }
+
   @override
   Widget build(BuildContext context) => PopScope<Object?>(
         onPopInvokedWithResult: (didPop, _) {
@@ -219,7 +293,18 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
                   padding: const EdgeInsets.all(BiliMetrics.gutter),
                   children: [
                     if (controller != null) ..._playbackSection(controller),
-                    if (widget.logs case final logs?) _LogSection(logs: logs, address: _logAddress),
+                    if (widget.logs case final logs?) ...[
+                      _LogSection(
+                        logs: logs,
+                        address: _logAddress,
+                        exporting: _exporting,
+                        onExport: _exportLogs,
+                        onCrash: _confirmCrash,
+                      ),
+                      const SizedBox(height: DevToolsTheme.footnoteGap),
+                      const Text('在电脑上运行 uv run tools/logserver.py，手机和电脑连同一个 Wi-Fi。',
+                          style: TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText)),
+                    ],
                     if (_speedTest case final runner? when !_speedTestStopped) ...[
                       const SizedBox(height: BiliMetrics.sectionGap),
                       _SpeedTestSection(runner: runner, links: _testLinks, onStart: _startSpeedTest),
@@ -502,11 +587,26 @@ class _Row extends StatelessWidget {
       );
 }
 
+/// BiliNative's 开发者 section: 发送日志到电脑 with the PCs found and a typed address, 导出日志 and 测试崩溃.
 class _LogSection extends StatelessWidget {
-  const _LogSection({required this.logs, required this.address});
+  const _LogSection({
+    required this.logs,
+    required this.address,
+    required this.exporting,
+    required this.onExport,
+    required this.onCrash,
+  });
 
   final LogForwarder logs;
   final TextEditingController address;
+  final bool exporting;
+  final void Function(Rect? origin) onExport;
+  final VoidCallback onCrash;
+
+  static Rect? _originOf(BuildContext context) {
+    final box = context.findRenderObject();
+    return box is RenderBox && box.hasSize ? box.localToGlobal(Offset.zero) & box.size : null;
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -552,10 +652,32 @@ class _LogSection extends StatelessWidget {
           Text(logs.status,
               key: const ValueKey('log-status'),
               style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText)),
+          const SizedBox(height: BiliMetrics.rowGap),
+          _Row(
+            label: '导出日志（最近 20 MB）',
+            trailing: Builder(
+              builder: (button) => OutlinedButton(
+                key: const ValueKey('log-export'),
+                onPressed: exporting ? null : () => onExport(_originOf(button)),
+                child: Text(exporting ? '准备中…' : '导出'),
+              ),
+            ),
+          ),
+          _Row(
+            label: '测试崩溃',
+            trailing: OutlinedButton(
+              key: const ValueKey('test-crash'),
+              style: OutlinedButton.styleFrom(foregroundColor: DevToolsTheme.crashInk),
+              onPressed: onCrash,
+              child: const Text('崩溃'),
+            ),
+          ),
         ]),
       );
 }
 
+/// A PC the phone found over Bonjour; tapping it sends the logs there, tapping it again goes back to the typed
+/// address.
 class _ServerTile extends StatelessWidget {
   const _ServerTile({required this.server, required this.logs});
 
@@ -566,13 +688,21 @@ class _ServerTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = logs.service?.host == server.host && logs.service?.port == server.port;
     return InkWell(
+      key: ValueKey('log-server-${server.name}'),
       onTap: () => logs.selectService(selected ? null : server),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: BiliMetrics.rowGap),
         child: Row(
           children: [
             Expanded(
-              child: Text(server.name, style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(server.name, style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text)),
+                  Text('${server.host}:${server.port}',
+                      style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText)),
+                ],
+              ),
             ),
             if (selected) const Icon(Icons.check, color: BiliColors.pink, size: BiliMetrics.iconSize),
           ],
