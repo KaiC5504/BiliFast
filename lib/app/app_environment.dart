@@ -223,6 +223,10 @@ class AppEnvironment extends ChangeNotifier {
         _face = nav.face;
         final mid = nav.mid;
         _logger.info(LogCategory.app, 'account', {'user': mid == null ? '?' : Redactor.mid(mid), 'vip': nav.isVip});
+      } else if (_keychainUnread) {
+        _account = const AccountUnknown();
+        _accountCheckFailed = true;
+        _logger.warn(LogCategory.app, 'account unknown, keychain unread');
       } else {
         _account = cookies.value('SESSDATA') == null ? const LoggedOut() : const LoginExpired();
         _mid = null;
@@ -235,7 +239,7 @@ class AppEnvironment extends ChangeNotifier {
       _logger.warn(LogCategory.app, 'nav failed', {'error': '$error'});
       if (epoch != _epoch) return false;
       if (_account is AccountUnknown) {
-        if (cookies.value('SESSDATA') == null) {
+        if (cookies.value('SESSDATA') == null && !_keychainUnread) {
           _account = const LoggedOut();
         } else {
           _accountCheckFailed = true;
@@ -245,6 +249,10 @@ class AppEnvironment extends ChangeNotifier {
       return false;
     }
   }
+
+  /// The keychain couldn't be read and the jar has no session: the login may well be stored, so this isn't 未登录 (that
+  /// would invite a second login). The account stays unknown, which coming back to the app or to home asks again.
+  bool get _keychainUnread => _persistence.blocked && cookies.value('SESSDATA') == null;
 
   /// After a failed read the stored cookies may still be there; once a read works they join the jar.
   Future<void> _retryBlockedKeychainLoad(int epoch) async {

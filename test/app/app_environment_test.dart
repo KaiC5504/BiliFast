@@ -66,6 +66,35 @@ void main() {
     expect(keychain.saved.last, {'SESSDATA': 'kept', 'buvid3': 'b3', 'buvid4': 'b4'});
   });
 
+  test('a keychain still unreadable when Bilibili says logged out leaves the account unknown, not 未登录', () async {
+    final keychain = FakeKeychain(const CookieLoadFailed(-25308));
+    // The jar starts without buvids, so the risk cookies are fetched first.
+    final http = Canned.http(loggedIn: false)
+      ..routes['/x/frontend/finger/spi'] = (200, '{"code":0,"message":"ok","data":{"b_3":"B3","b_4":"B4"}}');
+    final environment = await load(keychain, http);
+
+    expect(await environment.refreshAccount(), isTrue);
+    expect(environment.account, isA<AccountUnknown>());
+    expect(environment.accountCheckFailed, isTrue);
+
+    // Coming back to the app asks again; by then the keychain reads.
+    keychain.next = const StoredCookies(Canned.cookies);
+    http.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+    await environment.refreshAccount();
+    expect(environment.account, isA<LoggedIn>());
+    expect(environment.cookies.value('SESSDATA'), Canned.cookies['SESSDATA']);
+  });
+
+  test('a keychain still unreadable when nav fails leaves the account unknown too', () async {
+    final keychain = FakeKeychain(const CookieLoadFailed(-25308));
+    final http = Canned.http()..routes.remove(Canned.navPath);
+    final environment = await load(keychain, http);
+
+    expect(await environment.refreshAccount(), isFalse);
+    expect(environment.account, isA<AccountUnknown>());
+    expect(environment.accountCheckFailed, isTrue);
+  });
+
   test('a keychain channel that throws counts as a failed read', () async {
     final keychain = FakeKeychain(const StoredCookies(Canned.cookies))
       ..throws = PlatformException(code: 'unavailable');

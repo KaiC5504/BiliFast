@@ -18,14 +18,22 @@ enum KeychainChannel {
       case "loadCookies":
         result(loadCookies())
       case "saveCookies":
-        let cookies = arguments?["cookies"] as? [String: String] ?? [:]
+        // An empty map deletes the login, so a malformed argument must never read as one.
+        guard let cookies = arguments?["cookies"] as? [String: String] else {
+          result(["ok": false, "code": Int(errSecParam)])
+          return
+        }
         result(saveCookies(cookies))
       case "deleteCookies":
         result(deleteError(delete(cookieService)))
       case "loadAppToken":
         result(loadAppToken())
       case "saveAppToken":
-        result(saveAppToken(arguments?["token"] as? String ?? ""))
+        guard let token = arguments?["token"] as? String else {
+          result(["ok": false, "code": Int(errSecParam)])
+          return
+        }
+        result(saveAppToken(token))
       case "deleteAppToken":
         result(deleteError(delete(tokenService)))
       default:

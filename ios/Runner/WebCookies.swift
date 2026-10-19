@@ -62,8 +62,9 @@ enum WebCookies {
     return name == "bilibili.com" || name.hasSuffix(".bilibili.com")
   }
 
+  /// A domain cookie for all of bilibili.com; one without the leading dot is host-only and never reaches api.
   private static func isTopLevel(_ domain: String) -> Bool {
-    bareDomain(domain) == "bilibili.com"
+    domain.lowercased() == ".bilibili.com"
   }
 
   private static func bareDomain(_ domain: String) -> String {
