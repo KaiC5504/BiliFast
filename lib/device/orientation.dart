@@ -51,13 +51,13 @@ class OrientationController extends ChangeNotifier {
   bool get videoIsVertical => _videoIsVertical;
   bool _videoIsVertical = false;
 
-  /// Whether turns are drawn by Flutter rather than animated by the system: the 开发者 switch 旋转动画, armed only
-  /// while a page owns the orientation, since only that page draws them. Always off without a host.
+  /// Whether the host takes the turns over (any 旋转动画 方式 but 系统), armed only while a page owns the orientation,
+  /// since only that page draws them. Always off without a host.
   bool get turnTakeover => _turnTakeover;
   bool _turnTakeover = false;
   int _takeoverSends = 0;
 
-  /// The 开发者 choice, armed or not; the page reads its picture and drawn start from it.
+  /// The 开发者 choice, armed or not; the page reads its method (不转) and drawn start from it.
   TurnStyle get turnStyle => _turnStyle;
   TurnStyle _turnStyle = TurnStyle.system;
 
@@ -79,7 +79,7 @@ class OrientationController extends ChangeNotifier {
     return _syncTakeover();
   }
 
-  /// 自绘 as shipped by default, or 系统.
+  /// The default drawn style (TurnStyle()), or 系统.
   Future<void> setTurnTakeover(bool enabled) => setTurnStyle(enabled ? const TurnStyle() : TurnStyle.system);
 
   /// Queued with the requests, so a request made after a change goes out after it: an exit with no page to draw it

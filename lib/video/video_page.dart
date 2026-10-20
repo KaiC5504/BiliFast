@@ -181,6 +181,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   bool get _spinning => _spin.isAnimating || _held != null;
 
+  /// From [_beginTurn] until its spin is over and no other turn is waited for: only a turn the page draws has the
+  /// official app's turning window.
+  bool _drawing = false;
+
   final _recorder = TurnRecorder();
 
   /// Turns the host hasn't heard were drawn: its still picture covers the screen until it does.
@@ -314,6 +318,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     } else {
       _grow.reverse();
     }
+    _settleDrawing();
   }
 
   /// The turned size is already in (or about to be). The turn being waited for is drawn from the first build at its
@@ -359,8 +364,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final start = turn.start;
     if (!MediaQuery.disableAnimationsOf(context)) {
       final style = _orientation.turnStyle;
+      _drawing = true;
       _spinFrom = style.method == TurnMethod.noSpin ? 0 : _rotation - start.angle;
-      final hold = style.spinStart == TurnSpinStart.afterPicture && !_goneTurns.contains(start.id);
+      final hold =
+          style.choosesPicture && style.spinStart == TurnSpinStart.afterPicture && !_goneTurns.contains(start.id);
       _recorder.began(start.id, spinFrom: _spinFrom, duration: start.duration, grow: _grow.value, held: hold);
       if (hold) {
         _held = (id: start.id, duration: start.duration);
@@ -372,7 +379,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       }
     }
     _goneTurns.removeWhere((id) => id <= start.id);
+    _settleDrawing();
     _reportDrawn();
+  }
+
+  /// A grow the page neither turns through nor waits on a turn for is the system's.
+  void _settleDrawing() {
+    if (!_spinning && _turnFrom == null && _pendingTurn == null) _drawing = false;
   }
 
   void _runTurn(Duration duration) {
@@ -399,8 +412,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   void _pictureGone(int turn) {
     if (!mounted) return;
+    final held = _held?.id == turn;
+    // Turns this page doesn't own are another page's to log and draw.
+    if (!held && (_covered || !_owning)) return;
     _recorder.pictureGone(turn);
-    if (_held?.id == turn) {
+    if (held) {
       _release('picture');
     } else {
       _goneTurns.add(turn);
@@ -416,6 +432,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _turnFrom = null;
     _pendingTurn = null;
     _release('timeout');
+    _settleDrawing();
     if (!_grow.isAnimating) {
       if (_upright == Presentation.vertical) {
         _grow.value = _turnedFull ? 1 : 0;
@@ -432,6 +449,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// Rebuilds the PopScope, which holds the page while it turns.
   void _spinStatus(AnimationStatus status) {
     if (!status.isCompleted || !mounted) return;
+    _settleDrawing();
     // A turn of no length ends in the build that starts it, which reads it already.
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) return;
     setState(() {});
@@ -460,11 +478,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// Mid-turn, the player box with its top inset, where the upright body sits (竖屏 has none), the window it shows
   /// through and how far the turn has got, or null at rest. As the official app's UIKit window, measured frame by frame
   /// (01 in local/differences): the window goes from the upright screen to the landscape one about the centre, the box
-  /// spans its width from its top-left corner, from the small player or 竖屏's whole screen to the whole landscape
-  /// screen, and the body hangs from the box's bottom-left corner, cut off by the window's bottom. It is all placed
-  /// about the centre of the screen as it is now: iOS keeps the view's centre as it hands over the turned size halfway
-  /// through, so nothing moves then. Before that the box grows past the upright page's sides.
-  ({Rect box, double inset, Offset? body, Rect window, double t})? _turning(
+  /// spans the window's width from the window's top-left corner, from the small player or 竖屏's whole screen to the
+  /// whole landscape screen, and the body hangs from the box's bottom-left corner, cut off by the window's bottom. Only
+  /// a turn the page draws, laid out at the turned size from its start, has that window: 不转's too, since iOS turns
+  /// it as it turns the official one. Any other grow (系统, which has the turned size only halfway, Windows, a late
+  /// turn) has none, its body centred under the box. It is all placed about the centre of the screen as it is now: iOS
+  /// keeps the view's centre as it hands over the turned size halfway through, so nothing moves then. Before that the
+  /// box grows past the upright page's sides.
+  ({Rect box, double inset, Offset? body, Rect? window, double t})? _turning(
     Size screen,
     Presentation layout,
     double uprightTop,
@@ -491,16 +512,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       Rect.fromCenter(center: Offset.zero, width: long, height: short),
       t,
     )!.shift(centre);
-    final window = Rect.fromCenter(
-      center: centre,
-      width: short + (long - short) * t,
-      height: long - (long - short) * t,
-    );
-    if (vertical) return (box: box, inset: 0, body: null, window: window, t: t);
+    if (vertical) return (box: box, inset: 0, body: null, window: null, t: t);
+    final window = _drawing
+        ? Rect.fromCenter(center: centre, width: short + (long - short) * t, height: long - (long - short) * t)
+        : null;
     return (
       box: box,
       inset: uprightTop * (1 - t),
-      body: Offset(box.left, box.bottom - small),
+      body: Offset(window == null ? centre.dx - short / 2 : box.left, box.bottom - small),
       window: window,
       t: t,
     );
@@ -1340,8 +1359,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       }
                       // The tab row and the list ride on the player's bottom edge, at their upright size.
                       final body = turn?.body ?? Offset.zero;
-                      final window = turn?.body == null ? null : turn?.window;
-                      // Only mid-turn: a clipper bounds hit testing too.
+                      final window = turn?.window;
+                      // Only while the page draws a turn: a clipper bounds hit testing too.
                       Widget windowed(Offset origin, Widget child) => ClipRect(
                         clipper: window == null ? null : _WindowClip(window.shift(-origin)),
                         clipBehavior: window == null ? Clip.none : Clip.hardEdge,

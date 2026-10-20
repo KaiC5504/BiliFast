@@ -143,6 +143,22 @@ class TurnPage {
       ..viewPadding = insets;
   }
 
+  /// Another page pushed over the video page.
+  Future<void> cover(WidgetTester tester) async {
+    unawaited(_nav.currentState!.push(SwipeBackPageRoute<void>(builder: (_) => const SizedBox.expand())));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
+
+  /// The page over it popped.
+  Future<void> uncover(WidgetTester tester) async {
+    _nav.currentState!.pop();
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
+
   /// Back to the small player and off the page, so nothing of it is left running.
   Future<void> leave(WidgetTester tester) async {
     orientation.exitToInline();
