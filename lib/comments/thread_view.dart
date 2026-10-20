@@ -130,7 +130,10 @@ class _ThreadViewState extends State<ThreadView> {
                   ),
                 ),
               ),
-              CommentWriteBar(onWrite: (emotes) => callbacks.reply(ReplyToComment(root), emotes)),
+              CommentWriteBar(
+                prompt: thread.prompt ?? model.childPrompt,
+                onWrite: (emotes) => callbacks.reply(ReplyToComment(root), emotes),
+              ),
             ],
           );
         },

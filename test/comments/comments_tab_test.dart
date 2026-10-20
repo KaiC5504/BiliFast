@@ -48,6 +48,7 @@ class FakeComments extends CommentsModel {
   String? closedValue;
   CommentSort sortValue;
   bool loaded;
+  String? rootPromptValue;
 
   final calls = <String>[];
 
@@ -75,6 +76,8 @@ class FakeComments extends CommentsModel {
   CommentSort get sort => sortValue;
   @override
   bool get hasLoaded => loaded;
+  @override
+  String? get rootPrompt => rootPromptValue;
 
   @override
   Future<void> ensureLoaded() async => calls.add('ensureLoaded');
@@ -477,6 +480,22 @@ void main() {
       expect(face.center.dx, phone.width - CommentListTheme.faceBox / 2);
       expect(face.center.dy, field.center.dy);
       expect(find.text(CommentWriteBar.placeholder), findsOneWidget);
+    });
+
+    testWidgets('the section\'s own prompt replaces the fixed one once the list sends it', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final replies = Replies();
+      final model = FakeComments(isEndValue: true);
+      await show(tester, model, replies: replies);
+      expect(find.text(CommentWriteBar.placeholder), findsOneWidget);
+
+      model.change(() => model.rootPromptValue = '随便聊聊吧～');
+      await tester.pump();
+      expect(find.text(CommentWriteBar.placeholder), findsNothing);
+      expect(find.text('随便聊聊吧～'), findsOneWidget);
+      tester.semantics.tap(find.semantics.byLabel('随便聊聊吧～'));
+      expect(replies.calls, [(const ReplyToVideo(), false)]);
+      semantics.dispose();
     });
 
     testWidgets('the list ends above the bar', (tester) async {

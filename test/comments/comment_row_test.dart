@@ -380,15 +380,20 @@ void main() {
       expect(text.style.color, CommentRowTheme.text);
     });
 
-    testWidgets('a reply\'s 回复 @name : shows the name as a mention', (tester) async {
+    testWidgets('a reply\'s 回复 @name : reads 回复 name: with the name grey, as on font-check 04', (tester) async {
       await _mount(tester, _row(_comment(root: 9, message: '回复 @Wormkids :没人看的'), _Model(), _Calls()));
       final text = tester.widget<CommentText>(find.byType(CommentText));
       expect(text.marksReplyTarget, isTrue);
-      expect(markingReplyTarget(text.runs), const [
-        RichRun.text('回复 '),
-        RichRun.mention(name: 'Wormkids', mid: 0),
-        RichRun.text(' :没人看的'),
-      ]);
+      expect(find.text('回复 Wormkids: 没人看的', findRichText: true), findsOneWidget);
+      final spans = <TextSpan>[];
+      _paragraph(tester, find.byType(CommentText)).text.visitChildren((span) {
+        if (span is TextSpan && span.text != null) spans.add(span);
+        return true;
+      });
+      final name = spans.singleWhere((span) => span.text == 'Wormkids');
+      expect(name.style?.color, CommentTextTheme.replyTarget);
+      expect(name.recognizer, isNull);
+      expect(spans.where((span) => span.text!.contains('@')), isEmpty);
     });
   });
 
@@ -536,6 +541,40 @@ void main() {
 
       await _mount(tester, _row(_comment(likes: 0), _Model(), _Calls()));
       expect(find.text('0'), findsNothing);
+    });
+
+    testWidgets('⋮ centres the line 16 below the pictures; 👍 sits 2 px above it and 👎 2 px below (font-check 04)', (
+      tester,
+    ) async {
+      final pictures = [for (var i = 0; i < 3; i++) CommentPicture(url: 'p$i', width: 10, height: 10)];
+      await _mount(tester, _row(_comment(likes: 513, pictures: pictures), _Model(), _Calls(), replies: false));
+      final bottom = _rect(tester, find.byKey(const ValueKey('comment-picture-0'))).bottom;
+      final more = _rect(tester, find.byKey(const ValueKey('comment-more'))).center.dy;
+      expect(more - bottom, closeTo(16, 0.01));
+      final like = _rect(
+        tester,
+        find.descendant(of: find.byKey(const ValueKey('comment-like')), matching: find.byType(CommentThumb)),
+      );
+      final hate = _rect(
+        tester,
+        find.descendant(of: find.byKey(const ValueKey('comment-dislike')), matching: find.byType(CommentThumb)),
+      );
+      expect(like.center.dy - bottom, closeTo(46 / 3, 0.01));
+      expect(hate.center.dy - more, closeTo(2 / 3, 0.01));
+      expect(
+        _rect(tester, find.text('513')).center.dy,
+        closeTo(more + CommentRowTheme.metaDrop, 0.01),
+        reason: 'the count stays on the line',
+      );
+    });
+
+    testWidgets('⋮\'s dots are 6.4 px across and 13 px apart (font-check 04, 13)', (tester) async {
+      await _mount(tester, _row(_comment(), _Model(), _Calls()));
+      final dots = tester.widget<CustomPaint>(
+        find.descendant(of: find.byKey(const ValueKey('comment-more')), matching: find.byType(CustomPaint)),
+      );
+      expect(dots.size.width, closeTo(6.4 / 3, 1e-9));
+      expect(dots.size.height, closeTo((6.4 + 26) / 3, 1e-9));
     });
 
     testWidgets('👍 swells once as it turns pink, not with Reduce Motion', (tester) async {

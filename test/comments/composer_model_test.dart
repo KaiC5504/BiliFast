@@ -73,6 +73,14 @@ void main() {
       expect(rig.drafts[ComposerModel.draftKey(const ReplyToVideo(), aid: testAid)].isEmpty, isTrue);
     });
 
+    test('a comment on the video is prompted with the section\'s own words once the list has sent them', () async {
+      final api = ScriptedApi()..pages = (_, _) => const CommentPage(comments: [], rootPrompt: '随便聊聊吧～');
+      final rig = CommentsRig(api: api);
+      await rig.model.loadMore();
+      expect(composer(rig, const ReplyToVideo()).placeholder, '随便聊聊吧～');
+      expect(composer(rig, ReplyToComment(named(10, '小红'))).placeholder, '回复 小红 :', reason: 'a reply keeps its own');
+    });
+
     test('a reply to a comment uses it for root and parent, and can go to 动态', () async {
       final rig = CommentsRig();
       final model = composer(rig, ReplyToComment(named(10, '小红')));

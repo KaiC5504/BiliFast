@@ -59,9 +59,14 @@ abstract final class CommentFixtures {
   static final plain = reply(rpid: 9003, member: memberB, message: '普通评论');
   static final pinned = reply(rpid: 9100, member: memberA, message: '置顶评论', extra: ',"location":"IP属地：北京"');
 
-  static String page({required List<String> replies, List<String> top = const [], required String cursor}) =>
+  static String page(
+          {required List<String> replies, List<String> top = const [], required String cursor, String? control}) =>
       '{"code":0,"message":"OK","ttl":1,"data":{"cursor":$cursor,"replies":[${replies.join(',')}],'
-      '"top_replies":[${top.join(',')}]}}';
+      '"top_replies":[${top.join(',')}]${control == null ? '' : ',"control":$control'}}}';
+
+  /// The section's own write prompts, as the list and thread responses carry them; the texts are invented.
+  static const control = '{"input_disable":false,"root_input_text":"随便聊聊吧～","child_input_text":" 说说你的看法 ",'
+      '"giveup_input_text":"下次再聊吧","screenshot_icon_state":1,"upload_picture_icon_state":1}';
 
   static const cursorMore =
       '{"is_begin":true,"prev":0,"next":2,"is_end":false,"pagination_reply":{"next_offset":"CAEiAggC"},"mode":3,"all_count":1234}';
@@ -245,6 +250,37 @@ void main() {
     final later = await client.comments(aid: 1, sort: CommentSort.hot, offset: 'CAEiAggC');
     expect(later.pinned, isNull);
     expect(later.comments.map((comment) => comment.rpid), [9003]);
+  });
+
+  test('the write prompts come from control, trimmed, and stay through a later page', () async {
+    String page(String? control) =>
+        CommentFixtures.page(replies: [CommentFixtures.plain], cursor: CommentFixtures.cursorMore, control: control);
+    http.routes[signedPath] = (200, page(CommentFixtures.control));
+    final first = await client.comments(aid: 1, sort: CommentSort.hot);
+    expect(first.rootPrompt, '随便聊聊吧～');
+    expect(first.childPrompt, '说说你的看法');
+    // A later page drops the pinned comment through copyWith; the prompts stay.
+    final later = await client.comments(aid: 1, sort: CommentSort.hot, offset: 'CAEiAggC');
+    expect((later.rootPrompt, later.childPrompt), ('随便聊聊吧～', '说说你的看法'));
+
+    for (final control in [null, '{}', '{"root_input_text":"","child_input_text":"  "}', '{"root_input_text":7}']) {
+      http.routes[signedPath] = (200, page(control));
+      final answer = await client.comments(aid: 1, sort: CommentSort.hot);
+      expect((answer.rootPrompt, answer.childPrompt), (null, null), reason: '$control');
+    }
+  });
+
+  test('a thread reads its own child prompt', () async {
+    final root = CommentFixtures.plain;
+    http.routes[threadPath] = (200,
+        '{"code":0,"data":{"page":{"num":1,"size":20,"count":1},"root":$root,"replies":[$root],'
+            '"control":${CommentFixtures.control}}}');
+    final page = await client.thread(aid: 1, root: 9003, page: 1, sort: CommentSort.time);
+    expect(page.childPrompt, '说说你的看法');
+    expect(page.copyWith(total: 2).childPrompt, '说说你的看法');
+
+    http.routes[threadPath] = (200, CommentFixtures.thread);
+    expect((await client.thread(aid: 1, root: 9003, page: 1, sort: CommentSort.time)).childPrompt, isNull);
   });
 
   test('a missing next offset ends the list', () async {
