@@ -113,7 +113,7 @@ class LaunchFailedApp extends StatelessWidget {
         locale: BiliFonts.locale,
         supportedLocales: const [BiliFonts.locale],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        theme: ThemeData(fontFamily: BiliFonts.family),
+        theme: ThemeData(fontFamily: BiliFonts.family, textTheme: BiliFonts.untracked),
         home: Scaffold(
           backgroundColor: BiliColors.pageGrey,
           body: SafeArea(
@@ -162,6 +162,7 @@ class BiliFastApp extends StatelessWidget {
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: ThemeData(
           fontFamily: BiliFonts.family,
+          textTheme: BiliFonts.untracked,
           colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
           scaffoldBackgroundColor: BiliColors.pageGrey,
           // iOS has no ripples; rows show their own press highlight.

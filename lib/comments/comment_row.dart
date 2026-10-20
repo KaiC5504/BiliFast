@@ -100,10 +100,10 @@ class CommentRow extends StatelessWidget {
               ),
               child: _NameLine(comment: comment, isUp: model.upMid != 0 && member.mid == model.upMid),
             ),
-            const SizedBox(height: CommentRowTheme.textTop - nameTop - CommentRowTheme.nameLine),
+            SizedBox(height: CommentRowTheme.textTop - nameTop - CommentRowTheme.nameLine),
             if (hasText)
               ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: CommentRowTheme.textMinBottom - CommentRowTheme.textTop),
+                constraints: BoxConstraints(minHeight: CommentRowTheme.textMinBottom - CommentRowTheme.textTop),
                 child: Padding(
                   padding: textLeft,
                   child: Align(
@@ -159,7 +159,7 @@ class CommentRow extends StatelessWidget {
             ),
             if (showsReplies && comment.upLiked) const _UpLiked(),
             if (repliesBox) ...[
-              const SizedBox(height: CommentRowTheme.boxGap),
+              SizedBox(height: CommentRowTheme.boxGap),
               Padding(
                 padding: const EdgeInsets.only(left: CommentRowTheme.boxLeading, right: CommentRowTheme.gutter),
                 child: _RepliesBox(comment: comment, onOpen: () => callbacks.openThread(comment)),
@@ -256,7 +256,7 @@ class _MetaLine extends StatelessWidget {
       CommentRowTheme.countRoom;
 
   String get _stamp {
-    final time = TimeFormat.relative(comment.ctime, now: DateTime.now());
+    final time = TimeFormat.comment(comment.ctime, now: DateTime.now());
     final location = comment.location;
     return location == null ? time : '$time $location';
   }
@@ -514,31 +514,35 @@ class _RepliesBox extends StatelessWidget {
                   children: [
                     if (previews.isNotEmpty) ...[
                       const SizedBox(height: CommentRowTheme.previewTop),
-                      for (final (i, reply) in previews.indexed) ...[
-                        if (i > 0) const SizedBox(height: CommentRowTheme.previewSpacing),
-                        _PreviewLine(reply: reply),
-                      ],
-                      SizedBox(height: count > 0 ? CommentRowTheme.moreSlotGap : CommentRowTheme.previewTop),
+                      for (final (i, reply) in previews.indexed)
+                        _PullUp(
+                          by: i > 0 ? CommentRowTheme.previewOverlap : 0,
+                          child: _PreviewLine(reply: reply),
+                        ),
+                      if (count == 0) const SizedBox(height: CommentRowTheme.previewTop),
                     ],
                     if (count > 0)
-                      SizedBox(
-                        height: CommentRowTheme.moreSlot,
-                        child: Row(
-                          children: [
-                            Text(
-                              '共$count条回复',
-                              style: TextStyle(
-                                fontFamily: BiliFonts.family,
-                                fontSize: CommentRowTheme.moreText,
-                                color: CommentRowTheme.moreLink,
+                      _PullUp(
+                        by: previews.isNotEmpty ? CommentRowTheme.moreSlotOverlap : 0,
+                        child: SizedBox(
+                          height: CommentRowTheme.moreSlot,
+                          child: Row(
+                            children: [
+                              Text(
+                                '共$count条回复',
+                                style: TextStyle(
+                                  fontFamily: BiliFonts.family,
+                                  fontSize: CommentRowTheme.moreText,
+                                  color: CommentRowTheme.moreLink,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: CommentRowTheme.chevronGap),
-                            const CustomPaint(
-                              size: Size(CommentRowTheme.chevronWidth, CommentRowTheme.chevronHeight),
-                              painter: _ChevronPainter(),
-                            ),
-                          ],
+                              const SizedBox(width: CommentRowTheme.chevronGap),
+                              const CustomPaint(
+                                size: Size(CommentRowTheme.chevronWidth, CommentRowTheme.chevronHeight),
+                                painter: _ChevronPainter(),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                   ],
@@ -574,56 +578,64 @@ class _PreviewLine extends StatelessWidget {
       ),
       maxLines: 2,
     );
-    if (reply.likes <= 0) return text;
     return _PreviewText(
       ellipsis: CommentRowTheme.previewStyle,
       mask: CommentRowTheme.box,
+      cutGrowth: CommentRowTheme.previewCutGrowth,
       children: [
         text,
-        SizedBox(
-          height: CommentRowTheme.previewLine,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(width: CommentRowTheme.previewRuleGap),
-              const SizedBox(
-                width: CommentRowTheme.previewRuleWidth,
-                height: CommentRowTheme.previewRuleHeight,
-                child: ColoredBox(color: CommentRowTheme.dividerColour),
-              ),
-              const SizedBox(width: CommentRowTheme.previewRuleGap),
-              const CommentThumb(color: CommentRowTheme.action),
-              const SizedBox(width: CommentRowTheme.thumbCountGap),
-              Transform.translate(
-                offset: Offset(0, CommentRowTheme.metaDrop),
-                child: Text(CountFormat.short(reply.likes), style: CommentRowTheme.metaStyle(CommentRowTheme.action)),
-              ),
-            ],
+        if (reply.likes <= 0)
+          const SizedBox.shrink()
+        else
+          SizedBox(
+            height: CommentRowTheme.previewLine,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(width: CommentRowTheme.previewRuleGap),
+                const SizedBox(
+                  width: CommentRowTheme.previewRuleWidth,
+                  height: CommentRowTheme.previewRuleHeight,
+                  child: ColoredBox(color: CommentRowTheme.dividerColour),
+                ),
+                const SizedBox(width: CommentRowTheme.previewRuleGap),
+                const CommentThumb(color: CommentRowTheme.action),
+                const SizedBox(width: CommentRowTheme.thumbCountGap),
+                Transform.translate(
+                  offset: Offset(0, CommentRowTheme.metaDrop),
+                  child: Text(CountFormat.short(reply.likes), style: CommentRowTheme.metaStyle(CommentRowTheme.action)),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
 }
 
-/// A preview's text at the box's full width with its likes after the last line. When that line leaves no room for
-/// them it is cut short with "…" there, as 12's is, rather than narrowing the first line too.
+/// A preview's text at the box's full width with its likes, if any, after the last line. When that line leaves no
+/// room for them it is cut short with "…" there, as 12's is, rather than narrowing the first line too.
 class _PreviewText extends MultiChildRenderObjectWidget {
-  const _PreviewText({required this.ellipsis, required this.mask, required super.children});
+  const _PreviewText({required this.ellipsis, required this.mask, required this.cutGrowth, required super.children});
 
   final TextStyle ellipsis;
 
   /// The box's fill, laid over the end of a line that is cut short.
   final Color mask;
 
+  /// How much taller a preview stands when its text runs past its lines.
+  final double cutGrowth;
+
   @override
-  _RenderPreviewText createRenderObject(BuildContext context) => _RenderPreviewText(ellipsis: ellipsis, mask: mask);
+  _RenderPreviewText createRenderObject(BuildContext context) =>
+      _RenderPreviewText(ellipsis: ellipsis, mask: mask, cutGrowth: cutGrowth);
 
   @override
   void updateRenderObject(BuildContext context, _RenderPreviewText renderObject) {
     renderObject
       ..ellipsis = ellipsis
-      ..mask = mask;
+      ..mask = mask
+      ..cutGrowth = cutGrowth;
   }
 }
 
@@ -631,7 +643,7 @@ class _PreviewSlot extends ContainerBoxParentData<RenderBox> {}
 
 class _RenderPreviewText extends RenderBox
     with ContainerRenderObjectMixin<RenderBox, _PreviewSlot>, RenderBoxContainerDefaultsMixin<RenderBox, _PreviewSlot> {
-  _RenderPreviewText({required this._ellipsis, required this._mask});
+  _RenderPreviewText({required this._ellipsis, required this._mask, required this._cutGrowth});
 
   TextStyle _ellipsis;
   set ellipsis(TextStyle value) {
@@ -645,6 +657,13 @@ class _RenderPreviewText extends RenderBox
     if (value == _mask) return;
     _mask = value;
     markNeedsPaint();
+  }
+
+  double _cutGrowth;
+  set cutGrowth(double value) {
+    if (value == _cutGrowth) return;
+    _cutGrowth = value;
+    markNeedsLayout();
   }
 
   final TextPainter _dots = TextPainter(textDirection: TextDirection.ltr);
@@ -680,6 +699,7 @@ class _RenderPreviewText extends RenderBox
       likesSlot.offset = Offset(text.size.width, text.size.height - likes.size.height);
       return;
     }
+    if (paragraph.didExceedMaxLines) size = constraints.constrain(Size(width, text.size.height + _cutGrowth));
     final shift = MatrixUtils.transformPoint(paragraph.getTransformTo(text), Offset.zero);
     final last = boxes.last;
     final centre = (last.top + last.bottom) / 2;
@@ -688,7 +708,8 @@ class _RenderPreviewText extends RenderBox
       if ((box.top - last.top).abs() < 1) end = math.max(end, box.right);
     }
     final room = width - likes.size.width - shift.dx;
-    if (!paragraph.didExceedMaxLines && end <= room) {
+    // Without likes the text's own ellipsis ends a long preview.
+    if (likes.size.width == 0 || (!paragraph.didExceedMaxLines && end <= room)) {
       likesSlot.offset = shift + Offset(end, centre - likes.size.height / 2);
       return;
     }
@@ -756,6 +777,39 @@ class _ChevronPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ChevronPainter oldDelegate) => false;
+}
+
+/// Its child drawn [by] higher than where the column puts it, and that much shorter, so it can sit closer to what's
+/// above than a gap of zero allows.
+class _PullUp extends SingleChildRenderObjectWidget {
+  const _PullUp({required this.by, required super.child});
+
+  final double by;
+
+  @override
+  _RenderPullUp createRenderObject(BuildContext context) => _RenderPullUp(by);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderPullUp renderObject) => renderObject.by = by;
+}
+
+class _RenderPullUp extends RenderShiftedBox {
+  _RenderPullUp(this._by) : super(null);
+
+  double _by;
+  set by(double value) {
+    if (value == _by) return;
+    _by = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final child = this.child!;
+    child.layout(constraints, parentUsesSize: true);
+    (child.parentData! as BoxParentData).offset = Offset(0, -_by);
+    size = constraints.constrain(Size(child.size.width, math.max(0, child.size.height - _by)));
+  }
 }
 
 /// A comment's pictures: one large at its own aspect (10), two side by side, four in two rows, any other count in

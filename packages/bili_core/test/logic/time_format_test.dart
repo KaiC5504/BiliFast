@@ -49,6 +49,18 @@ void main() {
     expect(rel(unix(2025, 10, 1, 8, 0)), '2025-10-01');
   });
 
+  test('comment times read an earlier day this year as the official comments do', () {
+    final nowUnix = unix(2026, 10, 20, 12, 0);
+    final now = at(nowUnix);
+    String com(int t) => TimeFormat.comment(t, now: now, utcOffset: utc8);
+
+    expect(com(nowUnix - 3 * 3600), '3小时前');
+    expect(com(unix(2026, 10, 19, 7, 5)), '昨天 07:05');
+    expect(com(unix(2026, 9, 28, 8, 0)), '9月28日');
+    expect(com(unix(2026, 1, 2, 8, 0)), '1月2日');
+    expect(com(unix(2025, 10, 1, 8, 0)), '2025-10-01');
+  });
+
   test('yesterday follows the given UTC offset, not the device one', () {
     // 2026-10-16 07:00 at +8 is 2026-10-15 23:00 in UTC
     final now = at(unix(2026, 10, 17, 9, 0));

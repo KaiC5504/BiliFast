@@ -15,7 +15,19 @@ abstract final class TimeFormat {
   }
 
   /// Comment and feed timestamps. The 24 h cut is elapsed time; "昨天" and the date forms follow the calendar at `utcOffset`.
-  static String relative(int unix, {required DateTime now, Duration? utcOffset}) {
+  static String relative(int unix, {required DateTime now, Duration? utcOffset}) =>
+      _relative(unix, now: now, utcOffset: utcOffset, thisYear: (c) => '${_two(c.month)}-${_two(c.day)}');
+
+  /// [relative] as the official app's comments read it, an earlier day this year as "9月28日".
+  static String comment(int unix, {required DateTime now, Duration? utcOffset}) =>
+      _relative(unix, now: now, utcOffset: utcOffset, thisYear: (c) => '${c.month}月${c.day}日');
+
+  static String _relative(
+    int unix, {
+    required DateTime now,
+    required Duration? utcOffset,
+    required String Function(DateTime wallClock) thisYear,
+  }) {
     final then = _date(unix);
     final elapsed = now.difference(then).inMicroseconds / Duration.microsecondsPerSecond;
     if (elapsed < 60) return '刚刚';
@@ -26,7 +38,7 @@ abstract final class TimeFormat {
     final today = _wallClock(now, utcOffset);
     final days = _startOfDay(today).difference(_startOfDay(c)).inDays;
     if (days == 1) return '昨天 ${_two(c.hour)}:${_two(c.minute)}';
-    if (c.year == today.year) return '${_two(c.month)}-${_two(c.day)}';
+    if (c.year == today.year) return thisYear(c);
     return '${c.year}-${_two(c.month)}-${_two(c.day)}';
   }
 

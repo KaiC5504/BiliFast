@@ -632,6 +632,47 @@ void main() {
       expect(_rect(tester, find.text('51')).right, lessThanOrEqualTo(box.right - CommentRowTheme.boxPadding));
     });
 
+    testWidgets('previews stack with no gap: lines 23 apart, the next preview 18.75 down, 共N条回复 26 below '
+        '(differences 12)', (tester) async {
+      await _mount(
+        tester,
+        _row(
+          _comment(replyCount: 15, previews: [reply(2, '甲', '字' * 30, likes: 66), reply(3, '乙', '短', likes: 18)]),
+          _Model(),
+          _Calls(),
+        ),
+      );
+      final box = _rect(tester, find.byKey(const ValueKey('comment-replies')));
+      final texts = find.byType(CommentText);
+      final first = _paragraph(tester, texts.at(1));
+      final second = _paragraph(tester, texts.at(2));
+      final firstTop = first.localToGlobal(Offset.zero).dy;
+      final secondTop = second.localToGlobal(Offset.zero).dy;
+      const half = CommentRowTheme.previewLine / 2;
+      expect(first.size.height, CommentRowTheme.previewLine * 2);
+      expect(firstTop + half - box.top, closeTo(16.67, 0.01));
+      expect(secondTop + half - (firstTop + first.size.height - half), closeTo(18.75, 0.01));
+      final more = _rect(tester, find.text('共15条回复'));
+      expect(more.center.dy - (secondTop + half), closeTo(26, 0.01));
+      expect(box.bottom - more.center.dy, closeTo(CommentRowTheme.moreSlot / 2, 0.01));
+      expect(
+        _rect(tester, find.text('66')).center.dy,
+        closeTo(firstTop + first.size.height - half + CommentRowTheme.metaDrop, 0.5),
+      );
+    });
+
+    testWidgets('a preview cut short stands 7 taller below its last line (12), with likes or without', (tester) async {
+      for (final likes in [51, 0]) {
+        await _mount(
+          tester,
+          _row(_comment(replyCount: 28, previews: [reply(2, '甲', '很长的回复' * 20, likes: likes)]), _Model(), _Calls()),
+        );
+        final text = _paragraph(tester, find.byType(CommentText).last);
+        final lastLine = text.localToGlobal(Offset.zero).dy + text.size.height - CommentRowTheme.previewLine / 2;
+        expect(_rect(tester, find.text('共28条回复')).center.dy - lastLine, closeTo(33, 0.01), reason: 'likes $likes');
+      }
+    });
+
     testWidgets('no box in a thread, nor without replies', (tester) async {
       await _mount(tester, _row(_comment(replyCount: 12), _Model(), _Calls(), replies: false));
       expect(find.byKey(const ValueKey('comment-replies')), findsNothing);
@@ -642,6 +683,25 @@ void main() {
   });
 
   group('layout', () {
+    testWidgets('the system font starts the text 1.8 lower and the box 1.75 higher; MiSans keeps the places from 10', (
+      tester,
+    ) async {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      final comment = _comment(replyCount: 3);
+      BiliFonts.family = BiliFonts.miSans;
+      await _mount(tester, _row(comment, _Model(), _Calls()));
+      final textMiSans = _rect(tester, find.byType(CommentText)).top;
+      final boxMiSans = _rect(tester, find.byKey(const ValueKey('comment-replies'))).top;
+      expect(textMiSans, closeTo(CommentRowTheme.textFirstCentre - CommentRowTheme.textLine / 2, 0.01));
+
+      BiliFonts.family = null;
+      await _mount(tester, _row(comment, _Model(), _Calls()));
+      expect(_rect(tester, find.byType(CommentText)).top - textMiSans, closeTo(1.8, 0.01));
+      // A one-line comment keeps its meta line where it was, so only the box's own gap moves it.
+      expect(_rect(tester, find.byKey(const ValueKey('comment-replies'))).top - boxMiSans, closeTo(-1.75, 0.01));
+    });
+
     testWidgets('a one-line comment is 99.7 tall with its hairline from 54 at the bottom (13)', (tester) async {
       await _mount(tester, _row(_comment(), _Model(), _Calls()));
       final row = _rect(tester, find.byType(CommentRow));
@@ -690,13 +750,8 @@ void main() {
 
     testWidgets('a liked 👍 and a disliked 👎 read as selected, and not otherwise', (tester) async {
       final handle = tester.ensureSemantics();
-      Matcher reads(String label, {required bool selected}) => isSemantics(
-        label: label,
-        isButton: true,
-        hasTapAction: true,
-        hasSelectedState: true,
-        isSelected: selected,
-      );
+      Matcher reads(String label, {required bool selected}) =>
+          isSemantics(label: label, isButton: true, hasTapAction: true, hasSelectedState: true, isSelected: selected);
 
       await _mount(tester, _row(_comment(likes: 1, action: 1), _Model(), _Calls()));
       expect(tester.getSemantics(find.bySemanticsLabel('点赞 1')), reads('点赞 1', selected: true));

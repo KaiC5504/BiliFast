@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show TextTheme;
 import 'package:flutter/widgets.dart';
 
 /// Colours and sizes sampled from the official app's screenshots (BiliNative `Shared/Theme.swift`), so widgets
@@ -153,6 +154,27 @@ abstract final class BiliFonts {
   static bool get nudged => family == miSans;
 
   static const locale = Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN');
+
+  /// Material's type scale tracks its text 0.1 to 0.5 pt, and every style that doesn't set its own spacing took that
+  /// from the page's Material. iOS text isn't tracked; at 3 px per pt the extra 0.75 px leaves Chinese glyphs between
+  /// pixels, some drawn crisp and the next blurred thinner, and widens every line.
+  static const untracked = TextTheme(
+    displayLarge: TextStyle(letterSpacing: 0),
+    displayMedium: TextStyle(letterSpacing: 0),
+    displaySmall: TextStyle(letterSpacing: 0),
+    headlineLarge: TextStyle(letterSpacing: 0),
+    headlineMedium: TextStyle(letterSpacing: 0),
+    headlineSmall: TextStyle(letterSpacing: 0),
+    titleLarge: TextStyle(letterSpacing: 0),
+    titleMedium: TextStyle(letterSpacing: 0),
+    titleSmall: TextStyle(letterSpacing: 0),
+    bodyLarge: TextStyle(letterSpacing: 0),
+    bodyMedium: TextStyle(letterSpacing: 0),
+    bodySmall: TextStyle(letterSpacing: 0),
+    labelLarge: TextStyle(letterSpacing: 0),
+    labelMedium: TextStyle(letterSpacing: 0),
+    labelSmall: TextStyle(letterSpacing: 0),
+  );
 }
 
 abstract final class BiliMetrics {
@@ -1368,7 +1390,10 @@ abstract final class CommentRowTheme {
   static const textText = 15.0;
   static const textMinBottom = 200 / 3;
   static const text = BiliColors.text;
-  static const textTop = textFirstCentre - textLine / 2;
+
+  /// Under the system font PingFang's glyphs sit higher in their line than MiSans's, so the text starts 1.8 lower:
+  /// the official thread shot (differences 12) centres it 22 below the name, where ours sat 20.2.
+  static double get textTop => textFirstCentre - textLine / 2 + (BiliFonts.nudged ? 0 : 1.8);
 
   /// One picture: a tall one 162 wide, cut at 3:4, a wide one 240; 135 and 200 in 评论详情 (13). Long pictures show
   /// their top.
@@ -1419,25 +1444,33 @@ abstract final class CommentRowTheme {
   static const upLikedGap = 3.0;
   static const upLiked = BiliColors.secondaryText;
 
-  /// The replies box: 19.8 below the meta text's centre on 10, which is 21.2 below the meta line's; 54 from the left
-  /// and 12 from the right, 8 round. 12's preview lines are 23.5 apart, rounded to 24 as [textLine] is, the first
-  /// centred 16.7 down; 共N条回复 centres in a 36 pt slot at the bottom, which starts 55.2 down under two lines as on 12.
-  static const boxGap = 127 / 6 - metaHeight / 2;
+  /// The replies box: 19.8 below the meta text's centre on 10, which is 21.2 below the meta line's (1.75 less under
+  /// the system font, whose meta text sits higher); 54 from the left and 12 from the right, 8 round.
+  static double get boxGap => 127 / 6 - metaHeight / 2 - (BiliFonts.nudged ? 0 : 1.75);
   static const boxLeading = 54.0;
   static const boxRadius = 8.0;
   static const box = BiliColors.softGrey;
   static const boxPadding = 10.0;
+
+  /// A preview's lines are 23.33 apart on 12 and the thread shot, which Flutter rounds to 23; the first is centred
+  /// 16.67 down. Previews follow each other with no gap, so the next one's first line is 18.75 below the last one's
+  /// last line, closer than two lines of one preview.
   static const previewTop = 16.67 - previewLine / 2;
-  static const previewLine = 24.0;
+  static const previewLine = 23.0;
   static const previewText = 13.0;
-  static const previewSpacing = 6.0;
+  static const previewOverlap = previewLine - 18.75;
+
+  /// A preview cut short with "…" stands 7 taller below its last line (12), one that ends on its own doesn't (the
+  /// thread shot).
+  static const previewCutGrowth = 7.0;
   static const preview = Color(0xFF2F3238);
   static const previewName = BiliColors.secondaryText;
   static const previewRuleGap = 7.0;
   static const previewRuleWidth = 1.0;
   static const previewRuleHeight = 10.0;
+  /// 共N条回复 centres in a 36 pt slot at the bottom, 26 below a preview's last line that ends on its own.
   static const moreSlot = 36.0;
-  static const moreSlotGap = 2.5;
+  static const moreSlotOverlap = previewLine / 2 + moreSlot / 2 - 26;
   static const moreText = 12.0;
   static const moreLink = BiliColors.link;
   static const chevronGap = 7.0;
@@ -1511,15 +1544,16 @@ abstract final class CommentListTheme {
   /// The hairlines over the 发条评论 bar and under 评论详情's header.
   static const rule = BiliColors.divider;
 
-  /// 热门评论 (13 pt) and ≡ 按热度 (12 pt) centre 16.5 below the list's top in a 28 pt header, so the first row's fan
-  /// card starts 31 below it (10). 评论详情's 相关回复共N条 sits lower in 35 pt under the band (13).
+  /// 热门评论 and ≡ 按热度 centre 16.5 below the list's top in a 28 pt header, so the first row's fan card starts 31
+  /// below it (10). 评论详情's 相关回复共N条 sits lower in 35 pt under the band (13). The official app sets them in
+  /// PingFang at 12 and 11 pt (their glyphs 31 and 29 px tall on 10); MiSans matched at 13 and 12.
   static const sortHeight = 28.0;
   static const sortCentre = 16.5;
   static const threadSortHeight = 35.0;
   static const threadSortCentre = 55 / 3;
   static const sortLine = 18.0;
-  static const sortTitleText = 13.0;
-  static const sortText = 12.0;
+  static double get sortTitleText => BiliFonts.nudged ? 13 : 12;
+  static double get sortText => BiliFonts.nudged ? 12 : 11;
   static const sortInk = BiliColors.secondaryText;
 
   /// ≡: three bars 1 pt thick and 4 apart, 35/3 wide, 4 before 按热度.
@@ -1598,6 +1632,10 @@ abstract final class CommentTextTheme {
 
   /// An emote's side per step of its `size`, as a share of the text's size: 12's 😑 is 20 pt beside 15 pt text.
   static const emoteScale = 4 / 3;
+
+  /// Two emotes in a row stand apart by this share of the text's size: the thread shot's (differences 12) are 24 pt
+  /// apart beside 15 pt text, 4 more than their side. One after text gets no gap.
+  static const emoteGap = 4 / 15;
 
   /// How far an emote's middle sits above the baseline, as a share of the text's size: on the middle of the Chinese
   /// glyphs beside it, as on 12.

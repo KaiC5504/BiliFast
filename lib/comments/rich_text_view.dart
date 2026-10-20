@@ -128,16 +128,22 @@ class _CommentTextState extends State<CommentText> {
 
   List<InlineSpan> _build() {
     _disposeRecognizers();
-    _hasEmote = widget.runs.any((run) => run is EmoteRun && run.url.isNotEmpty);
+    _hasEmote = widget.runs.any(_drawn);
     const linked = TextStyle(color: CommentTextTheme.link);
     final fontSize = widget.style.fontSize ?? kDefaultFontSize;
     final runs = widget.marksReplyTarget ? markingReplyTarget(widget.runs) : widget.runs;
     return [
-      for (final run in runs)
+      for (final (i, run) in runs.indexed)
         switch (run) {
           TextRun(:final text) => TextSpan(text: text),
           EmoteRun(:final token, :final url) when url.isEmpty => TextSpan(text: token),
-          EmoteRun(:final token, :final url, :final size) => _emote(token, url, size, fontSize),
+          EmoteRun(:final token, :final url, :final size) => _emote(
+            token,
+            url,
+            size,
+            fontSize,
+            afterEmote: i > 0 && _drawn(runs[i - 1]),
+          ),
           MentionRun(:final name, :final mid) => TextSpan(
             text: name.startsWith('@') ? name : '@$name',
             style: linked,
@@ -169,7 +175,9 @@ class _CommentTextState extends State<CommentText> {
     return TextSpan(text: title, style: linked, recognizer: _tap(() => unawaited(_open(web))));
   }
 
-  InlineSpan _emote(String token, String url, int size, double fontSize) {
+  static bool _drawn(RichRun run) => run is EmoteRun && run.url.isNotEmpty;
+
+  InlineSpan _emote(String token, String url, int size, double fontSize, {required bool afterEmote}) {
     final side = fontSize * CommentTextTheme.emoteScale * math.max(size, 1);
     return WidgetSpan(
       alignment: PlaceholderAlignment.baseline,
@@ -179,9 +187,17 @@ class _CommentTextState extends State<CommentText> {
         child: Semantics(
           label: token,
           image: true,
-          child: SizedBox.square(
-            dimension: side,
-            child: RemoteImage(url, size: Size.square(side), fit: BoxFit.contain, placeholder: const SizedBox.shrink()),
+          child: Padding(
+            padding: EdgeInsets.only(left: afterEmote ? fontSize * CommentTextTheme.emoteGap : 0),
+            child: SizedBox.square(
+              dimension: side,
+              child: RemoteImage(
+                url,
+                size: Size.square(side),
+                fit: BoxFit.contain,
+                placeholder: const SizedBox.shrink(),
+              ),
+            ),
           ),
         ),
       ),

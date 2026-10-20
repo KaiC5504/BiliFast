@@ -132,6 +132,22 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('two emotes in a row stand 4 pt apart (24 pt between their lefts beside 15 pt text); one after text '
+        'gets no gap', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester, const [
+        RichRun.text('吗？'),
+        RichRun.emote(token: '[笑哭]', url: _emoteUrl, size: 1),
+        RichRun.emote(token: '[笑哭]', url: _emoteUrl, size: 1),
+      ]);
+      final emotes = find.byType(RemoteImage);
+      final first = tester.getRect(emotes.first);
+      final second = tester.getRect(emotes.last);
+      expect(first.left - tester.getTopLeft(_paragraph).dx, moreOrLessEquals(30));
+      expect(second.left - first.left, moreOrLessEquals(24));
+      expect(second.width, moreOrLessEquals(20));
+    });
+
     testWidgets('an emote is centred on the Chinese glyphs beside it, and its line grows 2 pt below the text', (
       tester,
     ) async {
