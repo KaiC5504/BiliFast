@@ -191,9 +191,27 @@ class TurnReportTests(unittest.TestCase):
 
     def test_the_system_turn_is_seen_through_the_window_alone(self):
         log = turn_logs.Log()
-        log.turn("系统", method="legacy", picture="none", ios_turns=True, spin=False)
-        _, a = only(log)
+        log.turn("系统", method="system", ios_turns=True)
+        events = log.events()
+        self.assertEqual({event["f"]["method"] for event in events if event["msg"].startswith("turn native ")},
+                         {"system"})
+        self.assertEqual({event["msg"] for event in events},
+                         {"turn presentation", "turn native request", "turn native request returned",
+                          "turn native begin", "turn native completion", "turn native frames", "turn sized",
+                          "turn frames"}, "what Swift and the page log for 系统")
+        # Whatever angle the page's frames say, 系统's is iOS's turn alone.
+        frames = next(event for event in events if event["msg"] == "turn frames")
+        frames["f"]["samples"] = ";".join(
+            ",".join([parts[0], "45", *parts[2:]]) for parts in
+            (sample.split(",") for sample in frames["f"]["samples"].split(";")))
+        grouped = phone_report.group_turns(events)
+        turn = grouped["turns"][0]
+        a = phone_report.analyse_turn(turn, grouped["pool"])
         self.assertGrades(a, start=-90, sweep=90, verdict="good")
+        self.assertIsNone(a["mismatch"])
+        self.assertAlmostEqual(a["ios"], 90, delta=1)
+        text = "\n".join(phone_report.turn_detail(1, turn, a))
+        self.assertNotIn("not in the log", text, "nothing is missing: 系统 is never sent to Dart")
         self.assertIsNone(a["ghost"])
         self.assertIsNone(a["pictureUntil"])
 
@@ -268,6 +286,26 @@ class TurnReportTests(unittest.TestCase):
             self.assertLessEqual(a["ticks"], 72)
             self.assertEqual(a["verdict"], "good")
 
+    def test_each_turn_holds_only_its_own_frames_line(self):
+        # The page's line starts at the presentation change, before the native begin, inside the last turn's trail.
+        for apart_ms in (600, 1000, 3000):
+            log = turn_logs.Log()
+            log.turn("移除·直接切·立即")
+            log.now += (apart_ms - 3000) * 1000
+            log.turn("移除·直接切·立即", to_landscape=False)
+            log.now += (apart_ms - 3000) * 1000
+            log.turn("系统", method="system", ios_turns=True)
+            events = log.events()
+            counts = [event["f"]["count"] for event in events if event["msg"] == "turn frames"]
+            starts = [event["f"]["t0Us"] for event in events if event["msg"] == "turn frames"]
+            grouped = phone_report.group_turns(events)
+            turns = grouped["turns"]
+            self.assertTrue(all(start < turn["us"] for start, turn in zip(starts, turns)), "a waiting frame first")
+            self.assertEqual([len(turn["dartFrames"]) for turn in turns], [1, 1, 1], f"{apart_ms} ms apart")
+            self.assertEqual([phone_report.analyse_turn(turn, grouped["pool"])["dartFrames"] for turn in turns],
+                             counts)
+            self.assertEqual(grouped["unplaced"], {})
+
     def test_a_frames_line_logged_after_the_next_turn_began_still_belongs_to_its_own(self):
         # Release builds wait for FrameTimings: the page's frames line can come ~1.5 s after the turn's last frame.
         log = turn_logs.Log()
@@ -282,7 +320,7 @@ class TurnReportTests(unittest.TestCase):
         first, second = grouped["turns"]
         self.assertEqual([len(turn["dartFrames"]) for turn in (first, second)], [1, 1])
         self.assertLess(first["dartFrames"][0]["span"][1], second["us"])
-        self.assertGreater(second["dartFrames"][0]["span"][0], second["us"])
+        self.assertLess(second["dartFrames"][0]["span"][0], second["us"], "its waiting frame, in the first's trail")
         for turn, start in ((first, -90), (second, 90)):
             a = phone_report.analyse_turn(turn, grouped["pool"])
             self.assertGrades(a, start=start, sweep=90, verdict="good")
@@ -290,7 +328,7 @@ class TurnReportTests(unittest.TestCase):
     def test_missing_pieces_are_named_not_fatal(self):
         log = turn_logs.Log()
         log.cycle(0, 13, "系统")
-        log.turn("系统", method="legacy", picture="none", ios_turns=True, spin=False, dart=False)
+        log.turn("系统", method="system", ios_turns=True, dart=False)
         log.cycle(1, 13, "移除·直接切·立即")
         log.turn("移除·直接切·立即", native=False)
         log.turn("移除·直接切·立即", dart=False)
@@ -412,19 +450,20 @@ class TurnReportTests(unittest.TestCase):
         log.turn("移除·淡出·立即", to_landscape=False)  # the style hadn't reached the host
         log.cycle_off(4)
         log.turn("抵消·直接切·立即", method="remove", to_landscape=True)
-        log.turn("系统", method="legacy", picture="none", ios_turns=True, spin=False, to_landscape=False)
+        log.turn("系统", method="system", ios_turns=True, to_landscape=False)
+        log.turn("系统", method="legacy", picture="none", ios_turns=True, spin=False)  # the takeover still on
         log.turn("不转", method="noSpin", picture="cut", spin=False, ios_turns=True)
         log.turn("自定", method="remove")
         found = analysed(log)
         self.assertEqual([a["mismatch"] for _, a in found],
-                         [None, "remove/cut", "remove/cut", None, "noSpin/cut", None])
+                         [None, "remove/cut", "remove/cut", None, "legacy/none", "noSpin/cut", None])
         text = phone_report.render_turns(log.events())
         self.assertIn("移除·淡出·立即 ≠ remove/cut", text)
         self.assertIn("the native begin ran remove/cut, not 移除·淡出·立即", text)
         self.assertIn("the native begin ran remove/cut, not 抵消·直接切·立即", text)
         rows = {row["style"]: row for row in phone_report.style_summary(found)}
         self.assertEqual(rows["移除·淡出·立即"]["mismatched"], 1)
-        self.assertEqual(rows["系统"]["mismatched"], 0)
+        self.assertEqual(rows["系统"]["mismatched"], 1)
 
     def test_styles_rank_by_good_out_of_all_their_turns_a_question_mark_counting_as_not_good(self):
         log = turn_logs.Log()

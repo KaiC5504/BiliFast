@@ -439,9 +439,9 @@ CYCLE_KINDS = ("cycle", "cycle done", "cycle off")
 UNDRAWN_STYLES = ("系统", "不转")
 PICTURE_KINDS = ("cut", "fade")
 FAIL_KEYS = ("sweep", "back and forth", "ghost", "gap", "first move", "slow")
-# 旋转动画's labels (lib/device/turn_style.dart) as the native lines name them. 系统 hands the host legacy, and only
-# drawn turns choose a picture; 不转 never shows one.
-NATIVE_METHODS = {"系统": "legacy", "原样": "legacy", "移除": "remove", "抵消": "counter", "关动作": "noActions",
+# 旋转动画's labels (lib/device/turn_style.dart) as the native lines name them. 系统's turns are iOS's own, logged as
+# system with no picture; 不转 never shows one either.
+NATIVE_METHODS = {"系统": "system", "原样": "legacy", "移除": "remove", "抵消": "counter", "关动作": "noActions",
                   "请求前关": "quietRequest", "不转": "noSpin"}
 NATIVE_PICTURES = {"直接切": "cut", "淡出": "fade", "无截图": "none"}
 
@@ -581,6 +581,12 @@ def dart_frames(f) -> dict:
     }
 
 
+def turn_window(turn) -> float:
+    """Where a turn's Dart frames can end: its next turn's begin, at most TRAIL_US after its own."""
+    trail = turn["us"] + TRAIL_US
+    return trail if turn["end"] is None else min(turn["end"], trail)
+
+
 def new_turn(ident, us, anchor) -> dict:
     return {"id": ident, "us": us, "anchor": anchor, "begin": None, "native": defaultdict(list),
             "dart": defaultdict(list), "request": None, "returned": None, "presentation": None, "cycle": None,
@@ -692,14 +698,17 @@ def group_turns(events) -> dict:
             frames = dart_frames(f)
             all_frames.append(frames)
             span = frames["span"] or ((frames["t0"],) * 2 if frames["t0"] is not None else None)
-            placed = False
-            for turn in turns:
-                window_end = turn["end"] if turn["end"] is not None else turn["us"] + TRAIL_US
-                if span is not None and span[0] <= window_end and span[1] >= turn["us"]:
-                    turn["dartFrames"].append(frames)
-                    placed = True
-            if not placed:
+            # One line per turn, starting at the presentation change, before its begin: it goes to the turn it
+            # overlaps most, never also to the one before.
+            best, most = None, -math.inf
+            for turn in turns if span is not None else []:
+                overlap = min(span[1], turn_window(turn)) - max(span[0], turn["us"])
+                if overlap >= 0 and overlap > most:
+                    best, most = turn, overlap
+            if best is None:
                 unplaced["Dart frames"] += 1
+            else:
+                best["dartFrames"].append(frames)
 
     for turn in turns:
         marks = [mark for mark in cycles if mark[0] <= turn["us"]]
@@ -737,7 +746,7 @@ def native_style(label: str) -> tuple[str, str | None] | None:
     if method is None:
         return None
     if len(parts) == 1:
-        return method, "none" if method == "noSpin" else None
+        return method, "none"
     picture = NATIVE_PICTURES.get(parts[1])
     return None if picture is None else (method, picture)
 
@@ -821,8 +830,10 @@ def analyse_turn(turn, pool) -> dict:
     has_dart = any(turn["dart"].values()) or bool(turn["dartFrames"]) or turn["presentation"] is not None
     begin = turn["begin"] or {}
     method = begin.get("method")
+    # iOS's own turn (系统): the page draws no angle, so what is seen is the window's rotation alone.
+    system = method == "system"
     spins = bool(turn["dart"]["began"]) or (not has_dart and style not in UNDRAWN_STYLES
-                                             and method not in (None, "noSpin"))
+                                             and method not in (None, "noSpin", "system"))
     a = {"ticks": len(ticks), "malformed": malformed, "cut": cut, "dartSamples": dart_samples, "spins": spins,
          "fails": [], "unknown": [], "gap": None, "ghost": None, "pictureUntil": None, "pictureAtEnd": False,
          "start": None, "sweep": None, "monotonic": None, "step": None, "moved": None, "settled": None,
@@ -843,7 +854,7 @@ def analyse_turn(turn, pool) -> dict:
     samples = []
     for tick in ticks:
         index = bisect.bisect_right(walls, anchor + tick["t"] * 1000) - 1
-        drawn = angles[index] if index >= 0 else 0.0
+        drawn = angles[index] if index >= 0 and not system else 0.0
         turned = tick["scene"] + tick["window"]
         content = turned + tick["container"] + tick["root"] + drawn
         opacity = 1.0 if tick["opacity"] is None else tick["opacity"]
@@ -1043,6 +1054,7 @@ def style_cell(turn, a) -> str:
 
 def turn_detail(number_, turn, a) -> list[str]:
     style, page = style_of(turn)
+    system = (turn["begin"] or {}).get("method") == "system"
     cycle = turn["cycle"]
     where = f" (轮换 {cycle.get('index', '?')}/{cycle.get('of', '?')})" if cycle else ""
     try:
@@ -1079,8 +1091,9 @@ def turn_detail(number_, turn, a) -> list[str]:
         ("native begin", turn["begin"] is not None),
         ("native frames", bool(turn["native"]["frames"])),
         ("Dart presentation", turn["presentation"] is not None),
-        ("Dart started", bool(turn["dart"]["started"])),
-        ("Dart began", bool(turn["dart"]["began"]) or style in UNDRAWN_STYLES),
+        # iOS's own turns are never sent to Dart.
+        ("Dart started", bool(turn["dart"]["started"]) or system),
+        ("Dart began", bool(turn["dart"]["began"]) or style in UNDRAWN_STYLES or system),
         ("Dart frames", a["dartSamples"] > 0 or bool(turn["dartFrames"])),
     ) if not there]
     if missing:

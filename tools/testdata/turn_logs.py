@@ -85,8 +85,13 @@ class Log:
         going from the turn's start to 0; the page's as the Dart frames' angle doing the same. The Dart `frames` line
         comes `frames_after_ms` after the last frame (up to ~1.5 s in release builds, waiting for FrameTimings).
 
-        The display ticks at `hz`, and the page builds a frame on every tick from `first_frame_ms`, each done
-        BUILD_MS + RASTER_MS after it starts unless `totals` gives a frame (by index) another span. `shown` and
+        Method `system` is 系统 as Swift logs it: request, request returned, begin (no snapshot), completion and
+        frames, tagged system/none, and nothing sent to Dart, so the page logs no started, began or picture lines.
+
+        The page's frames line starts at the presentation change with a frame of the page still waiting, upright at
+        its old size. The display ticks at `hz`, and the page builds a frame on every tick from `first_frame_ms`, each
+        done BUILD_MS + RASTER_MS after it starts unless `totals` gives one (by index from the first after the waiting
+        frame) another span. `shown` and
         `raster_end` leave out the frames' raster finish, as a log without FrameTimings has it; `snapshot` False is a
         still picture that failed; `lost` rides on the begin."""
         tick_ms = 1000 / hz
@@ -98,12 +103,16 @@ class Log:
         angle = 90.0 if to_landscape else -90.0
         start = -angle
         at = lambda ms: begin + ms * 1000  # noqa: E731
+        system = method == "system"
+        if system:
+            picture, spin = "none", False
         common = {"method": method, "picture": picture}
         snapped = picture != "none" if snapshot is None else snapshot
+        presented_ms = -40.0
         if dart:
-            self.dart(at(-40), "presentation", **({"from": "inline", "to": "landscape"} if to_landscape
-                                                   else {"from": "landscape", "to": "inline"}),
-                      wide=not to_landscape, waiting=True, style=style)
+            self.dart(at(presented_ms), "presentation", **({"from": "inline", "to": "landscape"} if to_landscape
+                                                            else {"from": "landscape", "to": "inline"}),
+                      wide=not to_landscape, waiting=not system, style=style)
         if native:
             self.native(at(-25), "request", ident - 1, **common, request=self.requests,
                         mask="landscape" if to_landscape else "portrait",
@@ -114,9 +123,10 @@ class Log:
                         fromW=size[0], fromH=size[1], toW=size[2], toH=size[3], animationsEnabled=True,
                         snapshot=snapped, snapshotMs=6.5 if snapped else 0.0, **({"lost": lost} if lost else {}))
             found = "window|transform|CABasicAnimation|0.4|easeInEaseOut|false|0;root|bounds|CABasicAnimation|0.4|easeInEaseOut|false|0"
-            self.native(at(1), "animations", ident, **common, phase="after super", found=found,
-                        removed=0 if ios_turns else 2)
-            self.native(at(2), "alongside", ident, **common)
+            if not system:
+                self.native(at(1), "animations", ident, **common, phase="after super", found=found,
+                            removed=0 if ios_turns else 2)
+                self.native(at(2), "alongside", ident, **common)
             if counter:
                 self.native(at(2), "container", ident, **common, event="installed")
             if snapped:
@@ -126,7 +136,9 @@ class Log:
 
         spin_start = drawn_ms + 2 + tick_ms if hold else first_frame_ms
         if dart:
-            self.dart(at(4), "started", turn=ident, angle=math.radians(angle), ms=seconds * 1000, outcome="pending")
+            if not system:
+                self.dart(at(4), "started", turn=ident, angle=math.radians(angle), ms=seconds * 1000,
+                          outcome="pending")
             self.dart(at(first_frame_ms - 2), "sized", w=956 if to_landscape else 440, h=440 if to_landscape else 956,
                       layout="landscape" if to_landscape else "inline")
             if spin:
@@ -142,20 +154,24 @@ class Log:
             return start * (1 - ease((ms - spin_start) / spin_ms)) if spin else 0.0
 
         if dart and dart_frames:
-            samples, timings = [], []
+            old = ("440", "956") if to_landscape else ("956", "440")
+            waiting_total = BUILD_MS + RASTER_MS
+            samples = [",".join(["0", "0", "0.000" if to_landscape else "1.000", "", "", "", "", *old,
+                                 number_text(waiting_total) if shown else ""])]
+            timings = [",".join([number_text(BUILD_MS), number_text(RASTER_MS), number_text(waiting_total)]
+                                + ([number_text(waiting_total)] if raster_end else []))]
             ms = first_frame_ms
             last = ms
             slow = 0
-            shown_ms = 0.0
+            shown_ms = waiting_total
             while ms <= spin_start + spin_ms + 2 * tick_ms:
-                index = len(samples)
-                total = totals.get(index, BUILD_MS + RASTER_MS)
+                total = totals.get(len(samples) - 1, BUILD_MS + RASTER_MS)
                 slow += total > tick_ms
+                since = ms - presented_ms
                 # Rasters run in order: a frame is never on screen before the one before it.
-                shown_ms = max(shown_ms, ms - first_frame_ms + total)
+                shown_ms = max(shown_ms, since + total)
                 progress = ease((ms - first_frame_ms) / spin_ms)
                 grow = progress if to_landscape else 1 - progress
-                since = ms - first_frame_ms
                 # The player box is empty at rest, once the turn is done.
                 box = ["", "", "", ""] if ms > spin_start + spin_ms else ["0", "0", "956", "440"]
                 samples.append(",".join([number_text(since), number_text(drawn_angle(ms)), f"{grow:.3f}", *box,
@@ -164,7 +180,7 @@ class Log:
                 timings.append(",".join(timing + ([number_text(shown_ms)] if raster_end else [])))
                 last = ms
                 ms += tick_ms
-            self.dart(at(last + frames_after_ms), "frames", t0Us=int(round(at(first_frame_ms))), count=len(samples),
+            self.dart(at(last + frames_after_ms), "frames", t0Us=int(round(at(presented_ms))), count=len(samples),
                       samples=";".join(samples), timings=";".join(timings), worstBuildMs=BUILD_MS,
                       worstRasterMs=max(total - BUILD_MS for total in [BUILD_MS + RASTER_MS, *totals.values()]),
                       refreshHz=hz, slow=slow)
@@ -197,7 +213,7 @@ class Log:
 def sample() -> Log:
     log = Log()
     styles = [
-        ("系统", {"method": "legacy", "picture": "none", "ios_turns": True, "spin": False}),
+        ("系统", {"method": "system", "ios_turns": True}),
         ("原样·淡出·立即", {"method": "legacy", "picture": "fade", "fade_ms": 120, "ios_turns": True}),
         ("移除·直接切·立即", {"method": "remove"}),
         ("移除·淡出·立即", {"method": "remove", "picture": "fade", "fade_ms": 120}),
