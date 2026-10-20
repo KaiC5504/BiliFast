@@ -4,8 +4,8 @@ import 'package:bilifast/shared/theme.dart';
 
 import 'support/system_font.dart';
 
-/// Tests register the SF stand-in under BiliFonts.system, which iOS doesn't, so the phone's own fallback to PingFang SC
-/// for Chinese has to be named here.
+/// Tests register the SF stand-in under BiliFonts.system itself, so the PingFang stand-in behind it is all the list the
+/// phone's launch check (BiliFonts.settleSystemFallback) names after SF.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   BiliFonts.systemFallback = systemFallback;
   await testMain();

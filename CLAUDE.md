@@ -212,11 +212,15 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Fonts: styles read `BiliFonts.family` where they're built, never in a const, so a 字体 change rebuilds in place. The
   MiSans nudges in `BiliMetrics` apply only while MiSans is on. The system font is `BiliFonts.system`
   (`CupertinoSystemText`). iOS's engine registers no family by that name (only `CupertinoSystemDisplay`), so on the
-  phone it matches nothing and the default, SF, draws. So the phone's system path must name no fallback family iOS
-  has: the first one that matches becomes every run's font (1.0.0 (15) listed Apple Color Emoji and drew digits and
-  spaces emoji-wide). `BiliFonts.systemFallback` stays null in the app; `test/flutter_test_config.dart` sets it to the
-  PingFang stand-in, because tests register the SF stand-in under the name the phone doesn't have. A test that passes
-  under the stand-ins can still be wrong on the phone wherever font resolution differs.
+  phone it matches nothing and the default, SF, draws. So in a fallback list the first family the phone has becomes
+  every run's font (1.0.0 (15) listed Apple Color Emoji and drew digits and spaces emoji-wide). With no list, the first
+  character SF lacks has iOS pick a font, which the engine keeps for the rest of the line (a katakana name drew its
+  whole reply in a Japanese font). So at launch `BiliFonts.settleSystemFallback` names SF by UIKit's family name
+  (`.AppleSystemUIFont`), then PingFang SC, but only if that name draws Latin exactly as the default does; otherwise
+  nothing, and it logs which (`system font fallback`). Nothing else sets `BiliFonts.systemFallback`;
+  `test/flutter_test_config.dart` sets the PingFang stand-in, because tests register the SF stand-in under the name
+  the phone doesn't have. A test that passes under the stand-ins can still be wrong on the phone wherever font
+  resolution differs.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
 - A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the

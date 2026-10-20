@@ -160,14 +160,46 @@ abstract final class BiliFonts {
 
   static const locale = Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN');
 
-  /// What the system font names after [system]. Null on the phone, and nothing in the app sets it: since [system]
-  /// matches nothing on iOS, a listed family the phone has becomes the font of every run, spaces and digits included
-  /// (1.0.0 (15) listed Apple Color Emoji first and drew them emoji-wide). What SF lacks goes to iOS's own fallback
-  /// instead, PingFang SC for Chinese under [locale]. Tests stand in for that with the PingFang stand-in
-  /// (test/flutter_test_config.dart).
+  /// What the system font names after [system]: set only by [settleSystemFallback] at launch, and by tests
+  /// (test/flutter_test_config.dart, the PingFang stand-in).
   static List<String>? systemFallback;
 
   static List<String>? get fallback => family == system ? systemFallback : null;
+
+  /// SF by the family name UIKit gives the system font, which the engine also looks up for the font it draws when a
+  /// style's families match nothing.
+  static const appleSystem = '.AppleSystemUIFont';
+
+  static const _sfThenPingFang = [appleSystem, 'PingFang SC'];
+
+  /// On iOS, names SF and then PingFang SC after [system]. With no list, the first character SF lacks has iOS pick a
+  /// font, and the engine keeps that font for the rest of the line: a reply opening with a katakana name drew the
+  /// whole line in a Japanese font, its commas and Chinese included. Since [system] itself matches nothing on iOS, the
+  /// first listed family the phone has becomes every run's font, so the list is taken only when [appleSystem] draws
+  /// Latin exactly as the unnamed default does; otherwise PingFang SC would draw it all (as Apple Color Emoji drew 1.0.0
+  /// (15)'s digits and spaces) and the system font names nothing, as before. Returns whether the list was taken.
+  static bool settleSystemFallback() {
+    systemFallback = chooseSystemFallback(_latinWidth);
+    return systemFallback != null;
+  }
+
+  /// SF then PingFang SC when the system font draws Latin as wide with them named as with nothing named, else null.
+  @visibleForTesting
+  static List<String>? chooseSystemFallback(double Function(List<String>? fallback) latinWidth) =>
+      latinWidth(_sfThenPingFang) == latinWidth(null) ? _sfThenPingFang : null;
+
+  static double _latinWidth(List<String>? fallback) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: 'Wi-Fi 1080P 0.5x',
+        style: TextStyle(fontFamily: system, fontFamilyFallback: fallback, fontSize: 17),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
 
   /// Under the system font, the strut a wrapping text whose lines can mix Latin and Chinese needs: each run splits its
   /// line height by its own font's ascent and descent, and SF's split differs from PingFang's, so a line holding both

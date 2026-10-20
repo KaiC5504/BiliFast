@@ -39,6 +39,9 @@ Future<void> main(List<String> args) async {
     'os': Platform.operatingSystemVersion,
     'devTools': devToolsEnabled,
   });
+  if (Platform.isIOS) {
+    Logger.shared.info(LogCategory.ui, 'system font fallback', {'pingFang': BiliFonts.settleSystemFallback()});
+  }
   final AppEnvironment environment;
   final RecentStore recents;
   final FontStore fonts;
