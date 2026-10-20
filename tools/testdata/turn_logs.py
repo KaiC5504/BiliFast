@@ -70,9 +70,11 @@ class Log:
              ios_turns: bool = False, counter: bool = False, spin: bool = True, hold: bool = False,
              first_frame_ms: float = 20.0, drawn_ms: float = 55.0, fade_ms: float = 0.0, spin_ms: float = 400.0,
              seconds: float = 0.4, stall_at_ms: float | None = None, stall_ms: float = 0.0,
-             native: bool = True, dart: bool = True, native_frames: bool = True, dart_frames: bool = True) -> int:
+             native: bool = True, dart: bool = True, native_frames: bool = True, dart_frames: bool = True,
+             frames_after_ms: float = 300.0) -> int:
         """One turn with `now` as its native begin; moves `now` on 3 s. iOS's own rotation shows as the window's angle
-        going from the turn's start to 0; the page's as the Dart frames' angle doing the same."""
+        going from the turn's start to 0; the page's as the Dart frames' angle doing the same. The Dart `frames` line
+        comes `frames_after_ms` after the last frame (up to ~1.5 s in release builds, waiting for FrameTimings)."""
         self.ids += 1
         self.requests += 1
         ident = self.ids
@@ -125,12 +127,18 @@ class Log:
         if dart and dart_frames:
             samples, timings = [], []
             ms = first_frame_ms
+            last = ms
             while ms <= spin_start + spin_ms + 2 * TICK_MS:
-                samples.append(",".join([number_text(ms - first_frame_ms), number_text(drawn_angle(ms)), "0.5",
-                                         "0", "0", "956", "440", "956", "440"]))
+                progress = ease((ms - first_frame_ms) / spin_ms)
+                grow = progress if to_landscape else 1 - progress
+                # The player box is empty at rest, once the turn is done.
+                box = ["", "", "", ""] if ms > spin_start + spin_ms else ["0", "0", "956", "440"]
+                samples.append(",".join([number_text(ms - first_frame_ms), number_text(drawn_angle(ms)),
+                                         f"{grow:.3f}", *box, "956", "440"]))
                 timings.append("4.2,3.1,7.3")
+                last = ms
                 ms += TICK_MS
-            self.dart(at(ms + 300), "frames", t0Us=int(round(at(first_frame_ms))), count=len(samples),
+            self.dart(at(last + frames_after_ms), "frames", t0Us=int(round(at(first_frame_ms))), count=len(samples),
                       samples=";".join(samples), timings=";".join(timings), worstBuildMs=4.2, worstRasterMs=3.1,
                       slow=0)
 
