@@ -9,12 +9,13 @@ builds replace the Swift ones on the phone and read the Swift app's keychain log
 
 1. `docs/flutter-move-spec.md`: decisions and why, architecture, rules, the slices, and the lessons that must survive.
    Start with its section 0.
-2. `docs/reference/`:
+2. `docs/milestone-3-spec.md`: the current milestone (find and follow), its slices, APIs and screenshots.
+3. `docs/reference/`:
    - `bilicore-inventory.md` and `app-inventory.md`: what the Swift app has, with paths. The port's checklist.
    - `piliplus-map.md`: where PiliPlus keeps what; GPL, so read only.
    - `testflight-flutter.md`: how this repo ships to TestFlight.
    - `turn-log.md`: the drawn turn's log lines on both sides, which `tools/phone_report.py --turns` times; `tools/turn_video.py` grades a recording.
-3. `D:\Repos\Apps\BiliNative\CLAUDE.md` only for the Swift app's behaviour. Where it and this file differ, this file
+4. `D:\Repos\Apps\BiliNative\CLAUDE.md` only for the Swift app's behaviour. Where it and this file differ, this file
    wins (no Mac, no Swift workflows, the UI follows the official screenshots).
 
 Every slice runs through `.claude/skills/running-a-slice`: a one-screen plan, KaiC's go, then parallel agents straight
@@ -128,7 +129,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
 - `design/icon-options/`: the app icon's five candidates and `make_icons.py`; A is the app's.
 - `test_ci/`: static tests of the workflow (pins, secrets only in step env, nothing leaks into the public log).
 - `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
-  test plan; `phone_report.py` reads a session; `turn_video.py` measures the turns in a screen recording. Run `uv run tools/logserver.py` in the background before KaiC tests.
+  test plan; `phone_report.py` reads a session; `turn_video.py` measures the turns in a screen recording;
+  `screen_diff.py` measures our screenshot against the official one (milestone 3, slice 10). Run `uv run tools/logserver.py` in the background before KaiC tests.
 
 ## How to test
 

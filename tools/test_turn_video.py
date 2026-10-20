@@ -300,8 +300,12 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(turn_video.unwrap([170.0, -170.0, -90.0]), [170.0, 190.0, 270.0])
 
     def test_the_pure_parts_load_without_opencv(self):
-        self.assertNotIn("cv2", sys.modules)
-        self.assertNotIn("numpy", sys.modules)
+        # In a fresh interpreter: other tools' tests in the same run load numpy themselves.
+        check = ("import sys; sys.path.insert(0, sys.argv[1]); import turn_video; "
+                 "print(sorted({'cv2', 'numpy'} & set(sys.modules)))")
+        loaded = subprocess.run([sys.executable, "-c", check, str(pathlib.Path(turn_video.__file__).parent)],
+                                capture_output=True, text=True, check=True).stdout.strip()
+        self.assertEqual(loaded, "[]")
 
 
 if __name__ == "__main__":
