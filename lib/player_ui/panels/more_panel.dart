@@ -43,6 +43,8 @@ class MorePanel extends StatefulWidget {
 }
 
 class _MorePanelState extends State<MorePanel> {
+  static const _remainingStyle = TextStyle(fontSize: BiliMetrics.panelDetailText, color: BiliColors.pink);
+
   var _page = _Page.root;
   var _customMinutes = 30;
 
@@ -155,7 +157,8 @@ class _MorePanelState extends State<MorePanel> {
                     : Text(
                         '${TimeFormat.clock(remaining.inMilliseconds / 1000)} 后暂停',
                         key: const ValueKey('sleep-remaining'),
-                        style: const TextStyle(fontSize: BiliMetrics.panelDetailText, color: BiliColors.pink),
+                        style: _remainingStyle,
+                        strutStyle: BiliFonts.strutOf(context, _remainingStyle),
                       ),
               ),
             ),
@@ -349,20 +352,20 @@ class _SleepWheelState extends State<_SleepWheel> {
     super.dispose();
   }
 
+  static TextStyle get _style => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontFamilyFallback: BiliFonts.fallback,
+    fontSize: BiliMetrics.bodyText,
+    color: BiliColors.panelText,
+  );
+
   @override
   Widget build(BuildContext context) => SizedBox(
     height: BiliMetrics.panelWheelHeight,
     child: CupertinoTheme(
       data: CupertinoThemeData(
         brightness: Brightness.dark,
-        textTheme: CupertinoTextThemeData(
-          pickerTextStyle: TextStyle(
-            fontFamily: BiliFonts.family,
-            fontFamilyFallback: BiliFonts.fallback,
-            fontSize: BiliMetrics.bodyText,
-            color: BiliColors.panelText,
-          ),
-        ),
+        textTheme: CupertinoTextThemeData(pickerTextStyle: _style),
       ),
       child: CupertinoPicker(
         key: const ValueKey('sleep-wheel'),
@@ -370,7 +373,8 @@ class _SleepWheelState extends State<_SleepWheel> {
         scrollController: _controller,
         onSelectedItemChanged: (index) => widget.onChanged(index + 1),
         children: [
-          for (var minutes = 1; minutes <= MorePanel.maxCustomMinutes; minutes++) Center(child: Text('$minutes 分钟')),
+          for (var minutes = 1; minutes <= MorePanel.maxCustomMinutes; minutes++)
+            Center(child: Text('$minutes 分钟', strutStyle: BiliFonts.strut(_style))),
         ],
       ),
     ),

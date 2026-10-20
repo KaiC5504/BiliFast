@@ -219,7 +219,13 @@ class _Recommended extends StatelessWidget {
                         left: 0,
                         right: 0,
                         top: 0,
-                        child: Text(card.title, style: _title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          card.title,
+                          style: _title,
+                          strutStyle: BiliFonts.strutOf(context, _title),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       Positioned(
                         left: 0,
@@ -231,7 +237,13 @@ class _Recommended extends StatelessWidget {
                           children: [
                             const _UpBadge(),
                             Flexible(
-                              child: Text(card.ownerName, style: _meta, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              child: Text(
+                                card.ownerName,
+                                style: _meta,
+                                strutStyle: BiliFonts.strutOf(context, _meta),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),

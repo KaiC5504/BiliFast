@@ -25,6 +25,18 @@ class VerticalChrome extends StatelessWidget {
 
   final PlayerUi ui;
 
+  static const _titleStyle = TextStyle(
+    color: BiliColors.onVideo,
+    fontSize: BiliMetrics.verticalTitleText,
+    height: BiliMetrics.verticalTitleLeading,
+  );
+
+  static const _fieldStyle = TextStyle(
+    color: VerticalActionTheme.fieldInk,
+    fontSize: VerticalActionTheme.fieldText,
+    height: 1,
+  );
+
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.paddingOf(context);
@@ -156,11 +168,8 @@ class VerticalChrome extends StatelessWidget {
             key: const ValueKey('vertical-title'),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: BiliColors.onVideo,
-              fontSize: BiliMetrics.verticalTitleText,
-              height: BiliMetrics.verticalTitleLeading,
-            ),
+            style: _titleStyle,
+            strutStyle: fullScreenStrut(_titleStyle),
           ),
         ),
         // The search suggestion row will sit between the title and the bar.
@@ -246,11 +255,8 @@ class VerticalChrome extends StatelessWidget {
                         maxLines: 1,
                         softWrap: false,
                         overflow: TextOverflow.clip,
-                        style: const TextStyle(
-                          color: VerticalActionTheme.fieldInk,
-                          fontSize: VerticalActionTheme.fieldText,
-                          height: 1,
-                        ),
+                        style: _fieldStyle,
+                        strutStyle: fullScreenStrut(_fieldStyle),
                       ),
                     ),
                   ),
@@ -304,6 +310,21 @@ class _Uploader extends StatelessWidget {
     );
   }
 
+  static const _fansStyle = TextStyle(
+    color: VerticalActionTheme.fans,
+    fontSize: VerticalActionTheme.fansText,
+    height: 1,
+  );
+
+  static TextStyle _nameStyle(UploaderCard? uploader) => fullScreenText.merge(
+    TextStyle(
+      color: uploader?.isVip ?? false ? BiliColors.pink : BiliColors.onVideo,
+      fontSize: BiliMetrics.verticalNameText,
+      fontWeight: FontWeight.w500,
+      height: 1,
+    ),
+  );
+
   Widget _row(UploaderCard? uploader, VideoActions? actions) => Row(
     key: const ValueKey('vertical-uploader'),
     children: [
@@ -334,19 +355,13 @@ class _Uploader extends StatelessWidget {
                   offset: Offset(0, VerticalActionTheme.nameDrop),
                   child: AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 200),
-                    style: fullScreenText.merge(
-                      TextStyle(
-                        color: uploader?.isVip ?? false ? BiliColors.pink : BiliColors.onVideo,
-                        fontSize: BiliMetrics.verticalNameText,
-                        fontWeight: FontWeight.w500,
-                        height: 1,
-                      ),
-                    ),
+                    style: _nameStyle(uploader),
                     child: Text(
                       detail.owner.name,
                       key: const ValueKey('vertical-name'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      strutStyle: BiliFonts.strut(_nameStyle(uploader)),
                     ),
                   ),
                 ),
@@ -366,11 +381,8 @@ class _Uploader extends StatelessWidget {
                             '${CountFormat.short(uploader.fans)}粉丝',
                             key: const ValueKey('vertical-fans'),
                             maxLines: 1,
-                            style: const TextStyle(
-                              color: VerticalActionTheme.fans,
-                              fontSize: VerticalActionTheme.fansText,
-                              height: 1,
-                            ),
+                            style: _fansStyle,
+                            strutStyle: fullScreenStrut(_fansStyle),
                           ),
                         ),
                 ),
@@ -495,6 +507,12 @@ class _Online extends StatelessWidget {
 
   final ValueListenable<String?> online;
 
+  static const _style = TextStyle(
+    color: VerticalActionTheme.online,
+    fontSize: VerticalActionTheme.onlineText,
+    fontWeight: FontWeight.w500,
+  );
+
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
     valueListenable: online,
@@ -512,15 +530,7 @@ class _Online extends StatelessWidget {
                     painter: _ViewersPainter(),
                   ),
                   const SizedBox(width: VerticalActionTheme.onlineGap),
-                  Text(
-                    '$count人正在看',
-                    maxLines: 1,
-                    style: const TextStyle(
-                      color: VerticalActionTheme.online,
-                      fontSize: VerticalActionTheme.onlineText,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  Text('$count人正在看', maxLines: 1, style: _style, strutStyle: fullScreenStrut(_style)),
                 ],
               ),
             ),

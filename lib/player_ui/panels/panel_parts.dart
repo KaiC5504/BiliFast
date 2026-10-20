@@ -253,7 +253,12 @@ class PanelCardRow extends StatelessWidget {
                                     color: selected ? BiliColors.pink : BiliColors.panelText,
                                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                                   ),
-                                  child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                  child: Text(
+                                    title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    strutStyle: BiliFonts.strutOf(context),
+                                  ),
                                 ),
                               ),
                               if (badge case final badge?) ...[
@@ -293,6 +298,13 @@ class _Badge extends StatelessWidget {
 
   final String text;
 
+  static const _style = TextStyle(
+    fontSize: BiliMetrics.panelSubtitleText,
+    height: 1,
+    color: BiliColors.onPink,
+    fontWeight: FontWeight.w400,
+  );
+
   @override
   Widget build(BuildContext context) => Container(
     height: BiliMetrics.panelBadgeHeight,
@@ -302,15 +314,7 @@ class _Badge extends StatelessWidget {
       color: BiliColors.pink,
       borderRadius: BorderRadius.circular(BiliMetrics.panelBadgeHeight / 2),
     ),
-    child: Text(
-      text,
-      style: const TextStyle(
-        fontSize: BiliMetrics.panelSubtitleText,
-        height: 1,
-        color: BiliColors.onPink,
-        fontWeight: FontWeight.w400,
-      ),
-    ),
+    child: Text(text, style: _style, strutStyle: BiliFonts.strutOf(context, _style)),
   );
 }
 
@@ -358,7 +362,7 @@ class PanelRowFrame extends StatelessWidget {
           child: Center(child: icon),
         ),
         const SizedBox(width: BiliMetrics.panelLabelInset - BiliMetrics.panelRowLead - BiliMetrics.panelRowIcon),
-        Text(title, maxLines: 1),
+        Text(title, maxLines: 1, strutStyle: BiliFonts.strutOf(context)),
         Expanded(child: trailing),
       ],
     ),
@@ -489,14 +493,15 @@ class PanelSegments<T> extends StatelessWidget {
 
   Widget _segment(BuildContext context, T value, String title) {
     final chosen = value == selected;
+    final style = DefaultTextStyle.of(context).style.copyWith(
+      fontSize: BiliMetrics.panelDetailText,
+      color: chosen ? BiliColors.pink : BiliColors.panelText,
+      fontWeight: chosen ? FontWeight.w600 : FontWeight.w400,
+    );
     final label = AnimatedDefaultTextStyle(
       duration: const Duration(milliseconds: 160),
-      style: DefaultTextStyle.of(context).style.copyWith(
-        fontSize: BiliMetrics.panelDetailText,
-        color: chosen ? BiliColors.pink : BiliColors.panelText,
-        fontWeight: chosen ? FontWeight.w600 : FontWeight.w400,
-      ),
-      child: Text(title, maxLines: 1),
+      style: style,
+      child: Text(title, maxLines: 1, strutStyle: BiliFonts.strut(style)),
     );
     return Semantics(
       button: true,

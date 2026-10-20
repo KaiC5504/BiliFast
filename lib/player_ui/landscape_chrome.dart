@@ -154,6 +154,11 @@ class LandscapeChrome extends StatelessWidget {
   }
 
   Widget _topRow(EdgeInsets insets) {
+    const titleStyle = TextStyle(
+      color: BiliColors.onVideo,
+      fontSize: BiliMetrics.chromeTitleText,
+      fontWeight: FontWeight.w600,
+    );
     return Padding(
       padding: EdgeInsets.only(
         left: insets.left + BiliMetrics.landscapeEdge,
@@ -173,11 +178,8 @@ class LandscapeChrome extends StatelessWidget {
                 maxLines: 1,
                 softWrap: false,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: BiliColors.onVideo,
-                  fontSize: BiliMetrics.chromeTitleText,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: titleStyle,
+                strutStyle: fullScreenStrut(titleStyle),
               ),
             ),
             SizedBox(
@@ -366,6 +368,9 @@ TextStyle get fullScreenText => TextStyle(
   decoration: TextDecoration.none,
 );
 
+/// [BiliFonts.strut] for a Text drawn in [style] under [fullScreenText], which replaces whatever style the page has.
+StrutStyle? fullScreenStrut(TextStyle style) => BiliFonts.strut(fullScreenText.merge(style));
+
 /// 倍速 at 1×, otherwise the rate as the 倍速 panel lists it (1.5X, 1.25X, 2.0X).
 String speedLabel(double rate) {
   if (rate == 1) return '倍速';
@@ -542,6 +547,12 @@ class _DanmakuField extends StatelessWidget {
   final bool closed;
   final VoidCallback onTap;
 
+  static const _fieldStyle = TextStyle(
+    color: BiliMetrics.chromeFieldInk,
+    fontSize: BiliMetrics.chromeFieldText,
+    height: 1,
+  );
+
   @override
   Widget build(BuildContext context) {
     final text = closed ? 'UP主已关闭弹幕' : '发个友善的弹幕见证当下';
@@ -569,11 +580,8 @@ class _DanmakuField extends StatelessWidget {
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.clip,
-                  style: const TextStyle(
-                    color: BiliMetrics.chromeFieldInk,
-                    fontSize: BiliMetrics.chromeFieldText,
-                    height: 1,
-                  ),
+                  style: _fieldStyle,
+                  strutStyle: fullScreenStrut(_fieldStyle),
                 ),
               ),
             ),
@@ -918,20 +926,24 @@ class _ChipText extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: box,
-    child: Baseline(
-      baseline: box / 2 + LandscapeActionTheme.chipBaselineDrop,
-      baselineType: TextBaseline.alphabetic,
-      child: Text(
-        text,
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: color, fontSize: LandscapeActionTheme.followText),
+  Widget build(BuildContext context) {
+    final style = TextStyle(color: color, fontSize: LandscapeActionTheme.followText);
+    return SizedBox(
+      height: box,
+      child: Baseline(
+        baseline: box / 2 + LandscapeActionTheme.chipBaselineDrop,
+        baselineType: TextBaseline.alphabetic,
+        child: Text(
+          text,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+          strutStyle: fullScreenStrut(style),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// 发现《…》 under the uploader (05). There is no music page yet, so it leads nowhere, as 简介's chip doesn't.
@@ -1008,6 +1020,8 @@ class _Online extends StatelessWidget {
 
   final ValueListenable<String?> online;
 
+  static const _style = TextStyle(color: LandscapeActionTheme.online, fontSize: LandscapeActionTheme.onlineText);
+
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
     valueListenable: online,
@@ -1033,7 +1047,8 @@ class _Online extends StatelessWidget {
                   '$count人正在看',
                   maxLines: 1,
                   softWrap: false,
-                  style: const TextStyle(color: LandscapeActionTheme.online, fontSize: LandscapeActionTheme.onlineText),
+                  style: _style,
+                  strutStyle: fullScreenStrut(_style),
                 ),
               ],
             ),
@@ -1089,30 +1104,28 @@ class LandscapeCornerOnline extends StatelessWidget {
     );
   }
 
-  static Widget _corner(String count) => Row(
-    key: const ValueKey('landscape-corner-online'),
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      const CustomPaint(
-        size: Size(LandscapeActionTheme.cornerIconWidth, LandscapeActionTheme.cornerIconHeight),
-        painter: _OnlinePainter(color: LandscapeActionTheme.corner, stroke: LandscapeActionTheme.cornerIconStroke),
-      ),
-      const SizedBox(width: LandscapeActionTheme.cornerGap),
-      Text(
-        '$count人正在看',
-        maxLines: 1,
-        softWrap: false,
-        // Outside the chrome's DefaultTextStyle, so nothing ambient (Material's spacing and line height) may leak in.
-        style: fullScreenText.copyWith(
-          color: LandscapeActionTheme.corner,
-          fontSize: LandscapeActionTheme.cornerText,
-          fontWeight: FontWeight.normal,
-          letterSpacing: 0,
-          height: 1,
+  static Widget _corner(String count) {
+    // Outside the chrome's DefaultTextStyle, so nothing ambient (Material's spacing and line height) may leak in.
+    final style = fullScreenText.copyWith(
+      color: LandscapeActionTheme.corner,
+      fontSize: LandscapeActionTheme.cornerText,
+      fontWeight: FontWeight.normal,
+      letterSpacing: 0,
+      height: 1,
+    );
+    return Row(
+      key: const ValueKey('landscape-corner-online'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CustomPaint(
+          size: Size(LandscapeActionTheme.cornerIconWidth, LandscapeActionTheme.cornerIconHeight),
+          painter: _OnlinePainter(color: LandscapeActionTheme.corner, stroke: LandscapeActionTheme.cornerIconStroke),
         ),
-      ),
-    ],
-  );
+        const SizedBox(width: LandscapeActionTheme.cornerGap),
+        Text('$count人正在看', maxLines: 1, softWrap: false, style: style, strutStyle: BiliFonts.strut(style)),
+      ],
+    );
+  }
 }
 
 /// The chip's + 关注 (05): white text with a thin plus after the divider, the chip's end its own; 已关注 is grey in

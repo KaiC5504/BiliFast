@@ -205,11 +205,18 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
                   ],
                 ),
                 style: _introStyle,
+                strutStyle: BiliFonts.strutOf(context, _introStyle),
               )
             : Row(
                 children: [
                   Flexible(
-                    child: Text(intro, maxLines: 1, overflow: TextOverflow.ellipsis, style: _introStyle),
+                    child: Text(
+                      intro,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _introStyle,
+                      strutStyle: BiliFonts.strutOf(context, _introStyle),
+                    ),
                   ),
                   Text('展开', style: _introStyle.merge(_more)),
                 ],
@@ -415,6 +422,11 @@ class _CoverRow extends StatelessWidget {
     final playing = episode.current;
     final duration = episode.duration;
     final pubdate = episode.pubdate;
+    final titleStyle = TextStyle(
+      fontSize: BiliMetrics.sheetEpisodeTitleText,
+      height: BiliMetrics.sheetEpisodeTitleLine / BiliMetrics.sheetEpisodeTitleText,
+      color: playing ? VerticalActionTheme.sheetPlaying : BiliColors.text,
+    );
     return Semantics(
       button: true,
       selected: playing,
@@ -496,15 +508,19 @@ class _CoverRow extends StatelessWidget {
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: BiliMetrics.sheetEpisodeTitleText,
-                            height: BiliMetrics.sheetEpisodeTitleLine / BiliMetrics.sheetEpisodeTitleText,
-                            color: playing ? VerticalActionTheme.sheetPlaying : BiliColors.text,
-                          ),
+                          style: titleStyle,
+                          strutStyle: BiliFonts.strutOf(context, titleStyle),
                         ),
                       ),
                       if (pubdate != null && pubdate > 0)
-                        _line(BiliMetrics.sheetDateCentre, Text(EpisodesPanel.date(pubdate), style: _meta)),
+                        _line(
+                          BiliMetrics.sheetDateCentre,
+                          Text(
+                            EpisodesPanel.date(pubdate),
+                            style: _meta,
+                            strutStyle: BiliFonts.strutOf(context, _meta),
+                          ),
+                        ),
                       _line(
                         BiliMetrics.sheetCountsCentre,
                         Row(
@@ -560,6 +576,7 @@ class _PartRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final playing = episode.current;
     final color = playing ? VerticalActionTheme.sheetPlaying : BiliColors.text;
+    final titleStyle = TextStyle(fontSize: BiliMetrics.sheetEpisodeTitleText, color: color);
     final duration = episode.duration;
     return Semantics(
       button: true,
@@ -583,7 +600,8 @@ class _PartRow extends StatelessWidget {
                   episode.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: BiliMetrics.sheetEpisodeTitleText, color: color),
+                  style: titleStyle,
+                  strutStyle: BiliFonts.strutOf(context, titleStyle),
                 ),
               ),
               if (duration != null && duration > 0) ...[
@@ -608,6 +626,8 @@ class EpisodesSheetHeader extends StatelessWidget {
   final String title;
   final VoidCallback close;
 
+  static const _style = TextStyle(fontSize: BiliMetrics.sheetTitleText, color: BiliColors.text);
+
   @override
   Widget build(BuildContext context) => SizedBox(
     height: BiliMetrics.sheetHeaderHeight,
@@ -623,7 +643,8 @@ class EpisodesSheetHeader extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: BiliMetrics.sheetTitleText, color: BiliColors.text),
+              style: _style,
+              strutStyle: BiliFonts.strutOf(context, _style),
             ),
           ),
           Semantics(

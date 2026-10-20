@@ -254,6 +254,8 @@ class _ChapterTitle extends StatelessWidget {
 
   final String title;
 
+  static const _style = TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.chapterTitleFont, height: 1);
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -269,7 +271,8 @@ class _ChapterTitle extends StatelessWidget {
           title,
           maxLines: 1,
           softWrap: false,
-          style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.chapterTitleFont, height: 1),
+          style: _style,
+          strutStyle: BiliFonts.strutOf(context, _style),
         ),
       ),
     );

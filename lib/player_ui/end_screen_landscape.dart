@@ -258,6 +258,8 @@ class _Uploader extends StatelessWidget {
   final VideoOwner owner;
   final VideoActions? actions;
 
+  static const _nameStyle = TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.landscapeEndNameText);
+
   @override
   Widget build(BuildContext context) => Row(
     key: const ValueKey('end-uploader'),
@@ -286,7 +288,8 @@ class _Uploader extends StatelessWidget {
                 owner.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.landscapeEndNameText),
+                style: _nameStyle,
+                strutStyle: fullScreenStrut(_nameStyle),
               ),
               const Spacer(),
               Row(
@@ -489,6 +492,14 @@ class _RelatedCard extends StatelessWidget {
   final VideoCard card;
   final VoidCallback onTap;
 
+  static const _titleStyle = TextStyle(
+    color: BiliColors.onVideo,
+    fontSize: BiliMetrics.landscapeEndCardTitle,
+    height: BiliMetrics.landscapeEndCardTitleLeading,
+  );
+
+  static const _uploaderStyle = TextStyle(color: BiliColors.endMeta, fontSize: BiliMetrics.landscapeEndUploaderText);
+
   static const _countStyle = TextStyle(
     color: BiliColors.onVideo,
     fontSize: BiliMetrics.landscapeEndCountText,
@@ -576,11 +587,8 @@ class _RelatedCard extends StatelessWidget {
               card.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: BiliColors.onVideo,
-                fontSize: BiliMetrics.landscapeEndCardTitle,
-                height: BiliMetrics.landscapeEndCardTitleLeading,
-              ),
+              style: _titleStyle,
+              strutStyle: fullScreenStrut(_titleStyle),
             ),
           ),
           Padding(
@@ -612,7 +620,8 @@ class _RelatedCard extends StatelessWidget {
                     card.ownerName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: BiliColors.endMeta, fontSize: BiliMetrics.landscapeEndUploaderText),
+                    style: _uploaderStyle,
+                    strutStyle: fullScreenStrut(_uploaderStyle),
                   ),
                 ),
               ],
