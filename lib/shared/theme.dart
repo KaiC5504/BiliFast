@@ -1972,15 +1972,15 @@ abstract final class ZoomBackTheme {
 }
 
 /// Turning to landscape full screen and back (01 in local/differences): the video grows from its small spot to full
-/// screen over the whole turn, starting as the presentation changes. The official turn moves visibly for 16 to 17
-/// frames at 60 fps either way, its ease-in-out's ends barely moving.
+/// screen over the whole turn, starting as the presentation changes, or as the system's turn starts when the page draws
+/// it. The official turn moves visibly for 16 to 17 frames at 60 fps either way, its ease-in-out's ends barely moving.
 abstract final class RotationTheme {
   /// The official turn's length both ways, fitted with [curve] to 298.5 and 300.1 ms: UIKit's 0.3 s. A turn the page
   /// draws itself takes the system's own duration instead.
   static const grow = Duration(milliseconds: 300);
 
-  /// The official page's angle and its box's growth, measured frame by frame both ways, fit this to within 0.2° rms
-  /// and 0.9° at worst, the two in step. A turn the page draws itself (旋转动画) turns and grows on it too.
+  /// The official page's angle, measured frame by frame both ways, fits this to within 0.2° rms (0.9° at worst), and
+  /// its box grows in step. A turn the page draws itself (旋转动画) turns and grows on it too.
   static const curve = Curves.easeInOut;
 
   /// While the page draws the turns, how long a change of presentation waits for the system's turn before the player

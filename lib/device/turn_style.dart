@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// 开发者 → 旋转动画: how a turn to or from landscape full screen is animated. Everything but [system] is drawn by the
-/// video page, each with its own way of keeping iOS's rotation out of it (NativeTurnMethod in
+/// 开发者 → 旋转动画: how a turn to or from landscape full screen is animated. Everything but [system] and [noSpin] is
+/// drawn by the video page, each with its own way of keeping iOS's rotation out of it (NativeTurnMethod in
 /// pigeons/device_api.dart). The test build carries them all; the phone's log decides which stays.
 enum TurnMethod {
   system('系统'),
@@ -18,6 +18,7 @@ enum TurnMethod {
 
   final String label;
 
+  /// Whether the host takes the turns over: 不转 too, for the turned size at once.
   bool get drawn => this != system;
 }
 
@@ -71,11 +72,11 @@ class TurnStyle {
         _ => '${method.label}·${picture.label}·${spinStart.label}',
       };
 
-  /// 轮换测试's order: the reference, every method as it would ship, then the pictures and the late start on the two
-  /// methods most likely to win.
+  /// 轮换测试's order: the reference, every method as it would ship (原样 faded, as 1.0.0 (12) always did), then the
+  /// pictures and the late start on the two methods most likely to win.
   static const cycle = <TurnStyle>[
     system,
-    TurnStyle(method: TurnMethod.legacy),
+    TurnStyle(method: TurnMethod.legacy, picture: TurnPicture.fade),
     TurnStyle(method: TurnMethod.remove),
     TurnStyle(method: TurnMethod.counter),
     TurnStyle(method: TurnMethod.noActions),

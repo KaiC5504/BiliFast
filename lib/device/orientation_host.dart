@@ -42,9 +42,9 @@ abstract interface class OrientationHost {
 
   Stream<OrientationRefusal> get refusals;
 
-  /// While on, turns are not animated by the system (kept out of them by [method], never [TurnMethod.system]): the
-  /// screen takes its turned size at once and each turn is reported on [turns] for Flutter to draw, with [picture]
-  /// covering the screen until [turnDrawn].
+  /// While on, the screen takes its turned size at once and each turn is reported on [turns]; [method] (never
+  /// [TurnMethod.system]) keeps iOS's rotation out of it, except [TurnMethod.noSpin], which leaves it to iOS with no
+  /// picture, and [picture] covers the screen until [turnDrawn].
   Future<void> setTurnTakeover(bool enabled, {required TurnMethod method, required TurnPicture picture});
 
   Stream<TurnStart> get turns;

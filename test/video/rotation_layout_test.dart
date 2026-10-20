@@ -187,13 +187,36 @@ void main() {
     }
   }
 
-  /// The tab row rides on the box's bottom edge at its upright width, hanging from its bottom-left corner as the
-  /// official body does.
-  void expectBodyRides(WidgetTester tester, {String? reason}) {
-    final row = tabRow(tester);
-    expect(row.top, closeTo(box(tester).bottom, 0.01), reason: reason);
+  /// Where [key]'s piece of the page is laid out, before any turn the page draws.
+  Rect placed(WidgetTester tester, String key) {
+    final piece = tester.widget<Positioned>(find.byKey(ValueKey(key)));
+    return Rect.fromLTWH(piece.left!, piece.top!, piece.width!, piece.height!);
+  }
+
+  /// The window [key]'s piece of the body is cut to, in the piece's coordinates; null when nothing cuts it.
+  Rect? windowCut(WidgetTester tester, String key) {
+    final clip = tester.widget<ClipRect>(
+      find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(ClipRect)).first,
+    );
+    return clip.clipper?.getClip(placed(tester, key).size);
+  }
+
+  /// The tab row rides on the box's bottom edge at its upright width. Grown by the system it is centred under the box
+  /// and nothing cuts the body; in a turn the page draws it hangs from the box's bottom-left corner as the official
+  /// body does, cut off by the turning window.
+  void expectBodyRides(WidgetTester tester, {bool drawn = false, String? reason}) {
+    final row = placed(tester, 'page-tab-row');
+    final player = placed(tester, 'page-player');
+    expect(row.top, closeTo(player.bottom, 0.01), reason: reason);
     expect(row.width, portrait.width, reason: reason);
-    expect(row.left, closeTo(box(tester).left, 0.01), reason: reason);
+    if (drawn) {
+      expect(row.left, closeTo(player.left, 0.01), reason: reason);
+    } else {
+      expect(row.center.dx, closeTo(centre(tester).dx, 0.01), reason: reason);
+    }
+    for (final key in ['page-tab-row', 'page-tabs-area', 'comment-overlays']) {
+      expect(windowCut(tester, key), drawn ? isNotNull : isNull, reason: '$reason: $key');
+    }
   }
 
   Future<void> frame(WidgetTester tester) => tester.pump(const Duration(milliseconds: 16));
@@ -549,6 +572,7 @@ void main() {
         final now = angle(tester).abs();
         expect(now, lessThan(last), reason: 'frame $i turns upright');
         expect(box(tester).width, isNot(width), reason: 'frame $i grows');
+        expectBodyRides(tester, drawn: true, reason: 'frame $i');
         last = now;
         width = box(tester).width;
       }
@@ -583,8 +607,10 @@ void main() {
       expectRect(box(tester), onTurned(full, from: landscape, to: portrait, by: pi / 2), reason: 'the box');
       expect(tester.getRect(find.byType(PageTabRow)).intersect(Offset.zero & portrait).isEmpty, isTrue,
           reason: 'the body is off the glass, beside the full-screen player');
+      expectBodyRides(tester, drawn: true, reason: 'the first frame back');
       await frame(tester);
       expect(host.drawn, 2);
+      expectBodyRides(tester, drawn: true, reason: 'shrinking');
 
       await tester.pump(RotationTheme.grow);
       await frame(tester);
@@ -677,6 +703,7 @@ void main() {
       final growing = box(tester);
       expect(growing.width, greaterThan(smallBox.width));
       expect(angle(tester), 0);
+      expectBodyRides(tester, reason: 'grown as the system would');
       screen(tester, landscape, landscapeInsets);
       await settle(tester);
       expect(area(tester), full);
@@ -720,6 +747,36 @@ void main() {
       screen(tester, landscape, landscapeInsets);
       await settle(tester);
       expect(area(tester), full);
+      expect(host.drawn, 0);
+      await leave(tester);
+    });
+
+    testWidgets("a grow the page doesn't draw (the switch off) has no window: the body is centred under the box and "
+        'nothing cuts it, either way', (tester) async {
+      await openTakenOver(tester, takeover: false);
+      orientation.enterLandscape();
+      await tester.pump();
+      for (var i = 0; i < half; i++) {
+        await frame(tester);
+        expectBodyRides(tester, reason: 'frame $i');
+      }
+      screen(tester, landscape, landscapeInsets);
+      await tester.pump();
+      expectBodyRides(tester, reason: 'at the size flip');
+      await settle(tester);
+      expect(area(tester), full);
+
+      // Back with the upright size at once, as on Windows: the body comes in whole below the shrinking box.
+      orientation.exitToInline();
+      screen(tester, portrait, portraitInsets);
+      await tester.pump();
+      for (var i = 0; i < 12; i++) {
+        await frame(tester);
+        expectBodyRides(tester, reason: 'back, frame $i');
+        expect(placed(tester, 'page-tabs-area').bottom, greaterThan(portrait.height), reason: 'back, frame $i');
+      }
+      await settle(tester);
+      expect(area(tester), small);
       expect(host.drawn, 0);
       await leave(tester);
     });
