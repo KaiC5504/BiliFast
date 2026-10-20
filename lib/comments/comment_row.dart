@@ -213,6 +213,13 @@ class _NameLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final member = comment.member;
+    final style = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: CommentRowTheme.nameText,
+      height: CommentRowTheme.nameLine / CommentRowTheme.nameText,
+      leadingDistribution: TextLeadingDistribution.even,
+      color: member.isVip ? CommentRowTheme.vipName : CommentRowTheme.name,
+    );
     return SizedBox(
       height: CommentRowTheme.nameLine,
       child: Row(
@@ -222,13 +229,8 @@ class _NameLine extends StatelessWidget {
               member.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: BiliFonts.family,
-                fontSize: CommentRowTheme.nameText,
-                height: CommentRowTheme.nameLine / CommentRowTheme.nameText,
-                leadingDistribution: TextLeadingDistribution.even,
-                color: member.isVip ? CommentRowTheme.vipName : CommentRowTheme.name,
-              ),
+              style: style,
+              strutStyle: BiliFonts.strutOf(context, style),
             ),
           ),
           const SizedBox(width: CommentRowTheme.badgeGap),
@@ -287,6 +289,7 @@ class _MetaLine extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: CommentRowTheme.metaStyle(CommentRowTheme.meta),
+                  strutStyle: BiliFonts.strutOf(context, CommentRowTheme.metaStyle(CommentRowTheme.meta)),
                 ),
               ),
               Semantics(
@@ -448,7 +451,11 @@ class _LikeButtonState extends State<_LikeButton> with SingleTickerProviderState
                 const SizedBox(width: CommentRowTheme.thumbCountGap),
                 Transform.translate(
                   offset: Offset(0, CommentRowTheme.metaDrop),
-                  child: Text(count, style: CommentRowTheme.metaStyle(colour)),
+                  child: Text(
+                    count,
+                    style: CommentRowTheme.metaStyle(colour),
+                    strutStyle: BiliFonts.strutOf(context, CommentRowTheme.metaStyle(colour)),
+                  ),
                 ),
               ],
             ],
@@ -487,7 +494,11 @@ class _UpLiked extends StatelessWidget {
         children: [
           const CommentThumb(solid: true, width: CommentRowTheme.upLikedIcon, color: CommentRowTheme.upLiked),
           const SizedBox(width: CommentRowTheme.upLikedGap),
-          Text('UP主觉得很赞', style: CommentRowTheme.metaStyle(CommentRowTheme.upLiked)),
+          Text(
+            'UP主觉得很赞',
+            style: CommentRowTheme.metaStyle(CommentRowTheme.upLiked),
+            strutStyle: BiliFonts.strutOf(context, CommentRowTheme.metaStyle(CommentRowTheme.upLiked)),
+          ),
         ],
       ),
     ),
@@ -515,7 +526,13 @@ class _UpLikedChip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: CommentRowTheme.upChipPadding),
             child: Center(
               widthFactor: 1,
-              child: Text('UP主觉得很赞', maxLines: 1, softWrap: false, style: CommentRowTheme.upChipStyle),
+              child: Text(
+                'UP主觉得很赞',
+                maxLines: 1,
+                softWrap: false,
+                style: CommentRowTheme.upChipStyle,
+                strutStyle: BiliFonts.strutOf(context, CommentRowTheme.upChipStyle),
+              ),
             ),
           ),
         ),
@@ -535,6 +552,11 @@ class _RepliesBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final previews = comment.previewReplies.take(2).toList();
     final count = comment.replyCount;
+    final moreStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: CommentRowTheme.moreText,
+      color: CommentRowTheme.moreLink,
+    );
     return Semantics(
       button: true,
       label: count > 0 ? '共$count条回复' : '查看回复',
@@ -571,11 +593,8 @@ class _RepliesBox extends StatelessWidget {
                             children: [
                               Text(
                                 '共$count条回复',
-                                style: TextStyle(
-                                  fontFamily: BiliFonts.family,
-                                  fontSize: CommentRowTheme.moreText,
-                                  color: CommentRowTheme.moreLink,
-                                ),
+                                style: moreStyle,
+                                strutStyle: BiliFonts.strutOf(context, moreStyle),
                               ),
                               const SizedBox(width: CommentRowTheme.chevronGap),
                               const CustomPaint(
@@ -644,7 +663,11 @@ class _PreviewLine extends StatelessWidget {
                 const SizedBox(width: CommentRowTheme.thumbCountGap),
                 Transform.translate(
                   offset: Offset(0, CommentRowTheme.metaDrop),
-                  child: Text(CountFormat.short(reply.likes), style: CommentRowTheme.metaStyle(CommentRowTheme.action)),
+                  child: Text(
+                    CountFormat.short(reply.likes),
+                    style: CommentRowTheme.metaStyle(CommentRowTheme.action),
+                    strutStyle: BiliFonts.strutOf(context, CommentRowTheme.metaStyle(CommentRowTheme.action)),
+                  ),
                 ),
               ],
             ),
@@ -756,6 +779,7 @@ class _RenderPreviewText extends RenderBox
     }
     _dots
       ..text = TextSpan(text: '…', style: _ellipsis)
+      ..strutStyle = paragraph.strutStyle
       ..layout();
     final target = room - _dots.width;
     final start = paragraph.getPositionForOffset(Offset(0, centre)).offset;

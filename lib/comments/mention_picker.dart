@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import '../player_ui/panels/episodes_panel.dart' show EpisodesSheetHeader;
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import 'field_strut.dart';
 
 /// The composer's @: the people the viewer follows, searchable by name; a tap picks one. A light sheet that fills the
 /// box it's given, header and search field on top.
@@ -118,6 +119,9 @@ class _MentionPickerState extends State<MentionPicker> {
     ),
   );
 
+  TextStyle get _fieldText =>
+      TextStyle(fontFamily: BiliFonts.family, fontSize: MentionTheme.fieldText, color: BiliColors.text);
+
   Widget _searchField() => Container(
     height: MentionTheme.fieldHeight,
     padding: const EdgeInsets.symmetric(horizontal: MentionTheme.fieldPadX),
@@ -149,7 +153,8 @@ class _MentionPickerState extends State<MentionPicker> {
               onSubmitted: (text) => unawaited(_run(text.trim())),
               textInputAction: TextInputAction.search,
               cursorColor: BiliColors.pink,
-              style: TextStyle(fontFamily: BiliFonts.family, fontSize: MentionTheme.fieldText, color: BiliColors.text),
+              style: _fieldText,
+              strutStyle: fieldStrut(context, _fieldText),
               decoration: InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
@@ -340,6 +345,7 @@ class _CandidateRowState extends State<_CandidateRow> {
             Expanded(
               child: Text.rich(
                 TextSpan(children: _highlighted(widget.who.name, widget.query)),
+                strutStyle: BiliFonts.strutOf(context),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

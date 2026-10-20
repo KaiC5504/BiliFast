@@ -186,6 +186,11 @@ class _EmotePanelState extends State<EmotePanel> {
   Widget _cell(Emote emote, {required double side, required double top}) {
     final Widget picture;
     if (emote.url.isEmpty) {
+      final style = TextStyle(
+        fontFamily: BiliFonts.family,
+        fontSize: ComposerTheme.kaomojiFont,
+        color: ComposerTheme.kaomoji,
+      );
       picture = Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: ComposerTheme.kaomojiPad),
@@ -195,11 +200,8 @@ class _EmotePanelState extends State<EmotePanel> {
               emote.token,
               maxLines: 1,
               softWrap: false,
-              style: TextStyle(
-                fontFamily: BiliFonts.family,
-                fontSize: ComposerTheme.kaomojiFont,
-                color: ComposerTheme.kaomoji,
-              ),
+              style: style,
+              strutStyle: BiliFonts.strutOf(context, style),
             ),
           ),
         ),
@@ -261,6 +263,11 @@ class _EmotePanelState extends State<EmotePanel> {
       );
     }
     final label = package.isText ? (package.emotes.firstOrNull?.token ?? package.name) : package.name;
+    final style = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: ComposerTheme.kaomojiTabFont,
+      color: ComposerTheme.kaomojiTab,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: ComposerTheme.kaomojiTabPad),
       child: FittedBox(
@@ -269,11 +276,8 @@ class _EmotePanelState extends State<EmotePanel> {
           label,
           maxLines: 1,
           softWrap: false,
-          style: TextStyle(
-            fontFamily: BiliFonts.family,
-            fontSize: ComposerTheme.kaomojiTabFont,
-            color: ComposerTheme.kaomojiTab,
-          ),
+          style: style,
+          strutStyle: BiliFonts.strutOf(context, style),
         ),
       ),
     );

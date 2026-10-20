@@ -238,6 +238,7 @@ class CommentSortHeader extends StatelessWidget {
     final label = sort == CommentSort.hot ? '按热度' : '按时间';
     void toggle() => onChange(sort == CommentSort.hot ? CommentSort.time : CommentSort.hot);
     const line = CommentListTheme.sortLine;
+    final titleStyle = _style(CommentListTheme.sortTitleText, CommentListTheme.sortTitleSpacing);
     return SizedBox(
       height: height,
       child: Stack(
@@ -250,7 +251,8 @@ class CommentSortHeader extends StatelessWidget {
               title,
               maxLines: 1,
               softWrap: false,
-              style: _style(CommentListTheme.sortTitleText, CommentListTheme.sortTitleSpacing),
+              style: titleStyle,
+              strutStyle: BiliFonts.strutOf(context, titleStyle),
             ),
           ),
           Positioned(
@@ -379,6 +381,7 @@ class CommentListFooter extends StatelessWidget {
                     key: const ValueKey('comments-error'),
                     textAlign: TextAlign.center,
                     style: _style(CommentListTheme.retryInk),
+                    strutStyle: BiliFonts.strutOf(context, _style(CommentListTheme.retryInk)),
                   ),
                   const SizedBox(height: CommentListTheme.retryGap),
                 ],
@@ -429,32 +432,35 @@ class _ClosedNotice extends StatelessWidget {
   final String message;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    key: const ValueKey('comments-closed'),
-    padding: const EdgeInsets.only(
-      top: CommentListTheme.closedTop,
-      left: CommentListTheme.gutter,
-      right: CommentListTheme.gutter,
-    ),
-    child: Column(
-      children: [
-        const ExcludeSemantics(
-          child: Icon(Icons.chat_bubble_outline, size: CommentListTheme.closedIcon, color: CommentListTheme.closedInk),
-        ),
-        const SizedBox(height: CommentListTheme.closedGap),
-        Text(
-          message,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: BiliFonts.family,
-            fontSize: CommentListTheme.closedText,
-            color: CommentListTheme.closedInk,
-            letterSpacing: 0,
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: CommentListTheme.closedText,
+      color: CommentListTheme.closedInk,
+      letterSpacing: 0,
+    );
+    return Padding(
+      key: const ValueKey('comments-closed'),
+      padding: const EdgeInsets.only(
+        top: CommentListTheme.closedTop,
+        left: CommentListTheme.gutter,
+        right: CommentListTheme.gutter,
+      ),
+      child: Column(
+        children: [
+          const ExcludeSemantics(
+            child: Icon(
+              Icons.chat_bubble_outline,
+              size: CommentListTheme.closedIcon,
+              color: CommentListTheme.closedInk,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(height: CommentListTheme.closedGap),
+          Text(message, textAlign: TextAlign.center, style: style, strutStyle: BiliFonts.strutOf(context, style)),
+        ],
+      ),
+    );
+  }
 }
 
 /// The bar under the list and the thread (10, 13): the grey pill with the section's prompt, or 哎呦，不错哦，发条评论吧
@@ -474,6 +480,12 @@ class CommentWriteBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     final shown = prompt ?? placeholder;
+    final promptStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: CommentListTheme.fieldText,
+      color: CommentListTheme.fieldInk,
+      letterSpacing: CommentListTheme.fieldSpacing,
+    );
     return DecoratedBox(
       key: const ValueKey('comment-bar'),
       decoration: const BoxDecoration(
@@ -514,12 +526,8 @@ class CommentWriteBar extends StatelessWidget {
                             maxLines: 1,
                             softWrap: false,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: BiliFonts.family,
-                              fontSize: CommentListTheme.fieldText,
-                              color: CommentListTheme.fieldInk,
-                              letterSpacing: CommentListTheme.fieldSpacing,
-                            ),
+                            style: promptStyle,
+                            strutStyle: BiliFonts.strutOf(context, promptStyle),
                           ),
                         ),
                       ),

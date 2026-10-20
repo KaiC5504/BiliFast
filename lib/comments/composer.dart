@@ -12,6 +12,7 @@ import '../shared/theme.dart';
 import '../shared/toast.dart';
 import 'composer_model.dart';
 import 'emote_panel.dart';
+import 'field_strut.dart';
 import 'mention_picker.dart';
 import 'picture_attach.dart';
 
@@ -364,6 +365,8 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
       fontSize: ComposerTheme.editorFont,
       color: ComposerTheme.text,
     );
+    final hintStyle = textStyle.copyWith(color: ComposerTheme.placeholder);
+    final strut = fieldStrut(context, textStyle);
     return AnimatedContainer(
       duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : ComposerTheme.expand,
       curve: Curves.easeOutCubic,
@@ -384,6 +387,7 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
               cursorColor: ComposerTheme.accent,
               contextMenuBuilder: _editMenu,
               style: textStyle,
+              strutStyle: strut,
               decoration: InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
@@ -392,9 +396,19 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
                   top: ComposerTheme.editorTop,
                   right: ComposerTheme.editorTrailing,
                 ),
-                hintText: model.placeholder,
+                // A "回复 name :" hint sits on the typed text's strut, which hintText's own Text can't take.
+                hintText: strut == null ? model.placeholder : null,
+                hint: strut == null
+                    ? null
+                    : Text(
+                        model.placeholder,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: fieldStyle(context, hintStyle),
+                        strutStyle: strut,
+                      ),
                 hintMaxLines: 1,
-                hintStyle: textStyle.copyWith(color: ComposerTheme.placeholder),
+                hintStyle: hintStyle,
               ),
             ),
           ),
