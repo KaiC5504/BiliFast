@@ -240,6 +240,9 @@ class _CommentTextState extends State<CommentText> {
     final text = Text.rich(
       TextSpan(children: [?widget.leading, ..._spans]),
       style: widget.style,
+      // A forced strut fixes every line's height, so an emote's line could no longer grow; with an emote the text
+      // keeps its own lines, where a line mixing SF and PingFang with even leading is off by a fraction of a point.
+      strutStyle: _hasEmote ? null : BiliFonts.strutOf(context, widget.style),
       maxLines: widget.maxLines,
       overflow: widget.maxLines == null ? null : TextOverflow.ellipsis,
     );
