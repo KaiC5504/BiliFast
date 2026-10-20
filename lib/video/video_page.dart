@@ -172,7 +172,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   /// A drawn turn holding its first pose until the host's still picture is gone (等截图), at most
   /// [RotationTheme.pictureWait].
-  ({int id, Duration duration})? _held;
+  int? _held;
   Timer? _heldWait;
   StreamSubscription<int>? _picturesGone;
 
@@ -326,6 +326,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// reported drawn, at once.
   void _turnStarted(TurnStart start) {
     if (!mounted || !_owning || _left || _covered) return;
+    // Asked for with iOS's animations off, the screen turns inside the request, so its turn can come before the build
+    // that follows the change of presentation: follow it here, at the shape last drawn, so this is the turn waited for.
+    if (_drawnWide case final wide? when (_presentation == Presentation.landscape) != _turnedFull) {
+      _followTurn(_presentation, wide);
+    }
     _drawnOwed.add(start.id);
     _turnMissed = false;
     final from = _turnFrom;
@@ -350,9 +355,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   }
 
   /// From the build that has the turn's new shape: the page drawn turned by −angle, so it sits where it was before
-  /// the turn, and back to upright as the box grows or shrinks, both over the system's duration. A turn that reverses
-  /// one under way starts from the angle the page is drawn at. 等截图 holds that first pose until the host's picture
-  /// is gone; 不转 leaves the turn to iOS and only grows the box.
+  /// the turn, and back to upright as the box grows or shrinks, both over the official turn's [RotationTheme.grow]:
+  /// iOS reports no length for a turn it makes with its animations off. A turn that reverses one under way starts from
+  /// the angle the page is drawn at. 等截图 holds that first pose until the host's picture is gone.
   void _beginTurn(({TurnStart start, bool wide}) turn) {
     _pendingTurn = null;
     _turnFrom = null;
@@ -368,14 +373,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _spinFrom = _rotation - start.angle;
       final hold =
           style.choosesPicture && style.spinStart == TurnSpinStart.afterPicture && !_goneTurns.contains(start.id);
-      _recorder.began(start.id, spinFrom: _spinFrom, duration: start.duration, grow: _grow.value, held: hold);
+      _recorder.began(start.id, spinFrom: _spinFrom, duration: RotationTheme.grow, grow: _grow.value, held: hold);
       if (hold) {
-        _held = (id: start.id, duration: start.duration);
+        _held = start.id;
         _spin.value = 0;
         _grow.stop();
         _heldWait = Timer(RotationTheme.pictureWait, () => _release('timeout'));
       } else {
-        _runTurn(start.duration);
+        _runTurn();
       }
     }
     _goneTurns.removeWhere((id) => id <= start.id);
@@ -388,7 +393,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (!_spinning && _turnFrom == null && _pendingTurn == null) _drawing = false;
   }
 
-  void _runTurn(Duration duration) {
+  void _runTurn() {
+    const duration = RotationTheme.grow;
     _spin
       ..duration = duration
       ..forward(from: 0);
@@ -399,20 +405,20 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     }
   }
 
-  /// The held turn starts over its whole duration.
+  /// The held turn starts over its whole length.
   void _release(String why) {
     final held = _held;
     _heldWait?.cancel();
     _heldWait = null;
     if (held == null || !mounted) return;
     _held = null;
-    _recorder.released(held.id, why: why);
-    _runTurn(held.duration);
+    _recorder.released(held, why: why);
+    _runTurn();
   }
 
   void _pictureGone(int turn) {
     if (!mounted) return;
-    final held = _held?.id == turn;
+    final held = _held == turn;
     // Turns this page doesn't own are another page's to log and draw.
     if (!held && (_covered || !_owning)) return;
     _recorder.pictureGone(turn);
@@ -450,8 +456,6 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _spinStatus(AnimationStatus status) {
     if (!status.isCompleted || !mounted) return;
     _settleDrawing();
-    // A turn of no length ends in the build that starts it, which reads it already.
-    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) return;
     setState(() {});
   }
 
@@ -480,11 +484,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// (01 in local/differences): the window goes from the upright screen to the landscape one about the centre, the box
   /// spans the window's width from the window's top-left corner, from the small player or 竖屏's whole screen to the
   /// whole landscape screen, and the body hangs from the box's bottom-left corner, cut off by the window's bottom. Only
-  /// a turn the page draws, laid out at the turned size from its start, has that window: 不转's too, since iOS turns
-  /// it as it turns the official one. Any other grow (系统, which has the turned size only halfway, Windows, a late
-  /// turn) has none, its body centred under the box. It is all placed about the centre of the screen as it is now: iOS
-  /// keeps the view's centre as it hands over the turned size halfway through, so nothing moves then. Before that the
-  /// box grows past the upright page's sides.
+  /// a turn the page draws, laid out at the turned size from its start, has that window. Any other grow (系统, which
+  /// has the turned size only halfway, Windows, a late turn) has none, its body centred under the box. It is all
+  /// placed about the centre of the screen as it is now: iOS keeps the view's centre as it hands over the turned size
+  /// halfway through, so nothing moves then. Before that the box grows past the upright page's sides.
   ({Rect box, double inset, Offset? body, Rect? window, double t})? _turning(
     Size screen,
     Presentation layout,
