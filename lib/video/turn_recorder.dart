@@ -19,6 +19,7 @@ class TurnRecorder {
     DateTime Function()? now,
     Timer Function(Duration delay, void Function() callback)? startTimer,
     this._scheduler,
+    this._refreshRate,
   })  : _logger = logger ?? Logger.shared,
         _now = now ?? DateTime.now,
         _startTimer = startTimer ?? Timer.new;
@@ -33,10 +34,8 @@ class TurnRecorder {
   /// A window keeps this many frames at most (5 s at 120 Hz), so a turn that never settles can't grow without bound.
   static const maxFrames = 600;
 
-  /// `slow` counts frames whose whole span, vsync to raster end, is over this.
-  static const _slowMs = 16.7;
-
-  /// Per frame: µs since t0, angle (rad), grow, box left, top, width, height (NaN at rest), width, height.
+  /// Per frame: µs since t0, angle (rad), grow, the box's left, top, width and height (NaN at rest), then the size's
+  /// width and height.
   static const _stride = 9;
 
   final Logger _logger;
@@ -44,17 +43,18 @@ class TurnRecorder {
   final Timer Function(Duration, void Function()) _startTimer;
   final SchedulerBinding? _scheduler;
 
-  Float64List _samples = Float64List(_stride * 128);
-  int _count = 0;
-  int _t0Us = 0;
-  int _lastFrameUs = 0;
-  final _timings = <FrameTiming>[];
-  SchedulerBinding? _listening;
+  /// The display's rate in Hz; the view's display when not given.
+  final double Function()? _refreshRate;
+
+  /// The turn being drawn now.
+  late _Window _window = _Window(_heard);
+
+  /// Settled turns still waiting for their timings, oldest first.
+  final _pending = <_Window>[];
 
   /// The settle check, at most one at a time; [_busy] when a frame or event came since it was started.
   Timer? _quiet;
   bool _busy = false;
-  Timer? _waitingForTimings;
   bool _disposed = false;
 
   /// The presentation changed: a turn may follow.
@@ -121,36 +121,39 @@ class TurnRecorder {
   void frame({required double angle, required double grow, required Rect? box, required Size size}) {
     if (_disposed) return;
     final now = _now().microsecondsSinceEpoch;
-    if (_count == 0) {
-      _t0Us = now;
-      _listen();
+    final window = _window;
+    if (window.count == 0) {
+      window.t0Us = now;
+      window.listen(_scheduler ?? SchedulerBinding.instance);
     }
-    _lastFrameUs = now;
-    _waitingForTimings?.cancel();
-    _waitingForTimings = null;
+    window.lastFrameUs = now;
     _touch();
-    if (_count == maxFrames) return;
-    var at = _count * _stride;
-    if (at + _stride > _samples.length) {
-      _samples = Float64List(_samples.length * 2)..setAll(0, _samples);
+    if (window.count == maxFrames) return;
+    var at = window.count * _stride;
+    var samples = window.samples;
+    if (at + _stride > samples.length) {
+      samples = window.samples = Float64List(samples.length * 2)..setAll(0, samples);
     }
-    _samples[at++] = (now - _t0Us).toDouble();
-    _samples[at++] = angle;
-    _samples[at++] = grow;
-    _samples[at++] = box?.left ?? double.nan;
-    _samples[at++] = box?.top ?? double.nan;
-    _samples[at++] = box?.width ?? double.nan;
-    _samples[at++] = box?.height ?? double.nan;
-    _samples[at++] = size.width;
-    _samples[at] = size.height;
-    _count++;
+    samples[at++] = (now - window.t0Us).toDouble();
+    samples[at++] = angle;
+    samples[at++] = grow;
+    samples[at++] = box?.left ?? double.nan;
+    samples[at++] = box?.top ?? double.nan;
+    samples[at++] = box?.width ?? double.nan;
+    samples[at++] = box?.height ?? double.nan;
+    samples[at++] = size.width;
+    samples[at] = size.height;
+    window.count++;
   }
 
   /// Writes what is pending at once.
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    if (_count > 0) _write();
+    for (final window in List.of(_pending)) {
+      _write(window);
+    }
+    if (_window.count > 0) _write(_window);
     _quiet?.cancel();
     _quiet = null;
   }
@@ -160,8 +163,8 @@ class TurnRecorder {
     if (_quiet != null) _busy = true;
   }
 
-  /// One timer per [settle] rather than one per frame: when it fires after more activity, it starts over, so the line
-  /// goes out between one and two [settle]s after the turn's last frame or event.
+  /// One timer per [settle] rather than one per frame: when it fires after more activity, it starts over, so the
+  /// settle check runs between one and two [settle]s after the turn's last frame or event.
   void _touch() {
     if (_quiet != null) {
       _busy = true;
@@ -177,24 +180,20 @@ class TurnRecorder {
       _touch();
       return;
     }
-    if (_count == 0) return;
-    if (_timingsCaughtUp) {
-      _write();
-    } else {
-      _waitingForTimings = _startTimer(timingsWait, _write);
+    final window = _window;
+    if (window.count == 0) return;
+    if (window.timingsCaughtUp) {
+      _write(window);
+      return;
     }
+    // 轮换测试 turns again about 1.5 s later, inside the wait, so the next frame or event starts a window of its own.
+    _pending.add(window);
+    window.waiting = _startTimer(timingsWait, () => _write(window));
+    _window = _Window(_heard);
   }
 
-  void _listen() {
-    if (_listening != null) return;
-    final scheduler = _scheduler ?? SchedulerBinding.instance;
-    scheduler.addTimingsCallback(_timingsReported);
-    _listening = scheduler;
-  }
-
-  void _timingsReported(List<FrameTiming> timings) {
-    if (_timings.length < 2 * maxFrames) _timings.addAll(timings);
-    if (_waitingForTimings != null && _timingsCaughtUp) _write();
+  void _heard(_Window window) {
+    if (window.waiting != null && window.timingsCaughtUp) _write(window);
   }
 
   /// The engine's timestamps are on its own clock; the raster end is also stamped on the wall clock, which places
@@ -204,71 +203,100 @@ class TurnRecorder {
     return wall == 0 ? null : wall - timing.timestampInMicroseconds(FramePhase.rasterFinish);
   }
 
-  /// The frame that built the last sample has been reported.
-  bool get _timingsCaughtUp => _timings.any((timing) {
-        final offset = _wallOffset(timing);
-        return offset == null || timing.timestampInMicroseconds(FramePhase.buildFinish) + offset >= _lastFrameUs;
-      });
-
-  /// The frame was built while the samples were taken: its build overlaps the first to the last.
-  bool _inWindow(FrameTiming timing) {
-    final offset = _wallOffset(timing);
-    if (offset == null) return true;
-    return timing.timestampInMicroseconds(FramePhase.buildStart) + offset <= _lastFrameUs &&
-        timing.timestampInMicroseconds(FramePhase.buildFinish) + offset >= _t0Us;
+  /// NaN when the engine gave no wall time.
+  static double _rasterEndMs(FrameTiming timing, int t0Us) {
+    final wall = timing.timestampInMicroseconds(FramePhase.rasterFinishWallTime);
+    return wall == 0 ? double.nan : (wall - t0Us) / 1000;
   }
 
-  void _write() {
-    _waitingForTimings?.cancel();
-    _waitingForTimings = null;
-    _listening?.removeTimingsCallback(_timingsReported);
-    _listening = null;
+  static int _buildStart(FrameTiming timing) => timing.timestampInMicroseconds(FramePhase.buildStart);
+
+  double _hz() {
+    final hz = _refreshRate?.call() ?? _displayHz(_scheduler ?? SchedulerBinding.instance);
+    // Reported as 0 when the platform doesn't say.
+    return hz.isFinite && hz > 0 ? hz : 60;
+  }
+
+  static double _displayHz(SchedulerBinding scheduler) {
+    final views = scheduler.platformDispatcher.views;
+    return views.isEmpty ? 0 : views.first.display.refreshRate;
+  }
+
+  void _write(_Window window) {
+    window.waiting?.cancel();
+    window.waiting = null;
+    window.stopListening();
+    _pending.remove(window);
+
+    final t0Us = window.t0Us;
+    final heard = window.timings.where(window.overlaps).toList()
+      ..sort((a, b) => _buildStart(a).compareTo(_buildStart(b)));
 
     final samples = StringBuffer();
-    for (var i = 0; i < _count; i++) {
+    var next = 0;
+    for (var i = 0; i < window.count; i++) {
       final at = i * _stride;
       if (i > 0) samples.write(';');
       samples
-        ..write(_fixed(_samples[at] / 1000, 1))
+        ..write(_fixed(window.samples[at] / 1000, 1))
         ..write(',')
-        ..write(_fixed(_samples[at + 1] * 180 / pi, 1))
+        ..write(_fixed(window.samples[at + 1] * 180 / pi, 1))
         ..write(',')
-        ..write(_fixed(_samples[at + 2], 3));
+        ..write(_fixed(window.samples[at + 2], 3));
       for (var field = 3; field < _stride; field++) {
         samples
           ..write(',')
-          ..write(_fixed(_samples[at + field], 1));
+          ..write(_fixed(window.samples[at + field], 1));
       }
+
+      // A sample is taken while its frame builds, and both run in time order, so one pass pairs them.
+      final us = t0Us + window.samples[at];
+      var shownMs = double.nan;
+      while (next < heard.length) {
+        final timing = heard[next];
+        final offset = _wallOffset(timing);
+        if (offset != null && timing.timestampInMicroseconds(FramePhase.buildFinish) + offset >= us) {
+          if (_buildStart(timing) + offset <= us) shownMs = _rasterEndMs(timing, t0Us);
+          break;
+        }
+        next++;
+      }
+      samples
+        ..write(',')
+        ..write(_fixed(shownMs, 1));
     }
 
+    final hz = _hz();
+    final refreshMs = 1000 / hz;
     final timings = StringBuffer();
     var worstBuild = 0.0;
     var worstRaster = 0.0;
     var slow = 0;
-    for (final timing in _timings) {
-      if (!_inWindow(timing)) continue;
+    for (final timing in heard) {
       final build = timing.buildDuration.inMicroseconds / 1000;
       final raster = timing.rasterDuration.inMicroseconds / 1000;
       final total = timing.totalSpan.inMicroseconds / 1000;
       if (timings.isNotEmpty) timings.write(';');
-      timings.write('${_fixed(build, 1)},${_fixed(raster, 1)},${_fixed(total, 1)}');
+      timings.write(
+          '${_fixed(build, 1)},${_fixed(raster, 1)},${_fixed(total, 1)},${_fixed(_rasterEndMs(timing, t0Us), 1)}');
       worstBuild = max(worstBuild, build);
       worstRaster = max(worstRaster, raster);
-      if (total > _slowMs) slow++;
+      if (total > refreshMs) slow++;
     }
 
     _logger.info(LogCategory.ui, 'turn frames', {
       'wUs': _now().microsecondsSinceEpoch,
-      't0Us': _t0Us,
-      'count': _count,
+      't0Us': t0Us,
+      'count': window.count,
       'samples': samples.toString(),
       'timings': timings.toString(),
       'worstBuildMs': (worstBuild * 10).round() / 10,
       'worstRasterMs': (worstRaster * 10).round() / 10,
+      'refreshHz': (hz * 10).round() / 10,
       'slow': slow,
     });
-    _count = 0;
-    _timings.clear();
+    window.count = 0;
+    window.timings.clear();
   }
 
   /// Empty for NaN (no player box), and never `-0.0`.
@@ -276,5 +304,51 @@ class TurnRecorder {
     if (value.isNaN) return '';
     final text = value.toStringAsFixed(digits);
     return text.startsWith('-') && double.parse(text) == 0 ? text.substring(1) : text;
+  }
+}
+
+/// One turn: its frames from the first until its line is written, and the engine's timings heard meanwhile.
+final class _Window {
+  _Window(this._heard);
+
+  final void Function(_Window window) _heard;
+  Float64List samples = Float64List(TurnRecorder._stride * 128);
+  int count = 0;
+  int t0Us = 0;
+  int lastFrameUs = 0;
+  final timings = <FrameTiming>[];
+  SchedulerBinding? _listening;
+
+  /// Settled, and waiting for the batch holding its last frame.
+  Timer? waiting;
+
+  void listen(SchedulerBinding scheduler) {
+    if (_listening != null) return;
+    scheduler.addTimingsCallback(_reported);
+    _listening = scheduler;
+  }
+
+  void stopListening() {
+    _listening?.removeTimingsCallback(_reported);
+    _listening = null;
+  }
+
+  void _reported(List<FrameTiming> reported) {
+    if (timings.length < 2 * TurnRecorder.maxFrames) timings.addAll(reported);
+    _heard(this);
+  }
+
+  /// The frame that built the last sample has been reported.
+  bool get timingsCaughtUp => timings.any((timing) {
+        final offset = TurnRecorder._wallOffset(timing);
+        return offset == null || timing.timestampInMicroseconds(FramePhase.buildFinish) + offset >= lastFrameUs;
+      });
+
+  /// The frame was built while the samples were taken: its build overlaps the first to the last.
+  bool overlaps(FrameTiming timing) {
+    final offset = TurnRecorder._wallOffset(timing);
+    if (offset == null) return true;
+    return timing.timestampInMicroseconds(FramePhase.buildStart) + offset <= lastFrameUs &&
+        timing.timestampInMicroseconds(FramePhase.buildFinish) + offset >= t0Us;
   }
 }
