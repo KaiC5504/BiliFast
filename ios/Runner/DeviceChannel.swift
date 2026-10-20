@@ -83,13 +83,8 @@ final class DeviceHostApiImpl: DeviceHostApi {
         }
         return
       }
-      let quiet = TurnTakeover.requesting(request, mask: mask, from: scene.effectiveGeometry.interfaceOrientation)
-      var ms = 0.0
-      if quiet {
-        UIView.performWithoutAnimation { ms = DeviceChannel.ask(scene, for: wanted, request: request) }
-      } else {
-        ms = DeviceChannel.ask(scene, for: wanted, request: request)
-      }
+      TurnTakeover.requesting(request, mask: mask, from: scene.effectiveGeometry.interfaceOrientation)
+      let ms = DeviceChannel.ask(scene, for: wanted, request: request)
       TurnTakeover.requestReturned(request, ms: ms)
     }
   }
