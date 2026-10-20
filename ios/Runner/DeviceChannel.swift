@@ -183,7 +183,8 @@ final class StatusEvents {
   private var monitoringWasOn = false
 
   func start() {
-    guard observers.isEmpty else { return }
+    // Already on after a Dart restart: Dart still waits for the first report a start promises.
+    guard observers.isEmpty else { return StatusEvents.report() }
     let device = UIDevice.current
     monitoringWasOn = device.isBatteryMonitoringEnabled
     device.isBatteryMonitoringEnabled = true
