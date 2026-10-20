@@ -5,10 +5,12 @@ import 'package:flutter/foundation.dart';
 
 import '../device/orientation.dart';
 import '../device/turn_style.dart';
+import '../shared/theme.dart';
 import '../video/player_prefs.dart';
 
 /// 开发者 → 轮换测试: walks [TurnStyle.cycle] while the phone is turned on a screen recording, moving on after every
-/// [roundTripsPerStyle] round trips, so one recording covers every style. Off at every launch; one per app.
+/// [roundTripsPerStyle] round trips, so one recording covers every style. Off at every launch; one per app. Switching
+/// it off, or reaching the end, puts back the style chosen before it started.
 ///
 /// A round trip is landscape full screen, then upright again (inline or 竖屏), each held for [settle]. The presentation
 /// changes before its turn is even requested, so counting the return at the change would draw that return with the
@@ -23,7 +25,7 @@ class TurnCycle extends ChangeNotifier {
   static const styles = TurnStyle.cycle;
   static const roundTripsPerStyle = 2;
 
-  /// Longer than any turn, including a drawn one that waits up to 0.5 s for its still picture before it spins.
+  /// Longer than any turn, including a drawn one held up to [RotationTheme.pictureWait] for its still picture.
   static const settle = Duration(milliseconds: 1500);
 
   final OrientationController _orientation;
@@ -51,6 +53,10 @@ class TurnCycle extends ChangeNotifier {
   /// Landscape has settled since the last counted return.
   bool _out = false;
 
+  /// What 方式, 截图 and 起转 were set to when it switched on. Not saved: the saved style is the cycle's while it runs, so
+  /// a phone killed mid-cycle keeps that one.
+  TurnStyle _chosen = const TurnStyle();
+
   /// Switches on at the first style, or goes back to it (重置).
   void start() {
     _settling?.cancel();
@@ -59,16 +65,22 @@ class TurnCycle extends ChangeNotifier {
     _out = false;
     if (!_on) {
       _on = true;
+      _chosen = _prefs.turnStyle;
       _orientation.addListener(_presentationChanged);
     }
     _go(0);
   }
 
-  /// Leaves the style it was on.
+  /// Puts back the style chosen before it started.
   void stop() {
     if (!_on) return;
     _halt();
-    _logger.info(LogCategory.ui, 'turn cycle off', {'index': position, 'of': styles.length, 'wUs': _wallUs()});
+    _apply(_chosen);
+    _logger.info(
+      LogCategory.ui,
+      'turn cycle off',
+      {'index': position, 'of': styles.length, 'label': _chosen.label, 'wUs': _wallUs()},
+    );
     notifyListeners();
   }
 
@@ -125,9 +137,8 @@ class TurnCycle extends ChangeNotifier {
 
   void _finish() {
     _halt();
-    const shipped = TurnStyle();
-    _apply(shipped);
-    _logger.info(LogCategory.ui, 'turn cycle done', {'of': styles.length, 'label': shipped.label, 'wUs': _wallUs()});
+    _apply(_chosen);
+    _logger.info(LogCategory.ui, 'turn cycle done', {'of': styles.length, 'label': _chosen.label, 'wUs': _wallUs()});
     notifyListeners();
   }
 

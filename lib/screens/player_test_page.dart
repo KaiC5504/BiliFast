@@ -352,7 +352,8 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   }
 
   /// Off-limits on Windows, and while 轮换测试 picks the styles so the badge never names one that isn't on. 系统 and 不转
-  /// have no 截图 or 起转 to pick.
+  /// have no 截图 or 起转 to pick. Each row is its own node for accessibility, so the card's text never becomes the
+  /// label of the 轮换测试 switch.
   Widget _turnSection() {
     final style = _prefs.turnStyle;
     final cycle = widget.turnCycle;
@@ -388,35 +389,43 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
       ),
       if (cycle != null) ...[
         const SizedBox(height: BiliMetrics.rowGap),
-        _Row(
-          label: '轮换测试',
-          trailing: Switch.adaptive(
-            key: const ValueKey('turn-cycle-switch'),
-            activeTrackColor: BiliColors.pink,
-            value: cycle.on,
-            onChanged: (on) => on ? cycle.start() : cycle.stop(),
+        MergeSemantics(
+          child: _Row(
+            label: '轮换测试',
+            trailing: Switch.adaptive(
+              key: const ValueKey('turn-cycle-switch'),
+              activeTrackColor: BiliColors.pink,
+              value: cycle.on,
+              onChanged: (on) => on ? cycle.start() : cycle.stop(),
+            ),
           ),
         ),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                cycle.on
-                    ? '${cycle.position}/${TurnCycle.styles.length} ${cycle.style.label} · '
-                        '第 ${cycle.roundTrips + 1}/${TurnCycle.roundTripsPerStyle} 次往返'
-                    : '每种往返 ${TurnCycle.roundTripsPerStyle} 次后换下一种，共 ${TurnCycle.styles.length} 种；'
-                        '横竖各停 ${TurnCycle.settle.inMilliseconds / 1000} 秒才算',
-                key: const ValueKey('turn-cycle-position'),
-                style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),
+        Semantics(
+          container: true,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  cycle.on
+                      ? '${cycle.position}/${TurnCycle.styles.length} ${cycle.style.label} · '
+                          '第 ${cycle.roundTrips + 1}/${TurnCycle.roundTripsPerStyle} 次往返'
+                      : '每种往返 ${TurnCycle.roundTripsPerStyle} 次后换下一种，共 ${TurnCycle.styles.length} 种；'
+                          '横竖各停 ${TurnCycle.settle.inMilliseconds / 1000} 秒才算',
+                  key: const ValueKey('turn-cycle-position'),
+                  style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),
+                ),
               ),
-            ),
-            const SizedBox(width: BiliMetrics.rowGap),
-            OutlinedButton(
-              key: const ValueKey('turn-cycle-reset'),
-              onPressed: cycle.on ? cycle.start : null,
-              child: const Text('重置'),
-            ),
-          ],
+              const SizedBox(width: BiliMetrics.rowGap),
+              // With the cycle off there is nothing to start over: greyed like the choices, and disabled with
+              // nothing to press for accessibility.
+              OutlinedButton(
+                key: const ValueKey('turn-cycle-reset'),
+                style: OutlinedButton.styleFrom(disabledForegroundColor: BiliColors.secondaryText),
+                onPressed: cycle.on ? cycle.start : null,
+                child: const Text('重置'),
+              ),
+            ],
+          ),
         ),
       ],
     ]);
@@ -690,8 +699,9 @@ class _Row extends StatelessWidget {
       );
 }
 
-/// A label and its choices, wrapping as they need. Without [onChosen] they are greyed, the chosen one still marked,
-/// and accessibility reads the row as that choice with nothing to press.
+/// A label and its choices, wrapping as they need, one node for accessibility with the choices inside. Without
+/// [onChosen] they are greyed, the chosen one still marked, and accessibility reads them as that choice with nothing
+/// to press.
 class _Choices<T> extends StatelessWidget {
   const _Choices({
     super.key,
@@ -723,24 +733,27 @@ class _Choices<T> extends StatelessWidget {
           ),
       ],
     );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: BiliMetrics.rowGap / 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: BiliMetrics.pillHeight,
-            child: Center(
-              child: Text(label, style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text)),
+    return Semantics(
+      container: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: BiliMetrics.rowGap / 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: BiliMetrics.pillHeight,
+              child: Center(
+                child: Text(label, style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text)),
+              ),
             ),
-          ),
-          const SizedBox(width: BiliMetrics.gutter),
-          Expanded(
-            child: choose != null
-                ? pills
-                : Semantics(container: true, label: name(chosen), child: ExcludeSemantics(child: pills)),
-          ),
-        ],
+            const SizedBox(width: BiliMetrics.gutter),
+            Expanded(
+              child: choose != null
+                  ? pills
+                  : Semantics(container: true, label: name(chosen), child: ExcludeSemantics(child: pills)),
+            ),
+          ],
+        ),
       ),
     );
   }

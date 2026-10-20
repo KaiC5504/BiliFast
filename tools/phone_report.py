@@ -413,13 +413,15 @@ def render(events) -> str:
 
 # The drawn turn's lines (docs/reference/turn-log.md).
 
-# A frame Flutter builds reaches the screen a vsync later.
-TICK_US = 1_000_000 / 60
+# The phone's display rate; a turn measures its own tick from its native samples, this is for one without them.
+REFRESH_HZ = 120
 SWEEP_DEG = 90
 SWEEP_SLACK_DEG = 6
 GHOST_MAX_DEG = 3
 GAP_MAX_MS = 50
 FIRST_MOVE_MAX_MS = 120
+# More Dart frames than this over one tick, inside the turn, fail it.
+SLOW_MAX = 2
 MOVE_DEG = 1
 # Steps back smaller than this are the layers' rounding, not a wobble anyone sees.
 BACKSTEP_DEG = 0.5
@@ -429,10 +431,19 @@ COVERING_OPACITY = 0.5
 LEAD_US = 3_000_000
 # How long after a begin the Dart side's lines without a turn id still belong to it.
 TRAIL_US = 1_500_000
+# A style with fewer turns than this is ranked on too little.
+FEW_TURNS = 4
 DART_KINDS = ("presentation", "started", "sized", "began", "released", "drawn sent", "picture gone", "late", "frames")
 DART_WITH_ID = ("started", "began", "released", "drawn sent", "picture gone")
+CYCLE_KINDS = ("cycle", "cycle done", "cycle off")
 UNDRAWN_STYLES = ("系统", "不转")
-FAIL_KEYS = ("sweep", "back and forth", "ghost", "gap", "first move")
+PICTURE_KINDS = ("cut", "fade")
+FAIL_KEYS = ("sweep", "back and forth", "ghost", "gap", "first move", "slow")
+# 旋转动画's labels (lib/device/turn_style.dart) as the native lines name them. 系统 hands the host legacy, and only
+# drawn turns choose a picture; 不转 never shows one.
+NATIVE_METHODS = {"系统": "legacy", "原样": "legacy", "移除": "remove", "抵消": "counter", "关动作": "noActions",
+                  "请求前关": "quietRequest", "不转": "noSpin"}
+NATIVE_PICTURES = {"直接切": "cut", "淡出": "fade", "无截图": "none"}
 
 
 def parse_number(text) -> float | None:
@@ -460,6 +471,11 @@ def turn_id(f) -> int | None:
     return None if value is None else int(value)
 
 
+def lost_of(f) -> int:
+    lost = number(f.get("lost"))
+    return int(lost) if lost is not None and lost > 0 else 0
+
+
 def turn_lines(events) -> tuple[list[dict], int]:
     """The turn log's lines in wall-clock order, each {us, side (native, dart or cycle), kind, f}; and how many
     turn lines had no time at all."""
@@ -472,7 +488,7 @@ def turn_lines(events) -> tuple[list[dict], int]:
         rest = msg[len("turn "):]
         if rest.startswith("native "):
             side, kind = "native", rest[len("native "):]
-        elif rest in ("cycle", "cycle done"):
+        elif rest in CYCLE_KINDS:
             side, kind = "cycle", rest
         elif rest in DART_KINDS:
             side, kind = "dart", rest
@@ -519,7 +535,8 @@ def native_ticks(frames: list[dict]) -> tuple[list[dict], int]:
 
 
 def dart_frames(f) -> dict:
-    """A Dart `frames` line: its samples as (wall µs, drawn angle), its span and its worst frames."""
+    """A Dart `frames` line: its samples as (built, shown or None, drawn angle) on the wall clock in µs, its timings
+    as (totalMs, raster end µs or None), its span and its worst frames."""
     t0 = number(f.get("t0Us"))
     samples = []
     bad = 0
@@ -533,33 +550,41 @@ def dart_frames(f) -> dict:
         if t is None or angle is None or t0 is None:
             bad += 1
             continue
-        samples.append((t0 + t * 1000, angle))
-    samples.sort()
+        shown = parse_number(parts[9]) if len(parts) > 9 and parts[9].strip() else None
+        samples.append((t0 + t * 1000, None if shown is None else t0 + shown * 1000, angle))
+    samples.sort(key=lambda sample: sample[0])
     timings = []
+    build = raster = None
     raw = f.get("timings")
     for timing in raw.split(";") if isinstance(raw, str) else []:
         parts = [parse_number(part) for part in timing.split(",")]
-        if len(parts) >= 3 and None not in parts[:3]:
-            timings.append(parts[:3])
-    build = number(f.get("worstBuildMs"))
-    raster = number(f.get("worstRasterMs"))
+        if len(parts) < 3 or None in parts[:3]:
+            continue
+        build = max(build or 0.0, parts[0])
+        raster = max(raster or 0.0, parts[1])
+        end = parts[3] if len(parts) > 3 and parts[3] is not None and t0 is not None else None
+        timings.append((parts[2], None if end is None else t0 + end * 1000))
+    worst_build = number(f.get("worstBuildMs"))
+    worst_raster = number(f.get("worstRasterMs"))
     slow = number(f.get("slow"))
+    hz = number(f.get("refreshHz"))
     return {
         "t0": t0,
         "samples": samples,
         "bad": bad,
         "span": (samples[0][0], samples[-1][0]) if samples else None,
-        "build": build if build is not None else max((timing[0] for timing in timings), default=None),
-        "raster": raster if raster is not None else max((timing[1] for timing in timings), default=None),
-        "slow": int(slow) if slow is not None else
-        (sum(1 for timing in timings if timing[2] > TICK_US / 1000) if timings else None),
+        "timings": timings,
+        "build": worst_build if worst_build is not None else build,
+        "raster": worst_raster if worst_raster is not None else raster,
+        "slow": None if slow is None else int(slow),
+        "hz": hz if hz is not None and hz > 0 else None,
     }
 
 
 def new_turn(ident, us, anchor) -> dict:
     return {"id": ident, "us": us, "anchor": anchor, "begin": None, "native": defaultdict(list),
             "dart": defaultdict(list), "request": None, "returned": None, "presentation": None, "cycle": None,
-            "dartFrames": [], "end": None}
+            "dartFrames": [], "end": None, "lost": 0}
 
 
 def group_turns(events) -> dict:
@@ -570,6 +595,7 @@ def group_turns(events) -> dict:
         if line["side"] == "native" and line["kind"] == "begin":
             turn = new_turn(turn_id(line["f"]), line["us"], "native begin")
             turn["begin"] = line["f"]
+            turn["lost"] += lost_of(line["f"])
             turns.append(turn)
 
     def by_id(ident, us, slack):
@@ -590,6 +616,7 @@ def group_turns(events) -> dict:
                 unplaced[f"native {kind}"] += 1
             else:
                 turn["native"][kind].append({**f, "us": line["us"]})
+                turn["lost"] += lost_of(f)
         elif side == "dart" and kind in DART_WITH_ID:
             ident = turn_id(f)
             turn = by_id(ident, line["us"], 500_000)
@@ -676,13 +703,14 @@ def group_turns(events) -> dict:
 
     for turn in turns:
         marks = [mark for mark in cycles if mark[0] <= turn["us"]]
+        # A cycle that is done or was switched off labels nothing after it.
         if marks and marks[-1][1] == "cycle":
             turn["cycle"] = marks[-1][2]
     # Pooled across turns: a frame drawn before this turn's first one is what the page still shows.
-    pool = sorted(sample for frames in all_frames for sample in frames["samples"])
+    pool = sorted((sample for frames in all_frames for sample in frames["samples"]), key=lambda sample: sample[0])
     return {"turns": turns, "orphans": orphans, "requestsWithout": requests_without, "undated": undated,
-            "unplaced": unplaced, "pool": ([us for us, _ in pool], [angle for _, angle in pool]),
-            "dartBad": sum(frames["bad"] for frames in all_frames)}
+            "unplaced": unplaced, "pool": pool, "dartBad": sum(frames["bad"] for frames in all_frames),
+            "lost": sum(lost_of(line["f"]) for line in lines if line["side"] == "native")}
 
 
 def style_of(turn) -> tuple[str, str | None]:
@@ -699,6 +727,32 @@ def style_of(turn) -> tuple[str, str | None]:
         if f and f.get("method") is not None:
             return f"{f.get('method')}/{f.get('picture', '?')}", None
     return "?", None
+
+
+def native_style(label: str) -> tuple[str, str | None] | None:
+    """The native method and picture a 旋转动画 label runs as (picture None when any will do); None for a label that
+    isn't one."""
+    parts = label.split("·")
+    method = NATIVE_METHODS.get(parts[0])
+    if method is None:
+        return None
+    if len(parts) == 1:
+        return method, "none" if method == "noSpin" else None
+    picture = NATIVE_PICTURES.get(parts[1])
+    return None if picture is None else (method, picture)
+
+
+def label_mismatch(turn) -> str | None:
+    """What the native begin ran, when its method or picture isn't what the turn's label says."""
+    begin = turn["begin"]
+    expected = native_style(style_of(turn)[0])
+    if begin is None or expected is None:
+        return None
+    method, picture = begin.get("method"), begin.get("picture")
+    if (method is not None and str(method) != expected[0]) or (
+            expected[1] is not None and picture is not None and str(picture) != expected[1]):
+        return f"{method if method is not None else '?'}/{picture if picture is not None else '?'}"
+    return None
 
 
 def direction_of(turn) -> str:
@@ -726,13 +780,32 @@ def unwrap(angles: list[float]) -> list[float]:
     return result
 
 
+def on_screen(pool, tick_us: float) -> tuple[list[float], list[float]]:
+    """Each Dart frame's angle from when it is on screen: from the first display tick at or after its raster finished,
+    or a tick after it was built when the log doesn't say."""
+    shown = sorted((built + tick_us if at is None else at, built, angle) for built, at, angle in pool)
+    return [us for us, _, _ in shown], [angle for _, _, angle in shown]
+
+
+def slow_frames(turn, start_us: float, end_us: float, tick_ms: float) -> int | None:
+    """The Dart frames over one tick inside the turn: placed by their raster finish where the log has it, else every
+    frame of the turn's lines, else the lines' own `slow`."""
+    counts = []
+    for frames in turn["dartFrames"]:
+        if frames["timings"]:
+            counts.append(sum(1 for total, end in frames["timings"]
+                              if total > tick_ms and (end is None or start_us <= end <= end_us)))
+        elif frames["slow"] is not None:
+            counts.append(frames["slow"])
+    return sum(counts) if counts else None
+
+
 def analyse_turn(turn, pool) -> dict:
     """What was on screen at each display-link tick, and the turn's grades from it.
 
     What is seen is the still picture while it covers the screen (opacity at least a half), the content otherwise:
-    `scene + window + container + root` plus the angle of the latest Dart frame built a tick or more before. Until the
+    `scene + window + container + root` plus the angle of the latest Dart frame on screen by then (on_screen). Until the
     turn's first frame is on screen that is the page's last frame from before, upright (0) when there is none."""
-    walls, angles = pool
     ticks, malformed = native_ticks(turn["native"]["frames"])
     anchor = turn["us"]
     cut = None
@@ -743,16 +816,17 @@ def analyse_turn(turn, pool) -> dict:
         ticks = kept
     style, _ = style_of(turn)
     window_end = anchor + (ticks[-1]["t"] * 1000 if ticks else TRAIL_US)
-    dart_samples = bisect.bisect_right(walls, window_end) - bisect.bisect_left(walls, anchor)
+    dart_samples = sum(1 for built, _, _ in pool if anchor <= built <= window_end)
     has_native = turn["begin"] is not None or any(turn["native"].values())
     has_dart = any(turn["dart"].values()) or bool(turn["dartFrames"]) or turn["presentation"] is not None
-    method = (turn["begin"] or {}).get("method")
+    begin = turn["begin"] or {}
+    method = begin.get("method")
     spins = bool(turn["dart"]["began"]) or (not has_dart and style not in UNDRAWN_STYLES
                                              and method not in (None, "noSpin"))
     a = {"ticks": len(ticks), "malformed": malformed, "cut": cut, "dartSamples": dart_samples, "spins": spins,
          "fails": [], "unknown": [], "gap": None, "ghost": None, "pictureUntil": None, "pictureAtEnd": False,
          "start": None, "sweep": None, "monotonic": None, "step": None, "moved": None, "settled": None,
-         "overshoot": None, "ios": None, "iosPeak": None}
+         "overshoot": None, "ios": None, "iosPeak": None, "tick": None, "mismatch": label_mismatch(turn)}
 
     previous = None
     gaps = []
@@ -762,10 +836,13 @@ def analyse_turn(turn, pool) -> dict:
             gaps.append(gap)
         previous = tick["t"]
     a["gap"] = max(gaps, default=None)
+    rates = [frames["hz"] for frames in turn["dartFrames"] if frames["hz"] is not None]
+    a["tick"] = median(gaps) if gaps else 1000 / (rates[0] if rates else REFRESH_HZ)
 
+    walls, angles = on_screen(pool, a["tick"] * 1000)
     samples = []
     for tick in ticks:
-        index = bisect.bisect_right(walls, anchor + tick["t"] * 1000 - TICK_US) - 1
+        index = bisect.bisect_right(walls, anchor + tick["t"] * 1000) - 1
         drawn = angles[index] if index >= 0 else 0.0
         turned = tick["scene"] + tick["window"]
         content = turned + tick["container"] + tick["root"] + drawn
@@ -809,12 +886,19 @@ def analyse_turn(turn, pool) -> dict:
         a["ios"] = ios[-1] - ios[0]
         a["iosPeak"] = max(ios) - min(ios)
 
+    presentation = turn["presentation"]
+    since = min(anchor, presentation["us"]) if presentation is not None else anchor
+    a["slow"] = slow_frames(turn, since, window_end, a["tick"])
+
     if not has_native:
         a["unknown"].append("no native lines")
     elif len(samples) < 2:
         a["unknown"].append("no native frames" if not turn["native"]["frames"] else "native frames unreadable")
     if spins and dart_samples == 0:
         a["unknown"].append("no Dart frames, so the page's spin is left out")
+    # A picture style whose snapshot failed turned uncovered: not the style it is labelled.
+    if begin.get("picture") in PICTURE_KINDS and begin.get("snapshot") is False:
+        a["unknown"].append("no picture")
     if not a["unknown"]:
         if abs(a["sweep"] - SWEEP_DEG) > SWEEP_SLACK_DEG:
             a["fails"].append(("sweep", f"sweep {a['sweep']:.0f}°"))
@@ -828,13 +912,13 @@ def analyse_turn(turn, pool) -> dict:
             a["fails"].append(("first move", "never moves"))
         elif a["moved"] >= FIRST_MOVE_MAX_MS:
             a["fails"].append(("first move", f"first move {a['moved']:.0f} ms"))
+        if a["slow"] is not None and a["slow"] > SLOW_MAX:
+            a["fails"].append(("slow", f"{a['slow']} slow frames"))
     a["verdict"] = "?" if a["unknown"] else ("bad" if a["fails"] else "good")
 
     frames = turn["dartFrames"]
     a["build"] = max((fr["build"] for fr in frames if fr["build"] is not None), default=None)
     a["raster"] = max((fr["raster"] for fr in frames if fr["raster"] is not None), default=None)
-    slow = [fr["slow"] for fr in frames if fr["slow"] is not None]
-    a["slow"] = sum(slow) if slow else None
     a["dartFrames"] = sum(len(fr["samples"]) for fr in frames)
     request = turn["request"]
     a["requestToBegin"] = (anchor - request["us"]) / 1000 if request and turn["begin"] is not None else None
@@ -882,6 +966,8 @@ def turn_times(turn) -> str:
             [f"{math.degrees(angle):+.0f}°" if angle is not None else "angle ?",
              f"{fmt(number(begin.get('seconds')), '{:.2f}')} s"]
             + ([f"snapshot {snapshot:.1f} ms"] if snapshot else [])
+            + (["snapshot failed"] if begin.get("snapshot") is False and begin.get("picture") in PICTURE_KINDS
+               else [])
             + (["not animated"] if begin.get("animated") is False else [])) + ")"))
     for f in turn["native"]["alongside"]:
         mark(f, "alongside")
@@ -950,6 +1036,11 @@ def angles_text(a) -> str:
     return text
 
 
+def style_cell(turn, a) -> str:
+    style = style_of(turn)[0]
+    return f"{style} ≠ {a['mismatch']}" if a["mismatch"] else style
+
+
 def turn_detail(number_, turn, a) -> list[str]:
     style, page = style_of(turn)
     cycle = turn["cycle"]
@@ -965,10 +1056,12 @@ def turn_detail(number_, turn, a) -> list[str]:
     if animations:
         lines += wrap.wrap("animations: " + animations)
     lines += wrap.wrap(angles_text(a))
-    lines += wrap.wrap(f"stalls: native longest gap {fmt(a['gap'])} ms over {a['ticks']} ticks; Dart worst build "
-                       f"{fmt(a['build'], '{:.1f}')} ms, raster {fmt(a['raster'], '{:.1f}')} ms, {fmt(a['slow'])} "
-                       f"slow over {a['dartFrames']} frames")
+    lines += wrap.wrap(f"stalls: native longest gap {fmt(a['gap'])} ms over {a['ticks']} ticks of "
+                       f"{fmt(a['tick'], '{:.1f}')} ms; Dart worst build {fmt(a['build'], '{:.1f}')} ms, raster "
+                       f"{fmt(a['raster'], '{:.1f}')} ms, {fmt(a['slow'])} slow over {a['dartFrames']} frames")
     notes = []
+    if a["mismatch"]:
+        notes.append(f"the native begin ran {a['mismatch']}, not {style}")
     if page is not None:
         notes.append(f"the page logged style {page}")
     if a["cut"] is not None:
@@ -977,6 +1070,8 @@ def turn_detail(number_, turn, a) -> list[str]:
         notes.append(f"{a['malformed']} native samples unreadable")
     if turn["native"]["fallback"]:
         notes.append("the 0.5 s fallback fired")
+    if turn["lost"]:
+        notes.append(f"{turn['lost']} native sends lost before its lines")
     if notes:
         lines += wrap.wrap("notes: " + "; ".join(notes))
     missing = [name for name, there in (
@@ -995,7 +1090,8 @@ def turn_detail(number_, turn, a) -> list[str]:
 
 
 def style_summary(analysed) -> list[dict]:
-    """Per style, best first: the most good turns, then the smallest worst gap, then the quickest first move."""
+    """Per style, best first: the most good turns of all its turns (a ? counts as not good), then the smallest worst
+    gap, then the quickest first move."""
     styles = {}
     for turn, a in analysed:
         style, _ = style_of(turn)
@@ -1012,6 +1108,8 @@ def style_summary(analysed) -> list[dict]:
             "good": good,
             "bad": len(graded) - good,
             "unknown": len(entry["turns"]) - len(graded),
+            "mismatched": sum(1 for a in entry["turns"] if a["mismatch"]),
+            "few": len(entry["turns"]) < FEW_TURNS,
             "sweep": median([a["sweep"] for a in graded if a["sweep"] is not None]),
             "ghost": median([a["ghost"][0] for a in graded if a["ghost"] is not None]),
             "move": median([a["moved"] for a in graded if a["moved"] is not None]),
@@ -1021,8 +1119,7 @@ def style_summary(analysed) -> list[dict]:
             "fails": Counter(key for a in graded for key, _ in a["fails"]),
             "graded": len(graded),
         })
-    rows.sort(key=lambda row: (row["graded"] == 0, -row["good"] / row["graded"] if row["graded"] else 0,
-                               math.inf if row["gap"] is None else row["gap"],
+    rows.sort(key=lambda row: (-row["good"] / row["turns"], math.inf if row["gap"] is None else row["gap"],
                                math.inf if row["move"] is None else row["move"]))
     return rows
 
@@ -1038,39 +1135,43 @@ def render_turns(events) -> str:
         directions = Counter(direction_of(turn) for turn in turns)
         lines.append(f"== Turns: {len(turns)} ("
                      + ", ".join(f"{name} {count}" for name, count in sorted(directions.items())) + ") ==")
-        rows = [["#", "at", "turn", "style", "dir", "req→beg", "iOS", "start", "sweep", "1-way", "step", "move",
+        rows = [["#", "at", "turn", "style", "dir", "req→beg", "tick", "iOS", "start", "sweep", "1-way", "step", "move",
                  "settle", "over", "ghost", "gap", "Dart b/r/slow", "verdict"]]
         for index, (turn, a) in enumerate(analysed, 1):
             rows.append([
-                str(index), clock(turn["us"] / 1_000_000), fmt(turn["id"]), style_of(turn)[0], direction_of(turn),
-                fmt(a["requestToBegin"]), fmt(a["ios"], "{:+.0f}"), fmt(a["start"], "{:+.0f}"), fmt(a["sweep"]),
+                str(index), clock(turn["us"] / 1_000_000), fmt(turn["id"]), style_cell(turn, a), direction_of(turn),
+                fmt(a["requestToBegin"]), fmt(a["tick"], "{:.1f}"), fmt(a["ios"], "{:+.0f}"),
+                fmt(a["start"], "{:+.0f}"), fmt(a["sweep"]),
                 "–" if a["monotonic"] is None else ("yes" if a["monotonic"] else "no"), fmt(a["step"], "{:.1f}"),
                 fmt(a["moved"]), fmt(a["settled"]), fmt(a["overshoot"], "{:.1f}"),
                 fmt(None if a["ghost"] is None else a["ghost"][0], "{:.1f}"), fmt(a["gap"]),
                 f"{fmt(a['build'])}/{fmt(a['raster'])}/{fmt(a['slow'])}", verdict_text(a)])
         lines += table(rows)
-        lines.append("(ms from the native begin; degrees on screen, positive clockwise, the final angle 0. iOS: what "
-                     "the scene and window turned. start, sweep, 1-way, step, settle, over: what was seen, the still "
-                     "picture while it covered, the content otherwise. ghost: picture against content as the picture "
-                     "went. gap: the longest native frame)")
+        lines.append("(ms from the native begin; degrees on screen, positive clockwise, the final angle 0. tick: the "
+                     "turn's median native frame. iOS: what the scene and window turned. start, sweep, 1-way, step, "
+                     "settle, over: what was seen, the still picture while it covered, the content otherwise. ghost: "
+                     "picture against content as the picture went. gap: the longest native frame. slow: Dart frames "
+                     "over one tick inside the turn. style ≠ method/picture: the native begin ran something else)")
         for index, (turn, a) in enumerate(analysed, 1):
             lines.append("")
             lines += turn_detail(index, turn, a)
         lines.append("")
         lines.append("== Styles, best first ==")
-        rows = [["rank", "style", "轮换", "turns", "good", "bad", "?", "sweep", "ghost", "move", "worst gap",
-                 "req→beg max", "fails"]]
+        rows = [["rank", "style", "轮换", "turns", "good", "bad", "?", "≠native", "sweep", "ghost", "move", "worst gap",
+                 "req→beg max", "fails", "note"]]
         for rank, row in enumerate(style_summary(analysed), 1):
             cycle = row["cycle"]
             rows.append([str(rank), row["style"], f"{cycle.get('index', '?')}/{cycle.get('of', '?')}" if cycle else "–",
                          str(row["turns"]), str(row["good"]), str(row["bad"]), str(row["unknown"]),
-                         fmt(row["sweep"]), fmt(row["ghost"], "{:.1f}"), fmt(row["move"]), fmt(row["gap"]),
-                         fmt(row["request"]),
-                         ", ".join(f"{key} ×{row['fails'][key]}" for key in FAIL_KEYS if row["fails"][key]) or "–"])
+                         str(row["mismatched"]), fmt(row["sweep"]), fmt(row["ghost"], "{:.1f}"), fmt(row["move"]),
+                         fmt(row["gap"]), fmt(row["request"]),
+                         ", ".join(f"{key} ×{row['fails'][key]}" for key in FAIL_KEYS if row["fails"][key]) or "–",
+                         f"under {FEW_TURNS} turns" if row["few"] else ""])
         lines += table(rows)
-        lines.append(f"(good: sweep {SWEEP_DEG}±{SWEEP_SLACK_DEG}°, one way, ghost under {GHOST_MAX_DEG}°, native gaps "
-                     f"under {GAP_MAX_MS} ms, first move under {FIRST_MOVE_MAX_MS} ms. sweep, ghost and move are medians "
-                     "of the graded turns)")
+        lines.append(f"(ranked by good turns out of all, a ? counting as not good. good: sweep {SWEEP_DEG}±"
+                     f"{SWEEP_SLACK_DEG}°, one way, ghost under {GHOST_MAX_DEG}°, native gaps under {GAP_MAX_MS} ms, "
+                     f"first move under {FIRST_MOVE_MAX_MS} ms, at most {SLOW_MAX} slow Dart frames. sweep, ghost and "
+                     "move are medians of the graded turns)")
     extras = []
     for orphan in grouped["orphans"]:
         f = orphan["f"]
@@ -1089,6 +1190,8 @@ def render_turns(events) -> str:
         lines.append(f"turn lines without a time: {grouped['undated']}")
     if grouped["dartBad"]:
         lines.append(f"Dart frame samples unreadable: {grouped['dartBad']}")
+    if turns or grouped["lost"]:
+        lines.append(f"native sends to Dart lost: {grouped['lost']}")
     return clean("\n".join(lines)) + "\n"
 
 

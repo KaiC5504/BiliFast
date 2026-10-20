@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show Tristate;
 
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
@@ -177,6 +178,14 @@ void main() {
 
     final cycleText = find.byKey(const ValueKey('turn-cycle-position'));
     String positionText(WidgetTester tester) => tester.widget<Text>(cycleText).data!;
+    final styles = TurnStyle.cycle;
+
+    /// The row under 轮换测试 while it runs, at [position] on round trip [trip].
+    String at(int position, int trip) =>
+        '$position/${styles.length} ${styles[position - 1].label} · 第 $trip/${TurnCycle.roundTripsPerStyle} 次往返';
+
+    final cycleSwitch = find.byKey(const ValueKey('turn-cycle-switch'));
+    final reset = find.byKey(const ValueKey('turn-cycle-reset'));
 
     testWidgets('on the phone, 方式, 截图 and 起转 save the choice and reach the host at once while a page owns the '
         'orientation', (tester) async {
@@ -293,23 +302,25 @@ void main() {
       }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
     }
 
-    testWidgets('轮换测试: on starts at 1/13 系统 and greys the choices, the count and style follow the turns, 重置 goes '
-        'back to 1, off leaves the style and frees the choices', (tester) async {
-      prefs.turnStyle = const TurnStyle(method: TurnMethod.counter);
+    testWidgets('轮换测试: on starts at the first style and greys the choices, the count and style follow the turns, '
+        '重置 goes back to 1, off puts back the style chosen before and frees the choices', (tester) async {
+      const chosen = TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade);
+      prefs.turnStyle = chosen;
       await show(tester, host: host);
       expect(find.text('轮换测试'), findsOneWidget);
       expect(cycle.on, isFalse);
-      expect(positionText(tester), contains('每种往返 2 次后换下一种，共 13 种'));
-      expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey('turn-cycle-reset'))).onPressed, isNull);
+      expect(positionText(tester),
+          contains('每种往返 ${TurnCycle.roundTripsPerStyle} 次后换下一种，共 ${styles.length} 种'));
+      expect(tester.widget<OutlinedButton>(reset).onPressed, isNull);
 
-      await tester.tap(find.byKey(const ValueKey('turn-cycle-switch')));
+      await tester.tap(cycleSwitch);
       await tester.pump();
       expect(cycle.on, isTrue);
-      expect(positionText(tester), '1/13 系统 · 第 1/2 次往返');
-      expect(prefs.turnStyle, TurnStyle.system);
-      expect(orientation.turnStyle, TurnStyle.system);
+      expect(positionText(tester), at(1, 1));
+      expect(prefs.turnStyle, styles[0]);
+      expect(orientation.turnStyle, styles[0]);
       final semantics = tester.ensureSemantics();
-      readsAs(tester, method, '系统');
+      readsAs(tester, method, styles[0].method.label);
 
       for (var trip = 0; trip < 3; trip++) {
         orientation.enterLandscape();
@@ -317,38 +328,109 @@ void main() {
         orientation.exitToInline();
         await tester.pump(TurnCycle.settle);
       }
-      expect(positionText(tester), '2/13 原样·直接切·立即 · 第 2/2 次往返');
-      readsAs(tester, method, '原样');
-      expect(prefs.turnStyle, const TurnStyle(method: TurnMethod.legacy));
+      expect(positionText(tester), at(2, 2));
+      readsAs(tester, method, styles[1].method.label);
+      expect(prefs.turnStyle, styles[1]);
 
       tester.semantics.tap(find.semantics.byLabel('重置'));
       await tester.pump();
-      expect(positionText(tester), '1/13 系统 · 第 1/2 次往返');
-      expect(prefs.turnStyle, TurnStyle.system);
+      expect(positionText(tester), at(1, 1));
+      expect(prefs.turnStyle, styles[0]);
 
-      await tester.tap(find.byKey(const ValueKey('turn-cycle-switch')));
+      await tester.tap(cycleSwitch);
       await tester.pump();
       expect(cycle.on, isFalse);
-      expect(prefs.turnStyle, TurnStyle.system);
+      expect(prefs.turnStyle, chosen);
+      expect(orientation.turnStyle, chosen);
       expect(find.semantics.byLabel('抵消'), findsOneWidget, reason: 'the choices are back');
+      expect(fill(tester, method, '抵消'), BiliColors.pinkTint);
+      expect(fill(tester, picture, '淡出'), BiliColors.pinkTint);
+      semantics.dispose();
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    for (final platform in [TargetPlatform.iOS, TargetPlatform.windows]) {
+      testWidgets('on ${platform.name}, each row of the card is its own node: 方式, 截图 and 起转 hold their choices, '
+          'and 轮换测试 is a toggle of its own', (tester) async {
+        await show(tester, host: platform == TargetPlatform.iOS ? host : null);
+        final semantics = tester.ensureSemantics();
+        for (final (row, label) in [(method, '方式'), (picture, '截图'), (spinStart, '起转')]) {
+          final node = tester.getSemantics(find.descendant(of: row, matching: find.text(label)));
+          expect(node.label, label);
+          expect(node.rect.size, tester.getSize(row));
+        }
+        final title = find.text(platform == TargetPlatform.iOS ? '旋转动画' : '旋转动画（仅 iPhone）');
+        expect(tester.getSemantics(title).label, isNot(contains('轮换测试')), reason: 'the card keeps only its title');
+
+        final toggle = tester.getSemantics(cycleSwitch);
+        expect(toggle.label, '轮换测试');
+        expect(toggle.getSemanticsData().flagsCollection.isToggled, Tristate.isFalse);
+        expect(toggle.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+        expect(toggle.rect.width, greaterThan(tester.getSize(cycleSwitch).width), reason: 'the whole row');
+
+        tester.semantics.tap(find.semantics.byLabel('轮换测试'));
+        await tester.pump();
+        expect(cycle.on, isTrue);
+        expect(tester.getSemantics(cycleSwitch).getSemanticsData().flagsCollection.isToggled, Tristate.isTrue);
+        expect(tester.getSemantics(cycleText).label, at(1, 1));
+
+        tester.semantics.tap(find.semantics.byLabel('轮换测试'));
+        await tester.pump();
+        expect(cycle.on, isFalse);
+        semantics.dispose();
+      }, variant: TargetPlatformVariant.only(platform));
+    }
+
+    testWidgets('重置 is disabled while 轮换测试 is off: greyed, and nothing to press for accessibility', (tester) async {
+      await show(tester, host: host);
+      final semantics = tester.ensureSemantics();
+      Color? ink() => DefaultTextStyle.of(tester.element(find.text('重置'))).style.color;
+
+      final off = tester.getSemantics(reset).getSemanticsData();
+      expect(off.label, '重置');
+      expect(off.flagsCollection.isButton, isTrue);
+      expect(off.flagsCollection.isEnabled, Tristate.isFalse);
+      expect(off.hasAction(SemanticsAction.tap), isFalse);
+      expect(ink(), BiliColors.secondaryText);
+      await tester.tap(reset, warnIfMissed: false);
+      await tester.pump();
+      expect(cycle.on, isFalse);
+      expect(prefs.turnStyle, const TurnStyle());
+
+      await tester.tap(cycleSwitch);
+      await tester.pump();
+      await tester.pump(kThemeChangeDuration);
+      final on = tester.getSemantics(reset).getSemanticsData();
+      expect(on.flagsCollection.isEnabled, Tristate.isTrue);
+      expect(on.hasAction(SemanticsAction.tap), isTrue);
+      expect(ink(), isNot(BiliColors.secondaryText));
+
+      await tester.tap(cycleSwitch);
+      await tester.pump();
+      await tester.pump(kThemeChangeDuration);
+      expect(tester.getSemantics(reset).getSemanticsData().flagsCollection.isEnabled, Tristate.isFalse);
+      expect(ink(), BiliColors.secondaryText);
       semantics.dispose();
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('on Windows 轮换测试 still runs, so the PC can check it', (tester) async {
       await show(tester);
       final semantics = tester.ensureSemantics();
-      await tester.tap(find.byKey(const ValueKey('turn-cycle-switch')));
+      await tester.tap(cycleSwitch);
       await tester.pump();
       expect(cycle.on, isTrue);
-      expect(positionText(tester), '1/13 系统 · 第 1/2 次往返');
+      expect(positionText(tester), at(1, 1));
       orientation.enterLandscape();
       await tester.pump(TurnCycle.settle);
       orientation.exitToInline();
       await tester.pump(TurnCycle.settle);
-      expect(positionText(tester), '1/13 系统 · 第 2/2 次往返');
+      expect(positionText(tester), at(1, 2));
       tester.semantics.tap(find.semantics.byLabel('重置'));
       await tester.pump();
-      expect(positionText(tester), '1/13 系统 · 第 1/2 次往返');
+      expect(positionText(tester), at(1, 1));
+      tester.semantics.tap(find.semantics.byLabel('轮换测试'));
+      await tester.pump();
+      expect(cycle.on, isFalse);
+      expect(prefs.turnStyle, const TurnStyle(), reason: 'what was chosen before');
       semantics.dispose();
     }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
   });

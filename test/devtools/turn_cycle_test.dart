@@ -15,6 +15,7 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
@@ -22,8 +23,14 @@ import '../device/fake_orientation_host.dart' show FakeOrientationHost;
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
 
-/// 开发者 → 轮换测试: two round trips per style, through TurnStyle.cycle, then back to the shipped style.
+/// 开发者 → 轮换测试: two round trips per style, through TurnStyle.cycle, then back to the style chosen before it.
 void main() {
+  final styles = TurnStyle.cycle;
+
+  /// Chosen in 方式, 截图 and 起转 before the cycle starts.
+  const chosen =
+      TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture);
+
   late MemorySink logs;
   late Logger logger;
   late PlayerPrefs prefs;
@@ -66,21 +73,21 @@ void main() {
     });
   });
 
-  test('switching on starts at 1 (系统), saves and applies it, and logs it', () {
+  test('switching on starts at 1, saves and applies it, and logs it', () {
     fakeAsync((async) {
-      prefs.turnStyle = const TurnStyle(method: TurnMethod.counter);
+      prefs.turnStyle = chosen;
       cycle.start();
       expect(cycle.on, isTrue);
       expect(cycle.position, 1);
-      expect(cycle.style, TurnStyle.system);
-      expect(prefs.turnStyle, TurnStyle.system);
-      expect(orientation.turnStyle, TurnStyle.system);
+      expect(cycle.style, styles.first);
+      expect(prefs.turnStyle, styles.first);
+      expect(orientation.turnStyle, styles.first);
       final line = cycleLines().single;
       expect(line.msg, 'turn cycle');
       expect(line.cat, LogCategory.ui);
       expect(line.f['index'], const LogInt(1));
-      expect(line.f['of'], const LogInt(13));
-      expect(line.f['label'], const LogString('系统'));
+      expect(line.f['of'], LogInt(styles.length));
+      expect(line.f['label'], LogString(styles.first.label));
       expect(line.f['wUs'], isA<LogInt>());
       expect((line.f['wUs']! as LogInt).value, closeTo(DateTime.now().microsecondsSinceEpoch, 60e6));
     });
@@ -95,15 +102,15 @@ void main() {
       roundTrip(async);
       expect(cycle.roundTrips, 1);
       expect(cycle.position, 1);
-      expect(orientation.turnStyle, TurnStyle.system);
+      expect(orientation.turnStyle, styles[0]);
       roundTrip(async);
       expect(cycle.position, 2);
       expect(cycle.roundTrips, 0);
-      expect(cycle.style, const TurnStyle(method: TurnMethod.legacy));
+      expect(cycle.style, styles[1]);
       expect(prefs.turnStyle, cycle.style);
       expect(orientation.turnStyle, cycle.style);
       expect(cycleLines().map((line) => line.f['index']), const [LogInt(1), LogInt(2)]);
-      expect(cycleLines().last.f['label'], const LogString('原样·直接切·立即'));
+      expect(cycleLines().last.f['label'], LogString(styles[1].label));
       expect(notified, 3, reason: 'on, the first round trip, the move');
     });
   });
@@ -114,18 +121,20 @@ void main() {
       roundTrip(async);
       orientation.enterLandscape();
       async.elapse(TurnCycle.settle * 3);
-      expect(orientation.turnStyle, TurnStyle.system, reason: 'landscape never applies');
+      expect(orientation.turnStyle, styles[0], reason: 'landscape never applies');
       orientation.exitToInline();
       async.elapse(TurnCycle.settle - const Duration(milliseconds: 1));
-      expect(orientation.turnStyle, TurnStyle.system, reason: 'the return is still turning');
+      expect(orientation.turnStyle, styles[0], reason: 'the return is still turning');
       expect(cycle.roundTrips, 1);
       async.elapse(const Duration(milliseconds: 1));
       expect(cycle.position, 2);
-      expect(orientation.turnStyle, const TurnStyle(method: TurnMethod.legacy));
+      expect(orientation.turnStyle, styles[1]);
     });
   });
 
   test('on the phone the next style reaches the host after the return\'s own request, not before it', () {
+    expect(styles[0].method.drawn, isFalse, reason: 'the cycle starts at the reference, iOS\'s own turn');
+    expect(styles[1].method.drawn, isTrue);
     fakeAsync((async) {
       final host = FakeOrientationHost();
       final phone = OrientationController(host: host, logger: logger);
@@ -141,11 +150,11 @@ void main() {
         async.elapse(TurnCycle.settle);
         phone.exitToInline();
         async.flushMicrotasks();
-        expect(host.sent.last, 'portrait', reason: 'the return is asked for under 系统');
+        expect(host.sent.last, 'portrait', reason: 'the return is asked for under the first style');
         async.elapse(TurnCycle.settle);
       }
       expect(host.sent, ['landscape', 'portrait', 'landscape', 'portrait', 'takeover on']);
-      expect(host.styles.single, (TurnMethod.legacy, TurnPicture.cut));
+      expect(host.styles.single, (styles[1].method, styles[1].picture));
     });
   });
 
@@ -199,37 +208,39 @@ void main() {
     });
   });
 
-  test('it goes through TurnStyle.cycle in order, then logs done, switches off and sets the shipped style', () {
+  test('it goes through TurnStyle.cycle in order, then logs done, switches off and puts back the style chosen before',
+      () {
     fakeAsync((async) {
       var notified = 0;
+      prefs.turnStyle = chosen;
       cycle.start();
       final applied = <TurnStyle>[cycle.style];
       cycle.addListener(() {
         notified += 1;
         if (cycle.on && cycle.roundTrips == 0) applied.add(cycle.style);
       });
-      for (var trip = 0; trip < 13 * 2; trip++) {
+      for (var trip = 0; trip < styles.length * 2; trip++) {
         expect(cycle.on, isTrue, reason: 'round trip ${trip + 1}');
         roundTrip(async);
       }
-      expect(applied, TurnStyle.cycle);
+      expect(applied, styles);
       expect(cycleLines().where((line) => line.msg == 'turn cycle').map((line) => line.f['label']),
-          [for (final style in TurnStyle.cycle) LogString(style.label)]);
+          [for (final style in styles) LogString(style.label)]);
       expect(cycleLines().where((line) => line.msg == 'turn cycle').map((line) => line.f['index']),
-          [for (var i = 1; i <= 13; i++) LogInt(i)]);
+          [for (var i = 1; i <= styles.length; i++) LogInt(i)]);
       final done = cycleLines().last;
       expect(done.msg, 'turn cycle done');
-      expect(done.f['of'], const LogInt(13));
-      expect(done.f['label'], const LogString('移除·直接切·立即'));
+      expect(done.f['of'], LogInt(styles.length));
+      expect(done.f['label'], LogString(chosen.label));
       expect(done.f['wUs'], isA<LogInt>());
       expect(cycle.on, isFalse);
-      expect(prefs.turnStyle, const TurnStyle());
-      expect(orientation.turnStyle, const TurnStyle());
-      expect(notified, 13 * 2);
+      expect(prefs.turnStyle, chosen);
+      expect(orientation.turnStyle, chosen);
+      expect(notified, styles.length * 2);
 
       roundTrip(async);
       roundTrip(async);
-      expect(prefs.turnStyle, const TurnStyle(), reason: 'off: turning moves nothing');
+      expect(prefs.turnStyle, chosen, reason: 'off: turning moves nothing');
       expect(cycleLines().last.msg, 'turn cycle done');
     });
   });
@@ -248,9 +259,9 @@ void main() {
       cycle.start();
       async.elapse(TurnCycle.settle);
       expect(cycle.position, 1);
-      expect(cycle.roundTrips, 0, reason: 'the trip under the old style isn\'t counted for 系统');
-      expect(orientation.turnStyle, TurnStyle.system);
-      expect(prefs.turnStyle, TurnStyle.system);
+      expect(cycle.roundTrips, 0, reason: 'the trip under the old style isn\'t counted for the first');
+      expect(orientation.turnStyle, styles[0]);
+      expect(prefs.turnStyle, styles[0]);
       expect(cycleLines().last.f['index'], const LogInt(1));
       roundTrip(async);
       roundTrip(async);
@@ -258,8 +269,42 @@ void main() {
     });
   });
 
-  test('switching off keeps the style it was on, stops counting and logs it', () {
+  test('重置 keeps the style chosen before the cycle, not the one it was on', () {
     fakeAsync((async) {
+      prefs.turnStyle = chosen;
+      cycle.start();
+      for (var trip = 0; trip < 4; trip++) {
+        roundTrip(async);
+      }
+      cycle.start();
+      expect(prefs.turnStyle, styles[0]);
+      cycle.stop();
+      expect(prefs.turnStyle, chosen);
+      expect(orientation.turnStyle, chosen);
+    });
+  });
+
+  test('started again later, it puts back what was chosen then', () {
+    fakeAsync((async) {
+      prefs.turnStyle = chosen;
+      cycle
+        ..start()
+        ..stop();
+      const later = TurnStyle(method: TurnMethod.noActions, picture: TurnPicture.none);
+      prefs.turnStyle = later;
+      cycle.start();
+      roundTrip(async);
+      roundTrip(async);
+      cycle.stop();
+      expect(prefs.turnStyle, later);
+      expect(orientation.turnStyle, later);
+      expect(cycleLines().last.f['label'], LogString(later.label));
+    });
+  });
+
+  test('switching off puts back the style chosen before, stops counting and logs it', () {
+    fakeAsync((async) {
+      prefs.turnStyle = chosen;
       cycle.start();
       roundTrip(async);
       roundTrip(async);
@@ -271,11 +316,14 @@ void main() {
       async.elapse(TurnCycle.settle);
       expect(cycle.on, isFalse);
       expect(cycle.position, 2);
-      expect(prefs.turnStyle, const TurnStyle(method: TurnMethod.legacy));
-      expect(orientation.turnStyle, const TurnStyle(method: TurnMethod.legacy));
+      expect(prefs.turnStyle, chosen);
+      expect(orientation.turnStyle, chosen);
       final off = cycleLines().last;
       expect(off.msg, 'turn cycle off');
       expect(off.f['index'], const LogInt(2));
+      expect(off.f['of'], LogInt(styles.length));
+      expect(off.f['label'], LogString(chosen.label));
+      expect(off.f['wUs'], isA<LogInt>());
       expect(async.pendingTimers, isEmpty);
     });
   });
@@ -321,25 +369,40 @@ void main() {
 
     final badge = find.byKey(const ValueKey('turn-cycle-badge'));
 
-    testWidgets('shows only while 轮换测试 runs, over the whole app, in the top-left of the safe area, and lets taps '
-        'through', (tester) async {
+    /// What the badge says at [position] in the cycle, on round trip [trip].
+    String says(int position, int trip) =>
+        '轮换 $position/${styles.length} · ${styles[position - 1].label} · $trip/${TurnCycle.roundTripsPerStyle}';
+
+    /// Every semantics node on screen, as its label and place.
+    List<String> nodes() => [
+          for (final node in find.semantics.byPredicate((_) => true).evaluate())
+            '${node.label}|${node.rect}|${node.transform}',
+        ]..sort();
+
+    testWidgets('shows only while 轮换测试 runs, over the whole app, top centre just below the status bar, and lets '
+        'taps through', (tester) async {
       await show(tester);
       expect(badge, findsNothing);
 
       appCycle.start();
       await tester.pump();
-      expect(find.text('轮换 1/13 · 系统 · 1/2'), findsOneWidget);
-      expect(tester.getTopLeft(badge), const Offset(BiliMetrics.rowGap, 62 + BiliMetrics.rowGap),
-          reason: 'below the status bar');
+      expect(find.text(says(1, 1)), findsOneWidget);
+      final rect = tester.getRect(badge);
+      expect(rect.top, 62 + BiliMetrics.rowGap / 2, reason: 'just below the status bar');
+      expect(rect.center.dx, 440 / 2);
+      expect(rect.left, greaterThan(SettingsTheme.backLeft + SettingsTheme.backTarget),
+          reason: 'clear of a bar\'s back chevron');
+      expect(rect.height, lessThan(SettingsTheme.barHeight / 2), reason: 'one small line');
       expect(find.ancestor(of: badge, matching: find.byType(Navigator)), findsNothing, reason: 'above every route');
       final hits = tester.hitTestOnBinding(tester.getCenter(badge)).path.map((entry) => entry.target);
       expect(hits, isNot(contains(tester.renderObject(badge))));
       expect(hits, contains(tester.renderObject(find.byType(Navigator))), reason: 'the page under it gets the tap');
-      final text = tester.widget<Text>(find.text('轮换 1/13 · 系统 · 1/2'));
-      final style = DefaultTextStyle.of(tester.element(find.text('轮换 1/13 · 系统 · 1/2'))).style;
+      final text = tester.widget<Text>(find.text(says(1, 1)));
+      final style = DefaultTextStyle.of(tester.element(find.text(says(1, 1)))).style;
       expect(text.style, isNull);
       expect(style.color, BiliColors.onVideo);
       expect(style.fontFamily, BiliFonts.family);
+      expect(style.fontSize, BiliMetrics.smallText);
       expect(style.decoration, isNot(TextDecoration.underline), reason: 'not the no-Material error style');
       final box = tester.widget<DecoratedBox>(badge).decoration as BoxDecoration;
       expect(box.color, BiliColors.statsFill);
@@ -347,6 +410,31 @@ void main() {
       appCycle.stop();
       await tester.pump();
       expect(badge, findsNothing);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('accessibility reads it as its own small node, and the app\'s nodes stay as they were', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await show(tester);
+      await tester.pump(const Duration(seconds: 1));
+      final before = nodes();
+      expect(before.where((node) => node.contains('轮换')), isEmpty);
+
+      appCycle.start();
+      await tester.pump();
+      final node = tester.getSemantics(badge);
+      expect(node.label, says(1, 1));
+      expect(node.rect.size, tester.getSize(badge));
+      expect(node.hasChildren, isFalse);
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
+      final after = nodes();
+      expect(after.where((node) => node.contains('轮换')), hasLength(1), reason: 'in no other node\'s label');
+      expect(after.where((node) => !node.contains('轮换')).toList(), before);
+
+      appCycle.stop();
+      await tester.pump();
+      expect(nodes(), before);
+      semantics.dispose();
       await tester.pump(const Duration(seconds: 2));
     });
 
@@ -358,22 +446,25 @@ void main() {
       await tester.pump(TurnCycle.settle);
       appOrientation.exitToInline();
       await tester.pump(TurnCycle.settle);
-      expect(find.text('轮换 1/13 · 系统 · 2/2'), findsOneWidget);
+      expect(find.text(says(1, 2)), findsOneWidget);
       appOrientation.enterLandscape();
       await tester.pump(TurnCycle.settle);
       appOrientation.exitToInline();
       await tester.pump(TurnCycle.settle);
-      expect(find.text('轮换 2/13 · 原样·直接切·立即 · 1/2'), findsOneWidget);
-      expect(TurnCycleBadge.text(appCycle), '轮换 2/13 · 原样·直接切·立即 · 1/2');
+      expect(find.text(says(2, 1)), findsOneWidget);
+      expect(TurnCycleBadge.text(appCycle), says(2, 1));
       await tester.pump(const Duration(seconds: 2));
     });
 
-    testWidgets('in landscape it sits inside the safe area, clear of the Dynamic Island', (tester) async {
+    testWidgets('in landscape it sits at the top centre, clear of the Dynamic Island', (tester) async {
       await show(tester, size: const Size(956, 440), safe: const EdgeInsets.only(left: 62, right: 62, bottom: 21));
       appCycle.start();
       await tester.pump();
-      expect(tester.getTopLeft(badge), const Offset(62 + BiliMetrics.rowGap, BiliMetrics.rowGap));
-      expect(tester.getBottomRight(badge).dx, lessThan(956 - 62));
+      final rect = tester.getRect(badge);
+      expect(rect.top, BiliMetrics.rowGap / 2);
+      expect(rect.center.dx, 956 / 2);
+      expect(rect.left, greaterThan(62));
+      expect(rect.right, lessThan(956 - 62));
       await tester.pump(const Duration(seconds: 2));
     });
   });
