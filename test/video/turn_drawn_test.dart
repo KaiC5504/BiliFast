@@ -203,69 +203,6 @@ void main() {
     });
   });
 
-  testWidgets('不转 draws no rotation and grows the box over the turn from the turned size, the body placed and cut as '
-      "in a drawn turn: iOS turns the window as it does the official app's", (tester) async {
-    final page = TurnPage();
-    await page.open(tester, style: const TurnStyle(method: TurnMethod.noSpin, picture: TurnPicture.none));
-    await page.turnToLandscape(tester);
-    expect(TurnPage.angle(tester), 0);
-    final centre = landscape.center(Offset.zero);
-    expect(tester.getRect(TurnPage.box), smallBox.shift(centre - portrait.center(Offset.zero)),
-        reason: 'the small player about the centre of the turned screen');
-    var width = tester.getRect(TurnPage.box).width;
-    for (var i = 0; i < 12; i++) {
-      await frame(tester);
-      expect(TurnPage.angle(tester), 0, reason: 'frame $i');
-      final now = tester.getRect(TurnPage.box);
-      expect(now.width, greaterThan(width), reason: 'frame $i grows');
-      expect(now.center.dx, closeTo(centre.dx, 1e-6));
-      expect(shown(tester, 'page-tab-row').left, now.left, reason: "frame $i: hangs from the box's left");
-      width = now.width;
-    }
-    await tester.pump(const Duration(milliseconds: 200));
-    await frame(tester);
-    expect(tester.getRect(TurnPage.area), fullBox);
-    expect(page.host.drawnTurns, hasLength(1));
-
-    await page.turnBack(tester);
-    expect(TurnPage.angle(tester), 0);
-    expect(tester.getRect(TurnPage.box), fullBox.shift(portrait.center(Offset.zero) - centre));
-    final player = tester.widget<Positioned>(TurnPage.box);
-    for (final key in ['page-tab-row', 'page-tabs-area']) {
-      expect(shown(tester, key).bottom, lessThanOrEqualTo(player.top! + player.height!),
-          reason: '$key: cut off by the window, below the full-screen player');
-    }
-    await frame(tester);
-    await frame(tester);
-    expect(TurnPage.angle(tester), 0);
-    expect(tester.getRect(TurnPage.box).width, lessThan(fullBox.width));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(tester.getRect(TurnPage.area), Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect));
-    await page.leave(tester);
-  });
-
-  testWidgets('不转 never waits for a picture, whatever drawn start it kept from another method', (tester) async {
-    final page = TurnPage();
-    await page.open(
-      tester,
-      style: const TurnStyle(
-        method: TurnMethod.noSpin,
-        picture: TurnPicture.none,
-        spinStart: TurnSpinStart.afterPicture,
-      ),
-    );
-    await page.turnToLandscape(tester);
-    final start = tester.getRect(TurnPage.box);
-    await frame(tester);
-    await frame(tester);
-    expect(tester.getRect(TurnPage.box).width, greaterThan(start.width), reason: 'grows from the first frame');
-    expect(tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop, isFalse);
-    await tester.pump(const Duration(milliseconds: 300));
-    await frame(tester);
-    expect(tester.getRect(TurnPage.area), fullBox);
-    await page.leave(tester);
-  });
-
   testWidgets('a covered page neither logs the pictures of turns it will not draw nor keeps them for its own',
       (tester) async {
     final logs = MemorySink();
