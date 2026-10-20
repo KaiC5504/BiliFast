@@ -28,7 +28,14 @@ doubles and bools only; per-frame data is packed into strings.
 
 `found`: `;`-separated animations, each `layer|keyPath|class|duration|timing|additive|beginOffsetMs`. Layer names:
 `window`, `window^1`, `window^2` (its superlayers, nearest first), `root` (the Flutter view), `container`,
-`picture`.
+`picture`. `duration` is in seconds; `timing` is `c1x c1y c2x c2y`, `spring m k d` or empty; `keyPath` is the
+animation's key when it isn't a property animation; `beginOffsetMs` is relative to the dump (negative: already
+running; 0: not committed yet).
+
+`request` lines carry the last begun turn's id and come only while the takeover is on. `picture gone` can also have
+`why: replaced` (the next turn's begin took it away); a turn with no picture (`none`, `noSpin`, a failed snapshot)
+has no `picture gone` line. The first `frames` sample's `gapMs` counts from `begin`, so a stall before the first tick
+shows there; `scene`, `window` and `container` angles include the layer's `sublayerTransform`.
 
 `frames.samples`: one per CADisplayLink tick for 1.2 s from `begin`, `;`-separated, each `,`-separated:
 `tMs` (since `begin`'s `wUs`), `gapMs` (since the last tick), `scene` (the summed angle of the window's superlayers),
