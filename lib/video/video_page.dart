@@ -169,7 +169,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   double _spinFrom = 0;
 
   /// Turns the host hasn't heard were drawn: its still picture covers the screen until it does.
-  int _drawnOwed = 0;
+  final _drawnOwed = <int>[];
 
   /// The screen's shape at the last build.
   bool? _drawnWide;
@@ -304,7 +304,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// reported drawn, at once.
   void _turnStarted(TurnStart start) {
     if (!mounted || !_owning || _left || _covered) return;
-    _drawnOwed += 1;
+    _drawnOwed.add(start.id);
     _turnMissed = false;
     final from = _turnFrom;
     final quarter = (start.angle.abs() % pi - pi / 2).abs() < pi / 4;
@@ -389,9 +389,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   }
 
   void _flushDrawn() {
-    for (; _drawnOwed > 0; _drawnOwed--) {
-      _services?.device.orientation.turnDrawn();
+    for (final turn in _drawnOwed) {
+      _services?.device.orientation.turnDrawn(turn);
     }
+    _drawnOwed.clear();
   }
 
   /// Mid-turn, the player box with its top inset, where the upright body sits (竖屏 has none) and how far the turn has

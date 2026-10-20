@@ -11,6 +11,8 @@ import UIKit
 enum TurnTakeover {
   /// Set from Dart's 开发者 switch 旋转动画 (DeviceHostApi.setTurnTakeover).
   static var enabled = false
+  static var method: NativeTurnMethod = .legacy
+  static var picture: NativeTurnPicture = .cut
 
   private static var picture: UIView?
 
@@ -22,8 +24,8 @@ enum TurnTakeover {
   private static let fallback = Duration.milliseconds(500)
   private static let fadeSeconds = 0.12
 
-  /// Flutter drew the turn's first frame; the still picture goes.
-  static func drawn() {
+  /// Flutter drew `turn`'s first frame; the still picture goes.
+  static func drawn(turn: Int) {
     fadeAway()
   }
 
@@ -60,7 +62,7 @@ enum TurnTakeover {
     }
 
     let seconds = coordinator.transitionDuration
-    Task { @MainActor in try? await DeviceChannel.events?.onTurn(angle: angle, seconds: seconds) }
+    Task { @MainActor in try? await DeviceChannel.events?.onTurn(turn: Int64(id), angle: angle, seconds: seconds) }
 
     Task { @MainActor in
       try? await Task.sleep(for: fallback)

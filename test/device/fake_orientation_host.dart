@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation_host.dart';
+import 'package:bilifast/device/turn_style.dart';
 
 /// DeviceChannel.swift's stand-in: records requests, and the test turns the phone and refuses rotations.
 final class FakeOrientationHost implements OrientationHost {
@@ -19,10 +20,16 @@ final class FakeOrientationHost implements OrientationHost {
   final _orientations = StreamController<PhoneOrientation>.broadcast(sync: true);
   final _refusals = StreamController<OrientationRefusal>.broadcast(sync: true);
   final _turns = StreamController<TurnStart>.broadcast(sync: true);
+  final _picturesGone = StreamController<int>.broadcast(sync: true);
 
   /// Every [setTurnTakeover] call, and how many times Flutter said a taken-over turn was drawn.
   final takeovers = <bool>[];
   int drawn = 0;
+
+  /// The turns Flutter said were drawn, in order, and the method and picture of every [setTurnTakeover].
+  final drawnTurns = <int>[];
+  final styles = <(TurnMethod, TurnPicture)>[];
+  int _turnIds = 0;
 
   /// Takeover changes and requests in the order they reached the host.
   final sent = <String>[];
@@ -30,9 +37,15 @@ final class FakeOrientationHost implements OrientationHost {
   /// Thrown by [setTurnTakeover] while set.
   Object? takeoverError;
 
-  /// The system starting a taken-over turn of [angle] radians.
-  void startTurn(double angle, {Duration duration = const Duration(milliseconds: 280)}) =>
-      _turns.add((angle: angle, duration: duration));
+  /// The system starting a taken-over turn of [angle] radians; returns its id.
+  int startTurn(double angle, {Duration duration = const Duration(milliseconds: 280)}) {
+    final id = ++_turnIds;
+    _turns.add((id: id, angle: angle, duration: duration));
+    return id;
+  }
+
+  /// [turn]'s still picture went.
+  void pictureGone(int turn) => _picturesGone.add(turn);
 
   void turn(PhoneOrientation orientation) {
     phone = orientation;
@@ -71,9 +84,10 @@ final class FakeOrientationHost implements OrientationHost {
   Stream<OrientationRefusal> get refusals => _refusals.stream;
 
   @override
-  Future<void> setTurnTakeover(bool enabled) async {
+  Future<void> setTurnTakeover(bool enabled, {required TurnMethod method, required TurnPicture picture}) async {
     if (takeoverError case final error?) throw error;
     takeovers.add(enabled);
+    styles.add((method, picture));
     sent.add(enabled ? 'takeover on' : 'takeover off');
   }
 
@@ -81,7 +95,13 @@ final class FakeOrientationHost implements OrientationHost {
   Stream<TurnStart> get turns => _turns.stream;
 
   @override
-  Future<void> turnDrawn() async => drawn += 1;
+  Future<void> turnDrawn(int turn) async {
+    drawn += 1;
+    drawnTurns.add(turn);
+  }
+
+  @override
+  Stream<int> get picturesGone => _picturesGone.stream;
 }
 
 /// Records full screen entered and left; levels as [NoDeviceControls].

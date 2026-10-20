@@ -1,3 +1,5 @@
+import 'turn_style.dart';
+
 /// The phone's physical orientation, as UIDevice reports it.
 enum PhoneOrientation {
   portrait,
@@ -19,8 +21,9 @@ enum OrientationMask { portrait, landscape, landscapeLeft, landscapeRight }
 
 typedef OrientationRefusal = ({int request, String error});
 
-/// A turn Flutter draws itself: the rotation in radians the system would have animated, and its length.
-typedef TurnStart = ({double angle, Duration duration});
+/// A turn Flutter draws itself: the host's count of it, the rotation in radians the system would have animated, and
+/// its length.
+typedef TurnStart = ({int id, double angle, Duration duration});
 
 /// The native side of [OrientationController]: it applies masks and reports, and decides nothing.
 abstract interface class OrientationHost {
@@ -39,11 +42,15 @@ abstract interface class OrientationHost {
 
   Stream<OrientationRefusal> get refusals;
 
-  /// While on, turns are not animated by the system: the screen takes its turned size at once and each turn is
-  /// reported on [turns] for Flutter to draw, with a still picture covering the screen until [turnDrawn].
-  Future<void> setTurnTakeover(bool enabled);
+  /// While on, turns are not animated by the system (kept out of them by [method], never [TurnMethod.system]): the
+  /// screen takes its turned size at once and each turn is reported on [turns] for Flutter to draw, with [picture]
+  /// covering the screen until [turnDrawn].
+  Future<void> setTurnTakeover(bool enabled, {required TurnMethod method, required TurnPicture picture});
 
   Stream<TurnStart> get turns;
 
-  Future<void> turnDrawn();
+  Future<void> turnDrawn(int turn);
+
+  /// The turns whose still picture is off the screen, or that had none.
+  Stream<int> get picturesGone;
 }

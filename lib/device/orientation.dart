@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'device_controls.dart';
 import 'orientation_host.dart';
+import 'turn_style.dart';
 
 enum Presentation {
   inline,
@@ -54,38 +55,56 @@ class OrientationController extends ChangeNotifier {
   /// while a page owns the orientation, since only that page draws them. Always off without a host.
   bool get turnTakeover => _turnTakeover;
   bool _turnTakeover = false;
-  bool _takeoverWanted = false;
   int _takeoverSends = 0;
+
+  /// The 开发者 choice, armed or not; the page reads its picture and drawn start from it.
+  TurnStyle get turnStyle => _turnStyle;
+  TurnStyle _turnStyle = TurnStyle.system;
+
+  /// What the host was last sent, null while off.
+  TurnStyle? _sentStyle;
 
   /// The taken-over turns as the system starts them; empty without a host or while [turnTakeover] is off.
   Stream<TurnStart> get turns => _host?.turns ?? const Stream.empty();
 
-  /// The 开发者 switch's choice; the host has it while a page owns the orientation.
-  Future<void> setTurnTakeover(bool enabled) {
-    _takeoverWanted = enabled;
+  /// The taken-over turns whose still picture is gone.
+  Stream<int> get picturesGone => _host?.picturesGone ?? const Stream.empty();
+
+  /// The 开发者 choice; the host has it while a page owns the orientation.
+  Future<void> setTurnStyle(TurnStyle style) {
+    _turnStyle = style;
     return _syncTakeover();
   }
+
+  /// 自绘 as shipped by default, or 系统.
+  Future<void> setTurnTakeover(bool enabled) => setTurnStyle(enabled ? const TurnStyle() : TurnStyle.system);
 
   /// Queued with the requests, so a request made after a change goes out after it: an exit with no page to draw it
   /// gets the system's turn rather than a still picture.
   Future<void> _syncTakeover() {
     final host = _host;
-    final armed = _takeoverWanted && _owner != null;
-    if (host == null || armed == _turnTakeover) return Future.value();
+    final armed = _turnStyle.method.drawn && _owner != null;
+    final style = armed ? _turnStyle : null;
+    if (host == null || style == _sentStyle) return Future.value();
     _turnTakeover = armed;
+    _sentStyle = style;
     final send = ++_takeoverSends;
+    final sent = style ?? _turnStyle;
     return _hostQueue = _hostQueue.then((_) async {
       try {
-        await host.setTurnTakeover(armed);
+        await host.setTurnTakeover(armed, method: sent.method, picture: sent.picture);
       } catch (error) {
-        if (send == _takeoverSends) _turnTakeover = false;
+        if (send == _takeoverSends) {
+          _turnTakeover = false;
+          _sentStyle = null;
+        }
         _hostFailed(error);
       }
     });
   }
 
-  /// The first frame of a taken-over turn is drawn, so the host can drop its still picture.
-  void turnDrawn() => _host?.turnDrawn().catchError(_hostFailed);
+  /// The first frame of taken-over [turn] is drawn, so the host can drop its still picture.
+  void turnDrawn(int turn) => _host?.turnDrawn(turn).catchError(_hostFailed);
 
   Object? _owner;
   bool _observing = false;

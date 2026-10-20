@@ -69,6 +69,30 @@ enum NativeInterfaceOrientation {
   unknown;
 }
 
+/// 开发者 → 旋转动画's ways of keeping iOS's own rotation out of a turn Flutter draws (TurnTakeover.swift). The test
+/// build carries them all; the phone's log decides which stays.
+enum NativeTurnMethod {
+  /// UIView animations off for the turn, as 1.0.0 (12) shipped.
+  legacy,
+  /// [legacy], then the animations iOS added to the window, the layers above it and the root view are removed.
+  remove,
+  /// iOS rotates as it likes; the Flutter view sits in a container turned the other way alongside, so the two cancel.
+  counter,
+  /// [legacy], inside a Core Animation transaction with its actions disabled until the turn is set up.
+  noActions,
+  /// UIView animations already off when the rotation is requested, until the turn completes.
+  quietRequest,
+  /// iOS's rotation as it is, with no still picture; Flutter gets the turned size at once and draws no turn itself.
+  noSpin;
+}
+
+/// What covers the screen while the window turns, until Flutter has drawn the turn's first frame.
+enum NativeTurnPicture {
+  cut,
+  fade,
+  none;
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -85,6 +109,12 @@ class _PigeonCodec extends StandardMessageCodec {
       writeValue(buffer, value.index);
     }    else if (value is NativeInterfaceOrientation) {
       buffer.putUint8(131);
+      writeValue(buffer, value.index);
+    }    else if (value is NativeTurnMethod) {
+      buffer.putUint8(132);
+      writeValue(buffer, value.index);
+    }    else if (value is NativeTurnPicture) {
+      buffer.putUint8(133);
       writeValue(buffer, value.index);
     } else {
       super.writeValue(buffer, value);
@@ -103,6 +133,12 @@ class _PigeonCodec extends StandardMessageCodec {
       case 131:
         final value = readValue(buffer) as int?;
         return value == null ? null : NativeInterfaceOrientation.values[value];
+      case 132:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : NativeTurnMethod.values[value];
+      case 133:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : NativeTurnPicture.values[value];
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -356,15 +392,16 @@ class DeviceHostApi {
   }
 
   /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): the scene's own rotation animation
-  /// is off, Flutter gets the turned size at once, and each turn is reported through [DeviceEventApi.onTurn].
-  Future<void> setTurnTakeover(bool enabled) async {
+  /// is kept out of them by [method], Flutter gets the turned size at once, and each turn is reported through
+  /// [DeviceEventApi.onTurn].
+  Future<void> setTurnTakeover(bool enabled, NativeTurnMethod method, NativeTurnPicture picture) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.setTurnTakeover$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled, method, picture]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -375,15 +412,15 @@ class DeviceHostApi {
     ;
   }
 
-  /// Flutter has drawn the first frame of a taken-over turn; the still picture covering the screen can go.
-  Future<void> turnDrawn() async {
+  /// Flutter has drawn the first frame of taken-over [turn]; the still picture covering the screen can go.
+  Future<void> turnDrawn(int turn) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.turnDrawn$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[turn]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -405,9 +442,16 @@ abstract class DeviceEventApi {
   /// A hardware button changed the volume while the volume view hides the system HUD.
   void onHardwareVolume(double volume);
 
-  /// A taken-over turn began: [angle] is the rotation in radians the scene would have animated (its coordinator's
-  /// target transform), [seconds] how long it would have taken.
-  void onTurn(double angle, double seconds);
+  /// Taken-over [turn] (counted from 1 per launch) began: [angle] is the rotation in radians the scene would have
+  /// animated (its coordinator's target transform), [seconds] how long it would have taken.
+  void onTurn(int turn, double angle, double seconds);
+
+  /// [turn]'s still picture is off the screen (cut, or its fade done), or there was none.
+  void onTurnPictureGone(int turn);
+
+  /// A line for the phone's log from the native side of a turn (docs/reference/turn-log.md); [fields] hold strings,
+  /// ints, doubles and bools only.
+  void onTurnLog(String kind, Map<String, Object?> fields);
 
   /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
   /// differ from the last path that was up, so the engine's speed measurements no longer hold.
@@ -492,10 +536,54 @@ abstract class DeviceEventApi {
       } else {
         pigeonVar_channel.setMessageHandler((Object? message) async {
           final List<Object?> args = message! as List<Object?>;
-          final double arg_angle = args[0]! as double;
-          final double arg_seconds = args[1]! as double;
+          final int arg_turn = args[0]! as int;
+          final double arg_angle = args[1]! as double;
+          final double arg_seconds = args[2]! as double;
           try {
-            api.onTurn(arg_angle, arg_seconds);
+            api.onTurn(arg_turn, arg_angle, arg_seconds);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.DeviceEventApi.onTurnPictureGone$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_turn = args[0]! as int;
+          try {
+            api.onTurnPictureGone(arg_turn);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.DeviceEventApi.onTurnLog$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final String arg_kind = args[0]! as String;
+          final Map<String, Object?> arg_fields = (args[1]! as Map<Object?, Object?>).cast<String, Object?>();
+          try {
+            api.onTurnLog(arg_kind, arg_fields);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
