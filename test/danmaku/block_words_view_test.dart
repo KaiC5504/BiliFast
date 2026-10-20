@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
+import '../shared/text_lines.dart';
 import '../support/fake_player_session.dart';
 
 class Rig {
@@ -43,11 +44,16 @@ const _rules = [
   BlockRule(id: 5, kind: BlockRuleKind.user, filter: 'a1b2c3d4'),
 ];
 
-Future<Rig> pumpView(WidgetTester tester, {bool loggedIn = true}) async {
+Future<Rig> pumpView(
+  WidgetTester tester, {
+  bool loggedIn = true,
+  List<BlockRule> rules = _rules,
+  ThemeData? theme,
+}) async {
   tester.view.physicalSize = const Size(956, 440);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final api = FakePageApi()..blockRules = [..._rules];
+  final api = FakePageApi()..blockRules = [...rules];
   final store = BlockRuleStore(api: api, isLoggedIn: () => loggedIn);
   final feed = DanmakuFeed(
     client: BiliClient(transport: Canned.http(), cookies: CookieJar(Canned.cookies)),
@@ -83,6 +89,7 @@ Future<Rig> pumpView(WidgetTester tester, {bool loggedIn = true}) async {
   final backs = <int>[];
   await tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       home: Builder(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(context).copyWith(padding: const EdgeInsets.only(left: 62, right: 62, bottom: 21)),
@@ -342,5 +349,35 @@ void main() {
     expect(find.text('CA'), findsNothing);
     expect(rig.toasts, isEmpty);
     handle.dispose();
+  });
+
+  group('under the system font', () {
+    testWidgets('a rule mixing Latin and Chinese sits on a Chinese rule\'s line', (tester) async {
+      await useSystemFont(tester);
+      await pumpView(
+        tester,
+        theme: appTheme(),
+        rules: const [
+          BlockRule(id: 1, kind: BlockRuleKind.keyword, filter: '剧透'),
+          BlockRule(id: 2, kind: BlockRuleKind.keyword, filter: 'OP 剧透 1080P'),
+        ],
+      );
+      double hanInChip(int id, String text) =>
+          linesOf(tester, find.text(text)).han.single - tester.getRect(key('block-rule-$id')).top;
+      expect(hanInChip(2, 'OP 剧透 1080P'), closeTo(hanInChip(1, '剧透'), 0.01));
+    });
+
+    testWidgets('typed text with Latin sits where Chinese does, on the hint\'s line', (tester) async {
+      await useSystemFont(tester);
+      await pumpView(tester, theme: appTheme());
+      final field = find.descendant(of: key('block-words-field'), matching: find.byType(EditableText));
+      final hint = linesOf(tester, find.textContaining('请填写要屏蔽的关键词')).han.first;
+      await type(tester, '设置版本');
+      final chinese = linesOf(tester, field).han.single;
+      await type(tester, 'KaiC 设置');
+      final mixed = linesOf(tester, field).han.single;
+      expect(mixed, closeTo(chinese, 0.01));
+      expect(chinese, closeTo(hint, 0.01));
+    });
   });
 }

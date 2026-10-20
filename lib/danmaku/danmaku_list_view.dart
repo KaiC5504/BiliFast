@@ -334,7 +334,11 @@ class _DanmakuRow extends StatelessWidget {
                 bottom: DanmakuListTheme.rowPadY,
                 right: DanmakuListTheme.textGap,
               ),
-              child: Text(elem.content, style: DanmakuListTheme.textStyle),
+              child: Text(
+                elem.content,
+                style: DanmakuListTheme.textStyle,
+                strutStyle: BiliFonts.strutOf(context, DanmakuListTheme.textStyle),
+              ),
             ),
           ),
           SizedBox(
@@ -386,6 +390,7 @@ class _DanmakuRow extends StatelessWidget {
                         count,
                         key: const ValueKey('danmaku-list-count'),
                         style: DanmakuListTheme.countStyle(colour),
+                        strutStyle: BiliFonts.strutOf(context, DanmakuListTheme.countStyle(colour)),
                       ),
                     ),
                   ),

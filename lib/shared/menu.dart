@@ -57,6 +57,8 @@ class MenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = onTap == null ? BiliColors.secondaryText : BiliColors.text;
+    final titleStyle = TextStyle(fontSize: BiliMetrics.bodyText, color: color);
+    const noteStyle = TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText);
     return MergeSemantics(
       child: Semantics(
         button: true,
@@ -75,16 +77,10 @@ class MenuRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(fontSize: BiliMetrics.bodyText, color: color),
-                    ),
+                    child: Text(title, style: titleStyle, strutStyle: BiliFonts.strutOf(context, titleStyle)),
                   ),
                   if (note case final note?)
-                    Text(
-                      note,
-                      style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),
-                    ),
+                    Text(note, style: noteStyle, strutStyle: BiliFonts.strutOf(context, noteStyle)),
                 ],
               ),
             ),

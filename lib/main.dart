@@ -124,20 +124,26 @@ class LaunchFailedApp extends StatelessWidget {
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(BiliMetrics.gutter),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('BiliFast 启动失败，请重启应用',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: BiliMetrics.titleText, color: BiliColors.text, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: BiliMetrics.rowGap),
-                    Text(error,
-                        key: const ValueKey('launch-error'),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.failure)),
-                  ],
-                ),
+                child: Builder(builder: (context) {
+                  const title =
+                      TextStyle(fontSize: BiliMetrics.titleText, color: BiliColors.text, fontWeight: FontWeight.w600);
+                  const detail = TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.failure);
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('BiliFast 启动失败，请重启应用',
+                          textAlign: TextAlign.center,
+                          style: title,
+                          strutStyle: BiliFonts.strutOf(context, title)),
+                      const SizedBox(height: BiliMetrics.rowGap),
+                      Text(error,
+                          key: const ValueKey('launch-error'),
+                          textAlign: TextAlign.center,
+                          style: detail,
+                          strutStyle: BiliFonts.strutOf(context, detail)),
+                    ],
+                  );
+                }),
               ),
             ),
           ),

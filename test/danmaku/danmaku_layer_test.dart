@@ -9,6 +9,7 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../shared/text_lines.dart';
 import '../support/system_font.dart';
 
 DisplayDanmaku item(String text, int ms, {int mode = 1, int color = 0xFFFFFF, bool own = false}) => DisplayDanmaku(
@@ -325,5 +326,29 @@ void main() {
     final miSans = DanmakuSprites.textStyle(17, Paint());
     expect(miSans.fontFamily, BiliFonts.miSans);
     expect(miSans.fontFamilyFallback, isNull);
+  });
+
+  // With no height a line takes each font's own ascent and descent, and PingFang's both exceed SF's, so a mixed line
+  // already sits on the Chinese one and the sprites need no strut.
+  testWidgets('sprites: under the system font a danmaku mixing Latin and Chinese is a Chinese one\'s height and baseline', (
+    tester,
+  ) async {
+    await useSystemFont(tester);
+    expect(BiliFonts.strut(DanmakuSprites.textStyle(17, Paint())), isNull);
+    double baseline(String text) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: DanmakuSprites.textStyle(17, Paint())),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      addTearDown(painter.dispose);
+      return painter.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+    }
+
+    final sprites = DanmakuSprites();
+    final chinese = sprites.of(item('弹幕弹幕', 0), pointSize: 17);
+    final mixed = sprites.of(item('KaiC 1080P 弹幕', 0), pointSize: 17);
+    expect(mixed.size.height, chinese.size.height);
+    expect(chinese.size.height, sprites.lineHeight(17).ceilToDouble() + 2 * BiliMetrics.danmakuPad);
+    expect(baseline('KaiC 1080P 弹幕'), closeTo(baseline('弹幕弹幕'), 0.01));
   });
 }
