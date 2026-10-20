@@ -111,6 +111,32 @@ void main() {
     expect(detail.pages.length, 2);
   });
 
+  test('the argue notice is read from argue_info', () {
+    String withArgue(String argue) => Fixtures.viewDetail.replaceAll('"staff":[],', '"staff":[],"argue_info":$argue,');
+    final notice = decode(
+        withArgue('{"argue_msg":"个人观点，仅供参考","argue_type":0,"argue_link":""}'), VideoDetail.fromJson);
+    expect(notice.argueMessage, '个人观点，仅供参考');
+    expect(notice, isNot(decode(Fixtures.viewDetail, VideoDetail.fromJson)));
+  });
+
+  test('an empty, blank, missing or malformed argue notice is none', () {
+    String withArgue(String argue) => Fixtures.viewDetail.replaceAll('"staff":[],', '"staff":[],"argue_info":$argue,');
+    expect(withArgue('null').contains('"argue_info":null'), isTrue);
+    expect(decode(Fixtures.viewDetail, VideoDetail.fromJson).argueMessage, isNull);
+    for (final argue in [
+      '{"argue_msg":"","argue_type":0,"argue_link":""}',
+      '{"argue_msg":"  ","argue_type":0}',
+      '{"argue_type":0}',
+      '{"argue_msg":5}',
+      '"none"',
+      'null',
+    ]) {
+      final detail = decode(withArgue(argue), VideoDetail.fromJson);
+      expect(detail.argueMessage, isNull, reason: argue);
+      expect(detail.title, '测试视频', reason: argue);
+    }
+  });
+
   test('a description without parts falls back to the plain text', () {
     final plain = Fixtures.viewDetail.replaceAll(
         '"desc_v2":[{"raw_text":"视频简介 ","type":1,"biz_id":0},{"raw_text":"测试用户","type":2,"biz_id":42}],', '"desc_v2":null,');

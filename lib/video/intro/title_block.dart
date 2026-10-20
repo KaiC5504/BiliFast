@@ -13,8 +13,8 @@ import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import 'desc_text.dart';
 
-/// The title with its 活动 tag and ⌄, and the meta line with N人正在看 (03). Expanded (18): the BV id, the reprint
-/// notice, the description with seeking timestamps, links and video ids, and the plain tags.
+/// The title with its 活动 tag and ⌄, the meta line with N人正在看 (03) and any notice under it. Expanded (18): the BV
+/// id, the reprint notice, the description with seeking timestamps, links and video ids, and the plain tags.
 class TitleBlock extends StatefulWidget {
   const TitleBlock({
     super.key,
@@ -132,6 +132,7 @@ class _TitleBlockState extends State<TitleBlock> with SingleTickerProviderStateM
             ),
             const SizedBox(height: IntroTheme.metaGap),
             _MetaLine(detail: detail, online: widget.online),
+            if (detail.argueMessage case final notice?) _NoticeLine(text: notice),
             SizeTransition(
               sizeFactor: _curve,
               alignment: Alignment.topCenter,
@@ -315,6 +316,68 @@ class _MetaLine extends StatelessWidget {
   }
 }
 
+/// The site's notice on the video, such as ⓘ 个人观点，仅供参考, collapsed and expanded alike.
+class _NoticeLine extends StatelessWidget {
+  const _NoticeLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: IntroTheme.noticeGap),
+    child: SizedBox(
+      height: IntroTheme.noticeLine - IntroTheme.noticeHang,
+      child: OverflowBox(
+        alignment: Alignment.topLeft,
+        minHeight: IntroTheme.noticeLine,
+        maxHeight: IntroTheme.noticeLine,
+        child: Row(
+          children: [
+            const SizedBox(width: IntroTheme.metaLead),
+            const CustomPaint(size: Size.square(IntroTheme.noticeIcon), painter: _NoticePainter()),
+            const SizedBox(width: IntroTheme.noticeIconGap),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _style(
+                  IntroTheme.noticeText,
+                  BiliColors.secondaryText,
+                  line: IntroTheme.noticeLine,
+                  spacing: IntroTheme.proseSpacing,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// The notice's ⓘ: a ring with a round-ended bar and a dot inside, traced on font-check 03 at 12×.
+class _NoticePainter extends CustomPainter {
+  const _NoticePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centre = size.center(Offset.zero);
+    final line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = IntroTheme.metaStroke
+      ..strokeCap = StrokeCap.round
+      ..color = BiliColors.secondaryText;
+    canvas
+      ..drawCircle(centre, (size.shortestSide - IntroTheme.metaStroke) / 2, line)
+      ..drawLine(centre.translate(0, -2.63), centre.translate(0, 0.5), line)
+      ..drawCircle(centre.translate(0, 2.43), 0.55, Paint()..color = BiliColors.secondaryText);
+  }
+
+  @override
+  bool shouldRepaint(_NoticePainter oldDelegate) => false;
+}
+
 /// 03's N人正在看 mark: a head and shoulders like an Ω, and the edge of a second one behind it on the right.
 class _OnlinePainter extends CustomPainter {
   const _OnlinePainter();
@@ -378,7 +441,7 @@ class _Details extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: IntroTheme.bvGap),
+        SizedBox(height: IntroTheme.bvGap + (detail.argueMessage == null ? 0 : IntroTheme.noticeHang)),
         SizedBox(
           height: IntroTheme.metaLine,
           child: Row(
