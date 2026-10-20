@@ -164,6 +164,20 @@ abstract final class BiliFonts {
   /// whichever font the engine last fell back to.
   static List<String>? get fallback => family == system ? const ['Apple Color Emoji', 'PingFang SC'] : null;
 
+  /// Under the system font, the strut a wrapping text whose lines can mix Latin and Chinese needs: each run splits its
+  /// line height by its own font's ascent and descent, and SF's split differs from PingFang's, so a line holding both
+  /// is a point taller than a Chinese one and its baseline a point lower. PingFang's line for every line keeps the
+  /// official app's pitch. Null under MiSans, which draws both scripts.
+  static StrutStyle? strut(TextStyle style) => family == system && style.height != null
+      ? StrutStyle(
+          fontFamily: 'PingFang SC',
+          fontSize: style.fontSize,
+          height: style.height,
+          leadingDistribution: style.leadingDistribution,
+          forceStrutHeight: true,
+        )
+      : null;
+
   /// Material's type scale tracks its text 0.1 to 0.5 pt, and every style that doesn't set its own spacing took that
   /// from the page's Material. iOS text isn't tracked; at 3 px per pt the extra 0.75 px leaves Chinese glyphs between
   /// pixels, some drawn crisp and the next blurred thinner, and widens every line.

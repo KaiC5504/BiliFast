@@ -46,4 +46,42 @@ void main() {
     expect(_laid('Wi-Fi 1080P', family: 'CupertinoSystemDisplay').width, width);
     expect(_laid('Wi-Fi 1080P', family: 'Roboto').width, width);
   });
+
+  group('BiliFonts.strut', () {
+    List<double> baselines(String text, {required bool strut}) {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      BiliFonts.family = BiliFonts.system;
+      const style = TextStyle(fontFamily: BiliFonts.system, fontFamilyFallback: _fallback, fontSize: 14, height: 1.6);
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        strutStyle: strut ? BiliFonts.strut(style) : null,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: 60);
+      return [for (final line in painter.computeLineMetrics()) line.baseline];
+    }
+
+    test('without it a line mixing Latin and Chinese is a point taller and its baseline a point lower', () {
+      final chinese = baselines('设置版本设置版本', strut: false);
+      final mixed = baselines('KaiC 设置 KaiC 设置', strut: false);
+      expect(mixed.first - chinese.first, closeTo(1, 0.01));
+      expect(mixed[1] - mixed[0], closeTo(23, 0.01));
+    });
+
+    test('with it every line keeps the Chinese pitch and baseline', () {
+      final chinese = baselines('设置版本设置版本', strut: true);
+      final mixed = baselines('KaiC 设置 KaiC 设置', strut: true);
+      expect(mixed.first, chinese.first);
+      expect(mixed[1] - mixed[0], closeTo(22, 0.01));
+    });
+
+    test('none under MiSans, or for a style with no height', () {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      BiliFonts.family = BiliFonts.miSans;
+      expect(BiliFonts.strut(const TextStyle(fontSize: 14, height: 1.6)), isNull);
+      BiliFonts.family = BiliFonts.system;
+      expect(BiliFonts.strut(const TextStyle(fontSize: 14)), isNull);
+    });
+  });
 }
