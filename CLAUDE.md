@@ -54,7 +54,14 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   without a reload; PipKeeper (a closed page lives on in the small window, restore pushes it back, ✕ or another
   video releases it); network changes reset the engine's node health; the drawn turn (开发者 → 旋转动画 自绘 / 系统).
 
-Next: the phone runs both checklists (M1 and M2) in full; then the cutover (spec, slice 9).
+Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), shipped as one build with (15) and the comment fix:
+1. Slice 10, the system-font check: KaiC's ours-beside-official pairs of the main screens (`local/differences/`), a
+   PC tool that measures them (line centres, glyph pitch, box edges, px / 3), one fix round.
+2. Slice 11, 搜索: the search box, suggestions, results with filters.
+3. Slice 12, UP主空间: an uploader's profile, videos and 关注, from every place an uploader shows.
+4. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
+Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
+full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
 - The drawn turn, 1.0.0 (15), committed but not shipped (KaiC ships it with the next work): (14)'s recording
