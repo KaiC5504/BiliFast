@@ -103,7 +103,7 @@ void main() {
 
   group('events', () {
     test('each is logged at once as turn <kind>, category ui, with the wall clock', () {
-      const style = TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade);
+      const style = TurnStyle(picture: TurnPicture.fade);
       recorder.presentation(Presentation.inline, Presentation.landscape, wide: false, waiting: true, style: style);
       nowUs = t0 + 1500;
       recorder.started((id: 3, angle: pi / 2, duration: const Duration(milliseconds: 300)), outcome: 'pending');
@@ -124,7 +124,7 @@ void main() {
           'to': 'landscape',
           'wide': false,
           'waiting': true,
-          'style': '抵消·淡出·立即',
+          'style': '请求前关·淡出·立即',
         },
         {'msg': 'turn started', 'wUs': w, 'turn': 3, 'angle': pi / 2, 'ms': 300.0, 'outcome': 'pending'},
         {'msg': 'turn sized', 'wUs': w, 'w': 956.0, 'h': 440.0, 'layout': 'landscape'},
@@ -274,7 +274,7 @@ void main() {
         Presentation.inline,
         wide: true,
         waiting: true,
-        style: const TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade),
+        style: const TurnStyle(picture: TurnPicture.fade),
       );
       expect(timers.activeWith(TurnRecorder.settle), isNull);
       expect(timers.activeWith(TurnRecorder.timingsWait), isNotNull);
@@ -325,7 +325,7 @@ void main() {
           Presentation.landscape,
           wide: false,
           waiting: true,
-          style: const TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade),
+          style: const TurnStyle(picture: TurnPicture.fade),
         );
         turn(second);
         expect(frameLines(), isEmpty);

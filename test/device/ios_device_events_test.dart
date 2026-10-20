@@ -88,7 +88,7 @@ void main() {
         <String, Object?>{
           'wUs': 1760000000000000,
           'turn': 2,
-          'method': 'remove',
+          'method': 'quietRequest',
           'picture': 'cut',
           'angle': 1.5707963,
           'animated': false,
@@ -96,8 +96,8 @@ void main() {
         },
       ]);
       await _send('onTurnLog', [
-        'container',
-        <String, Object?>{'wUs': 1760000000500000, 'turn': 0, 'event': 'installed', 'method': 'counter'},
+        'drawn',
+        <String, Object?>{'wUs': 1760000000500000, 'turn': 2, 'action': 'cut', 'method': 'quietRequest'},
       ]);
       expect(logs.events.every((event) => event.cat == LogCategory.ui && event.level == LogLevel.info), isTrue);
       expect([
@@ -108,12 +108,12 @@ void main() {
           'msg': 'turn native begin',
           'wUs': 1760000000000000,
           'turn': 2,
-          'method': 'remove',
+          'method': 'quietRequest',
           'picture': 'cut',
           'angle': 1.5707963,
           'animated': false,
         },
-        {'msg': 'turn native container', 'wUs': 1760000000500000, 'turn': 0, 'event': 'installed', 'method': 'counter'},
+        {'msg': 'turn native drawn', 'wUs': 1760000000500000, 'turn': 2, 'action': 'cut', 'method': 'quietRequest'},
       ]);
     });
   });
@@ -123,24 +123,16 @@ void main() {
 
     setUp(() => host = IosOrientationHost(DeviceHostApi(), events));
 
-    test('every method and picture reaches the native side; 系统 goes as legacy, only ever sent switched off', () async {
-      for (final method in TurnMethod.values) {
-        await host.setTurnTakeover(method.drawn, method: method, picture: TurnPicture.cut);
-      }
+    test('the switch and every picture reach the native side', () async {
+      await host.setTurnTakeover(false, picture: TurnPicture.cut);
       for (final picture in TurnPicture.values) {
-        await host.setTurnTakeover(true, method: TurnMethod.remove, picture: picture);
+        await host.setTurnTakeover(true, picture: picture);
       }
       expect(hostCalls, [
-        'setTurnTakeover false legacy cut',
-        'setTurnTakeover true legacy cut',
-        'setTurnTakeover true remove cut',
-        'setTurnTakeover true counter cut',
-        'setTurnTakeover true noActions cut',
-        'setTurnTakeover true quietRequest cut',
-        'setTurnTakeover true noSpin cut',
-        'setTurnTakeover true remove cut',
-        'setTurnTakeover true remove fade',
-        'setTurnTakeover true remove none',
+        'setTurnTakeover false cut',
+        'setTurnTakeover true cut',
+        'setTurnTakeover true fade',
+        'setTurnTakeover true none',
       ]);
     });
 

@@ -61,6 +61,7 @@ class PlayerPrefs {
   final Logger _logger;
 
   static const _defaultTurn = TurnStyle();
+  static const _retiredTurnMethods = {'legacy', 'remove', 'counter', 'noActions', 'noSpin'};
   Future<void> _writing = Future.value();
 
   bool _autoplay = true;
@@ -144,8 +145,12 @@ class PlayerPrefs {
     _danmakuStyleHintSeen = pick<bool>('danmakuStyleHintSeen') ?? _danmakuStyleHintSeen;
     // Up to 1.0.0 (12) 旋转动画 was a bool, false for 系统; the next write drops it.
     final before = pick<bool>('turnTakeover') == false ? TurnStyle.system : _turnStyle;
+    // 1.0.0 (13)'s test build had more methods; all of them drew the turn, as 请求前关 does now.
+    final method = _retiredTurnMethods.contains(values['turnMethod'])
+        ? TurnMethod.quietRequest
+        : named('turnMethod', TurnMethod.values);
     _turnStyle = TurnStyle(
-      method: named('turnMethod', TurnMethod.values) ?? before.method,
+      method: method ?? before.method,
       picture: named('turnPicture', TurnPicture.values) ?? before.picture,
       spinStart: named('turnSpinStart', TurnSpinStart.values) ?? before.spinStart,
     );

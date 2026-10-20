@@ -25,7 +25,7 @@ void main() {
   tearDown(() => folder.deleteSync(recursive: true));
 
   test('without a file the defaults apply: 自动连播 on, 不循环, 适应, BTR on, stats off, danmaku on, 旋转动画 '
-      '移除·直接切·立即', () async {
+      '请求前关·直接切·立即', () async {
     final prefs = await PlayerPrefs.load(path, logger: logger);
     expect(prefs.autoplay, isTrue);
     expect(prefs.loop, LoopMode.off);
@@ -50,8 +50,7 @@ void main() {
       ..showStats = true
       ..danmakuOn = false
       ..coinAlsoLike = false
-      ..turnStyle = const TurnStyle(
-          method: TurnMethod.counter, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture)
+      ..turnStyle = const TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture)
       ..quality = 127
       ..codec = VideoCodec.av1;
     await prefs.settle();
@@ -64,8 +63,7 @@ void main() {
     expect(again.showStats, isTrue);
     expect(again.danmakuOn, isFalse);
     expect(again.coinAlsoLike, isFalse);
-    expect(again.turnStyle,
-        const TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture));
+    expect(again.turnStyle, const TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture));
     expect(again.quality, 127);
     expect(again.codec, VideoCodec.av1);
   });
@@ -100,14 +98,14 @@ void main() {
     }
 
     test('the new keys win over it, and the next write drops it', () async {
-      File(path).writeAsStringSync('{"turnTakeover":false,"turnMethod":"counter"}');
+      File(path).writeAsStringSync('{"turnTakeover":false,"turnMethod":"quietRequest"}');
       final prefs = await PlayerPrefs.load(path, logger: logger);
-      expect(prefs.turnStyle, const TurnStyle(method: TurnMethod.counter));
+      expect(prefs.turnStyle, const TurnStyle(method: TurnMethod.quietRequest));
       prefs.autoplay = false;
       await prefs.settle();
       final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
       expect(written.keys, isNot(contains('turnTakeover')));
-      expect(written['turnMethod'], 'counter');
+      expect(written.keys, isNot(contains('turnMethod')), reason: '请求前关 is the default');
     });
 
     test('系统 carries over to the next launch as the method', () async {
@@ -116,6 +114,36 @@ void main() {
       await prefs.settle();
       expect(jsonDecode(File(path).readAsStringSync()), containsPair('turnMethod', 'system'));
       expect((await PlayerPrefs.load(path, logger: logger)).turnStyle, TurnStyle.system);
+    });
+  });
+
+  group('a 1.0.0 (13) method that is gone', () {
+    for (final name in ['legacy', 'remove', 'counter', 'noActions', 'noSpin']) {
+      test('$name reads as 请求前关 with its picture and start kept, without a warning', () async {
+        File(path).writeAsStringSync('{"turnMethod":"$name","turnPicture":"fade","turnSpinStart":"afterPicture"}');
+        final prefs = await PlayerPrefs.load(path, logger: logger);
+        expect(
+          prefs.turnStyle,
+          const TurnStyle(
+              method: TurnMethod.quietRequest, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture),
+        );
+        expect(logs.events.map((event) => event.msg), isNot(contains('player prefs value ignored')));
+        prefs.autoplay = false;
+        await prefs.settle();
+        final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+        expect(written.keys, isNot(contains('turnMethod')), reason: 'the next write drops it');
+        expect(written['turnPicture'], 'fade');
+      });
+    }
+
+    test('it wins over the 1.0.0 (12) bool, as any saved method does', () async {
+      File(path).writeAsStringSync('{"turnTakeover":false,"turnMethod":"counter"}');
+      expect((await PlayerPrefs.load(path, logger: logger)).turnStyle, const TurnStyle());
+    });
+
+    test('a (13) file without a method, which meant its default 移除, reads as 请求前关', () async {
+      File(path).writeAsStringSync('{"turnPicture":"none"}');
+      expect((await PlayerPrefs.load(path, logger: logger)).turnStyle, const TurnStyle(picture: TurnPicture.none));
     });
   });
 
