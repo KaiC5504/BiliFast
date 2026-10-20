@@ -11,15 +11,16 @@
 Widget tests render MiSans while the phone draws PingFang, so values settled on Windows can be off on the phone; this
 measures the phone. Everything is reported in pt (px / --scale, 3 for the iPhone).
 
-Ink is any pixel darker than its row's median by more than --ink, so grey text in a grey box counts and the box itself
-doesn't. Ink joined across gaps narrower than --join pt makes an element: a line of text, or an image when it is tall
+Ink is any pixel further from its row's median than --ink, darker or lighter (white text on the player), so grey text
+in a grey box counts and the box itself doesn't. Ink joined across gaps narrower than --join pt makes an element: a line of text, or an image when it is tall
 or solid; pieces of one line less than a character apart (a full-width comma's blank) are joined too. A line's centre
 and glyph size come from its Chinese-sized glyphs only, so Latin letters, descenders and punctuation don't move them.
 Flat fills of a shade other than white (a reply box, a pill, a card on a grey page) and hairlines are found
 separately.
 
-The shots are lined up by the vertical offset where their ink profiles agree best, then by their first few paired
-text lines, so a fault lower down doesn't pull the top out of line; --anchor (a y in each, in pt) sets it instead.
+Two whole screens (the same size) are lined up as they are, by the status bar. Crops are lined up by the vertical
+offset where their ink profiles agree best, then by their first few paired text lines, so a fault lower down doesn't
+pull the top out of line. --anchor (a y in each, in pt) sets it instead.
 Elements are paired in reading order, row by row. For each pair the report gives ours and the official centre, the
 difference, the change in the step from the pair before (where a spacing fault shows, without the drift of every
 fault above it), the left and right edges, the glyph height (the font size) and the ink (weight and size together;
@@ -70,9 +71,10 @@ def load(path: pathlib.Path) -> np.ndarray:
 
 
 def ink_mask(grey: np.ndarray, threshold: float) -> tuple[np.ndarray, np.ndarray]:
-    """Pixels darker than their row's median by more than threshold, and how much darker (0-1)."""
+    """Pixels further from their row's median than threshold, darker or (white text on the player) lighter, and how
+    far (0-1)."""
     background = np.median(grey, axis=1, keepdims=True)
-    depth = np.clip(background - grey, 0, None)
+    depth = np.abs(background - grey)
     return depth > threshold, depth / 255.0
 
 
@@ -399,12 +401,15 @@ def run(ours_path: pathlib.Path, official_path: pathlib.Path, *, scale: float = 
     columns = (0, ours_grey.shape[1]) if xs is None else (round(xs[0] * scale), round(xs[1] * scale))
     ours = elements(ours_grey, scale=scale, ink=ink, join_pt=join, xs=columns)
     official = elements(official_grey, scale=scale, ink=ink, join_pt=join, xs=columns)
+    whole = ours_grey.shape == official_grey.shape
     if anchor is not None:
         shift = (anchor[1] - anchor[0]) * scale
+    elif whole:
+        shift = 0.0
     else:
         shift = offset(ours, official, max(ours_grey.shape[0], official_grey.shape[0]), scale)
     pairs = pair(ours, official, shift, scale)
-    if anchor is None:
+    if anchor is None and not whole:
         top = [b.centre - a.centre for a, b in pairs if a is not None and b is not None and a.kind == "text"][:5]
         if top:
             shift = float(np.median(top))
@@ -426,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("ours", type=pathlib.Path)
     parser.add_argument("official", type=pathlib.Path)
     parser.add_argument("--scale", type=float, default=3, help="px per pt (3 on the iPhone 17 Pro Max)")
-    parser.add_argument("--ink", type=float, default=30, help="how much darker than its row's median ink is (0-255)")
+    parser.add_argument("--ink", type=float, default=30, help="how far from its row's median ink is (0-255)")
     parser.add_argument("--join", type=float, default=12, help="gaps narrower than this (pt) stay in one element")
     parser.add_argument("--pt", type=float, default=0.5, help="mark positions off by this much (pt)")
     parser.add_argument("--ratio", type=float, default=0.02, help="mark glyph sizes off by twice this share, ink 5x")

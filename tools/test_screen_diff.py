@@ -66,10 +66,17 @@ class ScreenDiffTest(unittest.TestCase):
 
     def test_a_shot_cropped_lower_lines_up_without_marks(self):
         ours = screen(lines=[(56, 50), (56, 74), (56, 98)])
-        official = screen(lines=[(56, 50), (56, 74), (56, 98)], top=10)
+        official = screen(lines=[(56, 50), (56, 74), (56, 98)], top=10).crop((0, 0, WIDTH, HEIGHT - 60))
         text, rows, shift = self.measure(ours, official)
         self.assertAlmostEqual(shift / 3, 10, places=0)
         self.assertTrue(all(not row.marks for row in rows), text)
+
+    def test_two_whole_screens_are_lined_up_by_the_status_bar(self):
+        ours = screen(lines=[(56, 50), (56, 74), (56, 98)])
+        official = screen(lines=[(56, 50), (56, 74), (56, 98)], top=4)
+        text, rows, shift = self.measure(ours, official)
+        self.assertEqual(shift, 0)
+        self.assertAlmostEqual(self.matched(rows)[0].dy, 4, delta=0.4, msg=text)
 
     def test_one_line_lower_shows_as_a_step_there_and_nowhere_else(self):
         ours = screen(lines=[(56, 50), (56, 74), (56, 98), (56, 122)])
@@ -98,6 +105,17 @@ class ScreenDiffTest(unittest.TestCase):
         ours = screen(lines=[(56, 50)], fill=(120, 120, 124))
         text, rows, _ = self.measure(ours, screen(lines=[(56, 50)]))
         self.assertLess(self.matched(rows)[0].ink, 0.85, text)
+
+    def test_white_text_on_the_dark_player_is_measured_too(self):
+        def dark(top: float) -> Image.Image:
+            image = Image.new("RGB", (WIDTH, HEIGHT), (12, 12, 14))
+            draw_text(ImageDraw.Draw(image), 56, 50 + top, LINE, fill=(255, 255, 255))
+            return image
+
+        text, rows, _ = self.measure(dark(0), dark(2))
+        row = self.matched(rows)[0]
+        self.assertAlmostEqual(row.dy, 2, delta=0.4, msg=text)
+        self.assertAlmostEqual(row.glyph, 1, delta=0.03)
 
     def test_a_grey_box_is_found_through_its_text_and_its_edges_compared(self):
         ours = screen(lines=[(66, 120), (66, 143)], box=(100, 170))
