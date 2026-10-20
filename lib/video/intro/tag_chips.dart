@@ -37,7 +37,7 @@ class TagChips extends StatelessWidget {
               final scaler = MediaQuery.textScalerOf(context);
               var scrolling = -1;
               for (var index = 0; index < shown.length && scrolling < 0; index++) {
-                if (_nameWidth(shown[index].name, scaler) > rooms[index]) scrolling = index;
+                if (_shownWidth(shown[index].name, scaler) > rooms[index]) scrolling = index;
               }
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
@@ -63,16 +63,9 @@ double _chrome(VideoTagKind kind) =>
     IntroListTheme.chipChevronWidth +
     IntroListTheme.chipTrailing;
 
-TextStyle _nameStyle() => TextStyle(
-  fontFamily: BiliFonts.family,
-  fontSize: IntroListTheme.chipText,
-  color: IntroListTheme.chipTextColor,
-  height: 1,
-);
-
 double _nameWidth(String text, TextScaler scaler) {
   final painter = TextPainter(
-    text: TextSpan(text: text, style: _nameStyle()),
+    text: TextSpan(text: text, style: ChipName.style()),
     textDirection: TextDirection.ltr,
     textScaler: scaler,
     maxLines: 1,
@@ -81,6 +74,16 @@ double _nameWidth(String text, TextScaler scaler) {
   painter.dispose();
   return width;
 }
+
+/// Full-width closing punctuation whose ink sits in the left half of its em.
+const _closing = '》〉」』】〕〗〙〛）］｝、。，．';
+
+/// The official chip ends a name on the ink of its last closing mark: font-check 02's › is 4.4 after 》, closer than
+/// 03's is after 子. So that mark's blank half em stays out of the chip.
+double _trailingTrim(String text, TextScaler scaler) =>
+    text.isNotEmpty && _closing.contains(text[text.length - 1]) ? scaler.scale(IntroListTheme.chipText) / 2 : 0;
+
+double _shownWidth(String text, TextScaler scaler) => _nameWidth(text, scaler) - _trailingTrim(text, scaler);
 
 class _Chip extends StatelessWidget {
   const _Chip(this.tag, {required this.room, required this.scrolls});
@@ -136,6 +139,16 @@ class ChipName extends StatefulWidget {
   final double room;
   final bool scrolls;
 
+  /// The style a name is drawn and measured in. It names the fallback itself because a [TextPainter] inherits
+  /// nothing from the page, and a name measured in another font than it is drawn in can ellipsise or scroll wrongly.
+  static TextStyle style() => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontFamilyFallback: BiliFonts.fallback,
+    fontSize: IntroListTheme.chipText,
+    color: IntroListTheme.chipTextColor,
+    height: 1,
+  );
+
   @override
   State<ChipName> createState() => _ChipNameState();
 }
@@ -168,10 +181,18 @@ class _ChipNameState extends State<ChipName> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    final width = _nameWidth(widget.text, MediaQuery.textScalerOf(context));
-    final style = _nameStyle();
+    final scaler = MediaQuery.textScalerOf(context);
+    final width = _nameWidth(widget.text, scaler);
+    final style = ChipName.style();
     final text = Text(widget.text, maxLines: 1, softWrap: false, style: style);
-    if (width <= widget.room) return text;
+    final shown = width - _trailingTrim(widget.text, scaler);
+    if (shown <= widget.room) {
+      if (shown == width) return text;
+      return SizedBox(
+        width: shown,
+        child: Text(widget.text, maxLines: 1, softWrap: false, overflow: TextOverflow.visible, style: style),
+      );
+    }
     if (!widget.scrolls) {
       return SizedBox(
         width: widget.room,

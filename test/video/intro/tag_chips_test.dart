@@ -1,7 +1,9 @@
 import 'package:bili_core/api.dart' show VideoTag, VideoTagKind;
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/intro/collection_row.dart' show Chevron;
 import 'package:bilifast/video/intro/tag_chips.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const bgm = VideoTag(id: 1, name: '晴天', kind: VideoTagKind.bgm);
@@ -137,6 +139,57 @@ void main() {
     await tester.pump();
     expect(tester.binding.hasScheduledFrame, isFalse);
     expect(pill(tester).width, moreOrLessEquals(row / 2));
+  });
+
+  testWidgets('a name ending in 》 leaves its blank half em out, so the › follows its ink closely (font-check 02)', (
+    tester,
+  ) async {
+    const closing = VideoTag(id: 7, name: '发现《昔涟》', kind: VideoTagKind.bgm);
+    await show(tester, const [closing, topic]);
+    final painter = TextPainter(
+      text: TextSpan(text: closing.name, style: ChipName.style()),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    addTearDown(painter.dispose);
+    final shown = painter.width - IntroListTheme.chipText / 2;
+
+    final name = tester.getRect(find.byType(ChipName).first);
+    expect(name.width, moreOrLessEquals(shown));
+    final chevron = tester.getRect(find.byType(Chevron).first);
+    expect(chevron.left - name.right, moreOrLessEquals(IntroListTheme.chipChevronGap));
+    expect(pill(tester).right - chevron.right, moreOrLessEquals(IntroListTheme.chipTrailing));
+    const chrome =
+        IntroListTheme.chipLead +
+        IntroListTheme.musicGlyphWidth +
+        IntroListTheme.chipIconGap +
+        IntroListTheme.chipChevronGap +
+        IntroListTheme.chipChevronWidth +
+        IntroListTheme.chipTrailing;
+    expect(pill(tester).width, moreOrLessEquals(chrome + shown));
+    expect(pill(tester, 1).left - pill(tester).right, moreOrLessEquals(IntroListTheme.chipGap));
+    final drawn = tester.widget<Text>(find.text(closing.name));
+    expect(drawn.overflow, TextOverflow.visible, reason: 'the 》 itself still draws whole');
+    expect(drawn.softWrap, isFalse);
+  });
+
+  test('a name is measured with the system font\'s fallback, as it is drawn, and with none under MiSans', () {
+    final family = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = family);
+
+    BiliFonts.family = null;
+    expect(ChipName.style().fontFamilyFallback, ['Apple Color Emoji', 'PingFang SC']);
+    BiliFonts.family = BiliFonts.miSans;
+    expect(ChipName.style().fontFamilyFallback, isNull);
+  });
+
+  testWidgets('under the system font the drawn name falls back as the measured one does', (tester) async {
+    final family = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = family);
+    BiliFonts.family = null;
+    await show(tester, const [bgm]);
+
+    final style = tester.renderObject<RenderParagraph>(find.text('晴天')).text.style!;
+    expect(style.fontFamilyFallback, ['Apple Color Emoji', 'PingFang SC']);
   });
 
   testWidgets('a short name takes only its own width and never moves', (tester) async {

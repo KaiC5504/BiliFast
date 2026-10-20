@@ -918,6 +918,10 @@ abstract final class IntroTheme {
   static const noticeIcon = 40 / 3;
   static const noticeIconGap = 3.2;
 
+  /// 03 and font-check 02 draw the action row's coin 7/6 lower than the thumbs, star and arrow beside it; its 三连
+  /// ring follows it.
+  static const actionCoinDrop = 7 / 6;
+
   /// iOS sets a tab on its default stops, 28 pt apart, so a description paragraph that opens with one is indented by
   /// 28 (font-check 03).
   static const descTabStop = 28.0;
@@ -926,10 +930,13 @@ abstract final class IntroTheme {
 /// 合集, the part strip, the topic and BGM chips and the related rows (03, 18).
 abstract final class IntroListTheme {
   /// 03 and 18 put the 合集 card, the chips and the related list's first hairline 18 apart, so each section owns
-  /// [sectionTop] above it and [sectionBottom] below. The action row's box ends 3.33 below its counts' ink, which puts
-  /// the first section 18.67 under the digits, as on both (18 under 不喜欢, whose ink reaches lower).
+  /// [sectionTop] above it and [sectionBottom] below.
   static const sectionTop = 46 / 3;
   static const sectionBottom = 8 / 3;
+
+  /// The action row ends this far below its count line, which puts the first section's top 45.17 under the icons'
+  /// centre, as on 03 and font-check 02 (18 under 不喜欢's ink).
+  static const actionsBottom = 0.5;
 
   /// 合集 (03): a 36 pt card inside the gutters, its title 12 in, then the playing bars, the place and the ›, which
   /// ends 15.7 before the card's edge.
@@ -946,11 +953,13 @@ abstract final class IntroListTheme {
   static const collectionChevronHeight = 12.0;
   static const chevronStroke = 1.3;
 
-  /// Three round-ended bars, the first full height, the other two 60% of it, 4.33 apart.
-  static const barsWidth = 21 / 2;
-  static const barsHeight = 34 / 3;
-  static const barWidth = 11 / 6;
-  static const barShortShare = 20 / 34;
+  /// Three round-ended bars 1.72 wide and 4.2 apart, centred on the line: tall, short, tall, as font-check 02 draws
+  /// them (11.75, 5.67 and 11). The official mark moves; 03 caught it tall, short, short.
+  static const barWidth = 31 / 18;
+  static const barStep = 4.2;
+  static const barsWidth = barWidth + 2 * barStep;
+  static const barsHeight = 11.75;
+  static const barShares = <double>[1, 17 / 35.25, 33 / 35.25];
 
   /// The part strip (no screenshot; the official app's style): 选集 N/M › over 140 × 52 chips with two lines.
   static const partHeaderHeight = 36.0;

@@ -145,8 +145,10 @@ class _NameAndCounts extends StatelessWidget {
           height: IntroTheme.nameLine,
           child: AnimatedDefaultTextStyle(
             duration: animate ? const Duration(milliseconds: 200) : Duration.zero,
+            // It replaces the page's style rather than merging with it, so it carries the fallback itself.
             style: TextStyle(
               fontFamily: BiliFonts.family,
+              fontFamilyFallback: BiliFonts.fallback,
               fontSize: IntroTheme.nameText,
               height: IntroTheme.nameLine / IntroTheme.nameText,
               leadingDistribution: TextLeadingDistribution.even,

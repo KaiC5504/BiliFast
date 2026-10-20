@@ -69,7 +69,10 @@ void main() {
     expect(find.text('投币'), findsOneWidget);
     expect(find.text('12.3万'), findsOneWidget);
     expect(find.text('148'), findsOneWidget);
-    expect(tester.getSize(find.byType(ActionRow)).height, closeTo(ActionTheme.rowHeight, 0.01));
+    expect(
+      tester.getSize(find.byType(ActionRow)).height,
+      closeTo(ActionTheme.rowHeight + IntroListTheme.actionsBottom, 0.01),
+    );
 
     final left = tester.getTopLeft(find.byType(ActionRow)).dx;
     final xs = [
@@ -79,6 +82,26 @@ void main() {
     for (var i = 0; i < 5; i++) {
       expect(xs[i], closeTo(BiliMetrics.gutter + cell * (i + 0.5), 0.5));
     }
+  });
+
+  testWidgets('the coin sits 7/6 lower than the other icons, its ring with it, its count level (03, font-check 02)', (
+    tester,
+  ) async {
+    await mount(tester, FakeVideoActions());
+    final top = tester.getTopLeft(find.byType(ActionRow)).dy;
+    double iconCentre(ActionGlyph glyph) =>
+        tester.getCenter(find.byWidgetPredicate((widget) => widget is ActionIcon && widget.glyph == glyph)).dy - top;
+
+    const resting = ActionTheme.topGap + ActionTheme.iconSize / 2;
+    for (final glyph in [ActionGlyph.like, ActionGlyph.dislike, ActionGlyph.favourite, ActionGlyph.share]) {
+      expect(iconCentre(glyph), closeTo(resting, 0.01), reason: '$glyph');
+    }
+    expect(iconCentre(ActionGlyph.coin), closeTo(resting + 7 / 6, 0.01));
+    final coinRing = find.descendant(of: cell('coin'), matching: find.byType(TripleRing));
+    expect(tester.getCenter(coinRing).dy - top, closeTo(resting + 7 / 6, 0.01));
+    final likeRing = find.descendant(of: cell('like'), matching: find.byType(TripleRing));
+    expect(tester.getCenter(likeRing).dy - top, closeTo(resting, 0.01));
+    expect(tester.getCenter(find.text('1210')).dy, closeTo(tester.getCenter(find.text('9131')).dy, 0.01));
   });
 
   testWidgets('each tap does its own action', (tester) async {
