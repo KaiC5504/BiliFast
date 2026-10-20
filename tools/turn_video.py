@@ -18,8 +18,9 @@ landscape at ±90°.
 
 Each turn is graded on its sweep, whether it moves one way, its first frame's jump, the time to settle and the RMS
 error against the official turn (90° along ease-in-out cubic(0.42, 0, 0.58, 1) over 300 ms). With --log, each turn
-gets the 轮换测试 style and native turn it ran as, the video placed on the log's clock by the offset that best lines
-the detected turns up with the native begins. Needs ffmpeg (and ffprobe beside it).
+gets the native turn it ran as and its style (the 轮换测试 label of 1.0.0 (13) and (14), else the page's: 自绘 or 系统),
+the video placed on the log's clock by the offset that best lines the detected turns up with the native begins. Needs
+ffmpeg (and ffprobe beside it).
 """
 from __future__ import annotations
 
@@ -93,6 +94,18 @@ COARSE_MATCH_S = 0.3
 GUESS_WINDOW_S = 30.0
 VERDICTS = ("official-like", "system-like", "spin", "cut", "?")
 STRIP_AFTER_MS = 50
+
+
+def wrap180(angle: float) -> float:
+    return (angle + 180) % 360 - 180
+
+
+def unwrap(angles: list[float]) -> list[float]:
+    """Angles made continuous, so a step across ±180° counts as the short way round."""
+    result = []
+    for angle in angles:
+        result.append(angle if not result else result[-1] + wrap180(angle - result[-1]))
+    return result
 
 
 def bezier_ease(x: float, curve=OFFICIAL_CURVE) -> float:
@@ -170,7 +183,7 @@ def turn_direction(angle: float | None, scale: float | None) -> str | None:
     """From the frame after a change measured against the small player of the frame before it: "to L" when the
     picture turned a quarter and grew to the screen, "back" when it turned and shrank (the frame before was the
     landscape one), None when it didn't turn."""
-    if angle is None or scale is None or abs(abs(phone_report.wrap180(angle)) - TURN_DEG) > TURN_SLACK_DEG:
+    if angle is None or scale is None or abs(abs(wrap180(angle)) - TURN_DEG) > TURN_SLACK_DEG:
         return None
     if scale >= LANDSCAPE_SCALE:
         return "to L"
@@ -189,7 +202,7 @@ def grade(samples: list[tuple[float, float | None]]) -> dict:
     if len(measured) < 2 or samples[0][1] is None:
         g["why"] = "the rest before is unmatched" if samples and samples[0][1] is None else "too few frames matched"
         return g
-    angles = phone_report.unwrap([angle for _, angle in measured])
+    angles = unwrap([angle for _, angle in measured])
     rel = [(t, angle - angles[0]) for (t, _), angle in zip(measured, angles)]
     end = statistics.median(angle for _, angle in rel[-3:])
     g["total"] = end
@@ -287,7 +300,8 @@ def log_turns(path) -> list[dict]:
         begin = turn["begin"]
         found.append({"s": turn["us"] / 1_000_000, "dir": phone_report.direction_of(turn), "id": turn["id"],
                       "style": phone_report.style_of(turn)[0], "cycle": turn["cycle"],
-                      "native": f"{begin.get('method', '?')}/{begin.get('picture', '?')}"})
+                      "native": str(begin.get("method", "?"))
+                      + ("" if begin.get("picture") is None else f"/{begin.get('picture')}")})
     return found
 
 
@@ -570,6 +584,7 @@ def parse_crop(text: str) -> tuple[int, int]:
 
 
 def main(argv=None) -> int:
+    phone_report.utf8_console()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("video", type=pathlib.Path, help="the screen recording")
     parser.add_argument("--log", type=pathlib.Path, help="the session's .jsonl, to label turns with styles")
@@ -578,8 +593,6 @@ def main(argv=None) -> int:
                         help=f"the small player's rows at {WIDTH} wide (default {CROP[0]}:{CROP[1]})")
     parser.add_argument("--frames", action="store_true", help="every measured frame with its scale and inliers")
     args = parser.parse_args(argv)
-    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ffmpeg = find_ffmpeg(args.ffmpeg)
     with tempfile.TemporaryDirectory(prefix="turn_video_") as folder:
         times, diffs, _, _ = decode(args.video, ffmpeg, pathlib.Path(folder))
