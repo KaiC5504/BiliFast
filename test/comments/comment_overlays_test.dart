@@ -804,7 +804,7 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('under the system font, its words fall back to emoji, then PingFang SC', (tester) async {
+    testWidgets('under the system font, its words fall back to PingFang SC', (tester) async {
       Future<void> show() => confirm(tester, comment(7));
       await expectSystemFallback(tester, show, find.text('删除评论'));
       await expectSystemFallback(tester, show, find.text('删除'));

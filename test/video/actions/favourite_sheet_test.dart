@@ -319,7 +319,7 @@ void main() {
     expect(tester.getTopLeft(find.byKey(const ValueKey('favourite-frame'))).dy, lessThan(portrait.height / 2));
   });
 
-  testWidgets('under the system font, sheet and side panel fall back to emoji, then PingFang SC', (tester) async {
+  testWidgets('under the system font, sheet and side panel fall back to PingFang SC', (tester) async {
     await expectSystemFallback(tester, () => pumpSheet(tester), find.text('默认收藏夹'));
     await expectSystemFallback(tester, () => pumpSheet(tester, dark: true), find.text('默认收藏夹'));
   });

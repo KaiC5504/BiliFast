@@ -35,7 +35,7 @@ void main() {
     });
   }
 
-  testWidgets('under the system font, the counts over the cover fall back to emoji, then PingFang SC', (tester) async {
+  testWidgets('under the system font, the counts over the cover fall back to PingFang SC', (tester) async {
     Future<void> show() => tester.pumpWidget(
       MaterialApp(
         home: Align(

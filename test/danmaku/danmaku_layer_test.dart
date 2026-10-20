@@ -313,7 +313,7 @@ void main() {
     expect(sprites.layouts, 3);
   });
 
-  test('sprites: under the system font the text falls back to emoji, then PingFang SC; MiSans needs none', () {
+  test('sprites: under the system font the text falls back to PingFang SC; MiSans needs none', () {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     BiliFonts.family = BiliFonts.system;

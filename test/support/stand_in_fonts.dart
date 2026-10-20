@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 /// The families the system path's text asks for: the Cupertino typography's on iOS, Material's Roboto where a test
-/// keeps Android, and the emoji and PingFang SC every style falls back to. The test font manager answers any family it
-/// doesn't know with the square test font, which has some Han glyphs (本), so emoji is given the Chinese stand-in too:
-/// there is no emoji stand-in, and what PingFang draws on the phone must not stop at the square font first.
+/// keeps Android, and PingFang SC, which tests name after the system font (flutter_test_config.dart). On the phone
+/// CupertinoSystemText matches nothing and the engine's default, SF, draws; here the SF stand-in is registered under
+/// it in that default's place.
 const _latinFamilies = ['CupertinoSystemText', 'CupertinoSystemDisplay', 'Roboto'];
-const _chineseFamilies = ['Apple Color Emoji', 'PingFang SC'];
+const _chineseFamilies = ['PingFang SC'];
 const _latinStyles = ['Regular', 'Medium', 'Semibold', 'Bold'];
 const _chineseStyles = ['Regular', 'Medium', 'Semibold'];
 

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/stand_in_fonts.dart';
 
-const _fallback = ['Apple Color Emoji', 'PingFang SC'];
+const _fallback = ['PingFang SC'];
 
 TextPainter _laid(String text, {double size = 20, String family = BiliFonts.system}) => TextPainter(
       text: TextSpan(
@@ -31,7 +31,7 @@ void main() {
     expect(line.height, (16 * 1.4).roundToDouble());
   });
 
-  test('本 comes from the PingFang stand-in, not the square test font the emoji family would otherwise answer with', () {
+  test('本 comes from the PingFang stand-in, not the square test font', () {
     expect(_laid('本').height, closeTo(20 * 1.4, 0.01));
   });
 

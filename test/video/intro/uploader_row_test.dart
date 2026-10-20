@@ -112,7 +112,7 @@ void main() {
     addTearDown(() => BiliFonts.family = family);
     BiliFonts.family = BiliFonts.system;
     await _mount(tester, UploaderRow(detail: _detail(), card: _card()));
-    expect(fallback(), ['Apple Color Emoji', 'PingFang SC']);
+    expect(fallback(), ['PingFang SC']);
 
     BiliFonts.family = BiliFonts.miSans;
     await _mount(tester, UploaderRow(detail: _detail(), card: _card()));

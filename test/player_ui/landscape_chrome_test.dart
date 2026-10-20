@@ -231,12 +231,12 @@ void main() {
     List<String>? fallbackOf(WidgetTester tester, String key) =>
         tester.renderObject<RenderParagraph>(find.byKey(ValueKey(key))).text.style?.fontFamilyFallback;
 
-    testWidgets("the chrome's text falls back to emoji, then PingFang SC, as the app's own text does", (tester) async {
+    testWidgets("the chrome's text falls back to PingFang SC, as the app's own text does", (tester) async {
       BiliFonts.family = BiliFonts.system;
       final rig = Rig(statusBar: FixedStatusBarFeed())..session.title = '⚠别眨眼！前方高燃！！';
       await rig.mount(tester);
       for (final key in ['landscape-title', 'landscape-time', 'status-time', 'status-battery-level']) {
-        expect(fallbackOf(tester, key), ['Apple Color Emoji', 'PingFang SC'], reason: key);
+        expect(fallbackOf(tester, key), ['PingFang SC'], reason: key);
       }
     });
 

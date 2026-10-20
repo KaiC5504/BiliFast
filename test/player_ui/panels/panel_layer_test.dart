@@ -523,7 +523,7 @@ void main() {
     });
   });
 
-  testWidgets('under the system font, a panel and its rows fall back to emoji, then PingFang SC', (tester) async {
+  testWidgets('under the system font, a panel and its rows fall back to PingFang SC', (tester) async {
     Future<void> show(Shape shape, PlayerPanel panel) async => open(tester, await pumpLayer(tester, shape), panel);
     await expectSystemFallback(tester, () => show(Shape.landscape, PlayerPanel.quality), find.text('自动'));
     await expectSystemFallback(tester, () => show(Shape.portrait, PlayerPanel.speed), find.text('倍速'));
@@ -740,7 +740,7 @@ void main() {
       expect(rig.panels.value, PlayerPanel.more);
     });
 
-    testWidgets('under the system font, segments and the wheel fall back to emoji, then PingFang SC', (tester) async {
+    testWidgets('under the system font, segments and the wheel fall back to PingFang SC', (tester) async {
       await expectSystemFallback(tester, () => more(tester), find.text('单集循环'));
       await expectSystemFallback(tester, () async {
         await more(tester);

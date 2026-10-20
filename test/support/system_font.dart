@@ -3,7 +3,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const systemFallback = ['Apple Color Emoji', 'PingFang SC'];
+/// What tests name after the system font (BiliFonts.systemFallback, set in flutter_test_config.dart): the PingFang
+/// stand-in, in place of iOS's own fallback to PingFang SC.
+const systemFallback = ['PingFang SC'];
 
 /// The fallback the first paragraph [text] finds is laid out with.
 List<String>? fallbackOf(WidgetTester tester, Finder text) =>
@@ -14,7 +16,7 @@ List<String>? defaultFallbackOf(WidgetTester tester, Finder text) =>
     DefaultTextStyle.of(tester.element(text.first)).style.fontFamilyFallback;
 
 /// Shows the widget under the system font, then afresh under MiSans: [text] and the default style around it fall back
-/// to emoji, then PingFang SC, only under the system font. The test's theme names no fallback, so the widget has to.
+/// to PingFang SC only under the system font. The test's theme names no fallback, so the widget has to.
 Future<void> expectSystemFallback(WidgetTester tester, Future<void> Function() show, Finder text) async {
   final saved = BiliFonts.family;
   addTearDown(() => BiliFonts.family = saved);

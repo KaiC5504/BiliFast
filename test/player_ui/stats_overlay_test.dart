@@ -95,7 +95,7 @@ void main() {
     expect(find.ancestor(of: find.text('卡顿 2 次'), matching: ignoring), findsOneWidget);
   });
 
-  testWidgets('past the monospace fonts it falls back to the app font, or to emoji then PingFang SC', (tester) async {
+  testWidgets('past the monospace fonts it falls back to the app font, or to PingFang SC', (tester) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     BiliFonts.family = BiliFonts.system;

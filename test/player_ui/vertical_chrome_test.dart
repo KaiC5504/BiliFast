@@ -174,7 +174,7 @@ final class DanmakuRig {
 Offset centre(WidgetTester tester, String key) => tester.getCenter(find.byKey(ValueKey(key)));
 
 void main() {
-  testWidgets("under the system font the title and the uploader's name fall back to emoji, then PingFang SC; MiSans "
+  testWidgets("under the system font the title and the uploader's name fall back to PingFang SC; MiSans "
       'names none', (tester) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
@@ -183,8 +183,8 @@ void main() {
 
     BiliFonts.family = BiliFonts.system;
     await rig09().mount(tester);
-    expect(fallbackOf('vertical-title'), ['Apple Color Emoji', 'PingFang SC']);
-    expect(fallbackOf('vertical-name'), ['Apple Color Emoji', 'PingFang SC']);
+    expect(fallbackOf('vertical-title'), ['PingFang SC']);
+    expect(fallbackOf('vertical-name'), ['PingFang SC']);
 
     BiliFonts.family = BiliFonts.miSans;
     await rig09().mount(tester);

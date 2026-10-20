@@ -306,7 +306,7 @@ void main() {
     }
   });
 
-  testWidgets('under the system font, its words fall back to emoji, then PingFang SC', (tester) async {
+  testWidgets('under the system font, its words fall back to PingFang SC', (tester) async {
     Future<void> show() async {
       await mount(tester, answers: {'': recent});
       await tester.pumpAndSettle();

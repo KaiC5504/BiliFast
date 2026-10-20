@@ -177,7 +177,7 @@ void main() {
     addTearDown(() => BiliFonts.family = family);
 
     BiliFonts.family = BiliFonts.system;
-    expect(ChipName.style().fontFamilyFallback, ['Apple Color Emoji', 'PingFang SC']);
+    expect(ChipName.style().fontFamilyFallback, ['PingFang SC']);
     BiliFonts.family = BiliFonts.miSans;
     expect(ChipName.style().fontFamilyFallback, isNull);
   });
@@ -189,7 +189,7 @@ void main() {
     await show(tester, const [bgm]);
 
     final style = tester.renderObject<RenderParagraph>(find.text('晴天')).text.style!;
-    expect(style.fontFamilyFallback, ['Apple Color Emoji', 'PingFang SC']);
+    expect(style.fontFamilyFallback, ['PingFang SC']);
   });
 
   testWidgets('a short name takes only its own width and never moves', (tester) async {

@@ -78,7 +78,7 @@ void main() {
     expect(opacity(), 1);
   });
 
-  testWidgets('under the system font, its words fall back to emoji, then PingFang SC', (tester) async {
+  testWidgets('under the system font, its words fall back to PingFang SC', (tester) async {
     await expectSystemFallback(tester, () => pumpConfirm(tester), find.text('确定不再关注？'));
     await expectSystemFallback(tester, () => pumpConfirm(tester), find.text('取消'));
   });

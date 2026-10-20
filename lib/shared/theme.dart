@@ -146,9 +146,10 @@ abstract final class BiliColors {
 abstract final class BiliFonts {
   static const miSans = 'MiSans';
 
-  /// The system font: SF (the engine's name for it on iOS), with PingFang SC for Chinese, as the official app draws.
-  /// Named rather than left null: a style that names no family takes its fallback list's first as its own, and in
-  /// tests the square test font.
+  /// The system font: SF, with PingFang SC for Chinese, as the official app draws. iOS's engine registers no family by
+  /// this name (only CupertinoSystemDisplay, SF's large face), so on the phone it matches nothing and the engine's
+  /// default, SF, draws; tests load the SF stand-in under it. Named rather than left null so tests never draw it in the
+  /// square test font.
   static const system = 'CupertinoSystemText';
 
   /// The family every style names.
@@ -159,10 +160,14 @@ abstract final class BiliFonts {
 
   static const locale = Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN');
 
-  /// Under the system font, what iOS's labels fall back to for what SF lacks: emoji before PingFang SC, so a ⚠ in a
-  /// title draws in colour as the official app's does, and every Chinese and kana glyph from PingFang SC rather than
-  /// whichever font the engine last fell back to.
-  static List<String>? get fallback => family == system ? const ['Apple Color Emoji', 'PingFang SC'] : null;
+  /// What the system font names after [system]. Null on the phone, and nothing in the app sets it: since [system]
+  /// matches nothing on iOS, a listed family the phone has becomes the font of every run, spaces and digits included
+  /// (1.0.0 (15) listed Apple Color Emoji first and drew them emoji-wide). What SF lacks goes to iOS's own fallback
+  /// instead, PingFang SC for Chinese under [locale]. Tests stand in for that with the PingFang stand-in
+  /// (test/flutter_test_config.dart).
+  static List<String>? systemFallback;
+
+  static List<String>? get fallback => family == system ? systemFallback : null;
 
   /// Under the system font, the strut a wrapping text whose lines can mix Latin and Chinese needs: each run splits its
   /// line height by its own font's ascent and descent, and SF's split differs from PingFang's, so a line holding both

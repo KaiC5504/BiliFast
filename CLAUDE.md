@@ -55,12 +55,16 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   without a reload; PipKeeper (a closed page lives on in the small window, restore pushes it back, ✕ or another
   video releases it); network changes reset the engine's node health; the drawn turn (开发者 → 旋转动画 自绘 / 系统).
 - The system font, 1.0.0 (15) (KaiC's call: its own build to check): slice 10's font fixes and comment fix, the drawn
-  turn, and the text fixes the stand-in fonts found: the system font named (`BiliFonts.system`; a style with no family
-  took Apple Color Emoji or PingFang for its Latin and digits), PingFang's strut on text mixing Latin and Chinese
-  (`BiliFonts.strut`; text fields drew a mixed line 23 pt where Chinese takes 22), 简介's description given the
-  fallback. Milestone 3 is paused (KaiC, 2026-10-20); its spec keeps the sweep's decisions.
+  turn, and the text fixes the stand-in fonts found: the system font named (`BiliFonts.system`), PingFang's strut on
+  text mixing Latin and Chinese (`BiliFonts.strut`; text fields drew a mixed line 23 pt where Chinese takes 22).
+  Milestone 3 is paused (KaiC, 2026-10-20); its spec keeps the sweep's decisions. On the phone every system-font digit
+  and space came out wide and low: see (16).
+- The system font's fallback, 1.0.0 (16): slice 10 had given the system font a fallback list (Apple Color Emoji, then
+  PingFang SC), and iOS has no family named `CupertinoSystemText`, so Apple Color Emoji, the first family that
+  matched, drew every run's digits and spaces at emoji width. The phone's system path now names no fallback, as (14)
+  did: SF is iOS's default and PingFang SC its own fallback for Chinese.
 
-Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), shipped as one build, 1.0.0 (16):
+Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), shipped as one build, 1.0.0 (17):
 1. Slice 10, the system-font check: shipped in (15) as far as it went. Left: the stand-in sweep's findings
    (`docs/milestone-3-spec.md` section 8: re-measure, then one fix round by screen group), the landscape title marquee
    with 章节 and 竖屏's 联合创作 and 合集 prefix (added by KaiC), and 弹幕设置's 查看更多 variant for the small player
@@ -72,12 +76,12 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
-- The drawn turn, 1.0.0 (15), committed but not shipped (KaiC ships it with the next work): (14)'s recording
+- The drawn turn, shipped in 1.0.0 (15): (14)'s recording
   (`local/differences/10-ours-rotate-testing-v5.MP4`, measured with `tools/turn_video.py`) matched the official turn
   with 请求前关, the picture cut and the turn started at once. (15) keeps only that as 开发者 → 旋转动画 自绘, beside
   系统; the test build's choices, 轮换测试 and the per-frame log lines are gone. On the phone: the turn both ways
   against the official app.
-- Comments under the system font, committed with (15), not shipped: KaiC's thread shots
+- Comments under the system font, shipped in (15): KaiC's thread shots
   (`local/differences/11-ours-comment-threads.jpg`, `12-official-…`) showed Material's tracking leaking into the text,
   previews with a gap the official app doesn't have, and PingFang sitting higher than MiSans. On the phone: a comment
   with two previews against the official app, and a long preview cut with "…".
@@ -206,9 +210,13 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   (ours beside the official), measured in px / 3. New Chinese in code or tests needs the script run again (the tools
   lane fails until it is).
 - Fonts: styles read `BiliFonts.family` where they're built, never in a const, so a 字体 change rebuilds in place. The
-  MiSans nudges in `BiliMetrics` apply only while MiSans is on. The system font is named, `BiliFonts.system`
-  (`CupertinoSystemText`, SF on iOS), never null: a style with no family takes its fallback list's first as its font
-  (Apple Color Emoji's digits, PingFang's Latin), and tests draw it in the square test font.
+  MiSans nudges in `BiliMetrics` apply only while MiSans is on. The system font is `BiliFonts.system`
+  (`CupertinoSystemText`). iOS's engine registers no family by that name (only `CupertinoSystemDisplay`), so on the
+  phone it matches nothing and the default, SF, draws. So the phone's system path must name no fallback family iOS
+  has: the first one that matches becomes every run's font (1.0.0 (15) listed Apple Color Emoji and drew digits and
+  spaces emoji-wide). `BiliFonts.systemFallback` stays null in the app; `test/flutter_test_config.dart` sets it to the
+  PingFang stand-in, because tests register the SF stand-in under the name the phone doesn't have. A test that passes
+  under the stand-ins can still be wrong on the phone wherever font resolution differs.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
 - A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the

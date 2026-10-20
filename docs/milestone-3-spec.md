@@ -15,7 +15,7 @@ official app finds and follows videos and people:
 Before any new screen, a **system-font check** puts the existing screens right on KaiC's phone, which draws in
 PingFang (字体 系统, the default on iOS), while every widget test and look-alike check renders MiSans.
 
-**Done** = all four slices pass their phone steps on one TestFlight build, 1.0.0 (16), which also carries the drawn
+**Done** = all four slices pass their phone steps on one TestFlight build, 1.0.0 (17), which also carries the drawn
 turn of (15) and the comment fix (`3d13ca9`). On that build the phone runs both checklists (BiliNative
 `docs/m1-phone-checklist.md` and `m2-phone-checklist.md`) in full; passing them is the cutover (flutter-move-spec,
 slice 9), and the Swift app retires.
@@ -59,6 +59,8 @@ After the stand-in fonts came in (`test/fonts`), every screen with an official s
 and measured again (2026-10-20). That found two faults no phone shot had shown yet, both fixed before any value: a
 style with no font family took its fallback list's first font (the system font is now named, `BiliFonts.system`), and
 lines mixing Latin and Chinese grow a point (`BiliFonts.strut`). The value fixes ran as one round per screen group.
+The first of those was only half right: iOS has no `CupertinoSystemText` either, so (15) drew every digit and space
+from Apple Color Emoji; (16) drops the fallback list on the phone (`BiliFonts.systemFallback`, CLAUDE.md's font rule).
 KaiC's calls on what else it found:
 
 - **Not built:** iOS's text shaping (about ⅛ em between Chinese and Latin or digits in titles, descriptions, meta and
@@ -139,7 +141,7 @@ A screen or state the build needs and these don't show is asked for before that 
 
 ## 7. Build
 
-1.0.0 (16), shipped once at the end of the milestone. (15) went out on its own (KaiC, 2026-10-21) with slice 10, the
+1.0.0 (17), shipped once at the end of the milestone. (15) went out on its own (KaiC, 2026-10-21) with slice 10, the
 drawn turn and the system-font text fixes. Each slice is committed on `main` with the gate green;
 `python scripts/testflight.py start` runs once, after slice 13.
 
