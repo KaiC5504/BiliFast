@@ -246,7 +246,7 @@ void main() {
         'hairline 8 under the box (font-check 04)', (tester) async {
       final saved = BiliFonts.family;
       addTearDown(() => BiliFonts.family = saved);
-      BiliFonts.family = null;
+      BiliFonts.family = BiliFonts.system;
       final chips = find.byKey(const ValueKey('comment-up-liked'), skipOffstage: false);
       final rootRow = find.byKey(const ValueKey('thread-root'), skipOffstage: false);
       final band = find.byKey(const ValueKey('thread-band'));

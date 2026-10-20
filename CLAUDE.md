@@ -156,7 +156,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     capture is stale). Scrolls, drags and swipes are covered by widget tests at ~1500 px/s instead.
 - Look-alike checks render our screens in widget tests at 440×956 (or 956×440), 3×, against KaiC's official
   screenshots in `local/official-app-reference/` (gitignored: look only, never copy or commit), and measure the pair
-  with `tools/screen_diff.py`. They render the system font, as the phone does: `BiliFonts.family = null` with
+  with `tools/screen_diff.py`. They render the system font, as the phone does: `BiliFonts.family = BiliFonts.system` with
   `test/support/stand_in_fonts.dart` loaded; `test/support/look_alike.dart` sizes the view as the phone and saves the
   3× PNG.
 - GitHub runs nothing on push. `testflight.yml` is the only workflow; don't add one without asking (`test_ci` fails if
@@ -203,7 +203,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   (ours beside the official), measured in px / 3. New Chinese in code or tests needs the script run again (the tools
   lane fails until it is).
 - Fonts: styles read `BiliFonts.family` where they're built, never in a const, so a 字体 change rebuilds in place. The
-  MiSans nudges in `BiliMetrics` apply only while MiSans is on.
+  MiSans nudges in `BiliMetrics` apply only while MiSans is on. The system font is named, `BiliFonts.system`
+  (`CupertinoSystemText`, SF on iOS), never null: a style with no family takes its fallback list's first as its font
+  (Apple Color Emoji's digits, PingFang's Latin), and tests draw it in the square test font.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
 - A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the

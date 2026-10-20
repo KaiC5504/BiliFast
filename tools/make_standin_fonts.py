@@ -56,8 +56,9 @@ SC_SCALE, SC_RISE = 1.0, -0.022
 # The weight class each file answers to, and where on Noto's wght axis PingFang's stroke is matched.
 SC_WEIGHTS = {"Regular": (400, 400), "Medium": (500, 500), "Semibold": (600, 600)}
 
-# SF's line per em (Apple's system font, from capsize's metrics of .SFNS).
-LATIN_ASCENT, LATIN_DESCENT = 1980 / 2048, 432 / 2048
+# SF's line per em on iOS: UIFont.systemFont(ofSize: 17) is 16.19 above the baseline and 4.10 below (its lineHeight
+# 20.29). macOS's .SFNS (1980/432, as capsize has it) puts mixed Latin and Chinese lines a point lower than the phone.
+LATIN_ASCENT, LATIN_DESCENT = 1950 / 2048, 494 / 2048
 # Inter scaled to SF's ink, its advances changed by a share of an em, and the optical size taken. SF's capitals and
 # digits are 3% shorter (its cap height, 0.705 em, against Inter's 0.728; settings 09 on the phone). Widths are SF's
 # untracked, as Flutter draws it: "Wi-Fi" in the official 09 (UIKit, tracked -0.15 pt at 14 pt) and "1.0.0 (14)" in

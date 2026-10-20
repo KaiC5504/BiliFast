@@ -18,7 +18,7 @@ List<String>? defaultFallbackOf(WidgetTester tester, Finder text) =>
 Future<void> expectSystemFallback(WidgetTester tester, Future<void> Function() show, Finder text) async {
   final saved = BiliFonts.family;
   addTearDown(() => BiliFonts.family = saved);
-  BiliFonts.family = null;
+  BiliFonts.family = BiliFonts.system;
   await tester.pumpWidget(const SizedBox.shrink());
   await show();
   expect(fallbackOf(tester, text), systemFallback);

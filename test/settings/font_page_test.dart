@@ -74,7 +74,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('font-system')));
     await tester.pump();
     expect(fonts.choice, FontChoice.system);
-    expect(BiliFonts.family, isNull);
+    expect(BiliFonts.family, BiliFonts.system);
     expect(tick('font-system'), findsOneWidget);
     expect(tick('font-miSans'), findsNothing);
   });
@@ -170,7 +170,7 @@ void main() {
 
     fonts.select(FontChoice.system);
     await tester.pumpAndSettle();
-    expect(tester.widget<Text>(find.byKey(const ValueKey('frozen'))).style?.fontFamily, isNull);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('frozen'))).style?.fontFamily, BiliFonts.system);
     final context = tester.element(find.byType(Scaffold));
     expect(Theme.of(context).textTheme.bodyMedium?.fontFamily, isNot(BiliFonts.miSans));
     expect(find.text('1'), findsOneWidget, reason: 'state survives the rebuild');

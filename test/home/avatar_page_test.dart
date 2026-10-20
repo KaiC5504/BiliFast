@@ -192,11 +192,11 @@ void main() {
     await show(tester);
     expect(find.text('还没有打开过视频'), findsOneWidget);
     expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, BiliFonts.miSans);
-    BiliFonts.family = null;
+    BiliFonts.family = BiliFonts.system;
     addTearDown(() => BiliFonts.family = BiliFonts.miSans);
     recents.clear();
     await settle(tester);
-    expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, isNull);
+    expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, BiliFonts.system);
   });
 
   testWidgets('a row opened again is stamped now and goes first, its progress kept', (tester) async {

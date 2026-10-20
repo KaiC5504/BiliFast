@@ -181,7 +181,7 @@ void main() {
     List<String>? fallbackOf(String key) =>
         tester.renderObject<RenderParagraph>(find.byKey(ValueKey(key))).text.style?.fontFamilyFallback;
 
-    BiliFonts.family = null;
+    BiliFonts.family = BiliFonts.system;
     await rig09().mount(tester);
     expect(fallbackOf('vertical-title'), ['Apple Color Emoji', 'PingFang SC']);
     expect(fallbackOf('vertical-name'), ['Apple Color Emoji', 'PingFang SC']);

@@ -70,7 +70,7 @@ void main() {
     final store = await open();
     expect(store.choice, FontChoice.system);
     expect(store.label, '系统字体');
-    expect(BiliFonts.family, isNull);
+    expect(BiliFonts.family, BiliFonts.system);
     expect(BiliFonts.nudged, isFalse, reason: 'the MiSans nudges would push PingFang off the official layout');
   });
 
@@ -79,7 +79,7 @@ void main() {
     var told = 0;
     store.addListener(() => told++);
     store.select(FontChoice.system);
-    expect(BiliFonts.family, isNull);
+    expect(BiliFonts.family, BiliFonts.system);
     expect(told, 1);
     store.select(FontChoice.system);
     expect(told, 1, reason: 'the same choice again changes nothing');
@@ -88,7 +88,7 @@ void main() {
     BiliFonts.family = BiliFonts.miSans;
     final again = await open();
     expect(again.choice, FontChoice.system);
-    expect(BiliFonts.family, isNull);
+    expect(BiliFonts.family, BiliFonts.system);
   });
 
   test('imported is refused until a font has been imported', () async {

@@ -52,7 +52,7 @@ Everything under "Rules that bite" in `CLAUDE.md`, in particular:
 | Input | KaiC's pairs in `local/differences/font-check/`, `NN-ours-<screen>.png` beside `NN-official-<screen>.png`, same video and state, 字体 系统. |
 | Screens | 首页 推荐 (top); the video page's 简介 (uploader, title, actions, the first related videos); 评论详情; the landscape player with its controls; 弹幕设置's portrait sheet; 头像页; 历史记录; 设置; the landscape quality picker. 评论 itself was measured from `local/differences/11-…` and `12-…` and fixed in `3d13ca9`. |
 | Work | Measure every pair, list each difference over the threshold with its token, group the fixes by file, one fix round. Values that differ by font become `BiliFonts.nudged ? miSans : system` getters, as `CommentRowTheme.textTop` does. |
-| Tests | A widget test per changed value under `BiliFonts.family = null`, so the system-font values are locked even though PingFang can't render on Windows. |
+| Tests | A widget test per changed value under `BiliFonts.family = BiliFonts.system`, so the system-font values are locked even though PingFang can't render on Windows. |
 | Phone check | Each screen beside the official app: sizes, weights, line breaks and spacing match; no thin and thick glyphs in one line. |
 
 ### Slice 11: 搜索

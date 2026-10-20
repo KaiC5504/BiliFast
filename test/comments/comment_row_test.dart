@@ -212,7 +212,7 @@ void main() {
     void systemFont() {
       final saved = BiliFonts.family;
       addTearDown(() => BiliFonts.family = saved);
-      BiliFonts.family = null;
+      BiliFonts.family = BiliFonts.system;
     }
 
     testWidgets('in the list: a thumb and grey text in 18 under the meta line, no box', (tester) async {
@@ -244,7 +244,7 @@ void main() {
       expect(style.color, const Color(0xFF757575));
       expect(style.fontSize, 10);
       expect(style.letterSpacing, 0.4);
-      expect(style.fontFamily, isNull);
+      expect(style.fontFamily, BiliFonts.system);
     });
 
     testWidgets('the root\'s band starts 8 under the box; a reply\'s hairline does too', (tester) async {
@@ -814,7 +814,7 @@ void main() {
         final boxMiSans = _rect(tester, find.byKey(const ValueKey('comment-replies'))).top;
         expect(textMiSans, closeTo(CommentRowTheme.textFirstCentre - CommentRowTheme.textLine / 2, 0.01));
 
-        BiliFonts.family = null;
+        BiliFonts.family = BiliFonts.system;
         await _mount(tester, _row(comment, _Model(), _Calls()));
         expect(_rect(tester, find.byType(CommentText)).top - textMiSans, closeTo(1.4, 0.01));
         // A one-line comment keeps its meta line where it was, so only the box's own gap moves it.
@@ -823,7 +823,7 @@ void main() {
         BiliFonts.family = BiliFonts.miSans;
         await _mount(tester, _row(_comment(), _Model(), _Calls()));
         final heightMiSans = _rect(tester, find.byType(CommentRow)).height;
-        BiliFonts.family = null;
+        BiliFonts.family = BiliFonts.system;
         await _mount(tester, _row(_comment(), _Model(), _Calls()));
         // 20 below the meta text, which sits 0.5 above the line's centre: 7.5 under the line against MiSans's 8.33.
         expect(_rect(tester, find.byType(CommentRow)).height - heightMiSans, closeTo(7.5 - (61 / 3 - 12), 0.01));

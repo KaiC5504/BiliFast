@@ -4,10 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/stand_in_fonts.dart';
 
-TextPainter _laid(String text, {double size = 20, String family = 'CupertinoSystemText'}) => TextPainter(
+const _fallback = ['Apple Color Emoji', 'PingFang SC'];
+
+TextPainter _laid(String text, {double size = 20, String family = BiliFonts.system}) => TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(fontFamily: family, fontFamilyFallback: const ['Apple Color Emoji', 'PingFang SC'], fontSize: size),
+        style: TextStyle(fontFamily: family, fontFamilyFallback: _fallback, fontSize: size),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
@@ -18,8 +20,8 @@ void main() {
   test('the system font\'s fallback names the families the stand-ins load', () {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
-    BiliFonts.family = null;
-    expect(BiliFonts.fallback, ['Apple Color Emoji', 'PingFang SC']);
+    BiliFonts.family = BiliFonts.system;
+    expect(BiliFonts.fallback, _fallback);
   });
 
   // Lines are whole points, as on the phone.
@@ -35,7 +37,7 @@ void main() {
 
   test('Latin alone takes SF\'s line, and is narrower than the square font', () {
     final line = _laid('KaiC5504', size: 14);
-    expect(line.height, (14 * (1980 + 432) / 2048).roundToDouble());
+    expect(line.height, (14 * (1950 + 494) / 2048).roundToDouble());
     expect(line.width, inExclusiveRange(14 * 8 * 0.4, 14 * 8 * 0.7));
   });
 

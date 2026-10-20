@@ -176,7 +176,7 @@ void main() {
     final family = BiliFonts.family;
     addTearDown(() => BiliFonts.family = family);
 
-    BiliFonts.family = null;
+    BiliFonts.family = BiliFonts.system;
     expect(ChipName.style().fontFamilyFallback, ['Apple Color Emoji', 'PingFang SC']);
     BiliFonts.family = BiliFonts.miSans;
     expect(ChipName.style().fontFamilyFallback, isNull);
@@ -185,7 +185,7 @@ void main() {
   testWidgets('under the system font the drawn name falls back as the measured one does', (tester) async {
     final family = BiliFonts.family;
     addTearDown(() => BiliFonts.family = family);
-    BiliFonts.family = null;
+    BiliFonts.family = BiliFonts.system;
     await show(tester, const [bgm]);
 
     final style = tester.renderObject<RenderParagraph>(find.text('晴天')).text.style!;

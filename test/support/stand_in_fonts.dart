@@ -13,7 +13,7 @@ const _chineseStyles = ['Regular', 'Medium', 'Semibold'];
 
 bool _loaded = false;
 
-/// Loads the iPhone's system font for a test that renders under it (`BiliFonts.family = null`): stand-ins for SF and
+/// Loads the iPhone's system font for a test that renders under it (`BiliFonts.family = BiliFonts.system`): stand-ins for SF and
 /// PingFang SC (test/fonts, made by tools/make_standin_fonts.py) with their line metrics and ink, so Chinese lines
 /// break and sit as on the phone and Latin comes close. Without them the system path draws Flutter's square test font.
 Future<void> loadSystemFontStandIns() async {

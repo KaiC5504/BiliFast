@@ -98,9 +98,9 @@ void main() {
   testWidgets('past the monospace fonts it falls back to the app font, or to emoji then PingFang SC', (tester) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
-    BiliFonts.family = null;
+    BiliFonts.family = BiliFonts.system;
     await _show(tester, _sample);
-    expect(fallbackOf(tester, find.text('卡顿 2 次')), ['Consolas', 'Courier New', ...systemFallback]);
+    expect(fallbackOf(tester, find.text('卡顿 2 次')), ['Consolas', 'Courier New', BiliFonts.system, ...systemFallback]);
     await tester.pumpWidget(const SizedBox.shrink());
     BiliFonts.family = BiliFonts.miSans;
     await _show(tester, _sample);

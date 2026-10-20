@@ -201,7 +201,7 @@ void main() {
     late String? font;
     setUp(() {
       font = BiliFonts.family;
-      BiliFonts.family = null;
+      BiliFonts.family = BiliFonts.system;
     });
     tearDown(() => BiliFonts.family = font);
 
@@ -225,7 +225,7 @@ void main() {
       final style = tester.renderObject<RenderParagraph>(notice).text.style!;
       expect(style.color, BiliColors.secondaryText);
       expect(style.fontSize, 12);
-      expect(style.fontFamily, isNull);
+      expect(style.fontFamily, BiliFonts.system);
       expect(tester.widget<Text>(notice).maxLines, 1);
     });
 
@@ -446,7 +446,7 @@ void main() {
     ) async {
       // MiSans's tightening would move the text after the stop by a tenth of a point.
       final font = BiliFonts.family;
-      BiliFonts.family = null;
+      BiliFonts.family = BiliFonts.system;
       addTearDown(() => BiliFonts.family = font);
       final rig = Rig();
       await rig.mount(

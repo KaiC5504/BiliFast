@@ -146,8 +146,12 @@ abstract final class BiliColors {
 abstract final class BiliFonts {
   static const miSans = 'MiSans';
 
-  /// The family every style names; null is the system's, which on the iPhone is SF with PingFang SC, as the official
-  /// app draws.
+  /// The system font: SF (the engine's name for it on iOS), with PingFang SC for Chinese, as the official app draws.
+  /// Named rather than left null: a style that names no family takes its fallback list's first as its own, and in
+  /// tests the square test font.
+  static const system = 'CupertinoSystemText';
+
+  /// The family every style names.
   static String? family = miSans;
 
   /// The layout nudges that line MiSans up with the official app's PingFang apply only while MiSans is on.
@@ -158,7 +162,7 @@ abstract final class BiliFonts {
   /// Under the system font, what iOS's labels fall back to for what SF lacks: emoji before PingFang SC, so a ⚠ in a
   /// title draws in colour as the official app's does, and every Chinese and kana glyph from PingFang SC rather than
   /// whichever font the engine last fell back to.
-  static List<String>? get fallback => family == null ? const ['Apple Color Emoji', 'PingFang SC'] : null;
+  static List<String>? get fallback => family == system ? const ['Apple Color Emoji', 'PingFang SC'] : null;
 
   /// Material's type scale tracks its text 0.1 to 0.5 pt, and every style that doesn't set its own spacing took that
   /// from the page's Material. iOS text isn't tracked; at 3 px per pt the extra 0.75 px leaves Chinese glyphs between

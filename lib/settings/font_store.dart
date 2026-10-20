@@ -95,9 +95,9 @@ class FontStore extends ChangeNotifier {
     FontChoice.imported => _imported?.name ?? '导入的字体',
   };
 
-  /// The family [choice] draws with; null is the system's.
+  /// The family [choice] draws with.
   String? familyOf(FontChoice choice) => switch (choice) {
-    FontChoice.system => null,
+    FontChoice.system => BiliFonts.system,
     FontChoice.miSans => BiliFonts.miSans,
     FontChoice.imported => _imported?.family,
   };

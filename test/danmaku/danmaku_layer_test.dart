@@ -315,9 +315,9 @@ void main() {
   test('sprites: under the system font the text falls back to emoji, then PingFang SC; MiSans needs none', () {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
-    BiliFonts.family = null;
+    BiliFonts.family = BiliFonts.system;
     final system = DanmakuSprites.textStyle(17, Paint());
-    expect(system.fontFamily, isNull);
+    expect(system.fontFamily, BiliFonts.system);
     expect(system.fontFamilyFallback, systemFallback);
     expect(system.fontSize, 17);
     expect(system.fontWeight, FontWeight.w600);

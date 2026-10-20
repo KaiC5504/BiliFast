@@ -232,7 +232,7 @@ void main() {
         tester.renderObject<RenderParagraph>(find.byKey(ValueKey(key))).text.style?.fontFamilyFallback;
 
     testWidgets("the chrome's text falls back to emoji, then PingFang SC, as the app's own text does", (tester) async {
-      BiliFonts.family = null;
+      BiliFonts.family = BiliFonts.system;
       final rig = Rig(statusBar: FixedStatusBarFeed())..session.title = '⚠别眨眼！前方高燃！！';
       await rig.mount(tester);
       for (final key in ['landscape-title', 'landscape-time', 'status-time', 'status-battery-level']) {
