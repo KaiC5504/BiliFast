@@ -234,6 +234,7 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
 
 TextStyle _style(double size, Color color, {FontWeight weight = HistoryTheme.textWeight, double? height}) => TextStyle(
   fontFamily: BiliFonts.family,
+  fontFamilyFallback: BiliFonts.fallback,
   fontSize: size,
   fontWeight: weight,
   color: color,

@@ -179,6 +179,7 @@ class _Cover extends StatelessWidget {
             child: DefaultTextStyle(
               style: TextStyle(
                 fontFamily: BiliFonts.family,
+                fontFamilyFallback: BiliFonts.fallback,
                 fontSize: BiliMetrics.cardStatText,
                 color: BiliColors.onCover,
                 fontFeatures: [FontFeature.tabularFigures()],

@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
+import '../support/system_font.dart';
 import 'history_fakes.dart';
 
 void main() {
@@ -413,5 +414,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('今天看的一'), findsOneWidget);
     expect(api.calls.where((call) => call == 'history after=0'), hasLength(1));
+  });
+
+  testWidgets('with no Material above it, the page names the system font fallback itself', (tester) async {
+    await expectSystemFallback(tester, () => show(tester), find.text('今天看的一'));
   });
 }

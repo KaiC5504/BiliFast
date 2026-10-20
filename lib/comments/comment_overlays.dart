@@ -422,6 +422,7 @@ class _DeleteConfirm extends StatelessWidget {
   Widget build(BuildContext context) => DefaultTextStyle(
     style: TextStyle(
       fontFamily: BiliFonts.family,
+      fontFamilyFallback: BiliFonts.fallback,
       fontSize: CommentOverlayTheme.alertButtonText,
       color: CommentOverlayTheme.alertTitle,
       decoration: TextDecoration.none,

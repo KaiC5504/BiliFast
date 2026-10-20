@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:bili_core/danmaku.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import '../shared/theme.dart';
@@ -85,14 +86,20 @@ final class DanmakuSprites {
     return DanmakuSprite(recorder.endRecording(), size);
   }
 
+  /// Built by hand for the paragraph, so it carries no ambient style: the system font's fallback has to be named here.
+  @visibleForTesting
+  static TextStyle textStyle(double pointSize, Paint foreground) => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontFamilyFallback: BiliFonts.fallback,
+    locale: BiliFonts.locale,
+    fontSize: pointSize,
+    fontWeight: FontWeight.w600,
+    foreground: foreground,
+  );
+
   static ui.Paragraph _paragraph(String text, double pointSize, Paint foreground) {
     final builder = ui.ParagraphBuilder(ui.ParagraphStyle(textDirection: TextDirection.ltr, maxLines: 1))
-      ..pushStyle(ui.TextStyle(
-          fontFamily: BiliFonts.family,
-          locale: BiliFonts.locale,
-          fontSize: pointSize,
-          fontWeight: FontWeight.w600,
-          foreground: foreground))
+      ..pushStyle(textStyle(pointSize, foreground).getTextStyle())
       ..addText(text);
     return builder.build()..layout(const ui.ParagraphConstraints(width: double.infinity));
   }

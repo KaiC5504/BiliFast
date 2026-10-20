@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_player_session.dart';
 import '../../support/fake_video_actions.dart';
+import '../../support/system_font.dart';
 
 const landscapeSize = Size(956, 440);
 const portraitSize = Size(440, 956);
@@ -522,6 +523,12 @@ void main() {
     });
   });
 
+  testWidgets('under the system font, a panel and its rows fall back to emoji, then PingFang SC', (tester) async {
+    Future<void> show(Shape shape, PlayerPanel panel) async => open(tester, await pumpLayer(tester, shape), panel);
+    await expectSystemFallback(tester, () => show(Shape.landscape, PlayerPanel.quality), find.text('自动'));
+    await expectSystemFallback(tester, () => show(Shape.portrait, PlayerPanel.speed), find.text('倍速'));
+  });
+
   group('⋮', () {
     Future<Rig> more(WidgetTester tester, {FakePlayerSession? session}) async {
       final rig = await pumpLayer(tester, Shape.landscape, session: session);
@@ -731,6 +738,14 @@ void main() {
       expect(find.text('$minutes分钟'), findsOneWidget);
       expect(textColor(tester, '$minutes分钟'), BiliColors.pink);
       expect(rig.panels.value, PlayerPanel.more);
+    });
+
+    testWidgets('under the system font, segments and the wheel fall back to emoji, then PingFang SC', (tester) async {
+      await expectSystemFallback(tester, () => more(tester), find.text('单集循环'));
+      await expectSystemFallback(tester, () async {
+        await more(tester);
+        await tapText(tester, '自定义');
+      }, find.text('30 分钟'));
     });
 
     testWidgets('the wheel opens on the minutes set before, each time', (tester) async {

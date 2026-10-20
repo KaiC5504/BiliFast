@@ -14,7 +14,7 @@ class StatsOverlay extends StatelessWidget {
     color: BiliColors.onVideo,
     fontSize: BiliMetrics.statsFont,
     fontFamily: 'Menlo',
-    fontFamilyFallback: ['Consolas', 'Courier New', ?BiliFonts.family],
+    fontFamilyFallback: ['Consolas', 'Courier New', ?BiliFonts.family, ...?BiliFonts.fallback],
     fontFeatures: [FontFeature.tabularFigures()],
   );
 

@@ -238,6 +238,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
       child: DefaultTextStyle(
         style: TextStyle(
           fontFamily: BiliFonts.family,
+          fontFamilyFallback: BiliFonts.fallback,
           fontSize: BiliMetrics.panelTitleText,
           color: light ? BiliColors.text : BiliColors.panelText,
           decoration: TextDecoration.none,

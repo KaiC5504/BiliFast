@@ -150,6 +150,7 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
   Widget build(BuildContext context) => DefaultTextStyle(
     style: TextStyle(
       fontFamily: BiliFonts.family,
+      fontFamilyFallback: BiliFonts.fallback,
       fontSize: widget.dark ? BiliMetrics.panelTitleText : FavouriteTheme.titleText,
       color: _palette.text,
       decoration: TextDecoration.none,

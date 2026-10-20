@@ -26,7 +26,12 @@ class SettingsConfirm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DefaultTextStyle(
-    style: TextStyle(fontFamily: BiliFonts.family, color: SettingsTheme.confirmTitle, decoration: TextDecoration.none),
+    style: TextStyle(
+      fontFamily: BiliFonts.family,
+      fontFamilyFallback: BiliFonts.fallback,
+      color: SettingsTheme.confirmTitle,
+      decoration: TextDecoration.none,
+    ),
     child: Stack(
       children: [
         Positioned.fill(

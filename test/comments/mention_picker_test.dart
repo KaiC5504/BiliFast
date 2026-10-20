@@ -9,6 +9,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/system_font.dart';
+
 /// No face addresses, so the avatars stay grey and nothing is fetched.
 const recent = [
   MentionCandidate(mid: 1, name: '星宇动漫社'),
@@ -302,5 +304,15 @@ void main() {
         reason: 'row $mid',
       );
     }
+  });
+
+  testWidgets('under the system font, its words fall back to emoji, then PingFang SC', (tester) async {
+    Future<void> show() async {
+      await mount(tester, answers: {'': recent});
+      await tester.pumpAndSettle();
+    }
+
+    await expectSystemFallback(tester, show, find.text('最近关注'));
+    await expectSystemFallback(tester, show, find.text('老番茄'));
   });
 }

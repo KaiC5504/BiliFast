@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:bili_core/api.dart';
+import 'package:bili_core/logic.dart' show CountFormat;
 import 'package:bilifast/home/feed_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/system_font.dart';
 import 'feed_fakes.dart';
 
 void main() {
@@ -32,4 +34,20 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('under the system font, the counts over the cover fall back to emoji, then PingFang SC', (tester) async {
+    Future<void> show() => tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 200,
+            child: FeedCardView(card: card, onOpen: (_) {}, onWatchLater: () {}),
+          ),
+        ),
+      ),
+    );
+    await expectSystemFallback(tester, show, find.text(CountFormat.short(card.views)));
+    await expectSystemFallback(tester, show, find.text(FeedCardView.duration(card.duration)));
+  });
 }

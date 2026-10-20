@@ -5,6 +5,8 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/system_font.dart';
+
 const _sample = OverlayStats(
   mode: PlaybackMode.btr,
   stream: '1080P 高清 · HEVC · 3.2 Mbps',
@@ -91,5 +93,17 @@ void main() {
     await _show(tester, _sample);
     final ignoring = find.byWidgetPredicate((widget) => widget is IgnorePointer && widget.ignoring);
     expect(find.ancestor(of: find.text('卡顿 2 次'), matching: ignoring), findsOneWidget);
+  });
+
+  testWidgets('past the monospace fonts it falls back to the app font, or to emoji then PingFang SC', (tester) async {
+    final saved = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = saved);
+    BiliFonts.family = null;
+    await _show(tester, _sample);
+    expect(fallbackOf(tester, find.text('卡顿 2 次')), ['Consolas', 'Courier New', ...systemFallback]);
+    await tester.pumpWidget(const SizedBox.shrink());
+    BiliFonts.family = BiliFonts.miSans;
+    await _show(tester, _sample);
+    expect(fallbackOf(tester, find.text('卡顿 2 次')), ['Consolas', 'Courier New', BiliFonts.miSans]);
   });
 }

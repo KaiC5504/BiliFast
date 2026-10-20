@@ -22,6 +22,7 @@ class UnfollowConfirm extends StatelessWidget {
   Widget build(BuildContext context) => DefaultTextStyle(
     style: TextStyle(
       fontFamily: BiliFonts.family,
+      fontFamilyFallback: BiliFonts.fallback,
       fontSize: FavouriteTheme.alertButtonText,
       color: BiliColors.text,
       decoration: TextDecoration.none,

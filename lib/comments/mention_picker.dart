@@ -94,6 +94,7 @@ class _MentionPickerState extends State<MentionPicker> {
   Widget build(BuildContext context) => DefaultTextStyle(
     style: TextStyle(
       fontFamily: BiliFonts.family,
+      fontFamilyFallback: BiliFonts.fallback,
       fontSize: MentionTheme.nameText,
       color: BiliColors.text,
       decoration: TextDecoration.none,

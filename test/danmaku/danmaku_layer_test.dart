@@ -9,6 +9,8 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/system_font.dart';
+
 DisplayDanmaku item(String text, int ms, {int mode = 1, int color = 0xFFFFFF, bool own = false}) => DisplayDanmaku(
   elem: DanmakuElem(progressMs: ms, mode: mode, color: color, content: text),
   text: text,
@@ -308,5 +310,20 @@ void main() {
     expect(sprites.layouts, 3);
     expect(sprites.of(item('同样', 0), pointSize: 17), same(plain));
     expect(sprites.layouts, 3);
+  });
+
+  test('sprites: under the system font the text falls back to emoji, then PingFang SC; MiSans needs none', () {
+    final saved = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = saved);
+    BiliFonts.family = null;
+    final system = DanmakuSprites.textStyle(17, Paint());
+    expect(system.fontFamily, isNull);
+    expect(system.fontFamilyFallback, systemFallback);
+    expect(system.fontSize, 17);
+    expect(system.fontWeight, FontWeight.w600);
+    BiliFonts.family = BiliFonts.miSans;
+    final miSans = DanmakuSprites.textStyle(17, Paint());
+    expect(miSans.fontFamily, BiliFonts.miSans);
+    expect(miSans.fontFamilyFallback, isNull);
   });
 }

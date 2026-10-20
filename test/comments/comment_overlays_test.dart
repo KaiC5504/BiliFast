@@ -11,6 +11,8 @@ import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/system_font.dart';
+
 /// Where the thread's top is put for these tests.
 const threadTop = 280.0;
 const screen = Size(440, 956);
@@ -800,6 +802,12 @@ void main() {
       tester.semantics.tap(find.semantics.byLabel('删除'));
       expect(model.deleted, [target]);
       handle.dispose();
+    });
+
+    testWidgets('under the system font, its words fall back to emoji, then PingFang SC', (tester) async {
+      Future<void> show() => confirm(tester, comment(7));
+      await expectSystemFallback(tester, show, find.text('删除评论'));
+      await expectSystemFallback(tester, show, find.text('删除'));
     });
   });
 }

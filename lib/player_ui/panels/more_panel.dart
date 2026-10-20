@@ -358,6 +358,7 @@ class _SleepWheelState extends State<_SleepWheel> {
         textTheme: CupertinoTextThemeData(
           pickerTextStyle: TextStyle(
             fontFamily: BiliFonts.family,
+            fontFamilyFallback: BiliFonts.fallback,
             fontSize: BiliMetrics.bodyText,
             color: BiliColors.panelText,
           ),
