@@ -295,6 +295,7 @@ class _Failure extends StatelessWidget {
               key: const ValueKey('video-error'),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.onVideo),
+              strutStyle: BiliFonts.strutOf(context, const TextStyle(fontSize: BiliMetrics.bodyText)),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: BiliMetrics.rowGap),

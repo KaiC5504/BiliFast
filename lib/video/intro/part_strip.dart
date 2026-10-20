@@ -173,6 +173,12 @@ class _PartChipState extends State<_PartChip> {
     final playing = widget.part.current;
     final still = MediaQuery.disableAnimationsOf(context);
     final colour = playing ? BiliColors.pink : BiliColors.text;
+    final style = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: IntroListTheme.partChipText,
+      height: IntroListTheme.partChipLine / IntroListTheme.partChipText,
+      color: colour,
+    );
     return Semantics(
       button: true,
       selected: playing,
@@ -219,12 +225,8 @@ class _PartChipState extends State<_PartChip> {
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: BiliFonts.family,
-                fontSize: IntroListTheme.partChipText,
-                height: IntroListTheme.partChipLine / IntroListTheme.partChipText,
-                color: colour,
-              ),
+              style: style,
+              strutStyle: BiliFonts.strut(style),
             ),
           ),
         ),

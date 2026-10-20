@@ -315,12 +315,17 @@ class _CoinDialogState extends State<CoinDialog> with TickerProviderStateMixin {
               opacity: shown,
               child: Column(
                 children: [
-                  Text(short ? '硬币不足' : '上滑或点击22娘投硬币', style: text.copyWith(color: ActionTheme.coinHint)),
+                  Text(
+                    short ? '硬币不足' : '上滑或点击22娘投硬币',
+                    style: text.copyWith(color: ActionTheme.coinHint),
+                    strutStyle: BiliFonts.strut(text),
+                  ),
                   Text(
                     balance != null
                         ? '硬币余额：${balance.toStringAsFixed(1)}'
                         : (_balanceFailed ? '硬币余额获取失败' : '硬币余额：--'),
                     style: text,
+                    strutStyle: BiliFonts.strut(text),
                   ),
                 ],
               ),

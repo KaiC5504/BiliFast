@@ -135,6 +135,23 @@ class _NameAndCounts extends StatelessWidget {
     final card = this.card;
     final animate = !MediaQuery.disableAnimationsOf(context);
     final counts = card == null ? '' : '${CountFormat.short(card.fans)}粉丝  ${CountFormat.short(card.videos)}视频';
+    final nameStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontFamilyFallback: BiliFonts.fallback,
+      fontSize: IntroTheme.nameText,
+      height: IntroTheme.nameLine / IntroTheme.nameText,
+      leadingDistribution: TextLeadingDistribution.even,
+      letterSpacing: IntroTheme.nameSpacing,
+      color: card?.isVip == true ? BiliColors.pink : IntroTheme.name,
+    );
+    final countsStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: IntroTheme.fansText,
+      height: IntroTheme.fansLine / IntroTheme.fansText,
+      leadingDistribution: TextLeadingDistribution.even,
+      letterSpacing: IntroTheme.fansSpacing,
+      color: BiliColors.secondaryText,
+    );
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -146,16 +163,8 @@ class _NameAndCounts extends StatelessWidget {
           child: AnimatedDefaultTextStyle(
             duration: animate ? const Duration(milliseconds: 200) : Duration.zero,
             // It replaces the page's style rather than merging with it, so it carries the fallback itself.
-            style: TextStyle(
-              fontFamily: BiliFonts.family,
-              fontFamilyFallback: BiliFonts.fallback,
-              fontSize: IntroTheme.nameText,
-              height: IntroTheme.nameLine / IntroTheme.nameText,
-              leadingDistribution: TextLeadingDistribution.even,
-              letterSpacing: IntroTheme.nameSpacing,
-              color: card?.isVip == true ? BiliColors.pink : IntroTheme.name,
-            ),
-            child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            style: nameStyle,
+            child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, strutStyle: BiliFonts.strut(nameStyle)),
           ),
         ),
         Positioned(
@@ -171,14 +180,8 @@ class _NameAndCounts extends StatelessWidget {
               _apartFromHan(counts, BiliFonts.nudged ? 0 : IntroTheme.fansHanGap),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: BiliFonts.family,
-                fontSize: IntroTheme.fansText,
-                height: IntroTheme.fansLine / IntroTheme.fansText,
-                leadingDistribution: TextLeadingDistribution.even,
-                letterSpacing: IntroTheme.fansSpacing,
-                color: BiliColors.secondaryText,
-              ),
+              style: countsStyle,
+              strutStyle: BiliFonts.strut(countsStyle),
             ),
           ),
         ),
@@ -197,6 +200,16 @@ class _StaffRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(fontFamily: BiliFonts.family, leadingDistribution: TextLeadingDistribution.even);
+    final nameStyle = style.copyWith(
+      fontSize: IntroTheme.staffNameText,
+      height: IntroTheme.staffLine / IntroTheme.staffNameText,
+      color: IntroTheme.name,
+    );
+    final roleStyle = style.copyWith(
+      fontSize: IntroTheme.staffRoleText,
+      height: IntroTheme.staffRoleLine / IntroTheme.staffRoleText,
+      color: BiliColors.secondaryText,
+    );
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -227,21 +240,15 @@ class _StaffRow extends StatelessWidget {
                             member.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: style.copyWith(
-                              fontSize: IntroTheme.staffNameText,
-                              height: IntroTheme.staffLine / IntroTheme.staffNameText,
-                              color: IntroTheme.name,
-                            ),
+                            style: nameStyle,
+                            strutStyle: BiliFonts.strut(nameStyle),
                           ),
                           Text(
                             member.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: style.copyWith(
-                              fontSize: IntroTheme.staffRoleText,
-                              height: IntroTheme.staffRoleLine / IntroTheme.staffRoleText,
-                              color: BiliColors.secondaryText,
-                            ),
+                            style: roleStyle,
+                            strutStyle: BiliFonts.strut(roleStyle),
                           ),
                         ],
                       ),

@@ -602,6 +602,17 @@ class _VideoRow extends StatelessWidget {
     const coverBottom = coverTop + AvatarPageTheme.coverHeight;
     final cover = this.cover;
     final time = this.time;
+    final titleStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: AvatarPageTheme.titleText,
+      height: AvatarPageTheme.titleLine / AvatarPageTheme.titleText,
+      color: BiliColors.text,
+    );
+    final timeStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: AvatarPageTheme.timeText,
+      color: BiliColors.secondaryText,
+    );
     return SizedBox(
       height: AvatarPageTheme.rowExtent,
       child: Stack(
@@ -677,12 +688,8 @@ class _VideoRow extends StatelessWidget {
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: BiliFonts.family,
-                  fontSize: AvatarPageTheme.titleText,
-                  height: AvatarPageTheme.titleLine / AvatarPageTheme.titleText,
-                  color: BiliColors.text,
-                ),
+                style: titleStyle,
+                strutStyle: BiliFonts.strut(titleStyle),
               ),
             ),
           ),
@@ -696,11 +703,8 @@ class _VideoRow extends StatelessWidget {
                   time,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: BiliFonts.family,
-                    fontSize: AvatarPageTheme.timeText,
-                    color: BiliColors.secondaryText,
-                  ),
+                  style: timeStyle,
+                  strutStyle: BiliFonts.strutOf(context, timeStyle),
                 ),
               ),
             ),

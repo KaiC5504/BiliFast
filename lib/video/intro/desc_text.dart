@@ -183,5 +183,8 @@ class _DescriptionTextState extends State<DescriptionText> {
   }
 
   @override
-  Widget build(BuildContext context) => Text.rich(TextSpan(style: widget.style, children: _spans));
+  Widget build(BuildContext context) => Text.rich(
+    TextSpan(style: widget.style, children: _spans),
+    strutStyle: BiliFonts.strutOf(context, widget.style),
+  );
 }

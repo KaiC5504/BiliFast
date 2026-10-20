@@ -329,6 +329,12 @@ class SettingsScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.paddingOf(context);
+    final titleStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: SettingsTheme.barTitleText,
+      fontWeight: SettingsTheme.barTitleWeight,
+      color: SettingsTheme.barTitle,
+    );
     return Scaffold(
       backgroundColor: SettingsTheme.page,
       body: Column(
@@ -345,14 +351,13 @@ class SettingsScaffold extends StatelessWidget {
                     Center(
                       child: Transform.translate(
                         offset: Offset(0, SettingsTheme.barTitleDrop),
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontFamily: BiliFonts.family,
-                            fontSize: SettingsTheme.barTitleText,
-                            fontWeight: SettingsTheme.barTitleWeight,
-                            color: SettingsTheme.barTitle,
+                        // Under the Scaffold's Material, whose style the title takes.
+                        child: Builder(
+                          builder: (context) => Text(
+                            title,
+                            maxLines: 1,
+                            style: titleStyle,
+                            strutStyle: BiliFonts.strutOf(context, titleStyle),
                           ),
                         ),
                       ),
@@ -423,6 +428,9 @@ class SettingsSection extends StatelessWidget {
   final List<Widget> children;
   final String? footer;
 
+  static TextStyle get footerStyle =>
+      TextStyle(fontFamily: BiliFonts.family, fontSize: SettingsTheme.footerText, color: SettingsTheme.footer);
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -458,14 +466,7 @@ class SettingsSection extends StatelessWidget {
             SettingsTheme.rowInset,
             SettingsTheme.footerBottom,
           ),
-          child: Text(
-            footer,
-            style: TextStyle(
-              fontFamily: BiliFonts.family,
-              fontSize: SettingsTheme.footerText,
-              color: SettingsTheme.footer,
-            ),
-          ),
+          child: Text(footer, style: footerStyle, strutStyle: BiliFonts.strutOf(context, footerStyle)),
         ),
     ],
   );
@@ -492,20 +493,31 @@ class SettingsRow extends StatelessWidget {
   final bool enabled;
 
   /// A row's title, set where 50's are.
-  static Widget titleText(String title, {Color color = SettingsTheme.rowTitle}) => Transform.translate(
-    offset: Offset(0, SettingsTheme.rowTitleDrop),
-    child: Text(
-      title,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontFamily: BiliFonts.family, fontSize: SettingsTheme.rowTitleText, color: color),
-    ),
-  );
+  static Widget titleText(String title, {Color color = SettingsTheme.rowTitle}) {
+    final style = TextStyle(fontFamily: BiliFonts.family, fontSize: SettingsTheme.rowTitleText, color: color);
+    return Transform.translate(
+      offset: Offset(0, SettingsTheme.rowTitleDrop),
+      child: Builder(
+        builder: (context) => Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+          strutStyle: BiliFonts.strutOf(context, style),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final value = this.value;
     final active = enabled ? onTap : null;
+    final valueStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: BiliMetrics.settingsValueText,
+      color: valueColor,
+    );
     return MergeSemantics(
       child: Semantics(
         button: onTap != null,
@@ -532,11 +544,8 @@ class SettingsRow extends StatelessWidget {
                               value,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: BiliFonts.family,
-                                fontSize: BiliMetrics.settingsValueText,
-                                color: valueColor,
-                              ),
+                              style: valueStyle,
+                              strutStyle: BiliFonts.strutOf(context, valueStyle),
                             ),
                           ),
                           if (badge case final badge?) ...[const SizedBox(width: SettingsTheme.vipBadgeGap), badge],

@@ -4,7 +4,8 @@ import 'dart:ui' show PathMetric;
 
 import 'package:bili_core/api.dart' show FavFolder;
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
-import 'package:flutter/material.dart' show Icons, InputBorder, InputDecoration, Material, MaterialType, TextField;
+import 'package:flutter/material.dart'
+    show Icons, InputBorder, InputDecoration, Material, MaterialType, TextField, Theme;
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter, TextInputAction;
 import 'package:flutter/widgets.dart';
 
@@ -456,6 +457,9 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
   Widget _form() {
     final palette = _palette;
     final textSize = widget.dark ? BiliMetrics.panelTitleText : FavouriteTheme.titleText;
+    final fieldStyle = TextStyle(fontFamily: BiliFonts.family, fontSize: textSize, color: palette.text);
+    // A TextField's text starts from the theme's bodyLarge, not the inherited style.
+    final fieldStrut = BiliFonts.strut(Theme.of(context).textTheme.bodyLarge?.merge(fieldStyle) ?? fieldStyle);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -478,7 +482,9 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => unawaited(_create()),
                     cursorColor: BiliColors.pink,
-                    style: TextStyle(fontFamily: BiliFonts.family, fontSize: textSize, color: palette.text),
+                    style: fieldStyle,
+                    strutStyle: fieldStrut,
+
                     decoration: InputDecoration(
                       isCollapsed: true,
                       border: InputBorder.none,

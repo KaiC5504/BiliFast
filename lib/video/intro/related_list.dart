@@ -123,6 +123,12 @@ class _RelatedRow extends StatelessWidget {
       card.cover,
       size: const Size(IntroListTheme.relatedCoverWidth, IntroListTheme.relatedCoverHeight),
     );
+    final title = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: IntroListTheme.relatedTitleText,
+      height: IntroListTheme.relatedTitleLine / IntroListTheme.relatedTitleText,
+      color: BiliColors.text,
+    );
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1,
       child: Stack(
@@ -191,12 +197,8 @@ class _RelatedRow extends StatelessWidget {
                         card.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: BiliFonts.family,
-                          fontSize: IntroListTheme.relatedTitleText,
-                          height: IntroListTheme.relatedTitleLine / IntroListTheme.relatedTitleText,
-                          color: BiliColors.text,
-                        ),
+                        style: title,
+                        strutStyle: BiliFonts.strut(title),
                       ),
                     ),
                     _line(
@@ -207,7 +209,13 @@ class _RelatedRow extends StatelessWidget {
                           const _UpBadge(),
                           const SizedBox(width: IntroListTheme.relatedMetaGap),
                           Flexible(
-                            child: Text(card.ownerName, style: _meta, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            child: Text(
+                              card.ownerName,
+                              style: _meta,
+                              strutStyle: BiliFonts.strut(_meta),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
@@ -219,11 +227,11 @@ class _RelatedRow extends StatelessWidget {
                         children: [
                           const _CountIcon(CountGlyph.views),
                           const SizedBox(width: IntroListTheme.relatedMetaGap),
-                          Text(CountFormat.short(card.views), style: _count),
+                          Text(CountFormat.short(card.views), style: _count, strutStyle: BiliFonts.strut(_count)),
                           const SizedBox(width: IntroListTheme.relatedCountSpacing),
                           const _CountIcon(CountGlyph.danmaku),
                           const SizedBox(width: IntroListTheme.relatedMetaGap),
-                          Text(CountFormat.short(card.danmaku), style: _count),
+                          Text(CountFormat.short(card.danmaku), style: _count, strutStyle: BiliFonts.strut(_count)),
                         ],
                       ),
                     ),

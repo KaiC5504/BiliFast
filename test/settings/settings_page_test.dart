@@ -5,6 +5,7 @@ import 'package:bili_core/engine.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/settings/font_page.dart';
+import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/node_page.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -12,6 +13,7 @@ import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../video/mixed_lines.dart';
 import 'settings_fakes.dart';
 
 void main() {
@@ -26,6 +28,7 @@ void main() {
     WidgetBuilder? developerPage,
     Completer<void>? startGate,
     bool reduceMotion = false,
+    ThemeData? theme,
   }) async {
     tester.view
       ..physicalSize = const Size(440, 956) * 3
@@ -35,6 +38,7 @@ void main() {
     addTearDown(world.dispose);
     await tester.pumpWidget(
       MaterialApp(
+        theme: theme,
         builder: (context, child) => AppScope(
           services: world.services,
           child: MediaQuery(
@@ -71,6 +75,39 @@ void main() {
     await tester.tap(row(key));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('under the system font mixed titles, the account\'s name, the licence line and the bar\'s title sit on '
+      'the Chinese line', (tester) async {
+    await useSystemFont(tester);
+    await show(tester, account: const LoggedIn(name: mixedLine, vip: false), theme: appTheme());
+    // The world's own font store starts on this platform's MiSans.
+    world.services.fonts.select(FontChoice.system);
+    await tester.pumpAndSettle();
+    expectOnChineseLine(tester, find.text(mixedLine));
+    expectOnChineseLine(tester, find.text('CDN 节点'));
+    expectOnChineseLine(tester, find.text('BTR 加速（默认）'));
+    const licence = '下载加速移植自 Bilibili 线程撕裂者（BTR），MIT 许可。';
+    await tester.ensureVisible(find.text(licence));
+    await tester.pumpAndSettle();
+    expectOnChineseLine(tester, find.text(licence));
+
+    await tapRow(tester, 'settings-node');
+    expectOnChineseLine(tester, find.text('CDN 节点'));
+  });
+
+  testWidgets('under the system font the system row\'s sample on 字体 sits on the Chinese line', (tester) async {
+    await useSystemFont(tester);
+    await show(tester, theme: appTheme());
+    world.services.fonts.select(FontChoice.system);
+    await tapRow(tester, 'settings-font');
+    expectOnChineseLine(
+      tester,
+      find.descendant(
+        of: find.byKey(const ValueKey('font-system')),
+        matching: find.text('推荐 关注 热门 · 1.2万播放 03:45'),
+      ),
+    );
+  });
 
   group('the account row', () {
     testWidgets('logged out: 登录 opens the login page, and there is no 退出登录', (tester) async {
