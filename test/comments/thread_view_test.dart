@@ -10,12 +10,13 @@ import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Comment comment(int rpid, {int root = 0, int replies = 0}) => Comment(
+Comment comment(int rpid, {int root = 0, int replies = 0, bool upLiked = false}) => Comment(
   rpid: rpid,
   root: root,
   replyCount: replies,
   member: CommentMember(mid: rpid * 10, name: '用户$rpid'),
   message: '评论 $rpid',
+  upLiked: upLiked,
 );
 
 final root = comment(100, replies: 12);
@@ -234,6 +235,55 @@ void main() {
       expect(
         tester.getRect(find.text('相关回复共12条')).center.dy - sort.top,
         closeTo(CommentListTheme.threadSortCentre, 0.01),
+      );
+    });
+
+    testWidgets('UP主觉得很赞 in its box under a liked root and a liked reply; the band and the replies 26 lower, the '
+        'hairline 8 under the box (font-check 04)', (tester) async {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      BiliFonts.family = null;
+      final chips = find.byKey(const ValueKey('comment-up-liked'), skipOffstage: false);
+      final rootRow = find.byKey(const ValueKey('thread-root'), skipOffstage: false);
+      final band = find.byKey(const ValueKey('thread-band'));
+
+      await show(tester, FakeThread(loaded(isEnd: true)));
+      expect(chips, findsNothing);
+      final bandWithout = tester.getRect(band).top;
+      final replyWithout = tester.getRect(find.byKey(const ValueKey(1))).top;
+
+      final liked = comment(100, replies: 12, upLiked: true);
+      await show(
+        tester,
+        FakeThread(
+          ThreadState(
+            root: liked,
+            replies: [comment(1, root: 100, upLiked: true), comment(2, root: 100)],
+            sort: CommentSort.time,
+            page: 1,
+            isEnd: true,
+            total: 12,
+          ),
+        ),
+      );
+      expect(chips, findsNWidgets(2));
+      final rootChip = tester.getRect(find.descendant(of: rootRow, matching: chips));
+      expect(rootChip.left, CommentRowTheme.textLeading);
+      expect(rootChip.height, CommentRowTheme.upChipHeight);
+      expect(tester.getRect(band).top - rootChip.bottom, closeTo(8, 0.01));
+      expect(tester.getRect(band).top - bandWithout, closeTo(26, 0.01));
+      expect(tester.getRect(find.byKey(const ValueKey(1))).top - replyWithout, closeTo(26, 0.01));
+
+      final reply = find.byKey(const ValueKey(1));
+      final replyChip = tester.getRect(find.descendant(of: reply, matching: chips));
+      final hairline = tester.getRect(
+        find.descendant(of: reply, matching: find.byKey(const ValueKey('comment-divider'))),
+      );
+      expect(hairline.top - replyChip.bottom, closeTo(8, 0.01));
+      expect(
+        find.descendant(of: find.byKey(const ValueKey(2)), matching: chips),
+        findsNothing,
+        reason: 'a reply the uploader didn\'t like',
       );
     });
 

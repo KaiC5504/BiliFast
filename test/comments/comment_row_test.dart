@@ -201,13 +201,93 @@ void main() {
       expect(find.text('置顶'), findsNothing);
       expect(tester.widget<CommentText>(find.byType(CommentText)).leading, isNull);
     });
+  });
 
-    testWidgets('UP主觉得很赞 shows under the meta line in the list only', (tester) async {
+  group('UP主觉得很赞', () {
+    Finder thumb() =>
+        find.byWidgetPredicate((widget) => widget is CommentThumb && widget.width == CommentRowTheme.upLikedIcon);
+    Finder chip() => find.byKey(const ValueKey('comment-up-liked'));
+    Rect metaLine(WidgetTester tester) => _rect(tester, find.byKey(const ValueKey('comment-like')));
+
+    void systemFont() {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      BiliFonts.family = null;
+    }
+
+    testWidgets('in the list: a thumb and grey text in 18 under the meta line, no box', (tester) async {
       await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls()));
-      expect(find.text('UP主觉得很赞'), findsOneWidget);
+      expect(thumb(), findsOneWidget);
+      expect(chip(), findsNothing);
+      expect(_colour(tester, 'UP主觉得很赞'), CommentRowTheme.upLiked);
+      final row = _rect(tester, find.byType(CommentRow));
+      expect(row.bottom - metaLine(tester).bottom, closeTo(CommentRowTheme.upLikedHeight + 9, 0.01));
+    });
 
-      await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false));
-      expect(find.text('UP主觉得很赞'), findsNothing);
+    testWidgets('in a thread: 10 pt #757575 in a #F4F4F4 box 16 tall and 2 round, 9.5 under the meta line at the '
+        'text\'s left, 13/3 either side of the text (font-check 04)', (tester) async {
+      systemFont();
+      await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false, divider: false));
+      expect(thumb(), findsNothing);
+      final box = _rect(tester, chip());
+      final text = _rect(tester, find.text('UP主觉得很赞'));
+      expect(box.left, CommentRowTheme.textLeading);
+      expect(box.top - metaLine(tester).bottom, closeTo(9.5, 0.01));
+      expect(box.height, closeTo(16, 0.01));
+      expect(box.width, closeTo(text.width + 26 / 3, 0.01));
+      expect(text.left - box.left, closeTo(13 / 3, 0.01));
+      expect(text.center.dy, closeTo(box.center.dy, 0.01));
+      final decoration = tester.widget<DecoratedBox>(chip()).decoration as BoxDecoration;
+      expect(decoration.color, const Color(0xFFF4F4F4));
+      expect(decoration.borderRadius, const BorderRadius.all(Radius.circular(2)));
+      final style = tester.renderObject<RenderParagraph>(find.text('UP主觉得很赞')).text.style!;
+      expect(style.color, const Color(0xFF757575));
+      expect(style.fontSize, 10);
+      expect(style.letterSpacing, 0.4);
+      expect(style.fontFamily, isNull);
+    });
+
+    testWidgets('the root\'s band starts 8 under the box; a reply\'s hairline does too', (tester) async {
+      systemFont();
+      await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false, divider: false));
+      expect(_rect(tester, find.byType(CommentRow)).bottom - _rect(tester, chip()).bottom, closeTo(8, 0.01));
+
+      final root = _comment(rpid: 9);
+      await _mount(tester, _row(_comment(root: 9, upLiked: true), _Model(), _Calls(), thread: root, replies: false));
+      final divider = _rect(tester, find.byKey(const ValueKey('comment-divider')));
+      expect(divider.top - _rect(tester, chip()).bottom, closeTo(8, 0.01));
+      expect(divider.bottom, _rect(tester, find.byType(CommentRow)).bottom);
+    });
+
+    testWidgets('the box moves the root\'s band 26 lower: 20 under the meta text without it, 46 with it (13, '
+        'font-check 04)', (tester) async {
+      systemFont();
+      double band(WidgetTester tester) => _rect(tester, find.byType(CommentRow)).bottom - metaLine(tester).bottom;
+      await _mount(tester, _row(_comment(), _Model(), _Calls(), replies: false, divider: false));
+      final without = band(tester);
+      expect(without, closeTo(7.5, 0.01), reason: 'the system font\'s meta text sits 0.5 above the line\'s centre');
+      await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false, divider: false));
+      expect(band(tester) - without, closeTo(26, 0.01));
+    });
+
+    testWidgets('MiSans keeps the root\'s band a hairline\'s room under the meta line, and its lower meta text puts '
+        'the box 11.2 under the line', (tester) async {
+      await _mount(tester, _row(_comment(), _Model(), _Calls(), replies: false, divider: false));
+      expect(_rect(tester, find.byType(CommentRow)).bottom - metaLine(tester).bottom, closeTo(9, 0.01));
+
+      await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false, divider: false));
+      final box = _rect(tester, chip());
+      expect(box.top - metaLine(tester).bottom, closeTo(11.2, 0.01));
+      expect(_rect(tester, find.byType(CommentRow)).bottom - box.bottom, closeTo(8, 0.01));
+    });
+
+    testWidgets('nothing under a comment the uploader didn\'t like, in the list or a thread', (tester) async {
+      for (final replies in [true, false]) {
+        await _mount(tester, _row(_comment(), _Model(), _Calls(), replies: replies, divider: replies));
+        expect(find.text('UP主觉得很赞'), findsNothing);
+        expect(chip(), findsNothing);
+        expect(thumb(), findsNothing);
+      }
     });
   });
 
