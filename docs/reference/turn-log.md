@@ -61,6 +61,12 @@ The line is written once the turn has settled (300 to 600 ms with no frame or ev
 turn. Release builds hand FrameTimings over in batches up to 1 s apart, so it waits up to 1.2 s more for the batch
 holding the last frame: it can come about 1.5 s after the turn's last frame.
 
+## 轮换测试 (`lib/devtools/turn_cycle.dart`)
+
+`turn cycle` with `index` (from 1), `of`, `label` and `wUs` each time the style moves on (and on 重置); `turn cycle
+done` after the last style; `turn cycle off` when it is switched off by hand. A position counts only once landscape,
+and then upright, have each held for 1.5 s, so a refused or quickly reversed turn doesn't move it on.
+
 ## What the report computes per turn
 
 The content's angle on screen at each display-link tick is `scene + window + container + root` plus the page's drawn
