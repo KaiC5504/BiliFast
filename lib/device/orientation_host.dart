@@ -1,5 +1,3 @@
-import 'turn_style.dart';
-
 /// The phone's physical orientation, as UIDevice reports it.
 enum PhoneOrientation {
   portrait,
@@ -43,13 +41,10 @@ abstract interface class OrientationHost {
   Stream<OrientationRefusal> get refusals;
 
   /// While on, rotations are requested with iOS's animation off, the screen takes its turned size at once, each turn
-  /// is reported on [turns], and [picture] covers the screen until [turnDrawn].
-  Future<void> setTurnTakeover(bool enabled, {required TurnPicture picture});
+  /// is reported on [turns], and a still picture covers the screen until [turnDrawn].
+  Future<void> setTurnTakeover(bool enabled);
 
   Stream<TurnStart> get turns;
 
   Future<void> turnDrawn(int turn);
-
-  /// The turns whose still picture is off the screen, or that had none.
-  Stream<int> get picturesGone;
 }

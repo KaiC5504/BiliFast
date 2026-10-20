@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation_host.dart';
-import 'package:bilifast/device/turn_style.dart';
 
 /// DeviceChannel.swift's stand-in: records requests, and the test turns the phone and refuses rotations.
 final class FakeOrientationHost implements OrientationHost {
@@ -20,15 +19,13 @@ final class FakeOrientationHost implements OrientationHost {
   final _orientations = StreamController<PhoneOrientation>.broadcast(sync: true);
   final _refusals = StreamController<OrientationRefusal>.broadcast(sync: true);
   final _turns = StreamController<TurnStart>.broadcast(sync: true);
-  final _picturesGone = StreamController<int>.broadcast(sync: true);
 
   /// Every [setTurnTakeover] call, and how many times Flutter said a taken-over turn was drawn.
   final takeovers = <bool>[];
   int drawn = 0;
 
-  /// The turns Flutter said were drawn, in order, and the picture of every [setTurnTakeover].
+  /// The turns Flutter said were drawn, in order.
   final drawnTurns = <int>[];
-  final pictures = <TurnPicture>[];
   int _turnIds = 0;
 
   /// Takeover changes and requests in the order they reached the host.
@@ -46,9 +43,6 @@ final class FakeOrientationHost implements OrientationHost {
     _turns.add((id: id, angle: angle, duration: duration));
     return id;
   }
-
-  /// [turn]'s still picture went.
-  void pictureGone(int turn) => _picturesGone.add(turn);
 
   void turn(PhoneOrientation orientation) {
     phone = orientation;
@@ -87,10 +81,9 @@ final class FakeOrientationHost implements OrientationHost {
   Stream<OrientationRefusal> get refusals => _refusals.stream;
 
   @override
-  Future<void> setTurnTakeover(bool enabled, {required TurnPicture picture}) async {
+  Future<void> setTurnTakeover(bool enabled) async {
     if (takeoverError case final error?) throw error;
     takeovers.add(enabled);
-    pictures.add(picture);
     sent.add(enabled ? 'takeover on' : 'takeover off');
   }
 
@@ -103,9 +96,6 @@ final class FakeOrientationHost implements OrientationHost {
     drawn += 1;
     drawnTurns.add(turn);
   }
-
-  @override
-  Stream<int> get picturesGone => _picturesGone.stream;
 }
 
 /// Records full screen entered and left; levels as [NoDeviceControls].

@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:bili_core/api.dart' show VideoCodec;
 import 'package:bili_core/devlog.dart';
-import 'package:bilifast/device/turn_style.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
@@ -25,7 +24,7 @@ void main() {
   tearDown(() => folder.deleteSync(recursive: true));
 
   test('without a file the defaults apply: 自动连播 on, 不循环, 适应, BTR on, stats off, danmaku on, 旋转动画 '
-      '请求前关·直接切·立即', () async {
+      '自绘', () async {
     final prefs = await PlayerPrefs.load(path, logger: logger);
     expect(prefs.autoplay, isTrue);
     expect(prefs.loop, LoopMode.off);
@@ -34,7 +33,7 @@ void main() {
     expect(prefs.showStats, isFalse);
     expect(prefs.danmakuOn, isTrue);
     expect(prefs.coinAlsoLike, isTrue);
-    expect(prefs.turnStyle, const TurnStyle());
+    expect(prefs.turnTakeover, isTrue);
     expect(prefs.quality, isNull);
     expect(prefs.codec, isNull);
     expect(File(path).existsSync(), isFalse, reason: 'nothing is written until something changes');
@@ -50,7 +49,7 @@ void main() {
       ..showStats = true
       ..danmakuOn = false
       ..coinAlsoLike = false
-      ..turnStyle = const TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture)
+      ..turnTakeover = false
       ..quality = 127
       ..codec = VideoCodec.av1;
     await prefs.settle();
@@ -63,87 +62,56 @@ void main() {
     expect(again.showStats, isTrue);
     expect(again.danmakuOn, isFalse);
     expect(again.coinAlsoLike, isFalse);
-    expect(again.turnStyle, const TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture));
+    expect(again.turnTakeover, isFalse);
     expect(again.quality, 127);
     expect(again.codec, VideoCodec.av1);
   });
 
-  test('旋转动画 put back on the default stays there, and only what differs from it is written', () async {
-    final prefs = await PlayerPrefs.load(path, logger: logger)..turnStyle = TurnStyle.system;
+  test('旋转动画 is written only as 系统; put back on 自绘 it leaves the file', () async {
+    final prefs = await PlayerPrefs.load(path, logger: logger)..turnTakeover = false;
     await prefs.settle();
-    expect(jsonDecode(File(path).readAsStringSync()), containsPair('turnMethod', 'system'));
-    prefs.turnStyle = const TurnStyle(picture: TurnPicture.none);
-    await prefs.settle();
-    final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
-    expect(written['turnPicture'], 'none');
-    expect(written.keys, isNot(contains('turnMethod')));
-    expect(written.keys, isNot(contains('turnSpinStart')));
-    prefs.turnStyle = const TurnStyle();
+    expect(jsonDecode(File(path).readAsStringSync()), containsPair('turnTakeover', false));
+    prefs.turnTakeover = true;
     await prefs.settle();
     final cleared = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
     expect(cleared.keys.where((key) => key.startsWith('turn')), isEmpty);
-    expect((await PlayerPrefs.load(path, logger: logger)).turnStyle, const TurnStyle());
+    expect((await PlayerPrefs.load(path, logger: logger)).turnTakeover, isTrue);
   });
 
-  group('the 1.0.0 (12) 旋转动画 bool', () {
-    for (final (json, style, name) in [
-      ('{"turnTakeover":false}', TurnStyle.system, '系统'),
-      ('{"turnTakeover":true}', const TurnStyle(), '自绘, the default'),
-      ('{}', const TurnStyle(), 'absent, the default'),
+  group('旋转动画 from earlier builds', () {
+    for (final (json, drawn, name) in [
+      ('{"turnTakeover":false}', false, '(12) 系统'),
+      ('{"turnTakeover":true}', true, '(12) 自绘'),
+      ('{"turnMethod":"system"}', false, '(14) 系统'),
+      ('{"turnMethod":"quietRequest","turnPicture":"fade","turnSpinStart":"afterPicture"}', true, '(14) 请求前关'),
+      ('{"turnMethod":"counter","turnPicture":"none"}', true, '(13) 抵消'),
+      ('{"turnMethod":"system","turnPicture":"none"}', false, '(14) 系统 with a picture'),
+      ('{"turnPicture":"none"}', true, 'a (13) file without a method'),
     ]) {
-      test('$json reads as $name', () async {
+      test('$json reads as ${drawn ? '自绘' : '系统'}: $name', () async {
         File(path).writeAsStringSync(json);
-        expect((await PlayerPrefs.load(path, logger: logger)).turnStyle, style);
+        final prefs = await PlayerPrefs.load(path, logger: logger);
+        expect(prefs.turnTakeover, drawn);
+        expect(logs.events.map((event) => event.msg), isNot(contains('player prefs value ignored')));
       });
     }
 
-    test('the new keys win over it, and the next write drops it', () async {
-      File(path).writeAsStringSync('{"turnTakeover":false,"turnMethod":"quietRequest"}');
-      final prefs = await PlayerPrefs.load(path, logger: logger);
-      expect(prefs.turnStyle, const TurnStyle(method: TurnMethod.quietRequest));
-      prefs.autoplay = false;
-      await prefs.settle();
-      final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
-      expect(written.keys, isNot(contains('turnTakeover')));
-      expect(written.keys, isNot(contains('turnMethod')), reason: '请求前关 is the default');
-    });
-
-    test('系统 carries over to the next launch as the method', () async {
-      File(path).writeAsStringSync('{"turnTakeover":false}');
+    test('the next write drops the method, picture and start, keeping 系统 as the bool', () async {
+      File(path).writeAsStringSync('{"turnMethod":"system","turnPicture":"fade","turnSpinStart":"afterPicture"}');
       final prefs = await PlayerPrefs.load(path, logger: logger)..autoplay = false;
       await prefs.settle();
-      expect(jsonDecode(File(path).readAsStringSync()), containsPair('turnMethod', 'system'));
-      expect((await PlayerPrefs.load(path, logger: logger)).turnStyle, TurnStyle.system);
-    });
-  });
-
-  group('a 1.0.0 (13) method that is gone', () {
-    for (final name in ['legacy', 'remove', 'counter', 'noActions', 'noSpin']) {
-      test('$name reads as 请求前关 with its picture and start kept, without a warning', () async {
-        File(path).writeAsStringSync('{"turnMethod":"$name","turnPicture":"fade","turnSpinStart":"afterPicture"}');
-        final prefs = await PlayerPrefs.load(path, logger: logger);
-        expect(
-          prefs.turnStyle,
-          const TurnStyle(
-              method: TurnMethod.quietRequest, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture),
-        );
-        expect(logs.events.map((event) => event.msg), isNot(contains('player prefs value ignored')));
-        prefs.autoplay = false;
-        await prefs.settle();
-        final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
-        expect(written.keys, isNot(contains('turnMethod')), reason: 'the next write drops it');
-        expect(written['turnPicture'], 'fade');
-      });
-    }
-
-    test('it wins over the 1.0.0 (12) bool, as any saved method does', () async {
-      File(path).writeAsStringSync('{"turnTakeover":false,"turnMethod":"counter"}');
-      expect((await PlayerPrefs.load(path, logger: logger)).turnStyle, const TurnStyle());
+      final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+      expect(written.keys.where((key) => key.startsWith('turn')), ['turnTakeover']);
+      expect(written['turnTakeover'], isFalse);
+      expect((await PlayerPrefs.load(path, logger: logger)).turnTakeover, isFalse);
     });
 
-    test('a (13) file without a method, which meant its default 移除, reads as 请求前关', () async {
-      File(path).writeAsStringSync('{"turnPicture":"none"}');
-      expect((await PlayerPrefs.load(path, logger: logger)).turnStyle, const TurnStyle(picture: TurnPicture.none));
+    test('a drawn method leaves nothing behind on the next write', () async {
+      File(path).writeAsStringSync('{"turnMethod":"quietRequest","turnPicture":"cut","turnSpinStart":"immediate"}');
+      final prefs = await PlayerPrefs.load(path, logger: logger)..autoplay = false;
+      await prefs.settle();
+      final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+      expect(written.keys.where((key) => key.startsWith('turn')), isEmpty);
     });
   });
 
@@ -161,21 +129,19 @@ void main() {
   test('a value of the wrong type or an unknown name falls back alone', () async {
     File(path).writeAsStringSync(
         '{"autoplay":"yes","loop":"forever","fit":"fill","quality":"high","codec":"hevc","turnTakeover":0,'
-        '"turnMethod":"spin","turnPicture":3,"turnSpinStart":"afterPicture"}');
+        '"turnMethod":"system"}');
     final prefs = await PlayerPrefs.load(path, logger: logger);
     expect(prefs.autoplay, isTrue);
     expect(prefs.loop, LoopMode.off);
     expect(prefs.fit, FitMode.fill);
     expect(prefs.quality, isNull);
     expect(prefs.codec, VideoCodec.hevc);
-    expect(prefs.turnStyle, const TurnStyle(spinStart: TurnSpinStart.afterPicture));
+    expect(prefs.turnTakeover, isFalse, reason: 'a bool of the wrong type falls back to the method');
     final ignored = logs.events.where((event) => event.msg == 'player prefs value ignored').toList();
     expect(ignored.map((event) => event.f['key']), const [
       LogString('autoplay'),
       LogString('loop'),
       LogString('turnTakeover'),
-      LogString('turnMethod'),
-      LogString('turnPicture'),
       LogString('quality'),
     ]);
     expect(ignored.every((event) => event.level == LogLevel.warn), isTrue);

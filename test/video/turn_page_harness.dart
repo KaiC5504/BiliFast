@@ -12,7 +12,6 @@ import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/device/player_device.dart';
-import 'package:bilifast/device/turn_style.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -42,7 +41,7 @@ const smallBox = Rect.fromLTWH(0, 0, 440, 62 + 440 / BiliMetrics.videoAspect);
 const fullBox = Rect.fromLTWH(0, 0, 956, 440);
 
 /// A video page on the upright phone with its video loaded, owning the orientation, its turns taken over by a
-/// [FakeOrientationHost] in [style] as the 开发者 choice leaves them on iOS.
+/// [FakeOrientationHost] while the 开发者 choice is 自绘 ([drawn]), else left to iOS.
 class TurnPage {
   final host = FakeOrientationHost();
   late final orientation = OrientationController(host: host);
@@ -53,8 +52,8 @@ class TurnPage {
   /// Wrapped around the app, for a test that reads the whole screen's picture.
   static const shotKey = ValueKey('turn-shot');
 
-  Future<void> open(WidgetTester tester, {TurnStyle style = const TurnStyle()}) async {
-    await orientation.setTurnStyle(style);
+  Future<void> open(WidgetTester tester, {bool drawn = true}) async {
+    await orientation.setTurnTakeover(drawn);
     screen(tester, portrait);
     addTearDown(tester.view.reset);
     final logger = Logger(session: 'test');

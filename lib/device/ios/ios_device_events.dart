@@ -21,7 +21,6 @@ final class IosDeviceEvents implements DeviceEventApi {
   final _volumes = StreamController<double>.broadcast();
   final _turns = StreamController<TurnStart>.broadcast();
   final _network = StreamController<bool>.broadcast();
-  final _picturesGone = StreamController<int>.broadcast();
 
   void connect({BinaryMessenger? binaryMessenger}) => DeviceEventApi.setUp(this, binaryMessenger: binaryMessenger);
 
@@ -32,8 +31,6 @@ final class IosDeviceEvents implements DeviceEventApi {
   Stream<double> get hardwareVolume => _volumes.stream;
 
   Stream<TurnStart> get turns => _turns.stream;
-
-  Stream<int> get picturesGone => _picturesGone.stream;
 
   /// NetworkMonitor.swift's changes to a path that is up: true when its interfaces or gateways changed.
   Stream<bool> get networkChanges => _network.stream;
@@ -56,9 +53,6 @@ final class IosDeviceEvents implements DeviceEventApi {
         angle: angle,
         duration: Duration(microseconds: (seconds * Duration.microsecondsPerSecond).round()),
       ));
-
-  @override
-  void onTurnPictureGone(int turn) => _picturesGone.add(turn);
 
   /// Straight to the log, as `turn native <kind>` (docs/reference/turn-log.md).
   @override

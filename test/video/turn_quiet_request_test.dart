@@ -1,15 +1,15 @@
 import 'dart:math' show pi;
 
 import 'package:bili_core/devlog.dart';
-import 'package:bilifast/device/turn_style.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'turn_page_harness.dart';
 
-/// 请求前关 as the phone runs it: iOS turns the screen inside the request, so the turn can reach the page before the
-/// build that follows the change of presentation, and it reports the turn as taking no time.
+/// 自绘 as the phone runs it: asked for with iOS's animations off, the screen turns inside the request, so the turn
+/// can reach the page before the build that follows the change of presentation, and it reports the turn as taking no
+/// time.
 void main() {
   late MemorySink logs;
 
@@ -105,37 +105,6 @@ void main() {
     expect(tester.getRect(TurnPage.area), fullBox);
     expect(page.host.drawnTurns, [id]);
     await page.leave(tester);
-  });
-
-  group('等截图, a turn of no length', () {
-    const style = TurnStyle(spinStart: TurnSpinStart.afterPicture);
-
-    testWidgets('released by the picture, turns over 300 ms', (tester) async {
-      final page = TurnPage();
-      await page.open(tester, style: style);
-      page.orientation.enterLandscape();
-      final id = page.host.startTurn(pi / 2, duration: Duration.zero);
-      page.screen(tester, landscape);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      expect(TurnPage.angle(tester), closeTo(-pi / 2, 1e-9), reason: 'held');
-      page.host.pictureGone(id);
-      await tester.pump();
-      await expectOfficialTurn(tester, from: -pi / 2);
-      expect(tester.getRect(TurnPage.area), fullBox);
-      await page.leave(tester);
-    });
-
-    testWidgets('released by the wait running out, turns over 300 ms', (tester) async {
-      final page = TurnPage();
-      await page.open(tester, style: style);
-      await page.turnToLandscape(tester, duration: Duration.zero);
-      await tester.pump(RotationTheme.pictureWait);
-      expect(lines('released').single.f['why'], const LogString('timeout'));
-      await expectOfficialTurn(tester, from: -pi / 2);
-      expect(tester.getRect(TurnPage.area), fullBox);
-      await page.leave(tester);
-    });
   });
 
   testWidgets('a turn the page did not ask for is still not drawn, only reported drawn', (tester) async {

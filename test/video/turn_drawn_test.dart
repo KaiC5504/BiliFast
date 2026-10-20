@@ -1,15 +1,12 @@
 import 'dart:math' show pi;
 
-import 'package:bili_core/devlog.dart';
-import 'package:bilifast/device/turn_style.dart';
-import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderClipRect;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'turn_page_harness.dart';
 
-/// The styles of 开发者 → 旋转动画 on the page, and the first frame of a drawn turn on the glass.
+/// The first frame of a drawn turn on the glass, and the turning window that cuts the page's body.
 void main() {
   Future<void> frame(WidgetTester tester) => tester.pump(const Duration(milliseconds: 16));
 
@@ -106,146 +103,5 @@ void main() {
         reason: "the window's height and width add up to the screen's sides");
     expect(tabs.bottom, lessThan(box.top! + portrait.height), reason: 'cut short of the upright page');
     await page.leave(tester);
-  });
-
-  group('等截图', () {
-    const style = TurnStyle(spinStart: TurnSpinStart.afterPicture);
-
-    testWidgets('holds the first pose until the picture goes, then turns over the whole duration', (tester) async {
-      final page = TurnPage();
-      await page.open(tester, style: style);
-      final id = await page.turnToLandscape(tester);
-      final start = tester.getRect(TurnPage.box);
-      for (var i = 0; i < 6; i++) {
-        await frame(tester);
-        expect(TurnPage.angle(tester), closeTo(-pi / 2, 1e-9), reason: 'frame $i holds');
-        expect(tester.getRect(TurnPage.box), start, reason: 'frame $i holds');
-      }
-      expect(page.host.drawnTurns, [id], reason: 'reported drawn, so the host lets its picture go');
-
-      page.host.pictureGone(id + 1);
-      await frame(tester);
-      expect(TurnPage.angle(tester), closeTo(-pi / 2, 1e-9), reason: "another turn's picture");
-
-      page.host.pictureGone(id);
-      await frame(tester);
-      await tester.pump(const Duration(milliseconds: 150));
-      expect(TurnPage.angle(tester), closeTo(-pi / 4, 0.1), reason: 'halfway through 300 ms');
-      await tester.pump(const Duration(milliseconds: 160));
-      await frame(tester);
-      expect(TurnPage.angle(tester), 0);
-      expect(tester.getRect(TurnPage.area), fullBox);
-      await page.leave(tester);
-    });
-
-    testWidgets('moves anyway once the wait runs out', (tester) async {
-      final page = TurnPage();
-      await page.open(tester, style: style);
-      await page.turnToLandscape(tester);
-      await tester.pump(RotationTheme.pictureWait);
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(TurnPage.angle(tester), 0);
-
-      await page.turnBack(tester);
-      await tester.pump(RotationTheme.pictureWait - const Duration(milliseconds: 10));
-      expect(TurnPage.angle(tester), closeTo(pi / 2, 1e-9), reason: 'still waiting');
-      bool canPop() => tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop;
-      expect(canPop(), isFalse, reason: 'held, the page is still turning');
-      await tester.pump(const Duration(milliseconds: 20));
-      await frame(tester);
-      await frame(tester);
-      final moving = TurnPage.angle(tester);
-      expect(moving, allOf(lessThan(pi / 2), greaterThan(pi / 2 - 0.1)), reason: 'from the start of the curve');
-      await tester.pump(const Duration(milliseconds: 300));
-      await frame(tester);
-      expect(TurnPage.angle(tester), 0);
-      expect(tester.getRect(TurnPage.area), Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect));
-      expect(canPop(), isTrue);
-      await page.leave(tester);
-    });
-
-    testWidgets('turned back while held, the next turn starts from the held pose, upright on glass', (tester) async {
-      final page = TurnPage();
-      await page.open(tester, style: style);
-      final box0 = tester.getRect(TurnPage.box);
-      await page.turnToLandscape(tester);
-      await frame(tester);
-      final id = await page.turnBack(tester);
-      expect(TurnPage.angle(tester), closeTo(0, 1e-9), reason: 'the page never moved on the glass');
-      expect(tester.getRect(TurnPage.box), box0);
-      await frame(tester);
-      page.host.pictureGone(id);
-      await frame(tester);
-      await tester.pump(const Duration(milliseconds: 320));
-      await frame(tester);
-      expect(TurnPage.angle(tester), 0);
-      expect(tester.getRect(TurnPage.box), box0);
-      expect(tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop, isTrue);
-      await page.leave(tester);
-    });
-
-    testWidgets('a picture already gone starts the turn at once', (tester) async {
-      final page = TurnPage();
-      await page.open(tester, style: style);
-      page.orientation.enterLandscape();
-      await tester.pump();
-      final id = page.host.startTurn(pi / 2, duration: const Duration(milliseconds: 300));
-      page.host.pictureGone(id);
-      await tester.pump();
-      page.screen(tester, landscape);
-      await tester.pump();
-      expect(TurnPage.angle(tester), closeTo(-pi / 2, 1e-9));
-      await frame(tester);
-      await frame(tester);
-      expect(TurnPage.angle(tester), greaterThan(-pi / 2 + 0.001));
-      await tester.pump(const Duration(milliseconds: 400));
-      await page.leave(tester);
-    });
-  });
-
-  testWidgets('a covered page neither logs the pictures of turns it will not draw nor keeps them for its own',
-      (tester) async {
-    final logs = MemorySink();
-    Logger.shared.add(logs);
-    addTearDown(() => Logger.shared.remove(logs));
-    Iterable<LogEvent> gone() => logs.events.where((line) => line.msg == 'turn picture gone');
-    final page = TurnPage();
-    await page.open(tester, style: const TurnStyle(spinStart: TurnSpinStart.afterPicture));
-    await page.cover(tester);
-    page.host
-      ..pictureGone(1)
-      ..pictureGone(2);
-    await tester.pump();
-    expect(gone(), isEmpty);
-
-    await page.uncover(tester);
-    final id = await page.turnToLandscape(tester);
-    expect(id, 1);
-    for (var i = 0; i < 3; i++) {
-      await frame(tester);
-      expect(TurnPage.angle(tester), closeTo(-pi / 2, 1e-9), reason: 'frame $i: held for its own picture');
-    }
-    page.host.pictureGone(id);
-    await frame(tester);
-    expect(gone().map((line) => line.f['turn']), const [LogInt(1)]);
-    await tester.pump(const Duration(milliseconds: 400));
-    await page.leave(tester);
-  });
-
-  testWidgets('the picture styles draw the same turn', (tester) async {
-    final angles = <TurnPicture, List<double>>{};
-    for (final picture in TurnPicture.values) {
-      final page = TurnPage();
-      await page.open(tester, style: TurnStyle(picture: picture));
-      await page.turnToLandscape(tester);
-      angles[picture] = [TurnPage.angle(tester)];
-      for (var i = 0; i < 20; i++) {
-        await frame(tester);
-        angles[picture]!.add(TurnPage.angle(tester));
-      }
-      await page.leave(tester);
-    }
-    expect(angles[TurnPicture.fade], angles[TurnPicture.cut]);
-    expect(angles[TurnPicture.none], angles[TurnPicture.cut]);
   });
 }
