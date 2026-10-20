@@ -255,6 +255,25 @@ class TurnReportTests(unittest.TestCase):
             self.assertLessEqual(a["ticks"], 37)
             self.assertEqual(a["verdict"], "good")
 
+    def test_a_frames_line_logged_after_the_next_turn_began_still_belongs_to_its_own(self):
+        # Release builds wait for FrameTimings: the page's frames line can come ~1.5 s after the turn's last frame.
+        log = turn_logs.Log()
+        log.turn("移除·直接切·立即", frames_after_ms=1500)
+        log.now -= 2_000_000  # the turn back begins 1 s after the first, before the first's frames line
+        log.turn("移除·直接切·立即", to_landscape=False, frames_after_ms=1500)
+        events = log.events()
+        order = [event["msg"] for event in events]
+        self.assertLess(order.index("turn presentation", order.index("turn native begin") + 1),
+                        order.index("turn frames"))
+        grouped = phone_report.group_turns(events)
+        first, second = grouped["turns"]
+        self.assertEqual([len(turn["dartFrames"]) for turn in (first, second)], [1, 1])
+        self.assertLess(first["dartFrames"][0]["span"][1], second["us"])
+        self.assertGreater(second["dartFrames"][0]["span"][0], second["us"])
+        for turn, start in ((first, -90), (second, 90)):
+            a = phone_report.analyse_turn(turn, grouped["pool"])
+            self.assertGrades(a, start=start, sweep=90, verdict="good")
+
     def test_missing_pieces_are_named_not_fatal(self):
         log = turn_logs.Log()
         log.cycle(0, 13, "系统")
