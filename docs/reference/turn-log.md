@@ -7,7 +7,8 @@ one, the losing styles and the per-frame lines go, and the summary stays.
 All lines are category `ui`. Every line has `wUs`, the wall clock in microseconds since the epoch (`Date()` natively,
 `DateTime.now()` in Dart), so the two sides line up. Native lines also have `turn` (the host's id for the turn, from 1
 per launch; 0 when there is no turn yet), `method` and `picture` (the `NativeTurnMethod` and `NativeTurnPicture`
-names). Angles in the `frames` samples are in degrees, positive clockwise on screen. Fields hold strings, ints,
+names; `system` and `none` for a turn iOS animates itself, the takeover off). A 系统 turn to or from landscape is only
+logged and sampled: `request`, `request returned`, `begin` (`snapshot` false), `completion` and `frames`. Angles in the `frames` samples are in degrees, positive clockwise on screen. Fields hold strings, ints,
 doubles and bools only; per-frame data is packed into strings.
 
 ## Native (`TurnProbe.swift`, `TurnTakeover.swift`, `DeviceChannel.swift`): `turn native <kind>`
@@ -24,17 +25,17 @@ doubles and bools only; per-frame data is packed into strings.
 | `picture gone` | `why` (`drawn` or `fallback`) |
 | `fallback` | the 0.5 s timeout fired before turnDrawn |
 | `container` | `event` (`installed`, `lost`, `restored`, or `reversed` when a counter turn starts while the last one still runs): the counter method's container around the Flutter view |
-| `frames` | `count` (int), `samples` (string, below) |
+| `frames` | `count` (int), `samples` (string, below); its own `wUs` is when sampling stopped |
 
 `found`: `;`-separated animations, each `layer|keyPath|class|duration|timing|additive|beginOffsetMs`. Layer names:
-`window`, `window^1`, `window^2` (its superlayers, nearest first), `root` (the Flutter view), `container`,
-`picture`. `duration` is in seconds; `timing` is `c1x c1y c2x c2y`, `spring m k d` or empty; `keyPath` is the
+`window`, `window^1`, `window^2` (its superlayers, nearest first), `root` (the Flutter view) and `picture`. `duration` is in seconds; `timing` is `c1x c1y c2x c2y`, `spring m k d` or empty; `keyPath` is the
 animation's key when it isn't a property animation; `beginOffsetMs` is relative to the dump (negative: already
 running; 0: not committed yet).
 
-`request` lines carry the last begun turn's id and come only while the takeover is on. `picture gone` can also have
+`request` lines carry the last begun turn's id. `picture gone` can also have
 `why: replaced` (the next turn's begin took it away); a turn with no picture (`none`, `noSpin`, a failed snapshot)
-has no `picture gone` line. Any native line can carry `lost` (int, only when above 0): sends to Dart that failed since the last line that got through. The first `frames` sample's `gapMs` counts from `begin`, so a stall before the first tick
+has no `picture gone` line. Any native line can carry `lost` (int, only when above 0): sends to Dart that failed since the last
+line that got through. The first `frames` sample's `gapMs` counts from `begin`, so a stall before the first tick
 shows there; `scene`, `window` and `container` angles include the layer's `sublayerTransform`.
 
 `frames.samples`: one per CADisplayLink tick for 1.2 s from `begin`, `;`-separated, each `,`-separated:
@@ -74,7 +75,8 @@ holding the last frame: it can come about 1.5 s after the turn's last frame.
 ## 轮换测试 (`lib/devtools/turn_cycle.dart`)
 
 `turn cycle` with `index` (from 1), `of`, `label` and `wUs` each time the style moves on (and on 重置); `turn cycle
-done` after the last style; `turn cycle off` when it is switched off by hand. A position counts only once landscape,
+done` after the last style and `turn cycle off` when it is switched off by hand, both with `of` and `label` (the style
+put back), `off` also with `index`. A position counts only once landscape,
 and then upright, have each held for 1.5 s, so a refused or quickly reversed turn doesn't move it on.
 
 ## What the report computes per turn

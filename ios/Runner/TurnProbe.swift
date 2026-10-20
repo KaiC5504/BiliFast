@@ -6,6 +6,8 @@ struct TurnTag: Sendable {
   let turn: Int
   let method: NativeTurnMethod
   let picture: NativeTurnPicture
+  /// A turn iOS animates itself (takeover off), logged as method `system`.
+  var system = false
 }
 
 /// The native side of a drawn turn for the phone's log (docs/reference/turn-log.md): what UIKit did, every screen
@@ -26,8 +28,8 @@ enum TurnProbe {
     var line = fields
     line["wUs"] = wUs ?? wallUs()
     line["turn"] = tag.turn
-    line["method"] = "\(tag.method)"
-    line["picture"] = "\(tag.picture)"
+    line["method"] = tag.system ? "system" : "\(tag.method)"
+    line["picture"] = tag.system ? "none" : "\(tag.picture)"
     Task { @MainActor [line] in
       guard let events = DeviceChannel.events else { return }
       var sent: [String: Any?] = [:]

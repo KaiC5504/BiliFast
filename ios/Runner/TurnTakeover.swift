@@ -59,12 +59,11 @@ enum TurnTakeover {
   /// Before DeviceChannel asks the scene to turn. For quietRequest, animations are off from here until the turn that
   /// follows completes (or for a second when none comes), so the request is made without animation.
   static func requesting(_ request: Int64, mask: NativeOrientationMask, from interface: UIInterfaceOrientation) {
-    guard enabled else { return }
     TurnProbe.log("request", tag(for: turn), [
       "request": Int(request), "mask": "\(mask)", "interface": TurnProbe.name(interface),
       "animationsEnabled": UIView.areAnimationsEnabled,
     ])
-    guard method == .quietRequest else { return }
+    guard enabled, method == .quietRequest else { return }
     requestHolds += 1
     let hold = HoldOwner.request(requestHolds)
     holdAnimations(owner: hold)
@@ -75,7 +74,6 @@ enum TurnTakeover {
   }
 
   static func requestReturned(_ request: Int64, ms: Double) {
-    guard enabled else { return }
     TurnProbe.log("request returned", tag(for: turn), ["request": Int(request), "ms": ms])
   }
 
@@ -212,7 +210,30 @@ enum TurnTakeover {
   }
 
   private static func tag(for id: Int) -> TurnTag {
-    TurnTag(turn: id, method: method, picture: method == .noSpin ? .none : picture)
+    guard enabled else { return TurnTag(turn: id, method: .legacy, picture: .none, system: true) }
+    return TurnTag(turn: id, method: method, picture: method == .noSpin ? .none : picture)
+  }
+
+  /// A turn to or from landscape that iOS animates itself (系统, the test's reference): only logged and sampled, with
+  /// nothing taken over and nothing sent to Dart.
+  static func observe(root: UIView, from: CGSize, to size: CGSize, angle: Double,
+                      coordinator: any UIViewControllerTransitionCoordinator) {
+    let startUs = TurnProbe.wallUs()
+    let startMedia = CACurrentMediaTime()
+    TurnProbe.endFrames()
+    turn += 1
+    let tag = tag(for: turn)
+    _ = coordinator.animate(alongsideTransition: nil, completion: { context in
+      TurnProbe.log("completion", tag, ["cancelled": context.isCancelled])
+    })
+    TurnProbe.startFrames(TurnFrames(tag: tag, start: startMedia, window: root.window, root: root, container: nil,
+                                     picture: nil))
+    TurnProbe.log("begin", tag, [
+      "angle": angle, "seconds": coordinator.transitionDuration, "animated": coordinator.isAnimated,
+      "fromW": Double(from.width), "fromH": Double(from.height),
+      "toW": Double(size.width), "toH": Double(size.height),
+      "animationsEnabled": UIView.areAnimationsEnabled, "snapshot": false, "snapshotMs": 0.0,
+    ], at: startUs)
   }
 
   private static func turnBack(_ still: UIView, to size: CGSize, angle: Double) {
@@ -430,7 +451,9 @@ class TurnViewController: FlutterViewController {
     let from = view.bounds.size
     let target = coordinator.targetTransform
     let angle = atan2(Double(target.b), Double(target.a))
-    guard TurnTakeover.enabled, (from.width > from.height) != (size.width > size.height), abs(angle) > 0.01 else {
+    let quarter = (from.width > from.height) != (size.width > size.height) && abs(angle) > 0.01
+    guard TurnTakeover.enabled, quarter else {
+      if quarter { TurnTakeover.observe(root: view, from: from, to: size, angle: angle, coordinator: coordinator) }
       super.viewWillTransition(to: size, with: coordinator)
       return
     }
