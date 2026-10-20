@@ -187,12 +187,13 @@ void main() {
     }
   }
 
-  /// The tab row rides on the box's bottom edge at its upright width, centred under it.
+  /// The tab row rides on the box's bottom edge at its upright width, hanging from its bottom-left corner as the
+  /// official body does.
   void expectBodyRides(WidgetTester tester, {String? reason}) {
     final row = tabRow(tester);
     expect(row.top, closeTo(box(tester).bottom, 0.01), reason: reason);
     expect(row.width, portrait.width, reason: reason);
-    expect(row.center.dx, closeTo(centre(tester).dx, 0.01), reason: reason);
+    expect(row.left, closeTo(box(tester).left, 0.01), reason: reason);
   }
 
   Future<void> frame(WidgetTester tester) => tester.pump(const Duration(milliseconds: 16));
