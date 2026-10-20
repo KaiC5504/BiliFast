@@ -13,8 +13,14 @@ struct TurnTag: Sendable {
 @MainActor
 enum TurnProbe {
   fileprivate static var frames: TurnFrames?
+  private static var lastBegin: CFTimeInterval = 0
+  private static let quiet: CFTimeInterval = 0.3
 
-  /// One line for the phone's log, sent from a task so it never runs inside a turn's setup. [fields] hold strings,
+  /// Sends to Dart that failed since the last line that got through, carried by the next line as `lost`.
+  private static var lost = 0
+  private static var failureLogged = false
+
+  /// One line for the phone's log, sent from a task so it never runs inside a turn's setup. `fields` hold strings,
   /// ints, doubles and bools only; `wUs` is now unless given.
   static func log(_ kind: String, _ tag: TurnTag, _ fields: [String: any Sendable] = [:], at wUs: Int64? = nil) {
     var line = fields
@@ -23,21 +29,50 @@ enum TurnProbe {
     line["method"] = "\(tag.method)"
     line["picture"] = "\(tag.picture)"
     Task { @MainActor [line] in
+      guard let events = DeviceChannel.events else { return }
       var sent: [String: Any?] = [:]
       for (key, value) in line {
         sent.updateValue(value, forKey: key)
       }
-      try? await DeviceChannel.events?.onTurnLog(kind: kind, fields: sent)
+      // Taken as the line goes, so a count rides on one line only; a line that fails hands it back.
+      let carried = lost
+      lost = 0
+      if carried > 0 { sent.updateValue(carried, forKey: "lost") }
+      do {
+        try await events.onTurnLog(kind: kind, fields: sent)
+      } catch {
+        lost += carried
+        failed("onTurnLog", error)
+      }
     }
+  }
+
+  /// A turn event for Dart, sent from a task; a failure counts towards the next line's `lost`.
+  static func send(_ name: String, _ call: @escaping @MainActor () async throws -> Void) {
+    Task { @MainActor in
+      do {
+        try await call()
+      } catch {
+        failed(name, error)
+      }
+    }
+  }
+
+  private static func failed(_ name: String, _ error: any Error) {
+    lost += 1
+    guard !failureLogged else { return }
+    failureLogged = true
+    NSLog("TurnProbe: %@ failed: %@", name, String(describing: error))
   }
 
   static func wallUs() -> Int64 {
     Int64(Date().timeIntervalSince1970 * 1_000_000)
   }
 
-  /// Samples every screen frame for 1.2 s; a sampler still running from the last turn stops and logs first.
+  /// Samples every screen frame for 1.2 s; a sampler still running from the last turn stops first.
   static func startFrames(_ sampler: TurnFrames) {
     endFrames()
+    lastBegin = CACurrentMediaTime()
     frames = sampler
     sampler.run()
   }
@@ -45,6 +80,19 @@ enum TurnProbe {
   static func endFrames() {
     frames?.finish()
     frames = nil
+  }
+
+  /// Runs `write` once no turn has begun for 300 ms: formatting a sampler's line takes a few milliseconds of this
+  /// thread, which Dart's UI shares, so it stays out of a turn's start.
+  fileprivate static func whenQuiet(_ write: @escaping @MainActor () -> Void) {
+    Task { @MainActor in
+      var left = quiet - (CACurrentMediaTime() - lastBegin)
+      while left > 0 {
+        try? await Task.sleep(for: .seconds(left))
+        left = quiet - (CACurrentMediaTime() - lastBegin)
+      }
+      write()
+    }
   }
 
   /// Degrees, positive clockwise on screen.
@@ -110,7 +158,7 @@ enum TurnProbe {
 }
 
 /// One turn's `frames` line: the presentation layers' angles and sizes at every display-link tick for 1.2 s from
-/// `begin`, kept as numbers and formatted once at the end.
+/// `begin`, kept as numbers until the line is written.
 @MainActor
 final class TurnFrames: NSObject {
   private struct Sample {
@@ -166,7 +214,7 @@ final class TurnFrames: NSObject {
     }
   }
 
-  /// Stops sampling and logs the samples, once.
+  /// Stops sampling, once; the line goes out when the turns are quiet, stamped with the time sampling stopped.
   func finish() {
     guard !done else { return }
     done = true
@@ -175,9 +223,11 @@ final class TurnFrames: NSObject {
     firstTick = nil
     if TurnProbe.frames === self { TurnProbe.frames = nil }
     let samples = self.samples
+    self.samples = []
     let tag = self.tag
-    Task { @MainActor in
-      TurnProbe.log("frames", tag, ["count": samples.count, "samples": TurnFrames.format(samples)])
+    let ended = TurnProbe.wallUs()
+    TurnProbe.whenQuiet {
+      TurnProbe.log("frames", tag, ["count": samples.count, "samples": TurnFrames.format(samples)], at: ended)
     }
   }
 
