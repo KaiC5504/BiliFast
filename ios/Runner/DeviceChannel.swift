@@ -131,6 +131,8 @@ final class DeviceHostApiImpl: DeviceHostApi {
   func turnDrawn(turn: Int64) throws {
     MainActor.assumeIsolated { TurnTakeover.drawn(turn: Int(turn)) }
   }
+
+  func setStatusEvents(enabled: Bool) throws {}
 }
 
 /// UIDevice's orientation notifications, on only while a page with a player is open.

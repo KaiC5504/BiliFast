@@ -103,6 +103,12 @@ enum NativeInterfaceOrientation: Int, CaseIterable {
   case unknown = 3
 }
 
+enum NativeNetwork: Int, CaseIterable {
+  case wifi = 0
+  case cellular = 1
+  case none = 2
+}
+
 private class DeviceApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -124,6 +130,12 @@ private class DeviceApiPigeonCodecReader: FlutterStandardReader {
         return NativeInterfaceOrientation(rawValue: enumResultAsInt)
       }
       return nil
+    case 132:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeNetwork(rawValue: enumResultAsInt)
+      }
+      return nil
     default:
       return super.readValue(ofType: type)
     }
@@ -140,6 +152,9 @@ private class DeviceApiPigeonCodecWriter: FlutterStandardWriter {
       super.writeValue(value.rawValue)
     } else if let value = value as? NativeInterfaceOrientation {
       super.writeByte(131)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? NativeNetwork {
+      super.writeByte(132)
       super.writeValue(value.rawValue)
     } else {
       super.writeValue(value)
@@ -191,6 +206,9 @@ protocol DeviceHostApi {
   func setTurnTakeover(enabled: Bool) throws
   /// Flutter has drawn the first frame of taken-over [turn]; the still picture covering the screen can go.
   func turnDrawn(turn: Int64) throws
+  /// Starts or stops battery and network reports to [DeviceEventApi.onStatus] for the status bar landscape full screen
+  /// draws (04); one report comes at once on start. iOS's battery monitoring is on only while they are.
+  func setStatusEvents(enabled: Bool) throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -405,6 +423,23 @@ class DeviceHostApiSetup {
     } else {
       turnDrawnChannel.setMessageHandler(nil)
     }
+    /// Starts or stops battery and network reports to [DeviceEventApi.onStatus] for the status bar landscape full screen
+    /// draws (04); one report comes at once on start. iOS's battery monitoring is on only while they are.
+    let setStatusEventsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.setStatusEvents\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setStatusEventsChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let enabledArg = args[0] as! Bool
+        do {
+          try api.setStatusEvents(enabled: enabledArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setStatusEventsChannel.setMessageHandler(nil)
+    }
   }
 }
 
@@ -423,6 +458,9 @@ protocol DeviceEventApiProtocol {
   /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
   /// differ from the last path that was up, so the engine's speed measurements no longer hold.
   @MainActor func onNetworkChanged(interfaceChanged interfaceChangedArg: Bool) async throws
+  /// The battery's level (0 to 1, or -1 when iOS can't tell), whether it is charging or full on power, and the network
+  /// the phone is on, after [DeviceHostApi.setStatusEvents] and whenever one of them changes.
+  @MainActor func onStatus(battery batteryArg: Double, charging chargingArg: Bool, network networkArg: NativeNetwork) async throws
 }
 class DeviceEventApi: DeviceEventApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -546,6 +584,28 @@ class DeviceEventApi: DeviceEventApiProtocol {
       let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onNetworkChanged\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([interfaceChangedArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: DeviceApiError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// The battery's level (0 to 1, or -1 when iOS can't tell), whether it is charging or full on power, and the network
+  /// the phone is on, after [DeviceHostApi.setStatusEvents] and whenever one of them changes.
+  @MainActor func onStatus(battery batteryArg: Double, charging chargingArg: Bool, network networkArg: NativeNetwork) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onStatus\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([batteryArg, chargingArg, networkArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

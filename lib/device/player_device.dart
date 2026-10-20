@@ -6,10 +6,13 @@ import 'ios/ios_device_controls.dart';
 import 'ios/ios_device_events.dart';
 import 'ios/ios_orientation_host.dart';
 import 'orientation.dart';
+import 'status_bar.dart';
 
-/// The phone's side of full screen, one for the app: rotation, and brightness and volume.
+/// The phone's side of full screen, one for the app: rotation, brightness and volume, and the battery and network for
+/// the status bar landscape draws.
 final class PlayerDevice {
-  PlayerDevice({required this.orientation, required this.controls});
+  PlayerDevice({required this.orientation, required this.controls, StatusBarFeed? status})
+    : status = status ?? FixedStatusBarFeed();
 
   /// The phone's own rotation and levels on iOS; everywhere else full screen is a layout inside the window.
   factory PlayerDevice.platform() =>
@@ -28,9 +31,11 @@ final class PlayerDevice {
     return PlayerDevice(
       orientation: OrientationController(controls: controls, host: IosOrientationHost(api, hub)),
       controls: controls,
+      status: IosStatusBarFeed(api, hub),
     );
   }
 
   final OrientationController orientation;
   final DeviceControls controls;
+  final StatusBarFeed status;
 }

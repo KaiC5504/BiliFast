@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../device/device_controls.dart';
 import '../danmaku/danmaku_session.dart';
 import '../device/orientation.dart';
+import '../device/status_bar.dart';
 import '../video/page_details.dart';
 import '../video/player_session.dart';
 import 'chrome_state.dart';
@@ -24,6 +25,7 @@ final class PlayerUi {
     this.edgeTaken,
     this.danmaku,
     this.layout,
+    this.statusBar,
   });
 
   final PlayerSession session;
@@ -55,6 +57,9 @@ final class PlayerUi {
   /// What the page has laid out, which trails the orientation through a turn until the screen has its new shape;
   /// null outside a video page, where the orientation's presentation is the layout.
   final ValueListenable<Presentation>? layout;
+
+  /// The battery and network for the status bar landscape full screen draws (04); null draws none.
+  final StatusBarFeed? statusBar;
 
   /// The presentation the player is drawn in: what panels and gestures fit themselves to. What the user asked for is
   /// [orientation]'s.

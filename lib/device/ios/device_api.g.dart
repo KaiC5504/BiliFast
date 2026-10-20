@@ -69,6 +69,12 @@ enum NativeInterfaceOrientation {
   unknown;
 }
 
+enum NativeNetwork {
+  wifi,
+  cellular,
+  none;
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -85,6 +91,9 @@ class _PigeonCodec extends StandardMessageCodec {
       writeValue(buffer, value.index);
     }    else if (value is NativeInterfaceOrientation) {
       buffer.putUint8(131);
+      writeValue(buffer, value.index);
+    }    else if (value is NativeNetwork) {
+      buffer.putUint8(132);
       writeValue(buffer, value.index);
     } else {
       super.writeValue(buffer, value);
@@ -103,6 +112,9 @@ class _PigeonCodec extends StandardMessageCodec {
       case 131:
         final value = readValue(buffer) as int?;
         return value == null ? null : NativeInterfaceOrientation.values[value];
+      case 132:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : NativeNetwork.values[value];
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -394,6 +406,26 @@ class DeviceHostApi {
     )
     ;
   }
+
+  /// Starts or stops battery and network reports to [DeviceEventApi.onStatus] for the status bar landscape full screen
+  /// draws (04); one report comes at once on start. iOS's battery monitoring is on only while they are.
+  Future<void> setStatusEvents(bool enabled) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.setStatusEvents$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 abstract class DeviceEventApi {
@@ -417,6 +449,10 @@ abstract class DeviceEventApi {
   /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
   /// differ from the last path that was up, so the engine's speed measurements no longer hold.
   void onNetworkChanged(bool interfaceChanged);
+
+  /// The battery's level (0 to 1, or -1 when iOS can't tell), whether it is charging or full on power, and the network
+  /// the phone is on, after [DeviceHostApi.setStatusEvents] and whenever one of them changes.
+  void onStatus(double battery, bool charging, NativeNetwork network);
 
   static void setUp(DeviceEventApi? api, {
     BinaryMessenger? binaryMessenger, 
@@ -545,6 +581,29 @@ abstract class DeviceEventApi {
           final bool arg_interfaceChanged = args[0]! as bool;
           try {
             api.onNetworkChanged(arg_interfaceChanged);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.DeviceEventApi.onStatus$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final double arg_battery = args[0]! as double;
+          final bool arg_charging = args[1]! as bool;
+          final NativeNetwork arg_network = args[2]! as NativeNetwork;
+          try {
+            api.onStatus(arg_battery, arg_charging, arg_network);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

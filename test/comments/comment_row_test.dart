@@ -683,7 +683,7 @@ void main() {
   });
 
   group('layout', () {
-    testWidgets('the system font starts the text 1.8 lower and the box 1.75 higher; MiSans keeps the places from 10', (
+    testWidgets('the system font starts the text 1.4 lower and the box 1.75 higher; MiSans keeps the places from 10', (
       tester,
     ) async {
       final saved = BiliFonts.family;
@@ -697,7 +697,7 @@ void main() {
 
       BiliFonts.family = null;
       await _mount(tester, _row(comment, _Model(), _Calls()));
-      expect(_rect(tester, find.byType(CommentText)).top - textMiSans, closeTo(1.8, 0.01));
+      expect(_rect(tester, find.byType(CommentText)).top - textMiSans, closeTo(1.4, 0.01));
       // A one-line comment keeps its meta line where it was, so only the box's own gap moves it.
       expect(_rect(tester, find.byKey(const ValueKey('comment-replies'))).top - boxMiSans, closeTo(-1.75, 0.01));
     });

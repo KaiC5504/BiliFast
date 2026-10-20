@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../orientation_host.dart';
 import 'device_api.g.dart';
 
+typedef DeviceStatusReport = ({double battery, bool charging, NativeNetwork network});
+
 /// What DeviceChannel.swift reports, as streams.
 final class IosDeviceEvents implements DeviceEventApi {
   IosDeviceEvents({Logger? logger}) : _logger = logger ?? Logger.shared;
@@ -21,6 +23,7 @@ final class IosDeviceEvents implements DeviceEventApi {
   final _volumes = StreamController<double>.broadcast();
   final _turns = StreamController<TurnStart>.broadcast();
   final _network = StreamController<bool>.broadcast();
+  final _status = StreamController<DeviceStatusReport>.broadcast();
 
   void connect({BinaryMessenger? binaryMessenger}) => DeviceEventApi.setUp(this, binaryMessenger: binaryMessenger);
 
@@ -35,6 +38,9 @@ final class IosDeviceEvents implements DeviceEventApi {
   /// NetworkMonitor.swift's changes to a path that is up: true when its interfaces or gateways changed.
   Stream<bool> get networkChanges => _network.stream;
 
+  /// The battery and network while status events are on.
+  Stream<DeviceStatusReport> get statusReports => _status.stream;
+
   @override
   void onDeviceOrientation(NativeDeviceOrientation orientation) => _orientations.add(orientation);
 
@@ -46,6 +52,10 @@ final class IosDeviceEvents implements DeviceEventApi {
 
   @override
   void onNetworkChanged(bool interfaceChanged) => _network.add(interfaceChanged);
+
+  @override
+  void onStatus(double battery, bool charging, NativeNetwork network) =>
+      _status.add((battery: battery, charging: charging, network: network));
 
   @override
   void onTurn(int turn, double angle, double seconds) => _turns.add((

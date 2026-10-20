@@ -155,6 +155,11 @@ abstract final class BiliFonts {
 
   static const locale = Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN');
 
+  /// Under the system font, what iOS's labels fall back to for what SF lacks: emoji before PingFang SC, so a ⚠ in a
+  /// title draws in colour as the official app's does, and every Chinese and kana glyph from PingFang SC rather than
+  /// whichever font the engine last fell back to.
+  static List<String>? get fallback => family == null ? const ['Apple Color Emoji', 'PingFang SC'] : null;
+
   /// Material's type scale tracks its text 0.1 to 0.5 pt, and every style that doesn't set its own spacing took that
   /// from the page's Material. iOS text isn't tracked; at 3 px per pt the extra 0.75 px leaves Chinese glyphs between
   /// pixels, some drawn crisp and the next blurred thinner, and widens every line.
@@ -749,8 +754,9 @@ abstract final class PageTheme {
   static const hairline = 0.5;
   static const tabText = Color(0xFF61666D);
 
-  /// 简介 and 评论 in 61666D or pink, 评论's count smaller on their baseline (03, 10, 18).
-  static const tabLabelText = 13.5;
+  /// 简介 and 评论 in 61666D or pink, 评论's count smaller on their baseline (03, 10, 18). The official app's
+  /// glyphs are 35 px tall to the system font's 37 at 13.5 (font-check 02).
+  static double get tabLabelText => BiliFonts.nudged ? 13.5 : 12.75;
   static const tabCountText = 10.5;
   static const tabCountGap = 3.5;
 
@@ -769,7 +775,7 @@ abstract final class PageTheme {
   static const capsuleHeight = 30.0;
   static const capsuleBorder = 0.7;
   static const danmakuFieldWidth = 97.0;
-  static const danmakuFieldText = 13.5;
+  static double get danmakuFieldText => BiliFonts.nudged ? 13.5 : 12.75;
   static const danmakuToggleOn = 40.0;
   static const danmakuToggleOff = 44.0;
 
@@ -840,7 +846,9 @@ abstract final class IntroTheme {
   /// The title row starts this far below the avatar; its first line centres in [titleRow].
   static const titleTop = 18.0;
   static const titleRow = 22.0;
-  static const titleText = 16.0;
+
+  /// Under the system font 15.25: the official title's glyphs are 43 px tall to our 45 at 16 (font-check 02).
+  static double get titleText => BiliFonts.nudged ? 16 : 15.25;
   static const titleLine = 22.0;
   static const honorText = 12.0;
   static const honorPadding = 8.0;
@@ -1392,8 +1400,9 @@ abstract final class CommentRowTheme {
   static const text = BiliColors.text;
 
   /// Under the system font PingFang's glyphs sit higher in their line than MiSans's, so the text starts 1.8 lower:
-  /// the official thread shot (differences 12) centres it 22 below the name, where ours sat 20.2.
-  static double get textTop => textFirstCentre - textLine / 2 + (BiliFonts.nudged ? 0 : 1.8);
+  /// the official app centres it 22 below the name in the list (differences 12) and 21.1-21.3 in a thread
+  /// (font-check 04), where ours sat 20.2; 1.4 lower lands within half a point of both.
+  static double get textTop => textFirstCentre - textLine / 2 + (BiliFonts.nudged ? 0 : 1.4);
 
   /// One picture: a tall one 162 wide, cut at 3:4, a wide one 240; 135 and 200 in 评论详情 (13). Long pictures show
   /// their top.
@@ -1603,7 +1612,8 @@ abstract final class CommentListTheme {
   /// 评论详情's header over the thread: 40 as the tab row it covers, then its 1 pt hairline (3 px at 239.7 on 13).
   static const threadHeaderHeight = 41.0;
   static const threadHairline = 1.0;
-  static const threadTitleText = 15.0;
+  /// Under the system font 13.75: the official 评论详情's glyphs are 38 px tall to our 41.5 at 15 (font-check 04).
+  static double get threadTitleText => BiliFonts.nudged ? 15 : 13.75;
   static const threadTitleInk = BiliColors.text;
 
   /// ✕: 38/3 pt square, 1.2 pt strokes, centred 26 in from the right edge in a 44 pt button.

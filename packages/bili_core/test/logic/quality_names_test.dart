@@ -6,6 +6,7 @@ void main() {
     expect(QualityNames.full(qn: 125, serverText: '真彩 HDR'), 'HDR 真彩');
     expect(QualityNames.full(qn: 120, serverText: '超清 4K'), '4K 超高清');
     expect(QualityNames.full(qn: 116, serverText: '高清 1080P60'), '1080P 60帧');
+    expect(QualityNames.full(qn: 112, serverText: '高码率 1080P+'), '1080P 高码率');
     expect(QualityNames.full(qn: 80, serverText: '高清 1080P'), '1080P 高清');
     expect(QualityNames.full(qn: 64, serverText: '高清 720P'), '720P 准高清');
     expect(QualityNames.full(qn: 32, serverText: '清晰 480P'), '480P 标清');

@@ -16,6 +16,8 @@ enum NativeDeviceOrientation { portrait, portraitUpsideDown, landscapeLeft, land
 
 enum NativeInterfaceOrientation { portrait, landscapeLeft, landscapeRight, unknown }
 
+enum NativeNetwork { wifi, cellular, none }
+
 /// Rotation, brightness and volume for full screen (DeviceChannel.swift, DeviceControls.swift). The rules about
 /// when to rotate live in Dart (lib/device/orientation.dart); the host only applies masks and reports.
 @HostApi()
@@ -58,6 +60,10 @@ abstract class DeviceHostApi {
 
   /// Flutter has drawn the first frame of taken-over [turn]; the still picture covering the screen can go.
   void turnDrawn(int turn);
+
+  /// Starts or stops battery and network reports to [DeviceEventApi.onStatus] for the status bar landscape full screen
+  /// draws (04); one report comes at once on start. iOS's battery monitoring is on only while they are.
+  void setStatusEvents(bool enabled);
 }
 
 @FlutterApi()
@@ -80,4 +86,8 @@ abstract class DeviceEventApi {
   /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
   /// differ from the last path that was up, so the engine's speed measurements no longer hold.
   void onNetworkChanged(bool interfaceChanged);
+
+  /// The battery's level (0 to 1, or -1 when iOS can't tell), whether it is charging or full on power, and the network
+  /// the phone is on, after [DeviceHostApi.setStatusEvents] and whenever one of them changes.
+  void onStatus(double battery, bool charging, NativeNetwork network);
 }

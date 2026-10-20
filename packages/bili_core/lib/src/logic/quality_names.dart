@@ -1,15 +1,15 @@
 /// The official app's names for Bilibili's qn values. The playurl's own descriptions read differently
 /// ("超清 4K", "清晰 480P"), so the app shows these and falls back to the server's text for a qn missing here.
 abstract final class QualityNames {
-  // 125 to 64 were read off the official app's 清晰度 picker and 32 from a later look at it. 127, 126, 112, 74
-  // and 16 have not been seen there yet; they follow its naming and get corrected when they are.
+  // 125 to 64 were read off the official app's 清晰度 picker, 32 and 112 from later looks at it. 127, 126, 74 and
+  // 16 have not been seen there yet; they follow its naming and get corrected when they are.
   static const Map<int, String> _fullNames = {
     127: '8K 超高清',
     126: '杜比视界',
     125: 'HDR 真彩',
     120: '4K 超高清',
     116: '1080P 60帧',
-    112: '1080P+ 高码率',
+    112: '1080P 高码率',
     80: '1080P 高清',
     74: '720P 60帧',
     64: '720P 准高清',
