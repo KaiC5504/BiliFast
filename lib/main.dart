@@ -17,6 +17,8 @@ import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_files.dart';
 import 'devtools/log_forwarder.dart';
+import 'devtools/turn_cycle.dart';
+import 'devtools/turn_cycle_badge.dart';
 import 'home/home_page.dart';
 import 'home/recent_store.dart';
 import 'playback/codec_memory.dart';
@@ -71,7 +73,7 @@ Future<void> main(List<String> args) async {
     onResumed: () => recheckUnknownAccount(environment),
   );
   final device = PlayerDevice.platform();
-  applyTurnTakeover(device.orientation, PlayerPrefs.shared);
+  applyTurnStyle(device.orientation, PlayerPrefs.shared);
   PhoneFrame.follow(device.orientation);
   runApp(BiliFastApp(
     services: AppServices(
@@ -84,6 +86,7 @@ Future<void> main(List<String> args) async {
       danmakuSettings: danmakuSettings,
       logFiles: logFiles,
       logs: logs,
+      turnCycle: TurnCycle(orientation: device.orientation, prefs: PlayerPrefs.shared),
     ),
     initialLink: _argument(args, '--play='),
   ));
@@ -97,8 +100,8 @@ void recheckUnknownAccount(AppEnvironment environment) {
 
 /// 开发者's 旋转动画 as last chosen, from the first turn. Not awaited, so the first frame doesn't wait on the host;
 /// the controller logs a host that fails.
-void applyTurnTakeover(OrientationController orientation, PlayerPrefs prefs) =>
-    unawaited(orientation.setTurnTakeover(prefs.turnTakeover));
+void applyTurnStyle(OrientationController orientation, PlayerPrefs prefs) =>
+    unawaited(orientation.setTurnStyle(prefs.turnStyle));
 
 /// What the app shows when it could not start.
 class LaunchFailedApp extends StatelessWidget {
@@ -172,7 +175,12 @@ class BiliFastApp extends StatelessWidget {
         // The official app keeps its sizes whatever iOS Text Size says, and every size here is measured off it.
         builder: (context, child) => AppScope(
           services: services,
-          child: PhoneFrame.wrap(context, ReduceMotion(child: MediaQuery.withNoTextScaling(child: child!))),
+          child: PhoneFrame.wrap(
+            context,
+            ReduceMotion(
+              child: MediaQuery.withNoTextScaling(child: TurnCycleBadge(cycle: services.turnCycle, child: child!)),
+            ),
+          ),
         ),
         home: HomePage(
           initialLink: initialLink,
@@ -184,6 +192,7 @@ class BiliFastApp extends StatelessWidget {
                     releasePlayback: services.playback.release,
                     logs: services.logs,
                     speedTestHooks: appSpeedTestHooksOn(services.playback.engine),
+                    turnCycle: services.turnCycle,
                   ),
         ),
       ),
