@@ -57,11 +57,12 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 Next: the phone runs both checklists (M1 and M2) in full; then the cutover (spec, slice 9).
 
 Open items, each waiting on its slice:
-- The drawn turn, 1.0.0 (13), a test build: 1.0.0 (12)'s 自绘 turned 180° because iOS still animated its own
-  rotation underneath (`local/differences/08-ours-rotate-customzie-v3.mov`). (13) carries every way of keeping iOS out
-  (开发者 → 旋转动画: 方式, 截图, 起转; `lib/device/turn_style.dart`), 轮换测试 cycles through them with a badge, and
-  both sides log each turn. KaiC runs one 轮换测试 session and sends the log; `phone_report.py --turns` ranks the
-  styles. Then keep the winner and remove the others, 轮换测试 and the per-frame lines (the summary stays).
+- The drawn turn, 1.0.0 (14): (13)'s 轮换测试 on the phone, measured frame by frame from KaiC's recording
+  (`local/differences/09-ours-rotate-testing-v4.MP4`, `tools/turn_video.py`), found only 请求前关 keeps iOS's own
+  rotation out (the others spun 180°), and the page drew its turns in 0 ms or not at all. (14) keeps 系统 and 请求前关
+  (开发者 → 旋转动画: 方式, 截图, 起转), draws every turn over 300 ms, and follows a turn that arrives before its
+  build. 轮换测试 walks 系统 and 请求前关's six 截图 × 起转 pairs. KaiC compares them by eye against the official app;
+  then keep the winning 截图 and 起转, and remove 轮换测试 and the per-frame lines (the summary stays).
 - 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
   account and a borrowed app key).
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
@@ -118,7 +119,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
 - `design/icon-options/`: the app icon's five candidates and `make_icons.py`; A is the app's.
 - `test_ci/`: static tests of the workflow (pins, secrets only in step env, nothing leaks into the public log).
 - `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
-  test plan; `phone_report.py` reads a session. Run `uv run tools/logserver.py` in the background before KaiC tests.
+  test plan; `phone_report.py` reads a session; `turn_video.py` measures the turns in a screen recording. Run `uv run tools/logserver.py` in the background before KaiC tests.
 
 ## How to test
 
@@ -183,10 +184,12 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - The video page lays out by the screen's shape, not the orientation's presentation: Flutter's iOS engine keeps the
   old size for the first half of a turn, so landscape is laid out only once the size is wide (`_laidOut`, which
   `PlayerUi`'s panels and gestures follow). Code that acts on what the user asked for reads the presentation.
-- The drawn turn (旋转动画, any 方式 but 系统): `TurnTakeover.swift` keeps iOS's rotation animation out by the chosen
-  method (`UIView.setAnimationsEnabled(false)` alone does not: iOS still turned the window in 1.0.0 (12)) and hands
-  Flutter the turned size at once, covering the screen with a still picture; the video page draws the turn from
-  −angle to 0 and calls `turnDrawn(id)`, or the picture lifts after 0.5 s. It is armed only while a video page owns
+- The drawn turn (旋转动画 请求前关): `TurnTakeover.swift` holds UIView animations off from before the rotation is
+  requested until the turn completes, the only way found to keep iOS's out-of-process rotation out (turning them off
+  inside viewWillTransition is too late: iOS still spun the window in 1.0.0 (12) and (13)). The window then turns at
+  once with a zero duration, Flutter gets the turned size at once under a still picture, and the video page draws the
+  turn from −angle to 0 over 300 ms and calls `turnDrawn(id)`, or the picture lifts after 0.5 s. The turn can reach
+  Dart before the build that follows the change of presentation, so `_turnStarted` follows it first. It is armed only while a video page owns
   the orientation; a page that is covered or leaves gives it up first. While the page draws a turn, its geometry is
   the official 01 clip's (300 ms ease-in-out, the body hanging from the box's bottom-left, cut at the turning
   window's edge); grows it doesn't draw (系统, Windows) keep the centred body.
