@@ -12,7 +12,7 @@ import '../actions/video_actions.dart';
 import 'triple_ring.dart';
 
 /// 点赞 不喜欢 投币 收藏 分享 under the title (03). Holding 点赞 fills rings around 点赞, 投币 and 收藏 and does 三连.
-/// The row owns the gap above its icons and ends at the bottom of its counts.
+/// The row owns the gap above its icons and ends [IntroListTheme.actionsBottom] below its counts' line.
 class ActionRow extends StatefulWidget {
   const ActionRow({super.key, required this.actions});
 
@@ -88,9 +88,13 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
       listenable: _actions,
       builder: (context, _) {
         final actions = _actions;
-        Widget ring(Widget cell) => _Ringed(progress: _ring, burst: _burst, child: cell);
+        Widget ring(Widget cell, {double drop = 0}) => _Ringed(progress: _ring, burst: _burst, drop: drop, child: cell);
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.gutter),
+          padding: const EdgeInsets.only(
+            left: BiliMetrics.gutter,
+            right: BiliMetrics.gutter,
+            bottom: IntroListTheme.actionsBottom,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -129,7 +133,8 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
                   count: actions.coinCount,
                   active: actions.coins > 0,
                   onTap: () => actions.ask(ActionPrompt.coin),
-                  decorate: ring,
+                  iconDrop: IntroTheme.actionCoinDrop,
+                  decorate: (cell) => ring(cell, drop: IntroTheme.actionCoinDrop),
                 ),
               ),
               Expanded(
@@ -162,12 +167,13 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
   }
 }
 
-/// The 三连 ring centred on a cell's icon.
+/// The 三连 ring centred on a cell's icon, [drop] lower where the icon is.
 class _Ringed extends StatelessWidget {
-  const _Ringed({required this.progress, required this.burst, required this.child});
+  const _Ringed({required this.progress, required this.burst, required this.child, this.drop = 0});
 
   final Animation<double> progress;
   final Animation<double> burst;
+  final double drop;
   final Widget child;
 
   @override
@@ -179,7 +185,7 @@ class _Ringed extends StatelessWidget {
       children: [
         child,
         Positioned(
-          top: ActionTheme.topGap + offset,
+          top: ActionTheme.topGap + offset + drop,
           child: TripleRing(progress: progress, burst: burst),
         ),
       ],
@@ -198,6 +204,7 @@ class _ActionCell extends StatefulWidget {
     this.count,
     this.activeLabel,
     this.dimmed = false,
+    this.iconDrop = 0,
     this.onLongPress,
     this.onDown,
     this.onUp,
@@ -207,6 +214,9 @@ class _ActionCell extends StatefulWidget {
 
   final ActionGlyph glyph;
   final String label;
+
+  /// How far the icon is drawn below its place; the count stays.
+  final double iconDrop;
 
   /// What VoiceOver reads while [active], as landscape says it; the name under the icon stays [label].
   final String? activeLabel;
@@ -291,13 +301,16 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: ActionTheme.topGap),
-          ScaleTransition(
-            scale: _scale,
-            child: ActionIcon(
-              widget.glyph,
-              solid: true,
-              size: ActionTheme.iconSize,
-              color: Color.lerp(ActionTheme.icon, BiliColors.pink, on)!,
+          Transform.translate(
+            offset: Offset(0, widget.iconDrop),
+            child: ScaleTransition(
+              scale: _scale,
+              child: ActionIcon(
+                widget.glyph,
+                solid: true,
+                size: ActionTheme.iconSize,
+                color: Color.lerp(ActionTheme.icon, BiliColors.pink, on)!,
+              ),
             ),
           ),
           const SizedBox(height: ActionTheme.countGap),

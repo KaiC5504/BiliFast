@@ -103,6 +103,22 @@ void main() {
     expect(spaced(), ['5', '0']);
   });
 
+  testWidgets('the name\'s style, which replaces the page\'s, keeps the system font\'s fallback; MiSans has none', (
+    tester,
+  ) async {
+    List<String>? fallback() => tester.renderObject<RenderParagraph>(find.text('星宇动漫社')).text.style?.fontFamilyFallback;
+
+    final family = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = family);
+    BiliFonts.family = null;
+    await _mount(tester, UploaderRow(detail: _detail(), card: _card()));
+    expect(fallback(), ['Apple Color Emoji', 'PingFang SC']);
+
+    BiliFonts.family = BiliFonts.miSans;
+    await _mount(tester, UploaderRow(detail: _detail(), card: _card()));
+    expect(fallback(), isNull);
+  });
+
   testWidgets('the name stays put when the counts arrive', (tester) async {
     await _mount(tester, UploaderRow(detail: _detail()));
     final before = tester.getTopLeft(find.text('视频里的名字'));

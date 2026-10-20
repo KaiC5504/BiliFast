@@ -1,5 +1,7 @@
 import 'package:bili_core/api.dart'
     show UgcSeason, UploaderCard, OfficialKind, VideoCard, VideoDetail, VideoOwner, VideoStat, VideoTag, VideoTagKind;
+import 'package:bilifast/shared/action_glyphs.dart';
+import 'package:bilifast/shared/menu.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/intro/action_row.dart';
@@ -19,7 +21,7 @@ import '../../support/fake_video_actions.dart';
 
 const bv = 'BV1GJ411x7h7';
 
-VideoDetail detail({UgcSeason? season}) => VideoDetail(
+VideoDetail detail({UgcSeason? season, String? notice}) => VideoDetail(
   bvid: bv,
   aid: 80433022,
   title: '恭喜你，终于触发了B站大保底！',
@@ -38,6 +40,7 @@ VideoDetail detail({UgcSeason? season}) => VideoDetail(
   height: 1080,
   honor: null,
   redirectURL: null,
+  argueMessage: notice,
 );
 
 VideoCard card(String bvid) => VideoCard(
@@ -201,6 +204,35 @@ void main() {
     row.onOpen();
     expect(calls, ['episodes']);
   });
+
+  for (final (notice, lower) in [(null, 0.0), ('个人观点，仅供参考', 16.0)]) {
+    testWidgets('the icons, the coin, the 合集 card and the chips land where the official has them below the tab row\'s '
+        'hairline, ${notice == null ? 'without a notice (03)' : '16 lower under a notice (font-check 02)'}', (
+      tester,
+    ) async {
+      details.actions = FakeVideoActions();
+      final season = UgcSeason(id: 1, title: 'MAD系列', intro: '', sections: const []);
+      await host(
+        tester,
+        IntroContent(
+          detail: detail(season: season, notice: notice),
+          episodes: seasonEpisodes,
+        ),
+      );
+
+      double iconCentre(ActionGlyph glyph) =>
+          tester.getCenter(find.byWidgetPredicate((widget) => widget is ActionIcon && widget.glyph == glyph)).dy;
+      // Measured on the official shots to a fifth of a pixel.
+      const within = 0.07;
+      expect(iconCentre(ActionGlyph.like), closeTo(134.86 + lower, within));
+      expect(iconCentre(ActionGlyph.coin), closeTo(136 + lower, within));
+      final card = tester.getRect(find.byType(PressHighlight));
+      expect(card.top, closeTo(180 + lower, within));
+      expect(card.bottom, closeTo(216 + lower, within));
+      final chip = tester.getRect(find.ancestor(of: find.byType(ChipName), matching: find.byType(Container)).first);
+      expect(chip.top, closeTo(234 + lower, within));
+    });
+  }
 
   testWidgets('the sections get the details\' card, N人正在看, tags and the page\'s callbacks', (tester) async {
     final related = [card('BV1x'), card('BV1y')];

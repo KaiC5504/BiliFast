@@ -92,7 +92,7 @@ class CollectionRow extends StatelessWidget {
   }
 }
 
-/// The official app's "now playing" mark: a tall bar and two shorter ones, centred on the line.
+/// The official app's "now playing" mark: a short bar between two tall ones, centred on the line.
 class PlayingBars extends StatelessWidget {
   const PlayingBars({super.key, required this.color, this.height = IntroListTheme.barsHeight});
 
@@ -116,7 +116,7 @@ class _BarsPainter extends CustomPainter {
     final bar = IntroListTheme.barWidth * size.height / IntroListTheme.barsHeight;
     final step = (size.width - bar) / 2;
     final paint = Paint()..color = color;
-    for (final (index, share) in [(0, 1.0), (1, IntroListTheme.barShortShare), (2, IntroListTheme.barShortShare)]) {
+    for (final (index, share) in IntroListTheme.barShares.indexed) {
       final h = size.height * share;
       canvas.drawRRect(
         RRect.fromRectAndRadius(Rect.fromLTWH(index * step, (size.height - h) / 2, bar, h), Radius.circular(bar / 2)),
