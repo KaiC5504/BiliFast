@@ -1976,7 +1976,7 @@ abstract final class ZoomBackTheme {
 /// it. The official turn moves visibly for 16 to 17 frames at 60 fps either way, its ease-in-out's ends barely moving.
 abstract final class RotationTheme {
   /// The official turn's length both ways, fitted with [curve] to 298.5 and 300.1 ms: UIKit's 0.3 s. A turn the page
-  /// draws itself takes the system's own duration instead.
+  /// draws takes it too, since iOS reports no length for a turn asked for with its animations off.
   static const grow = Duration(milliseconds: 300);
 
   /// The official page's angle, measured frame by frame both ways, fits this to within 0.2° rms (0.9° at worst), and
