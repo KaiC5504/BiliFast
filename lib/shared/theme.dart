@@ -1526,11 +1526,12 @@ abstract final class CommentRowTheme {
   static const chevronStroke = 1.0;
 
   /// The hairline under a row, 2 px of [BiliColors.divider] from 54 to the edge, 20.3 below the meta line's centre or
-  /// 12 below the replies box.
+  /// 12 below the replies box. Under the system font the meta text sits higher, so the hairline comes 0.7 up to stay
+  /// 20 below it (font-check 04).
   static const dividerLeading = 54.0;
   static const divider = 2 / 3;
   static const dividerColour = BiliColors.divider;
-  static const bottom = 61 / 3 - metaHeight / 2;
+  static double get bottom => 61 / 3 - metaHeight / 2 - (BiliFonts.nudged ? 0 : 0.7);
   static const boxBottom = 12.0;
 
   /// The fan card's art 36.3 tall, 0.7 down, its left 81 from the right edge; the two lines of its number start 31
