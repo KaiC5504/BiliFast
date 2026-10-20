@@ -1453,6 +1453,30 @@ abstract final class CommentRowTheme {
   static const upLikedGap = 3.0;
   static const upLiked = BiliColors.secondaryText;
 
+  /// 评论详情 draws UP主觉得很赞 as a box instead (font-check 04, under the root and under a reply): no thumb, #757575
+  /// in #F4F4F4, 16 tall and 2 round, its top 22 below the meta text's centre and its bottom 8 above the band or the
+  /// reply's hairline. The meta text's centre sits 0.5 above the meta line's under the system font, MiSans's 1.2
+  /// below it. The glyphs are 10 pt tall but 31.25 px apart, wider than PingFang's em as iOS tracks small text, which
+  /// makes the box 75 wide.
+  static double get upChipTop => BiliFonts.nudged ? 11.2 : 9.5;
+  static const upChipHeight = 16.0;
+  static const upChipBottom = 8.0;
+  static const upChipText = 10.0;
+  static const upChipSpacing = 0.4;
+  static const upChipPadding = 13 / 3;
+  static const upChipRadius = 2.0;
+  static const upChipFill = Color(0xFFF4F4F4);
+  static const upChipInk = Color(0xFF757575);
+
+  static TextStyle get upChipStyle => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: upChipText,
+    height: upChipHeight / upChipText,
+    leadingDistribution: TextLeadingDistribution.even,
+    letterSpacing: upChipSpacing,
+    color: upChipInk,
+  );
+
   /// The replies box: 19.8 below the meta text's centre on 10, which is 21.2 below the meta line's (1.75 less under
   /// the system font, whose meta text sits higher); 54 from the left and 12 from the right, 8 round.
   static double get boxGap => 127 / 6 - metaHeight / 2 - (BiliFonts.nudged ? 0 : 1.75);
@@ -1626,6 +1650,11 @@ abstract final class CommentListTheme {
   /// The grey band between the thread's root and its replies, straight under the root's meta line.
   static const bandHeight = 10.0;
   static const band = BiliColors.pageGrey;
+
+  /// The band starts 20 below the root's meta text's centre, where a reply's hairline does (13 and font-check 04):
+  /// 7.5 below the meta line under the system font, whose text sits 0.5 above the line's centre. MiSans keeps the
+  /// hairline's room.
+  static double get bandGap => BiliFonts.nudged ? CommentRowTheme.bottom + CommentRowTheme.divider : 7.5;
 
   /// MiSans sets Chinese wider than the official PingFang (热门评论 37.3 px a character on 10, MiSans 38.7; 按热度 33
   /// against 36); these close most of it without crowding the glyphs.

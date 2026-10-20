@@ -41,7 +41,8 @@ class CommentRow extends StatelessWidget {
   /// The grey box of reply previews and 共N条回复, in the list only.
   final bool showsReplies;
 
-  /// The hairline under the row, indented to the text.
+  /// The hairline under the row, indented to the text. Without it the row is 评论详情's root and ends where the band
+  /// starts.
   final bool showsDivider;
 
   void _reply() {
@@ -82,6 +83,14 @@ class CommentRow extends StatelessWidget {
     final runs = comment.runs;
     final hasText = runs.isNotEmpty || comment.isPinned;
     final repliesBox = showsReplies && (comment.replyCount > 0 || comment.previewReplies.isNotEmpty);
+    final upChip = !showsReplies && comment.upLiked;
+    final tail = repliesBox
+        ? CommentRowTheme.boxBottom + CommentRowTheme.divider
+        : upChip
+        ? CommentRowTheme.upChipBottom + (showsDivider ? CommentRowTheme.divider : 0)
+        : showsDivider
+        ? CommentRowTheme.bottom + CommentRowTheme.divider
+        : CommentListTheme.bandGap;
     const nameTop = CommentRowTheme.nameCentre - CommentRowTheme.nameLine / 2;
     const textLeft = EdgeInsets.only(left: CommentRowTheme.textLeading, right: CommentRowTheme.gutter);
     return Stack(
@@ -158,6 +167,7 @@ class CommentRow extends StatelessWidget {
               ),
             ),
             if (showsReplies && comment.upLiked) const _UpLiked(),
+            if (upChip) ...[SizedBox(height: CommentRowTheme.upChipTop), const _UpLikedChip()],
             if (repliesBox) ...[
               SizedBox(height: CommentRowTheme.boxGap),
               Padding(
@@ -165,9 +175,7 @@ class CommentRow extends StatelessWidget {
                 child: _RepliesBox(comment: comment, onOpen: () => callbacks.openThread(comment)),
               ),
             ],
-            SizedBox(
-              height: (repliesBox ? CommentRowTheme.boxBottom : CommentRowTheme.bottom) + CommentRowTheme.divider,
-            ),
+            SizedBox(height: tail),
           ],
         ),
         Positioned(
@@ -478,6 +486,36 @@ class _UpLiked extends StatelessWidget {
           const SizedBox(width: CommentRowTheme.upLikedGap),
           Text('UP主觉得很赞', style: CommentRowTheme.metaStyle(CommentRowTheme.upLiked)),
         ],
+      ),
+    ),
+  );
+}
+
+/// 评论详情's UP主觉得很赞, the text in a grey box.
+class _UpLikedChip extends StatelessWidget {
+  const _UpLikedChip();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: CommentRowTheme.textLeading),
+    child: Align(
+      alignment: Alignment.topLeft,
+      child: DecoratedBox(
+        key: const ValueKey('comment-up-liked'),
+        decoration: const BoxDecoration(
+          color: CommentRowTheme.upChipFill,
+          borderRadius: BorderRadius.all(Radius.circular(CommentRowTheme.upChipRadius)),
+        ),
+        child: SizedBox(
+          height: CommentRowTheme.upChipHeight,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: CommentRowTheme.upChipPadding),
+            child: Center(
+              widthFactor: 1,
+              child: Text('UP主觉得很赞', maxLines: 1, softWrap: false, style: CommentRowTheme.upChipStyle),
+            ),
+          ),
+        ),
       ),
     ),
   );
