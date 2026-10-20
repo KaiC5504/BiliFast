@@ -26,6 +26,7 @@ final class PlayerUi {
     this.danmaku,
     this.layout,
     this.statusBar,
+    this.replyCount,
   });
 
   final PlayerSession session;
@@ -60,6 +61,13 @@ final class PlayerUi {
 
   /// The battery and network for the status bar landscape full screen draws (04); null draws none.
   final StatusBarFeed? statusBar;
+
+  /// 评论's count as the page's tab row shows it, following posts and deletes once the list is in; null until then,
+  /// when the video's own count stands.
+  final ValueListenable<int?>? replyCount;
+
+  /// The count beside 评论 in full screen.
+  int? get replies => replyCount?.value ?? session.detail?.stat.reply;
 
   /// The presentation the player is drawn in: what panels and gestures fit themselves to. What the user asked for is
   /// [orientation]'s.

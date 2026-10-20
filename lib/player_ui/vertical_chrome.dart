@@ -10,7 +10,6 @@ import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../video/actions/video_actions.dart';
 import '../video/page_details.dart';
-import '../video/player_session.dart';
 import 'landscape_chrome.dart';
 import 'panels/panel_controller.dart';
 import 'player_ui.dart';
@@ -31,7 +30,7 @@ class VerticalChrome extends StatelessWidget {
     final insets = MediaQuery.paddingOf(context);
     final bottom = math.max(insets.bottom - BiliMetrics.verticalBottomDrop, 0.0);
     return ListenableBuilder(
-      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.danmaku]),
+      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.danmaku, ui.replyCount]),
       builder: (context, _) {
         final shown = ui.chrome.visible && ui.panels.value == null;
         return IgnorePointer(
@@ -66,12 +65,7 @@ class VerticalChrome extends StatelessWidget {
                     child: ChromeSlide(
                       shown: shown,
                       from: const Offset(BiliMetrics.chromeSlide, 0),
-                      child: _ActionColumn(
-                        details: details,
-                        session: ui.session,
-                        touch: _touch,
-                        onComments: ui.onComments,
-                      ),
+                      child: _ActionColumn(details: details, ui: ui, touch: _touch),
                     ),
                   ),
               ],
@@ -567,19 +561,18 @@ class _ViewersPainter extends CustomPainter {
 
 /// 点赞 评论 投币 收藏 分享 down the right, solid white with their counts, pink once given; once the actions exist.
 class _ActionColumn extends StatelessWidget {
-  const _ActionColumn({required this.details, required this.session, required this.touch, required this.onComments});
+  const _ActionColumn({required this.details, required this.ui, required this.touch});
 
   final PageDetails details;
-  final PlayerSession session;
+  final PlayerUi ui;
   final VoidCallback Function(VoidCallback) touch;
-  final VoidCallback? onComments;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: details,
     builder: (context, _) {
       final actions = details.actions;
-      final detail = session.detail;
+      final detail = ui.session.detail;
       return AnimatedSwitcher(
         duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 260),
         switchInCurve: Curves.easeOut,
@@ -588,7 +581,7 @@ class _ActionColumn extends StatelessWidget {
             : ListenableBuilder(
                 key: ObjectKey(actions),
                 listenable: actions,
-                builder: (context, _) => _items(actions, detail.stat.reply),
+                builder: (context, _) => _items(actions, ui.replies ?? detail.stat.reply),
               ),
       );
     },
@@ -615,7 +608,7 @@ class _ActionColumn extends StatelessWidget {
         size: VerticalActionTheme.commentIcon,
         count: replies,
         active: false,
-        onTap: touch(() => onComments?.call()),
+        onTap: touch(() => ui.onComments?.call()),
       ),
       _ColumnItem(
         key: const ValueKey('vertical-coin'),

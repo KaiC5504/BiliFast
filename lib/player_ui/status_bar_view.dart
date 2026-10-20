@@ -100,6 +100,7 @@ class _LandscapeStatusBarState extends State<LandscapeStatusBar> {
 
 TextStyle _style(double size) => TextStyle(
   fontFamily: BiliFonts.family,
+  fontFamilyFallback: BiliFonts.fallback,
   color: BiliColors.onVideo,
   fontSize: size,
   fontWeight: FontWeight.normal,

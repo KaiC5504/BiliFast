@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
 import 'ios/device_api.g.dart';
@@ -34,11 +35,12 @@ final class DeviceStatus {
   String toString() => 'DeviceStatus(battery: $battery, charging: $charging, network: ${network.name})';
 }
 
-/// The battery and network for the drawn status bar, watched only while landscape full screen shows it.
+/// The battery and network for the drawn status bar, watched only while landscape full screen is up.
 abstract interface class StatusBarFeed {
   ValueListenable<DeviceStatus> get status;
 
-  /// On while the drawn status bar is on screen; the phone's battery monitoring follows it.
+  /// On for as long as the drawn status bar is mounted: all of landscape full screen, while the controls are hidden
+  /// or a panel is up too, so the level is current when the bar shows. The phone's battery monitoring follows it.
   void watch(bool on);
 }
 
@@ -55,11 +57,12 @@ final class FixedStatusBarFeed implements StatusBarFeed {
 
 /// DeviceChannel.swift's reports. Watches are counted, so two screens can watch at once.
 final class IosStatusBarFeed implements StatusBarFeed {
-  IosStatusBarFeed(this._api, IosDeviceEvents events) {
+  IosStatusBarFeed(this._api, IosDeviceEvents events, {Logger? logger}) : _logger = logger ?? Logger.shared {
     _reports = events.statusReports.listen(_report);
   }
 
   final DeviceHostApi _api;
+  final Logger _logger;
   late final StreamSubscription<DeviceStatusReport> _reports;
   int _watchers = 0;
 
@@ -70,8 +73,10 @@ final class IosStatusBarFeed implements StatusBarFeed {
   void watch(bool on) {
     final before = _watchers;
     _watchers = on ? _watchers + 1 : (_watchers > 0 ? _watchers - 1 : 0);
-    if ((before == 0) != (_watchers == 0)) unawaited(_api.setStatusEvents(_watchers > 0));
+    if ((before == 0) != (_watchers == 0)) unawaited(_api.setStatusEvents(_watchers > 0).catchError(_hostFailed));
   }
+
+  void _hostFailed(Object error) => _logger.warn(LogCategory.ui, 'status events failed', {'error': '$error'});
 
   void _report(DeviceStatusReport report) => status.value = DeviceStatus(
     battery: report.battery < 0 ? null : report.battery.clamp(0, 1).toDouble(),

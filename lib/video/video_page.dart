@@ -652,6 +652,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       danmaku: danmaku,
       layout: _laidOut,
       statusBar: services.device.status,
+      replyCount: _listCount,
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);

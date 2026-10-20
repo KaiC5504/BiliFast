@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/device/ios/device_api.g.dart';
 import 'package:bilifast/device/ios/ios_device_events.dart';
 import 'package:bilifast/device/status_bar.dart';
@@ -24,16 +25,25 @@ void main() {
 
   late List<bool> calls;
   late IosStatusBarFeed feed;
+  late MemorySink logs;
+
+  /// What the host answers setStatusEvents with: null, or a failure as (code, message).
+  (String, String)? failure;
 
   setUp(() {
     calls = [];
+    failure = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMessageHandler(_setStatusEvents, (
       message,
     ) async {
       calls.add((DeviceHostApi.pigeonChannelCodec.decodeMessage(message) as List<Object?>).single! as bool);
+      if (failure case (final code, final text)?) {
+        return DeviceHostApi.pigeonChannelCodec.encodeMessage(<Object?>[code, text, null]);
+      }
       return DeviceHostApi.pigeonChannelCodec.encodeMessage(<Object?>[null]);
     });
-    feed = IosStatusBarFeed(DeviceHostApi(), IosDeviceEvents()..connect());
+    logs = MemorySink();
+    feed = IosStatusBarFeed(DeviceHostApi(), IosDeviceEvents()..connect(), logger: Logger(session: 'test')..add(logs));
   });
 
   tearDown(() {
@@ -59,6 +69,22 @@ void main() {
       ..watch(false);
     await settle();
     expect(calls, [true, false]);
+  });
+
+  test('a host that fails the switch leaves a warning in the log, not a crash', () async {
+    failure = ('error', 'battery monitoring unavailable');
+    final uncaught = <Object>[];
+    await runZonedGuarded(() async {
+      feed.watch(true);
+      await settle();
+      feed.watch(false);
+      await settle();
+    }, (error, _) => uncaught.add(error));
+    expect(calls, [true, false]);
+    expect(uncaught, isEmpty);
+    final warnings = logs.events.where((event) => event.msg == 'status events failed').toList();
+    expect(warnings, hasLength(2));
+    expect(warnings.first.level, LogLevel.warn);
   });
 
   test('reports become the status: the level kept to 0-1, unknown as null', () async {

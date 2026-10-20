@@ -1184,6 +1184,16 @@ abstract final class LandscapeActionTheme {
   /// After each 44 pt button, the last one's before ⋮.
   static const buttonGap = 8.0;
 
+  /// 05's 👍 and ⭐ are shorter than the outlines 简介 shares (19.7 and 18.7 pt of ink against 20.2 and 19.7) and sit
+  /// higher, their widths the same: each is squeezed upright about its button's centre, then lifted.
+  static const likeSquash = 0.975;
+  static const likeLift = 1.14;
+  static const favouriteSquash = 0.945;
+  static const favouriteLift = 0.8;
+
+  /// The title starts where N人正在看's icon under it does (04, 05), clear of back's 44 pt target.
+  static const titleInset = onlineInset;
+
   /// The superscript count: its left edge this far right of its button's centre, its digits standing on a baseline
   /// 12 pt into the button (32 pt down on 04 and 05, in either font), in proportional figures as 05's 1127 is.
   static const countText = 9.5;

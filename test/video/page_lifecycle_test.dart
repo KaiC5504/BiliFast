@@ -942,4 +942,41 @@ void main() {
     await back(tester);
     expect(playback.live, 0);
   });
+
+  testWidgets('⏭ tapped again while its part or 合集 episode loads opens nothing more: one load, one view asked for',
+      (tester) async {
+    await host(tester);
+    final player = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+    final session = ui(tester).session;
+    player.calls.clear();
+
+    const part = Episode(bvid: bv, cid: p2, title: 'P2', current: false);
+    session.playEpisode(part);
+    await frames(tester, 2);
+    session.playEpisode(part);
+    await frames(tester, 20);
+    expect(loads(player), hasLength(1));
+    expect(controllers.single.page?.cid, p2);
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    await frames(tester, 2);
+
+    http.routes[Canned.signedViewPath] = (200, otherView);
+    final gate = http.gates[Canned.signedViewPath] = Completer<void>();
+    final viewsBefore = http.to(Canned.signedViewPath).length;
+    player.calls.clear();
+    const episode = Episode(bvid: other, cid: 237649199, title: '', current: false);
+    session.playEpisode(episode);
+    await frames(tester, 2);
+    session.playEpisode(episode);
+    await frames(tester, 2);
+    gate.complete();
+    await frames(tester, 20);
+    expect(http.to(Canned.signedViewPath).length - viewsBefore, 1);
+    expect(loads(player), hasLength(1));
+    expect(controllers.single.video?.bvid, other);
+
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    await frames(tester, 2);
+    await back(tester);
+  });
 }

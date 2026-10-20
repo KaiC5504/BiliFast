@@ -14,6 +14,7 @@ import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
@@ -44,6 +45,9 @@ final class Rig {
   /// Set before [mount]; null is a player outside a video page.
   DanmakuRig? danmaku;
 
+  /// Set before [mount]: 评论's count as the page's tab row has it.
+  ValueNotifier<int?>? replyCount;
+
   late final ui = PlayerUi(
     session: session,
     chrome: chrome,
@@ -54,6 +58,7 @@ final class Rig {
     details: details,
     onComments: () => comments += 1,
     danmaku: danmaku?.session,
+    replyCount: replyCount,
   );
 
   Future<void> mount(WidgetTester tester, {bool still = false}) async {
@@ -69,6 +74,7 @@ final class Rig {
       session.dispose();
       details?.dispose();
       danmaku?.dispose();
+      replyCount?.dispose();
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -168,6 +174,26 @@ final class DanmakuRig {
 Offset centre(WidgetTester tester, String key) => tester.getCenter(find.byKey(ValueKey(key)));
 
 void main() {
+  testWidgets("under the system font the title and the uploader's name fall back to emoji, then PingFang SC; MiSans "
+      'names none', (tester) async {
+    final saved = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = saved);
+    List<String>? fallbackOf(String key) =>
+        tester.renderObject<RenderParagraph>(find.byKey(ValueKey(key))).text.style?.fontFamilyFallback;
+
+    BiliFonts.family = null;
+    await rig09().mount(tester);
+    expect(fallbackOf('vertical-title'), ['Apple Color Emoji', 'PingFang SC']);
+    expect(fallbackOf('vertical-name'), ['Apple Color Emoji', 'PingFang SC']);
+
+    BiliFonts.family = BiliFonts.miSans;
+    await rig09().mount(tester);
+    // The name's style animates, so it settles on the new font's first.
+    await tester.pumpAndSettle();
+    expect(fallbackOf('vertical-title'), isNull);
+    expect(fallbackOf('vertical-name'), isNull);
+  });
+
   testWidgets('lays out as 09: back and ⋮ under the island, the title over the bar, the bottom row', (tester) async {
     final rig = Rig()..session.title = '【VIT赛后】我们接受了LOUD的回溯！！';
     await rig.mount(tester);
@@ -498,6 +524,31 @@ void main() {
       rig.details!.changed();
       await tester.pumpAndSettle();
       expect(find.text('240'), findsOneWidget);
+    });
+
+    testWidgets("评论's count is the tab row's once the list has one, following a post or a delete; the detail's "
+        'until then', (tester) async {
+      final rig = rig09()..replyCount = ValueNotifier(null);
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      final comment = find.byKey(const ValueKey('vertical-comment'));
+      expect(find.descendant(of: comment, matching: find.text('239')), findsOneWidget);
+
+      rig.replyCount!.value = 240;
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: comment, matching: find.text('240')), findsOneWidget);
+      expect(find.descendant(of: comment, matching: find.text('239')), findsNothing);
+
+      rig.replyCount!.value = 239;
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: comment, matching: find.text('239')), findsOneWidget);
+
+      rig.replyCount!.value = null;
+      rig.session
+        ..detail = detail(reply: 5)
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: comment, matching: find.text('5')), findsOneWidget);
     });
 
     testWidgets('a new video brings new actions; the old ones no longer show', (tester) async {
