@@ -13,7 +13,7 @@ import 'comment_row.dart';
 import 'comments_model.dart';
 
 /// 评论 (10-12): 热门评论 / 最新评论 with ≡ 按热度 / 按时间, the pinned comment, the list paging as it nears the end,
-/// its footer, and the 哎呦，不错哦，发条评论吧 bar fixed at the bottom. Asks [model] for its first page when it first
+/// its footer, and the 发条评论 bar fixed at the bottom. Asks [model] for its first page when it first
 /// shows. Its list scrolls with the page's primary scroll controller and starts `PlayerReserve` below its top.
 class CommentsTab extends StatefulWidget {
   const CommentsTab({super.key, required this.model, required this.callbacks});
@@ -132,7 +132,11 @@ class _CommentsTabState extends State<CommentsTab> {
               ),
             ),
           ),
-          if (closed == null) CommentWriteBar(onWrite: (emotes) => callbacks.reply(const ReplyToVideo(), emotes)),
+          if (closed == null)
+            CommentWriteBar(
+              prompt: model.rootPrompt,
+              onWrite: (emotes) => callbacks.reply(const ReplyToVideo(), emotes),
+            ),
         ],
       ),
     );
@@ -453,18 +457,23 @@ class _ClosedNotice extends StatelessWidget {
   );
 }
 
-/// The bar under the list and the thread (10, 13): the grey 哎呦，不错哦，发条评论吧 pill and the emote face at its right,
-/// over the home indicator. [onWrite] gets true from the face, which opens the composer on its emotes.
+/// The bar under the list and the thread (10, 13): the grey pill with the section's prompt, or 哎呦，不错哦，发条评论吧
+/// when the server sent none, and the emote face at its right, over the home indicator. [onWrite] gets true from the
+/// face, which opens the composer on its emotes.
 class CommentWriteBar extends StatelessWidget {
-  const CommentWriteBar({super.key, required this.onWrite});
+  const CommentWriteBar({super.key, required this.onWrite, this.prompt});
 
   final ValueChanged<bool> onWrite;
+
+  /// The comment section's own words (font-check 04), which Bilibili sends with its pages.
+  final String? prompt;
 
   static const placeholder = '哎呦，不错哦，发条评论吧';
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final shown = prompt ?? placeholder;
     return DecoratedBox(
       key: const ValueKey('comment-bar'),
       decoration: const BoxDecoration(
@@ -488,7 +497,7 @@ class CommentWriteBar extends StatelessWidget {
                 child: Semantics(
                   key: const ValueKey('comment-field'),
                   button: true,
-                  label: placeholder,
+                  label: shown,
                   onTap: () => onWrite(false),
                   excludeSemantics: true,
                   child: GestureDetector(
@@ -501,7 +510,7 @@ class CommentWriteBar extends StatelessWidget {
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            placeholder,
+                            shown,
                             maxLines: 1,
                             softWrap: false,
                             overflow: TextOverflow.ellipsis,

@@ -241,40 +241,80 @@ void main() {
       expect(rig.videos, isEmpty);
     });
 
-    testWidgets('a reply target with no mid is blue and leads nowhere', (tester) async {
+    testWidgets('a reply\'s lead reads 回复 name: as on font-check 04: the name grey, no @, no link', (tester) async {
       final rig = Rig();
-      await rig.mount(tester, const [RichRun.text('回复 @小红 :说得对'), RichRun.timestamp(label: '1:02', seconds: 62)]);
-      final mention = _span(tester, '@小红');
-      expect(mention.style?.color, CommentTextTheme.link);
-      expect(mention.recognizer, isNull);
-      expect(find.text('回复 @小红 :说得对1:02', findRichText: true), findsOneWidget);
-      await _tapText(tester, '@小红');
-      expect(rig.links, isEmpty);
+      for (final runs in const [
+        [RichRun.text('回复 @小红 :说得对'), RichRun.timestamp(label: '1:02', seconds: 62)],
+        [
+          RichRun.text('回复 '),
+          RichRun.mention(name: '小红', mid: 7),
+          RichRun.text(' :说得对'),
+          RichRun.timestamp(label: '1:02', seconds: 62),
+        ],
+      ]) {
+        await rig.mount(tester, runs);
+        expect(_root(tester).children!.whereType<TextSpan>().map((span) => span.text), [
+          '回复 ',
+          '小红',
+          ': ',
+          '说得对',
+          '1:02',
+        ]);
+        final name = _span(tester, '小红');
+        expect(name.style?.color, CommentTextTheme.replyTarget);
+        expect(name.recognizer, isNull);
+        expect(_span(tester, '回复 ').style, isNull);
+        expect(_span(tester, ': ').style, isNull);
+        await _tapText(tester, '小红');
+        expect(rig.links, isEmpty);
+        expect(_span(tester, '1:02').style?.color, CommentTextTheme.link, reason: 'the rest keeps its links');
+      }
 
       await rig.mount(tester, const [RichRun.text('回复 @小红 :说得对')], marksReplyTarget: false);
       expect(_root(tester).children!.whereType<TextSpan>().map((span) => span.text), ['回复 @小红 :说得对']);
     });
 
-    test('markingReplyTarget', () {
-      expect(markingReplyTarget(const [RichRun.text('回复 @小红 :说得对'), RichRun.text('!')]), const [
-        RichRun.text('回复 '),
-        RichRun.mention(name: '小红', mid: 0),
-        RichRun.text(' :说得对'),
-        RichRun.text('!'),
-      ]);
-      expect(markingReplyTarget(const [RichRun.text('回复 @小红：好')]), const [
-        RichRun.text('回复 '),
-        RichRun.mention(name: '小红', mid: 0),
-        RichRun.text('：好'),
-      ]);
-      const untouched = [
+    testWidgets('an emote straight after the colon follows the lead with no gap', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester, const [RichRun.text('回复 @小红 :'), RichRun.emote(token: '[笑哭]', url: _emoteUrl, size: 1)]);
+      expect(_root(tester).children!.whereType<TextSpan>().map((span) => span.text), ['回复 ', '小红', ': ']);
+      // The test font draws every character 15 wide.
+      final left = tester.getRect(find.byType(RemoteImage)).left - tester.getTopLeft(_paragraph).dx;
+      expect(left, moreOrLessEquals(7 * 15));
+    });
+
+    test('replyLead', () {
+      void lead(List<RichRun> runs, String name, List<RichRun> rest) {
+        final found = replyLead(runs);
+        expect(found?.name, name, reason: '$runs');
+        expect(found?.rest, rest, reason: '$runs');
+      }
+
+      lead(
+        const [RichRun.text('回复 @小红 :说得对'), RichRun.text('!')],
+        '小红',
+        const [RichRun.text('说得对'), RichRun.text('!')],
+      );
+      lead(const [RichRun.text('回复 @小红：好')], '小红', const [RichRun.text('好')]);
+      lead(const [RichRun.text('回复 @Windows98es : 然后')], 'Windows98es', const [RichRun.text('然后')]);
+      lead(const [RichRun.text('回复 @小红 :\n第二行')], '小红', const [RichRun.text('\n第二行')]);
+      lead(const [RichRun.text('回复 @小红 :')], '小红', const []);
+      lead(
+        const [RichRun.text('回复 '), RichRun.mention(name: '小红', mid: 7), RichRun.text(' :好'), RichRun.text('!')],
+        '小红',
+        const [RichRun.text('好'), RichRun.text('!')],
+      );
+      lead(const [RichRun.text('回复 '), RichRun.mention(name: '@小红', mid: 7), RichRun.text('：')], '小红', const []);
+      for (final runs in const [
         [RichRun.text('回复 @小红 没有冒号')],
         [RichRun.text('回复 @ :空名字')],
-        [RichRun.text('回复 '), RichRun.mention(name: '小红', mid: 7), RichRun.text(' :好')],
+        [RichRun.text('看 @小红 :好')],
+        [RichRun.text('回复 '), RichRun.mention(name: '小红', mid: 7), RichRun.text(' 没有冒号')],
+        [RichRun.text('回复 '), RichRun.mention(name: '小红', mid: 7)],
+        [RichRun.text('回复 '), RichRun.text('小红 :好')],
         <RichRun>[],
-      ];
-      for (final runs in untouched) {
-        expect(markingReplyTarget(runs), same(runs));
+      ]) {
+        expect(replyLead(runs), isNull, reason: '$runs');
       }
     });
   });

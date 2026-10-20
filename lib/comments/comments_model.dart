@@ -124,6 +124,7 @@ class ThreadState {
     required this.total,
     this.loading = false,
     this.error,
+    this.prompt,
   });
 
   final Comment root;
@@ -137,6 +138,9 @@ class ThreadState {
   final bool loading;
   final String? error;
 
+  /// The write bar's prompt from the thread's first page, if the server sent one.
+  final String? prompt;
+
   ThreadState copyWith({
     Comment? root,
     List<Comment>? replies,
@@ -146,6 +150,7 @@ class ThreadState {
     int? total,
     bool? loading,
     String? Function()? error,
+    String? Function()? prompt,
   }) => ThreadState(
     root: root ?? this.root,
     replies: replies ?? this.replies,
@@ -155,6 +160,7 @@ class ThreadState {
     total: total ?? this.total,
     loading: loading ?? this.loading,
     error: error == null ? this.error : error(),
+    prompt: prompt == null ? this.prompt : prompt(),
   );
 
   @override
@@ -167,10 +173,11 @@ class ThreadState {
       other.isEnd == isEnd &&
       other.total == total &&
       other.loading == loading &&
-      other.error == error;
+      other.error == error &&
+      other.prompt == prompt;
 
   @override
-  int get hashCode => Object.hash(root, Object.hashAll(replies), sort, page, isEnd, total, loading, error);
+  int get hashCode => Object.hash(root, Object.hashAll(replies), sort, page, isEnd, total, loading, error, prompt);
 }
 
 /// One video's comments (BiliNative `CommentsModel`): 评论's list in either sort, paged by offset, the pinned comment
@@ -226,6 +233,8 @@ class CommentsModel extends ChangeNotifier {
   bool _loading = false;
   String? _error;
   ThreadState? _thread;
+  String? _rootPrompt;
+  String? _childPrompt;
 
   String? _nextOffset;
   int _emptyPages = 0;
@@ -254,6 +263,13 @@ class CommentsModel extends ChangeNotifier {
   /// Why the last page failed. Nothing asks again by itself: the footer's 重试 calls [loadMore].
   String? get error => _error;
   ThreadState? get thread => _thread;
+
+  /// The section's own prompt for the write bar under the list, from its first page; null until then or when the
+  /// server sends none.
+  String? get rootPrompt => _rootPrompt;
+
+  /// The list's first page's prompt for a thread's write bar, for a thread whose own page sent none.
+  String? get childPrompt => _childPrompt;
 
   bool get hasLoaded =>
       _answered || _comments.isNotEmpty || _pinned != null || _isEnd || _closedMessage != null || _error != null;
@@ -299,6 +315,8 @@ class CommentsModel extends ChangeNotifier {
       if (first) {
         _pinned = page.pinned;
         _total = page.total;
+        _rootPrompt = page.rootPrompt;
+        _childPrompt = page.childPrompt;
       }
       final seen = {for (final comment in _comments) comment.rpid, ?_pinned?.rpid};
       final added = [
@@ -557,7 +575,7 @@ class CommentsModel extends ChangeNotifier {
     final thread = _thread;
     if (thread == null) return;
     _threadGeneration += 1;
-    _thread = ThreadState(root: thread.root, sort: sort, total: thread.total);
+    _thread = ThreadState(root: thread.root, sort: sort, total: thread.total, prompt: thread.prompt);
     await _loadThread();
   }
 
@@ -595,6 +613,7 @@ class CommentsModel extends ChangeNotifier {
         // A page that adds nothing would only be asked for again.
         isEnd: page.isEnd || added.isEmpty,
         loading: false,
+        prompt: state.page == 0 ? () => page.childPrompt : null,
       );
     } catch (error, stack) {
       final thread = _thread;

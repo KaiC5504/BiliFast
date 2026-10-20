@@ -14,26 +14,32 @@ import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/intro/desc_text.dart' show linkTarget;
 
-/// A reply inside a thread starts "回复 @名字 :". When the server sent no mid for that name the runs keep it as text,
-/// so the name is made a mention here (mid 0, blue but leading nowhere) like the others.
-List<RichRun> markingReplyTarget(List<RichRun> runs) {
-  const lead = '回复 @';
-  if (runs.firstOrNull case TextRun(:final text) when text.startsWith(lead)) {
-    final rest = text.substring(lead.length);
-    final colon = rest.indexOf(RegExp('[:：]'));
-    if (colon < 0) return runs;
-    final written = rest.substring(0, colon);
-    final name = written.trim();
-    if (name.isEmpty) return runs;
-    final trailing = written.endsWith(' ') ? ' ' : '';
-    return [
-      const RichRun.text('回复 '),
-      RichRun.mention(name: name, mid: 0),
-      RichRun.text('$trailing${rest.substring(colon)}'),
-      ...runs.skip(1),
-    ];
+/// A reply inside a thread is sent as "回复 @名字 :…", the name a mention when the server gave its mid and plain text
+/// when not. Returns whom it answers and the runs after the colon, or null when [runs] don't start that way.
+({String name, List<RichRun> rest})? replyLead(List<RichRun> runs) {
+  final colon = RegExp('[:：]');
+  final spaces = RegExp(r'^[ 　]+');
+  List<RichRun> after(String text, Iterable<RichRun> more) {
+    final left = text.replaceFirst(spaces, '');
+    return [if (left.isNotEmpty) RichRun.text(left), ...more];
   }
-  return runs;
+
+  switch (runs) {
+    case [TextRun(:final text), ...] when text.startsWith('回复 @'):
+      final rest = text.substring('回复 @'.length);
+      final end = rest.indexOf(colon);
+      if (end < 0) return null;
+      final name = rest.substring(0, end).trim();
+      if (name.isEmpty) return null;
+      return (name: name, rest: after(rest.substring(end + 1), runs.skip(1)));
+    case [TextRun(text: '回复 '), MentionRun(:final name), TextRun(:final text), ...]:
+      final rest = text.replaceFirst(spaces, '');
+      if (!rest.startsWith(colon)) return null;
+      final bare = name.startsWith('@') ? name.substring(1) : name;
+      if (bare.isEmpty) return null;
+      return (name: bare, rest: after(rest.substring(1), runs.skip(3)));
+  }
+  return null;
 }
 
 /// A comment's text (BiliNative `RichTextView`): emotes inline, sized from the text (large ones bigger), @mentions,
@@ -64,7 +70,8 @@ class CommentText extends StatefulWidget {
   /// A web link or a mention's space page; the browser by default. False when nothing could open it.
   final Future<bool> Function(Uri link) openLink;
 
-  /// Turns a leading "回复 @名字 :" into a mention, as [markingReplyTarget].
+  /// Draws a leading "回复 @名字 :" as the official app does, "回复 名字: " with the name grey and no link (font-check
+  /// 04); see [replyLead].
   final bool marksReplyTarget;
 
   static Future<bool> _openInBrowser(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
@@ -131,8 +138,17 @@ class _CommentTextState extends State<CommentText> {
     _hasEmote = widget.runs.any(_drawn);
     const linked = TextStyle(color: CommentTextTheme.link);
     final fontSize = widget.style.fontSize ?? kDefaultFontSize;
-    final runs = widget.marksReplyTarget ? markingReplyTarget(widget.runs) : widget.runs;
+    final lead = widget.marksReplyTarget ? replyLead(widget.runs) : null;
+    final runs = lead?.rest ?? widget.runs;
     return [
+      if (lead != null) ...[
+        const TextSpan(text: '回复 '),
+        TextSpan(
+          text: lead.name,
+          style: const TextStyle(color: CommentTextTheme.replyTarget),
+        ),
+        const TextSpan(text: ': '),
+      ],
       for (final (i, run) in runs.indexed)
         switch (run) {
           TextRun(:final text) => TextSpan(text: text),

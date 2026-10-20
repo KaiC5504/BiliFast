@@ -36,6 +36,7 @@ class FakeThread extends CommentsModel {
       );
 
   ThreadState? threadValue;
+  String? childPromptValue;
   final calls = <String>[];
 
   /// What a page does once asked for, such as failing.
@@ -48,6 +49,9 @@ class FakeThread extends CommentsModel {
 
   @override
   ThreadState? get thread => threadValue;
+
+  @override
+  String? get childPrompt => childPromptValue;
 
   @override
   void closeThread() => calls.add('closeThread');
@@ -399,6 +403,28 @@ void main() {
       await tester.tap(find.text(CommentWriteBar.placeholder));
       await tester.tap(find.byKey(const ValueKey('comment-emotes')));
       expect(replies.calls, [(ReplyToComment(root), false), (ReplyToComment(root), true)]);
+    });
+
+    testWidgets('the thread\'s own prompt, else the list\'s for threads, else the fixed one (font-check 04)', (
+      tester,
+    ) async {
+      final replies = Replies();
+      final model = FakeThread(loaded(isEnd: true))..childPromptValue = '列表给的提示';
+      await show(tester, model, replies: replies);
+      expect(find.text('列表给的提示'), findsOneWidget);
+      expect(find.text(CommentWriteBar.placeholder), findsNothing);
+
+      model.change((thread) => thread!.copyWith(prompt: () => '楼里的提示'));
+      await tester.pump();
+      expect(find.text('楼里的提示'), findsOneWidget);
+      expect(find.text('列表给的提示'), findsNothing);
+      await tester.tap(find.text('楼里的提示'));
+      expect(replies.calls, [(ReplyToComment(root), false)]);
+
+      model.childPromptValue = null;
+      model.change((thread) => thread!.copyWith(prompt: () => null));
+      await tester.pump();
+      expect(find.text(CommentWriteBar.placeholder), findsOneWidget);
     });
   });
 }

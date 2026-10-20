@@ -324,8 +324,22 @@ final class Comment {
   String toString() => 'Comment($rpid, $message)';
 }
 
+/// The comment section's own prompt for the write bar, from a page's `control`; null when absent or blank.
+String? _prompt(JsonObject? control, String key) {
+  final text = control?.text(key)?.trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
 final class CommentPage {
-  const CommentPage({required this.comments, this.pinned, this.nextOffset, this.isEnd = true, this.total = 0});
+  const CommentPage({
+    required this.comments,
+    this.pinned,
+    this.nextOffset,
+    this.isEnd = true,
+    this.total = 0,
+    this.rootPrompt,
+    this.childPrompt,
+  });
 
   final List<Comment> comments;
   final Comment? pinned;
@@ -335,12 +349,20 @@ final class CommentPage {
   final bool isEnd;
   final int total;
 
+  /// `control.root_input_text`: the write bar's prompt under the list.
+  final String? rootPrompt;
+
+  /// `control.child_input_text`: the write bar's prompt in a thread.
+  final String? childPrompt;
+
   CommentPage copyWith({List<Comment>? comments, Comment? Function()? pinned, int? total}) => CommentPage(
     comments: comments ?? this.comments,
     pinned: pinned == null ? this.pinned : pinned(),
     nextOffset: nextOffset,
     isEnd: isEnd,
     total: total ?? this.total,
+    rootPrompt: rootPrompt,
+    childPrompt: childPrompt,
   );
 
   @override
@@ -350,25 +372,37 @@ final class CommentPage {
       other.pinned == pinned &&
       other.nextOffset == nextOffset &&
       other.isEnd == isEnd &&
-      other.total == total;
+      other.total == total &&
+      other.rootPrompt == rootPrompt &&
+      other.childPrompt == childPrompt;
 
   @override
-  int get hashCode => Object.hash(Object.hashAll(comments), pinned, nextOffset, isEnd, total);
+  int get hashCode => Object.hash(Object.hashAll(comments), pinned, nextOffset, isEnd, total, rootPrompt, childPrompt);
 }
 
 final class ThreadPage {
-  const ThreadPage({required this.root, required this.replies, required this.total, required this.isEnd});
+  const ThreadPage({
+    required this.root,
+    required this.replies,
+    required this.total,
+    required this.isEnd,
+    this.childPrompt,
+  });
 
   final Comment root;
   final List<Comment> replies;
   final int total;
   final bool isEnd;
 
+  /// `control.child_input_text`: the write bar's prompt in this thread.
+  final String? childPrompt;
+
   ThreadPage copyWith({Comment? root, List<Comment>? replies, int? total, bool? isEnd}) => ThreadPage(
     root: root ?? this.root,
     replies: replies ?? this.replies,
     total: total ?? this.total,
     isEnd: isEnd ?? this.isEnd,
+    childPrompt: childPrompt,
   );
 
   @override
@@ -377,10 +411,11 @@ final class ThreadPage {
       other.root == root &&
       listEquals(other.replies, replies) &&
       other.total == total &&
-      other.isEnd == isEnd;
+      other.isEnd == isEnd &&
+      other.childPrompt == childPrompt;
 
   @override
-  int get hashCode => Object.hash(root, Object.hashAll(replies), total, isEnd);
+  int get hashCode => Object.hash(root, Object.hashAll(replies), total, isEnd, childPrompt);
 }
 
 final class Emote {
@@ -457,6 +492,7 @@ CommentPage decodeCommentList(Object? json) {
   final top = object.lossyList('top_replies', Comment.fromJson);
   final cursor = object.nested('cursor');
   final next = _nonEmpty(cursor?.nested('pagination_reply')?.text('next_offset'));
+  final control = object.nested('control');
   return CommentPage(
     comments: replies,
     pinned: top.firstOrNull?.copyWith(isPinned: true),
@@ -464,6 +500,8 @@ CommentPage decodeCommentList(Object? json) {
     // Without an offset there is no way to ask for more, whatever is_end says.
     isEnd: next == null || cursor?.commentFlag('is_end') == true,
     total: cursor?.count('all_count') ?? 0,
+    rootPrompt: _prompt(control, 'root_input_text'),
+    childPrompt: _prompt(control, 'child_input_text'),
   );
 }
 
@@ -476,7 +514,13 @@ ThreadPage decodeCommentThread(Object? json) {
   final paging = object.nested('page');
   final total = paging?.count('count') ?? 0;
   final seen = (paging?.count('num') ?? 0) * (paging?.count('size') ?? 0);
-  return ThreadPage(root: root, replies: replies, total: total, isEnd: replies.isEmpty || seen >= total);
+  return ThreadPage(
+    root: root,
+    replies: replies,
+    total: total,
+    isEnd: replies.isEmpty || seen >= total,
+    childPrompt: _prompt(object.nested('control'), 'child_input_text'),
+  );
 }
 
 Comment decodePostedComment(Object? json) {

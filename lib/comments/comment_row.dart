@@ -79,7 +79,7 @@ class CommentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final member = comment.member;
     final card = member.fanCardImage;
-    // CommentText makes a reply's leading "回复 @name :" a mention itself.
+    // CommentText draws a reply's leading "回复 @name :" as the official lead itself.
     final runs = comment.runs;
     final hasText = runs.isNotEmpty || comment.isPinned;
     final repliesBox = showsReplies && (comment.replyCount > 0 || comment.previewReplies.isNotEmpty);
@@ -333,7 +333,7 @@ class _MetaLine extends StatelessWidget {
               onTap: onHate,
               child: Center(
                 child: Transform.translate(
-                  offset: const Offset(0, CommentRowTheme.dislikeDrop),
+                  offset: const Offset(0, CommentRowTheme.dislikeDrop - CommentRowTheme.thumbLift),
                   child: CommentThumb(
                     down: true,
                     solid: hated,
@@ -437,9 +437,12 @@ class _LikeButtonState extends State<_LikeButton> with SingleTickerProviderState
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ScaleTransition(
-                scale: _scale,
-                child: CommentThumb(solid: liked, color: colour),
+              Transform.translate(
+                offset: const Offset(0, -CommentRowTheme.thumbLift),
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: CommentThumb(solid: liked, color: colour),
+                ),
               ),
               if (count != null) ...[
                 const SizedBox(width: CommentRowTheme.thumbCountGap),

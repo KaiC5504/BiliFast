@@ -99,6 +99,33 @@ void main() {
       expect(model.total, 50);
     });
 
+    test('takes the write prompts from the first page and keeps them through a sort switch', () async {
+      var prompt = '随便聊聊吧～';
+      final api = ScriptedApi()
+        ..pages = (sort, offset) => offset == null
+            ? CommentPage(
+                comments: [comment(1)],
+                nextOffset: 'B',
+                isEnd: false,
+                rootPrompt: prompt,
+                childPrompt: '说说看',
+              )
+            : CommentPage(comments: [comment(2)], rootPrompt: '后面的页', childPrompt: '后面的页');
+      final model = CommentsRig(api: api).model;
+      expect((model.rootPrompt, model.childPrompt), (null, null));
+
+      await model.loadMore();
+      expect((model.rootPrompt, model.childPrompt), ('随便聊聊吧～', '说说看'));
+      await model.loadMore();
+      expect(model.rootPrompt, '随便聊聊吧～', reason: 'only the first page sets them');
+
+      prompt = '换了排序';
+      final switching = model.setSort(CommentSort.time);
+      expect(model.rootPrompt, '随便聊聊吧～', reason: 'the bar keeps its words while the new sort loads');
+      await switching;
+      expect(model.rootPrompt, '换了排序');
+    });
+
     test('ensureLoaded asks for the first page once', () async {
       final rig = CommentsRig(api: pagedApi());
       await Future.wait([rig.model.ensureLoaded(), rig.model.ensureLoaded()]);
@@ -660,6 +687,31 @@ void main() {
       expect(model.thread!.root.likes, 77);
       expect(model.thread!.root.isPinned, isTrue);
       expect(model.thread!.isEnd, isTrue);
+    });
+
+    test('the thread takes its write prompt from its first page and keeps it through a sort switch', () async {
+      String? prompt = '楼里的提示';
+      final api = ScriptedApi()
+        ..threadPages = (root, page, sort) => ThreadPage(
+          root: comment(root),
+          replies: [comment(root * 10 + page, root: root)],
+          total: 40,
+          isEnd: false,
+          childPrompt: page == 1 ? prompt : '第二页的',
+        );
+      final model = CommentsRig(api: api).model;
+      final open = model.openThread(comment(1));
+      expect(model.thread!.prompt, isNull);
+      await open;
+      expect(model.thread!.prompt, '楼里的提示');
+      await model.loadMoreThread();
+      expect(model.thread!.prompt, '楼里的提示', reason: 'only the first page sets it');
+
+      prompt = null;
+      final switching = model.setThreadSort(CommentSort.hot);
+      expect(model.thread!.prompt, '楼里的提示');
+      await switching;
+      expect(model.thread!.prompt, isNull);
     });
 
     test('a failed page shows its words, and loadMoreThread asks again', () async {

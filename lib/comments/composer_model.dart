@@ -97,9 +97,9 @@ class ComposerModel extends ChangeNotifier {
   /// Text is needed, as in PiliPlus: pictures alone don't make a comment.
   bool get canPost => _trimmed.isNotEmpty && !_posting && !comments.drafts.isPosting(_key);
 
-  /// 发条评论's prompt, or "回复 name :" for a reply.
+  /// The comment section's prompt, as the bar shows it, or "回复 name :" for a reply.
   String get placeholder => switch (target) {
-    ReplyToVideo() => '哎呦，不错哦，发条评论吧',
+    ReplyToVideo() => comments.rootPrompt ?? '哎呦，不错哦，发条评论吧',
     ReplyToComment(:final comment) => '回复 ${comment.member.name} :',
     ReplyInThread(:final reply) => '回复 ${reply.member.name} :',
   };

@@ -1508,7 +1508,7 @@ abstract final class CommentRowTheme {
   static const pictureSpacing = 4.0;
   static const picturePlaceholder = BiliColors.pageGrey;
 
-  /// The meta line centres 16 below a picture's bottom.
+  /// The meta line centres 16 below a picture's bottom: ⋮'s middle dot does on font-check 04, 10 and 13.
   static const pictureGap = 4.0;
 
   /// The meta line: time and place, 回复 8 after them, 👍 N with the count's box ending 73 from the right edge (its ink
@@ -1523,6 +1523,10 @@ abstract final class CommentRowTheme {
   static const likeTrailing = 73.0;
   static const thumbInk = 14.0;
 
+  /// 👍 is drawn above the line's centre: its ink centres 2 px above ⋮'s middle dot and the count on font-check 04,
+  /// 10 and 13 (15.2 below a picture's bottom).
+  static const thumbLift = 2 / 3;
+
   /// 👎 sits 4 px lower than 👍.
   static const dislikeDrop = 4 / 3;
   static const thumbCountGap = 17 / 3;
@@ -1531,7 +1535,9 @@ abstract final class CommentRowTheme {
   static const countRoom = 48.0;
   static const dislikeCentre = 49.0;
   static const moreCentre = 17.0;
-  static const moreDot = 8 / 3;
+
+  /// ⋮'s dots are 6.4 px across (each one's ink area on font-check 04 and 13) and 13 px apart.
+  static const moreDot = 6.4 / 3;
   static const morePitch = 13 / 3;
   static const likeTarget = 6.0;
   static const dislikeTarget = 32.0;
@@ -1761,6 +1767,9 @@ abstract final class CommentListTheme {
 abstract final class CommentTextTheme {
   /// The only blue the official comments show (12's 共N条回复) is the app's link blue.
   static const link = BiliColors.link;
+
+  /// A reply's "回复 名字: " lead names whom it answers in grey, #9499A0 on font-check 04, without the @.
+  static const replyTarget = BiliColors.secondaryText;
 
   /// An emote's side per step of its `size`, as a share of the text's size: 12's 😑 is 20 pt beside 15 pt text.
   static const emoteScale = 4 / 3;
