@@ -5,16 +5,16 @@ import UIKit
 /// size at once instead of halfway through, so the page can turn while the player grows past the upright page's
 /// sides, as the official app's does.
 ///
-/// The window turns under a still picture of the screen, turned back so it stays physically where it was; Flutter is
-/// told (`onTurn`) and draws the turn, and the picture goes on its first frame or after a timeout. iOS still animates
-/// the window's own rotation, so `method` is how that is kept out of the turn (NativeTurnMethod in
-/// pigeons/device_api.dart); the test build carries every one, and TurnProbe logs each turn.
+/// iOS animates the window's rotation out of process unless UIView animations are already off when the rotation is
+/// requested: then viewWillTransition comes unanimated with a zero duration and the window turns at once. So while
+/// the takeover is on, every request holds animations off until its turn completes. The window turns under a still
+/// picture of the screen, turned back so it stays physically where it was; Flutter is told (`onTurn`) and draws the
+/// turn, and the picture goes on its first frame or after a timeout. TurnProbe logs each turn.
 @MainActor
 enum TurnTakeover {
-  /// Set from Dart's 开发者 → 旋转动画 (DeviceHostApi.setTurnTakeover); the method and picture in force when a turn
-  /// begins are that turn's.
+  /// Set from Dart's 开发者 → 旋转动画 (DeviceHostApi.setTurnTakeover); the picture in force when a turn begins is
+  /// that turn's.
   private(set) static var enabled = false
-  private(set) static var method: NativeTurnMethod = .legacy
   private(set) static var picture: NativeTurnPicture = .cut
 
   /// The last turn's id.
@@ -30,12 +30,6 @@ enum TurnTakeover {
   private static var holdOwner: HoldOwner?
   private static var requestHolds = 0
 
-  /// The counter method's view between the window and the Flutter view, from its first turn until the takeover is
-  /// off or another method is chosen.
-  private static var container: UIView?
-  private static weak var containerRoot: UIView?
-  private static var rootMask: UIView.AutoresizingMask = []
-
   private static let fallback = Duration.milliseconds(500)
   private static let requestHoldLimit = Duration.seconds(1)
   private static let fadeSeconds = 0.12
@@ -46,24 +40,19 @@ enum TurnTakeover {
     case request(Int)
   }
 
-  static func configure(enabled: Bool, method: NativeTurnMethod, picture: NativeTurnPicture) {
+  static func configure(enabled: Bool, picture: NativeTurnPicture) {
     self.enabled = enabled
-    self.method = method
     self.picture = picture
-    guard !enabled || method != .counter else { return }
-    // A counter turn still running takes its container down when it settles.
-    if let state = current, state.tag.method == .counter, !state.settled { return }
-    uninstallContainer()
   }
 
-  /// Before DeviceChannel asks the scene to turn. For quietRequest, animations are off from here until the turn that
-  /// follows completes (or for a second when none comes), so the request is made without animation.
+  /// Before DeviceChannel asks the scene to turn. Animations are off from here until the turn that follows completes
+  /// (or for a second when none comes), so the request is made without animation.
   static func requesting(_ request: Int64, mask: NativeOrientationMask, from interface: UIInterfaceOrientation) {
     TurnProbe.log("request", tag(for: turn), [
       "request": Int(request), "mask": "\(mask)", "interface": TurnProbe.name(interface),
       "animationsEnabled": UIView.areAnimationsEnabled,
     ])
-    guard enabled, method == .quietRequest else { return }
+    guard enabled else { return }
     requestHolds += 1
     let hold = HoldOwner.request(requestHolds)
     holdAnimations(owner: hold)
@@ -96,22 +85,21 @@ enum TurnTakeover {
     takeAway(still, state.tag, why: "drawn")
   }
 
-  /// Before the turn moves anything; returns the turn's id. `angle` is the target transform's rotation in radians,
-  /// positive clockwise on screen (UIKit's y-down space, the same sense as Flutter's Transform.rotate): once the
-  /// window has turned, content drawn at -angle sits where it was, so Dart starts there and animates to 0.
+  /// Before the turn moves anything. `angle` is the target transform's rotation in radians, positive clockwise on
+  /// screen (UIKit's y-down space, the same sense as Flutter's Transform.rotate): once the window has turned, content
+  /// drawn at -angle sits where it was, so Dart starts there and animates to 0.
   static func begin(root: UIView, from: CGSize, to size: CGSize, angle: Double,
-                    coordinator: any UIViewControllerTransitionCoordinator) -> Int {
+                    coordinator: any UIViewControllerTransitionCoordinator) {
     let startUs = TurnProbe.wallUs()
     let startMedia = CACurrentMediaTime()
     let animationsWere = UIView.areAnimationsEnabled
     let window = root.window
-    let method = self.method
-    let shows: NativeTurnPicture = method == .noSpin ? .none : picture
+    let picture = self.picture
     TurnProbe.endFrames()
 
     // Taken first, so a picture still up from the last turn is in it, as it is on screen.
     let snapping = CACurrentMediaTime()
-    let still = shows == .none ? nil : window?.snapshotView(afterScreenUpdates: false)
+    let still = picture == .none ? nil : window?.snapshotView(afterScreenUpdates: false)
     let snapshotMs = still == nil ? 0 : (CACurrentMediaTime() - snapping) * 1000
     var replaced: TurnTag?
     if let last = current, let shown = last.still {
@@ -122,19 +110,11 @@ enum TurnTakeover {
 
     turn += 1
     let id = turn
-    let tag = TurnTag(turn: id, method: method, picture: shows)
-    let state = TurnState(tag: tag, window: window, root: root, pictured: still != nil)
+    let tag = TurnTag(turn: id, picture: picture)
+    let state = TurnState(tag: tag, pictured: still != nil)
     current = state
     recent[id] = state
     recent = recent.filter { $0.key > id - 8 }
-
-    var containerEvents: [String] = []
-    if method == .counter {
-      if let window { containerEvents = counterTurn(in: window, root: root, to: size, angle: angle) }
-    } else {
-      uninstallContainer()
-    }
-    let turning = method == .counter ? container : nil
 
     if let window, let still {
       still.isUserInteractionEnabled = false
@@ -144,42 +124,29 @@ enum TurnTakeover {
       state.still = still
     }
 
-    switch method {
-    case .counter, .noSpin:
-      releaseAnimations(owner: nil)
-    case .legacy, .remove, .noActions, .quietRequest:
-      holdAnimations(owner: .turn(id))
-    }
+    holdAnimations(owner: .turn(id))
 
     // Turned back inside the transition, as the window takes its new bounds; should the system still animate, the
-    // two turns cancel and the picture holds still all the same. The counter container takes the same path.
+    // two turns cancel and the picture holds still all the same.
     let queued = coordinator.animate(alongsideTransition: { _ in
       if let still { turnBack(still, to: size, angle: angle) }
-      if let turning { straighten(turning, to: size) }
       TurnProbe.log("alongside", tag)
     }, completion: { context in
       TurnProbe.log("completion", tag, ["cancelled": context.isCancelled])
       releaseAnimations(owner: .turn(id))
-      settle(state)
     })
     if !queued {
       if let still { turnBack(still, to: size, angle: angle) }
-      if let turning { straighten(turning, to: size) }
       releaseAnimations(owner: .turn(id))
     }
 
-    // Ahead of the begin and container lines, so Dart starts drawing first.
+    // Ahead of the begin line, so Dart starts drawing first.
     let seconds = coordinator.transitionDuration
     TurnProbe.send("onTurn") {
       try await DeviceChannel.events?.onTurn(turn: Int64(id), angle: angle, seconds: seconds)
     }
 
-    let frames = TurnFrames(tag: tag, start: startMedia, window: window, root: root, container: turning,
-                            picture: state.still)
-    if method == .remove {
-      frames.firstTick = { removeSystemAnimations(state, phase: "next tick") }
-    }
-    TurnProbe.startFrames(frames)
+    TurnProbe.startFrames(TurnFrames(tag: tag, start: startMedia, window: window, root: root, picture: state.still))
 
     Task { @MainActor in
       try? await Task.sleep(for: fallback)
@@ -192,30 +159,17 @@ enum TurnTakeover {
       "toW": Double(size.width), "toH": Double(size.height),
       "animationsEnabled": animationsWere, "snapshot": state.pictured, "snapshotMs": snapshotMs,
     ], at: startUs)
-    for event in containerEvents {
-      TurnProbe.log("container", tag, ["event": event])
-    }
     if let replaced { pictureGone(replaced, why: "replaced") }
     if !state.pictured { sendPictureGone(id) }
-    return id
-  }
-
-  /// After FlutterViewController's viewWillTransition: the remove method's first pass, queued because UIKit adds
-  /// its rotation animations after viewWillTransition returns.
-  static func afterSuper(_ id: Int) {
-    guard let state = current, state.tag.turn == id, state.tag.method == .remove else { return }
-    DispatchQueue.main.async {
-      MainActor.assumeIsolated { removeSystemAnimations(state, phase: "after super") }
-    }
   }
 
   private static func tag(for id: Int) -> TurnTag {
-    guard enabled else { return TurnTag(turn: id, method: .legacy, picture: .none, system: true) }
-    return TurnTag(turn: id, method: method, picture: method == .noSpin ? .none : picture)
+    guard enabled else { return TurnTag(turn: id, picture: .none, system: true) }
+    return TurnTag(turn: id, picture: picture)
   }
 
-  /// A turn to or from landscape that iOS animates itself (系统, the test's reference): only logged and sampled, with
-  /// nothing taken over and nothing sent to Dart.
+  /// A turn to or from landscape that iOS animates itself (系统): only logged and sampled, with nothing taken over and
+  /// nothing sent to Dart.
   static func observe(root: UIView, from: CGSize, to size: CGSize, angle: Double,
                       coordinator: any UIViewControllerTransitionCoordinator) {
     let startUs = TurnProbe.wallUs()
@@ -226,8 +180,7 @@ enum TurnTakeover {
     _ = coordinator.animate(alongsideTransition: nil, completion: { context in
       TurnProbe.log("completion", tag, ["cancelled": context.isCancelled])
     })
-    TurnProbe.startFrames(TurnFrames(tag: tag, start: startMedia, window: root.window, root: root, container: nil,
-                                     picture: nil))
+    TurnProbe.startFrames(TurnFrames(tag: tag, start: startMedia, window: root.window, root: root, picture: nil))
     TurnProbe.log("begin", tag, [
       "angle": angle, "seconds": coordinator.transitionDuration, "animated": coordinator.isAnimated,
       "fromW": Double(from.width), "fromH": Double(from.height),
@@ -241,134 +194,9 @@ enum TurnTakeover {
     still.center = CGPoint(x: size.width / 2, y: size.height / 2)
   }
 
-  /// The remove method: the animations on the window, the layers above it and the Flutter view go, so the window
-  /// stands turned at once; the picture then drops its turn-back too and sits at -angle, where it was.
-  private static func removeSystemAnimations(_ state: TurnState, phase: String) {
-    guard state === current, let window = state.window else { return }
-    var layers: [(name: String, layer: CALayer)] = [("window", window.layer)]
-    var above = window.layer.superlayer
-    while let layer = above {
-      layers.append(("window^\(layers.count)", layer))
-      above = layer.superlayer
-    }
-    if let root = state.root { layers.append(("root", root.layer)) }
-    var found: [String] = []
-    var removed = 0
-    for entry in layers {
-      found += TurnProbe.animations(on: entry.layer, named: entry.name)
-      removed += entry.layer.animationKeys()?.count ?? 0
-      entry.layer.removeAllAnimations()
-    }
-    if let still = state.still {
-      found += TurnProbe.animations(on: still.layer, named: "picture")
-      if removed > 0 {
-        for key in still.layer.animationKeys() ?? [] where key != fadeKey {
-          still.layer.removeAnimation(forKey: key)
-          removed += 1
-        }
-      }
-    }
-    TurnProbe.log("animations", state.tag, ["phase": phase, "found": found.joined(separator: ";"), "removed": removed])
-  }
-
-  /// The counter method: the Flutter view's container laid out at the new size and turned by +angle, around where
-  /// the window's centre is now. The alongside block takes it to 0 at the new centre, the same path as the picture's
-  /// turn-back, so it cancels the window's turn from -angle whatever iOS animates. A turn that reverses one under way
-  /// adds the angle the container is shown at, which is the inverse of what is left of the window's last turn, so the
-  /// content doesn't jump. Returns the container events.
-  private static func counterTurn(in window: UIWindow, root: UIView, to size: CGSize, angle: Double) -> [String] {
-    var events: [String] = []
-    if let held = container, held.superview !== window { uninstallContainer() }
-    if let held = container, root.superview !== held {
-      events.append("lost")
-      UIView.performWithoutAnimation { place(root, in: held) }
-      events.append("restored")
-    }
-    if container == nil, root.superview === window {
-      let made = TurnContainer(frame: window.bounds)
-      made.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      rootMask = root.autoresizingMask
-      UIView.performWithoutAnimation {
-        window.insertSubview(made, belowSubview: root)
-        place(root, in: made)
-      }
-      container = made
-      containerRoot = root
-      events.append("installed")
-    }
-    guard let container else { return events }
-    // The container's own rather than the window's: iOS may turn a layer above the window, whose model may already
-    // hold the new turn.
-    let presented = container.layer.presentation() ?? container.layer
-    let shown = presented.transform
-    let left = atan2(Double(shown.m12), Double(shown.m11))
-    // Mid-turn the model already holds the last turn's end; removing its animations would jump the centre there.
-    let centre = presented.position
-    if abs(left) > 0.001 { events.append("reversed") }
-    UIView.performWithoutAnimation {
-      container.layer.removeAllAnimations()
-      // Sized by hand until the turn settles: the window's own resize would add its change on top.
-      container.autoresizingMask = []
-      container.bounds = CGRect(origin: .zero, size: size)
-      container.center = centre
-      container.transform = CGAffineTransform(rotationAngle: CGFloat(angle + left))
-      root.frame = container.bounds
-    }
-    return events
-  }
-
-  /// Only the container is ever turned, so the Flutter view's frame always means what UIKit expects.
-  private static func place(_ root: UIView, in container: UIView) {
-    container.addSubview(root)
-    root.frame = container.bounds
-    root.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-  }
-
-  private static func straighten(_ container: UIView, to size: CGSize) {
-    container.bounds = CGRect(origin: .zero, size: size)
-    container.center = CGPoint(x: size.width / 2, y: size.height / 2)
-    container.transform = .identity
-  }
-
-  /// The latest turn is over (completion or fallback): the counter container follows the window again, or goes if
-  /// the takeover was switched off or another method chosen meanwhile.
-  private static func settle(_ state: TurnState) {
-    guard state === current, !state.settled else { return }
-    state.settled = true
-    guard let container else { return }
-    guard enabled, method == .counter else {
-      uninstallContainer()
-      return
-    }
-    UIView.performWithoutAnimation {
-      container.transform = .identity
-      if let window = container.superview {
-        container.bounds = CGRect(origin: .zero, size: window.bounds.size)
-        container.center = CGPoint(x: window.bounds.midX, y: window.bounds.midY)
-      }
-      container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    }
-  }
-
-  /// The Flutter view back in the window, laid out as UIKit had it.
-  private static func uninstallContainer() {
-    guard let held = container else { return }
-    container = nil
-    UIView.performWithoutAnimation {
-      if let root = containerRoot, root.superview === held, let window = held.superview {
-        window.insertSubview(root, aboveSubview: held)
-        root.frame = window.bounds
-        root.autoresizingMask = rootMask
-      }
-      held.removeFromSuperview()
-    }
-    containerRoot = nil
-  }
-
   private static func fellBack(_ state: TurnState) {
     guard state === current else { return }
     releaseAnimations(owner: .turn(state.tag.turn))
-    settle(state)
     if !state.drawn { TurnProbe.log("fallback", state.tag) }
     guard let still = state.still else { return }
     state.still = nil
@@ -385,10 +213,9 @@ enum TurnTakeover {
     holdOwner = owner
   }
 
-  /// Only for the latest owner: an earlier turn's would put them back in the middle of the next. nil puts them back
-  /// whoever holds them.
-  private static func releaseAnimations(owner: HoldOwner?) {
-    guard let saved = heldAnimations, owner == nil || owner == holdOwner else { return }
+  /// Only for the latest owner: an earlier turn's would put them back in the middle of the next.
+  private static func releaseAnimations(owner: HoldOwner) {
+    guard let saved = heldAnimations, owner == holdOwner else { return }
     heldAnimations = nil
     holdOwner = nil
     UIView.setAnimationsEnabled(saved)
@@ -428,19 +255,14 @@ enum TurnTakeover {
 @MainActor
 private final class TurnState {
   let tag: TurnTag
-  weak var window: UIWindow?
-  weak var root: UIView?
-  /// A still picture went up; not with `none`, `noSpin` or a failed snapshot.
+  /// A still picture went up; not with `none` or a failed snapshot.
   let pictured: Bool
   /// The picture while it covers the screen, until it is cut or starts to fade.
   var still: UIView?
   var drawn = false
-  var settled = false
 
-  init(tag: TurnTag, window: UIWindow?, root: UIView, pictured: Bool) {
+  init(tag: TurnTag, pictured: Bool) {
     self.tag = tag
-    self.window = window
-    self.root = root
     self.pictured = pictured
   }
 }
@@ -457,22 +279,10 @@ class TurnViewController: FlutterViewController {
       super.viewWillTransition(to: size, with: coordinator)
       return
     }
-    // noActions: UIKit's rotation block, which runs after this returns, inside a transaction with actions off.
-    let noActions = TurnTakeover.method == .noActions
-    if noActions {
-      CATransaction.begin()
-      CATransaction.setDisableActions(true)
-    }
-    let turn = TurnTakeover.begin(root: view, from: from, to: size, angle: angle, coordinator: coordinator)
+    TurnTakeover.begin(root: view, from: from, to: size, angle: angle, coordinator: coordinator)
     // FlutterViewController holds the old viewport size for half the coordinator's duration, and not at all when it
     // is zero.
     super.viewWillTransition(to: size, with: InstantTurnCoordinator(coordinator))
-    if noActions {
-      DispatchQueue.main.async {
-        MainActor.assumeIsolated { CATransaction.commit() }
-      }
-    }
-    TurnTakeover.afterSuper(turn)
   }
 }
 
@@ -539,13 +349,5 @@ private final class InstantTurnCoordinator: NSObject, UIViewControllerTransition
 
   nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
     base
-  }
-}
-
-/// Touches go through it to the Flutter view, or past it should UIKit ever take the Flutter view back out.
-private final class TurnContainer: UIView {
-  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    let hit = super.hitTest(point, with: event)
-    return hit === self ? nil : hit
   }
 }
