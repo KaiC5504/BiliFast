@@ -54,6 +54,11 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 - Slice 9, page lifecycle, 1.0.0 (12): a player per page on one shared engine; a covered page pauses and resumes
   without a reload; PipKeeper (a closed page lives on in the small window, restore pushes it back, ✕ or another
   video releases it); network changes reset the engine's node health; the drawn turn (开发者 → 旋转动画 自绘 / 系统).
+- The system font, 1.0.0 (15) (KaiC's call: its own build to check): slice 10's font fixes and comment fix, the drawn
+  turn, and the text fixes the stand-in fonts found: the system font named (`BiliFonts.system`; a style with no family
+  took Apple Color Emoji or PingFang for its Latin and digits), PingFang's strut on text mixing Latin and Chinese
+  (`BiliFonts.strut`; text fields drew a mixed line 23 pt where Chinese takes 22), 简介's description given the
+  fallback. Milestone 3 is paused (KaiC, 2026-10-20); its spec keeps the sweep's decisions.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), shipped as one build with (15) and the comment fix:
 1. Slice 10, the system-font check: committed, not shipped. Measured with `tools/screen_diff.py` on KaiC's pairs
