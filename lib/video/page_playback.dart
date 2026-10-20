@@ -193,6 +193,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   void openOnPage(String bvid, {int? cid}) {
     final controller = _controller;
     if (controller == null || _closed) return;
+    // A second tap while the first one's load is still out (⏭ keeps its target until the part arrives) would load
+    // it again, and ask for another video's view again.
+    if (bvid == _bvid && cid == _cid && controller.phase == PlaybackPhase.loading) return;
     final sameVideo = bvid == _bvid;
     // Another part of this video needs no second signed view.
     _view = sameVideo ? controller.video : null;

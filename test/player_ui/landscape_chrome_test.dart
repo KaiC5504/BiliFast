@@ -24,6 +24,7 @@ import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/status_bar_view.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/player_session.dart';
@@ -47,7 +48,7 @@ class CountingChrome extends ChromeState {
 /// The landscape chrome on an iPhone 17 Pro Max turned sideways (956 × 440 pt, the island's 62 pt each side, the
 /// home indicator's 21 below), the size 04 was taken at.
 final class Rig {
-  Rig({this.details, this.danmaku, this.statusBar});
+  Rig({this.details, this.danmaku, this.statusBar, this.replyCount});
 
   final session = FakePlayerSession();
   final chrome = CountingChrome();
@@ -56,6 +57,7 @@ final class Rig {
   final FakePageDetails? details;
   final DanmakuRig? danmaku;
   final StatusBarFeed? statusBar;
+  final ValueNotifier<int?>? replyCount;
   int backs = 0;
   int comments = 0;
 
@@ -70,6 +72,7 @@ final class Rig {
     onComments: () => comments += 1,
     danmaku: danmaku?.session,
     statusBar: statusBar,
+    replyCount: replyCount,
   );
 
   Future<void> mount(WidgetTester tester) async {
@@ -85,6 +88,7 @@ final class Rig {
       session.dispose();
       details?.dispose();
       danmaku?.dispose();
+      replyCount?.dispose();
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -207,8 +211,8 @@ void main() {
     expect(centre(tester, 'landscape-back').dx, closeTo(89, 1));
     expect(centre(tester, 'landscape-back').dy, closeTo(42, 1));
     expect(centre(tester, 'landscape-more'), within(distance: 1, from: const Offset(867, 42)));
-    expect(centre(tester, 'landscape-capture'), within(distance: 1.5, from: const Offset(873, 178.5)));
-    expect(centre(tester, 'landscape-lock'), within(distance: 1.5, from: const Offset(873, 231.5)));
+    expect(centre(tester, 'landscape-capture'), within(distance: 0.5, from: const Offset(872, 178.5)));
+    expect(centre(tester, 'landscape-lock'), within(distance: 0.5, from: const Offset(872, 231.5)));
     expect(centre(tester, 'landscape-play'), within(distance: 1, from: const Offset(84, 397)));
     expect(centre(tester, 'landscape-danmaku'), within(distance: 1, from: const Offset(134, 396)));
     expect(centre(tester, 'landscape-bar').dy, closeTo(359, 1));
@@ -217,6 +221,33 @@ void main() {
     expect(tester.getTopLeft(find.byKey(const ValueKey('landscape-time'))).dx, 63);
     // The title stops short of where 点赞…分享 go.
     expect(tester.getTopRight(find.byKey(const ValueKey('landscape-title'))).dx, lessThanOrEqualTo(509));
+  });
+
+  group('the system font (字体 系统)', () {
+    late String? saved;
+    setUp(() => saved = BiliFonts.family);
+    tearDown(() => BiliFonts.family = saved);
+
+    List<String>? fallbackOf(WidgetTester tester, String key) =>
+        tester.renderObject<RenderParagraph>(find.byKey(ValueKey(key))).text.style?.fontFamilyFallback;
+
+    testWidgets("the chrome's text falls back to emoji, then PingFang SC, as the app's own text does", (tester) async {
+      BiliFonts.family = null;
+      final rig = Rig(statusBar: FixedStatusBarFeed())..session.title = '⚠别眨眼！前方高燃！！';
+      await rig.mount(tester);
+      for (final key in ['landscape-title', 'landscape-time', 'status-time', 'status-battery-level']) {
+        expect(fallbackOf(tester, key), ['Apple Color Emoji', 'PingFang SC'], reason: key);
+      }
+    });
+
+    testWidgets('MiSans names no fallback', (tester) async {
+      BiliFonts.family = BiliFonts.miSans;
+      final rig = Rig(statusBar: FixedStatusBarFeed())..session.title = '⚠别眨眼！前方高燃！！';
+      await rig.mount(tester);
+      for (final key in ['landscape-title', 'landscape-time', 'status-time', 'status-battery-level']) {
+        expect(fallbackOf(tester, key), isNull, reason: key);
+      }
+    });
   });
 
   testWidgets('back, ⋮, play and the bar do what they say and keep the controls up', (tester) async {
@@ -530,6 +561,35 @@ void main() {
     }
   });
 
+  testWidgets("the title starts over N人正在看's icon, as 05's does, and still ends before the actions", (tester) async {
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions(), online: '1'))..session.title = '别眨眼！前方高燃！！';
+    await rig.mount(tester);
+    final title = tester.getRect(find.byKey(const ValueKey('landscape-title')));
+    expect(title.left, closeTo(115.7, 0.01));
+    expect(title.left, closeTo(tester.getTopLeft(find.byKey(const ValueKey('landscape-online'))).dx, 0.01));
+    expect(title.right, closeTo(509, 0.01));
+  });
+
+  testWidgets("👍 and ⭐ are fitted to 05's shorter, higher ink; the rest keep the shared glyph's box", (tester) async {
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions()));
+    await rig.mount(tester);
+    Rect iconBox(String key) =>
+        tester.getRect(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(ActionIcon)));
+
+    const size = LandscapeActionTheme.iconSize;
+    for (final (key, x, squash, lift) in [
+      ('landscape-like', 555.0, LandscapeActionTheme.likeSquash, LandscapeActionTheme.likeLift),
+      ('landscape-favourite', 659.0, LandscapeActionTheme.favouriteSquash, LandscapeActionTheme.favouriteLift),
+      ('landscape-comments', 607.0, 1.0, 0.0),
+      ('landscape-coin', 711.0, 1.0, 0.0),
+    ]) {
+      final box = iconBox(key);
+      expect(box.width, closeTo(size, 0.01), reason: key);
+      expect(box.height, closeTo(size * squash, 0.01), reason: key);
+      expect(box.center, within(distance: 0.01, from: Offset(x, 42 - lift)), reason: key);
+    }
+  });
+
   testWidgets('点赞 and 收藏 carry their counts as superscripts at their top right; none at 0', (tester) async {
     final actions = FakeVideoActions(likeCount: 30, favCount: 38);
     final rig = Rig(details: FakePageDetails(actions: actions));
@@ -588,6 +648,31 @@ void main() {
       ..changed();
     await tester.pump();
     expect(find.descendant(of: comments, matching: find.byType(Text)), findsNothing);
+  });
+
+  testWidgets("评论's count is the tab row's once the list has one, following a post or a delete; the detail's until "
+      'then', (tester) async {
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions()), replyCount: ValueNotifier(null))
+      ..session.detail = VideoDetail.fromJson({
+        'bvid': 'BV1',
+        'stat': {'reply': 18},
+      });
+    await rig.mount(tester);
+    final comments = find.byKey(const ValueKey('landscape-comments'));
+    expect(find.descendant(of: comments, matching: find.text('18')), findsOneWidget);
+
+    rig.replyCount!.value = 19;
+    await tester.pump();
+    expect(find.descendant(of: comments, matching: find.text('19')), findsOneWidget);
+    expect(find.descendant(of: comments, matching: find.text('18')), findsNothing);
+
+    rig.replyCount!.value = 0;
+    await tester.pump();
+    expect(find.descendant(of: comments, matching: find.byType(Text)), findsNothing, reason: 'the last one deleted');
+
+    rig.replyCount!.value = null;
+    await tester.pump();
+    expect(find.descendant(of: comments, matching: find.text('18')), findsOneWidget);
   });
 
   testWidgets('each action does what it says and keeps the controls up; 充电 toasts that it is not supported', (
@@ -851,6 +936,29 @@ void main() {
     );
     expect(tester.getCenter(avatar), within(distance: 0.5, from: const Offset(91, 93)));
     expect(find.bySemanticsLabel('已关注'), findsOneWidget);
+  });
+
+  testWidgets("a card that came back empty gives way to the view's owner: 05's chip keeps the name and the face", (
+    tester,
+  ) async {
+    const empty = UploaderCard(mid: 1, name: '', face: '', fans: 0, videos: 0, isVip: false, following: false);
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions(), uploader: empty))
+      ..session.detail = VideoDetail.fromJson({
+        'bvid': 'BV1',
+        'owner': {'mid': 1, 'name': '老鹿der', 'face': 'https://i0.hdslb.com/bfs/face/up.jpg'},
+      });
+    await rig.mount(tester);
+
+    expect(
+      find.descendant(of: find.byKey(const ValueKey('landscape-uploader-name')), matching: find.text('老鹿der')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('landscape-uploader-divider')), findsOneWidget);
+    final avatar = find.descendant(
+      of: find.byKey(const ValueKey('landscape-avatar')),
+      matching: find.byType(RemoteImage),
+    );
+    expect(tester.widget<RemoteImage>(avatar).url, 'https://i0.hdslb.com/bfs/face/up.jpg');
   });
 
   testWidgets("the chip's capsule is 05's: 26 pt tall, round-ended, 15% black, centred on the uploader's line", (

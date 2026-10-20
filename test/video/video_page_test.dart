@@ -2284,14 +2284,18 @@ void main() {
         ..changed();
       await tester.pump();
       expect(find.bySemanticsLabel('评论 27'), findsOneWidget);
+      expect(ui(tester).replies, 27, reason: "full screen's 评论 reads what the tab row does");
       await showComments(tester);
       expect(find.bySemanticsLabel('评论 2'), findsOneWidget);
+      expect(ui(tester).replies, 2);
       await openBar(tester);
       await type(tester, '第三条');
       await publish(tester);
       expect(find.bySemanticsLabel('评论 3'), findsOneWidget);
+      expect(ui(tester).replies, 3);
       await deleteRow(tester, 100);
       expect(find.bySemanticsLabel('评论 2'), findsOneWidget);
+      expect(ui(tester).replies, 2);
       await back(tester);
     });
 

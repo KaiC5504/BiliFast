@@ -48,6 +48,7 @@ class LandscapeChrome extends StatelessWidget {
         ui.details,
         ui.overlay,
         ui.danmaku,
+        ui.replyCount,
       ]),
       builder: (context, _) {
         final shown = ui.chrome.visible && ui.panels.value == null;
@@ -105,7 +106,7 @@ class LandscapeChrome extends StatelessWidget {
             ),
           ),
           Positioned(
-            right: math.max(insets.right - 1, 0),
+            right: insets.right,
             top: 0,
             bottom: 0,
             child: Center(
@@ -163,6 +164,7 @@ class LandscapeChrome extends StatelessWidget {
         child: Row(
           children: [
             ChromeTap(key: const ValueKey('landscape-back'), label: '返回', onTap: ui.onBack, child: const BackGlyph()),
+            const SizedBox(width: LandscapeActionTheme.titleInset),
             Expanded(
               child: Text(
                 ui.session.title,
@@ -358,6 +360,7 @@ class LandscapeChrome extends StatelessWidget {
 /// The full-screen controls draw over the page's own text style, which may be outside any Material.
 TextStyle get fullScreenText => TextStyle(
   fontFamily: BiliFonts.family,
+  fontFamilyFallback: BiliFonts.fallback,
   color: BiliColors.onVideo,
   decoration: TextDecoration.none,
 );
@@ -619,7 +622,7 @@ class _TopActions extends StatelessWidget {
                       key: const ValueKey('landscape-comments'),
                       label: '评论',
                       glyph: ActionGlyph.comment,
-                      count: ui.session.detail?.stat.reply,
+                      count: ui.replies,
                       onTap: touch(() => ui.onComments?.call()),
                     ),
                     _TopAction(
@@ -684,7 +687,7 @@ class _TopAction extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Center(child: ActionPop(glyph, active: active)),
+          Center(child: _fitted(glyph, ActionPop(glyph, active: active))),
           if (count case final count? when count > 0)
             Positioned(
               left: BiliMetrics.chromeButton / 2 + LandscapeActionTheme.countLead,
@@ -708,6 +711,20 @@ class _TopAction extends StatelessWidget {
         ],
       ),
     ),
+  );
+}
+
+/// 05's 👍 and ⭐ against the outlines 简介 shares: squeezed upright about the button's centre and lifted.
+Widget _fitted(ActionGlyph glyph, Widget icon) {
+  final (squash, lift) = switch (glyph) {
+    ActionGlyph.like => (LandscapeActionTheme.likeSquash, LandscapeActionTheme.likeLift),
+    ActionGlyph.favourite => (LandscapeActionTheme.favouriteSquash, LandscapeActionTheme.favouriteLift),
+    _ => (1.0, 0.0),
+  };
+  if (squash == 1 && lift == 0) return icon;
+  return Transform.translate(
+    offset: Offset(0, -lift),
+    child: Transform.scale(scaleY: squash, child: icon),
   );
 }
 
@@ -780,8 +797,8 @@ class _UploaderBlock extends StatelessWidget {
     final details = ui.details;
     final owner = ui.session.detail?.owner;
     final known = owner != null && owner.mid != 0;
-    final face = details?.uploader?.face ?? (known ? owner.face : null);
-    final name = details?.uploader?.name ?? (known ? owner.name : '');
+    final face = _cardOr(details?.uploader?.face, known ? owner.face : null);
+    final name = _cardOr(details?.uploader?.name, known ? owner.name : null) ?? '';
     final actions = details?.actions;
     final bgm = details?.tags.where((tag) => tag.kind == VideoTagKind.bgm).firstOrNull;
     return Column(
@@ -849,6 +866,10 @@ class _UploaderBlock extends StatelessWidget {
     );
   }
 }
+
+/// A card can come back with an empty name or face; the view's owner then stands in.
+String? _cardOr(String? fromCard, String? fromView) =>
+    fromCard == null || fromCard.isEmpty ? fromView ?? fromCard : fromCard;
 
 /// 05's translucent capsule behind a row of the uploader block, [LandscapeActionTheme.chipHeight] tall and centred
 /// in whatever height the row takes, so its buttons can keep a taller target than the capsule.
