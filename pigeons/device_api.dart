@@ -16,9 +16,6 @@ enum NativeDeviceOrientation { portrait, portraitUpsideDown, landscapeLeft, land
 
 enum NativeInterfaceOrientation { portrait, landscapeLeft, landscapeRight, unknown }
 
-/// What covers the screen while the window turns, until Flutter has drawn the turn's first frame.
-enum NativeTurnPicture { cut, fade, none }
-
 /// Rotation, brightness and volume for full screen (DeviceChannel.swift, DeviceControls.swift). The rules about
 /// when to rotate live in Dart (lib/device/orientation.dart); the host only applies masks and reports.
 @HostApi()
@@ -55,9 +52,9 @@ abstract class DeviceHostApi {
   void detachVolumeView();
 
   /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): rotations are requested with UIView
-  /// animations off, so the scene turns the window at once, Flutter gets the turned size at once, [picture] covers
-  /// the screen until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
-  void setTurnTakeover(bool enabled, NativeTurnPicture picture);
+  /// animations off, so the scene turns the window at once, Flutter gets the turned size at once under a still
+  /// picture until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
+  void setTurnTakeover(bool enabled);
 
   /// Flutter has drawn the first frame of taken-over [turn]; the still picture covering the screen can go.
   void turnDrawn(int turn);
@@ -75,9 +72,6 @@ abstract class DeviceEventApi {
   /// Taken-over [turn] (counted from 1 per launch) began: [angle] is the rotation in radians the scene would have
   /// animated (its coordinator's target transform), [seconds] how long it would have taken.
   void onTurn(int turn, double angle, double seconds);
-
-  /// [turn]'s still picture is off the screen (cut, or its fade done), or there was none.
-  void onTurnPictureGone(int turn);
 
   /// A line for the phone's log from the native side of a turn (docs/reference/turn-log.md); [fields] hold strings,
   /// ints, doubles and bools only.

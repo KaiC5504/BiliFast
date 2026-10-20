@@ -103,13 +103,6 @@ enum NativeInterfaceOrientation: Int, CaseIterable {
   case unknown = 3
 }
 
-/// What covers the screen while the window turns, until Flutter has drawn the turn's first frame.
-enum NativeTurnPicture: Int, CaseIterable {
-  case cut = 0
-  case fade = 1
-  case none = 2
-}
-
 private class DeviceApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -131,12 +124,6 @@ private class DeviceApiPigeonCodecReader: FlutterStandardReader {
         return NativeInterfaceOrientation(rawValue: enumResultAsInt)
       }
       return nil
-    case 132:
-      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
-      if let enumResultAsInt = enumResultAsInt {
-        return NativeTurnPicture(rawValue: enumResultAsInt)
-      }
-      return nil
     default:
       return super.readValue(ofType: type)
     }
@@ -153,9 +140,6 @@ private class DeviceApiPigeonCodecWriter: FlutterStandardWriter {
       super.writeValue(value.rawValue)
     } else if let value = value as? NativeInterfaceOrientation {
       super.writeByte(131)
-      super.writeValue(value.rawValue)
-    } else if let value = value as? NativeTurnPicture {
-      super.writeByte(132)
       super.writeValue(value.rawValue)
     } else {
       super.writeValue(value)
@@ -202,9 +186,9 @@ protocol DeviceHostApi {
   func attachVolumeView() throws
   func detachVolumeView() throws
   /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): rotations are requested with UIView
-  /// animations off, so the scene turns the window at once, Flutter gets the turned size at once, [picture] covers
-  /// the screen until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
-  func setTurnTakeover(enabled: Bool, picture: NativeTurnPicture) throws
+  /// animations off, so the scene turns the window at once, Flutter gets the turned size at once under a still
+  /// picture until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
+  func setTurnTakeover(enabled: Bool) throws
   /// Flutter has drawn the first frame of taken-over [turn]; the still picture covering the screen can go.
   func turnDrawn(turn: Int64) throws
 }
@@ -388,16 +372,15 @@ class DeviceHostApiSetup {
       detachVolumeViewChannel.setMessageHandler(nil)
     }
     /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): rotations are requested with UIView
-    /// animations off, so the scene turns the window at once, Flutter gets the turned size at once, [picture] covers
-    /// the screen until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
+    /// animations off, so the scene turns the window at once, Flutter gets the turned size at once under a still
+    /// picture until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
     let setTurnTakeoverChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.setTurnTakeover\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       setTurnTakeoverChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let enabledArg = args[0] as! Bool
-        let pictureArg = args[1] as! NativeTurnPicture
         do {
-          try api.setTurnTakeover(enabled: enabledArg, picture: pictureArg)
+          try api.setTurnTakeover(enabled: enabledArg)
           reply(wrapResult(nil))
         } catch {
           reply(wrapError(error))
@@ -434,8 +417,6 @@ protocol DeviceEventApiProtocol {
   /// Taken-over [turn] (counted from 1 per launch) began: [angle] is the rotation in radians the scene would have
   /// animated (its coordinator's target transform), [seconds] how long it would have taken.
   @MainActor func onTurn(turn turnArg: Int64, angle angleArg: Double, seconds secondsArg: Double) async throws
-  /// [turn]'s still picture is off the screen (cut, or its fade done), or there was none.
-  @MainActor func onTurnPictureGone(turn turnArg: Int64) async throws
   /// A line for the phone's log from the native side of a turn (docs/reference/turn-log.md); [fields] hold strings,
   /// ints, doubles and bools only.
   @MainActor func onTurnLog(kind kindArg: String, fields fieldsArg: [String: Any?]) async throws
@@ -521,27 +502,6 @@ class DeviceEventApi: DeviceEventApiProtocol {
       let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onTurn\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([turnArg, angleArg, secondsArg] as [Any?]) { response in
-        guard let listResponse = response as? [Any?] else {
-          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
-          return
-        }
-        if listResponse.count > 1 {
-          let code: String = listResponse[0] as! String
-          let message: String? = nilOrValue(listResponse[1])
-          let details: String? = nilOrValue(listResponse[2])
-          continuation.resume(throwing: DeviceApiError(code: code, message: message, details: details))
-        } else {
-          continuation.resume()
-        }
-      }
-    }
-  }
-  /// [turn]'s still picture is off the screen (cut, or its fade done), or there was none.
-  @MainActor func onTurnPictureGone(turn turnArg: Int64) async throws {
-    return try await withCheckedThrowingContinuation { continuation in
-      let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onTurnPictureGone\(messageChannelSuffix)"
-      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
-      channel.sendMessage([turnArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

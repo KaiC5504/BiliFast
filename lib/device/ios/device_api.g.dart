@@ -69,13 +69,6 @@ enum NativeInterfaceOrientation {
   unknown;
 }
 
-/// What covers the screen while the window turns, until Flutter has drawn the turn's first frame.
-enum NativeTurnPicture {
-  cut,
-  fade,
-  none;
-}
-
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -92,9 +85,6 @@ class _PigeonCodec extends StandardMessageCodec {
       writeValue(buffer, value.index);
     }    else if (value is NativeInterfaceOrientation) {
       buffer.putUint8(131);
-      writeValue(buffer, value.index);
-    }    else if (value is NativeTurnPicture) {
-      buffer.putUint8(132);
       writeValue(buffer, value.index);
     } else {
       super.writeValue(buffer, value);
@@ -113,9 +103,6 @@ class _PigeonCodec extends StandardMessageCodec {
       case 131:
         final value = readValue(buffer) as int?;
         return value == null ? null : NativeInterfaceOrientation.values[value];
-      case 132:
-        final value = readValue(buffer) as int?;
-        return value == null ? null : NativeTurnPicture.values[value];
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -369,16 +356,16 @@ class DeviceHostApi {
   }
 
   /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): rotations are requested with UIView
-  /// animations off, so the scene turns the window at once, Flutter gets the turned size at once, [picture] covers
-  /// the screen until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
-  Future<void> setTurnTakeover(bool enabled, NativeTurnPicture picture) async {
+  /// animations off, so the scene turns the window at once, Flutter gets the turned size at once under a still
+  /// picture until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
+  Future<void> setTurnTakeover(bool enabled) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.setTurnTakeover$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled, picture]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -422,9 +409,6 @@ abstract class DeviceEventApi {
   /// Taken-over [turn] (counted from 1 per launch) began: [angle] is the rotation in radians the scene would have
   /// animated (its coordinator's target transform), [seconds] how long it would have taken.
   void onTurn(int turn, double angle, double seconds);
-
-  /// [turn]'s still picture is off the screen (cut, or its fade done), or there was none.
-  void onTurnPictureGone(int turn);
 
   /// A line for the phone's log from the native side of a turn (docs/reference/turn-log.md); [fields] hold strings,
   /// ints, doubles and bools only.
@@ -518,27 +502,6 @@ abstract class DeviceEventApi {
           final double arg_seconds = args[2]! as double;
           try {
             api.onTurn(arg_turn, arg_angle, arg_seconds);
-            return wrapResponse(empty: true);
-          } on PlatformException catch (e) {
-            return wrapResponse(error: e);
-          }          catch (e) {
-            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
-          }
-        });
-      }
-    }
-    {
-      final pigeonVar_channel = BasicMessageChannel<Object?>(
-          'dev.flutter.pigeon.bilifast.DeviceEventApi.onTurnPictureGone$messageChannelSuffix', pigeonChannelCodec,
-          binaryMessenger: binaryMessenger);
-      if (api == null) {
-        pigeonVar_channel.setMessageHandler(null);
-      } else {
-        pigeonVar_channel.setMessageHandler((Object? message) async {
-          final List<Object?> args = message! as List<Object?>;
-          final int arg_turn = args[0]! as int;
-          try {
-            api.onTurnPictureGone(arg_turn);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
