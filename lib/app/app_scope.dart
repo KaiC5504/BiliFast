@@ -12,6 +12,7 @@ import '../device/player_device.dart';
 import '../devtools/crash_log.dart';
 import '../devtools/log_files.dart';
 import '../devtools/log_forwarder.dart';
+import '../devtools/turn_cycle.dart';
 import '../home/recent_store.dart';
 import '../playback/codec_memory.dart';
 import '../playback/playback_controller.dart';
@@ -133,8 +134,8 @@ class AppPlayback with WidgetsBindingObserver {
 }
 
 /// What every page reaches: the account and API client, the players, 最近打开, the phone's rotation and levels,
-/// the font, the page body's calls, the login page, the log kept on the phone, and the log forwarder in dev builds
-/// (null otherwise).
+/// the font, the page body's calls, the login page, the log kept on the phone, 轮换测试, and the log forwarder in dev
+/// builds (null otherwise).
 class AppServices {
   AppServices({
     required this.environment,
@@ -147,6 +148,7 @@ class AppServices {
     BlockRuleStore? blockRules,
     LoginGate? loginGate,
     PipKeeper? pipKeeper,
+    TurnCycle? turnCycle,
     this.logFiles = const NoLogFiles(),
     this.logs,
   }) : device = device ?? PlayerDevice.inWindow(),
@@ -157,6 +159,7 @@ class AppServices {
        danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
     this.blockRules =
         blockRules ?? BlockRuleStore(api: this.pageApi, isLoggedIn: () => environment.account is LoggedIn);
+    this.turnCycle = turnCycle ?? TurnCycle(orientation: this.device.orientation);
     _account = environment.account;
     environment.addListener(_accountChanged);
     environment.logins.addListener(_loggedIn);
@@ -202,6 +205,9 @@ class AppServices {
 
   /// The closed page the small window is playing, if any.
   final PipKeeper pipKeeper;
+
+  /// 开发者's 轮换测试 and its badge.
+  late final TurnCycle turnCycle;
   final LogFiles logFiles;
   final LogForwarder? logs;
 }

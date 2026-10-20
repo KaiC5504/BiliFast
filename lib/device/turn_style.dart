@@ -56,6 +56,15 @@ class TurnStyle {
   final TurnPicture picture;
   final TurnSpinStart spinStart;
 
+  /// Whether [picture] and [spinStart] take part: 系统 and 不转 have no picture or drawn start to choose.
+  bool get choosesPicture => method != TurnMethod.system && method != TurnMethod.noSpin;
+
+  TurnStyle copyWith({TurnMethod? method, TurnPicture? picture, TurnSpinStart? spinStart}) => TurnStyle(
+        method: method ?? this.method,
+        picture: picture ?? this.picture,
+        spinStart: spinStart ?? this.spinStart,
+      );
+
   /// 系统 and 不转 have no picture or drawn start to choose.
   String get label => switch (method) {
         TurnMethod.system || TurnMethod.noSpin => method.label,

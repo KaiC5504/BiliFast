@@ -5,6 +5,7 @@ import 'package:bili_core/api.dart' show VideoCodec;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart' show NodeMode;
 
+import '../device/turn_style.dart';
 import '../player/bili_player.dart';
 import 'player_session.dart';
 
@@ -58,6 +59,8 @@ class PlayerPrefs {
 
   final String? _path;
   final Logger _logger;
+
+  static const _defaultTurn = TurnStyle();
   Future<void> _writing = Future.value();
 
   bool _autoplay = true;
@@ -69,7 +72,7 @@ class PlayerPrefs {
   bool _danmakuOn = true;
   bool _coinAlsoLike = true;
   bool _danmakuStyleHintSeen = false;
-  bool _turnTakeover = true;
+  TurnStyle _turnStyle = _defaultTurn;
   int? _quality;
   VideoCodec? _codec;
 
@@ -102,9 +105,9 @@ class PlayerPrefs {
   bool get danmakuStyleHintSeen => _danmakuStyleHintSeen;
   set danmakuStyleHintSeen(bool value) => _set(() => _danmakuStyleHintSeen = value);
 
-  /// 开发者's 旋转动画: turns drawn by Flutter (自绘) rather than animated by iOS (系统).
-  bool get turnTakeover => _turnTakeover;
-  set turnTakeover(bool value) => _set(() => _turnTakeover = value);
+  /// 开发者's 旋转动画: how a turn to or from landscape full screen is drawn.
+  TurnStyle get turnStyle => _turnStyle;
+  set turnStyle(TurnStyle value) => _set(() => _turnStyle = value);
 
   /// Null until the user picks one: the controller's own default applies.
   int? get quality => _quality;
@@ -139,7 +142,13 @@ class PlayerPrefs {
     _danmakuOn = pick<bool>('danmakuOn') ?? _danmakuOn;
     _coinAlsoLike = pick<bool>('coinAlsoLike') ?? _coinAlsoLike;
     _danmakuStyleHintSeen = pick<bool>('danmakuStyleHintSeen') ?? _danmakuStyleHintSeen;
-    _turnTakeover = pick<bool>('turnTakeover') ?? _turnTakeover;
+    // Up to 1.0.0 (12) 旋转动画 was a bool, false for 系统; the next write drops it.
+    final before = pick<bool>('turnTakeover') == false ? TurnStyle.system : _turnStyle;
+    _turnStyle = TurnStyle(
+      method: named('turnMethod', TurnMethod.values) ?? before.method,
+      picture: named('turnPicture', TurnPicture.values) ?? before.picture,
+      spinStart: named('turnSpinStart', TurnSpinStart.values) ?? before.spinStart,
+    );
     _quality = pick<int>('quality');
     _codec = named('codec', VideoCodec.values);
   }
@@ -154,7 +163,9 @@ class PlayerPrefs {
     'danmakuOn': _danmakuOn,
     'coinAlsoLike': _coinAlsoLike,
     if (_danmakuStyleHintSeen) 'danmakuStyleHintSeen': true,
-    if (!_turnTakeover) 'turnTakeover': false,
+    if (_turnStyle.method != _defaultTurn.method) 'turnMethod': _turnStyle.method.name,
+    if (_turnStyle.picture != _defaultTurn.picture) 'turnPicture': _turnStyle.picture.name,
+    if (_turnStyle.spinStart != _defaultTurn.spinStart) 'turnSpinStart': _turnStyle.spinStart.name,
     'quality': ?_quality,
     'codec': ?_codec?.name,
   };
