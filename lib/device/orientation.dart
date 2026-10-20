@@ -61,8 +61,11 @@ class OrientationController extends ChangeNotifier {
   TurnStyle get turnStyle => _turnStyle;
   TurnStyle _turnStyle = TurnStyle.system;
 
-  /// What the host was last sent, null while off.
-  TurnStyle? _sentStyle;
+  /// What the host was last sent, null while off. The drawn start is the page's alone, so a change of it sends nothing.
+  ({TurnMethod method, TurnPicture picture})? _sent;
+
+  /// A send failed, so the host may be in either state: the next sync goes out whatever it carries.
+  bool _sentUnknown = false;
 
   /// The taken-over turns as the system starts them; empty without a host or while [turnTakeover] is off.
   Stream<TurnStart> get turns => _host?.turns ?? const Stream.empty();
@@ -83,20 +86,22 @@ class OrientationController extends ChangeNotifier {
   /// gets the system's turn rather than a still picture.
   Future<void> _syncTakeover() {
     final host = _host;
-    final armed = _turnStyle.method.drawn && _owner != null;
-    final style = armed ? _turnStyle : null;
-    if (host == null || style == _sentStyle) return Future.value();
+    final style = _turnStyle;
+    final armed = style.method.drawn && _owner != null;
+    final sent = armed ? (method: style.method, picture: style.picture) : null;
+    if (host == null || (sent == _sent && !_sentUnknown)) return Future.value();
     _turnTakeover = armed;
-    _sentStyle = style;
+    _sent = sent;
+    _sentUnknown = false;
     final send = ++_takeoverSends;
-    final sent = style ?? _turnStyle;
     return _hostQueue = _hostQueue.then((_) async {
       try {
-        await host.setTurnTakeover(armed, method: sent.method, picture: sent.picture);
+        await host.setTurnTakeover(armed, method: style.method, picture: style.picture);
       } catch (error) {
         if (send == _takeoverSends) {
           _turnTakeover = false;
-          _sentStyle = null;
+          _sent = null;
+          _sentUnknown = true;
         }
         _hostFailed(error);
       }

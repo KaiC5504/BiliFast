@@ -37,6 +37,9 @@ final class FakeOrientationHost implements OrientationHost {
   /// Thrown by [setTurnTakeover] while set.
   Object? takeoverError;
 
+  /// Thrown by [turnDrawn] while set.
+  Object? drawnError;
+
   /// The system starting a taken-over turn of [angle] radians; returns its id.
   int startTurn(double angle, {Duration duration = const Duration(milliseconds: 280)}) {
     final id = ++_turnIds;
@@ -96,6 +99,7 @@ final class FakeOrientationHost implements OrientationHost {
 
   @override
   Future<void> turnDrawn(int turn) async {
+    if (drawnError case final error?) throw error;
     drawn += 1;
     drawnTurns.add(turn);
   }

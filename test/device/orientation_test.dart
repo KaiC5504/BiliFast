@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/device/orientation_host.dart';
+import 'package:bilifast/device/turn_style.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_orientation_host.dart';
@@ -432,6 +435,140 @@ void main() {
       expect(orientation.turnTakeover, isTrue);
       await settle();
       expect(host.sent, ['takeover on', 'landscape']);
+    });
+  });
+
+  group('the turn style (旋转动画 in the test build)', () {
+    test('setTurnTakeover sends the shipped drawn style, and off is 系统', () async {
+      orientation.begin(page, videoIsVertical: false);
+      await orientation.setTurnTakeover(true);
+      expect(orientation.turnStyle, const TurnStyle());
+      await orientation.setTurnTakeover(false);
+      expect(orientation.turnStyle, TurnStyle.system);
+      expect(host.takeovers, [true, false]);
+      expect(host.styles.first, (TurnMethod.remove, TurnPicture.cut));
+    });
+
+    test('a change while armed sends the new method and picture', () async {
+      orientation.begin(page, videoIsVertical: false);
+      await orientation.setTurnStyle(const TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade));
+      await orientation.setTurnStyle(const TurnStyle(method: TurnMethod.counter, picture: TurnPicture.none));
+      await orientation.setTurnStyle(const TurnStyle(method: TurnMethod.noSpin, picture: TurnPicture.none));
+      expect(host.takeovers, [true, true, true]);
+      expect(host.styles, [
+        (TurnMethod.counter, TurnPicture.fade),
+        (TurnMethod.counter, TurnPicture.none),
+        (TurnMethod.noSpin, TurnPicture.none),
+      ]);
+      expect(orientation.turnTakeover, isTrue);
+    });
+
+    test("the drawn start is the page's alone: changing only it, or setting the same style again, sends nothing",
+        () async {
+      orientation.begin(page, videoIsVertical: false);
+      await orientation.setTurnStyle(const TurnStyle());
+      await orientation.setTurnStyle(const TurnStyle(spinStart: TurnSpinStart.afterPicture));
+      await orientation.setTurnStyle(const TurnStyle(spinStart: TurnSpinStart.afterPicture));
+      expect(host.styles, [(TurnMethod.remove, TurnPicture.cut)]);
+      expect(orientation.turnStyle.spinStart, TurnSpinStart.afterPicture);
+    });
+
+    test('系统 disarms, and the moves after it go out unarmed', () async {
+      orientation.begin(page, videoIsVertical: false);
+      await orientation.setTurnStyle(const TurnStyle(method: TurnMethod.counter));
+      await orientation.setTurnStyle(TurnStyle.system);
+      expect(orientation.turnTakeover, isFalse);
+      orientation.enterLandscape();
+      await settle();
+      expect(host.sent, ['takeover on', 'takeover off', 'landscape']);
+    });
+
+    test('nothing goes out while no page owns the orientation; the style goes out when one begins', () async {
+      const style = TurnStyle(method: TurnMethod.noActions, picture: TurnPicture.none);
+      await orientation.setTurnStyle(const TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade));
+      await orientation.setTurnStyle(style);
+      await settle();
+      expect(host.sent, isEmpty);
+      expect(orientation.turnTakeover, isFalse);
+      expect(orientation.turnStyle, style);
+
+      orientation.begin(page, videoIsVertical: false);
+      await settle();
+      expect(host.takeovers, [true]);
+      expect(host.styles, [(TurnMethod.noActions, TurnPicture.none)]);
+    });
+
+    test('a failed change resets, so setting it again resends', () async {
+      orientation.begin(page, videoIsVertical: false);
+      await orientation.setTurnStyle(const TurnStyle());
+      host.takeoverError = StateError('channel closed');
+      await orientation.setTurnStyle(const TurnStyle(method: TurnMethod.counter));
+      expect(orientation.turnTakeover, isFalse);
+      expect(logs.events.where((event) => event.msg == 'orientation host failed'), hasLength(1));
+
+      host.takeoverError = null;
+      await orientation.setTurnStyle(const TurnStyle(method: TurnMethod.counter));
+      expect(orientation.turnTakeover, isTrue);
+      expect(host.styles, [(TurnMethod.remove, TurnPicture.cut), (TurnMethod.counter, TurnPicture.cut)]);
+    });
+
+    test('a failed hand-back leaves the host unknown, so the next sync sends off again', () async {
+      orientation.begin(page, videoIsVertical: false);
+      await orientation.setTurnStyle(const TurnStyle());
+      host.takeoverError = StateError('channel closed');
+      await orientation.setTurnStyle(TurnStyle.system);
+      host.takeoverError = null;
+
+      orientation.end(page);
+      await settle();
+      expect(host.sent, ['takeover on', 'takeover off']);
+      orientation.begin(page, videoIsVertical: false);
+      await settle();
+      expect(host.sent, ['takeover on', 'takeover off']);
+    });
+
+    test('turns and pictures gone pass through with their ids', () async {
+      final turns = <TurnStart>[];
+      final gone = <int>[];
+      final subscriptions = [orientation.turns.listen(turns.add), orientation.picturesGone.listen(gone.add)];
+      final first = host.startTurn(pi / 2, duration: const Duration(milliseconds: 300));
+      final second = host.startTurn(-pi / 2);
+      host.pictureGone(second);
+      host.pictureGone(first);
+      expect(turns, [
+        (id: 1, angle: pi / 2, duration: const Duration(milliseconds: 300)),
+        (id: 2, angle: -pi / 2, duration: const Duration(milliseconds: 280)),
+      ]);
+      expect(gone, [2, 1]);
+      for (final subscription in subscriptions) {
+        await subscription.cancel();
+      }
+    });
+
+    test('turnDrawn carries the turn id; a failure is only logged', () async {
+      orientation
+        ..turnDrawn(3)
+        ..turnDrawn(5);
+      await settle();
+      expect(host.drawnTurns, [3, 5]);
+
+      host.drawnError = StateError('channel closed');
+      orientation.turnDrawn(6);
+      await settle();
+      expect(host.drawnTurns, [3, 5]);
+      expect(logs.events.where((event) => event.msg == 'orientation host failed'), hasLength(1));
+    });
+
+    test('without a host nothing is armed and the turn streams are empty', () async {
+      final inWindow = OrientationController(controls: controls);
+      await inWindow.setTurnStyle(const TurnStyle(method: TurnMethod.counter));
+      inWindow.begin(page, videoIsVertical: false);
+      expect(inWindow.turnTakeover, isFalse);
+      expect(inWindow.turnStyle.method, TurnMethod.counter);
+      inWindow.turnDrawn(1);
+      expect(await inWindow.turns.isEmpty, isTrue);
+      expect(await inWindow.picturesGone.isEmpty, isTrue);
+      inWindow.dispose();
     });
   });
 }
