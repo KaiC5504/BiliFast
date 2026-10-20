@@ -124,8 +124,8 @@ final class DeviceHostApiImpl: DeviceHostApi {
     MainActor.assumeIsolated { DeviceControls.detachVolumeView() }
   }
 
-  func setTurnTakeover(enabled: Bool, picture: NativeTurnPicture) throws {
-    MainActor.assumeIsolated { TurnTakeover.configure(enabled: enabled, picture: picture) }
+  func setTurnTakeover(enabled: Bool) throws {
+    MainActor.assumeIsolated { TurnTakeover.configure(enabled: enabled) }
   }
 
   func turnDrawn(turn: Int64) throws {

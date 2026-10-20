@@ -9,13 +9,11 @@ import UIKit
 /// requested: then viewWillTransition comes unanimated with a zero duration and the window turns at once. So while
 /// the takeover is on, every request holds animations off until its turn completes. The window turns under a still
 /// picture of the screen, turned back so it stays physically where it was; Flutter is told (`onTurn`) and draws the
-/// turn, and the picture goes on its first frame or after a timeout. TurnProbe logs each turn.
+/// turn, and the picture is cut on its first frame (`turnDrawn`) or after a timeout. TurnProbe logs each turn.
 @MainActor
 enum TurnTakeover {
-  /// Set from Dart's 开发者 → 旋转动画 (DeviceHostApi.setTurnTakeover); the picture in force when a turn begins is
-  /// that turn's.
+  /// Set from Dart's 开发者 → 旋转动画 (DeviceHostApi.setTurnTakeover).
   private(set) static var enabled = false
-  private(set) static var picture: NativeTurnPicture = .cut
 
   /// The last turn's id.
   private static var turn = 0
@@ -32,17 +30,14 @@ enum TurnTakeover {
 
   private static let fallback = Duration.milliseconds(500)
   private static let requestHoldLimit = Duration.seconds(1)
-  private static let fadeSeconds = 0.12
-  private static let fadeKey = "fade"
 
   private enum HoldOwner: Equatable {
     case turn(Int)
     case request(Int)
   }
 
-  static func configure(enabled: Bool, picture: NativeTurnPicture) {
+  static func configure(enabled: Bool) {
     self.enabled = enabled
-    self.picture = picture
   }
 
   /// Before DeviceChannel asks the scene to turn. Animations are off from here until the turn that follows completes
@@ -66,12 +61,12 @@ enum TurnTakeover {
     TurnProbe.log("request returned", tag(for: turn), ["request": Int(request), "ms": ms])
   }
 
-  /// Flutter drew turn `id`'s first frame; its still picture goes, cut or faded as that turn's picture says.
+  /// Flutter drew turn `id`'s first frame; its still picture is cut.
   static func drawn(turn id: Int) {
     guard let state = current, state.tag.turn == id else {
       let earlier = recent[id]
       let earlierTag = earlier?.tag ?? tag(for: id)
-      let pictured = earlier?.pictured ?? (earlierTag.picture != .none)
+      let pictured = earlier?.pictured ?? !earlierTag.system
       TurnProbe.log("drawn", earlierTag, ["action": pictured ? "gone" : "none"])
       return
     }
@@ -81,8 +76,8 @@ enum TurnTakeover {
       return
     }
     state.still = nil
-    TurnProbe.log("drawn", state.tag, ["action": state.tag.picture == .fade ? "fade" : "cut"])
-    takeAway(still, state.tag, why: "drawn")
+    TurnProbe.log("drawn", state.tag, ["action": "cut"])
+    cut(still, state.tag, why: "drawn")
   }
 
   /// Before the turn moves anything. `angle` is the target transform's rotation in radians, positive clockwise on
@@ -91,15 +86,13 @@ enum TurnTakeover {
   static func begin(root: UIView, from: CGSize, to size: CGSize, angle: Double,
                     coordinator: any UIViewControllerTransitionCoordinator) {
     let startUs = TurnProbe.wallUs()
-    let startMedia = CACurrentMediaTime()
     let animationsWere = UIView.areAnimationsEnabled
     let window = root.window
-    let picture = self.picture
-    TurnProbe.endFrames()
 
-    // Taken first, so a picture still up from the last turn is in it, as it is on screen.
+    // Taken first, so a picture still up from the last turn is in it, as it is on screen. Should it fail, the turn
+    // goes on uncovered.
     let snapping = CACurrentMediaTime()
-    let still = picture == .none ? nil : window?.snapshotView(afterScreenUpdates: false)
+    let still = window?.snapshotView(afterScreenUpdates: false)
     let snapshotMs = still == nil ? 0 : (CACurrentMediaTime() - snapping) * 1000
     var replaced: TurnTag?
     if let last = current, let shown = last.still {
@@ -110,7 +103,7 @@ enum TurnTakeover {
 
     turn += 1
     let id = turn
-    let tag = TurnTag(turn: id, picture: picture)
+    let tag = TurnTag(turn: id)
     let state = TurnState(tag: tag, pictured: still != nil)
     current = state
     recent[id] = state
@@ -146,8 +139,6 @@ enum TurnTakeover {
       try await DeviceChannel.events?.onTurn(turn: Int64(id), angle: angle, seconds: seconds)
     }
 
-    TurnProbe.startFrames(TurnFrames(tag: tag, start: startMedia, window: window, root: root, picture: state.still))
-
     Task { @MainActor in
       try? await Task.sleep(for: fallback)
       fellBack(state)
@@ -160,27 +151,22 @@ enum TurnTakeover {
       "animationsEnabled": animationsWere, "snapshot": state.pictured, "snapshotMs": snapshotMs,
     ], at: startUs)
     if let replaced { pictureGone(replaced, why: "replaced") }
-    if !state.pictured { sendPictureGone(id) }
   }
 
   private static func tag(for id: Int) -> TurnTag {
-    guard enabled else { return TurnTag(turn: id, picture: .none, system: true) }
-    return TurnTag(turn: id, picture: picture)
+    TurnTag(turn: id, system: !enabled)
   }
 
-  /// A turn to or from landscape that iOS animates itself (系统): only logged and sampled, with nothing taken over and
-  /// nothing sent to Dart.
+  /// A turn to or from landscape that iOS animates itself (系统): only logged, with nothing taken over and nothing
+  /// sent to Dart.
   static func observe(root: UIView, from: CGSize, to size: CGSize, angle: Double,
                       coordinator: any UIViewControllerTransitionCoordinator) {
     let startUs = TurnProbe.wallUs()
-    let startMedia = CACurrentMediaTime()
-    TurnProbe.endFrames()
     turn += 1
     let tag = tag(for: turn)
     _ = coordinator.animate(alongsideTransition: nil, completion: { context in
       TurnProbe.log("completion", tag, ["cancelled": context.isCancelled])
     })
-    TurnProbe.startFrames(TurnFrames(tag: tag, start: startMedia, window: root.window, root: root, picture: nil))
     TurnProbe.log("begin", tag, [
       "angle": angle, "seconds": coordinator.transitionDuration, "animated": coordinator.isAnimated,
       "fromW": Double(from.width), "fromH": Double(from.height),
@@ -200,7 +186,7 @@ enum TurnTakeover {
     if !state.drawn { TurnProbe.log("fallback", state.tag) }
     guard let still = state.still else { return }
     state.still = nil
-    takeAway(still, state.tag, why: "fallback")
+    cut(still, state.tag, why: "fallback")
   }
 
   /// Off already, they are someone else's to put back.
@@ -221,33 +207,13 @@ enum TurnTakeover {
     UIView.setAnimationsEnabled(saved)
   }
 
-  private static func takeAway(_ still: UIView, _ tag: TurnTag, why: String) {
-    guard tag.picture == .fade else {
-      still.removeFromSuperview()
-      pictureGone(tag, why: why)
-      return
-    }
-    // Core Animation directly: UIView animations may still be off for the rest of the turn.
-    let fade = CABasicAnimation(keyPath: "opacity")
-    fade.fromValue = 1.0
-    fade.toValue = 0.0
-    fade.duration = fadeSeconds
-    still.layer.opacity = 0
-    still.layer.add(fade, forKey: fadeKey)
-    Task { @MainActor in
-      try? await Task.sleep(for: .seconds(fadeSeconds))
-      still.removeFromSuperview()
-      pictureGone(tag, why: why)
-    }
+  private static func cut(_ still: UIView, _ tag: TurnTag, why: String) {
+    still.removeFromSuperview()
+    pictureGone(tag, why: why)
   }
 
   private static func pictureGone(_ tag: TurnTag, why: String) {
     TurnProbe.log("picture gone", tag, ["why": why])
-    sendPictureGone(tag.turn)
-  }
-
-  private static func sendPictureGone(_ id: Int) {
-    TurnProbe.send("onTurnPictureGone") { try await DeviceChannel.events?.onTurnPictureGone(turn: Int64(id)) }
   }
 }
 
@@ -255,9 +221,9 @@ enum TurnTakeover {
 @MainActor
 private final class TurnState {
   let tag: TurnTag
-  /// A still picture went up; not with `none` or a failed snapshot.
+  /// A still picture went up; not when the snapshot failed.
   let pictured: Bool
-  /// The picture while it covers the screen, until it is cut or starts to fade.
+  /// The picture while it covers the screen, until it is cut.
   var still: UIView?
   var drawn = false
 
