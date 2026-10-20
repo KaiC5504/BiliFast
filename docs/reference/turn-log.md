@@ -16,7 +16,7 @@ doubles and bools only; per-frame data is packed into strings.
 |---|---|
 | `request` | `request` (int), `mask`, `interface` (before), `animationsEnabled` (bool): Dart asked for a mask |
 | `request returned` | `request`, `ms` (double): `requestGeometryUpdate` returned |
-| `begin` | `angle` (rad), `seconds`, `animated` (bool), `fromW`, `fromH`, `toW`, `toH`, `animationsEnabled` (bool, before), `snapshotMs` (double, 0 with no picture) |
+| `begin` | `angle` (rad), `seconds`, `animated` (bool), `fromW`, `fromH`, `toW`, `toH`, `animationsEnabled` (bool, before), `snapshot` (bool: a still picture is up for this turn), `snapshotMs` (double, 0 with no picture) |
 | `animations` | `phase` (`after super` or `next tick`), `found` (string, below), `removed` (int) |
 | `alongside` | the coordinator's alongside block ran |
 | `completion` | `cancelled` (bool) |
@@ -34,7 +34,7 @@ running; 0: not committed yet).
 
 `request` lines carry the last begun turn's id and come only while the takeover is on. `picture gone` can also have
 `why: replaced` (the next turn's begin took it away); a turn with no picture (`none`, `noSpin`, a failed snapshot)
-has no `picture gone` line. The first `frames` sample's `gapMs` counts from `begin`, so a stall before the first tick
+has no `picture gone` line. Any native line can carry `lost` (int, only when above 0): sends to Dart that failed since the last line that got through. The first `frames` sample's `gapMs` counts from `begin`, so a stall before the first tick
 shows there; `scene`, `window` and `container` angles include the layer's `sublayerTransform`.
 
 `frames.samples`: one per CADisplayLink tick for 1.2 s from `begin`, `;`-separated, each `,`-separated:
@@ -54,15 +54,18 @@ shows there; `scene`, `window` and `container` angles include the layer's `subla
 | `drawn sent` | `turn` |
 | `picture gone` | `turn` |
 | `late` | `missed` (bool) |
-| `frames` | `t0Us` (wall µs the samples count from), `count`, `samples`, `timings`, `worstBuildMs`, `worstRasterMs`, `slow` (frames over 16.7 ms) |
+| `frames` | `t0Us` (wall µs the samples count from), `count`, `samples`, `timings`, `worstBuildMs`, `worstRasterMs`, `refreshHz` (the display's rate), `slow` (frames over one refresh) |
 
 `frames.samples`: one per frame built while a turn runs, `;`-separated, each `,`-separated:
 `tMs` (since `t0Us`), `angle` (deg, the page's drawn turn), `grow`, `boxL`, `boxT`, `boxW`, `boxH` (empty at rest),
-`w`, `h` (the size laid out at). `frames.timings`: the engine's FrameTiming for the same window, `;`-separated
-`buildMs,rasterMs,totalMs`.
+`w`, `h` (the size laid out at), `shownMs` (since `t0Us`, when its raster finished, from its FrameTiming; empty when
+not known). `frames.timings`: the engine's FrameTiming for the same window, `;`-separated
+`buildMs,rasterMs,totalMs,rasterEndMs` (`rasterEndMs` since `t0Us`, empty when the engine gives no wall time).
 
 `grow` has 3 decimals. `timings` holds only the frames whose build overlaps the samples, placed on the wall clock
-by their raster finish; `slow` counts those whose whole span (vsync to raster end) is over 16.7 ms.
+by their raster finish; `slow` counts those whose whole span (vsync to raster end) is over one refresh at
+`refreshHz` (the iPhone runs at 120 Hz). A frame built while a settled window still waits for its timings starts a
+new window, so each line holds one turn.
 
 The line is written once the turn has settled (300 to 600 ms with no frame or event), so logging never runs inside the
 turn. Release builds hand FrameTimings over in batches up to 1 s apart, so it waits up to 1.2 s more for the batch
