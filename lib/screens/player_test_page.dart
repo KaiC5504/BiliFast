@@ -10,11 +10,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
-import '../device/turn_style.dart';
 import '../devtools/crash_log.dart';
 import '../devtools/log_forwarder.dart';
 import '../devtools/log_server_discovery.dart';
-import '../devtools/turn_cycle.dart';
 import '../playback/playback_controller.dart';
 import '../playback/playback_setup.dart';
 import '../playback/shared_engine.dart';
@@ -65,7 +63,7 @@ Future<void> shareFileThroughSystem(String path, Rect? origin) async {
 }
 
 /// Slice 1's whole app, now 开发者 in 设置 (dev builds): the account the keychain login gave, a BV field, the player and
-/// its switches, 旋转动画 with 轮换测试, the log forwarder with 导出日志 and 测试崩溃, and the speed test.
+/// its switches, 旋转动画, the log forwarder with 导出日志 and 测试崩溃, and the speed test.
 class PlayerTestPage extends StatefulWidget {
   const PlayerTestPage({
     super.key,
@@ -78,7 +76,6 @@ class PlayerTestPage extends StatefulWidget {
     this.releasePlayback,
     this.shareFile = shareFileThroughSystem,
     this.prefs,
-    this.turnCycle,
   });
 
   final AppEnvironment environment;
@@ -101,9 +98,6 @@ class PlayerTestPage extends StatefulWidget {
 
   /// [PlayerPrefs.shared] unless a test passes its own.
   final PlayerPrefs? prefs;
-
-  /// 轮换测试; without it the row is left out.
-  final TurnCycle? turnCycle;
 
   @override
   State<PlayerTestPage> createState() => _PlayerTestPageState();
@@ -210,9 +204,9 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
   }
 
   /// From the next turn on; the controller logs a host that fails.
-  void _setTurnStyle(TurnStyle style) {
-    setState(() => _prefs.turnStyle = style);
-    unawaited(AppScope.of(context).device.orientation.setTurnStyle(style));
+  void _setTurnTakeover(bool drawn) {
+    setState(() => _prefs.turnTakeover = drawn);
+    unawaited(AppScope.of(context).device.orientation.setTurnTakeover(drawn));
   }
 
   void _startSpeedTest() {
@@ -298,7 +292,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
       body: SafeArea(
         top: false,
         child: ListenableBuilder(
-          listenable: Listenable.merge([widget.environment, ?controller, ?controller?.danmaku, ?widget.turnCycle]),
+          listenable: Listenable.merge([widget.environment, ?controller, ?controller?.danmaku]),
           builder: (context, _) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -323,7 +317,12 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
                   padding: const EdgeInsets.all(BiliMetrics.gutter),
                   children: [
                     if (controller != null) ..._playbackSection(controller),
-                    _turnSection(),
+                    _Card(children: [
+                      _Row(
+                        label: _canTakeOverTurns ? '旋转动画' : '旋转动画（仅 iPhone）',
+                        trailing: _turnTakeoverChoice(),
+                      ),
+                    ]),
                     const SizedBox(height: BiliMetrics.sectionGap),
                     if (widget.logs case final logs?) ...[
                       _LogSection(
@@ -351,84 +350,32 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     );
   }
 
-  /// Off-limits on Windows, and while 轮换测试 picks the styles so the badge never names one that isn't on. 系统 has no
-  /// 截图 or 起转 to pick. Each row is its own node for accessibility, so the card's text never becomes the
-  /// label of the 轮换测试 switch.
-  Widget _turnSection() {
-    final style = _prefs.turnStyle;
-    final cycle = widget.turnCycle;
-    final choosable = _canTakeOverTurns && !(cycle?.on ?? false);
-    final drawn = choosable && style.choosesPicture;
-    return _Card(children: [
-      Text(_canTakeOverTurns ? '旋转动画' : '旋转动画（仅 iPhone）',
-          style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text)),
-      const SizedBox(height: BiliMetrics.rowGap / 2),
-      _Choices<TurnMethod>(
-        key: const ValueKey('turn-method'),
-        label: '方式',
-        options: TurnMethod.values,
-        name: (method) => method.label,
-        chosen: style.method,
-        onChosen: choosable ? (method) => _setTurnStyle(style.copyWith(method: method)) : null,
-      ),
-      _Choices<TurnPicture>(
-        key: const ValueKey('turn-picture'),
-        label: '截图',
-        options: TurnPicture.values,
-        name: (picture) => picture.label,
-        chosen: style.picture,
-        onChosen: drawn ? (picture) => _setTurnStyle(style.copyWith(picture: picture)) : null,
-      ),
-      _Choices<TurnSpinStart>(
-        key: const ValueKey('turn-spin-start'),
-        label: '起转',
-        options: TurnSpinStart.values,
-        name: (start) => start.label,
-        chosen: style.spinStart,
-        onChosen: drawn ? (start) => _setTurnStyle(style.copyWith(spinStart: start)) : null,
-      ),
-      if (cycle != null) ...[
-        const SizedBox(height: BiliMetrics.rowGap),
-        MergeSemantics(
-          child: _Row(
-            label: '轮换测试',
-            trailing: Switch.adaptive(
-              key: const ValueKey('turn-cycle-switch'),
-              activeTrackColor: BiliColors.pink,
-              value: cycle.on,
-              onChanged: (on) => on ? cycle.start() : cycle.stop(),
-            ),
-          ),
+  /// Off-limits (Windows), it still shows the stored choice: Material leaves a disabled segment unfilled, chosen or
+  /// not. Accessibility reads it as that choice, with nothing to press.
+  Widget _turnTakeoverChoice() {
+    final choice = SegmentedButton<bool>(
+      key: const ValueKey('turn-takeover'),
+      showSelectedIcon: false,
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled) && states.contains(WidgetState.selected)
+              ? BiliColors.divider
+              : null,
         ),
-        Semantics(
-          container: true,
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  cycle.on
-                      ? '${cycle.position}/${TurnCycle.styles.length} ${cycle.style.label} · '
-                          '第 ${cycle.roundTrips + 1}/${TurnCycle.roundTripsPerStyle} 次往返'
-                      : '每种往返 ${TurnCycle.roundTripsPerStyle} 次后换下一种，共 ${TurnCycle.styles.length} 种；'
-                          '横竖各停 ${TurnCycle.settle.inMilliseconds / 1000} 秒才算',
-                  key: const ValueKey('turn-cycle-position'),
-                  style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),
-                ),
-              ),
-              const SizedBox(width: BiliMetrics.rowGap),
-              // With the cycle off there is nothing to start over: greyed like the choices, and disabled with
-              // nothing to press for accessibility.
-              OutlinedButton(
-                key: const ValueKey('turn-cycle-reset'),
-                style: OutlinedButton.styleFrom(disabledForegroundColor: BiliColors.secondaryText),
-                onPressed: cycle.on ? cycle.start : null,
-                child: const Text('重置'),
-              ),
-            ],
-          ),
-        ),
+      ),
+      segments: const [
+        ButtonSegment(value: true, label: Text('自绘')),
+        ButtonSegment(value: false, label: Text('系统')),
       ],
-    ]);
+      selected: {_prefs.turnTakeover},
+      onSelectionChanged: _canTakeOverTurns ? (selected) => _setTurnTakeover(selected.first) : null,
+    );
+    if (_canTakeOverTurns) return choice;
+    return Semantics(
+      container: true,
+      label: _prefs.turnTakeover ? '自绘' : '系统',
+      child: ExcludeSemantics(child: choice),
+    );
   }
 
   Widget _stage(BuildContext context, PlaybackController? controller) {
@@ -697,106 +644,6 @@ class _Row extends StatelessWidget {
           ],
         ),
       );
-}
-
-/// A label and its choices, wrapping as they need, one node for accessibility with the choices inside. Without
-/// [onChosen] they are greyed, the chosen one still marked, and accessibility reads them as that choice with nothing
-/// to press.
-class _Choices<T> extends StatelessWidget {
-  const _Choices({
-    super.key,
-    required this.label,
-    required this.options,
-    required this.name,
-    required this.chosen,
-    required this.onChosen,
-  });
-
-  final String label;
-  final List<T> options;
-  final String Function(T option) name;
-  final T chosen;
-  final void Function(T option)? onChosen;
-
-  @override
-  Widget build(BuildContext context) {
-    final choose = onChosen;
-    final pills = Wrap(
-      spacing: BiliMetrics.rowGap,
-      runSpacing: BiliMetrics.rowGap,
-      children: [
-        for (final option in options)
-          _Pill(
-            label: name(option),
-            selected: option == chosen,
-            onTap: choose == null ? null : () => choose(option),
-          ),
-      ],
-    );
-    return Semantics(
-      container: true,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: BiliMetrics.rowGap / 2),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: BiliMetrics.pillHeight,
-              child: Center(
-                child: Text(label, style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text)),
-              ),
-            ),
-            const SizedBox(width: BiliMetrics.gutter),
-            Expanded(
-              child: choose != null
-                  ? pills
-                  : Semantics(container: true, label: name(chosen), child: ExcludeSemantics(child: pills)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.label, required this.selected, required this.onTap});
-
-  final String label;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    final fill = switch ((selected, enabled)) {
-      (true, true) => BiliColors.pinkTint,
-      (true, false) => BiliColors.divider,
-      (false, true) => BiliColors.pageGrey,
-      (false, false) => BiliColors.card,
-    };
-    final ink = !enabled ? BiliColors.secondaryText : (selected ? BiliColors.pink : BiliColors.text);
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          height: BiliMetrics.pillHeight,
-          padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.gutter),
-          decoration: BoxDecoration(color: fill, borderRadius: BorderRadius.circular(BiliMetrics.pillHeight / 2)),
-          child: Center(
-            widthFactor: 1,
-            child: Text(label, style: TextStyle(fontSize: BiliMetrics.smallText, color: ink)),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// BiliNative's 开发者 section: 发送日志到电脑 with the PCs found and a typed address, 导出日志 and 测试崩溃.

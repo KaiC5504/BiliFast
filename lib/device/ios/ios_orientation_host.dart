@@ -1,5 +1,4 @@
 import '../orientation_host.dart';
-import '../turn_style.dart';
 import 'device_api.g.dart';
 import 'ios_device_events.dart';
 
@@ -42,23 +41,13 @@ final class IosOrientationHost implements OrientationHost {
   Stream<OrientationRefusal> get refusals => _events.refusals;
 
   @override
-  Future<void> setTurnTakeover(bool enabled, {required TurnPicture picture}) => _host.setTurnTakeover(
-        enabled,
-        switch (picture) {
-          TurnPicture.cut => NativeTurnPicture.cut,
-          TurnPicture.fade => NativeTurnPicture.fade,
-          TurnPicture.none => NativeTurnPicture.none,
-        },
-      );
+  Future<void> setTurnTakeover(bool enabled) => _host.setTurnTakeover(enabled);
 
   @override
   Stream<TurnStart> get turns => _events.turns;
 
   @override
   Future<void> turnDrawn(int turn) => _host.turnDrawn(turn);
-
-  @override
-  Stream<int> get picturesGone => _events.picturesGone;
 
   static PhoneOrientation _phone(NativeDeviceOrientation orientation) => switch (orientation) {
         NativeDeviceOrientation.portrait => PhoneOrientation.portrait,

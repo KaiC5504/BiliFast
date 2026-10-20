@@ -6,7 +6,6 @@ import 'package:bilifast/device/ios/device_api.g.dart';
 import 'package:bilifast/device/ios/ios_device_events.dart';
 import 'package:bilifast/device/ios/ios_orientation_host.dart';
 import 'package:bilifast/device/orientation_host.dart';
-import 'package:bilifast/device/turn_style.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -72,16 +71,6 @@ void main() {
       await subscription.cancel();
     });
 
-    test('onTurnPictureGone reaches picturesGone', () async {
-      final gone = <int>[];
-      final subscription = events.picturesGone.listen(gone.add);
-      await _send('onTurnPictureGone', [4]);
-      await _send('onTurnPictureGone', [3]);
-      await settle();
-      expect(gone, [4, 3]);
-      await subscription.cancel();
-    });
-
     test('onTurnLog writes turn native <kind> in category ui, its null fields dropped', () async {
       await _send('onTurnLog', [
         'begin',
@@ -89,7 +78,6 @@ void main() {
           'wUs': 1760000000000000,
           'turn': 2,
           'method': 'quietRequest',
-          'picture': 'cut',
           'angle': 1.5707963,
           'animated': false,
           'snapshotMs': null,
@@ -109,7 +97,6 @@ void main() {
           'wUs': 1760000000000000,
           'turn': 2,
           'method': 'quietRequest',
-          'picture': 'cut',
           'angle': 1.5707963,
           'animated': false,
         },
@@ -123,34 +110,22 @@ void main() {
 
     setUp(() => host = IosOrientationHost(DeviceHostApi(), events));
 
-    test('the switch and every picture reach the native side', () async {
-      await host.setTurnTakeover(false, picture: TurnPicture.cut);
-      for (final picture in TurnPicture.values) {
-        await host.setTurnTakeover(true, picture: picture);
-      }
-      expect(hostCalls, [
-        'setTurnTakeover false cut',
-        'setTurnTakeover true cut',
-        'setTurnTakeover true fade',
-        'setTurnTakeover true none',
-      ]);
+    test('the switch reaches the native side', () async {
+      await host.setTurnTakeover(true);
+      await host.setTurnTakeover(false);
+      expect(hostCalls, ['setTurnTakeover true', 'setTurnTakeover false']);
     });
 
-    test('turnDrawn sends the id; turns and pictures gone come from the events', () async {
+    test('turnDrawn sends the id; turns come from the events', () async {
       await host.turnDrawn(12);
       expect(hostCalls, ['turnDrawn 12']);
 
       final turns = <TurnStart>[];
-      final gone = <int>[];
-      final subscriptions = [host.turns.listen(turns.add), host.picturesGone.listen(gone.add)];
+      final subscription = host.turns.listen(turns.add);
       await _send('onTurn', [12, pi / 2, 0.3]);
-      await _send('onTurnPictureGone', [12]);
       await settle();
       expect(turns.map((turn) => turn.id), [12]);
-      expect(gone, [12]);
-      for (final subscription in subscriptions) {
-        await subscription.cancel();
-      }
+      await subscription.cancel();
     });
   });
 }

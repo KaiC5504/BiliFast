@@ -1986,9 +1986,6 @@ abstract final class RotationTheme {
   /// While the page draws the turns, how long a change of presentation waits for the system's turn before the player
   /// grows without one, as a refused or lost turn would leave it.
   static const takeoverWait = Duration(milliseconds: 250);
-
-  /// 等截图: how long a drawn turn holds its first pose for the host's still picture to go before it moves anyway.
-  static const pictureWait = Duration(milliseconds: 150);
 }
 
 /// 弹幕设置 (07, 08, 24, 29, 33, 40, 41). Landscape is a hard-edged dark strip at the right, portrait the light

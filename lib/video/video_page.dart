@@ -19,7 +19,6 @@ import '../comments/comments_model.dart';
 import '../comments/comments_tab.dart';
 import '../device/orientation.dart';
 import '../device/orientation_host.dart' show TurnStart;
-import '../device/turn_style.dart';
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_controller.dart';
 import '../player/bili_player.dart' show PlayerStatus;
@@ -170,16 +169,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   late final _spin = AnimationController(vsync: this);
   double _spinFrom = 0;
 
-  /// A drawn turn holding its first pose until the host's still picture is gone (等截图), at most
-  /// [RotationTheme.pictureWait].
-  int? _held;
-  Timer? _heldWait;
-  StreamSubscription<int>? _picturesGone;
-
-  /// Turns whose picture went before the page began drawing them.
-  final _goneTurns = <int>{};
-
-  bool get _spinning => _spin.isAnimating || _held != null;
+  bool get _spinning => _spin.isAnimating;
 
   /// From [_beginTurn] until its spin is over and no other turn is waited for: only a turn the page draws has the
   /// official app's turning window.
@@ -303,7 +293,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     // Under Reduce Motion the turn jumps, so there is nothing to wait for.
     final still = MediaQuery.disableAnimationsOf(context);
     _turnFrom = _orientation.turnTakeover && _owning && !_left && !settled && !still ? overtaken?.wide ?? wide : null;
-    _recorder.presentation(from, presentation, wide: wide, waiting: _turnFrom != null, style: _orientation.turnStyle);
+    _recorder.presentation(
+      from,
+      presentation,
+      wide: wide,
+      waiting: _turnFrom != null,
+      drawn: _orientation.turnTakeoverChosen,
+    );
     if (_turnFrom != null) {
       _turnTimeout = Timer(RotationTheme.takeoverWait, _turnLate);
     } else if (overtaken != null) {
@@ -357,33 +353,19 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// From the build that has the turn's new shape: the page drawn turned by −angle, so it sits where it was before
   /// the turn, and back to upright as the box grows or shrinks, both over the official turn's [RotationTheme.grow]:
   /// iOS reports no length for a turn it makes with its animations off. A turn that reverses one under way starts from
-  /// the angle the page is drawn at. 等截图 holds that first pose until the host's picture is gone.
+  /// the angle the page is drawn at.
   void _beginTurn(({TurnStart start, bool wide}) turn) {
     _pendingTurn = null;
     _turnFrom = null;
     _turnTimeout?.cancel();
     _turnTimeout = null;
-    _heldWait?.cancel();
-    _heldWait = null;
-    _held = null;
     final start = turn.start;
     if (!MediaQuery.disableAnimationsOf(context)) {
-      final style = _orientation.turnStyle;
       _drawing = true;
       _spinFrom = _rotation - start.angle;
-      final hold =
-          style.choosesPicture && style.spinStart == TurnSpinStart.afterPicture && !_goneTurns.contains(start.id);
-      _recorder.began(start.id, spinFrom: _spinFrom, duration: RotationTheme.grow, grow: _grow.value, held: hold);
-      if (hold) {
-        _held = start.id;
-        _spin.value = 0;
-        _grow.stop();
-        _heldWait = Timer(RotationTheme.pictureWait, () => _release('timeout'));
-      } else {
-        _runTurn();
-      }
+      _recorder.began(start.id, spinFrom: _spinFrom, duration: RotationTheme.grow, grow: _grow.value);
+      _runTurn();
     }
-    _goneTurns.removeWhere((id) => id <= start.id);
     _settleDrawing();
     _reportDrawn();
   }
@@ -405,30 +387,6 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     }
   }
 
-  /// The held turn starts over its whole length.
-  void _release(String why) {
-    final held = _held;
-    _heldWait?.cancel();
-    _heldWait = null;
-    if (held == null || !mounted) return;
-    _held = null;
-    _recorder.released(held, why: why);
-    _runTurn();
-  }
-
-  void _pictureGone(int turn) {
-    if (!mounted) return;
-    final held = _held == turn;
-    // Turns this page doesn't own are another page's to log and draw.
-    if (!held && (_covered || !_owning)) return;
-    _recorder.pictureGone(turn);
-    if (held) {
-      _release('picture');
-    } else {
-      _goneTurns.add(turn);
-    }
-  }
-
   /// No turn came, or not its new shape: the player grows as it does when the system turns the screen itself.
   void _turnLate() {
     _turnTimeout = null;
@@ -437,7 +395,6 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _recorder.late(missed: _turnMissed);
     _turnFrom = null;
     _pendingTurn = null;
-    _release('timeout');
     _settleDrawing();
     if (!_grow.isAnimating) {
       if (_upright == Presentation.vertical) {
@@ -547,7 +504,6 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _services = AppScope.of(context);
       _orientation.addListener(_presentationChanged);
       _turns = _orientation.turns.listen(_turnStarted);
-      _picturesGone = _orientation.picturesGone.listen(_pictureGone);
       _takePlayback();
     }
     // Only another page covers this one. A popup on top (the ⋮ menu, a dialog) makes the route not current as well,
@@ -1194,11 +1150,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..dispose();
     _grow.dispose();
     unawaited(_turns?.cancel());
-    unawaited(_picturesGone?.cancel());
     _turnTimeout?.cancel();
-    _heldWait?.cancel();
     _flushDrawn();
-    _recorder.dispose();
     _spin.dispose();
     _turningPlayer.dispose();
     _verticalTurn.dispose();
@@ -1357,9 +1310,6 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       _verticalTurn.value = turn != null && _upright == Presentation.vertical ? turn.t : null;
                       // The chrome goes from the change of presentation, so the host's still picture has none either.
                       _turningPlayer.value = turn != null || spinning || waiting;
-                      if (turn != null || spinning || waiting) {
-                        _recorder.frame(angle: _rotation, grow: _grow.value, box: turn?.box, size: constraints.biggest);
-                      }
                       // The tab row and the list ride on the player's bottom edge, at their upright size.
                       final body = turn?.body ?? Offset.zero;
                       final window = turn?.window;
