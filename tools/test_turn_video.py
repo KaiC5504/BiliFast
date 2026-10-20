@@ -1,5 +1,7 @@
 import argparse
+import os
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -191,25 +193,43 @@ class AlignTests(unittest.TestCase):
         offset, _ = turn_video.align(self.video, twice, self.offset + 100.5)
         self.assertAlmostEqual(offset, self.offset + 100.03, delta=0.01)
 
-    def test_log_turns_read_the_phone_log_through_phone_report(self):
-        log = turn_logs.Log()
-        log.cycle(1, 7, "系统")
-        log.turn("系统", method="system", ios_turns=True)
-        log.cycle(2, 7, "请求前关·直接切·立即")
-        log.turn("请求前关·直接切·立即", to_landscape=False)
-        log.dart(log.now, "presentation", **{"from": "inline", "to": "landscape"}, wide=False, waiting=True,
-                 style="请求前关·直接切·立即")
-        log.now += 400_000
-        log.turn("请求前关·直接切·立即", to_landscape=False)
+    def read(self, log):
         with tempfile.TemporaryDirectory() as folder:
             path = pathlib.Path(folder) / "session.jsonl"
             log.write(path)
-            found = turn_video.log_turns(path)
+            return turn_video.log_turns(path)
+
+    def test_log_turns_read_the_phone_log_through_phone_report(self):
+        log = turn_logs.Log()
+        log.cycle(1, 7, "系统")
+        log.turn("系统", build=14, method="system")
+        log.cycle(2, 7, "请求前关·直接切·立即")
+        log.turn("请求前关·直接切·立即", build=14, to_landscape=False)
+        log.dart(log.now, "presentation", **{"from": "inline", "to": "landscape"}, wide=False, waiting=True,
+                 style="请求前关·直接切·立即")
+        log.now += 400_000
+        log.turn("请求前关·直接切·立即", build=14, to_landscape=False)
+        found = self.read(log)
         self.assertEqual([(entry["id"], entry["dir"], entry["style"], entry["native"]) for entry in found],
                          [(1, "to L", "系统", "system/none"), (2, "back", "请求前关·直接切·立即", "quietRequest/cut"),
                           (3, "back", "请求前关·直接切·立即", "quietRequest/cut")],
                          "the direction is what the window did, not a presentation change that never turned")
         self.assertAlmostEqual(found[1]["s"] - found[0]["s"], 3.5, delta=0.001)
+
+    def test_without_a_cycle_turns_take_the_pages_style(self):
+        # 1.0.0 (15): no 轮换测试; a turn back's presentation change comes just after its native begin.
+        log = turn_logs.Log()
+        log.turn("系统", method="system")
+        log.turn("系统", method="system", to_landscape=False)
+        log.turn("自绘", picture=None)
+        log.turn("自绘", picture=None, to_landscape=False)
+        log.turn("自绘", dart=False)
+        log.turn("系统", to_landscape=False)  # the host still drew it
+        found = self.read(log)
+        self.assertEqual([(entry["dir"], entry["style"], entry["native"]) for entry in found],
+                         [("to L", "系统", "system/none"), ("back", "系统", "system/none"),
+                          ("to L", "自绘", "quietRequest"), ("back", "自绘", "quietRequest"),
+                          ("to L", "自绘", "quietRequest/cut"), ("back", "系统", "quietRequest/cut")])
 
 
 def measured(samples):
@@ -267,6 +287,17 @@ class CommandLineTests(unittest.TestCase):
         for bad in ("300:70", "x:1", "70"):
             with self.assertRaises(argparse.ArgumentTypeError):
                 turn_video.parse_crop(bad)
+
+    def test_help_survives_a_cp1252_console(self):
+        tool = pathlib.Path(turn_video.__file__)
+        done = subprocess.run([sys.executable, str(tool), "--help"], capture_output=True, timeout=60,
+                              env={**os.environ, "PYTHONIOENCODING": "cp1252"})
+        self.assertEqual(done.returncode, 0, done.stderr.decode("utf-8", "replace"))
+        self.assertIn("轮换测试", done.stdout.decode("utf-8"))
+
+    def test_angles_wrap_the_short_way_round(self):
+        self.assertEqual(turn_video.wrap180(270.0), -90.0)
+        self.assertEqual(turn_video.unwrap([170.0, -170.0, -90.0]), [170.0, 190.0, 270.0])
 
     def test_the_pure_parts_load_without_opencv(self):
         self.assertNotIn("cv2", sys.modules)

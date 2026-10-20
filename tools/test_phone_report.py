@@ -2,6 +2,7 @@ import io
 import json
 import os
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -137,9 +138,11 @@ class PhoneReportTests(unittest.TestCase):
         self.assertIn("Speed test 1", out.getvalue())
 
 
+
+
 def analysed(log):
     grouped = phone_report.group_turns(log.events())
-    return [(turn, phone_report.analyse_turn(turn, grouped["pool"])) for turn in grouped["turns"]]
+    return [(turn, phone_report.analyse_turn(turn)) for turn in grouped["turns"]]
 
 
 def only(log):
@@ -148,216 +151,164 @@ def only(log):
     return found[0]
 
 
+def fail_keys(a):
+    return [key for key, _ in a["fails"]]
+
+
 class TurnReportTests(unittest.TestCase):
-    def assertGrades(self, a, *, start, sweep, verdict, fails=()):
-        self.assertAlmostEqual(a["start"], start, delta=1)
-        self.assertAlmostEqual(a["sweep"], sweep, delta=1)
-        self.assertEqual(a["verdict"], verdict, phone_report.verdict_text(a))
-        self.assertEqual([key for key, _ in a["fails"]], list(fails))
+    def test_a_drawn_turn_reads_as_its_timeline(self):
+        for to_landscape in (True, False):
+            for picture in ("cut", None):
+                log = turn_logs.Log()
+                log.turn("自绘", to_landscape=to_landscape, picture=picture)
+                turn, a = only(log)
+                self.assertEqual(phone_report.style_of(turn), ("自绘", None))
+                self.assertEqual(phone_report.direction_of(turn), "to L" if to_landscape else "back")
+                self.assertTrue(a["drawn"])
+                self.assertEqual((a["requestToBegin"], a["started"], a["began"], a["drawnAt"], a["picture"]),
+                                 (20, 9, 11, 20, 20))
+                self.assertEqual((a["outcome"], a["pictureWhy"]), ("pending", "drawn"))
+                # The picture hides the page's first frames: the turn shows once it is gone.
+                self.assertEqual(a["move"], 40)
+                self.assertEqual((a["fails"], a["missing"], a["mismatch"]), ([], [], None))
 
-    def test_ios_still_turning_under_the_drawn_spin_sweeps_180(self):
-        for to_landscape, start, ios in ((True, -180, 90), (False, 180, -90)):
-            log = turn_logs.Log()
-            log.turn("请求前关·直接切·立即", ios_turns=True, to_landscape=to_landscape)
-            turn, a = only(log)
-            self.assertGrades(a, start=start, sweep=180, verdict="bad", fails=["sweep"])
-            self.assertTrue(a["monotonic"])
-            self.assertAlmostEqual(a["ios"], ios, delta=1)
-            self.assertEqual(phone_report.direction_of(turn), "to L" if to_landscape else "back")
-
-    def test_a_clean_drawn_turn_is_good(self):
-        for to_landscape, start in ((True, -90), (False, 90)):
-            log = turn_logs.Log()
-            log.turn("请求前关·直接切·立即", to_landscape=to_landscape)
-            _, a = only(log)
-            self.assertGrades(a, start=start, sweep=90, verdict="good")
-            self.assertAlmostEqual(a["ios"], 0, delta=0.1)
-            self.assertLess(a["ghost"][0], 1)
-            self.assertLess(a["moved"], phone_report.FIRST_MOVE_MAX_MS)
-            self.assertAlmostEqual(a["gap"], 1000 / 120, delta=0.1)
-            self.assertAlmostEqual(a["tick"], 1000 / 120, delta=0.1)
-            self.assertEqual(a["slow"], 0)
-            self.assertLessEqual(a["overshoot"], 1)
-            self.assertIsNone(a["mismatch"])
-
-    def test_a_60_hz_turn_measures_its_own_tick(self):
+    def test_the_system_turn_moves_at_its_begin_and_sends_nothing_to_dart(self):
         log = turn_logs.Log()
-        log.turn("请求前关·直接切·立即", hz=60, totals={3: 12, 4: 12, 5: 12})
-        _, a = only(log)
-        self.assertGrades(a, start=-90, sweep=90, verdict="good")
-        self.assertAlmostEqual(a["tick"], 1000 / 60, delta=0.1)
-        self.assertAlmostEqual(a["gap"], 1000 / 60, delta=0.1)
-        self.assertEqual(a["slow"], 0, "12 ms is inside a 60 Hz tick")
-
-    def test_the_system_turn_is_seen_through_the_window_alone(self):
-        log = turn_logs.Log()
-        log.turn("系统", method="system", ios_turns=True)
+        log.turn("系统", method="system", to_landscape=False)
         events = log.events()
-        self.assertEqual({event["f"]["method"] for event in events if event["msg"].startswith("turn native ")},
-                         {"system"})
         self.assertEqual({event["msg"] for event in events},
                          {"turn presentation", "turn native request", "turn native request returned",
-                          "turn native begin", "turn native completion", "turn native frames", "turn sized",
-                          "turn frames"}, "what Swift and the page log for 系统")
-        # Whatever angle the page's frames say, 系统's is iOS's turn alone.
-        frames = next(event for event in events if event["msg"] == "turn frames")
-        frames["f"]["samples"] = ";".join(
-            ",".join([parts[0], "45", *parts[2:]]) for parts in
-            (sample.split(",") for sample in frames["f"]["samples"].split(";")))
-        grouped = phone_report.group_turns(events)
-        turn = grouped["turns"][0]
-        a = phone_report.analyse_turn(turn, grouped["pool"])
-        self.assertGrades(a, start=-90, sweep=90, verdict="good")
-        self.assertIsNone(a["mismatch"])
-        self.assertAlmostEqual(a["ios"], 90, delta=1)
+                          "turn native begin", "turn native completion", "turn sized"})
+        turn, a = only(log)
+        self.assertFalse(a["drawn"])
+        self.assertEqual((a["requestToBegin"], a["move"], a["began"], a["picture"]), (20, 20, None, None))
+        self.assertEqual((a["fails"], a["missing"]), ([], []))
         text = "\n".join(phone_report.turn_detail(1, turn, a))
-        self.assertNotIn("not in the log", text, "nothing is missing: 系统 is never sent to Dart")
-        self.assertIsNone(a["ghost"])
-        self.assertIsNone(a["pictureUntil"])
+        self.assertNotIn("not in the log", text)
 
-    def test_a_picture_fading_over_a_moving_page_is_a_ghost(self):
+    def test_a_held_turn_moves_once_released(self):
         log = turn_logs.Log()
-        log.turn("请求前关·淡出·立即", picture="fade", fade_ms=120)
-        _, a = only(log)
-        self.assertGrades(a, start=-90, sweep=90, verdict="bad", fails=["ghost"])
-        self.assertGreater(a["ghost"][0], 10)
-        self.assertGreater(a["pictureUntil"], 150)
+        log.turn("请求前关·直接切·等截图", build=14, hold=True)
+        turn, a = only(log)
+        self.assertAlmostEqual(a["move"], 40.35, delta=0.01, msg="released just after the picture went")
+        self.assertEqual(a["fails"], [])
 
-    def test_a_picture_cut_before_the_first_frame_is_on_screen_shows_the_old_frame(self):
-        # The page's first frame (built at 20 ms, its raster done at 27) is on screen at the 33 ms tick; the picture
-        # went at 24 ms, before it.
+    def test_a_turn_backs_presentation_after_its_begin_is_its_own(self):
+        # The page logs a turn back's presentation change a few ms after the native begin.
         log = turn_logs.Log()
-        log.turn("请求前关·直接切·立即", drawn_ms=24)
-        _, a = only(log)
-        self.assertAlmostEqual(a["ghost"][0], 90, delta=1)
-        self.assertGreater(a["sweep"], 250)
-        self.assertFalse(a["monotonic"])
-        self.assertEqual([key for key, _ in a["fails"]], ["sweep", "back and forth", "ghost"])
+        log.turn("自绘")
+        log.now -= 2_400_000
+        log.turn("自绘", to_landscape=False)
+        log.now -= 2_400_000
+        log.turn("系统", method="system")
+        grouped = phone_report.group_turns(log.events())
+        turns = grouped["turns"]
+        self.assertEqual([turn["presentation"]["to"] for turn in turns], ["landscape", "inline", "landscape"])
+        self.assertEqual([turn["presentation"]["us"] - turn["us"] for turn in turns], [-10_000, 8_000, -10_000])
+        self.assertEqual([phone_report.style_of(turn)[0] for turn in turns], ["自绘", "自绘", "系统"])
+        self.assertEqual(grouped["orphans"], [])
 
-    def test_a_300_ms_gap_is_a_stall(self):
+    def test_failures_are_named(self):
         log = turn_logs.Log()
-        log.turn("请求前关·直接切·立即", stall_at_ms=150, stall_ms=300)
+        log.turn("自绘", fallback=True)
+        log.turn("自绘", late=True, to_landscape=False)
+        log.turn("自绘", outcome="stale")
+        log.turn("自绘", outcome="unasked", to_landscape=False)
+        log.turn("请求前关·淡出·立即", build=14, picture="fade", fade_ms=130)
+        log.turn("自绘", lost=3, to_landscape=False)
+        log.turn("系统")  # the takeover still on
+        log.turn("自绘", fallback=True, snapshot=False, to_landscape=False)
+        found = analysed(log)
+        self.assertEqual([fail_keys(a) for _, a in found],
+                         [["fallback", "picture"], ["late"], ["stale"], ["unasked"], ["picture"], ["lost"],
+                          ["≠native"], ["fallback"]])
+        self.assertEqual([phone_report.verdict_text(a) for _, a in found],
+                         ["fallback, picture 500 ms", "late", "stale", "unasked", "picture 150 ms", "3 lost",
+                          "ran quietRequest/cut", "fallback"])
+        self.assertEqual(found[0][1]["move"], 520)
+        self.assertEqual(found[0][1]["missing"], [], "a fallback stands for turnDrawn")
+        text = phone_report.render_turns(log.events())
+        self.assertRegex(text, r"\n1 .* 自绘\s+to L\s+20\s+9\s+11\s+510\s+500 fallback\s+520\s+fallback, picture 500 ms\n")
+        self.assertRegex(text, r"\n3 .* 9 stale ")
+        self.assertIn("the native begin ran quietRequest/cut, not 系统", text)
+        self.assertIn("notes: 3 native sends lost before its lines", text)
+        self.assertIn("snapshot failed", text)
+
+    def test_a_14_picture_the_page_doesnt_wait_for_is_not_a_failure(self):
+        log = turn_logs.Log()
+        log.turn("请求前关·无截图·立即", build=14, picture="none")
         _, a = only(log)
-        self.assertAlmostEqual(a["gap"], 300, delta=0.1)
-        self.assertEqual(a["verdict"], "bad")
-        self.assertEqual([key for key, _ in a["fails"]], ["gap"])
-        self.assertGreater(a["step"], 40)
+        self.assertEqual((a["picture"], a["move"], a["fails"]), (None, 31, []))
 
     def test_turns_take_the_style_of_the_cycle_they_ran_in(self):
         log = turn_logs.Log()
-        log.cycle(2, 7, "请求前关·直接切·等截图")
-        log.turn("请求前关·直接切·等截图", hold=True, ios_turns=True)
-        log.turn("别的", hold=True, ios_turns=True, to_landscape=False)
-        log.cycle(3, 7, "请求前关·直接切·立即")
-        log.turn("请求前关·直接切·立即")
-        log.cycle_done()
-        log.turn("请求前关·淡出·立即", picture="fade", fade_ms=120, ios_turns=True)
+        log.cycle(1, 7, "请求前关·淡出·立即")
+        log.turn("请求前关·淡出·立即", build=14, picture="fade")
+        log.turn("别的", build=14, picture="fade", to_landscape=False)
+        log.cycle_off(1, 7, "请求前关·直接切·等截图")
+        log.turn("请求前关·直接切·等截图", build=14, hold=True)
+        log.cycle(1, 7, "系统")
+        log.cycle_done(7, "请求前关·直接切·立即")
+        log.turn("请求前关·直接切·立即", build=14, to_landscape=False)
         found = analysed(log)
         self.assertEqual([phone_report.style_of(turn) for turn, _ in found],
-                         [("请求前关·直接切·等截图", None), ("请求前关·直接切·等截图", "别的"),
-                          ("请求前关·直接切·立即", None), ("请求前关·淡出·立即", None)])
-        rows = phone_report.style_summary(found)
-        self.assertEqual([(row["style"], row["turns"], row["good"], row["bad"]) for row in rows],
-                         [("请求前关·直接切·立即", 1, 1, 0), ("请求前关·直接切·等截图", 2, 0, 2),
-                          ("请求前关·淡出·立即", 1, 0, 1)])
+                         [("请求前关·淡出·立即", None), ("请求前关·淡出·立即", "别的"),
+                          ("请求前关·直接切·等截图", None), ("请求前关·直接切·立即", None)])
+        self.assertEqual([turn["cycle"] is not None for turn, _ in found], [True, True, False, False])
+        self.assertEqual([a["mismatch"] for _, a in found], [None, None, None, None])
         text = phone_report.render_turns(log.events())
-        self.assertIn("(轮换 2/7)", text)
+        self.assertIn("请求前关·淡出·立即 (轮换 1/7)", text)
         self.assertIn("the page logged style 别的", text)
+        self.assertNotIn("请求前关·直接切·等截图 (轮换", text)
 
-    def test_lines_are_placed_by_turn_id_and_time_not_by_arrival(self):
+    def test_a_turn_whose_native_begin_disagrees_with_its_label_is_flagged(self):
         log = turn_logs.Log()
-        log.turn("请求前关·直接切·立即")
-        log.now -= 2_400_000  # the turn back starts 600 ms after the first
-        log.turn("请求前关·直接切·立即", to_landscape=False)
-        events = log.events()
-        # The phone may log the two sides in any order; only the wall clock counts.
-        shuffled = [{**event, "seq": len(events) - index} for index, event in enumerate(events)]
-        for given in (events, shuffled):
-            grouped = phone_report.group_turns(given)
-            first, second = grouped["turns"]
-            self.assertEqual((first["id"], second["id"]), (1, 2))
-            self.assertEqual((first["presentation"]["to"], second["presentation"]["to"]), ("landscape", "inline"))
-            self.assertEqual((first["request"]["request"], second["request"]["request"]), (1, 2))
-            self.assertEqual((first["returned"]["request"], second["returned"]["request"]), (1, 2))
-            self.assertEqual([f["w"] for f in first["dart"]["sized"]], [956])
-            self.assertEqual([f["w"] for f in second["dart"]["sized"]], [440])
-            self.assertEqual((len(first["dartFrames"]), len(second["dartFrames"])), (1, 1))
-            a = phone_report.analyse_turn(first, grouped["pool"])
-            self.assertAlmostEqual(a["cut"], 600, delta=1)
-            self.assertLessEqual(a["ticks"], 72)
-            self.assertEqual(a["verdict"], "good")
+        log.cycle(4, 7, "请求前关·淡出·立即")
+        log.turn("请求前关·淡出·立即", build=14, picture="fade")
+        log.turn("请求前关·淡出·立即", build=14, to_landscape=False)  # the style hadn't reached the host
+        log.cycle_off(4)
+        log.turn("请求前关·直接切·立即", build=14, method="system")
+        log.turn("移除·直接切·立即", build=14, method="remove")  # 1.0.0 (13)'s, not checked
+        log.turn("自绘", method="system", to_landscape=False)
+        log.turn("自绘", picture="fade")
+        log.turn("自定", to_landscape=False)
+        found = analysed(log)
+        self.assertEqual([a["mismatch"] for _, a in found],
+                         [None, "quietRequest/cut", "system/none", None, "system/none", "quietRequest/fade", None])
+        rows = {row["style"]: row for row in phone_report.style_summary(found)}
+        self.assertEqual(rows["请求前关·淡出·立即"]["fails"]["≠native"], 1)
+        self.assertEqual(rows["自绘"]["fails"]["≠native"], 2)
 
-    def test_each_turn_holds_only_its_own_frames_line(self):
-        # The page's line starts at the presentation change, before the native begin, inside the last turn's trail.
-        for apart_ms in (600, 1000, 3000):
-            log = turn_logs.Log()
-            log.turn("请求前关·直接切·立即")
-            log.now += (apart_ms - 3000) * 1000
-            log.turn("请求前关·直接切·立即", to_landscape=False)
-            log.now += (apart_ms - 3000) * 1000
-            log.turn("系统", method="system", ios_turns=True)
-            events = log.events()
-            counts = [event["f"]["count"] for event in events if event["msg"] == "turn frames"]
-            starts = [event["f"]["t0Us"] for event in events if event["msg"] == "turn frames"]
-            grouped = phone_report.group_turns(events)
-            turns = grouped["turns"]
-            self.assertTrue(all(start < turn["us"] for start, turn in zip(starts, turns)), "a waiting frame first")
-            self.assertEqual([len(turn["dartFrames"]) for turn in turns], [1, 1, 1], f"{apart_ms} ms apart")
-            self.assertEqual([phone_report.analyse_turn(turn, grouped["pool"])["dartFrames"] for turn in turns],
-                             counts)
-            self.assertEqual(grouped["unplaced"], {})
-
-    def test_a_frames_line_logged_after_the_next_turn_began_still_belongs_to_its_own(self):
-        # Release builds wait for FrameTimings: the page's frames line can come ~1.5 s after the turn's last frame.
+    def test_the_native_method_names_a_turn_the_page_left_unlabelled(self):
         log = turn_logs.Log()
-        log.turn("请求前关·直接切·立即", frames_after_ms=1500)
-        log.now -= 2_000_000  # the turn back begins 1 s after the first, before the first's frames line
-        log.turn("请求前关·直接切·立即", to_landscape=False, frames_after_ms=1500)
-        events = log.events()
-        order = [event["msg"] for event in events]
-        self.assertLess(order.index("turn presentation", order.index("turn native begin") + 1),
-                        order.index("turn frames"))
-        grouped = phone_report.group_turns(events)
-        first, second = grouped["turns"]
-        self.assertEqual([len(turn["dartFrames"]) for turn in (first, second)], [1, 1])
-        self.assertLess(first["dartFrames"][0]["span"][1], second["us"])
-        self.assertLess(second["dartFrames"][0]["span"][0], second["us"], "its waiting frame, in the first's trail")
-        for turn, start in ((first, -90), (second, 90)):
-            a = phone_report.analyse_turn(turn, grouped["pool"])
-            self.assertGrades(a, start=start, sweep=90, verdict="good")
+        log.turn("自绘", dart=False)
+        log.turn("系统", method="system", dart=False, to_landscape=False)
+        log.turn("抵消", method="counter", dart=False)
+        self.assertEqual([phone_report.style_of(turn)[0] for turn, _ in analysed(log)],
+                         ["自绘", "系统", "counter/cut"])
 
     def test_missing_pieces_are_named_not_fatal(self):
         log = turn_logs.Log()
-        log.cycle(0, 7, "系统")
-        log.turn("系统", method="system", ios_turns=True, dart=False)
-        log.cycle(1, 7, "请求前关·直接切·立即")
-        log.turn("请求前关·直接切·立即", native=False)
-        log.turn("请求前关·直接切·立即", dart=False)
-        log.turn("请求前关·直接切·立即", native_frames=False)
-        log.turn("请求前关·直接切·立即", dart_frames=False)
-        log.presentation_only("请求前关·直接切·立即")
+        log.turn("系统", method="system", dart=False)
+        log.turn("自绘", native=False, to_landscape=False)
+        log.turn("自绘", dart=False)
+        log.presentation_only("自绘")
         found = analysed(log)
-        self.assertEqual([a["verdict"] for _, a in found], ["good", "?", "?", "?", "?"])
-        self.assertEqual([a["unknown"] for _, a in found[1:]],
-                         [["no native lines"], ["no Dart frames, so the page's spin is left out"],
-                          ["no native frames"], ["no Dart frames, so the page's spin is left out"]])
+        self.assertEqual([a["missing"] for _, a in found],
+                         [["Dart presentation"], ["native request", "native begin", "native drawn"],
+                          ["Dart presentation", "Dart started", "Dart began"]])
+        self.assertIsNone(found[1][1]["requestToBegin"])
+        self.assertEqual((found[1][1]["move"], found[1][1]["moveFrom"]), (3, "presentation"))
         text = phone_report.render_turns(log.events())
-        self.assertIn("not in the log: native request, native begin, native frames", text)
-        self.assertIn("not in the log: Dart presentation, Dart started, Dart began, Dart frames", text)
+        self.assertIn("not in the log: native request, native begin, native drawn", text)
+        self.assertIn("ok (missing lines)", text)
         self.assertIn("presentation changes no turn followed: 1", text)
         self.assertIn("(late, missed)", text)
-        self.assertIn("?: no native frames", text)
 
-    def test_malformed_lines_and_samples_never_crash(self):
+    def test_malformed_lines_never_crash(self):
         log = turn_logs.Log()
-        log.turn("请求前关·直接切·立即")
-        events = log.events()
-        native = next(event for event in events if event["msg"] == "turn native frames")
-        native["f"]["samples"] = "rubbish;1,2;;" + native["f"]["samples"] + ";5,16.7,0,x,956,440,,0,,"
-        dart = next(event for event in events if event["msg"] == "turn frames")
-        dart["f"]["samples"] = dart["f"]["samples"] + ";oops;3"
-        dart["f"]["timings"] = "a,b;1"
-        events += [
+        log.turn("自绘")
+        events = log.events() + [
             {"seq": 900, "msg": "turn native begin", "f": "not fields"},
             {"seq": 901, "msg": "turn started", "f": {"turn": "two"}},
             {"seq": 902, "msg": 5},
@@ -366,116 +317,40 @@ class TurnReportTests(unittest.TestCase):
             {"seq": 905, "msg": "turn cycle", "f": {"wUs": 1.5e15, "label": None}},
             {"seq": 906, "msg": "turn presentation", "f": {"wUs": float("inf")}},
             {"seq": 907, "msg": "turn native drawn", "f": {"wUs": 1e30, "turn": 99}},
+            {"seq": 908, "msg": "turn native picture gone", "f": {"wUs": 1.76e15, "turn": 1, "why": None}},
         ]
         grouped = phone_report.group_turns(events)
-        first = grouped["turns"][0]
-        a = phone_report.analyse_turn(first, grouped["pool"])
-        self.assertEqual(a["malformed"], 4)
-        self.assertEqual(a["verdict"], "good")
-        self.assertEqual(grouped["dartBad"], 2)
+        self.assertEqual(phone_report.analyse_turn(grouped["turns"][0])["fails"], [])
         text = phone_report.render_turns(events)
-        self.assertIn("4 native samples unreadable", text)
         self.assertIn("turn lines without a time: 3", text)
-        self.assertIn("Dart frame samples unreadable: 2", text)
         self.assertEqual(phone_report.render_turns([]).strip(),
-                         "no turns in this log (the 旋转动画 test build logs them while 发送日志到电脑 is on)")
+                         "no turns in this log (dev builds log them while 发送日志到电脑 is on)")
 
-    def test_styles_rank_good_first_then_by_worst_gap_and_first_move(self):
+    def test_lines_are_placed_by_turn_id_and_time_not_by_arrival(self):
         log = turn_logs.Log()
-        for label, options in (("坏", {"ios_turns": True}),
-                               ("慢", {"stall_at_ms": 150, "stall_ms": 40}),
-                               ("好", {}),
-                               ("晚", {"hold": True, "first_frame_ms": 10, "drawn_ms": 40}),
-                               ("缺", {"native_frames": False})):
-            log.turn(label, **options)
-            log.turn(label, to_landscape=False, **options)
-        rows = phone_report.style_summary(analysed(log))
-        self.assertEqual([row["style"] for row in rows], ["好", "晚", "慢", "坏", "缺"])
-        self.assertEqual([(row["good"], row["bad"], row["unknown"]) for row in rows],
-                         [(2, 0, 0), (2, 0, 0), (2, 0, 0), (0, 2, 0), (0, 0, 2)])
-        self.assertAlmostEqual(rows[2]["gap"], 40, delta=0.1)
-        self.assertGreater(rows[1]["move"], rows[0]["move"])
-        self.assertEqual(rows[3]["fails"], {"sweep": 2})
-        self.assertAlmostEqual(rows[0]["sweep"], 90, delta=1)
+        log.turn("自绘")
+        log.now -= 2_400_000  # the turn back starts 600 ms after the first
+        log.turn("自绘", to_landscape=False)
+        events = log.events()
+        shuffled = [{**event, "seq": len(events) - index} for index, event in enumerate(events)]
+        for given in (events, shuffled):
+            grouped = phone_report.group_turns(given)
+            first, second = grouped["turns"]
+            self.assertEqual((first["id"], second["id"]), (1, 2))
+            self.assertEqual((first["request"]["request"], second["request"]["request"]), (1, 2))
+            self.assertEqual((first["returned"]["request"], second["returned"]["request"]), (1, 2))
+            self.assertEqual([f["w"] for f in first["dart"]["sized"]], [956])
+            self.assertEqual([f["w"] for f in second["dart"]["sized"]], [440])
+            self.assertEqual([phone_report.analyse_turn(turn)["fails"] for turn in (first, second)], [[], []])
 
-    def test_the_turn_report_never_prints_a_url(self):
-        log = turn_logs.Log()
-        log.cycle(0, 7, "see https://evil.example.com/x?token=SECRET")
-        log.turn("请求前关·直接切·立即")
-        text = phone_report.render_turns(log.events())
-        self.assertIn("evil.example.com", text)
-        self.assertNotIn("http", text)
-        self.assertNotIn("SECRET", text)
-
-    def test_the_sample_session_is_what_turn_logs_writes(self):
-        self.assertEqual(phone_report.load(turn_logs.SAMPLE), turn_logs.sample().events())
-
-    def test_main_grades_the_sample_session(self):
-        out = io.StringIO()
-        with redirect_stdout(out):
-            self.assertEqual(phone_report.main(["--turns", str(turn_logs.SAMPLE)]), 0)
-        text = out.getvalue()
-        self.assertIn("== Turns: 12 (back 6, to L 6) ==", text)
-        self.assertIn("== Styles, best first ==", text)
-        summary = text[text.index("== Styles, best first =="):].splitlines()
-        self.assertRegex(summary[2], r"^1\s+系统\s+1/7\s+2\s+2\s+0\s+0\s+0\s+90\s.*under 4 turns$")
-        self.assertRegex(summary[3], r"^2\s+请求前关·直接切·立即\s+2/7\s+4\s+3\s+0\s+1\s+0\s+90\s")
-        self.assertRegex(text, r"请求前关·淡出·立即\s+to L .* bad: sweep 180°, ghost 23.3°")
-        self.assertIn("bad: gap 300 ms", text)
-        self.assertRegex(text, r"请求前关·无截图·立即\s+back .* bad: sweep 180°, back and forth",
-                         "with no picture, the turned page shows before the page's first frame")
-        self.assertRegex(text, r"\n12 .* back +25 +16\.7 .* good\n", "the 60 Hz turn")
-        self.assertIn("native sends to Dart lost: 2", text)
-
-    def test_a_cycle_switched_off_labels_nothing_after_it(self):
-        log = turn_logs.Log()
-        log.cycle(1, 7, "请求前关·淡出·立即")
-        log.turn("请求前关·淡出·立即", picture="fade")
-        log.cycle_off(1, 7, "请求前关·直接切·等截图")
-        log.turn("请求前关·直接切·等截图", hold=True)
-        log.cycle(1, 7, "系统")
-        log.cycle_done(7, "请求前关·直接切·立即")
-        log.turn("请求前关·直接切·立即")
-        found = analysed(log)
-        self.assertEqual([phone_report.style_of(turn) for turn, _ in found],
-                         [("请求前关·淡出·立即", None), ("请求前关·直接切·等截图", None), ("请求前关·直接切·立即", None)])
-        self.assertEqual([turn["cycle"] is not None for turn, _ in found], [True, False, False])
-        self.assertEqual([a["mismatch"] for _, a in found], [None, None, None])
-        text = phone_report.render_turns(log.events())
-        self.assertIn("请求前关·淡出·立即 (轮换 1/7)", text)
-        self.assertNotIn("请求前关·直接切·等截图 (轮换", text)
-
-    def test_a_turn_whose_native_begin_disagrees_with_its_label_is_flagged(self):
-        log = turn_logs.Log()
-        log.cycle(4, 7, "请求前关·淡出·立即")
-        log.turn("请求前关·淡出·立即", picture="fade")
-        log.turn("请求前关·淡出·立即", to_landscape=False)  # the style hadn't reached the host
-        log.cycle_off(4)
-        log.turn("请求前关·直接切·立即", method="system", ios_turns=True, spin=False)
-        log.turn("系统", method="system", ios_turns=True, to_landscape=False)
-        log.turn("系统", picture="none", ios_turns=True, spin=False)  # the takeover still on
-        log.turn("移除·直接切·立即", method="remove")  # 1.0.0 (13)'s, not checked
-        log.turn("自定")
-        found = analysed(log)
-        self.assertEqual([a["mismatch"] for _, a in found],
-                         [None, "quietRequest/cut", "system/none", None, "quietRequest/none", None, None])
-        text = phone_report.render_turns(log.events())
-        self.assertIn("请求前关·淡出·立即 ≠ quietRequest/cut", text)
-        self.assertIn("the native begin ran quietRequest/cut, not 请求前关·淡出·立即", text)
-        self.assertIn("the native begin ran system/none, not 请求前关·直接切·立即", text)
-        rows = {row["style"]: row for row in phone_report.style_summary(found)}
-        self.assertEqual(rows["请求前关·淡出·立即"]["mismatched"], 1)
-        self.assertEqual(rows["系统"]["mismatched"], 1)
-
-    def test_a_13_log_with_its_removed_methods_still_reads(self):
-        # 1.0.0 (13) also logged `animations` and `container` lines, and methods (14) no longer has.
+    def test_older_builds_per_frame_and_13_lines_are_passed_over(self):
         log = turn_logs.Log()
         log.cycle(4, 13, "抵消·直接切·立即")
-        log.turn("抵消·直接切·立即", method="counter")
-        log.turn("抵消·直接切·立即", method="counter", to_landscape=False)
-        clean = analysed(log)
+        log.turn("抵消·直接切·立即", build=14, method="counter")
+        log.turn("抵消·直接切·立即", build=14, method="counter", to_landscape=False)
+        clean = [a for _, a in analysed(log)]
         for turn in (1, 2):
-            us = turn_logs.START_US + (turn - 1) * 3_000_000
+            us = turn_logs.START_US + 500_000 + (turn - 1) * 3_000_000
             log.native(us + 1000, "animations", turn, "counter", "cut", phase="after super",
                        found="window|transform|CABasicAnimation|0.4|easeInEaseOut|false|0", removed=2)
             log.native(us + 2000, "container", turn, "counter", "cut", event="installed")
@@ -483,108 +358,88 @@ class TurnReportTests(unittest.TestCase):
         events = log.events()
         grouped = phone_report.group_turns(events)
         self.assertEqual([turn["id"] for turn in grouped["turns"]], [1, 2], "no turn made up from a container line")
-        self.assertEqual(grouped["unplaced"], {})
-        self.assertEqual(grouped["lost"], 1)
-        found = [(turn, phone_report.analyse_turn(turn, grouped["pool"])) for turn in grouped["turns"]]
-        self.assertEqual([(a["verdict"], a["sweep"], a["mismatch"]) for _, a in found],
-                         [(a["verdict"], a["sweep"], a["mismatch"]) for _, a in clean])
-        self.assertEqual([a["verdict"] for _, a in found], ["good", "good"])
+        self.assertEqual((grouped["unplaced"], grouped["lost"], grouped["frames"]), ({}, 1, 4))
+        self.assertEqual([phone_report.analyse_turn(turn) for turn in grouped["turns"]], clean)
         text = phone_report.render_turns(events)
         self.assertNotIn("animations", text)
         self.assertNotIn("container", text)
+        self.assertIn("per-frame lines passed over: 4", text)
 
-    def test_styles_rank_by_good_out_of_all_their_turns_a_question_mark_counting_as_not_good(self):
+    def test_styles_are_summed_up_in_the_order_first_seen(self):
         log = turn_logs.Log()
-        for _ in range(2):
-            log.turn("半", native_frames=False)
-            log.turn("半", to_landscape=False)
-        for to_landscape in (True, False, True):
-            log.turn("多", to_landscape=to_landscape)
-        log.turn("多", ios_turns=True)
-        log.turn("一", to_landscape=False)
+        log.turn("系统", method="system")
+        log.turn("自绘", to_landscape=False)
+        log.turn("自绘", fallback=True)
+        log.turn("系统", method="system", to_landscape=False, late=True)
+        log.turn("自绘", to_landscape=False, dart=False)
         rows = phone_report.style_summary(analysed(log))
-        self.assertEqual([(row["style"], row["good"], row["bad"], row["unknown"]) for row in rows],
-                         [("一", 1, 0, 0), ("多", 3, 1, 0), ("半", 2, 0, 2)])
-        self.assertEqual([row["few"] for row in rows], [True, False, False])
-        summary = phone_report.render_turns(log.events()).split("== Styles, best first ==")[1].splitlines()
-        self.assertRegex(summary[2], r"^1\s+一\s.*under 4 turns$")
-        self.assertNotIn("under 4 turns", summary[3] + summary[4])
+        self.assertEqual([(row["style"], row["turns"], row["ok"], row["missing"]) for row in rows],
+                         [("系统", 2, 1, 0), ("自绘", 3, 2, 1)])
+        self.assertEqual(rows[0]["fails"], {"late": 1})
+        self.assertEqual(rows[1]["fails"], {"fallback": 1, "picture": 1})
+        self.assertEqual((rows[1]["picture"], rows[1]["pictureMax"], rows[1]["move"], rows[1]["moveMax"]),
+                         (20, 500, 280, 520))
+        self.assertEqual((rows[0]["move"], rows[0]["began"]), (20, None))
 
-    def test_a_dart_frame_is_on_screen_from_the_first_tick_after_its_raster_finished(self):
-        self.assertEqual(phone_report.on_screen([(0, None, 10.0), (8_000, 30_000, 20.0), (16_000, 25_000, 30.0)],
-                                                8_333), ([8_333, 25_000, 30_000], [10.0, 30.0, 20.0]))
-        # The first frame is built at 20 ms and its raster is done at 48: on screen at the 50 ms tick, after the
-        # picture went at 35. Placed a tick after it was built instead, it would be under the picture by 33.
-        graded = {}
-        for shown in (True, False):
-            log = turn_logs.Log()
-            log.turn("请求前关·直接切·立即", drawn_ms=35, totals={0: 28}, shown=shown)
-            graded[shown] = only(log)[1]
-        self.assertAlmostEqual(graded[True]["ghost"][0], 90, delta=1)
-        self.assertFalse(graded[True]["monotonic"])
-        self.assertEqual(graded[True]["verdict"], "bad")
-        self.assertLess(graded[False]["ghost"][0], 1)
-        self.assertEqual(graded[False]["verdict"], "good")
-        self.assertEqual(graded[False]["slow"], 1)
-
-    def test_more_than_two_slow_dart_frames_inside_the_turn_fail_it(self):
-        def turn(slow_frames, **options):
-            log = turn_logs.Log()
-            log.turn("请求前关·直接切·立即", totals={index: 12 for index in range(5, 5 + slow_frames)}, **options)
-            return log
-
-        _, two = only(turn(2))
-        self.assertEqual((two["slow"], two["verdict"]), (2, "good"))
-        _, three = only(turn(3))
-        self.assertEqual(three["slow"], 3)
-        self.assertGrades(three, start=-90, sweep=90, verdict="bad", fails=["slow"])
-        self.assertIn("bad: 3 slow frames", phone_report.verdict_text(three))
-        _, sixty = only(turn(3, hz=60))
-        self.assertEqual((sixty["slow"], sixty["verdict"]), (0, "good"), "against the turn's own tick")
-
-        # A slow frame placed after the turn is not the turn's.
-        events = turn(2).events()
-        frames = next(event for event in events if event["msg"] == "turn frames")
-        frames["f"]["timings"] += ";4.2,20,24.2,5000"
-        grouped = phone_report.group_turns(events)
-        self.assertEqual(phone_report.analyse_turn(grouped["turns"][0], grouped["pool"])["slow"], 2)
-        # Without timings, the line's own count.
-        frames["f"]["timings"] = ""
-        frames["f"]["slow"] = 3
-        grouped = phone_report.group_turns(events)
-        a = phone_report.analyse_turn(grouped["turns"][0], grouped["pool"])
-        self.assertEqual((a["slow"], a["verdict"]), (3, "bad"))
-        # Without a raster finish, every frame of the line.
-        _, unplaced = only(turn(3, raster_end=False, shown=False))
-        self.assertEqual((unplaced["slow"], unplaced["verdict"]), (3, "bad"))
-
-    def test_a_picture_style_whose_snapshot_failed_is_not_graded(self):
-        for picture in ("cut", "fade"):
-            log = turn_logs.Log()
-            log.turn("请求前关·直接切·立即", picture=picture, snapshot=False)
-            _, a = only(log)
-            self.assertEqual(a["verdict"], "?")
-            self.assertEqual(a["unknown"], ["no picture"])
-            text = phone_report.render_turns(log.events())
-            self.assertIn("?: no picture", text)
-            self.assertIn("snapshot failed", text)
+    def test_the_turn_report_never_prints_a_url(self):
         log = turn_logs.Log()
-        log.turn("请求前关·无截图·立即", picture="none")
-        _, a = only(log)
-        self.assertEqual(a["unknown"], [], "no picture is what 无截图 asks for")
+        log.cycle(0, 7, "see https://evil.example.com/x?token=SECRET")
+        log.turn("自绘")
+        text = phone_report.render_turns(log.events())
+        self.assertIn("evil.example.com", text)
+        self.assertNotIn("http", text)
+        self.assertNotIn("SECRET", text)
 
     def test_lost_sends_are_totalled(self):
         log = turn_logs.Log()
-        log.turn("请求前关·直接切·立即", lost=3)
-        log.turn("请求前关·直接切·立即", to_landscape=False, lost=2)
+        log.turn("自绘", lost=3)
+        log.turn("自绘", to_landscape=False, lost=2)
         log.native(log.now, "container", 0, "counter", "cut", event="lost", lost=1)
         grouped = phone_report.group_turns(log.events())
         self.assertEqual(grouped["lost"], 6)
         self.assertEqual([turn["lost"] for turn in grouped["turns"]], [3, 2])
-        text = phone_report.render_turns(log.events())
-        self.assertIn("native sends to Dart lost: 6", text)
-        self.assertIn("notes: 3 native sends lost before its lines", text)
+        self.assertIn("native sends to Dart lost: 6", phone_report.render_turns(log.events()))
         self.assertNotIn("lost", phone_report.render_turns([]))
+
+    def test_the_sample_sessions_are_what_turn_logs_writes(self):
+        self.assertEqual(phone_report.load(turn_logs.SAMPLE_15), turn_logs.sample_15().events())
+        self.assertEqual(phone_report.load(turn_logs.SAMPLE_14), turn_logs.sample_14().events())
+
+    def run_main(self, path):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(phone_report.main(["--turns", str(path)]), 0)
+        return out.getvalue()
+
+    def test_main_reads_a_15_session(self):
+        text = self.run_main(turn_logs.SAMPLE_15)
+        self.assertIn("== Turns: 8 (back 4, to L 4) ==", text)
+        summary = text[text.index("== Per style =="):].splitlines()
+        self.assertRegex(summary[2], r"^系统\s+–\s+2\s+2\s+–\s+0\s+20\s+–\s+–\s+–/–\s+20/20$")
+        self.assertRegex(summary[3], r"^自绘\s+–\s+6\s+2\s+fallback ×1, late ×1, stale ×1, picture ×1, lost ×1\s+0\s+"
+                                     r"20\s+11\s+20\s+20/500\s+40/520$")
+        self.assertIn("presentation changes no turn followed: 1", text)
+        self.assertIn("native sends to Dart lost: 2", text)
+        self.assertNotIn("passed over", text)
+
+    def test_main_reads_a_14_session(self):
+        text = self.run_main(turn_logs.SAMPLE_14)
+        self.assertIn("== Turns: 12 (back 6, to L 6) ==", text)
+        summary = text[text.index("== Per style =="):].splitlines()
+        self.assertRegex(summary[2], r"^系统\s+1/7\s+2\s+2\s")
+        self.assertRegex(summary[5], r"^请求前关·淡出·立即\s+4/7\s+2\s+0\s+picture ×2\s")
+        self.assertRegex(summary[3], r"^请求前关·直接切·立即\s+2/7\s+4\s+3\s+lost ×1\s+1\s",
+                         "the two turns after the cycle was switched off share the page's label")
+        self.assertIn("per-frame lines passed over: 23", text)
+
+    def test_help_and_report_survive_a_cp1252_console(self):
+        tool = pathlib.Path(phone_report.__file__)
+        env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+        for args in (["--help"], ["--turns", str(turn_logs.SAMPLE_15)]):
+            done = subprocess.run([sys.executable, str(tool), *args], capture_output=True, env=env, timeout=60)
+            self.assertEqual(done.returncode, 0, done.stderr.decode("utf-8", "replace"))
+            self.assertIn("旋转动画" if args == ["--help"] else "自绘", done.stdout.decode("utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
