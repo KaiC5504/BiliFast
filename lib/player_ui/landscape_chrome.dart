@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:bili_core/api.dart' show VideoTagKind;
 import 'package:bili_core/logic.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
@@ -14,13 +15,15 @@ import 'panels/panel_controller.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
 import 'seek_bar.dart';
+import 'status_bar_view.dart';
 
 const _fade = Duration(milliseconds: 220);
 
-/// The landscape full-screen controls, filling the screen (BiliNative `LandscapeChrome.swift`, measured on 04): back
-/// and the title with N人正在看 and the uploader under it, 点赞 评论 收藏 投币 充电 分享 and ⋮, 截图 and the rotation
-/// lock on the right edge, the time, the bar and the bottom row. The bars slide in from their edges as the controls
-/// show and stand aside while a panel is open. The page details' parts have their room kept until they arrive.
+/// The landscape full-screen controls, filling the screen (BiliNative `LandscapeChrome.swift`, measured on 04 and 05):
+/// the drawn status bar, back and the title with N人正在看, the uploader's chip and the bgm under it, 点赞 评论 收藏 投币
+/// 充电 分享 and ⋮, 截图 and the rotation lock on the right edge, the time, the bar and the bottom row. The bars slide in
+/// from their edges as the controls show and stand aside while a panel is open; the status bar goes with the top one,
+/// as 25, 27 and the panels (05, 06, 20) show none. The page details' parts have their room kept until they arrive.
 class LandscapeChrome extends StatelessWidget {
   const LandscapeChrome({super.key, required this.ui});
 
@@ -137,6 +140,18 @@ class LandscapeChrome extends StatelessWidget {
   };
 
   Widget _topBar(EdgeInsets insets) {
+    final row = _topRow(insets);
+    final feed = ui.statusBar;
+    if (feed == null) return row;
+    return Stack(
+      children: [
+        row,
+        Positioned(left: 0, right: 0, top: insets.top, child: LandscapeStatusBar(feed: feed)),
+      ],
+    );
+  }
+
+  Widget _topRow(EdgeInsets insets) {
     return Padding(
       padding: EdgeInsets.only(
         left: insets.left + BiliMetrics.landscapeEdge,
@@ -220,6 +235,7 @@ class LandscapeChrome extends StatelessWidget {
 
   Widget _bottomBar(EdgeInsets insets) {
     final session = ui.session;
+    final next = session.next;
     final bar = FullScreenSeekBar.repaintOf(ui);
     return Padding(
       padding: EdgeInsets.only(
@@ -269,6 +285,13 @@ class LandscapeChrome extends StatelessWidget {
                   pauseGap: BiliMetrics.chromePauseGap,
                   pauseHeight: BiliMetrics.chromePauseShare,
                 ),
+                if (next != null || session.episodes.isNotEmpty) ...[
+                  const SizedBox(width: BiliMetrics.landscapeDanmakuLead),
+                  _NextButton(
+                    onTap: next == null ? null : _touch(() => session.playEpisode(next)),
+                    keepUp: ui.chrome.show,
+                  ),
+                ],
                 Padding(
                   padding: const EdgeInsets.only(left: BiliMetrics.landscapeDanmakuLead),
                   child: ChromeTap(
@@ -297,6 +320,15 @@ class LandscapeChrome extends StatelessWidget {
                 ] else
                   const Expanded(child: SizedBox.shrink()),
                 const SizedBox(width: BiliMetrics.chromeSpeedGap),
+                if (session.episodes.isNotEmpty) ...[
+                  _TextButton(
+                    key: const ValueKey('landscape-episodes'),
+                    label: '选集',
+                    text: '选集',
+                    onTap: _touch(() => ui.panels.open(PlayerPanel.episodes)),
+                  ),
+                  const SizedBox(width: LandscapeActionTheme.episodesGap),
+                ],
                 _TextButton(
                   key: const ValueKey('landscape-speed'),
                   label: '倍速',
@@ -314,15 +346,6 @@ class LandscapeChrome extends StatelessWidget {
                   bold: true,
                   onTap: _touch(() => ui.panels.open(PlayerPanel.quality)),
                 ),
-                if (session.episodes.isNotEmpty) ...[
-                  const SizedBox(width: BiliMetrics.chromeEpisodesGap),
-                  _TextButton(
-                    key: const ValueKey('landscape-episodes'),
-                    label: '选集',
-                    text: '选集',
-                    onTap: _touch(() => ui.panels.open(PlayerPanel.episodes)),
-                  ),
-                ],
               ],
             ),
           ),
@@ -425,6 +448,89 @@ class _TextButton extends StatelessWidget {
   );
 }
 
+/// ⏭ after ▶ (05), playing the next part or 合集 episode; with episodes but nothing next it stays, greyed, as on 34,
+/// and a tap on it only keeps the controls up.
+class _NextButton extends StatelessWidget {
+  const _NextButton({required this.onTap, required this.keepUp});
+
+  final VoidCallback? onTap;
+  final VoidCallback keepUp;
+
+  @override
+  Widget build(BuildContext context) {
+    final onTap = this.onTap;
+    final glyph = Transform.translate(
+      offset: const Offset(LandscapeActionTheme.nextShift, 0),
+      child: const CustomPaint(
+        size: Size(LandscapeActionTheme.nextWidth, LandscapeActionTheme.nextHeight),
+        painter: _NextPainter(),
+      ),
+    );
+    if (onTap == null) {
+      return Semantics(
+        key: const ValueKey('landscape-next'),
+        button: true,
+        enabled: false,
+        label: '下一集',
+        excludeSemantics: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: keepUp,
+          child: SizedBox.square(
+            dimension: BiliMetrics.chromeButton,
+            child: Center(
+              child: Opacity(opacity: LandscapeActionTheme.nextOffOpacity, child: glyph),
+            ),
+          ),
+        ),
+      );
+    }
+    return ChromeTap(key: const ValueKey('landscape-next'), label: '下一集', onTap: onTap, child: glyph);
+  }
+}
+
+/// 05's ⏭: a play triangle with rounded corners whose tip runs into a bar with round ends.
+class _NextPainter extends CustomPainter {
+  const _NextPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final h = size.height;
+    const r = LandscapeActionTheme.nextCorner;
+    final a = Offset.zero, b = Offset(0, h), c = Offset(LandscapeActionTheme.nextTip, h / 2);
+    final ab = (a - b).distance, bc = (b - c).distance, ca = (c - a).distance;
+    final centre = (a * bc + b * ca + c * ab) / (ab + bc + ca);
+    final inradius = LandscapeActionTheme.nextTip * h / (ab + bc + ca);
+    // Shrunk towards its incentre by r, then stroked 2r wide with round joins: the full triangle with round corners.
+    Offset inward(Offset p) => centre + (p - centre) * ((inradius - r) / inradius);
+    final triangle = Path()..addPolygon([inward(a), inward(b), inward(c)], true);
+    final fill = Paint()..color = BiliColors.onVideo;
+    canvas
+      ..drawPath(triangle, fill)
+      ..drawPath(
+        triangle,
+        Paint()
+          ..color = BiliColors.onVideo
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = r * 2
+          ..strokeJoin = StrokeJoin.round,
+      )
+      ..drawRRect(
+        RRect.fromLTRBR(
+          size.width - LandscapeActionTheme.nextBar,
+          0,
+          size.width,
+          h,
+          const Radius.circular(LandscapeActionTheme.nextBar / 2),
+        ),
+        fill,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_NextPainter oldDelegate) => false;
+}
+
 /// 04's capsule, opening the send bar; with the uploader's danmaku closed it reads UP主已关闭弹幕 and opens nothing.
 class _DanmakuField extends StatelessWidget {
   const _DanmakuField({required this.closed, required this.onTap});
@@ -513,6 +619,7 @@ class _TopActions extends StatelessWidget {
                       key: const ValueKey('landscape-comments'),
                       label: '评论',
                       glyph: ActionGlyph.comment,
+                      count: ui.session.detail?.stat.reply,
                       onTap: touch(() => ui.onComments?.call()),
                     ),
                     _TopAction(
@@ -581,17 +688,20 @@ class _TopAction extends StatelessWidget {
           if (count case final count? when count > 0)
             Positioned(
               left: BiliMetrics.chromeButton / 2 + LandscapeActionTheme.countLead,
-              top: LandscapeActionTheme.countTop,
-              child: Text(
-                CountFormat.short(count),
-                maxLines: 1,
-                softWrap: false,
-                textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  color: BiliColors.onVideo,
-                  fontSize: LandscapeActionTheme.countText,
-                  height: 1,
-                  fontFeatures: [FontFeature.tabularFigures()],
+              top: 0,
+              child: Baseline(
+                baseline: LandscapeActionTheme.countBaseline,
+                baselineType: TextBaseline.alphabetic,
+                child: Text(
+                  CountFormat.short(count),
+                  maxLines: 1,
+                  softWrap: false,
+                  textScaler: TextScaler.noScaling,
+                  style: const TextStyle(
+                    color: BiliColors.onVideo,
+                    fontSize: LandscapeActionTheme.countText,
+                    height: 1,
+                  ),
                 ),
               ),
             ),
@@ -657,7 +767,8 @@ class _ActionPopState extends State<ActionPop> with SingleTickerProviderStateMix
   );
 }
 
-/// N人正在看 and the uploader's avatar with + 关注 under the title. Each keeps its line whether or not it has arrived.
+/// N人正在看 under the title, then the uploader's chip (avatar, name, + 关注) and the bgm's (05). N人正在看 and the
+/// uploader keep their lines whether or not they have arrived; the bgm's chip shows only for a video with one.
 class _UploaderBlock extends StatelessWidget {
   const _UploaderBlock({required this.ui, required this.touch});
 
@@ -668,8 +779,11 @@ class _UploaderBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final details = ui.details;
     final owner = ui.session.detail?.owner;
-    final face = details?.uploader?.face ?? (owner == null || owner.mid == 0 ? null : owner.face);
+    final known = owner != null && owner.mid != 0;
+    final face = details?.uploader?.face ?? (known ? owner.face : null);
+    final name = details?.uploader?.name ?? (known ? owner.name : '');
     final actions = details?.actions;
+    final bgm = details?.tags.where((tag) => tag.kind == VideoTagKind.bgm).firstOrNull;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -685,23 +799,180 @@ class _UploaderBlock extends StatelessWidget {
           height: LandscapeActionTheme.uploaderHeight,
           child: face == null
               ? null
-              : Row(
-                  children: [
-                    const SizedBox(width: LandscapeActionTheme.avatarInset),
-                    ClipOval(
-                      key: const ValueKey('landscape-avatar'),
-                      child: SizedBox.square(
-                        dimension: LandscapeActionTheme.avatar,
-                        child: RemoteImage.avatar(face, size: const Size.square(LandscapeActionTheme.avatar)),
-                      ),
+              : Padding(
+                  padding: const EdgeInsets.only(
+                    left: LandscapeActionTheme.avatarInset - LandscapeActionTheme.chipInset,
+                  ),
+                  child: _Chip(
+                    key: const ValueKey('landscape-uploader'),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(width: LandscapeActionTheme.chipInset),
+                        ClipOval(
+                          key: const ValueKey('landscape-avatar'),
+                          child: SizedBox.square(
+                            dimension: LandscapeActionTheme.avatar,
+                            child: RemoteImage.avatar(face, size: const Size.square(LandscapeActionTheme.avatar)),
+                          ),
+                        ),
+                        if (name.isNotEmpty) ...[
+                          const SizedBox(width: LandscapeActionTheme.nameGap),
+                          Flexible(
+                            child: _ChipText(
+                              name,
+                              key: const ValueKey('landscape-uploader-name'),
+                              box: LandscapeActionTheme.uploaderHeight,
+                            ),
+                          ),
+                        ],
+                        if (actions != null)
+                          _Follow(actions: actions, touch: touch, divided: name.isNotEmpty)
+                        else
+                          const SizedBox(width: LandscapeActionTheme.followTrailing),
+                      ],
                     ),
-                    if (actions != null) _Follow(actions: actions, touch: touch),
-                  ],
+                  ),
                 ),
         ),
+        if (bgm != null)
+          Padding(
+            padding: const EdgeInsets.only(
+              top:
+                  LandscapeActionTheme.chipGap -
+                  (LandscapeActionTheme.uploaderHeight - LandscapeActionTheme.chipHeight) / 2,
+              left: LandscapeActionTheme.avatarInset - LandscapeActionTheme.chipInset,
+            ),
+            child: _MusicChip(name: bgm.name),
+          ),
       ],
     );
   }
+}
+
+/// 05's translucent capsule behind a row of the uploader block, [LandscapeActionTheme.chipHeight] tall and centred
+/// in whatever height the row takes, so its buttons can keep a taller target than the capsule.
+class _Chip extends StatelessWidget {
+  const _Chip({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(painter: const _ChipPainter(), child: child);
+}
+
+class _ChipPainter extends CustomPainter {
+  const _ChipPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromCenter(
+      center: size.center(Offset.zero),
+      width: size.width,
+      height: LandscapeActionTheme.chipHeight,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(LandscapeActionTheme.chipHeight / 2)),
+      Paint()..color = LandscapeActionTheme.chipFill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ChipPainter oldDelegate) => false;
+}
+
+/// A chip's 12.5 pt line in a [box] pt tall row, standing on the baseline 05's text shares whatever the font.
+class _ChipText extends StatelessWidget {
+  const _ChipText(this.text, {super.key, required this.box, this.color = BiliColors.onVideo});
+
+  final String text;
+  final double box;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: box,
+    child: Baseline(
+      baseline: box / 2 + LandscapeActionTheme.chipBaselineDrop,
+      baselineType: TextBaseline.alphabetic,
+      child: Text(
+        text,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: color, fontSize: LandscapeActionTheme.followText),
+      ),
+    ),
+  );
+}
+
+/// 发现《…》 under the uploader (05). There is no music page yet, so it leads nowhere, as 简介's chip doesn't.
+class _MusicChip extends StatelessWidget {
+  const _MusicChip({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    key: const ValueKey('landscape-bgm'),
+    label: name,
+    excludeSemantics: true,
+    child: _Chip(
+      child: SizedBox(
+        height: LandscapeActionTheme.chipHeight,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: LandscapeActionTheme.musicLead),
+            const CustomPaint(
+              size: Size(LandscapeActionTheme.musicGlyphWidth, LandscapeActionTheme.musicGlyphHeight),
+              painter: _MusicPainter(),
+            ),
+            const SizedBox(width: LandscapeActionTheme.musicGap),
+            Flexible(child: _ChipText(name, box: LandscapeActionTheme.chipHeight)),
+            const SizedBox(width: LandscapeActionTheme.musicTrailing),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// 05's two beamed quavers, traced on their 13.67 × 14.33 box: a beam rising to the right over two stems, each
+/// ending in a round head, the left one lower.
+class _MusicPainter extends CustomPainter {
+  const _MusicPainter();
+
+  static const _grid = Size(LandscapeActionTheme.musicGlyphWidth, LandscapeActionTheme.musicGlyphHeight);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = _traced(_grid, size);
+    final scale = size.width / _grid.width;
+    final paint = Paint()..color = BiliColors.onVideo;
+    final beamTopLeft = p(3.13, 1.1), beamTopRight = p(13.5, 0);
+    canvas
+      ..drawPath(
+        Path()
+          ..moveToPoint(p(3.13, 2.1))
+          ..quadraticBezierTo(beamTopLeft.dx, beamTopLeft.dy, p(4.1, 1.45).dx, p(4.1, 1.45).dy)
+          ..lineToPoint(p(12.7, 0))
+          ..quadraticBezierTo(beamTopRight.dx, beamTopRight.dy, p(13.5, 0.8).dx, p(13.5, 0.8).dy)
+          ..lineToPoint(p(13.5, 10))
+          ..lineToPoint(p(12, 10))
+          ..lineToPoint(p(12, 2.85))
+          ..lineToPoint(p(4.63, 4.05))
+          ..lineToPoint(p(4.63, 12))
+          ..lineToPoint(p(3.13, 12))
+          ..close(),
+        paint,
+      )
+      ..drawCircle(p(2.25, 12), 2.33 * scale, paint)
+      ..drawCircle(p(11.33, 10), 2.25 * scale, paint);
+  }
+
+  @override
+  bool shouldRepaint(_MusicPainter oldDelegate) => false;
 }
 
 class _Online extends StatelessWidget {
@@ -816,56 +1087,74 @@ class LandscapeCornerOnline extends StatelessWidget {
   );
 }
 
-/// 04's + 关注 is white text with a thin plus and no pill; 已关注 is grey.
+/// The chip's + 关注 (05): white text with a thin plus after the divider, the chip's end its own; 已关注 is grey in
+/// the same place. Without a name before it, it follows the avatar as on 04, with no divider.
 class _Follow extends StatelessWidget {
-  const _Follow({required this.actions, required this.touch});
+  const _Follow({required this.actions, required this.touch, required this.divided});
 
   final VideoActions actions;
   final _Touch touch;
+  final bool divided;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: actions,
     builder: (context, _) {
       final following = actions.following;
-      return ChromeTap(
-        key: const ValueKey('landscape-follow'),
-        label: following ? '已关注' : '关注',
-        square: false,
-        onTap: touch(actions.tapFollow),
-        child: SizedBox(
-          height: LandscapeActionTheme.uploaderHeight,
-          child: Padding(
-            padding: const EdgeInsets.only(left: LandscapeActionTheme.avatarGap, right: BiliMetrics.chromeTextPad),
-            child: AnimatedSwitcher(
-              duration: _motion(context),
-              layoutBuilder: (current, previous) =>
-                  Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
-              child: Row(
-                key: ValueKey(following),
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!following) ...[
-                    const CustomPaint(
-                      size: Size.square(LandscapeActionTheme.plus),
-                      painter: FollowPlusPainter(color: BiliColors.onVideo, stroke: LandscapeActionTheme.plusStroke),
-                    ),
-                    const SizedBox(width: LandscapeActionTheme.plusGap),
-                  ],
-                  Text(
-                    following ? '已关注' : '关注',
-                    maxLines: 1,
-                    softWrap: false,
-                    style: TextStyle(
-                      color: following ? LandscapeActionTheme.followed : BiliColors.onVideo,
-                      fontSize: LandscapeActionTheme.followText,
-                    ),
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (divided) ...[
+            const SizedBox(width: LandscapeActionTheme.dividerGap),
+            const SizedBox(
+              key: ValueKey('landscape-uploader-divider'),
+              width: LandscapeActionTheme.dividerWidth,
+              height: LandscapeActionTheme.dividerHeight,
+              child: ColoredBox(color: LandscapeActionTheme.divider),
+            ),
+          ],
+          ChromeTap(
+            key: const ValueKey('landscape-follow'),
+            label: following ? '已关注' : '关注',
+            square: false,
+            onTap: touch(actions.tapFollow),
+            child: SizedBox(
+              height: LandscapeActionTheme.uploaderHeight,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: divided ? LandscapeActionTheme.dividerGap : LandscapeActionTheme.avatarGap,
+                  right: LandscapeActionTheme.followTrailing,
+                ),
+                child: AnimatedSwitcher(
+                  duration: _motion(context),
+                  layoutBuilder: (current, previous) =>
+                      Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                  child: Row(
+                    key: ValueKey(following),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!following) ...[
+                        const CustomPaint(
+                          size: Size.square(LandscapeActionTheme.plus),
+                          painter: FollowPlusPainter(
+                            color: BiliColors.onVideo,
+                            stroke: LandscapeActionTheme.plusStroke,
+                          ),
+                        ),
+                        const SizedBox(width: LandscapeActionTheme.plusGap),
+                      ],
+                      _ChipText(
+                        following ? '已关注' : '关注',
+                        box: LandscapeActionTheme.uploaderHeight,
+                        color: following ? LandscapeActionTheme.followed : BiliColors.onVideo,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+        ],
       );
     },
   );
