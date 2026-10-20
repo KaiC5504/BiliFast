@@ -139,5 +139,88 @@ A screen or state the build needs and these don't show is asked for before that 
 
 ## 7. Build
 
-1.0.0 (16), shipped once at the end of the milestone (the last TestFlight build was (14)). Each slice is committed
-on `main` with the gate green; `python scripts/testflight.py start` runs once, after slice 13.
+1.0.0 (16), shipped once at the end of the milestone. (15) went out on its own (KaiC, 2026-10-21) with slice 10, the
+drawn turn and the system-font text fixes. Each slice is committed on `main` with the gate green;
+`python scripts/testflight.py start` runs once, after slice 13.
+
+## 8. The stand-in sweep's findings (to fix when the milestone resumes)
+
+Six read-only checkers rendered every screen with an official shot under the stand-in fonts and measured it with
+`tools/screen_diff.py` (2026-10-20, on `d68cb5a`). Two things changed after they ran, so **re-render and re-measure
+each item before changing anything**, and drop what no longer reproduces:
+- the system font is named (`BiliFonts.system`), so styles that drew the square test font (the full-screen chrome,
+  panels, the status bar, end screens, history, uploader names, counts) now render, and the checkers' merged-font
+  workarounds are not needed;
+- the SF stand-in takes iOS's line (1950/494 per 2048, was 1980/432), which moved Latin-only lines up about a point;
+  items marked † came from Latin-only lines and may be gone.
+
+Values are ours → official, in pt, from the official screenshots (the truth). The official app draws Chinese at about
+0.993 em, so a size is the official Han advance / 0.993. Slice 10's system-font sizes were read off (14)'s phone shots,
+whose text still carried Material's letter spacing, so several of them are wrong (the sizes below). System-font values
+go in the `BiliFonts.nudged ? miSans : system` getters. Run it as one fix round, one agent per group (the groups own
+disjoint files), then a look-alike check of every screen again.
+
+**Home, history, settings** (01, 28, 45-48, 50; phone pairs 01, 07-09)
+- 01 tab row too tall: 推荐 centre 127.3 vs 123.8, indicator top 144 vs 136, divider 151 vs 141.67, first card 157.5 vs
+  148 (`home_page.dart` `_RecommendTab`: top padding 10 → ~6.5, gap 5 → ~0.5, bottom 4 → ~2.67). On the phone too.
+- 01 card titles 18 apart vs ~20 (`feed_card.dart` `_lineHeight` 1.3 → 1.4); footer 2.75 and ⋮ 4.33 high
+  (`cardFooterInset` 9 → 26/3); card 239 tall vs 242.
+- 01 card corner radius 6 vs 13/3: a feed-card token (and the zoom route's end radius), not `BiliMetrics.cardRadius`.
+- 01 search field starts 65 vs 64 (avatar gap 12 → 11); placeholder ink starts 101 vs 94.3, colour #9499A0 vs
+  #61666D; card ⋮ dots 2.67 wide vs 2 (official: 2 pt dots 4 apart).
+- 50/09 bar title 设置 1.5 low (`SettingsTheme.barTitleDrop` system −1.5). 45/08 历史记录 1.0 low (`titleDrop` −1).
+- 08 a 0 progress shows "00:00/01:13"; the official shows "01:13" (`history_model.dart` ~258).
+- 08 rows: title starts 1.0 right, line 1 0.6 low (`rowTitleTop`), UP/date 0.67-0.9 high (`metaBottom`), 今天 0.67 low
+  (`headerTextTop`). 48 sheet words 1.1-1.7 high (stand-in only, `sheetTextDrop`).
+- 49 avatar page, 07: pass.
+
+**简介 and the video page** (03, 18, 19, 15, 26; phone pairs 02, 03)
+- Title: `IntroTheme.titleText` system 15.25 → 16 (official Han advance 15.86; 03-intro breaks after 理, ours after
+  解) and w600 → w500 (official stroke 1.33 vs 1.67).
+- 合集 row: ' · ' ~2 pt wider each side officially; `collectionPlaceText` system 12.5 (digits 8.67-9.0 tall vs 9.33,
+  "221/221" 41.7 vs 44.3); title 0.67 high.
+- 15 coin dialog: "硬币余额 : 873.0" with a half-width colon and spaces (ours "：", 4 pt wider); crates 1.7 high.
+- 19 collection sheet: share circle and 收藏 pill 3.2 high; list hairlines and covers 1.3-1.7 high.
+- Tab row: danmaku field 98 wide not 97; `tabLabelText` and `danmakuFieldText` system 12.75 → 13.
+- 活动 tag rows (older shots 03/18): title 1.17 high, 活动 0.5-0.8 low; confirm on a new shot first.
+- 26: pass.
+
+**评论 and 评论详情** (10-14; phone pairs 04, `local/differences/11-…`/`12-…`). Every checked line break matches.
+- 04 a one-line reply holding an emote is ~2 pt short (text 24.2 below the name vs 21.5; ⋮ 51.2 vs 49.0):
+  `emoteLineGrowth` is lost inside `textMinBottom`.
+- 13/04 评论详情 header: title ~14.5 (`threadTitleText`, 14.44 a glyph vs 13.75); title and ✕ centre over the 40 above
+  the hairline, not 41; ✕ 12 square vs 12.67.
+- 10-13 write-bar prompt ~14.5 not 15 (`fieldText`; 12 glyphs 170.3 vs 178.3), first ink at x 25 vs 26.
+- 13/04 thread rows: names and text 0.8-1.5 low (`nameCentre`, `textTop` for thread rows; pictures and meta stay).
+- Box, hairline and band 20.0 below ⋮'s middle dot (ours 19.4-19.5), UP chip 22.0 (21.5): `bottom`, `bandGap`,
+  `upChipTop` +0.5, `boxGap` +0.58. 热门评论 ~12.5 (`sortTitleText`).
+
+**Danmaku** (07, 08, 22-24, 29-33, 36-39; phone pair 06)
+- 31/32 当前弹幕列表: text 0.8 high, a 3-line row 80.67 vs 82.33, pitch 16.0 vs 16.67 (`textLine` 16.33 rounds to 16):
+  system `textLine` 17 with even leading, `rowPadY` 15.67.
+- 30 屏蔽词 tabs too far apart (正则 +1.0, 举报屏蔽用户 +2.67): `BlockWordsTheme.tabGap` system ~21.
+- 32 屏蔽弹幕 eye 20.7×12.7 pointed vs 22×16 rounded, pupil ring ~10 vs 8.7; popover arrow 0.7-1 short.
+- 23 swatch rings 1.4 vs ~1.1. 36/37/39 cursor 22 tall vs 20 (iOS draws `cursorHeight + 2`: 18). 37 typed "Hello"
+  maybe 14 pt not 15 (†).
+- 07, 08, 22, 24, 29, 33: pass.
+
+**竖屏** (09, 35, 40, 41)
+- 09 收藏 star 26.7 vs 30 (`favouriteIcon` ~36), 💬 29.3 vs 30.3, share 28.7×24 vs 30×24.7 and 1 high.
+- Uploader name 2.33 high; 发弹幕 / 已关闭弹幕 1.5 high (09, 35); + 关注: text 1.5 high, 关注 12.5 not 13, plus 9.67
+  wide vs 9, gap 4.3 vs 5.3; 粉丝 line 11 not 11.5.
+- Minor: counts maybe 12.5 (†); 40's percentages 0.8 high. 40, 41: pass.
+
+**Landscape** (04-06, 20, 21, 25, 27, 34; phone pairs 05, 10)
+- 34 quality button: "1080P" with a small outlined "60帧" capsule above it (ours "1080P60"), centred in a slot of at
+  least ~33 pt ending at 879 (ours right-aligned to 871, so 倍速 lands ~28 pt left).
+- The faint "N人正在看" corner is hidden under open panels; the official keeps it (05, 06, 10, 20, 21).
+- 27 end screen: cover counts ~2 low and ~10 pt (11), icon gap 4.0 (1.67), icon 10 tall (9); UP row 2.3 low, UP badge
+  1.33 left; name 1.5 low, 推荐视频 1.2 low; small offsets on 点赞, 收藏, 分享, 关注's + and 充电.
+- 05 two-line HDR card: title 1 high, subtitle 1 low; ⓘ 1 low.
+- Field placeholder 1.33-1.5 high (04, 05, phone); share icon 1 low (04, 05, phone); 大会员 badge gap 1-1.33 wide;
+  ⋮ panel 稍后再看 / 小窗播放 1.5 low; 高级设置 and 适应 1.3-1.7 left of the chevron.
+- Minor: 定时关闭 dividers 64 vs 64.67 apart; quality cards 0.67 left; seek thumb 0.67 low; 倍速中 0.8 high.
+- 25: pass.
+
+**Structural, by KaiC's calls in slice 10 above:** the marquee title and 章节, 联合创作 and the 合集 prefix are to build;
+the light ⋮ sheets (42, 43), the emote bar cells (14) and 记住账号信息 (51) stay out.
