@@ -54,7 +54,12 @@ doubles and bools only; per-frame data is packed into strings.
 `w`, `h` (the size laid out at). `frames.timings`: the engine's FrameTiming for the same window, `;`-separated
 `buildMs,rasterMs,totalMs`.
 
-The line is written once the turn has settled (300 ms with no frame), so logging never runs inside the turn.
+`grow` has 3 decimals. `timings` holds only the frames whose build overlaps the samples, placed on the wall clock
+by their raster finish; `slow` counts those whose whole span (vsync to raster end) is over 16.7 ms.
+
+The line is written once the turn has settled (300 to 600 ms with no frame or event), so logging never runs inside the
+turn. Release builds hand FrameTimings over in batches up to 1 s apart, so it waits up to 1.2 s more for the batch
+holding the last frame: it can come about 1.5 s after the turn's last frame.
 
 ## What the report computes per turn
 
