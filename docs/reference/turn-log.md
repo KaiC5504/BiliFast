@@ -23,7 +23,7 @@ doubles and bools only; per-frame data is packed into strings.
 | `drawn` | `action` (`cut`, `fade`, `none` or `gone`): Flutter's turnDrawn arrived |
 | `picture gone` | `why` (`drawn` or `fallback`) |
 | `fallback` | the 0.5 s timeout fired before turnDrawn |
-| `container` | `event` (`installed`, `lost` or `restored`): the counter method's container around the Flutter view |
+| `container` | `event` (`installed`, `lost`, `restored`, or `reversed` when a counter turn starts while the last one still runs): the counter method's container around the Flutter view |
 | `frames` | `count` (int), `samples` (string, below) |
 
 `found`: `;`-separated animations, each `layer|keyPath|class|duration|timing|additive|beginOffsetMs`. Layer names:
