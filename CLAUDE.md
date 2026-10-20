@@ -13,6 +13,7 @@ builds replace the Swift ones on the phone and read the Swift app's keychain log
    - `bilicore-inventory.md` and `app-inventory.md`: what the Swift app has, with paths. The port's checklist.
    - `piliplus-map.md`: where PiliPlus keeps what; GPL, so read only.
    - `testflight-flutter.md`: how this repo ships to TestFlight.
+   - `turn-log.md`: the drawn turn's log lines on both sides, which `tools/phone_report.py --turns` grades.
 3. `D:\Repos\Apps\BiliNative\CLAUDE.md` only for the Swift app's behaviour. Where it and this file differ, this file
    wins (no Mac, no Swift workflows, the UI follows the official screenshots).
 
@@ -56,8 +57,11 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 Next: the phone runs both checklists (M1 and M2) in full; then the cutover (spec, slice 9).
 
 Open items, each waiting on its slice:
-- The drawn turn's first phone check (1.0.0 (12)): with 自绘 the page draws the whole turn as the official 01 clip;
-  系统 leaves it to iOS (`local/differences/07-ours-rotate-v2.mov` is before).
+- The drawn turn, 1.0.0 (13), a test build: 1.0.0 (12)'s 自绘 turned 180° because iOS still animated its own
+  rotation underneath (`local/differences/08-ours-rotate-customzie-v3.mov`). (13) carries every way of keeping iOS out
+  (开发者 → 旋转动画: 方式, 截图, 起转; `lib/device/turn_style.dart`), 轮换测试 cycles through them with a badge, and
+  both sides log each turn. KaiC runs one 轮换测试 session and sends the log; `phone_report.py --turns` ranks the
+  styles. Then keep the winner and remove the others, 轮换测试 and the per-frame lines (the summary stays).
 - 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
   account and a borrowed app key).
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
@@ -97,7 +101,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/comments/`: 评论, 评论详情, the composer with its emote panel, @ picker and pictures, and
     `comment_overlays.dart`, the in-page layers the page's Stack holds.
   - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
-  - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server.
+  - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server;
+    `turn_cycle.dart` and its badge (轮换测试, the turn test build only).
   - `lib/speedtest/`: the speed test (dev builds only).
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
@@ -178,10 +183,13 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - The video page lays out by the screen's shape, not the orientation's presentation: Flutter's iOS engine keeps the
   old size for the first half of a turn, so landscape is laid out only once the size is wide (`_laidOut`, which
   `PlayerUi`'s panels and gestures follow). Code that acts on what the user asked for reads the presentation.
-- The drawn turn (旋转动画 自绘): `TurnTakeover.swift` switches off iOS's rotation animation and hands Flutter the turned
-  size at once, covering the screen with a still picture; the video page draws the turn from −angle to 0 and calls
-  `turnDrawn()`, or the picture lifts after 0.5 s. It is armed only while a video page owns the orientation; a page
-  that is covered or leaves gives it up first.
+- The drawn turn (旋转动画, any 方式 but 系统): `TurnTakeover.swift` keeps iOS's rotation animation out by the chosen
+  method (`UIView.setAnimationsEnabled(false)` alone does not: iOS still turned the window in 1.0.0 (12)) and hands
+  Flutter the turned size at once, covering the screen with a still picture; the video page draws the turn from
+  −angle to 0 and calls `turnDrawn(id)`, or the picture lifts after 0.5 s. It is armed only while a video page owns
+  the orientation; a page that is covered or leaves gives it up first. While the page draws a turn, its geometry is
+  the official 01 clip's (300 ms ease-in-out, the body hanging from the box's bottom-left, cut at the turning
+  window's edge); grows it doesn't draw (系统, Windows) keep the centred body.
 - One player per page (BiliNative's one AVPlayer per page), all on one engine isolate. A covered page pauses, stops
   its small window, drops its prefetch and gives up auto PiP; its loads start paused while covered. It resumes when
   shown only if it was playing, and not while another page's video is in the small window. A page popped while its
