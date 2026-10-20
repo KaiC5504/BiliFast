@@ -558,6 +558,7 @@ void main() {
       expect(icon.solid, isFalse);
       expect(icon.color, BiliColors.onVideo);
       expect(icon.size, LandscapeActionTheme.iconSize);
+      expect(icon.stroke, LandscapeActionTheme.outline, reason: "04 and 05's 1.5 pt lines");
     }
   });
 
@@ -570,7 +571,7 @@ void main() {
     expect(title.right, closeTo(509, 0.01));
   });
 
-  testWidgets("👍 and ⭐ are fitted to 05's shorter, higher ink; the rest keep the shared glyph's box", (tester) async {
+  testWidgets("👍, 💬 and ⭐ are fitted to 05's shorter ink; the rest keep the shared glyph's box", (tester) async {
     final rig = Rig(details: FakePageDetails(actions: FakeVideoActions()));
     await rig.mount(tester);
     Rect iconBox(String key) =>
@@ -580,7 +581,7 @@ void main() {
     for (final (key, x, squash, lift) in [
       ('landscape-like', 555.0, LandscapeActionTheme.likeSquash, LandscapeActionTheme.likeLift),
       ('landscape-favourite', 659.0, LandscapeActionTheme.favouriteSquash, LandscapeActionTheme.favouriteLift),
-      ('landscape-comments', 607.0, 1.0, 0.0),
+      ('landscape-comments', 607.0, LandscapeActionTheme.commentSquash, 0.0),
       ('landscape-coin', 711.0, 1.0, 0.0),
     ]) {
       final box = iconBox(key);

@@ -20,7 +20,13 @@ final class Ink {
   bool paintedAt(Offset point) => _alpha[(point.dy * _scale).floor() * _width + (point.dx * _scale).floor()] > 128;
 }
 
-Future<Ink> render(WidgetTester tester, ActionGlyph glyph, {required bool solid, required double size}) async {
+Future<Ink> render(
+  WidgetTester tester,
+  ActionGlyph glyph, {
+  required bool solid,
+  required double size,
+  double? stroke,
+}) async {
   final key = GlobalKey();
   await tester.pumpWidget(
     Directionality(
@@ -29,7 +35,7 @@ Future<Ink> render(WidgetTester tester, ActionGlyph glyph, {required bool solid,
         alignment: Alignment.topLeft,
         child: RepaintBoundary(
           key: key,
-          child: ActionIcon(glyph, solid: solid, size: size, color: _white),
+          child: ActionIcon(glyph, solid: solid, size: size, color: _white, stroke: stroke),
         ),
       ),
     ),
@@ -112,6 +118,31 @@ void main() {
     }
   });
 
+  testWidgets("a stroke sets the outlines' and the 币's line; without one they keep their share of the glyph", (
+    tester,
+  ) async {
+    const size = 24.0;
+    final box = Rect.fromCenter(
+      center: const Offset(size / 2, size / 2),
+      width: size * ActionIcon.inkShare,
+      height: size * ActionIcon.inkShare,
+    );
+    // Painted pixels along the coin's middle row, from its left edge to the 币's stem: the ring, then an arch.
+    int across(Ink ink) {
+      var count = 0;
+      for (var x = box.left; x < box.center.dx - 0.5; x += 1 / _scale) {
+        if (ink.paintedAt(Offset(x, size / 2 + 2))) count++;
+      }
+      return count;
+    }
+
+    final shared = await render(tester, ActionGlyph.coin, solid: false, size: size);
+    final thick = await render(tester, ActionGlyph.coin, solid: false, size: size, stroke: 1.5);
+    expect(across(shared), closeTo(2 * 0.055 * box.width * _scale, 2));
+    expect(across(thick), closeTo(2 * 1.5 * _scale, 2));
+    expect(thick.bounds.width, closeTo(shared.bounds.width, 0.4), reason: 'the ink keeps its size');
+  });
+
   testWidgets('the icon is decoration only for accessibility', (tester) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
@@ -133,6 +164,10 @@ void main() {
     expect(painter.shouldRepaint(ActionGlyphPainter(ActionGlyph.like, solid: true, color: _white)), isFalse);
     expect(painter.shouldRepaint(ActionGlyphPainter(ActionGlyph.like, solid: false, color: _white)), isTrue);
     expect(painter.shouldRepaint(ActionGlyphPainter(ActionGlyph.coin, solid: true, color: _white)), isTrue);
+    expect(
+      painter.shouldRepaint(ActionGlyphPainter(ActionGlyph.like, solid: true, color: _white, stroke: 1.5)),
+      isTrue,
+    );
     expect(
       painter.shouldRepaint(ActionGlyphPainter(ActionGlyph.like, solid: true, color: const Color(0xFFFF6699))),
       isTrue,

@@ -687,7 +687,7 @@ class _TopAction extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Center(child: _fitted(glyph, ActionPop(glyph, active: active))),
+          Center(child: _fitted(glyph, ActionPop(glyph, active: active, stroke: LandscapeActionTheme.outline))),
           if (count case final count? when count > 0)
             Positioned(
               left: BiliMetrics.chromeButton / 2 + LandscapeActionTheme.countLead,
@@ -714,10 +714,11 @@ class _TopAction extends StatelessWidget {
   );
 }
 
-/// 05's 👍 and ⭐ against the outlines 简介 shares: squeezed upright about the button's centre and lifted.
+/// 05's 👍, 💬 and ⭐ against the outlines 简介 shares: squeezed upright about the button's centre and lifted.
 Widget _fitted(ActionGlyph glyph, Widget icon) {
   final (squash, lift) = switch (glyph) {
     ActionGlyph.like => (LandscapeActionTheme.likeSquash, LandscapeActionTheme.likeLift),
+    ActionGlyph.comment => (LandscapeActionTheme.commentSquash, 0.0),
     ActionGlyph.favourite => (LandscapeActionTheme.favouriteSquash, LandscapeActionTheme.favouriteLift),
     _ => (1.0, 0.0),
   };
@@ -731,11 +732,20 @@ Widget _fitted(ActionGlyph glyph, Widget icon) {
 /// An action's outline glyph, solid and pink while on (as BiliNative's `.fill` icons); it swells and settles as it
 /// turns on.
 class ActionPop extends StatefulWidget {
-  const ActionPop(this.glyph, {super.key, required this.active, this.size = LandscapeActionTheme.iconSize});
+  const ActionPop(
+    this.glyph, {
+    super.key,
+    required this.active,
+    this.size = LandscapeActionTheme.iconSize,
+    this.stroke,
+  });
 
   final ActionGlyph glyph;
   final bool active;
   final double size;
+
+  /// The line in pt; null keeps the shared glyph's.
+  final double? stroke;
 
   @override
   State<ActionPop> createState() => _ActionPopState();
@@ -779,6 +789,7 @@ class _ActionPopState extends State<ActionPop> with SingleTickerProviderStateMix
       widget.glyph,
       solid: widget.active,
       size: widget.size,
+      stroke: widget.stroke,
       color: widget.active ? BiliColors.pink : BiliColors.onVideo,
     ),
   );

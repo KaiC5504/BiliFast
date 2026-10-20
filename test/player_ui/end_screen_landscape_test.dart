@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show UploaderCard, VideoCard, VideoDetail;
+import 'package:bili_core/api.dart' show UploaderCard, VideoCard, VideoDetail, VideoView;
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
@@ -8,6 +8,7 @@ import 'package:bilifast/player_ui/landscape_chrome.dart' show LandscapeCornerOn
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -439,6 +440,42 @@ void main() {
 
     expect(find.text('不科学の小石头'), findsOneWidget);
     expect(find.byKey(const ValueKey('end-follow')), findsOneWidget);
+  });
+
+  testWidgets("a card that came back empty counts as missing: the view's name stands in", (tester) async {
+    final rig = Rig(
+      details: FakePageDetails(
+        actions: FakeVideoActions(),
+        uploader: const UploaderCard(mid: 9, name: '', face: '', fans: 0, videos: 0, isVip: false, following: false),
+      ),
+    )..session.video = const VideoView(bvid: 'BV1', owner: '不科学の小石头');
+    await rig.mount(tester);
+
+    final uploader = find.byKey(const ValueKey('end-uploader'));
+    expect(find.descendant(of: uploader, matching: find.text('不科学の小石头')), findsOneWidget);
+  });
+
+  testWidgets("a detail whose owner came back empty takes the card's name and face", (tester) async {
+    final rig = Rig(
+      details: FakePageDetails(
+        actions: FakeVideoActions(),
+        uploader: const UploaderCard(
+          mid: 9,
+          name: '星野寻希望',
+          face: 'https://i0.hdslb.com/bfs/face/up.jpg',
+          fans: 0,
+          videos: 0,
+          isVip: false,
+          following: false,
+        ),
+      ),
+    )..session.detail = VideoDetail.fromJson({'bvid': 'BV1'});
+    await rig.mount(tester);
+
+    final uploader = find.byKey(const ValueKey('end-uploader'));
+    expect(find.descendant(of: uploader, matching: find.text('星野寻希望')), findsOneWidget);
+    final avatar = find.descendant(of: uploader, matching: find.byType(RemoteImage));
+    expect(tester.widget<RemoteImage>(avatar).url, 'https://i0.hdslb.com/bfs/face/up.jpg');
   });
 
   testWidgets('the actions and the pills press through accessibility too, as VoiceOver and the Windows test driver do',
