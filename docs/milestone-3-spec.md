@@ -55,6 +55,25 @@ Everything under "Rules that bite" in `CLAUDE.md`, in particular:
 | Tests | A widget test per changed value under `BiliFonts.family = BiliFonts.system`, so the system-font values are locked even though PingFang can't render on Windows. |
 | Phone check | Each screen beside the official app: sizes, weights, line breaks and spacing match; no thin and thick glyphs in one line. |
 
+After the stand-in fonts came in (`test/fonts`), every screen with an official shot was rendered under the system font
+and measured again (2026-10-20). That found two faults no phone shot had shown yet, both fixed before any value: a
+style with no font family took its fallback list's first font (the system font is now named, `BiliFonts.system`), and
+lines mixing Latin and Chinese grow a point (`BiliFonts.strut`). The value fixes ran as one round per screen group.
+KaiC's calls on what else it found:
+
+- **Not built:** iOS's text shaping (about ⅛ em between Chinese and Latin or digits in titles, descriptions, meta and
+  history; a leading 【 or 《 at half width). Lines can end a few points apart and wrap differently; accepted.
+- **Added to the milestone, after the fix round:** the landscape title scrolling with faded edges instead of "…", and
+  `· 章节 · <chapter>` after the time (the video's view points; one new endpoint, tried live once); 竖屏's
+  联合创作 block (the staff's avatars, "<name> 等 N 人联合创作 ⌄") and the "合集 · 第N集 |" prefix before the title
+  (35).
+- **Left out:** the light ⋮ sheets of the small player and 竖屏 (42, 43; ours keeps the dark panel), the emote bar's
+  ⚙ 🔍 🕒 cells (14), 51's 记住账号信息 row.
+- **Still open:** 查看对话 on a reply to a reply (the conversation API), the small player's 弹幕设置 variant (06, waiting
+  for KaiC's 查看更多 shot).
+- **Known limit:** the official app draws Chinese at about 0.993 em (a 24-glyph line 2.5 pt shorter than ours); the
+  stand-in draws 1 em. Whether Flutter on the phone does too shows on the first build with the fixes.
+
 ### Slice 11: 搜索
 
 | | |
