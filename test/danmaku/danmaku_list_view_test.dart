@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
+import '../shared/text_lines.dart';
 import '../support/fake_player_session.dart';
 
 /// The page's session with the feed's two calls answered here: [rows] is what showed, [hidden] what 屏蔽弹幕 took.
@@ -102,7 +103,8 @@ final class Rig {
     danmaku: session,
   );
 
-  Future<void> mount(WidgetTester tester) async {
+  /// [panelText] is the default style the panel layer puts around its panels.
+  Future<void> mount(WidgetTester tester, {TextStyle? panelText}) async {
     tester.view
       ..physicalSize = const Size(956, 440)
       ..devicePixelRatio = 1
@@ -128,7 +130,10 @@ final class Rig {
                   right: 62 + BiliMetrics.panelTrailing,
                   bottom: 21 + BiliMetrics.panelBottom,
                 ),
-                child: DanmakuListView(ui: ui, toast: toasts.add, back: () {}, close: () {}),
+                child: DefaultTextStyle.merge(
+                  style: panelText,
+                  child: DanmakuListView(ui: ui, toast: toasts.add, back: () {}, close: () {}),
+                ),
               ),
             ),
           ),
@@ -423,5 +428,66 @@ void main() {
     await tester.pump();
     expect(rig.session.hidden, [rows[1]]);
     semantics.dispose();
+  });
+
+  group('under the system font', () {
+    const chinese = DanmakuElem(id: 21, content: '设置版本');
+    const mixed = DanmakuElem(id: 22, content: 'KaiC 设置');
+    const longChinese = DanmakuElem(id: 23, content: '孤狼前行不惧长路寻找志同道合的伙伴欢迎加入交流群孤狼前行不惧长路寻找志同道合的伙伴');
+    const longMixed = DanmakuElem(id: 24, content: 'KaiC 设置 1080P 高清 KaiC 设置 1080P 高清 KaiC 设置 1080P 高清 KaiC 设置');
+
+    Future<void> mountRows(WidgetTester tester) async {
+      await useSystemFont(tester);
+      final rig = Rig(shown: [chinese, mixed, longChinese, longMixed])
+        ..api.danmakuLikeStats[21] = (likes: 12, liked: false)
+        ..api.danmakuLikeStats[22] = (likes: 12000, liked: false);
+      await rig.mount(
+        tester,
+        panelText: TextStyle(
+          inherit: false,
+          fontFamily: BiliFonts.family,
+          fontFamilyFallback: BiliFonts.fallback,
+          fontSize: BiliMetrics.panelTitleText,
+          color: BiliColors.panelText,
+          decoration: TextDecoration.none,
+        ),
+      );
+      await tester.pump();
+    }
+
+    Rect rowOf(WidgetTester tester, String text) =>
+        tester.getRect(find.ancestor(of: find.text(text), matching: find.byType(AnimatedOpacity)));
+
+    testWidgets('a danmaku mixing Latin and Chinese sits on the Chinese one\'s line', (tester) async {
+      await mountRows(tester);
+      double hanInRow(String text) => linesOf(tester, find.text(text)).han.first - rowOf(tester, text).top;
+      expect(rowOf(tester, mixed.content).height, rowOf(tester, chinese.content).height);
+      expect(hanInRow(mixed.content), closeTo(hanInRow(chinese.content), 0.01));
+    });
+
+    testWidgets('a wrapped one keeps the Chinese pitch and baselines', (tester) async {
+      await mountRows(tester);
+      final chineseLines = linesOf(tester, find.text(longChinese.content));
+      final mixedLines = linesOf(tester, find.text(longMixed.content));
+      expect(chineseLines.lines.length, greaterThan(1));
+      expect(mixedLines.lines.length, greaterThan(1));
+      expect(mixedLines.pitch, closeTo(chineseLines.pitch, 0.01));
+      for (var line = 0; line < 2; line++) {
+        expect(
+          mixedLines.han[line] - rowOf(tester, longMixed.content).top,
+          closeTo(chineseLines.han[line] - rowOf(tester, longChinese.content).top, 0.01),
+        );
+      }
+    });
+
+    testWidgets('1.2万 sits on the same line as a count of digits', (tester) async {
+      await mountRows(tester);
+      Rect countLine(String text) =>
+          linesOf(tester, inRow(text, 'danmaku-list-count')).lines.single.shift(-rowOf(tester, text).topLeft);
+      expect(countOf(tester, mixed.content), '1.2万');
+      final digits = countLine(chinese.content), wan = countLine(mixed.content);
+      expect(wan.top, closeTo(digits.top, 0.01));
+      expect(wan.bottom, closeTo(digits.bottom, 0.01));
+    });
   });
 }

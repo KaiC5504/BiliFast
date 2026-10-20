@@ -4,6 +4,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'text_lines.dart';
+
 const screen = Size(440, 956);
 
 Future<BuildContext> mount(WidgetTester tester, {double keyboard = 0}) async {
@@ -90,6 +92,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('第一条'), findsNothing);
     expect(find.text('第二条'), findsOneWidget);
+    await runOut(tester);
+  });
+
+  // The toast's style sets no height, so each line already takes PingFang's ascent and descent, which exceed SF's.
+  testWidgets('under the system font, a message mixing Latin and Chinese sits on a Chinese one\'s lines', (
+    tester,
+  ) async {
+    await useSystemFont(tester);
+    final context = await mount(tester);
+    Future<(TextLines, Rect)> show(String message) async {
+      showToast(context, message);
+      await tester.pump(const Duration(milliseconds: 200));
+      return (linesOf(tester, find.text(message)), tester.getRect(find.byKey(const ValueKey('toast'))));
+    }
+
+    final (chinese, chineseBox) = await show('评论发布失败请稍后再试评论发布失败请稍后再试评论发布失败请稍后再试');
+    final (mixed, mixedBox) = await show('HTTP 412 评论发布失败 HTTP 412 评论发布失败 HTTP 412 评论发布失败');
+    expect(chinese.lines.length, 2);
+    expect(mixed.lines.length, 2);
+    expect(mixedBox.height, chineseBox.height);
+    expect(mixed.pitch, closeTo(chinese.pitch, 0.01));
+    for (var line = 0; line < 2; line++) {
+      expect(mixed.han[line] - mixedBox.top, closeTo(chinese.han[line] - chineseBox.top, 0.01));
+    }
     await runOut(tester);
   });
 }

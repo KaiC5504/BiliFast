@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:bili_core/danmaku.dart';
-import 'package:flutter/material.dart' show InputBorder, InputDecoration, Material, MaterialType, TextField;
+import 'package:flutter/material.dart' show InputBorder, InputDecoration, Material, MaterialType, TextField, Theme;
 import 'package:flutter/services.dart' show TextInputAction;
 import 'package:flutter/widgets.dart';
 
@@ -222,36 +222,49 @@ class _BlockWordsViewState extends State<BlockWordsView> {
     );
   }
 
-  Widget _input() => GestureDetector(
-    onTap: _focus.requestFocus,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: BlockWordsTheme.fieldPadX),
-      alignment: Alignment.centerLeft,
-      decoration: BoxDecoration(
-        color: BlockWordsTheme.fieldFill,
-        borderRadius: BorderRadius.circular(BlockWordsTheme.fieldRadius),
-      ),
-      child: TextField(
-        key: const ValueKey('block-words-field'),
-        controller: _field,
-        focusNode: _focus,
-        autocorrect: false,
-        enableSuggestions: false,
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) => _add(),
-        cursorColor: BlockWordsTheme.pink,
-        textAlignVertical: TextAlignVertical.center,
-        style: _style(BlockWordsTheme.fieldText, BlockWordsTheme.fieldInk),
-        decoration: InputDecoration(
-          isCollapsed: true,
-          border: InputBorder.none,
-          hintText: '请填写要屏蔽的关键词（支持正则，以 "/" 开头 "/" 结束）',
-          hintMaxLines: 1,
-          hintStyle: _style(BlockWordsTheme.fieldText, BlockWordsTheme.grey, spacing: BlockWordsTheme.smallSpacing),
+  Widget _input() {
+    // What the field and its hint draw in (the theme's bodyLarge under ours); the hint is a Text so it takes a strut.
+    final base = Theme.of(context).textTheme.bodyLarge!;
+    final field = base.merge(_style(BlockWordsTheme.fieldText, BlockWordsTheme.fieldInk));
+    final hint = field.merge(
+      _style(BlockWordsTheme.fieldText, BlockWordsTheme.grey, spacing: BlockWordsTheme.smallSpacing),
+    );
+    return GestureDetector(
+      onTap: _focus.requestFocus,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: BlockWordsTheme.fieldPadX),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: BlockWordsTheme.fieldFill,
+          borderRadius: BorderRadius.circular(BlockWordsTheme.fieldRadius),
+        ),
+        child: TextField(
+          key: const ValueKey('block-words-field'),
+          controller: _field,
+          focusNode: _focus,
+          autocorrect: false,
+          enableSuggestions: false,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _add(),
+          cursorColor: BlockWordsTheme.pink,
+          textAlignVertical: TextAlignVertical.center,
+          style: _style(BlockWordsTheme.fieldText, BlockWordsTheme.fieldInk),
+          strutStyle: BiliFonts.strut(field),
+          decoration: InputDecoration(
+            isCollapsed: true,
+            border: InputBorder.none,
+            hint: Text(
+              '请填写要屏蔽的关键词（支持正则，以 "/" 开头 "/" 结束）',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: hint,
+              strutStyle: BiliFonts.strut(hint),
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _button({
     required Key key,
@@ -384,6 +397,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: _style(BlockWordsTheme.chipText, BlockWordsTheme.grey),
+            strutStyle: BiliFonts.strutOf(context, _style(BlockWordsTheme.chipText, BlockWordsTheme.grey)),
           ),
         ),
         Semantics(

@@ -7,11 +7,13 @@ import 'package:bilifast/danmaku/send/danmaku_style_panel.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
-import 'package:flutter/material.dart' show MaterialApp, TextField;
+import 'package:flutter/material.dart' show MaterialApp, TextField, ThemeData;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../shared/text_lines.dart';
 
 void main() {
   late DanmakuSendModel model;
@@ -38,8 +40,10 @@ void main() {
     Presentation presentation = Presentation.inline,
     bool styleShown = false,
     bool closed = false,
+    ThemeData? theme,
   }) => tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       home: Align(
         alignment: Alignment.bottomCenter,
         child: RepaintBoundary(
@@ -160,6 +164,26 @@ void main() {
       expect(clear, findsNothing);
       await tester.tap(send);
       expect(sends, 1);
+    });
+
+    testWidgets('under the system font, UP主已关闭弹幕 and typed text with Latin sit on the Chinese placeholder\'s line', (
+      tester,
+    ) async {
+      await useSystemFont(tester);
+      double han(Finder finder) => linesOf(tester, finder).han.first;
+      final field = find.descendant(of: input, matching: find.byType(EditableText));
+      await pumpBar(tester, theme: appTheme());
+      final placeholder = han(find.text('发个友善的弹幕见证当下'));
+      await tester.enterText(input, '设置版本');
+      await tester.pump();
+      expect(han(field), closeTo(placeholder, 0.01));
+      await tester.enterText(input, 'KaiC 设置');
+      await tester.pump();
+      expect(han(field), closeTo(placeholder, 0.01));
+      await tester.enterText(input, '');
+      await pumpBar(tester, theme: appTheme(), closed: true);
+      await tester.pump();
+      expect(han(find.text('UP主已关闭弹幕')), closeTo(placeholder, 0.01));
     });
   });
 

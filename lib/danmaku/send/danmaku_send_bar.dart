@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/material.dart'
-    show AdaptiveTextSelectionToolbar, InputBorder, InputDecoration, Material, MaterialType, TextField;
+    show AdaptiveTextSelectionToolbar, InputBorder, InputDecoration, Material, MaterialType, TextField, Theme;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -213,6 +213,9 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
             color: DanmakuSendTheme.placeholder,
             letterSpacing: DanmakuSendTheme.placeholderSpacing,
           );
+    // What the field and its hint draw in (the theme's bodyLarge under ours); the hint is a Text so it takes a strut.
+    final field = Theme.of(context).textTheme.bodyLarge!.merge(textStyle);
+    final hint = field.merge(hintStyle);
     return Container(
       key: const ValueKey('danmaku-send-field'),
       height: DanmakuSendTheme.fieldHeight,
@@ -248,6 +251,7 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
                 cursorRadius: const Radius.circular(DanmakuSendTheme.cursorWidth / 2),
                 contextMenuBuilder: _editMenu,
                 style: textStyle,
+                strutStyle: BiliFonts.strut(field),
                 textAlignVertical: TextAlignVertical.center,
                 // Sending from the keyboard keeps it up; the bar closes itself once the danmaku went.
                 onEditingComplete: () {},
@@ -258,9 +262,13 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
                   isCollapsed: true,
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.only(left: pad, right: clear ? DanmakuSendTheme.clearCell : pad),
-                  hintText: widget.closed ? 'UP主已关闭弹幕' : '发个友善的弹幕见证当下',
-                  hintMaxLines: 1,
-                  hintStyle: hintStyle,
+                  hint: Text(
+                    widget.closed ? 'UP主已关闭弹幕' : '发个友善的弹幕见证当下',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: hint,
+                    strutStyle: BiliFonts.strut(hint),
+                  ),
                 ),
               ),
             ),
