@@ -82,12 +82,14 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
             child: Text(
               widget.message,
               textAlign: TextAlign.center,
-              // The root overlay sits outside any Material, whose text style would otherwise be missing.
+              // The root overlay sits outside any Material; what it would inherit is WidgetsApp's monospace w900 error
+              // style, so nothing is inherited.
               style: TextStyle(
+                inherit: false,
                 fontFamily: BiliFonts.family,
+                fontFamilyFallback: BiliFonts.fallback,
                 fontSize: BiliMetrics.bodyText,
                 color: BiliColors.panelText,
-                decoration: TextDecoration.none,
               ),
             ),
           ),

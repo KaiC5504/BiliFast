@@ -803,7 +803,7 @@ void main() {
 
   group('layout', () {
     testWidgets(
-      'the system font starts the text 1.4 lower and the box 1.75 and the hairline 0.7 higher; MiSans keeps the places from 10',
+      'the system font starts the text 1.4 lower and the box 1.75 and the hairline 0.83 higher; MiSans keeps the places from 10',
       (tester) async {
         final saved = BiliFonts.family;
         addTearDown(() => BiliFonts.family = saved);
@@ -825,7 +825,8 @@ void main() {
         final heightMiSans = _rect(tester, find.byType(CommentRow)).height;
         BiliFonts.family = null;
         await _mount(tester, _row(_comment(), _Model(), _Calls()));
-        expect(_rect(tester, find.byType(CommentRow)).height - heightMiSans, closeTo(-0.7, 0.01));
+        // 20 below the meta text, which sits 0.5 above the line's centre: 7.5 under the line against MiSans's 8.33.
+        expect(_rect(tester, find.byType(CommentRow)).height - heightMiSans, closeTo(7.5 - (61 / 3 - 12), 0.01));
       },
     );
 

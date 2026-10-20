@@ -268,6 +268,9 @@ class CommentsModel extends ChangeNotifier {
   /// server sends none.
   String? get rootPrompt => _rootPrompt;
 
+  /// The write bar's words when the comment section sends none.
+  static const defaultPrompt = '哎呦，不错哦，发条评论吧';
+
   /// The list's first page's prompt for a thread's write bar, for a thread whose own page sent none.
   String? get childPrompt => _childPrompt;
 

@@ -99,7 +99,7 @@ class ComposerModel extends ChangeNotifier {
 
   /// The comment section's prompt, as the bar shows it, or "回复 name :" for a reply.
   String get placeholder => switch (target) {
-    ReplyToVideo() => comments.rootPrompt ?? '哎呦，不错哦，发条评论吧',
+    ReplyToVideo() => comments.rootPrompt ?? CommentsModel.defaultPrompt,
     ReplyToComment(:final comment) => '回复 ${comment.member.name} :',
     ReplyInThread(:final reply) => '回复 ${reply.member.name} :',
   };

@@ -468,7 +468,7 @@ class CommentWriteBar extends StatelessWidget {
   /// The comment section's own words (font-check 04), which Bilibili sends with its pages.
   final String? prompt;
 
-  static const placeholder = '哎呦，不错哦，发条评论吧';
+  static const placeholder = CommentsModel.defaultPrompt;
 
   @override
   Widget build(BuildContext context) {

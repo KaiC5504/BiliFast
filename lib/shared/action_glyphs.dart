@@ -44,7 +44,8 @@ class ActionGlyphPainter extends CustomPainter {
   final Color color;
   final double? stroke;
 
-  /// Outline strokes: 1.1 pt on a 20 pt glyph. Landscape's top row passes 04's 1.5 pt as [stroke].
+  /// Outline strokes: 1.1 pt on a 20 pt glyph unless [stroke] says otherwise; landscape's top row and 简介's cut-out
+  /// 币 pass the official 1.5 pt.
   static const _line = 0.055;
 
   /// The 币 strokes, solid and outlined alike.

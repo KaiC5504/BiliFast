@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:bili_core/api.dart' show UploaderCard, VideoCard, VideoOwner;
+import 'package:bili_core/api.dart' show VideoCard, VideoOwner;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/widgets.dart';
@@ -16,6 +16,7 @@ import 'end_screen_portrait.dart'
 import 'landscape_chrome.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
+import 'uploader_source.dart';
 
 /// The full-screen end screen (BiliNative `EndScreens.swift`, measured on 27): back, the uploader with 充电 and 关注,
 /// 重播 | 点赞 投币 收藏 分享, and a row of related videos that rise in one after another. It fills the screen. The
@@ -92,7 +93,7 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
     final actions = ui.details?.actions;
     final link = session.shareLink;
     final related = session.related;
-    final owner = _ownerOf(session.detail?.owner, ui.details?.uploader, session.video?.owner);
+    final owner = uploaderOf(session.detail?.owner, ui.details?.uploader, session.video?.owner);
     final rule = Padding(
       padding: EdgeInsets.only(left: insets.left, right: insets.right),
       child: const SizedBox(
@@ -248,18 +249,6 @@ class _EndScreenLandscapeState extends State<EndScreenLandscape> with SingleTick
       ),
     );
   }
-}
-
-/// The uploader from whichever source has each part: the detail's owner, then the page's card, then for the name the
-/// view's. A card can come back with an empty name or face, which counts as missing.
-VideoOwner? _ownerOf(VideoOwner? fromDetail, UploaderCard? card, String? viewName) {
-  if (fromDetail == null && card == null) return null;
-  String filled(List<String?> each) => each.nonNulls.firstWhere((text) => text.isNotEmpty, orElse: () => '');
-  return VideoOwner(
-    mid: fromDetail == null || fromDetail.mid == 0 ? card?.mid ?? 0 : fromDetail.mid,
-    name: filled([fromDetail?.name, card?.name, viewName]),
-    face: filled([fromDetail?.face, card?.face]),
-  );
 }
 
 /// The uploader's ringed avatar and name, with 充电 and 关注 under the name, level with the avatar's bottom.

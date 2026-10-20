@@ -16,6 +16,7 @@ import 'player_ui.dart';
 import 'portrait_controls.dart';
 import 'seek_bar.dart';
 import 'status_bar_view.dart';
+import 'uploader_source.dart';
 
 const _fade = Duration(milliseconds: 220);
 
@@ -806,10 +807,9 @@ class _UploaderBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final details = ui.details;
-    final owner = ui.session.detail?.owner;
-    final known = owner != null && owner.mid != 0;
-    final face = _cardOr(details?.uploader?.face, known ? owner.face : null);
-    final name = _cardOr(details?.uploader?.name, known ? owner.name : null) ?? '';
+    final owner = uploaderOf(ui.session.detail?.owner, details?.uploader, ui.session.video?.owner);
+    final face = owner?.face;
+    final name = owner?.name ?? '';
     final actions = details?.actions;
     final bgm = details?.tags.where((tag) => tag.kind == VideoTagKind.bgm).firstOrNull;
     return Column(
@@ -877,10 +877,6 @@ class _UploaderBlock extends StatelessWidget {
     );
   }
 }
-
-/// A card can come back with an empty name or face; the view's owner then stands in.
-String? _cardOr(String? fromCard, String? fromView) =>
-    fromCard == null || fromCard.isEmpty ? fromView ?? fromCard : fromCard;
 
 /// 05's translucent capsule behind a row of the uploader block, [LandscapeActionTheme.chipHeight] tall and centred
 /// in whatever height the row takes, so its buttons can keep a taller target than the capsule.

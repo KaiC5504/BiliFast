@@ -1,4 +1,6 @@
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/shared/toast.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -41,6 +43,26 @@ void main() {
     await runOut(tester);
     expect(find.byKey(const ValueKey('toast')), findsNothing);
   });
+
+  testWidgets(
+    'its text takes nothing from the root overlay (the monospace w900 of WidgetsApp), and the font fallback',
+    (tester) async {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      for (final family in [null, BiliFonts.miSans]) {
+        BiliFonts.family = family;
+        final context = await mount(tester);
+        showToast(context, '已复制');
+        await tester.pump(const Duration(milliseconds: 200));
+        final style = tester.renderObject<RenderParagraph>(find.text('已复制')).text.style!;
+        expect(style.fontFamily, family);
+        expect(style.fontFamilyFallback, BiliFonts.fallback);
+        expect(style.fontWeight, anyOf(isNull, FontWeight.w400));
+        expect(style.fontSize, BiliMetrics.bodyText);
+        await runOut(tester);
+      }
+    },
+  );
 
   testWidgets('above the keyboard when one is up, where it would otherwise be hidden', (tester) async {
     const keyboard = 336.0;
