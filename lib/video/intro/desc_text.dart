@@ -58,6 +58,28 @@ final _trailingPunctuation = RegExp(r'''[.,;:!?)\]}'"]+$''');
   return (video: null, web: uri);
 }
 
+/// Flutter draws a tab as one space, where the official app moves to the next of iOS's tab stops. Only tabs that open a
+/// line are placed: there the stop is known without measuring the line. Leading spaces stay as written.
+List<InlineSpan> _tabbed(String text, {required bool lineStart}) {
+  final spans = <InlineSpan>[];
+  var start = 0;
+  for (final match in _leadingTabs.allMatches(text)) {
+    if (match.start == 0 && !lineStart) continue;
+    if (start < match.start) spans.add(TextSpan(text: text.substring(start, match.start)));
+    spans.add(
+      WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: SizedBox(width: match[0]!.length * IntroTheme.descTabStop),
+      ),
+    );
+    start = match.end;
+  }
+  if (start < text.length || spans.isEmpty) spans.add(TextSpan(text: text.substring(start)));
+  return spans;
+}
+
+final _leadingTabs = RegExp(r'(?<=^|\n)\t+');
+
 /// The description as one paragraph: timestamps, links and video ids in the link colour and tappable, mentions in the
 /// link colour only, the rest in [style].
 class DescriptionText extends StatefulWidget {
@@ -118,34 +140,46 @@ class _DescriptionTextState extends State<DescriptionText> {
   /// Taps read the callbacks from [widget] when they happen, so only new runs need new spans.
   List<InlineSpan> _build() {
     _disposeRecognizers();
+    final spans = <InlineSpan>[];
+    var lineStart = true;
+    for (final run in widget.runs) {
+      if (run case TextRun(:final text)) {
+        spans.addAll(_tabbed(text, lineStart: lineStart));
+        if (text.isNotEmpty) lineStart = text.endsWith('\n');
+      } else {
+        spans.add(_span(run));
+        lineStart = false;
+      }
+    }
+    return spans;
+  }
+
+  InlineSpan _span(RichRun run) {
     const linked = TextStyle(color: BiliColors.link);
-    return [
-      for (final run in widget.runs)
-        switch (run) {
-          TextRun(:final text) => TextSpan(text: text),
-          EmoteRun(:final token) => TextSpan(text: token),
-          MentionRun(:final name) => TextSpan(text: name.startsWith('@') ? name : '@$name', style: linked),
-          TimestampRun(:final label, :final seconds) => TextSpan(
-            text: label,
-            style: linked,
-            recognizer: _tap(() => widget.onSeek(seconds.toDouble())),
-          ),
-          VideoRun(:final id) => TextSpan(text: id, style: linked, recognizer: _tap(() => widget.onOpenVideo(id))),
-          LinkRun(:final title) => switch (linkTarget(run)) {
-            (video: final String id, web: _) => TextSpan(
-              text: title,
-              style: linked,
-              recognizer: _tap(() => widget.onOpenVideo(id)),
-            ),
-            (video: _, web: final Uri uri) => TextSpan(
-              text: title,
-              style: linked,
-              recognizer: _tap(() => widget.onOpenLink(uri)),
-            ),
-            _ => TextSpan(text: title),
-          },
-        },
-    ];
+    return switch (run) {
+      TextRun(:final text) => TextSpan(text: text),
+      EmoteRun(:final token) => TextSpan(text: token),
+      MentionRun(:final name) => TextSpan(text: name.startsWith('@') ? name : '@$name', style: linked),
+      TimestampRun(:final label, :final seconds) => TextSpan(
+        text: label,
+        style: linked,
+        recognizer: _tap(() => widget.onSeek(seconds.toDouble())),
+      ),
+      VideoRun(:final id) => TextSpan(text: id, style: linked, recognizer: _tap(() => widget.onOpenVideo(id))),
+      LinkRun(:final title) => switch (linkTarget(run)) {
+        (video: final String id, web: _) => TextSpan(
+          text: title,
+          style: linked,
+          recognizer: _tap(() => widget.onOpenVideo(id)),
+        ),
+        (video: _, web: final Uri uri) => TextSpan(
+          text: title,
+          style: linked,
+          recognizer: _tap(() => widget.onOpenLink(uri)),
+        ),
+        _ => TextSpan(text: title),
+      },
+    };
   }
 
   @override

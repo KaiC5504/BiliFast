@@ -908,6 +908,20 @@ abstract final class IntroTheme {
 
   /// MiSans sets the counts half a point higher in their line than PingFang.
   static double get fansDrop => BiliFonts.nudged ? 0.5 : 0;
+
+  /// 个人观点，仅供参考 (font-check 02 and 03): a 16 pt line 2 under the meta line, its ⓘ (a ring 13.33 across) where the
+  /// meta line's ▶ is and the text 3.2 after it. Collapsed, the actions sit only 16 lower for it, so the line's last
+  /// [noticeHang] hangs below the block; expanded, the BV line keeps its usual gap under the line.
+  static const noticeGap = 2.0;
+  static const noticeLine = 16.0;
+  static const noticeHang = 2.0;
+  static const noticeText = 12.0;
+  static const noticeIcon = 40 / 3;
+  static const noticeIconGap = 3.2;
+
+  /// iOS sets a tab on its default stops, 28 pt apart, so a description paragraph that opens with one is indented by
+  /// 28 (font-check 03).
+  static const descTabStop = 28.0;
 }
 
 /// 合集, the part strip, the topic and BGM chips and the related rows (03, 18).

@@ -262,6 +262,7 @@ final class VideoDetail {
     required this.height,
     required this.honor,
     required this.redirectURL,
+    this.argueMessage,
   });
 
   factory VideoDetail.fromJson(Object? json) {
@@ -277,6 +278,7 @@ final class VideoDetail {
         .nested('honor_reply')
         ?.lenientList('honor', (json) => JsonObject.from(json).string('desc') ?? '');
     final redirect = object.string('redirect_url');
+    final argue = object.nested('argue_info')?.text('argue_msg');
     return VideoDetail(
       bvid: bvid,
       aid: object.integer('aid') ?? 0,
@@ -296,6 +298,7 @@ final class VideoDetail {
       height: rotated ? rawWidth : rawHeight,
       honor: honors?.where((desc) => desc.isNotEmpty).firstOrNull,
       redirectURL: redirect == null || redirect.isEmpty ? null : redirect,
+      argueMessage: argue == null || argue.trim().isEmpty ? null : argue,
     );
   }
 
@@ -322,6 +325,9 @@ final class VideoDetail {
   /// Set for bangumi and other pages the ordinary video page cannot show.
   final String? redirectURL;
 
+  /// The notice the site puts under the stats, such as 个人观点，仅供参考 (`argue_info.argue_msg`); null when none.
+  final String? argueMessage;
+
   bool get isVertical => height > width;
 
   @override
@@ -344,12 +350,13 @@ final class VideoDetail {
       other.width == width &&
       other.height == height &&
       other.honor == honor &&
-      other.redirectURL == redirectURL;
+      other.redirectURL == redirectURL &&
+      other.argueMessage == argueMessage;
 
   @override
   int get hashCode => Object.hashAll([
     bvid, aid, title, cover, pubdate, duration, desc, Object.hashAll(descParts), copyright, owner, stat, //
-    Object.hashAll(pages), season, Object.hashAll(staff), width, height, honor, redirectURL,
+    Object.hashAll(pages), season, Object.hashAll(staff), width, height, honor, redirectURL, argueMessage,
   ]);
 }
 

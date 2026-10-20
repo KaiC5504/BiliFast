@@ -16,6 +16,7 @@ VideoDetail _detail({
   List<DescPart> desc = const [],
   String title = '恭喜你，终于触发了B站大保底！',
   String bvid = 'BV1PdJD6iEFb',
+  String? argue,
 }) => VideoDetail(
   bvid: bvid,
   aid: 1,
@@ -35,7 +36,10 @@ VideoDetail _detail({
   height: 1080,
   honor: honor,
   redirectURL: null,
+  argueMessage: argue,
 );
+
+const _notice = '个人观点，仅供参考';
 
 const _desc = [
   DescPart(text: '从03:15开始，高潮在1:02:03。看 https://example.com/a?b=1。和 www.bilibili.com/read 还有 '),
@@ -190,6 +194,64 @@ void main() {
       rig.online.value = '';
       await tester.pump();
       expect(find.textContaining('人正在看'), findsNothing);
+    });
+  });
+
+  group('notice', () {
+    late String? font;
+    setUp(() {
+      font = BiliFonts.family;
+      BiliFonts.family = null;
+    });
+    tearDown(() => BiliFonts.family = font);
+
+    testWidgets('ⓘ and the text sit a 16 pt line 2 under the meta line, grey at 12, after the ▶ column', (
+      tester,
+    ) async {
+      final rig = Rig();
+      await rig.mount(tester, _detail(argue: _notice));
+
+      final notice = find.text(_notice);
+      expect(notice, findsOneWidget);
+      final date = find.text('2026年10月11日 21:05');
+      expect(
+        tester.getCenter(notice).dy - tester.getCenter(date).dy,
+        moreOrLessEquals(IntroTheme.noticeGap + IntroTheme.noticeLine),
+      );
+      expect(
+        tester.getTopLeft(notice).dx,
+        moreOrLessEquals(BiliMetrics.gutter + IntroTheme.metaLead + IntroTheme.noticeIcon + IntroTheme.noticeIconGap),
+      );
+      final style = tester.renderObject<RenderParagraph>(notice).text.style!;
+      expect(style.color, BiliColors.secondaryText);
+      expect(style.fontSize, 12);
+      expect(style.fontFamily, isNull);
+      expect(tester.widget<Text>(notice).maxLines, 1);
+    });
+
+    testWidgets('is absent without a message', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester, _detail());
+      expect(find.text(_notice), findsNothing);
+    });
+
+    testWidgets('collapsed, the block grows 16 for it; expanded, the BV line moves 18', (tester) async {
+      final plain = Rig();
+      await plain.mount(tester, _detail(bvid: 'BV1plain'));
+      final collapsed = tester.getSize(find.byType(TitleBlock)).height;
+      await plain.toggle(tester);
+      final bv = tester.getCenter(find.text('BV1plain')).dy;
+
+      final noted = Rig();
+      await noted.mount(tester, _detail(bvid: 'BV1noted', argue: _notice));
+      expect(
+        tester.getSize(find.byType(TitleBlock)).height - collapsed,
+        moreOrLessEquals(IntroTheme.noticeGap + IntroTheme.noticeLine - IntroTheme.noticeHang),
+      );
+      expect(IntroTheme.noticeGap + IntroTheme.noticeLine - IntroTheme.noticeHang, 16);
+      await noted.toggle(tester);
+      expect(tester.getCenter(find.text('BV1noted')).dy - bv, moreOrLessEquals(18));
+      expect(find.text(_notice), findsOneWidget);
     });
   });
 
@@ -372,6 +434,52 @@ void main() {
           RichRun.video(id: 'BV1AB411c7mD'),
         ],
       );
+    });
+
+    test('leading spaces, full-width or not, stay in the runs', () {
+      const text = '第一段\n　　第二段\n  第三段';
+      expect(descriptionRuns(const [DescPart(text: text)]), const [RichRun.text(text)]);
+    });
+
+    testWidgets('a tab that opens a line indents it to the next 28 pt stop; one mid-line and leading spaces stay', (
+      tester,
+    ) async {
+      // MiSans's tightening would move the text after the stop by a tenth of a point.
+      final font = BiliFonts.family;
+      BiliFonts.family = null;
+      addTearDown(() => BiliFonts.family = font);
+      final rig = Rig();
+      await rig.mount(
+        tester,
+        _detail(
+          desc: const [
+            DescPart(text: '\t第一段\n第二段\n\t\t第三段\n'),
+            DescPart(text: '\t第四段'),
+            DescPart(text: '\n　　第五段 03:15\t第六'),
+          ],
+        ),
+      );
+      await rig.toggle(tester);
+
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: find.byType(DescriptionText), matching: find.byType(RichText)),
+      );
+      final plain = paragraph.text.toPlainText();
+      double x(String text) => paragraph.getOffsetForCaret(TextPosition(offset: plain.indexOf(text)), Rect.zero).dx;
+      expect(x('第一段'), moreOrLessEquals(IntroTheme.descTabStop));
+      expect(x('第二段'), moreOrLessEquals(0));
+      expect(x('第三段'), moreOrLessEquals(2 * IntroTheme.descTabStop));
+      expect(x('第四段'), moreOrLessEquals(IntroTheme.descTabStop));
+      expect(plain, contains('　　第五段'));
+      expect(x('第五段'), greaterThan(0));
+      expect(plain, contains('03:15\t第六'));
+
+      final widths = <double?>[];
+      paragraph.text.visitChildren((span) {
+        if (span is WidgetSpan) widths.add((span.child as SizedBox).width);
+        return true;
+      });
+      expect(widths, [IntroTheme.descTabStop, 2 * IntroTheme.descTabStop, IntroTheme.descTabStop]);
     });
 
     test('an address written twice is a link both times', () {
