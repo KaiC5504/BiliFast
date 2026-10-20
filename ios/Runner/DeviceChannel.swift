@@ -24,6 +24,22 @@ enum DeviceChannel {
     let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
     return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
   }
+
+  /// Asks the scene to turn to `wanted`; returns how long requestGeometryUpdate took, in milliseconds.
+  @MainActor static func ask(_ scene: UIWindowScene, for wanted: UIInterfaceOrientationMask, request: Int64) -> Double {
+    // iOS intersects the root controller's orientations (SystemChrome's, all by default) with the app delegate's,
+    // so the controllers must ask again after `mask` changes.
+    for window in scene.windows {
+      window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+    }
+    let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: wanted)
+    let started = CACurrentMediaTime()
+    scene.requestGeometryUpdate(preferences) { @Sendable error in
+      let message = String(describing: error)
+      Task { @MainActor in try? await DeviceChannel.events?.onOrientationRefused(request: request, error: message) }
+    }
+    return (CACurrentMediaTime() - started) * 1000
+  }
 }
 
 /// Pigeon calls in on the main thread.
@@ -67,16 +83,14 @@ final class DeviceHostApiImpl: DeviceHostApi {
         }
         return
       }
-      // iOS intersects the root controller's orientations (SystemChrome's, all by default) with the app delegate's,
-      // so the controllers must ask again after `mask` changes.
-      for window in scene.windows {
-        window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+      let quiet = TurnTakeover.requesting(request, mask: mask, from: scene.effectiveGeometry.interfaceOrientation)
+      var ms = 0.0
+      if quiet {
+        UIView.performWithoutAnimation { ms = DeviceChannel.ask(scene, for: wanted, request: request) }
+      } else {
+        ms = DeviceChannel.ask(scene, for: wanted, request: request)
       }
-      let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: wanted)
-      scene.requestGeometryUpdate(preferences) { @Sendable error in
-        let message = String(describing: error)
-        Task { @MainActor in try? await DeviceChannel.events?.onOrientationRefused(request: request, error: message) }
-      }
+      TurnTakeover.requestReturned(request, ms: ms)
     }
   }
 
@@ -116,11 +130,7 @@ final class DeviceHostApiImpl: DeviceHostApi {
   }
 
   func setTurnTakeover(enabled: Bool, method: NativeTurnMethod, picture: NativeTurnPicture) throws {
-    MainActor.assumeIsolated {
-      TurnTakeover.enabled = enabled
-      TurnTakeover.method = method
-      TurnTakeover.picture = picture
-    }
+    MainActor.assumeIsolated { TurnTakeover.configure(enabled: enabled, method: method, picture: picture) }
   }
 
   func turnDrawn(turn: Int64) throws {
