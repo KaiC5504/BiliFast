@@ -1,5 +1,5 @@
 import 'package:bilifast/shared/theme.dart';
-import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/stand_in_fonts.dart';
@@ -73,6 +73,24 @@ void main() {
       final mixed = baselines('KaiC 设置 KaiC 设置', strut: true);
       expect(mixed.first, chinese.first);
       expect(mixed[1] - mixed[0], closeTo(22, 0.01));
+    });
+
+    testWidgets('strutOf takes the height the text inherits', (tester) async {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      BiliFonts.family = BiliFonts.system;
+      StrutStyle? found;
+      await tester.pumpWidget(DefaultTextStyle(
+        style: const TextStyle(fontSize: 14, height: 1.43),
+        child: Builder(builder: (context) {
+          found = BiliFonts.strutOf(context, const TextStyle(fontSize: 16));
+          return const SizedBox.shrink();
+        }),
+      ));
+      expect(found?.fontSize, 16);
+      expect(found?.height, 1.43);
+      expect(found?.fontFamily, 'PingFang SC');
+      expect(found?.forceStrutHeight, isTrue);
     });
 
     test('none under MiSans, or for a style with no height', () {

@@ -178,6 +178,11 @@ abstract final class BiliFonts {
         )
       : null;
 
+  /// [strut] for [style] as a Text under [context] draws it, the inherited default style merged in (most text takes
+  /// its height from the Material's body style).
+  static StrutStyle? strutOf(BuildContext context, [TextStyle? style]) =>
+      strut(DefaultTextStyle.of(context).style.merge(style));
+
   /// Material's type scale tracks its text 0.1 to 0.5 pt, and every style that doesn't set its own spacing took that
   /// from the page's Material. iOS text isn't tracked; at 3 px per pt the extra 0.75 px leaves Chinese glyphs between
   /// pixels, some drawn crisp and the next blurred thinner, and widens every line.
