@@ -1,8 +1,8 @@
 import Flutter
 import UIKit
 
-/// Dart's full-screen rotation and level controls (lib/device/): Pigeon's DeviceHostApi and DeviceEventApi
-/// (DeviceApi.g.swift). The app delegate's supported orientations follow `mask`.
+/// Dart's full-screen rotation and level controls and the drawn status bar's feed (lib/device/): Pigeon's
+/// DeviceHostApi and DeviceEventApi (DeviceApi.g.swift). The app delegate's supported orientations follow `mask`.
 enum DeviceChannel {
   /// What the app delegate reports; portrait until Dart asks for full screen.
   @MainActor static var mask: UIInterfaceOrientationMask = .portrait
@@ -45,6 +45,7 @@ enum DeviceChannel {
 /// Pigeon calls in on the main thread.
 final class DeviceHostApiImpl: DeviceHostApi {
   private let orientation = MainActor.assumeIsolated { OrientationEvents() }
+  private let status = MainActor.assumeIsolated { StatusEvents() }
 
   func setOrientationEvents(enabled: Bool) throws {
     let orientation = self.orientation
@@ -132,7 +133,10 @@ final class DeviceHostApiImpl: DeviceHostApi {
     MainActor.assumeIsolated { TurnTakeover.drawn(turn: Int(turn)) }
   }
 
-  func setStatusEvents(enabled: Bool) throws {}
+  func setStatusEvents(enabled: Bool) throws {
+    let status = self.status
+    MainActor.assumeIsolated { enabled ? status.start() : status.stop() }
+  }
 }
 
 /// UIDevice's orientation notifications, on only while a page with a player is open.
@@ -168,6 +172,50 @@ final class OrientationEvents {
     case .faceUp: return .faceUp
     case .faceDown: return .faceDown
     default: return .unknown
+    }
+  }
+}
+
+/// The battery and the network for the status bar landscape full screen draws, on only while it is on screen.
+@MainActor
+final class StatusEvents {
+  private var observers: [NSObjectProtocol] = []
+  private var monitoringWasOn = false
+
+  func start() {
+    guard observers.isEmpty else { return }
+    let device = UIDevice.current
+    monitoringWasOn = device.isBatteryMonitoringEnabled
+    device.isBatteryMonitoringEnabled = true
+    // Becoming active too: a change made while the app was suspended isn't promised a notification.
+    let names = [UIDevice.batteryLevelDidChangeNotification, UIDevice.batteryStateDidChangeNotification,
+                 UIApplication.didBecomeActiveNotification]
+    observers = names.map { name in
+      NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+        MainActor.assumeIsolated { StatusEvents.report() }
+      }
+    }
+    NetworkMonitor.kindChanged = { StatusEvents.report() }
+    StatusEvents.report()
+  }
+
+  func stop() {
+    guard !observers.isEmpty else { return }
+    for observer in observers {
+      NotificationCenter.default.removeObserver(observer)
+    }
+    observers = []
+    NetworkMonitor.kindChanged = nil
+    if !monitoringWasOn { UIDevice.current.isBatteryMonitoringEnabled = false }
+  }
+
+  private static func report() {
+    let device = UIDevice.current
+    let battery = Double(device.batteryLevel)
+    let charging = device.batteryState == .charging || device.batteryState == .full
+    let network = NetworkMonitor.kind
+    Task { @MainActor in
+      try? await DeviceChannel.events?.onStatus(battery: battery, charging: charging, network: network)
     }
   }
 }

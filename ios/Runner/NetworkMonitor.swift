@@ -3,12 +3,22 @@ import Network
 
 /// The phone's network path for the engine (port of PlaybackController.swift's NWPathMonitor), reported through
 /// DeviceEventApi.onNetworkChanged: bans and backoffs earned on the old path would keep the engine off nodes that
-/// work on the new one.
+/// work on the new one. The path's kind also feeds the status bar landscape full screen draws (StatusEvents).
 @MainActor
 enum NetworkMonitor {
   /// One for the app's life.
   private static var monitor: NWPathMonitor?
   private static var changes = NetworkPathChanges()
+  private static var lastKind: NativeNetwork?
+
+  /// Set while status events are on.
+  static var kindChanged: (@MainActor () -> Void)?
+
+  /// The kind of the last path reported, or of the monitor's current one before the first report.
+  static var kind: NativeNetwork {
+    if let lastKind { return lastKind }
+    return monitor.map { NativeNetwork($0.currentPath) } ?? NativeNetwork.none
+  }
 
   static func start() {
     guard monitor == nil else { return }
@@ -16,15 +26,39 @@ enum NetworkMonitor {
     monitor.pathUpdateHandler = { path in
       let now = NetworkPath(up: path.status == .satisfied, interfaces: path.availableInterfaces.map(\.name),
                             gateways: path.gateways.map { "\($0)" })
-      MainActor.assumeIsolated { NetworkMonitor.pathUpdated(now) }
+      let kind = NativeNetwork(path)
+      MainActor.assumeIsolated { NetworkMonitor.pathUpdated(now, kind: kind) }
     }
     monitor.start(queue: .main)
     self.monitor = monitor
   }
 
-  private static func pathUpdated(_ path: NetworkPath) {
+  private static func pathUpdated(_ path: NetworkPath, kind: NativeNetwork) {
+    if kind != lastKind {
+      lastKind = kind
+      kindChanged?()
+    }
     guard let interfaceChanged = changes.next(path) else { return }
     Task { @MainActor in try? await DeviceChannel.events?.onNetworkChanged(interfaceChanged: interfaceChanged) }
+  }
+}
+
+extension NativeNetwork {
+  /// What the status bar shows for `path`. Anything else that is up (a wired adapter) shows as Wi-Fi, its other
+  /// connected state.
+  init(_ path: NWPath) {
+    if path.status != .satisfied {
+      self = .none
+    } else if path.usesInterfaceType(.wifi) {
+      self = .wifi
+    } else if path.usesInterfaceType(.cellular) {
+      self = .cellular
+    } else if path.availableInterfaces.first(where: { $0.type == .wifi || $0.type == .cellular })?.type == .cellular {
+      // A VPN's path can use only its tunnel; the first real interface in the list is the one under it.
+      self = .cellular
+    } else {
+      self = .wifi
+    }
   }
 }
 
