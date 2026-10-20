@@ -13,7 +13,7 @@ builds replace the Swift ones on the phone and read the Swift app's keychain log
    - `bilicore-inventory.md` and `app-inventory.md`: what the Swift app has, with paths. The port's checklist.
    - `piliplus-map.md`: where PiliPlus keeps what; GPL, so read only.
    - `testflight-flutter.md`: how this repo ships to TestFlight.
-   - `turn-log.md`: the drawn turn's log lines on both sides, which `tools/phone_report.py --turns` grades.
+   - `turn-log.md`: the drawn turn's log lines on both sides, which `tools/phone_report.py --turns` times; `tools/turn_video.py` grades a recording.
 3. `D:\Repos\Apps\BiliNative\CLAUDE.md` only for the Swift app's behaviour. Where it and this file differ, this file
    wins (no Mac, no Swift workflows, the UI follows the official screenshots).
 
@@ -57,12 +57,11 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 Next: the phone runs both checklists (M1 and M2) in full; then the cutover (spec, slice 9).
 
 Open items, each waiting on its slice:
-- The drawn turn, 1.0.0 (14): (13)'s 轮换测试 on the phone, measured frame by frame from KaiC's recording
-  (`local/differences/09-ours-rotate-testing-v4.MP4`, `tools/turn_video.py`), found only 请求前关 keeps iOS's own
-  rotation out (the others spun 180°), and the page drew its turns in 0 ms or not at all. (14) keeps 系统 and 请求前关
-  (开发者 → 旋转动画: 方式, 截图, 起转), draws every turn over 300 ms, and follows a turn that arrives before its
-  build. 轮换测试 walks 系统 and 请求前关's six 截图 × 起转 pairs. KaiC compares them by eye against the official app;
-  then keep the winning 截图 and 起转, and remove 轮换测试 and the per-frame lines (the summary stays).
+- The drawn turn, 1.0.0 (15), committed but not shipped (KaiC ships it with the next work): (14)'s recording
+  (`local/differences/10-ours-rotate-testing-v5.MP4`, measured with `tools/turn_video.py`) matched the official turn
+  with 请求前关, the picture cut and the turn started at once. (15) keeps only that as 开发者 → 旋转动画 自绘, beside
+  系统; the test build's choices, 轮换测试 and the per-frame log lines are gone. On the phone: the turn both ways
+  against the official app.
 - 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
   account and a borrowed app key).
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
@@ -102,8 +101,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/comments/`: 评论, 评论详情, the composer with its emote panel, @ picker and pictures, and
     `comment_overlays.dart`, the in-page layers the page's Stack holds.
   - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
-  - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server;
-    `turn_cycle.dart` and its badge (轮换测试, the turn test build only).
+  - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server.
   - `lib/speedtest/`: the speed test (dev builds only).
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
@@ -184,7 +182,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - The video page lays out by the screen's shape, not the orientation's presentation: Flutter's iOS engine keeps the
   old size for the first half of a turn, so landscape is laid out only once the size is wide (`_laidOut`, which
   `PlayerUi`'s panels and gestures follow). Code that acts on what the user asked for reads the presentation.
-- The drawn turn (旋转动画 请求前关): `TurnTakeover.swift` holds UIView animations off from before the rotation is
+- The drawn turn (旋转动画 自绘): `TurnTakeover.swift` holds UIView animations off from before the rotation is
   requested until the turn completes, the only way found to keep iOS's out-of-process rotation out (turning them off
   inside viewWillTransition is too late: iOS still spun the window in 1.0.0 (12) and (13)). The window then turns at
   once with a zero duration, Flutter gets the turned size at once under a still picture, and the video page draws the
