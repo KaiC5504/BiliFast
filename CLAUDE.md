@@ -62,6 +62,10 @@ Open items, each waiting on its slice:
   with 请求前关, the picture cut and the turn started at once. (15) keeps only that as 开发者 → 旋转动画 自绘, beside
   系统; the test build's choices, 轮换测试 and the per-frame log lines are gone. On the phone: the turn both ways
   against the official app.
+- Comments under the system font, committed with (15), not shipped: KaiC's thread shots
+  (`local/differences/11-ours-comment-threads.jpg`, `12-official-…`) showed Material's tracking leaking into the text,
+  previews with a gap the official app doesn't have, and PingFang sitting higher than MiSans. On the phone: a comment
+  with two previews against the official app, and a long preview cut with "…".
 - 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
   account and a borrowed app key).
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
@@ -172,6 +176,11 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Nothing ships until every control the change touched has been pressed on Windows and its effect confirmed.
 - Text scaling is off at the app's root (`main.dart`), so sizes are the official pt whatever iOS's Text Size says.
   Don't add per-widget clamps.
+- The theme's `BiliFonts.untracked` keeps Material's 0.1-0.5 pt letter spacing out of every style: tracked Chinese at
+  3× lands between pixels and draws some glyphs thin. Keep it in both `ThemeData`s.
+- The phone draws in the system font (PingFang) by default, but widget tests and look-alike checks render MiSans.
+  Sizes and nudges tuned on MiSans can be off on the phone; settle system-font values from KaiC's phone screenshots
+  (ours beside the official), measured in px / 3.
 - Fonts: styles read `BiliFonts.family` where they're built, never in a const, so a 字体 change rebuilds in place. The
   MiSans nudges in `BiliMetrics` apply only while MiSans is on.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
