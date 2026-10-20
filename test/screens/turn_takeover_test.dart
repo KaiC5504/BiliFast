@@ -52,7 +52,7 @@ void main() {
 
     tearDown(() => folder.deleteSync(recursive: true));
 
-    test('a first launch draws turns as shipped (移除·直接切), from the first page that owns the orientation; the saved '
+    test('a first launch draws turns as shipped (请求前关·直接切), from the first page that owns the orientation; the saved '
         '系统 hands them back to iOS', () async {
       final orientation = OrientationController(host: host, logger: logger);
       addTearDown(orientation.dispose);
@@ -64,7 +64,7 @@ void main() {
       orientation.begin(Object(), videoIsVertical: false);
       await settle();
       expect(host.takeovers, [true]);
-      expect(host.styles, [(TurnMethod.remove, TurnPicture.cut)]);
+      expect(host.pictures, [TurnPicture.cut]);
       expect(orientation.turnTakeover, isTrue);
 
       final saved = await PlayerPrefs.load(path, logger: logger)
@@ -78,15 +78,14 @@ void main() {
 
     test('a saved style reaches the host as saved, its drawn start on the controller for the page', () async {
       final saved = await PlayerPrefs.load(path, logger: logger)
-        ..turnStyle = const TurnStyle(
-            method: TurnMethod.counter, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture);
+        ..turnStyle = const TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture);
       await saved.settle();
       final orientation = OrientationController(host: host, logger: logger);
       addTearDown(orientation.dispose);
       applyTurnStyle(orientation, await PlayerPrefs.load(path, logger: logger));
       orientation.begin(Object(), videoIsVertical: false);
       await settle();
-      expect(host.styles, [(TurnMethod.counter, TurnPicture.fade)]);
+      expect(host.pictures, [TurnPicture.fade]);
       expect(orientation.turnStyle.spinStart, TurnSpinStart.afterPicture);
     });
 
@@ -195,7 +194,7 @@ void main() {
       await tester.pump();
       expect(host.takeovers, [true]);
       expect(find.text('旋转动画'), findsOneWidget);
-      expect(fill(tester, method, '移除'), BiliColors.pinkTint);
+      expect(fill(tester, method, '请求前关'), BiliColors.pinkTint);
       expect(fill(tester, method, '系统'), BiliColors.pageGrey);
 
       await tester.tap(choice(method, '系统'));
@@ -207,72 +206,74 @@ void main() {
 
       // As ghosthand presses them on the PC.
       final semantics = tester.ensureSemantics();
-      tester.semantics.tap(find.semantics.byLabel('抵消'));
+      tester.semantics.tap(find.semantics.byLabel('请求前关'));
       await tester.pump();
-      expect(prefs.turnStyle, const TurnStyle(method: TurnMethod.counter));
+      expect(prefs.turnStyle, const TurnStyle());
       expect(host.takeovers, [true, false, true]);
-      expect(host.styles.last, (TurnMethod.counter, TurnPicture.cut));
+      expect(host.pictures.last, TurnPicture.cut);
       expect(orientation.turnTakeover, isTrue);
 
       tester.semantics.tap(find.semantics.byLabel('淡出'));
       await tester.pump();
       expect(prefs.turnStyle.picture, TurnPicture.fade);
-      expect(host.styles.last, (TurnMethod.counter, TurnPicture.fade));
+      expect(host.pictures.last, TurnPicture.fade);
       expect(fill(tester, picture, '淡出'), BiliColors.pinkTint);
 
       tester.semantics.tap(find.semantics.byLabel('等截图'));
       await tester.pump();
-      expect(prefs.turnStyle.method, TurnMethod.counter);
+      expect(prefs.turnStyle.method, TurnMethod.quietRequest);
       expect(prefs.turnStyle.picture, TurnPicture.fade);
       expect(prefs.turnStyle.spinStart, TurnSpinStart.afterPicture);
       expect(orientation.turnStyle.spinStart, TurnSpinStart.afterPicture, reason: 'the page reads it from here');
       semantics.dispose();
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
-    for (final none in [TurnMethod.system, TurnMethod.noSpin]) {
-      testWidgets('with ${none.label}, 截图 and 起转 are greyed but still show and read their choice', (tester) async {
-        prefs.turnStyle = TurnStyle(method: none, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture);
-        await show(tester, host: host);
-        final semantics = tester.ensureSemantics();
-        readsAs(tester, picture, '淡出');
-        readsAs(tester, spinStart, '等截图');
-        expect(fill(tester, picture, '淡出'), BiliColors.divider);
-        expect(fill(tester, picture, '直接切'), BiliColors.card);
-        expect(tester.widget<Text>(choice(picture, '直接切')).style?.color, BiliColors.secondaryText);
-        expect(find.semantics.byLabel('直接切'), findsNothing);
+    testWidgets('with 系统, 截图 and 起转 are greyed but still show and read their choice', (tester) async {
+      prefs.turnStyle =
+          const TurnStyle(method: TurnMethod.system, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture);
+      await show(tester, host: host);
+      final semantics = tester.ensureSemantics();
+      readsAs(tester, picture, '淡出');
+      readsAs(tester, spinStart, '等截图');
+      expect(fill(tester, picture, '淡出'), BiliColors.divider);
+      expect(fill(tester, picture, '直接切'), BiliColors.card);
+      expect(tester.widget<Text>(choice(picture, '直接切')).style?.color, BiliColors.secondaryText);
+      expect(find.semantics.byLabel('直接切'), findsNothing);
 
-        await tester.tap(choice(picture, '直接切'));
-        await tester.tap(choice(spinStart, '立即'));
-        await tester.pump();
-        expect(prefs.turnStyle.picture, TurnPicture.fade);
-        expect(prefs.turnStyle.spinStart, TurnSpinStart.afterPicture);
+      await tester.tap(choice(picture, '直接切'));
+      await tester.tap(choice(spinStart, '立即'));
+      await tester.pump();
+      expect(prefs.turnStyle.picture, TurnPicture.fade);
+      expect(prefs.turnStyle.spinStart, TurnSpinStart.afterPicture);
 
-        tester.semantics.tap(find.semantics.byLabel('移除'));
-        await tester.pump();
-        expect(prefs.turnStyle, const TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture),
-            reason: 'a drawn method takes up the picture and start kept');
-        expect(find.semantics.byLabel('直接切'), findsOneWidget);
-        semantics.dispose();
-      }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
-    }
+      tester.semantics.tap(find.semantics.byLabel('请求前关'));
+      await tester.pump();
+      expect(prefs.turnStyle, const TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture),
+          reason: '请求前关 takes up the picture and start kept');
+      expect(find.semantics.byLabel('直接切'), findsOneWidget);
+      semantics.dispose();
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('shows the saved choice', (tester) async {
-      prefs.turnStyle = const TurnStyle(method: TurnMethod.counter, picture: TurnPicture.none);
+      prefs.turnStyle = const TurnStyle(picture: TurnPicture.none, spinStart: TurnSpinStart.afterPicture);
       await show(tester, host: host);
-      expect(fill(tester, method, '抵消'), BiliColors.pinkTint);
+      expect(fill(tester, method, '请求前关'), BiliColors.pinkTint);
+      expect(fill(tester, method, '系统'), BiliColors.pageGrey);
       expect(fill(tester, picture, '无截图'), BiliColors.pinkTint);
-      expect(fill(tester, spinStart, '立即'), BiliColors.pinkTint);
+      expect(fill(tester, spinStart, '等截图'), BiliColors.pinkTint);
       expect(host.takeovers, isEmpty, reason: 'opening the page applies nothing; launch did');
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
-    testWidgets('the choices fit 440 pt, 方式 on two rows', (tester) async {
+    testWidgets('the choices fit 440 pt, each on one row: 方式 offers 系统 and 请求前关 alone', (tester) async {
       await show(tester, host: host);
       for (final row in [method, picture, spinStart]) {
         expect(tester.getBottomRight(row).dx, lessThanOrEqualTo(440 - 2 * BiliMetrics.gutter));
       }
-      final rows = {for (final each in TurnMethod.values) tester.getTopLeft(choice(method, each.label)).dy};
-      expect(rows, hasLength(2));
-      for (final row in [picture, spinStart]) {
+      expect(TurnMethod.values.map((each) => each.label), ['系统', '请求前关']);
+      for (final each in TurnMethod.values) {
+        expect(choice(method, each.label), findsOneWidget);
+      }
+      for (final row in [method, picture, spinStart]) {
         expect(tester.getSize(row).height, BiliMetrics.pillHeight + BiliMetrics.rowGap, reason: 'one row');
       }
       expect(tester.takeException(), isNull);
@@ -280,22 +281,23 @@ void main() {
 
     for (final stored in [const TurnStyle(), TurnStyle.system]) {
       final chosen = stored.method.label;
+      final other = stored.choosesPicture ? TurnMethod.system.label : TurnMethod.quietRequest.label;
       testWidgets('on Windows, with no turns to take over, it is shown off-limits (仅 iPhone); the stored $chosen '
           'still shows chosen, and reads as it with nothing to press', (tester) async {
         prefs.turnStyle = stored;
         await show(tester);
         expect(find.text('旋转动画（仅 iPhone）'), findsOneWidget);
         expect(fill(tester, method, chosen), BiliColors.divider);
-        expect(fill(tester, method, '抵消'), BiliColors.card);
+        expect(fill(tester, method, other), BiliColors.card);
 
         final semantics = tester.ensureSemantics();
         readsAs(tester, method, chosen);
         readsAs(tester, picture, '直接切');
         readsAs(tester, spinStart, '立即');
-        expect(find.semantics.byLabel('抵消'), findsNothing);
+        expect(find.semantics.byLabel(other), findsNothing);
         semantics.dispose();
 
-        await tester.tap(choice(method, '抵消'), warnIfMissed: false);
+        await tester.tap(choice(method, other), warnIfMissed: false);
         await tester.pump();
         expect(prefs.turnStyle, stored);
         expect(orientation.turnTakeover, isFalse);
@@ -304,7 +306,7 @@ void main() {
 
     testWidgets('轮换测试: on starts at the first style and greys the choices, the count and style follow the turns, '
         '重置 goes back to 1, off puts back the style chosen before and frees the choices', (tester) async {
-      const chosen = TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade);
+      const chosen = TurnStyle(picture: TurnPicture.fade);
       prefs.turnStyle = chosen;
       await show(tester, host: host);
       expect(find.text('轮换测试'), findsOneWidget);
@@ -342,8 +344,8 @@ void main() {
       expect(cycle.on, isFalse);
       expect(prefs.turnStyle, chosen);
       expect(orientation.turnStyle, chosen);
-      expect(find.semantics.byLabel('抵消'), findsOneWidget, reason: 'the choices are back');
-      expect(fill(tester, method, '抵消'), BiliColors.pinkTint);
+      expect(find.semantics.byLabel('系统'), findsOneWidget, reason: 'the choices are back');
+      expect(fill(tester, method, '请求前关'), BiliColors.pinkTint);
       expect(fill(tester, picture, '淡出'), BiliColors.pinkTint);
       semantics.dispose();
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));

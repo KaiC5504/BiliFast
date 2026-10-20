@@ -28,8 +28,7 @@ void main() {
   final styles = TurnStyle.cycle;
 
   /// Chosen in 方式, 截图 and 起转 before the cycle starts.
-  const chosen =
-      TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture);
+  const chosen = TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture);
 
   late MemorySink logs;
   late Logger logger;
@@ -59,6 +58,18 @@ void main() {
     back == Presentation.vertical ? orientation.enterVertical() : orientation.exitToInline();
     async.elapse(TurnCycle.settle);
   }
+
+  test('it walks 7 styles: 系统 first, then every 截图 and 起转 of 请求前关', () {
+    expect(styles, hasLength(7));
+    expect(styles.first, TurnStyle.system);
+    final drawn = styles.skip(1);
+    expect(drawn.map((style) => style.method), everyElement(TurnMethod.quietRequest));
+    expect({for (final style in drawn) (style.picture, style.spinStart)}, {
+      for (final picture in TurnPicture.values)
+        for (final start in TurnSpinStart.values) (picture, start),
+    });
+    expect(styles[1], const TurnStyle(), reason: 'the shipped style right after the reference');
+  });
 
   test('off at launch: turning counts nothing and nothing is applied', () {
     fakeAsync((async) {
@@ -154,7 +165,7 @@ void main() {
         async.elapse(TurnCycle.settle);
       }
       expect(host.sent, ['landscape', 'portrait', 'landscape', 'portrait', 'takeover on']);
-      expect(host.styles.single, (styles[1].method, styles[1].picture));
+      expect(host.pictures.single, styles[1].picture);
     });
   });
 
@@ -290,7 +301,7 @@ void main() {
       cycle
         ..start()
         ..stop();
-      const later = TurnStyle(method: TurnMethod.noActions, picture: TurnPicture.none);
+      const later = TurnStyle(picture: TurnPicture.none);
       prefs.turnStyle = later;
       cycle.start();
       roundTrip(async);

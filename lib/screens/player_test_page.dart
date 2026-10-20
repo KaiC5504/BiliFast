@@ -351,8 +351,8 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
     );
   }
 
-  /// Off-limits on Windows, and while 轮换测试 picks the styles so the badge never names one that isn't on. 系统 and 不转
-  /// have no 截图 or 起转 to pick. Each row is its own node for accessibility, so the card's text never becomes the
+  /// Off-limits on Windows, and while 轮换测试 picks the styles so the badge never names one that isn't on. 系统 has no
+  /// 截图 or 起转 to pick. Each row is its own node for accessibility, so the card's text never becomes the
   /// label of the 轮换测试 switch.
   Widget _turnSection() {
     final style = _prefs.turnStyle;
