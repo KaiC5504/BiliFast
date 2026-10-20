@@ -11,7 +11,7 @@ enum ActionGlyph { like, dislike, coin, favourite, share, comment, charge }
 /// the soft star and arrow) match no icon font closely enough. The glyph's ink spans [inkShare] of [size], so the
 /// coin, thumb, star, bubble and arrow are all as wide as `size * inkShare`.
 class ActionIcon extends StatelessWidget {
-  const ActionIcon(this.glyph, {super.key, required this.solid, required this.size, required this.color});
+  const ActionIcon(this.glyph, {super.key, required this.solid, required this.size, required this.color, this.stroke});
 
   /// Measured on 03, 04, 09 and 27: a 20 pt coin in a 24 pt icon.
   static const inkShare = 0.84;
@@ -21,12 +21,15 @@ class ActionIcon extends StatelessWidget {
   final double size;
   final Color color;
 
+  /// The outline's and the 币's line in pt; null keeps the glyph's own share of its ink.
+  final double? stroke;
+
   @override
   Widget build(BuildContext context) => ExcludeSemantics(
     child: SizedBox.square(
       dimension: size,
       child: CustomPaint(
-        painter: ActionGlyphPainter(glyph, solid: solid, color: color),
+        painter: ActionGlyphPainter(glyph, solid: solid, color: color, stroke: stroke),
       ),
     ),
   );
@@ -34,17 +37,20 @@ class ActionIcon extends StatelessWidget {
 
 /// Paints [glyph] into the centre [ActionIcon.inkShare] of the square it gets.
 class ActionGlyphPainter extends CustomPainter {
-  ActionGlyphPainter(this.glyph, {required this.solid, required this.color});
+  ActionGlyphPainter(this.glyph, {required this.solid, required this.color, this.stroke});
 
   final ActionGlyph glyph;
   final bool solid;
   final Color color;
+  final double? stroke;
 
-  /// Outline strokes on 04 and 27 are 1.1 pt on a 20 pt glyph.
+  /// Outline strokes: 1.1 pt on a 20 pt glyph. Landscape's top row passes 04's 1.5 pt as [stroke].
   static const _line = 0.055;
 
   /// The 币 strokes, solid and outlined alike.
   static const _markLine = 0.056;
+
+  double _lineOn(Rect box) => stroke ?? _line * box.width;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -98,7 +104,7 @@ class ActionGlyphPainter extends CustomPainter {
     if (solid) {
       _fillSoft(canvas, unit(), box, extent, soften);
     } else {
-      final line = _line * box.width;
+      final line = _lineOn(box);
       canvas.drawPath(_place(unit(), box, extent, inset: line), _stroke(line));
     }
   }
@@ -139,7 +145,7 @@ class ActionGlyphPainter extends CustomPainter {
       _fillSoft(canvas, flip(_hand()), box, extent, 0.05);
       _fillSoft(canvas, flip(_cuff()), box, extent, 0.04);
     } else {
-      final line = _line * box.width;
+      final line = _lineOn(box);
       canvas
         ..drawPath(_place(flip(_thumbOutline()), box, extent, inset: line), _stroke(line))
         ..drawPath(
@@ -159,7 +165,7 @@ class ActionGlyphPainter extends CustomPainter {
   }
 
   void _coin(Canvas canvas, Rect box) {
-    final mark = _stroke(_markLine * box.width);
+    final mark = _stroke(stroke ?? _markLine * box.width);
     if (solid) {
       // The 币 is cut out of the disc, so whatever is behind shows through it.
       canvas
@@ -168,7 +174,7 @@ class ActionGlyphPainter extends CustomPainter {
         ..drawPath(_place(_bi(), box, const Size(1, 1)), mark..blendMode = BlendMode.clear)
         ..restore();
     } else {
-      final line = _line * box.width;
+      final line = _lineOn(box);
       canvas
         ..drawOval(box.deflate(line / 2), _stroke(line))
         ..drawPath(_place(_bi(), box, const Size(1, 1)), mark);
@@ -185,7 +191,7 @@ class ActionGlyphPainter extends CustomPainter {
       }
       canvas.drawPath(Path.combine(PathOperation.difference, bubble, _place(dots, box, extent)), _fill);
     } else {
-      final line = _line * box.width;
+      final line = _lineOn(box);
       canvas.drawPath(_place(_bubble(), box, extent, inset: line), _stroke(line));
     }
   }
@@ -196,7 +202,7 @@ class ActionGlyphPainter extends CustomPainter {
     final width = box.width * 0.73;
     final battery = Rect.fromCenter(center: box.center, width: width, height: box.height);
     Offset at(double u, double v) => Offset(battery.left + u * width, battery.top + v * battery.height);
-    final line = _line * box.width;
+    final line = _lineOn(box);
     final cap = RRect.fromRectAndRadius(Rect.fromPoints(at(0.3, 0), at(0.7, 0.06)), Radius.circular(box.width * 0.03));
     final body = Rect.fromPoints(at(0, 0.13), at(1, 1));
     final corner = Radius.circular(box.width * 0.1);
@@ -342,5 +348,6 @@ class ActionGlyphPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(ActionGlyphPainter old) => old.glyph != glyph || old.solid != solid || old.color != color;
+  bool shouldRepaint(ActionGlyphPainter old) =>
+      old.glyph != glyph || old.solid != solid || old.color != color || old.stroke != stroke;
 }

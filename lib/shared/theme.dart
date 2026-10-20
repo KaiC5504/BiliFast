@@ -1193,10 +1193,15 @@ abstract final class LandscapeActionTheme {
   /// After each 44 pt button, the last one's before ⋮.
   static const buttonGap = 8.0;
 
-  /// 05's 👍 and ⭐ are shorter than the outlines 简介 shares (19.7 and 18.7 pt of ink against 20.2 and 19.7) and sit
-  /// higher, their widths the same: each is squeezed upright about its button's centre, then lifted.
+  /// 04 and 05 draw the outlines and the 币 4.5 px (1.5 pt) wide, where the glyphs 简介 shares draw 1.1 pt.
+  static const outline = 1.5;
+
+  /// 05's 👍, 💬 and ⭐ are shorter than the outlines 简介 shares (19.7, 19.4 and 18.7 pt of ink against 20.2, 19.9
+  /// and 19.7), their widths the same, and 👍 and ⭐ sit higher: each is squeezed upright about its button's centre,
+  /// then lifted.
   static const likeSquash = 0.975;
   static const likeLift = 1.14;
+  static const commentSquash = 0.973;
   static const favouriteSquash = 0.945;
   static const favouriteLift = 0.8;
 
