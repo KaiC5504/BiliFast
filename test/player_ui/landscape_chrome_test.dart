@@ -1,21 +1,34 @@
 import 'package:bili_core/api.dart'
-    show BiliClient, CookieJar, HTTPRequest, HTTPResponse, HTTPTransport, QualityOption, UploaderCard, VideoDetail;
+    show
+        BiliClient,
+        CookieJar,
+        HTTPRequest,
+        HTTPResponse,
+        HTTPTransport,
+        QualityOption,
+        UploaderCard,
+        VideoDetail,
+        VideoTag,
+        VideoTagKind;
 import 'package:bili_core/devlog.dart' show Logger;
 import 'package:bilifast/danmaku/block_rule_store.dart';
 import 'package:bilifast/danmaku/danmaku_session.dart';
 import 'package:bilifast/danmaku/danmaku_settings_store.dart';
 import 'package:bilifast/device/orientation.dart';
+import 'package:bilifast/device/status_bar.dart';
 import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/landscape_chrome.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/player_ui/status_bar_view.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
@@ -34,7 +47,7 @@ class CountingChrome extends ChromeState {
 /// The landscape chrome on an iPhone 17 Pro Max turned sideways (956 × 440 pt, the island's 62 pt each side, the
 /// home indicator's 21 below), the size 04 was taken at.
 final class Rig {
-  Rig({this.details, this.danmaku});
+  Rig({this.details, this.danmaku, this.statusBar});
 
   final session = FakePlayerSession();
   final chrome = CountingChrome();
@@ -42,6 +55,7 @@ final class Rig {
   final orientation = OrientationController()..enterLandscape();
   final FakePageDetails? details;
   final DanmakuRig? danmaku;
+  final StatusBarFeed? statusBar;
   int backs = 0;
   int comments = 0;
 
@@ -55,6 +69,7 @@ final class Rig {
     details: details,
     onComments: () => comments += 1,
     danmaku: danmaku?.session,
+    statusBar: statusBar,
   );
 
   Future<void> mount(WidgetTester tester) async {
@@ -80,6 +95,19 @@ final class Rig {
       ),
     );
   }
+}
+
+/// A fixed status that records every watch.
+final class CountingStatusFeed implements StatusBarFeed {
+  CountingStatusFeed([DeviceStatus status = DeviceStatus.full]) : status = ValueNotifier(status);
+
+  @override
+  final ValueNotifier<DeviceStatus> status;
+
+  final calls = <bool>[];
+
+  @override
+  void watch(bool on) => calls.add(on);
 }
 
 final class _NoNetwork implements HTTPTransport {
@@ -130,10 +158,31 @@ final class DanmakuRig {
 
 Offset centre(WidgetTester tester, String key) => tester.getCenter(find.byKey(ValueKey(key)));
 
+const twoParts = [
+  Episode(bvid: 'BV1', cid: 1, title: 'P1', current: true),
+  Episode(bvid: 'BV1', cid: 2, title: 'P2', current: false),
+];
+
 final detail = VideoDetail.fromJson({
   'bvid': 'BV1',
   'owner': {'mid': 1, 'name': 'PRORES 8K', 'face': ''},
 });
+
+/// How far down the screen [text]'s alphabetic baseline is, laid out again as the paragraph is.
+double baselineOf(WidgetTester tester, Finder text) {
+  final paragraph = tester.renderObject<RenderParagraph>(text);
+  final painter = TextPainter(
+    text: paragraph.text,
+    textDirection: paragraph.textDirection,
+    textScaler: paragraph.textScaler,
+    maxLines: paragraph.maxLines,
+    strutStyle: paragraph.strutStyle,
+    textHeightBehavior: paragraph.textHeightBehavior,
+  )..layout(maxWidth: paragraph.size.width);
+  final baseline = painter.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+  painter.dispose();
+  return paragraph.localToGlobal(Offset.zero).dy + baseline;
+}
 
 ActionIcon iconOf(WidgetTester tester, String key) =>
     tester.widget<ActionIcon>(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(ActionIcon)));
@@ -330,20 +379,89 @@ void main() {
     expect(tester.getCenter(glyph.last).dx - centre(tester, 'landscape-play').dx, closeTo(2.2, 0.01));
   });
 
-  testWidgets('选集 shows only with episodes, and opens the episodes panel', (tester) async {
-    final rig = Rig();
+  testWidgets('选集 shows only with episodes, before 倍速 and 4K as on 05, and opens the episodes panel', (tester) async {
+    final rig = Rig(danmaku: DanmakuRig());
+    rig.session
+      ..qualities = const [QualityOption(id: 120, name: '4K 超清')]
+      ..quality = 120;
     await rig.mount(tester);
     expect(find.byKey(const ValueKey('landscape-episodes')), findsNothing);
+    final speed = tester.getRect(find.byKey(const ValueKey('landscape-speed')));
+    final quality = tester.getRect(find.byKey(const ValueKey('landscape-quality')));
 
     rig.session
-      ..episodes = const [
-        Episode(bvid: 'BV1', cid: 1, title: 'P1', current: true),
-        Episode(bvid: 'BV1', cid: 2, title: 'P2', current: false),
-      ]
+      ..episodes = twoParts
       ..changed();
     await tester.pump();
+    final episodes = tester.getRect(find.byKey(const ValueKey('landscape-episodes')));
+    expect(
+      tester.getRect(find.byKey(const ValueKey('landscape-speed'))),
+      rectMoreOrLessEquals(speed, epsilon: 0.01),
+      reason: '倍速 stays where 04 has it',
+    );
+    expect(
+      tester.getRect(find.byKey(const ValueKey('landscape-quality'))),
+      rectMoreOrLessEquals(quality, epsilon: 0.01),
+    );
+    expect(speed.left - episodes.right, closeTo(LandscapeActionTheme.episodesGap, 0.01));
+    final field = tester.getRect(
+      find.descendant(of: find.byKey(const ValueKey('landscape-danmaku-field')), matching: find.byType(Container)),
+    );
+    expect(episodes.left - field.right, closeTo(BiliMetrics.chromeSpeedGap, 0.5), reason: 'the field gives way');
+    // 05's labels are 62 pt apart, centre to centre.
+    expect(speed.center.dx - episodes.center.dx, closeTo(62, 0.5));
+
     await tester.tap(find.byKey(const ValueKey('landscape-episodes')));
     expect(rig.panels.value, PlayerPanel.episodes);
+  });
+
+  testWidgets('⏭ follows ▶ when something plays next, as on 05, and plays it; 弹 and the rest move 50 pt on', (
+    tester,
+  ) async {
+    final rig = Rig(danmaku: DanmakuRig());
+    await rig.mount(tester);
+    expect(find.byKey(const ValueKey('landscape-next')), findsNothing);
+    expect(centre(tester, 'landscape-danmaku'), within(distance: 1, from: const Offset(134, 396)));
+
+    rig.session
+      ..episodes = twoParts
+      ..next = twoParts.last
+      ..changed();
+    await tester.pump();
+    expect(centre(tester, 'landscape-next'), within(distance: 0.01, from: const Offset(134, 396)));
+    final glyph = find.descendant(of: find.byKey(const ValueKey('landscape-next')), matching: find.byType(CustomPaint));
+    expect(tester.getCenter(glyph).dx, closeTo(135, 0.01), reason: "05's ⏭ is centred 135 pt in");
+    expect(tester.getSize(glyph), const Size(LandscapeActionTheme.nextWidth, LandscapeActionTheme.nextHeight));
+    expect(centre(tester, 'landscape-danmaku'), within(distance: 1, from: const Offset(184, 396)));
+    expect(centre(tester, 'landscape-danmaku-settings'), within(distance: 1, from: const Offset(232, 396)));
+
+    await tester.tap(find.byKey(const ValueKey('landscape-next')));
+    expect(rig.session.calls, ['playEpisode BV1 2']);
+    expect(rig.chrome.shows, 1);
+    tester.semantics.tap(find.semantics.byLabel('下一集'));
+    expect(rig.session.calls, ['playEpisode BV1 2', 'playEpisode BV1 2']);
+  });
+
+  testWidgets('with episodes but nothing next ⏭ stays greyed, as on 34, and a tap only keeps the controls up', (
+    tester,
+  ) async {
+    final rig = Rig();
+    rig.session.episodes = twoParts;
+    await rig.mount(tester);
+
+    final next = find.byKey(const ValueKey('landscape-next'));
+    expect(centre(tester, 'landscape-next'), within(distance: 0.01, from: const Offset(134, 396)));
+    expect(
+      tester.widget<Opacity>(find.descendant(of: next, matching: find.byType(Opacity))).opacity,
+      LandscapeActionTheme.nextOffOpacity,
+    );
+    await tester.tap(next);
+    expect(rig.session.calls, isEmpty);
+    expect(
+      find.semantics.byLabel('下一集').evaluate().single,
+      matchesSemantics(label: '下一集', isButton: true, hasEnabledState: true),
+    );
+    expect(rig.chrome.shows, 1);
   });
 
   testWidgets('the time shows the position against the duration', (tester) async {
@@ -422,8 +540,11 @@ void main() {
     Finder textsOf(String key) => find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(Text));
     expect(countOf('landscape-like', '30'), findsOneWidget);
     expect(countOf('landscape-favourite', '38'), findsOneWidget);
-    expect(tester.getTopLeft(countOf('landscape-like', '30')), within(distance: 0.5, from: const Offset(561.7, 25.5)));
+    expect(tester.getTopLeft(countOf('landscape-like', '30')).dx, closeTo(561.7, 0.5));
     expect(tester.getTopLeft(countOf('landscape-favourite', '38')).dx, closeTo(665.7, 0.5));
+    // 04's and 05's digits stand 32 pt down, in either font.
+    expect(baselineOf(tester, countOf('landscape-like', '30')), closeTo(32, 0.01));
+    expect(baselineOf(tester, countOf('landscape-favourite', '38')), closeTo(32, 0.01));
     expect(tester.widget<Text>(countOf('landscape-like', '30')).style!.fontSize, LandscapeActionTheme.countText);
     for (final key in ['landscape-comments', 'landscape-coin', 'landscape-charge', 'landscape-share']) {
       expect(textsOf(key), findsNothing, reason: key);
@@ -437,6 +558,36 @@ void main() {
     expect(countOf('landscape-like', '1.2万'), findsOneWidget);
     expect(textsOf('landscape-favourite'), findsNothing);
     expect(centre(tester, 'landscape-like'), within(distance: 0.5, from: const Offset(555, 42)));
+  });
+
+  testWidgets("评论 carries the video's reply count as 05 does; none while unknown or at 0", (tester) async {
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions()));
+    await rig.mount(tester);
+    final comments = find.byKey(const ValueKey('landscape-comments'));
+    expect(find.descendant(of: comments, matching: find.byType(Text)), findsNothing);
+
+    rig.session
+      ..detail = VideoDetail.fromJson({
+        'bvid': 'BV1',
+        'stat': {'reply': 18},
+      })
+      ..changed();
+    await tester.pump();
+    final count = find.descendant(of: comments, matching: find.text('18'));
+    expect(count, findsOneWidget);
+    expect(tester.getTopLeft(count).dx, closeTo(607 + LandscapeActionTheme.countLead, 0.01));
+    expect(baselineOf(tester, count), closeTo(32, 0.01));
+    expect(tester.widget<Text>(count).style!.fontSize, LandscapeActionTheme.countText);
+    expect(centre(tester, 'landscape-comments'), within(distance: 0.5, from: const Offset(607, 42)));
+
+    rig.session
+      ..detail = VideoDetail.fromJson({
+        'bvid': 'BV1',
+        'stat': {'reply': 0},
+      })
+      ..changed();
+    await tester.pump();
+    expect(find.descendant(of: comments, matching: find.byType(Text)), findsNothing);
   });
 
   testWidgets('each action does what it says and keeps the controls up; 充电 toasts that it is not supported', (
@@ -633,9 +784,8 @@ void main() {
     expect(find.textContaining('人正在看'), findsNothing);
   });
 
-  testWidgets('the uploader under it: avatar and a white + 关注 that follows; 已关注 is grey with no plus', (
-    tester,
-  ) async {
+  testWidgets('the uploader under it in 05\'s chip: avatar, name, divider and a white + 关注 that follows; 已关注 is '
+      'grey with no plus', (tester) async {
     final actions = FakeVideoActions();
     final rig = Rig(
       details: FakePageDetails(
@@ -657,11 +807,30 @@ void main() {
     final avatar = find.byKey(const ValueKey('landscape-avatar'));
     expect(tester.getCenter(avatar), within(distance: 0.5, from: const Offset(91, 93)));
     expect(tester.getSize(avatar), const Size(24, 24));
-    expect(tester.getTopLeft(find.text('关注')).dx, closeTo(126.4, 1));
-    expect(tester.getCenter(find.text('关注')).dy, closeTo(93, 1));
-    expect(tester.widget<Text>(find.text('关注')).style!.color, BiliColors.onVideo);
+    final chip = tester.getRect(find.byKey(const ValueKey('landscape-uploader')));
+    expect(chip.left, closeTo(78, 0.01), reason: "the capsule's end 1 pt outside the avatar");
+    expect(chip.center.dy, closeTo(93, 0.01));
+
+    final name = find.text('PRORES 8K');
+    expect(tester.getTopLeft(name).dx, closeTo(103 + LandscapeActionTheme.nameGap, 0.01));
+    expect(tester.widget<Text>(name).style!.fontSize, LandscapeActionTheme.followText);
+    expect(tester.widget<Text>(name).style!.color, BiliColors.onVideo);
+    final divider = tester.getRect(find.byKey(const ValueKey('landscape-uploader-divider')));
+    expect(divider.left - tester.getTopRight(name).dx, closeTo(LandscapeActionTheme.dividerGap, 0.01));
+    expect(divider.width, closeTo(LandscapeActionTheme.dividerWidth, 0.01));
+    expect(divider.height, closeTo(LandscapeActionTheme.dividerHeight, 0.01));
+    expect(divider.center.dy, closeTo(93, 0.01));
+
     final follow = find.byKey(const ValueKey('landscape-follow'));
-    expect(find.descendant(of: follow, matching: find.byType(CustomPaint)), findsOneWidget);
+    final plus = find.descendant(of: follow, matching: find.byType(CustomPaint));
+    expect(plus, findsOneWidget);
+    expect(tester.getTopLeft(plus).dx - divider.right, closeTo(LandscapeActionTheme.dividerGap, 0.01));
+    expect(tester.getCenter(plus).dy, closeTo(93, 0.01));
+    expect(tester.widget<Text>(find.text('关注')).style!.color, BiliColors.onVideo);
+    expect(chip.right - tester.getTopRight(find.text('关注')).dx, closeTo(LandscapeActionTheme.followTrailing, 0.01));
+    // 05's name and 关注 stand on one baseline 97.67 pt down.
+    expect(baselineOf(tester, name), closeTo(97.67, 0.01));
+    expect(baselineOf(tester, find.text('关注')), closeTo(97.67, 0.01));
 
     await tester.tap(follow);
     expect(actions.calls, ['tapFollow']);
@@ -675,8 +844,88 @@ void main() {
     expect(find.text('关注'), findsNothing);
     expect(tester.widget<Text>(find.text('已关注')).style!.color, LandscapeActionTheme.followed);
     expect(find.descendant(of: follow, matching: find.byType(CustomPaint)), findsNothing);
+    expect(tester.getTopLeft(find.text('已关注')).dx - divider.right, closeTo(LandscapeActionTheme.dividerGap, 0.01));
+    expect(
+      tester.getRect(find.byKey(const ValueKey('landscape-uploader'))).right - tester.getTopRight(find.text('已关注')).dx,
+      closeTo(LandscapeActionTheme.followTrailing, 0.01),
+    );
     expect(tester.getCenter(avatar), within(distance: 0.5, from: const Offset(91, 93)));
     expect(find.bySemanticsLabel('已关注'), findsOneWidget);
+  });
+
+  testWidgets("the chip's capsule is 05's: 26 pt tall, round-ended, 15% black, centred on the uploader's line", (
+    tester,
+  ) async {
+    final rig = Rig(details: FakePageDetails(actions: FakeVideoActions()))..session.detail = detail;
+    await rig.mount(tester);
+
+    final chip = find.byKey(const ValueKey('landscape-uploader'));
+    final rect = tester.getRect(chip);
+    expect(rect.height, closeTo(LandscapeActionTheme.uploaderHeight, 0.01), reason: '关注 keeps a taller target');
+    expect(
+      tester.renderObject(find.descendant(of: chip, matching: find.byType(CustomPaint)).first),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(rect.width / 2, rect.height / 2),
+            width: rect.width,
+            height: LandscapeActionTheme.chipHeight,
+          ),
+          const Radius.circular(LandscapeActionTheme.chipHeight / 2),
+        ),
+        color: LandscapeActionTheme.chipFill,
+      ),
+    );
+    expect(find.text('PRORES 8K'), findsOneWidget, reason: "the detail's owner names it before the card arrives");
+  });
+
+  testWidgets('the bgm sits in its own chip under the uploader as on 05, reads as 简介 words it, and leads nowhere', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final details = FakePageDetails(
+      actions: FakeVideoActions(),
+      tags: const [
+        VideoTag(id: 1, name: '生活', kind: VideoTagKind.normal),
+        VideoTag(id: 2, name: '发现《Whatever It Takes》', kind: VideoTagKind.bgm),
+      ],
+    );
+    final rig = Rig(details: details)..session.detail = detail;
+    await rig.mount(tester);
+
+    final bgm = find.byKey(const ValueKey('landscape-bgm'));
+    expect(bgm, findsOneWidget);
+    final rect = tester.getRect(bgm);
+    expect(rect.left, closeTo(78, 0.01), reason: "lined up with the uploader's chip");
+    expect(rect.top, closeTo(114, 0.01));
+    expect(rect.height, closeTo(LandscapeActionTheme.chipHeight, 0.01));
+    final text = find.text('发现《Whatever It Takes》');
+    expect(tester.widget<Text>(text).style!.fontSize, LandscapeActionTheme.followText);
+    expect(baselineOf(tester, text), closeTo(131.67, 0.01));
+    final glyph = find.descendant(of: bgm, matching: find.byType(CustomPaint)).last;
+    expect(
+      tester.getRect(glyph),
+      rectMoreOrLessEquals(
+        Rect.fromLTWH(
+          78 + LandscapeActionTheme.musicLead,
+          127 - LandscapeActionTheme.musicGlyphHeight / 2,
+          LandscapeActionTheme.musicGlyphWidth,
+          LandscapeActionTheme.musicGlyphHeight,
+        ),
+        epsilon: 0.01,
+      ),
+    );
+    expect(tester.getTopLeft(text).dx - tester.getTopRight(glyph).dx, closeTo(LandscapeActionTheme.musicGap, 0.01));
+    expect(rect.right - tester.getTopRight(text).dx, closeTo(LandscapeActionTheme.musicTrailing, 0.01));
+    expect(find.semantics.byLabel('发现《Whatever It Takes》'), findsOne);
+    expect(find.descendant(of: bgm, matching: find.byType(GestureDetector)), findsNothing);
+
+    details
+      ..tags = const [VideoTag(id: 1, name: '生活', kind: VideoTagKind.normal)]
+      ..changed();
+    await tester.pump();
+    expect(bgm, findsNothing);
+    semantics.dispose();
   });
 
   testWidgets('without page details none of their parts show, and the rest is where it was', (tester) async {
@@ -773,6 +1022,86 @@ void main() {
       );
       expect(fade.opacity, 0, reason: key);
     }
+  });
+
+  group('the drawn status bar (04, 05)', () {
+    const charging = DeviceStatus(battery: 0.85, charging: true, network: StatusNetwork.wifi);
+
+    testWidgets('the time centred at the top; WIFI, the level and the battery at the right, as on 05', (tester) async {
+      final rig = Rig(statusBar: FixedStatusBarFeed(charging));
+      await rig.mount(tester);
+
+      expect(tester.takeException(), isNull);
+      final time = find.byKey(const ValueKey('status-time'));
+      expect(tester.getCenter(time).dx, closeTo(478, 0.01));
+      expect(baselineOf(tester, time), closeTo(LandscapeStatusTheme.timeBaseline, 0.01));
+      expect(tester.widget<Text>(time).style!.fontSize, LandscapeStatusTheme.timeText);
+
+      // The cap ends 11 pt inside the island's 62.
+      final battery = tester.getRect(find.byType(BatteryGlyph));
+      expect(battery, rectMoreOrLessEquals(const Rect.fromLTWH(863, 5, 20, 10), epsilon: 0.01));
+      final level = find.text('85%');
+      expect(baselineOf(tester, level), closeTo(LandscapeStatusTheme.smallBaseline, 0.01));
+      expect(battery.left - tester.getTopRight(level).dx, closeTo(LandscapeStatusTheme.batteryGap, 0.01));
+      final wifi = tester.getRect(find.byKey(const ValueKey('status-wifi')));
+      expect(wifi.size, const Size(LandscapeStatusTheme.capsuleWidth, LandscapeStatusTheme.capsuleHeight));
+      expect(wifi.center.dy, closeTo(LandscapeStatusTheme.centre, 0.01));
+      expect(tester.getTopLeft(level).dx - wifi.right, closeTo(LandscapeStatusTheme.capsuleGap, 0.01));
+      expect(baselineOf(tester, find.text('WIFI')), closeTo(LandscapeStatusTheme.smallBaseline, 0.01));
+      expect(tester.getCenter(find.text('WIFI')).dx, closeTo(wifi.center.dx, 0.01));
+
+      expect(centre(tester, 'landscape-back'), within(distance: 1, from: const Offset(89, 42)), reason: 'unmoved');
+      expect(centre(tester, 'landscape-more'), within(distance: 1, from: const Offset(867, 42)));
+    });
+
+    testWidgets('it goes with the top bar: away with the controls and under a panel, as 25 and 05 show none', (
+      tester,
+    ) async {
+      final rig = Rig(statusBar: FixedStatusBarFeed(charging));
+      await rig.mount(tester);
+      Finder slideOf(String key) =>
+          find.ancestor(of: find.byKey(ValueKey(key)), matching: find.byType(AnimatedSlide)).first;
+      double fade() => tester
+          .widget<AnimatedOpacity>(
+            find.ancestor(of: find.byKey(const ValueKey('status-time')), matching: find.byType(AnimatedOpacity)).first,
+          )
+          .opacity;
+      expect(slideOf('status-time').evaluate().single, same(slideOf('landscape-back').evaluate().single));
+      expect(fade(), 1);
+
+      rig.chrome.hide();
+      await tester.pumpAndSettle();
+      expect(fade(), 0);
+      expect(tester.widget<AnimatedSlide>(slideOf('status-time')).offset, const Offset(0, -BiliMetrics.chromeSlide));
+
+      rig.chrome.show();
+      await tester.pumpAndSettle();
+      expect(fade(), 1);
+
+      rig.panels.open(PlayerPanel.speed);
+      await tester.pumpAndSettle();
+      expect(fade(), 0);
+    });
+
+    testWidgets('outside a video page there is none', (tester) async {
+      await Rig().mount(tester);
+      expect(find.byKey(const ValueKey('status-time')), findsNothing);
+      expect(find.byType(BatteryGlyph), findsNothing);
+    });
+
+    testWidgets('the chrome watches the feed while it is up and lets go when it leaves', (tester) async {
+      final feed = CountingStatusFeed(charging);
+      final rig = Rig(statusBar: feed);
+      await rig.mount(tester);
+      expect(feed.calls, [true]);
+
+      rig.chrome.hide();
+      await tester.pumpAndSettle();
+      expect(feed.calls, [true], reason: 'the level stays current for when the controls come back');
+
+      await tester.pumpWidget(const SizedBox());
+      expect(feed.calls, [true, false]);
+    });
   });
 
   test('speedLabel', () {

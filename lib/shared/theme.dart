@@ -1176,7 +1176,8 @@ abstract final class FavouriteTheme {
   static const alertStartScale = 1.08;
 }
 
-/// Landscape's top actions, uploader and 关注 (04), and its end screen's actions (27), measured at 3 px per pt.
+/// Landscape's top actions, uploader and 关注 (04, 05), the bgm row, ⏭ and 选集 on the bottom row (05), and its end
+/// screen's actions (27), measured at 3 px per pt.
 abstract final class LandscapeActionTheme {
   /// The glyphs' ink is 20 pt on both screens, 0.84 of the icon's box.
   static const iconSize = 24.0;
@@ -1184,11 +1185,11 @@ abstract final class LandscapeActionTheme {
   /// After each 44 pt button, the last one's before ⋮.
   static const buttonGap = 8.0;
 
-  /// The superscript count: its left edge this far right of its button's centre, the top of its line box 5.5 pt into
-  /// the button.
+  /// The superscript count: its left edge this far right of its button's centre, its digits standing on a baseline
+  /// 12 pt into the button (32 pt down on 04 and 05, in either font), in proportional figures as 05's 1127 is.
   static const countText = 9.5;
   static const countLead = 6.7;
-  static const countTop = 5.5;
+  static const countBaseline = 12.0;
 
   /// N人正在看 under the title, centred 64.8 pt down: the icon 4.7 pt right of the back button.
   static const onlineTop = 56.8;
@@ -1228,6 +1229,45 @@ abstract final class LandscapeActionTheme {
   static const followText = 12.5;
   static const followed = Color(0x99FFFFFF);
 
+  /// 05's uploader chip: a 15% black capsule 26 pt tall on the uploader's line, its left end 1 pt outside the avatar,
+  /// holding the avatar, the name 8 pt on (12.5 pt, as 关注), a 0.67 × 12 pt half-white divider 8.6 pt either side,
+  /// then + 关注, which ends 16 pt before the capsule does (05 and 34 alike). Text stands on a baseline 4.67 pt below
+  /// the capsule's centre, which 'der' and 'Takes' share.
+  static const chipHeight = 26.0;
+  static const chipFill = Color(0x26000000);
+  static const chipInset = 1.0;
+  static const chipBaselineDrop = 4.67;
+  static const nameGap = 8.0;
+  static const dividerGap = 8.6;
+  static const dividerWidth = 0.67;
+  static const dividerHeight = 12.0;
+  static const divider = Color(0x80FFFFFF);
+  static const followTrailing = 16.0;
+
+  /// 05's bgm row, 发现《…》 in its own chip 8 pt under the uploader's (centred 127 pt down): two beamed quavers 6.67
+  /// pt in, the name 8.75 pt after them and the chip's end 9 pt after the name. Its left end is over the black bar
+  /// beside the video on 05, so it is taken to line up with the uploader's chip.
+  static const chipGap = 8.0;
+  static const musicLead = 6.67;
+  static const musicGlyphWidth = 13.67;
+  static const musicGlyphHeight = 14.33;
+  static const musicGap = 8.75;
+  static const musicTrailing = 9.0;
+
+  /// 05's ⏭: a rounded triangle against a bar in a 16.9 × 16.67 box, centred 1 pt right of its 44 pt button, which
+  /// follows ▶ with the 6 pt the 弹 toggle keeps, the toggle 6 pt after it in turn. 34 greys it to half white when
+  /// nothing plays next.
+  static const nextWidth = 16.9;
+  static const nextHeight = 16.67;
+  static const nextShift = 1.0;
+  static const nextTip = 14.67;
+  static const nextBar = 4.2;
+  static const nextCorner = 1.5;
+  static const nextOffOpacity = 0.5;
+
+  /// 选集 before 倍速 (05, 34): their labels' centres 62 pt apart, so 17.67 pt between their buttons.
+  static const episodesGap = 17.67;
+
   /// 27's 充电 and 关注 pills under the uploader's name, level with the avatar's bottom.
   static const pillWidth = 88.0;
   static const pillHeight = 30.0;
@@ -1249,6 +1289,45 @@ abstract final class LandscapeActionTheme {
 
   /// How far an action's icon swells as it turns on.
   static const pop = 1.28;
+}
+
+/// The status bar landscape full screen draws while iOS's is hidden (04, 05, 34), from the screen's top edge. Text is
+/// placed by its baseline, where digits and capitals stand in any font.
+abstract final class LandscapeStatusTheme {
+  /// The clock: 12 pt regular, centred on the screen, on a baseline 14.33 pt down.
+  static const timeText = 12.0;
+  static const timeBaseline = 14.33;
+
+  /// WIFI and the percentage: 10 pt regular on a baseline 13.67 pt down.
+  static const smallText = 10.0;
+  static const smallBaseline = 13.67;
+
+  /// Everything on the right is centred 10 pt down; the battery's cap ends 11 pt inside the right safe inset.
+  static const centre = 10.0;
+  static const trailing = 11.0;
+
+  /// WIFI's 33 × 14 capsule, outlined 1 pt in 30% white, 8 pt before the percentage.
+  static const capsuleWidth = 33.0;
+  static const capsuleHeight = 14.0;
+  static const capsuleStroke = 1.0;
+  static const capsuleOutline = Color(0x4DFFFFFF);
+  static const capsuleGap = 8.0;
+
+  /// The percentage ends this far before the battery.
+  static const batteryGap = 3.75;
+
+  /// The battery: a 19 × 10 body outlined 0.45 pt in white with 2 pt corners, and a 1 × 4 cap. The level fills it
+  /// 1.5 pt inside the outline, 16 pt when full, with 1 pt corners: white (04), or 05's green under a white bolt
+  /// while charging.
+  static const batteryWidth = 19.0;
+  static const batteryHeight = 10.0;
+  static const batteryStroke = 0.45;
+  static const batteryCorner = 2.0;
+  static const capWidth = 1.0;
+  static const capHeight = 4.0;
+  static const fillInset = 1.5;
+  static const fillCorner = 1.0;
+  static const charging = Color(0xFF9EDEA2);
 }
 
 /// 竖屏's action column, uploader, 粉丝, 关注 and 发弹幕 (09), and the 选集 sheet's share circle and 收藏 (19).
