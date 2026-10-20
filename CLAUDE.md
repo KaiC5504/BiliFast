@@ -56,8 +56,12 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   video releases it); network changes reset the engine's node health; the drawn turn (开发者 → 旋转动画 自绘 / 系统).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), shipped as one build with (15) and the comment fix:
-1. Slice 10, the system-font check: KaiC's ours-beside-official pairs of the main screens (`local/differences/`), a
-   PC tool that measures them (line centres, glyph pitch, box edges, px / 3), one fix round.
+1. Slice 10, the system-font check: committed, not shipped. Measured with `tools/screen_diff.py` on KaiC's pairs
+   (`local/differences/font-check/`, ours from (14)). Sizes under the system font, emoji then PingFang SC as every
+   style's fallback, toasts off the root overlay's debug style; 简介's ⓘ notice line, tab indents, 投币 and 合集 fixes;
+   评论详情's UP主觉得很赞 box, 回复 name: leads, the server's write-bar prompt, the thumbs either side of ⋮;
+   landscape's drawn status bar (battery and network from DeviceChannel), uploader and bgm chips, 💬 count, ⏭,
+   选集 倍速 4K, 1.5 pt outlines. Waiting: 弹幕设置's 查看更多 variant for the small player (KaiC's screenshot).
 2. Slice 11, 搜索: the search box, suggestions, results with filters.
 3. Slice 12, UP主空间: an uploader's profile, videos and 关注, from every place an uploader shows.
 4. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
