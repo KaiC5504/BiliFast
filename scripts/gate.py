@@ -48,8 +48,9 @@ def lanes(quick: bool) -> dict[str, list[Step]]:
         "app": [(flutter + ["analyze", "--fatal-infos"], ROOT),
                 (flutter + ["test", "--reporter", "failures-only"], ROOT)],
         "workflows": [(python + ["-m", "unittest", "discover", "-s", "test_ci"], ROOT)],
-        # screen_diff measures with numpy and draws its test pairs with Pillow.
-        "tools": [(python[:-1] + ["--with", "numpy==2.5.4", "--with", "pillow==13.0.0", "python", "-m", "unittest",
+        # screen_diff measures with numpy and draws its test pairs with Pillow; the stand-in fonts are read with fontTools.
+        "tools": [(python[:-1] + ["--with", "numpy==2.5.4", "--with", "pillow==13.0.0", "--with", "fonttools==4.60.1",
+                                  "python", "-m", "unittest",
                                   "discover", "-s", "tools", "-p", "test_*.py"], ROOT)],
         "swift": [([tool("swiftc"), "-parse"] + swift_files, ROOT)],
     }

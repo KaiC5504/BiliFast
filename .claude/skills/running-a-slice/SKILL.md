@@ -84,8 +84,10 @@ slice.
 - Spec and phone checklist.
 - Comments against KaiC's comment style.
 - Look-alike check, for every screen the slice touches: render ours at the phone's size and safe areas (a widget test
-  at 440×956 or 956×440, 3×, MiSans loaded, fake data, PNGs to the scratchpad, never committed) and compare each with
-  its reference screenshot. A verdict per screen: PASS when the layout matches (positions, sizes, icons, colours,
+  at 440×956 or 956×440, 3×, fake data, PNGs to the scratchpad, never committed) and compare each with its reference
+  screenshot, by eye and with `tools/screen_diff.py`. Render under the system font, as the phone draws by default:
+  `BiliFonts.family = null` with `test/support/stand_in_fonts.dart` loaded, and `look_alike.dart`'s `showAsPhone` and
+  `saveShot`. MiSans only for what is MiSans's own. A verdict per screen: PASS when the layout matches (positions, sizes, icons, colours,
   fonts, text; the video frame itself differs), FAIL with every difference listed.
 - Swift review of every Swift change (only when Swift changed).
 - Windows run, as a general agent bound by the ghosthand rules:

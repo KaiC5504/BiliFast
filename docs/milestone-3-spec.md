@@ -103,6 +103,9 @@ network:
   the caller's (the scratchpad), never the repo.
 - **Tests**: `tools/test_screen_diff.py` draws its pairs with MiSans (`assets/fonts`) in the test itself; nothing from
   `local/` is read or committed. The gate's tools lane runs it.
+- **The system font in tests**: since slice 10, look-alike checks render the system path with stand-ins for SF and
+  PingFang SC (`test/fonts`, `tools/make_standin_fonts.py`), calibrated with this tool on settings (09): our render
+  against the phone's (14) shot and the official one.
 
 ## 6. Screenshots KaiC takes
 

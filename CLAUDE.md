@@ -134,7 +134,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
 - `test_ci/`: static tests of the workflow (pins, secrets only in step env, nothing leaks into the public log).
 - `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
   test plan; `phone_report.py` reads a session; `turn_video.py` measures the turns in a screen recording;
-  `screen_diff.py` measures our screenshot against the official one (milestone 3, slice 10). Run `uv run tools/logserver.py` in the background before KaiC tests.
+  `screen_diff.py` measures our screenshot against the official one (milestone 3, slice 10); `make_standin_fonts.py`
+  makes the system font's stand-ins in `test/fonts`. Run `uv run tools/logserver.py` in the background before KaiC tests.
 
 ## How to test
 
@@ -154,7 +155,10 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - ghosthand can't scroll or drag, and the 956 pt window is taller than this PC's screen (the bottom ~10 pt of a
     capture is stale). Scrolls, drags and swipes are covered by widget tests at ~1500 px/s instead.
 - Look-alike checks render our screens in widget tests at 440×956 (or 956×440), 3×, against KaiC's official
-  screenshots in `local/official-app-reference/` (gitignored: look only, never copy or commit).
+  screenshots in `local/official-app-reference/` (gitignored: look only, never copy or commit), and measure the pair
+  with `tools/screen_diff.py`. They render the system font, as the phone does: `BiliFonts.family = null` with
+  `test/support/stand_in_fonts.dart` loaded; `test/support/look_alike.dart` sizes the view as the phone and saves the
+  3× PNG.
 - GitHub runs nothing on push. `testflight.yml` is the only workflow; don't add one without asking (`test_ci` fails if
   one appears).
 
@@ -191,9 +195,13 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   Don't add per-widget clamps.
 - The theme's `BiliFonts.untracked` keeps Material's 0.1-0.5 pt letter spacing out of every style: tracked Chinese at
   3× lands between pixels and draws some glyphs thin. Keep it in both `ThemeData`s.
-- The phone draws in the system font (PingFang) by default, but widget tests and look-alike checks render MiSans.
-  Sizes and nudges tuned on MiSans can be off on the phone; settle system-font values from KaiC's phone screenshots
-  (ours beside the official), measured in px / 3.
+- The phone draws the system font by default: SF, with PingFang SC for Chinese. Both are Apple's and can't be on the
+  PC, so tests of the system path load open stand-ins (`test/fonts`, made by `tools/make_standin_fonts.py`: Noto Sans
+  SC and Inter given PingFang's and SF's line metrics, glyph places and widths, measured off the phone); without
+  them that path draws Flutter's square test font. On settings (09) they land within a pixel of the phone, but
+  stroke weight and Latin shapes still differ, so system-font values are still settled from KaiC's phone screenshots
+  (ours beside the official), measured in px / 3. New Chinese in code or tests needs the script run again (the tools
+  lane fails until it is).
 - Fonts: styles read `BiliFonts.family` where they're built, never in a const, so a 字体 change rebuilds in place. The
   MiSans nudges in `BiliMetrics` apply only while MiSans is on.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
