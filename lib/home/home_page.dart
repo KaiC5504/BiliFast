@@ -419,85 +419,93 @@ class _TopRow extends StatelessWidget {
       ? SystemContextMenu.editableText(editableTextState: state)
       : AdaptiveTextSelectionToolbar.editableText(editableTextState: state);
 
+  static const _fieldStyle = TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text);
+
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: BiliMetrics.topRowHeight,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.topRowMargin),
-      child: Row(
-        children: [
-          Semantics(
-            button: true,
-            label: '账号',
-            child: GestureDetector(
-              key: const ValueKey('home-avatar'),
-              onTap: onAvatar,
-              child: _AccountAvatar(face: face, size: BiliMetrics.homeAvatar),
+  Widget build(BuildContext context) {
+    final body = Theme.of(context).textTheme.bodyLarge;
+    final field = body?.merge(_fieldStyle) ?? _fieldStyle;
+    final hint = field.merge(const TextStyle(color: BiliColors.secondaryText));
+    return SizedBox(
+      height: BiliMetrics.topRowHeight,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.topRowMargin),
+        child: Row(
+          children: [
+            Semantics(
+              button: true,
+              label: '账号',
+              child: GestureDetector(
+                key: const ValueKey('home-avatar'),
+                onTap: onAvatar,
+                child: _AccountAvatar(face: face, size: BiliMetrics.homeAvatar),
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: GestureDetector(
-              onTap: focus.requestFocus,
-              child: Container(
-                height: BiliMetrics.linkFieldHeight,
-                padding: const EdgeInsets.only(left: 12, right: 2),
-                decoration: ShapeDecoration(
-                  shape: StadiumBorder(side: BorderSide(color: BiliColors.secondaryText, width: 0.67)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.search, size: BiliMetrics.linkFieldIcon, color: BiliColors.secondaryText),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: TextField(
-                        key: const ValueKey('home-link'),
-                        controller: link,
-                        focusNode: focus,
-                        enabled: !opening,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        textInputAction: TextInputAction.go,
-                        contextMenuBuilder: _editMenu,
-                        onChanged: onChanged,
-                        onSubmitted: onSubmit,
-                        style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text),
-                        decoration: const InputDecoration(
-                          isCollapsed: true,
-                          border: InputBorder.none,
-                          hintText: '粘贴链接或BV号',
-                          hintStyle: TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.secondaryText),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GestureDetector(
+                onTap: focus.requestFocus,
+                child: Container(
+                  height: BiliMetrics.linkFieldHeight,
+                  padding: const EdgeInsets.only(left: 12, right: 2),
+                  decoration: ShapeDecoration(
+                    shape: StadiumBorder(side: BorderSide(color: BiliColors.secondaryText, width: 0.67)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search, size: BiliMetrics.linkFieldIcon, color: BiliColors.secondaryText),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: TextField(
+                          key: const ValueKey('home-link'),
+                          controller: link,
+                          focusNode: focus,
+                          enabled: !opening,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          textInputAction: TextInputAction.go,
+                          contextMenuBuilder: _editMenu,
+                          onChanged: onChanged,
+                          onSubmitted: onSubmit,
+                          style: _fieldStyle,
+                          strutStyle: BiliFonts.strut(field),
+                          decoration: InputDecoration(
+                            isCollapsed: true,
+                            border: InputBorder.none,
+                            // As the decorator would draw hintText, with the strut it can't be given.
+                            hint: Text('粘贴链接或BV号', style: hint, strutStyle: BiliFonts.strut(hint)),
+                          ),
                         ),
                       ),
-                    ),
-                    ListenableBuilder(
-                      listenable: link,
-                      builder: (context, _) => link.text.isEmpty
-                          ? PasteButton(key: const ValueKey('home-paste'), enabled: !opening, onText: onPaste)
-                          : IconButton(
-                              key: const ValueKey('home-clear'),
-                              onPressed: () {
-                                link.clear();
-                                onChanged('');
-                              },
-                              tooltip: '清空',
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(
-                                Icons.cancel,
-                                size: BiliMetrics.linkClearIcon,
-                                color: BiliColors.divider,
+                      ListenableBuilder(
+                        listenable: link,
+                        builder: (context, _) => link.text.isEmpty
+                            ? PasteButton(key: const ValueKey('home-paste'), enabled: !opening, onText: onPaste)
+                            : IconButton(
+                                key: const ValueKey('home-clear'),
+                                onPressed: () {
+                                  link.clear();
+                                  onChanged('');
+                                },
+                                tooltip: '清空',
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(
+                                  Icons.cancel,
+                                  size: BiliMetrics.linkClearIcon,
+                                  color: BiliColors.divider,
+                                ),
                               ),
-                            ),
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// 01's tab row, with only 推荐 and that one selected.
@@ -811,6 +819,7 @@ class _RetryMessage extends StatelessWidget {
           key: messageKey,
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.secondaryText),
+          strutStyle: BiliFonts.strutOf(context, const TextStyle(fontSize: BiliMetrics.bodyText)),
         ),
         const SizedBox(height: BiliMetrics.rowGap),
         CupertinoButton(

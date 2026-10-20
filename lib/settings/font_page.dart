@@ -130,6 +130,10 @@ class _FontRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final family =
         this.family ?? Typography.material2021(platform: Theme.of(context).platform).black.bodyMedium?.fontFamily;
+    // The PingFang strut fits only the system font's row; the others draw in a font of their own.
+    final system = family == BiliFonts.system;
+    final nameStyle = TextStyle(fontFamily: family, fontSize: BiliMetrics.bodyText, color: BiliColors.text);
+    final sampleStyle = TextStyle(fontFamily: family, fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText);
     return MergeSemantics(
       child: Semantics(
         button: true,
@@ -153,7 +157,8 @@ class _FontRow extends StatelessWidget {
                         name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontFamily: family, fontSize: BiliMetrics.bodyText, color: BiliColors.text),
+                        style: nameStyle,
+                        strutStyle: system ? BiliFonts.strutOf(context, nameStyle) : null,
                       ),
                       const SizedBox(height: BiliMetrics.fontSampleGap),
                       ExcludeSemantics(
@@ -161,11 +166,8 @@ class _FontRow extends StatelessWidget {
                           '推荐 关注 热门 · 1.2万播放 03:45',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: family,
-                            fontSize: BiliMetrics.smallText,
-                            color: BiliColors.secondaryText,
-                          ),
+                          style: sampleStyle,
+                          strutStyle: system ? BiliFonts.strutOf(context, sampleStyle) : null,
                         ),
                       ),
                     ],

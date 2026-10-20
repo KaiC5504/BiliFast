@@ -23,6 +23,11 @@ class CollectionRow extends StatelessWidget {
     if (episodes.isEmpty) return const SizedBox.shrink();
     final place = CollectionRow.place(episodes);
     final radius = BorderRadius.circular(BiliMetrics.cardRadius);
+    final titleStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: IntroListTheme.collectionTitleText,
+      color: BiliColors.text,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         BiliMetrics.gutter,
@@ -56,11 +61,8 @@ class CollectionRow extends StatelessWidget {
                         '合集 · $title',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: BiliFonts.family,
-                          fontSize: IntroListTheme.collectionTitleText,
-                          color: BiliColors.text,
-                        ),
+                        style: titleStyle,
+                        strutStyle: BiliFonts.strutOf(context, titleStyle),
                       ),
                     ),
                     const SizedBox(width: BiliMetrics.gutter),

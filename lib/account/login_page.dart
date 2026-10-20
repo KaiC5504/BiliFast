@@ -300,7 +300,12 @@ class _Retry extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(message, textAlign: TextAlign.center, style: LoginTheme.messageStyle),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: LoginTheme.messageStyle,
+          strutStyle: BiliFonts.strutOf(context, LoginTheme.messageStyle),
+        ),
         const SizedBox(height: LoginTheme.gap),
         CupertinoButton(
           onPressed: onRetry,

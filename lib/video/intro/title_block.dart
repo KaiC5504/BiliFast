@@ -158,6 +158,8 @@ class _TitleBlockState extends State<TitleBlock> with SingleTickerProviderStateM
 
 TextStyle _style(double size, Color color, {double? line, FontWeight? weight, double spacing = 0}) => TextStyle(
   fontFamily: BiliFonts.family,
+  // The description's spans take no fallback from the page's style.
+  fontFamilyFallback: BiliFonts.fallback,
   fontSize: size,
   height: (line ?? size) / size,
   leadingDistribution: TextLeadingDistribution.even,
@@ -175,6 +177,7 @@ class _TitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = _style(IntroTheme.titleText, BiliColors.text, line: IntroTheme.titleLine, weight: FontWeight.w600);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -184,7 +187,8 @@ class _TitleRow extends StatelessWidget {
             detail.title,
             maxLines: expanded ? null : 1,
             overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: _style(IntroTheme.titleText, BiliColors.text, line: IntroTheme.titleLine, weight: FontWeight.w600),
+            style: style,
+            strutStyle: BiliFonts.strut(style),
           ),
         ),
         const SizedBox(width: IntroTheme.chevronGap),
@@ -267,6 +271,7 @@ class _MetaLine extends StatelessWidget {
       line: IntroTheme.metaLine,
       spacing: IntroTheme.metaSpacing,
     );
+    final strut = BiliFonts.strut(text);
     const icon = Size(IntroTheme.metaIconWidth, IntroTheme.metaIconHeight);
     return SizedBox(
       height: IntroTheme.metaLine,
@@ -281,16 +286,16 @@ class _MetaLine extends StatelessWidget {
               painter: CountPainter(CountGlyph.views, color: BiliColors.secondaryText),
             ),
             const SizedBox(width: IntroTheme.metaIconGap),
-            Text(CountFormat.short(detail.stat.view), style: text),
+            Text(CountFormat.short(detail.stat.view), style: text, strutStyle: strut),
             const SizedBox(width: IntroTheme.metaGroupGap),
             const CustomPaint(
               size: icon,
               painter: CountPainter(CountGlyph.danmaku, color: BiliColors.secondaryText),
             ),
             const SizedBox(width: IntroTheme.metaIconGap),
-            Text(CountFormat.short(detail.stat.danmaku), style: text),
+            Text(CountFormat.short(detail.stat.danmaku), style: text, strutStyle: strut),
             const SizedBox(width: IntroTheme.metaGroupGap),
-            Text(TimeFormat.publish(detail.pubdate), style: text),
+            Text(TimeFormat.publish(detail.pubdate), style: text, strutStyle: strut),
             ValueListenableBuilder(
               valueListenable: online,
               builder: (context, count, _) {
@@ -304,7 +309,7 @@ class _MetaLine extends StatelessWidget {
                       painter: _OnlinePainter(),
                     ),
                     const SizedBox(width: IntroTheme.metaIconGap),
-                    Text('$count人正在看', style: text),
+                    Text('$count人正在看', style: text, strutStyle: strut),
                   ],
                 );
               },
@@ -323,37 +328,41 @@ class _NoticeLine extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: IntroTheme.noticeGap),
-    child: SizedBox(
-      height: IntroTheme.noticeLine - IntroTheme.noticeHang,
-      child: OverflowBox(
-        alignment: Alignment.topLeft,
-        minHeight: IntroTheme.noticeLine,
-        maxHeight: IntroTheme.noticeLine,
-        child: Row(
-          children: [
-            const SizedBox(width: IntroTheme.metaLead),
-            const CustomPaint(size: Size.square(IntroTheme.noticeIcon), painter: _NoticePainter()),
-            const SizedBox(width: IntroTheme.noticeIconGap),
-            Flexible(
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _style(
-                  IntroTheme.noticeText,
-                  BiliColors.secondaryText,
-                  line: IntroTheme.noticeLine,
-                  spacing: IntroTheme.proseSpacing,
+  Widget build(BuildContext context) {
+    final style = _style(
+      IntroTheme.noticeText,
+      BiliColors.secondaryText,
+      line: IntroTheme.noticeLine,
+      spacing: IntroTheme.proseSpacing,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: IntroTheme.noticeGap),
+      child: SizedBox(
+        height: IntroTheme.noticeLine - IntroTheme.noticeHang,
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          minHeight: IntroTheme.noticeLine,
+          maxHeight: IntroTheme.noticeLine,
+          child: Row(
+            children: [
+              const SizedBox(width: IntroTheme.metaLead),
+              const CustomPaint(size: Size.square(IntroTheme.noticeIcon), painter: _NoticePainter()),
+              const SizedBox(width: IntroTheme.noticeIconGap),
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style,
+                  strutStyle: BiliFonts.strut(style),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// The notice's ⓘ: a ring with a round-ended bar and a dot inside, traced on font-check 03 at 12×.
@@ -499,28 +508,32 @@ class _PlainTag extends StatelessWidget {
   final String name;
 
   @override
-  Widget build(BuildContext context) => Container(
-    height: IntroTheme.tagHeight,
-    padding: const EdgeInsets.symmetric(horizontal: IntroTheme.tagPadding),
-    decoration: BoxDecoration(
-      color: BiliColors.softGrey,
-      borderRadius: BorderRadius.circular(IntroTheme.tagHeight / 2),
-    ),
-    child: Center(
-      widthFactor: 1,
-      child: Text(
-        name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: _style(
-          IntroTheme.tagText,
-          IntroTheme.tagInk,
-          line: IntroTheme.tagHeight,
-          spacing: IntroTheme.proseSpacing,
+  Widget build(BuildContext context) {
+    final style = _style(
+      IntroTheme.tagText,
+      IntroTheme.tagInk,
+      line: IntroTheme.tagHeight,
+      spacing: IntroTheme.proseSpacing,
+    );
+    return Container(
+      height: IntroTheme.tagHeight,
+      padding: const EdgeInsets.symmetric(horizontal: IntroTheme.tagPadding),
+      decoration: BoxDecoration(
+        color: BiliColors.softGrey,
+        borderRadius: BorderRadius.circular(IntroTheme.tagHeight / 2),
+      ),
+      child: Center(
+        widthFactor: 1,
+        child: Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+          strutStyle: BiliFonts.strut(style),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// ⊘ before 未经作者授权禁止转载 (18).

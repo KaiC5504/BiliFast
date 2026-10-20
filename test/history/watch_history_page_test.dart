@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 import '../support/system_font.dart';
+import '../video/mixed_lines.dart';
 import 'history_fakes.dart';
 
 void main() {
@@ -104,6 +105,14 @@ void main() {
     expect(find.byKey(const ValueKey('history-device-phone')), findsNWidgets(2));
     expect(find.byKey(const ValueKey('history-device-pc')), findsNWidgets(2));
     expect(find.text('没有更多了'), findsOneWidget);
+  });
+
+  testWidgets('under the system font a row\'s mixed title, uploader and time sit on the Chinese line', (tester) async {
+    await useSystemFont(tester);
+    await show(tester, items: [historyItem(1, viewAt: wall(19, 3, 2), title: mixedLines)]);
+    expectOnChineseLine(tester, find.text(mixedLines));
+    expectOnChineseLine(tester, find.text('UP1'));
+    expectOnChineseLine(tester, find.text('2026年10月19日 03:02'));
   });
 
   testWidgets('a section header stays pinned while its rows scroll under it', (tester) async {

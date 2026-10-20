@@ -15,6 +15,7 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/shared/menu.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/video/intro/title_block.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:flutter/material.dart';
@@ -24,10 +25,14 @@ import 'package:flutter_test/flutter_test.dart';
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
+import '../video/mixed_lines.dart';
 import 'fake_login_gate.dart';
 import 'feed_fakes.dart';
 
 const _watchLaterPath = '/x/v2/history/toview/add';
+
+/// A store that keeps the system font on, where the default one would turn this platform's MiSans back on.
+FontStore _systemFont() => FontStore.memory()..select(FontChoice.system);
 
 /// The fingerprint cookies alone: logged out, with no `spi` call.
 const _loggedOutCookies = {'buvid3': 'b3', 'buvid4': 'b4'};
@@ -55,6 +60,8 @@ void main() {
     double scale = 1,
     bool still = false,
     Map<String, String> cookies = Canned.cookies,
+    ThemeData? theme,
+    FontStore? fonts,
   }) async {
     tester.view.physicalSize = const Size(440, 900);
     tester.view.devicePixelRatio = 1;
@@ -88,9 +95,16 @@ void main() {
     });
     recents = await RecentStore.load(null, logger: logger);
     addTearDown(playback.dispose);
-    final services = AppServices(environment: environment, playback: playback, recents: recents, loginGate: gate);
+    final services = AppServices(
+      environment: environment,
+      playback: playback,
+      recents: recents,
+      loginGate: gate,
+      fonts: fonts,
+    );
     await tester.pumpWidget(
       MaterialApp(
+        theme: theme,
         builder: (context, child) => AppScope(services: services, child: child!),
         home: HomePage(developerPage: developer ? (context) => const Text('开发者页面') : null),
       ),
@@ -134,6 +148,43 @@ void main() {
     final second = tester.getTopLeft(card('BV1bbb'));
     expect(first.dy, second.dy, reason: 'side by side');
     expect(http.asked.first, 1);
+  });
+
+  group('under the system font a line mixing Latin and Chinese sits on the Chinese line', () {
+    testWidgets('a card\'s title over both lines, its uploader and its reason', (tester) async {
+      await useSystemFont(tester);
+      http.pages[1] = [feedItem('BV1aaa', title: mixedLines, reason: '1万点赞'), feedItem('BV1bbb')];
+      await show(tester, theme: appTheme(), fonts: _systemFont());
+      await settle(tester);
+      expectOnChineseLine(tester, find.text('$mixedLines BV1aaa'));
+      expectOnChineseLine(tester, find.text('UP BV1bbb'));
+      expectOnChineseLine(tester, find.text('1万点赞'));
+    });
+
+    testWidgets('the link field\'s hint and what is typed in it', (tester) async {
+      await useSystemFont(tester);
+      await show(tester, theme: appTheme(), fonts: _systemFont());
+      await settle(tester);
+      expectOnChineseLine(tester, find.text('粘贴链接或BV号'));
+
+      final field = find.descendant(of: find.byKey(const ValueKey('home-link')), matching: find.byType(EditableText));
+      await tester.enterText(field, chineseLine);
+      await tester.pump();
+      final chinese = baselinesOf(tester, field, strut: false);
+      await tester.enterText(field, mixedLine);
+      await tester.pump();
+      expectOnChineseLines(tester, field, chinese);
+      await tester.enterText(field, '');
+      await settle(tester);
+    });
+
+    testWidgets('a failed feed\'s message', (tester) async {
+      await useSystemFont(tester);
+      http.failing.add(1);
+      await show(tester, theme: appTheme(), fonts: _systemFont());
+      await settle(tester);
+      expectOnChineseLine(tester, find.byKey(const ValueKey('feed-error')));
+    });
   });
 
   testWidgets('a failed feed says why, and 重试 loads it', (tester) async {

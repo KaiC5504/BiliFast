@@ -128,6 +128,7 @@ class _RecentRow extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text),
+                        strutStyle: BiliFonts.strutOf(context, const TextStyle(fontSize: BiliMetrics.bodyText)),
                       ),
                       if (item.pageCount > 1)
                         Text(
@@ -135,6 +136,7 @@ class _RecentRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),
+                          strutStyle: BiliFonts.strutOf(context, const TextStyle(fontSize: BiliMetrics.smallText)),
                         ),
                     ],
                   ),

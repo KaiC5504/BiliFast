@@ -64,8 +64,10 @@ double _chrome(VideoTagKind kind) =>
     IntroListTheme.chipTrailing;
 
 double _nameWidth(String text, TextScaler scaler) {
+  final style = ChipName.style();
   final painter = TextPainter(
-    text: TextSpan(text: text, style: ChipName.style()),
+    text: TextSpan(text: text, style: style),
+    strutStyle: BiliFonts.strut(style),
     textDirection: TextDirection.ltr,
     textScaler: scaler,
     maxLines: 1,
@@ -184,19 +186,34 @@ class _ChipNameState extends State<ChipName> with SingleTickerProviderStateMixin
     final scaler = MediaQuery.textScalerOf(context);
     final width = _nameWidth(widget.text, scaler);
     final style = ChipName.style();
-    final text = Text(widget.text, maxLines: 1, softWrap: false, style: style);
+    final strut = BiliFonts.strut(style);
+    final text = Text(widget.text, maxLines: 1, softWrap: false, style: style, strutStyle: strut);
     final shown = width - _trailingTrim(widget.text, scaler);
     if (shown <= widget.room) {
       if (shown == width) return text;
       return SizedBox(
         width: shown,
-        child: Text(widget.text, maxLines: 1, softWrap: false, overflow: TextOverflow.visible, style: style),
+        child: Text(
+          widget.text,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.visible,
+          style: style,
+          strutStyle: strut,
+        ),
       );
     }
     if (!widget.scrolls) {
       return SizedBox(
         width: widget.room,
-        child: Text(widget.text, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: style),
+        child: Text(
+          widget.text,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+          strutStyle: strut,
+        ),
       );
     }
     final still = MediaQuery.disableAnimationsOf(context);

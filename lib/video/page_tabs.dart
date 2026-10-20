@@ -393,6 +393,13 @@ class _DanmakuCapsule extends StatelessWidget {
 
   static const _curve = Curves.easeOutCubic;
 
+  static TextStyle get _fieldStyle => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: PageTheme.danmakuFieldText,
+    color: BiliColors.secondaryText,
+    letterSpacing: 0,
+  );
+
   @override
   Widget build(BuildContext context) {
     final toggleWidth = on ? PageTheme.danmakuToggleOn : PageTheme.danmakuToggleOff;
@@ -411,7 +418,7 @@ class _DanmakuCapsule extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: _field()),
+          Expanded(child: _field(context)),
           AnimatedContainer(
             duration: duration,
             curve: _curve,
@@ -424,7 +431,7 @@ class _DanmakuCapsule extends StatelessWidget {
     );
   }
 
-  Widget _field() => ClipRect(
+  Widget _field(BuildContext context) => ClipRect(
     child: OverflowBox(
       minWidth: PageTheme.danmakuFieldWidth,
       maxWidth: PageTheme.danmakuFieldWidth,
@@ -451,12 +458,8 @@ class _DanmakuCapsule extends StatelessWidget {
                     key: ValueKey(text),
                     maxLines: 1,
                     softWrap: false,
-                    style: TextStyle(
-                      fontFamily: BiliFonts.family,
-                      fontSize: PageTheme.danmakuFieldText,
-                      color: BiliColors.secondaryText,
-                      letterSpacing: 0,
-                    ),
+                    style: _fieldStyle,
+                    strutStyle: BiliFonts.strutOf(context, _fieldStyle),
                   ),
                 ),
               ),

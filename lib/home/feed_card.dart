@@ -49,6 +49,13 @@ class FeedCardView extends StatefulWidget {
 class _FeedCardViewState extends State<FeedCardView> {
   bool _pressed = false;
 
+  static const _title = TextStyle(
+    fontSize: BiliMetrics.cardTitleText,
+    color: BiliColors.text,
+    height: FeedCardSize._lineHeight,
+  );
+  static const _owner = TextStyle(fontSize: BiliMetrics.cardFooterText, color: BiliColors.secondaryText);
+
   void _press(bool pressed) {
     if (_pressed != pressed) setState(() => _pressed = pressed);
   }
@@ -97,11 +104,8 @@ class _FeedCardViewState extends State<FeedCardView> {
                         card.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: BiliMetrics.cardTitleText,
-                          color: BiliColors.text,
-                          height: FeedCardSize._lineHeight,
-                        ),
+                        style: _title,
+                        strutStyle: BiliFonts.strutOf(context, _title),
                       ),
                     ),
                   ),
@@ -120,10 +124,8 @@ class _FeedCardViewState extends State<FeedCardView> {
                                 card.ownerName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: BiliMetrics.cardFooterText,
-                                  color: BiliColors.secondaryText,
-                                ),
+                                style: _owner,
+                                strutStyle: BiliFonts.strutOf(context, _owner),
                               ),
                             ),
                             _More(onWatchLater: widget.onWatchLater),
@@ -238,17 +240,15 @@ class _Tag extends StatelessWidget {
 
   final String text;
 
+  static const _style = TextStyle(fontSize: BiliMetrics.cardTagText, color: BiliColors.reason, height: 1);
+
   @override
   Widget build(BuildContext context) => Container(
     height: BiliMetrics.cardTagHeight,
     padding: const EdgeInsets.symmetric(horizontal: 4),
     alignment: Alignment.center,
     decoration: BoxDecoration(color: BiliColors.reasonTint, borderRadius: BorderRadius.circular(2)),
-    child: Text(
-      text,
-      maxLines: 1,
-      style: const TextStyle(fontSize: BiliMetrics.cardTagText, color: BiliColors.reason, height: 1),
-    ),
+    child: Text(text, maxLines: 1, style: _style, strutStyle: BiliFonts.strutOf(context, _style)),
   );
 }
 

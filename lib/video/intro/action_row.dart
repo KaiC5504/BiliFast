@@ -329,6 +329,7 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
                   height: 1,
                   color: Color.lerp(ActionTheme.count, BiliColors.pink, on),
                 ),
+                strutStyle: BiliFonts.strut(const TextStyle(fontSize: ActionTheme.countFont, height: 1)),
               ),
             ),
           ),

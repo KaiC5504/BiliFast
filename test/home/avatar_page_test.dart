@@ -12,6 +12,7 @@ import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -24,6 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
+import '../video/mixed_lines.dart';
 import 'fake_login_gate.dart';
 
 /// 2026-10-19 21:00 local.
@@ -74,6 +76,8 @@ void main() {
     bool fakeAccount = false,
     bool checkAccount = true,
     LoginGate? loginGate,
+    ThemeData? theme,
+    FontStore? fonts,
   }) async {
     tester.view.physicalSize = const Size(440, 956);
     tester.view.devicePixelRatio = 1;
@@ -112,9 +116,11 @@ void main() {
       recents: recents,
       loginGate: loginGate ?? gate,
       pageApi: api,
+      fonts: fonts,
     );
     await tester.pumpWidget(
       MaterialApp(
+        theme: theme,
         navigatorObservers: [pageRoutes],
         builder: (context, child) => AppScope(services: services, child: child!),
         home: const Scaffold(body: Center(child: Text('首页'))),
@@ -221,6 +227,31 @@ void main() {
     final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
     expect(route.bvid, 'BV1v0');
     expect(route.cid, 0);
+  });
+
+  testWidgets('under the system font a mixed title and when it played sit on the Chinese line, here and in 最近打开', (
+    tester,
+  ) async {
+    await useSystemFont(tester);
+    clock = _now.subtract(const Duration(hours: 2));
+    final video = RecentVideo(
+      bvid: 'BV1v0',
+      cid: 0,
+      title: mixedLines,
+      part: mixedLine,
+      page: 2,
+      pageCount: 3,
+      duration: 0,
+      cover: null,
+    );
+    await show(tester, opened: [video], theme: appTheme(), fonts: FontStore.memory()..select(FontChoice.system));
+    expectOnChineseLine(tester, find.text(mixedLines));
+    expectOnChineseLine(tester, find.text('2小时前播放'));
+
+    await tester.tap(find.byKey(const ValueKey('avatar-all')));
+    await settle(tester, 20);
+    expectOnChineseLine(tester, find.text(mixedLines));
+    expectOnChineseLine(tester, find.text('P2 $mixedLine'));
   });
 
   testWidgets('全部 opens 最近打开', (tester) async {

@@ -328,6 +328,11 @@ class _HistoryRow extends StatelessWidget {
     const textLeft = HistoryTheme.gutter + HistoryTheme.coverWidth + HistoryTheme.textGap;
     const coverBottom = HistoryTheme.rowPadTop + HistoryTheme.coverHeight;
     const metaRoom = HistoryTheme.moreCentreRight + HistoryTheme.moreTarget / 2;
+    final titleStyle = _style(
+      HistoryTheme.rowTitleText,
+      HistoryTheme.rowTitle,
+      height: HistoryTheme.rowTitleLine / HistoryTheme.rowTitleText,
+    );
     return SizedBox(
       height: HistoryTheme.rowHeight,
       child: Stack(
@@ -357,11 +362,8 @@ class _HistoryRow extends StatelessWidget {
                 item.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: _style(
-                  HistoryTheme.rowTitleText,
-                  HistoryTheme.rowTitle,
-                  height: HistoryTheme.rowTitleLine / HistoryTheme.rowTitleText,
-                ),
+                style: titleStyle,
+                strutStyle: BiliFonts.strut(titleStyle),
               ),
             ),
           ),
@@ -420,27 +422,31 @@ class _MetaLine extends StatelessWidget {
   final double spacing;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: HistoryTheme.metaLine,
-    child: Row(
-      children: [
-        SizedBox(width: HistoryTheme.glyphBox, height: HistoryTheme.metaLine, child: glyph),
-        const SizedBox(width: HistoryTheme.glyphGap),
-        Flexible(
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _style(
-              HistoryTheme.metaText,
-              HistoryTheme.meta,
-              height: HistoryTheme.metaLine / HistoryTheme.metaText,
-            ).copyWith(letterSpacing: spacing),
+  Widget build(BuildContext context) {
+    final style = _style(
+      HistoryTheme.metaText,
+      HistoryTheme.meta,
+      height: HistoryTheme.metaLine / HistoryTheme.metaText,
+    ).copyWith(letterSpacing: spacing);
+    return SizedBox(
+      height: HistoryTheme.metaLine,
+      child: Row(
+        children: [
+          SizedBox(width: HistoryTheme.glyphBox, height: HistoryTheme.metaLine, child: glyph),
+          const SizedBox(width: HistoryTheme.glyphGap),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+              strutStyle: BiliFonts.strut(style),
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _Cover extends StatelessWidget {
