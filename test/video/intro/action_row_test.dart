@@ -104,6 +104,13 @@ void main() {
     expect(tester.getCenter(find.text('1210')).dy, closeTo(tester.getCenter(find.text('9131')).dy, 0.01));
   });
 
+  testWidgets('the solid icons cut their lines (the 币 in 投币) 1.5 pt wide, as font-check 02 does', (tester) async {
+    await mount(tester, FakeVideoActions());
+    final icons = tester.widgetList<ActionIcon>(find.byType(ActionIcon)).toList();
+    expect(icons, hasLength(5));
+    expect(icons.map((icon) => icon.stroke), everyElement(ActionTheme.cutStroke));
+  });
+
   testWidgets('each tap does its own action', (tester) async {
     final actions = FakeVideoActions();
     await mount(tester, actions);

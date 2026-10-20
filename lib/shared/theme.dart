@@ -1049,6 +1049,9 @@ abstract final class IntroListTheme {
 
 /// The action row under the title, the 三连 rings and the coin dialog (03, 15).
 abstract final class ActionTheme {
+  /// The solid glyphs' cut-out lines (投币's 币): 4.5 px on font-check 02, as landscape's outlines.
+  static const cutStroke = 1.5;
+
   /// 03's icons are #61666D and their counts the page's grey; on, both turn [BiliColors.pink].
   static const icon = Color(0xFF61666D);
   static const count = BiliColors.secondaryText;

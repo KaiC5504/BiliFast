@@ -309,6 +309,7 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
                 widget.glyph,
                 solid: true,
                 size: ActionTheme.iconSize,
+                stroke: ActionTheme.cutStroke,
                 color: Color.lerp(ActionTheme.icon, BiliColors.pink, on)!,
               ),
             ),
