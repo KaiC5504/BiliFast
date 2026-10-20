@@ -2,8 +2,9 @@
 
     python tools/testdata/turn_logs.py
 
-rewrites turn_session.jsonl: a 轮换测试 over five styles switched off by hand, a turn after it with only the Dart side,
-one at 60 Hz, and a presentation change no turn followed; the sample `phone_report.py --turns` is tried on.
+rewrites turn_session.jsonl: 1.0.0 (14)'s 轮换测试 over five of its seven styles switched off by hand, a turn after it
+with only the Dart side, one at 60 Hz, and a presentation change no turn followed; the sample `phone_report.py --turns`
+is tried on.
 """
 from __future__ import annotations
 
@@ -50,11 +51,11 @@ class Log:
         self.line(self.now, "turn cycle", index=index, of=of, label=label)
         self.now += 500_000
 
-    def cycle_done(self, of: int = 13, label: str = "移除·直接切·立即"):
+    def cycle_done(self, of: int = 7, label: str = "请求前关·直接切·立即"):
         self.line(self.now, "turn cycle done", of=of, label=label)
         self.now += 500_000
 
-    def cycle_off(self, index: int, of: int = 13, label: str = "移除·直接切·立即"):
+    def cycle_off(self, index: int, of: int = 7, label: str = "请求前关·直接切·立即"):
         self.line(self.now, "turn cycle off", index=index, of=of, label=label)
         self.now += 500_000
 
@@ -74,15 +75,16 @@ class Log:
         self.dart(self.now + 600_000, "late", missed=True)
         self.now += 3_000_000
 
-    def turn(self, style: str, *, method: str = "remove", picture: str = "cut", to_landscape: bool = True,
-             ios_turns: bool = False, counter: bool = False, spin: bool = True, hold: bool = False,
+    def turn(self, style: str, *, method: str = "quietRequest", picture: str = "cut", to_landscape: bool = True,
+             ios_turns: bool = False, spin: bool = True, hold: bool = False,
              first_frame_ms: float = 20.0, drawn_ms: float = 55.0, fade_ms: float = 0.0, spin_ms: float = 400.0,
              seconds: float = 0.4, stall_at_ms: float | None = None, stall_ms: float = 0.0,
              native: bool = True, dart: bool = True, native_frames: bool = True, dart_frames: bool = True,
              frames_after_ms: float = 300.0, hz: float = HZ, totals: dict[int, float] | None = None,
              shown: bool = True, raster_end: bool = True, snapshot: bool | None = None, lost: int = 0) -> int:
-        """One turn with `now` as its native begin; moves `now` on 3 s. iOS's own rotation shows as the window's angle
-        going from the turn's start to 0; the page's as the Dart frames' angle doing the same. The Dart `frames` line
+        """One turn with `now` as its native begin; moves `now` on 3 s. iOS's own rotation (`ios_turns`: 系统, or a
+        请求前关 that failed to keep it out) shows as the window's angle going from the turn's start to 0; the page's as
+        the Dart frames' angle doing the same. The Dart `frames` line
         comes `frames_after_ms` after the last frame (up to ~1.5 s in release builds, waiting for FrameTimings).
 
         Method `system` is 系统 as Swift logs it: request, request returned, begin (no snapshot), completion and
@@ -122,13 +124,8 @@ class Log:
             self.native(at(0), "begin", ident, **common, angle=math.radians(angle), seconds=seconds, animated=True,
                         fromW=size[0], fromH=size[1], toW=size[2], toH=size[3], animationsEnabled=True,
                         snapshot=snapped, snapshotMs=6.5 if snapped else 0.0, **({"lost": lost} if lost else {}))
-            found = "window|transform|CABasicAnimation|0.4|easeInEaseOut|false|0;root|bounds|CABasicAnimation|0.4|easeInEaseOut|false|0"
             if not system:
-                self.native(at(1), "animations", ident, **common, phase="after super", found=found,
-                            removed=0 if ios_turns else 2)
                 self.native(at(2), "alongside", ident, **common)
-            if counter:
-                self.native(at(2), "container", ident, **common, event="installed")
             if snapped:
                 self.native(at(drawn_ms), "drawn", ident, **common, action=picture)
                 self.native(at(drawn_ms), "picture gone", ident, **common, why="drawn")
@@ -193,14 +190,12 @@ class Log:
                     ms = stall_at_ms + stall_ms
                 gap = tick_ms if previous is None else ms - previous
                 window = start * (1 - ease(ms / (seconds * 1000))) if ios_turns else 0.0
-                container = -window if counter else None
                 up = snapped and ms < drawn_ms + fade_ms
                 opacity = None if not up else 1.0 if ms < drawn_ms else 1 - (ms - drawn_ms) / fade_ms
                 # The still picture is turned back so it stays where it was on the phone.
-                picture_angle = (start - window if counter else start) if up else None
+                picture_angle = start if up else None
                 ticks.append(",".join([
-                    number_text(ms), number_text(gap), "0", number_text(window), "956", "440",
-                    "" if container is None else number_text(container), "0",
+                    number_text(ms), number_text(gap), "0", number_text(window), "956", "440", "", "0",
                     "" if picture_angle is None else number_text(picture_angle),
                     "" if opacity is None else number_text(opacity)]))
                 previous = ms
@@ -212,22 +207,23 @@ class Log:
 
 def sample() -> Log:
     log = Log()
+    # 轮换测试's first five (lib/device/turn_style.dart). 请求前关·淡出·立即 is one where iOS still turned underneath,
+    # a fading picture over it; 请求前关·直接切·等截图's turn to landscape stalls.
     styles = [
         ("系统", {"method": "system", "ios_turns": True}),
-        ("原样·淡出·立即", {"method": "legacy", "picture": "fade", "fade_ms": 120, "ios_turns": True}),
-        ("移除·直接切·立即", {"method": "remove"}),
-        ("移除·淡出·立即", {"method": "remove", "picture": "fade", "fade_ms": 120}),
-        ("抵消·直接切·等截图", {"method": "counter", "ios_turns": True, "counter": True, "hold": True,
-                         "stall_at_ms": 150, "stall_ms": 300}),
+        ("请求前关·直接切·立即", {}),
+        ("请求前关·直接切·等截图", {"hold": True, "stall_at_ms": 150, "stall_ms": 300}),
+        ("请求前关·淡出·立即", {"picture": "fade", "fade_ms": 120, "ios_turns": True}),
+        ("请求前关·无截图·立即", {"picture": "none"}),
     ]
     for index, (label, options) in enumerate(styles, 1):
-        log.cycle(index, 13, label)
+        log.cycle(index, 7, label)
         log.turn(label, **options)
         log.turn(label, to_landscape=False, **{**options, "stall_at_ms": None})
-    log.cycle_off(len(styles), 13, "移除·直接切·立即")
-    log.turn("移除·直接切·立即", native=False)
-    log.turn("移除·直接切·立即", to_landscape=False, hz=60, lost=2)
-    log.presentation_only("移除·直接切·立即")
+    log.cycle_off(len(styles))
+    log.turn("请求前关·直接切·立即", native=False)
+    log.turn("请求前关·直接切·立即", to_landscape=False, hz=60, lost=2)
+    log.presentation_only("请求前关·直接切·立即")
     return log
 
 

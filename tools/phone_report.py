@@ -436,13 +436,15 @@ FEW_TURNS = 4
 DART_KINDS = ("presentation", "started", "sized", "began", "released", "drawn sent", "picture gone", "late", "frames")
 DART_WITH_ID = ("started", "began", "released", "drawn sent", "picture gone")
 CYCLE_KINDS = ("cycle", "cycle done", "cycle off")
-UNDRAWN_STYLES = ("系统", "不转")
+# 1.0.0 (14)'s native kinds besides begin and the requests. 1.0.0 (13)'s methods also logged `animations` and
+# `container`: those lines are passed over, though their lost sends still count.
+NATIVE_KINDS = ("alongside", "completion", "drawn", "picture gone", "fallback", "frames")
+SYSTEM_STYLE = "系统"
 PICTURE_KINDS = ("cut", "fade")
 FAIL_KEYS = ("sweep", "back and forth", "ghost", "gap", "first move", "slow")
 # 旋转动画's labels (lib/device/turn_style.dart) as the native lines name them. 系统's turns are iOS's own, logged as
-# system with no picture; 不转 never shows one either.
-NATIVE_METHODS = {"系统": "system", "原样": "legacy", "移除": "remove", "抵消": "counter", "关动作": "noActions",
-                  "请求前关": "quietRequest", "不转": "noSpin"}
+# system with no picture. 1.0.0 (13)'s other methods are graded without this check.
+NATIVE_METHODS = {"系统": "system", "请求前关": "quietRequest"}
 NATIVE_PICTURES = {"直接切": "cut", "淡出": "fade", "无截图": "none"}
 
 
@@ -611,10 +613,10 @@ def group_turns(events) -> dict:
     unplaced = Counter()
     for line in lines:
         side, kind, f = line["side"], line["kind"], line["f"]
-        if side == "native" and kind not in ("begin", "request", "request returned"):
+        if side == "native" and kind in NATIVE_KINDS:
             ident = turn_id(f)
             turn = by_id(ident, line["us"], 100_000)
-            if turn is None and ident and kind != "container":
+            if turn is None and ident:
                 # A turn whose begin never reached the log.
                 turn = new_turn(ident, line["us"], f"native {kind}")
                 turns.append(turn)
@@ -765,6 +767,12 @@ def label_mismatch(turn) -> str | None:
 
 
 def direction_of(turn) -> str:
+    """What the window turned to, from the native begin's sizes; else what the page asked for. A presentation change
+    whose turn never came can sit on the next turn."""
+    begin = turn["begin"] or {}
+    w, h = number(begin.get("toW")), number(begin.get("toH"))
+    if w is not None and h is not None:
+        return "to L" if w > h else "back"
     presentation = turn["presentation"] or {}
     source, target = presentation.get("from"), presentation.get("to")
     if target == "landscape":
@@ -773,9 +781,8 @@ def direction_of(turn) -> str:
         return "back"
     if source is not None or target is not None:
         return f"{source}→{target}"
-    begin = turn["begin"] or {}
-    for w, h in [(begin.get("toW"), begin.get("toH"))] + [(f.get("w"), f.get("h")) for f in turn["dart"]["sized"]]:
-        w, h = number(w), number(h)
+    for f in turn["dart"]["sized"]:
+        w, h = number(f.get("w")), number(f.get("h"))
         if w is not None and h is not None:
             return "to L" if w > h else "back"
     return "?"
@@ -832,8 +839,7 @@ def analyse_turn(turn, pool) -> dict:
     method = begin.get("method")
     # iOS's own turn (系统): the page draws no angle, so what is seen is the window's rotation alone.
     system = method == "system"
-    spins = bool(turn["dart"]["began"]) or (not has_dart and style not in UNDRAWN_STYLES
-                                             and method not in (None, "noSpin", "system"))
+    spins = bool(turn["dart"]["began"]) or (not has_dart and style != SYSTEM_STYLE and method not in (None, "system"))
     a = {"ticks": len(ticks), "malformed": malformed, "cut": cut, "dartSamples": dart_samples, "spins": spins,
          "fails": [], "unknown": [], "gap": None, "ghost": None, "pictureUntil": None, "pictureAtEnd": False,
          "start": None, "sweep": None, "monotonic": None, "step": None, "moved": None, "settled": None,
@@ -990,8 +996,6 @@ def turn_times(turn) -> str:
         mark(f, "picture gone", str(f.get("why", "")))
     for f in turn["native"]["fallback"]:
         mark(f, "fallback")
-    for f in turn["native"]["container"]:
-        mark(f, "container", str(f.get("event", "")))
     for f in turn["dart"]["started"]:
         mark(f, "started", str(f.get("outcome", "")))
     for f in turn["dart"]["sized"]:
@@ -1011,20 +1015,6 @@ def turn_times(turn) -> str:
     marks.sort(key=lambda item: item[0])
     origin = "the native begin" if begin is not None else turn["anchor"]
     return f"times (ms from {origin}): " + " · ".join(text for _, text in marks)
-
-
-def animations_text(lines) -> str | None:
-    parts = []
-    for f in lines:
-        found = f.get("found")
-        layers = defaultdict(list)
-        for entry in found.split(";") if isinstance(found, str) else []:
-            if entry.strip():
-                bits = entry.split("|")
-                layers[bits[0] or "?"].append(bits[1] if len(bits) > 1 and bits[1] else "?")
-        listed = ", ".join(f"{layer}×{len(keys)} [{', '.join(sorted(set(keys)))}]" for layer, keys in layers.items())
-        parts.append(f"{f.get('phase', '?')} found {listed or 'none'}, removed {fmt(number(f.get('removed')))}")
-    return "; ".join(parts) if parts else None
 
 
 def angles_text(a) -> str:
@@ -1064,9 +1054,6 @@ def turn_detail(number_, turn, a) -> list[str]:
     lines = [f"-- {number_} · turn {fmt(turn['id'])} · {style}{where} · {direction_of(turn)} · {when} --"]
     wrap = textwrap.TextWrapper(width=118, initial_indent="  ", subsequent_indent="    ", break_long_words=False)
     lines += wrap.wrap(turn_times(turn))
-    animations = animations_text(turn["native"]["animations"])
-    if animations:
-        lines += wrap.wrap("animations: " + animations)
     lines += wrap.wrap(angles_text(a))
     lines += wrap.wrap(f"stalls: native longest gap {fmt(a['gap'])} ms over {a['ticks']} ticks of "
                        f"{fmt(a['tick'], '{:.1f}')} ms; Dart worst build {fmt(a['build'], '{:.1f}')} ms, raster "
@@ -1093,7 +1080,7 @@ def turn_detail(number_, turn, a) -> list[str]:
         ("Dart presentation", turn["presentation"] is not None),
         # iOS's own turns are never sent to Dart.
         ("Dart started", bool(turn["dart"]["started"]) or system),
-        ("Dart began", bool(turn["dart"]["began"]) or style in UNDRAWN_STYLES or system),
+        ("Dart began", bool(turn["dart"]["began"]) or style == SYSTEM_STYLE or system),
         ("Dart frames", a["dartSamples"] > 0 or bool(turn["dartFrames"])),
     ) if not there]
     if missing:
