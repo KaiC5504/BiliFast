@@ -365,7 +365,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (!MediaQuery.disableAnimationsOf(context)) {
       final style = _orientation.turnStyle;
       _drawing = true;
-      _spinFrom = style.method == TurnMethod.noSpin ? 0 : _rotation - start.angle;
+      _spinFrom = _rotation - start.angle;
       final hold =
           style.choosesPicture && style.spinStart == TurnSpinStart.afterPicture && !_goneTurns.contains(start.id);
       _recorder.began(start.id, spinFrom: _spinFrom, duration: start.duration, grow: _grow.value, held: hold);

@@ -57,7 +57,7 @@ class OrientationController extends ChangeNotifier {
   bool _turnTakeover = false;
   int _takeoverSends = 0;
 
-  /// The 开发者 choice, armed or not; the page reads its method (不转) and drawn start from it.
+  /// The 开发者 choice, armed or not; the page reads its drawn start from it.
   TurnStyle get turnStyle => _turnStyle;
   TurnStyle _turnStyle = TurnStyle.system;
 
@@ -96,7 +96,7 @@ class OrientationController extends ChangeNotifier {
     final send = ++_takeoverSends;
     return _hostQueue = _hostQueue.then((_) async {
       try {
-        await host.setTurnTakeover(armed, method: style.method, picture: style.picture);
+        await host.setTurnTakeover(armed, picture: style.picture);
       } catch (error) {
         if (send == _takeoverSends) {
           _turnTakeover = false;

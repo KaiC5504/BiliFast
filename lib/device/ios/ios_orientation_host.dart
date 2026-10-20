@@ -42,17 +42,8 @@ final class IosOrientationHost implements OrientationHost {
   Stream<OrientationRefusal> get refusals => _events.refusals;
 
   @override
-  Future<void> setTurnTakeover(bool enabled, {required TurnMethod method, required TurnPicture picture}) =>
-      _host.setTurnTakeover(
+  Future<void> setTurnTakeover(bool enabled, {required TurnPicture picture}) => _host.setTurnTakeover(
         enabled,
-        switch (method) {
-          TurnMethod.system || TurnMethod.legacy => NativeTurnMethod.legacy,
-          TurnMethod.remove => NativeTurnMethod.remove,
-          TurnMethod.counter => NativeTurnMethod.counter,
-          TurnMethod.noActions => NativeTurnMethod.noActions,
-          TurnMethod.quietRequest => NativeTurnMethod.quietRequest,
-          TurnMethod.noSpin => NativeTurnMethod.noSpin,
-        },
         switch (picture) {
           TurnPicture.cut => NativeTurnPicture.cut,
           TurnPicture.fade => NativeTurnPicture.fade,

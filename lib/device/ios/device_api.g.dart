@@ -69,23 +69,6 @@ enum NativeInterfaceOrientation {
   unknown;
 }
 
-/// 开发者 → 旋转动画's ways of keeping iOS's own rotation out of a turn Flutter draws (TurnTakeover.swift). The test
-/// build carries them all; the phone's log decides which stays.
-enum NativeTurnMethod {
-  /// UIView animations off for the turn, as 1.0.0 (12) shipped.
-  legacy,
-  /// [legacy], then the animations iOS added to the window, the layers above it and the root view are removed.
-  remove,
-  /// iOS rotates as it likes; the Flutter view sits in a container turned the other way alongside, so the two cancel.
-  counter,
-  /// [legacy], inside a Core Animation transaction with its actions disabled until the turn is set up.
-  noActions,
-  /// UIView animations already off when the rotation is requested, until the turn completes.
-  quietRequest,
-  /// iOS's rotation as it is, with no still picture; Flutter gets the turned size at once and draws no turn itself.
-  noSpin;
-}
-
 /// What covers the screen while the window turns, until Flutter has drawn the turn's first frame.
 enum NativeTurnPicture {
   cut,
@@ -110,11 +93,8 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is NativeInterfaceOrientation) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    }    else if (value is NativeTurnMethod) {
-      buffer.putUint8(132);
-      writeValue(buffer, value.index);
     }    else if (value is NativeTurnPicture) {
-      buffer.putUint8(133);
+      buffer.putUint8(132);
       writeValue(buffer, value.index);
     } else {
       super.writeValue(buffer, value);
@@ -134,9 +114,6 @@ class _PigeonCodec extends StandardMessageCodec {
         final value = readValue(buffer) as int?;
         return value == null ? null : NativeInterfaceOrientation.values[value];
       case 132:
-        final value = readValue(buffer) as int?;
-        return value == null ? null : NativeTurnMethod.values[value];
-      case 133:
         final value = readValue(buffer) as int?;
         return value == null ? null : NativeTurnPicture.values[value];
       default:
@@ -391,17 +368,17 @@ class DeviceHostApi {
     ;
   }
 
-  /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): the scene's own rotation animation
-  /// is kept out of them by [method], Flutter gets the turned size at once, and each turn is reported through
-  /// [DeviceEventApi.onTurn].
-  Future<void> setTurnTakeover(bool enabled, NativeTurnMethod method, NativeTurnPicture picture) async {
+  /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): rotations are requested with UIView
+  /// animations off, so the scene turns the window at once, Flutter gets the turned size at once, [picture] covers
+  /// the screen until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
+  Future<void> setTurnTakeover(bool enabled, NativeTurnPicture picture) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.setTurnTakeover$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled, method, picture]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled, picture]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(

@@ -42,10 +42,9 @@ abstract interface class OrientationHost {
 
   Stream<OrientationRefusal> get refusals;
 
-  /// While on, the screen takes its turned size at once and each turn is reported on [turns]; [method] (never
-  /// [TurnMethod.system]) keeps iOS's rotation out of it, except [TurnMethod.noSpin], which leaves it to iOS with no
-  /// picture, and [picture] covers the screen until [turnDrawn].
-  Future<void> setTurnTakeover(bool enabled, {required TurnMethod method, required TurnPicture picture});
+  /// While on, rotations are requested with iOS's animation off, the screen takes its turned size at once, each turn
+  /// is reported on [turns], and [picture] covers the screen until [turnDrawn].
+  Future<void> setTurnTakeover(bool enabled, {required TurnPicture picture});
 
   Stream<TurnStart> get turns;
 

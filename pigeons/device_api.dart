@@ -16,28 +16,6 @@ enum NativeDeviceOrientation { portrait, portraitUpsideDown, landscapeLeft, land
 
 enum NativeInterfaceOrientation { portrait, landscapeLeft, landscapeRight, unknown }
 
-/// 开发者 → 旋转动画's ways of keeping iOS's own rotation out of a turn Flutter draws (TurnTakeover.swift). The test
-/// build carries them all; the phone's log decides which stays.
-enum NativeTurnMethod {
-  /// UIView animations off for the turn, as 1.0.0 (12) shipped.
-  legacy,
-
-  /// [legacy], then the animations iOS added to the window, the layers above it and the root view are removed.
-  remove,
-
-  /// iOS rotates as it likes; the Flutter view sits in a container turned the other way alongside, so the two cancel.
-  counter,
-
-  /// [legacy], inside a Core Animation transaction with its actions disabled until the turn is set up.
-  noActions,
-
-  /// UIView animations already off when the rotation is requested, until the turn completes.
-  quietRequest,
-
-  /// iOS's rotation as it is, with no still picture; Flutter gets the turned size at once and draws no turn itself.
-  noSpin,
-}
-
 /// What covers the screen while the window turns, until Flutter has drawn the turn's first frame.
 enum NativeTurnPicture { cut, fade, none }
 
@@ -76,10 +54,10 @@ abstract class DeviceHostApi {
 
   void detachVolumeView();
 
-  /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): the scene's own rotation animation
-  /// is kept out of them by [method], Flutter gets the turned size at once, and each turn is reported through
-  /// [DeviceEventApi.onTurn].
-  void setTurnTakeover(bool enabled, NativeTurnMethod method, NativeTurnPicture picture);
+  /// While on, the video page's turns are drawn by Flutter (TurnTakeover.swift): rotations are requested with UIView
+  /// animations off, so the scene turns the window at once, Flutter gets the turned size at once, [picture] covers
+  /// the screen until [turnDrawn], and each turn is reported through [DeviceEventApi.onTurn].
+  void setTurnTakeover(bool enabled, NativeTurnPicture picture);
 
   /// Flutter has drawn the first frame of taken-over [turn]; the still picture covering the screen can go.
   void turnDrawn(int turn);

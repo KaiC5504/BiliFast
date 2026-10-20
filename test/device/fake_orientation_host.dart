@@ -26,9 +26,9 @@ final class FakeOrientationHost implements OrientationHost {
   final takeovers = <bool>[];
   int drawn = 0;
 
-  /// The turns Flutter said were drawn, in order, and the method and picture of every [setTurnTakeover].
+  /// The turns Flutter said were drawn, in order, and the picture of every [setTurnTakeover].
   final drawnTurns = <int>[];
-  final styles = <(TurnMethod, TurnPicture)>[];
+  final pictures = <TurnPicture>[];
   int _turnIds = 0;
 
   /// Takeover changes and requests in the order they reached the host.
@@ -87,10 +87,10 @@ final class FakeOrientationHost implements OrientationHost {
   Stream<OrientationRefusal> get refusals => _refusals.stream;
 
   @override
-  Future<void> setTurnTakeover(bool enabled, {required TurnMethod method, required TurnPicture picture}) async {
+  Future<void> setTurnTakeover(bool enabled, {required TurnPicture picture}) async {
     if (takeoverError case final error?) throw error;
     takeovers.add(enabled);
-    styles.add((method, picture));
+    pictures.add(picture);
     sent.add(enabled ? 'takeover on' : 'takeover off');
   }
 

@@ -1,24 +1,17 @@
 import 'package:flutter/foundation.dart';
 
-/// 开发者 → 旋转动画: how a turn to or from landscape full screen is animated. Everything but [system] and [noSpin] is
-/// drawn by the video page, each with its own way of keeping iOS's rotation out of it (NativeTurnMethod in
-/// pigeons/device_api.dart). The test build carries them all; the phone's log decides which stays.
+/// 开发者 → 旋转动画: how a turn to or from landscape full screen is animated. [quietRequest] asks for the rotation
+/// with UIView animations already off, the only way 1.0.0 (13)'s phone test found to keep iOS's own rotation out
+/// (09 in local/differences), so the video page draws the official turn; [system] leaves it to iOS.
 enum TurnMethod {
   system('系统'),
-  legacy('原样'),
-  remove('移除'),
-  counter('抵消'),
-  noActions('关动作'),
-  quietRequest('请求前关'),
-
-  /// iOS turns the screen; the page only grows the player, at the turned size from the start.
-  noSpin('不转');
+  quietRequest('请求前关');
 
   const TurnMethod(this.label);
 
   final String label;
 
-  /// Whether the host takes the turns over: 不转 too, for the turned size at once.
+  /// Whether the host takes the turns over.
   bool get drawn => this != system;
 }
 
@@ -46,7 +39,7 @@ enum TurnSpinStart {
 @immutable
 class TurnStyle {
   const TurnStyle({
-    this.method = TurnMethod.remove,
+    this.method = TurnMethod.quietRequest,
     this.picture = TurnPicture.cut,
     this.spinStart = TurnSpinStart.immediate,
   });
@@ -57,8 +50,8 @@ class TurnStyle {
   final TurnPicture picture;
   final TurnSpinStart spinStart;
 
-  /// Whether [picture] and [spinStart] take part: 系统 and 不转 have no picture or drawn start to choose.
-  bool get choosesPicture => method != TurnMethod.system && method != TurnMethod.noSpin;
+  /// Whether [picture] and [spinStart] take part: 系统 has no picture or drawn start to choose.
+  bool get choosesPicture => method != TurnMethod.system;
 
   TurnStyle copyWith({TurnMethod? method, TurnPicture? picture, TurnSpinStart? spinStart}) => TurnStyle(
         method: method ?? this.method,
@@ -66,28 +59,17 @@ class TurnStyle {
         spinStart: spinStart ?? this.spinStart,
       );
 
-  /// 系统 and 不转 have no picture or drawn start to choose.
-  String get label => switch (method) {
-        TurnMethod.system || TurnMethod.noSpin => method.label,
-        _ => '${method.label}·${picture.label}·${spinStart.label}',
-      };
+  String get label => choosesPicture ? '${method.label}·${picture.label}·${spinStart.label}' : method.label;
 
-  /// 轮换测试's order: the reference, every method as it would ship (原样 faded, as 1.0.0 (12) always did), then the
-  /// pictures and the late start on the two methods most likely to win.
+  /// 轮换测试's order: the reference, then every picture and start of the drawn turn.
   static const cycle = <TurnStyle>[
     system,
-    TurnStyle(method: TurnMethod.legacy, picture: TurnPicture.fade),
-    TurnStyle(method: TurnMethod.remove),
-    TurnStyle(method: TurnMethod.counter),
-    TurnStyle(method: TurnMethod.noActions),
-    TurnStyle(method: TurnMethod.quietRequest),
-    TurnStyle(method: TurnMethod.noSpin, picture: TurnPicture.none),
-    TurnStyle(method: TurnMethod.remove, picture: TurnPicture.fade),
-    TurnStyle(method: TurnMethod.remove, picture: TurnPicture.none),
-    TurnStyle(method: TurnMethod.remove, spinStart: TurnSpinStart.afterPicture),
-    TurnStyle(method: TurnMethod.counter, picture: TurnPicture.fade),
-    TurnStyle(method: TurnMethod.counter, picture: TurnPicture.none),
-    TurnStyle(method: TurnMethod.counter, spinStart: TurnSpinStart.afterPicture),
+    TurnStyle(),
+    TurnStyle(spinStart: TurnSpinStart.afterPicture),
+    TurnStyle(picture: TurnPicture.fade),
+    TurnStyle(picture: TurnPicture.fade, spinStart: TurnSpinStart.afterPicture),
+    TurnStyle(picture: TurnPicture.none),
+    TurnStyle(picture: TurnPicture.none, spinStart: TurnSpinStart.afterPicture),
   ];
 
   @override
