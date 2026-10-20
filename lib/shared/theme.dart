@@ -396,7 +396,6 @@ abstract final class BiliMetrics {
   static double get chromeFieldDrop => BiliFonts.nudged ? 2 : 0;
   static const chromeSpeedGap = 14.0;
   static const chromeQualityGap = 23.0;
-  static const chromeEpisodesGap = 15.0;
   static const chromeTextPad = 8.0;
   static const chromeLabelText = 14.0;
 
