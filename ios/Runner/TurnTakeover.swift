@@ -264,7 +264,7 @@ enum TurnTakeover {
       events.append("restored")
     }
     if container == nil, root.superview === window {
-      let made = UIView(frame: window.bounds)
+      let made = TurnContainer(frame: window.bounds)
       made.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       rootMask = root.autoresizingMask
       UIView.performWithoutAnimation {
@@ -278,15 +278,18 @@ enum TurnTakeover {
     guard let container else { return events }
     // The container's own rather than the window's: iOS may turn a layer above the window, whose model may already
     // hold the new turn.
-    let shown = (container.layer.presentation() ?? container.layer).transform
+    let presented = container.layer.presentation() ?? container.layer
+    let shown = presented.transform
     let left = atan2(Double(shown.m12), Double(shown.m11))
+    // Mid-turn the model already holds the last turn's end; removing its animations would jump the centre there.
+    let centre = presented.position
     if abs(left) > 0.001 { events.append("reversed") }
     UIView.performWithoutAnimation {
       container.layer.removeAllAnimations()
       // Sized by hand until the turn settles: the window's own resize would add its change on top.
       container.autoresizingMask = []
       container.bounds = CGRect(origin: .zero, size: size)
-      container.center = CGPoint(x: window.bounds.midX, y: window.bounds.midY)
+      container.center = centre
       container.transform = CGAffineTransform(rotationAngle: CGFloat(angle + left))
       root.frame = container.bounds
     }
@@ -513,5 +516,13 @@ private final class InstantTurnCoordinator: NSObject, UIViewControllerTransition
 
   nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
     base
+  }
+}
+
+/// Touches go through it to the Flutter view, or past it should UIKit ever take the Flutter view back out.
+private final class TurnContainer: UIView {
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    let hit = super.hitTest(point, with: event)
+    return hit === self ? nil : hit
   }
 }
