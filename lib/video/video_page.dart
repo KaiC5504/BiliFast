@@ -30,6 +30,9 @@ import '../player_ui/player_ui.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../space/space_route.dart';
+import '../space/uploader_sheet.dart';
+import '../space/uploader_tap.dart';
 import 'actions/action_overlays.dart';
 import 'collapsing_player.dart';
 import 'intro/intro_tab.dart';
@@ -214,7 +217,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   final _commentOverlays = CommentOverlayController();
   bool _threadOpen = false;
 
-  /// 评论详情 holds the left edge, over the small player too, so the player's drag leaves it alone.
+  /// The uploader sheet the uploader row and staff open (62).
+  final _uploaderSheet = UploaderSheetController();
+
+  /// 评论详情 and the uploader sheet hold the left edge, over the small player too, so the player's drag leaves it
+  /// alone.
   final _threadEdge = ValueNotifier<bool>(false);
 
   /// The list's count once its first page is in, for 评论 N to follow a post or a delete; null before.
@@ -498,6 +505,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..addListener(_panelChanged)
       ..addListener(_standAside);
     _commentOverlays.addListener(_panelChanged);
+    _uploaderSheet.addListener(_sheetChanged);
     _collapse.addListener(_collapseChanged);
     _spin.addStatusListener(_spinStatus);
   }
@@ -780,8 +788,27 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   void _setThreadOpen(bool open) {
     _threadOpen = open;
-    _threadEdge.value = open;
+    _threadEdge.value = open || _uploaderSheet.isOpen;
   }
+
+  /// Rebuilds the PopScope, which back then closes first.
+  void _sheetChanged() {
+    _threadEdge.value = _threadOpen || _uploaderSheet.isOpen;
+    _panelChanged();
+  }
+
+  /// The uploader row's and staff's tap: the sheet on the small player; full screen has no room for it.
+  void _openUploader(UploaderRef uploader) {
+    if (_left || !mounted) return;
+    if (_presentation.fullScreen || _laidOut.value.fullScreen) {
+      unawaited(openSpace(context, uploader));
+    } else {
+      _uploaderSheet.open(uploader);
+    }
+  }
+
+  /// The page's own 关注 for its uploader; anyone else's the sheet asks for.
+  bool? _followingOf(int mid) => mid == _intro.detail?.owner.mid ? _details?.actions?.following : null;
 
   /// Closes the composer, the picture viewer or the delete confirm, else 评论详情. False when none is up. A composer
   /// that is posting stays: closed, a failed post would never show and its text would be lost with the page.
@@ -812,6 +839,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (_presentation.fullScreen && _commentOverlays.value is ComposeOverlay && !_drafts.anyPosting) {
       _commentOverlays.close();
     }
+    if (_presentation.fullScreen) _uploaderSheet.close();
     setState(() {});
     _applySystemUi();
     _standAside();
@@ -903,7 +931,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (mounted) setState(() {});
   }
 
-  /// Back closes the comments' overlays and thread first on the small player, then an action overlay, then a panel.
+  /// Back closes the comments' overlays and thread first on the small player, then an action overlay, then a panel,
+  /// then the uploader sheet's confirm and the sheet.
   void _back() {
     if (_closeDanmakuSend()) return;
     if (!_presentation.fullScreen && _closeComments()) return;
@@ -911,6 +940,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _overlays.close();
     } else if (_panels.value != null) {
       _panels.close();
+    } else if (_uploaderSheet.back()) {
+      return;
     } else if (_presentation.fullScreen) {
       _orientation.exitToInline();
     } else if (!_laidOut.value.fullScreen) {
@@ -1152,6 +1183,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _commentOverlays
       ..removeListener(_panelChanged)
       ..dispose();
+    _uploaderSheet
+      ..removeListener(_sheetChanged)
+      ..dispose();
     _threadEdge.dispose();
     _listCount.dispose();
     _comments
@@ -1215,7 +1249,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           _panels.value == null &&
           _overlays.value == null &&
           _commentOverlays.value == null &&
-          !_threadOpen,
+          !_threadOpen &&
+          !_uploaderSheet.isOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           setState(_leave);
@@ -1227,6 +1262,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           _overlays.close();
         } else if (_panels.value != null) {
           _panels.close();
+        } else if (_uploaderSheet.back()) {
+          return;
         } else if (_presentation.fullScreen) {
           _orientation.exitToInline();
         }
@@ -1256,9 +1293,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                     _uprightFrame = (size: constraints.biggest, top: top);
                   }
                   final upright = _uprightFrame ?? (size: constraints.biggest, top: top);
-                  // 评论详情 covers the tab row and the list, for VoiceOver too.
+                  // 评论详情 and the uploader sheet cover the tab row and the list, for VoiceOver too.
                   Widget belowPlayer(Widget child) => ExcludeSemantics(
-                    excluding: _threadOpen,
+                    excluding: _threadOpen || _uploaderSheet.isOpen,
                     child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
                   );
                   // Out of sight in full screen, except while the player grows over it or shrinks back.
@@ -1424,6 +1461,28 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                               ),
                             ),
                           ),
+                          Positioned(
+                            key: const ValueKey('uploader-sheet-layer'),
+                            left: body.dx,
+                            top: body.dy,
+                            width: upright.size.width,
+                            height: upright.size.height,
+                            child: windowed(
+                              body,
+                              hideable(
+                                hidden,
+                                UploaderSheetLayer(
+                                  controller: _uploaderSheet,
+                                  top: uprightBox,
+                                  playingBvid: (_attached ? controller?.video?.bvid : null) ?? _playback?.bvid,
+                                  followingOf: _followingOf,
+                                  requestLogin: _askLogin,
+                                  logins: _logins,
+                                  openPage: widget.openPage,
+                                ),
+                              ),
+                            ),
+                          ),
                           if (ui != null)
                             Positioned.fill(
                               key: const ValueKey('video-panels'),
@@ -1446,7 +1505,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       // The whole page turns about the screen's centre; nothing clips it but the screen.
                       return IgnorePointer(
                         ignoring: spinning,
-                        child: Transform.rotate(key: const ValueKey('page-turn'), angle: _rotation, child: page),
+                        child: Transform.rotate(
+                          key: const ValueKey('page-turn'),
+                          angle: _rotation,
+                          child: UploaderTap(open: _openUploader, child: page),
+                        ),
                       );
                     },
                   );
