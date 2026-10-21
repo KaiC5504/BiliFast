@@ -475,14 +475,14 @@ class _RecommendTab extends StatelessWidget {
     header: true,
     selected: true,
     child: Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      padding: const EdgeInsets.only(top: BiliMetrics.tabRowTop, bottom: BiliMetrics.tabRowBottom),
       child: Column(
         children: [
           const Text(
             '推荐',
             style: TextStyle(fontSize: BiliMetrics.tabText, fontWeight: FontWeight.w600, color: BiliColors.pink),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: BiliMetrics.tabIndicatorGap),
           Container(
             width: BiliMetrics.tabIndicatorWidth,
             height: BiliMetrics.tabIndicatorHeight,

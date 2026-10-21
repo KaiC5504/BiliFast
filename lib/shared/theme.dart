@@ -757,6 +757,12 @@ abstract final class BiliMetrics {
   static const tabText = 16.0;
   static const tabIndicatorWidth = 18.0;
   static const tabIndicatorHeight = 3.0;
+
+  /// 首页's tab row (01, 14): from the field row to 推荐's line box, from that line box to the pink bar, and from the bar
+  /// to the hairline at 141.67 pt.
+  static const tabRowTop = 20 / 3;
+  static const tabIndicatorGap = 2 / 3;
+  static const tabRowBottom = 8 / 3;
   static const menuRowHeight = 46.0;
   static const menuRadius = 12.0;
   static const menuIconBox = 24.0;

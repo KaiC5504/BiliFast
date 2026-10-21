@@ -94,6 +94,9 @@ void main() {
       moreOrLessEquals(field.left + HomeTabBarTheme.fieldTextStart),
     );
 
+    // 01's tab row ends at its hairline, 141.67 pt; the row's pieces are whole thirds, so ours lands on 142.
+    expect(tester.getRect(find.byType(Divider).first).top, moreOrLessEquals(141.67, epsilon: 0.34));
+
     final bar = tester.getRect(find.byType(HomeTabBar));
     expect(bar.top, 873);
     expect(bar.bottom, 956);
