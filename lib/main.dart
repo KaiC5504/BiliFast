@@ -38,6 +38,7 @@ import 'watch_later/fake_watch_later_api.dart';
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   CrashLog.install();
+  await resolveSupportFolder();
   final logs = devToolsEnabled ? await LogForwarder.load(supportFilePath('log_server.json')) : null;
   final logFiles = LogFiles.platform();
   Logger.shared.info(LogCategory.app, 'launch', {

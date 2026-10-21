@@ -25,6 +25,7 @@ dependencies:
   url_launcher: ^6.3.3
   image_picker: ^1.2.4
   lottie: ^3.6.1
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:

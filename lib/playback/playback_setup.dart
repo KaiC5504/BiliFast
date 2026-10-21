@@ -1,7 +1,9 @@
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../devtools/log_forwarder.dart';
 import '../player/player_factory.dart';
@@ -55,15 +57,57 @@ String? nodeMemoryPath() => supportFilePath('node_memory.json');
 /// Where the codecs this phone's player refused are kept (Swift's `playback.failedCodecs`).
 String? codecMemoryPath() => supportFilePath('codec_memory.json');
 
+String? _iosSupportFolder;
+
+/// The files the app keeps in its support folder, for the launch's check.
+const _supportFiles = [
+  'player_prefs.json',
+  'recents.json',
+  'font.json',
+  'search_history.json',
+  'danmaku_settings.json',
+  'emotes_recent.json',
+  'codec_memory.json',
+  'node_memory.json',
+  'log_server.json',
+];
+
+/// Asks iOS where the app's Application Support folder is, once per launch, before any store loads. A TestFlight
+/// update moves the app's container, so the folder is looked up each launch and never kept; logs whether it exists
+/// and which of the app's files it holds (names only: the path carries the container's id).
+Future<void> resolveSupportFolder({Logger? logger}) async {
+  if (!Platform.isIOS) return;
+  final log = logger ?? Logger.shared;
+  try {
+    _iosSupportFolder = (await getApplicationSupportDirectory()).path;
+  } catch (error) {
+    log.error(LogCategory.app, 'support folder lookup failed', {'error': '${error.runtimeType}'});
+  }
+  final folder = _iosSupportFolder;
+  log.info(LogCategory.app, 'support folder', {
+    'resolved': folder != null,
+    'sameAsHome': folder != null && folder == _homeSupportFolder(),
+    'exists': folder != null && await Directory(folder).exists(),
+    'files': [
+      for (final name in _supportFiles)
+        if (folder != null && await File('$folder/$name').exists()) name,
+    ].join(','),
+  });
+}
+
+String? _homeSupportFolder() {
+  final home = Platform.environment['HOME'];
+  return home == null ? null : '$home/Library/Application Support';
+}
+
 /// [name] in the app's support folder, kept across launches; null on other platforms or without HOME/APPDATA.
 String? supportFilePath(String name) {
-  final env = Platform.environment;
   if (Platform.isIOS) {
-    final home = env['HOME'];
-    return home == null ? null : '$home/Library/Application Support/$name';
+    final folder = _iosSupportFolder ?? _homeSupportFolder();
+    return folder == null ? null : '$folder/$name';
   }
   if (Platform.isWindows) {
-    final appData = env['APPDATA'];
+    final appData = Platform.environment['APPDATA'];
     return appData == null ? null : '$appData\\bilifast\\$name';
   }
   return null;
