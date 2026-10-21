@@ -12,6 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../space/space_route.dart';
+import '../space/uploader_tap.dart';
 import '../video/intro/desc_text.dart' show linkTarget;
 
 /// A reply inside a thread is sent as "回复 @名字 :…", the name a mention when the server gave its mid and plain text
@@ -42,9 +44,21 @@ import '../video/intro/desc_text.dart' show linkTarget;
   return null;
 }
 
-/// A comment's text (BiliNative `RichTextView`): emotes inline, sized from the text (large ones bigger), @mentions,
-/// links and video ids in the link blue, timestamps that seek, a 笔记 link as a "[笔记]" lead. [leading] goes first,
-/// as a reply preview's "name: ".
+/// The uploader a space address names (`space.bilibili.com/<mid>`, `m.bilibili.com/space/<mid>`), or null.
+int? spaceMid(Uri link) {
+  final segments = link.pathSegments.where((segment) => segment.isNotEmpty).toList();
+  final id = switch ((link.host.toLowerCase(), segments)) {
+    ('space.bilibili.com', [final id, ...]) => id,
+    ('m.bilibili.com', ['space', final id, ...]) => id,
+    _ => null,
+  };
+  final mid = id == null ? null : int.tryParse(id);
+  return mid != null && mid > 0 ? mid : null;
+}
+
+/// A comment's text (BiliNative `RichTextView`): emotes inline, sized from the text (large ones bigger), @mentions
+/// that open the space, links and video ids in the link blue, timestamps that seek, a 笔记 link as a "[笔记]" lead.
+/// [leading] goes first, as a reply preview's "name: ".
 class CommentText extends StatefulWidget {
   const CommentText({
     super.key,
@@ -56,6 +70,7 @@ class CommentText extends StatefulWidget {
     this.onOpenVideo,
     this.openLink = _openInBrowser,
     this.marksReplyTarget = true,
+    this.linksOpen = true,
   });
 
   final List<RichRun> runs;
@@ -67,12 +82,16 @@ class CommentText extends StatefulWidget {
   final ValueChanged<int>? onSeek;
   final ValueChanged<String>? onOpenVideo;
 
-  /// A web link or a mention's space page; the browser by default. False when nothing could open it.
+  /// A web link; the browser by default. False when nothing could open it.
   final Future<bool> Function(Uri link) openLink;
 
   /// Draws a leading "回复 @名字 :" as the official app does, "回复 名字: " with the name grey and no link (font-check
   /// 04); see [replyLead].
   final bool marksReplyTarget;
+
+  /// False in a reply preview, where a tap anywhere but the name opens the thread: the blue runs stay blue but open
+  /// nothing.
+  final bool linksOpen;
 
   static Future<bool> _openInBrowser(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
 
@@ -98,6 +117,7 @@ class _CommentTextState extends State<CommentText> {
     if (!listEquals(oldWidget.runs, widget.runs) ||
         oldWidget.style.fontSize != widget.style.fontSize ||
         oldWidget.marksReplyTarget != widget.marksReplyTarget ||
+        oldWidget.linksOpen != widget.linksOpen ||
         (oldWidget.onSeek == null) != (widget.onSeek == null) ||
         (oldWidget.onOpenVideo == null) != (widget.onOpenVideo == null)) {
       _spans = _build();
@@ -117,7 +137,8 @@ class _CommentTextState extends State<CommentText> {
     _recognizers.clear();
   }
 
-  TapGestureRecognizer _tap(VoidCallback onTap) {
+  TapGestureRecognizer? _tap(VoidCallback onTap) {
+    if (!widget.linksOpen) return null;
     final recognizer = TapGestureRecognizer()..onTap = onTap;
     _recognizers.add(recognizer);
     return recognizer;
@@ -163,7 +184,7 @@ class _CommentTextState extends State<CommentText> {
           MentionRun(:final name, :final mid) => TextSpan(
             text: name.startsWith('@') ? name : '@$name',
             style: linked,
-            recognizer: mid > 0 ? _tap(() => unawaited(_open(Uri.parse('https://space.bilibili.com/$mid')))) : null,
+            recognizer: mid > 0 ? _tap(() => _openSpace(mid, name)) : null,
           ),
           TimestampRun(:final label, :final seconds) =>
             widget.onSeek == null
@@ -178,8 +199,9 @@ class _CommentTextState extends State<CommentText> {
     ];
   }
 
-  /// A bilibili.com video address opens in the app; anything else on the web, or such an address when the page has
-  /// nowhere to open videos, goes to the browser. A jump word with no web address stays plain.
+  /// A bilibili.com video address opens in the app, and a space address the space; anything else on the web, or a
+  /// video address when the page has nowhere to open videos, goes to the browser. A jump word with no web address
+  /// stays plain.
   InlineSpan _link(LinkRun run, TextStyle linked) {
     final title = run.note ? '[笔记] ' : run.title;
     final target = linkTarget(run);
@@ -188,7 +210,15 @@ class _CommentTextState extends State<CommentText> {
     }
     final web = target?.web ?? (target == null ? null : Uri.tryParse(run.url));
     if (web == null) return TextSpan(text: title);
+    if (spaceMid(web) case final mid?) {
+      return TextSpan(text: title, style: linked, recognizer: _tap(() => _openSpace(mid, '')));
+    }
     return TextSpan(text: title, style: linked, recognizer: _tap(() => unawaited(_open(web))));
+  }
+
+  void _openSpace(int mid, String name) {
+    final bare = name.startsWith('@') ? name.substring(1) : name;
+    unawaited(openSpace(context, UploaderRef(mid: mid, name: bare.isEmpty ? null : bare)));
   }
 
   static bool _drawn(RichRun run) => run is EmoteRun && run.url.isNotEmpty;

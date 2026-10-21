@@ -18,10 +18,12 @@ import 'package:bilifast/search/search_model.dart';
 import 'package:bilifast/search/search_page.dart';
 import 'package:bilifast/search/suggestion_list.dart';
 import 'package:bilifast/settings/settings_confirm.dart';
+import 'package:bilifast/space/fake_space_api.dart';
+import 'package:bilifast/space/space_page.dart';
+import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/link_opener.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
@@ -64,10 +66,7 @@ void main() {
   late SearchHistoryStore history;
   late _FakeOpener opener;
   late List<VideoRoute> videos;
-  late List<Uri> spaces;
-
-  /// What opening an uploader's space answers.
-  late Future<bool> Function() spaceAnswer;
+  late List<UploaderRef> spaces;
   final navigator = GlobalKey<NavigatorState>();
 
   setUp(() {
@@ -83,13 +82,18 @@ void main() {
     opener = _FakeOpener();
     videos = [];
     spaces = [];
-    spaceAnswer = () async => true;
   });
 
   tearDown(() => opener.dispose());
 
   /// The page pushed over a home screen, at the iPhone's size.
-  Future<void> show(WidgetTester tester, {String? placeholder = '默认词', FakeSearchApi? searchApi}) async {
+  /// [watchSpaces] hands the page a hook that records the spaces it opens instead of pushing them.
+  Future<void> show(
+    WidgetTester tester, {
+    String? placeholder = '默认词',
+    FakeSearchApi? searchApi,
+    bool watchSpaces = true,
+  }) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1
@@ -108,6 +112,7 @@ void main() {
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
       searchApi: searchApi ?? api,
+      spaceApi: FakeSpaceApi.demo(),
       searchHistory: history,
     );
     await tester.pumpWidget(
@@ -124,10 +129,7 @@ void main() {
             placeholder: placeholder,
             linkOpener: opener,
             openVideo: (context, route) => videos.add(route),
-            openSpace: (link) {
-              spaces.add(link);
-              return spaceAnswer();
-            },
+            openSpace: watchSpaces ? (context, uploader) async => spaces.add(uploader) : null,
           ),
         ),
       ),
@@ -284,13 +286,6 @@ void main() {
     expect(key('search-clear'), findsNothing);
   });
 
-  /// Lets a toast run out, so its timer is not left pending.
-  Future<void> toastGone(WidgetTester tester) async {
-    for (var i = 0; i < 30; i++) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-  }
-
   ValueNotifier<bool> filterOpen(WidgetTester tester) =>
       tester.widget<ResultsView>(find.byType(ResultsView)).filterOpen!;
 
@@ -431,22 +426,20 @@ void main() {
     });
   }
 
-  testWidgets("an uploader's space that can't open says 无法打开", (tester) async {
-    await showResults(tester);
-    spaceAnswer = () async => false;
-    tester.widget<ResultsView>(find.byType(ResultsView)).onOpenUser(_user);
+  testWidgets("a 用户 row pushes the uploader's space over 搜索", (tester) async {
+    await show(tester, watchSpaces: false);
+    await tester.tap(key('search-submit'));
+    await settle(tester);
+    await tester.tap(find.text('用户'));
+    await settle(tester);
+    expect(find.byType(SpacePage), findsNothing);
+    await tester.tap(key('search-user-4242'));
     await tester.pump();
-    await tester.pump();
-    expect(find.text('无法打开'), findsOneWidget);
-    await toastGone(tester);
-
-    spaceAnswer = () async => throw PlatformException(code: 'ACTIVITY_NOT_FOUND');
-    tester.widget<ResultsView>(find.byType(ResultsView)).onOpenUser(_user);
-    await tester.pump();
-    await tester.pump();
-    expect(find.text('无法打开'), findsOneWidget);
-    await toastGone(tester);
-    expect(spaces, hasLength(2));
+    await tester.pump(const Duration(milliseconds: 600));
+    final space = tester.widget<SpacePage>(find.byType(SpacePage)).uploader;
+    expect(space.mid, 4242);
+    expect(space.name, '某人');
+    expect(space.face, '');
   });
 
   testWidgets('tapping the field over results goes back to the suggestions for its text', (tester) async {
@@ -472,9 +465,9 @@ void main() {
     expect(videos.single.title, '一个视频');
     expect(videos.single.cover, 'https://i0.hdslb.com/bfs/archive/cover.jpg');
     results.onOpenUser(_user);
-    expect(spaces, [Uri.parse('https://space.bilibili.com/4242')]);
-    await tester.pump();
-    expect(find.text('无法打开'), findsNothing);
+    expect(spaces.single.mid, 4242);
+    expect(spaces.single.name, '某人');
+    expect(spaces.single.face, '');
   });
 
   testWidgets('⋮ shows the sheet in the page; back closes it before the page', (tester) async {

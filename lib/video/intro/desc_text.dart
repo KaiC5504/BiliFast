@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart' hide RichText;
 import 'package:bili_core/api.dart' as bili show RichText;
 import 'package:flutter/foundation.dart';
@@ -5,6 +7,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../shared/theme.dart';
+import '../../space/space_route.dart';
+import '../../space/uploader_tap.dart';
 
 /// Mentions come from `desc_v2`'s typed parts; web addresses, timestamps and video ids are found in the plain parts
 /// (BiliNative `TitleBlock.descriptionRuns`).
@@ -80,8 +84,8 @@ List<InlineSpan> _tabbed(String text, {required bool lineStart}) {
 
 final _leadingTabs = RegExp(r'(?<=^|\n)\t+');
 
-/// The description as one paragraph: timestamps, links and video ids in the link colour and tappable, mentions in the
-/// link colour only, the rest in [style].
+/// The description as one paragraph: timestamps, links, video ids and mentions in the link colour and tappable (a
+/// mention opens that uploader's space), the rest in [style].
 class DescriptionText extends StatefulWidget {
   const DescriptionText({
     super.key,
@@ -159,7 +163,13 @@ class _DescriptionTextState extends State<DescriptionText> {
     return switch (run) {
       TextRun(:final text) => TextSpan(text: text),
       EmoteRun(:final token) => TextSpan(text: token),
-      MentionRun(:final name) => TextSpan(text: name.startsWith('@') ? name : '@$name', style: linked),
+      MentionRun(:final name, :final mid) => TextSpan(
+        text: name.startsWith('@') ? name : '@$name',
+        style: linked,
+        recognizer: mid > 0
+            ? _tap(() => unawaited(openSpace(context, UploaderRef(mid: mid, name: name.replaceFirst('@', '')))))
+            : null,
+      ),
       TimestampRun(:final label, :final seconds) => TextSpan(
         text: label,
         style: linked,

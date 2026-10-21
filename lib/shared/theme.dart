@@ -3791,4 +3791,171 @@ abstract final class SpaceTheme {
 }
 
 /// 投稿's chips, 播放全部, sort and rows, and a row's ⋮ menu (63, 69, 70, 74).
-abstract final class SpaceVideosTheme {}
+abstract final class SpaceVideosTheme {
+  // Measured in px / 3 from the tab row's hairline, where the list starts.
+  static const gutter = BiliMetrics.gutter;
+
+  /// The chips (69, 70): 28 tall, 6.33 under the hairline and 12 apart, in a 42 band; 14 pt words about 8 in from each
+  /// side, a long title cut with … at [chipMaxText] (70's cut title is 102.7 wide with its …, a glyph more would be
+  /// 116.3; between them, so the stand-in's 1 em … fits too). The chosen one is pink on a pink tint, the others
+  /// #61666D in a 0.5 hairline rim drawn 0.5 inside the chip's box. A two-glyph chip is 43.8 wide (69's six chips end
+  /// at 362.33): the padding gives back what the official app's narrower Chinese (about 0.993 em) leaves.
+  static const chipsBlock = 42.0;
+  static const chipsTop = 19 / 3;
+  static const chipHeight = 28.0;
+  static const chipGap = 12.0;
+  static const chipPadX = 7.9;
+  static const chipMaxText = 110.0;
+  static const chipRadius = 4.0;
+  static const chipText = 14.0;
+  static const chipInk = Color(0xFF61666D);
+  static const chipChosenInk = BiliColors.pink;
+  static const chipChosenFill = Color(0xFFFFECF1);
+  static const chipRim = BiliColors.divider;
+  static const chipRimWidth = 0.5;
+  static const chipRimInset = 0.5;
+
+  /// 播放全部 and the sort share a strip 27.33 tall, their line 14.33 down it (63's first cover is 37.33 under the
+  /// hairline). The ring is 16.67 across from 13.67, its ▶ 5.17 long and 5.67 tall; the words start at 40.
+  static const stripHeight = 82 / 3;
+  static const stripCentre = 43 / 3;
+  static const playAllRing = 50 / 3;
+  static const playAllRingLeft = 41 / 3;
+  static const playAllStroke = 3.5 / 3;
+  static const playAllTriangleLeft = -1.75;
+  static const playAllTriangleRight = 2.85;
+  static const playAllTriangleHalf = 2.6;
+  static const playAllTriangleRound = 0.5;
+  static const playAllGlyphInk = BiliColors.pink;
+  static const playAllTextLeft = 40.0;
+  static const playAllText = 14.0;
+  static const playAllInk = BiliColors.text;
+
+  /// ≡ 最新发布: three 12 wide bars 1.33 thick and 4 apart, 3.67 before 12 pt grey words ending 12.33 from the edge.
+  static const sortGlyphWidth = 12.0;
+  static const sortGlyphBar = 4 / 3;
+  static const sortGlyphPitch = 4.0;
+  static const sortGlyphInk = Color(0xFF999999);
+  static const sortGlyphGap = 11 / 3;
+  static const sortText = 12.0;
+  static const sortInk = BiliColors.secondaryText;
+  static const sortRight = 37 / 3;
+
+  /// A row (63, 69, 70): 93 with its hairline, the 128 × 72 cover 10 down with a 4 corner, then 10 to a 1 pt hairline
+  /// from the gutter to the edge.
+  static const rowHeight = 93.0;
+  static const rowPadTop = 10.0;
+  static const rowPadBottom = 10.0;
+  static const hairline = 1.0;
+  static const hairlineInk = BiliColors.divider;
+  static const coverWidth = 128.0;
+  static const coverHeight = 72.0;
+  static const coverRadius = 4.0;
+  static const coverPlaceholder = BiliColors.pageGrey;
+  static const textGap = 10.0;
+
+  /// Two 14 pt title lines 18 apart, the first's ink 0.67 under the cover's top; they wrap before 428.
+  static const titleText = 14.0;
+  static const titleLine = 18.0;
+  static const titleTop = -1.88;
+  static const titleRight = 12.0;
+  static const titleInk = BiliColors.text;
+
+  /// The date and the counts in 11 pt grey, centred 46.67 and 66 under the cover's top. The ▶ box starts 1 in, the
+  /// danmaku box 80 after it whatever the plays' width; each number 3 after its 14 × 12 box.
+  static const metaText = 11.0;
+  static const metaLine = 14.0;
+  static const metaInk = BiliColors.secondaryText;
+  static const dateCentre = 140 / 3;
+  static const countsCentre = 66.0;
+  static const countsInset = 1.0;
+  static const countGlyphWidth = 14.0;
+  static const countGlyphHeight = 12.0;
+  static const countGap = 3.0;
+  static const danmakuColumn = 80.0;
+
+  /// ⋮ on the counts' line, centred 20 from the edge: 2.33 dots 4.33 apart.
+  static const moreCentreRight = 20.0;
+  static const moreTarget = 32.0;
+  static const moreDot = 7 / 3;
+  static const morePitch = 13 / 3;
+  static const moreInk = BiliColors.secondaryText;
+
+  /// The length: a 16 tall pill 4 in from the cover's right and 5 up from its bottom, black at half.
+  static const durationText = 10.0;
+  static const durationHeight = 16.0;
+  static const durationPadX = 14 / 3;
+  static const durationRight = 4.0;
+  static const durationBottom = 5.0;
+  static const durationRadius = 2.0;
+  static const durationFill = Color(0x80000000);
+  static const durationInk = BiliColors.onCover;
+
+  /// 合作 and the like: pink, 16 tall, 4 in from the cover's top right corner.
+  static const badgeText = 10.0;
+  static const badgeHeight = 16.0;
+  static const badgePadX = 4.0;
+  static const badgeTop = 4.0;
+  static const badgeRight = 4.0;
+  static const badgeGap = 4.0;
+  static const badgeRadius = 2.0;
+  static const badgeFill = BiliColors.pink;
+  static const badgeInk = BiliColors.onPink;
+
+  /// Rows scrolled this close to the end ask for the next page.
+  static const loadAhead = 360.0;
+
+  /// Under the rows: the next page's small spinner, 已经到底啦~ (76's #727272 14 pt) or the failure, in a 20 line 16
+  /// clear of the last hairline. Before the first page: the loading TV, the failure or the end, 40 under the strip.
+  static const footerPad = 16.0;
+  static const footerLine = 20.0;
+  static const spinnerRadius = 10.0;
+  static const endText = 14.0;
+  static const endInk = Color(0xFF727272);
+  static const stateTop = 40.0;
+  static const stateText = 14.0;
+  static const stateInk = BiliColors.secondaryText;
+  static const stateGap = 16.0;
+
+  /// 重试, as 搜索's.
+  static const retryHeight = SearchResultTheme.retryHeight;
+  static const retryPadX = SearchResultTheme.retryPadX;
+  static const retryRim = SearchResultTheme.retryRim;
+  static const retryText = SearchResultTheme.retryText;
+  static const retryPressedScale = SearchResultTheme.followPressedScale;
+  static const retryPressMotion = SearchResultTheme.followPressMotion;
+
+  /// ⋮'s popover (74): the page under black at half; a white box 200 × 104 with a 12 corner, its top 16 under the dots'
+  /// centre and its right 15 past it (5 from the screen's edge at most), an arrow 5.33 tall with 45° sides pointing
+  /// at the dots. Two 52 rows: pink icons centred 26.83 and 25.67 in, 14 pt words from 44.
+  static const menuDim = BiliColors.sheetDim;
+  static const menuIn = Duration(milliseconds: 200);
+  static const menuOut = Duration(milliseconds: 150);
+  static const menuStartScale = 0.85;
+  static const menuFill = BiliColors.card;
+  static const menuWidth = 200.0;
+  static const menuRowHeight = 52.0;
+  static const menuRadius = 12.0;
+  static const menuGap = 16.0;
+  static const menuPastAnchor = 15.0;
+  static const menuMargin = 5.0;
+  static const menuArrowHeight = 16 / 3;
+  static const menuArrowFoot = 0.5;
+  static const menuArrowRound = 0.5;
+
+  /// The arrow's tip sits this far right of the dots' centre.
+  static const menuArrowShift = 2.5 / 3;
+  static const menuText = 14.0;
+  static const menuInk = BiliColors.text;
+  static const menuTextLeft = 44.0;
+  static const menuIconInk = BiliColors.pink;
+  static const menuIconSlot = 24.0;
+  static const menuWatchLaterCentre = 80.5 / 3;
+  static const menuWatchLaterIcon = 55 / 3;
+  static const menuShareCentre = 77 / 3;
+  static const menuShareIcon = 59.5 / 3;
+  static const menuShareStroke = 1.2;
+
+  /// 分享's icon sits a little above its row's middle (74).
+  static const menuShareLift = 2.5 / 3;
+}

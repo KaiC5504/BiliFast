@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/space_host.dart';
+
 final _published = DateTime(2026, 10, 11, 21, 5);
 
 VideoDetail _detail({
@@ -394,7 +396,7 @@ void main() {
       expect(rig.links, hasLength(3));
     });
 
-    testWidgets('mentions are blue but lead nowhere yet; plain text stays grey', (tester) async {
+    testWidgets('mentions are blue and tappable; plain text stays grey', (tester) async {
       final rig = Rig();
       await rig.mount(tester, _detail(desc: _desc));
       await rig.toggle(tester);
@@ -403,14 +405,27 @@ void main() {
       final spans = root.children!.cast<TextSpan>();
       final mention = spans.singleWhere((span) => span.text == '@小明');
       expect(mention.style?.color, BiliColors.link);
-      expect(mention.recognizer, isNull);
+      expect(mention.recognizer, isNotNull);
       expect(root.style?.color, BiliColors.secondaryText);
       expect(spans.firstWhere((span) => span.text == '03:15').style?.color, BiliColors.link);
+    });
 
+    testWidgets("a mention opens that uploader's space, not a link", (tester) async {
+      final links = <Uri>[];
+      await pumpSpaceHost(
+        tester,
+        DescriptionText(
+          runs: const [RichRun.mention(name: '@小明', mid: 42), TextRun(' 你好')],
+          style: const TextStyle(fontSize: 13),
+          onSeek: (_) {},
+          onOpenVideo: (_) {},
+          onOpenLink: links.add,
+        ),
+      );
       await _tapText(tester, '@小明');
-      expect(rig.seeks, isEmpty);
-      expect(rig.videos, isEmpty);
-      expect(rig.links, isEmpty);
+      await pumpRoute(tester);
+      expect(openSpaces(tester).map((space) => (space.mid, space.name)), [(42, '小明')]);
+      expect(links, isEmpty);
     });
 
     test('runs: mentions from desc_v2, addresses cut out before ids and timestamps', () {

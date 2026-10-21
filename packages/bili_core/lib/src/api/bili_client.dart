@@ -241,6 +241,7 @@ final class BiliClient {
     String host = api,
     String? referer,
     bool sendCookies = true,
+    Map<String, String> extraHeaders = const {},
     required JsonDecode<T> decode,
   }) async {
     final sent = await _send(
@@ -252,6 +253,7 @@ final class BiliClient {
       referer: referer,
       accept: 'application/json',
       sendCookies: sendCookies,
+      extraHeaders: extraHeaders,
     );
     return _decodeEnvelope(sent, path, decode);
   }
@@ -314,6 +316,7 @@ final class BiliClient {
   /// Logs the path only: the query and form can carry the csrf token or a comment the user typed.
   /// `sendCookies: false` is for the app API: no session cookies, no csrf field (its calls carry a signature and
   /// an access token instead), and no 412 retry, since fresh fingerprint cookies would not be sent anyway.
+  /// [extraHeaders] add to the website's and win over them, as the official app's User-Agent does.
   Future<_Sent> _send({
     required String method,
     required String path,
@@ -325,11 +328,17 @@ final class BiliClient {
     String? referer,
     required String accept,
     bool sendCookies = true,
+    Map<String, String> extraHeaders = const {},
     Duration? timeout,
     bool retried = false,
   }) async {
     Uint8List? body;
-    final headers = {'User-Agent': userAgent, 'Referer': referer ?? BiliClient.referer, 'Accept': accept};
+    final headers = {
+      'User-Agent': userAgent,
+      'Referer': referer ?? BiliClient.referer,
+      'Accept': accept,
+      ...extraHeaders,
+    };
     if (form != null) {
       final fields = Map.of(form);
       if (sendCookies) {
@@ -396,6 +405,7 @@ final class BiliClient {
           referer: referer,
           accept: accept,
           sendCookies: sendCookies,
+          extraHeaders: extraHeaders,
           timeout: timeout,
           retried: true,
         );

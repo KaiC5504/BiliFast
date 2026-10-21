@@ -6,13 +6,13 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../settings/settings_confirm.dart';
 import '../shared/theme.dart';
-import '../shared/toast.dart';
+import '../space/space_route.dart';
+import '../space/uploader_tap.dart';
 import '../video/intro/collection_row.dart' show Chevron;
 import '../video/link_opener.dart';
 import '../video/video_route.dart';
@@ -53,8 +53,8 @@ class SearchPage extends StatefulWidget {
   /// Opens a result's video; [openVideoPage] unless a test watches it instead.
   final void Function(BuildContext context, VideoRoute route)? openVideo;
 
-  /// Opens an uploader's space; the browser unless a test watches it instead.
-  final Future<bool> Function(Uri link)? openSpace;
+  /// Opens a 用户 row's UP主空间, pushed over 搜索 unless a test watches it instead.
+  final Future<void> Function(BuildContext context, UploaderRef uploader)? openSpace;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -221,17 +221,9 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     }
   }
 
-  Future<void> _openUser(SearchUser user) async {
-    // UP主空间 is slice 12's; until then the space opens in the browser, as an @mention does.
-    final link = Uri.parse('https://space.bilibili.com/${user.mid}');
-    final open = widget.openSpace ?? (Uri link) => launchUrl(link, mode: LaunchMode.externalApplication);
-    var opened = false;
-    try {
-      opened = await open(link);
-    } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'space open failed', {'error': '${error.runtimeType}'});
-    }
-    if (!opened && mounted) showToast(context, '无法打开');
+  void _openUser(SearchUser user) {
+    final uploader = UploaderRef(mid: user.mid, name: user.name, face: user.face);
+    unawaited((widget.openSpace ?? openSpace)(context, uploader));
   }
 
   void _askClear() {
@@ -313,7 +305,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                         SearchStage.results => ResultsView(
                           model: model,
                           onOpenVideo: _openVideo,
-                          onOpenUser: (user) => unawaited(_openUser(user)),
+                          onOpenUser: _openUser,
                           filterOpen: _filterOpen,
                           onMore: (video) {
                             _focus.unfocus();

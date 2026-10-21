@@ -189,7 +189,7 @@ class PinnedTag extends StatelessWidget {
   );
 }
 
-/// The avatar, the pendant frame around it, and the pink 大 of 大会员. Taps go nowhere.
+/// The avatar, the pendant frame around it, and the pink 大 of 大会员.
 class CommentAvatar extends StatelessWidget {
   const CommentAvatar({super.key, required this.member});
 
