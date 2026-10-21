@@ -9,6 +9,8 @@ import 'package:bilifast/history/history_model.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/shared/loading_tv.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/cupertino.dart';
@@ -46,7 +48,7 @@ void main() {
   final older = [historyItem(4, viewAt: wall(17, 23, 10), progress: 6, duration: 13230, device: 1, title: '更早看的')];
 
   /// The page pushed over a home screen, at the iPhone's size.
-  Future<HistoryModel> show(WidgetTester tester, {List<HistoryItem>? items}) async {
+  Future<HistoryModel> show(WidgetTester tester, {List<HistoryItem>? items, bool settle = true}) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1
@@ -77,7 +79,14 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      // The loading TV never settles; this outlasts the push.
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
     return model;
   }
 
@@ -246,6 +255,50 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('history-retry')));
     await tester.pumpAndSettle();
     expect(find.text('今天看的一'), findsOneWidget);
+  });
+
+  testWidgets('the first page loads under the TV, 297.33 below the bar as in 搜索', (tester) async {
+    final hold = Completer<void>();
+    api.holds['history'] = hold;
+    await show(tester, settle: false);
+    final state = find.byKey(const ValueKey('history-loading'));
+    expect(tester.widget(state), isA<LoadingTvState>());
+    expect(find.text(LoadingTvState.message), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    final barBottom = 62 + HistoryTheme.barHeight + HistoryTheme.barHairline;
+    final tv = find.byType(LoadingTv);
+    expect(tester.getTopLeft(tv).dy - barBottom, closeTo(892 / 3, 0.01));
+    expect(tester.getCenter(tv).dx, closeTo(220, 0.01));
+
+    hold.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(LoadingTv), findsNothing);
+    expect(find.text('今天看的一'), findsOneWidget);
+  });
+
+  testWidgets('a pull shows the TV held on its first face, cycling once it refreshes', (tester) async {
+    await show(tester);
+    final hold = Completer<void>();
+    api.holds['history'] = hold;
+    final list = find.byKey(const ValueKey('history-list'));
+    final gesture = await tester.startGesture(tester.getCenter(list));
+    await gesture.moveBy(const Offset(0, 40));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, 20));
+    await tester.pump();
+    expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isFalse, reason: 'short of the trigger');
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    await gesture.moveBy(const Offset(0, 120));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(api.calls.last, 'history after=0');
+    expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isTrue);
+
+    hold.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(LoadingTv), findsNothing);
   });
 
   testWidgets('pull to refresh keeps the rows while it reloads', (tester) async {

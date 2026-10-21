@@ -11,6 +11,7 @@ import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_history_store.dart';
 import 'package:bilifast/search/search_page.dart';
 import 'package:bilifast/settings/font_store.dart';
+import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +24,7 @@ import '../../support/stand_in_fonts.dart';
 
 // The whole page in its results stage, so the results sit under the page's own field row as on the phone.
 
-/// Where the 3× shots go for tools/screen_diff.py against 56, 57, 58 and 60, outside the repo:
+/// Where the 3× shots go for tools/screen_diff.py against 56, 57, 58, 60 and 67's 0.8 s frame, outside the repo:
 /// `--dart-define=SEARCH_SHOTS=<folder>`. Nothing is written without it.
 const _shots = String.fromEnvironment('SEARCH_SHOTS');
 
@@ -128,7 +129,7 @@ void main() {
   final boundary = GlobalKey();
   late FakeSearchApi search;
 
-  Future<void> show(WidgetTester tester) async {
+  Future<void> show(WidgetTester tester, {bool holdVideos = false}) async {
     showAsPhone(tester);
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
@@ -141,6 +142,7 @@ void main() {
     final playback = AppPlayback(() => Completer<PlaybackController>().future);
     addTearDown(playback.dispose);
     search = FakeSearchApi(videos: _videos(DateTime.now()), users: _users);
+    if (holdVideos) search.held.add('videos');
     final services = AppServices(
       environment: environment,
       playback: playback,
@@ -209,6 +211,21 @@ void main() {
     await _settle(tester);
     await shoot(tester, '58');
     expect(tester.getTopLeft(find.byKey(const ValueKey('search-filter-dim'))).dy, closeTo(146.33, 0.01));
+  });
+
+  testWidgets('67: the first page loads under the TV, centred, its box 297.33 under the field row', (tester) async {
+    await show(tester, holdVideos: true);
+    await shoot(tester, '67');
+    expect(search.waiting, 1);
+    final tv = tester.getRect(find.byType(LoadingTv));
+    expect(tv.top, closeTo(106 + 892 / 3, 0.01));
+    expect(tv.center.dx, closeTo(220, 0.01));
+    expect(tester.getCenter(find.text(LoadingTvState.message)).dx, closeTo(220, 0.01));
+    search
+      ..held.clear()
+      ..release();
+    await _settle(tester);
+    expect(find.byType(LoadingTv), findsNothing);
   });
 
   testWidgets('60: 用户 with its sort row', (tester) async {

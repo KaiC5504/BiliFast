@@ -11,6 +11,7 @@ import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../comments/comments_tab.dart' show NearEndPaging;
 import '../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSystem;
+import '../shared/loading_tv.dart';
 import '../shared/menu.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -188,7 +189,13 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
       if (model.isEnd && !model.loading) {
         return const Center(key: ValueKey('history-empty'), child: _StateText('还没有看过视频'));
       }
-      return const Center(child: CupertinoActivityIndicator(radius: HistoryTheme.spinnerRadius));
+      return const Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: EdgeInsets.only(top: _loadingTvTop),
+          child: LoadingTvState(key: ValueKey('history-loading')),
+        ),
+      );
     }
     final sections = model.sections;
     return _paging.listen(
@@ -196,7 +203,7 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
         key: const ValueKey('history-list'),
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          CupertinoSliverRefreshControl(onRefresh: _refresh),
+          CupertinoSliverRefreshControl(onRefresh: _refresh, builder: loadingTvRefreshIndicator),
           for (final section in sections)
             SliverMainAxisGroup(
               slivers: [
@@ -231,6 +238,9 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
     );
   }
 }
+
+/// The first load's TV box starts this far under the title bar, as far as 搜索's is under its field row (67).
+const _loadingTvTop = 892 / 3;
 
 TextStyle _style(double size, Color color, {FontWeight weight = HistoryTheme.textWeight, double? height}) => TextStyle(
   fontFamily: BiliFonts.family,

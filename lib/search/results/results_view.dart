@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
+import '../../shared/loading_tv.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../../video/actions/actions_model.dart' show ActionsModel;
@@ -296,7 +298,7 @@ class _ResultsViewState extends State<ResultsView> with TickerProviderStateMixin
                 child: IndexedStack(
                   index: tab.index,
                   children: [
-                    // A hidden tab's first-page spinner would otherwise tick on behind the shown one, a frame at a time.
+                    // A hidden tab's first-page TV would otherwise tick on behind the shown one, a frame at a time.
                     TickerMode(
                       enabled: tab == SearchTab.all,
                       child:
@@ -404,7 +406,10 @@ class _ResultsViewState extends State<ResultsView> with TickerProviderStateMixin
   }
 }
 
-/// One tab's rows under the header's room, with the first page's spinner, 没有找到相关内容, the failure with 重试, and
+/// The first load's TV box starts this far under the field row (67).
+const _loadingTvTop = 892 / 3;
+
+/// One tab's rows under the header's room, with the first page's loading TV, 没有找到相关内容, the failure with 重试, and
 /// the next page's spinner, failure or 加载更多 at the end.
 class _ResultList<T> extends StatelessWidget {
   const _ResultList({
@@ -462,12 +467,14 @@ class _ResultList<T> extends StatelessWidget {
         ),
       );
     } else {
-      body = const SliverFillRemaining(
+      // Measured from the field row, not the tab row: 67 has none yet while the first page loads.
+      body = SliverFillRemaining(
         hasScrollBody: false,
-        child: Center(
-          child: CupertinoActivityIndicator(
-            key: ValueKey('search-first-spinner'),
-            radius: SearchResultTheme.spinnerRadius,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: EdgeInsets.only(top: math.max(0, _loadingTvTop - top)),
+            child: const LoadingTvState(key: ValueKey('search-first-spinner')),
           ),
         ),
       );

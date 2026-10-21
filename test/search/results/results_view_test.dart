@@ -9,6 +9,7 @@ import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_filters.dart';
 import 'package:bilifast/search/search_history_store.dart';
 import 'package:bilifast/search/search_model.dart';
+import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
@@ -310,11 +311,36 @@ void main() {
   });
 
   group('paging', () {
-    testWidgets('the first page shows a spinner', (tester) async {
+    testWidgets('the first page shows the loading TV 297.33 under the field row, on either tab', (tester) async {
       model.videosValue = const SearchResults(loading: true);
+      model.usersValue = const SearchResults(loading: true);
       await show(tester);
-      expect(find.byKey(const ValueKey('search-first-spinner')), findsOneWidget);
+      final state = find.byKey(const ValueKey('search-first-spinner'));
+      expect(tester.widget(state), isA<LoadingTvState>());
+      expect(find.descendant(of: state, matching: find.text(LoadingTvState.message)), findsOneWidget);
       expect(find.byKey(const ValueKey('search-empty')), findsNothing);
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      final viewTop = tester.getTopLeft(find.byType(ResultsView)).dy;
+      Finder tv(String list) => find.descendant(of: find.byKey(ValueKey(list)), matching: find.byType(LoadingTv));
+      expect(tester.getTopLeft(tv('search-list-all')).dy - viewTop, closeTo(892 / 3, 0.01));
+      expect(tester.getCenter(tv('search-list-all')).dx, closeTo(220, 0.01));
+
+      await tester.tap(tab(SearchTab.users));
+      await settle(tester);
+      expect(model.tab, SearchTab.users);
+      expect(
+        tester.getTopLeft(tv('search-list-users')).dy - viewTop,
+        closeTo(892 / 3, 0.01),
+        reason: 'the sort row does not move it',
+      );
+    });
+
+    testWidgets('a loading next page keeps the small spinner at the end, not the TV', (tester) async {
+      model.videosValue = SearchResults(items: videos(3), loaded: true, loading: true);
+      await show(tester);
+      expect(find.byKey(const ValueKey('search-more-spinner')), findsOneWidget);
+      expect(find.byType(LoadingTv), findsNothing);
+      expect(find.byKey(const ValueKey('search-first-spinner')), findsNothing);
     });
 
     testWidgets('no results say 没有找到相关内容', (tester) async {
@@ -564,6 +590,7 @@ void main() {
       expect(real.videos.stalled, isTrue);
       expect(real.videos.loading, isFalse);
       expect(find.byType(CupertinoActivityIndicator), findsNothing, reason: 'no spinner left ticking');
+      expect(find.byType(LoadingTv), findsNothing);
       await settle(tester, 40);
       expect(asked(), SearchModel.pagesPerLoad, reason: 'nothing more by itself');
       await tester.tap(find.byKey(const ValueKey('search-load-more')));
