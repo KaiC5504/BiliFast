@@ -28,6 +28,8 @@ void main() {
 
   List<String> bvids(FeedModel feed) => [for (final card in feed.cards) card.bvid];
 
+  Matcher failedWith(String message) => isA<DislikeError>().having((error) => error.message, 'message', message);
+
   test('refresh asks for page 1, load more for the next, and a repeated video shows once', () async {
     http.pages[1] = [feedItem('BV1'), feedItem('BV2')];
     http.pages[2] = [
@@ -287,6 +289,33 @@ void main() {
       expect(feed.error, '请求过于频繁，请稍后再试');
     });
 
+    test("failures log the error's type and Bilibili's code or the HTTP status, never its words", () async {
+      http.officialCode = -352;
+      final feed = official();
+      await feed.refresh();
+      wanted = false;
+      http.failing.add(1);
+      await feed.refresh();
+      http.failing.clear();
+      http.pages[1] = [feedItem('BV1')];
+      await feed.refresh();
+      http.dislikeCode = -400;
+      http.officialCode = 0;
+      http.officialPages[0] = [officialItem('BV2')];
+      wanted = true;
+      await feed.refresh();
+      await feed.dislike(feed.cards.first, feed.cards.first.dislike!.video!);
+      Iterable<Map<String, LogValue>> fields(String message) =>
+          logs.events.where((event) => event.msg == message).map((event) => event.f);
+      expect(fields('feed refresh failed'), [
+        {'error': const LogString('BiliAPIError'), 'code': const LogInt(-352)},
+        {'error': const LogString('BiliHTTPError'), 'status': const LogInt(500)},
+      ]);
+      expect(fields('feed dislike failed'), [
+        {'error': const LogString('BiliAPIError'), 'code': const LogInt(-400)},
+      ]);
+    });
+
     group('不感兴趣', () {
       Future<(FeedModel, FeedCard)> shown() async {
         http.officialPages[0] = [officialItem('BV1'), officialItem('BV2')];
@@ -330,16 +359,41 @@ void main() {
       test('a failure turns the card back and hands back why', () async {
         final (feed, card) = await shown();
         http.dislikeCode = -400;
-        expect(await feed.dislike(card, card.dislike!.video!), 'B 站返回错误 -400：请求错误');
+        expect(await feed.dislike(card, card.dislike!.video!), failedWith('B 站返回错误 -400：请求错误'));
         expect(feed.dislikeOf(card), isNull);
 
         http.dislikeCode = 0;
         await feed.dislike(card, card.dislike!.video!);
         http.dislikeCode = -400;
-        expect(await feed.undo(card), isNotNull);
+        expect(await feed.undo(card), isA<DislikeError>());
         expect(feed.dislikeOf(card)?.reason.id, 1, reason: 'still turned over: the server kept it');
-        expect(await feed.sendReason(card, card.dislike!.tiles.first), isNotNull);
+        expect(await feed.sendReason(card, card.dislike!.tiles.first), isA<DislikeError>());
         expect(feed.dislikeOf(card)?.feedback, isNull);
+      });
+
+      for (final code in [-101, -2]) {
+        test('a token turned down ($code) is no 需要登录: each call rolls back and says the token was refused', () async {
+          final (feed, card) = await shown();
+          http.dislikeCode = code;
+          expect(await feed.dislike(card, card.dislike!.video!), isA<DislikeTokenRefused>());
+          expect(feed.dislikeOf(card), isNull);
+
+          http.dislikeCode = 0;
+          await feed.dislike(card, card.dislike!.video!);
+          http.dislikeCode = code;
+          expect(await feed.undo(card), isA<DislikeTokenRefused>());
+          expect(feed.dislikeOf(card)?.reason.id, 1);
+          expect(await feed.sendReason(card, card.dislike!.tiles.first), isA<DislikeTokenRefused>());
+          expect(feed.dislikeOf(card)?.feedback, isNull);
+        });
+      }
+
+      test('with no token held the call is refused for the token, and nothing is sent', () async {
+        final (feed, card) = await shown();
+        client.appToken = null;
+        expect(await feed.dislike(card, card.dislike!.video!), isA<DislikeTokenRefused>());
+        expect(feed.dislikeOf(card), isNull);
+        expect(http.dislikes, isEmpty);
       });
 
       test('a web card has nothing to send', () async {

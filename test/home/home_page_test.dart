@@ -680,7 +680,9 @@ void main() {
     expect(find.text('需要登录'), findsNothing);
   });
 
-  testWidgets('cards are buttons named by their title, with ⋮ and 稍后再看 as their actions', (tester) async {
+  testWidgets('cards are buttons named by their title with 稍后再看 as their action, and ⋮ a button of its own', (
+    tester,
+  ) async {
     final semantics = tester.ensureSemantics();
     await show(tester);
     await settle(tester);
@@ -690,9 +692,21 @@ void main() {
         label: '视频 BV1aaa',
         isButton: true,
         hasTapAction: true,
-        customActions: const [CustomSemanticsAction(label: '更多'), CustomSemanticsAction(label: '稍后再看')],
+        customActions: const [CustomSemanticsAction(label: '稍后再看')],
       ),
     );
+    final more = find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more-semantics')));
+    expect(tester.getSemantics(more), isSemantics(label: '更多', isButton: true, hasTapAction: true));
+    expect(
+      tester.getRect(more),
+      tester.getRect(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more')))),
+      reason: "over the ⋮ it names",
+    );
+    expect(find.semantics.byLabel('更多'), findsExactly(2), reason: 'one per card');
+
+    tester.semantics.tap(find.semantics.byLabel('更多').first);
+    await settle(tester);
+    expect(find.text('添加至稍后再看'), findsOneWidget, reason: 'an accessibility press opens the sheet');
     semantics.dispose();
   });
 

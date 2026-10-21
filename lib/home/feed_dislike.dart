@@ -156,141 +156,138 @@ class FeedDislikedCard extends StatelessWidget {
     final undo = feedSheetStyle(FeedDislikeTheme.undoText, FeedDislikeTheme.undoInk);
     final reasons = feedSheetStyle(FeedDislikeTheme.reasonsText, FeedDislikeTheme.ink);
     final onReasons = this.onReasons;
-    return MediaQuery.withClampedTextScaling(
-      maxScaleFactor: 1,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(BiliMetrics.cardRadius)),
-        child: ColoredBox(
-          color: BiliColors.card,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AspectRatio(
-                aspectRatio: BiliMetrics.coverAspect,
-                child: LayoutBuilder(
-                  builder: (context, box) {
-                    final middle = box.maxHeight / 2;
-                    final undoCentre = box.maxHeight - FeedDislikeTheme.undoFromBottom;
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // A blur paints past its child's edges; the white below must stay white.
-                        ClipRect(
-                          child: ImageFiltered(
-                            imageFilter: ImageFilter.blur(
-                              sigmaX: FeedDislikeTheme.coverBlur,
-                              sigmaY: FeedDislikeTheme.coverBlur,
-                              tileMode: TileMode.clamp,
-                            ),
-                            child: RemoteImage(card.cover),
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(BiliMetrics.cardRadius)),
+      child: ColoredBox(
+        color: BiliColors.card,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: BiliMetrics.coverAspect,
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final middle = box.maxHeight / 2;
+                  final undoCentre = box.maxHeight - FeedDislikeTheme.undoFromBottom;
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // A blur paints past its child's edges; the white below must stay white.
+                      ClipRect(
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: FeedDislikeTheme.coverBlur,
+                            sigmaY: FeedDislikeTheme.coverBlur,
+                            tileMode: TileMode.clamp,
                           ),
+                          child: RemoteImage(card.cover),
                         ),
-                        const ColoredBox(color: FeedDislikeTheme.coverShade),
-                        Positioned(
-                          top: middle + FeedDislikeTheme.checkCentre - FeedDislikeTheme.checkDisc / 2,
-                          left: 0,
-                          right: 0,
-                          child: const Center(child: FeedDislikeCheck()),
+                      ),
+                      const ColoredBox(color: FeedDislikeTheme.coverShade),
+                      Positioned(
+                        top: middle + FeedDislikeTheme.checkCentre - FeedDislikeTheme.checkDisc / 2,
+                        left: 0,
+                        right: 0,
+                        child: const Center(child: FeedDislikeCheck()),
+                      ),
+                      Positioned(
+                        top: middle + FeedDislikeTheme.messageCentre - FeedDislikeTheme.messageText,
+                        height: FeedDislikeTheme.messageText * 2,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Text('已减少此类内容推荐', key: const ValueKey('feed-disliked-message'), style: message),
                         ),
-                        Positioned(
-                          top: middle + FeedDislikeTheme.messageCentre - FeedDislikeTheme.messageText,
-                          height: FeedDislikeTheme.messageText * 2,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Text('已减少此类内容推荐', key: const ValueKey('feed-disliked-message'), style: message),
-                          ),
-                        ),
-                        Positioned(
-                          top: undoCentre - FeedDislikeTheme.undoText,
-                          height: FeedDislikeTheme.undoText * 2,
-                          left: FeedDislikeTheme.undoShift * 2,
-                          right: 0,
-                          child: Center(
-                            child: Semantics(
-                              button: true,
-                              label: '撤销',
+                      ),
+                      Positioned(
+                        top: undoCentre - FeedDislikeTheme.undoText,
+                        height: FeedDislikeTheme.undoText * 2,
+                        left: FeedDislikeTheme.undoShift * 2,
+                        right: 0,
+                        child: Center(
+                          child: Semantics(
+                            button: true,
+                            label: '撤销',
+                            onTap: onUndo,
+                            excludeSemantics: true,
+                            child: GestureDetector(
+                              key: const ValueKey('feed-disliked-undo'),
+                              behavior: HitTestBehavior.opaque,
                               onTap: onUndo,
-                              excludeSemantics: true,
-                              child: GestureDetector(
-                                key: const ValueKey('feed-disliked-undo'),
-                                behavior: HitTestBehavior.opaque,
-                                onTap: onUndo,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: FeedDislikeTheme.undoText),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const SizedBox(
-                                        width: FeedDislikeTheme.undoGlyphWidth,
-                                        height: FeedDislikeTheme.undoGlyphHeight,
-                                        child: FeedDislikeGlyphIcon(
-                                          FeedDislikeGlyph.undo,
-                                          size: FeedDislikeTheme.undoGlyphHeight,
-                                          color: FeedDislikeTheme.undoInk,
-                                          stroke: FeedDislikeTheme.undoGlyphStroke,
-                                        ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: FeedDislikeTheme.undoText),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const SizedBox(
+                                      width: FeedDislikeTheme.undoGlyphWidth,
+                                      height: FeedDislikeTheme.undoGlyphHeight,
+                                      child: FeedDislikeGlyphIcon(
+                                        FeedDislikeGlyph.undo,
+                                        size: FeedDislikeTheme.undoGlyphHeight,
+                                        color: FeedDislikeTheme.undoInk,
+                                        stroke: FeedDislikeTheme.undoGlyphStroke,
                                       ),
-                                      const SizedBox(width: FeedDislikeTheme.undoGap),
-                                      Text('撤销', style: undo),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: FeedDislikeTheme.undoGap),
+                                    Text('撤销', style: undo),
+                                  ],
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              Expanded(
-                child: onReasons == null
-                    ? const SizedBox.shrink()
-                    : Semantics(
-                        button: true,
-                        label: '选择不感兴趣原因',
-                        onTap: onReasons,
-                        excludeSemantics: true,
-                        child: GestureDetector(
-                          key: const ValueKey('feed-disliked-reasons'),
-                          behavior: HitTestBehavior.opaque,
-                          onTap: onReasons,
-                          child: Stack(
-                            children: [
-                              Positioned(
-                                left: FeedDislikeTheme.reasonsShift * 2,
-                                right: 0,
-                                top: FeedDislikeTheme.reasonsCentre - FeedDislikeTheme.reasonsText,
-                                height: FeedDislikeTheme.reasonsText * 2,
-                                child: Center(
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text('选择不感兴趣原因', style: reasons),
-                                      const SizedBox(width: FeedDislikeTheme.chevronGap),
-                                      const SizedBox(
-                                        width: FeedDislikeTheme.chevronWidth,
-                                        height: FeedDislikeTheme.chevronHeight,
-                                        child: FeedDislikeGlyphIcon(
-                                          FeedDislikeGlyph.chevron,
-                                          size: FeedDislikeTheme.chevronHeight,
-                                          color: FeedDislikeTheme.ink,
-                                          stroke: FeedDislikeTheme.chevronStroke,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
                       ),
+                    ],
+                  );
+                },
               ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: onReasons == null
+                  ? const SizedBox.shrink()
+                  : Semantics(
+                      button: true,
+                      label: '选择不感兴趣原因',
+                      onTap: onReasons,
+                      excludeSemantics: true,
+                      child: GestureDetector(
+                        key: const ValueKey('feed-disliked-reasons'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onReasons,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: FeedDislikeTheme.reasonsShift * 2,
+                              right: 0,
+                              top: FeedDislikeTheme.reasonsCentre - FeedDislikeTheme.reasonsText,
+                              height: FeedDislikeTheme.reasonsText * 2,
+                              child: Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('选择不感兴趣原因', style: reasons),
+                                    const SizedBox(width: FeedDislikeTheme.chevronGap),
+                                    const SizedBox(
+                                      width: FeedDislikeTheme.chevronWidth,
+                                      height: FeedDislikeTheme.chevronHeight,
+                                      child: FeedDislikeGlyphIcon(
+                                        FeedDislikeGlyph.chevron,
+                                        size: FeedDislikeTheme.chevronHeight,
+                                        color: FeedDislikeTheme.ink,
+                                        stroke: FeedDislikeTheme.chevronStroke,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+            ),
+          ],
         ),
       ),
     );
