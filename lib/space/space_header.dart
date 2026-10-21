@@ -153,7 +153,12 @@ class _Top extends StatelessWidget {
           child: ExcludeSemantics(
             child: banner == null || banner.isEmpty
                 ? const ColoredBox(key: ValueKey('space-banner-default'), color: SpaceTheme.bannerDefault)
-                : RemoteImage(banner, placeholder: const ColoredBox(color: SpaceTheme.bannerDefault)),
+                : RemoteImage(
+                    banner,
+                    // A pull stretches the box every frame; the download keeps the resting size.
+                    size: Size(MediaQuery.sizeOf(context).width, SpaceTheme.bannerHeight),
+                    placeholder: const ColoredBox(color: SpaceTheme.bannerDefault),
+                  ),
           ),
         ),
         Positioned(
@@ -369,6 +374,7 @@ class SpaceFollowRow extends StatelessWidget {
           child: Semantics(
             button: true,
             label: '更多推荐',
+            onTap: onSoon,
             excludeSemantics: true,
             child: GestureDetector(
               key: const ValueKey('space-follow-more'),
@@ -444,6 +450,7 @@ class _Button extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: true,
     label: label,
+    onTap: onTap,
     excludeSemantics: true,
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -516,6 +523,7 @@ class _Detail extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: true,
     label: '详情',
+    onTap: onTap,
     excludeSemantics: true,
     child: GestureDetector(
       key: const ValueKey('space-detail'),
@@ -566,8 +574,8 @@ class _OfficialLine extends StatelessWidget {
                     alignment: Alignment.center,
                     child: const SpaceGlyphIcon(
                       SpaceGlyph.bolt,
-                      width: SpaceTheme.officialDisc * 0.44,
-                      height: SpaceTheme.officialDisc * 0.62,
+                      width: SpaceTheme.officialBoltWidth,
+                      height: SpaceTheme.officialBoltHeight,
                       color: IntroTheme.badgeBolt,
                     ),
                   ),
@@ -701,6 +709,7 @@ class _Tag extends StatelessWidget {
     return Semantics(
       button: true,
       label: tag.text,
+      onTap: onLink,
       excludeSemantics: true,
       child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onLink, child: row),
     );
@@ -740,7 +749,7 @@ class _Entry extends StatelessWidget {
       SpaceEntryKind.shop => const SpaceGlyphIcon(
         SpaceGlyph.shop,
         width: SpaceTheme.entryIcon,
-        height: SpaceTheme.entryIcon * 0.875,
+        height: SpaceTheme.entryShopHeight,
         color: SpaceTheme.entryIconInk,
       ),
       SpaceEntryKind.charge => const SizedBox(
@@ -758,6 +767,7 @@ class _Entry extends StatelessWidget {
     return Semantics(
       button: true,
       label: '${entry.title}，${entry.note}',
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         key: ValueKey('space-entry-${entry.kind.name}'),
