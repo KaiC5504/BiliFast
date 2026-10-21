@@ -4196,8 +4196,265 @@ abstract final class FeedDislikeTheme {
   static const fadeIn = Duration(milliseconds: 220);
 }
 
-/// 我的收藏: the folders, a folder, all videos, a row's ⋮ (80-84).
+/// 我的收藏: the folders, a folder, all videos, a row's ⋮ (80-84), measured at 3 px per pt from the screen's top.
 abstract final class FavouritesTheme {
+  static const textWeight = FontWeight.w400;
+
+  /// The bar under the status bar (80, 81, 83): ‹ as 历史记录's, 44 tall.
+  static const barHeight = HistoryTheme.barHeight;
+  static const backTarget = HistoryTheme.backTarget;
+  static const backTipX = HistoryTheme.backTipX;
+  static const backWidth = HistoryTheme.backWidth;
+
+  /// 收藏 and 追更 (80, 83): 16 pt regular centred 35.92 either side of the page's middle (0.25 left of it), 收藏 pink
+  /// over a 12 × 2 bar 15 under the bar's middle, 追更 black.
+  static const tabText = 16.0;
+  static const tabLine = 22.0;
+  static const tabHalfSpacing = 215.5 / 6;
+  static const tabCentreShift = -0.25;
+  static const tabWidth = 64.0;
+  static const tabInk = BiliColors.text;
+  static const tabChosenInk = BiliColors.pink;
+  static const tabBarWidth = 12.0;
+  static const tabBarHeight = 2.0;
+  static const tabBarCentreBelow = 15.0;
+  static const tabBarRadius = 1.0;
+
+  /// The chips under the bar: 28 tall, 12 below it and 12 in, 8 apart, 13 pt words 8 in from each side; the chosen
+  /// one pink on a pink tint, the other #61666D. The band ends at a #F1F2F3 hairline 157.67 down.
+  static const chipsBand = 155 / 3;
+  static const chipTop = 12.0;
+  static const chipLeft = 12.0;
+  static const chipHeight = 28.0;
+  static const chipGap = 8.0;
+  static const chipPadX = 8.0;
+  static const chipRadius = 4.0;
+  static const chipText = 13.0;
+  static const chipLine = 18.0;
+  static const chipInk = Color(0xFF61666D);
+  static const chipChosenInk = BiliColors.pink;
+  static const chipChosenFill = SpaceVideosTheme.chipChosenFill;
+  static const headerHairline = 1 / 3;
+  static const headerHairlineInk = BiliColors.pageGrey;
+
+  /// The chip row's glyphs, #61666D with 1.33 lines in 40 wide slots ending 2 from the edge (centres 418, 378, 338):
+  /// 🔍 15.33 × 15, + 14, the layout's two stacked boxes 15.33 × 16, 83's list 15.33 × 13.67.
+  static const toolSlot = 40.0;
+  static const toolRight = 2.0;
+  static const toolCentreDrop = -0.25;
+  static const toolInk = Color(0xFF61666D);
+  static const toolStroke = 4 / 3;
+  static const toolSearch = 46 / 3;
+  static const toolPlus = 14.0;
+  static const toolLayoutWidth = 46 / 3;
+  static const toolLayoutHeight = 16.0;
+  static const toolListWidth = 46 / 3;
+  static const toolListHeight = 41 / 3;
+
+  /// The folders (80) on the page's grey: white cards 12 in, 8 under the hairline and 8 apart, with a 12 corner.
+  static const page = BiliColors.softGrey;
+  static const listTop = 8.0;
+  static const cardInset = 12.0;
+  static const cardGap = 8.0;
+  static const cardRadius = 12.0;
+  static const cardFill = BiliColors.card;
+  static const cardPad = 12.0;
+
+  /// The title, 16 pt medium, its middle 27 under the card's top; the count 12 pt grey, a lock 12 × 13 and a dot
+  /// before it on a private folder, and the › 6.67 × 12 in #C9CCD0 16.67 from the card's right.
+  static const cardTitleCentre = 27.0;
+  static const cardTitleText = 16.0;
+  static const cardTitleLine = 22.0;
+  static const cardTitleWeight = FontWeight.w500;
+  static const cardTitleInk = BiliColors.text;
+  static const cardCountText = 12.0;
+  static const cardCountInk = BiliColors.secondaryText;
+  static const chevronWidth = 20 / 3;
+  static const chevronHeight = 12.0;
+  static const chevronRight = 50 / 3;
+  static const chevronInk = Color(0xFFC9CCD0);
+  static const chevronStroke = 1.2;
+  static const chevronGap = 23 / 3;
+  static const lockWidth = 12.0;
+  static const lockHeight = 13.0;
+  static const lockStroke = 1.1;
+  static const lockGap = 22 / 3;
+  static const dotSize = 5 / 3;
+  static const dotGap = 17 / 3;
+
+  /// Three covers 128 × 72, 4 apart with a 6 corner, 50 under the card's top; grey where there's no video. Under
+  /// them each title in 12 pt, 5.33 in, its middle 17.83 below; a card ends 16 under the covers, or 41 with titles.
+  static const tilesTop = 50.0;
+  static const tileWidth = 128.0;
+  static const tileHeight = 72.0;
+  static const tileGap = 4.0;
+  static const tileRadius = 6.0;
+  static const tileEmpty = BiliColors.pageGrey;
+  static const tileTitleText = 12.0;
+  static const tileTitleLine = 17.0;
+  static const tileTitleInset = 16 / 3;
+  static const tileTitleCentre = 53.5 / 3;
+  static const tileTitleInk = BiliColors.text;
+  static const cardBottom = 16.0;
+  static const cardBottomTitled = 41.0;
+
+  /// + 新建收藏夹: a 34 tall pill 58 under the last card, a 1 pt #E3E5E7 rim; + 11.33 then 12 pt grey words.
+  static const newGap = 58.0;
+  static const newHeight = 34.0;
+  static const newPadLeft = 40 / 3;
+  static const newPadRight = 34 / 3;
+  static const newRim = 1.0;
+  static const newRimInk = BiliColors.divider;
+  static const newPlus = 34 / 3;
+  static const newPlusStroke = 1.1;
+  static const newPlusGap = 4.0;
+  static const newText = 12.0;
+  static const newLine = 17.0;
+  static const newInk = BiliColors.secondaryText;
+  static const newBottom = 40.0;
+
+  /// A folder's page (81): the bar's 🔍 18, the multi-select list 18.67 × 16.33 and ⋮'s 3.33 dots 6.67 apart in
+  /// #484C52, centred 141, 87 and 32.67 from the right.
+  static const folderBarInk = Color(0xFF484C52);
+  static const folderBarStroke = 1.5;
+  static const folderSearchRight = 141.0;
+  static const folderSelectRight = 87.0;
+  static const folderMoreRight = 98 / 3;
+  static const folderToolDrop = -0.5;
+  static const folderToolSlot = 44.0;
+  static const folderSearch = 18.0;
+  static const folderSelectWidth = 56 / 3;
+  static const folderSelectHeight = 49 / 3;
+  static const folderMoreDot = 10 / 3;
+  static const folderMorePitch = 20 / 3;
+
+  /// Under the bar: the title in 18 pt regular, its middle 27 below the bar; 创建者 and the count in 12 pt grey,
+  /// their middles 60.5 and 78.83 below; 20 in. The rows start 102 below the bar.
+  static const folderInset = 20.0;
+  static const folderTitleText = 18.0;
+  static const folderTitleLine = 25.0;
+  static const folderTitleCentre = 27.0;
+  static const folderMetaText = 12.0;
+  static const folderMetaLine = 18.0;
+  static const folderMetaInk = BiliColors.secondaryText;
+  static const folderOwnerCentre = 60.5;
+  static const folderCountCentre = 236.5 / 3;
+  static const folderHeader = 102.0;
+
+  /// 点赞, 收藏 and 分享: glyphs centred 132, 82 and 32 from the right and 57.33 below the bar, 10 pt grey words
+  /// 80.17 below; 收藏's folder is lighter.
+  static const folderActionRights = [132.0, 82.0, 32.0];
+  static const folderActionWidth = 50.0;
+  static const folderActionGlyphCentre = 172 / 3;
+  static const folderActionLabelCentre = 239 / 3;
+  static const folderActionText = 10.0;
+  static const folderActionLine = 14.0;
+  static const folderAddStroke = 1.1;
+  static const folderAddDrop = 2 / 3;
+  static const folderActionInk = Color(0xFF797F87);
+  static const folderActionFaint = Color(0xFFAEB3B9);
+  static const folderActionLabelInk = BiliColors.secondaryText;
+  /// The thumb's and the arrow's ink widths; the icons are drawn by `ActionIcon`, which sizes by its square.
+  static const folderLikeInk = 52 / 3;
+  static const folderShareInk = 50 / 3;
+  static const folderAddWidth = 50 / 3;
+  static const folderAddHeight = 14.0;
+
+  /// A video row (81, 83), 历史记录's: 100 tall, the 136 × 76 cover 12 down, a hairline under every row but the
+  /// last; the title in two 14 pt lines; the UP and the counts in 12 pt grey, the danmaku's glyph 10 after the plays.
+  static const rowHeight = HistoryTheme.rowHeight;
+  static const rowPadTop = HistoryTheme.rowPadTop;
+  static const gutter = HistoryTheme.gutter;
+  static const coverWidth = HistoryTheme.coverWidth;
+  static const coverHeight = HistoryTheme.coverHeight;
+  static const coverRadius = HistoryTheme.coverRadius;
+  static const coverEmpty = BiliColors.pageGrey;
+  static const textGap = HistoryTheme.textGap;
+  static const hairline = HistoryTheme.hairline;
+  static const divider = HistoryTheme.divider;
+  static const rowTitleText = HistoryTheme.rowTitleText;
+  static const rowTitleLine = HistoryTheme.rowTitleLine;
+  static const rowTitleTop = HistoryTheme.rowTitleTop;
+  static const titleRight = HistoryTheme.titleRight;
+  static const rowTitleInk = BiliColors.text;
+  static const metaText = HistoryTheme.metaText;
+  static const metaLine = HistoryTheme.metaLine;
+  static const metaGap = HistoryTheme.metaGap + 0.5;
+  static const metaBottom = HistoryTheme.metaBottom;
+  static const metaInk = HistoryTheme.meta;
+  static const glyphBox = HistoryTheme.glyphBox;
+  static const glyphGap = HistoryTheme.glyphGap;
+  static const countGlyphWidth = BiliMetrics.endCountIconWidth;
+  static const countGlyphHeight = BiliMetrics.endCountIconHeight;
+  static const countGap = 10.0;
+
+  /// On the counts' line (81, 83) the digits sit a third of a point higher than the UP's name, the glyphs 0.67.
+  static const countLift = 1 / 3;
+  static const countGlyphLift = 2 / 3;
+  static const moreCentreRight = HistoryTheme.moreCentreRight;
+  static const moreTarget = HistoryTheme.moreTarget;
+
+  /// The length on the cover, and the pink line of how much was watched (83's, #FA6496).
+  static const pillFont = HistoryTheme.pillText;
+  static const pillHeight = HistoryTheme.pillHeight;
+  static const pillPadX = HistoryTheme.pillPadX;
+  static const pillRight = 4.0;
+  static const pillBottom = HistoryTheme.pillBottom;
+  static const pillRadius = HistoryTheme.pillRadius;
+  static const pillFill = HistoryTheme.pillFill;
+  static const pillInk = HistoryTheme.pillInk;
+  static const progressHeight = HistoryTheme.progressHeight;
+  static const progressRadius = 1.0;
+  static const progress = Color(0xFFFA6496);
+
+  /// Under the last row (84): 仅展示本App中可查看的稿件 in 12 pt #C9CCD0, its middle 40.5 below the row.
+  static const endText = 12.0;
+  static const endInk = Color(0xFFC9CCD0);
+  static const endLine = 17.0;
+  static const endTop = 94 / 3;
+  static const endBottom = 95 / 3;
+
+  /// Loading more, a failure and the page's states, as 历史记录's.
+  static const footerPad = HistoryTheme.footerPad;
+  static const footerText = HistoryTheme.footerText;
+  static const footerInk = HistoryTheme.footerInk;
+  static const spinnerRadius = HistoryTheme.spinnerRadius;
+  static const stateText = HistoryTheme.stateText;
+  static const stateGap = HistoryTheme.stateGap;
+  static const stateInk = HistoryTheme.stateInk;
+  static const loginText = HistoryTheme.loginText;
+  static const loginHeight = HistoryTheme.loginHeight;
+  static const loginPadX = HistoryTheme.loginPadX;
+  static const retryText = HistoryTheme.retryText;
+  static const retryPadX = HistoryTheme.retryPadX;
+  static const retryHeight = HistoryTheme.retryHeight;
+  static const buttonWeight = HistoryTheme.buttonWeight;
+
+  /// Rows scrolled this close to the end ask for the next page.
+  static const loadAhead = 360.0;
+
+  /// ⋮'s sheet (82), 历史记录's (48) without its row of other apps: 取消收藏's star, struck through, 26 × 25 and 29
+  /// under the sheet's top, its words' ink 70.67 under it; then the band and 取消.
+  static const sheetDim = HistoryTheme.sheetDim;
+  static const sheetIn = HistoryTheme.sheetIn;
+  static const sheetOut = HistoryTheme.sheetOut;
+  static const sheetFill = HistoryTheme.sheetFill;
+  static const sheetItemCentre = HistoryTheme.sheetItemCentre;
+  static const sheetItemWidth = HistoryTheme.sheetItemWidth;
+  static const sheetRemoveHeight = HistoryTheme.sheetDeleteHeight;
+  static const sheetStarTop = 29.0;
+  static const sheetStarWidth = 26.0;
+  static const sheetStarHeight = 25.0;
+  static const sheetStarStroke = 1.4;
+  static const sheetLabelTop = 227 / 3;
+  static const sheetLabelText = HistoryTheme.sheetLabelText;
+  static const sheetRemoveInk = HistoryTheme.sheetDeleteInk;
+  static const sheetBand = HistoryTheme.sheetBand;
+  static const sheetBandFill = HistoryTheme.sheetBandFill;
+  static const sheetCancelHeight = HistoryTheme.sheetCancelHeight;
+  static const sheetCancelText = HistoryTheme.sheetCancelText;
+  static const sheetCancelInk = HistoryTheme.sheetCancelInk;
+  static double get sheetTextDrop => HistoryTheme.sheetTextDrop;
 }
 
 /// 稍后再看: the list and its empty page (85, 86).

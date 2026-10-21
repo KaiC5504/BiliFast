@@ -13,6 +13,7 @@ import 'bili_error.dart';
 import 'bili_hosts.dart';
 import 'comment_models.dart';
 import 'cookie_jar.dart';
+import 'fav_models.dart';
 import 'feed_models.dart';
 import 'form_encoding.dart';
 import 'http.dart';
