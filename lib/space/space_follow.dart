@@ -61,6 +61,16 @@ class SpaceFollow extends ChangeNotifier {
     }
   }
 
+  /// After a login: what was said logged out is no longer known, so a tap before the card answers asks it first
+  /// rather than sending a follow the account may already have.
+  Future<void> reload() {
+    if (!_busy && _following != null) {
+      _following = null;
+      _notify();
+    }
+    return load();
+  }
+
   /// Follows or unfollows. Logged out, it asks for the login instead. Asks no question: callers confirm an unfollow
   /// first. With [following] unknown it asks the card before sending anything. A tap while a call is out shows at once
   /// and goes out when that call returns, if it still differs from what Bilibili took; one call at a time.

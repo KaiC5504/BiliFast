@@ -462,8 +462,8 @@ class _UploaderSheetState extends State<UploaderSheet> with SingleTickerProvider
     if (mounted) setState(() {});
   }
 
-  /// A login made from the page: this account's 关注.
-  void _loggedIn() => unawaited(_follow?.load());
+  /// Any login, the space's above included: this account's 关注.
+  void _loggedIn() => unawaited(_follow?.reload());
 
   void _toast(String message) {
     if (mounted) showToast(context, message);

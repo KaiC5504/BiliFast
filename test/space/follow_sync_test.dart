@@ -121,6 +121,26 @@ void main() {
       expect(api.calls, isEmpty);
     });
 
+    test('after a login, a tap before the card answers asks it first instead of following blind', () async {
+      loggedIn = false;
+      final model = follow();
+      await model.load();
+      expect(model.following, isFalse);
+
+      loggedIn = true;
+      api.uploader = const UploaderCard(mid: _owner, name: '', face: '', fans: 0, videos: 0, isVip: false, following: true);
+      final hold = api.holds['uploaderCard'] = Completer<void>();
+      final reload = model.reload();
+      expect(model.following, isNull, reason: 'what logged out said is no longer known');
+      api.holds.remove('uploaderCard');
+      final tap = model.toggle();
+      hold.complete();
+      await reload;
+      await tap;
+      expect(api.calls.where((call) => call.startsWith('follow')), isEmpty);
+      expect(model.following, isTrue);
+    });
+
     test('a change made elsewhere shows here', () {
       final model = follow(following: false);
       book.changed(_owner, following: true);

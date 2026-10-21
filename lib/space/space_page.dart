@@ -119,7 +119,7 @@ class _SpacePageState extends State<SpacePage> {
   }
 
   /// The new account's 关注 for this uploader.
-  void _loggedIn() => unawaited(_follow?.load());
+  void _loggedIn() => unawaited(_follow?.reload());
 
   void _followChanged() {
     if (mounted) setState(() {});

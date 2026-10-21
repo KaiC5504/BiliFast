@@ -1483,7 +1483,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                                   playingBvid: (_attached ? controller?.video?.bvid : null) ?? _playback?.bvid,
                                   followingOf: _followingOf,
                                   requestLogin: _askLogin,
-                                  logins: _logins,
+                                  // The app's, not the page's: a login from a space pushed over the sheet counts too.
+                                  logins: _services!.environment.logins,
                                   openPage: widget.openPage,
                                 ),
                               ),
