@@ -318,6 +318,7 @@ void main() {
       expect(find.text('第1条评论'), findsOneWidget);
       expect(find.text('没有更多了'), findsOneWidget);
       expect(find.byKey(const ValueKey('comments-loading')), findsNothing);
+      expect(find.byKey(const ValueKey('comments-first-load')), findsNothing);
       expect(api.calls, ['comments sort=hot offset=', 'comments sort=hot offset=o1']);
     });
 
@@ -328,6 +329,7 @@ void main() {
       await hostTab(tester, CommentsRig(api: api).model);
       expect(find.text('还没有评论，快来抢沙发吧'), findsOneWidget);
       expect(find.byKey(const ValueKey('comments-loading')), findsNothing);
+      expect(find.byKey(const ValueKey('comments-first-load')), findsNothing);
       expect(api.calls, hasLength(3));
     });
 

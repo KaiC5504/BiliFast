@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../shared/loading_tv.dart';
 import '../shared/theme.dart';
 import '../video/collapsing_player.dart';
 import 'comment_callbacks.dart';
@@ -14,7 +15,8 @@ import 'comments_model.dart';
 
 /// 评论 (10-12): 热门评论 / 最新评论 with ≡ 按热度 / 按时间, the pinned comment, the list paging as it nears the end,
 /// its footer, and the 发条评论 bar fixed at the bottom. Asks [model] for its first page when it first
-/// shows. Its list scrolls with the page's primary scroll controller and starts `PlayerReserve` below its top.
+/// shows, with the loading TV centred over what's left above the bar until it lands (64). Its list scrolls with the
+/// page's primary scroll controller and starts `PlayerReserve` below its top.
 class CommentsTab extends StatefulWidget {
   const CommentsTab({super.key, required this.model, required this.callbacks});
 
@@ -28,9 +30,13 @@ class CommentsTab extends StatefulWidget {
 class _CommentsTabState extends State<CommentsTab> {
   late NearEndPaging _paging = _pagingFor(widget.model);
 
+  /// The sort header stays once a list has shown, so another sort's first load keeps its toggle.
+  bool _listShown = false;
+
   @override
   void initState() {
     super.initState();
+    _listShown = !_firstLoad(widget.model);
     widget.model.addListener(_changed);
   }
 
@@ -47,6 +53,7 @@ class _CommentsTabState extends State<CommentsTab> {
     oldWidget.model.removeListener(_changed);
     _paging.dispose();
     _paging = _pagingFor(widget.model);
+    _listShown = !_firstLoad(widget.model);
     widget.model.addListener(_changed);
     _loadIfShown();
   }
@@ -70,8 +77,16 @@ class _CommentsTabState extends State<CommentsTab> {
     ask: model.loadMore,
   );
 
+  static bool _firstLoad(CommentsModel model) =>
+      model.comments.isEmpty &&
+      model.pinned == null &&
+      model.error == null &&
+      model.closedMessage == null &&
+      (model.loading || !model.hasLoaded);
+
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() => _listShown |= !_firstLoad(widget.model));
   }
 
   @override
@@ -81,6 +96,7 @@ class _CommentsTabState extends State<CommentsTab> {
     final closed = model.closedMessage;
     final pinned = model.pinned;
     final comments = model.comments;
+    final firstLoad = _firstLoad(model);
     return ColoredBox(
       color: CommentListTheme.background,
       child: Column(
@@ -97,36 +113,48 @@ class _CommentsTabState extends State<CommentsTab> {
                   if (closed != null)
                     SliverToBoxAdapter(child: _ClosedNotice(message: closed))
                   else ...[
-                    SliverToBoxAdapter(
-                      child: CommentSortHeader(
-                        title: model.sort == CommentSort.hot ? '热门评论' : '最新评论',
-                        sort: model.sort,
-                        onChange: (sort) => unawaited(model.setSort(sort)),
-                      ),
-                    ),
-                    if (pinned != null)
+                    if (!firstLoad || _listShown)
                       SliverToBoxAdapter(
-                        child: CommentRow(
-                          key: ValueKey('pinned-${pinned.rpid}'),
-                          comment: pinned,
+                        child: CommentSortHeader(
+                          title: model.sort == CommentSort.hot ? '热门评论' : '最新评论',
+                          sort: model.sort,
+                          onChange: (sort) => unawaited(model.setSort(sort)),
+                        ),
+                      ),
+                    if (firstLoad)
+                      const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(child: LoadingTvState(key: ValueKey('comments-first-load'))),
+                      )
+                    else ...[
+                      if (pinned != null)
+                        SliverToBoxAdapter(
+                          child: CommentRow(
+                            key: ValueKey('pinned-${pinned.rpid}'),
+                            comment: pinned,
+                            model: model,
+                            callbacks: callbacks,
+                          ),
+                        ),
+                      commentRows(
+                        comments,
+                        (comment) => CommentRow(
+                          key: ValueKey(comment.rpid),
+                          comment: comment,
                           model: model,
                           callbacks: callbacks,
                         ),
                       ),
-                    commentRows(
-                      comments,
-                      (comment) =>
-                          CommentRow(key: ValueKey(comment.rpid), comment: comment, model: model, callbacks: callbacks),
-                    ),
-                    SliverToBoxAdapter(
-                      child: CommentListFooter(
-                        loading: model.loading || !model.hasLoaded,
-                        error: model.error,
-                        isEnd: model.isEnd,
-                        isEmpty: comments.isEmpty && pinned == null,
-                        onRetry: () => unawaited(model.loadMore()),
+                      SliverToBoxAdapter(
+                        child: CommentListFooter(
+                          loading: model.loading || !model.hasLoaded,
+                          error: model.error,
+                          isEnd: model.isEnd,
+                          isEmpty: comments.isEmpty && pinned == null,
+                          onRetry: () => unawaited(model.loadMore()),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ],
               ),
@@ -603,7 +631,8 @@ class _EmoteFacePainter extends CustomPainter {
   bool shouldRepaint(_EmoteFacePainter oldDelegate) => false;
 }
 
-/// 评论 before the video's aid is known: the spinner where the list will start.
+/// 评论 before the video's aid is known: the loading TV under the reserve, centred in a box as tall as the list (64
+/// before its write bar comes, which sits lower than [CommentsTab]'s first load).
 class CommentsSlot extends StatelessWidget {
   const CommentsSlot({super.key});
 
@@ -614,12 +643,11 @@ class CommentsSlot extends StatelessWidget {
       primary: true,
       slivers: [
         SliverToBoxAdapter(child: SizedBox(height: PlayerReserve.of(context))),
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.only(top: CommentListTheme.emptyPadding),
-            child: CupertinoActivityIndicator(
-              key: ValueKey('comments-slot-loading'),
-              radius: CommentListTheme.spinnerRadius,
+        SliverLayoutBuilder(
+          builder: (context, constraints) => SliverToBoxAdapter(
+            child: SizedBox(
+              height: constraints.viewportMainAxisExtent,
+              child: const Center(child: LoadingTvState(key: ValueKey('comments-slot-loading'))),
             ),
           ),
         ),
