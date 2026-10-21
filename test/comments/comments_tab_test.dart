@@ -3,6 +3,7 @@ import 'package:bilifast/comments/comment_callbacks.dart';
 import 'package:bilifast/comments/comment_row.dart';
 import 'package:bilifast/comments/comments_model.dart';
 import 'package:bilifast/comments/comments_tab.dart';
+import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/fake_page_api.dart';
@@ -139,6 +140,8 @@ Future<void> show(WidgetTester tester, FakeComments model, {Replies? replies, do
   reserve: reserve,
 );
 
+Finder get firstLoad => find.byKey(const ValueKey('comments-first-load'));
+
 ScrollPosition position(WidgetTester tester) => tester.state<ScrollableState>(find.byType(Scrollable).first).position;
 
 /// Pumps through a fling without waiting on the spinner, which never settles.
@@ -212,7 +215,7 @@ void main() {
     testWidgets('shows what the model has as it changes', (tester) async {
       final model = FakeComments(loaded: false, loadingValue: true);
       await show(tester, model);
-      expect(find.byKey(const ValueKey('comments-loading')), findsOneWidget);
+      expect(firstLoad, findsOneWidget);
 
       model.change(() {
         model.loaded = true;
@@ -223,7 +226,70 @@ void main() {
       await tester.pump();
       expect(rowKey(1), findsOneWidget);
       expect(find.text('没有更多了'), findsOneWidget);
+      expect(firstLoad, findsNothing);
       expect(find.byKey(const ValueKey('comments-loading')), findsNothing);
+    });
+
+    testWidgets('the first page loading: the TV centred between the reserve and the bar, no header, no spinner (64)', (
+      tester,
+    ) async {
+      await show(tester, FakeComments(loaded: false, loadingValue: true), reserve: 300);
+      final tv = tester.getRect(find.byType(LoadingTvState));
+      final bar = tester.getRect(find.byKey(const ValueKey('comment-bar')));
+      expect(firstLoad, findsOneWidget);
+      expect(tester.widget(firstLoad), isA<LoadingTvState>());
+      expect(tv.center.dy, moreOrLessEquals((300 + bar.top) / 2, epsilon: 0.01));
+      expect(tv.center.dx, phone.width / 2);
+      expect(find.byType(CommentSortHeader), findsNothing);
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      expect(find.byType(CommentListFooter), findsNothing);
+    });
+
+    testWidgets('an empty first page with more still to come keeps the TV; a failed one offers 重试', (tester) async {
+      final model = FakeComments(loadingValue: true);
+      await show(tester, model);
+      expect(firstLoad, findsOneWidget, reason: 'answered, empty, and asking for the next page');
+
+      model.change(() {
+        model.loadingValue = false;
+        model.errorValue = '失败';
+      });
+      await tester.pump();
+      expect(firstLoad, findsNothing);
+      expect(find.byKey(const ValueKey('comments-retry')), findsOneWidget);
+    });
+
+    testWidgets("another sort's first page keeps the header, with the TV under it", (tester) async {
+      final model = FakeComments(comments: [comment(1)], isEndValue: true);
+      await show(tester, model);
+      expect(find.byType(CommentSortHeader), findsOneWidget);
+
+      model.change(() {
+        model.sortValue = CommentSort.time;
+        model.commentsValue = const [];
+        model.isEndValue = false;
+        model.loaded = false;
+        model.loadingValue = true;
+      });
+      await tester.pump();
+      expect(find.text('最新评论'), findsOneWidget);
+      expect(firstLoad, findsOneWidget);
+      final header = tester.getRect(find.byType(CommentSortHeader));
+      final bar = tester.getRect(find.byKey(const ValueKey('comment-bar')));
+      expect(tester.getCenter(firstLoad).dy, moreOrLessEquals((header.bottom + bar.top) / 2, epsilon: 0.01));
+    });
+
+    testWidgets('a hidden tab holds the TV still', (tester) async {
+      await host(
+        tester,
+        TickerMode(
+          enabled: false,
+          child: CommentsTab(model: FakeComments(loaded: false), callbacks: Replies().callbacks),
+        ),
+      );
+      expect(firstLoad, findsOneWidget);
+      await tester.pump(LoadingTvTheme.frame * 2);
+      expect(tester.hasRunningAnimations, isFalse);
     });
   });
 
@@ -320,10 +386,22 @@ void main() {
   });
 
   group('the footer', () {
-    testWidgets('a spinner while a page loads, an empty space while more waits', (tester) async {
+    testWidgets('the small spinner while the next page loads under the rows, an empty space while more waits', (
+      tester,
+    ) async {
       final model = FakeComments(comments: [comment(1)], loadingValue: true);
       await show(tester, model);
       expect(find.byKey(const ValueKey('comments-loading')), findsOneWidget);
+      expect(
+        tester.widget<CupertinoActivityIndicator>(find.byKey(const ValueKey('comments-loading'))).radius,
+        CommentListTheme.spinnerRadius,
+      );
+      expect(
+        tester.getRect(find.byKey(const ValueKey('comments-loading'))).top,
+        greaterThan(tester.getRect(rowKey(1)).bottom),
+      );
+      expect(find.byType(LoadingTv), findsNothing);
+      expect(find.byType(CommentSortHeader), findsOneWidget);
 
       model.change(() => model.loadingValue = false);
       await tester.pump();
@@ -528,11 +606,15 @@ void main() {
   });
 
   group('before the aid is known', () {
-    testWidgets('a spinner under the reserve, in a list on the primary controller', (tester) async {
+    testWidgets('the TV under the reserve, centred in a box as tall as the list, on the primary controller (64)', (
+      tester,
+    ) async {
       await host(tester, const CommentsSlot(), reserve: 300);
-      final spinner = tester.getRect(find.byKey(const ValueKey('comments-slot-loading')));
-      expect(spinner.top, 300 + CommentListTheme.emptyPadding);
-      expect(spinner.center.dx, phone.width / 2);
+      final tv = tester.getRect(find.byKey(const ValueKey('comments-slot-loading')));
+      expect(tester.widget(find.byKey(const ValueKey('comments-slot-loading'))), isA<LoadingTvState>());
+      expect(tv.center.dy, moreOrLessEquals(300 + phone.height / 2, epsilon: 0.01));
+      expect(tv.center.dx, phone.width / 2);
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
       expect(primary.hasClients, isTrue);
     });
   });
