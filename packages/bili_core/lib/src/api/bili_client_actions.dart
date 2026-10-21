@@ -78,7 +78,7 @@ extension BiliClientActions on BiliClient {
 
   Future<FavFolder> createFolder({required String title, required bool isPrivate, String intro = ''}) => post(
     '/x/v3/fav/folder/add',
-    form: {'title': title, 'intro': intro, 'privacy': isPrivate ? '1' : '0'},
+    form: {'title': title, if (intro.isNotEmpty) 'intro': intro, 'privacy': isPrivate ? '1' : '0'},
     decode: FavFolder.fromJson,
   );
 
