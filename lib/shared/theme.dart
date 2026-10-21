@@ -3531,8 +3531,140 @@ abstract final class PlayerLoadingTheme {
   static const grace = Duration(milliseconds: 750);
 }
 
-/// The uploader sheet over the video page's body (62, 68, 76).
-abstract final class UploaderSheetTheme {}
+/// The uploader sheet over the video page's body (62, 68, 76), measured on 68 and 76 at 3 px per pt from the sheet's
+/// top, which meets the player box's bottom.
+abstract final class UploaderSheetTheme {
+  static const fill = BiliColors.card;
+  static const radius = 12.0;
+  static const grabberTop = 8.0;
+  static const grabberWidth = 30.0;
+  static const grabberHeight = 3.0;
+  static const grabber = BiliColors.sheetGrabber;
+
+  static const rise = Duration(milliseconds: 300);
+  static const fall = Duration(milliseconds: 220);
+
+  /// Let go dragged down past this share of its height, or flung faster than [flingClose] points a second, the sheet
+  /// closes; short of both it springs back over [dragBack].
+  static const dragClose = 0.25;
+  static const flingClose = 700.0;
+  static const dragBack = Duration(milliseconds: 200);
+
+  /// An edge swipe closes it as one closes 评论详情.
+  static const edgeCloseShare = CommentOverlayTheme.threadCloseShare;
+  static const edgeFlingWidths = CommentOverlayTheme.threadFlingWidths;
+
+  /// The header: the face 16 in and 31 down, the name and its pill on a line centred 35.33 down, the counts on one
+  /// 62 down, both 12 after the face; 进入空间 › centred 44 down, its chevron ending 16.33 from the right edge. The
+  /// grid starts 77 down.
+  static const side = 16.0;
+  static const face = 34.0;
+  static const faceTop = 31.0;
+  static const textGap = 12.0;
+  static const nameText = 14.0;
+  static const nameWeight = FontWeight.w500;
+  static const nameInk = BiliColors.text;
+  static const nameLine = 20.0;
+  static const nameCentre = 106 / 3;
+
+  /// The name's line ends this far from the right edge, clear of 进入空间.
+  static const nameRight = 100.0;
+  static const countsText = 12.0;
+  static const countsInk = BiliColors.secondaryText;
+  static const countsLine = 17.0;
+
+  static const countsCentre = 62.0;
+  static const countsGap = 8.5;
+
+  /// PingFang sets digits a little apart from the Chinese they meet ("3 万粉丝"); Flutter's layout sets them touching.
+  static const countsHanGap = 5 / 3;
+  static const enterText = 13.0;
+  static const enterInk = Color(0xFF61666D);
+  static const enterCentre = 44.0;
+  static const enterLine = 18.0;
+
+  /// 进入空间's Chinese draws half a point under its line's middle, where the chevron centres.
+  static const enterTextLift = 0.5;
+  static const enterRight = 49 / 3;
+  static const chevronWidth = 20 / 3;
+  static const chevronHeight = 12.0;
+  static const chevronStroke = 1.0;
+  static const chevronInk = Color(0xFF939393);
+  static const chevronGap = 14.0;
+
+  /// The tap target around the face and around 进入空间 ›.
+  static const targetPad = 8.0;
+
+  /// + 关注: a 60 × 24 pink pill 9 after the name; followed, 03's grey 已关注.
+  static const followGap = 9.0;
+  static const followWidth = 60.0;
+  static const followHeight = 24.0;
+  static const followText = 13.0;
+  static const followPlus = 28 / 3;
+  static const followPlusStroke = 1.1;
+  static const followPlusGap = 4.0;
+  static const followedFill = IntroTheme.followedFill;
+  static const followedInk = IntroTheme.followedText;
+  static const followPressedScale = IntroTheme.followPressedScale;
+
+  static const gridTop = 77.0;
+
+  /// Two columns of 16:9 covers, 8 from the sides and each other; a card is its cover and 52 under it.
+  static const gridSide = 8.0;
+  static const gridGap = 8.0;
+  static const coverAspect = 16 / 9;
+  static const belowCover = 52.0;
+  static const coverRadius = 4.0;
+  static const coverShadeHeight = 30.0;
+
+  /// The title's two 13 pt lines 15.33 apart (Flutter draws them 15 apart), the first centred 16.17 under the cover.
+  static const titleText = 13.0;
+  static const titleLine = 46 / 3;
+  static const titleTop = 16.17 - titleLine / 2;
+  static const titleInk = BiliColors.text;
+
+  /// The page's own video: its title pink after the playing mark, three rounded bars (10, 5.33 and 10 tall, 3.45
+  /// apart) 2 in from the title's start and 6 before its text, a little under the line's middle.
+  static const playingInk = BiliColors.pink;
+  static const barsInk = Color(0xFFEB7093);
+  static const barsLead = 2.0;
+  static const barsTrail = 6.0;
+  static const barsDrop = 0.25;
+  static const barWidth = 1.5;
+  static const barPitch = 3.45;
+  static const barTall = 10.0;
+  static const barShort = 16 / 3;
+
+  /// The cover's ▶ count and date at its bottom left, the length at its bottom right: 10 pt white, its digits
+  /// centred 11 above the cover's bottom and the ▶ box 11.17, 7.33 in with 3.5 after it and 11 between the count
+  /// and the date.
+  static const statText = 10.0;
+  static const statInk = BiliColors.onCover;
+  static const statCentre = 11.5;
+  static const statIconDrop = 2 / 3;
+  static const statLine = 14.0;
+  static const statLeft = 22 / 3;
+  static const statRight = 8.0;
+  static const statIconWidth = 40 / 3;
+  static const statIconHeight = 11.0;
+  static const statIconGap = 3.5;
+  static const statDateGap = 11.0;
+
+  /// The end of the grid: 已经到底啦~ (76) or the next page's spinner, in a 40 band.
+  static const footerHeight = 40.0;
+  static const endText = 14.0;
+  static const endInk = Color(0xFF727272);
+  static const spinnerRadius = 10.0;
+
+  /// The first load's TV, its failure and 重试.
+  static const stateText = 14.0;
+  static const stateInk = BiliColors.secondaryText;
+  static const stateGap = 16.0;
+  static const retryText = 14.0;
+  static const retryHeight = 30.0;
+  static const retryPadX = 20.0;
+  static const retryRim = 1.0;
+}
 
 /// UP主空间's header, its collapsed bar and its tab row (63, 69-73, 75, 77-79).
 abstract final class SpaceTheme {}

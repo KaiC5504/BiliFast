@@ -10,6 +10,7 @@ import 'package:bili_core/api.dart'
         CommentPicture,
         OfficialKind,
         RichRun,
+        SpaceVideo,
         TextRun,
         UploaderCard,
         BiliError,
@@ -57,7 +58,13 @@ import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/space/fake_space_api.dart';
+import 'package:bilifast/space/space_api.dart';
+import 'package:bilifast/space/uploader_sheet.dart';
+import 'package:bilifast/space/uploader_sheet_grid.dart';
+import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/actions/action_overlays.dart';
+import 'package:bilifast/video/actions/actions_model.dart';
 import 'package:bilifast/video/actions/coin_dialog.dart';
 import 'package:bilifast/video/actions/favourite_sheet.dart';
 import 'package:bilifast/video/actions/video_actions.dart';
@@ -224,6 +231,7 @@ void main() {
     bool checkAccount = true,
     bool loggedIn = true,
     PageApi? pageApi,
+    SpaceApi? spaceApi,
   }) async {
     screen(tester, portrait, portraitInsets);
     addTearDown(tester.view.reset);
@@ -259,6 +267,7 @@ void main() {
       recents: recents = await RecentStore.load(null, logger: logger),
       device: PlayerDevice(orientation: orientation, controls: NoDeviceControls()),
       pageApi: pageApi,
+      spaceApi: spaceApi,
       loginGate: gate,
     );
     // The small window's restore button pushes on the app's navigator.
@@ -3204,6 +3213,183 @@ void main() {
       expect(loading(offstage: true), findsNothing);
       await tester.pump(PlayerLoadingTheme.grace);
       expect(loading(offstage: true), findsNothing);
+      await back(tester);
+      await back(tester);
+    });
+  });
+
+  group('the uploader sheet (62, 68, 76)', () {
+    const owner = 7;
+    late FakePageApi api;
+    late FakeSpaceApi spaceApi;
+
+    setUp(() {
+      api = FakePageApi(
+        uploader: const UploaderCard(mid: 0, name: '', face: '', fans: 0, videos: 0, isVip: false, following: false),
+      );
+      spaceApi = FakeSpaceApi(
+        videoList: [
+          for (var i = 1; i <= 6; i++)
+            SpaceVideo(aid: i, bvid: 'BV1sheetpg0$i', title: '投稿 $i', cover: '', duration: 60),
+        ],
+      );
+    });
+
+    UploaderSheetController sheet(WidgetTester tester) =>
+        tester.widget<UploaderSheetLayer>(find.byType(UploaderSheetLayer, skipOffstage: false).last).controller;
+    bool canPop(WidgetTester tester) => tester.widget<PopScope<Object?>>(find.byType(PopScope<Object?>).last).canPop;
+
+    /// The page with its video and detail in, its uploader [owner], and the sheet opened as the uploader row does.
+    Future<void> openSheet(WidgetTester tester, {int mid = owner}) async {
+      await host(tester, pageApi: api, spaceApi: spaceApi);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      sessions.single
+        ..detail = detail(bv, ownerMid: owner)
+        ..changed();
+      await tester.pump();
+      openUploader(tester.element(find.byType(PageTabs).last), UploaderRef(mid: mid, name: 'UP主'));
+      await frames(tester);
+    }
+
+    testWidgets('the uploader row opens it from the player\'s bottom, over the tabs; back closes it first, then the '
+        'page leaves', (tester) async {
+      await openSheet(tester);
+      expect(sheet(tester).uploader?.mid, owner);
+      final box = tester.getRect(find.byKey(const ValueKey('uploader-sheet')));
+      expect(box.top, area(tester).bottom);
+      expect(box.bottom, portrait.height);
+      expect(find.byType(UploaderVideoCard), findsWidgets);
+      expect(canPop(tester), isFalse);
+
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester, 20);
+      expect(sheet(tester).isOpen, isFalse);
+      expect(find.byType(UploaderSheet), findsNothing);
+      expect(find.byType(VideoPage), findsOneWidget);
+      expect(canPop(tester), isTrue);
+
+      openUploader(tester.element(find.byType(PageTabs)), const UploaderRef(mid: owner));
+      await frames(tester);
+      ui(tester).onBack();
+      await frames(tester, 20);
+      expect(sheet(tester).isOpen, isFalse, reason: 'the player\'s 〈 closes it too');
+      expect(find.byType(VideoPage), findsOneWidget);
+      await back(tester);
+      expect(find.byType(VideoPage), findsNothing);
+    });
+
+    testWidgets('the player above it keeps working: its controls still answer', (tester) async {
+      await openSheet(tester);
+      final chrome = ui(tester).chrome;
+      final shown = chrome.visible;
+      await tester.tapAt(area(tester).center);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(chrome.visible, isNot(shown));
+      expect(sheet(tester).isOpen, isTrue);
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('going to full screen closes it', (tester) async {
+      await openSheet(tester);
+      await rotate(tester, Presentation.landscape);
+      expect(sheet(tester).isOpen, isFalse);
+      await rotate(tester, Presentation.inline);
+      await frames(tester);
+      expect(find.byType(UploaderSheet), findsNothing);
+      await back(tester);
+    });
+
+    testWidgets('in full screen the uploader opens the space instead', (tester) async {
+      await host(tester, pageApi: api, spaceApi: spaceApi);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await rotate(tester, Presentation.landscape);
+      openUploader(tester.element(find.byType(PanelLayer).last), const UploaderRef(mid: owner));
+      await frames(tester, 20);
+      expect(sheet(tester).isOpen, isFalse);
+      expect(find.byType(VideoPage), findsNothing, reason: 'the space covers it');
+      nav.currentState!.pop();
+      await frames(tester, 20);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets('关注 and 取消关注 in the sheet keep the page\'s 关注 in step, and the page\'s reaches the sheet', (
+      tester,
+    ) async {
+      ActionsModel? actions;
+      makeDetails = () => FakePageDetails(
+        actions: actions = ActionsModel(
+          api: api,
+          detail: detail(bv, ownerMid: owner),
+          isLoggedIn: () => true,
+          accountMid: () => 1,
+          requestLogin: () {},
+          toast: (_) {},
+          follows: services.follows,
+        ),
+      );
+      await openSheet(tester);
+      final model = actions!;
+      addTearDown(model.dispose);
+      expect(api.calls.where((call) => call.startsWith('uploaderCard')), isEmpty, reason: 'started from the page\'s');
+      expect(model.following, isFalse);
+
+      await tester.tap(find.byKey(const ValueKey('uploader-sheet-follow')));
+      await frames(tester);
+      expect(api.calls.last, 'follow on=true');
+      expect(model.following, isTrue);
+      await frames(tester, 50);
+
+      await tester.tap(find.byKey(const ValueKey('uploader-sheet-follow')));
+      await frames(tester);
+      expect(find.text('确定不再关注？'), findsOneWidget);
+      expect(canPop(tester), isFalse);
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester);
+      expect(find.text('确定不再关注？'), findsNothing, reason: 'back closes the confirm first');
+      expect(sheet(tester).isOpen, isTrue);
+      expect(model.following, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('uploader-sheet-follow')));
+      await frames(tester);
+      await tester.tap(find.byKey(const ValueKey('unfollow-确定')));
+      await frames(tester);
+      expect(api.calls.last, 'follow on=false');
+      expect(model.following, isFalse);
+      await frames(tester, 50);
+
+      await model.toggleFollow();
+      await frames(tester);
+      expect(
+        find.descendant(of: find.byType(UploaderSheet), matching: find.text('已关注')),
+        findsOneWidget,
+        reason: 'the page\'s 关注 reached the sheet',
+      );
+      await frames(tester, 50);
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('another uploader (a staff member) is asked about', (tester) async {
+      await openSheet(tester, mid: 99);
+      expect(api.calls, contains('uploaderCard mid=99'));
+      expect(spaceApi.calls.first, 'profile mid=99');
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('a card opens its video on a page above; back there finds the sheet still up', (tester) async {
+      await openSheet(tester);
+      await tester.tap(find.byType(UploaderVideoCard).first);
+      await frames(tester, 20);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, 'BV1sheetpg01');
+      await back(tester);
+      expect(find.byType(VideoPage), findsOneWidget);
+      expect(sheet(tester).isOpen, isTrue);
+      expect(find.byType(UploaderSheet), findsOneWidget);
       await back(tester);
       await back(tester);
     });
