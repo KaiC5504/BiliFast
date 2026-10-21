@@ -24,7 +24,7 @@ slice 9), and the Swift app retires.
 
 | Decision | Why |
 |---|---|
-| Scope is 搜索, UP主空间, 我的收藏 and 稍后再看. | The daily-use gaps. Each reuses the video rows and lists the app already draws. |
+| Scope is 搜索, UP主空间, 我的收藏 and 稍后再看, and (2026-10-22) the official API's login with PiliPlus's split. | The daily-use gaps. Each reuses the video rows and lists the app already draws. |
 | The system-font check runs first. | The comment fix showed MiSans-tuned values are off under PingFang. Fixing the method first means every new screen is checked the same way. |
 | One build for the whole milestone. | "No need to ship"; (15) and (16) went out on their own to check the font. |
 | Slice 10's leftovers wait (2026-10-21). | Once Japanese names were fixed, the rest of the text was fine to KaiC's eye: the sweep's findings, the marquee title with 章节, 联合创作 and the 合集 prefix, and 查看更多 come later. |
@@ -105,14 +105,19 @@ then PingFang SC when iOS matches SF's own family name (CLAUDE.md's font rule). 
 | APIs | The official app's, signed with the Android app's key pair (`AppSigner.android`; public, the same in every copy of the app): `app.bilibili.com/x/v2/space` (card, tabs, default tab, chips, counts, banner), `/x/v2/space/archive/cursor` (videos by `order`, paged by the last aid), `/x/v2/space/season/videos` and `/x/v2/space/series` (chips). No cookies go to them. 关注 state is the web card (`uploaderCard`), changes `/x/relation/modify`; 稍后再看 `addToWatchLater`. Each item's `uri` carries a signed play link: never stored or logged. PiliPlus: `lib/http/member.dart`, `lib/models_new/space/`. |
 | Decisions (KaiC) | Only 投稿 works: 主页 and 动态 are drawn and toast 暂未开放, and a space whose default is one of them opens on 投稿. 视频 and the 合集/系列 chips list; 图文 toasts. The sort is a toggle (最新发布 ↔ 最多播放, no menu). 播放全部 opens the first video in the current order. Toast 暂未开放: 充电, ▽ (its 你可能感兴趣 strip has no known API), 加入特别关注, 设置分组, 私信, the space's search and ⋮, 详情, the 小店/充电 cards. A video tapped in the sheet opens a new page, as related videos do. Own build, 1.0.0 (19). Later (KaiC): move other calls that need no account to the official API. |
 
-### Slice 13: 我的收藏 and 稍后再看
+### Slice 13: 我的收藏, 稍后再看 and the official API's login
 
 | | |
 |---|---|
-| Entry | 头像页's 我的收藏 and 稍后再看 shortcuts (49), which toast "soon" today. |
-| Screens | 我的收藏's folder list; inside a folder; a row's ⋮ menu. 稍后再看's list; its row ⋮ menu or edit mode. |
-| APIs | 我的收藏: `/x/v3/fav/folder/created/list-all` (in `bili_core`), `/x/v3/fav/folder/collected/list` (folders followed), `/x/v3/fav/resource/list` (a folder's videos, with order and keyword), `/x/v3/fav/resource/batch-deal` (in `bili_core`, to remove). 稍后再看: `/x/v2/history/toview/web` (the list), `/x/v2/history/toview/v2/dels` (remove), `/x/v2/history/toview/clear` (clear watched) if the screenshots offer it. PiliPlus: `lib/http/fav.dart`, `lib/http/user.dart`. |
+| Entry | 头像页's 我的收藏 and 稍后再看 shortcuts (49), which toast "soon" today. The app token's confirm opens once by itself (see below). |
+| Screens | 我的收藏's folder list; inside a folder; a row's ⋮ menu. 稍后再看's list; its row ⋮ menu or edit mode. 不喜欢 lit. 推荐 card ⋮'s 不感兴趣 and its reasons. All wait on KaiC's screenshots; the token, the official calls and the 收藏/稍后再看 API are built first. |
+| The split (PiliPlus's) | An official call (`app.bilibili.com`) carries the app token as `access_key` and the Android signature, never cookies; every other call carries the web login's cookies as before. Official with the token: 推荐 (`/x/v2/feed/index`, personalised, only video cards kept), 点赞 (`/x/v2/view/like`), 投币 (`/x/v2/view/coin/add`), 不喜欢 (`/x/v2/view/dislike`, now live), 推荐's 不感兴趣 (`/x/feed/dislike`), and UP主空间 (no token). Web, unchanged: comments, history, 收藏, 稍后再看, 关注, 搜索, the watch heartbeat, playback and danmaku. Left out of PiliPlus's: separate accounts per job, and the official binary (gRPC) calls. |
+| The token | One login with the Android HD key (`AppSigner.android`, `mobi_app=android_hd`): `/x/passport-tv-login/qrcode/auth_code`, confirmed with the web login's cookies (`/x/passport-tv-login/h5/qrcode/confirm`, PiliPlus's "cookie转access_key"), then `/qrcode/poll`; if the confirm call is refused, its page opens in the login web view for a tap on 确认. A new login shows in the account's 登录设备 list (KaiC agreed, 2026-10-22). Kept as JSON in the keychain's app-token item (access, refresh, mid, expiry); a device id (`buvid`) is made once and kept, so the feed learns one device. Without the token, 推荐 is the web feed, 点赞 and 投币 the web calls, and 不喜欢 asks for the confirm. |
+| Renewal and a dead token (KaiC) | The expiry is stored with the token; a launch only compares dates, and the one renewal call (`/x/passport-login/oauth2/refresh_token`) goes out when under 30 days are left. A rejected token (-101, -2 on an official account call) is dropped and the confirm asked again. 退出登录 deletes it. |
+| 开发者 | The token's state (已授权, days left, 重新授权) and 推荐's source (官方 / 网页). |
+| APIs (收藏, 稍后再看) | 我的收藏: `/x/v3/fav/folder/created/list-all` (in `bili_core`), `/x/v3/fav/folder/collected/list` (folders followed), `/x/v3/fav/resource/list` (a folder's videos, with order and keyword), `/x/v3/fav/resource/batch-deal` (in `bili_core`, to remove). 稍后再看: `/x/v2/history/toview/web` (the list), `/x/v2/history/toview/v2/dels` (remove), `/x/v2/history/toview/clear` (clear watched) if the screenshots offer it. PiliPlus: `lib/http/fav.dart`, `lib/http/user.dart`, `lib/http/video.dart` (feed, actions), `lib/http/login.dart` (TV login), `lib/utils/accounts/account_manager/account_mgr.dart` (the split). |
 | Behaviour | A row opens its video page with resume as 历史记录's does. Removing is optimistic and rolled back on failure, as the actions are. |
+| Live calls | None from the PC with KaiC's account (no token there); shapes from PiliPlus's models and fixtures with every id made up. The phone's log records each official call's code, never the token or the answer. |
 
 ## 5. `tools/screen_diff.py`
 

@@ -90,6 +90,14 @@ extension BiliClientApp on BiliClient {
     }
   }
 
+  /// The one renewal near [AppToken.expiresAt]: the passport swaps the refresh token for a fresh pair.
+  Future<AppToken> renewAppToken() => _officialPost(
+    '/x/passport-login/oauth2/refresh_token',
+    {'refresh_token': appToken?.refreshToken ?? ''},
+    (json) => AppToken.issued(JsonObject.from(json).nested('token_info')?.map ?? json, now: now()),
+    host: BiliClient.passport,
+  );
+
   /// `on: true` dislikes the video, `on: false` takes it back.
   Future<void> dislike({required int aid, required bool on, required String accessToken, required AppSigner signer}) {
     final form = signer.signed({'aid': '$aid', 'dislike': on ? '0' : '1', 'access_key': accessToken}, ts: _unixSeconds);

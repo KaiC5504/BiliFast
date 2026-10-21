@@ -7,6 +7,9 @@ sealed class BiliError implements Exception {
   static const BiliError notDash = BiliNotDashError();
   static const BiliError invalidLink = BiliInvalidLinkError();
 
+  /// An official-API account call with no app token yet (or one just dropped as rejected).
+  static const BiliError noAppToken = BiliNoAppTokenError();
+
   bool get needsLogin => switch (this) {
     BiliAPIError(code: -101) => true,
     _ => false,
@@ -22,6 +25,7 @@ sealed class BiliError implements Exception {
     BiliDecodingError() => 'B 站返回的数据无法解析',
     BiliNotDashError() => '这个视频不是 DASH 格式，暂不支持',
     BiliInvalidLinkError() => '没有找到视频链接',
+    BiliNoAppTokenError() => '需要先授权官方接口',
   };
 }
 
@@ -83,4 +87,11 @@ final class BiliInvalidLinkError extends BiliError {
 
   @override
   String toString() => 'BiliError.invalidLink';
+}
+
+final class BiliNoAppTokenError extends BiliError {
+  const BiliNoAppTokenError();
+
+  @override
+  String toString() => 'BiliError.noAppToken';
 }

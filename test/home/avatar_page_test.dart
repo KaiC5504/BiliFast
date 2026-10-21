@@ -8,6 +8,7 @@ import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
+import 'package:bilifast/favourites/favourites_page.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -19,6 +20,7 @@ import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_page.dart';
+import 'package:bilifast/watch_later/watch_later_page.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator, CupertinoSliverRefreshControl;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -284,20 +286,27 @@ void main() {
     expect(find.byKey(const ValueKey('settings-font')), findsOneWidget);
   });
 
-  testWidgets('历史记录 opens 历史记录; the other shortcuts say 即将推出', (tester) async {
+  testWidgets('历史记录, 我的收藏 and 稍后再看 open their pages; 离线缓存 says 即将推出', (tester) async {
     await show(tester);
-    for (final key in ['avatar-offline', 'avatar-favourites', 'avatar-later']) {
-      await tester.tap(find.byKey(ValueKey(key)));
-      await tester.pump();
-      expect(find.text('即将推出'), findsOneWidget, reason: key);
-      await settle(tester, 60);
-    }
+    await tester.tap(find.byKey(const ValueKey('avatar-offline')));
+    await tester.pump();
+    expect(find.text('即将推出'), findsOneWidget);
+    await settle(tester, 60);
     expect(find.byType(WatchHistoryPage), findsNothing);
     await tester.tap(find.byKey(const ValueKey('avatar-history')));
     await settle(tester, 20);
     expect(find.byType(WatchHistoryPage), findsOneWidget);
     expect(gate.requests, 0);
   });
+
+  for (final (key, page) in [('avatar-favourites', FavouritesPage), ('avatar-later', WatchLaterPage)]) {
+    testWidgets('$key opens its page', (tester) async {
+      await show(tester);
+      await tester.tap(find.byKey(ValueKey(key)));
+      await settle(tester, 20);
+      expect(find.byType(page), findsOneWidget);
+    });
+  }
 
   testWidgets('back returns to where the page was opened from', (tester) async {
     await show(tester);

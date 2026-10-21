@@ -4,6 +4,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart' show NodeMode;
 import 'package:flutter/widgets.dart';
 
+import '../account/app_auth.dart';
 import '../account/login_gate.dart';
 import '../danmaku/block_rule_store.dart';
 import '../danmaku/danmaku_settings_store.dart';
@@ -12,6 +13,7 @@ import '../device/player_device.dart';
 import '../devtools/crash_log.dart';
 import '../devtools/log_files.dart';
 import '../devtools/log_forwarder.dart';
+import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
 import '../playback/codec_memory.dart';
 import '../playback/playback_controller.dart';
@@ -23,6 +25,7 @@ import '../space/follow_book.dart';
 import '../space/space_api.dart';
 import '../video/page_api.dart';
 import '../video/pip_keeper.dart';
+import '../watch_later/watch_later_api.dart';
 import 'app_environment.dart';
 
 /// Hands each page a controller and player of its own (BiliNative's one AVPlayer per page), all on one [SharedEngine]
@@ -136,9 +139,9 @@ class AppPlayback with WidgetsBindingObserver {
   }
 }
 
-/// What every page reaches: the account and API client, the players, 最近打开, the phone's rotation and levels,
-/// the font, the page body's, 搜索's and UP主空间's calls, 关注 changes, 搜索历史, the login page, the log kept on the
-/// phone, and the log forwarder in dev builds (null otherwise).
+/// What every page reaches: the account and API client, the official API's token, the players, 最近打开, the phone's
+/// rotation and levels, the font, the page body's, 搜索's, UP主空间's, 我的收藏's and 稍后再看's calls, 关注 changes,
+/// 搜索历史, the login page, the log kept on the phone, and the log forwarder in dev builds (null otherwise).
 class AppServices {
   AppServices({
     required this.environment,
@@ -149,6 +152,10 @@ class AppServices {
     PageApi? pageApi,
     this._searchApi,
     this._spaceApi,
+    this._favouritesApi,
+    this._watchLaterApi,
+    AppAuth? appAuth,
+    GlobalKey<NavigatorState>? navigator,
     SearchHistoryStore? searchHistory,
     DanmakuSettingsStore? danmakuSettings,
     BlockRuleStore? blockRules,
@@ -156,7 +163,9 @@ class AppServices {
     PipKeeper? pipKeeper,
     this.logFiles = const NoLogFiles(),
     this.logs,
-  }) : device = device ?? PlayerDevice.inWindow(),
+  }) : appAuth = appAuth ?? NoAppAuth(),
+       navigator = navigator ?? GlobalKey<NavigatorState>(),
+       device = device ?? PlayerDevice.inWindow(),
        pipKeeper = pipKeeper ?? PipKeeper(),
        loginGate = loginGate ?? LoginPageGate(environment),
        fonts = fonts ?? FontStore.memory(),
@@ -187,6 +196,7 @@ class AppServices {
   }
 
   void dispose() {
+    appAuth.dispose();
     environment.removeListener(_accountChanged);
     environment.logins.removeListener(_loggedIn);
   }
@@ -207,6 +217,19 @@ class AppServices {
   /// UP主空间's calls, made on first use like [searchApi].
   late final SpaceApi spaceApi = _spaceApi ?? ClientSpaceApi(environment.client);
 
+  final FavouritesApi? _favouritesApi;
+
+  /// 我的收藏's calls, made on first use like [searchApi].
+  late final FavouritesApi favouritesApi = _favouritesApi ?? ClientFavouritesApi(environment.client);
+
+  final WatchLaterApi? _watchLaterApi;
+
+  /// 稍后再看's calls, made on first use like [searchApi].
+  late final WatchLaterApi watchLaterApi = _watchLaterApi ?? ClientWatchLaterApi(environment.client);
+
+  /// The official API's login token.
+  final AppAuth appAuth;
+
   /// 关注 changes, so every page showing an uploader agrees.
   final follows = FollowBook();
 
@@ -220,8 +243,9 @@ class AppServices {
   /// Where every logged-out action goes.
   final LoginGate loginGate;
 
-  /// The app's navigator, for pages pushed from outside a page's context (the small window's restore).
-  final navigator = GlobalKey<NavigatorState>();
+  /// The app's navigator, for pages pushed from outside a page's context (the small window's restore, the launch's
+  /// confirm of the app token).
+  final GlobalKey<NavigatorState> navigator;
 
   /// The closed page the small window is playing, if any.
   final PipKeeper pipKeeper;

@@ -74,6 +74,9 @@ class AppEnvironment extends ChangeNotifier {
   final CookiePersistence _persistence;
   final KeychainStore _keychain;
 
+  /// The keychain the login came from, for the app token's item beside it.
+  KeychainStore get keychain => _keychain;
+
   /// The login web view's store, read by the login page and cleared on logout.
   final WebCookies webCookies;
   final Logger _logger;

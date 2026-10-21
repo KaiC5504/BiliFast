@@ -8,6 +8,7 @@ import '../devlog/log_event.dart';
 import '../devlog/logger.dart';
 import 'action_models.dart';
 import 'app_signer.dart';
+import 'app_token.dart';
 import 'bili_error.dart';
 import 'bili_hosts.dart';
 import 'comment_models.dart';
@@ -27,9 +28,14 @@ part 'bili_client_actions.dart';
 part 'bili_client_app.dart';
 part 'bili_client_comments.dart';
 part 'bili_client_danmaku.dart';
+part 'bili_client_fav.dart';
 part 'bili_client_feed.dart';
+part 'bili_client_feed_official.dart';
+part 'bili_client_official.dart';
+part 'bili_client_actions_official.dart';
 part 'bili_client_search.dart';
 part 'bili_client_space.dart';
+part 'bili_client_toview.dart';
 part 'bili_client_video.dart';
 
 typedef _Sent = ({HTTPResponse response, double ms});
@@ -60,6 +66,15 @@ final class BiliClient {
   final DateTime Function() now;
   final Logger _logger;
   ({String day, String mixin})? _wbiCache;
+
+  /// The official API's login, set by the app once it has one; account calls to `app.bilibili.com` need it.
+  AppToken? appToken;
+
+  /// Called when an official account call answers that [appToken] is no longer taken; the app drops it and asks again.
+  void Function()? onAppTokenRejected;
+
+  /// The device id the official calls name (`buvid`), made once by the app and kept, so the feed learns one device.
+  String? appBuvid;
 
   /// The cookie every write call must echo back as the `csrf` form field.
   String? get csrf {
@@ -264,6 +279,7 @@ final class BiliClient {
     String? referer,
     required String host,
     bool cookies = true,
+    Map<String, String> extraHeaders = const {},
     required JsonDecode<T> decode,
   }) async {
     final sent = await _send(
@@ -275,6 +291,7 @@ final class BiliClient {
       referer: referer,
       accept: 'application/json',
       sendCookies: cookies,
+      extraHeaders: extraHeaders,
     );
     return _decodeEnvelope(sent, path, decode);
   }

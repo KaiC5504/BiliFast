@@ -128,6 +128,11 @@ class FakePageApi implements PageApi {
       });
 
   @override
+  Future<void> dislike({required int aid, required bool on}) => _answer('dislike', 'dislike on=$on', () {
+        relationValue = _relation(dislike: on, like: on ? false : relationValue.like);
+      });
+
+  @override
   Future<void> coin({required int aid, required String bvid, required int multiply, required bool alsoLike}) =>
       _answer('coin', 'coin multiply=$multiply like=$alsoLike', () {
         if (balance < multiply) throw const BiliError.api(code: -104, message: '硬币不足');

@@ -4102,3 +4102,19 @@ abstract final class SpaceVideosTheme {
   /// 分享's icon sits a little above its row's middle (74).
   static const menuShareLift = 2.5 / 3;
 }
+
+/// 推荐's ⋮ sheet, the card after 不感兴趣 and the reasons sheet (90, 91, 92).
+abstract final class FeedDislikeTheme {
+}
+
+/// 我的收藏: the folders, a folder, all videos, a row's ⋮ (80-84).
+abstract final class FavouritesTheme {
+}
+
+/// 稍后再看: the list and its empty page (85, 86).
+abstract final class WatchLaterTheme {
+}
+
+/// The app token's confirm and 开发者's 官方接口 card.
+abstract final class AppAuthTheme {
+}

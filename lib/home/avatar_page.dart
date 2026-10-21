@@ -11,6 +11,7 @@ import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/route_observer.dart';
 import '../app/swipe_back_route.dart';
+import '../favourites/favourites_page.dart';
 import '../history/history_model.dart';
 import '../history/watch_history_page.dart';
 import '../player_ui/portrait_controls.dart';
@@ -20,6 +21,7 @@ import '../shared/menu.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../watch_later/watch_later_page.dart';
 import '../video/video_route.dart';
 import 'feed_card.dart';
 import 'recents_page.dart';
@@ -58,8 +60,18 @@ class AvatarPage extends StatelessWidget {
                     glyph: _Glyph.history,
                     onTap: () => _push(context, (_) => const WatchHistoryPage()),
                   ),
-                  _Shortcut(key: const ValueKey('avatar-favourites'), label: '我的收藏', glyph: _Glyph.star, onTap: soon),
-                  _Shortcut(key: const ValueKey('avatar-later'), label: '稍后再看', glyph: _Glyph.later, onTap: soon),
+                  _Shortcut(
+                    key: const ValueKey('avatar-favourites'),
+                    label: '我的收藏',
+                    glyph: _Glyph.star,
+                    onTap: () => _push(context, (_) => const FavouritesPage()),
+                  ),
+                  _Shortcut(
+                    key: const ValueKey('avatar-later'),
+                    label: '稍后再看',
+                    glyph: _Glyph.later,
+                    onTap: () => _push(context, (_) => const WatchLaterPage()),
+                  ),
                 ],
               ),
             ),

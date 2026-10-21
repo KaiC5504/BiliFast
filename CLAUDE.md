@@ -230,7 +230,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 
 - Public repo. Never commit, print or log secrets, cookies, tokens, signed playurl responses, or anything in `local/`
   or `logs/` (both gitignored). The build log and artifacts are public too.
-- KaiC's Bilibili account: no second login, few live calls, no loops against the API. Tests never touch the network.
+- KaiC's Bilibili account: no second login (the one exception, KaiC's call in slice 13: the app token, confirmed once with
+  the web login), few live calls, no loops against the API. Tests never touch the network.
 - No Mac: iOS checks run in GitHub Actions and on his phone.
 - Layout comes only from the official app's screenshots (`local/official-app-reference/`, his iPhone 17 Pro Max,
   440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or
@@ -270,6 +271,11 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's
   `PlayerLoading`), never a spinning circle, except for loading more under a list and inside buttons, where the
   official app keeps the small system spinner too.
+- Two logins, split by host as PiliPlus does: a call to `app.bilibili.com` carries the app token (`access_key`) and
+  the Android signature, never cookies (`bili_client_official.dart`); every other call carries the web login's cookies.
+  The token never reaches a log, a fixture or an error message; an official account call without it throws
+  `BiliError.noAppToken` and its feature asks `AppAuth.request` instead. 推荐 is never fetched from the official feed
+  without the token (that feed is generic).
 - UP主空间's calls are the official app's (`app.bilibili.com`), signed with `AppSigner.android` (a public pair, the
   same for everyone; KaiC allowed it in the repo) and sent with no cookies. An archive item's `uri` carries a signed
   play link: never keep, log or put it in a fixture. 关注 stays on the web card and `/x/relation/modify`.

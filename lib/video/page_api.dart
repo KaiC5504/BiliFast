@@ -17,6 +17,9 @@ abstract interface class PageApi {
 
   Future<TripleResult> triple({required int aid, required String bvid});
 
+  /// The official API's, so it needs the app token; `on: false` takes the 不喜欢 back.
+  Future<void> dislike({required int aid, required bool on});
+
   Future<void> coin({required int aid, required String bvid, required int multiply, required bool alsoLike});
 
   Future<double> coinBalance();
@@ -109,6 +112,9 @@ class ClientPageApi implements PageApi {
 
   @override
   Future<TripleResult> triple({required int aid, required String bvid}) => _client.triple(aid: aid, bvid: bvid);
+
+  @override
+  Future<void> dislike({required int aid, required bool on}) => _client.officialDislike(aid: aid, on: on);
 
   @override
   Future<void> coin({required int aid, required String bvid, required int multiply, required bool alsoLike}) =>

@@ -70,6 +70,7 @@ class PlayerPrefs {
   bool _coinAlsoLike = true;
   bool _danmakuStyleHintSeen = false;
   bool _turnTakeover = true;
+  bool _officialFeed = true;
   int? _quality;
   VideoCodec? _codec;
 
@@ -105,6 +106,10 @@ class PlayerPrefs {
   /// 开发者's 旋转动画: turns drawn by Flutter (自绘) rather than animated by iOS (系统).
   bool get turnTakeover => _turnTakeover;
   set turnTakeover(bool value) => _set(() => _turnTakeover = value);
+
+  /// 开发者's 推荐: the official app's feed (官方) while the app token is held, or the website's (网页).
+  bool get officialFeed => _officialFeed;
+  set officialFeed(bool value) => _set(() => _officialFeed = value);
 
   /// Null until the user picks one: the controller's own default applies.
   int? get quality => _quality;
@@ -142,6 +147,7 @@ class PlayerPrefs {
     // A 1.0.0 (13) or (14) file holds a turnMethod instead, where every method but 系统 draws the turn; the next
     // write drops it and its turnPicture and turnSpinStart.
     _turnTakeover = pick<bool>('turnTakeover') ?? values['turnMethod'] != 'system';
+    _officialFeed = pick<bool>('officialFeed') ?? _officialFeed;
     _quality = pick<int>('quality');
     _codec = named('codec', VideoCodec.values);
   }
@@ -157,6 +163,7 @@ class PlayerPrefs {
     'coinAlsoLike': _coinAlsoLike,
     if (_danmakuStyleHintSeen) 'danmakuStyleHintSeen': true,
     if (!_turnTakeover) 'turnTakeover': false,
+    if (!_officialFeed) 'officialFeed': false,
     'quality': ?_quality,
     'codec': ?_codec?.name,
   };

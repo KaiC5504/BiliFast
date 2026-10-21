@@ -27,7 +27,9 @@ class DanmakuSettingsStore extends ValueNotifier<DanmakuSettings> {
     try {
       final json = jsonDecode(await file.readAsString());
       if (json is! Map<String, Object?>) throw const FormatException('not an object');
-      return DanmakuSettingsStore._(path, log, DanmakuSettings.fromJson(json));
+      final settings = DanmakuSettings.fromJson(json);
+      log.info(LogCategory.app, 'danmaku settings loaded', {'changed': settings != const DanmakuSettings()});
+      return DanmakuSettingsStore._(path, log, settings);
     } catch (error) {
       log.warn(LogCategory.app, 'danmaku settings unreadable, using defaults', {'error': _reason(error)});
     }
@@ -71,6 +73,7 @@ class DanmakuSettingsStore extends ValueNotifier<DanmakuSettings> {
       final temporary = File('$path.tmp');
       await temporary.writeAsString(text, flush: true);
       await temporary.rename(path);
+      _logger.info(LogCategory.app, 'danmaku settings saved');
     } catch (error) {
       _logger.warn(LogCategory.app, 'danmaku settings not saved', {'error': _reason(error)});
     }

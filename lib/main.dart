@@ -5,6 +5,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'account/app_auth.dart';
 import 'app/app_environment.dart';
 import 'app/app_scope.dart';
 import 'app/phone_frame.dart';
@@ -17,6 +18,7 @@ import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_files.dart';
 import 'devtools/log_forwarder.dart';
+import 'favourites/fake_favourites_api.dart';
 import 'home/home_page.dart';
 import 'home/recent_store.dart';
 import 'playback/codec_memory.dart';
@@ -31,6 +33,7 @@ import 'space/fake_space_api.dart';
 import 'shared/theme.dart';
 import 'video/fake_page_api.dart';
 import 'video/player_prefs.dart';
+import 'watch_later/fake_watch_later_api.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,8 +69,8 @@ Future<void> main(List<String> args) async {
     runApp(LaunchFailedApp(error: '$error'));
     return;
   }
-  // PC checks only: the page's actions, 搜索 and UP主空间 answer from memory, so every button can be pressed with no
-  // account traffic.
+  // PC checks only: the page's actions, 搜索, UP主空间, 我的收藏 and 稍后再看 answer from memory, and the app token
+  // reads authorized, so every button can be pressed with no account traffic.
   final fakeAccount = !Platform.isIOS && args.contains('--fake-account');
   if (fakeAccount) environment.useFakeAccount();
   unawaited(environment.refreshAccount());
@@ -79,6 +82,9 @@ Future<void> main(List<String> args) async {
     muted: args.contains('--mute'),
     onResumed: () => recheckUnknownAccount(environment),
   );
+  final navigator = GlobalKey<NavigatorState>();
+  final AppAuth appAuth =
+      fakeAccount ? FakeAppAuth() : TokenAppAuth(environment: environment, navigator: navigator);
   final device = PlayerDevice.platform();
   applyTurnTakeover(device.orientation, PlayerPrefs.shared);
   PhoneFrame.follow(device.orientation);
@@ -92,6 +98,10 @@ Future<void> main(List<String> args) async {
       pageApi: fakeAccount ? FakePageApi.demo() : null,
       searchApi: fakeAccount ? FakeSearchApi.demo() : null,
       spaceApi: fakeAccount ? FakeSpaceApi.demo() : null,
+      favouritesApi: fakeAccount ? FakeFavouritesApi.demo() : null,
+      watchLaterApi: fakeAccount ? FakeWatchLaterApi.demo() : null,
+      appAuth: appAuth,
+      navigator: navigator,
       searchHistory: searchHistory,
       danmakuSettings: danmakuSettings,
       logFiles: logFiles,
@@ -99,6 +109,7 @@ Future<void> main(List<String> args) async {
     ),
     initialLink: _argument(args, '--play='),
   ));
+  unawaited(appAuth.start());
 }
 
 /// The launch's account check fails without a network; as Swift's RootView did on becoming active, coming back to
