@@ -3534,8 +3534,261 @@ abstract final class PlayerLoadingTheme {
 /// The uploader sheet over the video page's body (62, 68, 76).
 abstract final class UploaderSheetTheme {}
 
-/// UP主空间's header, its collapsed bar and its tab row (63, 69-73, 75, 77-79).
-abstract final class SpaceTheme {}
+/// UP主空间's header, its collapsed bar and its tab row (63, 69-73, 75, 77-79), measured in px / 3 from the screen's
+/// top with the header unscrolled.
+abstract final class SpaceTheme {
+  static const page = BiliColors.card;
+
+  /// The banner runs under the status bar to 187.67; a space without one draws this light fill in its place.
+  static const bannerHeight = 563 / 3;
+  static const bannerDefault = Color(0xFFF3F2F7);
+
+  /// 〈, 私信, search and ⋮: 30 pt discs of black at 30% centred 7 under the safe area's top, 〈 25 from the left and
+  /// the others 109, 67 and 25 from the right. Their glyphs are white over the banner and grey on the white bar.
+  static const buttonDrop = 7.0;
+  static const button = 30.0;
+  static const buttonTarget = 44.0;
+  static const buttonFill = Color(0x4D000000);
+  static const buttonInk = Color(0xFFFFFFFF);
+  static const barInk = Color(0xFF61666D);
+  static const backCentre = 25.0;
+  static const chatCentreRight = 109.0;
+  static const searchCentreRight = 67.0;
+  static const moreCentreRight = 25.0;
+
+  /// The glyphs' ink boxes and strokes (63, 73). 〈's ink centres 0.83 left of its disc, the magnifier's 0.5 up and
+  /// left.
+  static const glyphStroke = 1.5;
+  static const backGlyphShift = -5 / 6;
+  static const searchGlyphShift = -0.5;
+  static const backWidth = 23 / 3;
+  static const backHeight = 44 / 3;
+  static const chatWidth = 16.0;
+  static const chatHeight = 46 / 3;
+  static const searchSize = 15.0;
+  static const moreDot = 8 / 3;
+  static const moreStep = 16 / 3;
+
+  /// Scrolled, the white bar (73) covers the status bar and 32 more; it shows once the name passes under the status
+  /// bar (77), fading in while the discs fade out.
+  static const barRow = 32.0;
+  static const bar = Color(0xFFFFFFFF);
+  static const barFade = Duration(milliseconds: 150);
+
+  /// The bar's centred pill: a 28 tall tint with the 26 pt face 2 in from its left, + 关注 8.33 after it and 13 clear
+  /// on the right.
+  static const pillHeight = 28.0;
+  static const pillFace = 26.0;
+  static const pillFaceInset = 2.0;
+  static const pillFaceGap = 25 / 3;
+  static const pillPadRight = 12.0;
+  static const pillFill = Color(0xFFFFECF1);
+  static const pillInk = BiliColors.pink;
+  static const pillFollowedFill = Color(0xFFF1F2F3);
+  static const pillFollowedInk = BiliColors.secondaryText;
+  static const pillText = 14.0;
+  static const pillPlus = 35 / 3;
+  static const pillPlusGap = 4.0;
+
+  /// While the space loads, the bar shows the face and name the tap knew.
+  static const loadingNameText = 15.0;
+  static const loadingNameGap = 8.0;
+  static const loadingNameWidth = 240.0;
+
+  /// The face: an 80 pt picture in a 2 pt white ring, the ring's box 30 from the left and 165.67 down, its badge a
+  /// 20 pt disc in its own 2 pt ring flush with the box's lower right (70, 78).
+  static const faceLeft = 30.0;
+  static const faceTop = 497 / 3;
+  static const face = 84.0;
+  static const faceRing = 2.0;
+  static const faceRingInk = Color(0xFFFFFFFF);
+  static const faceBadge = 24.0;
+
+  /// 粉丝 | 关注 | 获赞: three equal columns from 153.5 to 9.5 short of the right edge with 1 pt rules between them,
+  /// the count's ink centred 202.5 down and the label's 220.5.
+  static const statsLeft = 153.5;
+  static const statsRight = 9.5;
+  static const countCentre = 202.5;
+  static const countLine = 18.0;
+  static const countText = 14.0;
+  static const countInk = BiliColors.text;
+  static const labelCentre = 220.5;
+  static const labelLine = 14.0;
+  static const labelText = 11.0;
+  static const labelInk = BiliColors.secondaryText;
+  static const statsRuleTop = 607 / 3;
+  static const statsRule = 16.0;
+  static const statsRuleWidth = 1.0;
+  static const statsRuleInk = BiliColors.divider;
+
+  /// The 关注 row, 30 tall at 232.67 from 156 to 12 short of the right edge: + 关注 pink across all of it; followed,
+  /// 充电 (83 wide, outlined) 4 before 已关注 (grey) and ▽ (30 square) 2 after it (70). 充电 shows whenever the
+  /// uploader takes it (78, 79).
+  static const followTop = 698 / 3;
+  static const followHeight = 30.0;
+  static const followLeft = 156.0;
+  static const followRight = 12.0;
+  static const followRadius = 4.0;
+  static const followText = 14.0;
+  static const followFill = BiliColors.pink;
+  static const followInk = Color(0xFFFFFFFF);
+  static const followPlus = 34 / 3;
+  static const followPlusStroke = 1.0;
+  static const followPlusGap = 13 / 3;
+
+  /// Each label sits a little right of its button's middle: + 关注 and 已关注 by 0.67, 充电 by 2.33 (63, 70).
+  static const followShift = 2 / 3;
+  static const chargeShift = 7 / 3;
+  static const followedFill = BiliColors.divider;
+  static const followedInk = BiliColors.secondaryText;
+  static const followedListWidth = 12.0;
+  static const followedListHeight = 26 / 3;
+  static const followedListStroke = 0.9;
+  static const followedListGap = 11 / 3;
+  static const chargeWidth = 83.0;
+  static const chargeGap = 4.0;
+  static const chargeBorder = 1.0;
+  static const chargeInk = BiliColors.pink;
+  static const chargeBoltWidth = 7.0;
+  static const chargeBoltHeight = 12.0;
+  static const chargeBoltGap = 6.5;
+  static const chargeText = 13.0;
+  static const moreWidth = 30.0;
+  static const moreGap = 2.0;
+  static const moreChevronWidth = 12.0;
+  static const moreChevronHeight = 19 / 3;
+  static const moreChevronStroke = 1.0;
+  static const moreChevronDrop = 5 / 6;
+
+  /// The rows under the face, 12 from the edges: the name's box from 280, 25 tall; the bio's 7.33 under it, 21 tall;
+  /// the tag row's 6.33 under that, 15 tall; the cards 12 under that, 40 tall; then 16 to the tab row.
+  static const gutter = 12.0;
+  static const topBlock = 280.0;
+  static const nameBox = 25.0;
+  static const nameText = 18.0;
+  static const nameInk = Color(0xFF2F3238);
+  static const nameVipInk = BiliColors.pink;
+  static const levelGap = 25 / 3;
+  static const vipLabelGap = 22 / 3;
+  static const vipLabelHeight = 18.0;
+  static const vipLabelWidth = 82.0;
+
+  /// The LV badge, 11.33 tall and 22 wide; 硬核会员's runs 6 further with its bolt. LV4-6 are the space's own
+  /// colours, brighter than 评论's (63, 69, 75); LV0-3 have no shot yet and keep 评论's.
+  static const levelHeight = 34 / 3;
+  static const levelWidth = 22.0;
+  static const levelSeniorExtra = 6.0;
+  static const levels = [
+    Color(0xFFC0C4CC),
+    Color(0xFFC0C4CC),
+    Color(0xFF8BD29B),
+    Color(0xFF7BCDEF),
+    Color(0xFFFFB37C),
+    Color(0xFFEE672A),
+    Color(0xFFF04C49),
+  ];
+  static const levelInk = Color(0xFFFFFFFF);
+
+  /// bilibili UP主认证's line takes the bio's place and moves the rest down 30 (78): a 22 tall grey pill with the
+  /// verification's 16 pt disc 5 in.
+  static const officialBlock = 30.0;
+  static const officialCentre = 18.5;
+  static const officialHeight = 22.0;
+  static const officialFill = BiliColors.pageGrey;
+  static const officialDisc = 16.0;
+  static const officialDiscInset = 5.0;
+  static const officialTextGap = 6.0;
+  static const officialPadRight = 8.0;
+  static const officialText = 12.0;
+  static const officialInk = Color(0xFF61666D);
+
+  /// The bio stops short of 详情 even when 详情 is on the line above (69, 78).
+  static const bioGap = 41 / 6;
+  static const bioBox = 21.0;
+  static const bioText = 12.0;
+  static const bioInk = BiliColors.secondaryText;
+  static const bioRight = 40.0;
+  static const detailText = 12.0;
+  static const detailInk = BiliColors.link;
+
+  /// IP属地 and the like on one row, 11.33 apart: a 10.33 × 8.67 IP box 1 in, the text 3.33 after it; a link ends
+  /// with ›.
+  static const tagGap = 41 / 6;
+  static const tagBox = 15.0;
+  static const tagText = 10.0;
+  static const tagInk = Color(0xFF61666D);
+  static const tagSpacing = 34 / 3;
+  static const tagIconWidth = 31 / 3;
+  static const tagIconHeight = 26 / 3;
+  static const tagIconInset = 1.0;
+  static const tagIconGap = 3.0;
+  static const tagIconStroke = 0.9;
+  static const tagIconRadius = 2.0;
+  static const tagChevronWidth = 10 / 3;
+  static const tagChevronHeight = 6.0;
+  static const tagChevronGap = 3.0;
+
+  /// 小店 and 充电: 40 tall grey cards, side by side 8 apart when there are two (78), the icon 10 in, the note 10
+  /// from the right.
+  static const entriesGap = 12.0;
+  static const entryHeight = 40.0;
+  static const entrySpacing = 8.0;
+  static const entryRadius = 4.5;
+  static const entryFill = BiliColors.softGrey;
+  static const entryPad = 10.0;
+  static const entryPadRight = 25 / 3;
+  static const entryIcon = 12.0;
+  static const entryBoltWidth = 25 / 3;
+  static const entryBoltHeight = 13.0;
+  static const entryIconGap = 13 / 3;
+  static const entryText = 12.0;
+  static const entryTextDrop = 2 / 3;
+  static const entryInk = BiliColors.text;
+  static const entryNoteText = 11.0;
+  static const entryNoteInk = Color(0xFF61666D);
+  static const entryIconInk = Color(0xFFFFC200);
+  static const bottomGap = 16.0;
+
+  /// The tab row: 39.5 between 0.5 pt hairlines. Its labels sit in equal cells across the width and 4 beyond each
+  /// edge (63's five, 78's four, 69's three); the shown one pink over a 14 × 2 bar 4 above the lower hairline.
+  static const tabsHairline = 0.5;
+  static const tabsBody = 39.5;
+  static const tabsHeight = tabsHairline * 2 + tabsBody;
+  static const tabsHairlineInk = BiliColors.divider;
+  static const tabsSpread = 4.0;
+  static const tabText = 16.0;
+  static const tabLine = 22.0;
+  static const tabInk = Color(0xFF61666D);
+  static const tabSelected = BiliColors.pink;
+  static const indicatorWidth = 14.0;
+  static const indicatorHeight = 2.0;
+  static const indicatorBottom = 4.0;
+
+  /// 已关注's sheet (71): rows 50 tall, the second and third with a 0.5 pt rule along their top from 20 in, a 5 pt
+  /// gap, then 取消 in a 56 tall row with 14 under it, over the page dimmed by half.
+  static const sheetDim = Color(0x80000000);
+  static const sheetFill = Color(0xFFFFFFFF);
+  static const sheetShadow = Color(0x1F000000);
+  static const sheetShadowBlur = 12.0;
+  static const sheetRow = 50.0;
+  static const sheetRule = 0.5;
+  static const sheetRuleInk = Color(0xFFAEB3B9);
+  static const sheetInset = 20.0;
+  static const sheetText = 14.0;
+  static const sheetInk = BiliColors.text;
+  static const sheetGap = 5.0;
+  static const sheetGapFill = BiliColors.divider;
+  static const sheetCancel = 56.0;
+  static const sheetCancelText = 16.0;
+  static const sheetBottom = 14.0;
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
+
+  /// 加载失败，点击重试 in the middle of the page.
+  static const retryText = 14.0;
+  static const retryInk = BiliColors.secondaryText;
+  static const retryAction = BiliColors.link;
+}
 
 /// 投稿's chips, 播放全部, sort and rows, and a row's ⋮ menu (63, 69, 70, 74).
 abstract final class SpaceVideosTheme {}
