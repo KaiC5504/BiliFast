@@ -16,6 +16,7 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_api.dart';
 import 'package:bilifast/search/search_page.dart';
+import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/menu.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -23,7 +24,7 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/video/intro/title_block.dart';
 import 'package:bilifast/video/video_page.dart';
-import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
+import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator, CupertinoSliverRefreshControl;
 import 'package:flutter/gestures.dart' show kPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -283,6 +284,52 @@ void main() {
     expect(find.byKey(const ValueKey('feed-error')), findsNothing);
     expect(card('BV1c0'), findsOneWidget);
     await toastGone(tester);
+  });
+
+  testWidgets("推荐's pull shows the TV: held while dragged short of the trigger, cycling while it refreshes", (
+    tester,
+  ) async {
+    http.pages[1] = twenty();
+    await show(tester);
+    await settle(tester);
+    Finder spinners() => find.descendant(
+      of: find.byType(CupertinoSliverRefreshControl),
+      matching: find.byType(CupertinoActivityIndicator),
+    );
+    final feed = find.byKey(const ValueKey('feed'));
+    final pull = await tester.startGesture(tester.getCenter(feed));
+    for (var i = 0; i < 4; i++) {
+      await pull.moveBy(const Offset(0, 20));
+      await tester.pump();
+    }
+    expect(find.byType(LoadingTv), findsOneWidget);
+    // The builder's box spans the width; the 60 pt face is scaled down into it, centred.
+    expect(tester.getSize(find.byType(LoadingTv)).height, LoadingTvTheme.size);
+    expect(tester.getCenter(find.byType(LoadingTv)).dx, 220);
+    await tester.pump(LoadingTvTheme.frame * 2);
+    expect(tvFace(tester), 0, reason: 'held');
+    expect(spinners(), findsNothing);
+    expect(http.asked, [1], reason: 'short of the trigger');
+
+    http.gates[1] = Completer<void>();
+    for (var i = 0; i < 10; i++) {
+      await pull.moveBy(const Offset(0, 40));
+      await tester.pump();
+    }
+    await pull.up();
+    await settle(tester, 10);
+    expect(http.asked, [1, 1]);
+    expect(find.byType(LoadingTv), findsOneWidget);
+    final first = tvFace(tester);
+    await tester.pump(LoadingTvTheme.frame);
+    expect(tvFace(tester), (first + 1) % LoadingTv.frames.length, reason: 'cycling');
+    expect(spinners(), findsNothing);
+
+    http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1n$i')];
+    http.gates[1]!.complete();
+    await settle(tester, 30);
+    expect(card('BV1n0'), findsOneWidget);
+    expect(find.byType(LoadingTv), findsNothing);
   });
 
   testWidgets('home goes idle once the feed shows: nothing ticks, no frame waits', (tester) async {
@@ -788,16 +835,14 @@ void main() {
         )
         .position;
 
-    Finder reloadSpinner() => find.descendant(
-      of: find.byKey(const ValueKey('feed-reload')),
-      matching: find.byType(CupertinoActivityIndicator),
-    );
+    Finder reloadTv() =>
+        find.descendant(of: find.byKey(const ValueKey('feed-reload')), matching: find.byType(LoadingTv));
 
     List<Map<String, Object?>> fresh() => [for (var i = 0; i < 20; i++) feedItem('BV1n$i')];
 
     Future<void> tapHome(WidgetTester tester) => tester.tap(find.byKey(const ValueKey('home-tab-home')));
 
-    testWidgets('scrolled, goes back to the top and refreshes 推荐 once, the spinner up until the new cards', (
+    testWidgets('scrolled, goes back to the top and refreshes 推荐 once, the TV up until the new cards', (
       tester,
     ) async {
       http.pages[1] = twenty();
@@ -816,10 +861,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 150));
       expect(http.asked.sublist(asked), [1], reason: 'straight away, not after the scroll');
       expect(feedScroll(tester).pixels, inExclusiveRange(0, from), reason: 'scrolling, not jumped');
-      expect(reloadSpinner(), findsNothing, reason: 'the spinner opens once at the top');
+      expect(reloadTv(), findsNothing, reason: 'the TV opens once at the top');
       await settle(tester, 10);
       expect(feedScroll(tester).pixels, 0);
-      expect(reloadSpinner(), findsOneWidget);
+      expect(reloadTv(), findsOneWidget);
       expect(card('BV1c0'), findsOneWidget, reason: 'the old cards stay until the new ones come');
 
       http.gates[1]!.complete();
@@ -832,7 +877,34 @@ void main() {
       expect(tester.binding.transientCallbackCount, 0, reason: 'nothing left ticking');
     });
 
-    testWidgets('at the top, refreshes 推荐 once with the spinner up', (tester) async {
+    testWidgets('the header holds the cycling TV centred in its 60 pt band, above the cards', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      final cardTop = tester.getTopLeft(card('BV1c0')).dy;
+      http.gates[1] = Completer<void>();
+      await tapHome(tester);
+      await settle(tester, 10);
+      final band = tester.getRect(find.byKey(const ValueKey('feed-reload')));
+      expect(band.height, LoadingTvTheme.size);
+      expect(tester.getRect(reloadTv()), Rect.fromCenter(center: band.center, width: 60, height: 60));
+      expect(tester.getTopLeft(card('BV1c0')).dy, cardTop + LoadingTvTheme.size);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('feed-reload')),
+          matching: find.byType(CupertinoActivityIndicator),
+        ),
+        findsNothing,
+      );
+      final first = tvFace(tester);
+      await tester.pump(LoadingTvTheme.frame);
+      expect(tvFace(tester), (first + 1) % LoadingTv.frames.length);
+      http.gates[1]!.complete();
+      await settle(tester, 20);
+      expect(find.byType(LoadingTv), findsNothing);
+    });
+
+    testWidgets('at the top, refreshes 推荐 once with the TV up', (tester) async {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
@@ -842,7 +914,7 @@ void main() {
       await tapHome(tester);
       await settle(tester, 6);
       expect(http.asked, [1, 1]);
-      expect(reloadSpinner(), findsOneWidget);
+      expect(reloadTv(), findsOneWidget);
       expect(feedScroll(tester).pixels, 0);
       http.gates[1]!.complete();
       await settle(tester, 20);
@@ -913,7 +985,7 @@ void main() {
       expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
     });
 
-    testWidgets('with reduced motion jumps to the top and shows the spinner at once', (tester) async {
+    testWidgets('with reduced motion jumps to the top and shows the TV at once, on its first face', (tester) async {
       http.pages[1] = twenty();
       await show(tester, still: true);
       await settle(tester);
@@ -924,8 +996,10 @@ void main() {
       await tapHome(tester);
       await tester.pump();
       expect(feedScroll(tester).pixels, 0);
-      expect(reloadSpinner(), findsOneWidget);
+      expect(reloadTv(), findsOneWidget);
       expect(tester.getSize(find.byKey(const ValueKey('feed-reload'))).height, 60, reason: 'already open');
+      await tester.pump(LoadingTvTheme.frame * 2);
+      expect(tvFace(tester), 0);
       http.gates[1]!.complete();
       await settle(tester, 4);
       expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
@@ -952,4 +1026,12 @@ void main() {
 String? shownTitle(WidgetTester tester) {
   final blocks = find.byType(TitleBlock, skipOffstage: false);
   return blocks.evaluate().isEmpty ? null : tester.widget<TitleBlock>(blocks.first).detail.title;
+}
+
+/// The face the one loading TV on screen shows.
+int tvFace(WidgetTester tester) {
+  for (var face = 0; face < LoadingTv.frames.length; face++) {
+    if (find.byKey(ValueKey('loading-tv-$face')).evaluate().isNotEmpty) return face;
+  }
+  fail('no loading TV');
 }

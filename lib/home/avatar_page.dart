@@ -15,6 +15,7 @@ import '../history/history_model.dart';
 import '../history/watch_history_page.dart';
 import '../player_ui/portrait_controls.dart';
 import '../settings/settings_page.dart';
+import '../shared/loading_tv.dart';
 import '../shared/menu.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -434,7 +435,12 @@ class _RecentCardState extends State<_RecentCard> with RouteAware {
   }) => CustomScrollView(
     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
     slivers: [
-      if (onRefresh != null) CupertinoSliverRefreshControl(onRefresh: onRefresh),
+      if (onRefresh != null)
+        CupertinoSliverRefreshControl(
+          refreshIndicatorExtent: LoadingTvTheme.size,
+          builder: loadingTvRefreshIndicator,
+          onRefresh: onRefresh,
+        ),
       SliverToBoxAdapter(child: _Header(onAll: onAll)),
       if (note != null)
         SliverToBoxAdapter(
