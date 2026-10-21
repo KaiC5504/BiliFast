@@ -180,14 +180,11 @@ class _Count extends StatelessWidget {
   );
 }
 
-/// A glyph in its box, then its words.
 class _Meta extends StatelessWidget {
   const _Meta({required this.glyph, required this.text, this.shrink = true});
 
   final Widget glyph;
   final String text;
-
-  /// Whether the words are cut with … when the line runs out.
   final bool shrink;
 
   @override
@@ -220,9 +217,9 @@ class _Cover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = watchLaterStyle(WatchLaterTheme.progressText, WatchLaterTheme.progressInk).copyWith(
-      height: 1.2,
+      height: WatchLaterTheme.progressLineHeight,
       leadingDistribution: TextLeadingDistribution.even,
-      shadows: const [Shadow(color: WatchLaterTheme.progressShadow, blurRadius: 2)],
+      shadows: const [Shadow(color: WatchLaterTheme.progressShadow, blurRadius: WatchLaterTheme.progressShadowBlur)],
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(WatchLaterTheme.coverRadius),

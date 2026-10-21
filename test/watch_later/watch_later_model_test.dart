@@ -163,6 +163,81 @@ void main() {
     expect(numbers(), isNot(contains(1)));
   });
 
+  test('删除 refused with -101 turns the list to its login state', () async {
+    await model.start();
+    await idle();
+    api.failures['remove'] = const BiliError.api(code: -101, message: '账号未登录');
+    expect(await model.remove(model.items[2]), isNull, reason: 'no toast');
+    expect(model.needsLogin, isTrue);
+    expect(model.items, isEmpty);
+  });
+
+  test(
+    'removals among the first page leave no row behind: the next ask is the page holding the first unseen row',
+    () async {
+      api = FakeWatchLaterApi(items: laterItems(25));
+      model = WatchLaterModel(
+        api: api,
+        isLoggedIn: () => true,
+        accountMid: () => 77,
+        logger: Logger(session: 'test'),
+      );
+      addTearDown(model.dispose);
+      await model.start();
+      await idle();
+      model.setEditing(true);
+      model.toggleChosen(model.items[2]);
+      model.toggleChosen(model.items[6]);
+      expect(await model.removeChosen(), isNull);
+      expect(await model.remove(model.items[12]), isNull);
+      expect(numbers(), isNot(contains(15)));
+      final remaining = [
+        for (var i = 1; i <= 25; i++)
+          if (i != 3 && i != 7 && i != 15) i,
+      ];
+      for (var asks = 0; model.canLoadMore && asks < 5; asks++) {
+        model.loadMore();
+        await idle();
+      }
+      expect(numbers(), remaining);
+      expect(model.hasMore, isFalse);
+      expect(api.calls.where((call) => call.startsWith('list')), [
+        'list all newest page=1',
+        'list all newest page=1',
+        'list all newest page=2',
+      ]);
+    },
+  );
+
+  test('a removal while the next page is out leaves no row behind, and rows keep the server’s order', () async {
+    api = FakeWatchLaterApi(items: laterItems(25));
+    model = WatchLaterModel(
+      api: api,
+      isLoggedIn: () => true,
+      accountMid: () => 77,
+      logger: Logger(session: 'test'),
+    );
+    addTearDown(model.dispose);
+    await model.start();
+    await idle();
+    final hold = api.holds['list'] = Completer<void>();
+    model.loadMore();
+    await idle();
+    expect(await model.remove(model.items[2]), isNull);
+    api.holds.remove('list');
+    hold.complete();
+    await idle();
+    for (var asks = 0; model.canLoadMore && asks < 5; asks++) {
+      model.loadMore();
+      await idle();
+    }
+    expect(numbers(), [
+      for (var i = 1; i <= 25; i++)
+        if (i != 3) i,
+    ]);
+    expect(model.hasMore, isFalse);
+  });
+
   test('the edit mode chooses rows, 全选 and 取消选择, and 删除 sends them in one call', () async {
     await model.start();
     await idle();
@@ -188,6 +263,23 @@ void main() {
     expect(numbers().first, 3);
   });
 
+  test('a failed 批量 删除 puts every row back in order and leaves the edit mode', () async {
+    await model.start();
+    await idle();
+    model.setEditing(true);
+    for (final index in [0, 1, 4]) {
+      model.toggleChosen(model.items[index]);
+    }
+    api.failures['remove'] = const BiliError.http(502);
+    final done = model.removeChosen();
+    expect(numbers().take(3), [3, 4, 6]);
+    expect(await done, requestFailureMessage(const BiliError.http(502)));
+    expect(api.calls.last, 'remove 83000001,83000002,83000005');
+    expect(numbers(), [for (var i = 1; i <= 20; i++) i]);
+    expect(model.editing, isFalse);
+    expect(model.chosen, isEmpty);
+  });
+
   test('the chips and the sort don’t change in edit mode', () async {
     await model.start();
     await idle();
@@ -211,6 +303,15 @@ void main() {
     expect(await model.clear(WatchLaterClean.invalid), isNotNull);
     await idle();
     expect(api.calls.last, 'clear invalid');
+  });
+
+  test('一键清除 refused with -101 turns the list to its login state', () async {
+    await model.start();
+    await idle();
+    api.failures['clear'] = const BiliError.api(code: -101, message: '账号未登录');
+    expect(await model.clear(WatchLaterClean.watched), isNull, reason: 'no toast');
+    expect(model.needsLogin, isTrue);
+    expect(model.items, isEmpty);
   });
 
   test('复制到 names the folder and the account, ends the edit mode and lists again', () async {
@@ -240,6 +341,49 @@ void main() {
     await idle();
     expect(api.calls.where((call) => call.startsWith('move')).last, 'move 83000001 to=9101');
     expect(numbers().first, 2);
+  });
+
+  for (final move in [false, true]) {
+    test('${move ? '移动到' : '复制到'} refused with -101 turns the list to its login state, with no toast', () async {
+      await model.start();
+      await idle();
+      model.setEditing(true);
+      model.toggleChosen(model.items[0]);
+      api.failures[move ? 'moveToFolder' : 'copyToFolder'] = const BiliError.api(code: -101, message: '账号未登录');
+      expect(await model.sendChosen(testFolders.last, move: move), isNull);
+      expect(model.needsLogin, isTrue);
+      expect(model.editing, isFalse);
+      expect(model.items, isEmpty);
+    });
+  }
+
+  test('移动到 counts as a removal: paging after it leaves no row behind', () async {
+    api = FakeWatchLaterApi(items: laterItems(25), folderList: testFolders);
+    model = WatchLaterModel(
+      api: api,
+      isLoggedIn: () => true,
+      accountMid: () => 77,
+      logger: Logger(session: 'test'),
+    );
+    addTearDown(model.dispose);
+    await model.start();
+    await idle();
+    model.setEditing(true);
+    model.toggleChosen(model.items[1]);
+    model.toggleChosen(model.items[3]);
+    api.failures['list'] = const BiliError.http(500);
+    expect(await model.sendChosen(testFolders.first, move: true), WatchLaterModel.moved);
+    expect(numbers(), isNot(contains(2)), reason: 'moved rows leave at once');
+    await idle();
+    api.failures.clear();
+    for (var asks = 0; model.canLoadMore && asks < 5; asks++) {
+      model.loadMore();
+      await idle();
+    }
+    expect(numbers(), [
+      for (var i = 1; i <= 25; i++)
+        if (i != 2 && i != 4) i,
+    ]);
   });
 
   test('a row opens at its progress; a finished one from the start', () {

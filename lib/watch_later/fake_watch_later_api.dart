@@ -7,8 +7,12 @@ import 'watch_later_api.dart';
 /// Answers from memory, for tests and `--fake-account`: a server-side list that removing, clearing and moving change,
 /// paged and filtered as the website does.
 class FakeWatchLaterApi implements WatchLaterApi {
-  FakeWatchLaterApi({List<WatchLaterItem> items = const [], this.folderList = const [], this.delay = Duration.zero})
-    : items = [...items];
+  FakeWatchLaterApi({
+    List<WatchLaterItem> items = const [],
+    List<FavFolder> folderList = const [],
+    this.delay = Duration.zero,
+  }) : items = [...items],
+       folderList = [...folderList];
 
   /// 23 made-up videos, newest added first, so paging, both chips, both orders and every progress label show; covers
   /// are empty so nothing is fetched.
@@ -49,6 +53,8 @@ class FakeWatchLaterApi implements WatchLaterApi {
 
   /// Aids whose video is gone (一键清除已失效视频 takes them).
   final Set<int> invalid = {};
+
+  /// The account's folders; [createFolder] adds to them.
   final List<FavFolder> folderList;
   Duration delay;
 
@@ -79,7 +85,7 @@ class FakeWatchLaterApi implements WatchLaterApi {
           for (final item in oldestFirst ? items.reversed : items)
             if (filter == WatchLaterFilter.all || item.progress != -1) item,
         ];
-        const size = 20;
+        const size = WatchLaterListPage.size;
         final start = (page - 1) * size;
         final rows = kept.skip(start).take(size).toList();
         return WatchLaterListPage(
@@ -105,7 +111,7 @@ class FakeWatchLaterApi implements WatchLaterApi {
 
   @override
   Future<List<FavFolder>> folders({required int mid, required int aid}) =>
-      _answer('folders', 'folders mid=$mid aid=$aid', () => folderList);
+      _answer('folders', 'folders mid=$mid aid=$aid', () => [...folderList]);
 
   @override
   Future<void> copyToFolder({required List<int> aids, required int folderId, required int mid}) => _answer(
@@ -120,4 +126,24 @@ class FakeWatchLaterApi implements WatchLaterApi {
         (folderContents[folderId] ??= []).addAll(aids);
         items.removeWhere((item) => aids.contains(item.aid));
       });
+
+  @override
+  Future<FavFolder> createFolder({
+    required String title,
+    required String intro,
+    required bool isPrivate,
+    String cover = '',
+  }) => _answer('createFolder', 'createFolder title=$title intro=$intro private=$isPrivate cover=$cover', () {
+    final folder = FavFolder(
+      id: 9900 + folderList.length,
+      title: title,
+      count: 0,
+      isPrivate: isPrivate,
+      contains: false,
+      isDefault: false,
+    );
+    final at = folderList.indexWhere((folder) => !folder.isDefault);
+    folderList.insert(at < 0 ? folderList.length : at, folder);
+    return folder;
+  });
 }

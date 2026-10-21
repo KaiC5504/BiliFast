@@ -4568,7 +4568,9 @@ abstract final class WatchLaterTheme {
   static const progressRight = 22 / 3;
   static const progressBottom = 4.9;
   static const progressInk = BiliColors.onCover;
+  static const progressLineHeight = 1.2;
   static const progressShadow = Color(0x66000000);
+  static const progressShadowBlur = 2.0;
 
   /// The edit-mode circle (95, 96): 21.33 across, centred 23 in; a hairline grey ring, or pink with a white ✓.
   static const circleCentreX = 23.0;
@@ -4635,6 +4637,7 @@ abstract final class WatchLaterTheme {
   static const actionHairline = 0.5;
   static const actionHairlineInk = BiliColors.pageGrey;
   static const actionPressed = Color(0x0A000000);
+  static const actionIdle = BiliColors.chromeShadeClear;
 
   /// 复制到 / 移动到's sheet (97, 98): white, 554.67 tall; the 📁 16 × 15 at 12, 24.67 down; 选择收藏夹 22 pt from 34 and
   /// + 新建收藏夹 20 pt grey ending 12 from the edge, centred 32.33 down. The folders from 56.17 down, 61 a row: the
@@ -4671,6 +4674,7 @@ abstract final class WatchLaterTheme {
   static const editBarHairline = 2 / 3;
   static const editShadeHeight = 94 / 3;
   static const editShade = Color(0x1A000000);
+  static const editShadeClear = BiliColors.chromeShadeClear;
   static const selectAllLeft = 42.0;
   static const editText = 13.0;
   static const editActionGap = 16.0;

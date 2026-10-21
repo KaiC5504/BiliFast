@@ -16,6 +16,14 @@ abstract interface class WatchLaterApi {
 
   /// Also takes the videos out of 稍后再看.
   Future<void> moveToFolder({required List<int> aids, required int folderId});
+
+  /// 选择收藏夹's + 新建收藏夹, through the 创建 page.
+  Future<FavFolder> createFolder({
+    required String title,
+    required String intro,
+    required bool isPrivate,
+    String cover = '',
+  });
 }
 
 class ClientWatchLaterApi implements WatchLaterApi {
@@ -43,4 +51,14 @@ class ClientWatchLaterApi implements WatchLaterApi {
   @override
   Future<void> moveToFolder({required List<int> aids, required int folderId}) =>
       _client.moveWatchLater(aids: aids, folderId: folderId);
+
+  @override
+  Future<FavFolder> createFolder({
+    required String title,
+    required String intro,
+    required bool isPrivate,
+    String cover = '',
+  }) =>
+      // bili_core's createFolder takes no cover on this base; it goes on as cover: cover once it does.
+      _client.createFolder(title: title, isPrivate: isPrivate, intro: intro);
 }

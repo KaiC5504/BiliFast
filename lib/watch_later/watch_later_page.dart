@@ -8,6 +8,7 @@ import '../account/login_gate.dart';
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../comments/comments_tab.dart' show NearEndPaging;
+import '../favourites/new_folder_page.dart';
 import '../shared/loading_tv.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -35,7 +36,6 @@ class WatchLaterPage extends StatefulWidget {
   static const note = '仅展示本App中可查看的稿件';
   static const emptyMessage = '暂无稍后再看视频哦';
   static const loggedOutMessage = '登录后查看稍后再看';
-  static const soon = '暂未开放';
 
   @override
   State<WatchLaterPage> createState() => _WatchLaterPageState();
@@ -157,7 +157,16 @@ class _WatchLaterPageState extends State<WatchLaterPage> {
     final message = await _m.sendChosen(folder, move: move);
     if (!mounted) return;
     _sheet.value = null;
-    showToast(context, message);
+    if (message != null) showToast(context, message);
+  }
+
+  Future<FavFolder?> _newFolder() {
+    final api = widget.api ?? AppScope.of(context).watchLaterApi;
+    return openNewFolder(
+      context,
+      create: ({required String title, required String intro, required bool isPrivate, String cover = ''}) =>
+          api.createFolder(title: title, intro: intro, isPrivate: isPrivate, cover: cover),
+    );
   }
 
   void _back() {
@@ -243,7 +252,7 @@ class _WatchLaterPageState extends State<WatchLaterPage> {
                     },
                     onRemove: (item) => unawaited(_remove(item)),
                     onSend: (folder, move) => unawaited(_send(folder, move: move)),
-                    onNewFolder: () => showToast(context, WatchLaterPage.soon),
+                    onNewFolder: _newFolder,
                   ),
                 ),
               ],
@@ -642,7 +651,7 @@ class _Footer extends StatelessWidget {
   }
 }
 
-/// 85: the grey TV and 暂无稍后再看视频哦 under it.
+/// 85
 class _Empty extends StatelessWidget {
   const _Empty();
 

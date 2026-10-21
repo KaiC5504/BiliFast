@@ -9,10 +9,11 @@ const _toViewMovePath = '/x/v2/history/toview/move';
 /// 稍后再看's calls, the website's (as PiliPlus keeps them): the list, removing, clearing, and copying or moving to a
 /// 收藏 folder. All need the login cookie.
 extension BiliClientToView on BiliClient {
-  static const pageSize = 20;
+  static const pageSize = WatchLaterListPage.size;
 
-  /// [page] counts from 1. The list ends when a page comes back empty or the pages so far cover the server's count;
-  /// rows dropped while decoding still count, so a page of bangumi doesn't stop it early.
+  /// [page] counts from 1. The list ends when a page comes back empty or the pages up to this one cover the server's
+  /// count; rows dropped while decoding still count, so a page of bangumi doesn't stop it early. After a removal the
+  /// rows behind it move up a place, so the caller asks again for the page holding its first unseen row.
   Future<WatchLaterListPage> watchLater({
     required WatchLaterFilter filter,
     required bool oldestFirst,

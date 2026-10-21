@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -30,7 +31,16 @@ class WatchLaterModel extends ChangeNotifier {
   WatchLaterFilter _filter = WatchLaterFilter.all;
   bool _oldestFirst = false;
   List<WatchLaterItem> _items = const [];
-  int _nextPage = 1;
+
+  /// How many of the server's rows the pages so far cover, counted in the list as the server now holds it. A removal
+  /// moves the rows behind it up, so the next page asked is the one holding the first unseen row, and the rows it
+  /// repeats drop out.
+  int _covered = 0;
+
+  /// Removal calls out, and the rows the server has taken out so far: a page answering across a removal can't tell
+  /// whether the server cut it before or after.
+  int _removing = 0;
+  int _removedRows = 0;
   bool _hasMore = true;
   bool _loading = false;
   bool _refreshing = false;
@@ -59,8 +69,6 @@ class WatchLaterModel extends ChangeNotifier {
 
   /// A pull to refresh is running; the rows shown stay until it answers.
   bool get refreshing => _refreshing;
-
-  /// The first page of the current list has answered.
   bool get loaded => _loaded;
 
   /// Why the next page (or, with no rows, the first) failed.
@@ -125,7 +133,7 @@ class WatchLaterModel extends ChangeNotifier {
     if (!keepRows) {
       _items = const [];
       _refreshing = false;
-      _nextPage = 1;
+      _covered = 0;
       _hasMore = true;
       _loaded = false;
     }
@@ -143,23 +151,55 @@ class WatchLaterModel extends ChangeNotifier {
     _loading = true;
     _error = null;
     _notify();
-    unawaited(_fetch(_generation, _filter, _oldestFirst, _fromTop ? 1 : _nextPage));
+    final page = _fromTop ? 1 : _covered ~/ WatchLaterListPage.size + 1;
+    unawaited(_fetch(_generation, _filter, _oldestFirst, page, replacing: _fromTop));
   }
 
-  Future<void> _fetch(int generation, WatchLaterFilter filter, bool oldestFirst, int page) async {
-    final replacing = page == 1;
+  Future<void> _fetch(
+    int generation,
+    WatchLaterFilter filter,
+    bool oldestFirst,
+    int page, {
+    required bool replacing,
+  }) async {
+    final removingAtAsk = _removing > 0;
+    final removedAtAsk = _removedRows;
     try {
       final answer = await api.list(filter: filter, oldestFirst: oldestFirst, page: page);
       if (!_answered(generation)) return;
       final kept = replacing ? <WatchLaterItem>[] : [..._items];
-      final seen = {for (final item in kept) item.aid, ..._removed};
+      // A page asked again after a removal can hold new rows among ones already shown: each goes in after the shown
+      // row before it in the page, or before the first shown one.
+      final ahead = <WatchLaterItem>[];
+      int? at;
       for (final item in answer.items) {
-        if (seen.add(item.aid)) kept.add(item);
+        final shown = kept.indexWhere((row) => row.aid == item.aid);
+        if (shown >= 0) {
+          kept.insertAll(shown, ahead);
+          at = shown + ahead.length + 1;
+          ahead.clear();
+        } else if (_removed.contains(item.aid) || ahead.any((row) => row.aid == item.aid)) {
+          continue;
+        } else if (at == null) {
+          ahead.add(item);
+        } else {
+          kept.insert(at++, item);
+        }
       }
+      kept.addAll(ahead);
       _items = kept;
       _fromTop = false;
-      _nextPage = page + 1;
-      _hasMore = answer.hasMore;
+      const size = WatchLaterListPage.size;
+      final shifted = _removedRows - removedAtAsk;
+      if (removingAtAsk || _removing > 0 || shifted > 0) {
+        // The server may have cut this page before the removal, or after it, when the rows moving up past the page's
+        // start went unseen. Asking again from its start, less the rows removed, covers both.
+        _covered = math.max(0, (page - 1) * size - shifted);
+        _hasMore = answer.hasMore || _covered < answer.total;
+      } else {
+        _covered = page * size;
+        _hasMore = answer.hasMore;
+      }
       _loaded = true;
       _refreshing = false;
       if (_editing) _chosen = _chosen.where((aid) => _items.any((item) => item.aid == aid)).toSet();
@@ -221,7 +261,7 @@ class WatchLaterModel extends ChangeNotifier {
     _needsLogin = true;
     _items = const [];
     _fromTop = true;
-    _nextPage = 1;
+    _covered = 0;
     _hasMore = true;
     _loaded = false;
     _error = null;
@@ -281,9 +321,11 @@ class WatchLaterModel extends ChangeNotifier {
         if (!aids.contains(item.aid)) item,
     ];
     _removed.addAll(aids);
+    _removing++;
     _notify();
     try {
       await api.remove(aids: aids.toList());
+      _removedOnServer(aids.length);
       return null;
     } catch (error) {
       _logger.warn(LogCategory.ui, 'watch later remove failed', {'error': '${error.runtimeType}'});
@@ -296,7 +338,6 @@ class WatchLaterModel extends ChangeNotifier {
         _notify();
         return null;
       }
-      // Put each back before the first row that followed it, or at the end.
       final restored = [..._items];
       for (final item in rows) {
         if (restored.any((row) => row.aid == item.aid)) continue;
@@ -308,7 +349,14 @@ class WatchLaterModel extends ChangeNotifier {
       _items = restored;
       _notify();
       return requestFailureMessage(error);
+    } finally {
+      _removing--;
     }
+  }
+
+  void _removedOnServer(int rows) {
+    _removedRows += rows;
+    _covered = math.max(0, _covered - rows);
   }
 
   /// 一键清除: the server clears, then the list starts over. Returns the words for a toast on failure.
@@ -327,14 +375,15 @@ class WatchLaterModel extends ChangeNotifier {
     return null;
   }
 
-  /// 复制到 or 移动到 [folder] with the chosen rows. On success edit mode ends and the list starts over; returns the
-  /// words for a toast either way.
-  Future<String> sendChosen(FavFolder folder, {required bool move}) async {
+  /// 复制到 or 移动到 [folder] with the chosen rows. On success edit mode ends, moved rows leave and the list starts
+  /// over. Returns the words for a toast, or null when a -101 turned the list to its login state.
+  Future<String?> sendChosen(FavFolder folder, {required bool move}) async {
     final aids = [
       for (final item in _items)
         if (_chosen.contains(item.aid)) item.aid,
     ];
     if (aids.isEmpty) return requestFailureMessage(StateError('nothing chosen'));
+    if (move) _removing++;
     try {
       if (move) {
         await api.moveToFolder(aids: aids, folderId: folder.id);
@@ -345,9 +394,23 @@ class WatchLaterModel extends ChangeNotifier {
       }
     } catch (error) {
       _logger.warn(LogCategory.ui, 'watch later ${move ? 'move' : 'copy'} failed', {'error': '${error.runtimeType}'});
+      if (error is BiliError && error.needsLogin) {
+        if (!_disposed) signOut();
+        return null;
+      }
       return requestFailureMessage(error);
+    } finally {
+      if (move) _removing--;
     }
     if (_disposed) return move ? moved : copied;
+    if (move) {
+      _items = [
+        for (final item in _items)
+          if (!aids.contains(item.aid)) item,
+      ];
+      _removed.addAll(aids);
+      _removedOnServer(aids.length);
+    }
     _editing = false;
     _chosen = const {};
     unawaited(reload());

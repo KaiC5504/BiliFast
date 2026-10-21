@@ -12,7 +12,6 @@ import 'watch_later_api.dart';
 import 'watch_later_glyphs.dart';
 import 'watch_later_text.dart';
 
-/// What the page's sheet layer shows.
 sealed class WatchLaterSheet {
   const WatchLaterSheet();
 }
@@ -58,7 +57,9 @@ class SheetLayer extends StatefulWidget {
   final VoidCallback onBulk;
   final ValueChanged<WatchLaterItem> onRemove;
   final void Function(FavFolder folder, bool move) onSend;
-  final VoidCallback onNewFolder;
+
+  /// Completes with the folder made, or null.
+  final Future<FavFolder?> Function() onNewFolder;
 
   @override
   State<SheetLayer> createState() => _SheetLayerState();
@@ -70,6 +71,7 @@ class _SheetLayerState extends State<SheetLayer> with SingleTickerProviderStateM
     duration: WatchLaterTheme.sheetIn,
     reverseDuration: WatchLaterTheme.sheetOut,
   );
+  late final _curve = CurvedAnimation(parent: _motion, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
   WatchLaterSheet? _shown;
 
   @override
@@ -83,6 +85,7 @@ class _SheetLayerState extends State<SheetLayer> with SingleTickerProviderStateM
   @override
   void dispose() {
     widget.sheet.removeListener(_changed);
+    _curve.dispose();
     _motion.dispose();
     super.dispose();
   }
@@ -117,7 +120,6 @@ class _SheetLayerState extends State<SheetLayer> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     final shown = _shown;
     if (shown == null) return const SizedBox.shrink();
-    final curve = CurvedAnimation(parent: _motion, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
     final Widget panel = switch (shown) {
       ManageSheet() => _ActionPanel(
         key: const ValueKey('later-manage-sheet'),
@@ -163,7 +165,7 @@ class _SheetLayerState extends State<SheetLayer> with SingleTickerProviderStateM
           right: 0,
           bottom: 0,
           child: SlideTransition(
-            position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(curve),
+            position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(_curve),
             child: panel,
           ),
         ),
@@ -280,7 +282,7 @@ class _ActionRowState extends State<_ActionRow> {
         onTapCancel: () => _press(false),
         onTap: action.onTap,
         child: ColoredBox(
-          color: _pressed ? WatchLaterTheme.actionPressed : const Color(0x00000000),
+          color: _pressed ? WatchLaterTheme.actionPressed : WatchLaterTheme.actionIdle,
           child: SizedBox(
             height: WatchLaterTheme.actionRowHeight,
             child: Stack(
@@ -327,7 +329,7 @@ class _FolderPanel extends StatefulWidget {
   final FolderSheet sheet;
   final WatchLaterApi api;
   final void Function(FavFolder folder, bool move) onSend;
-  final VoidCallback onNewFolder;
+  final Future<FavFolder?> Function() onNewFolder;
 
   @override
   State<_FolderPanel> createState() => _FolderPanelState();
@@ -359,6 +361,16 @@ class _FolderPanelState extends State<_FolderPanel> {
     if (_sending) return;
     _sending = true;
     widget.onSend(folder, widget.sheet.move);
+  }
+
+  /// The new folder joins the list after the default one, as the video page's 收藏 sheet lists it.
+  Future<void> _newFolder() async {
+    final folder = await widget.onNewFolder();
+    final folders = _folders;
+    if (folder == null || folders == null || !mounted) return;
+    if (folders.any((row) => row.id == folder.id)) return;
+    final at = folders.indexWhere((row) => !row.isDefault);
+    setState(() => _folders = [...folders]..insert(at < 0 ? folders.length : at, folder));
   }
 
   @override
@@ -422,12 +434,12 @@ class _FolderPanelState extends State<_FolderPanel> {
             child: Semantics(
               button: true,
               label: '新建收藏夹',
-              onTap: widget.onNewFolder,
+              onTap: () => unawaited(_newFolder()),
               excludeSemantics: true,
               child: GestureDetector(
                 key: const ValueKey('later-new-folder'),
                 behavior: HitTestBehavior.opaque,
-                onTap: widget.onNewFolder,
+                onTap: () => unawaited(_newFolder()),
                 child: Padding(
                   padding: const EdgeInsets.only(left: WatchLaterTheme.gutter, right: WatchLaterTheme.folderNewRight),
                   child: Row(
@@ -512,7 +524,7 @@ class _FolderRow extends StatelessWidget {
   }
 }
 
-/// The edit mode's bar (95, 96), risen from the bottom while [shown].
+/// (95, 96)
 class EditBar extends StatelessWidget {
   const EditBar({
     super.key,
@@ -568,79 +580,82 @@ class EditBar extends StatelessWidget {
     );
     return IgnorePointer(
       ignoring: !shown,
-      child: AnimatedSlide(
-        offset: shown ? Offset.zero : const Offset(0, 1.2),
-        duration: reduce ? Duration.zero : WatchLaterTheme.editMotion,
-        curve: Curves.easeOutCubic,
-        child: Column(
-          key: const ValueKey('later-edit-bar'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const IgnorePointer(
-              child: SizedBox(
-                height: WatchLaterTheme.editShadeHeight,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0x00000000), WatchLaterTheme.editShade],
+      child: ExcludeSemantics(
+        excluding: !shown,
+        child: AnimatedSlide(
+          offset: shown ? Offset.zero : const Offset(0, 1.2),
+          duration: reduce ? Duration.zero : WatchLaterTheme.editMotion,
+          curve: Curves.easeOutCubic,
+          child: Column(
+            key: const ValueKey('later-edit-bar'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const IgnorePointer(
+                child: SizedBox(
+                  height: WatchLaterTheme.editShadeHeight,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [WatchLaterTheme.editShadeClear, WatchLaterTheme.editShade],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(
-              height: WatchLaterTheme.editBarHairline,
-              child: ColoredBox(color: WatchLaterTheme.hairlineInk),
-            ),
-            ColoredBox(
-              color: BiliColors.card,
-              child: Padding(
-                padding: EdgeInsets.only(bottom: bottom),
-                child: SizedBox(
-                  height: WatchLaterTheme.editBarHeight,
-                  child: Row(
-                    children: [
-                      Semantics(
-                        button: true,
-                        selected: allChosen,
-                        label: '全选',
-                        onTap: onToggleAll,
-                        excludeSemantics: true,
-                        child: GestureDetector(
-                          key: const ValueKey('later-edit-all'),
-                          behavior: HitTestBehavior.opaque,
+              const SizedBox(
+                height: WatchLaterTheme.editBarHairline,
+                child: ColoredBox(color: WatchLaterTheme.hairlineInk),
+              ),
+              ColoredBox(
+                color: BiliColors.card,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: bottom),
+                  child: SizedBox(
+                    height: WatchLaterTheme.editBarHeight,
+                    child: Row(
+                      children: [
+                        Semantics(
+                          button: true,
+                          selected: allChosen,
+                          label: '全选',
                           onTap: onToggleAll,
-                          child: Row(
-                            children: [
-                              const SizedBox(width: WatchLaterTheme.circleCentreX - WatchLaterTheme.circleSize / 2),
-                              ChoiceCircle(chosen: allChosen),
-                              const SizedBox(
-                                width:
-                                    WatchLaterTheme.selectAllLeft -
-                                    WatchLaterTheme.circleCentreX -
-                                    WatchLaterTheme.circleSize / 2,
-                              ),
-                              Text('全选', maxLines: 1, style: allStyle, strutStyle: BiliFonts.strut(allStyle)),
-                              const SizedBox(width: WatchLaterTheme.gutter),
-                            ],
+                          excludeSemantics: true,
+                          child: GestureDetector(
+                            key: const ValueKey('later-edit-all'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: onToggleAll,
+                            child: Row(
+                              children: [
+                                const SizedBox(width: WatchLaterTheme.circleCentreX - WatchLaterTheme.circleSize / 2),
+                                ChoiceCircle(chosen: allChosen),
+                                const SizedBox(
+                                  width:
+                                      WatchLaterTheme.selectAllLeft -
+                                      WatchLaterTheme.circleCentreX -
+                                      WatchLaterTheme.circleSize / 2,
+                                ),
+                                Text('全选', maxLines: 1, style: allStyle, strutStyle: BiliFonts.strut(allStyle)),
+                                const SizedBox(width: WatchLaterTheme.gutter),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const Spacer(),
-                      action('clear', any ? '取消选择 ($chosen)' : '取消选择', onClearChoice),
-                      action('delete', '删除', onDelete),
-                      action('copy', '复制到', onCopy),
-                      action('move', '移动到', onMove),
-                      const SizedBox(width: WatchLaterTheme.editActionRight - WatchLaterTheme.editActionGap / 2),
-                    ],
+                        const Spacer(),
+                        action('clear', any ? '取消选择 ($chosen)' : '取消选择', onClearChoice),
+                        action('delete', '删除', onDelete),
+                        action('copy', '复制到', onCopy),
+                        action('move', '移动到', onMove),
+                        const SizedBox(width: WatchLaterTheme.editActionRight - WatchLaterTheme.editActionGap / 2),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

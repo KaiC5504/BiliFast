@@ -188,7 +188,6 @@ class _SheetGlyphPainter extends CustomPainter {
       ..translate(size.width / 2, size.height / 2);
     switch (glyph) {
       case SheetGlyph.clear:
-        // A brush: the domed head over a band, the bristles' box under it with two short strokes.
         canvas
           ..drawPath(
             Path()
@@ -218,7 +217,6 @@ class _SheetGlyphPainter extends CustomPainter {
           ..drawLine(const Offset(-2.1, 4.7), const Offset(-2.1, 7.54), paint)
           ..drawLine(const Offset(2.1, 4.0), const Offset(2.1, 7.54), paint);
       case SheetGlyph.list:
-        // ✓ ○ ✓ down the left, three bars to their right.
         final bars = _line(WatchLaterTheme.ink, 1.15);
         for (final y in const [-5.04, 0.17, 5.38]) {
           canvas.drawLine(Offset(-1.58, y), Offset(7.38, y), bars);
@@ -234,7 +232,6 @@ class _SheetGlyphPainter extends CustomPainter {
         }
         canvas.drawCircle(const Offset(-5.54, 0.17), 1.4, paint);
       case SheetGlyph.trash:
-        // A lid with its handle over an open can holding two short strokes.
         canvas
           ..drawLine(const Offset(-7.83, -4.8), const Offset(7.8, -4.8), paint)
           ..drawPath(
@@ -369,13 +366,10 @@ class _EmptyTvPainter extends CustomPainter {
     canvas
       ..save()
       ..translate(-160, -426)
-      // The base: a hump under the ledge with a bar running out to the right.
       ..drawRRect(RRect.fromLTRBR(190.5, 488, 260.3, 525.7, const Radius.circular(10)), shade)
       ..drawRRect(RRect.fromLTRBR(200, 517, 280.3, 525.7, const Radius.circular(4.35)), shade)
-      // The strokes off the top right corner.
       ..drawPath(_strokes, shade)
       ..drawPath(_strokes, _line(WatchLaterTheme.artShade, 0.6))
-      // The box and its ledge, in the box's own tipped frame.
       ..translate(162.4, 449.9)
       ..rotate(-11.3 * math.pi / 180)
       ..drawRRect(RRect.fromLTRBR(0, 0, 97.7, 56, const Radius.circular(6)), body)

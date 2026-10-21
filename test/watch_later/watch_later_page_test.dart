@@ -1,5 +1,6 @@
 import 'package:bili_core/api.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/favourites/new_folder_page.dart';
 import 'package:bilifast/home/feed_model.dart' show requestFailureMessage;
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_route.dart';
@@ -275,13 +276,54 @@ void main() {
     await toastGone(tester);
   });
 
-  testWidgets('+ 新建收藏夹 says it isn’t open yet', (tester) async {
+  testWidgets('a 复制到 refused with -101 turns the page to its login state, with no toast', (tester) async {
+    await show(tester);
+    api.failures['copyToFolder'] = const BiliError.api(code: -101, message: '账号未登录');
+    await chooseFirst(tester);
+    await tap(tester, 'later-edit-copy');
+    await tap(tester, 'later-folder-9102');
+    expect(find.text(requestFailureMessage(api.failures['copyToFolder']!)), findsNothing);
+    expect(find.text('选择收藏夹'), findsNothing);
+    expect(find.text(WatchLaterPage.loggedOutMessage), findsOneWidget);
+    expect(editing(tester), isFalse);
+  });
+
+  testWidgets('+ 新建收藏夹 opens 创建, which makes the folder; the folder joins the list after the default one', (
+    tester,
+  ) async {
     await show(tester);
     await chooseFirst(tester);
     await tap(tester, 'later-edit-copy');
     await tap(tester, 'later-new-folder');
-    expect(find.text(WatchLaterPage.soon), findsOneWidget);
+    final page = tester.widget<NewFolderPage>(find.byType(NewFolderPage));
+    final folder = await page.create(title: '新的收藏夹', intro: '简介', isPrivate: true);
+    expect(api.calls.last, 'createFolder title=新的收藏夹 intro=简介 private=true cover=');
+    Navigator.of(tester.element(find.byType(NewFolderPage))).pop(folder);
+    await settle(tester, 20);
+    expect(find.byType(NewFolderPage), findsNothing);
+    expect(find.text('选择收藏夹'), findsOneWidget);
+    final rows = [
+      for (final id in [9101, folder.id, 9102]) tester.getTopLeft(find.byKey(ValueKey('later-folder-$id'))).dy,
+    ];
+    expect(rows, orderedEquals([...rows]..sort()));
+    expect(api.calls.where((call) => call.startsWith('folders')).length, 1, reason: 'the list isn’t asked again');
+    await tap(tester, 'later-folder-${folder.id}');
+    expect(api.calls.where((call) => call.startsWith('copy')).single, startsWith('copy 83000001 to=${folder.id} '));
     await toastGone(tester);
+  });
+
+  testWidgets('the edit bar is in the semantics tree only while it shows', (tester) async {
+    final handle = tester.ensureSemantics();
+    bool listed(String label) => tester.semantics.simulatedAccessibilityTraversal().any((node) => node.label == label);
+    await show(tester);
+    expect(listed('全选'), isFalse);
+    expect(listed('移动到'), isFalse);
+    await tap(tester, 'later-manage');
+    await tap(tester, 'later-action-批量管理');
+    expect(listed('全选'), isTrue);
+    await tap(tester, 'later-manage');
+    expect(listed('全选'), isFalse);
+    handle.dispose();
   });
 
   testWidgets('logged out asks nothing and offers the login page', (tester) async {

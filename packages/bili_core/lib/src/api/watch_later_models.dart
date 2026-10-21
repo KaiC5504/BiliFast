@@ -106,6 +106,9 @@ final class WatchLaterListPage {
 
   static const empty = WatchLaterListPage(items: [], total: 0, hasMore: false);
 
+  /// The website's `ps`.
+  static const size = 20;
+
   final List<WatchLaterItem> items;
 
   /// The server's count for the filter, rows that don't play here included.
