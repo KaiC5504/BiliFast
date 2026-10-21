@@ -80,6 +80,37 @@ void main() {
       expect(rejected, 1);
     });
 
+    test('点赞, 投币 and 不喜欢 send PiliPlus\'s fields, where 0 means on for 点赞 and 不喜欢', () async {
+      final http = FakeHTTP();
+      const coinPath = '/x/v2/view/coin/add';
+      const dislikePath = '/x/v2/view/dislike';
+      for (final path in [likePath, coinPath, dislikePath]) {
+        http.routes[path] = (200, '{"code":0,"message":"0","ttl":1}');
+      }
+      final client = makeClient(http)..appToken = token;
+      await client.officialLike(aid: 3, on: false);
+      await client.officialCoin(aid: 3, multiply: 2, alsoLike: true);
+      await client.officialCoin(aid: 3, multiply: 1, alsoLike: false);
+      await client.officialDislike(aid: 3, on: true);
+      await client.officialDislike(aid: 3, on: false);
+
+      Map<String, String> sent(String path, int index) {
+        final form = fields(http.requestsTo(path)[index], http);
+        expect(form['access_key'], 'ACCESS', reason: path);
+        expect(form['aid'], '3', reason: path);
+        return form;
+      }
+
+      expect(sent(likePath, 0)['like'], '1');
+      expect(sent(coinPath, 0), allOf(containsPair('multiply', '2'), containsPair('select_like', '1')));
+      expect(sent(coinPath, 1), allOf(containsPair('multiply', '1'), containsPair('select_like', '0')));
+      expect(sent(dislikePath, 0)['dislike'], '0');
+      expect(sent(dislikePath, 1)['dislike'], '1');
+      for (final path in [coinPath, dislikePath]) {
+        expect(http.requestsTo(path).first.url.toString(), 'https://app.bilibili.com$path');
+      }
+    });
+
     test('any other refusal leaves the token alone', () async {
       final http = FakeHTTP();
       http.routes[likePath] = (200, '{"code":65006,"message":"已赞过","ttl":1}');

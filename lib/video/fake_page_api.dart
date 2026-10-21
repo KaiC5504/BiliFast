@@ -123,7 +123,7 @@ class FakePageApi implements PageApi {
   @override
   Future<TripleResult> triple({required int aid, required String bvid}) => _answer('triple', 'triple', () {
         final multiply = 2 - relationValue.coins;
-        relationValue = _relation(like: true, favorite: true, coins: relationValue.coins + multiply);
+        relationValue = _relation(like: true, dislike: false, favorite: true, coins: relationValue.coins + multiply);
         return TripleResult(like: true, coin: multiply > 0, favorite: true, multiply: multiply);
       });
 
@@ -137,7 +137,11 @@ class FakePageApi implements PageApi {
       _answer('coin', 'coin multiply=$multiply like=$alsoLike', () {
         if (balance < multiply) throw const BiliError.api(code: -104, message: '硬币不足');
         balance -= multiply;
-        relationValue = _relation(coins: relationValue.coins + multiply, like: alsoLike || relationValue.like);
+        relationValue = _relation(
+          coins: relationValue.coins + multiply,
+          like: alsoLike || relationValue.like,
+          dislike: !alsoLike && relationValue.dislike,
+        );
       });
 
   @override

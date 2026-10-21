@@ -22,10 +22,13 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     required this._accountMid,
     required this._requestLogin,
     required this._toast,
-    this.dislikeAvailable = false,
+    bool Function()? appAuthorized,
+    Future<bool> Function()? requestAppAuth,
     this._follows,
     Logger? logger,
-  })  : _logger = logger ?? Logger.shared,
+  })  : _appAuthorized = appAuthorized ?? _never,
+        _requestAppAuth = requestAppAuth ?? _refused,
+        _logger = logger ?? Logger.shared,
         _likeCount = detail.stat.like,
         _coinCount = detail.stat.coin,
         _favCount = detail.stat.favorite,
@@ -41,11 +44,15 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   final int? Function() _accountMid;
   final VoidCallback _requestLogin;
   final void Function(String message) _toast;
+
+  /// Whether the app token, which 不喜欢 needs, is held; [_requestAppAuth] asks for it and says whether it came.
+  final bool Function() _appAuthorized;
+  final Future<bool> Function() _requestAppAuth;
   final FollowBook? _follows;
   final Logger _logger;
 
-  @override
-  final bool dislikeAvailable;
+  static bool _never() => false;
+  static Future<bool> _refused() async => false;
 
   bool _liked = false;
   bool _disliked = false;
@@ -181,19 +188,25 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     return _perform('like', () => _setLiked(on), (_) => _api.like(aid: detail.aid, bvid: detail.bvid, on: on));
   }
 
-  /// Never sent in this build: Bilibili takes 不喜欢 only through the app API, signed with the TV app's keys and the TV
-  /// login's token, and [PageApi] has no such call yet. Checked in Swift's order, keys first and then the login.
+  /// The official API's call, so without the app token it asks for one first and goes on only once it has it. A token
+  /// Bilibili turns down is asked for again, and the tap isn't replayed.
   @override
   Future<void> toggleDislike() async {
-    if (!dislikeAvailable) {
-      _say('此版本不支持不喜欢');
-      return;
-    }
     if (!_isLoggedIn()) {
       _login();
       return;
     }
-    _say('此版本不支持不喜欢');
+    if (!_appAuthorized()) {
+      if (!await _requestAppAuth() || _disposed) return;
+    }
+    final on = !_disliked;
+    await _perform(
+      'dislike',
+      () => _setDisliked(on),
+      (_) => _api.dislike(aid: detail.aid, on: on),
+      done: () => _say(on ? '感谢反馈' : '取消不喜欢'),
+      official: true,
+    );
   }
 
   @override
@@ -344,6 +357,13 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
 
   static const _ownWords = {-101, -352, -412, -404};
 
+  /// No token, or one Bilibili turned down (the client's codes for that; it has reported the token to be dropped).
+  static bool _tokenRefused(Object error) => switch (error) {
+        BiliNoAppTokenError() => true,
+        BiliAPIError(code: -101 || -2) => true,
+        _ => false,
+      };
+
   _Snapshot get _snapshot => _Snapshot(
         liked: _liked,
         disliked: _disliked,
@@ -436,12 +456,17 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     }
   }
 
-  /// Like clears dislike, as on the server.
+  /// Like clears dislike and dislike clears like, as on the server.
   void _setLiked(bool on) {
     if (on == _liked) return;
     _liked = on;
     _likeCount = max(0, _likeCount + (on ? 1 : -1));
     if (on) _disliked = false;
+  }
+
+  void _setDisliked(bool on) {
+    _disliked = on;
+    if (on) _setLiked(false);
   }
 
   void _setFavorited(bool on) {
@@ -472,9 +497,9 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   }
 
   /// One action: shown at once, sent, and taken back with the server's words if it fails. A second tap while it is
-  /// out does nothing.
+  /// out does nothing. An [official] call's -101 is about the app token, not the web login.
   Future<void> _perform(String name, void Function() change, Future<void> Function(_Action action) call,
-      {VoidCallback? done}) async {
+      {VoidCallback? done, bool official = false}) async {
     if (!_isLoggedIn()) {
       _login();
       return;
@@ -493,8 +518,10 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
         // A refusal is Bilibili's; anything else may be a bug in reading its answer.
         if (error is! BiliError) 'stack': '$stack',
       });
-      // An expired login gets the login prompt's words alone.
-      if (error is BiliError && error.needsLogin) {
+      // An expired login gets the login prompt's words alone, and a refused app token the token's confirm.
+      if (official && _tokenRefused(error)) {
+        if (!_disposed) unawaited(_requestAppAuth());
+      } else if (error is BiliError && error.needsLogin) {
         _login();
       } else {
         _say(failureMessage(error));

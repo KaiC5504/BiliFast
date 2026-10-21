@@ -72,6 +72,12 @@ PageDetails pageDetails({
     accountMid: () => environment.mid,
     requestLogin: requestLogin,
     toast: toast,
+    appAuthorized: () => services.appAuth.authorized,
+    // The factory has no page context, so the token's confirm goes up on the app's navigator, as the launch's does.
+    requestAppAuth: () async {
+      final context = services.navigator.currentContext;
+      return context != null && await services.appAuth.request(context);
+    },
     follows: services.follows,
     accountChanges: environment,
     logins: logins,

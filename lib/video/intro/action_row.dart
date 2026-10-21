@@ -120,7 +120,7 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
                   glyph: ActionGlyph.dislike,
                   label: '不喜欢',
                   active: actions.disliked,
-                  dimmed: !actions.dislikeAvailable,
+                  tintsText: false,
                   onTap: () => unawaited(actions.toggleDislike()),
                 ),
               ),
@@ -203,7 +203,7 @@ class _ActionCell extends StatefulWidget {
     required this.onTap,
     this.count,
     this.activeLabel,
-    this.dimmed = false,
+    this.tintsText = true,
     this.iconDrop = 0,
     this.onLongPress,
     this.onDown,
@@ -222,7 +222,9 @@ class _ActionCell extends StatefulWidget {
   final String? activeLabel;
   final int? count;
   final bool active;
-  final bool dimmed;
+
+  /// Whether the count or name turns pink with the icon; 不喜欢's name stays grey (88).
+  final bool tintsText;
 
   /// What a tap does; also the accessibility press.
   final VoidCallback onTap;
@@ -327,7 +329,7 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
                   fontFamily: BiliFonts.family,
                   fontSize: ActionTheme.countFont,
                   height: 1,
-                  color: Color.lerp(ActionTheme.count, BiliColors.pink, on),
+                  color: widget.tintsText ? Color.lerp(ActionTheme.count, BiliColors.pink, on) : ActionTheme.count,
                 ),
                 strutStyle: BiliFonts.strut(const TextStyle(fontSize: ActionTheme.countFont, height: 1)),
               ),
@@ -339,7 +341,7 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
     final body = AnimatedScale(
       scale: _pressed && !still ? BiliMetrics.chromePressedScale : 1,
       duration: const Duration(milliseconds: 120),
-      child: Opacity(opacity: widget.dimmed ? ActionTheme.unavailableOpacity : 1, child: cell),
+      child: cell,
     );
     return Semantics(
       button: true,

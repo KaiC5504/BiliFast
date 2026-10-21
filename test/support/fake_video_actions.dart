@@ -18,7 +18,6 @@ class FakeVideoActions extends ChangeNotifier implements VideoActions {
     this.favCount = 3907,
     this.shareCount = 148,
     this.maxCoins = 2,
-    this.dislikeAvailable = false,
     this.seasonFavourited,
     this.balance = 873,
   });
@@ -57,9 +56,6 @@ class FakeVideoActions extends ChangeNotifier implements VideoActions {
 
   @override
   int maxCoins;
-
-  @override
-  bool dislikeAvailable;
 
   @override
   bool? seasonFavourited;

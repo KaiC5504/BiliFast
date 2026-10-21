@@ -24,6 +24,7 @@ import 'package:bili_core/danmaku.dart' show DisplayDanmaku;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart' show EngineSnapshot, PlaybackMode;
 import 'package:bili_core/shared.dart';
+import 'package:bilifast/account/app_auth.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
@@ -157,6 +158,32 @@ class FakeLoginGate implements LoginGate {
   }
 }
 
+/// The app token's confirm, answered at once with [grants]; each ask notes whether it had a context to show in.
+class _RecordingAppAuth extends ChangeNotifier implements AppAuth {
+  _RecordingAppAuth({this.grants = true});
+
+  @override
+  bool authorized = false;
+  bool grants;
+  final asks = <bool>[];
+
+  @override
+  DateTime? get expiresAt => null;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<bool> request(BuildContext context) async {
+    asks.add(context.mounted);
+    if (grants) authorized = true;
+    return grants;
+  }
+
+  @override
+  Future<bool> reauthorize(BuildContext context) => request(context);
+}
+
 void main() {
   late CannedHttp http;
   late ManualClock time;
@@ -232,6 +259,7 @@ void main() {
     bool loggedIn = true,
     PageApi? pageApi,
     SpaceApi? spaceApi,
+    AppAuth? appAuth,
   }) async {
     screen(tester, portrait, portraitInsets);
     addTearDown(tester.view.reset);
@@ -268,6 +296,7 @@ void main() {
       device: PlayerDevice(orientation: orientation, controls: NoDeviceControls()),
       pageApi: pageApi,
       spaceApi: spaceApi,
+      appAuth: appAuth,
       loginGate: gate,
     );
     // The small window's restore button pushes on the app's navigator.
@@ -2587,6 +2616,7 @@ void main() {
     /// What went to Bilibili on the account's behalf, leaving out the page's own loads.
     const accountCalls = [
       'like',
+      'dislike',
       'triple',
       'coin',
       'favourite',
@@ -2642,9 +2672,10 @@ void main() {
       bool loggedIn = false,
       bool vertical = false,
       bool checkAccount = true,
+      AppAuth? appAuth,
     }) async {
       if (!loggedIn) http.routes[Canned.navPath] = (200, Canned.navLoggedOut);
-      await host(tester, pageApi: api, checkAccount: checkAccount);
+      await host(tester, pageApi: api, checkAccount: checkAccount, appAuth: appAuth);
       if (checkAccount) expect(environment.account, loggedIn ? isA<LoggedIn>() : isA<LoginExpired>());
       unawaited(
         nav.currentState!.push(
@@ -2683,6 +2714,7 @@ void main() {
       }
 
       await press('点赞', () => tester.tap(find.byKey(const ValueKey('action-like'))));
+      await press('不喜欢', () => tester.tap(find.byKey(const ValueKey('action-dislike'))));
       await press('三连, the hold', () => actions(tester).triple());
       await press('投币', () => tester.tap(find.byKey(const ValueKey('action-coin'))));
       await press('收藏', () => tester.tap(find.byKey(const ValueKey('action-favourite'))));
@@ -2704,7 +2736,6 @@ void main() {
       await press('a comment\'s 踩', () => tester.tap(inRow(100, 'comment-dislike').first));
       expect(sent(), isEmpty);
       expect(relations(), 0);
-      expect(find.text('此版本不支持不喜欢'), findsNothing);
       await back(tester);
     });
 
@@ -2731,13 +2762,37 @@ void main() {
       await back(tester);
     });
 
-    testWidgets('不喜欢 stays grey: its toast, never the login', (tester) async {
-      await openReal(tester);
+    testWidgets('logged in without the app token, 不喜欢 asks for it on the app\'s navigator, then goes out (88, 89)',
+        (tester) async {
+      final auth = _RecordingAppAuth();
+      await openReal(tester, loggedIn: true, appAuth: auth);
       await tester.tap(find.byKey(const ValueKey('action-dislike')));
       await frames(tester, 3);
-      expect(find.text('此版本不支持不喜欢'), findsOneWidget);
+      expect(auth.asks, [true]);
       expect(gate.asks, isEmpty);
+      expect(sent(), ['dislike on=true']);
+      expect(actions(tester).disliked, isTrue);
+      expect(find.text('感谢反馈'), findsOneWidget);
       await frames(tester, 60);
+
+      await tester.tap(find.byKey(const ValueKey('action-dislike')));
+      await frames(tester, 3);
+      expect(auth.asks, hasLength(1), reason: 'the token is held now');
+      expect(sent(), ['dislike on=true', 'dislike on=false']);
+      expect(find.text('取消不喜欢'), findsOneWidget);
+      await frames(tester, 60);
+      await back(tester);
+    });
+
+    testWidgets('a confirm that gives no token leaves 不喜欢 off and sends nothing', (tester) async {
+      final auth = _RecordingAppAuth(grants: false);
+      await openReal(tester, loggedIn: true, appAuth: auth);
+      await tester.tap(find.byKey(const ValueKey('action-dislike')));
+      await frames(tester, 3);
+      expect(auth.asks, [true]);
+      expect(sent(), isEmpty);
+      expect(actions(tester).disliked, isFalse);
+      expect(gate.asks, isEmpty);
       await back(tester);
     });
 
