@@ -24,6 +24,7 @@ dependencies:
   file_selector: ^1.1.0
   url_launcher: ^6.3.3
   image_picker: ^1.2.4
+  lottie: ^3.6.1
 
 dev_dependencies:
   flutter_test:
@@ -39,6 +40,8 @@ flutter:
   assets:
     - assets/images/paycoins/
     - assets/images/noface.jpeg
+    - assets/images/loading/
+    - assets/lottie/
   fonts:
     - family: MiSans
       fonts:

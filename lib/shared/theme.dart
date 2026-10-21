@@ -3493,3 +3493,24 @@ abstract final class SearchGlyphTheme {
   static const plusStroke = 1.1;
   static const watchLaterStroke = 1.2;
 }
+
+/// The official app's loading TV (14, 64, 67): four faces at 133 ms each, drawn 60 pt square.
+abstract final class LoadingTvTheme {
+  static const size = 60.0;
+  static const frame = Duration(milliseconds: 133);
+
+  /// 正在努力加载... under the TV on a page's first load (64, 67).
+  static const stateText = 13.0;
+  static const stateInk = Color(0xFF86898B);
+
+  /// From the TV's box to the text's line box.
+  static const stateGap = 6.0;
+}
+
+/// The player's 正在缓冲... with its pink TV (65, 66). Values are the player agent's to measure.
+abstract final class PlayerLoadingTheme {
+  static const tvSize = 24.0;
+  static const text = 14.0;
+  static const ink = BiliColors.onVideo;
+  static const gap = 4.0;
+}
