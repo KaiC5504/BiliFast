@@ -631,8 +631,9 @@ class _EmoteFacePainter extends CustomPainter {
   bool shouldRepaint(_EmoteFacePainter oldDelegate) => false;
 }
 
-/// 评论 before the video's aid is known: the loading TV under the reserve, centred in a box as tall as the list (64
-/// before its write bar comes, which sits lower than [CommentsTab]'s first load).
+/// 评论 before the video's aid is known: the loading TV under the reserve, centred in a box as tall as the list, as 64
+/// has it before its write bar comes (lower than [CommentsTab]'s first load). It doesn't scroll: the box runs past the
+/// screen's bottom, and a drag would carry the collapsing player with it.
 class CommentsSlot extends StatelessWidget {
   const CommentsSlot({super.key});
 
@@ -641,6 +642,7 @@ class CommentsSlot extends StatelessWidget {
     color: CommentListTheme.background,
     child: CustomScrollView(
       primary: true,
+      physics: const NeverScrollableScrollPhysics(),
       slivers: [
         SliverToBoxAdapter(child: SizedBox(height: PlayerReserve.of(context))),
         SliverLayoutBuilder(

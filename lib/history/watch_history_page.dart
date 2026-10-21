@@ -203,7 +203,11 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
         key: const ValueKey('history-list'),
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          CupertinoSliverRefreshControl(onRefresh: _refresh, builder: loadingTvRefreshIndicator),
+          CupertinoSliverRefreshControl(
+            onRefresh: _refresh,
+            builder: loadingTvRefreshIndicator,
+            refreshIndicatorExtent: LoadingTvTheme.size,
+          ),
           for (final section in sections)
             SliverMainAxisGroup(
               slivers: [

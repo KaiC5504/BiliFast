@@ -270,6 +270,14 @@ void main() {
       await pumpEventQueue();
       expect(model.videos.error, isNotNull);
       expect(model.awaitingFirstPage, isFalse, reason: 'the failure shows with the tab row');
+      unawaited(model.retry());
+      expect(model.awaitingFirstPage, isFalse, reason: '重试 keeps the tab row');
+      await pumpEventQueue();
+
+      model.search('狗');
+      expect(model.awaitingFirstPage, isTrue, reason: 'the same word again is a new search');
+      await pumpEventQueue();
+      expect(model.awaitingFirstPage, isFalse);
     });
 
     test('searches counts every search, the same word again included, and nothing for a blank one', () async {

@@ -1,12 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart' show RefreshIndicatorMode;
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
 import 'theme.dart';
 
 /// The official app's loading TV (14, 64, 67): its four faces in turn, [LoadingTvTheme.frame] each, drawn
-/// [LoadingTvTheme.size] square. It stops while its ticker is muted (a hidden tab), and Reduce Motion holds the first
+/// [LoadingTvTheme.size] square. It stops under a muted [TickerMode] (a hidden tab), and Reduce Motion holds the first
 /// face.
 class LoadingTv extends StatefulWidget {
   const LoadingTv({super.key, this.playing = true});
@@ -29,11 +30,12 @@ class LoadingTv extends StatefulWidget {
   State<LoadingTv> createState() => _LoadingTvState();
 }
 
-class _LoadingTvState extends State<LoadingTv> with SingleTickerProviderStateMixin {
-  late final AnimationController _cycle = AnimationController(
-    vsync: this,
-    duration: LoadingTvTheme.frame * LoadingTv.frames.length,
-  );
+class _LoadingTvState extends State<LoadingTv> {
+  // A timer rather than a ticker: an AnimationController would ask for every vsync (120 Hz on the phone) to change a
+  // face 7.5 times a second. TickerMode's notifier still stops it on a hidden tab or a covered page.
+  Timer? _timer;
+  ValueListenable<TickerModeData>? _ticking;
+  int _face = 0;
   bool _still = false;
 
   @override
@@ -41,6 +43,11 @@ class _LoadingTvState extends State<LoadingTv> with SingleTickerProviderStateMix
     super.didChangeDependencies();
     _still = MediaQuery.disableAnimationsOf(context);
     unawaited(LoadingTv.precache(context));
+    final ticking = TickerMode.getValuesNotifier(context);
+    if (!identical(ticking, _ticking)) {
+      _ticking?.removeListener(_tickingChanged);
+      _ticking = ticking..addListener(_tickingChanged);
+    }
     _run();
   }
 
@@ -50,39 +57,39 @@ class _LoadingTvState extends State<LoadingTv> with SingleTickerProviderStateMix
     if (oldWidget.playing != widget.playing) _run();
   }
 
+  void _tickingChanged() => setState(_run);
+
+  /// Starts or stops the faces; called where a build follows.
   void _run() {
-    if (widget.playing && !_still) {
-      if (!_cycle.isAnimating) unawaited(_cycle.repeat());
+    if (widget.playing && !_still && (_ticking?.value.enabled ?? true)) {
+      _timer ??= Timer.periodic(LoadingTvTheme.frame, (_) {
+        if (mounted) setState(() => _face = (_face + 1) % LoadingTv.frames.length);
+      });
     } else {
-      _cycle
-        ..stop()
-        ..value = 0;
+      _timer?.cancel();
+      _timer = null;
+      _face = 0;
     }
   }
 
   @override
   void dispose() {
-    _cycle.dispose();
+    _timer?.cancel();
+    _ticking?.removeListener(_tickingChanged);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => Semantics(
     label: '加载中',
-    child: AnimatedBuilder(
-      animation: _cycle,
-      builder: (context, _) {
-        final face = (_cycle.value * LoadingTv.frames.length).floor() % LoadingTv.frames.length;
-        return Image.asset(
-          LoadingTv.frames[face],
-          key: ValueKey('loading-tv-$face'),
-          width: LoadingTvTheme.size,
-          height: LoadingTvTheme.size,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
-          excludeFromSemantics: true,
-        );
-      },
+    child: Image.asset(
+      LoadingTv.frames[_face],
+      key: ValueKey('loading-tv-$_face'),
+      width: LoadingTvTheme.size,
+      height: LoadingTvTheme.size,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+      excludeFromSemantics: true,
     ),
   );
 }
@@ -106,7 +113,8 @@ class LoadingTvState extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const LoadingTv(),
+        // The text says it; the TV's own 加载中 would be a second stop for VoiceOver.
+        const ExcludeSemantics(child: LoadingTv()),
         const SizedBox(height: LoadingTvTheme.stateGap),
         Text(message, style: style, strutStyle: BiliFonts.strutOf(context, style), maxLines: 1),
       ],
@@ -116,7 +124,8 @@ class LoadingTvState extends StatelessWidget {
 
 /// [CupertinoSliverRefreshControl]'s `builder` with the TV in place of the spinner: it comes down out from under
 /// what's above as the list is pulled, holding its first face until the pull would refresh, then cycles until the
-/// refresh is done and the gap closes. While refreshing the gap is the TV's height, as in 14.
+/// refresh is done and the gap closes. Callers set `refreshIndicatorExtent` to [LoadingTvTheme.size], the gap 14 holds
+/// while refreshing.
 Widget loadingTvRefreshIndicator(
   BuildContext context,
   RefreshIndicatorMode mode,

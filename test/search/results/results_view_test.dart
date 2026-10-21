@@ -315,7 +315,7 @@ void main() {
       model.videosValue = const SearchResults(loading: true);
       model.usersValue = const SearchResults(loading: true);
       await show(tester);
-      final state = find.byKey(const ValueKey('search-first-spinner'));
+      final state = find.byKey(const ValueKey('search-first-load'));
       expect(tester.widget(state), isA<LoadingTvState>());
       expect(find.descendant(of: state, matching: find.text(LoadingTvState.message)), findsOneWidget);
       expect(find.byKey(const ValueKey('search-empty')), findsNothing);
@@ -361,14 +361,14 @@ void main() {
       await show(tester);
       expect(find.byKey(const ValueKey('search-more-spinner')), findsOneWidget);
       expect(find.byType(LoadingTv), findsNothing);
-      expect(find.byKey(const ValueKey('search-first-spinner')), findsNothing);
+      expect(find.byKey(const ValueKey('search-first-load')), findsNothing);
     });
 
     testWidgets('no results say 没有找到相关内容', (tester) async {
       model.videosValue = const SearchResults(loaded: true, exhausted: true);
       await show(tester);
       expect(find.text('没有找到相关内容'), findsOneWidget);
-      expect(find.byKey(const ValueKey('search-first-spinner')), findsNothing);
+      expect(find.byKey(const ValueKey('search-first-load')), findsNothing);
     });
 
     testWidgets('a failed first page shows why with 重试', (tester) async {

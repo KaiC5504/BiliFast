@@ -46,16 +46,34 @@ void main() {
     expect(_face(tester), 1);
   });
 
-  testWidgets('a muted ticker stops it', (tester) async {
+  testWidgets('a muted ticker holds it on its first face, and it goes on when unmuted', (tester) async {
     await tester.pumpWidget(_host(const TickerMode(enabled: false, child: LoadingTv())));
     await tester.pump(LoadingTvTheme.frame * 2);
-    expect(tester.hasRunningAnimations, isFalse);
+    expect(_face(tester), 0);
+    await tester.pumpWidget(_host(const TickerMode(enabled: true, child: LoadingTv())));
+    await tester.pump(LoadingTvTheme.frame);
+    expect(_face(tester), 1);
+    await tester.pumpWidget(_host(const TickerMode(enabled: false, child: LoadingTv())));
+    await tester.pump(LoadingTvTheme.frame * 2);
+    expect(_face(tester), 0);
   });
 
-  testWidgets('the first-load state reads 正在努力加载...', (tester) async {
+  testWidgets('asks for a frame only when its face changes', (tester) async {
+    await tester.pumpWidget(_host(const LoadingTv()));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pump(LoadingTvTheme.frame - const Duration(milliseconds: 16));
+    expect(_face(tester), 1);
+  });
+
+  testWidgets('the first-load state reads 正在努力加载... at 14 pt, one stop for VoiceOver', (tester) async {
+    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(_host(const LoadingTvState()));
     expect(find.text(LoadingTvState.message), findsOneWidget);
     expect(find.byType(LoadingTv), findsOneWidget);
+    expect(tester.widget<Text>(find.text(LoadingTvState.message)).style?.fontSize, 14);
+    expect(find.bySemanticsLabel('加载中'), findsNothing);
+    semantics.dispose();
   });
 
   testWidgets('the refresh indicator holds while dragged and cycles while refreshing', (tester) async {

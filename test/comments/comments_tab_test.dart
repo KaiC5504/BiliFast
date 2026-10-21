@@ -617,5 +617,14 @@ void main() {
       expect(find.byType(CupertinoActivityIndicator), findsNothing);
       expect(primary.hasClients, isTrue);
     });
+
+    testWidgets("doesn't scroll, so a drag leaves the TV and the collapsing player where they are", (tester) async {
+      await host(tester, const CommentsSlot(), reserve: 300);
+      final before = tester.getRect(find.byKey(const ValueKey('comments-slot-loading')));
+      await tester.drag(find.byType(CommentsSlot), const Offset(0, -200));
+      await tester.pump();
+      expect(primary.offset, 0);
+      expect(tester.getRect(find.byKey(const ValueKey('comments-slot-loading'))), before);
+    });
   });
 }

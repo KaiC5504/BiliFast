@@ -472,7 +472,7 @@ class _ResultList<T> extends StatelessWidget {
           alignment: Alignment.topCenter,
           child: Padding(
             padding: EdgeInsets.only(top: math.max(0, LoadingTvTheme.stateTop - top)),
-            child: const LoadingTvState(key: ValueKey('search-first-spinner')),
+            child: const LoadingTvState(key: ValueKey('search-first-load')),
           ),
         ),
       );

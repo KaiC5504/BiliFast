@@ -1227,7 +1227,7 @@ abstract final class FavouriteTheme {
 
   /// Loading and failure inside the list, and 重试.
   static const statePad = 32.0;
-  static const stateText = 14.0;
+  static const stateText = 13.0;
   static const spinnerRadius = 10.0;
   static const retryHeight = 30.0;
   static const retryPad = 18.0;
@@ -3493,13 +3493,13 @@ abstract final class SearchGlyphTheme {
   static const watchLaterStroke = 1.2;
 }
 
-/// The official app's loading TV (14, 64, 67): four faces at 133 ms each, drawn 60 pt square.
+/// The official app's loading TV (14, 64, 67).
 abstract final class LoadingTvTheme {
   static const size = 60.0;
   static const frame = Duration(milliseconds: 133);
 
   /// 正在努力加载... under the TV on a page's first load (64, 67).
-  static const stateText = 13.0;
+  static const stateText = 14.0;
   static const stateInk = Color(0xFF86898B);
 
   /// From the TV's box to the text's line box.
