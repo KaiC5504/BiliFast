@@ -89,6 +89,7 @@ Future<void> main(List<String> args) async {
   final device = PlayerDevice.platform();
   applyTurnTakeover(device.orientation, PlayerPrefs.shared);
   PhoneFrame.follow(device.orientation);
+  await appAuth.start();
   runApp(BiliFastApp(
     services: AppServices(
       environment: environment,
@@ -110,7 +111,6 @@ Future<void> main(List<String> args) async {
     ),
     initialLink: _argument(args, '--play='),
   ));
-  unawaited(appAuth.start());
 }
 
 /// The launch's account check fails without a network; as Swift's RootView did on becoming active, coming back to

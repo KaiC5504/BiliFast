@@ -175,7 +175,8 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
       _client.appToken = token;
       notifyListeners();
       _logger.info(LogCategory.app, 'app token', {'days': _daysLeft(token, now)});
-      if (token.dueForRenewal(now)) await _renew();
+      // Off the launch's path, which waits for this load so 推荐's first page already knows the token.
+      if (token.dueForRenewal(now)) unawaited(_renew());
     }
     if (_disposed) return;
     environment.addListener(_accountChanged);

@@ -289,6 +289,10 @@ void main() {
             '"refresh_token":"NEW-REFRESH","expires_in":15552000},"cookie_info":{"cookies":[]}}}',
       );
       await h.auth.start();
+      // The renewal runs off the launch's path, which only waits for the stored token.
+      expect(h.client.appToken?.accessToken, 'OLD-ACCESS');
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
       expect(h.http.to(renewPath), hasLength(1));
       expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
       final kept = AppToken.fromJson(jsonDecode(h.keychain.saves.single));
@@ -305,6 +309,8 @@ void main() {
       final h = await mount(tester, token: stored(days: 10));
       h.http.routes[renewPath] = (200, reply(-400));
       await h.auth.start();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
       expect(h.http.to(renewPath), hasLength(1));
       expect(h.client.appToken?.accessToken, 'OLD-ACCESS');
       expect(h.keychain.deletes, 0);
