@@ -4113,6 +4113,223 @@ abstract final class FavouritesTheme {
 
 /// 稍后再看: the list and its empty page (85, 86).
 abstract final class WatchLaterTheme {
+  static const gutter = 12.0;
+  static const ink = BiliColors.text;
+  static const grey = Color(0xFF61666D);
+
+  /// Greyed while nothing can be done (85, and the strip in edit mode, 95).
+  static const greyOff = Color(0xFFC0C2C5);
+  static const pinkOff = Color(0xFFFFC2D6);
+
+  /// The title bar (85, 86): ‹ #61666D, its tip 25.96 in and its ends 8.35 above and below; 稍后再看 17 pt bold and
+  /// centred; 管理 (取消管理 in edit mode, 95) 14 pt, its words ending 16.67 from the edge.
+  static const barHeight = 44.0;
+  static const backTarget = 44.0;
+  static const backTipX = 25.96;
+  static const backEndX = 33.96;
+  static const backHalfHeight = 8.35;
+  static const backStroke = 1.45;
+  static const titleText = 17.0;
+  static const titleWeight = FontWeight.w600;
+  static const manageText = 14.0;
+  static const manageRight = 50 / 3;
+
+  /// The stand-ins sit 稍后再看 0.5 high and the strip's words 0.5 low against 86.
+  static const titleDrop = 0.5;
+  static const stripTextLift = 0.5;
+  static const chipChosenWeight = FontWeight.w500;
+
+  /// 历史记录's UP glyph sits 0.5 lower in its line than 86's.
+  static const upGlyphLift = 0.5;
+
+  /// The strip under the bar, 52 tall and ending in a 0.5 hairline, the list 2/3 under the hairline's top. The chips are
+  /// 25.67 tall, 13.33 down, 8 apart, 13 pt words 8 in from each side; the chosen one pink on a pink tint (paler in
+  /// edit mode, 95). Its line is 26.17 down the strip.
+  static const stripHeight = 52.0;
+  static const stripCentre = 157 / 6;
+  static const stripHairline = 0.5;
+  static const listGap = 2 / 3;
+  static const hairlineInk = BiliColors.divider;
+  static const chipTop = 40 / 3;
+  static const chipHeight = 77 / 3;
+  static const chipGap = 8.0;
+  static const chipPadX = 8.0;
+  static const chipRadius = 3.0;
+  static const chipText = 13.0;
+  static const chipChosenFill = Color(0xFFFFECF1);
+  static const chipChosenFillOff = Color(0xFFFFF7F9);
+
+  /// ≡↑ 最近添加: three bars and a half-headed arrow, 12.67 × 9.67 from 268.33, 4 before 13 pt words; then 23.33 to
+  /// ▶ 播放全部, an 11.33 × 12 rounded triangle 6.3 before its words, which end 12.67 from the edge. The stand-in's
+  /// Chinese runs about 0.2 a glyph wider, so the gaps here are a little shorter to keep each piece's middle.
+  static const sortGlyphWidth = 38 / 3;
+  static const sortGlyphHeight = 29 / 3;
+  static const sortGlyphStroke = 1.0;
+  static const sortGlyphGap = 3.5;
+  static const sortText = 13.0;
+  static const sortToPlay = 21.5;
+  static const playGlyphWidth = 34 / 3;
+  static const playGlyphHeight = 12.0;
+  static const playGlyphRound = 1.6;
+  static const playGlyphGap = 6.3;
+  static const playText = 13.0;
+  static const playRight = 37 / 3;
+
+  /// A row (86): 98 tall, the 139 × 78 cover 10 down with a 6 corner; text 10 after it. In edit mode (95) everything
+  /// moves 34 right for the circle and the title runs to 12 from the edge; out of it the title stops 28 short, so
+  /// 86's line breaks where it does.
+  static const rowHeight = 98.0;
+  static const rowPadTop = 10.0;
+  static const coverWidth = 139.0;
+  static const coverHeight = 78.0;
+  static const coverRadius = 6.0;
+  static const coverPlaceholder = BiliColors.pageGrey;
+  static const textGap = 10.0;
+  static const editShift = 34.0;
+  static const editMotion = Duration(milliseconds: 220);
+
+  /// Two 14 pt lines 21.33 apart, the first's middle 8.5 under the cover's top.
+  static const titleLineText = 14.0;
+  static const titleLine = 64 / 3;
+  static const titleTop = -2.5;
+  static const titleRight = 28.0;
+  static const titleRightEditing = 12.0;
+
+  /// UP and the counts in 12 pt grey, centred 52 and 70 under the cover's top; each glyph 1 in, 13.33 × 11.33, its
+  /// words 3.33 after its box; the danmaku glyph 11.33 after the plays.
+  static const metaText = 12.0;
+  static const metaLine = 16.0;
+  static const metaInk = BiliColors.secondaryText;
+  static const upCentre = 52.0;
+  static const countsCentre = 70.0;
+  static const metaInset = 1.0;
+  static const glyphBox = 41 / 3;
+  static const countGlyphWidth = 40 / 3;
+  static const countGlyphHeight = 34 / 3;
+  static const glyphGap = 10 / 3;
+  static const countsGap = 12.0;
+
+  /// ⋮ on the counts' line, centred 20 from the edge: 2.67 dots 4.33 apart.
+  static const moreCentreRight = 20.0;
+  static const moreTarget = 44.0;
+  static const moreDot = 8 / 3;
+  static const morePitch = 13 / 3;
+  static const moreInk = Color(0xFFC9CCD0);
+
+  /// watched / total on the cover, 10 pt white with no pill, its digits ending 8 from the right and 7.33 above the
+  /// bottom.
+  static const progressText = 10.0;
+  static const progressRight = 22 / 3;
+  static const progressBottom = 4.9;
+  static const progressInk = BiliColors.onCover;
+  static const progressShadow = Color(0x66000000);
+
+  /// The edit-mode circle (95, 96): 21.33 across, centred 23 in; a hairline grey ring, or pink with a white ✓.
+  static const circleCentreX = 23.0;
+  static const circleSize = 64 / 3;
+  static const circleStroke = 1.0;
+  static const circleInk = Color(0xFFC9CCD0);
+  static const circleChosen = BiliColors.pink;
+  static const checkInk = BiliColors.onPink;
+  static const checkStroke = 1.2;
+
+  /// 仅展示本App中可查看的稿件 under the last row, 12 pt, centred 37.2 below it.
+  static const noteTop = 27.2;
+  static const noteLine = 20.0;
+  static const noteText = 12.0;
+  static const noteInk = Color(0xFFC9CCD0);
+  static const loadAhead = 360.0;
+  static const spinnerRadius = 10.0;
+
+  /// The empty page (85): the grey TV, its box 120 × 100 from 160 across and 267.33 under the list's top, and
+  /// 暂无稍后再看视频哦 14 pt, centred 406.83 under it.
+  static const emptyArtTop = 802 / 3;
+  static const emptyArtLeft = 160.0;
+  static const emptyArtWidth = 120.0;
+  static const emptyArtHeight = 100.0;
+  static const emptyTextCentre = 1220.5 / 3;
+  static const emptyText = 14.0;
+  static const emptyInk = BiliColors.secondaryText;
+  static const artBody = Color(0xFFEBEDEF);
+  static const artShade = Color(0xFFDADCDF);
+
+  /// Logged out and failed: the words and pink buttons 历史记录 uses.
+  static const stateText = HistoryTheme.stateText;
+  static const stateGap = HistoryTheme.stateGap;
+  static const stateInk = HistoryTheme.stateInk;
+  static const buttonText = HistoryTheme.loginText;
+  static const buttonHeight = HistoryTheme.loginHeight;
+  static const buttonPadX = HistoryTheme.loginPadX;
+  static const buttonWeight = HistoryTheme.buttonWeight;
+
+  /// 管理's and ⋮'s sheets (93, 94): the page dimmed by 32 % black; a #F6F7F8 sheet with a 12 corner, its grabber 30 × 3
+  /// 8 down; one white group 19 down, 16 in from each side, 12 corner, 24 above the home indicator's inset. Rows
+  /// 53.44 tall: the 20 pt glyph centred 42 across, 18 pt words from 60, a 0.5 hairline from 60 between rows.
+  static const sheetDim = Color(0x52000000);
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
+  static const sheetFill = BiliColors.softGrey;
+  static const sheetRadius = 12.0;
+  static const grabberTop = 8.0;
+  static const grabberWidth = 30.0;
+  static const grabberHeight = 3.0;
+  static const grabberInk = Color(0xFFC5C6C6);
+  static const groupTop = 19.0;
+  static const groupInset = 16.0;
+  static const groupRadius = 12.0;
+  static const groupBottom = 24.0;
+  static const groupFill = BiliColors.card;
+  static const actionRowHeight = 481 / 9;
+  static const actionGlyphCentre = 42.0;
+  static const actionGlyphSize = 20.0;
+  static const actionGlyphStroke = 0.95;
+  static const actionTextLeft = 60.0;
+  static const actionText = 18.0;
+  static const actionWeight = FontWeight.w500;
+  static const actionHairline = 0.5;
+  static const actionHairlineInk = BiliColors.pageGrey;
+  static const actionPressed = Color(0x0A000000);
+
+  /// 复制到 / 移动到's sheet (97, 98): white, 554.67 tall; the 📁 16 × 15 at 12, 24.67 down; 选择收藏夹 22 pt from 34 and
+  /// + 新建收藏夹 20 pt grey ending 12 from the edge, centred 32.33 down. The folders from 56.17 down, 61 a row: the
+  /// name 20 pt centred 17.33 down (16.83 here: the stand-in sits it 0.5 low), 公开 · N个内容 17 pt grey centred 46.67
+  /// down, and a 0.5 hairline 12 in from each side atop every row after the first.
+  static const folderSheetHeight = 1664 / 3;
+  static const folderSheetFill = BiliColors.card;
+  static const folderGrabberInk = Color(0xFFC9CCD0);
+  static const folderHeaderCentre = 97 / 3;
+  static const folderIconLeft = 12.0;
+  static const folderIconTop = 74 / 3;
+  static const folderIconWidth = 16.0;
+  static const folderIconHeight = 15.0;
+  static const folderIconInk = Color(0xFFF3C14A);
+  static const folderTitleLeft = 34.0;
+  static const folderTitleText = 22.0;
+  static const folderNewText = 20.0;
+  static const folderNewRight = 12.0;
+  static const plusSize = 34 / 3;
+  static const plusStroke = 1.2;
+  static const plusGap = 5.5;
+  static const folderRowsTop = 337 / 6;
+  static const folderRowHeight = 61.0;
+  static const folderNameCentre = 50.5 / 3;
+  static const folderNameText = 20.0;
+  static const folderMetaCentre = 140 / 3;
+  static const folderMetaText = 17.0;
+  static const folderHairline = 0.5;
+
+  /// The edit-mode bar (95, 96): 48 above the home indicator's inset over a 2/3 hairline, a soft shade 31.33 tall
+  /// above it; ○ 全选 at the left, 13 pt; 取消选择 / 删除 / 复制到 / 移动到 at the right, 16 apart and ending 12.67 from
+  /// the edge, light grey until something is chosen.
+  static const editBarHeight = 48.0;
+  static const editBarHairline = 2 / 3;
+  static const editShadeHeight = 94 / 3;
+  static const editShade = Color(0x1A000000);
+  static const selectAllLeft = 42.0;
+  static const editText = 13.0;
+  static const editActionGap = 16.0;
+  static const editActionRight = 12.67;
+  static const editActionOff = Color(0xFFC9CCD0);
 }
 
 /// The app token's confirm and 开发者's 官方接口 card.
