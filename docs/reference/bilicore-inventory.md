@@ -139,8 +139,8 @@ Signing column: **W** = WBI w_rid, **C** = csrf (bili_jct) form, **A** = app key
 | `/x/dm/filter/user/add` | POST | `type` (0 keyword / 1 regex / 2 user), `filter` | C | `addBlockRule` | `BlockRuleItem` |
 | `/x/dm/filter/user/del` | POST | `ids` | C | `deleteBlockRule(id:)` | none |
 | `/x/v2/dm/post` (send danmaku) | POST | `type=1, oid=cid, bvid, msg, mode, fontsize, color` (decimal), `progress` (ms), `rnd` (unix µs), `pool=0`, `colorful=60001` when gradient (Referer = video page) | C | `postDanmaku(DanmakuDraft)` | `dmid` (0 if absent) |
-| passport `/x/passport-tv-login/qrcode/auth_code` (TV login) | POST, cookie-less | `local_id=0` + appkey/ts/sign | A | `tvAuthCode(signer:)` (+App) | `{url, auth_code}`; the user confirms the URL in a signed-in web view |
-| passport `/x/passport-tv-login/qrcode/poll` | POST, cookie-less | `auth_code, local_id=0` + appkey/ts/sign | A | `tvPoll(signer:authCode:)` | code 0 → `.confirmed(access_token, mid)`; 86039/86090 → `.waiting`; 86038 → `.expired`; other codes throw |
+| passport `/x/passport-tv-login/qrcode/auth_code` (TV login) | POST, cookie-less | `local_id=0` + appkey/ts/sign | A | `tvAuthCode()` (+App) | `{url, auth_code}`; the user confirms the URL in a signed-in web view |
+| passport `/x/passport-tv-login/qrcode/poll` | POST, cookie-less | `auth_code, local_id=0` + appkey/ts/sign | A | `tvPoll(authCode:)` | code 0 → `.confirmed(access_token, mid)`; 86039/86090 → `.waiting`; 86038 → `.expired`; other codes throw |
 | app `/x/v2/view/dislike` (不喜欢) | POST, cookie-less | `aid`, `dislike` (**`"0"` when dislike on, `"1"` to take it back**), `access_key` + appkey/ts/sign | A | `dislike(aid:on:accessToken:signer:)` | none |
 
 **Not in the package:**

@@ -80,12 +80,18 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   稍后再看 and 分享). Comments' face and name, reply previews' names, @mentions (comments and 简介), space links and
   搜索's 用户 rows open the space. The space's calls are the official app's (`app.bilibili.com`, `AppSigner.android`);
   关注 stays on the web calls, kept in step everywhere by `FollowBook`.
+- Slice 13, 我的收藏, 稍后再看 and the official login, 1.0.0 (20): the app token (`AppAuth`), confirmed once with the
+  web login (its confirm page as the fallback), kept with its expiry, renewed once within 30 days of the end, asked
+  again when rejected; PiliPlus's split by host. Official with the token: 推荐 (personalised, videos only; the web
+  feed without the token), its ⋮ sheet with 不感兴趣 and its reasons (90-92), 点赞, 投币 and 不喜欢 (now live, 88,
+  89). 我的收藏 (80-84, 99-101): folders as cards or a list, a folder, 视频, 取消收藏, 创建 with a picked cover.
+  稍后再看 (85, 86, 93-98): 全部 / 未看完, the sort, 播放全部, 删除, 一键清除, 批量管理 with 复制到 / 移动到. Settings
+  files now live in the folder iOS names (path_provider): until (19) none survived a relaunch on the phone. Shipped
+  without the Windows press-through (the PC was locked; KaiC's call), on widget tests' accessibility presses.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
-1. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
-After slice 12 KaiC wants to talk about moving other web calls to the official app API: calls that need no account
-can move; account-bound ones need an app token (a TV/app login, a new device on the account).
+1. KaiC's phone check of (20), then the milestone's closing build and both checklists.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
@@ -104,8 +110,12 @@ Open items, each waiting on its slice:
   stand-in sweep's findings (re-measure, then one fix round by screen group), the landscape title marquee with 章节,
   竖屏's 联合创作 and 合集 prefix, 弹幕设置's 查看更多 variant for the small player (waiting on KaiC's screenshot), and
   12's first comment drawing about 3% wide on (16), cause unknown.
-- 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
-  account and a borrowed app key).
+- The official login on the phone (1.0.0 (20)): the confirm call (`/x/passport-tv-login/h5/qrcode/confirm`, its fields
+  inferred) or its page fallback, 推荐's mix against the official 首页, 不感兴趣's reason ids (inferred), 我的收藏's
+  视频 (the official app's `/x/v3/fav/tab/fav` with cookies, untried), the cover upload, and the launch log's
+  `support folder` line showing the settings files kept (字体, 弹幕设置, 搜索历史 reset on every relaunch before).
+  Not built: 追更, the folder search, 批量 in folders, folder rows' progress line (the web list has none), 卡片/列表
+  remembered across launches. The Windows press-through of slice 13 is still owed.
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
   the logged-out paths.
 - Follow-up slice: 人像防挡 (the mask file from `/x/v2/dm/web/view`); its switch is drawn off and toasts until then.
@@ -148,6 +158,9 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     the route and `UploaderTap` / `openUploader` (the video page's sheet, else the space), `SpaceFollow` and
     `FollowBook` (关注 in step across pages), the uploader sheet, the space page (header, bar, tabs, the 取消关注 sheet)
     and 投稿's list (`space_videos.dart`).
+  - `lib/favourites/`: 我的收藏 (folders, a folder, 视频, the 创建 page `new_folder_page.dart` that 稍后再看 shares).
+  - `lib/watch_later/`: 稍后再看 (the list, its sheets and 批量管理).
+  - `lib/account/app_auth*.dart`: the official login's token, its confirm and fallback page.
   - `lib/player/`: the `BiliPlayer` interface and its iOS and Windows players. `lib/playback/`: the engine's setup,
     the shared engine (`shared_engine.dart`: one isolate, a lease per controller), the playback controller, codec
     memory, the danmaku feed.
