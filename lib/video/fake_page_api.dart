@@ -87,22 +87,25 @@ class FakePageApi implements PageApi {
   Future<VideoRelation> relation({required int aid, required String bvid}) =>
       _answer('relation', 'relation', () => relationValue);
 
+  /// Says what [uploader] was when asked, so a held answer can be one a 关注 made since has outdated.
   @override
-  Future<UploaderCard> uploaderCard({required int mid}) => _answer('uploaderCard', 'uploaderCard mid=$mid', () {
-        final card = uploader;
-        if (card == null) throw const BiliError.api(code: -404, message: '啥都木有');
-        // Answers for whichever uploader is asked about, so a real video's owner gets the canned counts.
-        return UploaderCard(
-          mid: mid,
-          name: card.name,
-          face: card.face,
-          fans: card.fans,
-          videos: card.videos,
-          isVip: card.isVip,
-          following: card.following,
-          official: card.official,
-        );
-      });
+  Future<UploaderCard> uploaderCard({required int mid}) {
+    final card = uploader;
+    return _answer('uploaderCard', 'uploaderCard mid=$mid', () {
+      if (card == null) throw const BiliError.api(code: -404, message: '啥都木有');
+      // Answers for whichever uploader is asked about, so a real video's owner gets the canned counts.
+      return UploaderCard(
+        mid: mid,
+        name: card.name,
+        face: card.face,
+        fans: card.fans,
+        videos: card.videos,
+        isVip: card.isVip,
+        following: card.following,
+        official: card.official,
+      );
+    });
+  }
 
   @override
   Future<List<VideoTag>> tags({required String bvid, required int cid}) =>

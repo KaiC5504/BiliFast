@@ -484,6 +484,52 @@ void main() {
       expect(find.text('已关注'), findsOneWidget);
     });
 
+    testWidgets('a check that failed is made again on the tap, and an uploader already followed shows 已关注', (
+      tester,
+    ) async {
+      pageApi.failures['uploaderCard'] = const BiliError.http(500);
+      await show(tester);
+      await open(tester);
+      expect(find.text('关注'), findsOneWidget);
+      pageApi.failures.clear();
+      pageApi.uploader = const UploaderCard(
+        mid: 0,
+        name: '',
+        face: '',
+        fans: 0,
+        videos: 0,
+        isVip: false,
+        following: true,
+      );
+      await tester.tap(text('uploader-sheet-follow'));
+      await frames(tester);
+      expect(find.text('已关注'), findsOneWidget);
+      expect(pageApi.calls, ['uploaderCard mid=$_mid', 'uploaderCard mid=$_mid'], reason: 'no follow sent');
+    });
+
+    testWidgets('取消关注 confirmed while the follow is still out goes once it returns', (tester) async {
+      await show(tester, following: false);
+      await open(tester);
+      final held = pageApi.holds['follow'] = Completer<void>();
+      await tester.tap(text('uploader-sheet-follow'));
+      await frames(tester);
+      expect(find.text('已关注'), findsOneWidget);
+      await tester.tap(text('uploader-sheet-follow'));
+      await frames(tester);
+      await tester.tap(find.byKey(const ValueKey('unfollow-确定')));
+      await frames(tester);
+      expect(find.text('关注'), findsOneWidget);
+      expect(pageApi.calls, ['follow on=true']);
+
+      pageApi.holds.clear();
+      held.complete();
+      await frames(tester);
+      expect(pageApi.calls, ['follow on=true', 'follow on=false']);
+      expect(find.text('关注'), findsOneWidget);
+      expect(services.follows.last, (mid: _mid, following: false));
+      await frames(tester, 50);
+    });
+
     testWidgets('logged out, 关注 asks for the login and sends nothing', (tester) async {
       await show(tester, loggedIn: false);
       await open(tester);

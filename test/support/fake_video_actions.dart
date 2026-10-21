@@ -11,6 +11,7 @@ class FakeVideoActions extends ChangeNotifier implements VideoActions {
     this.disliked = false,
     this.favorited = false,
     this.following = false,
+    this.followingKnown = true,
     this.coins = 0,
     this.likeCount = 9131,
     this.coinCount = 1210,
@@ -35,6 +36,9 @@ class FakeVideoActions extends ChangeNotifier implements VideoActions {
 
   @override
   bool following;
+
+  @override
+  bool followingKnown;
 
   @override
   int coins;

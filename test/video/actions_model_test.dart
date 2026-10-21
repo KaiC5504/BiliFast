@@ -449,6 +449,24 @@ void main() {
       r.model.applyUploader(_card(mid: 42, following: true));
       expect(r.model.following, isFalse, reason: 'the tap stands');
     });
+
+    test('is known once the relation or the uploader\'s card says, or a tap sets it', () async {
+      expect(rig().model.followingKnown, isFalse);
+      expect(rig(relation: _relation()).model.followingKnown, isTrue);
+      expect(rig(uploader: _card(mid: 42, following: false)).model.followingKnown, isTrue);
+      expect(rig(uploader: _card(mid: 7, following: false)).model.followingKnown, isFalse, reason: 'someone else\'s');
+      final tapped = rig();
+      final tap = tapped.hold('follow');
+      final out = tapped.model.toggleFollow();
+      expect(tapped.model.followingKnown, isTrue);
+      tap.complete();
+      await out;
+      expect(tapped.model.followingKnown, isTrue);
+      final refused = rig();
+      refused.api.failures['follow'] = const BiliError.api(code: 22009, message: '关注已达上限');
+      await refused.model.toggleFollow();
+      expect(refused.model.followingKnown, isFalse, reason: 'taken back, and Bilibili never said');
+    });
   });
 
   group('收藏', () {

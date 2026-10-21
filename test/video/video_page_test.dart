@@ -3324,6 +3324,7 @@ void main() {
         actions: actions = ActionsModel(
           api: api,
           detail: detail(bv, ownerMid: owner),
+          relation: const VideoRelation(like: false, dislike: false, favorite: false, attention: false, coins: 0),
           isLoggedIn: () => true,
           accountMid: () => 1,
           requestLogin: () {},
@@ -3372,6 +3373,63 @@ void main() {
       await back(tester);
       await back(tester);
     });
+
+    testWidgets('opened before the page knows its 关注, the sheet asks the card and shows an uploader already followed',
+        (tester) async {
+      api.uploader = const UploaderCard(mid: 0, name: '', face: '', fans: 0, videos: 0, isVip: false, following: true);
+      ActionsModel? actions;
+      makeDetails = () => FakePageDetails(
+        actions: actions = ActionsModel(
+          api: api,
+          detail: detail(bv, ownerMid: owner),
+          isLoggedIn: () => true,
+          accountMid: () => 1,
+          requestLogin: () {},
+          toast: (_) {},
+          follows: services.follows,
+        ),
+      );
+      await openSheet(tester);
+      addTearDown(actions!.dispose);
+      expect(api.calls, contains('uploaderCard mid=$owner'));
+      expect(find.descendant(of: find.byType(UploaderSheet), matching: find.text('已关注')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('uploader-sheet-follow')));
+      await frames(tester);
+      expect(find.text('确定不再关注？'), findsOneWidget);
+      expect(api.calls.where((call) => call.startsWith('follow')), isEmpty);
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester);
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('the status bar\'s tap leaves the list under the sheet where it is', (tester) async {
+      await openSheet(tester);
+      sessions.single
+        ..related = [for (var i = 0; i < 20; i++) quietCard('BV1r$i')]
+        ..changed();
+      await frames(tester, 2);
+      final intro = tester
+          .state<ScrollableState>(
+            find.descendant(of: find.byType(IntroTab), matching: find.byType(Scrollable), skipOffstage: false).first,
+          )
+          .position
+        ..jumpTo(200);
+      await tester.pump();
+      final top = tester.getRect(find.byKey(const ValueKey('uploader-sheet'))).top;
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.statusBar.name,
+        SystemChannels.statusBar.codec.encodeMethodCall(const MethodCall('handleScrollToTop')),
+        (_) {},
+      );
+      await frames(tester, 30);
+      expect(intro.pixels, 200);
+      expect(sheet(tester).isOpen, isTrue);
+      expect(tester.getRect(find.byKey(const ValueKey('uploader-sheet'))).top, top);
+      await back(tester);
+      await back(tester);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('another uploader (a staff member) is asked about', (tester) async {
       await openSheet(tester, mid: 99);

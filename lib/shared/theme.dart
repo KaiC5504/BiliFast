@@ -3576,6 +3576,9 @@ abstract final class UploaderSheetTheme {
   static const countsCentre = 62.0;
   static const countsGap = 8.5;
 
+  /// The counts fade in once the space answers.
+  static const countsFade = Duration(milliseconds: 220);
+
   /// PingFang sets digits a little apart from the Chinese they meet ("3 万粉丝"); Flutter's layout sets them touching.
   static const countsHanGap = 5 / 3;
   static const enterText = 13.0;
@@ -3606,6 +3609,10 @@ abstract final class UploaderSheetTheme {
   static const followedFill = IntroTheme.followedFill;
   static const followedInk = IntroTheme.followedText;
   static const followPressedScale = IntroTheme.followPressedScale;
+
+  /// 简介's: the fill and words change over [followMotion]; a press shrinks the pill over [followPressMotion].
+  static const followMotion = SearchResultTheme.followMotion;
+  static const followPressMotion = SearchResultTheme.followPressMotion;
 
   static const gridTop = 77.0;
 

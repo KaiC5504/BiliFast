@@ -17,6 +17,10 @@ abstract interface class VideoActions implements Listenable {
 
   bool get following;
 
+  /// False while [following] is only the default: the relation and the uploader's card haven't said, and 关注 hasn't
+  /// been changed here or elsewhere.
+  bool get followingKnown;
+
   /// Coins this account has given the video.
   int get coins;
 
