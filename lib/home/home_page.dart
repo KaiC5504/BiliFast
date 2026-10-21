@@ -15,6 +15,7 @@ import '../app/zoom_back_route.dart';
 import '../search/search_glyphs.dart';
 import '../search/results/video_row.dart' show searchLogReason;
 import '../search/search_page.dart';
+import '../shared/loading_tv.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -67,6 +68,7 @@ class _HomePageState extends State<HomePage> {
     _services = AppScope.of(context);
     _opener.busy.addListener(_busyChanged);
     _feed = FeedModel(client: _environment.client);
+    unawaited(LoadingTv.precache(context));
     unawaited(_refreshFeed());
     _environment.addListener(_accountChanged);
     _accountChanged();
@@ -531,7 +533,7 @@ class _FeedGridState extends State<_FeedGrid> {
   int _batch = 0;
   double _rowExtent = 0;
 
-  /// Whether 首页's refresh shows the pull-to-refresh spinner at the top.
+  /// Whether 首页's refresh shows the pull-to-refresh TV at the top.
   bool _reloadHeader = false;
 
   @override
@@ -565,7 +567,7 @@ class _FeedGridState extends State<_FeedGrid> {
   }
 
   /// 首页's tap, as the official app's: back to the top and 推荐 refreshed at once, whether scrolled or already at the
-  /// top, with the pull-to-refresh spinner held at the top until the new cards come. Nothing more while a refresh
+  /// top, with the pull-to-refresh TV held at the top until the new cards come. Nothing more while a refresh
   /// (or the first load) runs.
   Future<void> reload() async {
     final feed = widget.feed;
@@ -626,7 +628,11 @@ class _FeedGridState extends State<_FeedGrid> {
         );
         final cards = feed.cards;
         final loadingFirst = cards.isEmpty && (feed.loading || feed.error == null);
-        final pull = CupertinoSliverRefreshControl(onRefresh: widget.onRefresh);
+        final pull = CupertinoSliverRefreshControl(
+          refreshIndicatorExtent: LoadingTvTheme.size,
+          builder: loadingTvRefreshIndicator,
+          onRefresh: widget.onRefresh,
+        );
         return AnimatedSwitcher(
           duration: still ? Duration.zero : const Duration(milliseconds: 320),
           layoutBuilder: (current, previous) =>
@@ -666,13 +672,7 @@ class _FeedGridState extends State<_FeedGrid> {
                             child: SizedBox(
                               key: const ValueKey('feed-reload'),
                               height: pull.refreshIndicatorExtent,
-                              child: CupertinoSliverRefreshControl.buildRefreshIndicator(
-                                context,
-                                RefreshIndicatorMode.refresh,
-                                pull.refreshIndicatorExtent,
-                                pull.refreshTriggerPullDistance,
-                                pull.refreshIndicatorExtent,
-                              ),
+                              child: const Center(child: LoadingTv()),
                             ),
                           ),
                         ),

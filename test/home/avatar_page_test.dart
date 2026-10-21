@@ -14,10 +14,12 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
+import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_page.dart';
+import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator, CupertinoSliverRefreshControl;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -363,6 +365,31 @@ void main() {
       await settle(tester, 30);
       expect(find.text('加载失败，下拉重试'), findsNothing);
       expect(find.text('看过 1'), findsOneWidget);
+    });
+
+    testWidgets("a pull shows the loading TV, not the system spinner, until the history comes", (tester) async {
+      await show(tester, loggedIn: true, history: watched);
+      final hold = Completer<void>();
+      api.holds['history'] = hold;
+      final pull = await tester.startGesture(tester.getCenter(find.byType(CustomScrollView)));
+      for (var i = 0; i < 10; i++) {
+        await pull.moveBy(const Offset(0, 40));
+        await tester.pump();
+      }
+      await pull.up();
+      await settle(tester);
+      expect(historyCalls(), 2);
+      final tv = find.descendant(of: find.byType(CupertinoSliverRefreshControl), matching: find.byType(LoadingTv));
+      expect(tv, findsOneWidget);
+      expect(tester.getSize(tv).height, LoadingTvTheme.size);
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      final face = find.descendant(of: tv, matching: find.byType(Image));
+      final first = (tester.widget<Image>(face).key! as ValueKey<String>).value;
+      await tester.pump(LoadingTvTheme.frame);
+      expect((tester.widget<Image>(face).key! as ValueKey<String>).value, isNot(first), reason: 'cycling');
+      hold.complete();
+      await settle(tester, 30);
+      expect(find.byType(LoadingTv), findsNothing);
     });
 
     testWidgets('with no history the card says so', (tester) async {
