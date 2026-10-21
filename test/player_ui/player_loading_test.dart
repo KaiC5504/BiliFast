@@ -21,7 +21,7 @@ Widget _host(Widget child, {bool still = false}) => MaterialApp(
   ),
 );
 
-double _frame(WidgetTester tester) => tester.widget<Lottie>(find.byType(Lottie)).controller!.value;
+bool _animates(WidgetTester tester) => tester.widget<Lottie>(find.byType(Lottie)).animate;
 
 void main() {
   group('the line', () {
@@ -56,11 +56,9 @@ void main() {
     expect(find.text(PlayerLoading.message), findsOneWidget);
     expect(tester.getSize(find.byType(Lottie)), const Size.square(PlayerLoadingTheme.tvSize));
     expect(tester.getCenter(find.byType(Lottie)), const Offset(220, 247.5 / 2));
-    final start = _frame(tester);
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(_frame(tester), isNot(start));
-    await tester.pump(const Duration(seconds: 3));
-    expect(tester.hasRunningAnimations, isTrue, reason: 'it loops');
+    expect(_animates(tester), isTrue);
+    await tester.pump(const Duration(seconds: 4));
+    expect(tester.hasRunningAnimations, isTrue, reason: 'it loops past the file\'s 3 s');
 
     stats.value = _measured.copyWith(downloadBps: 69.33 * 1024);
     await tester.pump();
@@ -74,7 +72,7 @@ void main() {
     await _precache(tester);
     await tester.pumpWidget(_host(const PlayerLoading(), still: true));
     await tester.pump(const Duration(seconds: 1));
-    expect(_frame(tester), 0);
+    expect(_animates(tester), isFalse);
     expect(tester.hasRunningAnimations, isFalse);
   });
 

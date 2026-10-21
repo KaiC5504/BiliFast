@@ -223,7 +223,11 @@ class VideoPlayerArea extends StatelessWidget {
                   // In 竖屏 it centres on the video's band.
                   child: FractionallySizedBox(
                     heightFactor: _loadingBand(ui),
-                    child: PlayerLoading(key: const ValueKey('video-loading'), stats: ui?.session.stats),
+                    // Hidden through a turn like the chrome: the pinned layer would stretch it unevenly.
+                    child: _unseen(
+                      aside,
+                      PlayerLoading(key: const ValueKey('video-loading'), stats: ui?.session.stats),
+                    ),
                   ),
                 )
               : const SizedBox.shrink(),

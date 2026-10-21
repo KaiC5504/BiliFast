@@ -386,6 +386,22 @@ void main() {
     expect(find.byType(PlayerLoading), findsNothing, reason: 'the failure takes its place');
   });
 
+  testWidgets('the loading TV is out of sight through a turn, where the pinned layer would stretch it', (tester) async {
+    final turning = ValueNotifier(false);
+    addTearDown(turning.dispose);
+    await show(tester, Presentation.inline, loading: true, turning: turning);
+    bool drawn() => tester
+        .widget<Visibility>(find.ancestor(of: find.byType(PlayerLoading), matching: find.byType(Visibility)).first)
+        .visible;
+    expect(drawn(), isTrue);
+    turning.value = true;
+    await tester.pump();
+    expect(drawn(), isFalse);
+    turning.value = false;
+    await tester.pump();
+    expect(drawn(), isTrue);
+  });
+
   testWidgets('the cover keeps its element as the session, the chrome and the spinner come', (tester) async {
     const cover = SizedBox.expand(key: ValueKey('video-cover'));
     await show(tester, Presentation.inline, withUi: false, loading: true, cover: cover);

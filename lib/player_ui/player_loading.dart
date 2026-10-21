@@ -44,45 +44,14 @@ class PlayerLoading extends StatefulWidget {
   State<PlayerLoading> createState() => _PlayerLoadingState();
 }
 
-class _PlayerLoadingState extends State<PlayerLoading> with SingleTickerProviderStateMixin {
-  late final AnimationController _loop = AnimationController(vsync: this);
-  bool _still = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _still = MediaQuery.disableAnimationsOf(context);
-    _run();
-  }
-
-  void _loaded(LottieComposition composition) {
-    _loop.duration = composition.duration;
-    _run();
-  }
-
-  void _run() {
-    if (_loop.duration == null) return;
-    if (_still) {
-      _loop
-        ..stop()
-        ..value = 0;
-    } else if (!_loop.isAnimating) {
-      unawaited(_loop.repeat());
-    }
-  }
-
-  @override
-  void dispose() {
-    _loop.dispose();
-    super.dispose();
-  }
-
+class _PlayerLoadingState extends State<PlayerLoading> {
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(
       fontFamily: BiliFonts.family,
       fontFamilyFallback: BiliFonts.fallback,
       fontSize: PlayerLoadingTheme.text,
+      fontWeight: FontWeight.w400,
       color: PlayerLoadingTheme.ink,
       letterSpacing: 0,
       decoration: TextDecoration.none,
@@ -104,10 +73,11 @@ class _PlayerLoadingState extends State<PlayerLoading> with SingleTickerProvider
         children: [
           LayoutId(
             id: _Slot.tv,
+            // Lottie's own animation, not a controller of ours: it ticks at the file's 30 fps rather than every
+            // vsync, and stops under a muted TickerMode.
             child: Lottie.asset(
               PlayerLoading.asset,
-              controller: _loop,
-              onLoaded: _loaded,
+              animate: !MediaQuery.disableAnimationsOf(context),
               width: PlayerLoadingTheme.tvSize,
               height: PlayerLoadingTheme.tvSize,
             ),
