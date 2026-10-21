@@ -73,11 +73,19 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   keyword answers), and the player's 正在缓冲... with the engine's speed for loads, reloads and waits past 750 ms (65,
   66). Loading more keeps the small system spinner, as the official app does. 首页's tab row ends at 01's hairline
   (it was 9.33 pt low since slice 3).
+- Slice 12, UP主空间, 1.0.0 (19) (KaiC: its own build): the uploader row's and staff's face and name (one target) open
+  the uploader sheet under the playing video (62, 68, 76): counts, 关注, the uploader's videos, 进入空间. The space (63,
+  69-75, 77-79): banner, counts, 关注 with 充电 / 已关注 / ▽ and the 取消关注 sheet, the collapsing white bar with the
+  tab row pinned, always on 投稿 (chips for 视频 and 合集/系列, the 最新发布 ↔ 最多播放 toggle, 播放全部, rows with ⋮'s
+  稍后再看 and 分享). Comments' face and name, reply previews' names, @mentions (comments and 简介), space links and
+  搜索's 用户 rows open the space. The space's calls are the official app's (`app.bilibili.com`, `AppSigner.android`);
+  关注 stays on the web calls, kept in step everywhere by `FollowBook`.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
-1. Slice 12, UP主空间: an uploader's profile, videos and 关注, from every place an uploader shows.
-2. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
+1. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
+After slice 12 KaiC wants to talk about moving other web calls to the official app API: calls that need no account
+can move; account-bound ones need an app token (a TV/app login, a new device on the account).
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
@@ -109,6 +117,13 @@ Open items, each waiting on its slice:
   refresh), 历史记录's first load or a speed past 1024 KB/s (ours writes MB/s); 评论 before the aid is known was only
   seen under an ad card. A pause before the first frame may leave 正在缓冲... up (older than (18), unconfirmed). The
   @ list, emote panel and 收藏 sheet keep their spinners (no recording).
+- UP主空间 on the phone: 关注 / 取消关注 on the real account (FollowBook keeping the page, sheet and space in step), the
+  bolt on 硬核会员's level badge (`level_info.identity` 2) and 充电 only for uploaders who take it (`elec.show`), both
+  unseen live; the -404 page's 用户不存在或已注销 and the collapsed bar's 已关注 pill are guesses (no screenshot).
+  Not built: 主页/动态/小店/收藏 (toast), the uploader's default tab, 你可能感兴趣 after 关注 (no known API), medals and
+  找我官方合作 after the name, 图文. Uploader names on 推荐 cards, 历史记录, 搜索's video rows and related rows don't
+  open the space yet (no screenshot of what the official app does). 分享 on Windows opens an invisible share window
+  that freezes the app (share_plus; the phone is fine): checks skip it.
 - Left out by KaiC: 举报 on danmaku, 互动弹幕列表.
 - Later: 竖屏 search, 充电鸣谢, the player box following a 16:10 video's height.
 - Known limit: Flutter rounds a line to whole points, so comment lines are 24 pt where the official app's are 24.33.
@@ -129,6 +144,10 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     for tests and `--fake-account`), the history store, `search_glyphs.dart`, and `results/` (tabs, rows, 筛选, the ⋮
     sheet). `lib/video/link_opener.dart` opens a pasted link's video for 搜索 and `--play=`.
   - `lib/history/`: 历史记录, its model and the row's ⋮ sheet.
+  - `lib/space/`: UP主空间: `SpaceApi` (the official app's calls; `fake_space_api.dart` for tests and `--fake-account`),
+    the route and `UploaderTap` / `openUploader` (the video page's sheet, else the space), `SpaceFollow` and
+    `FollowBook` (关注 in step across pages), the uploader sheet, the space page (header, bar, tabs, the 取消关注 sheet)
+    and 投稿's list (`space_videos.dart`).
   - `lib/player/`: the `BiliPlayer` interface and its iOS and Windows players. `lib/playback/`: the engine's setup,
     the shared engine (`shared_engine.dart`: one isolate, a lease per controller), the playback controller, codec
     memory, the danmaku feed.
@@ -251,6 +270,12 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's
   `PlayerLoading`), never a spinning circle, except for loading more under a list and inside buttons, where the
   official app keeps the small system spinner too.
+- UP主空间's calls are the official app's (`app.bilibili.com`), signed with `AppSigner.android` (a public pair, the
+  same for everyone; KaiC allowed it in the repo) and sent with no cookies. An archive item's `uri` carries a signed
+  play link: never keep, log or put it in a fixture. 关注 stays on the web card and `/x/relation/modify`.
+- A control wrapped in `Semantics(excludeSemantics: true)` needs its own `onTap:` on the Semantics (`ChromeTap`'s
+  pattern): excluding drops the GestureDetector's tap action, and VoiceOver and ghosthand then press nothing (slice
+  12's space shipped that way to its first Windows check).
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
 - A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the
