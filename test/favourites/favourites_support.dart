@@ -43,10 +43,12 @@ FavVideo favVideo(
   int duration = 11,
   int play = 8040,
   int danmaku = 0,
+  String cover = '',
 }) => FavVideo(
   aid: 7000 + i,
   bvid: bvidOf(7000 + i),
   title: title ?? '测试收藏 $i',
+  cover: cover,
   duration: duration,
   ownerMid: 600 + i,
   ownerName: owner,

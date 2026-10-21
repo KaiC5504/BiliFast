@@ -4,28 +4,25 @@ import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
 
-/// 我的收藏's line glyphs, traced on 80-83.
+/// 我的收藏's line glyphs, traced on 80-83 and 99.
 enum FavGlyph {
-  /// The chip row's and the folder bar's 🔍.
   search,
-
-  /// The chip row's +.
   plus,
 
   /// The folders' layout toggle: two stacked boxes (80).
   layout,
 
+  /// The toggle in the list layout (99): two rows of a box and two bars.
+  layoutList,
+
   /// Multi-select: ✓, ○, ✓ before three bars (81, 83).
   select,
-
-  /// A card's ›.
   chevron,
-
-  /// A private folder's padlock.
   lock,
-
-  /// The folder bar's ⋮, filled dots.
   more,
+
+  /// 播放's filled ▶ with rounded corners (99).
+  play,
 
   /// 收藏 under a folder's title: a filled folder with a white + (81).
   folderAdd,
@@ -88,6 +85,10 @@ class FavGlyphPainter extends CustomPainter {
         _plus(canvas, size);
       case FavGlyph.layout:
         _layout(canvas, size);
+      case FavGlyph.layoutList:
+        _layoutList(canvas, size);
+      case FavGlyph.play:
+        _play(canvas, size);
       case FavGlyph.select:
         _select(canvas, size);
       case FavGlyph.chevron:
@@ -130,6 +131,47 @@ class FavGlyphPainter extends CustomPainter {
       final box = Rect.fromLTWH(half, top + half, size.width - stroke, boxHeight - stroke);
       canvas.drawRRect(RRect.fromRectAndRadius(box, const Radius.circular(2.3)), _line);
     }
+  }
+
+  /// Each half of the height a box over the left 0.44 with a 2.3 corner, and two bars from the middle: the upper to
+  /// the edge, the lower to 0.875, at 0.32 and 0.68 of the half.
+  void _layoutList(Canvas canvas, Size size) {
+    const gap = 2 / 3;
+    final half = stroke / 2;
+    final rowHeight = (size.height - gap) / 2;
+    final boxWidth = size.width * 0.4375;
+    final barLeft = size.width / 2 + half;
+    for (final top in [0.0, rowHeight + gap]) {
+      final box = Rect.fromLTWH(half, top + half, boxWidth - stroke, rowHeight - stroke);
+      canvas
+        ..drawRRect(RRect.fromRectAndRadius(box, const Radius.circular(2.3)), _line)
+        ..drawLine(Offset(barLeft, top + rowHeight * 0.32), Offset(size.width - half, top + rowHeight * 0.32), _line)
+        ..drawLine(
+          Offset(barLeft, top + rowHeight * 0.68),
+          Offset(size.width * 0.875 - half, top + rowHeight * 0.68),
+          _line,
+        );
+    }
+  }
+
+  /// Filled, its corners rounded by stroking the inset outline with round joins.
+  void _play(Canvas canvas, Size size) {
+    final round = size.width * 0.13;
+    final triangle = Path()
+      ..moveTo(round, round)
+      ..lineTo(size.width - round, size.height / 2)
+      ..lineTo(round, size.height - round)
+      ..close();
+    canvas
+      ..drawPath(triangle, _fill)
+      ..drawPath(
+        triangle,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = round * 2
+          ..strokeJoin = StrokeJoin.round,
+      );
   }
 
   /// Marks in the left 0.29 of the width, bars from 0.39; rows at the top, middle and bottom line.

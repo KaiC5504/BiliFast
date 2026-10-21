@@ -1,10 +1,13 @@
 import 'dart:io';
 
+import 'package:bili_core/api.dart' show FavFolder;
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/favourites/fake_favourites_api.dart';
 import 'package:bilifast/favourites/favourites_page.dart';
 import 'package:bilifast/favourites/folder_page.dart';
+import 'package:bilifast/favourites/new_folder_page.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:flutter/cupertino.dart' show CupertinoSwitch;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -79,6 +82,54 @@ void main() {
     expect(pill.top, 533);
     expect(pill.height, 34);
     expect(pill.width, closeTo(305 / 3, 0.5));
+  });
+
+  testWidgets('99: the folders as a list', (tester) async {
+    favouritesLayout = FavouritesLayout.list;
+    addTearDown(() => favouritesLayout = FavouritesLayout.cards);
+    await show(tester, const FavouritesPage(), _api());
+    await settle(tester);
+    await shoot(tester, '99-favourites-folders-list-layout-ours');
+
+    expect(tester.getRect(find.byKey(const ValueKey('fav-folder-1'))), const Rect.fromLTRB(12, 166, 428, 258));
+    expect(tester.getRect(find.byKey(const ValueKey('fav-folder-2'))), const Rect.fromLTRB(12, 266, 428, 358));
+    expect(tester.getRect(find.byKey(const ValueKey('fav-play-2'))), const Rect.fromLTRB(364, 300, 416, 324));
+    expect(tester.getRect(find.byKey(const ValueKey('fav-new-folder'))).top, 416);
+    final toggle = tester.getRect(find.byKey(const ValueKey('fav-layout-list')));
+    expect(toggle.center.dx, closeTo(418, 0.5));
+    expect(toggle.width, 16);
+  });
+
+  testWidgets('100 and 101: 创建, then 封面’s sheet', (tester) async {
+    Future<FavFolder> create({
+      required String title,
+      required String intro,
+      required bool isPrivate,
+      String cover = '',
+    }) async => favFolder(9, title);
+    Future<String> upload({required List<int> bytes, required String filename}) async => '';
+    await show(tester, NewFolderPage(create: create, uploadCover: upload), _api());
+    await shoot(tester, '100-favourites-new-folder-ours');
+
+    expect(tester.getRect(find.byKey(const ValueKey('fav-new-cover'))), const Rect.fromLTRB(0, 116, 440, 180));
+    final title = tester.getRect(find.byKey(const ValueKey('fav-new-title')));
+    expect(title.left, 88);
+    expect(title.right, 428);
+    expect(title.center.dy, closeTo(211, 0.5));
+    final intro = tester.getRect(find.byKey(const ValueKey('fav-new-intro')));
+    expect(intro.top, closeTo(244 + 1 / 3 + 68 / 3 - 10 - 1, 0.01));
+    final toggle = tester.getRect(find.byType(CupertinoSwitch));
+    expect(toggle.center.dx, 404.5);
+    expect(toggle.center.dy, closeTo(420 + 1 / 3, 0.01));
+
+    await tester.tap(find.byKey(const ValueKey('fav-new-cover')));
+    await settle(tester);
+    await shoot(tester, '101-favourites-new-folder-cover-picker-ours');
+    final sheet = tester.getRect(find.byKey(const ValueKey('fav-new-cover-sheet')));
+    expect(sheet.left, 8);
+    expect(sheet.right, 432);
+    expect(sheet.bottom, 922);
+    expect(sheet.top, closeTo(742 + 2 / 3, 0.01));
   });
 
   testWidgets('81: a folder', (tester) async {

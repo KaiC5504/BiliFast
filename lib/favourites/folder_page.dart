@@ -41,8 +41,8 @@ class FolderPage extends StatefulWidget {
   final FavFolder folder;
   final FavouritesApi api;
 
-  /// Told when a video left this folder, so the folder list follows.
-  final void Function(int aid)? onRemoved;
+  /// Told when a video left this folder, with the newest left, so the folder list follows.
+  final void Function(FavouriteRow removed, FavouriteRow? newest)? onRemoved;
 
   /// Tests hand in a fake; otherwise [AppScope]'s.
   final LoginGate? loginGate;

@@ -4455,6 +4455,112 @@ abstract final class FavouritesTheme {
   static const sheetCancelText = HistoryTheme.sheetCancelText;
   static const sheetCancelInk = HistoryTheme.sheetCancelInk;
   static double get sheetTextDrop => HistoryTheme.sheetTextDrop;
+
+  /// The layout toggle in 99's list: two rows of a box 7 wide and two bars, the upper one long, 16 × 15.33.
+  static const toolLayoutListWidth = 16.0;
+  static const toolLayoutListHeight = 46 / 3;
+
+  /// 99's list: a white card per folder, 92 tall with 80's insets; its cover 120 × 66, 13 down, grey when empty; the
+  /// title (80's) and the count 142 in, their middles 22.33 and 71.83 down (a private folder's count 0.67 higher, by
+  /// its lock).
+  static const rowCardHeight = 92.0;
+  static const rowCoverTop = 13.0;
+  static const rowCoverWidth = 120.0;
+  static const rowCoverHeight = 66.0;
+  static const rowTextLeft = 142.0;
+  static const rowTitleCentre = 67 / 3;
+  static const rowCountCentre = 215.5 / 3;
+  static const rowPrivateCountLift = 2 / 3;
+  static const rowLockInset = 2.0;
+  static const rowTitleGap = 8.0;
+
+  /// ▶ 播放: a 52 × 24 pill 12 from the card's right, centred; a rounded ▶ 8.67 × 9.33, 7.67 in and 3.67 before 12 pt
+  /// words, #61666D on #F6F7F8. An empty folder's is pale.
+  static const playWidth = 52.0;
+  static const playHeight = 24.0;
+  static const playRight = 12.0;
+  static const playPadLeft = 23 / 3;
+  static const playGlyphWidth = 26 / 3;
+  static const playGlyphHeight = 28 / 3;
+  static const playGap = 11 / 3;
+  static const playText = 12.0;
+  static const playLine = 17.0;
+  static const playFill = BiliColors.softGrey;
+  static const playInk = Color(0xFF61666D);
+  static const playFillOff = Color(0xFFFAFBFB);
+  static const playInkOff = Color(0xFFAFB2B6);
+  static const playGlyphOff = Color(0xFFD5D6D8);
+
+  /// 创建 (100): the bar's 创建 20 pt bold and centred, 完成 20 pt ending 20 from the edge, grey (#484C53) until there
+  /// is a name; white groups on #F1F2F3, 10 apart and 10 under the bar: 封面 64 tall, 名称 44, 简介 144, 公开 44.
+  static const newTitleText = 20.0;
+  static const newTitleLine = 28.0;
+  static const newTitleWeight = FontWeight.w600;
+
+  /// The stand-ins centre Chinese ink on the line's middle; 100's bar words and labels sit a point higher.
+  static const formTextLift = 1.0;
+  static const newDoneText = 20.0;
+  static const newDoneRight = 20.0;
+  static const newDoneTarget = 64.0;
+  static const newDoneOffInk = Color(0xFF484C53);
+
+  /// Not in 100 (its name is empty): Bilibili's pink, a guess.
+  static const newDoneInk = BiliColors.pink;
+  static const newPage = BiliColors.pageGrey;
+  static const newGroupFill = BiliColors.card;
+  static const newGroupGap = 10.0;
+
+  /// 简介's group starts a third of a point lower than the others' gap would put it.
+  static const newIntroGap = 31 / 3;
+  static const newCoverHeight = 64.0;
+  static const newRowHeight = 44.0;
+  static const newIntroHeight = 144.0;
+
+  /// Labels 14 pt, 12 in; the fields from 88, 12 short of the edge, their placeholders #AEB3B9. 名称's * is #D0021B.
+  /// 简介's label sits with its middle 20.5 under the group's top, its field's first line 22.67.
+  static const formText = 14.0;
+  static const formLine = 20.0;
+  static const formInk = BiliColors.text;
+  static const newHintInk = Color(0xFFAEB3B9);
+  static const newRequiredInk = Color(0xFFD0021B);
+  static const newLabelLeft = 12.0;
+  static const newFieldLeft = 88.0;
+  static const newFieldRight = 12.0;
+  static const newIntroLabelCentre = 20.5;
+  static const newIntroFieldCentre = 68 / 3;
+  static const newIntroBottom = 12.0;
+  static const newTitleMax = 20;
+  static const newIntroMax = 200;
+
+  /// 封面's ›, 80's chevron in #999999; a picked cover's 64 × 36 thumbnail 8 before it.
+  static const newChevronInk = Color(0xFF999999);
+  static const newThumbWidth = 64.0;
+  static const newThumbHeight = 36.0;
+  static const newThumbRadius = 4.0;
+  static const newThumbGap = 8.0;
+  static const newThumbBusy = Color(0x66FFFFFF);
+
+  /// 公开's switch, the system's 51 × 31 in #FB7299, 10 from the edge (its 59 × 39 box 6).
+  static const newSwitchOn = Color(0xFFFB7299);
+  static const newSwitchRight = 6.0;
+
+  /// 封面's sheet (101), the system's: the page dimmed 20%; 8 in, 从相册选择 and 拍照 57 tall on #EFEFEF with a
+  /// #B1B1B2 hairline, then 8 apart 取消 alone on white, bold, with 14 corners and the home bar's 34 under it; 23 pt
+  /// #D16585 words.
+  static const coverSheetDim = Color(0x33000000);
+  static const coverSheetMargin = 8.0;
+  static const coverSheetRow = 57.0;
+  static const coverSheetGap = 8.0;
+  static const coverSheetRadius = 14.0;
+  static const coverSheetFill = Color(0xFFEFEFEF);
+  static const coverSheetCancelFill = BiliColors.card;
+  static const coverSheetHairline = 1 / 3;
+  static const coverSheetHairlineInk = Color(0xFFB1B1B2);
+  static const coverSheetText = 23.0;
+  static const coverSheetLine = 28.0;
+  static const coverSheetTextDrop = 2 / 3;
+  static const coverSheetInk = Color(0xFFD16585);
+  static const coverSheetCancelWeight = FontWeight.w600;
 }
 
 /// 稍后再看: the list and its empty page (85, 86).

@@ -5,6 +5,7 @@ import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/favourites/fake_favourites_api.dart';
 import 'package:bilifast/favourites/favourites_page.dart';
 import 'package:bilifast/favourites/folder_page.dart';
+import 'package:bilifast/favourites/new_folder_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/cupertino.dart';
@@ -23,6 +24,7 @@ void main() {
     opened = [];
     shared = [];
     gate = FakeLoginGate();
+    favouritesLayout = FavouritesLayout.cards;
   });
 
   FakeFavouritesApi demo() => FakeFavouritesApi(
@@ -138,14 +140,11 @@ void main() {
       expect(asked, greaterThan(0));
     });
 
-    testWidgets('追更, 🔍, +, the layout toggle and + 新建收藏夹 say 暂未开放', (tester) async {
+    testWidgets('追更 and 🔍 say 暂未开放', (tester) async {
       final api = demo();
       await show(tester, favourites(api), api);
       await expectSoon(tester, find.byKey(const ValueKey('fav-tab-following')));
       await expectSoon(tester, find.byKey(const ValueKey('fav-tool-search')));
-      await expectSoon(tester, find.byKey(const ValueKey('fav-tool-new')));
-      await expectSoon(tester, find.byKey(const ValueKey('fav-tool-layout')));
-      await expectSoon(tester, find.byKey(const ValueKey('fav-new-folder')));
     });
 
     testWidgets('a card opens its folder; a removal there follows back to the card', (tester) async {
@@ -190,6 +189,148 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('fav-folders-retry')));
       await settle(tester);
       expect(find.byKey(const ValueKey('fav-folder-2')), findsOneWidget);
+    });
+  });
+
+  group('the list layout (99)', () {
+    testWidgets('the toggle turns the cards into the list and back, its glyph following', (tester) async {
+      final api = demo();
+      await show(tester, favourites(api), api);
+      expect(find.byKey(const ValueKey('fav-layout-cards')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('fav-tool-layout')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('fav-layout-list')), findsOneWidget);
+      expect(find.text('私密视频 0'), findsNothing, reason: 'no cover titles in the list');
+      expect(find.text('25个内容'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('fav-folder-2')),
+          matching: find.byKey(const ValueKey('fav-row-lock')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('fav-play-2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('fav-play-1')), findsNothing, reason: 'an empty folder’s 播放 is pale');
+      await tester.tap(find.byKey(const ValueKey('fav-tool-layout')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('fav-layout-cards')), findsOneWidget);
+      expect(find.text('私密视频 0'), findsOneWidget);
+    });
+
+    testWidgets('the list asks only for the folders, covers included', (tester) async {
+      favouritesLayout = FavouritesLayout.list;
+      final api = FakeFavouritesApi(
+        folders: [favFolder(1, '默认收藏夹', isDefault: true), favFolder(2, '有封面', count: 1)],
+        contents: {
+          1: const [],
+          2: [favVideo(1, cover: 'https://i0.hdslb.com/bfs/archive/test.jpg')],
+        },
+      );
+      await show(tester, favourites(api), api);
+      expect(api.calls, ['folders mid=12345']);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('fav-folder-2')),
+          matching: find.byKey(const ValueKey('fav-row-cover')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('fav-folder-1')),
+          matching: find.byKey(const ValueKey('fav-row-cover')),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets('the choice holds for the next 我的收藏 while the app runs', (tester) async {
+      final api = demo();
+      await show(tester, favourites(api), api);
+      await tester.tap(find.byKey(const ValueKey('fav-tool-layout')));
+      await settle(tester);
+      await tester.pumpWidget(const SizedBox());
+      await show(tester, favourites(api), api);
+      expect(find.byKey(const ValueKey('fav-layout-list')), findsOneWidget);
+    });
+
+    testWidgets('播放 opens the folder’s newest video; a card opens the folder', (tester) async {
+      favouritesLayout = FavouritesLayout.list;
+      final api = demo();
+      await show(tester, favourites(api), api);
+      await tester.tap(find.byKey(const ValueKey('fav-play-3')));
+      await settle(tester);
+      expect(opened.single.bvid, bvidOf(7100));
+      expect(api.calls.last, 'folderVideos folder=3 page=1 size=3');
+      await tester.tap(find.byKey(const ValueKey('fav-folder-3')));
+      await settle(tester, 20);
+      expect(find.byType(FolderPage), findsOneWidget);
+    });
+
+    testWidgets('a refused 播放 says why', (tester) async {
+      favouritesLayout = FavouritesLayout.list;
+      final api = demo()..failures['folderVideos'] = const BiliError.http(500);
+      await show(tester, favourites(api), api);
+      await tester.tap(find.byKey(const ValueKey('fav-play-2')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('网络请求失败（HTTP 500）'), findsOneWidget);
+      expect(opened, isEmpty);
+      await toastGone(tester);
+    });
+  });
+
+  group('创建 from 我的收藏 (100)', () {
+    Future<void> create(WidgetTester tester, String name) async {
+      expect(find.byType(NewFolderPage), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('fav-new-title')), name);
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fav-new-done')));
+      await settle(tester, 20);
+    }
+
+    testWidgets('+ opens 创建, and the folder made joins the list after the default one without a reload', (
+      tester,
+    ) async {
+      final api = demo();
+      await show(tester, favourites(api), api);
+      await tester.tap(find.byKey(const ValueKey('fav-tool-new')));
+      await settle(tester, 20);
+      await create(tester, '新的收藏夹');
+      expect(find.byType(NewFolderPage), findsNothing);
+      expect(api.calls.where((call) => call.startsWith('folders')), hasLength(1));
+      expect(api.calls, contains('createFolder title=新的收藏夹 intro= private=false cover='));
+      final made = api.folderList[1];
+      expect(made.title, '新的收藏夹');
+      expect(
+        tester.getTopLeft(find.byKey(ValueKey('fav-folder-${made.id}'))).dy,
+        lessThan(tester.getTopLeft(find.byKey(const ValueKey('fav-folder-2'))).dy),
+      );
+      expect(
+        tester.getTopLeft(find.byKey(ValueKey('fav-folder-${made.id}'))).dy,
+        greaterThan(tester.getTopLeft(find.byKey(const ValueKey('fav-folder-1'))).dy),
+      );
+    });
+
+    testWidgets('+ 新建收藏夹 under the folders opens 创建 too, and backing out makes nothing', (tester) async {
+      final api = demo();
+      await show(tester, favourites(api), api);
+      await tester.tap(find.byKey(const ValueKey('fav-new-folder')));
+      await settle(tester, 20);
+      expect(find.byType(NewFolderPage), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('fav-new-back')));
+      await settle(tester, 20);
+      expect(find.byType(NewFolderPage), findsNothing);
+      expect(api.calls.where((call) => call.startsWith('createFolder')), isEmpty);
+    });
+
+    testWidgets('logged out, + asks for the login instead', (tester) async {
+      final api = demo();
+      await show(tester, favourites(api), api, loggedIn: false);
+      await tester.tap(find.byKey(const ValueKey('fav-tool-new')));
+      await settle(tester);
+      expect(gate.requests, 1);
+      expect(find.byType(NewFolderPage), findsNothing);
     });
   });
 

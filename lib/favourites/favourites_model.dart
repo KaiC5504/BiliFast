@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -174,23 +175,33 @@ abstract class FavouriteRowsModel<C extends Object> extends ChangeNotifier {
     _loading = true;
     notify();
     var next = replacing ? null : _cursor;
-    var kept = replacing ? <FavouriteRow>[] : [..._rows];
+    final added = <FavouriteRow>[];
     var end = false;
     try {
       for (var attempt = 0; attempt < _emptyPagesAllowed; attempt++) {
         final (page, after) = await fetch(next);
         if (mine != _generation || _disposed) return null;
-        final seen = {for (final row in kept) row.aid, ..._removed};
-        final fresh = [
+        // Against the rows as they are now: one removed during the call must not come back.
+        final seen = {
+          if (!replacing)
+            for (final row in _rows) row.aid,
+          for (final row in added) row.aid,
+          ..._removed,
+        };
+        added.addAll([
           for (final row in page)
             if (seen.add(row.aid)) row,
-        ];
-        kept = [...kept, ...fresh];
+        ]);
         next = after;
         end = after == null || page.isEmpty;
-        if (fresh.isNotEmpty || end) break;
+        if (added.isNotEmpty || end) break;
       }
-      _rows = kept;
+      if (added.isEmpty && !end) {
+        // Page after page of rows already listed: stop until 重试 rather than keep asking.
+        if (!replacing || _rows.isEmpty) _cursor = next;
+        return _failed(StateError('pages repeat listed rows'), replacing: replacing);
+      }
+      _rows = replacing ? added : [..._rows, ...added];
       _cursor = next;
       _isEnd = end;
       _error = null;
@@ -255,7 +266,7 @@ abstract class FavouriteRowsModel<C extends Object> extends ChangeNotifier {
         return null;
       }
       if (!_rows.any((kept) => kept.aid == row.aid)) {
-        // Rows may have come meanwhile; it goes back after the row that was before it.
+        // Rows may have arrived meanwhile.
         final previous = index == 0 ? null : before[index - 1].aid;
         final at = previous == null ? 0 : _rows.indexWhere((kept) => kept.aid == previous) + 1;
         _rows = [..._rows]..insert(at.clamp(0, _rows.length), row);
@@ -278,8 +289,12 @@ abstract class FavouriteRowsModel<C extends Object> extends ChangeNotifier {
   }
 }
 
+/// Where a folder's next page starts: the server's position just past the last page asked, and how many rows had
+/// been removed here by then.
+typedef FolderCursor = ({int end, int removed});
+
 /// A folder's videos (81), 20 to a page; [info] starts as the card's and follows the server's and each removal.
-class FolderVideosModel extends FavouriteRowsModel<int> {
+class FolderVideosModel extends FavouriteRowsModel<FolderCursor> {
   FolderVideosModel({
     required this.api,
     required FavFolder folder,
@@ -291,10 +306,12 @@ class FolderVideosModel extends FavouriteRowsModel<int> {
 
   final FavouritesApi api;
 
-  /// Told when a video has left the folder for good, so the folder list can follow.
-  final void Function(int aid)? onRemoved;
+  /// Told when [removed] has left the folder for good, with the folder's newest row left, so the folder list can
+  /// follow.
+  final void Function(FavouriteRow removed, FavouriteRow? newest)? onRemoved;
   final int pageSize;
   FavFolderInfo _info;
+  int _removedHere = 0;
 
   FavFolderInfo get info => _info;
 
@@ -302,22 +319,32 @@ class FolderVideosModel extends FavouriteRowsModel<int> {
   String get logName => 'favourites folder';
 
   @override
-  Future<(List<FavouriteRow>, int?)> fetch(int? cursor) async {
-    final page = cursor ?? 1;
+  Future<(List<FavouriteRow>, FolderCursor?)> fetch(FolderCursor? cursor) async {
+    final removed = _removedHere;
+    // Each removal since moved the rows after it up one, so the next unseen row may be on a page already asked; the
+    // repeats that brings are dropped.
+    final start = cursor == null ? 0 : math.max(0, cursor.end - (removed - cursor.removed));
+    final page = start ~/ pageSize + 1;
     final answer = await api.folderVideos(folderId: _info.id, page: page, pageSize: pageSize);
     if (answer.info case final info?) {
-      _info = page == 1 ? info : info.withCount(_info.count);
+      _info = cursor == null ? info : info.withCount(_info.count);
     }
-    return ([for (final video in answer.videos) FavouriteRow.fromFolder(video)], answer.hasMore ? page + 1 : null);
+    return (
+      [for (final video in answer.videos) FavouriteRow.fromFolder(video)],
+      answer.hasMore ? (end: page * pageSize, removed: removed) : null,
+    );
   }
 
   @override
-  void rowCountChanged(int by) => _info = _info.withCount((_info.count + by).clamp(0, 1 << 31));
+  void rowCountChanged(int by) {
+    _info = _info.withCount((_info.count + by).clamp(0, 1 << 31));
+    _removedHere -= by;
+  }
 
   @override
   Future<void> removeOnServer(FavouriteRow row) async {
     await api.removeFromFolder(folderId: _info.id, aid: row.aid);
-    onRemoved?.call(row.aid);
+    onRemoved?.call(row, rows.firstOrNull);
   }
 }
 
@@ -368,13 +395,16 @@ final class PreviewFailed extends FolderPreview {
   const PreviewFailed();
 }
 
-/// 收藏夹 (80): the account's folders in one call, then each card's first three covers, one call at a time and only
-/// for the cards on screen.
+/// 收藏夹 (80, 99): the account's folders with their covers, one call for up to 20; then in 80's cards each card's
+/// first three videos, one call at a time and only for the cards on screen.
 class FavouriteFoldersModel extends ChangeNotifier {
   FavouriteFoldersModel({required this.api, required this.mid, required this.isLoggedIn, Logger? logger})
     : _logger = logger ?? Logger.shared;
 
   static const previewSize = 3;
+
+  /// Bounds the folder pages asked in one load, should the server keep saying there are more.
+  static const _folderPagesAllowed = 50;
 
   final FavouritesApi api;
   final int? Function() mid;
@@ -382,6 +412,7 @@ class FavouriteFoldersModel extends ChangeNotifier {
   final Logger _logger;
 
   List<FavFolder> _folders = const [];
+  Map<int, String> _folderCovers = {};
   bool _loading = false;
   bool _loaded = false;
   bool _refreshing = false;
@@ -404,6 +435,9 @@ class FavouriteFoldersModel extends ChangeNotifier {
 
   /// Null until the card has asked.
   FolderPreview? preview(int folderId) => _previews[folderId];
+
+  /// The folder's cover in 99's list, '' when it has none.
+  String cover(int folderId) => _folderCovers[folderId] ?? '';
 
   Future<void> start() async {
     if (!isLoggedIn() || mid() == null) {
@@ -435,9 +469,22 @@ class FavouriteFoldersModel extends ChangeNotifier {
     _loading = true;
     _notify();
     try {
-      final folders = await api.folders(mid: account);
-      if (mine != _generation || _disposed) return null;
+      final folders = <FavFolder>[];
+      final covers = <int, String>{};
+      final seen = <int>{};
+      for (var page = 1; page <= _folderPagesAllowed; page++) {
+        final answer = await api.folders(mid: account, page: page);
+        if (mine != _generation || _disposed) return null;
+        final before = folders.length;
+        folders.addAll([
+          for (final folder in answer.folders)
+            if (seen.add(folder.id)) folder,
+        ]);
+        covers.addAll(answer.covers);
+        if (!answer.hasMore || folders.length == before) break;
+      }
       _folders = folders;
+      _folderCovers = covers;
       _loaded = true;
       _previews.clear();
       _queue.clear();
@@ -448,6 +495,7 @@ class FavouriteFoldersModel extends ChangeNotifier {
       if (error.needsLogin) {
         _needsLogin = true;
         _folders = const [];
+        _folderCovers = {};
         _loaded = false;
         return null;
       }
@@ -462,6 +510,31 @@ class FavouriteFoldersModel extends ChangeNotifier {
         _notify();
       }
     }
+  }
+
+  /// A folder 创建 made: it goes after the default folder, where the server lists it, without asking again.
+  void added(FavFolder folder, {String cover = ''}) {
+    if (_folders.any((kept) => kept.id == folder.id)) return;
+    final at = _folders.isNotEmpty && _folders.first.isDefault ? 1 : 0;
+    _folders = [..._folders]..insert(at, folder);
+    if (cover.isNotEmpty) _folderCovers[folder.id] = cover;
+    _notify();
+  }
+
+  /// The video 99's 播放 opens: the folder's newest that still plays (else its newest), from the card's videos when
+  /// they were asked, otherwise in one call. Null for an empty folder; a failed call throws.
+  Future<FavVideo?> firstVideo(FavFolder folder) async {
+    var videos = switch (_previews[folder.id]) {
+      PreviewReady(:final videos) => videos,
+      _ => null,
+    };
+    if (videos == null) {
+      final mine = _generation;
+      final page = await api.folderVideos(folderId: folder.id, page: 1, pageSize: previewSize);
+      videos = page.videos.take(previewSize).toList();
+      if (mine == _generation && !_disposed) _previews[folder.id] = PreviewReady(videos);
+    }
+    return videos.where((video) => !video.invalid).firstOrNull ?? videos.firstOrNull;
   }
 
   String? _failed(Object error) {
@@ -506,8 +579,18 @@ class FavouriteFoldersModel extends ChangeNotifier {
     unawaited(_nextPreview());
   }
 
-  /// The folder [folderId] lost [aid] (its page's 取消收藏): one fewer, and its cover gone.
-  void removedFrom(int folderId, int aid) {
+  /// The folder [folderId] lost [removed] (its page's 取消收藏): one fewer, its video gone from the card, and in the
+  /// list, if it was the folder's cover, [newest]'s cover instead.
+  void removedFrom(int folderId, FavouriteRow removed, {FavouriteRow? newest}) {
+    final aid = removed.aid;
+    if (removed.cover.isNotEmpty && _folderCovers[folderId] == removed.cover) {
+      final next = newest?.cover ?? '';
+      if (next.isEmpty) {
+        _folderCovers.remove(folderId);
+      } else {
+        _folderCovers[folderId] = next;
+      }
+    }
     _folders = [
       for (final folder in _folders)
         folder.id == folderId

@@ -59,7 +59,7 @@ void main() {
           api: api,
           folder: favFolder(2, '满的', count: 45),
           isLoggedIn: () => loggedIn,
-          onRemoved: onRemoved,
+          onRemoved: onRemoved == null ? null : (row, _) => onRemoved(row.aid),
           logger: logger,
         );
 
@@ -157,6 +157,87 @@ void main() {
       expect(folder.isEnd, isTrue);
       expect(folder.error, isNull);
     });
+
+    test('after removals the next page starts at the first unseen row, so none is skipped', () async {
+      final api = api45();
+      final folder = model(api);
+      await folder.start();
+      final gone = [folder.rows[3], folder.rows[10]];
+      for (final row in gone) {
+        expect(await folder.remove(row), isNull);
+      }
+      while (!folder.isEnd) {
+        await folder.loadMore();
+      }
+      expect(
+        [for (final row in folder.rows) row.aid],
+        [
+          for (final video in rows45)
+            if (!gone.any((row) => row.aid == video.aid)) video.aid,
+        ],
+      );
+      // The two rows that moved up onto page 1 are found by asking it again; the repeats are dropped.
+      expect(api.calls.where((call) => call.startsWith('folderVideos')), [
+        'folderVideos folder=2 page=1 size=20',
+        'folderVideos folder=2 page=1 size=20',
+        'folderVideos folder=2 page=2 size=20',
+        'folderVideos folder=2 page=3 size=20',
+      ]);
+    });
+
+    test('more removals than a page step back as many pages', () async {
+      final api = FakeFavouritesApi(contents: {2: rows45});
+      final folder = FolderVideosModel(
+        api: api,
+        folder: favFolder(2, '满的', count: 45),
+        isLoggedIn: () => true,
+        pageSize: 5,
+        logger: logger,
+      );
+      await folder.start();
+      await folder.loadMore();
+      final gone = folder.rows.take(7).toList();
+      for (final row in gone) {
+        await folder.remove(row);
+      }
+      await folder.loadMore();
+      expect([for (final row in folder.rows) row.aid], [for (var i = 7; i < 12; i++) 7000 + i]);
+      expect(api.calls.last, 'folderVideos folder=2 page=1 size=5');
+    });
+
+    test('a removal still on its way counts too; if refused, the row comes back and nothing is lost', () async {
+      final api = api45();
+      final folder = model(api);
+      await folder.start();
+      final hold = api.holds['removeFromFolder'] = Completer<void>();
+      api.failures['removeFromFolder'] = const BiliError.http(500);
+      final target = folder.rows[5];
+      final removing = folder.remove(target);
+      api.holds.remove('removeFromFolder');
+      await folder.loadMore();
+      hold.complete();
+      expect(await removing, FavouriteRowsModel.removeFailed);
+      while (!folder.isEnd) {
+        await folder.loadMore();
+      }
+      expect(folder.rows.map((row) => row.aid).toSet(), {for (final video in rows45) video.aid});
+      expect(folder.rows, hasLength(45));
+    });
+
+    test('pages that only repeat listed rows stop paging until 重试', () async {
+      final api = _RepeatingApi(rows45.take(20).toList());
+      final folder = FolderVideosModel(api: api, folder: favFolder(2, '满的', count: 45), isLoggedIn: () => true);
+      await folder.start();
+      expect(folder.rows, hasLength(20));
+      await folder.loadMore();
+      expect(api.calls, hasLength(4), reason: 'the first page, then three that add nothing');
+      expect(folder.error, '加载失败，请稍后重试');
+      expect(folder.isEnd, isFalse);
+      expect(folder.canLoadMore, isFalse, reason: 'nothing asks again by itself');
+      expect(folder.rows, hasLength(20));
+      await folder.loadMore();
+      expect(api.calls, hasLength(7), reason: '重试 asks again');
+    });
   });
 
   group('AllVideosModel', () {
@@ -171,9 +252,29 @@ void main() {
       expect(api.calls, [
         'videosTab',
         'allVideos tab=12 after=null',
-        'allVideos tab=12 after=20',
-        'allVideos tab=12 after=40',
+        'allVideos tab=12 after=7019',
+        'allVideos tab=12 after=7039',
       ]);
+    });
+
+    test('removals before the cursor skip nothing: 视频 pages by the last row, not by count', () async {
+      final api = api45();
+      final videos = AllVideosModel(api: api, isLoggedIn: () => true, logger: logger);
+      await videos.start();
+      final gone = [videos.rows[0], videos.rows[19]];
+      for (final row in gone) {
+        expect(await videos.remove(row), isNull);
+      }
+      while (!videos.isEnd) {
+        await videos.loadMore();
+      }
+      expect(
+        [for (final row in videos.rows) row.aid],
+        [
+          for (final video in rows45)
+            if (!gone.any((row) => row.aid == video.aid)) video.aid,
+        ],
+      );
     });
 
     test('no 视频 tab in the answer reads as a failure', () async {
@@ -203,12 +304,97 @@ void main() {
     FavouriteFoldersModel model(FakeFavouritesApi api, {int? mid = 12345}) =>
         FavouriteFoldersModel(api: api, mid: () => mid, isLoggedIn: () => mid != null, logger: logger);
 
-    test('the folders come in one call', () async {
+    test('the folders come in one call, with their covers', () async {
+      final api = FakeFavouritesApi(
+        folders: [favFolder(1, '默认收藏夹', isDefault: true), favFolder(2, '满的', count: 2), favFolder(3, '封面', count: 1)],
+        contents: {
+          1: const [],
+          2: [favVideo(1, cover: 'https://i0.hdslb.com/bfs/archive/a.jpg'), favVideo(2)],
+          3: [favVideo(3, cover: 'https://i0.hdslb.com/bfs/archive/b.jpg')],
+        },
+        covers: {3: 'https://i0.hdslb.com/bfs/medialist/c.jpg'},
+      );
+      final folders = model(api);
+      await folders.start();
+      expect([for (final folder in folders.folders) folder.title], ['默认收藏夹', '满的', '封面']);
+      expect(api.calls, ['folders mid=12345']);
+      expect(folders.cover(1), '');
+      expect(folders.cover(2), 'https://i0.hdslb.com/bfs/archive/a.jpg', reason: 'the newest video’s');
+      expect(folders.cover(3), 'https://i0.hdslb.com/bfs/medialist/c.jpg', reason: 'the one picked for it');
+    });
+
+    test('more folders than a page are asked page by page, one at a time', () async {
+      final api = FakeFavouritesApi(
+        folders: [for (var i = 1; i <= 5; i++) favFolder(i, '收藏夹 $i', isDefault: i == 1)],
+        folderPageSize: 2,
+      );
+      final folders = model(api);
+      await folders.start();
+      expect(folders.folders, hasLength(5));
+      expect(api.calls, ['folders mid=12345', 'folders mid=12345 page=2', 'folders mid=12345 page=3']);
+    });
+
+    test('a folder 创建 made goes after the default one with its cover, without asking again', () async {
       final api = api45();
       final folders = model(api);
       await folders.start();
-      expect([for (final folder in folders.folders) folder.title], ['默认收藏夹', '满的']);
-      expect(api.calls, ['folders mid=12345']);
+      api.calls.clear();
+      folders.added(favFolder(9, '新的'), cover: 'https://i0.hdslb.com/bfs/medialist/n.jpg');
+      expect([for (final folder in folders.folders) folder.title], ['默认收藏夹', '新的', '满的']);
+      expect(folders.cover(9), 'https://i0.hdslb.com/bfs/medialist/n.jpg');
+      folders.added(favFolder(9, '新的'));
+      expect(folders.folders, hasLength(3));
+      expect(api.calls, isEmpty);
+    });
+
+    test('播放’s first video comes from the card’s covers when asked, else from one call', () async {
+      final api = FakeFavouritesApi(
+        folders: [favFolder(2, '甲', count: 2), favFolder(3, '乙', count: 2)],
+        contents: {
+          2: [favVideo(1), favVideo(2)],
+          3: [favVideo(3), favVideo(4)],
+        },
+      );
+      final folders = model(api);
+      await folders.start();
+      folders.wantPreview(folders.folders.first);
+      await pumpEventQueue();
+      api.calls.clear();
+      expect((await folders.firstVideo(folders.folders.first))?.aid, 7001);
+      expect(api.calls, isEmpty);
+      expect((await folders.firstVideo(folders.folders.last))?.aid, 7003);
+      expect(api.calls, ['folderVideos folder=3 page=1 size=3']);
+      expect((await folders.firstVideo(folders.folders.last))?.aid, 7003);
+      expect(api.calls, hasLength(1), reason: 'kept for the next time');
+    });
+
+    test('播放 passes over a video that is gone', () async {
+      final api = FakeFavouritesApi(
+        folders: [favFolder(2, '甲', count: 2)],
+        contents: {
+          2: [FavVideo(aid: 7100, bvid: bvidOf(7100), title: '失效', invalid: true), favVideo(2)],
+        },
+      );
+      final folders = model(api);
+      await folders.start();
+      expect((await folders.firstVideo(folders.folders.first))?.aid, 7002);
+    });
+
+    test('removing the video a folder’s cover came from shows the newest left instead', () async {
+      final api = FakeFavouritesApi(
+        folders: [favFolder(2, '甲', count: 2)],
+        contents: {
+          2: [favVideo(1, cover: 'https://i0.hdslb.com/1.jpg'), favVideo(2, cover: 'https://i0.hdslb.com/2.jpg')],
+        },
+      );
+      final folders = model(api);
+      await folders.start();
+      final first = FavouriteRow.fromFolder(api.videosIn(2)[0]);
+      final second = FavouriteRow.fromFolder(api.videosIn(2)[1]);
+      folders.removedFrom(2, first, newest: second);
+      expect(folders.cover(2), 'https://i0.hdslb.com/2.jpg');
+      folders.removedFrom(2, second);
+      expect(folders.cover(2), '');
     });
 
     test('covers are asked one card at a time, only for cards that ask, and never for an empty folder', () async {
@@ -307,7 +493,7 @@ void main() {
       await folders.start();
       folders.wantPreview(folders.folders.first);
       await pumpEventQueue();
-      folders.removedFrom(2, 7001);
+      folders.removedFrom(2, FavouriteRow.fromFolder(favVideo(1)));
       expect(folders.folders.first.count, 1);
       expect([for (final video in (folders.preview(2)! as PreviewReady).videos) video.aid], [7002]);
     });
@@ -335,4 +521,17 @@ void main() {
       expect(api.calls, hasLength(1));
     });
   });
+}
+
+/// A server whose every page is the same [page] and says there is more.
+class _RepeatingApi extends FakeFavouritesApi {
+  _RepeatingApi(this.page);
+
+  final List<FavVideo> page;
+
+  @override
+  Future<FavFolderPage> folderVideos({required int folderId, required int page, int pageSize = 20}) async {
+    calls.add('folderVideos folder=$folderId page=$page size=$pageSize');
+    return FavFolderPage(videos: this.page, hasMore: true);
+  }
 }

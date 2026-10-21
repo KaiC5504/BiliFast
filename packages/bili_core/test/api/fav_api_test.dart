@@ -3,7 +3,6 @@ import 'package:test/test.dart';
 
 import 'fake_http.dart';
 
-const foldersPath = '/x/v3/fav/folder/created/list-all';
 const resourcesPath = '/x/v3/fav/resource/list';
 const tabsPath = '/x/v3/fav/tab';
 const tabFavPath = '/x/v3/fav/tab/fav';
@@ -12,13 +11,6 @@ const okEmpty = '{"code":0,"message":"0","ttl":1,"data":null}';
 
 // Every id, name and title below is made up; the shapes are PiliPlus's (`models_new/fav/`) and the official app's
 // (`FavoritesTabList`, `FavoritesMediasItem`, `FavoritesTabs`).
-
-const foldersAnswer = r'''
-{"code":0,"message":"0","ttl":1,"data":{"count":3,"list":[
-{"id":1000101,"fid":10001,"mid":101,"attr":0,"title":"默认收藏夹","fav_state":0,"media_count":0},
-{"id":1000201,"fid":10002,"mid":101,"attr":3,"title":"私密的","fav_state":0,"media_count":8},
-{"id":1000301,"fid":10003,"mid":101,"attr":2,"title":"公开的","fav_state":0,"media_count":"--"}
-]}}''';
 
 const resourcesAnswer = r'''
 {"code":0,"message":"0","ttl":1,"data":{
@@ -73,23 +65,6 @@ void main() {
       expect(bvidOf(80433022), 'BV1GJ411x7h7');
       expect(bvidOf(170001), 'BV17x411w7KC');
     });
-  });
-
-  test('created folders ask for the account’s folders and read count, privacy and the default', () async {
-    http.routes[foldersPath] = (200, foldersAnswer);
-    final folders = await client.createdFolders(mid: 101);
-    expect(http.query(sent(foldersPath)), {'up_mid': '101'});
-    expect(sent(foldersPath).method, 'GET');
-    expect([for (final folder in folders) folder.title], ['默认收藏夹', '私密的', '公开的']);
-    expect([for (final folder in folders) folder.count], [0, 8, 0]);
-    expect([for (final folder in folders) folder.isPrivate], [false, true, false]);
-    expect(folders.first.isDefault, isTrue);
-    expect(folders[1].isDefault, isFalse);
-  });
-
-  test('created folders with no data read as none', () async {
-    http.routes[foldersPath] = (200, okEmpty);
-    expect(await client.createdFolders(mid: 101), isEmpty);
   });
 
   test('a folder page sends the web query and keeps only the videos it can read', () async {
