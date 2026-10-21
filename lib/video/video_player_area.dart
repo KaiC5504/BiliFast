@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -11,6 +10,7 @@ import '../player_ui/end_screen_portrait.dart';
 import '../player_ui/landscape_chrome.dart';
 import '../player_ui/player_gestures.dart';
 import '../player_ui/player_hud.dart';
+import '../player_ui/player_loading.dart';
 import '../player_ui/player_ui.dart';
 import '../player_ui/portrait_controls.dart';
 import '../player_ui/stats_overlay.dart';
@@ -19,7 +19,7 @@ import '../shared/theme.dart';
 
 /// The player as the video page shows it, in every presentation (BiliNative `PlayerBox` and `ChromeLayer.swift`): the
 /// video with danmaku over it, the stats overlay, the gesture layer, the chrome for [presentation] or the end screen,
-/// the HUD, and the cover, spinner and failure around them. It fills the space the page gives it.
+/// the HUD, and the cover, the loading TV and failure around them. It fills the space the page gives it.
 ///
 /// Every layer is keyed, so the native view and the cover's Hero keep their elements while the others come and go.
 class VideoPlayerArea extends StatelessWidget {
@@ -32,6 +32,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.danmaku,
     this.cover,
     this.loading = false,
+    this.waiting,
     this.failure,
     this.onRetry,
     this.endScreenAside = false,
@@ -59,7 +60,11 @@ class VideoPlayerArea extends StatelessWidget {
   /// The card's cover, over the video until it first plays.
   final Widget? cover;
 
+  /// The first load, or a change of quality: [PlayerLoading] shows at once.
   final bool loading;
+
+  /// The player has waited for data past [PlayerLoadingTheme.grace] mid-play: [PlayerLoading] shows too.
+  final ValueListenable<bool>? waiting;
   final String? failure;
   final VoidCallback? onRetry;
 
@@ -208,10 +213,20 @@ class VideoPlayerArea extends StatelessWidget {
       ],
       if (failure case final failure?)
         _Failure(key: const ValueKey('video-failure'), message: failure, onRetry: onRetry)
-      else if (loading)
-        const Center(
-          key: ValueKey('video-loading'),
-          child: CupertinoActivityIndicator(color: BiliColors.onVideo, radius: BiliMetrics.videoSpinnerRadius),
+      else
+        ValueListenableBuilder(
+          key: const ValueKey('video-loading-layer'),
+          valueListenable: waiting ?? const AlwaysStoppedAnimation(false),
+          builder: (context, waiting, _) => loading || waiting
+              ? Align(
+                  alignment: Alignment.topCenter,
+                  // In 竖屏 it centres on the video's band.
+                  child: FractionallySizedBox(
+                    heightFactor: _loadingBand(ui),
+                    child: PlayerLoading(key: const ValueKey('video-loading'), stats: ui?.session.stats),
+                  ),
+                )
+              : const SizedBox.shrink(),
         ),
       if (ui == null || failed)
         SafeArea(
@@ -234,6 +249,9 @@ class VideoPlayerArea extends StatelessWidget {
         ),
     ];
   }
+
+  double _loadingBand(PlayerUi? ui) =>
+      presentation == Presentation.vertical && ui?.session.isVertical != true ? BiliMetrics.verticalVideoCentre * 2 : 1;
 
   /// Not painted while [unseen], and deaf to touches, but laid out and animating, so it comes back as it was.
   static Widget _unseen(bool unseen, Widget child, {Key? key}) => Visibility(

@@ -3510,10 +3510,18 @@ abstract final class LoadingTvTheme {
   static const stateTop = 892 / 3;
 }
 
-/// The player's 正在缓冲... with its pink TV (65, 66). Values are the player agent's to measure.
+/// The player's 正在缓冲... with its pink TV (65, 66), measured in px / 3: the TV's ink is 64 × 60 px, the Lottie's
+/// 24 pt design at 1:1, centred on the video box's centre in both presentations; the line is 14 pt regular white
+/// (CJK pitch 40-43 px, digits 30 px tall), with no shadow, its baseline 21.3 pt below the TV's box.
 abstract final class PlayerLoadingTheme {
   static const tvSize = 24.0;
   static const text = 14.0;
   static const ink = BiliColors.onVideo;
-  static const gap = 4.0;
+
+  /// From the TV's box to the line's box: the system font's baseline lands where the recordings have it.
+  static const gap = 6.5;
+
+  /// A wait for data shorter than this shows nothing: the controller's 卡顿 line (`StallFilter.afterMs`), so the TV
+  /// shows for exactly the waits the app counts as stalls or slow seeks.
+  static const grace = Duration(milliseconds: 750);
 }

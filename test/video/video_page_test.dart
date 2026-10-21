@@ -21,6 +21,7 @@ import 'package:bili_core/api.dart'
 import 'package:bili_core/api.dart' as core show VideoPage, VideoView;
 import 'package:bili_core/danmaku.dart' show DisplayDanmaku;
 import 'package:bili_core/devlog.dart';
+import 'package:bili_core/engine.dart' show EngineSnapshot, PlaybackMode;
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/account/login_gate.dart';
@@ -41,6 +42,7 @@ import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/device/player_device.dart';
 import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
@@ -49,6 +51,7 @@ import 'package:bilifast/player_ui/end_screen_portrait.dart';
 import 'package:bilifast/player_ui/landscape_chrome.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
+import 'package:bilifast/player_ui/player_loading.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
@@ -3118,6 +3121,90 @@ void main() {
       expect(chrome.autoHide, isFalse);
       danmaku.closeSend();
       expect(chrome.autoHide, isTrue);
+      await back(tester);
+    });
+  });
+
+  group('the loading TV (65, 66)', () {
+    Finder loading({bool offstage = false}) => find.byType(PlayerLoading, skipOffstage: !offstage);
+
+    Future<void> playing(WidgetTester tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 2);
+      expect(loading(), findsNothing);
+    }
+
+    Future<void> waitPastGrace(WidgetTester tester) async {
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      await tester.pump(PlayerLoadingTheme.grace);
+      await tester.pump();
+    }
+
+    testWidgets('shows through the first load in place of the spinner, and goes once it plays', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await frames(tester, 20);
+      expect(controller.phase, PlaybackPhase.loading);
+      expect(find.byKey(const ValueKey('video-loading')), findsOneWidget);
+      expect(loading(), findsOneWidget);
+      expect(find.text(PlayerLoading.message), findsOneWidget);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 2);
+      expect(loading(), findsNothing);
+      await back(tester);
+    });
+
+    testWidgets('a wait for data mid-play shows it once past the grace, with the speed; a short blip shows nothing',
+        (tester) async {
+      await playing(tester);
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      await tester.pump(PlayerLoadingTheme.grace - const Duration(milliseconds: 100));
+      expect(loading(), findsNothing);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await tester.pump(const Duration(seconds: 1));
+      expect(loading(), findsNothing, reason: 'a quick seek or hiccup');
+
+      await waitPastGrace(tester);
+      expect(loading(), findsOneWidget);
+      expect(find.text(PlayerLoading.message), findsOneWidget, reason: 'no speed until the engine reports');
+      sessions.single.stats.value = const OverlayStats(
+        mode: PlaybackMode.btr,
+        downloadBps: 69.33 * 1024,
+        engine: EngineSnapshot(),
+      );
+      await tester.pump();
+      expect(find.text('正在缓冲... 69.33 KB/s'), findsOneWidget);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await tester.pump();
+      expect(loading(), findsNothing);
+      await back(tester);
+    });
+
+    testWidgets('paused or ended takes it away', (tester) async {
+      await playing(tester);
+      for (final rest in [PlayerStatus.paused, PlayerStatus.ended]) {
+        await waitPastGrace(tester);
+        expect(loading(), findsOneWidget);
+        player.emit(StatusChanged(rest));
+        await tester.pump(PlayerLoadingTheme.grace);
+        expect(loading(), findsNothing, reason: '$rest');
+      }
+      await back(tester);
+    });
+
+    testWidgets('a covered page shows none', (tester) async {
+      await playing(tester);
+      await waitPastGrace(tester);
+      expect(loading(), findsOneWidget);
+      unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => const SizedBox())));
+      await frames(tester, 20);
+      expect(loading(offstage: true), findsNothing);
+      await tester.pump(PlayerLoadingTheme.grace);
+      expect(loading(offstage: true), findsNothing);
+      await back(tester);
       await back(tester);
     });
   });
