@@ -11,13 +11,20 @@ import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_page.dart';
+import 'package:bilifast/home/home_tab_bar.dart';
 import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/search/fake_search_api.dart';
+import 'package:bilifast/search/search_api.dart';
+import 'package:bilifast/search/search_page.dart';
 import 'package:bilifast/shared/menu.dart';
 import 'package:bilifast/shared/remote_image.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/video/intro/title_block.dart';
 import 'package:bilifast/video/video_page.dart';
+import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
+import 'package:flutter/gestures.dart' show kPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,6 +43,17 @@ FontStore _systemFont() => FontStore.memory()..select(FontChoice.system);
 
 /// The fingerprint cookies alone: logged out, with no `spi` call.
 const _loggedOutCookies = {'buvid3': 'b3', 'buvid4': 'b4'};
+
+/// The search entry's default word.
+const _word = '崩铁新版本即将上线';
+
+class _FailingSearchApi extends FakeSearchApi {
+  @override
+  Future<String?> defaultWord() async {
+    calls.add('defaultWord');
+    throw Exception('offline');
+  }
+}
 
 void main() {
   late FeedHttp http;
@@ -62,6 +80,8 @@ void main() {
     Map<String, String> cookies = Canned.cookies,
     ThemeData? theme,
     FontStore? fonts,
+    SearchApi? search,
+    String? initialLink,
   }) async {
     tester.view.physicalSize = const Size(440, 900);
     tester.view.devicePixelRatio = 1;
@@ -101,12 +121,13 @@ void main() {
       recents: recents,
       loginGate: gate,
       fonts: fonts,
+      searchApi: search ?? FakeSearchApi(defaultWord: _word),
     );
     await tester.pumpWidget(
       MaterialApp(
         theme: theme,
         builder: (context, child) => AppScope(services: services, child: child!),
-        home: HomePage(developerPage: developer ? (context) => const Text('开发者页面') : null),
+        home: HomePage(developerPage: developer ? (context) => const Text('开发者页面') : null, initialLink: initialLink),
       ),
     );
   }
@@ -161,21 +182,16 @@ void main() {
       expectOnChineseLine(tester, find.text('1万点赞'));
     });
 
-    testWidgets('the link field\'s hint and what is typed in it', (tester) async {
+    testWidgets("the search entry's default word", (tester) async {
       await useSystemFont(tester);
-      await show(tester, theme: appTheme(), fonts: _systemFont());
+      await show(
+        tester,
+        theme: appTheme(),
+        fonts: _systemFont(),
+        search: FakeSearchApi(defaultWord: mixedLine),
+      );
       await settle(tester);
-      expectOnChineseLine(tester, find.text('粘贴链接或BV号'));
-
-      final field = find.descendant(of: find.byKey(const ValueKey('home-link')), matching: find.byType(EditableText));
-      await tester.enterText(field, chineseLine);
-      await tester.pump();
-      final chinese = baselinesOf(tester, field, strut: false);
-      await tester.enterText(field, mixedLine);
-      await tester.pump();
-      expectOnChineseLines(tester, field, chinese);
-      await tester.enterText(field, '');
-      await settle(tester);
+      expectOnChineseLine(tester, find.text(mixedLine));
     });
 
     testWidgets('a failed feed\'s message', (tester) async {
@@ -310,10 +326,10 @@ void main() {
     expect(entrance('BV1c0'), findsNothing);
   });
 
-  testWidgets('a pasted link opens its part on the video page, lands in 最近打开, and back closes it', (tester) async {
-    await show(tester);
-    await settle(tester);
-    await tester.enterText(find.byKey(const ValueKey('home-link')), 'https://www.bilibili.com/video/BV1GJ411x7h7?p=2');
+  testWidgets('--play= opens its part on the video page, with no zoom back, lands in 最近打开, and back closes it', (
+    tester,
+  ) async {
+    await show(tester, initialLink: 'https://www.bilibili.com/video/BV1GJ411x7h7?p=2');
     await settle(tester, 20);
     expect(controller.video?.title, '测试视频');
     expect(controller.page?.cid, 137649200);
@@ -321,20 +337,30 @@ void main() {
     expect(recents.items.single.id, 'BV1GJ411x7h7#137649200');
     final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
     expect(route.detail?.bvid, 'BV1GJ411x7h7', reason: 'the signed view that resolved the link, for its 合集');
+    expect(route.zoomSource, isNull);
+    expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isNot(isA<ZoomBackPageRoute<void>>()));
     expect(http.canned.to(Canned.signedViewPath), hasLength(1));
 
     await tester.tap(find.byKey(const ValueKey('video-back')));
     await settle(tester, 20);
     expect(find.text('推荐'), findsOneWidget);
     expect(controller.video, isNull, reason: 'the page gave the player back');
-    expect(tester.widget<TextField>(find.byKey(const ValueKey('home-link'))).controller!.text, isEmpty);
   });
 
-  testWidgets('a link to a video in parts asks which part, with no spinner left behind the sheet', (tester) async {
-    await show(tester);
+  testWidgets('--play= shows the spinner while its link resolves', (tester) async {
+    http.canned.gates[Canned.signedViewPath] = Completer<void>();
+    await show(tester, initialLink: 'https://www.bilibili.com/video/BV1GJ411x7h7?p=2');
     await settle(tester);
-    await tester.enterText(find.byKey(const ValueKey('home-link')), 'BV1GJ411x7h7');
-    await tester.testTextInput.receiveAction(TextInputAction.go);
+    expect(find.byKey(const ValueKey('opening')), findsOneWidget);
+    expect(find.byType(VideoPage), findsNothing);
+    http.canned.gates[Canned.signedViewPath]!.complete();
+    await settle(tester, 20);
+    expect(find.byType(VideoPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('opening')), findsNothing);
+  });
+
+  testWidgets('--play= to a video in parts asks which part, with no spinner left behind the sheet', (tester) async {
+    await show(tester, initialLink: 'BV1GJ411x7h7');
     await settle(tester, 20);
     expect(find.text('选择分P'), findsOneWidget);
     expect(find.byKey(const ValueKey('opening')), findsNothing);
@@ -357,9 +383,7 @@ void main() {
     expect(shownTitle(tester), '测试视频', reason: 'the page shows the video it opened');
   });
 
-  testWidgets("a card opens the page that swipes back into it, with the card's rect; a pasted link does not", (
-    tester,
-  ) async {
+  testWidgets("a card opens the page that swipes back into it, with the card's rect", (tester) async {
     await show(tester);
     await settle(tester);
     final resting = tester.getRect(card('BV1aaa'));
@@ -387,10 +411,6 @@ void main() {
     await settle(tester, 20);
     expect(source(), resting, reason: 'back where it was once the page has gone');
     expect(cover('BV1aaa'), findsOneWidget, reason: "the card's cover is back after a spring back and 〈");
-    await tester.enterText(find.byKey(const ValueKey('home-link')), 'https://www.bilibili.com/video/BV1GJ411x7h7?p=2');
-    await settle(tester, 20);
-    expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.zoomSource, isNull);
-    expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isNot(isA<ZoomBackPageRoute<void>>()));
   });
 
   testWidgets("〈 straight from a card's page flies back into it, and the card shows its cover again", (tester) async {
@@ -644,29 +664,288 @@ void main() {
     });
   }
 
-  testWidgets("on iOS the link field's edit menu is the system's, whose Paste asks nothing", (tester) async {
-    tester.platformDispatcher.supportsShowingSystemContextMenu = true;
-    addTearDown(tester.platformDispatcher.resetSupportsShowingSystemContextMenu);
-    await show(tester);
-    await settle(tester);
-    expect(await editMenu(tester), isA<SystemContextMenu>());
-  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+  group('the search entry', () {
+    testWidgets('shows the default word, asked for once, and opens 搜索 with it; back returns home', (tester) async {
+      final search = FakeSearchApi(defaultWord: _word);
+      final semantics = tester.ensureSemantics();
+      await show(tester, search: search);
+      await settle(tester);
+      expect(find.text(_word), findsOneWidget);
+      expect(find.byType(TextField), findsNothing, reason: 'a bar to tap, not a field');
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('home-search'))),
+        isSemantics(label: '搜索', value: _word, isButton: true, hasTapAction: true),
+      );
 
-  testWidgets("elsewhere the link field's edit menu is Flutter's own", (tester) async {
-    await show(tester);
-    await settle(tester);
-    expect(await editMenu(tester), isA<AdaptiveTextSelectionToolbar>());
+      await tester.tap(find.byKey(const ValueKey('home-search')));
+      await settle(tester, 20);
+      expect(tester.widget<SearchPage>(find.byType(SearchPage)).placeholder, _word);
+      await tester.binding.handlePopRoute();
+      await settle(tester, 20);
+      expect(find.byType(SearchPage), findsNothing);
+      expect(find.text(_word), findsOneWidget);
+      expect(search.calls.where((call) => call == 'defaultWord'), hasLength(1));
+      semantics.dispose();
+    });
+
+    testWidgets('greys while pressed, in its stadium, and clears when let go or the press moves off', (tester) async {
+      await show(tester);
+      await settle(tester);
+      ShapeDecoration face() =>
+          tester.widget<Container>(find.byKey(const ValueKey('home-search-field'))).foregroundDecoration!
+              as ShapeDecoration;
+      expect(face().color, isNull);
+
+      final press = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('home-search'))));
+      await tester.pump(kPressTimeout);
+      expect(face().color, BiliColors.pressedFill);
+      expect(face().shape, isA<StadiumBorder>());
+      await press.moveBy(const Offset(0, 200));
+      await tester.pump();
+      expect(face().color, isNull, reason: 'dragged off, no tap');
+      await press.up();
+      await settle(tester);
+      expect(find.byType(SearchPage), findsNothing);
+
+      final tap = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('home-search'))));
+      await tester.pump(kPressTimeout);
+      expect(face().color, BiliColors.pressedFill);
+      await tap.up();
+      await tester.pump();
+      expect(face().color, isNull);
+      await settle(tester, 20);
+      expect(find.byType(SearchPage), findsOneWidget);
+    });
+
+    testWidgets('a failed default word leaves the bar empty, and 搜索 opens with none', (tester) async {
+      await show(tester, search: _FailingSearchApi());
+      await settle(tester);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('home-search-word'))).data, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('home-search')));
+      await settle(tester, 20);
+      expect(tester.widget<SearchPage>(find.byType(SearchPage)).placeholder, isNull);
+    });
   });
-}
 
-/// What the link field shows as its edit menu once focused.
-Future<Widget> editMenu(WidgetTester tester) async {
-  final field = find.byKey(const ValueKey('home-link'));
-  await tester.tap(field);
-  await tester.pump();
-  final editable = find.descendant(of: field, matching: find.byType(EditableText));
-  final state = tester.state<EditableTextState>(editable);
-  return tester.widget<TextField>(field).contextMenuBuilder!(tester.element(editable), state);
+  group('the bottom bar', () {
+    testWidgets('five slots across the bottom over the home indicator, the feed ending at it', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await show(tester);
+      tester.view
+        ..padding = const FakeViewPadding(bottom: 34)
+        ..viewPadding = const FakeViewPadding(bottom: 34);
+      await settle(tester);
+      final bar = tester.getRect(find.byType(HomeTabBar));
+      expect(bar.bottom, 900);
+      expect(bar.height, 49 + 34);
+      expect(tester.getRect(find.byKey(const ValueKey('feed'))).bottom, bar.top);
+
+      for (final (i, tab) in HomeTab.values.indexed) {
+        final slot = find.byKey(ValueKey('home-tab-${tab.name}'));
+        expect(tester.getRect(slot), Rect.fromLTWH(88.0 * i, bar.top, 88, 49));
+        expect(
+          tester.getSemantics(slot),
+          isSemantics(
+            label: tab.label,
+            isButton: true,
+            hasTapAction: true,
+            hasSelectedState: true,
+            isSelected: tab == HomeTab.home,
+          ),
+        );
+        if (tab == HomeTab.post) {
+          expect(find.text(tab.label), findsNothing, reason: 'the + has no label');
+          continue;
+        }
+        final label = find.text(tab.label);
+        expect(tester.getCenter(label).dx, 44 + 88.0 * i);
+        expect(tester.getTopLeft(label).dy, greaterThan(bar.top + 30));
+        expect(tester.widget<Text>(label).style?.color, tab == HomeTab.home ? BiliColors.pink : HomeTabBarTheme.label);
+      }
+      semantics.dispose();
+    });
+
+    testWidgets('关注, +, 消息 and 我的 say 暂未开放 and change nothing', (tester) async {
+      await show(tester);
+      await settle(tester, 40);
+      final asked = List.of(http.asked);
+      for (final tab in [HomeTab.follow, HomeTab.post, HomeTab.messages, HomeTab.mine]) {
+        await tester.tap(find.byKey(ValueKey('home-tab-${tab.name}')));
+        await tester.pump();
+        expect(find.text('暂未开放'), findsOneWidget, reason: tab.label);
+        await toastGone(tester);
+        expect(find.byType(HomePage), findsOneWidget);
+        expect(find.byType(SearchPage), findsNothing);
+        expect(http.asked, asked, reason: 'no refresh');
+      }
+    });
+  });
+
+  group("首页's tap", () {
+    ScrollPosition feedScroll(WidgetTester tester) => tester
+        .state<ScrollableState>(
+          find.descendant(of: find.byKey(const ValueKey('feed')), matching: find.byType(Scrollable)).first,
+        )
+        .position;
+
+    Finder reloadSpinner() => find.descendant(
+      of: find.byKey(const ValueKey('feed-reload')),
+      matching: find.byType(CupertinoActivityIndicator),
+    );
+
+    List<Map<String, Object?>> fresh() => [for (var i = 0; i < 20; i++) feedItem('BV1n$i')];
+
+    Future<void> tapHome(WidgetTester tester) => tester.tap(find.byKey(const ValueKey('home-tab-home')));
+
+    testWidgets('scrolled, goes back to the top and refreshes 推荐 once, the spinner up until the new cards', (
+      tester,
+    ) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, -1500));
+      await settle(tester, 20);
+      final from = feedScroll(tester).pixels;
+      expect(from, greaterThan(1000));
+      final asked = http.asked.length;
+      http.pages[1] = fresh();
+      http.gates[1] = Completer<void>();
+
+      await tapHome(tester);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(http.asked.sublist(asked), [1], reason: 'straight away, not after the scroll');
+      expect(feedScroll(tester).pixels, inExclusiveRange(0, from), reason: 'scrolling, not jumped');
+      expect(reloadSpinner(), findsNothing, reason: 'the spinner opens once at the top');
+      await settle(tester, 10);
+      expect(feedScroll(tester).pixels, 0);
+      expect(reloadSpinner(), findsOneWidget);
+      expect(card('BV1c0'), findsOneWidget, reason: 'the old cards stay until the new ones come');
+
+      http.gates[1]!.complete();
+      await settle(tester, 20);
+      expect(card('BV1n0'), findsOneWidget);
+      expect(card('BV1c0'), findsNothing);
+      expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
+      expect(http.asked.sublist(asked), [1]);
+      await settle(tester, 40);
+      expect(tester.binding.transientCallbackCount, 0, reason: 'nothing left ticking');
+    });
+
+    testWidgets('at the top, refreshes 推荐 once with the spinner up', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      expect(feedScroll(tester).pixels, 0);
+      http.pages[1] = fresh();
+      http.gates[1] = Completer<void>();
+      await tapHome(tester);
+      await settle(tester, 6);
+      expect(http.asked, [1, 1]);
+      expect(reloadSpinner(), findsOneWidget);
+      expect(feedScroll(tester).pixels, 0);
+      http.gates[1]!.complete();
+      await settle(tester, 20);
+      expect(card('BV1n0'), findsOneWidget);
+      expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
+      expect(http.asked, [1, 1]);
+    });
+
+    testWidgets('does nothing more during the first load or a refresh, from a tap or a pull', (tester) async {
+      http.pages[1] = twenty();
+      http.gates[1] = Completer<void>();
+      await show(tester);
+      await settle(tester, 2);
+      await tapHome(tester);
+      await settle(tester, 2);
+      expect(http.asked, [1], reason: 'the first load is running');
+      http.gates[1]!.complete();
+      await settle(tester);
+
+      http.gates[1] = Completer<void>();
+      await tapHome(tester);
+      await settle(tester, 10);
+      await tapHome(tester);
+      await settle(tester, 10);
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
+      await settle(tester, 10);
+      expect(http.asked, [1, 1]);
+      http.gates[1]!.complete();
+      await settle(tester, 20);
+      expect(http.asked, [1, 1]);
+      expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
+
+      await tapHome(tester);
+      await settle(tester, 20);
+      expect(http.asked, [1, 1, 1], reason: 'once the refresh is done a tap refreshes again');
+    });
+
+    testWidgets('during the refresh after a login, a tap or a pull waits on it instead of asking again', (
+      tester,
+    ) async {
+      http.pages[1] = twenty();
+      http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+      await show(tester, cookies: _loggedOutCookies);
+      await settle(tester, 20);
+      expect(environment.account, isA<LoggedOut>());
+      expect(http.asked, [1]);
+
+      http.pages[1] = fresh();
+      http.gates[1] = Completer<void>();
+      environment.cookies.set('SESSDATA', 's');
+      http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+      await environment.refreshAccount();
+      await settle(tester, 4);
+      expect(environment.account, isA<LoggedIn>());
+      expect(http.asked, [1, 1], reason: 'the login refresh, held');
+
+      await tapHome(tester);
+      await settle(tester, 10);
+      expect(http.asked, [1, 1], reason: 'a tap');
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
+      await settle(tester, 10);
+      expect(http.asked, [1, 1], reason: 'a pull');
+
+      http.gates[1]!.complete();
+      await settle(tester, 20);
+      expect(http.asked, [1, 1]);
+      expect(card('BV1n0'), findsOneWidget);
+      expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
+    });
+
+    testWidgets('with reduced motion jumps to the top and shows the spinner at once', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester, still: true);
+      await settle(tester);
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, -1500));
+      await settle(tester, 20);
+      expect(feedScroll(tester).pixels, greaterThan(1000));
+      http.gates[1] = Completer<void>();
+      await tapHome(tester);
+      await tester.pump();
+      expect(feedScroll(tester).pixels, 0);
+      expect(reloadSpinner(), findsOneWidget);
+      expect(tester.getSize(find.byKey(const ValueKey('feed-reload'))).height, 60, reason: 'already open');
+      http.gates[1]!.complete();
+      await settle(tester, 4);
+      expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
+    });
+
+    testWidgets('a refresh that fails keeps the cards and says why in a toast', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      http.failing.add(1);
+      await tapHome(tester);
+      await settle(tester, 20);
+      expect(http.asked, [1, 1]);
+      expect(find.text('网络请求失败（HTTP 500）'), findsOneWidget);
+      expect(find.byKey(const ValueKey('feed-error')), findsNothing);
+      expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
+      expect(card('BV1c0'), findsOneWidget);
+      await toastGone(tester);
+    });
+  });
 }
 
 /// The title the video page's title block shows; null before the video's detail arrives.

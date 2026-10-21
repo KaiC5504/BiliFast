@@ -63,12 +63,15 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   PingFang SC), and iOS has no family named `CupertinoSystemText`, so Apple Color Emoji, the first family that
   matched, drew every run's digits and spaces at emoji width. The phone's system path now names no fallback, as (14)
   did: SF is iOS's default and PingFang SC its own fallback for Chinese.
+- Slice 11, 搜索, and the bottom bar, 1.0.0 (17) (KaiC: its own build): 首页's field opens 搜索 (52-61; the paste
+  button is gone, a link pasted or typed in 搜索 opens its video), 热搜, 搜索历史 kept on the phone, 搜索发现,
+  suggestions, 综合 with 筛选 and 用户 (rows open the space in the browser until slice 12), the ⋮ sheet's 稍后再看;
+  01's bottom bar, where only 首页 works (one tap scrolls 推荐 up and refreshes it). Also carries the katakana fix.
 
-Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), shipped as one build at its end (slice 10, the
-system-font check, shipped in (15) and (16); its leftovers are set aside, below):
-1. Slice 11, 搜索: the search box, suggestions, results with filters.
-2. Slice 12, UP主空间: an uploader's profile, videos and 关注, from every place an uploader shows.
-3. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
+Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
+the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
+1. Slice 12, UP主空间: an uploader's profile, videos and 关注, from every place an uploader shows.
+2. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
@@ -78,7 +81,7 @@ Open items, each waiting on its slice:
   with 请求前关, the picture cut and the turn started at once. (15) keeps only that as 开发者 → 旋转动画 自绘, beside
   系统; the test build's choices, 轮换测试 and the per-frame log lines are gone. On the phone: the turn both ways
   against the official app.
-- Japanese names under the system font, `5f116e1`, committed and not shipped (it goes with the next build): on (16) a
+- Japanese names under the system font, `5f116e1`, shipped in 1.0.0 (17): on (16) a
   reply whose name is katakana (シロハ_, 单可ト) drew its whole line in a Japanese font; the launch check now names SF,
   then PingFang SC (the font rule below). On the phone: those replies draw like the others, and the log's
   `system font fallback` reads pingFang true (false means iOS didn't match `.AppleSystemUIFont`; the app then stays
@@ -92,6 +95,10 @@ Open items, each waiting on its slice:
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
   the logged-out paths.
 - Follow-up slice: 人像防挡 (the mask file from `/x/v2/dm/web/view`); its switch is drawn off and toasts until then.
+- 搜索 on the phone: the keyboard's 搜索 key (ghosthand's Enter doesn't reach the Windows app), results with the
+  real login (no -412), the … under PingFang (the stand-in draws it mid-height), and the zoom back into a 推荐 card
+  half under the bottom bar. Left out of 搜索 for now: 番剧/直播/影视/图文, the keyword chips, comment snippets,
+  相关搜索, 筛选's 音画质量/范围/date range, 大会员 names, 用户's sort menus (no screenshot of them open).
 - Left out by KaiC: 举报 on danmaku, 互动弹幕列表.
 - Later: 竖屏 search, 充电鸣谢, the player box following a 16:10 video's height.
 - Known limit: Flutter rounds a line to whole points, so comment lines are 24 pt where the official app's are 24.33.
@@ -106,7 +113,11 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     page-route observer (a page counts as covered only when a page route is pushed over it), Reduce Motion, and
     `phone_frame.dart` (Windows only: the window as KaiC's iPhone).
   - `lib/account/`: keychain and cookie persistence, the login page and `LoginGate`, the web view's cookies.
-  - `lib/home/`: home, the feed, the avatar page (49) and 最近打开.
+  - `lib/home/`: home, the feed, the bottom bar (`home_tab_bar.dart`, its glyphs in `tab_bar_icons.dart`), the avatar
+    page (49) and 最近打开.
+  - `lib/search/`: 搜索: the page, the empty page and suggestions, `SearchModel` over `SearchApi` (`fake_search_api.dart`
+    for tests and `--fake-account`), the history store, `search_glyphs.dart`, and `results/` (tabs, rows, 筛选, the ⋮
+    sheet). `lib/video/link_opener.dart` opens a pasted link's video for 搜索 and `--play=`.
   - `lib/history/`: 历史记录, its model and the row's ⋮ sheet.
   - `lib/player/`: the `BiliPlayer` interface and its iOS and Windows players. `lib/playback/`: the engine's setup,
     the shared engine (`shared_engine.dart`: one isolate, a lease per controller), the playback controller, codec
@@ -130,8 +141,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/speedtest/`: the speed test (dev builds only).
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
-    `font.json`, `emotes_recent.json`, `node_memory.json`, `danmaku_settings.json`, `codec_memory.json`,
-    `log_server.json`); the log is in the caches folder.
+    `font.json`, `emotes_recent.json`, `search_history.json`, `node_memory.json`, `danmaku_settings.json`,
+    `codec_memory.json`, `log_server.json`); the log is in the caches folder.
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`: `shared`, `devlog`,
   `danmaku`, `api`, `logic`, `dash_hls`, `local_http`, `engine`, and `bin/ripper_bench.dart`.
 - `ios/Runner/`: native Swift (player registry and host view, keychain, the login web view's cookies, device
@@ -223,6 +234,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   `test/flutter_test_config.dart` sets the PingFang stand-in, because tests register the SF stand-in under the name
   the phone doesn't have. A test that passes under the stand-ins can still be wrong on the phone wherever font
   resolution differs.
+- 搜索 keeps one search call out at a time, suggestions included, with a gap between result pages; a load round
+  that adds no row (a 筛选 cut them all) stalls until the user asks again, so nothing loops against the account.
+  The keyword is the user's text: never log it, nor an error's `toString` (cupertino_http's carries the URL).
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
 - A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the

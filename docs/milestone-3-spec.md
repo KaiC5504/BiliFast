@@ -88,11 +88,13 @@ then PingFang SC when iOS matches SF's own family name (CLAUDE.md's font rule). 
 
 | | |
 |---|---|
-| Entry | 首页's top bar (01). The bar already takes a pasted link; a link typed or pasted there still opens its video, anything else searches. |
-| Screens | The empty search page (history, 热搜); typing with suggestions; results (综合 first, top and scrolled); the 筛选 menu; the 用户 tab. |
-| APIs | `/x/web-interface/wbi/search/default` (the placeholder word), `s.search.bilibili.com/main/hotword` (热搜), `/x/web-interface/suggest`, `/x/web-interface/wbi/search/all/v2` (综合), `/x/web-interface/wbi/search/type` (a tab, with order, duration and partition filters), `/x/web-interface/history/search` (account history) if 12's screenshots show it synced; otherwise history is local. PiliPlus: `lib/http/api.dart:256-271`, `lib/http/search.dart`. |
-| Behaviour | Results' video rows open the video page; 用户 rows open UP主空间 (slice 12). Titles carry `<em class="keyword">` highlights to draw in pink, and HTML entities to decode. Search needs the `buvid3` cookie the app already gets (`/x/frontend/finger/spi`). |
-| Risk | Search answers -412 when called too fast; the client keeps one request in flight and debounces suggestions. |
+| Entry | 首页's top field (01), now a button showing the default word that opens 搜索; its paste button is gone (KaiC). A link typed or pasted in 搜索's field opens its video; anything else searches. A bare av id counts as a link only on its own with 5+ digits, so "AV1" searches. |
+| Screens | 52-61 (`52-search-keyboard` … `61-search-random-words`): the empty page (bilibili热搜, 搜索历史, 搜索发现, 反馈), suggestions, 综合 (top, scrolled), 筛选, the ⋮ sheet, 用户. 62-63 (the uploader sheet, the space) are slice 12's. |
+| APIs | `/x/web-interface/wbi/search/default` (the word), `/x/v2/search/trending/ranking` (热搜; the same ten words as `s.search.bilibili.com/main/hotword`, in the usual envelope), the app host's `/x/v2/search/recommend` with the Android app's parameters and no cookies (搜索发现; fewer parameters answer -400), `/x/web-interface/suggest` (rows beside `code`, not under `data`), `/x/web-interface/wbi/search/all/v2` (综合's video group), `/x/web-interface/wbi/search/type` (综合 with 筛选, and 用户). Each tried live once, logged out (2026-10-21). PiliPlus: `lib/http/api.dart:256-271,757-764`, `lib/http/search.dart`. |
+| Decisions (KaiC) | 搜索历史 on the phone only (`search_history.json`, 20 words). Only the 综合 and 用户 tabs. 综合 draws video rows only: the keyword chips, comment snippets, 相关搜索, other cards and the 4K/高帧数 tags aren't in the web answers. 筛选 keeps 排序方式, 发布时间 (no date range) and 内容时长 (60-120 and 120+ cut on our side from the over-60 bucket); 音画质量 and 范围 are left out. 用户 rows open the space in the browser until slice 12. 完整榜单, 反馈, the ⋮ sheet's feedback, 用户's two sort menus toast 暂未开放. 用户's 大会员 pink names aren't in the web answer. |
+| Behaviour | Titles' `<em>` marks draw pink, entities decoded. The buvid cookies are fetched before every search. One search call at a time, suggestions included, with a gap between result pages; suggestions after a 300 ms pause. A load round whose pages a 筛选 cut empties stops and offers 加载更多, so nothing loops against the account. Live covers are drawn still (an animated cover kept the page busy). |
+
+**The bottom bar** (KaiC, with slice 11): 01's 首页 关注 + 消息 我的 under 首页. Only 首页 works: one tap scrolls 推荐 to the top and refreshes it, as KaiC's recording of the official app shows (`local/differences/14-official-home-tab-reload.mp4`); the others toast 暂未开放.
 
 ### Slice 12: UP主空间
 
@@ -150,7 +152,8 @@ A screen or state the build needs and these don't show is asked for before that 
 ## 7. Build
 
 One build, shipped once at the end of the milestone (the build number follows App Store Connect's latest). (15) and
-(16) went out on their own (KaiC, 2026-10-21) with slice 10, the drawn turn and the system-font fixes. Each slice is
+(16) went out on their own (KaiC, 2026-10-21) with slice 10, the drawn turn and the system-font fixes, and slice 11
+with the bottom bar as (17) (KaiC: "build it"). Each slice is
 committed on `main` with the gate green; `python scripts/testflight.py start` runs once, after slice 13.
 
 ## 8. The stand-in sweep's findings (set aside by KaiC, 2026-10-21; not part of milestone 3)

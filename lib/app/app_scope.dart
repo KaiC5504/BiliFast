@@ -16,6 +16,8 @@ import '../home/recent_store.dart';
 import '../playback/codec_memory.dart';
 import '../playback/playback_controller.dart';
 import '../playback/shared_engine.dart';
+import '../search/search_api.dart';
+import '../search/search_history_store.dart';
 import '../settings/font_store.dart';
 import '../video/page_api.dart';
 import '../video/pip_keeper.dart';
@@ -133,8 +135,8 @@ class AppPlayback with WidgetsBindingObserver {
 }
 
 /// What every page reaches: the account and API client, the players, 最近打开, the phone's rotation and levels,
-/// the font, the page body's calls, the login page, the log kept on the phone, and the log forwarder in dev builds
-/// (null otherwise).
+/// the font, the page body's and 搜索's calls, 搜索历史, the login page, the log kept on the phone, and the log
+/// forwarder in dev builds (null otherwise).
 class AppServices {
   AppServices({
     required this.environment,
@@ -143,6 +145,8 @@ class AppServices {
     PlayerDevice? device,
     FontStore? fonts,
     PageApi? pageApi,
+    this._searchApi,
+    SearchHistoryStore? searchHistory,
     DanmakuSettingsStore? danmakuSettings,
     BlockRuleStore? blockRules,
     LoginGate? loginGate,
@@ -154,6 +158,7 @@ class AppServices {
        loginGate = loginGate ?? LoginPageGate(environment),
        fonts = fonts ?? FontStore.memory(),
        pageApi = pageApi ?? ClientPageApi(environment.client),
+       searchHistory = searchHistory ?? SearchHistoryStore.memory(),
        danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
     this.blockRules =
         blockRules ?? BlockRuleStore(api: this.pageApi, isLoggedIn: () => environment.account is LoggedIn);
@@ -189,6 +194,13 @@ class AppServices {
   final PlayerDevice device;
   final FontStore fonts;
   final PageApi pageApi;
+  final SearchApi? _searchApi;
+
+  /// Made on first use, so tests whose environment has no client never ask for one.
+  late final SearchApi searchApi = _searchApi ?? ClientSearchApi(environment.client);
+
+  /// 搜索历史, kept on the device, not on the account.
+  final SearchHistoryStore searchHistory;
   final DanmakuSettingsStore danmakuSettings;
 
   /// The account's 弹幕屏蔽词, shared by every page.

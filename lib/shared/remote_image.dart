@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'theme.dart';
@@ -22,6 +26,8 @@ String sizedImageUrl(String url, {required int width, required int height}) {
 
 /// Fills the box it is given with the image, grey (or [placeholder]) until it arrives and then faded in. Sizes are
 /// rounded up to steps, so cards of nearly the same width share one cached download.
+///
+/// Only emotes and 装扮 pictures move; anything else shows its first frame (see [StillNetworkImage]).
 class RemoteImage extends StatelessWidget {
   const RemoteImage(this.url, {super.key, this.fit = BoxFit.cover, this.size, this.placeholder, this.fallback});
 
@@ -75,9 +81,10 @@ class RemoteImage extends StatelessWidget {
     final address =
         sizedImageUrl(source, width: _bucket(logical.width * ratio), height: _bucket(logical.height * ratio));
     final instead = fallback;
-    return Image.network(
-      address,
-      headers: BiliClient.mediaHeaders,
+    return Image(
+      image: animates(source)
+          ? NetworkImage(address, headers: BiliClient.mediaHeaders)
+          : StillNetworkImage(address, headers: BiliClient.mediaHeaders),
       fit: fit,
       width: double.infinity,
       height: double.infinity,
@@ -96,6 +103,13 @@ class RemoteImage extends StatelessWidget {
 
   static const _fade = Duration(milliseconds: 150);
 
+  /// The comments' emotes and 装扮 stickers are drawn moving, as in the official app.
+  @visibleForTesting
+  static bool animates(String url) {
+    final path = Uri.tryParse(secureImageUrl(url))?.path ?? '';
+    return path.startsWith('/bfs/emote/') || path.startsWith('/bfs/garb/');
+  }
+
   /// The path shows the size suffix; the query, which can carry a signature, never goes in the log.
   static void _logFailure(String address, Object error) {
     final uri = Uri.tryParse(address);
@@ -109,6 +123,71 @@ class RemoteImage extends StatelessWidget {
       if (status != null) 'status': status else 'error': kind,
     });
   }
+}
+
+/// A network picture's first frame only. The CDN serves a GIF original (a cover, a face) as an animated webp through
+/// the size suffix, and a moving picture decodes a frame every few tens of ms for as long as it is on screen. It is a
+/// [NetworkImage] of its own type, so it never shares a cache entry with the moving one.
+class StillNetworkImage extends ImageProvider<NetworkImage> implements NetworkImage {
+  StillNetworkImage(String url, {Map<String, String>? headers}) : _network = NetworkImage(url, headers: headers);
+
+  final NetworkImage _network;
+
+  @override
+  String get url => _network.url;
+
+  @override
+  double get scale => _network.scale;
+
+  @override
+  Map<String, String>? get headers => _network.headers;
+
+  @override
+  WebHtmlElementStrategy get webHtmlElementStrategy => _network.webHtmlElementStrategy;
+
+  @override
+  Future<NetworkImage> obtainKey(ImageConfiguration configuration) => SynchronousFuture<NetworkImage>(this);
+
+  @override
+  ImageStreamCompleter loadImage(NetworkImage key, ImageDecoderCallback decode) {
+    Future<ui.Codec> firstFrame(ui.ImmutableBuffer buffer, {ui.TargetImageSizeCallback? getTargetSize}) async =>
+        _FirstFrame(await decode(buffer, getTargetSize: getTargetSize));
+    final completer = _network.loadImage(_network, firstFrame);
+    // NetworkImage evicts its own key when the download fails, not this one; without this a failed picture would
+    // stay failed in the cache.
+    completer.addEphemeralErrorListener((_, _) {
+      scheduleMicrotask(() => PaintingBinding.instance.imageCache.evict(key));
+    });
+    return completer;
+  }
+
+  @override
+  bool operator ==(Object other) => other is StillNetworkImage && other._network == _network;
+
+  @override
+  int get hashCode => Object.hash(StillNetworkImage, _network);
+
+  @override
+  String toString() => 'StillNetworkImage("$url")';
+}
+
+/// One frame, played once, so the image stream never asks for the next.
+final class _FirstFrame implements ui.Codec {
+  _FirstFrame(this._codec);
+
+  final ui.Codec _codec;
+
+  @override
+  int get frameCount => 1;
+
+  @override
+  int get repetitionCount => 0;
+
+  @override
+  Future<ui.FrameInfo> getNextFrame() => _codec.getNextFrame();
+
+  @override
+  void dispose() => _codec.dispose();
 }
 
 /// The image fading in over [under], which goes once the fade is done.

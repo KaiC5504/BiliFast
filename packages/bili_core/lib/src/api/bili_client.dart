@@ -18,6 +18,7 @@ import 'http.dart';
 import 'json.dart';
 import 'link_parser.dart';
 import 'models.dart';
+import 'search_models.dart';
 import 'video_models.dart';
 import 'wbi.dart';
 
@@ -26,6 +27,7 @@ part 'bili_client_app.dart';
 part 'bili_client_comments.dart';
 part 'bili_client_danmaku.dart';
 part 'bili_client_feed.dart';
+part 'bili_client_search.dart';
 part 'bili_client_video.dart';
 
 typedef _Sent = ({HTTPResponse response, double ms});
@@ -149,8 +151,10 @@ final class BiliClient {
     Map<String, String> query = const {},
     required bool signed,
     String host = api,
+    String? referer,
     required JsonDecode<T> decode,
-  }) async => _checked(await _getEnvelope(path, query: query, signed: signed, host: host, decode: decode));
+  }) async =>
+      _checked(await _getEnvelope(path, query: query, signed: signed, host: host, referer: referer, decode: decode));
 
   /// For reads whose success may carry `data: null`, which is an empty result rather than an error.
   Future<T?> _getIfPresent<T>(
@@ -233,6 +237,8 @@ final class BiliClient {
     Map<String, String> query = const {},
     required bool signed,
     String host = api,
+    String? referer,
+    bool sendCookies = true,
     required JsonDecode<T> decode,
   }) async {
     final sent = await _send(
@@ -241,7 +247,9 @@ final class BiliClient {
       query: query,
       signed: signed,
       host: host,
+      referer: referer,
       accept: 'application/json',
+      sendCookies: sendCookies,
     );
     return _decodeEnvelope(sent, path, decode);
   }
@@ -278,9 +286,27 @@ final class BiliClient {
       return envelope;
     } on Exception catch (error) {
       if (error is! DecodeError && error is! FormatException) rethrow;
-      _logger.error(LogCategory.api, '$path decode failed', {'error': '$error'});
-      throw BiliError.decoding('$error');
+      final failure = _decodeFailure(error);
+      _logger.error(LogCategory.api, '$path decode failed', {'error': failure});
+      throw BiliError.decoding(failure);
     }
+  }
+
+  /// A FormatException quotes the answer it choked on, which can echo what the user searched for.
+  static String _decodeFailure(Exception error) =>
+      error is FormatException ? 'FormatException: ${error.message}' : '$error';
+
+  static final _nsError = RegExp(r'\[domain=([\w.]+), code=(-?\d+)\]');
+
+  /// The error's type, and an NSError's domain and code, which cupertino_http writes into its message. Never the
+  /// message itself: `package:http`'s errors end with the request's URL, query and all.
+  static Map<String, Object> _transportFailure(Object error) {
+    final ns = _nsError.firstMatch('$error');
+    return {
+      'error': '${error.runtimeType}',
+      if (ns != null) 'domain': ns[1]!,
+      if (ns != null) 'code': int.parse(ns[2]!),
+    };
   }
 
   /// Logs the path only: the query and form can carry the csrf token or a comment the user typed.
@@ -346,7 +372,7 @@ final class BiliClient {
         HTTPRequest(url: url, headers: headers, method: method, body: body, timeout: timeout),
       );
     } catch (error) {
-      _logger.error(LogCategory.api, path, {'error': '$error'});
+      _logger.error(LogCategory.api, path, _transportFailure(error));
       rethrow;
     }
     final ms = watch.elapsedMicroseconds / 1000;

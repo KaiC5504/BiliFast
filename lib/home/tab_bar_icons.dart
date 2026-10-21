@@ -1,0 +1,196 @@
+import 'dart:math' as math;
+
+import 'package:flutter/widgets.dart';
+
+import '../shared/theme.dart';
+import 'home_tab_bar.dart';
+
+/// A bottom-bar glyph, drawn as 01 (首页 selected, the rest not) and 02 (首页 not selected, 我的 selected) show it.
+/// [HomeTab.post] is the + on its pink rounded square, [TabIconTheme.postSquare] across; the others are line glyphs
+/// in a [TabIconTheme.size] square.
+class HomeTabIcon extends StatelessWidget {
+  const HomeTabIcon(this.tab, {super.key, this.selected = false});
+
+  final HomeTab tab;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: tab == HomeTab.post
+        ? SizedBox.square(
+            dimension: TabIconTheme.postSquare,
+            child: CustomPaint(painter: PostButtonPainter()),
+          )
+        : SizedBox.square(
+            dimension: TabIconTheme.size,
+            child: CustomPaint(
+              painter: HomeTabGlyphPainter(
+                tab,
+                selected: selected,
+                color: selected ? TabIconTheme.selectedInk : TabIconTheme.ink,
+              ),
+            ),
+          ),
+  );
+}
+
+/// The line glyphs, laid out in a 22 pt square as measured on 01 and 02 and scaled to the square they get.
+class HomeTabGlyphPainter extends CustomPainter {
+  HomeTabGlyphPainter(this.tab, {required this.selected, required this.color});
+
+  final HomeTab tab;
+  final bool selected;
+  final Color color;
+
+  static const _design = 22.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final side = size.shortestSide;
+    if (side <= 0) return;
+    canvas
+      ..save()
+      ..translate((size.width - side) / 2, (size.height - side) / 2)
+      ..scale(side / _design);
+    switch (tab) {
+      case HomeTab.home:
+        _home(canvas);
+      case HomeTab.follow:
+        _pinwheel(canvas);
+      case HomeTab.messages:
+        _bubble(canvas);
+      case HomeTab.mine:
+        _tv(canvas);
+      case HomeTab.post:
+        break;
+    }
+    canvas.restore();
+  }
+
+  Paint _line(double width) => Paint()
+    ..color = color
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = width
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+
+  /// The roof overhangs both walls; the right wall runs up into it, the left stops short.
+  void _home(Canvas canvas) {
+    const corner = Radius.circular(3.67);
+    final roof = Path()
+      ..moveTo(2, 9.29)
+      ..lineTo(11, 2)
+      ..lineTo(20, 9.29);
+    final walls = Path()
+      ..moveTo(4, 11.33)
+      ..lineTo(4, 19.5 - corner.x)
+      ..arcToPoint(Offset(4 + corner.x, 19.5), radius: corner, clockwise: false)
+      ..lineTo(18 - corner.x, 19.5)
+      ..arcToPoint(Offset(18, 19.5 - corner.x), radius: corner, clockwise: false)
+      ..lineTo(18, 7.67);
+    final line = _line(TabIconTheme.line);
+    canvas
+      ..drawPath(roof, line)
+      ..drawPath(walls, line);
+    final face = _line(TabIconTheme.faceLine);
+    if (selected) {
+      const startDegrees = 32.3;
+      canvas.drawArc(
+        Rect.fromCircle(center: const Offset(11, 13.05), radius: 3.43),
+        startDegrees * math.pi / 180,
+        (180 - 2 * startDegrees) * math.pi / 180,
+        false,
+        face,
+      );
+    } else {
+      canvas.drawLine(const Offset(8.42, 15.5), const Offset(13.58, 15.5), face);
+    }
+  }
+
+  /// A cross whose four arms each carry a half circle on their anticlockwise side, from the tip back to the middle.
+  void _pinwheel(Canvas canvas) {
+    const centre = Offset(11, 11);
+    const arm = 9.67;
+    final line = _line(TabIconTheme.fanLine);
+    canvas
+      ..drawLine(const Offset(11 - arm, 11), const Offset(11 + arm, 11), line)
+      ..drawLine(const Offset(11, 11 - arm), const Offset(11, 11 + arm), line);
+    for (var i = 0; i < 4; i++) {
+      final angle = -math.pi / 2 + i * math.pi / 2;
+      final middle = centre + Offset(math.cos(angle), math.sin(angle)) * (arm / 2);
+      canvas.drawArc(Rect.fromCircle(center: middle, radius: arm / 2), angle, -math.pi, false, line);
+    }
+  }
+
+  /// A round bubble a little flatter below, its tail a point at the lower left with a short flick inwards, two dots.
+  void _bubble(Canvas canvas) {
+    final outline = Path()
+      ..moveTo(6, 16.8)
+      ..lineTo(2, 17.3)
+      ..quadraticBezierTo(3.6, 19.4, 6.5, 19.4)
+      ..lineTo(11, 19.46)
+      ..cubicTo(15.5, 19.46, 20, 15.23, 20, 11)
+      ..cubicTo(20, 6.32, 15.97, 2.52, 11, 2.52)
+      ..cubicTo(6.03, 2.52, 2, 6.32, 2, 11)
+      ..cubicTo(2, 13, 3.8, 15.4, 5.2, 16.85);
+    canvas.drawPath(outline, _line(TabIconTheme.line));
+    final dot = Paint()..color = color;
+    canvas
+      ..drawCircle(const Offset(8.5, 10.75), 1.5, dot)
+      ..drawCircle(const Offset(14.5, 10.75), 1.5, dot);
+  }
+
+  /// The TV: closed eyes (two dashes) when not selected, open (two upright strokes) when selected.
+  void _tv(Canvas canvas) {
+    canvas.drawRRect(RRect.fromLTRBR(1.5, 5.5, 20.5, 19.75, const Radius.circular(4)), _line(TabIconTheme.line));
+    final face = _line(TabIconTheme.faceLine);
+    canvas
+      ..drawLine(const Offset(4.8, 1.75), const Offset(8.7, 5.5), face)
+      ..drawLine(const Offset(17.2, 1.75), const Offset(13.3, 5.5), face);
+    if (selected) {
+      canvas
+        ..drawLine(const Offset(8, 10.75), const Offset(8, 14.92), face)
+        ..drawLine(const Offset(14, 10.75), const Offset(14, 14.92), face);
+    } else {
+      canvas
+        ..drawLine(const Offset(4.75, 12.23), const Offset(9.25, 12.23), face)
+        ..drawLine(const Offset(12.75, 12.23), const Offset(17.25, 12.23), face);
+    }
+  }
+
+  @override
+  bool shouldRepaint(HomeTabGlyphPainter old) => old.tab != tab || old.selected != selected || old.color != color;
+}
+
+/// 发布's pink square, lighter at the top, with its white +.
+class PostButtonPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final side = size.shortestSide;
+    if (side <= 0) return;
+    final scale = side / TabIconTheme.postSquare;
+    final square = Rect.fromCenter(center: size.center(Offset.zero), width: side, height: side);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(square, Radius.circular(TabIconTheme.postRadius * scale)),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: const [TabIconTheme.postTop, TabIconTheme.postBottom],
+        ).createShader(square),
+    );
+    final line = TabIconTheme.postPlusLine * scale;
+    final reach = (TabIconTheme.postPlus * scale - line) / 2;
+    final plus = Paint()
+      ..color = TabIconTheme.postPlusInk
+      ..strokeWidth = line
+      ..strokeCap = StrokeCap.round;
+    final centre = square.center;
+    canvas
+      ..drawLine(centre.translate(-reach, 0), centre.translate(reach, 0), plus)
+      ..drawLine(centre.translate(0, -reach), centre.translate(0, reach), plus);
+  }
+
+  @override
+  bool shouldRepaint(PostButtonPainter old) => false;
+}

@@ -12,26 +12,29 @@ import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../app/zoom_back_route.dart';
-import '../playback/playback_controller.dart';
-import '../shared/paste_button.dart';
+import '../search/search_glyphs.dart';
+import '../search/results/video_row.dart' show searchLogReason;
+import '../search/search_page.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../video/link_opener.dart';
 import '../video/video_route.dart';
 import 'avatar_page.dart';
 import 'feed_card.dart';
 import 'feed_model.dart';
-import 'recent_store.dart';
+import 'home_tab_bar.dart';
 
-/// 首页 (01, port of HomeView.swift): the avatar and the link field, the 推荐 tab and its feed. A pasted link opens
-/// its video page; the avatar opens its page (49), with 设置, the shortcuts and the last of 最近打开.
+/// 首页 (01, port of HomeView.swift): the avatar and the search entry, the 推荐 tab and its feed, the bottom bar. The
+/// entry opens 搜索 with the default word; the avatar opens its page (49), with 设置, the shortcuts and the last of
+/// 最近打开; 首页 in the bar goes back to the top and refreshes 推荐.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.developerPage, this.initialLink});
 
   /// Builds the developer page (dev builds), passed on to 设置 through the avatar's page; null leaves 开发者 out.
   final WidgetBuilder? developerPage;
 
-  /// Opened as if pasted once home is up (`--play=<BV or link>` on the PC).
+  /// Opened as a pasted link once home is up (`--play=<BV or link>` on the PC).
   final String? initialLink;
 
   @override
@@ -41,13 +44,19 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late AppServices _services;
   FeedModel? _feed;
-  final _link = TextEditingController();
-  final _focus = FocusNode();
-  String _lastText = '';
+  final _grid = GlobalKey<_FeedGridState>();
+  late final _opener = LinkOpener(onPushed: (pushed) => unawaited(_visit(pushed)));
   bool _opening = false;
+
+  /// The search entry's grey word, asked for once; null until it comes, and after a failure.
+  String? _searchWord;
 
   /// Whether the feed on screen was fetched logged in; null until the first account check has answered.
   bool? _feedSignedIn;
+
+  /// The refresh of 推荐 running, from the first load, an account change, a pull, 首页 or 重试; a pull or a tap while
+  /// it runs waits on it instead of asking again.
+  Future<void>? _refreshing;
 
   AppEnvironment get _environment => _services.environment;
 
@@ -56,22 +65,37 @@ class _HomePageState extends State<HomePage> {
     super.didChangeDependencies();
     if (_feed != null) return;
     _services = AppScope.of(context);
-    final feed = FeedModel(client: _environment.client);
-    _feed = feed;
-    unawaited(feed.refresh());
+    _opener.busy.addListener(_busyChanged);
+    _feed = FeedModel(client: _environment.client);
+    unawaited(_refreshFeed());
     _environment.addListener(_accountChanged);
     _accountChanged();
+    unawaited(_loadSearchWord());
     final link = widget.initialLink;
-    if (link != null) WidgetsBinding.instance.addPostFrameCallback((_) => _open(link));
+    if (link != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_opener.open(context, link));
+      });
+    }
   }
 
   @override
   void dispose() {
+    _opener.dispose();
     _environment.removeListener(_accountChanged);
     _feed?.dispose();
-    _link.dispose();
-    _focus.dispose();
     super.dispose();
+  }
+
+  void _busyChanged() => setState(() => _opening = _opener.busy.value);
+
+  Future<void> _loadSearchWord() async {
+    try {
+      final word = await _services.searchApi.defaultWord();
+      if (mounted) setState(() => _searchWord = word);
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'default search word failed', {'error': searchLogReason(error)});
+    }
   }
 
   /// Logging in or out changes what 推荐 recommends; the first check at launch does not.
@@ -87,11 +111,23 @@ class _HomePageState extends State<HomePage> {
     }
     final previous = _feedSignedIn;
     _feedSignedIn = signedIn;
-    if (previous != null && previous != signedIn) unawaited(_refreshFeed());
+    if (previous != null && previous != signedIn) unawaited(_refreshFeed(restart: true));
+  }
+
+  /// The running refresh, or a new one. [restart] starts one even while another runs (whose answer the feed then
+  /// drops), as a refresh asked for before the account changed would bring the old account's 推荐.
+  Future<void> _refreshFeed({bool restart = false}) {
+    final running = _refreshing;
+    if (running != null && !restart) return running;
+    late final Future<void> refresh;
+    refresh = _fetchFeed().whenComplete(() {
+      if (identical(_refreshing, refresh)) _refreshing = null;
+    });
+    return _refreshing = refresh;
   }
 
   /// A refresh that fails with cards on screen keeps them and says why in a toast.
-  Future<void> _refreshFeed() async {
+  Future<void> _fetchFeed() async {
     final failure = await _feed?.refresh();
     if (failure != null && mounted) showToast(context, failure);
   }
@@ -110,96 +146,14 @@ class _HomePageState extends State<HomePage> {
     unawaited(_visit(Navigator.of(context).push(page)));
   }
 
-  void _textChanged(String text) {
-    final grew = text.length - _lastText.length;
-    _lastText = text;
-    // A paste lands as one big change; typing adds a character at a time.
-    if (grew > 1 && LinkParser.parse(text) != null) {
-      _focus.unfocus();
-      unawaited(_open(text));
-    }
-  }
+  void _openSearch() => unawaited(_visit(openSearchPage(context, placeholder: _searchWord)));
 
-  void _pasted(String text) {
-    if (!mounted) return;
-    if (text.isEmpty) {
-      showToast(context, '剪贴板里没有链接');
-      return;
+  void _tabTapped(HomeTab tab) {
+    if (tab == HomeTab.home) {
+      unawaited(_grid.currentState?.reload());
+    } else {
+      showToast(context, '暂未开放');
     }
-    unawaited(_open(text));
-  }
-
-  Future<void> _open(String text) async {
-    if (_opening) return;
-    final link = LinkParser.parse(text);
-    if (link == null) {
-      showToast(context, BiliError.invalidLink.userMessage);
-      return;
-    }
-    setState(() => _opening = true);
-    try {
-      VideoDetail? resolved;
-      final (view, pageNumber) = await resolveVideoLink(_environment.client, link, onDetail: (d) => resolved = d);
-      if (!mounted) return;
-      Logger.shared.info(LogCategory.ui, 'open', {'bvid': view.bvid, 'pages': view.pages.length});
-      // Handed to the page so its open asks for nothing again and keeps the 合集.
-      final detail = resolved?.bvid == view.bvid ? resolved : null;
-      final match = view.pages.where((page) => page.page == pageNumber).firstOrNull;
-      if (match != null) {
-        _go(view, match, detail);
-      } else if (view.pages.length > 1) {
-        // The spinner would otherwise wait behind the sheet for as long as it is up.
-        setState(() => _opening = false);
-        await _choosePart(view, detail);
-      } else if (view.pages.firstOrNull case final first?) {
-        _go(view, first, detail);
-      } else {
-        showToast(context, '该视频没有可播放的分P');
-      }
-      _link.clear();
-      _lastText = '';
-    } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'open failed', {'error': '$error'});
-      if (mounted) showToast(context, requestFailureMessage(error, fallback: '打开视频失败，请稍后重试'));
-    } finally {
-      if (mounted) setState(() => _opening = false);
-    }
-  }
-
-  Future<void> _choosePart(VideoView view, VideoDetail? detail) async {
-    final page = await showCupertinoModalPopup<VideoPage>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: const Text('选择分P'),
-        message: Text(view.title),
-        actions: [
-          for (final page in view.pages)
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop(page),
-              child: Text('P${page.page} ${page.part}', maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
-      ),
-    );
-    if (page != null && mounted) _go(view, page, detail);
-  }
-
-  void _go(VideoView view, VideoPage page, VideoDetail? detail) {
-    _services.recents.add(
-      RecentVideo(
-        bvid: view.bvid,
-        cid: page.cid,
-        title: view.title,
-        part: page.part,
-        page: page.page,
-        pageCount: view.pages.length,
-        cover: detail?.cover,
-        duration: page.duration,
-      ),
-    );
-    final route = VideoRoute(bvid: view.bvid, cid: page.cid, title: view.title, view: view, detail: detail);
-    unawaited(_visit(openVideoPage(context, route)));
   }
 
   void _openCard(FeedCard card, ZoomSource source) => unawaited(
@@ -249,14 +203,10 @@ class _HomePageState extends State<HomePage> {
                         ListenableBuilder(
                           listenable: _environment,
                           builder: (context, _) => _TopRow(
-                            link: _link,
-                            focus: _focus,
                             face: _environment.face,
-                            opening: _opening,
+                            searchWord: _searchWord,
                             onAvatar: _openAvatarPage,
-                            onChanged: _textChanged,
-                            onSubmit: _open,
-                            onPaste: _pasted,
+                            onSearch: _openSearch,
                           ),
                         ),
                         const _RecommendTab(),
@@ -266,8 +216,16 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const Divider(height: 0.5, thickness: 0.5, color: BiliColors.divider),
                 Expanded(
-                  child: _FeedGrid(feed: _feed!, onOpen: _openCard, onWatchLater: _watchLater, onRefresh: _refreshFeed),
+                  child: _FeedGrid(
+                    key: _grid,
+                    feed: _feed!,
+                    onOpen: _openCard,
+                    onWatchLater: _watchLater,
+                    onRefresh: _refreshFeed,
+                    refreshing: () => _refreshing,
+                  ),
                 ),
+                HomeTabBar(onTap: _tabTapped),
               ],
             ),
             IgnorePointer(
@@ -391,41 +349,17 @@ class _AccountAvatar extends StatelessWidget {
   }
 }
 
-/// The avatar and the rounded link field (01's search field).
+/// The avatar and the search entry (01): a rounded bar with the magnifier and the default word, which opens 搜索.
 class _TopRow extends StatelessWidget {
-  const _TopRow({
-    required this.link,
-    required this.focus,
-    required this.face,
-    required this.opening,
-    required this.onAvatar,
-    required this.onChanged,
-    required this.onSubmit,
-    required this.onPaste,
-  });
+  const _TopRow({required this.face, required this.searchWord, required this.onAvatar, required this.onSearch});
 
-  final TextEditingController link;
-  final FocusNode focus;
   final String? face;
-  final bool opening;
+  final String? searchWord;
   final VoidCallback onAvatar;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSubmit;
-  final ValueChanged<String> onPaste;
-
-  /// iOS's own edit menu: its Paste reads the clipboard without the "Allow Paste" alert that Flutter's toolbar
-  /// brings up.
-  static Widget _editMenu(BuildContext context, EditableTextState state) => SystemContextMenu.isSupported(context)
-      ? SystemContextMenu.editableText(editableTextState: state)
-      : AdaptiveTextSelectionToolbar.editableText(editableTextState: state);
-
-  static const _fieldStyle = TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text);
+  final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
-    final body = Theme.of(context).textTheme.bodyLarge;
-    final field = body?.merge(_fieldStyle) ?? _fieldStyle;
-    final hint = field.merge(const TextStyle(color: BiliColors.secondaryText));
     return SizedBox(
       height: BiliMetrics.topRowHeight,
       child: Padding(
@@ -441,67 +375,87 @@ class _TopRow extends StatelessWidget {
                 child: _AccountAvatar(face: face, size: BiliMetrics.homeAvatar),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: GestureDetector(
-                onTap: focus.requestFocus,
-                child: Container(
-                  height: BiliMetrics.linkFieldHeight,
-                  padding: const EdgeInsets.only(left: 12, right: 2),
-                  decoration: ShapeDecoration(
-                    shape: StadiumBorder(side: BorderSide(color: BiliColors.secondaryText, width: 0.67)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.search, size: BiliMetrics.linkFieldIcon, color: BiliColors.secondaryText),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: TextField(
-                          key: const ValueKey('home-link'),
-                          controller: link,
-                          focusNode: focus,
-                          enabled: !opening,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          textInputAction: TextInputAction.go,
-                          contextMenuBuilder: _editMenu,
-                          onChanged: onChanged,
-                          onSubmitted: onSubmit,
-                          style: _fieldStyle,
-                          strutStyle: BiliFonts.strut(field),
-                          decoration: InputDecoration(
-                            isCollapsed: true,
-                            border: InputBorder.none,
-                            // As the decorator would draw hintText, with the strut it can't be given.
-                            hint: Text('粘贴链接或BV号', style: hint, strutStyle: BiliFonts.strut(hint)),
-                          ),
-                        ),
-                      ),
-                      ListenableBuilder(
-                        listenable: link,
-                        builder: (context, _) => link.text.isEmpty
-                            ? PasteButton(key: const ValueKey('home-paste'), enabled: !opening, onText: onPaste)
-                            : IconButton(
-                                key: const ValueKey('home-clear'),
-                                onPressed: () {
-                                  link.clear();
-                                  onChanged('');
-                                },
-                                tooltip: '清空',
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(
-                                  Icons.cancel,
-                                  size: BiliMetrics.linkClearIcon,
-                                  color: BiliColors.divider,
-                                ),
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
+            const SizedBox(width: HomeTabBarTheme.fieldGap),
+            _SearchField(word: searchWord, onTap: onSearch),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The search entry: the magnifier and the grey word in a stadium, greyed while pressed.
+class _SearchField extends StatefulWidget {
+  const _SearchField({required this.word, required this.onTap});
+
+  final String? word;
+  final VoidCallback onTap;
+
+  @override
+  State<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<_SearchField> {
+  bool _pressed = false;
+
+  void _press(bool pressed) {
+    if (_pressed != pressed) setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const word = TextStyle(fontSize: HomeTabBarTheme.fieldText, color: HomeTabBarTheme.fieldInk);
+    const glyphLead = HomeTabBarTheme.fieldGlyphCentre - HomeTabBarTheme.fieldGlyph / 2;
+    return Semantics(
+      button: true,
+      label: '搜索',
+      value: widget.word,
+      child: GestureDetector(
+        key: const ValueKey('home-search'),
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _press(true),
+        onTapUp: (_) => _press(false),
+        onTapCancel: () => _press(false),
+        onTap: widget.onTap,
+        child: ExcludeSemantics(
+          // The rim is drawn over the contents: as the decoration, its width would inset them (01 measures from the
+          // rim's outer edge).
+          child: Container(
+            key: const ValueKey('home-search-field'),
+            width: HomeTabBarTheme.fieldWidth,
+            height: BiliMetrics.linkFieldHeight,
+            foregroundDecoration: ShapeDecoration(
+              color: _pressed ? BiliColors.pressedFill : null,
+              shape: const StadiumBorder(
+                side: BorderSide(color: HomeTabBarTheme.fieldOutline, width: HomeTabBarTheme.fieldOutlineWidth),
               ),
             ),
-          ],
+            child: Row(
+              children: [
+                const SizedBox(width: glyphLead),
+                Transform.translate(
+                  offset: const Offset(0, -HomeTabBarTheme.fieldGlyphRise),
+                  child: const SearchGlyphIcon(
+                    SearchGlyph.magnifier,
+                    size: HomeTabBarTheme.fieldGlyph,
+                    color: HomeTabBarTheme.fieldInk,
+                  ),
+                ),
+                const SizedBox(width: HomeTabBarTheme.fieldTextStart - glyphLead - HomeTabBarTheme.fieldGlyph),
+                Expanded(
+                  child: Text(
+                    widget.word ?? '',
+                    key: const ValueKey('home-search-word'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: word,
+                    strutStyle: BiliFonts.strutOf(context, word),
+                  ),
+                ),
+                const SizedBox(width: HomeTabBarTheme.fieldTextEnd),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -537,12 +491,24 @@ class _RecommendTab extends StatelessWidget {
 }
 
 class _FeedGrid extends StatefulWidget {
-  const _FeedGrid({required this.feed, required this.onOpen, required this.onWatchLater, required this.onRefresh});
+  const _FeedGrid({
+    super.key,
+    required this.feed,
+    required this.onOpen,
+    required this.onWatchLater,
+    required this.onRefresh,
+    required this.refreshing,
+  });
 
   final FeedModel feed;
   final void Function(FeedCard card, ZoomSource source) onOpen;
   final void Function(FeedCard card) onWatchLater;
+
+  /// The page's refresh: the one running, or a new one.
   final Future<void> Function() onRefresh;
+
+  /// The refresh running, if any.
+  final Future<void>? Function() refreshing;
 
   @override
   State<_FeedGrid> createState() => _FeedGridState();
@@ -564,6 +530,9 @@ class _FeedGridState extends State<_FeedGrid> {
   final _entered = <String>{};
   int _batch = 0;
   double _rowExtent = 0;
+
+  /// Whether 首页's refresh shows the pull-to-refresh spinner at the top.
+  bool _reloadHeader = false;
 
   @override
   void initState() {
@@ -593,6 +562,26 @@ class _FeedGridState extends State<_FeedGrid> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _scroll.hasClients) _loadMoreNearEnd(_scroll.position);
     });
+  }
+
+  /// 首页's tap, as the official app's: back to the top and 推荐 refreshed at once, whether scrolled or already at the
+  /// top, with the pull-to-refresh spinner held at the top until the new cards come. Nothing more while a refresh
+  /// (or the first load) runs.
+  Future<void> reload() async {
+    final feed = widget.feed;
+    if (widget.refreshing() case final running?) return running;
+    if (feed.cards.isEmpty && feed.loading) return;
+    final refresh = widget.onRefresh();
+    if (!_scroll.hasClients) return refresh;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _scroll.jumpTo(0);
+    } else {
+      await _scroll.animateTo(0, duration: HomeTabBarTheme.reloadScroll, curve: Curves.easeOut);
+    }
+    if (!mounted || !identical(widget.refreshing(), refresh)) return;
+    setState(() => _reloadHeader = true);
+    await refresh;
+    if (mounted) setState(() => _reloadHeader = false);
   }
 
   bool _scrolled(ScrollNotification notification) {
@@ -637,6 +626,7 @@ class _FeedGridState extends State<_FeedGrid> {
         );
         final cards = feed.cards;
         final loadingFirst = cards.isEmpty && (feed.loading || feed.error == null);
+        final pull = CupertinoSliverRefreshControl(onRefresh: widget.onRefresh);
         return AnimatedSwitcher(
           duration: still ? Duration.zero : const Duration(milliseconds: 320),
           layoutBuilder: (current, previous) =>
@@ -665,7 +655,28 @@ class _FeedGridState extends State<_FeedGrid> {
                     controller: _scroll,
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     slivers: [
-                      CupertinoSliverRefreshControl(onRefresh: widget.onRefresh),
+                      pull,
+                      SliverToBoxAdapter(
+                        child: _Presence(
+                          visible: _reloadHeader,
+                          duration: still ? Duration.zero : HomeTabBarTheme.reloadHeader,
+                          builder: (context, animation) => SizeTransition(
+                            sizeFactor: animation,
+                            alignment: Alignment.topCenter,
+                            child: SizedBox(
+                              key: const ValueKey('feed-reload'),
+                              height: pull.refreshIndicatorExtent,
+                              child: CupertinoSliverRefreshControl.buildRefreshIndicator(
+                                context,
+                                RefreshIndicatorMode.refresh,
+                                pull.refreshIndicatorExtent,
+                                pull.refreshTriggerPullDistance,
+                                pull.refreshIndicatorExtent,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                       if (cards.isEmpty)
                         SliverFillRemaining(
                           hasScrollBody: false,
@@ -673,7 +684,7 @@ class _FeedGridState extends State<_FeedGrid> {
                             child: _RetryMessage(
                               message: feed.error ?? FeedModel.emptyMessage,
                               messageKey: const ValueKey('feed-error'),
-                              onRetry: feed.retry,
+                              onRetry: widget.onRefresh,
                             ),
                           ),
                         )

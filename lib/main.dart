@@ -23,6 +23,8 @@ import 'playback/codec_memory.dart';
 import 'playback/playback_setup.dart';
 import 'playback/shared_engine.dart';
 import 'screens/player_test_page.dart';
+import 'search/fake_search_api.dart';
+import 'search/search_history_store.dart';
 import 'settings/follow_font.dart';
 import 'settings/font_store.dart';
 import 'shared/theme.dart';
@@ -45,6 +47,7 @@ Future<void> main(List<String> args) async {
   final AppEnvironment environment;
   final RecentStore recents;
   final FontStore fonts;
+  final SearchHistoryStore searchHistory;
   final DanmakuSettingsStore danmakuSettings;
   final CodecMemory codecMemory;
   try {
@@ -52,6 +55,7 @@ Future<void> main(List<String> args) async {
     recents = await RecentStore.load(supportFilePath('recents.json'));
     PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
     fonts = await FontStore.load(supportFilePath('font.json'));
+    searchHistory = await SearchHistoryStore.load(supportFilePath('search_history.json'));
     danmakuSettings = await DanmakuSettingsStore.load(supportFilePath('danmaku_settings.json'));
     RecentEmotes.shared = await RecentEmotes.load(supportFilePath('emotes_recent.json'));
     codecMemory = await CodecMemory.load(codecMemoryPath());
@@ -61,7 +65,8 @@ Future<void> main(List<String> args) async {
     runApp(LaunchFailedApp(error: '$error'));
     return;
   }
-  // PC checks only: the page's actions answer from memory, so every button can be pressed with no account traffic.
+  // PC checks only: the page's actions and 搜索 answer from memory, so every button can be pressed with no account
+  // traffic.
   final fakeAccount = !Platform.isIOS && args.contains('--fake-account');
   if (fakeAccount) environment.useFakeAccount();
   unawaited(environment.refreshAccount());
@@ -84,6 +89,8 @@ Future<void> main(List<String> args) async {
       device: device,
       fonts: fonts,
       pageApi: fakeAccount ? FakePageApi.demo() : null,
+      searchApi: fakeAccount ? FakeSearchApi.demo() : null,
+      searchHistory: searchHistory,
       danmakuSettings: danmakuSettings,
       logFiles: logFiles,
       logs: logs,

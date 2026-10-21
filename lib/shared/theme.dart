@@ -3035,3 +3035,461 @@ abstract final class SettingsTheme {
   static const vipBadgePadding = 6.0;
   static const vipBadgeGap = 6.0;
 }
+
+/// 首页's bottom bar (01, 02): its height over the home indicator, the hairline above it, the labels.
+abstract final class HomeTabBarTheme {
+  static const bar = BiliColors.card;
+
+  /// 49 pt from the hairline's top to the home indicator's safe area, in five slots of a fifth of the width each.
+  static const height = 49.0;
+  static const hairline = BiliColors.divider;
+  static const hairlineWidth = 1 / 3;
+
+  /// Below the bar's top: a glyph's centre, the pink +'s (centred under the hairline) and a label's line box top.
+  static const iconCentre = 18.0;
+  static const postCentre = 74 / 3;
+  static const labelTop = 94 / 3;
+  static const labelText = 11.0;
+  static const label = Color(0xFF61666D);
+  static const selected = BiliColors.pink;
+
+  /// 首页's search entry beside the avatar (01): 300 pt of the row, ending 76 pt short of the screen's edge, in a
+  /// 2 px grey outline; the magnifier's centre and the word's start from the outline's left edge, the word cut
+  /// short of the right one.
+  static const fieldGap = 11.0;
+  static const fieldWidth = 300.0;
+  static const fieldOutline = BiliColors.secondaryText;
+  static const fieldOutlineWidth = 2 / 3;
+  static const fieldGlyph = SearchGlyphTheme.magnifierSize;
+  static const fieldGlyphCentre = 18.0;
+  static const fieldGlyphRise = 1 / 3;
+  static const fieldTextStart = 89 / 3;
+  static const fieldTextEnd = 14.0;
+  static const fieldText = 15.0;
+  static const fieldInk = Color(0xFF61666D);
+
+  /// The 推荐 refresh 首页's tap runs: the scroll back to the top, then the pull-to-refresh spinner's room opening.
+  static const reloadScroll = Duration(milliseconds: 300);
+  static const reloadHeader = Duration(milliseconds: 200);
+}
+
+/// The bottom bar's glyphs (01, 02): their size, strokes and colours, and the + on its pink rounded square.
+abstract final class TabIconTheme {
+  /// The square each line glyph is drawn in. On 01 and 02 every glyph's ink is centred on its column (88 pt wide) at
+  /// y 891 pt; the widest, 关注 and 我的, are 21.33 pt.
+  static const size = 22.0;
+
+  static const ink = Color(0xFF61666D);
+  static const selectedInk = BiliColors.pink;
+
+  /// Outlines; 关注's pinwheel is a touch heavier on both shots.
+  static const line = 2.0;
+  static const fanLine = 2.1;
+
+  /// 首页's smile or mouth, 我的's eyes and antennae.
+  static const faceLine = 1.5;
+
+  /// 发布: a 38 pt square (centred at y 897.67 pt on 01, its top at 878.67) with 14 pt corners, shaded top to bottom,
+  /// and a white + 13 pt across with 2.5 pt round-capped strokes.
+  static const postSquare = 38.0;
+  static const postRadius = 14.0;
+  static const postTop = Color(0xFFFE739A);
+  static const postBottom = Color(0xFFFF4AA4);
+  static const postPlus = 13.0;
+  static const postPlusLine = 2.5;
+  static const postPlusInk = Color(0xFFFFFFFF);
+}
+
+/// 搜索's page (52-55): the field row, the empty page's 热搜, 搜索历史 and 搜索发现, and the suggestions.
+abstract final class SearchTheme {
+  static const page = BiliColors.card;
+
+  /// Measured on 52-55 at 3 px per pt. Every word on the page is #18191C; the field's grey word, ‹ and 反馈 are
+  /// #61666D, the sections' glyphs and 完整榜单 #9499A0.
+  static const text = BiliColors.text;
+  static const dim = Color(0xFF61666D);
+  static const grey = BiliColors.secondaryText;
+  static const highlight = BiliColors.pink;
+
+  /// The row under the status bar: ‹ (8.7 × 16.7, its middle 19 in), the 34 tall stadium from 38 to 376 with its
+  /// 0.67 grey rim drawn over it (insetting nothing), and 搜索 centred in the 64 after it. The magnifier's ink is
+  /// centred 56 in and half a point above the field's middle (its box raised 2/3, as its ink sits low in it); the
+  /// word's box starts at 68.
+  static const barHeight = 44.0;
+  static const backTarget = 38.0;
+  static const backWidth = 26 / 3;
+  static const backHeight = 50 / 3;
+  static const backStroke = 1.5;
+  static const fieldHeight = 34.0;
+  static const fieldRim = 0.67;
+  static const fieldRimColor = BiliColors.secondaryText;
+  static const fieldText = 15.0;
+  static const fieldLine = 21.0;
+  static const magnifierInset = 35 / 3;
+  static const magnifier = SearchGlyphTheme.magnifierSize;
+  static const magnifierLift = 2 / 3;
+  static const magnifierGap = 6.0;
+  static const caret = BiliColors.pink;
+
+  /// The grey ⓧ: 13.3 across, its middle 18 from the field's right end, in a 36 wide target.
+  static const clear = 40 / 3;
+  static const clearColor = Color(0xFFC9CCCF);
+  static const clearRight = 18.0;
+  static const submitWidth = 64.0;
+  static const submitText = 16.0;
+  static const submitDrop = 0.5;
+  static const submit = BiliColors.pink;
+
+  /// The opening spinner over the page, as 首页's.
+  static const openingFill = BiliColors.toastFill;
+  static const openingSpinner = BiliColors.panelText;
+
+  /// The empty page's sections: a 14 pt medium title whose middle is 17 down a 34 tall header, its glyphs centred
+  /// 73 and 20 (⌄) or 26 (👁) from the right edge with a 1 px #C9CCD0 rule 46.5 in between. Each glyph is pressed in
+  /// a 44 wide target. 🗑's box is raised 2/3 and ⌃'s 5/6, where their ink would otherwise sit low (53, 54).
+  static const gutter = 12.0;
+  static const headerHeight = 34.0;
+  static const headerText = 14.0;
+  static const headerWeight = FontWeight.w500;
+  static const headerLine = 20.0;
+  static const headerFirstGlyph = 73.0;
+  static const headerRule = 46.5;
+  static const headerExpandGlyph = 20.0;
+  static const headerEyeGlyph = 26.0;
+  static const headerGlyphTarget = 44.0;
+  static const trashLift = 2 / 3;
+  static const collapseLift = 5 / 6;
+  static const ruleWidth = 1 / 3;
+  static const ruleHeight = 8.0;
+  static const rule = Color(0xFFC9CCD0);
+  static const trash = 40 / 3;
+  static const expand = 12.0;
+  static const refresh = 40 / 3;
+  static const eye = 46 / 3;
+
+  /// The words in the sections and the suggestions: 14 pt on a 20 pt line.
+  static const wordText = 14.0;
+  static const wordLine = 20.0;
+
+  /// bilibili热搜: 1/3 below the bar, then rows 34 tall in two 196 wide columns 24 apart, each word's 14 pt badge 4
+  /// after it. 完整榜单 is 12 pt with a 5.3 × 9.3 › 4 after it, ending 15.3 from the right.
+  static const hotTop = 1 / 3;
+  static const hotRowHeight = 34.0;
+  static const hotColumnGap = 24.0;
+  static const hotWords = 10;
+  static const badge = 14.0;
+  static const badgeGap = 4.0;
+  static const moreText = 12.0;
+  static const moreGap = 4.0;
+  static const moreChevronWidth = 16 / 3;
+  static const moreChevronHeight = 28 / 3;
+  static const moreChevronStroke = 1.2;
+  static const moreRight = 46 / 3;
+
+  /// The gap after 热搜's rows, and after the chips or cells of the other sections, before the next title's header.
+  static const afterHot = 12.0;
+  static const afterList = 61 / 3;
+
+  /// Between a header and its chips or cells.
+  static const listTop = 8 / 3;
+
+  /// 搜索历史's chips: 30 tall, 14 in on both sides, 10 apart and 8 between rows, 4 corners; a word is cut with … at
+  /// 117 (the chip at 145). Folded it shows two rows (52, 53).
+  static const chipHeight = 30.0;
+  static const chipPadding = 14.0;
+  static const chipSpacing = 10.0;
+  static const chipRunSpacing = 8.0;
+  static const chipRadius = 4.0;
+  static const chipTextMax = 117.0;
+  static const chipFill = BiliColors.softGrey;
+  static const foldedRows = 2;
+  static const historyMotion = Duration(milliseconds: 250);
+
+  /// 搜索发现's cells: two columns 7 apart, 30 tall, 8 between rows, the word 8 in.
+  static const cellHeight = 30.0;
+  static const cellGap = 7.0;
+  static const cellRunSpacing = 8.0;
+  static const cellPadding = 8.0;
+  static const cellRadius = 4.0;
+  static const cellFill = BiliColors.softGrey;
+  static const discoveryWords = 12;
+
+  /// A 搜索发现 word's grey "·昨天更新" (52's first cell).
+  static const suffix = grey;
+
+  /// The 反馈 pill, 28 under the last cell: 66 × 24 with a 0.67 #C9CCD0 rim, its 14 pt glyph 3 before the 12.5 pt
+  /// word.
+  static const feedbackTop = 28.0 - afterList;
+  static const feedbackWidth = 66.0;
+  static const feedbackHeight = 24.0;
+  static const feedbackRim = 0.67;
+  static const feedbackGlyph = 14.0;
+  static const feedbackGap = 3.0;
+  static const feedbackText = 12.5;
+  static const feedbackBottom = 24.0;
+  static const feedbackPressedScale = IntroTheme.followPressedScale;
+
+  /// The pressed 反馈 pill shrinking; chips, cells and words darken with [BiliColors.pressedFill] instead.
+  static const pressMotion = Duration(milliseconds: 120);
+
+  /// The suggestions (55): rows 44 tall, each ending in a 1 px #D9DBDE hairline from the gutter to the right edge.
+  static const suggestionHeight = 44.0;
+  static const suggestionHairline = 1 / 3;
+  static const suggestionHairlineColor = Color(0xFFD9DBDE);
+}
+
+/// 搜索's results (56, 57, 59-61): the tab row, the video and uploader rows, the ⋮ sheet.
+abstract final class SearchResultTheme {
+  static const page = BiliColors.card;
+
+  /// The tab row: 40 under the field row (which ends 106 down, where 55's suggestions start), then a hairline across
+  /// the page, lighter than the rows' own. Labels sit in 54 wide slots from the left edge, the shown one 16 and pink,
+  /// the others 15 and grey, all on one baseline.
+  static const tabRowHeight = 40.0;
+  static const hairline = 1 / 3;
+  static const hairlineInk = Color(0xFFE3E5E7);
+  static const rowHairlineInk = Color(0xFFD9DBDE);
+  static const tabSlot = 54.0;
+  static const tabText = 15.0;
+  static const tabSelectedText = 16.0;
+  static const tabBaseline = 77 / 3;
+  static const tabInk = Color(0xFF61666D);
+  static const tabSelected = BiliColors.pink;
+  static const indicatorWidth = 18.0;
+  static const indicatorHeight = 3.0;
+  static const indicatorTop = 34.0;
+  static const tabMotion = Duration(milliseconds: 200);
+
+  /// 筛选's funnel, centred 26 from the right edge and 19.5 down the tab row; pink while 筛选 is open (58).
+  static const funnel = 52 / 3;
+  static const funnelCentreRight = 26.0;
+  static const funnelCentreTop = 19.5;
+  static const funnelTarget = 44.0;
+  static const funnelInk = tabInk;
+  static const funnelOpen = BiliColors.pink;
+
+  /// 用户's 默认排序 and 全部用户 (60), each centred in half the width; on 用户 the hairline runs under this row, not the
+  /// tab row.
+  static const sortRowHeight = 119 / 3;
+  static const sortText = 13.0;
+  static const sortInk = tabInk;
+  static const sortChevronWidth = 8.0;
+  static const sortChevronHeight = 4.4;
+  static const sortChevronStroke = 1.1;
+  static const sortChevronGap = 4.3;
+
+  /// Rows scrolled this close to the end ask for the next page.
+  static const loadAhead = 360.0;
+
+  /// A video row (56, 61): the 172 × 97 cover 12 down, 11.67 under it to the hairline, which runs from the gutter to
+  /// the right edge.
+  static const gutter = 12.0;
+  static const rowPadTop = 12.0;
+  static const rowPadBottom = 35 / 3;
+  static const coverWidth = 172.0;
+  static const coverHeight = 97.0;
+  static const coverRadius = 13 / 3;
+  static const coverPlaceholder = BiliColors.pageGrey;
+  static const textGap = 8.0;
+
+  /// Two title lines 19.33 apart, their first ink 3.3 under the cover's top; they wrap before 422.
+  static const titleText = 14.0;
+  static const titleLine = 58 / 3;
+  static const titleTop = 0.0;
+  static const titleRight = 18.0;
+  static const titleInk = BiliColors.text;
+  static const highlight = BiliColors.pink;
+
+  /// UP and ▷ lines, ink centred 27.33 and 8.5 above the cover's bottom; both glyphs start 1.33 into their 13.67
+  /// slot, ▷ 12.67 wide.
+  static const metaText = 12.0;
+  static const metaLine = 17.0;
+  static const metaGap = 2.2;
+  static const metaBottom = -0.2;
+  static const metaInk = BiliColors.secondaryText;
+  static const metaGlyphSlot = 41 / 3;
+  static const metaGlyphInset = 4 / 3;
+  static const metaGlyph = 38 / 3;
+  static const metaGlyphGap = 4.0;
+
+  /// The · between counts has 6.67 clear on each side (56, 60): a space and this much more.
+  static const dotSpacing = 5 / 3;
+
+  /// ⋮, centred 16 from the right edge on the ▷ line.
+  static const moreCentreRight = 16.0;
+  static const moreTarget = 32.0;
+
+  /// The length on the cover: a 14 tall pill 4 in from its right and bottom.
+  static const durationText = 10.0;
+  static const durationHeight = 14.0;
+  static const durationPadX = 8 / 3;
+  static const durationRight = 4.0;
+  static const durationBottom = 4.0;
+  static const durationRadius = 3.0;
+  static const durationFill = Color(0x99000000);
+  static const durationInk = BiliColors.onCover;
+
+  /// An uploader row (60): 80 with its hairline, inset 12 at both ends; the 48 avatar 16 down, the text 8 after it.
+  static const userRowHeight = 80.0;
+  static const avatar = 48.0;
+  static const avatarTop = 16.0;
+  static const userTextGap = 8.0;
+  static const nameText = 14.0;
+  static const nameInk = BiliColors.text;
+  static const nameLine = 20.0;
+  static const levelGap = 5.0;
+  static const countsText = 12.0;
+  static const countsLine = 17.0;
+  static const countsInk = BiliColors.secondaryText;
+
+  /// Where each line centres from the avatar's centre, with the counts alone or with the description under them.
+  static const nameCentreTwo = -11.17;
+  static const countsCentreTwo = 13.0;
+  static const nameCentreThree = -18.67;
+  static const countsCentreThree = 1.33;
+  static const descCentreThree = 20.33;
+
+  /// The bolt disc at the avatar's lower right, ringed in white: yellow for a person, blue for an organisation.
+  static const badge = 40 / 3;
+  static const badgeRing = 4 / 3;
+  static const badgePerson = IntroTheme.badgePerson;
+  static const badgeOrganisation = IntroTheme.badgeOrganisation;
+  static const badgeBolt = IntroTheme.badgeBolt;
+
+  /// "+ 关注": the pink pill 12 from the right, level with the avatar; followed, 简介's grey 已关注.
+  static const followWidth = 70.0;
+  static const followHeight = 24.0;
+  static const followText = 13.0;
+  static const followPlus = 29 / 3;
+  static const followPlusStroke = 1.2;
+  static const followPlusGap = 13 / 3;
+  static const followFill = BiliColors.pink;
+  static const followInk = BiliColors.onPink;
+  static const followedFill = IntroTheme.followedFill;
+  static const followedInk = IntroTheme.followedText;
+  static const followPressedScale = IntroTheme.followPressedScale;
+
+  /// 简介's: the fill and words change over [followMotion], the label fading in from [followSwapScale]; a press
+  /// shrinks the pill over [followPressMotion].
+  static const followMotion = Duration(milliseconds: 220);
+  static const followPressMotion = Duration(milliseconds: 120);
+  static const followSwapScale = 0.85;
+  static const textRight = 12.0;
+
+  /// The first page's spinner, the next page's, 重试 and 没有找到相关内容.
+  static const stateText = 14.0;
+  static const stateInk = BiliColors.secondaryText;
+  static const stateGap = 16.0;
+  static const spinnerRadius = 10.0;
+  static const footerPad = 16.0;
+  static const retryText = 14.0;
+  static const retryHeight = 30.0;
+  static const retryPadX = 20.0;
+  static const retryRim = 1.0;
+
+  /// Let go with the header part shown, it finishes coming in or going out, whichever is nearer.
+  static const headerSnap = Duration(milliseconds: 200);
+
+  /// 筛选's dim over the rows only (58).
+  static const filterDim = Color(0x4D000000);
+  static const filterMotion = Duration(milliseconds: 220);
+
+  /// ⋮'s sheet (59): the page dimmed, the soft-grey sheet rising to 411.33 tall from the screen's bottom with a 12
+  /// corner, white cards 16 in.
+  static const sheetDim = Color(0x52000000);
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
+  static const sheetFill = BiliColors.softGrey;
+  static const sheetRadius = 12.0;
+  static const sheetInset = 16.0;
+  static const grabberTop = 8.0;
+  static const grabberWidth = 30.0;
+  static const grabberHeight = 3.0;
+  static const grabberInk = Color(0xFFC5C6C6);
+  static const sheetCardTop = 19.0;
+  static const sheetCardHeight = 137 / 3;
+  static const sheetCardRadius = 6.0;
+  static const sheetCardFill = BiliColors.card;
+  static const sheetIcon = 18.0;
+  static const sheetIconLeft = 13.0;
+  static const sheetIconGap = 9.0;
+  static const sheetText = 18.0;
+  static const sheetInk = BiliColors.text;
+  static const sheetHeaderText = 55 / 3;
+
+  /// The words on the sheet's cards sit this much lower in their boxes than the stand-ins put them (59).
+  static const sheetTextDrop = 2 / 3;
+  static const sheetHeaderWeight = FontWeight.w600;
+
+  /// A heading's block runs from the card above to its buttons, the words centred 32.67 down it.
+  static const sheetHeaderBlock = 172 / 3;
+  static const sheetHeaderCentre = 98 / 3;
+  static const sheetButtonHeight = 44.0;
+  static const sheetButtonGap = 8.0;
+  static const sheetBottom = 6.0;
+
+  /// Dragged down this far, or flung, the sheet closes.
+  static const sheetDragClose = 0.25;
+  static const sheetFlingClose = 700.0;
+}
+
+/// 筛选 (58): its chip rows and the dimmed list under it.
+abstract final class SearchFilterTheme {
+  static const panel = BiliColors.card;
+
+  /// 58's rhythm: the first title's middle 20 below the panel's top, each title's middle 18.67 above its chips and
+  /// 24.33 below the chips before it. 58 cuts the panel off under a fade at 450 pt, so the bottom is the space a chip
+  /// grid leaves above the next title's ink.
+  static const side = BiliMetrics.gutter;
+  static const firstTitleMiddle = 20.0;
+  static const titleToChips = 56 / 3;
+  static const chipsToTitle = 73 / 3;
+  static const bottom = 56 / 3;
+
+  static const titleText = 12.0;
+  static const title = BiliColors.text;
+
+  /// Four to a row, 99 wide at 440 pt: 58 floors the width to a whole point, leaving 14 on the right.
+  static const columns = 4;
+  static const chipHeight = 26.0;
+  static const chipGap = 6.0;
+  static const chipRowGap = 10.0;
+  static const chipRadius = 4.0;
+  static const chipText = 12.0;
+
+  /// 58 draws 内容时长's digits a pixel further apart than SF and a point further from Chinese; Flutter's SF draws
+  /// neither.
+  static double get chipLatinSpacing => BiliFonts.nudged ? 0 : 1 / 3;
+  static double get chipHanGap => BiliFonts.nudged ? 0 : 1.0;
+
+  /// The chosen chip keeps the same grey; only its label turns the deeper pink of the comment composer's accent.
+  static const chip = BiliColors.softGrey;
+  static const chipLabel = Color(0xFF62666C);
+  static const chipChosenLabel = Color(0xFFED7098);
+}
+
+/// 搜索's glyphs (52-60): their strokes.
+abstract final class SearchGlyphTheme {
+  static const stroke = 1.0;
+
+  /// Each glyph's ink box, the larger side, measured at 3 px per pt: pass it as the icon's size. Strokes below are at
+  /// these sizes and scale with them.
+  static const magnifierSize = 12.33;
+  static const clearSize = 13.33;
+  static const trashSize = 13.33;
+  static const expandSize = 12.0;
+  static const refreshSize = 13.33;
+  static const eyeSize = 15.33;
+  static const feedbackSize = 14.0;
+  static const chevronSize = 9.33;
+  static const funnelSize = 16.67;
+  static const playSize = 13.33;
+  static const plusSize = 9.33;
+  static const watchLaterSize = 18.0;
+
+  static const magnifierStroke = 1.5;
+  static const clearStroke = 1.1;
+  static const funnelStroke = 1.3;
+  static const plusStroke = 1.1;
+  static const watchLaterStroke = 1.2;
+}
