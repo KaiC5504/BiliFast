@@ -259,11 +259,10 @@ abstract final class BiliMetrics {
   static const tagVerticalPadding = 2.0;
   static const iconSize = 18.0;
 
-  /// The video page's player box, its back arrow and the loading spinner's radius (twice it is [chromeIcon]).
+  /// The video page's player box and its back arrow.
   static const videoAspect = 16 / 9;
   static const videoBackIcon = 20.0;
   static const videoBackShadow = 6.0;
-  static const videoSpinnerRadius = 14.0;
 
   /// The gesture HUD's pills, measured on 25 (px / 3): 倍速中 is 92 × 44, 10 below the top, centred, with its icon 14
   /// in, and its two overlapping arrows are 28/3 × 12 each before rounding, the second 23/3 right of the first.

@@ -12,6 +12,7 @@ import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../app/zoom_back_route.dart';
+import '../player_ui/player_loading.dart';
 import '../search/search_glyphs.dart';
 import '../search/results/video_row.dart' show searchLogReason;
 import '../search/search_page.dart';
@@ -69,6 +70,7 @@ class _HomePageState extends State<HomePage> {
     _opener.busy.addListener(_busyChanged);
     _feed = FeedModel(client: _environment.client);
     unawaited(LoadingTv.precache(context));
+    unawaited(PlayerLoading.precache());
     unawaited(_refreshFeed());
     _environment.addListener(_accountChanged);
     _accountChanged();

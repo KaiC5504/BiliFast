@@ -20,6 +20,10 @@ class PlayerLoading extends StatefulWidget {
   static const asset = 'assets/lottie/player_loading_tv.json';
   static const message = '正在缓冲...';
 
+  /// Parses the Lottie into the package's shared cache ahead of the first video, which would otherwise draw nothing
+  /// for its first frames.
+  static Future<void> precache() => AssetLottie(asset).load();
+
   /// `正在缓冲... 69.33 KB/s`, or the message alone until the engine reports (never, in direct mode). The official app
   /// shows 0.00 KB/s too, so a measured zero still reads.
   static String line(OverlayStats? stats) => switch (speed(stats)) {
