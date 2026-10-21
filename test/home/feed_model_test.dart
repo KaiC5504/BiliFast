@@ -191,4 +191,174 @@ void main() {
     await Future.wait([first, second]);
     expect(http.asked.where((index) => index == 2), hasLength(1));
   });
+
+  group('the official feed', () {
+    late BiliClient client;
+    var wanted = true;
+
+    FeedModel official() {
+      wanted = true;
+      client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
+        ..appToken = fakeAppToken;
+      return FeedModel(client: client, logger: Logger(session: 'test')..add(logs), officialWanted: () => wanted);
+    }
+
+    test('without the app token it is never asked, whatever 开发者 says', () async {
+      http.officialPages[0] = [officialItem('BV1')];
+      http.pages[1] = [feedItem('BVweb')];
+      http.pages[2] = [feedItem('BVweb2')];
+      final feed = official();
+      client.appToken = null;
+      await feed.refresh();
+      await feed.loadMore();
+      expect(http.officialAsked, isEmpty);
+      expect(http.asked, [1, 2]);
+      expect(feed.source, FeedSource.web);
+      expect(bvids(feed), ['BVweb', 'BVweb2']);
+    });
+
+    test('with the token it pages from 0, and 开发者 → 网页 goes back to the website', () async {
+      http.officialPages[0] = [officialItem('BV1'), officialItem('BV2')];
+      http.officialPages[1] = [officialItem('BV3')];
+      final feed = official();
+      await feed.refresh();
+      expect(feed.source, FeedSource.official);
+      expect(bvids(feed), ['BV1', 'BV2']);
+      expect(feed.cards.first.viewsText, '10.4万');
+      await feed.loadMore();
+      expect(http.officialAsked, [0, 1]);
+      expect(bvids(feed), ['BV1', 'BV2', 'BV3']);
+      expect(http.asked, isEmpty, reason: 'the website is not asked as well');
+
+      wanted = false;
+      http.pages[1] = [feedItem('BVweb')];
+      await feed.refresh();
+      expect(feed.source, FeedSource.web);
+      expect(http.asked, [1]);
+      expect(http.officialAsked, [0, 1]);
+    });
+
+    test('only video cards are kept: ads and live rooms are dropped', () async {
+      http.officialPages[0] = [
+        officialItem('BV1'),
+        officialItem('BVad', goto: 'ad_av'),
+        officialItem('BVlive', goto: 'live'),
+        {...officialItem('BVadinfo'), 'ad_info': <String, Object?>{}},
+        officialItem('BV2'),
+      ];
+      final feed = official();
+      await feed.refresh();
+      expect(bvids(feed), ['BV1', 'BV2']);
+    });
+
+    test('a refused token brings the same load from the website, so 推荐 never goes blank', () async {
+      http.officialCode = -101;
+      http.pages[1] = [feedItem('BVweb1')];
+      http.pages[2] = [feedItem('BVweb2')];
+      final feed = official();
+      expect(await feed.refresh(), isNull);
+      expect(http.officialAsked, [0]);
+      expect(http.asked, [1]);
+      expect(feed.source, FeedSource.web);
+      expect(bvids(feed), ['BVweb1']);
+      await feed.loadMore();
+      expect(http.officialAsked, [0], reason: 'the rest of the scroll stays on the website');
+      expect(http.asked, [1, 2]);
+    });
+
+    test('a token refused mid-scroll (-2) loads that page from the website', () async {
+      http.officialPages[0] = [officialItem('BV1')];
+      final feed = official();
+      await feed.refresh();
+      http.officialCode = -2;
+      http.pages[2] = [feedItem('BVweb2')];
+      await feed.loadMore();
+      expect(http.officialAsked, [0, 1]);
+      expect(http.asked, [2], reason: "the website's own count, as if it had been read all along");
+      expect(bvids(feed), ['BV1', 'BVweb2']);
+      expect(feed.error, isNull);
+    });
+
+    test('any other official failure is a failure, not a switch', () async {
+      http.officialCode = -352;
+      final feed = official();
+      await feed.refresh();
+      expect(http.asked, isEmpty);
+      expect(feed.error, '请求过于频繁，请稍后再试');
+    });
+
+    group('不感兴趣', () {
+      Future<(FeedModel, FeedCard)> shown() async {
+        http.officialPages[0] = [officialItem('BV1'), officialItem('BV2')];
+        final feed = official();
+        await feed.refresh();
+        return (feed, feed.cards.first);
+      }
+
+      test('turns the card over at once and sends its reason; 撤销 takes it back', () async {
+        final (feed, card) = await shown();
+        final gate = http.dislikeGate = Completer<void>();
+        final sent = feed.dislike(card, card.dislike!.video!);
+        expect(feed.dislikeOf(card)?.reason.id, 1, reason: 'optimistic');
+        expect(await feed.dislike(card, card.dislike!.uploader!), isNull, reason: 'a second tap is dropped');
+        gate.complete();
+        http.dislikeGate = null;
+        expect(await sent, isNull);
+        expect(http.dislikes, hasLength(1));
+        expect(http.dislikes.single['reason_id'], '1');
+        expect(http.dislikes.single['goto'], 'av');
+        expect(http.dislikes.single['id'], '${'BV1'.hashCode.abs()}');
+        expect(feed.dislikeOf(feed.cards[1]), isNull);
+
+        expect(await feed.undo(card), isNull);
+        expect(feed.dislikeOf(card), isNull);
+        expect(http.cancels.single['reason_id'], '1');
+      });
+
+      test("the uploader's reason, then a 反馈 picked from the sheet with its feedback id", () async {
+        final (feed, card) = await shown();
+        await feed.dislike(card, card.dislike!.uploader!);
+        expect(http.dislikes.single['reason_id'], '4');
+        final repeated = card.dislike!.repeated!;
+        expect(await feed.sendReason(card, repeated), isNull);
+        expect(http.dislikes.last['feedback_id'], '19');
+        expect(http.dislikes.last.containsKey('reason_id'), isFalse);
+        expect(feed.dislikeOf(card)?.feedback, repeated);
+        expect(feed.dislikeOf(card)?.reason.id, 4, reason: 'the card stays turned over');
+      });
+
+      test('a failure turns the card back and hands back why', () async {
+        final (feed, card) = await shown();
+        http.dislikeCode = -400;
+        expect(await feed.dislike(card, card.dislike!.video!), 'B 站返回错误 -400：请求错误');
+        expect(feed.dislikeOf(card), isNull);
+
+        http.dislikeCode = 0;
+        await feed.dislike(card, card.dislike!.video!);
+        http.dislikeCode = -400;
+        expect(await feed.undo(card), isNotNull);
+        expect(feed.dislikeOf(card)?.reason.id, 1, reason: 'still turned over: the server kept it');
+        expect(await feed.sendReason(card, card.dislike!.tiles.first), isNotNull);
+        expect(feed.dislikeOf(card)?.feedback, isNull);
+      });
+
+      test('a web card has nothing to send', () async {
+        http.pages[1] = [feedItem('BVweb')];
+        final feed = make();
+        await feed.refresh();
+        final card = feed.cards.single;
+        expect(card.dislike, isNull);
+        expect(await feed.dislike(card, const FeedReason(id: 1, name: '不感兴趣', kind: FeedReasonKind.dislike)), isNull);
+        expect(feed.dislikeOf(card), isNull);
+        expect(http.dislikes, isEmpty);
+      });
+
+      test('a refresh forgets the cards it replaced', () async {
+        final (feed, card) = await shown();
+        await feed.dislike(card, card.dislike!.video!);
+        await feed.refresh();
+        expect(feed.dislikeOf(feed.cards.first), isNull);
+      });
+    });
+  });
 }

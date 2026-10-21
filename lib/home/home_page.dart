@@ -21,6 +21,7 @@ import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/link_opener.dart';
+import '../video/player_prefs.dart';
 import '../video/video_route.dart';
 import 'avatar_page.dart';
 import 'feed_card.dart';
@@ -56,6 +57,9 @@ class _HomePageState extends State<HomePage> {
   /// Whether the feed on screen was fetched logged in; null until the first account check has answered.
   bool? _feedSignedIn;
 
+  /// Whether the app token was held when last heard, so a new one can bring the official 推荐.
+  bool _authorized = false;
+
   /// The refresh of 推荐 running, from the first load, an account change, a pull, 首页 or 重试; a pull or a tap while
   /// it runs waits on it instead of asking again.
   Future<void>? _refreshing;
@@ -74,6 +78,8 @@ class _HomePageState extends State<HomePage> {
     unawaited(_refreshFeed());
     _environment.addListener(_accountChanged);
     _accountChanged();
+    _authorized = _services.appAuth.authorized;
+    _services.appAuth.addListener(_authChanged);
     unawaited(_loadSearchWord());
     final link = widget.initialLink;
     if (link != null) {
@@ -87,6 +93,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _opener.dispose();
     _environment.removeListener(_accountChanged);
+    _services.appAuth.removeListener(_authChanged);
     _feed?.dispose();
     super.dispose();
   }
@@ -116,6 +123,17 @@ class _HomePageState extends State<HomePage> {
     final previous = _feedSignedIn;
     _feedSignedIn = signedIn;
     if (previous != null && previous != signedIn) unawaited(_refreshFeed(restart: true));
+  }
+
+  /// A token that arrives after 推荐 came from the website (at launch the stored one may land after the first load,
+  /// or the confirm was just given) brings the official feed in its place.
+  void _authChanged() {
+    final authorized = _services.appAuth.authorized;
+    final gained = authorized && !_authorized;
+    _authorized = authorized;
+    if (gained && PlayerPrefs.shared.officialFeed && _feed?.source != FeedSource.official) {
+      unawaited(_refreshFeed(restart: true));
+    }
   }
 
   /// The running refresh, or a new one. [restart] starts one even while another runs (whose answer the feed then
@@ -186,6 +204,31 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Without the app token the confirm is asked first; the card turns over only once it is given.
+  Future<bool> _authorize() async {
+    final auth = _services.appAuth;
+    return auth.authorized || await auth.request(context);
+  }
+
+  Future<void> _dislike(FeedCard card, FeedReason reason) async {
+    if (!await _authorize() || !mounted) return;
+    final failure = await _feed!.dislike(card, reason);
+    if (failure != null && mounted) showToast(context, failure);
+  }
+
+  Future<void> _undoDislike(FeedCard card) async {
+    if (!await _authorize() || !mounted) return;
+    final failure = await _feed!.undo(card);
+    if (failure != null && mounted) showToast(context, failure);
+  }
+
+  /// The official app says nothing after a reason is picked, so neither does this, unless it fails.
+  Future<void> _dislikeReason(FeedCard card, FeedReason reason) async {
+    if (!await _authorize() || !mounted) return;
+    final failure = await _feed!.sendReason(card, reason);
+    if (failure != null && mounted) showToast(context, failure);
+  }
+
   @override
   Widget build(BuildContext context) {
     final still = MediaQuery.disableAnimationsOf(context);
@@ -225,6 +268,9 @@ class _HomePageState extends State<HomePage> {
                     feed: _feed!,
                     onOpen: _openCard,
                     onWatchLater: _watchLater,
+                    onDislike: _dislike,
+                    onUndo: _undoDislike,
+                    onReason: _dislikeReason,
                     onRefresh: _refreshFeed,
                     refreshing: () => _refreshing,
                   ),
@@ -500,6 +546,9 @@ class _FeedGrid extends StatefulWidget {
     required this.feed,
     required this.onOpen,
     required this.onWatchLater,
+    required this.onDislike,
+    required this.onUndo,
+    required this.onReason,
     required this.onRefresh,
     required this.refreshing,
   });
@@ -507,6 +556,9 @@ class _FeedGrid extends StatefulWidget {
   final FeedModel feed;
   final void Function(FeedCard card, ZoomSource source) onOpen;
   final void Function(FeedCard card) onWatchLater;
+  final void Function(FeedCard card, FeedReason reason) onDislike;
+  final void Function(FeedCard card) onUndo;
+  final void Function(FeedCard card, FeedReason reason) onReason;
 
   /// The page's refresh: the one running, or a new one.
   final Future<void> Function() onRefresh;
@@ -706,6 +758,10 @@ class _FeedGridState extends State<_FeedGrid> {
                                     card: card,
                                     onOpen: (source) => widget.onOpen(card, source),
                                     onWatchLater: () => widget.onWatchLater(card),
+                                    dislike: feed.dislikeOf(card),
+                                    onDislike: (reason) => widget.onDislike(card, reason),
+                                    onUndo: () => widget.onUndo(card),
+                                    onReason: (reason) => widget.onReason(card, reason),
                                   ),
                                 );
                               },

@@ -10,6 +10,7 @@ import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
+import 'package:bilifast/home/feed_more_sheet.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -17,7 +18,6 @@ import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_api.dart';
 import 'package:bilifast/search/search_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
-import 'package:bilifast/shared/menu.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/playback/playback_controller.dart';
@@ -496,7 +496,7 @@ void main() {
     }
   });
 
-  testWidgets('⋮ opens a frosted menu beside it whose 稍后再看 adds the video', (tester) async {
+  testWidgets("⋮ opens 90's sheet whose 添加至稍后再看 adds the video; a web card has no 不感兴趣", (tester) async {
     http.canned.routes[_watchLaterPath] = (200, '{"code":0,"message":"0","ttl":1}');
     await show(tester);
     await settle(tester);
@@ -504,16 +504,13 @@ void main() {
     expect(tester.getSize(more), const Size.square(24), reason: "Swift's tap target");
     await tester.tap(more);
     await settle(tester);
-    expect(find.byType(GlassPanel), findsOneWidget);
-    expect(find.byType(BackdropFilter), findsOneWidget);
-    expect(
-      find.descendant(of: find.byType(GlassPanel), matching: find.byType(InkWell)),
-      findsNothing,
-      reason: 'no Material ripple in the menu',
-    );
-    await tester.tap(find.byKey(const ValueKey('card-watch-later')));
+    expect(find.byType(FeedSheetRow), findsOneWidget);
+    expect(find.text('添加至稍后再看'), findsOneWidget);
+    expect(find.textContaining('不感兴趣'), findsNothing);
+    expect(find.descendant(of: find.byType(FeedSheetRow), matching: find.byType(InkWell)), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('feed-more-watch-later')));
     await settle(tester);
-    expect(find.byType(GlassPanel), findsNothing);
+    expect(find.byType(FeedSheetRow), findsNothing);
     expect(find.text('已添加至稍后再看'), findsOneWidget);
     final sent = Uri.splitQueryString(utf8.decode(http.canned.to(_watchLaterPath).single.body!));
     expect(sent['aid'], '${'BV1aaa'.hashCode.abs()}');
@@ -521,9 +518,9 @@ void main() {
 
     await tester.tap(more);
     await settle(tester);
-    await tester.tapAt(const Offset(220, 850));
+    await tester.tapAt(const Offset(220, 300));
     await settle(tester);
-    expect(find.byType(GlassPanel), findsNothing, reason: 'a tap elsewhere closes it');
+    expect(find.byType(FeedSheetRow), findsNothing, reason: 'a tap on the dim closes it');
     expect(http.canned.to(_watchLaterPath), hasLength(1));
   });
 
@@ -661,7 +658,7 @@ void main() {
       expect(environment.account, anyOf(isA<LoggedOut>(), isA<LoginExpired>()));
       await tester.tap(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more'))));
       await settle(tester);
-      await tester.tap(find.byKey(const ValueKey('card-watch-later')));
+      await tester.tap(find.byKey(const ValueKey('feed-more-watch-later')));
       await settle(tester);
       expect(gate.requests, 1);
       expect(http.canned.to(_watchLaterPath), isEmpty);
@@ -676,14 +673,14 @@ void main() {
     expect(environment.account, isA<LoggedIn>());
     await tester.tap(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more'))));
     await settle(tester);
-    await tester.tap(find.byKey(const ValueKey('card-watch-later')));
+    await tester.tap(find.byKey(const ValueKey('feed-more-watch-later')));
     await settle(tester);
     expect(http.canned.to(_watchLaterPath), hasLength(1));
     expect(gate.requests, 1);
     expect(find.text('需要登录'), findsNothing);
   });
 
-  testWidgets('cards are buttons named by their title, with 稍后再看 as their action', (tester) async {
+  testWidgets('cards are buttons named by their title, with ⋮ and 稍后再看 as their actions', (tester) async {
     final semantics = tester.ensureSemantics();
     await show(tester);
     await settle(tester);
@@ -693,7 +690,7 @@ void main() {
         label: '视频 BV1aaa',
         isButton: true,
         hasTapAction: true,
-        customActions: const [CustomSemanticsAction(label: '稍后再看')],
+        customActions: const [CustomSemanticsAction(label: '更多'), CustomSemanticsAction(label: '稍后再看')],
       ),
     );
     semantics.dispose();

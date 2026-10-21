@@ -14,6 +14,9 @@ final class FeedCard {
     required this.ownerMid,
     required this.reason,
     required this.isVertical,
+    this.viewsText,
+    this.danmakuText,
+    this.dislike,
   });
 
   factory FeedCard.fromJson(Object? json) {
@@ -40,6 +43,73 @@ final class FeedCard {
     );
   }
 
+  /// A card of the official app's feed (`/x/v2/feed/index`), which the caller has already found to be a video.
+  /// Its counts come as the cover's text ("10.4万", "-"), kept to show as sent.
+  factory FeedCard.fromOfficial(Object? json) {
+    final object = JsonObject.from(json);
+    final player = object.nested('player_args');
+    final args = object.nested('args');
+    final param = int.tryParse(object.text('param') ?? '');
+    final aid = asInt(player?.map['aid']) ?? param ?? asInt(args?.map['aid']) ?? 0;
+    if (aid <= 0) throw const DecodeError('missing aid');
+    final sentBvid = object.text('bvid');
+    final views = object.text('cover_left_text_1');
+    final danmaku = object.text('cover_left_text_2');
+    var reason = object.text('rcmd_reason');
+    final markedVertical = reason == '竖屏';
+    if (markedVertical || reason != null && reason.isEmpty) reason = null;
+    final goto = object.text('card_goto') ?? object.text('goto') ?? 'av';
+    return FeedCard(
+      aid: aid,
+      bvid: sentBvid == null || sentBvid.isEmpty ? _avToBv(aid) : sentBvid,
+      cid: asInt(player?.map['cid']) ?? 0,
+      title: object.text('title') ?? '',
+      cover: object.text('cover') ?? '',
+      duration: asInt(player?.map['duration']) ?? 0,
+      views: parseCountText(views),
+      danmaku: parseCountText(danmaku),
+      ownerName: args?.text('up_name') ?? '',
+      ownerMid: asInt(args?.map['up_id']) ?? 0,
+      reason: reason,
+      isVertical: markedVertical || _uriVertical(object.text('uri')),
+      viewsText: views,
+      danmakuText: danmaku,
+      dislike: FeedDislike._from(object.map['three_point_v2'], goto: goto, id: param ?? aid),
+    );
+  }
+
+  /// The official card's uri names the player's size, which is how the app itself tells a vertical video.
+  static bool _uriVertical(String? uri) {
+    if (uri == null) return false;
+    final query = Uri.tryParse(uri)?.queryParameters ?? const {};
+    final width = int.tryParse(query['player_width'] ?? '') ?? 0;
+    final height = int.tryParse(query['player_height'] ?? '') ?? 0;
+    final rotated = query['player_rotate'] == '1';
+    return rotated ? width > height : height > width;
+  }
+
+  static const _bvAlphabet = 'FcwAPNKTMug3GV5Lj7EJnHpWsx4tb8haYeviqBz6rkCy12mUSDQX9RdoZf';
+
+  /// The aid's BV id by Bilibili's published conversion: the official feed leaves `bvid` out of some cards.
+  static String _avToBv(int aid) {
+    const xor = 23442827791579;
+    final chars = 'BV1000000000'.split('');
+    var value = ((1 << 51) | aid) ^ xor;
+    for (var index = chars.length - 1; value > 0; index--) {
+      chars[index] = _bvAlphabet[value % 58];
+      value ~/= 58;
+    }
+    void swap(int a, int b) {
+      final kept = chars[a];
+      chars[a] = chars[b];
+      chars[b] = kept;
+    }
+
+    swap(3, 9);
+    swap(4, 7);
+    return chars.join();
+  }
+
   /// A file stored rotated (`rotate == 1`) is shown with width and height swapped, as in `VideoDetail`.
   /// The web feed sends no `dimension` at all, so this is false for every card it returns today.
   static bool _isVertical(JsonObject? dimension) {
@@ -64,6 +134,13 @@ final class FeedCard {
   final String? reason;
   final bool isVertical;
 
+  /// The official card's counts as its cover shows them; null on web cards, whose counts are formatted here.
+  final String? viewsText;
+  final String? danmakuText;
+
+  /// What ⋮'s 不感兴趣 sends; only official cards carry it.
+  final FeedDislike? dislike;
+
   String get id => bvid;
 
   @override
@@ -80,11 +157,135 @@ final class FeedCard {
       other.ownerName == ownerName &&
       other.ownerMid == ownerMid &&
       other.reason == reason &&
-      other.isVertical == isVertical;
+      other.isVertical == isVertical &&
+      other.viewsText == viewsText &&
+      other.danmakuText == danmakuText &&
+      other.dislike == dislike;
 
   @override
-  int get hashCode =>
-      Object.hash(aid, bvid, cid, title, cover, duration, views, danmaku, ownerName, ownerMid, reason, isVertical);
+  int get hashCode => Object.hash(
+    aid,
+    bvid,
+    cid,
+    title,
+    cover,
+    duration,
+    views,
+    danmaku,
+    ownerName,
+    ownerMid,
+    reason,
+    isVertical,
+    viewsText,
+    danmakuText,
+    dislike,
+  );
+}
+
+/// A count as the official app writes it ("174", "10.4万", "1.2亿"); "-" and anything else unreadable is 0.
+int parseCountText(String? text) {
+  if (text == null) return 0;
+  final match = RegExp(r'^\s*(\d+(?:\.\d+)?)\s*(万|亿)?').firstMatch(text);
+  if (match == null) return 0;
+  final scale = switch (match[2]) {
+    '万' => 10000,
+    '亿' => 100000000,
+    _ => 1,
+  };
+  return (double.parse(match[1]!) * scale).round();
+}
+
+/// Which of ⋮'s lists a reason came from: 我不想看 (`dislike`, sent as `reason_id`) or 反馈 (`feedback`, sent as
+/// `feedback_id`).
+enum FeedReasonKind { dislike, feedback }
+
+final class FeedReason {
+  const FeedReason({required this.id, required this.name, required this.kind, this.toast});
+
+  factory FeedReason._fromJson(Object? json, FeedReasonKind kind) {
+    final object = JsonObject.from(json);
+    final id = asInt(object.map['id']);
+    final name = object.text('name');
+    if (id == null || name == null || name.isEmpty) throw const DecodeError('reason without id or name');
+    return FeedReason(id: id, name: name, kind: kind, toast: object.text('toast'));
+  }
+
+  final int id;
+  final String name;
+  final FeedReasonKind kind;
+  final String? toast;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FeedReason && other.id == id && other.name == name && other.kind == kind && other.toast == toast;
+
+  @override
+  int get hashCode => Object.hash(id, name, kind, toast);
+
+  @override
+  String toString() => 'FeedReason(${kind.name} $id $name)';
+}
+
+/// A card's 不感兴趣 data from `three_point_v2`: what `/x/feed/dislike` names the card by ([goto], [id]) and the
+/// reasons it offers.
+final class FeedDislike {
+  const FeedDislike({required this.goto, required this.id, required this.reasons, required this.feedbacks});
+
+  /// Null when the card offers no reason at all.
+  static FeedDislike? _from(Object? groups, {required String goto, required int id}) {
+    final reasons = <FeedReason>[];
+    final feedbacks = <FeedReason>[];
+    for (final group in groups is List ? groups : const <Object?>[]) {
+      if (group is! Map<String, Object?>) continue;
+      final object = JsonObject(group);
+      final kind = switch (object.text('type')) {
+        'dislike' => FeedReasonKind.dislike,
+        'feedback' => FeedReasonKind.feedback,
+        _ => null,
+      };
+      if (kind == null) continue;
+      final decoded = object.lenientList('reasons', (json) => FeedReason._fromJson(json, kind));
+      (kind == FeedReasonKind.dislike ? reasons : feedbacks).addAll(decoded);
+    }
+    if (reasons.isEmpty && feedbacks.isEmpty) return null;
+    return FeedDislike(goto: goto, id: id, reasons: reasons, feedbacks: feedbacks);
+  }
+
+  final String goto;
+  final int id;
+
+  /// 我不想看: the video (不感兴趣), the uploader (UP主:…), the channel and the like.
+  final List<FeedReason> reasons;
+
+  /// 反馈: 色情低俗, 标题党/封面党 and the like.
+  final List<FeedReason> feedbacks;
+
+  /// ⋮'s 不感兴趣：当前视频 (id 1 in PiliPlus's captures).
+  FeedReason? get video =>
+      reasons.where((reason) => reason.id == 1 || reason.name == '不感兴趣' || reason.name.contains('当前视频')).firstOrNull;
+
+  /// ⋮'s 不感兴趣：UP (`UP主:<name>`, id 4).
+  FeedReason? get uploader => reasons.where((reason) => reason.id == 4 || reason.name.startsWith('UP')).firstOrNull;
+
+  /// The reasons sheet's last row, 该内容已推荐过, from whichever list carries it.
+  FeedReason? get repeated => [...feedbacks, ...reasons].where((reason) => reason.name.contains('推荐过')).firstOrNull;
+
+  /// The reasons sheet's tiles: every feedback but [repeated].
+  List<FeedReason> get tiles => [
+    for (final reason in feedbacks)
+      if (!reason.name.contains('推荐过')) reason,
+  ];
+
+  @override
+  bool operator ==(Object other) =>
+      other is FeedDislike &&
+      other.goto == goto &&
+      other.id == id &&
+      listEquals(other.reasons, reasons) &&
+      listEquals(other.feedbacks, feedbacks);
+
+  @override
+  int get hashCode => Object.hash(goto, id, Object.hashAll(reasons), Object.hashAll(feedbacks));
 }
 
 enum HistoryDeviceKind { phone, pc, padOrTV }

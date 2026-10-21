@@ -2,15 +2,16 @@ import 'dart:async';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/logic.dart';
-import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
 import '../app/zoom_back_route.dart';
-import '../shared/menu.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../video/video_route.dart';
+import 'feed_dislike.dart';
+import 'feed_model.dart' show CardDislike;
+import 'feed_more_sheet.dart';
 
 /// Card sizes that depend on the text size, so the grid can give every card the same height.
 abstract final class FeedCardSize {
@@ -28,13 +29,32 @@ abstract final class FeedCardSize {
 
 /// One 推荐 card (01, port of FeedCard.swift): the cover with counts and duration, a two-line title, and the tag,
 /// uploader and ⋮ footer. It gives a little under the finger. [onOpen] gets the card's [ZoomSource], for the swipe
-/// back into it.
+/// back into it. ⋮ opens its sheet (90); after 不感兴趣 ([dislike] set) the card shows [FeedDislikedCard] (91) instead.
 class FeedCardView extends StatefulWidget {
-  const FeedCardView({super.key, required this.card, required this.onOpen, required this.onWatchLater});
+  const FeedCardView({
+    super.key,
+    required this.card,
+    required this.onOpen,
+    required this.onWatchLater,
+    this.dislike,
+    this.onDislike,
+    this.onUndo,
+    this.onReason,
+  });
 
   final FeedCard card;
   final ValueChanged<ZoomSource> onOpen;
   final VoidCallback onWatchLater;
+
+  /// The card's 不感兴趣 while it stands.
+  final CardDislike? dislike;
+
+  /// 不感兴趣 with one of the card's reasons (the video's or the uploader's).
+  final ValueChanged<FeedReason>? onDislike;
+  final VoidCallback? onUndo;
+
+  /// The reasons sheet's pick.
+  final ValueChanged<FeedReason>? onReason;
 
   /// Covers say 0:18, not 00:18 (01).
   static String duration(int seconds) {
@@ -60,18 +80,59 @@ class _FeedCardViewState extends State<FeedCardView> {
     if (_pressed != pressed) setState(() => _pressed = pressed);
   }
 
+  Future<void> _more() async {
+    final card = widget.card;
+    final choice = await showFeedMoreSheet(context, card);
+    final dislike = card.dislike;
+    switch (choice) {
+      case null:
+        return;
+      case FeedMoreChoice.watchLater:
+        widget.onWatchLater();
+      case FeedMoreChoice.dislikeVideo:
+        if (dislike?.video case final reason?) widget.onDislike?.call(reason);
+      case FeedMoreChoice.dislikeUploader:
+        if (dislike?.uploader case final reason?) widget.onDislike?.call(reason);
+    }
+  }
+
+  Future<void> _reasons() async {
+    final dislike = widget.card.dislike;
+    if (dislike == null) return;
+    final picked = await showFeedReasonsSheet(context, dislike);
+    if (picked != null) widget.onReason?.call(picked);
+  }
+
   @override
-  Widget build(BuildContext context) => ZoomSourceBox(builder: _card);
+  Widget build(BuildContext context) {
+    final dislike = widget.dislike;
+    final data = widget.card.dislike;
+    final offersReasons = data != null && (data.tiles.isNotEmpty || data.repeated != null);
+    return AnimatedSwitcher(
+      duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : FeedDislikeTheme.fadeIn,
+      child: dislike == null
+          ? ZoomSourceBox(key: const ValueKey('feed-card-live'), builder: _card)
+          : FeedDislikedCard(
+              key: const ValueKey('feed-card-disliked'),
+              card: widget.card,
+              onUndo: () => widget.onUndo?.call(),
+              onReasons: offersReasons ? () => unawaited(_reasons()) : null,
+            ),
+    );
+  }
 
   Widget _card(BuildContext context, ZoomSource source) {
     final card = widget.card;
     final scaler = MediaQuery.textScalerOf(context);
-    // One element for VoiceOver, named by the title; ⋮'s 稍后再看 is its action.
+    // One element for VoiceOver, named by the title; ⋮ and its 稍后再看 are its actions.
     return Semantics(
       button: true,
       label: card.title,
       onTap: () => widget.onOpen(source),
-      customSemanticsActions: {const CustomSemanticsAction(label: '稍后再看'): widget.onWatchLater},
+      customSemanticsActions: {
+        const CustomSemanticsAction(label: '更多'): () => unawaited(_more()),
+        const CustomSemanticsAction(label: '稍后再看'): widget.onWatchLater,
+      },
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -128,7 +189,19 @@ class _FeedCardViewState extends State<FeedCardView> {
                                 strutStyle: BiliFonts.strutOf(context, _owner),
                               ),
                             ),
-                            _More(onWatchLater: widget.onWatchLater),
+                            GestureDetector(
+                              key: const ValueKey('card-more'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => unawaited(_more()),
+                              child: const SizedBox.square(
+                                dimension: BiliMetrics.cardMoreTarget,
+                                child: Icon(
+                                  Icons.more_vert,
+                                  size: BiliMetrics.cardFooterText + 4,
+                                  color: BiliColors.secondaryText,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -201,11 +274,11 @@ class _Cover extends StatelessWidget {
                           color: BiliColors.onCover,
                         ),
                         const SizedBox(width: 3),
-                        Flexible(child: Text(CountFormat.short(card.views))),
+                        Flexible(child: Text(card.viewsText ?? CountFormat.short(card.views))),
                         const SizedBox(width: 10),
                         const Icon(Icons.subtitles_outlined, size: BiliMetrics.cardStatIcon, color: BiliColors.onCover),
                         const SizedBox(width: 3),
-                        Flexible(child: Text(CountFormat.short(card.danmaku))),
+                        Flexible(child: Text(card.danmakuText ?? CountFormat.short(card.danmaku))),
                       ],
                     ),
                   ),
@@ -274,129 +347,6 @@ class UpBadge extends StatelessWidget {
       ),
     ),
   );
-}
-
-/// The ⋮ at the end of the footer, Swift's 24 × 24 target.
-class _More extends StatelessWidget {
-  const _More({required this.onWatchLater});
-
-  final VoidCallback onWatchLater;
-
-  void _open(BuildContext context) {
-    final box = context.findRenderObject()! as RenderBox;
-    final anchor = box.localToGlobal(Offset.zero) & box.size;
-    unawaited(
-      Navigator.of(context).push(
-        _CardMenuRoute(
-          anchor: anchor,
-          reduceMotion: MediaQuery.disableAnimationsOf(context),
-          onWatchLater: onWatchLater,
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    key: const ValueKey('card-more'),
-    behavior: HitTestBehavior.opaque,
-    onTap: () => _open(context),
-    child: const SizedBox.square(
-      dimension: BiliMetrics.cardMoreTarget,
-      child: Icon(Icons.more_vert, size: BiliMetrics.cardFooterText + 4, color: BiliColors.secondaryText),
-    ),
-  );
-}
-
-/// ⋮'s menu (Swift's Menu): frosted glass growing out of the button, below it or, near the bottom, above; a tap
-/// anywhere else closes it.
-class _CardMenuRoute extends PopupRoute<void> {
-  _CardMenuRoute({required this.anchor, required this.reduceMotion, required this.onWatchLater});
-
-  final Rect anchor;
-  final bool reduceMotion;
-  final VoidCallback onWatchLater;
-
-  static const _height = BiliMetrics.menuRowHeight;
-
-  @override
-  Color? get barrierColor => null;
-
-  @override
-  bool get barrierDismissible => true;
-
-  @override
-  String get barrierLabel => '关闭菜单';
-
-  @override
-  Duration get transitionDuration => reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-
-  @override
-  Duration get reverseTransitionDuration => reduceMotion ? Duration.zero : const Duration(milliseconds: 150);
-
-  @override
-  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
-    final screen = MediaQuery.sizeOf(context);
-    final padding = MediaQuery.paddingOf(context);
-    final below =
-        anchor.bottom + BiliMetrics.cardMenuGap + _height <= screen.height - padding.bottom - BiliMetrics.gutter;
-    final left = clampDouble(
-      anchor.right - BiliMetrics.cardMenuWidth,
-      BiliMetrics.gutter,
-      screen.width - BiliMetrics.gutter - BiliMetrics.cardMenuWidth,
-    );
-    return Stack(
-      children: [
-        Positioned(
-          left: left,
-          top: below ? anchor.bottom + BiliMetrics.cardMenuGap : anchor.top - BiliMetrics.cardMenuGap - _height,
-          child: ScaleTransition(
-            alignment: below ? Alignment.topRight : Alignment.bottomRight,
-            scale: Tween(begin: 0.8, end: 1.0).animate(animation),
-            child: FadeTransition(
-              opacity: animation,
-              // The route sits outside the page's Material, whose text style the row would otherwise miss.
-              child: Material(
-                type: MaterialType.transparency,
-                child: GlassPanel(
-                  width: BiliMetrics.cardMenuWidth,
-                  child: MenuRow(
-                    key: const ValueKey('card-watch-later'),
-                    title: '稍后再看',
-                    icon: Icons.schedule,
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      onWatchLater();
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget buildTransitions(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) => child;
-
-  CurvedAnimation? _curve;
-
-  @override
-  Animation<double> createAnimation() =>
-      _curve = CurvedAnimation(parent: super.createAnimation(), curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
-
-  @override
-  void dispose() {
-    _curve?.dispose();
-    super.dispose();
-  }
 }
 
 /// A card's outline while the first page loads, a light band sweeping across it.
