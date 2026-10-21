@@ -1,12 +1,14 @@
 import 'package:bili_core/api.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/intro/uploader_row.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_video_actions.dart';
+import '../../support/space_host.dart';
 
 /// No face addresses, so the avatars are the default face and nothing is fetched.
 VideoDetail _detail({List<StaffMember> staff = const []}) => VideoDetail(
@@ -30,19 +32,23 @@ VideoDetail _detail({List<StaffMember> staff = const []}) => VideoDetail(
   redirectURL: null,
 );
 
-UploaderCard _card({bool isVip = false, bool following = false, OfficialKind official = OfficialKind.none}) =>
-    UploaderCard(
-      mid: 7,
-      name: '星宇动漫社',
-      face: '',
-      fans: 475000,
-      videos: 410,
-      isVip: isVip,
-      following: following,
-      official: official,
-    );
+UploaderCard _card({
+  bool isVip = false,
+  bool following = false,
+  OfficialKind official = OfficialKind.none,
+  String face = '',
+}) => UploaderCard(
+  mid: 7,
+  name: '星宇动漫社',
+  face: face,
+  fans: 475000,
+  videos: 410,
+  isVip: isVip,
+  following: following,
+  official: official,
+);
 
-Future<void> _mount(WidgetTester tester, UploaderRow row) async {
+Future<void> _mount(WidgetTester tester, Widget row) async {
   await tester.pumpWidget(
     MediaQuery(
       data: const MediaQueryData(size: Size(440, 956)),
@@ -270,5 +276,132 @@ void main() {
     );
     expect(find.text('UP主'), findsNothing);
     expect(find.text('47.5万粉丝  410视频'), findsOneWidget);
+  });
+
+  group('the face and the name are one tap', () {
+    const face = 'https://i0.hdslb.com/bfs/face/up.jpg';
+    const staff = [
+      StaffMember(mid: 1, title: 'UP主', name: '不科学', face: 'https://i0.hdslb.com/bfs/face/1.jpg'),
+      StaffMember(mid: 2, title: '参演', name: '後藤の独', face: 'https://i0.hdslb.com/bfs/face/2.jpg'),
+    ];
+
+    /// The row inside a video page's [UploaderTap], which records each uploader it is asked to open.
+    Future<List<UploaderRef>> mountInPage(WidgetTester tester, UploaderRow row) async {
+      final opened = <UploaderRef>[];
+      await _mount(tester, UploaderTap(open: opened.add, child: row));
+      return opened;
+    }
+
+    void expectUploader(UploaderRef uploader, {required int mid, required String name, required String face}) {
+      expect(uploader.mid, mid);
+      expect(uploader.name, name);
+      expect(uploader.face, face);
+    }
+
+    testWidgets('on a video page the face, the name and the counts open the sheet for the uploader as drawn', (
+      tester,
+    ) async {
+      final opened = await mountInPage(
+        tester,
+        UploaderRow(
+          detail: _detail(),
+          card: _card(face: face),
+        ),
+      );
+      await tester.tap(find.byType(DefaultAvatar));
+      await tester.tap(find.text('星宇动漫社'));
+      await tester.tap(find.text('47.5万粉丝  410视频'));
+      expect(opened, hasLength(3));
+      for (final uploader in opened) {
+        expectUploader(uploader, mid: 7, name: '星宇动漫社', face: face);
+      }
+    });
+
+    testWidgets('before the card, the video\'s owner opens', (tester) async {
+      final opened = await mountInPage(tester, UploaderRow(detail: _detail()));
+      await tester.tap(find.text('视频里的名字'));
+      expectUploader(opened.single, mid: 7, name: '视频里的名字', face: '');
+    });
+
+    testWidgets('关注 follows and opens nothing', (tester) async {
+      final actions = FakeVideoActions();
+      addTearDown(actions.dispose);
+      final opened = await mountInPage(tester, UploaderRow(detail: _detail(), card: _card(), actions: actions));
+      await tester.tap(find.text('关注'));
+      expect(actions.calls, ['tapFollow']);
+      expect(opened, isEmpty);
+    });
+
+    testWidgets('a 联合投稿 member\'s face and name open theirs; 关注 still follows', (tester) async {
+      final actions = FakeVideoActions();
+      addTearDown(actions.dispose);
+      final opened = await mountInPage(
+        tester,
+        UploaderRow(
+          detail: _detail(staff: staff),
+          card: _card(),
+          actions: actions,
+        ),
+      );
+      await tester.tap(find.byType(DefaultAvatar).at(1));
+      await tester.tap(find.text('不科学'));
+      await tester.tap(find.text('参演'));
+      expect(opened, hasLength(3));
+      expectUploader(opened[0], mid: 2, name: '後藤の独', face: staff[1].face);
+      expectUploader(opened[1], mid: 1, name: '不科学', face: staff[0].face);
+      expectUploader(opened[2], mid: 2, name: '後藤の独', face: staff[1].face);
+
+      await tester.tap(find.text('关注'));
+      expect(actions.calls, ['tapFollow']);
+      expect(opened, hasLength(3));
+    });
+
+    testWidgets('one VoiceOver stop each, read as the name and pressed through accessibility', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final opened = await mountInPage(tester, UploaderRow(detail: _detail(), card: _card()));
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('uploader-open'))),
+        isSemantics(label: '星宇动漫社', value: '47.5万粉丝  410视频', isButton: true, hasTapAction: true),
+      );
+      tester.semantics.tap(find.semantics.byLabel('星宇动漫社'));
+      expectUploader(opened.single, mid: 7, name: '星宇动漫社', face: '');
+
+      final inStaff = await mountInPage(
+        tester,
+        UploaderRow(
+          detail: _detail(staff: staff),
+          card: _card(),
+        ),
+      );
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('uploader-open-2'))),
+        isSemantics(label: '後藤の独', value: '参演', isButton: true, hasTapAction: true),
+      );
+      tester.semantics.tap(find.semantics.byLabel('後藤の独'));
+      expectUploader(inStaff.single, mid: 2, name: '後藤の独', face: staff[1].face);
+      semantics.dispose();
+    });
+
+    testWidgets('outside a video page the face and the name open the space', (tester) async {
+      await pumpSpaceHost(
+        tester,
+        SizedBox(
+          width: 440,
+          child: UploaderRow(
+            detail: _detail(),
+            card: _card(face: face),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(DefaultAvatar));
+      await pumpRoute(tester);
+      expectUploader(openSpaces(tester).single, mid: 7, name: '星宇动漫社', face: face);
+
+      await closeSpace(tester);
+      expect(openSpaces(tester), isEmpty);
+      await tester.tap(find.text('星宇动漫社'));
+      await pumpRoute(tester);
+      expectUploader(openSpaces(tester).single, mid: 7, name: '星宇动漫社', face: face);
+    });
   });
 }

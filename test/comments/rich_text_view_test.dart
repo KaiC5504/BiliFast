@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/space_host.dart';
+
 const _style = TextStyle(fontSize: 15, height: 25 / 15, color: BiliColors.text);
 const _emoteUrl = 'https://i0.hdslb.com/bfs/emote/a.png';
 
@@ -32,6 +34,7 @@ final class Rig {
     InlineSpan? leading,
     int? maxLines,
     bool marksReplyTarget = true,
+    bool linksOpen = true,
     TextStyle style = _style,
   }) async {
     await tester.pumpWidget(
@@ -53,6 +56,7 @@ final class Rig {
                   onOpenVideo: videos ? this.videos.add : null,
                   openLink: openLink,
                   marksReplyTarget: marksReplyTarget,
+                  linksOpen: linksOpen,
                 ),
               ),
             ),
@@ -61,6 +65,15 @@ final class Rig {
       ),
     );
   }
+
+  /// In the app, where a mention can open the space.
+  Future<void> mountInApp(WidgetTester tester, List<RichRun> runs) => pumpSpaceHost(
+    tester,
+    SizedBox(
+      width: 372,
+      child: CommentText(runs: runs, style: _style, openLink: openLink),
+    ),
+  );
 }
 
 Finder get _paragraph => find.descendant(of: find.byType(CommentText), matching: find.byType(RichText));
@@ -229,16 +242,73 @@ void main() {
   });
 
   group('mentions', () {
-    testWidgets('@name in the link blue opens the space page in the browser', (tester) async {
+    testWidgets('@name in the link blue opens the space in the app, not the browser', (tester) async {
       final rig = Rig();
-      await rig.mount(tester, const [RichRun.text('看 '), RichRun.mention(name: '小明', mid: 42)]);
+      await rig.mountInApp(tester, const [RichRun.text('看 '), RichRun.mention(name: '小明', mid: 42)]);
       expect(_span(tester, '@小明').style?.color, CommentTextTheme.link);
       expect(_span(tester, '看 ').style, isNull);
 
       await _tapText(tester, '@小明');
-      expect(rig.links, [Uri.parse('https://space.bilibili.com/42')]);
+      await pumpRoute(tester);
+      final space = openSpaces(tester).single;
+      expect(space.mid, 42);
+      expect(space.name, '小明');
+      expect(space.face, isNull);
+      expect(rig.links, isEmpty);
       expect(rig.seeks, isEmpty);
       expect(rig.videos, isEmpty);
+    });
+
+    testWidgets('a mention with no mid stays blue and opens nothing', (tester) async {
+      final rig = Rig();
+      await rig.mountInApp(tester, const [RichRun.mention(name: '@某人', mid: 0)]);
+      expect(_span(tester, '@某人').recognizer, isNull);
+      await _tapText(tester, '@某人');
+      await pumpRoute(tester);
+      expect(openSpaces(tester), isEmpty);
+      expect(rig.links, isEmpty);
+    });
+
+    testWidgets('a space address opens the space in the app; other addresses still go to the browser', (tester) async {
+      final rig = Rig();
+      await rig.mountInApp(tester, const [
+        RichRun.link(title: '我的空间', url: 'https://space.bilibili.com/77/video'),
+        RichRun.text(' 和 '),
+        RichRun.link(title: '投票', url: 'https://t.bilibili.com/vote/h5/index?vote_id=1'),
+      ]);
+      await _tapText(tester, '我的空间');
+      await pumpRoute(tester);
+      expect(openSpaces(tester).single.mid, 77);
+      expect(rig.links, isEmpty);
+
+      await closeSpace(tester);
+      await _tapText(tester, '投票');
+      expect(rig.links, [Uri.parse('https://t.bilibili.com/vote/h5/index?vote_id=1')]);
+      expect(openSpaces(tester), isEmpty);
+    });
+
+    test('spaceMid reads a space address only', () {
+      expect(spaceMid(Uri.parse('https://space.bilibili.com/42')), 42);
+      expect(spaceMid(Uri.parse('https://space.bilibili.com/42/dynamic?spm=1')), 42);
+      expect(spaceMid(Uri.parse('https://m.bilibili.com/space/43')), 43);
+      expect(spaceMid(Uri.parse('https://space.bilibili.com/')), isNull);
+      expect(spaceMid(Uri.parse('https://space.bilibili.com/abc')), isNull);
+      expect(spaceMid(Uri.parse('https://www.bilibili.com/space/42')), isNull);
+      expect(spaceMid(Uri.parse('https://m.bilibili.com/video/BV1xx411c7mD')), isNull);
+    });
+
+    testWidgets('in a reply preview the blue runs open nothing, so the tap reaches the box', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester, const [
+        RichRun.mention(name: '小明', mid: 42),
+        RichRun.link(title: '投票', url: 'https://t.bilibili.com/vote/h5/index?vote_id=1'),
+        RichRun.link(title: '我的空间', url: 'https://space.bilibili.com/77'),
+        RichRun.timestamp(label: '1:02', seconds: 62),
+      ], linksOpen: false);
+      for (final text in ['@小明', '投票', '我的空间', '1:02']) {
+        expect(_span(tester, text).style?.color, CommentTextTheme.link, reason: text);
+        expect(_span(tester, text).recognizer, isNull, reason: text);
+      }
     });
 
     testWidgets('a reply\'s lead reads 回复 name: as on font-check 04: the name grey, no @, no link', (tester) async {

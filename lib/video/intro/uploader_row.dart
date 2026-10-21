@@ -4,10 +4,11 @@ import 'package:flutter/widgets.dart';
 
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
+import '../../space/uploader_tap.dart';
 import '../actions/video_actions.dart';
 
 /// The uploader (03): avatar with its verification badge, the name (pink for 大会员), 粉丝 and 视频, and the 关注 pill;
-/// a 联合投稿 shows its staff instead.
+/// a 联合投稿 shows its staff instead. The face and the name are one tap, [openUploader]'s.
 class UploaderRow extends StatelessWidget {
   const UploaderRow({super.key, required this.detail, this.card, this.actions});
 
@@ -39,19 +40,60 @@ class UploaderRow extends StatelessWidget {
 
   Widget _single(Widget follow) {
     final card = this.card;
+    final name = _or(card?.name, detail.owner.name);
+    final face = _or(card?.face, detail.owner.face);
     return SizedBox(
       height: IntroTheme.avatar,
       child: Row(
         children: [
-          _Avatar(face: _or(card?.face, detail.owner.face), official: card?.official ?? OfficialKind.none),
-          const SizedBox(width: IntroTheme.avatarGap),
           Expanded(
-            child: _NameAndCounts(name: _or(card?.name, detail.owner.name), card: card),
+            child: _UploaderTarget(
+              key: const ValueKey('uploader-open'),
+              uploader: UploaderRef(mid: detail.owner.mid, name: name, face: face),
+              value: card == null ? null : _counts(card),
+              child: Row(
+                children: [
+                  _Avatar(face: face, official: card?.official ?? OfficialKind.none),
+                  const SizedBox(width: IntroTheme.avatarGap),
+                  Expanded(
+                    child: _NameAndCounts(name: name, card: card),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(width: IntroTheme.avatarGap),
           follow,
         ],
       ),
+    );
+  }
+}
+
+String _counts(UploaderCard card) => '${CountFormat.short(card.fans)}粉丝  ${CountFormat.short(card.videos)}视频';
+
+/// A face with its name: the page's uploader sheet, or the space where there is none. One VoiceOver stop, read as
+/// the name.
+class _UploaderTarget extends StatelessWidget {
+  const _UploaderTarget({super.key, required this.uploader, this.value, required this.child});
+
+  final UploaderRef uploader;
+
+  /// What VoiceOver reads after the name: the counts, or a staff member's role.
+  final String? value;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final open = uploader.mid > 0 ? () => openUploader(context, uploader) : null;
+    return Semantics(
+      container: true,
+      button: open != null,
+      label: uploader.name,
+      value: value,
+      onTap: open,
+      excludeSemantics: true,
+      child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: open, child: child),
     );
   }
 }
@@ -134,7 +176,7 @@ class _NameAndCounts extends StatelessWidget {
   Widget build(BuildContext context) {
     final card = this.card;
     final animate = !MediaQuery.disableAnimationsOf(context);
-    final counts = card == null ? '' : '${CountFormat.short(card.fans)}粉丝  ${CountFormat.short(card.videos)}视频';
+    final counts = card == null ? '' : _counts(card);
     final nameStyle = TextStyle(
       fontFamily: BiliFonts.family,
       fontFamilyFallback: BiliFonts.fallback,
@@ -222,10 +264,10 @@ class _StaffRow extends StatelessWidget {
               spacing: IntroTheme.staffSpacing,
               children: [
                 for (final member in staff)
-                  Semantics(
-                    container: true,
-                    label: '${member.name}，${member.title}',
-                    excludeSemantics: true,
+                  _UploaderTarget(
+                    key: ValueKey('uploader-open-${member.mid}'),
+                    uploader: UploaderRef(mid: member.mid, name: member.name, face: member.face),
+                    value: member.title,
                     child: SizedBox(
                       width: IntroTheme.staffWidth,
                       child: Column(

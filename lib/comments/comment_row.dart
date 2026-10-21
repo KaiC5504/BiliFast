@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:bili_core/api.dart' show BiliClient, Comment, CommentPicture;
 import 'package:bili_core/logic.dart' show CountFormat, TimeFormat;
 import 'package:flutter/foundation.dart' show clampDouble;
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart' show Icons, Material, MaterialType;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:flutter/rendering.dart';
@@ -13,13 +14,16 @@ import '../shared/menu.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../space/space_route.dart';
+import '../space/uploader_tap.dart';
 import 'comment_badges.dart';
 import 'comment_callbacks.dart';
 import 'comments_model.dart';
 import 'rich_text_view.dart';
 
 /// One comment (10, 12, 13): avatar with its pendant and marks, name, LV and the other badges, the fan card, the
-/// text, pictures, the meta line (time, place, 回复, 👍 N, 👎, ⋮) and, in the list, the replies preview.
+/// text, pictures, the meta line (time, place, 回复, 👍 N, 👎, ⋮) and, in the list, the replies preview. The face and
+/// the name open the member's space, even on the video page (75).
 class CommentRow extends StatelessWidget {
   const CommentRow({
     super.key,
@@ -107,7 +111,11 @@ class CommentRow extends StatelessWidget {
                     ? CommentRowTheme.gutter
                     : CommentRowTheme.fanCardLeft + CommentRowTheme.fanCardClearance,
               ),
-              child: _NameLine(comment: comment, isUp: model.upMid != 0 && member.mid == model.upMid),
+              child: _NameLine(
+                comment: comment,
+                isUp: model.upMid != 0 && member.mid == model.upMid,
+                onOpen: _spaceOpener(context, comment),
+              ),
             ),
             SizedBox(height: CommentRowTheme.textTop - nameTop - CommentRowTheme.nameLine),
             if (hasText)
@@ -181,7 +189,13 @@ class CommentRow extends StatelessWidget {
         Positioned(
           left: CommentRowTheme.gutter,
           top: CommentRowTheme.avatarTop,
-          child: CommentAvatar(member: member),
+          // VoiceOver reaches the space through the name.
+          child: GestureDetector(
+            key: const ValueKey('comment-avatar'),
+            behavior: HitTestBehavior.opaque,
+            onTap: _spaceOpener(context, comment),
+            child: CommentAvatar(member: member),
+          ),
         ),
         if (card != null)
           Positioned(
@@ -204,11 +218,23 @@ class CommentRow extends StatelessWidget {
   }
 }
 
+/// The writer's mid: the member's, or the comment's when the member came without one.
+int _writerMid(Comment comment) => comment.member.mid > 0 ? comment.member.mid : comment.mid;
+
+/// Opens the space of [comment]'s writer, or null when the server named no mid.
+VoidCallback? _spaceOpener(BuildContext context, Comment comment) {
+  final mid = _writerMid(comment);
+  if (mid <= 0) return null;
+  final member = comment.member;
+  return () => unawaited(openSpace(context, UploaderRef(mid: mid, name: member.name, face: member.face)));
+}
+
 class _NameLine extends StatelessWidget {
-  const _NameLine({required this.comment, required this.isUp});
+  const _NameLine({required this.comment, required this.isUp, required this.onOpen});
 
   final Comment comment;
   final bool isUp;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -225,12 +251,23 @@ class _NameLine extends StatelessWidget {
       child: Row(
         children: [
           Flexible(
-            child: Text(
-              member.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: style,
-              strutStyle: BiliFonts.strutOf(context, style),
+            child: Semantics(
+              button: onOpen != null,
+              label: member.name,
+              onTap: onOpen,
+              excludeSemantics: true,
+              child: GestureDetector(
+                key: const ValueKey('comment-name'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onOpen,
+                child: Text(
+                  member.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style,
+                  strutStyle: BiliFonts.strutOf(context, style),
+                ),
+              ),
             ),
           ),
           const SizedBox(width: CommentRowTheme.badgeGap),
@@ -541,7 +578,8 @@ class _UpLikedChip extends StatelessWidget {
   );
 }
 
-/// The grey box under a comment in the list: up to two replies and 共N条回复 › (10, 12). Any tap opens the thread.
+/// The grey box under a comment in the list: up to two replies and 共N条回复 › (10, 12). A reply's name opens its
+/// space; any other tap opens the thread.
 class _RepliesBox extends StatelessWidget {
   const _RepliesBox({required this.comment, required this.onOpen});
 
@@ -569,44 +607,42 @@ class _RepliesBox extends StatelessWidget {
           onTap: onOpen,
           child: ColoredBox(
             color: CommentRowTheme.box,
-            child: IgnorePointer(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: CommentRowTheme.boxPadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (previews.isNotEmpty) ...[
-                      const SizedBox(height: CommentRowTheme.previewTop),
-                      for (final (i, reply) in previews.indexed)
-                        _PullUp(
-                          by: i > 0 ? CommentRowTheme.previewOverlap : 0,
-                          child: _PreviewLine(reply: reply),
-                        ),
-                      if (count == 0) const SizedBox(height: CommentRowTheme.previewTop),
-                    ],
-                    if (count > 0)
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: CommentRowTheme.boxPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (previews.isNotEmpty) ...[
+                    const SizedBox(height: CommentRowTheme.previewTop),
+                    for (final (i, reply) in previews.indexed)
                       _PullUp(
-                        by: previews.isNotEmpty ? CommentRowTheme.moreSlotOverlap : 0,
-                        child: SizedBox(
-                          height: CommentRowTheme.moreSlot,
-                          child: Row(
-                            children: [
-                              Text(
-                                '共$count条回复',
-                                style: moreStyle,
-                                strutStyle: BiliFonts.strutOf(context, moreStyle),
-                              ),
-                              const SizedBox(width: CommentRowTheme.chevronGap),
-                              const CustomPaint(
-                                size: Size(CommentRowTheme.chevronWidth, CommentRowTheme.chevronHeight),
-                                painter: _ChevronPainter(),
-                              ),
-                            ],
-                          ),
+                        by: i > 0 ? CommentRowTheme.previewOverlap : 0,
+                        child: _PreviewLine(reply: reply),
+                      ),
+                    if (count == 0) const SizedBox(height: CommentRowTheme.previewTop),
+                  ],
+                  if (count > 0)
+                    _PullUp(
+                      by: previews.isNotEmpty ? CommentRowTheme.moreSlotOverlap : 0,
+                      child: SizedBox(
+                        height: CommentRowTheme.moreSlot,
+                        child: Row(
+                          children: [
+                            Text(
+                              '共$count条回复',
+                              style: moreStyle,
+                              strutStyle: BiliFonts.strutOf(context, moreStyle),
+                            ),
+                            const SizedBox(width: CommentRowTheme.chevronGap),
+                            const CustomPaint(
+                              size: Size(CommentRowTheme.chevronWidth, CommentRowTheme.chevronHeight),
+                              painter: _ChevronPainter(),
+                            ),
+                          ],
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -616,14 +652,28 @@ class _RepliesBox extends StatelessWidget {
   }
 }
 
-/// "name: text…" in two lines, with "| 👍 N" after its last line.
-class _PreviewLine extends StatelessWidget {
+/// "name: text…" in two lines, with "| 👍 N" after its last line. The name opens its space.
+class _PreviewLine extends StatefulWidget {
   const _PreviewLine({required this.reply});
 
   final Comment reply;
 
   @override
+  State<_PreviewLine> createState() => _PreviewLineState();
+}
+
+class _PreviewLineState extends State<_PreviewLine> {
+  late final _name = TapGestureRecognizer()..onTap = () => _spaceOpener(context, widget.reply)?.call();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final reply = widget.reply;
     final text = CommentText(
       runs: reply.runs,
       style: CommentRowTheme.previewStyle,
@@ -632,11 +682,13 @@ class _PreviewLine extends StatelessWidget {
           TextSpan(
             text: reply.member.name,
             style: const TextStyle(color: CommentRowTheme.previewName),
+            recognizer: _writerMid(reply) > 0 ? _name : null,
           ),
           const TextSpan(text: ': '),
         ],
       ),
       maxLines: 2,
+      linksOpen: false,
     );
     return _PreviewText(
       ellipsis: CommentRowTheme.previewStyle,

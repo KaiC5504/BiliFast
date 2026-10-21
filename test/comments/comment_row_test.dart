@@ -5,11 +5,14 @@ import 'package:bilifast/comments/comment_row.dart';
 import 'package:bilifast/comments/comments_model.dart';
 import 'package:bilifast/comments/rich_text_view.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/space_host.dart';
 
 /// Records the reactions the row asks for; [own] stands in for the logged-in viewer's comments.
 class _Model extends CommentsModel {
@@ -64,6 +67,7 @@ Comment _comment({
   int root = 0,
   int mid = 2,
   String name = '殇泪丶丿',
+  String face = '',
   int level = 6,
   bool vip = false,
   String? pendant,
@@ -91,6 +95,7 @@ Comment _comment({
   member: CommentMember(
     mid: mid,
     name: name,
+    face: face,
     level: level,
     isVip: vip,
     pendant: pendant,
@@ -125,6 +130,10 @@ Future<void> _mount(WidgetTester tester, Widget row, {bool reduceMotion = false}
   );
   await tester.pump();
 }
+
+/// [row] in the app, where a space can open.
+Future<void> _mountInApp(WidgetTester tester, Widget row) =>
+    pumpSpaceHost(tester, SingleChildScrollView(child: SizedBox(width: 440, child: row)));
 
 CommentRow _row(
   Comment comment,
@@ -324,10 +333,125 @@ void main() {
 
     testWidgets('a tap on the avatar asks nothing of the page', (tester) async {
       final calls = _Calls();
-      await _mount(tester, _row(_comment(), _Model(), calls));
+      await _mountInApp(tester, _row(_comment(), _Model(), calls));
       await tester.tap(find.byType(CommentAvatar));
+      await pumpRoute(tester);
       expect(calls.replies, isEmpty);
       expect(calls.threads, isEmpty);
+    });
+  });
+
+  group('the face and the name open the space', () {
+    const face = 'https://i0.hdslb.com/bfs/face/writer.jpg';
+
+    void expectWriter(WidgetTester tester, {int mid = 2, String name = '殇泪丶丿', String face = face}) {
+      final space = openSpaces(tester).single;
+      expect(space.mid, mid);
+      expect(space.name, name);
+      expect(space.face, face);
+    }
+
+    final shapes = <String, CommentRow Function(_Calls calls)>{
+      'in the list': (calls) => _row(_comment(face: face, replyCount: 3), _Model(), calls),
+      "as a thread's root": (calls) => _row(_comment(face: face), _Model(), calls, replies: false, divider: false),
+      'as a reply in a thread': (calls) =>
+          _row(_comment(rpid: 5, root: 1, face: face), _Model(), calls, thread: _comment(rpid: 1), replies: false),
+    };
+    for (final MapEntry(key: shape, value: row) in shapes.entries) {
+      testWidgets("$shape, the face and the name each open the writer's space", (tester) async {
+        final calls = _Calls();
+        await _mountInApp(tester, row(calls));
+        await tester.tap(find.byType(CommentAvatar));
+        await pumpRoute(tester);
+        expectWriter(tester);
+
+        await closeSpace(tester);
+        await tester.tap(find.text('殇泪丶丿'));
+        await pumpRoute(tester);
+        expectWriter(tester);
+        expect(calls.replies, isEmpty);
+        expect(calls.threads, isEmpty);
+      });
+    }
+
+    testWidgets('on a video page too, rather than its uploader sheet (75)', (tester) async {
+      final sheet = <UploaderRef>[];
+      await _mountInApp(
+        tester,
+        UploaderTap(
+          open: sheet.add,
+          child: _row(_comment(face: face), _Model(), _Calls()),
+        ),
+      );
+      await tester.tap(find.text('殇泪丶丿'));
+      await pumpRoute(tester);
+      expectWriter(tester);
+      expect(sheet, isEmpty);
+    });
+
+    testWidgets("a member sent without a mid takes the comment's; with neither nothing opens", (tester) async {
+      Comment writer({required int mid}) => Comment(
+        rpid: 1,
+        mid: mid,
+        member: const CommentMember(mid: 0, name: '无名'),
+        message: '文字',
+      );
+
+      await _mountInApp(tester, _row(writer(mid: 8), _Model(), _Calls()));
+      await tester.tap(find.text('无名'));
+      await pumpRoute(tester);
+      expectWriter(tester, mid: 8, name: '无名', face: '');
+
+      await closeSpace(tester);
+      await _mountInApp(tester, _row(writer(mid: 0), _Model(), _Calls()));
+      await tester.tap(find.text('无名'));
+      await tester.tap(find.byType(CommentAvatar));
+      await pumpRoute(tester);
+      expect(openSpaces(tester), isEmpty);
+    });
+
+    testWidgets('the name is one labelled button that opens the space through accessibility', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _mountInApp(tester, _row(_comment(face: face), _Model(), _Calls()));
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('comment-name'))),
+        isSemantics(label: '殇泪丶丿', isButton: true, hasTapAction: true),
+      );
+      expect(find.semantics.byLabel('殇泪丶丿'), findsOne, reason: 'the face is no stop of its own');
+      tester.semantics.tap(find.semantics.byLabel('殇泪丶丿'));
+      await pumpRoute(tester);
+      expectWriter(tester);
+      handle.dispose();
+    });
+
+    testWidgets("a reply preview's name opens its space; the rest of the box, links too, opens the thread", (
+      tester,
+    ) async {
+      final calls = _Calls();
+      final preview = Comment(
+        rpid: 7,
+        root: 1,
+        member: const CommentMember(mid: 70, name: '回复者', face: face),
+        message: '看 @小明 的',
+        runs: const [
+          RichRun.text('看 '),
+          RichRun.mention(name: '小明', mid: 42),
+          RichRun.text(' 的视频'),
+        ],
+      );
+      await _mountInApp(tester, _row(_comment(replyCount: 3, previews: [preview]), _Model(), calls));
+      await tester.tapOnText(find.textRange.ofSubstring('回复者'));
+      await pumpRoute(tester);
+      expectWriter(tester, mid: 70, name: '回复者');
+      expect(calls.threads, isEmpty);
+
+      await closeSpace(tester);
+      await tester.tapOnText(find.textRange.ofSubstring('@小明'));
+      await tester.tapOnText(find.textRange.ofSubstring('的视频'));
+      await tester.tap(find.text('共3条回复'));
+      await pumpRoute(tester);
+      expect(openSpaces(tester), isEmpty);
+      expect(calls.threads, [1, 1, 1]);
     });
   });
 
