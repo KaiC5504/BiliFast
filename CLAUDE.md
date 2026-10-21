@@ -67,6 +67,12 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   button is gone, a link pasted or typed in 搜索 opens its video), 热搜, 搜索历史 kept on the phone, 搜索发现,
   suggestions, 综合 with 筛选 and 用户 (rows open the space in the browser until slice 12), the ⋮ sheet's 稍后再看;
   01's bottom bar, where only 首页 works (one tap scrolls 推荐 up and refreshes it). Also carries the katakana fix.
+- The loading TV, 1.0.0 (18): the official app's 小电视 (its four refresh faces and the player's pink Lottie, from the
+  8.43.0 APK) in place of the spinning circle: 推荐's pull and 首页-tap refresh, the avatar page's and 历史记录's
+  pulls (14), the first loads of 搜索, 历史记录 and 评论 over 正在努力加载... (64, 67; 搜索 hides its tab row until a new
+  keyword answers), and the player's 正在缓冲... with the engine's speed for loads, reloads and waits past 750 ms (65,
+  66). Loading more keeps the small system spinner, as the official app does. 首页's tab row ends at 01's hairline
+  (it was 9.33 pt low since slice 3).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -99,6 +105,10 @@ Open items, each waiting on its slice:
   real login (no -412), the … under PingFang (the stand-in draws it mid-height), and the zoom back into a 推荐 card
   half under the bottom bar. Left out of 搜索 for now: 番剧/直播/影视/图文, the keyword chips, comment snippets,
   相关搜索, 筛选's 音画质量/范围/date range, 大会员 names, 用户's sort menus (no screenshot of them open).
+- The loading TV on the phone: no recording shows a pull in progress (ours holds the first face until the pull would
+  refresh), 历史记录's first load or a speed past 1024 KB/s (ours writes MB/s); 评论 before the aid is known was only
+  seen under an ad card. A pause before the first frame may leave 正在缓冲... up (older than (18), unconfirmed). The
+  @ list, emote panel and 收藏 sheet keep their spinners (no recording).
 - Left out by KaiC: 举报 on danmaku, 互动弹幕列表.
 - Later: 竖屏 search, 充电鸣谢, the player box following a 16:10 video's height.
 - Known limit: Flutter rounds a line to whole points, so comment lines are 24 pt where the official app's are 24.33.
@@ -139,7 +149,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
   - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server.
   - `lib/speedtest/`: the speed test (dev builds only).
-  - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours).
+  - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours). `lib/shared/loading_tv.dart`: the
+    loading TV every list and page uses (`lib/player_ui/player_loading.dart` is the player's).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
     `font.json`, `emotes_recent.json`, `search_history.json`, `node_memory.json`, `danmaku_settings.json`,
     `codec_memory.json`, `log_server.json`); the log is in the caches folder.
@@ -149,7 +160,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   controls, frame capture, paste control, log-server discovery, the one-time carry-over of the Swift app's 最近打开). Pigeon definitions are in
   `pigeons/`. New Swift files must be added to `ios/Runner.xcodeproj/project.pbxproj` by hand (four entries, see
   `KeychainChannel.swift`'s).
-- `assets/`: MiSans, and assets taken from PiliPlus (`assets/README.md`).
+- `assets/`: MiSans, assets taken from PiliPlus, and the loading TV's from the official APK (`assets/README.md`).
 - `design/icon-options/`: the app icon's five candidates and `make_icons.py`; A is the app's.
 - `test_ci/`: static tests of the workflow (pins, secrets only in step env, nothing leaks into the public log).
 - `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
@@ -237,6 +248,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - 搜索 keeps one search call out at a time, suggestions included, with a gap between result pages; a load round
   that adds no row (a 筛选 cut them all) stalls until the user asks again, so nothing loops against the account.
   The keyword is the user's text: never log it, nor an error's `toString` (cupertino_http's carries the URL).
+- Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's
+  `PlayerLoading`), never a spinning circle, except for loading more under a list and inside buttons, where the
+  official app keeps the small system spinner too.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
 - A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the

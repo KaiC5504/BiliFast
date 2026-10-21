@@ -11,7 +11,7 @@ import '../shared/theme.dart';
 /// The official player's wait (65, 66): the pink TV, looping, centred in the box it is given, over 正在缓冲..., which
 /// gains the download speed once the engine has measured one. It takes no touches. Reduce Motion holds the TV still,
 /// and it stops while its ticker is muted (a covered page).
-class PlayerLoading extends StatefulWidget {
+class PlayerLoading extends StatelessWidget {
   const PlayerLoading({super.key, this.stats});
 
   /// The playback's stats; null (no session yet) shows no speed.
@@ -41,11 +41,6 @@ class PlayerLoading extends StatefulWidget {
   }
 
   @override
-  State<PlayerLoading> createState() => _PlayerLoadingState();
-}
-
-class _PlayerLoadingState extends State<PlayerLoading> {
-  @override
   Widget build(BuildContext context) {
     final style = TextStyle(
       fontFamily: BiliFonts.family,
@@ -66,7 +61,7 @@ class _PlayerLoadingState extends State<PlayerLoading> {
       softWrap: false,
       overflow: TextOverflow.visible,
     );
-    final stats = widget.stats;
+    final stats = this.stats;
     return IgnorePointer(
       child: CustomMultiChildLayout(
         delegate: _Layout(),

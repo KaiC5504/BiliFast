@@ -3073,7 +3073,7 @@ abstract final class HomeTabBarTheme {
   static const fieldText = 15.0;
   static const fieldInk = Color(0xFF61666D);
 
-  /// The 推荐 refresh 首页's tap runs: the scroll back to the top, then the pull-to-refresh spinner's room opening.
+  /// The 推荐 refresh 首页's tap runs: the scroll back to the top, then the pull-to-refresh TV's room opening.
   static const reloadScroll = Duration(milliseconds: 300);
   static const reloadHeader = Duration(milliseconds: 200);
 }
@@ -3381,7 +3381,7 @@ abstract final class SearchResultTheme {
   static const followSwapScale = 0.85;
   static const textRight = 12.0;
 
-  /// The first page's spinner, the next page's, 重试 and 没有找到相关内容.
+  /// The next page's spinner, 重试 and 没有找到相关内容.
   static const stateText = 14.0;
   static const stateInk = BiliColors.secondaryText;
   static const stateGap = 16.0;
