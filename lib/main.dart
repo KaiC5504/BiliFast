@@ -219,6 +219,7 @@ class BiliFastApp extends StatelessWidget {
                     releasePlayback: services.playback.release,
                     logs: services.logs,
                     speedTestHooks: appSpeedTestHooksOn(services.playback.engine),
+                    appAuth: services.appAuth,
                   ),
         ),
       ),
