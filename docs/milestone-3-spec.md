@@ -12,11 +12,11 @@ official app finds and follows videos and people:
 - **UP主空间**: an uploader's own page, from every place an uploader shows.
 - **我的收藏** and **稍后再看**: the avatar page's two "soon" shortcuts become real pages.
 
-Before any new screen, a **system-font check** puts the existing screens right on KaiC's phone, which draws in
-PingFang (字体 系统, the default on iOS), while every widget test and look-alike check renders MiSans.
+The **system-font check** (slice 10) came first and shipped in (15) and (16). Its leftovers are set aside, outside
+this milestone (KaiC, 2026-10-21; slice 10 below, section 8), so the milestone is slices 11-13.
 
-**Done** = all four slices pass their phone steps on one TestFlight build, 1.0.0 (17), which also carries the drawn
-turn of (15) and the comment fix (`3d13ca9`). On that build the phone runs both checklists (BiliNative
+**Done** = slices 11-13 pass their phone steps on one TestFlight build at the end of the milestone, which also carries
+the katakana fix (`5f116e1`) unless it ships before. On that build the phone runs both checklists (BiliNative
 `docs/m1-phone-checklist.md` and `m2-phone-checklist.md`) in full; passing them is the cutover (flutter-move-spec,
 slice 9), and the Swift app retires.
 
@@ -26,7 +26,8 @@ slice 9), and the Swift app retires.
 |---|---|
 | Scope is 搜索, UP主空间, 我的收藏 and 稍后再看. | The daily-use gaps. Each reuses the video rows and lists the app already draws. |
 | The system-font check runs first. | The comment fix showed MiSans-tuned values are off under PingFang. Fixing the method first means every new screen is checked the same way. |
-| One build for the whole milestone. | "No need to ship"; (15) and the comment fix wait for it. |
+| One build for the whole milestone. | "No need to ship"; (15) and (16) went out on their own to check the font. |
+| Slice 10's leftovers wait (2026-10-21). | Once Japanese names were fixed, the rest of the text was fine to KaiC's eye: the sweep's findings, the marquee title with 章节, 联合创作 and the 合集 prefix, and 查看更多 come later. |
 | Later, not now: 动态, 离线缓存, 番剧, 直播. | 动态 has many card types (a milestone of its own); 离线缓存 needs a download path through the engine; 番剧 and 直播 need other players and APIs. |
 | System-font values are the app's; MiSans keeps its own nudges. | KaiC uses the system font. MiSans stays as tuned. (Claude's recommendation, accepted with the plan.) |
 | Fix anything off by 0.5 pt or more, or 2 % in width. | Smaller differences are below what a 3× screenshot measures reliably. |
@@ -58,15 +59,17 @@ Everything under "Rules that bite" in `CLAUDE.md`, in particular:
 After the stand-in fonts came in (`test/fonts`), every screen with an official shot was rendered under the system font
 and measured again (2026-10-20). That found two faults no phone shot had shown yet, both fixed before any value: a
 style with no font family took its fallback list's first font (the system font is now named, `BiliFonts.system`), and
-lines mixing Latin and Chinese grow a point (`BiliFonts.strut`). The value fixes ran as one round per screen group.
-The first of those was only half right: iOS has no `CupertinoSystemText` either, so (15) drew every digit and space
-from Apple Color Emoji; (16) drops the fallback list on the phone (`BiliFonts.systemFallback`, CLAUDE.md's font rule).
-KaiC's calls on what else it found:
+lines mixing Latin and Chinese grow a point (`BiliFonts.strut`). The value fixes (section 8) were stopped before they
+ran. The first of those faults was only half right: iOS has no `CupertinoSystemText` either, so (15) drew every digit
+and space from Apple Color Emoji; (16) dropped the fallback list on the phone. On (16) a reply whose name is Japanese
+(シロハ_, 单可ト) drew its whole line in a Japanese font, as (14) had; `5f116e1` (committed, not shipped) names SF and
+then PingFang SC when iOS matches SF's own family name (CLAUDE.md's font rule). KaiC's calls on what else it found:
 
 - **Not built:** iOS's text shaping (about ⅛ em between Chinese and Latin or digits in titles, descriptions, meta and
   history; a leading 【 or 《 at half width). Lines can end a few points apart and wrap differently; accepted.
-- **Added to the milestone, after the fix round:** the landscape title scrolling with faded edges instead of "…", and
-  `· 章节 · <chapter>` after the time (the video's view points; one new endpoint, tried live once); 竖屏's
+- **Added by KaiC, set aside with the fix round:** the landscape title scrolling with faded edges instead of "…", and
+  `· 章节 · <chapter>` after the time (the video's view points, which `/x/player/wbi/v2` already returns and
+  `PlayerInfo` parses); 竖屏's
   联合创作 block (the staff's avatars, "<name> 等 N 人联合创作 ⌄") and the "合集 · 第N集 |" prefix before the title
   (35).
 - **Left out:** the light ⋮ sheets of the small player and 竖屏 (42, 43; ours keeps the dark panel), the emote bar's
@@ -75,6 +78,11 @@ KaiC's calls on what else it found:
   for KaiC's 查看更多 shot).
 - **Known limit:** the official app draws Chinese at about 0.993 em (a 24-glyph line 2.5 pt shorter than ours); the
   stand-in draws 1 em. Whether Flutter on the phone does too shows on the first build with the fixes.
+- **Set aside (KaiC, 2026-10-21), not part of this milestone:** once Japanese names were fixed, the rest looked fine to
+  KaiC, so the sweep's findings (section 8), the marquee title with 章节, 联合创作 with the 合集 prefix, the 查看更多
+  variant, and one measured oddity wait for later. The oddity: on (16) the first comment of 12's thread
+  (`local/differences/12-official-comment-threads.jpg`) draws about 3% wider than the official, each Chinese glyph a
+  third of a point further on at the same glyph size, while its previews match; cause unknown.
 
 ### Slice 11: 搜索
 
@@ -141,11 +149,11 @@ A screen or state the build needs and these don't show is asked for before that 
 
 ## 7. Build
 
-1.0.0 (17), shipped once at the end of the milestone. (15) went out on its own (KaiC, 2026-10-21) with slice 10, the
-drawn turn and the system-font text fixes. Each slice is committed on `main` with the gate green;
-`python scripts/testflight.py start` runs once, after slice 13.
+One build, shipped once at the end of the milestone (the build number follows App Store Connect's latest). (15) and
+(16) went out on their own (KaiC, 2026-10-21) with slice 10, the drawn turn and the system-font fixes. Each slice is
+committed on `main` with the gate green; `python scripts/testflight.py start` runs once, after slice 13.
 
-## 8. The stand-in sweep's findings (to fix when the milestone resumes)
+## 8. The stand-in sweep's findings (set aside by KaiC, 2026-10-21; not part of milestone 3)
 
 Six read-only checkers rendered every screen with an official shot under the stand-in fonts and measured it with
 `tools/screen_diff.py` (2026-10-20, on `d68cb5a`). Two things changed after they ran, so **re-render and re-measure

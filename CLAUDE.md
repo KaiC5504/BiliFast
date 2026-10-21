@@ -64,14 +64,11 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   matched, drew every run's digits and spaces at emoji width. The phone's system path now names no fallback, as (14)
   did: SF is iOS's default and PingFang SC its own fallback for Chinese.
 
-Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), shipped as one build, 1.0.0 (17):
-1. Slice 10, the system-font check: shipped in (15) as far as it went. Left: the stand-in sweep's findings
-   (`docs/milestone-3-spec.md` section 8: re-measure, then one fix round by screen group), the landscape title marquee
-   with 章节 and 竖屏's 联合创作 and 合集 prefix (added by KaiC), and 弹幕设置's 查看更多 variant for the small player
-   (waiting on KaiC's screenshot).
-2. Slice 11, 搜索: the search box, suggestions, results with filters.
-3. Slice 12, UP主空间: an uploader's profile, videos and 关注, from every place an uploader shows.
-4. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
+Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), shipped as one build at its end (slice 10, the
+system-font check, shipped in (15) and (16); its leftovers are set aside, below):
+1. Slice 11, 搜索: the search box, suggestions, results with filters.
+2. Slice 12, UP主空间: an uploader's profile, videos and 关注, from every place an uploader shows.
+3. Slice 13, 我的收藏 and 稍后再看: the avatar page's two "soon" shortcuts.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
@@ -81,10 +78,15 @@ Open items, each waiting on its slice:
   with 请求前关, the picture cut and the turn started at once. (15) keeps only that as 开发者 → 旋转动画 自绘, beside
   系统; the test build's choices, 轮换测试 and the per-frame log lines are gone. On the phone: the turn both ways
   against the official app.
-- Comments under the system font, shipped in (15): KaiC's thread shots
-  (`local/differences/11-ours-comment-threads.jpg`, `12-official-…`) showed Material's tracking leaking into the text,
-  previews with a gap the official app doesn't have, and PingFang sitting higher than MiSans. On the phone: a comment
-  with two previews against the official app, and a long preview cut with "…".
+- Japanese names under the system font, `5f116e1`, committed and not shipped (it goes with the next build): on (16) a
+  reply whose name is katakana (シロハ_, 单可ト) drew its whole line in a Japanese font; the launch check now names SF,
+  then PingFang SC (the font rule below). On the phone: those replies draw like the others, and the log's
+  `system font fallback` reads pingFang true (false means iOS didn't match `.AppleSystemUIFont`; the app then stays
+  as (16)).
+- Slice 10's leftovers, set aside by KaiC (2026-10-21; `docs/milestone-3-spec.md`, slice 10 and section 8): the
+  stand-in sweep's findings (re-measure, then one fix round by screen group), the landscape title marquee with 章节,
+  竖屏's 联合创作 and 合集 prefix, 弹幕设置's 查看更多 variant for the small player (waiting on KaiC's screenshot), and
+  12's first comment drawing about 3% wide on (16), cause unknown.
 - 不喜欢 stays grey (此版本不支持不喜欢): KaiC left out the TV authorisation it needs (a new 云视听小电视 device on the
   account and a borrowed app key).
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
