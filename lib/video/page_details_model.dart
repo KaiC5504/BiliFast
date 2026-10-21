@@ -194,15 +194,16 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
   Future<void> _loadRelation(VideoDetail detail, _RelationAsk ask) async {
     if (!_isLoggedIn()) return;
     final video = _video;
+    final asked = _actions?.answerStamp;
     if (ask == _RelationAsk.reset) _resetting = video;
     try {
       final relation = await _api.relation(aid: detail.aid, bvid: detail.bvid);
       if (_disposed || video != _video) return;
       switch (ask) {
         case _RelationAsk.fill:
-          _actions?.apply(relation);
+          _actions?.apply(relation, asked: asked);
         case _RelationAsk.reset:
-          _actions?.reset(relation);
+          _actions?.reset(relation, asked: asked);
       }
     } catch (error) {
       _logger.warn(LogCategory.api, 'relation failed', {'bvid': detail.bvid, 'error': '$error'});
@@ -215,11 +216,12 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
 
   Future<void> _loadUploader(VideoDetail detail) async {
     final video = _video;
+    final asked = _actions?.answerStamp;
     try {
       final card = await _api.uploaderCard(mid: detail.owner.mid);
       if (_disposed || video != _video) return;
       _uploader = card;
-      _actions?.applyUploader(card);
+      _actions?.applyUploader(card, asked: asked);
       notifyListeners();
     } catch (error) {
       _logger.warn(LogCategory.api, 'uploader card failed', {'bvid': detail.bvid, 'error': '$error'});

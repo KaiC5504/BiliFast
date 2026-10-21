@@ -4,6 +4,7 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
+import '../search/results/video_row.dart' show searchLogReason;
 import '../video/actions/actions_model.dart' show ActionsModel;
 import '../video/page_api.dart';
 import 'follow_book.dart';
@@ -36,6 +37,10 @@ class SpaceFollow extends ChangeNotifier {
   bool _busy = false;
   bool _disposed = false;
 
+  /// Bumped by every tap, by the end of every run of calls and by every change made elsewhere, so a card answer asked
+  /// before one of them is dropped.
+  int _generation = 0;
+
   /// Null until the card answers; logged out it is false.
   bool? get following => _following;
 
@@ -47,33 +52,47 @@ class SpaceFollow extends ChangeNotifier {
       _set(false);
       return;
     }
+    final generation = _generation;
     try {
       final card = await _api.uploaderCard(mid: mid);
-      if (!_busy) _set(card.following);
+      if (!_busy && generation == _generation) _set(card.following);
     } catch (error) {
-      _logger.warn(LogCategory.api, 'space follow state failed', {'error': '$error'});
+      _logger.warn(LogCategory.api, 'space follow state failed', {'error': searchLogReason(error)});
     }
   }
 
-  /// Follows or unfollows. Logged out, it asks for the login instead. Unfollowing asks no question here: the space's
-  /// 取消关注 sheet is the confirm.
+  /// Follows or unfollows. Logged out, it asks for the login instead. Asks no question: callers confirm an unfollow
+  /// first. With [following] unknown it asks the card before sending anything. A tap while a call is out shows at once
+  /// and goes out when that call returns, if it still differs from what Bilibili took; one call at a time.
   Future<void> toggle() async {
     if (!_isLoggedIn()) {
       _requestLogin();
       return;
     }
-    if (_busy) return;
-    final on = !(_following ?? false);
-    final before = _following;
+    _generation += 1;
+    final next = !(_following ?? false);
+    if (_busy) {
+      _set(next);
+      return;
+    }
+    var taken = _following;
     _busy = true;
-    _set(on);
+    _set(next);
     try {
-      await _api.follow(mid: mid, on: on);
-      _book.changed(mid, following: on);
-      _say(on ? '关注成功' : '取消关注成功');
+      taken ??= (await _api.uploaderCard(mid: mid)).following;
+      while (_following != taken) {
+        final on = _following!;
+        await _api.follow(mid: mid, on: on);
+        taken = on;
+        _book.changed(mid, following: on);
+        // A change of mind still to send would make this one's toast wrong a moment later.
+        if (_following == on) _say(on ? '关注成功' : '取消关注成功');
+      }
     } catch (error) {
-      _following = before;
-      _logger.warn(LogCategory.api, 'space follow failed', {'error': '$error'});
+      _following = taken;
+      _logger.warn(LogCategory.api, taken == null ? 'space follow state failed' : 'space follow failed', {
+        'error': searchLogReason(error),
+      });
       if (error is BiliError && error.needsLogin) {
         if (!_disposed) _requestLogin();
       } else {
@@ -81,6 +100,7 @@ class SpaceFollow extends ChangeNotifier {
       }
     } finally {
       _busy = false;
+      _generation += 1;
       _notify();
     }
   }
@@ -88,6 +108,7 @@ class SpaceFollow extends ChangeNotifier {
   void _bookChanged() {
     final change = _book.last;
     if (change == null || change.mid != mid || _busy) return;
+    _generation += 1;
     _set(change.following);
   }
 

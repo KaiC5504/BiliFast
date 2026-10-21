@@ -64,8 +64,11 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   final Map<_Field, _Change> _owners = {};
   VideoRelation? _relation;
 
-  /// The relation's 关注 or the uploader card's, whichever came last.
+  /// The relation's 关注 or the uploader card's, whichever came last, or a 关注 accepted elsewhere since.
   bool? _saidFollowing;
+
+  /// Bumped by every 关注 accepted elsewhere; see [answerStamp].
+  int _followStamp = 0;
   final Set<String> _busy = {};
   bool _disposed = false;
 
@@ -80,6 +83,13 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
 
   @override
   bool get following => _following;
+
+  @override
+  bool get followingKnown => _saidFollowing != null || _owners.containsKey(_Field.following);
+
+  /// Taken as a relation or card ask goes out, and handed back with its answer to [apply], [applyUploader] or
+  /// [reset]: a 关注 accepted elsewhere after the ask holds over the answer's.
+  int get answerStamp => _followStamp;
 
   @override
   int get coins => _coins;
@@ -102,40 +112,46 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   @override
   ActionPrompt? get prompt => _prompt;
 
-  /// A relation answer fills in what the user hasn't changed, and later what a refused change gives back.
-  void apply(VideoRelation relation) {
+  /// A relation answer fills in what the user hasn't changed, and later what a refused change gives back. [asked] is
+  /// the [answerStamp] its ask went out with; without one the answer counts as asked just now.
+  void apply(VideoRelation relation, {int? asked}) {
     final before = _snapshot;
     _relation = relation;
-    _saidFollowing = relation.attention;
+    if (_askedSinceFollow(asked)) _saidFollowing = relation.attention;
     for (final field in _Field.values) {
       if (!_owners.containsKey(field)) _showSaid(field);
     }
     if (_snapshot.changedFrom(before).isNotEmpty) _notify();
   }
 
-  void applyUploader(UploaderCard card) {
-    if (card.mid != detail.owner.mid) return;
+  void applyUploader(UploaderCard card, {int? asked}) {
+    if (card.mid != detail.owner.mid || !_askedSinceFollow(asked)) return;
     _saidFollowing = card.following;
     if (_owners.containsKey(_Field.following) || card.following == _following) return;
     _following = card.following;
     _notify();
   }
 
-  /// A 关注 accepted elsewhere (the uploader sheet, a space) is what Bilibili now says, over any tap made here.
+  bool _askedSinceFollow(int? asked) => asked == null || asked == _followStamp;
+
+  /// A 关注 accepted elsewhere (the uploader sheet, a space) wins over an earlier tap here and over a relation or card
+  /// answer asked before it; a tap here still in flight keeps its own answer.
   void _followChanged() {
     final change = _follows?.last;
-    if (change == null || change.mid != detail.owner.mid || _busy.contains('follow')) return;
-    _owners.remove(_Field.following);
+    if (change == null || change.mid != detail.owner.mid) return;
+    _followStamp += 1;
     _saidFollowing = change.following;
+    if (_busy.contains('follow')) return;
+    _owners.remove(_Field.following);
     if (_following == change.following) return;
     _following = change.following;
     _notify();
   }
 
   /// After a login: this account's state, whatever was tapped before.
-  void reset(VideoRelation relation) {
+  void reset(VideoRelation relation, {int? asked}) {
     _owners.clear();
-    apply(relation);
+    apply(relation, asked: asked);
   }
 
   int get _coinLimit => detail.copyright == 2 ? 1 : 2;

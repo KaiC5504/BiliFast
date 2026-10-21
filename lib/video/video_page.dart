@@ -807,8 +807,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     }
   }
 
-  /// The page's own 关注 for its uploader; anyone else's the sheet asks for.
-  bool? _followingOf(int mid) => mid == _intro.detail?.owner.mid ? _details?.actions?.following : null;
+  /// The page's own 关注 for its uploader once known. Null for anyone else, and for the page's own before the relation
+  /// or card has said: the sheet then asks the card rather than show + 关注 for someone followed.
+  bool? _followingOf(int mid) {
+    final actions = _details?.actions;
+    if (mid != _intro.detail?.owner.mid || actions == null || !actions.followingKnown) return null;
+    return actions.following;
+  }
 
   /// Closes the composer, the picture viewer or the delete confirm, else 评论详情. False when none is up. A composer
   /// that is posting stays: closed, a failed post would never show and its text would be lost with the page.
@@ -1274,9 +1279,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         // its list its own, and nothing else in the body takes one, so the composer's lists and the panels stay off it.
         child: ListenableBuilder(
           listenable: _tabs,
-          // 评论详情 covers the tabs and scrolls on its own: a tap then reaches nothing rather than the list under it.
+          // 评论详情 and the uploader sheet cover the tabs: a tap then reaches nothing rather than the list under them,
+          // which would grow a shrunk player and move the sheet with it.
           builder: (context, scaffold) => PrimaryScrollController(
-            controller: _threadOpen ? _noScroll : _tabs.scrollOf(_tabs.selected),
+            controller: _threadOpen || _uploaderSheet.isOpen ? _noScroll : _tabs.scrollOf(_tabs.selected),
             child: scaffold!,
           ),
           child: Scaffold(

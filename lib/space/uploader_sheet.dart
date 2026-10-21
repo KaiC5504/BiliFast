@@ -94,7 +94,8 @@ class UploaderSheetLayer extends StatefulWidget {
   final double top;
   final String? playingBvid;
 
-  /// The page's own 关注 for its uploader, so the sheet starts from it instead of asking; null for anyone else.
+  /// The page's own 关注 for its uploader, so the sheet starts from it instead of asking; null for anyone else, and
+  /// while the page doesn't know.
   final bool? Function(int mid)? followingOf;
   final VoidCallback? requestLogin;
 
@@ -732,7 +733,7 @@ class _Header extends StatelessWidget {
           height: UploaderSheetTheme.countsLine,
           child: AnimatedOpacity(
             opacity: profile == null ? 0 : 1,
-            duration: animate ? const Duration(milliseconds: 220) : Duration.zero,
+            duration: animate ? UploaderSheetTheme.countsFade : Duration.zero,
             curve: Curves.easeOut,
             child: _Counts(profile: profile),
           ),
@@ -861,7 +862,7 @@ class _FollowButtonState extends State<_FollowButton> {
   Widget build(BuildContext context) {
     final following = widget.following;
     final animate = !MediaQuery.disableAnimationsOf(context);
-    final duration = animate ? const Duration(milliseconds: 220) : Duration.zero;
+    final duration = animate ? UploaderSheetTheme.followMotion : Duration.zero;
     final ink = following ? UploaderSheetTheme.followedInk : BiliColors.onPink;
     final label = Text(
       following ? '已关注' : '关注',
@@ -881,7 +882,7 @@ class _FollowButtonState extends State<_FollowButton> {
         onTap: widget.onTap,
         child: AnimatedScale(
           scale: _pressed ? UploaderSheetTheme.followPressedScale : 1,
-          duration: animate ? const Duration(milliseconds: 120) : Duration.zero,
+          duration: animate ? UploaderSheetTheme.followPressMotion : Duration.zero,
           curve: Curves.easeOut,
           child: AnimatedContainer(
             duration: duration,
