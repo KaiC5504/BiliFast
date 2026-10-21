@@ -192,7 +192,7 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
       return const Align(
         alignment: Alignment.topCenter,
         child: Padding(
-          padding: EdgeInsets.only(top: _loadingTvTop),
+          padding: EdgeInsets.only(top: LoadingTvTheme.stateTop),
           child: LoadingTvState(key: ValueKey('history-loading')),
         ),
       );
@@ -238,9 +238,6 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
     );
   }
 }
-
-/// The first load's TV box starts this far under the title bar, as far as 搜索's is under its field row (67).
-const _loadingTvTop = 892 / 3;
 
 TextStyle _style(double size, Color color, {FontWeight weight = HistoryTheme.textWeight, double? height}) => TextStyle(
   fontFamily: BiliFonts.family,

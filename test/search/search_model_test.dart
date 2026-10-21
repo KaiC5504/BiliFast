@@ -249,6 +249,29 @@ void main() {
       expect(history.words, ['狗', '猫']);
     });
 
+    test("a new keyword awaits its first page until 综合 answers or fails; 筛选 and 用户 don't wait again", () async {
+      final api = FakeSearchApi(videos: videoRows(3), users: [user(1)]);
+      final model = make(api);
+      expect(model.awaitingFirstPage, isFalse);
+      model.search('猫');
+      expect(model.awaitingFirstPage, isTrue);
+      await pumpEventQueue();
+      expect(model.awaitingFirstPage, isFalse);
+
+      model.setFilters(const SearchFilters(order: FilterOrder.newest));
+      expect(model.awaitingFirstPage, isFalse);
+      model.selectTab(SearchTab.users);
+      expect(model.awaitingFirstPage, isFalse);
+      await pumpEventQueue();
+
+      api.failNext('videos');
+      model.search('狗');
+      expect(model.awaitingFirstPage, isTrue);
+      await pumpEventQueue();
+      expect(model.videos.error, isNotNull);
+      expect(model.awaitingFirstPage, isFalse, reason: 'the failure shows with the tab row');
+    });
+
     test('searches counts every search, the same word again included, and nothing for a blank one', () async {
       final api = FakeSearchApi(videos: videoRows(3));
       final model = make(api);

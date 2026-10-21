@@ -123,6 +123,7 @@ class SearchModel extends ChangeNotifier {
 
   /// The moment 发布时间's window counts back from, fixed per search and 筛选 so every page asks the same window.
   DateTime? _asOf;
+  bool _answered = false;
 
   /// The grey word in the empty field, which 搜索 searches; '' until known.
   String get placeholder => _placeholder;
@@ -140,6 +141,10 @@ class SearchModel extends ChangeNotifier {
   SearchFilters get filters => _filters;
   SearchResults<SearchVideo> get videos => _videos.results;
   SearchResults<SearchUser> get users => _users.results;
+
+  /// A new keyword whose first page hasn't answered yet: the official page shows only the loading TV under the field
+  /// then, without the tab row (67). A 筛选 change or a tab switch doesn't count.
+  bool get awaitingFirstPage => _stage == SearchStage.results && !_answered;
 
   /// 热搜, 搜索发现 and, without a placeholder, the default word, each on its own: one failing leaves its part empty.
   Future<void> loadHome() async {
@@ -265,6 +270,7 @@ class SearchModel extends ChangeNotifier {
     _stage = SearchStage.results;
     _suggestions = const [];
     _tab = SearchTab.all;
+    _answered = false;
     _reset(_videos);
     _reset(_users);
     _notify();
@@ -480,6 +486,7 @@ class SearchModel extends ChangeNotifier {
         loaded: true,
         stalled: added.isEmpty && more,
       );
+      _answered = true;
     } catch (error) {
       if (!current()) return;
       _logger.warn(LogCategory.ui, 'search page failed', {
@@ -488,6 +495,7 @@ class SearchModel extends ChangeNotifier {
         'error': _reason(error),
       });
       lane.results = SearchResults(items: lane.results.items, error: requestFailureMessage(error), loaded: true);
+      _answered = true;
     }
     _notify();
   }

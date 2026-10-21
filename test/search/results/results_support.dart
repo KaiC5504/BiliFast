@@ -28,6 +28,7 @@ class StubSearchModel extends SearchModel {
   SearchFilters filtersValue = const SearchFilters();
   SearchResults<SearchVideo> videosValue = const SearchResults();
   SearchResults<SearchUser> usersValue = const SearchResults();
+  bool awaitingValue = false;
 
   int loadMores = 0;
   int retries = 0;
@@ -49,6 +50,8 @@ class StubSearchModel extends SearchModel {
   SearchResults<SearchVideo> get videos => videosValue;
   @override
   SearchResults<SearchUser> get users => usersValue;
+  @override
+  bool get awaitingFirstPage => awaitingValue;
 
   void update(void Function() change) {
     change();

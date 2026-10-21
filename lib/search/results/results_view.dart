@@ -385,29 +385,27 @@ class _ResultsViewState extends State<ResultsView> with TickerProviderStateMixin
                   ],
                 ),
               ),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: -_shift,
-              height: header,
-              child: _Header(
-                tab: tab,
-                filterOpen: _filterOpen,
-                onTab: (next) {
-                  if (next != tab) model.selectTab(next);
-                },
-                onFilter: _toggleFilter,
+            if (!model.awaitingFirstPage)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: -_shift,
+                height: header,
+                child: _Header(
+                  tab: tab,
+                  filterOpen: _filterOpen,
+                  onTab: (next) {
+                    if (next != tab) model.selectTab(next);
+                  },
+                  onFilter: _toggleFilter,
+                ),
               ),
-            ),
           ],
         ),
       ),
     );
   }
 }
-
-/// The first load's TV box starts this far under the field row (67).
-const _loadingTvTop = 892 / 3;
 
 /// One tab's rows under the header's room, with the first page's loading TV, 没有找到相关内容, the failure with 重试, and
 /// the next page's spinner, failure or 加载更多 at the end.
@@ -473,7 +471,7 @@ class _ResultList<T> extends StatelessWidget {
         child: Align(
           alignment: Alignment.topCenter,
           child: Padding(
-            padding: EdgeInsets.only(top: math.max(0, _loadingTvTop - top)),
+            padding: EdgeInsets.only(top: math.max(0, LoadingTvTheme.stateTop - top)),
             child: const LoadingTvState(key: ValueKey('search-first-spinner')),
           ),
         ),

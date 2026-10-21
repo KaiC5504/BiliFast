@@ -1228,7 +1228,7 @@ abstract final class FavouriteTheme {
 
   /// Loading and failure inside the list, and 重试.
   static const statePad = 32.0;
-  static const stateText = 13.0;
+  static const stateText = 14.0;
   static const spinnerRadius = 10.0;
   static const retryHeight = 30.0;
   static const retryPad = 18.0;
@@ -3505,6 +3505,9 @@ abstract final class LoadingTvTheme {
 
   /// From the TV's box to the text's line box.
   static const stateGap = 6.0;
+
+  /// From the top of a list's area (under 搜索's field row, 历史记录's title bar) to the TV's box (67).
+  static const stateTop = 892 / 3;
 }
 
 /// The player's 正在缓冲... with its pink TV (65, 66). Values are the player agent's to measure.

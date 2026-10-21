@@ -335,6 +335,27 @@ void main() {
       );
     });
 
+    testWidgets("a new keyword's first page shows only the TV, without the tab row, as 67", (tester) async {
+      model
+        ..videosValue = const SearchResults(loading: true)
+        ..awaitingValue = true;
+      await show(tester);
+      expect(find.byKey(ValueKey('search-tab-${SearchTab.all.name}')), findsNothing);
+      expect(find.byKey(const ValueKey('search-filter')), findsNothing);
+      final viewTop = tester.getTopLeft(find.byType(ResultsView)).dy;
+      final tv = find.descendant(of: find.byKey(const ValueKey('search-list-all')), matching: find.byType(LoadingTv));
+      expect(tester.getTopLeft(tv).dy - viewTop, closeTo(LoadingTvTheme.stateTop, 0.01));
+
+      model.update(() {
+        model
+          ..videosValue = SearchResults(items: videos(3), loaded: true)
+          ..awaitingValue = false;
+      });
+      await settle(tester);
+      expect(find.byKey(ValueKey('search-tab-${SearchTab.all.name}')), findsOneWidget);
+      expect(find.byType(LoadingTv), findsNothing);
+    });
+
     testWidgets('a loading next page keeps the small spinner at the end, not the TV', (tester) async {
       model.videosValue = SearchResults(items: videos(3), loaded: true, loading: true);
       await show(tester);
