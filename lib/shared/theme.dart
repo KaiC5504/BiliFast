@@ -3707,9 +3707,9 @@ abstract final class SpaceTheme {
   static const bar = Color(0xFFFFFFFF);
   static const barFade = Duration(milliseconds: 150);
 
-  /// The bar's centred pill: a 28 tall tint with the 26 pt face 2 in from its left, + 关注 8.33 after it and 13 clear
-  /// of the text's ink on the right.
-  static const pillHeight = 28.0;
+  /// The bar's centred pill (73, 77): a 30 tall tint with the 26 pt face 2 in from its left, + 关注 8.33 after it and
+  /// 13 clear of the text's ink on the right.
+  static const pillHeight = 30.0;
   static const pillFace = 26.0;
   static const pillFaceInset = 2.0;
   static const pillFaceGap = 25 / 3;
@@ -3753,9 +3753,9 @@ abstract final class SpaceTheme {
   static const statsRuleWidth = 1.0;
   static const statsRuleInk = BiliColors.divider;
 
-  /// The 关注 row, 30 tall at 232.67 from 156 to 12 short of the right edge: + 关注 pink across all of it; followed,
-  /// 充电 (83 wide, outlined) 4 before 已关注 (grey) and ▽ (30 square) 2 after it (70). 充电 shows whenever the
-  /// uploader takes it (78, 79).
+  /// The 关注 row, 30 tall at 232.67 from 156 to 12 short of the right edge: + 关注 pink across what 充电 leaves;
+  /// followed, 已关注 (grey) and ▽ (30 square) 2 after it (70). 充电 (83 wide, outlined, 4 before the rest) shows
+  /// whenever the uploader takes it (78, 79).
   static const followTop = 698 / 3;
   static const followHeight = 30.0;
   static const followLeft = 156.0;
@@ -3823,12 +3823,14 @@ abstract final class SpaceTheme {
   static const levelInk = Color(0xFFFFFFFF);
 
   /// bilibili UP主认证's line takes the bio's place and moves the rest down 30 (78): a 22 tall grey pill with the
-  /// verification's 16 pt disc 5 in.
+  /// verification's 16 pt disc 5 in, its bolt 0.44 of the disc wide and 0.62 tall.
   static const officialBlock = 30.0;
   static const officialCentre = 18.5;
   static const officialHeight = 22.0;
   static const officialFill = BiliColors.pageGrey;
   static const officialDisc = 16.0;
+  static const officialBoltWidth = officialDisc * 0.44;
+  static const officialBoltHeight = officialDisc * 0.62;
   static const officialDiscInset = 5.0;
   static const officialTextGap = 6.0;
   static const officialPadRight = 8.0;
@@ -3861,8 +3863,8 @@ abstract final class SpaceTheme {
   static const tagChevronHeight = 6.0;
   static const tagChevronGap = 3.0;
 
-  /// 小店 and 充电: 40 tall grey cards, side by side 8 apart when there are two (78), the icon 10 in, the title 12 pt
-  /// and the note 11 pt, its ink ending 9 from the right.
+  /// 小店 and 充电: 40 tall grey cards, side by side 8 apart when there are two (78), the icon 10 in (小店's bag 12 ×
+  /// 10.5), the title 12 pt and the note 11 pt, its ink ending 9 from the right.
   static const entriesGap = 12.0;
   static const entryHeight = 40.0;
   static const entrySpacing = 8.0;
@@ -3871,6 +3873,7 @@ abstract final class SpaceTheme {
   static const entryPad = 10.0;
   static const entryPadRight = 25 / 3;
   static const entryIcon = 12.0;
+  static const entryShopHeight = 10.5;
   static const entryBoltWidth = 25 / 3;
   static const entryBoltHeight = 13.0;
   static const entryIconGap = 13 / 3;
@@ -3917,7 +3920,7 @@ abstract final class SpaceTheme {
   static const sheetIn = Duration(milliseconds: 280);
   static const sheetOut = Duration(milliseconds: 220);
 
-  /// 加载失败，点击重试 in the middle of the page.
+  /// Why the space didn't load, with 点击重试 under it, in the middle of the page.
   static const retryText = 14.0;
   static const retryInk = BiliColors.secondaryText;
   static const retryAction = BiliColors.link;

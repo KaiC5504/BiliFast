@@ -192,34 +192,40 @@ class _Button extends StatelessWidget {
       height: SpaceTheme.buttonTarget,
       child: IgnorePointer(
         ignoring: gone,
-        child: Semantics(
-          button: true,
-          label: label,
-          excludeSemantics: true,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
+        child: ExcludeSemantics(
+          excluding: gone,
+          child: Semantics(
+            button: true,
+            label: label,
             onTap: onTap,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                AnimatedOpacity(
-                  opacity: collapsed ? 0 : 1,
-                  duration: fade,
-                  child: Container(
-                    width: SpaceTheme.button,
-                    height: SpaceTheme.button,
-                    decoration: const BoxDecoration(color: SpaceTheme.buttonFill, shape: BoxShape.circle),
-                    alignment: Alignment.center,
-                    child: glyphIn(SpaceTheme.buttonInk),
-                  ),
-                ),
-                if (!goesWhenCollapsed)
+            excludeSemantics: true,
+            child: GestureDetector(
+              // Over the banner only the disc answers (its circle decoration is what gets hit): the whole target
+              // would take taps meant for + 关注's right end while the header scrolls under it.
+              behavior: collapsed ? HitTestBehavior.opaque : HitTestBehavior.deferToChild,
+              onTap: onTap,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
                   AnimatedOpacity(
-                    opacity: collapsed ? 1 : 0,
+                    opacity: collapsed ? 0 : 1,
                     duration: fade,
-                    child: glyphIn(SpaceTheme.barInk),
+                    child: Container(
+                      width: SpaceTheme.button,
+                      height: SpaceTheme.button,
+                      decoration: const BoxDecoration(color: SpaceTheme.buttonFill, shape: BoxShape.circle),
+                      alignment: Alignment.center,
+                      child: glyphIn(SpaceTheme.buttonInk),
+                    ),
                   ),
-              ],
+                  if (!goesWhenCollapsed)
+                    AnimatedOpacity(
+                      opacity: collapsed ? 1 : 0,
+                      duration: fade,
+                      child: glyphIn(SpaceTheme.barInk),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -241,6 +247,7 @@ class _Pill extends StatelessWidget {
     return Semantics(
       button: true,
       label: following ? '已关注' : '关注',
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         key: const ValueKey('space-pill'),

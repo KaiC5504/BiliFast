@@ -71,6 +71,7 @@ class _Tab extends StatelessWidget {
       button: true,
       selected: shown,
       label: tab.title,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         key: ValueKey('space-tab-${tab.kind.name}'),

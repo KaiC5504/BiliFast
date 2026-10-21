@@ -150,6 +150,7 @@ class _SpaceUnfollowSheetState extends State<SpaceUnfollowSheet> with SingleTick
                           child: Semantics(
                             button: true,
                             label: '取消',
+                            onTap: _close,
                             excludeSemantics: true,
                             child: SizedBox(
                               key: const ValueKey('space-sheet-cancel'),
@@ -192,6 +193,7 @@ class _Row extends StatelessWidget {
     child: Semantics(
       button: true,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: SizedBox(
         height: SpaceTheme.sheetRow,

@@ -232,7 +232,7 @@ void main() {
     expect(_rect(tester, 'space-tabs').top, closeTo(94, 0.01));
     final pill = _rect(tester, 'space-pill');
     expect(pill.center, offsetMoreOrLessEquals(const Offset(220, 69), epsilon: 0.5));
-    expect(pill.height, 28);
+    expect(pill.height, 30);
     expect(pill.width, closeTo(91.33, 1));
   });
 }

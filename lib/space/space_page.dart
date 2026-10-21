@@ -3,12 +3,14 @@ import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../app/app_environment.dart' show LoggedIn;
 import '../app/app_scope.dart';
+import '../home/feed_model.dart' show requestFailureMessage;
 import '../shared/loading_tv.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -32,13 +34,17 @@ class SpacePage extends StatefulWidget {
 
 class _SpacePageState extends State<SpacePage> {
   static const _soon = '暂未开放';
+  static const _missing = '用户不存在或已注销';
 
   final _scroll = ScrollController();
   final _sheet = ValueNotifier(false);
 
   SpaceProfile? _profile;
-  bool _failed = false;
+
+  /// Why the profile didn't load, and whether asking again could help.
+  ({String message, bool retry})? _failure;
   SpaceFollow? _follow;
+  ValueListenable<int>? _logins;
   bool _collapsed = false;
 
   /// How far the space scrolls before the bar comes in, set where the page is built.
@@ -62,15 +68,17 @@ class _SpacePageState extends State<SpacePage> {
       api: services.pageApi,
       book: services.follows,
       isLoggedIn: () => environment.account is LoggedIn,
-      requestLogin: () => unawaited(services.loginGate.request(context)),
+      requestLogin: () => unawaited(_requestLogin()),
       toast: (message) => showToast(context, message),
     )..addListener(_followChanged);
+    _logins = environment.logins..addListener(_loggedIn);
     unawaited(_follow!.load());
     unawaited(_load());
   }
 
   @override
   void dispose() {
+    _logins?.removeListener(_loggedIn);
     _scroll.dispose();
     _sheet.dispose();
     _follow?.dispose();
@@ -79,13 +87,13 @@ class _SpacePageState extends State<SpacePage> {
 
   Future<void> _load() async {
     final api = AppScope.of(context).spaceApi;
-    if (_failed) setState(() => _failed = false);
+    if (_failure != null) setState(() => _failure = null);
     try {
       final profile = await api.profile(widget.uploader.mid);
       if (mounted) setState(() => _profile = profile);
     } catch (error) {
       Logger.shared.warn(LogCategory.api, 'space failed', {'error': _reason(error)});
-      if (mounted) setState(() => _failed = true);
+      if (mounted) setState(() => _failure = _failureOf(error));
     }
   }
 
@@ -94,6 +102,24 @@ class _SpacePageState extends State<SpacePage> {
     BiliAPIError(:final code) => 'api $code',
     _ => '${error.runtimeType}',
   };
+
+  /// -404 is an uploader who isn't there: asking again won't bring them.
+  static ({String message, bool retry}) _failureOf(Object error) => switch (error) {
+    BiliAPIError(code: -404) => (message: _missing, retry: false),
+    _ => (message: requestFailureMessage(error), retry: true),
+  };
+
+  /// A login the environment's `logins` heard is followed there; a gate answering logged in without one still has
+  /// the 关注 state asked again.
+  Future<void> _requestLogin() async {
+    final services = AppScope.of(context);
+    final logins = services.environment.logins.value;
+    final loggedIn = await services.loginGate.request(context);
+    if (loggedIn && mounted && services.environment.logins.value == logins) _loggedIn();
+  }
+
+  /// The new account's 关注 for this uploader.
+  void _loggedIn() => unawaited(_follow?.load());
 
   void _followChanged() {
     if (mounted) setState(() {});
@@ -184,32 +210,42 @@ class _SpacePageState extends State<SpacePage> {
 
   Widget _waiting() {
     final top = MediaQuery.paddingOf(context).top + SpaceTheme.barRow;
+    final style = spaceStyle(SpaceTheme.retryText, SpaceTheme.retryInk);
+    void retry() => unawaited(_load());
     return Padding(
       padding: EdgeInsets.only(top: top),
       child: Center(
-        child: _failed
-            ? Semantics(
-                button: true,
-                label: '加载失败，点击重试',
-                excludeSemantics: true,
-                child: GestureDetector(
-                  key: const ValueKey('space-retry'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => unawaited(_load()),
-                  child: Padding(
-                    padding: const EdgeInsets.all(SpaceTheme.gutter),
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(text: '加载失败，', style: spaceStyle(SpaceTheme.retryText, SpaceTheme.retryInk)),
-                          TextSpan(text: '点击重试', style: spaceStyle(SpaceTheme.retryText, SpaceTheme.retryAction)),
-                        ],
-                      ),
-                    ),
+        child: switch (_failure) {
+          null => const LoadingTvState(key: ValueKey('space-loading')),
+          (:final message, retry: false) => Padding(
+            padding: const EdgeInsets.all(SpaceTheme.gutter),
+            child: Text(message, key: const ValueKey('space-failed'), textAlign: TextAlign.center, style: style),
+          ),
+          (:final message, retry: true) => Semantics(
+            button: true,
+            label: '$message，点击重试',
+            onTap: retry,
+            excludeSemantics: true,
+            child: GestureDetector(
+              key: const ValueKey('space-retry'),
+              behavior: HitTestBehavior.opaque,
+              onTap: retry,
+              child: Padding(
+                padding: const EdgeInsets.all(SpaceTheme.gutter),
+                child: Text.rich(
+                  key: const ValueKey('space-failed'),
+                  textAlign: TextAlign.center,
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$message\n', style: style),
+                      TextSpan(text: '点击重试', style: spaceStyle(SpaceTheme.retryText, SpaceTheme.retryAction)),
+                    ],
                   ),
                 ),
-              )
-            : const LoadingTvState(key: ValueKey('space-loading')),
+              ),
+            ),
+          ),
+        },
       ),
     );
   }
