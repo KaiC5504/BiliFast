@@ -25,6 +25,7 @@ import '../player/bili_player.dart' show PlayerStatus;
 import '../player_ui/chrome_state.dart';
 import '../player_ui/panels/panel_controller.dart';
 import '../player_ui/panels/panel_layer.dart';
+import '../player_ui/player_loading.dart';
 import '../player_ui/player_ui.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -126,6 +127,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// The native view: built once, so no layout switch or chrome change recreates it.
   Widget? _videoView;
   Listenable? _autoHideInputs;
+
+  /// Mid-play waits for data past the grace, for the loading TV.
+  PlayerWait? _dataWait;
   final _chrome = ChromeState();
   final _panels = PanelController();
   final _overlays = ActionOverlayController();
@@ -519,6 +523,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void didPushNext() {
     if (_covered) return;
     _covered = true;
+    _dataWait?.active = false;
     _owning = false;
     // The page above claims the orientation only once its video is known; until then a turn must not be taken over
     // with no page to draw it. A newer begin first makes this a no-op.
@@ -535,6 +540,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void didPopNext() {
     if (!_covered) return;
     _covered = false;
+    if (!_left) _dataWait?.active = true;
+    // The loading TV comes back if this page's load is still running.
+    if (mounted) setState(() {});
     // Shown again after the page above popped: this page takes the orientation back after the frame, once the pop
     // and the page above's leaving are done.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -657,6 +665,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
     session.readout.status.addListener(_syncCollapse);
+    _dataWait = PlayerWait(session.readout.status)..active = !_covered;
     _autoHideInputs = Listenable.merge([session.readout.status, session.scrubbing, _panels, _overlays, danmaku.sendOpen])
       ..addListener(_syncAutoHide);
     _syncAutoHide();
@@ -1106,6 +1115,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final session = _session;
     session?.removeListener(_sessionChanged);
     session?.readout.status.removeListener(_syncCollapse);
+    _dataWait?.active = false;
     _autoHideInputs?.removeListener(_syncAutoHide);
     final playback = _playback;
     if (playback != null) {
@@ -1147,6 +1157,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ?..removeListener(_commentsChanged)
       ..dispose();
     _autoHideInputs?.removeListener(_syncAutoHide);
+    _dataWait?.dispose();
     _collapse
       ..removeListener(_collapseChanged)
       ..dispose();
@@ -1271,6 +1282,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                         danmaku: mine ? controller.danmaku : null,
                         cover: _cover(context),
                         loading: _loading(controller, mine),
+                        waiting: mine ? _dataWait : null,
                         failure: _failure(controller, mine),
                         onRetry: _retry,
                         endScreenAside: _overlayAside,
@@ -1497,8 +1509,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     );
   }
 
+  /// The first load and a reload (quality, codec, replay); [_dataWait] covers waits mid-play.
   bool _loading(PlaybackController? controller, bool mine) {
-    if (_playback?.startError != null) return false;
+    if (_playback?.startError != null || _covered) return false;
     if (mine) return controller!.phase == PlaybackPhase.loading;
     return !_left;
   }

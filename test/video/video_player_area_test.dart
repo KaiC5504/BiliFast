@@ -8,6 +8,7 @@ import 'package:bilifast/player_ui/landscape_chrome.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_gestures.dart';
 import 'package:bilifast/player_ui/player_hud.dart';
+import 'package:bilifast/player_ui/player_loading.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/stats_overlay.dart';
@@ -55,6 +56,7 @@ void main() {
     Presentation presentation, {
     bool withUi = true,
     bool loading = false,
+    ValueListenable<bool>? waiting,
     String? failure,
     Widget? cover,
     Size size = const Size(440, 956),
@@ -74,6 +76,7 @@ void main() {
           video: video,
           cover: cover,
           loading: loading,
+          waiting: waiting,
           failure: failure,
           onRetry: () {},
           turning: turning,
@@ -346,6 +349,41 @@ void main() {
     expect(find.byType(PortraitControls), findsNothing, reason: 'the failure covers the player');
     await tester.tap(find.byKey(const ValueKey('video-back')));
     expect(backs, 2);
+  });
+
+  testWidgets('the loading TV shows for a load or a wait, over the chrome, centred on the video', (tester) async {
+    final waiting = ValueNotifier(false);
+    addTearDown(waiting.dispose);
+    await show(tester, Presentation.inline, waiting: waiting);
+    expect(find.byType(PlayerLoading), findsNothing);
+    waiting.value = true;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('video-loading')), findsOneWidget);
+    expect(find.byType(PlayerLoading), findsOneWidget);
+    final stack = tester.widget<Stack>(
+      find.descendant(of: find.byKey(const ValueKey('video-pinned')), matching: find.byType(Stack)).first,
+    );
+    final order = stack.children.map((child) => child.key).toList();
+    expect(order.indexOf(const ValueKey('video-hud')), lessThan(order.indexOf(const ValueKey('video-loading-layer'))));
+    waiting.value = false;
+    await tester.pump();
+    expect(find.byType(PlayerLoading), findsNothing);
+
+    await show(tester, Presentation.inline, loading: true, waiting: waiting);
+    expect(find.byType(PlayerLoading), findsOneWidget);
+
+    // 竖屏 sets a landscape video in its band above the middle; the TV keeps to the video.
+    await show(tester, Presentation.vertical, loading: true);
+    final band = 956 * BiliMetrics.verticalVideoCentre * 2;
+    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & Size(440, band));
+    session
+      ..isVertical = true
+      ..changed();
+    await tester.pump();
+    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & const Size(440, 956));
+
+    await show(tester, Presentation.inline, loading: true, failure: '播放失败');
+    expect(find.byType(PlayerLoading), findsNothing, reason: 'the failure takes its place');
   });
 
   testWidgets('the cover keeps its element as the session, the chrome and the spinner come', (tester) async {
