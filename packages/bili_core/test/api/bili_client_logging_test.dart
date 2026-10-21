@@ -56,8 +56,9 @@ void main() {
       now: () => testNow,
       logger: logger,
     );
-    await expectLater(client.searchSuggestions(_typed), throwsA(isA<_OfflineError>()));
-    await expectLater(client.searchVideos(keyword: _typed), throwsA(isA<_OfflineError>()));
+    const offline = BiliError.network('_OfflineError', domain: 'NSURLErrorDomain', code: -1009);
+    await expectLater(client.searchSuggestions(_typed), throwsA(offline));
+    await expectLater(client.searchVideos(keyword: _typed), throwsA(offline));
     final failures = log.events.where((event) => event.level == LogLevel.error).toList();
     expect(failures, hasLength(2));
     expect(failures.first.msg, '/x/web-interface/suggest');

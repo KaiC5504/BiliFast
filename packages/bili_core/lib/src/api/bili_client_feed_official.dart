@@ -62,20 +62,21 @@ extension BiliClientFeedOfficial on BiliClient {
   /// [BiliError.noAppToken] and sends nothing: the feed is generic without it.
   Future<List<FeedCard>> officialFeed({required int index}) async {
     const path = '/x/v2/feed/index';
+    final token = _officialToken(true);
     final envelope = await _getEnvelope(
       path,
       query: _officialSigned({
         ..._officialFeedQuery,
         'idx': '$index',
         'pull': index == 0 ? 'true' : 'false',
-      }, account: true),
+      }, token),
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
       extraHeaders: _officialHeaders(_officialFeedHeaders),
       decode: (json) => [for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card],
     );
-    final checked = _officialChecked(envelope, account: true);
+    final checked = _officialChecked(envelope, token);
     if (checked.code != 0) throw BiliError.api(code: checked.code, message: checked.message ?? '');
     return checked.data ?? const [];
   }
@@ -100,6 +101,7 @@ extension BiliClientFeedOfficial on BiliClient {
     required int? reasonId,
     required int? feedbackId,
   }) async {
+    final token = _officialToken(true);
     final envelope = await _getEnvelope(
       path,
       query: _officialSigned({
@@ -109,14 +111,14 @@ extension BiliClientFeedOfficial on BiliClient {
         'feedback_id': ?feedbackId?.toString(),
         'build': '1',
         'mobi_app': 'android',
-      }, account: true),
+      }, token),
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
       extraHeaders: _officialHeaders(const {}),
       decode: (_) => null,
     );
-    final checked = _officialChecked(envelope, account: true);
+    final checked = _officialChecked(envelope, token);
     if (checked.code != 0) throw BiliError.api(code: checked.code, message: checked.message ?? '');
   }
 }

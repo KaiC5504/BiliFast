@@ -34,6 +34,10 @@ const confirmed =
 
 String reply(int code) => '{"code":$code,"message":"m","ttl":1,"data":null}';
 
+const renewed =
+    '{"code":0,"message":"0","data":{"status":0,"token_info":{"mid":12345,"access_token":"NEW-ACCESS",'
+    '"refresh_token":"NEW-REFRESH","expires_in":15552000},"cookie_info":{"cookies":[]}}}';
+
 String stored({int days = 100, int mid = 12345}) => jsonEncode(
   AppToken(
     accessToken: 'OLD-ACCESS',
@@ -123,7 +127,13 @@ void main() {
     logger = Logger(session: 'test')..add(events);
   });
 
-  Future<Harness> mount(WidgetTester tester, {String? token, bool loggedIn = true}) async {
+  Future<Harness> mount(
+    WidgetTester tester, {
+    String? token,
+    bool loggedIn = true,
+    String? devicePath,
+    Future<bool> Function(BuildContext context)? confirm,
+  }) async {
     final http = Canned.http(loggedIn: loggedIn)
       ..routes[spiPath] = (200, '{"code":0,"message":"ok","data":{"b_3":"B3","b_4":"B4"}}')
       ..routes[authCodePath] = (200, authCodeReply)
@@ -141,7 +151,8 @@ void main() {
     final auth = TokenAppAuth(
       environment: environment,
       navigator: navigator,
-      devicePath: () => null,
+      confirm: confirm ?? showAppAuthPrompt,
+      devicePath: () => devicePath,
       pollInterval: const Duration(milliseconds: 100),
       pagePollInterval: const Duration(seconds: 1),
       pageTimeout: const Duration(seconds: 10),
@@ -330,6 +341,46 @@ void main() {
       expect(prompt, findsNothing);
       expect(h.keychain.deletes, 0);
     });
+
+    testWidgets('a renewal Bilibili rejects drops the token, and the confirm is asked once the account is known',
+        (tester) async {
+      final h = await mount(tester, token: stored(days: 10));
+      h.http.routes[renewPath] = (200, '{"code":-101,"message":"账号未登录"}');
+      await h.auth.start();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      expect(h.http.to(renewPath), hasLength(1));
+      expect(h.auth.authorized, isFalse);
+      expect(h.keychain.deletes, 1);
+      expect(h.keychain.saves, isEmpty);
+      expect(prompt, findsNothing, reason: 'the account is still unknown');
+
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      expect(prompt, findsOneWidget);
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      expectNoSecretsLogged();
+    });
+
+    testWidgets('a logout while the renewal is out neither holds nor saves the renewed token', (tester) async {
+      final h = await mount(tester, token: stored(days: 10));
+      h.http.routes[renewPath] = (200, renewed);
+      final renewal = h.http.gates[renewPath] = Completer<void>();
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      expect(h.http.to(renewPath), hasLength(1));
+
+      await h.environment.logout();
+      renewal.complete();
+      await tester.pumpAndSettle();
+      expect(h.client.appToken, isNull);
+      expect(h.auth.authorized, isFalse);
+      expect(h.keychain.saves, isEmpty);
+      expect(h.keychain.token, isNull);
+      expectNoSecretsLogged();
+    });
   });
 
   group('a token that stops working', () {
@@ -375,6 +426,58 @@ void main() {
       expect(changes, greaterThan(0));
       expect(h.keychain.token, isNull);
       expect(prompt, findsNothing);
+    });
+
+    testWidgets('a rejection that comes back after the renewal leaves the renewed token', (tester) async {
+      final h = await mount(tester, token: stored(days: 10));
+      h.http.routes[renewPath] = (200, renewed);
+      h.http.routes[likePath] = (200, '{"code":-101,"message":"账号未登录"}');
+      final renewal = h.http.gates[renewPath] = Completer<void>();
+      final like = h.http.gates[likePath] = Completer<void>();
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+
+      final call = h.client.officialLike(aid: 1, on: true);
+      await tester.pump();
+      expect(h.http.to(likePath), hasLength(1), reason: 'signed with the old token');
+      renewal.complete();
+      await tester.pumpAndSettle();
+      expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
+
+      like.complete();
+      await expectLater(call, throwsA(isA<BiliAPIError>()));
+      await tester.pumpAndSettle();
+      expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
+      expect(h.keychain.deletes, 0);
+      expect(prompt, findsNothing);
+      expectNoSecretsLogged();
+    });
+
+    testWidgets("another account's login whose checks failed drops the token once a check reads it", (tester) async {
+      final h = await mount(tester, token: stored());
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      expect(h.auth.authorized, isTrue);
+
+      h.http.errors[Canned.navPath] = Exception('offline');
+      final login = h.environment.didLogin({'SESSDATA': 'other', 'bili_jct': 'other'});
+      for (var second = 0; second < 4; second++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(await login, isFalse);
+      expect(h.environment.account, isA<AccountUnknown>());
+      expect(h.auth.authorized, isTrue, reason: 'whose login it is is not known yet');
+
+      h.http.errors.remove(Canned.navPath);
+      h.http.routes[Canned.navPath] = (200, Canned.navLoggedIn.replaceFirst('"mid":12345', '"mid":67890'));
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      expect(h.environment.mid, 67890);
+      expect(h.auth.authorized, isFalse);
+      expect(h.keychain.deletes, 1);
+      expect(h.keychain.token, isNull);
     });
 
     testWidgets('a new login without a token asks once', (tester) async {
@@ -519,6 +622,42 @@ void main() {
       expect(h.http.to(authCodePath), isEmpty);
     });
 
+    testWidgets('a logout while the confirm is out discards the token unsaved', (tester) async {
+      final h = await mount(tester);
+      await h.environment.refreshAccount();
+      final poll = h.http.gates[pollPath] = Completer<void>();
+      final answer = h.auth.request(host);
+      await tester.pumpAndSettle();
+      await tester.tap(authorize);
+      await tester.pumpAndSettle();
+      expect(h.http.to(pollPath), hasLength(1));
+
+      await h.environment.logout();
+      poll.complete();
+      await tester.pumpAndSettle();
+      expect(await answer, isFalse);
+      expect(h.client.appToken, isNull);
+      expect(h.keychain.saves, isEmpty);
+      expect(find.text('授权成功'), findsNothing);
+      expect(events.lines.where((line) => line.contains('app auth discarded')), hasLength(1));
+      await settle(tester);
+      expectNoSecretsLogged();
+    });
+
+    testWidgets('a token confirmed for another account is discarded unsaved', (tester) async {
+      final h = await mount(tester);
+      h.http.routes[pollPath] = (200, confirmed.replaceFirst('"mid":12345', '"mid":67890'));
+      await h.environment.refreshAccount();
+      final answer = h.auth.request(host);
+      await tester.pumpAndSettle();
+      await tester.tap(authorize);
+      await tester.pumpAndSettle();
+      expect(await answer, isFalse);
+      expect(h.client.appToken, isNull);
+      expect(h.keychain.saves, isEmpty);
+      await settle(tester);
+    });
+
     testWidgets('logged out it answers false without asking', (tester) async {
       final h = await mount(tester, loggedIn: false);
       await h.environment.refreshAccount();
@@ -655,6 +794,72 @@ void main() {
       await settle(tester);
       expect(await answer, isTrue);
       expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
+    });
+  });
+
+  group('a declined confirm', () {
+    late String path;
+    var asked = 0;
+    var answer = false;
+
+    Future<bool> confirm(BuildContext context) async {
+      asked += 1;
+      return answer;
+    }
+
+    setUp(() {
+      final folder = Directory.systemTemp.createTempSync('app_auth_declined');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      path = '${folder.path}${Platform.pathSeparator}app_device.json';
+      asked = 0;
+      answer = false;
+    });
+
+    Map<String, Object?> deviceFile() => jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+
+    Future<Harness> launch(WidgetTester tester) async {
+      final h = await mount(tester, devicePath: path, confirm: confirm);
+      await tester.runAsync(h.auth.start);
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      return h;
+    }
+
+    testWidgets("isn't asked by itself at the next launch; what needs the token and 开发者 still ask", (tester) async {
+      await launch(tester);
+      expect(asked, 1);
+      expect(deviceFile(), containsPair('authDeclined', true));
+      final buvid = deviceFile()['buvid'];
+
+      final next = await launch(tester);
+      expect(asked, 1, reason: 'declined before, so the launch asks nothing');
+      expect(next.client.appBuvid, buvid);
+
+      expect(await next.auth.request(host), isFalse);
+      expect(asked, 2, reason: '不喜欢 and 不感兴趣 still ask');
+      expect(deviceFile(), containsPair('authDeclined', true));
+
+      answer = true;
+      expect(await next.auth.reauthorize(host), isTrue);
+      expect(asked, 3, reason: '开发者 still asks');
+      expect(next.client.appToken?.accessToken, 'NEW-ACCESS');
+      expect(deviceFile(), {'buvid': buvid}, reason: 'a confirm that goes through clears it');
+      await settle(tester);
+      expectNoSecretsLogged();
+    });
+
+    testWidgets('a logout clears it, so the next login asks', (tester) async {
+      final h = await launch(tester);
+      expect(asked, 1);
+      expect(deviceFile(), containsPair('authDeclined', true));
+
+      await h.environment.logout();
+      await tester.pumpAndSettle();
+      expect(deviceFile(), isNot(contains('authDeclined')));
+
+      expect(await h.environment.didLogin(Canned.cookies), isTrue);
+      await tester.pumpAndSettle();
+      expect(asked, 2);
     });
   });
 

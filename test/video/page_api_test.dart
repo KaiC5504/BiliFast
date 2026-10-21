@@ -79,7 +79,7 @@ void main() {
 
     test('a token Bilibili turns down is reported, and the 点赞 or 投币 goes out once on the web instead', () async {
       var rejected = 0;
-      client.onAppTokenRejected = () => rejected += 1;
+      client.onAppTokenRejected = (_) => rejected += 1;
       http.routes[_officialLike] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
       http.routes[_officialCoin] = (200, '{"code":-2,"message":"Access Key错误","ttl":1}');
       await api.like(aid: 3, bvid: 'BV1test00001', on: true);

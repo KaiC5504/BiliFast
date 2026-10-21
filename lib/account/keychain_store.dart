@@ -33,7 +33,7 @@ abstract interface class KeychainStore {
   /// Throws when the keychain refused the delete; an item that wasn't there counts as deleted.
   Future<void> deleteCookies();
 
-  /// The app-API access token 不喜欢 needs; null when absent or unreadable.
+  /// The official API's access token; null when absent or unreadable.
   Future<String?> loadAppToken();
   Future<bool> saveAppToken(String token);
   /// Throws as [deleteCookies].

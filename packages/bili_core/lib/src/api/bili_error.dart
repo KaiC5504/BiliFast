@@ -10,6 +10,8 @@ sealed class BiliError implements Exception {
   /// An official-API account call with no app token yet (or one just dropped as rejected).
   static const BiliError noAppToken = BiliNoAppTokenError();
 
+  const factory BiliError.network(String type, {String? domain, int? code}) = BiliNetworkError;
+
   bool get needsLogin => switch (this) {
     BiliAPIError(code: -101) => true,
     _ => false,
@@ -26,6 +28,7 @@ sealed class BiliError implements Exception {
     BiliNotDashError() => '这个视频不是 DASH 格式，暂不支持',
     BiliInvalidLinkError() => '没有找到视频链接',
     BiliNoAppTokenError() => '需要先授权官方接口',
+    BiliNetworkError() => '网络连接失败，请检查网络后重试',
   };
 }
 
@@ -94,4 +97,26 @@ final class BiliNoAppTokenError extends BiliError {
 
   @override
   String toString() => 'BiliError.noAppToken';
+}
+
+/// The request got no answer: offline, timed out, refused. It keeps only the transport error's type and an NSError's
+/// domain and code, because the transport's own words end with the request's URL, and an official call's query
+/// carries the app token.
+final class BiliNetworkError extends BiliError {
+  const BiliNetworkError(this.type, {this.domain, this.code});
+
+  /// The transport error's runtime type, such as `TimeoutException` or `NSErrorClientException`.
+  final String type;
+  final String? domain;
+  final int? code;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BiliNetworkError && other.type == type && other.domain == domain && other.code == code;
+
+  @override
+  int get hashCode => Object.hash(type, domain, code);
+
+  @override
+  String toString() => domain == null ? 'BiliError.network($type)' : 'BiliError.network($type, $domain $code)';
 }

@@ -133,12 +133,12 @@ void main() {
     test('a rejected token is reported and the renewal throws', () async {
       final http = FakeHTTP();
       http.routes[renewPath] = (200, '{"code":-101,"message":"账号未登录"}');
-      var rejected = 0;
+      final rejected = <String>[];
       final client = makeClient(http)
         ..appToken = held
-        ..onAppTokenRejected = () => rejected++;
+        ..onAppTokenRejected = rejected.add;
       await expectLater(client.renewAppToken(), throwsA(const BiliError.api(code: -101, message: '账号未登录')));
-      expect(rejected, 1);
+      expect(rejected, ['OLD-ACCESS']);
     });
 
     test('without a token nothing is sent', () async {

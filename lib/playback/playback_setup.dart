@@ -70,23 +70,31 @@ const _supportFiles = [
   'codec_memory.json',
   'node_memory.json',
   'log_server.json',
+  'app_device.json',
 ];
 
 /// Asks iOS where the app's Application Support folder is, once per launch, before any store loads. A TestFlight
 /// update moves the app's container, so the folder is looked up each launch and never kept; logs whether it exists
-/// and which of the app's files it holds (names only: the path carries the container's id).
-Future<void> resolveSupportFolder({Logger? logger}) async {
-  if (!Platform.isIOS) return;
+/// and which of the app's files it holds (names only: the path carries the container's id). [isIOS], [lookup] and
+/// [home] are for tests.
+Future<void> resolveSupportFolder({
+  Logger? logger,
+  bool? isIOS,
+  Future<Directory> Function() lookup = getApplicationSupportDirectory,
+  String? home,
+}) async {
+  if (!(isIOS ?? Platform.isIOS)) return;
   final log = logger ?? Logger.shared;
+  _iosSupportFolder = null;
   try {
-    _iosSupportFolder = (await getApplicationSupportDirectory()).path;
+    _iosSupportFolder = (await lookup()).path;
   } catch (error) {
     log.error(LogCategory.app, 'support folder lookup failed', {'error': '${error.runtimeType}'});
   }
   final folder = _iosSupportFolder;
   log.info(LogCategory.app, 'support folder', {
     'resolved': folder != null,
-    'sameAsHome': folder != null && folder == _homeSupportFolder(),
+    'sameAsHome': folder != null && folder == _homeSupportFolder(home),
     'exists': folder != null && await Directory(folder).exists(),
     'files': [
       for (final name in _supportFiles)
@@ -95,15 +103,16 @@ Future<void> resolveSupportFolder({Logger? logger}) async {
   });
 }
 
-String? _homeSupportFolder() {
-  final home = Platform.environment['HOME'];
-  return home == null ? null : '$home/Library/Application Support';
+String? _homeSupportFolder(String? home) {
+  final folder = home ?? Platform.environment['HOME'];
+  return folder == null ? null : '$folder/Library/Application Support';
 }
 
 /// [name] in the app's support folder, kept across launches; null on other platforms or without HOME/APPDATA.
-String? supportFilePath(String name) {
-  if (Platform.isIOS) {
-    final folder = _iosSupportFolder ?? _homeSupportFolder();
+/// [isIOS] and [home] are for tests.
+String? supportFilePath(String name, {bool? isIOS, String? home}) {
+  if (isIOS ?? Platform.isIOS) {
+    final folder = _iosSupportFolder ?? _homeSupportFolder(home);
     return folder == null ? null : '$folder/$name';
   }
   if (Platform.isWindows) {
