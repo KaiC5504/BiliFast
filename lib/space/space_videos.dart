@@ -28,8 +28,8 @@ typedef OpenSpaceVideo = void Function(BuildContext context, VideoRoute route);
 /// and the sort, then the rows, a page at a time as the scroll nears the end.
 ///
 /// One call is out at a time; a page that adds no row ends the list, and a failure waits for 重试, so nothing loops
-/// against the account. Changing the chip or the sort starts again from the top, and answers to the old list are
-/// dropped.
+/// against the account. Changing the chip or the sort starts again from the top: a call still out for the old list
+/// is let finish and its answer dropped, then one call asks for the latest choice.
 class SpaceVideosSliver extends StatefulWidget {
   const SpaceVideosSliver({
     super.key,
@@ -66,6 +66,9 @@ class _SpaceVideosSliverState extends State<SpaceVideosSliver> {
   String? _next;
   bool _hasMore = true;
   bool _loading = false;
+
+  /// The list started again while a call was out; its first page is asked for when that call answers.
+  bool _restartPending = false;
 
   /// The list's first page has answered.
   bool _loaded = false;
@@ -114,7 +117,7 @@ class _SpaceVideosSliverState extends State<SpaceVideosSliver> {
 
   List<SpaceChip> get _chips => widget.profile.chips;
 
-  /// A space's profile can be fetched again (after 关注), with new chip objects for the same chips.
+  /// Compared by value: `SpaceChip` has no ==.
   static bool _sameChip(SpaceChip? a, SpaceChip? b) =>
       a != null &&
       b != null &&
@@ -140,9 +143,13 @@ class _SpaceVideosSliverState extends State<SpaceVideosSliver> {
     _next = null;
     _hasMore = true;
     _loaded = false;
-    _loading = false;
     _error = null;
-    _load();
+    // Quick taps on the chips or the sort would otherwise put a signed call out per tap, which risks -352.
+    if (_loading) {
+      _restartPending = true;
+    } else {
+      _load();
+    }
   }
 
   /// Asks for the next page; callers rebuild.
@@ -155,34 +162,44 @@ class _SpaceVideosSliverState extends State<SpaceVideosSliver> {
 
   Future<void> _fetch(int generation, SpaceChip? chip, SpaceOrder order, String? next) async {
     final mid = widget.profile.mid;
+    final SpaceVideoPage page;
     try {
-      final page = await (chip == null || chip.kind == SpaceChipKind.video
+      page = await (chip == null || chip.kind == SpaceChipKind.video
           ? widget.api.videos(mid, order: order, next: next)
           : widget.api.chipVideos(mid, chip, next: next));
-      if (!mounted || generation != _generation) return;
-      final seen = {for (final video in _items) video.aid};
-      final fresh = [
-        for (final video in page.items)
-          if (seen.add(video.aid)) video,
-      ];
-      setState(() {
-        _items = [..._items, ...fresh];
-        _next = page.next;
-        // A page that adds nothing ends the list, so an answer repeating itself can't keep it asking.
-        _hasMore = page.hasMore && page.next != null && fresh.isNotEmpty;
-        _loaded = true;
-        _loading = false;
-      });
-      // A short page may leave the end in view, with no scroll to ask for the next.
-      if (_hasMore) _checkAfterFrame();
     } catch (error) {
-      if (!mounted || generation != _generation) return;
       Logger.shared.warn(LogCategory.ui, 'space videos failed', {'error': searchLogReason(error)});
-      setState(() {
-        _loading = false;
-        _error = requestFailureMessage(error);
-      });
+      if (_answered(generation)) setState(() => _error = requestFailureMessage(error));
+      return;
     }
+    if (!_answered(generation)) return;
+    final seen = {for (final video in _items) video.aid};
+    final fresh = [
+      for (final video in page.items)
+        if (seen.add(video.aid)) video,
+    ];
+    setState(() {
+      _items = [..._items, ...fresh];
+      _next = page.next;
+      // A page that adds nothing ends the list, so an answer repeating itself can't keep it asking.
+      _hasMore = page.hasMore && page.next != null && fresh.isNotEmpty;
+      _loaded = true;
+    });
+    // A short page may leave the end in view, with no scroll to ask for the next.
+    if (_hasMore) _checkAfterFrame();
+  }
+
+  /// Ends the call that was out, and says whether its answer belongs to the list shown. When the list started again
+  /// meanwhile, the answer is dropped and the new list's first page asked for.
+  bool _answered(int generation) {
+    if (!mounted) return false;
+    _loading = false;
+    if (generation == _generation) return true;
+    if (_restartPending) {
+      _restartPending = false;
+      setState(_load);
+    }
+    return false;
   }
 
   void _retry() => setState(_load);
@@ -277,11 +294,11 @@ class _SpaceVideosSliverState extends State<SpaceVideosSliver> {
       await services.pageApi.addToWatchLater(aid: video.aid);
       if (mounted) showToast(context, '已添加至稍后再看');
     } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'space watch later failed', {'error': searchLogReason(error)});
       if (!mounted) return;
       if (error is BiliError && error.needsLogin) {
         unawaited(services.loginGate.request(context));
       } else {
-        Logger.shared.warn(LogCategory.ui, 'space watch later failed', {'error': searchLogReason(error)});
         showToast(context, ActionsModel.failureMessage(error));
       }
     } finally {

@@ -3923,9 +3923,9 @@ abstract final class SpaceTheme {
   static const retryAction = BiliColors.link;
 }
 
-/// 投稿's chips, 播放全部, sort and rows, and a row's ⋮ menu (63, 69, 70, 74).
+/// 投稿's chips, 播放全部, sort and rows, and a row's ⋮ menu (63, 69, 70, 74). Measured in px / 3 from the tab row's
+/// hairline, where the list starts.
 abstract final class SpaceVideosTheme {
-  // Measured in px / 3 from the tab row's hairline, where the list starts.
   static const gutter = BiliMetrics.gutter;
 
   /// The chips (69, 70): 28 tall, 6.33 under the hairline and 12 apart, in a 42 band; 14 pt words about 8 in from each
