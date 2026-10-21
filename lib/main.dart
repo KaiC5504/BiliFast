@@ -27,6 +27,7 @@ import 'search/fake_search_api.dart';
 import 'search/search_history_store.dart';
 import 'settings/follow_font.dart';
 import 'settings/font_store.dart';
+import 'space/fake_space_api.dart';
 import 'shared/theme.dart';
 import 'video/fake_page_api.dart';
 import 'video/player_prefs.dart';
@@ -65,7 +66,7 @@ Future<void> main(List<String> args) async {
     runApp(LaunchFailedApp(error: '$error'));
     return;
   }
-  // PC checks only: the page's actions and 搜索 answer from memory, so every button can be pressed with no account
+  // PC checks only: the page's actions, 搜索 and UP主空间 answer from memory, so every button can be pressed with no account
   // traffic.
   final fakeAccount = !Platform.isIOS && args.contains('--fake-account');
   if (fakeAccount) environment.useFakeAccount();
@@ -90,6 +91,7 @@ Future<void> main(List<String> args) async {
       fonts: fonts,
       pageApi: fakeAccount ? FakePageApi.demo() : null,
       searchApi: fakeAccount ? FakeSearchApi.demo() : null,
+      spaceApi: fakeAccount ? FakeSpaceApi.demo() : null,
       searchHistory: searchHistory,
       danmakuSettings: danmakuSettings,
       logFiles: logFiles,

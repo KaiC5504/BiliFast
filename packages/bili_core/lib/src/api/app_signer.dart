@@ -2,9 +2,11 @@ import 'md5.dart';
 import 'wbi.dart';
 
 /// The app API's request signing: the secret is appended to the sorted, percent-encoded query and hashed.
-/// The key pair is a parameter because it comes from a build-time secret and never lives in this package.
 final class AppSigner {
   const AppSigner({required this._appKey, required this._appSecret});
+
+  /// The official Android app's own pair, the same in every copy of the app and tied to no account.
+  static const android = AppSigner(appKey: 'dfca71928277209b', appSecret: 'b5475a8825547a4fc26c7d518eaaa02e');
 
   final String _appKey;
   final String _appSecret;

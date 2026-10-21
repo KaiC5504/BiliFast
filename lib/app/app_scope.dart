@@ -19,6 +19,8 @@ import '../playback/shared_engine.dart';
 import '../search/search_api.dart';
 import '../search/search_history_store.dart';
 import '../settings/font_store.dart';
+import '../space/follow_book.dart';
+import '../space/space_api.dart';
 import '../video/page_api.dart';
 import '../video/pip_keeper.dart';
 import 'app_environment.dart';
@@ -135,7 +137,7 @@ class AppPlayback with WidgetsBindingObserver {
 }
 
 /// What every page reaches: the account and API client, the players, 最近打开, the phone's rotation and levels,
-/// the font, the page body's and 搜索's calls, 搜索历史, the login page, the log kept on the phone, and the log
+/// the font, the page body's, 搜索's and UP主空间's calls, 关注 changes, 搜索历史, the login page, the log kept on the phone, and the log
 /// forwarder in dev builds (null otherwise).
 class AppServices {
   AppServices({
@@ -146,6 +148,7 @@ class AppServices {
     FontStore? fonts,
     PageApi? pageApi,
     this._searchApi,
+    this._spaceApi,
     SearchHistoryStore? searchHistory,
     DanmakuSettingsStore? danmakuSettings,
     BlockRuleStore? blockRules,
@@ -198,6 +201,14 @@ class AppServices {
 
   /// Made on first use, so tests whose environment has no client never ask for one.
   late final SearchApi searchApi = _searchApi ?? ClientSearchApi(environment.client);
+
+  final SpaceApi? _spaceApi;
+
+  /// UP主空间's calls, made on first use like [searchApi].
+  late final SpaceApi spaceApi = _spaceApi ?? ClientSpaceApi(environment.client);
+
+  /// 关注 changes, so every page showing an uploader agrees.
+  final follows = FollowBook();
 
   /// 搜索历史, kept on the device, not on the account.
   final SearchHistoryStore searchHistory;

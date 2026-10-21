@@ -3530,3 +3530,12 @@ abstract final class PlayerLoadingTheme {
   /// shows for exactly the waits the app counts as stalls or slow seeks.
   static const grace = Duration(milliseconds: 750);
 }
+
+/// The uploader sheet over the video page's body (62, 68, 76).
+abstract final class UploaderSheetTheme {}
+
+/// UP主空间's header, its collapsed bar and its tab row (63, 69-73, 75, 77-79).
+abstract final class SpaceTheme {}
+
+/// 投稿's chips, 播放全部, sort and rows, and a row's ⋮ menu (63, 69, 70, 74).
+abstract final class SpaceVideosTheme {}

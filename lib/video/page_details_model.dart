@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../home/feed_model.dart' show requestFailureMessage;
+import '../space/follow_book.dart';
 import 'actions/actions_model.dart';
 import 'actions/video_actions.dart';
 import 'page_api.dart';
@@ -29,6 +30,7 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
     required this._requestLogin,
     required this._toast,
     this._dislikeAvailable = false,
+    this._follows,
     PeriodicTimer? periodic,
     Logger? logger,
     this._accountChanges,
@@ -59,6 +61,7 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
   final VoidCallback _requestLogin;
   final void Function(String message) _toast;
   final bool _dislikeAvailable;
+  final FollowBook? _follows;
   final PeriodicTimer _periodic;
   final Logger _logger;
   final Listenable? _accountChanges;
@@ -171,6 +174,7 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
       requestLogin: _requestLogin,
       toast: _toast,
       dislikeAvailable: _dislikeAvailable,
+      follows: _follows,
       logger: _logger,
     );
     notifyListeners();

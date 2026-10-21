@@ -6,6 +6,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../home/feed_model.dart' show requestFailureMessage;
+import '../../space/follow_book.dart';
 import '../page_api.dart';
 import 'favourites_model.dart';
 import 'video_actions.dart';
@@ -22,6 +23,7 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     required this._requestLogin,
     required this._toast,
     this.dislikeAvailable = false,
+    this._follows,
     Logger? logger,
   })  : _logger = logger ?? Logger.shared,
         _likeCount = detail.stat.like,
@@ -30,6 +32,7 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
         _shareCount = detail.stat.share {
     if (relation != null) apply(relation);
     if (uploader != null) applyUploader(uploader);
+    _follows?.addListener(_followChanged);
   }
 
   final VideoDetail detail;
@@ -38,6 +41,7 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   final int? Function() _accountMid;
   final VoidCallback _requestLogin;
   final void Function(String message) _toast;
+  final FollowBook? _follows;
   final Logger _logger;
 
   @override
@@ -114,6 +118,17 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
     _saidFollowing = card.following;
     if (_owners.containsKey(_Field.following) || card.following == _following) return;
     _following = card.following;
+    _notify();
+  }
+
+  /// A 关注 accepted elsewhere (the uploader sheet, a space) is what Bilibili now says, over any tap made here.
+  void _followChanged() {
+    final change = _follows?.last;
+    if (change == null || change.mid != detail.owner.mid || _busy.contains('follow')) return;
+    _owners.remove(_Field.following);
+    _saidFollowing = change.following;
+    if (_following == change.following) return;
+    _following = change.following;
     _notify();
   }
 
@@ -252,7 +267,12 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   @override
   Future<void> toggleFollow() {
     final on = !_following;
-    return _perform('follow', () => _following = on, (_) => _api.follow(mid: detail.owner.mid, on: on));
+    return _perform(
+      'follow',
+      () => _following = on,
+      (_) => _api.follow(mid: detail.owner.mid, on: on),
+      done: () => _follows?.changed(detail.owner.mid, following: on),
+    );
   }
 
   /// Not knowing (the relation hasn't answered or couldn't be asked) counts as not subscribed.
@@ -486,6 +506,7 @@ class ActionsModel extends ChangeNotifier implements VideoActions {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _follows?.removeListener(_followChanged);
     super.dispose();
   }
 }

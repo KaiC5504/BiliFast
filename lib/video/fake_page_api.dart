@@ -180,6 +180,19 @@ class FakePageApi implements PageApi {
   @override
   Future<void> follow({required int mid, required bool on}) => _answer('follow', 'follow on=$on', () {
         relationValue = _relation(attention: on);
+        // The card answers for every uploader, so a space opened again shows the change too.
+        if (uploader case final card?) {
+          uploader = UploaderCard(
+            mid: card.mid,
+            name: card.name,
+            face: card.face,
+            fans: card.fans,
+            videos: card.videos,
+            isVip: card.isVip,
+            following: on,
+            official: card.official,
+          );
+        }
       });
 
   @override

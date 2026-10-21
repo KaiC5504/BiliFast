@@ -69,6 +69,7 @@ PageDetails pageDetails({
     accountMid: () => environment.mid,
     requestLogin: requestLogin,
     toast: toast,
+    follows: services.follows,
     accountChanges: environment,
     logins: logins,
   );

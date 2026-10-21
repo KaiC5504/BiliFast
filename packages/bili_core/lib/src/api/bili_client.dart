@@ -19,6 +19,7 @@ import 'json.dart';
 import 'link_parser.dart';
 import 'models.dart';
 import 'search_models.dart';
+import 'space_models.dart';
 import 'video_models.dart';
 import 'wbi.dart';
 
@@ -28,6 +29,7 @@ part 'bili_client_comments.dart';
 part 'bili_client_danmaku.dart';
 part 'bili_client_feed.dart';
 part 'bili_client_search.dart';
+part 'bili_client_space.dart';
 part 'bili_client_video.dart';
 
 typedef _Sent = ({HTTPResponse response, double ms});
