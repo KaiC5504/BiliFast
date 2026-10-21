@@ -22,6 +22,7 @@ import 'models.dart';
 import 'search_models.dart';
 import 'space_models.dart';
 import 'video_models.dart';
+import 'watch_later_models.dart';
 import 'wbi.dart';
 
 part 'bili_client_actions.dart';
