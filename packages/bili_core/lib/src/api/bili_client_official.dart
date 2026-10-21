@@ -34,16 +34,17 @@ extension BiliClientOfficial on BiliClient {
     bool account = true,
     Map<String, String> headers = const {},
   }) async {
+    final token = _officialToken(account);
     final envelope = await _getEnvelope(
       path,
-      query: _officialSigned(query, account: account),
+      query: _officialSigned(query, token),
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
       extraHeaders: _officialHeaders(headers),
       decode: decode,
     );
-    return _checked(_officialChecked(envelope, account: account));
+    return _checked(_officialChecked(envelope, token));
   }
 
   /// A write; the signed fields go in the form, as the app sends them.
@@ -55,15 +56,16 @@ extension BiliClientOfficial on BiliClient {
     bool account = true,
     Map<String, String> headers = const {},
   }) async {
+    final token = _officialToken(account);
     final envelope = await _postEnvelope(
       path,
-      form: _officialSigned(form, account: account),
+      form: _officialSigned(form, token),
       host: host,
       cookies: false,
       extraHeaders: _officialHeaders(headers),
       decode: decode,
     );
-    return _checked(_officialChecked(envelope, account: account));
+    return _checked(_officialChecked(envelope, token));
   }
 
   /// For writes whose success carries no data.
@@ -74,15 +76,16 @@ extension BiliClientOfficial on BiliClient {
     bool account = true,
     Map<String, String> headers = const {},
   }) async {
+    final token = _officialToken(account);
     final envelope = await _postEnvelope(
       path,
-      form: _officialSigned(form, account: account),
+      form: _officialSigned(form, token),
       host: host,
       cookies: false,
       extraHeaders: _officialHeaders(headers),
       decode: (_) => null,
     );
-    final checked = _officialChecked(envelope, account: account);
+    final checked = _officialChecked(envelope, token);
     if (checked.code != 0) throw BiliError.api(code: checked.code, message: checked.message ?? '');
   }
 
@@ -91,20 +94,20 @@ extension BiliClientOfficial on BiliClient {
     return {..._androidHeaders, 'buvid': ?buvid, ...headers};
   }
 
-  Map<String, String> _officialSigned(Map<String, String> params, {required bool account}) {
-    final fields = {..._androidQuery, ...params};
-    if (account) {
-      final token = appToken;
-      if (token == null) throw BiliError.noAppToken;
-      fields['access_key'] = token.accessToken;
-    }
-    return AppSigner.android.signed(fields, ts: _unixSeconds);
+  /// The token an account call signs with, read once, so a rejection names that one even if [appToken] has changed
+  /// by the time the answer comes; null for a call without the account.
+  AppToken? _officialToken(bool account) {
+    if (!account) return null;
+    return appToken ?? (throw BiliError.noAppToken);
   }
 
-  BiliEnvelope<T> _officialChecked<T>(BiliEnvelope<T> envelope, {required bool account}) {
-    if (account && _rejectedTokenCodes.contains(envelope.code)) {
+  Map<String, String> _officialSigned(Map<String, String> params, AppToken? token) =>
+      AppSigner.android.signed({..._androidQuery, ...params, 'access_key': ?token?.accessToken}, ts: _unixSeconds);
+
+  BiliEnvelope<T> _officialChecked<T>(BiliEnvelope<T> envelope, AppToken? token) {
+    if (token != null && _rejectedTokenCodes.contains(envelope.code)) {
       _logger.warn(LogCategory.api, 'app token rejected', {'code': envelope.code});
-      onAppTokenRejected?.call();
+      onAppTokenRejected?.call(token.accessToken);
     }
     return envelope;
   }

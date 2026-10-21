@@ -519,7 +519,7 @@ class CommentsModel extends ChangeNotifier {
 
   /// Bilibili words its refusals for the user (too frequent, already deleted); those are shown as sent.
   static String messageFor(Object error) {
-    if (error is! BiliError) return '网络连接失败，请稍后再试';
+    if (error is! BiliError || error is BiliNetworkError) return '网络连接失败，请稍后再试';
     if (error case BiliAPIError(:final code, :final message) when message.isNotEmpty && code > 0) return message;
     return error.userMessage;
   }

@@ -124,7 +124,7 @@ void main() {
     expect(await opener.open(context, pasted), isTrue);
     await tester.pump();
     final failed = sink.events.where((event) => event.msg == 'open failed').single;
-    expect('${failed.f['error']}', contains('_Exception'));
+    expect('${failed.f['error']}', contains('BiliNetworkError'));
     expect('${failed.f}', isNot(contains('private123')));
     expect('${failed.f}', isNot(contains('bilibili.com')));
     await settle(tester);

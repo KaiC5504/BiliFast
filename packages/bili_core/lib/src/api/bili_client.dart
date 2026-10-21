@@ -72,8 +72,9 @@ final class BiliClient {
   /// The official API's login, set by the app once it has one; account calls to `app.bilibili.com` need it.
   AppToken? appToken;
 
-  /// Called when an official account call answers that [appToken] is no longer taken; the app drops it and asks again.
-  void Function()? onAppTokenRejected;
+  /// Called with the access token an official account call was signed with when the answer says it is no longer
+  /// taken; the app drops it, unless [appToken] has changed since, and asks again.
+  void Function(String accessToken)? onAppTokenRejected;
 
   /// The device id the official calls name (`buvid`), made once by the app and kept, so the feed learns one device.
   String? appBuvid;
@@ -129,7 +130,10 @@ final class BiliClient {
         } on FormatException {
           throw BiliError.invalidLink;
         }
-        final response = await _transport.send(HTTPRequest(url: secure, headers: {'User-Agent': userAgent}));
+        final response = await _sendOver(
+          HTTPRequest(url: secure, headers: {'User-Agent': userAgent}),
+          'resolve short link',
+        );
         _logger.info(LogCategory.api, 'resolve short link', {'host': secure.host, 'status': response.status});
         final next = LinkParser.parse(response.finalURL.toString());
         if (next == null || next.isShort) throw BiliError.invalidLink;
@@ -321,15 +325,31 @@ final class BiliClient {
 
   static final _nsError = RegExp(r'\[domain=([\w.]+), code=(-?\d+)\]');
 
-  /// The error's type, and an NSError's domain and code, which cupertino_http writes into its message. Never the
-  /// message itself: `package:http`'s errors end with the request's URL, query and all.
-  static Map<String, Object> _transportFailure(Object error) {
-    final ns = _nsError.firstMatch('$error');
-    return {
-      'error': '${error.runtimeType}',
-      if (ns != null) 'domain': ns[1]!,
-      if (ns != null) 'code': int.parse(ns[2]!),
-    };
+  /// The transport's failure as [BiliNetworkError], logged under [path]. Only the error's type and an NSError's
+  /// domain and code, which cupertino_http writes into its message, are kept: `package:http`'s errors end with the
+  /// request's URL, query and all, so the error itself never leaves here. An [Error] is a bug, not the network, and
+  /// goes on as it is.
+  Future<HTTPResponse> _sendOver(HTTPRequest request, String path) async {
+    try {
+      return await _transport.send(request);
+    } catch (error, stack) {
+      if (error is! Exception) {
+        _logger.error(LogCategory.api, path, {'error': '${error.runtimeType}'});
+        rethrow;
+      }
+      final ns = _nsError.firstMatch('$error');
+      final failure = BiliNetworkError(
+        '${error.runtimeType}',
+        domain: ns?[1],
+        code: ns == null ? null : int.parse(ns[2]!),
+      );
+      _logger.error(LogCategory.api, path, {
+        'error': failure.type,
+        'domain': ?failure.domain,
+        'code': ?failure.code,
+      });
+      Error.throwWithStackTrace(failure, stack);
+    }
   }
 
   /// Logs the path only: the query and form can carry the csrf token or a comment the user typed.
@@ -396,15 +416,10 @@ final class BiliClient {
       throw BiliError.invalidLink;
     }
     final watch = Stopwatch()..start();
-    final HTTPResponse response;
-    try {
-      response = await _transport.send(
-        HTTPRequest(url: url, headers: headers, method: method, body: body, timeout: timeout),
-      );
-    } catch (error) {
-      _logger.error(LogCategory.api, path, _transportFailure(error));
-      rethrow;
-    }
+    final response = await _sendOver(
+      HTTPRequest(url: url, headers: headers, method: method, body: body, timeout: timeout),
+      path,
+    );
     final ms = watch.elapsedMicroseconds / 1000;
     if (response.status < 200 || response.status >= 300) {
       _logger.warn(LogCategory.api, path, {'status': response.status, 'ms': ms.round()});

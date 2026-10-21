@@ -72,12 +72,12 @@ void main() {
     test('a rejected token is reported, then the call throws', () async {
       final http = FakeHTTP();
       http.routes[likePath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
-      var rejected = 0;
+      final rejected = <String>[];
       final client = makeClient(http)
         ..appToken = token
-        ..onAppTokenRejected = () => rejected++;
+        ..onAppTokenRejected = rejected.add;
       await expectLater(client.officialLike(aid: 1, on: true), throwsA(const BiliError.api(code: -101, message: '账号未登录')));
-      expect(rejected, 1);
+      expect(rejected, ['ACCESS']);
     });
 
     test('点赞, 投币 and 不喜欢 send PiliPlus\'s fields, where 0 means on for 点赞 and 不喜欢', () async {
@@ -114,12 +114,12 @@ void main() {
     test('any other refusal leaves the token alone', () async {
       final http = FakeHTTP();
       http.routes[likePath] = (200, '{"code":65006,"message":"已赞过","ttl":1}');
-      var rejected = 0;
+      final rejected = <String>[];
       final client = makeClient(http)
         ..appToken = token
-        ..onAppTokenRejected = () => rejected++;
+        ..onAppTokenRejected = rejected.add;
       await expectLater(client.officialLike(aid: 1, on: true), throwsA(isA<BiliAPIError>()));
-      expect(rejected, 0);
+      expect(rejected, isEmpty);
     });
   });
 }

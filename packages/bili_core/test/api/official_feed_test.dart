@@ -143,13 +143,13 @@ void main() {
 
   test('a rejected token is reported and the feed throws its code', () async {
     http.routes[feedPath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
-    var rejected = 0;
-    client.onAppTokenRejected = () => rejected++;
+    final rejected = <String>[];
+    client.onAppTokenRejected = rejected.add;
     await expectLater(
       client.officialFeed(index: 0),
       throwsA(isA<BiliAPIError>().having((error) => error.code, 'code', -101)),
     );
-    expect(rejected, 1);
+    expect(rejected, ['ACCESS']);
   });
 
   test('a feed without items is empty', () async {

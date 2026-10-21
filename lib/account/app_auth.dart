@@ -23,7 +23,8 @@ abstract interface class AppAuth implements Listenable {
   /// When the token runs out; null without one.
   DateTime? get expiresAt;
 
-  /// Launch: the stored token (renewed if due, one call), and the confirm asked once when logged in without one.
+  /// Launch: the stored token (renewed if due, one call), and the confirm asked once when logged in without one,
+  /// unless it was turned down before.
   Future<void> start();
 
   /// Asks for the confirm, completing with whether a token is held now. One already up answers every caller.
@@ -147,6 +148,10 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
 
   /// The keychain threw on the read, so a token may well be stored: the launch doesn't ask for another.
   bool _storeUnreadable = false;
+
+  /// The confirm was turned down. Kept in the device file, so the app doesn't ask by itself again, at this launch or
+  /// the next, until a confirm goes through or the account logs out; what needs the token, and 开发者, still ask.
+  bool _declined = false;
   Future<bool>? _request;
 
   BiliClient get _client => environment.client;
@@ -206,6 +211,7 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     final pages = Navigator.maybeOf(context, rootNavigator: true);
     if (!await confirm(context)) {
       _logger.info(LogCategory.app, 'app auth declined');
+      _setDeclined(true);
       return authorized;
     }
     _logger.info(LogCategory.app, 'app auth asked');
@@ -215,7 +221,13 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
         _logger.info(LogCategory.app, 'app auth closed');
         return authorized;
       }
+      // A logout, or another account, while the confirm was out: the token isn't this login's to keep.
+      if (environment.account is! LoggedIn || environment.mid != token.mid) {
+        _logger.info(LogCategory.app, 'app auth discarded', {'reason': 'account changed'});
+        return authorized;
+      }
       await _hold(token);
+      _setDeclined(false);
       _logger.info(LogCategory.app, 'app auth done', {'days': _daysLeft(token, _now())});
       _toast(context.mounted ? context : null, '授权成功');
       return true;
@@ -268,11 +280,9 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
         final TVLoginState state;
         try {
           state = await _client.tvPoll(authCode);
-        } on BiliError {
-          rethrow;
         } catch (error) {
           // A dropped connection while the user reads the page; only a run of them ends it.
-          if (++failures >= pageFailuresAllowed) rethrow;
+          if ((error is BiliError && error is! BiliNetworkError) || ++failures >= pageFailuresAllowed) rethrow;
           continue;
         }
         failures = 0;
@@ -314,8 +324,9 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     }
   }
 
-  void _rejected() {
-    if (!authorized) return;
+  /// [accessToken] signed the call Bilibili turned down; a rejection that arrives after the token changed is old news.
+  void _rejected(String accessToken) {
+    if (_client.appToken?.accessToken != accessToken) return;
     unawaited(_drop('rejected'));
     if (_rejectionAsked) return;
     _rejectionAsked = true;
@@ -331,12 +342,14 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
       case LoggedOut():
         _loginUnderway = false;
         if (authorized) unawaited(_drop('logout'));
+        _setDeclined(false);
       case LoginExpired():
         _loginUnderway = false;
       case LoggedIn():
+        // Before the early return: a login whose own checks failed is first known here.
+        _dropOtherAccount();
         if (_loginUnderway || _launchAsked) return;
         _launchAsked = true;
-        _dropOtherAccount();
         if (!authorized && !_storeUnreadable) _askLater();
     }
   }
@@ -358,7 +371,7 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
   /// After the current turn, so a login page popping as it hands over its login closes itself, not the confirm.
   void _askLater() {
     Timer.run(() {
-      if (_disposed || authorized || environment.account is! LoggedIn) return;
+      if (_disposed || authorized || _declined || environment.account is! LoggedIn) return;
       final context = navigator.currentContext;
       if (context == null) {
         _logger.warn(LogCategory.app, 'app auth not asked', {'reason': 'no navigator'});
@@ -420,6 +433,7 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     }
   }
 
+  /// The device id, and whether the confirm was turned down, from the device file.
   Future<String> _deviceId() async {
     final path = devicePath();
     if (path != null) {
@@ -427,7 +441,9 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
         final file = File(path);
         if (await file.exists()) {
           final json = jsonDecode(await file.readAsString());
-          final id = json is Map<String, Object?> ? json['buvid'] : null;
+          final fields = json is Map<String, Object?> ? json : const <String, Object?>{};
+          if (fields[_declinedField] == true) _declined = true;
+          final id = fields['buvid'];
           if (id is String && _buvidShape.hasMatch(id)) return id;
         }
       } catch (error) {
@@ -438,12 +454,30 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     if (path != null) {
       try {
         await File(path).parent.create(recursive: true);
-        await File(path).writeAsString(jsonEncode({'buvid': id}), flush: true);
+        await File(path).writeAsString(jsonEncode(_deviceFile(id)), flush: true);
       } catch (error) {
         _logger.warn(LogCategory.app, 'app device id not saved', {'error': '${error.runtimeType}'});
       }
     }
     return id;
+  }
+
+  static const _declinedField = 'authDeclined';
+
+  Map<String, Object> _deviceFile(String id) => {'buvid': id, if (_declined) _declinedField: true};
+
+  /// Written at once: it changes only on a confirm's answer or a logout, and the file is a few bytes.
+  void _setDeclined(bool declined) {
+    if (_declined == declined) return;
+    _declined = declined;
+    final id = _client.appBuvid;
+    final path = devicePath();
+    if (id == null || path == null) return;
+    try {
+      File(path).writeAsStringSync(jsonEncode(_deviceFile(id)), flush: true);
+    } catch (error) {
+      _logger.warn(LogCategory.app, 'app device file not saved', {'error': '${error.runtimeType}'});
+    }
   }
 
   /// A context under the app's overlay, for the toasts of a confirm no page asked for.
