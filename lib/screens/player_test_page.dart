@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../account/app_auth.dart';
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../devtools/crash_log.dart';
@@ -63,7 +64,8 @@ Future<void> shareFileThroughSystem(String path, Rect? origin) async {
 }
 
 /// Slice 1's whole app, now 开发者 in 设置 (dev builds): the account the keychain login gave, a BV field, the player and
-/// its switches, 旋转动画, the log forwarder with 导出日志 and 测试崩溃, and the speed test.
+/// its switches, 旋转动画, the official API's token and 推荐's source, the log forwarder with 导出日志 and 测试崩溃,
+/// and the speed test.
 class PlayerTestPage extends StatefulWidget {
   const PlayerTestPage({
     super.key,
@@ -76,6 +78,7 @@ class PlayerTestPage extends StatefulWidget {
     this.releasePlayback,
     this.shareFile = shareFileThroughSystem,
     this.prefs,
+    this.appAuth,
   });
 
   final AppEnvironment environment;
@@ -98,6 +101,9 @@ class PlayerTestPage extends StatefulWidget {
 
   /// [PlayerPrefs.shared] unless a test passes its own.
   final PlayerPrefs? prefs;
+
+  /// The official API's token, for the 官方接口 row; without it the row is left out.
+  final AppAuth? appAuth;
 
   @override
   State<PlayerTestPage> createState() => _PlayerTestPageState();
@@ -292,7 +298,7 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
       body: SafeArea(
         top: false,
         child: ListenableBuilder(
-          listenable: Listenable.merge([widget.environment, ?controller, ?controller?.danmaku]),
+          listenable: Listenable.merge([widget.environment, ?widget.appAuth, ?controller, ?controller?.danmaku]),
           builder: (context, _) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -322,6 +328,12 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
                         label: _canTakeOverTurns ? '旋转动画' : '旋转动画（仅 iPhone）',
                         trailing: _turnTakeoverChoice(),
                       ),
+                    ]),
+                    const SizedBox(height: BiliMetrics.sectionGap),
+                    _Card(children: [
+                      if (widget.appAuth case final appAuth?)
+                        _Row(label: '官方接口', trailing: _appAuthState(appAuth)),
+                      _Row(label: '推荐', trailing: _feedChoice()),
                     ]),
                     const SizedBox(height: BiliMetrics.sectionGap),
                     if (widget.logs case final logs?) ...[
@@ -377,6 +389,41 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
       child: ExcludeSemantics(child: choice),
     );
   }
+
+  Widget _appAuthState(AppAuth appAuth) {
+    final expiresAt = appAuth.expiresAt;
+    final authorized = appAuth.authorized;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          authorized && expiresAt != null
+              ? '已授权 · 剩 ${expiresAt.difference(DateTime.now()).inDays} 天'
+              : '未授权',
+          key: const ValueKey('app-auth-state'),
+          style: const TextStyle(fontSize: AppAuthTheme.statusText, color: AppAuthTheme.status),
+        ),
+        const SizedBox(width: BiliMetrics.rowGap),
+        OutlinedButton(
+          key: const ValueKey('app-auth-button'),
+          onPressed: () => unawaited(authorized ? appAuth.reauthorize(context) : appAuth.request(context)),
+          child: Text(authorized ? '重新授权' : '授权'),
+        ),
+      ],
+    );
+  }
+
+  /// Which feed 推荐 asks for; 官方 only while the token is held.
+  Widget _feedChoice() => SegmentedButton<bool>(
+        key: const ValueKey('official-feed'),
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(value: true, label: Text('官方')),
+          ButtonSegment(value: false, label: Text('网页')),
+        ],
+        selected: {_prefs.officialFeed},
+        onSelectionChanged: (selected) => setState(() => _prefs.officialFeed = selected.first),
+      );
 
   Widget _stage(BuildContext context, PlaybackController? controller) {
     if (controller == null) {

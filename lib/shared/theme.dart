@@ -4117,4 +4117,23 @@ abstract final class WatchLaterTheme {
 
 /// The app token's confirm and 开发者's 官方接口 card.
 abstract final class AppAuthTheme {
+  /// The confirm is 设置's alert (51), coming and going as it does there.
+  static const promptIn = SettingsTheme.confirmIn;
+  static const promptOut = SettingsTheme.confirmOut;
+
+  /// The page that opens when the confirm call is refused: Bilibili's confirm page in the login page's frame, which
+  /// no official screenshot shows.
+  static const bar = LoginTheme.bar;
+  static const page = LoginTheme.page;
+  static const close = LoginTheme.close;
+  static const closeIcon = LoginTheme.closeIcon;
+  static const closeTarget = LoginTheme.closeTarget;
+
+  /// 开发者's state line: 已授权 · 剩 N 天, or 未授权.
+  static const status = BiliColors.secondaryText;
+  static const statusText = BiliMetrics.smallText;
+
+  static TextStyle get titleStyle => LoginTheme.titleStyle;
+
+  static TextStyle get messageStyle => LoginTheme.messageStyle;
 }

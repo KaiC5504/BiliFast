@@ -5,7 +5,7 @@ sealed class TVLoginState {
 
   static const TVLoginState waiting = TVLoginWaiting();
   static const TVLoginState expired = TVLoginExpired();
-  const factory TVLoginState.confirmed({required String accessToken, required int mid}) = TVLoginConfirmed;
+  const factory TVLoginState.confirmed(AppToken token) = TVLoginConfirmed;
 }
 
 final class TVLoginWaiting extends TVLoginState {
@@ -23,35 +23,31 @@ final class TVLoginExpired extends TVLoginState {
 }
 
 final class TVLoginConfirmed extends TVLoginState {
-  const TVLoginConfirmed({required this.accessToken, required this.mid});
+  const TVLoginConfirmed(this.token);
 
-  final String accessToken;
-  final int mid;
-
-  @override
-  bool operator ==(Object other) => other is TVLoginConfirmed && other.accessToken == accessToken && other.mid == mid;
+  final AppToken token;
 
   @override
-  int get hashCode => Object.hash(accessToken, mid);
+  bool operator ==(Object other) => other is TVLoginConfirmed && other.token == token;
 
-  // The token is a credential, so it never lands in a log or test failure message.
   @override
-  String toString() => 'TVLoginState.confirmed(mid: $mid)';
+  int get hashCode => token.hashCode;
+
+  // AppToken prints its expiry only, so neither token reaches a log or a test's failure message.
+  @override
+  String toString() => 'TVLoginState.confirmed($token)';
 }
 
-({String accessToken, int mid}) _tvToken(Object? json) {
-  final object = JsonObject.from(json);
-  final token = object.required(object.string('access_token'), 'access_token');
-  final mid = object.required(object.integer('mid'), 'mid');
-  if (token.isEmpty) throw const DecodeError('missing access_token');
-  return (accessToken: token, mid: mid);
-}
+/// The TV login's code, asked as PiliPlus's `getHDcode` asks it.
+const _tvCodeFields = {'local_id': '0', 'platform': 'android', 'mobi_app': 'android_hd'};
 
-/// The app API (and the passport TV login that issues its token) wants a signature and an access token, not cookies.
+/// The app token's login: a TV login code, confirmed with the web login's cookies, then polled for the token. Both
+/// the code and the poll are signed with [AppSigner.android] (the Android HD key), so the token pairs with every
+/// official call.
 extension BiliClientApp on BiliClient {
-  /// The URL is Bilibili's confirm page; the user opens it in a signed-in web view and taps 确认登录.
-  Future<({String url, String authCode})> tvAuthCode({required AppSigner signer}) {
-    final form = signer.signed({'local_id': '0'}, ts: _unixSeconds);
+  /// The URL is Bilibili's confirm page; [confirmTvLogin] confirms it without the page.
+  Future<({String url, String authCode})> tvAuthCode() {
+    final form = AppSigner.android.signed(_tvCodeFields, ts: _unixSeconds);
     return post(
       '/x/passport-tv-login/qrcode/auth_code',
       form: form,
@@ -67,20 +63,25 @@ extension BiliClientApp on BiliClient {
     );
   }
 
-  Future<TVLoginState> tvPoll({required AppSigner signer, required String authCode}) async {
-    final form = signer.signed({'auth_code': authCode, 'local_id': '0'}, ts: _unixSeconds);
+  /// PiliPlus's "cookie转access_key": the web login confirms the code as tapping 确认 on its page would. The client
+  /// adds the cookies and the `csrf` field; a refusal throws, and the page is the way left.
+  Future<void> confirmTvLogin(String authCode) =>
+      postVoid('/x/passport-tv-login/h5/qrcode/confirm', form: {'auth_code': authCode}, host: BiliClient.passport);
+
+  Future<TVLoginState> tvPoll(String authCode) async {
+    final form = AppSigner.android.signed({'auth_code': authCode, 'local_id': '0'}, ts: _unixSeconds);
     final envelope = await _postEnvelope(
       '/x/passport-tv-login/qrcode/poll',
       form: form,
       host: BiliClient.passport,
       cookies: false,
-      decode: _tvToken,
+      decode: (json) => _issuedToken(json),
     );
     switch (envelope.code) {
       case 0:
         final token = envelope.data;
         if (token == null) throw const BiliError.decoding('tv login: confirmed without a token');
-        return TVLoginState.confirmed(accessToken: token.accessToken, mid: token.mid);
+        return TVLoginState.confirmed(token);
       case 86039 || 86090:
         return TVLoginState.waiting;
       case 86038:
@@ -90,17 +91,23 @@ extension BiliClientApp on BiliClient {
     }
   }
 
-  /// The one renewal near [AppToken.expiresAt]: the passport swaps the refresh token for a fresh pair.
-  Future<AppToken> renewAppToken() => _officialPost(
-    '/x/passport-login/oauth2/refresh_token',
-    {'refresh_token': appToken?.refreshToken ?? ''},
-    (json) => AppToken.issued(JsonObject.from(json).nested('token_info')?.map ?? json, now: now()),
-    host: BiliClient.passport,
-  );
+  /// The one renewal near [AppToken.expiresAt]: the passport swaps the refresh token for a fresh pair. The helper
+  /// adds the current token as `access_key`.
+  Future<AppToken> renewAppToken() {
+    final current = appToken;
+    return _officialPost(
+      '/x/passport-login/oauth2/refresh_token',
+      {'refresh_token': current?.refreshToken ?? ''},
+      (json) => _issuedToken(json, mid: current?.mid),
+      host: BiliClient.passport,
+    );
+  }
 
-  /// `on: true` dislikes the video, `on: false` takes it back.
-  Future<void> dislike({required int aid, required bool on, required String accessToken, required AppSigner signer}) {
-    final form = signer.signed({'aid': '$aid', 'dislike': on ? '0' : '1', 'access_key': accessToken}, ts: _unixSeconds);
-    return postVoid('/x/v2/view/dislike', form: form, host: BiliClient.appAPI, cookies: false);
+  /// The passport's answers carry the token flat (the TV poll's `data`), under `token_info`, or both. A renewal
+  /// that leaves out `mid` keeps the account's.
+  AppToken _issuedToken(Object? json, {int? mid}) {
+    final object = JsonObject.from(json);
+    final info = object.map['access_token'] == null ? object.nested('token_info')?.map ?? object.map : object.map;
+    return AppToken.issued(info['mid'] == null && mid != null ? {...info, 'mid': mid} : info, now: now());
   }
 }
