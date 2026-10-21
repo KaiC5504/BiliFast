@@ -4105,6 +4105,95 @@ abstract final class SpaceVideosTheme {
 
 /// 推荐's ⋮ sheet, the card after 不感兴趣 and the reasons sheet (90, 91, 92).
 abstract final class FeedDislikeTheme {
+  /// Both sheets (90, 92): the page dimmed by half, the soft-grey sheet with a 12 corner and its grabber 8 down,
+  /// white cards 16 in with an 8 corner, 16 between groups and below the last one.
+  static const dim = Color(0x80000000);
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
+  static const sheetFill = BiliColors.softGrey;
+  static const sheetRadius = 12.0;
+  static const grabberTop = 8.0;
+  static const grabberWidth = 30.0;
+  static const grabberHeight = 3.0;
+  static const grabberInk = Color(0xFFC9CCD0);
+  static const inset = 16.0;
+  static const groupGap = 16.0;
+  static const sheetBottom = 16.0;
+  static const cardFill = BiliColors.card;
+  static const cardRadius = 8.0;
+
+  /// Dragged down this far, or flung, a sheet closes.
+  static const dragClose = 0.25;
+  static const flingClose = 700.0;
+
+  /// 90's rows: 52 tall, the icon's middle 26.67 in from the card's edge and the words 44 in, 14 pt; the hairline
+  /// between two rows starts under the words.
+  static const menuTop = 19.0;
+  static const rowHeight = 52.0;
+  static const rowIconCentre = 80 / 3;
+  static const rowIconBox = 20.0;
+  static const watchLaterIcon = 18.0;
+
+  /// 添加至稍后再看's ring sits a little right of the other icons' middle.
+  static const watchLaterShift = 1 / 6;
+  static const rowTextLeft = 44.0;
+  static const rowText = 14.0;
+  static const ink = BiliColors.text;
+  static const hairline = 1 / 3;
+  static const hairlineInk = BiliColors.divider;
+
+  /// The line drawings' stroke, 90's and 92's.
+  static const glyphStroke = 4 / 3;
+  static const tileGlyphStroke = 1.5;
+
+  /// 92: 不感兴趣原因 bold 14, its middle 33 below the sheet's top; tiles 4 across from 55 down, 67 tall and 8 apart,
+  /// the icon's middle 24 below a tile's top and the label's 51.5, 11 pt grey.
+  static const titleCentre = 33.0;
+  static const titleText = 14.0;
+  static const titleWeight = FontWeight.w600;
+  static const tilesTop = 55.0;
+  static const tileHeight = 67.0;
+  static const tileGap = 8.0;
+  static const tileColumns = 4;
+  static const tileIconCentre = 24.0;
+  static const tileIconBox = 22.0;
+  static const tileLabelCentre = 51.5;
+  static const tileLabelText = 11.0;
+  static const tileLabelInk = Color(0xFF61666D);
+
+  /// 91: the cover blurred under a light shade, a white disc 23.33 across with the ✓ cut out of it, 已减少此类内容推荐
+  /// white 13 pt and ↶ 撤销 12 pt in white at 60 %; under the cover, 选择不感兴趣原因 › 14 pt in the middle of the white.
+  /// The card keeps its top corners only.
+  static const coverBlur = 24.0;
+  static const coverShade = Color(0x26000000);
+  static const checkDisc = 70 / 3;
+  static const checkStroke = 5 / 3;
+
+  /// Middles measured from the cover's middle (the ✓ and the words) and from its bottom (撤销).
+  static const checkCentre = -21.5;
+  static const messageCentre = 6.5;
+  static const messageText = 13.0;
+  static const messageInk = Color(0xFFFFFFFF);
+  static const undoFromBottom = 20.0;
+  static const undoText = 12.0;
+  static const undoInk = Color(0x99FFFFFF);
+  static const undoGlyphWidth = 26 / 3;
+  static const undoGlyphHeight = 9.0;
+  static const undoGap = 11 / 3;
+
+  /// ↶ 撤销 sits right of the card's middle, and 选择不感兴趣原因 › left of it, 41.83 below the cover (the middle of
+  /// 91's taller card).
+  static const undoShift = 3.0;
+  static const reasonsCentre = 251 / 6;
+  static const reasonsShift = -1.5;
+  static const undoGlyphStroke = 1.0;
+  static const reasonsText = 14.0;
+  static const chevronWidth = 14 / 3;
+  static const chevronHeight = 28 / 3;
+  static const chevronGap = 11 / 3;
+  static const chevronStroke = 1.2;
+
+  static const fadeIn = Duration(milliseconds: 220);
 }
 
 /// 我的收藏: the folders, a folder, all videos, a row's ⋮ (80-84).
