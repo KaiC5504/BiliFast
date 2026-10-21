@@ -58,7 +58,5 @@ class ClientWatchLaterApi implements WatchLaterApi {
     required String intro,
     required bool isPrivate,
     String cover = '',
-  }) =>
-      // bili_core's createFolder takes no cover on this base; it goes on as cover: cover once it does.
-      _client.createFolder(title: title, isPrivate: isPrivate, intro: intro);
+  }) => _client.createFolder(title: title, isPrivate: isPrivate, intro: intro, cover: cover);
 }

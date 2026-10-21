@@ -161,11 +161,13 @@ class _WatchLaterPageState extends State<WatchLaterPage> {
   }
 
   Future<FavFolder?> _newFolder() {
-    final api = widget.api ?? AppScope.of(context).watchLaterApi;
+    final services = AppScope.of(context);
+    final api = widget.api ?? services.watchLaterApi;
     return openNewFolder(
       context,
       create: ({required String title, required String intro, required bool isPrivate, String cover = ''}) =>
           api.createFolder(title: title, intro: intro, isPrivate: isPrivate, cover: cover),
+      uploadCover: services.favouritesApi.uploadCover,
     );
   }
 
