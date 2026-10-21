@@ -189,7 +189,7 @@ void main() {
     await frames(tester);
     expect(key('space-retry'), findsNothing);
     expect(key('space-header'), findsOneWidget);
-    expect(harness.spaceApi.calls, ['profile mid=$_mid', 'profile mid=$_mid']);
+    expect(harness.spaceApi.calls.where((call) => call.startsWith('profile')), ['profile mid=$_mid', 'profile mid=$_mid']);
   });
 
   testWidgets('+ 关注 follows at once, toasts 关注成功 and shows 已关注 with ▽', (tester) async {

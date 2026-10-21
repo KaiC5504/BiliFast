@@ -41,6 +41,9 @@ class _SpacePageState extends State<SpacePage> {
   SpaceFollow? _follow;
   bool _collapsed = false;
 
+  /// How far the space scrolls before the bar comes in, set where the page is built.
+  double _barAt = SpaceHeader.nameCentre;
+
   @override
   void initState() {
     super.initState();
@@ -103,8 +106,7 @@ class _SpacePageState extends State<SpacePage> {
   /// The bar comes in once the name's line has passed under the status bar (77).
   void _scrolled() {
     if (!_scroll.hasClients) return;
-    final top = MediaQuery.paddingOf(context).top;
-    final collapsed = _scroll.offset >= SpaceHeader.nameCentre - top;
+    final collapsed = _scroll.offset >= _barAt;
     if (collapsed != _collapsed) setState(() => _collapsed = collapsed);
   }
 
@@ -214,6 +216,7 @@ class _SpacePageState extends State<SpacePage> {
 
   Widget _space(SpaceProfile profile) {
     final top = MediaQuery.paddingOf(context).top;
+    _barAt = SpaceHeader.nameCentre - top;
     final barHeight = top + SpaceTheme.barRow;
     final headerHeight = SpaceHeader.heightOf(profile);
     final following = _following;

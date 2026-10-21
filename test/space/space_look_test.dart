@@ -174,16 +174,43 @@ void main() {
   testWidgets('63: the default banner, the face, the counts, + 关注, the name, 小店 and five tabs', (tester) async {
     await _show(tester, _jojo);
     await _shoot(tester, '63');
+    // 63's measures, in pt.
+    expect(_rect(tester, 'space-follow'), rectMoreOrLessEquals(const Rect.fromLTRB(156, 232.67, 428, 262.67), epsilon: 0.5));
+    expect(_rect(tester, 'space-fans').center.dx, closeTo(199.5, 0.5));
+    expect(_rect(tester, 'space-following').center.dx, closeTo(292, 0.5));
+    expect(_rect(tester, 'space-likes').center.dx, closeTo(384, 1));
+    expect(_rect(tester, 'space-name').center.dy, closeTo(292.5, 0.5));
+    expect(_rect(tester, 'space-bio').center.dy, closeTo(322.83, 0.5));
+    expect(
+      _rect(tester, 'space-entry-shop'),
+      rectMoreOrLessEquals(const Rect.fromLTRB(12, 366.67, 428, 406.67), epsilon: 0.5),
+    );
+    expect(_rect(tester, 'space-tabs').top, closeTo(422.67, 0.5));
+    expect(_rect(tester, 'space-tab-indicator'), rectMoreOrLessEquals(const Rect.fromLTRB(213, 456.67, 227, 458.67), epsilon: 0.5));
+    for (final (kind, centre) in [('home', 40.33), ('dynamic', 130.17), ('shop', 309.17), ('favourite', 399.0)]) {
+      expect(_rect(tester, 'space-tab-$kind').center.dx, closeTo(centre, 1), reason: kind);
+    }
   });
 
   testWidgets('69: a long bio and three tabs, no cards', (tester) async {
     await _show(tester, _firefly);
     await _shoot(tester, '69');
+    expect(_rect(tester, 'space-tabs').top, closeTo(370.67, 0.5), reason: 'no cards: 16 under the tag row');
+    for (final (kind, centre) in [('home', 70.17), ('dynamic', 219.67), ('contribute', 368.83)]) {
+      expect(_rect(tester, 'space-tab-$kind').center.dx, closeTo(centre, 1), reason: kind);
+    }
   });
 
   testWidgets('70: followed, with 充电, 已关注 and ▽', (tester) async {
     await _show(tester, _wallpaper, following: true);
     await _shoot(tester, '70');
+    expect(_rect(tester, 'space-charge'), rectMoreOrLessEquals(const Rect.fromLTRB(156, 232.67, 239, 262.67), epsilon: 0.5));
+    expect(_rect(tester, 'space-followed'), rectMoreOrLessEquals(const Rect.fromLTRB(243, 232.67, 396, 262.67), epsilon: 0.5));
+    expect(
+      _rect(tester, 'space-follow-more'),
+      rectMoreOrLessEquals(const Rect.fromLTRB(398, 232.67, 428, 262.67), epsilon: 0.5),
+    );
+    expect(_rect(tester, 'space-face-badge'), rectMoreOrLessEquals(const Rect.fromLTRB(90, 225.67, 114, 249.67), epsilon: 0.5));
   });
 
   testWidgets('71: 已关注 opens its sheet over the dimmed page', (tester) async {
@@ -191,6 +218,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('space-followed')));
     await tester.pumpAndSettle();
     await _shoot(tester, '71');
+    expect(_rect(tester, 'space-sheet').top, closeTo(731, 0.5));
+    expect(_rect(tester, 'space-sheet-cancel').center.dy, closeTo(914.33, 0.5));
   });
 
   testWidgets('73: scrolled, the white bar with the tabs pinned under it', (tester) async {
@@ -199,5 +228,11 @@ void main() {
     position.jumpTo(position.maxScrollExtent);
     await tester.pumpAndSettle();
     await _shoot(tester, '73');
+    expect(_rect(tester, 'space-bar').bottom, 94);
+    expect(_rect(tester, 'space-tabs').top, closeTo(94, 0.01));
+    final pill = _rect(tester, 'space-pill');
+    expect(pill.center, offsetMoreOrLessEquals(const Offset(220, 69), epsilon: 0.5));
+    expect(pill.height, 28);
+    expect(pill.width, closeTo(91.33, 1));
   });
 }

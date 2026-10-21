@@ -210,7 +210,7 @@ class _Face extends StatelessWidget {
               child: ClipOval(child: RemoteImage.avatar(profile.face)),
             ),
           ),
-          // Both badges are drawn for the video page at half this size; scaled up whole, ring and all.
+          // The video page's bolt and 评论's 大 are drawn at half this size; scaled up whole, ring and all.
           if (badge != null)
             Positioned(
               right: 0,

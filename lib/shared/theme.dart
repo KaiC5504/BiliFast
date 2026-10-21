@@ -3576,7 +3576,7 @@ abstract final class SpaceTheme {
   static const barFade = Duration(milliseconds: 150);
 
   /// The bar's centred pill: a 28 tall tint with the 26 pt face 2 in from its left, + 关注 8.33 after it and 13 clear
-  /// on the right.
+  /// of the text's ink on the right.
   static const pillHeight = 28.0;
   static const pillFace = 26.0;
   static const pillFaceInset = 2.0;
@@ -3660,8 +3660,9 @@ abstract final class SpaceTheme {
   static const moreChevronStroke = 1.0;
   static const moreChevronDrop = 5 / 6;
 
-  /// The rows under the face, 12 from the edges: the name's box from 280, 25 tall; the bio's 7.33 under it, 21 tall;
-  /// the tag row's 6.33 under that, 15 tall; the cards 12 under that, 40 tall; then 16 to the tab row.
+  /// The rows under the face, 12 from the edges: the name's box from 280, 25 tall; the bio's 6.83 under it, 21 tall
+  /// (its ink centred 322.83); the tag row's 6.83 under that, 15 tall; the cards 12 under that, 40 tall; then 16 to the
+  /// tab row.
   static const gutter = 12.0;
   static const topBlock = 280.0;
   static const nameBox = 25.0;
@@ -3711,8 +3712,8 @@ abstract final class SpaceTheme {
   static const detailText = 12.0;
   static const detailInk = BiliColors.link;
 
-  /// IP属地 and the like on one row, 11.33 apart: a 10.33 × 8.67 IP box 1 in, the text 3.33 after it; a link ends
-  /// with ›.
+  /// IP属地 and the like on one row, 11.33 apart: a 10.33 × 8.67 IP box 1 in, the text's ink 3.33 after it; a link
+  /// ends with ›.
   static const tagGap = 41 / 6;
   static const tagBox = 15.0;
   static const tagText = 10.0;
@@ -3728,8 +3729,8 @@ abstract final class SpaceTheme {
   static const tagChevronHeight = 6.0;
   static const tagChevronGap = 3.0;
 
-  /// 小店 and 充电: 40 tall grey cards, side by side 8 apart when there are two (78), the icon 10 in, the note 10
-  /// from the right.
+  /// 小店 and 充电: 40 tall grey cards, side by side 8 apart when there are two (78), the icon 10 in, the title 12 pt
+  /// and the note 11 pt, its ink ending 9 from the right.
   static const entriesGap = 12.0;
   static const entryHeight = 40.0;
   static const entrySpacing = 8.0;
