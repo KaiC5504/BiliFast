@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/space/fake_space_api.dart';
 import 'package:bilifast/space/space_api.dart';
@@ -166,6 +167,17 @@ void main() {
     expect(find.byKey(const ValueKey('space-sort')), findsOneWidget);
   });
 
+  testWidgets('chips without 视频 (only 图文 and 合集) list the uploader’s videos with none chosen', (tester) async {
+    await show(tester, space: profile(chips: const [_article, _season]));
+    expect(api.calls, ['videos mid=$_mid order=pubdate next=null']);
+    expect(find.byKey(const ValueKey('space-chip-1')), findsOneWidget);
+    for (final title in ['图文', '测试合集']) {
+      expect(tester.widget<Semantics>(_chipSemantics(title)).properties.selected, isFalse, reason: title);
+    }
+    expect(find.text('测试视频 0'), findsOneWidget);
+    expect(find.byKey(const ValueKey('space-sort')), findsOneWidget);
+  });
+
   testWidgets('图文 toasts 暂未开放 and stays unchosen', (tester) async {
     await show(tester);
     await tester.tap(find.byKey(const ValueKey('space-chip-1')));
@@ -206,6 +218,71 @@ void main() {
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('space-play-all')));
     expect(opened.last.bvid, 'BV1space044');
+  });
+
+  testWidgets('播放全部 opens nothing while the first page loads, nor on an empty list', (tester) async {
+    final hold = api.holds['videos'] = Completer<void>();
+    await show(tester);
+    await tester.tap(find.byKey(const ValueKey('space-play-all')));
+    await tester.pump();
+    expect(opened, isEmpty);
+    api.holds.remove('videos');
+    hold.complete();
+    await settle(tester);
+
+    api = FakeSpaceApi();
+    await show(tester);
+    expect(find.text(SpaceVideosSliver.endMessage), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('space-play-all')));
+    await tester.pump();
+    expect(opened, isEmpty);
+  });
+
+  testWidgets('every control answers an accessibility press', (tester) async {
+    final handle = tester.ensureSemantics();
+    api = FakeSpaceApi(videoList: videos(45, plays: [for (var i = 0; i < 45; i++) i * 10]));
+    await show(tester);
+
+    tester.semantics.tap(find.semantics.byLabel('排序：最新发布'));
+    await settle(tester);
+    expect(api.calls.last, 'videos mid=$_mid order=click next=null');
+
+    tester.semantics.tap(find.semantics.byLabel('播放全部'));
+    expect(opened.single.bvid, 'BV1space044');
+    tester.semantics.tap(find.semantics.byLabel(RegExp('^测试视频 43，')));
+    expect(opened.last.bvid, 'BV1space043');
+
+    tester.semantics.tap(find.semantics.byLabel('更多操作').first);
+    await settle(tester);
+    expect(find.byKey(const ValueKey('space-menu')), findsOneWidget);
+    tester.semantics.tap(find.semantics.byLabel('添加至稍后再看'));
+    await settle(tester);
+    expect(pageApi.calls, ['addToWatchLater aid=9044']);
+    await toastGone(tester);
+
+    tester.semantics.tap(find.semantics.byLabel('更多操作').first);
+    await settle(tester);
+    tester.semantics.tap(find.semantics.byLabel('分享'));
+    await settle(tester);
+    expect(shared, [Uri.parse('https://www.bilibili.com/video/BV1space044')]);
+
+    tester.semantics.tap(find.semantics.byLabel('测试合集'));
+    await settle(tester);
+    expect(api.calls.last, 'chipVideos mid=$_mid chip=测试合集 next=null');
+    tester.semantics.tap(find.semantics.byLabel('视频'));
+    await settle(tester);
+    expect(api.calls.last, 'videos mid=$_mid order=click next=null');
+
+    api.failures['videos'] = const BiliHTTPError(500);
+    tester.semantics.tap(find.semantics.byLabel('排序：最多播放'));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('space-videos-retry')), findsOneWidget);
+    api.failures.remove('videos');
+    tester.semantics.tap(find.semantics.byLabel('重试'));
+    await settle(tester);
+    expect(api.calls.last, 'videos mid=$_mid order=pubdate next=null');
+    expect(find.text('测试视频 0'), findsOneWidget);
+    handle.dispose();
   });
 
   testWidgets('a row opens its video', (tester) async {
@@ -294,6 +371,27 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('space-menu-watch-later')));
       await settle(tester);
       expect(gate.requests, 1);
+    });
+
+    testWidgets('a 添加至稍后再看 that fails after the page is gone is still logged, by its code only', (tester) async {
+      final sink = MemorySink();
+      Logger.shared.add(sink);
+      addTearDown(() => Logger.shared.remove(sink));
+      pageApi.failures['addToWatchLater'] = const BiliAPIError(code: 90001, message: '稍后再看已满');
+      final hold = pageApi.holds['addToWatchLater'] = Completer<void>();
+      await show(tester);
+      await openMenu(tester);
+      await tester.tap(find.byKey(const ValueKey('space-menu-watch-later')));
+      await settle(tester);
+      expect(pageApi.calls, ['addToWatchLater aid=9000']);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      hold.complete();
+      await tester.pump();
+      final logged = sink.events.singleWhere((event) => event.msg == 'space watch later failed');
+      expect('${logged.f['error']}', contains('api 90001'));
+      expect('${logged.f}', isNot(contains('稍后再看已满')));
+      expect(find.text('稍后再看已满'), findsNothing);
     });
 
     testWidgets('分享 shares the video’s link, logged in or out', (tester) async {
@@ -411,16 +509,21 @@ void main() {
       expect(find.byKey(const ValueKey('space-videos-retry')), findsNothing);
     });
 
-    testWidgets('an answer to the list before a chip or sort change is dropped', (tester) async {
+    testWidgets('a chip or sort change waits for the call out, drops its answer, then asks for the new list', (
+      tester,
+    ) async {
       api = FakeSpaceApi(videoList: videos(45, plays: [for (var i = 0; i < 45; i++) i * 10]));
       final hold = api.holds['videos'] = Completer<void>();
       await show(tester);
       await tester.tap(find.byKey(const ValueKey('space-chip-2')));
       await settle(tester);
-      expect(api.calls.last, startsWith('chipVideos'));
+      expect(api.calls, hasLength(1), reason: 'the first page is still out');
+      expect(find.byKey(const ValueKey('space-videos-loading')), findsOneWidget);
       api.holds.remove('videos');
       hold.complete();
       await settle(tester);
+      expect(api.calls, ['videos mid=$_mid order=pubdate next=null', 'chipVideos mid=$_mid chip=测试合集 next=null']);
+      expect(row(0), findsOneWidget);
       expect(row(12), findsNothing);
       expect(tester.widget<Semantics>(_chipSemantics('测试合集')).properties.selected, isTrue);
       expect(find.byKey(const ValueKey('space-sort')), findsNothing);
@@ -432,15 +535,71 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('space-sort')));
       await tester.pump();
       expect(api.calls.last, 'videos mid=$_mid order=click next=null');
-      api.holds.remove('videos');
       await tester.tap(find.byKey(const ValueKey('space-sort')));
       await settle(tester);
-      expect(api.calls.last, 'videos mid=$_mid order=pubdate next=null');
+      expect(api.calls.last, 'videos mid=$_mid order=click next=null', reason: '最多播放 is still out');
+      api.holds.remove('videos');
       late.complete();
       await settle(tester);
+      expect(api.calls.last, 'videos mid=$_mid order=pubdate next=null');
       expect(find.text('最新发布'), findsOneWidget);
       expect(find.text('测试视频 0'), findsOneWidget);
       expect(find.text('测试视频 44'), findsNothing);
+    });
+
+    testWidgets('quick chip and sort taps while a call is out put one more call out, for the last choice', (
+      tester,
+    ) async {
+      api = FakeSpaceApi(videoList: videos(45, plays: [for (var i = 0; i < 45; i++) i * 10]));
+      final hold = api.holds['videos'] = Completer<void>();
+      await show(tester);
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(find.byKey(const ValueKey('space-sort')));
+        await tester.pump();
+      }
+      await tester.tap(find.byKey(const ValueKey('space-chip-2')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('space-chip-0')));
+      await tester.pump();
+      expect(api.calls, hasLength(1));
+      expect(find.text('最多播放'), findsOneWidget);
+
+      api.holds.remove('videos');
+      hold.complete();
+      await settle(tester);
+      expect(api.calls, ['videos mid=$_mid order=pubdate next=null', 'videos mid=$_mid order=click next=null']);
+      expect(find.text('测试视频 44'), findsOneWidget, reason: 'the most played first');
+      expect(find.text('测试视频 0'), findsNothing);
+      expect(tester.widget<Semantics>(_chipSemantics('视频')).properties.selected, isTrue);
+    });
+
+    testWidgets('the sort toggled while the next page is out drops that page, then lists the new order from the top', (
+      tester,
+    ) async {
+      api = FakeSpaceApi(videoList: videos(45, plays: [for (var i = 0; i < 45; i++) i * 10]));
+      await show(tester);
+      final twentyRows = scroll.position.maxScrollExtent;
+      final hold = api.holds['videos'] = Completer<void>();
+      scroll.jumpTo(twentyRows);
+      await settle(tester);
+      expect(api.calls.last, 'videos mid=$_mid order=pubdate next=20');
+
+      scroll.jumpTo(0);
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('space-sort')));
+      await settle(tester);
+      expect(api.calls, hasLength(2));
+      api.holds.remove('videos');
+      hold.complete();
+      await settle(tester);
+      expect(api.calls.last, 'videos mid=$_mid order=click next=null');
+      expect(row(44), findsOneWidget);
+      expect(scroll.position.maxScrollExtent, twentyRows, reason: "最新发布's second page isn't added");
+
+      scroll.jumpTo(scroll.position.maxScrollExtent);
+      await settle(tester);
+      expect(api.calls.last, 'videos mid=$_mid order=click next=20');
+      expect(api.calls, hasLength(4));
     });
   });
 }

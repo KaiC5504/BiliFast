@@ -81,6 +81,33 @@ void main() {
     }
   }
 
+  testWidgets("the grid's card and both 重试 answer accessibility presses", (tester) async {
+    final handle = tester.ensureSemantics();
+    final presses = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Column(
+          children: [
+            SizedBox(
+              width: 200,
+              child: UploaderVideoCard(video: _video(1), playing: true, onOpen: () => presses.add('card')),
+            ),
+            UploaderSheetFooter(loading: false, error: '加载失败', isEnd: false, onRetry: () => presses.add('more')),
+            SizedBox(
+              height: 200,
+              child: UploaderSheetFirstLoad(error: '加载失败', onRetry: () => presses.add('first')),
+            ),
+          ],
+        ),
+      ),
+    );
+    tester.semantics.tap(find.semantics.byLabel('正在播放：演示视频 第1期'));
+    tester.semantics.tap(find.semantics.byLabel('加载失败，点击重试'));
+    tester.semantics.tap(find.semantics.byLabel('重试'));
+    expect(presses, ['card', 'more', 'first']);
+    handle.dispose();
+  });
+
   /// A page with a player box over a body whose row opens the uploader, as the video page has them, at the iPhone's
   /// size. [following] is what the page knows of 关注 for the uploader.
   Future<void> show(

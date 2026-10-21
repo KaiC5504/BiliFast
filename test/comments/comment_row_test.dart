@@ -453,6 +453,45 @@ void main() {
       expect(openSpaces(tester), isEmpty);
       expect(calls.threads, [1, 1, 1]);
     });
+
+    testWidgets("to accessibility a reply preview's name is a button inside the box's one stop, opening its space", (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final calls = _Calls();
+      Comment reply(int rpid, int mid, String name) =>
+          Comment(rpid: rpid, root: 1, member: CommentMember(mid: mid, name: name, face: face), message: '看看');
+      await _mountInApp(
+        tester,
+        _row(_comment(replyCount: 3, previews: [reply(7, 70, '回复者'), reply(8, 0, '无名')]), _Model(), calls),
+      );
+      final box = find.semantics.byLabel('共3条回复');
+      expect(box, findsOne);
+      final children = <SemanticsNode>[];
+      box.evaluate().single.visitChildren((child) {
+        children.add(child);
+        return true;
+      });
+      expect(children.map((child) => child.label), ['回复者'], reason: 'no text, link or blank node of its own');
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('comment-replies'))),
+        isSemantics(label: '共3条回复', isButton: true, hasTapAction: true),
+      );
+      expect(children.single, isSemantics(label: '回复者', isButton: true, hasTapAction: true));
+      expect(find.semantics.byLabel('无名'), findsNothing, reason: 'a writer without a mid has no space to open');
+
+      tester.semantics.tap(find.semantics.byLabel('回复者'));
+      await pumpRoute(tester);
+      expectWriter(tester, mid: 70, name: '回复者');
+      expect(calls.threads, isEmpty);
+
+      await closeSpace(tester);
+      tester.semantics.tap(box);
+      await pumpRoute(tester);
+      expect(openSpaces(tester), isEmpty);
+      expect(calls.threads, [1]);
+      handle.dispose();
+    });
   });
 
   group('fan card', () {

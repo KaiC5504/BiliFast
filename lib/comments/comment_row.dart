@@ -221,7 +221,7 @@ class CommentRow extends StatelessWidget {
 /// The writer's mid: the member's, or the comment's when the member came without one.
 int _writerMid(Comment comment) => comment.member.mid > 0 ? comment.member.mid : comment.mid;
 
-/// Opens the space of [comment]'s writer, or null when the server named no mid.
+/// The tap that opens [comment]'s writer's space; null when the server named no mid.
 VoidCallback? _spaceOpener(BuildContext context, Comment comment) {
   final mid = _writerMid(comment);
   if (mid <= 0) return null;
@@ -579,7 +579,8 @@ class _UpLikedChip extends StatelessWidget {
 }
 
 /// The grey box under a comment in the list: up to two replies and 共N条回复 › (10, 12). A reply's name opens its
-/// space; any other tap opens the thread.
+/// space; any other tap opens the thread. To accessibility the box is one button, with each reply's name a button
+/// inside it.
 class _RepliesBox extends StatelessWidget {
   const _RepliesBox({required this.comment, required this.onOpen});
 
@@ -595,11 +596,11 @@ class _RepliesBox extends StatelessWidget {
       fontSize: CommentRowTheme.moreText,
       color: CommentRowTheme.moreLink,
     );
+    // The box's tap is PressHighlight's own: a second one on this node would split that off as a blank node.
     return Semantics(
+      container: true,
       button: true,
       label: count > 0 ? '共$count条回复' : '查看回复',
-      onTap: onOpen,
-      excludeSemantics: true,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(CommentRowTheme.boxRadius),
         child: PressHighlight(
@@ -626,19 +627,21 @@ class _RepliesBox extends StatelessWidget {
                       by: previews.isNotEmpty ? CommentRowTheme.moreSlotOverlap : 0,
                       child: SizedBox(
                         height: CommentRowTheme.moreSlot,
-                        child: Row(
-                          children: [
-                            Text(
-                              '共$count条回复',
-                              style: moreStyle,
-                              strutStyle: BiliFonts.strutOf(context, moreStyle),
-                            ),
-                            const SizedBox(width: CommentRowTheme.chevronGap),
-                            const CustomPaint(
-                              size: Size(CommentRowTheme.chevronWidth, CommentRowTheme.chevronHeight),
-                              painter: _ChevronPainter(),
-                            ),
-                          ],
+                        child: ExcludeSemantics(
+                          child: Row(
+                            children: [
+                              Text(
+                                '共$count条回复',
+                                style: moreStyle,
+                                strutStyle: BiliFonts.strutOf(context, moreStyle),
+                              ),
+                              const SizedBox(width: CommentRowTheme.chevronGap),
+                              const CustomPaint(
+                                size: Size(CommentRowTheme.chevronWidth, CommentRowTheme.chevronHeight),
+                                painter: _ChevronPainter(),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -652,7 +655,8 @@ class _RepliesBox extends StatelessWidget {
   }
 }
 
-/// "name: text…" in two lines, with "| 👍 N" after its last line. The name opens its space.
+/// "name: text…" in two lines, with "| 👍 N" after its last line. The name opens its space; to accessibility the
+/// whole preview is that name's button.
 class _PreviewLine extends StatefulWidget {
   const _PreviewLine({required this.reply});
 
@@ -690,7 +694,8 @@ class _PreviewLineState extends State<_PreviewLine> {
       maxLines: 2,
       linksOpen: false,
     );
-    return _PreviewText(
+    final open = _spaceOpener(context, reply);
+    final preview = _PreviewText(
       ellipsis: CommentRowTheme.previewStyle,
       mask: CommentRowTheme.box,
       cutGrowth: CommentRowTheme.previewCutGrowth,
@@ -725,6 +730,16 @@ class _PreviewLineState extends State<_PreviewLine> {
             ),
           ),
       ],
+    );
+    if (open == null) return ExcludeSemantics(child: preview);
+    // The paragraph would make the name a link and the rest of the text stops of their own; the box stays one stop.
+    return Semantics(
+      container: true,
+      button: true,
+      label: reply.member.name,
+      onTap: open,
+      excludeSemantics: true,
+      child: preview,
     );
   }
 }
