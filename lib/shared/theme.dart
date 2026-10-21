@@ -1117,10 +1117,10 @@ abstract final class ActionTheme {
   /// The solid glyphs' cut-out lines (投币's 币): 4.5 px on font-check 02, as landscape's outlines.
   static const cutStroke = 1.5;
 
-  /// 03's icons are #61666D and their counts the page's grey; on, both turn [BiliColors.pink].
+  /// 03's icons are #61666D and their counts the page's grey; on, both turn [BiliColors.pink], except 不喜欢's name,
+  /// which stays grey under its pink thumb (88, 89).
   static const icon = Color(0xFF61666D);
   static const count = BiliColors.secondaryText;
-  static const unavailableOpacity = 0.4;
 
   /// From 03 (px / 3): the icons' ink starts 23.7 pt under the meta line's and spans 20 pt (a 24 pt icon), the counts'
   /// digits are centred 22.7 pt under the icons'. [rowHeight] ends at the bottom of the count line; 简介 adds

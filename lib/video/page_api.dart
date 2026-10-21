@@ -107,8 +107,10 @@ class ClientPageApi implements PageApi {
       _client.onlineCount(aid: aid, bvid: bvid, cid: cid);
 
   @override
-  Future<void> like({required int aid, required String bvid, required bool on}) =>
-      _client.like(aid: aid, bvid: bvid, on: on);
+  Future<void> like({required int aid, required String bvid, required bool on}) => _officialFirst(
+    () => _client.officialLike(aid: aid, on: on),
+    () => _client.like(aid: aid, bvid: bvid, on: on),
+  );
 
   @override
   Future<TripleResult> triple({required int aid, required String bvid}) => _client.triple(aid: aid, bvid: bvid);
@@ -118,7 +120,25 @@ class ClientPageApi implements PageApi {
 
   @override
   Future<void> coin({required int aid, required String bvid, required int multiply, required bool alsoLike}) =>
-      _client.coin(aid: aid, bvid: bvid, multiply: multiply, alsoLike: alsoLike);
+      _officialFirst(
+        () => _client.officialCoin(aid: aid, multiply: multiply, alsoLike: alsoLike),
+        () => _client.coin(aid: aid, bvid: bvid, multiply: multiply, alsoLike: alsoLike),
+      );
+
+  /// The official call while the app token is held, as PiliPlus does, else the web's. A token Bilibili turns down
+  /// (the client's -101 and -2) has just been reported and is being dropped, and the call did nothing, so it goes out
+  /// once on the web instead: the web login is a different one, and a -101 there still asks for it.
+  Future<void> _officialFirst(Future<void> Function() official, Future<void> Function() web) async {
+    if (_client.appToken == null) return web();
+    try {
+      return await official();
+    } on BiliAPIError catch (error) {
+      if (!_tokenRefused.contains(error.code)) rethrow;
+      return web();
+    }
+  }
+
+  static const _tokenRefused = {-101, -2};
 
   @override
   Future<double> coinBalance() => _client.coinBalance();

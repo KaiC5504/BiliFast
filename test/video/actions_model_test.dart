@@ -84,7 +84,8 @@ class _Rig {
     VideoRelation? relation,
     UploaderCard? uploader,
     int? mid = 10001,
-    bool dislikeAvailable = false,
+    this.authorized = true,
+    this.grants = true,
   }) {
     model = ActionsModel(
       api: api,
@@ -95,7 +96,12 @@ class _Rig {
       accountMid: () => mid,
       requestLogin: () => logins += 1,
       toast: toasts.add,
-      dislikeAvailable: dislikeAvailable,
+      appAuthorized: () => authorized,
+      requestAppAuth: () async {
+        authAsks += 1;
+        if (grants) authorized = true;
+        return grants;
+      },
       logger: Logger(session: 'test')..add(logs),
     );
     model.addListener(() => notified += 1);
@@ -105,6 +111,11 @@ class _Rig {
   final toasts = <String>[];
   final logs = MemorySink();
   bool loggedIn;
+
+  /// The app token is held; asking for it ([grants]) gets one, and [authAsks] counts the asks.
+  bool authorized;
+  bool grants;
+  var authAsks = 0;
   var logins = 0;
   var notified = 0;
   late final ActionsModel model;
@@ -124,7 +135,8 @@ void main() {
     VideoRelation? relation,
     UploaderCard? uploader,
     int? mid = 10001,
-    bool dislikeAvailable = false,
+    bool authorized = true,
+    bool grants = true,
   }) {
     final made = _Rig(
       loggedIn: loggedIn,
@@ -133,7 +145,8 @@ void main() {
       relation: relation,
       uploader: uploader,
       mid: mid,
-      dislikeAvailable: dislikeAvailable,
+      authorized: authorized,
+      grants: grants,
     );
     rigs.add(made);
     return made;
@@ -757,33 +770,133 @@ void main() {
   });
 
   group('不喜欢', () {
-    test('is not available in this build: a tap says so and sends nothing', () async {
+    test('shows at once, goes out for this video, and says 感谢反馈 (88); again takes it back with 取消不喜欢 (89)',
+        () async {
       final r = rig();
-      expect(r.model.dislikeAvailable, isFalse);
+      final gate = r.hold('dislike');
+      final pending = r.model.toggleDislike();
+      expect(r.model.disliked, isTrue, reason: 'the change shows while the server has not answered');
+      expect(r.toasts, isEmpty, reason: 'the thanks waits for the server');
+      gate.complete();
+      await pending;
+      expect(r.model.disliked, isTrue);
+      expect(r.api.calls, ['dislike on=true']);
+      expect(r.toasts, ['感谢反馈']);
+
       await r.model.toggleDislike();
-      expect(r.toasts, ['此版本不支持不喜欢']);
+      expect(r.model.disliked, isFalse);
+      expect(r.api.calls.last, 'dislike on=false');
+      expect(r.toasts, ['感谢反馈', '取消不喜欢']);
+      expect(r.authAsks, 0, reason: 'the token was held');
+      expect(r.model.likeCount, 9131);
+    });
+
+    test('turning it on turns 点赞 off, its count with it; turning 点赞 on turns it off', () async {
+      final r = rig(relation: _relation(like: true));
+      expect(r.model.liked, isTrue);
+      await r.model.toggleDislike();
+      expect(r.model.disliked, isTrue);
+      expect(r.model.liked, isFalse);
+      expect(r.model.likeCount, 9130);
+
+      await r.model.toggleLike();
+      expect(r.model.liked, isTrue);
+      expect(r.model.disliked, isFalse);
+      expect(r.model.likeCount, 9131);
+      expect(r.api.calls, ['dislike on=true', 'like on=true']);
+    });
+
+    test('taking it back leaves 点赞 as it is', () async {
+      final r = rig(relation: _relation(dislike: true));
+      await r.model.toggleDislike();
+      expect(r.model.disliked, isFalse);
+      expect(r.model.liked, isFalse);
+      expect(r.model.likeCount, 9131);
+    });
+
+    test('a refusal rolls back both fields and toasts the server\'s words', () async {
+      final r = rig(relation: _relation(like: true));
+      r.api.failures['dislike'] = const BiliError.api(code: 10003, message: '不存在该稿件');
+      await r.model.toggleDislike();
+      expect(r.model.disliked, isFalse);
+      expect(r.model.liked, isTrue);
+      expect(r.model.likeCount, 9131);
+      expect(r.toasts, ['不存在该稿件']);
+      expect(r.logged, contains('dislike failed'));
+    });
+
+    test('a refusal leaves a 点赞 made since it went out', () async {
+      final r = rig(relation: _relation(like: true));
+      final gate = r.hold('dislike');
+      r.api.failures['dislike'] = const BiliError.http(500);
+      final pending = r.model.toggleDislike();
+      expect(r.model.liked, isFalse);
+      await r.model.toggleLike();
+      expect(r.model.liked, isTrue);
+      expect(r.model.disliked, isFalse);
+      gate.complete();
+      await pending;
+      expect(r.model.liked, isTrue, reason: 'the 点赞 holds');
+      expect(r.model.disliked, isFalse);
+      expect(r.model.likeCount, 9131);
+    });
+
+    test('logged out asks for the login and nothing else', () async {
+      final r = rig(loggedIn: false, authorized: false);
+      await r.model.toggleDislike();
+      expect(r.logins, 1);
+      expect(r.authAsks, 0);
+      expect(r.api.calls, isEmpty);
+      expect(r.toasts, isEmpty);
+    });
+
+    test('without the app token asks for it, and goes on once it comes', () async {
+      final r = rig(authorized: false);
+      await r.model.toggleDislike();
+      expect(r.authAsks, 1);
+      expect(r.model.disliked, isTrue);
+      expect(r.api.calls, ['dislike on=true']);
+      expect(r.toasts, ['感谢反馈']);
+      expect(r.logins, 0);
+    });
+
+    test('without the app token and none given, nothing changes or goes out', () async {
+      final r = rig(authorized: false, grants: false);
+      await r.model.toggleDislike();
+      expect(r.authAsks, 1);
       expect(r.model.disliked, isFalse);
       expect(r.api.calls, isEmpty);
+      expect(r.toasts, isEmpty);
+      expect(r.notified, 0);
     });
 
-    test('says so logged out too, without asking for a login', () async {
-      final r = rig(loggedIn: false);
-      await r.model.toggleDislike();
-      expect(r.toasts, ['此版本不支持不喜欢']);
-      expect(r.logins, 0);
+    test('a token Bilibili turns down rolls back and asks for the token, not the web login, without replaying',
+        () async {
+      for (final refusal in [
+        const BiliError.api(code: -101, message: '账号未登录'),
+        const BiliError.api(code: -2, message: 'Access Key错误'),
+        BiliError.noAppToken,
+      ]) {
+        final r = rig(relation: _relation(like: true));
+        r.api.failures['dislike'] = refusal;
+        await r.model.toggleDislike();
+        expect(r.model.disliked, isFalse, reason: '$refusal');
+        expect(r.model.liked, isTrue, reason: '$refusal');
+        expect(r.authAsks, 1, reason: '$refusal');
+        expect(r.logins, 0, reason: '$refusal');
+        expect(r.toasts, isEmpty, reason: '$refusal');
+        expect(r.api.calls, ['dislike on=true'], reason: '$refusal');
+      }
     });
 
-    test('with the TV keys: logged out asks for a login, logged in still says it can\'t', () async {
-      final out = rig(loggedIn: false, dislikeAvailable: true);
-      await out.model.toggleDislike();
-      expect(out.logins, 1);
-      expect(out.toasts, isEmpty);
+    test('三连 and 投币 with 点赞 turn it off', () async {
+      final r = rig(relation: _relation(dislike: true));
+      await r.model.coin(1, alsoLike: true);
+      expect(r.model.disliked, isFalse);
 
-      final r = rig(dislikeAvailable: true);
-      await r.model.toggleDislike();
-      expect(r.toasts, ['此版本不支持不喜欢']);
-      expect(r.logins, 0);
-      expect(r.api.calls, isEmpty);
+      final t = rig(relation: _relation(dislike: true));
+      await t.model.triple();
+      expect(t.model.disliked, isFalse);
     });
   });
 

@@ -21,7 +21,7 @@ import 'player_session.dart';
 /// the actions show defaults as the account's state.
 class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver implements PageDetails {
   /// [accountChanges] hears the account change and [logins] each login made from the page; after either the relation
-  /// is asked again for this account.
+  /// is asked again for this account. [appAuthorized] and [requestAppAuth] are the app token's, for 不喜欢.
   VideoPageDetailsModel({
     required this._session,
     required this._api,
@@ -29,7 +29,8 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
     required this._accountMid,
     required this._requestLogin,
     required this._toast,
-    this._dislikeAvailable = false,
+    this._appAuthorized,
+    this._requestAppAuth,
     this._follows,
     PeriodicTimer? periodic,
     Logger? logger,
@@ -60,7 +61,8 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
   final int? Function() _accountMid;
   final VoidCallback _requestLogin;
   final void Function(String message) _toast;
-  final bool _dislikeAvailable;
+  final bool Function()? _appAuthorized;
+  final Future<bool> Function()? _requestAppAuth;
   final FollowBook? _follows;
   final PeriodicTimer _periodic;
   final Logger _logger;
@@ -173,7 +175,8 @@ class VideoPageDetailsModel extends ChangeNotifier with WidgetsBindingObserver i
       accountMid: _accountMid,
       requestLogin: _requestLogin,
       toast: _toast,
-      dislikeAvailable: _dislikeAvailable,
+      appAuthorized: _appAuthorized,
+      requestAppAuth: _requestAppAuth,
       follows: _follows,
       logger: _logger,
     );

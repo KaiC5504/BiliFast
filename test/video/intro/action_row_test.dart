@@ -123,20 +123,34 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('without the TV keys 不喜欢 is dimmed but still taps through to its toast', (tester) async {
-    final actions = FakeVideoActions(dislikeAvailable: false);
+  testWidgets('不喜欢 is drawn like the others, and on its thumb turns pink with a pop while its name stays grey (88, 89)',
+      (tester) async {
+    final actions = FakeVideoActions();
     await mount(tester, actions);
-    final dimmed = find.ancestor(of: find.text('不喜欢'), matching: find.byType(Opacity));
-    expect(tester.widget<Opacity>(dimmed.first).opacity, ActionTheme.unavailableOpacity);
-
-    await tester.tap(find.bySemanticsLabel('不喜欢'));
-    expect(actions.calls, ['toggleDislike']);
+    expect(find.ancestor(of: find.text('不喜欢'), matching: find.byType(Opacity)), findsNothing);
+    expect(icon(tester, ActionGlyph.dislike).color, ActionTheme.icon);
+    expect(icon(tester, ActionGlyph.dislike).solid, isTrue);
+    expect(textColour(tester, '不喜欢'), ActionTheme.count);
 
     actions
-      ..dislikeAvailable = true
+      ..disliked = true
       ..changed();
     await tester.pump();
-    expect(tester.widget<Opacity>(dimmed.first).opacity, 1);
+    await tester.pump(const Duration(milliseconds: 100));
+    final pop = tester.widget<ScaleTransition>(
+      find.ancestor(of: find.byWidget(icon(tester, ActionGlyph.dislike)), matching: find.byType(ScaleTransition)).first,
+    );
+    expect(pop.scale.value, greaterThan(1));
+    await tester.pumpAndSettle();
+    expect(icon(tester, ActionGlyph.dislike).color, BiliColors.pink);
+    expect(icon(tester, ActionGlyph.dislike).solid, isTrue);
+    expect(textColour(tester, '不喜欢'), ActionTheme.count);
+
+    actions
+      ..disliked = false
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(icon(tester, ActionGlyph.dislike).color, ActionTheme.icon);
   });
 
   testWidgets('what is on turns pink, icon and count, with a pop', (tester) async {

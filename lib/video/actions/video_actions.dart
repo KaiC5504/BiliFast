@@ -6,8 +6,8 @@ enum ActionPrompt { coin, favourites, unfollow, share }
 
 /// 点赞, 不喜欢, 三连, 投币, 收藏, 分享 and 关注 for the video on the page (BiliNative `ActionsModel.swift`), shared by
 /// the action row, the full-screen chrome and the end screens. Every change shows at once and is taken back, field by
-/// field, if the server refuses it. Logged out, every action but 分享 asks for a login and sends nothing; 不喜欢 says
-/// it isn't supported first (see [dislikeAvailable]).
+/// field, if the server refuses it. Logged out, every action but 分享 asks for a login and sends nothing; logged in
+/// without the app token, 不喜欢 asks for that first.
 abstract interface class VideoActions implements Listenable {
   bool get liked;
 
@@ -39,9 +39,6 @@ abstract interface class VideoActions implements Listenable {
 
   /// Whether a 三连 now goes to the server, so the row bursts only for one that does.
   bool get tripleSends;
-
-  /// Always false until the TV login is ported: 不喜欢 is grey and a tap says 此版本不支持不喜欢.
-  bool get dislikeAvailable;
 
   /// The 合集 holding the video is in this account's 订阅; null without a 合集, before the relation answers, or when
   /// it couldn't be asked.
