@@ -6,19 +6,23 @@ import 'package:bili_core/logic.dart' show CountFormat;
 import 'favourites_api.dart';
 
 /// Answers from memory, for tests and `--fake-account`: nothing leaves the machine. Folders hold [contents] (newest
-/// first), and 视频 lists every video once, newest first, [pageSize] at a time. [calls] lists what was asked, in
-/// order; [holds] keeps a call waiting and [failures] makes it throw, both by method name.
+/// first) and are listed [folderPageSize] at a time, each with its picked cover or else its newest video's; 视频
+/// lists every video once, newest first, [pageSize] at a time. [calls] lists what was asked, in order; [holds] keeps
+/// a call waiting and [failures] makes it throw, both by method name.
 class FakeFavouritesApi implements FavouritesApi {
   FakeFavouritesApi({
     List<FavFolder> folders = const [],
     Map<int, List<FavVideo>> contents = const {},
+    Map<int, String> covers = const {},
     this.ownerName = '测试账号',
     this.pageSize = 20,
+    this.folderPageSize = 20,
     this.videosTabId = 12,
   }) : _folders = [...folders],
        _contents = {
          for (final MapEntry(:key, :value) in contents.entries) key: [...value],
-       };
+       },
+       _covers = {...covers};
 
   /// The PC's `--fake-account` run: the default folder empty, a private one with 45 videos (two pages and the end), a
   /// public one with 2, and one with exactly 3. Covers are empty so nothing is fetched.
@@ -53,8 +57,10 @@ class FakeFavouritesApi implements FavouritesApi {
 
   final List<FavFolder> _folders;
   final Map<int, List<FavVideo>> _contents;
+  final Map<int, String> _covers;
   final String ownerName;
   final int pageSize;
+  final int folderPageSize;
 
   /// What `/x/v3/fav/tab` answers as 视频's id; null for an answer without it.
   final int? videosTabId;
@@ -62,6 +68,7 @@ class FakeFavouritesApi implements FavouritesApi {
   final calls = <String>[];
   final holds = <String, Completer<void>>{};
   final failures = <String, Object>{};
+  var _uploads = 0;
 
   Future<T> _answer<T>(String name, String call, T Function() value) async {
     calls.add(call);
@@ -70,25 +77,42 @@ class FakeFavouritesApi implements FavouritesApi {
     return value();
   }
 
-  /// A folder's videos as they stand now.
   List<FavVideo> videosIn(int folderId) => List.unmodifiable(_contents[folderId] ?? const []);
 
+  List<FavFolder> get folderList => List.unmodifiable(_folders);
+
+  String coverOf(int folderId) {
+    final picked = _covers[folderId];
+    if (picked != null) return picked;
+    final newest = _contents[folderId]?.firstOrNull;
+    return newest?.cover ?? '';
+  }
+
   @override
-  Future<List<FavFolder>> folders({required int mid}) => _answer(
-    'folders',
-    'folders mid=$mid',
-    () => [
-      for (final folder in _folders)
-        FavFolder(
-          id: folder.id,
-          title: folder.title,
-          count: _contents[folder.id]?.length ?? folder.count,
-          isPrivate: folder.isPrivate,
-          contains: false,
-          isDefault: folder.isDefault,
-        ),
-    ],
-  );
+  Future<FavFolderListPage> folders({required int mid, int page = 1}) =>
+      _answer('folders', page == 1 ? 'folders mid=$mid' : 'folders mid=$mid page=$page', () {
+        final start = (page - 1) * folderPageSize;
+        final end = (start + folderPageSize).clamp(0, _folders.length);
+        final listed = start >= _folders.length ? const <FavFolder>[] : _folders.sublist(start, end);
+        return FavFolderListPage(
+          folders: [
+            for (final folder in listed)
+              FavFolder(
+                id: folder.id,
+                title: folder.title,
+                count: _contents[folder.id]?.length ?? folder.count,
+                isPrivate: folder.isPrivate,
+                contains: false,
+                isDefault: folder.isDefault,
+              ),
+          ],
+          covers: {
+            for (final folder in listed)
+              if (coverOf(folder.id) case final cover when cover.isNotEmpty) folder.id: cover,
+          },
+          hasMore: end < _folders.length,
+        );
+      });
 
   @override
   Future<FavFolderPage> folderVideos({required int folderId, required int page, int pageSize = 20}) =>
@@ -122,23 +146,25 @@ class FakeFavouritesApi implements FavouritesApi {
   @override
   Future<int?> videosTab() => _answer('videosTab', 'videosTab', () => videosTabId);
 
+  /// As the server does, the cursor is the last row's favourite time, so rows removed before it shift nothing.
   @override
   Future<FavTabPage> allVideos({required int tabId, FavTabCursor? after}) =>
-      _answer('allVideos', 'allVideos tab=$tabId after=${after?.score}', () {
+      _answer('allVideos', 'allVideos tab=$tabId after=${after?.oid}', () {
         final seen = <int>{};
         final every = [
           for (final videos in _contents.values)
             for (final video in videos)
               if (seen.add(video.aid)) video,
         ]..sort((a, b) => b.favTime.compareTo(a.favTime));
-        final start = after?.score ?? 0;
-        final end = (start + pageSize).clamp(0, every.length);
-        final rows = start >= every.length ? const <FavVideo>[] : every.sublist(start, end);
+        final start = after == null ? 0 : every.indexWhere((video) => video.favTime < after.score);
+        final from = start < 0 ? every.length : start;
+        final end = (from + pageSize).clamp(0, every.length);
+        final rows = every.sublist(from, end);
         final hasMore = end < every.length;
         return FavTabPage(
-          items: [for (final (index, video) in rows.indexed) _tabVideo(video, start + index)],
+          items: [for (final (index, video) in rows.indexed) _tabVideo(video, from + index)],
           hasMore: hasMore,
-          next: hasMore ? FavTabCursor(oid: rows.last.aid, otype: 2, score: end) : null,
+          next: hasMore ? FavTabCursor(oid: rows.last.aid, otype: 2, score: rows.last.favTime) : null,
           total: every.length,
         );
       });
@@ -168,4 +194,28 @@ class FakeFavouritesApi implements FavouritesApi {
       videos.removeWhere((video) => video.aid == aid);
     }
   });
+
+  /// The new folder goes after the default one, where the server lists it.
+  @override
+  Future<FavFolder> createFolder({
+    required String title,
+    required String intro,
+    required bool isPrivate,
+    String cover = '',
+  }) => _answer('createFolder', 'createFolder title=$title intro=$intro private=$isPrivate cover=$cover', () {
+    final id = _folders.fold(1000, (top, folder) => folder.id > top ? folder.id : top) + 1;
+    final folder = FavFolder(id: id, title: title, count: 0, isPrivate: isPrivate, contains: false, isDefault: false);
+    final at = _folders.isNotEmpty && _folders.first.isDefault ? 1 : 0;
+    _folders.insert(at, folder);
+    _contents[id] = [];
+    if (cover.isNotEmpty) _covers[id] = cover;
+    return folder;
+  });
+
+  @override
+  Future<String> uploadCover({required List<int> bytes, required String filename}) => _answer(
+    'uploadCover',
+    'uploadCover $filename',
+    () => 'https://i0.hdslb.com/bfs/medialist/cover/fake${++_uploads}.jpg',
+  );
 }

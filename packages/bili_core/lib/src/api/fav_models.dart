@@ -1,7 +1,42 @@
 /// 我的收藏's folders and their videos.
 library;
 
+import 'action_models.dart';
 import 'json.dart';
+
+/// A page of the account's own folders, the default first: `/x/v3/fav/folder/created/list`'s `data`, which unlike
+/// `list-all` carries each folder's cover.
+final class FavFolderListPage {
+  const FavFolderListPage({required this.folders, this.covers = const {}, required this.hasMore});
+
+  factory FavFolderListPage.fromJson(Object? json) {
+    final data = JsonObject.from(json, 'folders');
+    final covers = <int, String>{};
+    final folders = data.lossyList('list', (json) {
+      final folder = FavFolder.fromJson(json);
+      final cover = JsonObject.from(json).text('cover') ?? '';
+      if (cover.isNotEmpty) covers[folder.id] = cover;
+      return folder;
+    });
+    return FavFolderListPage(folders: folders, covers: covers, hasMore: data.flag('has_more'));
+  }
+
+  static const empty = FavFolderListPage(folders: [], hasMore: false);
+
+  final List<FavFolder> folders;
+
+  /// Each folder's cover by its id: the one picked for it, else its newest video's. A folder without one is absent.
+  final Map<int, String> covers;
+  final bool hasMore;
+}
+
+/// Where an uploaded cover went: `/x/upload/web/image`'s `data.location`.
+String decodeUploadedCover(Object? json) {
+  final data = JsonObject.from(json, 'upload');
+  final location = data.required(data.string('location'), 'location');
+  if (location.isEmpty) throw const DecodeError('empty location');
+  return location;
+}
 
 /// A folder's own line on its page (81): `/x/v3/fav/resource/list`'s `info`.
 final class FavFolderInfo {

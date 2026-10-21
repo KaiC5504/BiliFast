@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
@@ -11,6 +12,7 @@ import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../comments/comments_tab.dart' show NearEndPaging;
 import '../history/history_glyphs.dart' show HistoryBackPainter;
+import '../home/feed_model.dart' show requestFailureMessage;
 import '../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSystem;
 import '../shared/loading_tv.dart';
 import '../shared/remote_image.dart';
@@ -22,13 +24,22 @@ import 'favourites_api.dart';
 import 'favourites_glyphs.dart';
 import 'favourites_model.dart';
 import 'folder_page.dart';
+import 'new_folder_page.dart';
 import 'unfavourite_sheet.dart';
 
 /// 收藏夹 or 视频, the chips under the bar.
 enum FavouritesChip { folders, videos }
 
-/// 我的收藏 (80, 83, 84), from the avatar page's shortcut: 收藏 (追更 is 暂未开放), then 收藏夹, the account's folders as
-/// cards with their first three covers, or 视频, every favourite across them. A card opens its folder (81).
+/// 收藏夹's two layouts: 80's cards with three covers each, or 99's list with one cover and ▶ 播放.
+enum FavouritesLayout { cards, list }
+
+/// The layout chosen last, kept while the app runs: 我的收藏 has no settings file to keep it in across launches.
+@visibleForTesting
+FavouritesLayout favouritesLayout = FavouritesLayout.cards;
+
+/// 我的收藏 (80, 83, 84, 99), from the avatar page's shortcut: 收藏 (追更 is 暂未开放), then 收藏夹, the account's
+/// folders as cards or a list, or 视频, every favourite across them. A folder opens its page (81); + and 新建收藏夹 open
+/// 创建 (100).
 class FavouritesPage extends StatefulWidget {
   const FavouritesPage({super.key, this.api, this.loginGate, this.share = shareThroughSystem, this.open});
 
@@ -57,6 +68,9 @@ class _FavouritesPageState extends State<FavouritesPage> {
 
   /// A removal in a folder since 视频 last loaded.
   bool _videosStale = false;
+
+  /// 播放 is finding a folder's first video.
+  bool _playing = false;
   final _sheet = ValueNotifier<FavouriteRow?>(null);
   late final _paging = NearEndPaging(canAsk: () => _videos?.canLoadMore ?? false, ask: () => _videos!.loadMore());
 
@@ -135,6 +149,45 @@ class _FavouritesPageState extends State<FavouritesPage> {
     if (message != null && mounted) showToast(context, message);
   }
 
+  void _toggleLayout() => setState(
+    () => favouritesLayout = switch (favouritesLayout) {
+      FavouritesLayout.cards => FavouritesLayout.list,
+      FavouritesLayout.list => FavouritesLayout.cards,
+    },
+  );
+
+  Future<void> _newFolder() async {
+    if (!_isLoggedIn() || _folders!.needsLogin) {
+      await _login();
+      return;
+    }
+    var madeCover = '';
+    final folder = await openNewFolder(
+      context,
+      create: ({required title, required intro, required isPrivate, cover = ''}) async {
+        final made = await _api.createFolder(title: title, intro: intro, isPrivate: isPrivate, cover: cover);
+        madeCover = cover;
+        return made;
+      },
+      uploadCover: _api.uploadCover,
+    );
+    if (folder != null && mounted) _folders!.added(folder, cover: madeCover);
+  }
+
+  Future<void> _play(FavFolder folder) async {
+    if (_playing) return;
+    _playing = true;
+    try {
+      final video = await _folders!.firstVideo(folder);
+      if (video != null && mounted) _openRow(FavouriteRow.fromFolder(video));
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'favourites play failed', {'error': '$error'});
+      if (mounted) showToast(context, requestFailureMessage(error));
+    } finally {
+      _playing = false;
+    }
+  }
+
   void _openFolder(FavFolder folder) {
     final folders = _folders!;
     unawaited(
@@ -143,8 +196,8 @@ class _FavouritesPageState extends State<FavouritesPage> {
           builder: (_) => FolderPage(
             folder: folder,
             api: _api,
-            onRemoved: (aid) {
-              folders.removedFrom(folder.id, aid);
+            onRemoved: (removed, newest) {
+              folders.removedFrom(folder.id, removed, newest: newest);
               _videosStale = true;
             },
             loginGate: widget.loginGate,
@@ -198,7 +251,14 @@ class _FavouritesPageState extends State<FavouritesPage> {
                   children: [
                     SizedBox(height: top),
                     _Bar(onFollowing: _soon),
-                    _ChipRow(chip: _chip, onChip: _choose, onSoon: _soon),
+                    _ChipRow(
+                      chip: _chip,
+                      layout: favouritesLayout,
+                      onChip: _choose,
+                      onNew: () => unawaited(_newFolder()),
+                      onLayout: _toggleLayout,
+                      onSoon: _soon,
+                    ),
                     const SizedBox(
                       height: FavouritesTheme.headerHairline,
                       child: ColoredBox(color: FavouritesTheme.headerHairlineInk),
@@ -257,8 +317,9 @@ class _FavouritesPageState extends State<FavouritesPage> {
           }
         }
         final folders = model.folders;
+        final layout = favouritesLayout;
         return CustomScrollView(
-          key: const ValueKey('fav-folders-list'),
+          key: ValueKey('fav-folders-${layout.name}'),
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           // Only the cards on screen are built, so only they ask for their covers.
           scrollCacheExtent: const ScrollCacheExtent.pixels(0),
@@ -280,16 +341,25 @@ class _FavouritesPageState extends State<FavouritesPage> {
                 separatorBuilder: (context, index) => const SizedBox(height: FavouritesTheme.cardGap),
                 itemBuilder: (context, index) {
                   final folder = folders[index];
-                  return _FolderCard(
-                    key: ValueKey('fav-folder-${folder.id}'),
-                    folder: folder,
-                    model: model,
-                    onOpen: () => _openFolder(folder),
-                  );
+                  return switch (layout) {
+                    FavouritesLayout.cards => _FolderCard(
+                      key: ValueKey('fav-folder-${folder.id}'),
+                      folder: folder,
+                      model: model,
+                      onOpen: () => _openFolder(folder),
+                    ),
+                    FavouritesLayout.list => _FolderRow(
+                      key: ValueKey('fav-folder-${folder.id}'),
+                      folder: folder,
+                      cover: model.cover(folder.id),
+                      onOpen: () => _openFolder(folder),
+                      onPlay: () => unawaited(_play(folder)),
+                    ),
+                  };
                 },
               ),
             ),
-            SliverToBoxAdapter(child: _NewFolder(onTap: _soon)),
+            SliverToBoxAdapter(child: _NewFolder(onTap: () => unawaited(_newFolder()))),
             SliverToBoxAdapter(child: SizedBox(height: MediaQuery.paddingOf(context).bottom)),
           ],
         );
@@ -390,12 +460,23 @@ class _Bar extends StatelessWidget {
   }
 }
 
-/// 收藏夹 and 视频 on the left; on the right 🔍, + and the layout toggle for the folders, 🔍 and multi-select for 视频.
+/// 收藏夹 and 视频 on the left; on the right 🔍, + and the layout toggle (its glyph the layout shown) for the folders,
+/// 🔍 and multi-select for 视频.
 class _ChipRow extends StatelessWidget {
-  const _ChipRow({required this.chip, required this.onChip, required this.onSoon});
+  const _ChipRow({
+    required this.chip,
+    required this.layout,
+    required this.onChip,
+    required this.onNew,
+    required this.onLayout,
+    required this.onSoon,
+  });
 
   final FavouritesChip chip;
+  final FavouritesLayout layout;
   final ValueChanged<FavouritesChip> onChip;
+  final VoidCallback onNew;
+  final VoidCallback onLayout;
   final VoidCallback onSoon;
 
   @override
@@ -429,10 +510,10 @@ class _ChipRow extends StatelessWidget {
       );
     }
 
-    Widget tool(String key, String label, Widget glyph) => FavTap(
+    Widget tool(String key, String label, Widget glyph, {VoidCallback? onTap}) => FavTap(
       key: ValueKey(key),
       label: label,
-      onTap: onSoon,
+      onTap: onTap ?? onSoon,
       child: SizedBox(
         width: FavouritesTheme.toolSlot,
         height: FavouritesTheme.chipHeight,
@@ -460,17 +541,24 @@ class _ChipRow extends StatelessWidget {
             height: FavouritesTheme.toolPlus,
             color: FavouritesTheme.toolInk,
           ),
+          onTap: onNew,
         ),
-        tool(
-          'fav-tool-layout',
-          '切换布局',
-          const FavGlyphIcon(
+        tool('fav-tool-layout', '切换布局', switch (layout) {
+          FavouritesLayout.cards => const FavGlyphIcon(
             FavGlyph.layout,
+            key: ValueKey('fav-layout-cards'),
             width: FavouritesTheme.toolLayoutWidth,
             height: FavouritesTheme.toolLayoutHeight,
             color: FavouritesTheme.toolInk,
           ),
-        ),
+          FavouritesLayout.list => const FavGlyphIcon(
+            FavGlyph.layoutList,
+            key: ValueKey('fav-layout-list'),
+            width: FavouritesTheme.toolLayoutListWidth,
+            height: FavouritesTheme.toolLayoutListHeight,
+            color: FavouritesTheme.toolInk,
+          ),
+        }, onTap: onLayout),
       ],
       FavouritesChip.videos => [
         tool('fav-tool-search', '搜索', search),
@@ -701,6 +789,170 @@ class _Tile extends StatelessWidget {
               ? null
               : RemoteImage(cover, size: const Size(FavouritesTheme.tileWidth, FavouritesTheme.tileHeight)),
         ),
+      ),
+    );
+  }
+}
+
+/// A folder in 99's list: its cover, the title, the count (a lock first when private) and ▶ 播放, which opens its
+/// newest video; an empty folder's 播放 is pale and does nothing.
+class _FolderRow extends StatelessWidget {
+  const _FolderRow({super.key, required this.folder, required this.cover, required this.onOpen, required this.onPlay});
+
+  final FavFolder folder;
+  final String cover;
+  final VoidCallback onOpen;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = favStyle(
+      FavouritesTheme.cardTitleText,
+      FavouritesTheme.cardTitleInk,
+      line: FavouritesTheme.cardTitleLine,
+      weight: FavouritesTheme.cardTitleWeight,
+    );
+    final count = favStyle(
+      FavouritesTheme.cardCountText,
+      FavouritesTheme.cardCountInk,
+      line: FavouritesTheme.cardTitleLine,
+    );
+    final countText = FavouriteFormat.cardCount(folder.count);
+    final playable = folder.count > 0;
+    const pillTop = (FavouritesTheme.rowCardHeight - FavouritesTheme.playHeight) / 2;
+    const textRight = FavouritesTheme.playRight + FavouritesTheme.playWidth + FavouritesTheme.rowTitleGap;
+    final countCentre = FavouritesTheme.rowCountCentre - (folder.isPrivate ? FavouritesTheme.rowPrivateCountLift : 0);
+    return SizedBox(
+      height: FavouritesTheme.rowCardHeight,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: FavTap(
+              label: '${folder.title}，${folder.isPrivate ? '私密，' : ''}$countText',
+              onTap: onOpen,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: FavouritesTheme.cardFill,
+                  borderRadius: BorderRadius.all(Radius.circular(FavouritesTheme.cardRadius)),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      left: FavouritesTheme.cardPad,
+                      top: FavouritesTheme.rowCoverTop,
+                      width: FavouritesTheme.rowCoverWidth,
+                      height: FavouritesTheme.rowCoverHeight,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(FavouritesTheme.tileRadius),
+                        child: ColoredBox(
+                          color: FavouritesTheme.tileEmpty,
+                          child: cover.isEmpty
+                              ? null
+                              : RemoteImage(
+                                  cover,
+                                  key: const ValueKey('fav-row-cover'),
+                                  size: const Size(FavouritesTheme.rowCoverWidth, FavouritesTheme.rowCoverHeight),
+                                ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: FavouritesTheme.rowTextLeft,
+                      right: textRight,
+                      top: FavouritesTheme.rowTitleCentre - FavouritesTheme.cardTitleLine / 2,
+                      height: FavouritesTheme.cardTitleLine,
+                      child: Text(
+                        folder.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: title,
+                        strutStyle: BiliFonts.strut(title),
+                      ),
+                    ),
+                    Positioned(
+                      left: FavouritesTheme.rowTextLeft,
+                      right: textRight,
+                      top: countCentre - FavouritesTheme.cardTitleLine / 2,
+                      height: FavouritesTheme.cardTitleLine,
+                      child: Row(
+                        children: [
+                          if (folder.isPrivate) ...[
+                            const SizedBox(width: FavouritesTheme.rowLockInset),
+                            const FavGlyphIcon(
+                              FavGlyph.lock,
+                              key: ValueKey('fav-row-lock'),
+                              width: FavouritesTheme.lockWidth,
+                              height: FavouritesTheme.lockHeight,
+                              color: FavouritesTheme.cardCountInk,
+                              stroke: FavouritesTheme.lockStroke,
+                            ),
+                            const SizedBox(width: FavouritesTheme.lockGap),
+                            const DecoratedBox(
+                              decoration: BoxDecoration(color: FavouritesTheme.cardCountInk, shape: BoxShape.circle),
+                              child: SizedBox.square(dimension: FavouritesTheme.dotSize),
+                            ),
+                            const SizedBox(width: FavouritesTheme.dotGap),
+                          ],
+                          Text(countText, style: count, strutStyle: BiliFonts.strut(count)),
+                        ],
+                      ),
+                    ),
+                    if (!playable)
+                      const Positioned(right: FavouritesTheme.playRight, top: pillTop, child: _PlayPill(on: false)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (playable)
+            Positioned(
+              right: FavouritesTheme.playRight,
+              top: pillTop,
+              child: FavTap(
+                key: ValueKey('fav-play-${folder.id}'),
+                label: '播放',
+                onTap: onPlay,
+                child: const _PlayPill(on: true),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// ▶ 播放, pale when [on] is false.
+class _PlayPill extends StatelessWidget {
+  const _PlayPill({required this.on});
+
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = favStyle(
+      FavouritesTheme.playText,
+      on ? FavouritesTheme.playInk : FavouritesTheme.playInkOff,
+      line: FavouritesTheme.playLine,
+    );
+    return Container(
+      width: FavouritesTheme.playWidth,
+      height: FavouritesTheme.playHeight,
+      padding: const EdgeInsets.only(left: FavouritesTheme.playPadLeft),
+      decoration: ShapeDecoration(
+        color: on ? FavouritesTheme.playFill : FavouritesTheme.playFillOff,
+        shape: const StadiumBorder(),
+      ),
+      child: Row(
+        children: [
+          FavGlyphIcon(
+            FavGlyph.play,
+            width: FavouritesTheme.playGlyphWidth,
+            height: FavouritesTheme.playGlyphHeight,
+            color: on ? FavouritesTheme.playInk : FavouritesTheme.playGlyphOff,
+          ),
+          const SizedBox(width: FavouritesTheme.playGap),
+          Text('播放', style: style, strutStyle: BiliFonts.strut(style)),
+        ],
       ),
     );
   }

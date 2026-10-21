@@ -2,18 +2,26 @@ part of 'bili_client.dart';
 
 /// 我的收藏's calls, the website's (as PiliPlus keeps them): the account's folders, a folder's videos, removing.
 /// 视频 (every favourite, across folders) has no web call; it is the official app's own list on the same host, sent
-/// with the cookies like the rest. Removing from one folder is `updateFavourites`.
+/// with the cookies like the rest. Removing from one folder is `updateFavourites`, making one `createFolder`.
 extension BiliClientFav on BiliClient {
-  /// The account's own folders, the default first.
-  Future<List<FavFolder>> createdFolders({required int mid}) async {
-    final folders = await _getIfPresent(
-      '/x/v3/fav/folder/created/list-all',
-      query: {'up_mid': '$mid'},
+  /// Page [page] (from 1) of the account's own folders, the default first, with their covers.
+  Future<FavFolderListPage> createdFolders({required int mid, int page = 1, int pageSize = 20}) async {
+    final answer = await _getIfPresent(
+      '/x/v3/fav/folder/created/list',
+      query: {'pn': '$page', 'ps': '$pageSize', 'up_mid': '$mid'},
       signed: false,
-      decode: (json) => JsonObject.from(json).lossyList('list', FavFolder.fromJson),
+      decode: FavFolderListPage.fromJson,
     );
-    return folders ?? [];
+    return answer ?? FavFolderListPage.empty;
   }
+
+  /// Uploads a picture for a new folder's 封面; the answer is its address, for `createFolder`'s cover.
+  Future<String> uploadFolderCover({required List<int> bytes, required String filename}) => _postFile(
+    '/x/upload/web/image',
+    form: {'bucket': 'medialist', 'dir': 'cover'},
+    file: (field: 'file', filename: filename, contentType: BiliClientComments._imageType(filename), bytes: bytes),
+    decode: decodeUploadedCover,
+  );
 
   /// Page [page] (from 1) of a folder's videos, the latest favourite first; a card's covers ask for 3.
   Future<FavFolderPage> favFolderVideos({required int folderId, required int page, int pageSize = 20}) async {

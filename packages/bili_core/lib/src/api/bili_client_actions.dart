@@ -76,9 +76,20 @@ extension BiliClientActions on BiliClient {
     },
   );
 
-  Future<FavFolder> createFolder({required String title, required bool isPrivate, String intro = ''}) => post(
+  /// [cover] is an address from `uploadFolderCover`; without one the folder shows its newest video's.
+  Future<FavFolder> createFolder({
+    required String title,
+    required bool isPrivate,
+    String intro = '',
+    String cover = '',
+  }) => post(
     '/x/v3/fav/folder/add',
-    form: {'title': title, if (intro.isNotEmpty) 'intro': intro, 'privacy': isPrivate ? '1' : '0'},
+    form: {
+      'title': title,
+      if (intro.isNotEmpty) 'intro': intro,
+      'privacy': isPrivate ? '1' : '0',
+      if (cover.isNotEmpty) 'cover': cover,
+    },
     decode: FavFolder.fromJson,
   );
 

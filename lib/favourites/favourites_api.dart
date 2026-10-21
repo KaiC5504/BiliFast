@@ -3,8 +3,8 @@ import 'package:bili_core/api.dart';
 /// 我的收藏's calls, the website's. 视频 has no web list, so it is the official app's own on the same host
 /// (`/x/v3/fav/tab/fav`), sent with the cookies like the rest.
 abstract interface class FavouritesApi {
-  /// The account's own folders, the default first.
-  Future<List<FavFolder>> folders({required int mid});
+  /// Page [page] (from 1) of the account's own folders, the default first, with their covers.
+  Future<FavFolderListPage> folders({required int mid, int page = 1});
 
   /// Page [page] (from 1) of a folder's videos; a card's covers ask for 3.
   Future<FavFolderPage> folderVideos({required int folderId, required int page, int pageSize = 20});
@@ -20,6 +20,17 @@ abstract interface class FavouritesApi {
 
   /// Takes the video [aid] out of every folder.
   Future<void> removeEverywhere({required int aid});
+
+  /// 创建 (100); [cover] is an address [uploadCover] gave.
+  Future<FavFolder> createFolder({
+    required String title,
+    required String intro,
+    required bool isPrivate,
+    String cover = '',
+  });
+
+  /// Uploads a picture for 创建's 封面 and answers its address.
+  Future<String> uploadCover({required List<int> bytes, required String filename});
 }
 
 class ClientFavouritesApi implements FavouritesApi {
@@ -28,7 +39,7 @@ class ClientFavouritesApi implements FavouritesApi {
   final BiliClient _client;
 
   @override
-  Future<List<FavFolder>> folders({required int mid}) => _client.createdFolders(mid: mid);
+  Future<FavFolderListPage> folders({required int mid, int page = 1}) => _client.createdFolders(mid: mid, page: page);
 
   @override
   Future<FavFolderPage> folderVideos({required int folderId, required int page, int pageSize = 20}) =>
@@ -47,4 +58,16 @@ class ClientFavouritesApi implements FavouritesApi {
 
   @override
   Future<void> removeEverywhere({required int aid}) => _client.unfavouriteEverywhere(aid: aid);
+
+  @override
+  Future<FavFolder> createFolder({
+    required String title,
+    required String intro,
+    required bool isPrivate,
+    String cover = '',
+  }) => _client.createFolder(title: title, intro: intro, isPrivate: isPrivate, cover: cover);
+
+  @override
+  Future<String> uploadCover({required List<int> bytes, required String filename}) =>
+      _client.uploadFolderCover(bytes: bytes, filename: filename);
 }

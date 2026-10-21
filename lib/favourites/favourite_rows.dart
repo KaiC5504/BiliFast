@@ -44,8 +44,7 @@ class FavTap extends StatelessWidget {
   );
 }
 
-/// The slivers of a row list under whatever the page puts above it: its first load, failure, login or empty state,
-/// then the rows and under them the next page's spinner, the failure, or 84's 仅展示本App中可查看的稿件.
+/// The slivers of a row list under whatever the page puts above it.
 List<Widget> favouriteRowSlivers({
   required BuildContext context,
   required FavouriteRowsModel model,
