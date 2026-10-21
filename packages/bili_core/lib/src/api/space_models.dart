@@ -1,3 +1,5 @@
+import 'json.dart';
+
 /// A space's tabs as the official app names them (`tab2`'s `param`). Anything else is [other], drawn but not opened.
 enum SpaceTabKind { home, dynamic, contribute, shop, favourite, other }
 
@@ -126,7 +128,53 @@ final class SpaceProfile {
   final List<SpaceChip> chips;
   final List<SpaceOrder> orders;
 
-  static SpaceProfile fromJson(Object? json) => throw UnimplementedError('slice 12: SpaceProfile.fromJson');
+  /// `/x/v2/space`'s `data`. Only the card's mid is required; the rest reads leniently, so one odd field costs
+  /// that field, not the space.
+  static SpaceProfile fromJson(Object? json) {
+    final data = JsonObject.from(json, 'space');
+    final card = data.nested('card') ?? (throw const DecodeError('missing card'));
+    final mid = _id(card.map['mid']) ?? (throw const DecodeError('missing mid'));
+    final level = card.nested('level_info');
+    final vip = card.nested('vip');
+    final verify = card.nested('official_verify');
+    final official = switch (asInt(verify?.map['type'])) {
+      0 => SpaceOfficial.person,
+      1 => SpaceOfficial.organisation,
+      _ => SpaceOfficial.none,
+    };
+    final archive = data.nested('archive');
+    final tabs = data.lenientList('tab2', (json) => JsonObject.from(json));
+    final contribute = tabs.where((tab) => tab.text('param') == 'contribute').firstOrNull;
+    final orders = archive?.lenientList('order', _order) ?? const <SpaceOrder>[];
+    return SpaceProfile(
+      mid: mid,
+      name: card.text('name') ?? '',
+      face: _secure(card.text('face') ?? ''),
+      sign: card.text('sign') ?? '',
+      level: level?.count('current_level') ?? 0,
+      // The app's card marks 硬核会员 with identity 2; the web card's flag is read too, should it ever come.
+      seniorMember: asInt(level?.map['identity']) == 2 || card.flag('is_senior_member'),
+      vip: vip?.count('vipStatus', 'status') == 1,
+      vipLabel: _picture(vip?.nested('label')?.text('image')),
+      official: official,
+      officialTitle: official == SpaceOfficial.none ? '' : verify?.text('splice_title') ?? '',
+      fans: card.count('fans'),
+      following: card.count('attention'),
+      likes: card.nested('likes')?.count('like_num') ?? 0,
+      videoCount: archive?.count('count') ?? 0,
+      banner: _picture(data.nested('images')?.text('imgUrl')),
+      tagLines: card.lenientList('space_tag', _tagLine),
+      entries: data.lenientList('space_button_list', _entry),
+      chargeable: data.nested('elec')?.flag('show') ?? false,
+      tabs: lossy(tabs, _tab),
+      defaultTab: switch (_tabKind(data.text('default_tab'))) {
+        SpaceTabKind.other => SpaceTabKind.contribute,
+        final kind => kind,
+      },
+      chips: contribute?.lenientList('items', _chip) ?? const [],
+      orders: orders.isEmpty ? const [SpaceOrder.latest, SpaceOrder.mostPlayed] : orders,
+    );
+  }
 }
 
 /// One video of a space's lists. Only its ids and what is drawn are kept: the answer's `uri` carries a signed play
@@ -172,5 +220,137 @@ final class SpaceVideoPage {
   final String? next;
   final int? total;
 
-  static SpaceVideoPage fromArchive(Object? json) => throw UnimplementedError('slice 12: SpaceVideoPage.fromArchive');
+  /// The `data` of 投稿's `/x/v2/space/archive/cursor`, a 合集's `/x/v2/space/season/videos` or a 系列's
+  /// `/x/v2/space/series`. 投稿 pages by `has_next` and the last item's aid, a 系列 by its `next` (0 at the end),
+  /// and a 合集 comes whole.
+  static SpaceVideoPage fromArchive(Object? json) {
+    final data = JsonObject.from(json, 'page');
+    final rows = data.lenientList('item', (json) => json);
+    String? next;
+    if (rows.isNotEmpty) {
+      if (data.map.containsKey('has_next')) {
+        // The raw last row, not the last decoded one: a row that fails to decode must not be fetched again.
+        final last = rows.last;
+        final cursor = last is Map<String, Object?> ? _id(last['param']) ?? _id(last['aid']) : null;
+        if (data.flag('has_next') && cursor != null) next = '$cursor';
+      } else {
+        final page = _id(data.map['next']);
+        if (page != null && page > 0) next = '$page';
+      }
+    }
+    return SpaceVideoPage(
+      items: lossy(rows, _video),
+      hasMore: next != null,
+      next: next,
+      total: _id(data.map['total']) ?? _id(data.map['count']),
+    );
+  }
 }
+
+SpaceVideo _video(Object? json) {
+  final object = JsonObject.from(json, 'video');
+  // 投稿 also lists the uploader's 课堂 courses (goto "cheese"), which don't open as a video page.
+  final goto = object.text('goto');
+  if (goto != null && goto != 'av') throw DecodeError('not a video: $goto');
+  final aid = _id(object.map['param']) ?? _id(object.map['aid']);
+  if (aid == null || aid <= 0) throw const DecodeError('missing param');
+  final bvid = _filled(object.text('bvid')) ?? (throw const DecodeError('missing bvid'));
+  final ctime = object.count('ctime');
+  return SpaceVideo(
+    aid: aid,
+    bvid: bvid,
+    title: object.text('title') ?? '',
+    cover: _secure(object.text('cover') ?? ''),
+    duration: object.count('duration'),
+    play: object.count('play'),
+    danmaku: object.count('danmaku'),
+    published: ctime > 0 ? DateTime.fromMillisecondsSinceEpoch(ctime * 1000) : null,
+    publishedText: object.text('publish_time_text') ?? '',
+    badges: object.lenientList('badges', (json) => _filled(JsonObject.from(json).text('text')) ?? _noText()),
+  );
+}
+
+SpaceTabKind _tabKind(String? param) => switch (param) {
+  'home' => SpaceTabKind.home,
+  'dynamic' => SpaceTabKind.dynamic,
+  'contribute' || 'archive' || 'video' => SpaceTabKind.contribute,
+  'shop' || 'mall' => SpaceTabKind.shop,
+  'favorite' || 'favourite' => SpaceTabKind.favourite,
+  _ => SpaceTabKind.other,
+};
+
+SpaceTab _tab(Object? json) {
+  final object = JsonObject.from(json, 'tab');
+  return SpaceTab(kind: _tabKind(object.text('param')), title: _filled(object.text('title')) ?? _noText());
+}
+
+SpaceChip _chip(Object? json) {
+  final object = JsonObject.from(json, 'chip');
+  final title = _filled(object.text('title')) ?? _noText();
+  switch (object.text('param')) {
+    case 'video':
+      return SpaceChip(kind: SpaceChipKind.video, title: title);
+    case 'opus' || 'article':
+      return SpaceChip(kind: SpaceChipKind.article, title: title);
+    case 'season_video':
+      final id = _id(object.map['season_id']);
+      if (id == null || id <= 0) throw const DecodeError('missing season_id');
+      return SpaceChip(kind: SpaceChipKind.season, title: title, seasonId: id);
+    case 'series':
+      final id = _id(object.map['series_id']);
+      if (id == null || id <= 0) throw const DecodeError('missing series_id');
+      return SpaceChip(kind: SpaceChipKind.series, title: title, seriesId: id);
+    default:
+      return SpaceChip(kind: SpaceChipKind.other, title: title);
+  }
+}
+
+SpaceOrder _order(Object? json) {
+  final value = JsonObject.from(json, 'order').text('value');
+  return SpaceOrder.values.where((order) => order.value == value).firstOrNull ??
+      (throw const DecodeError('unknown order'));
+}
+
+/// The line's own link (`uri`) is only noted, never kept.
+SpaceTagLine _tagLine(Object? json) {
+  final object = JsonObject.from(json, 'tag');
+  return SpaceTagLine(
+    text: _filled(object.text('title')) ?? _noText(),
+    icon: _picture(object.text('icon')),
+    link: _filled(object.text('uri')) != null,
+  );
+}
+
+/// `space_button_list`'s cards; 大航海 and anything else unknown is left out.
+SpaceEntry _entry(Object? json) {
+  final object = JsonObject.from(json, 'entry');
+  final kind = switch (object.text('module_type')) {
+    'goods' || 'shop' => SpaceEntryKind.shop,
+    'charge' => SpaceEntryKind.charge,
+    _ => throw const DecodeError('unknown module_type'),
+  };
+  return SpaceEntry(
+    kind: kind,
+    title: _filled(object.text('title')) ?? _noText(),
+    note: object.text('sub_title') ?? '',
+  );
+}
+
+Never _noText() => throw const DecodeError('missing text');
+
+/// Ids come as numbers or, like the card's mid and an item's param, as strings.
+int? _id(Object? value) => asInt(value) ?? (value is String ? int.tryParse(value) : null);
+
+String? _filled(String? text) => text == null || text.isEmpty ? null : text;
+
+/// Pictures come as http or protocol-relative.
+String _secure(String url) {
+  if (url.startsWith('//')) return 'https:$url';
+  if (url.startsWith('http://')) return 'https://${url.substring(7)}';
+  return url;
+}
+
+String? _picture(String? url) => switch (_filled(url)) {
+  final url? => _secure(url),
+  null => null,
+};
