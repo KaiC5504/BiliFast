@@ -137,8 +137,8 @@ class AppPlayback with WidgetsBindingObserver {
 }
 
 /// What every page reaches: the account and API client, the players, 最近打开, the phone's rotation and levels,
-/// the font, the page body's, 搜索's and UP主空间's calls, 关注 changes, 搜索历史, the login page, the log kept on the phone, and the log
-/// forwarder in dev builds (null otherwise).
+/// the font, the page body's, 搜索's and UP主空间's calls, 关注 changes, 搜索历史, the login page, the log kept on the
+/// phone, and the log forwarder in dev builds (null otherwise).
 class AppServices {
   AppServices({
     required this.environment,

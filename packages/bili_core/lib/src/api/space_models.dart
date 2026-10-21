@@ -121,7 +121,7 @@ final class SpaceProfile {
   final bool chargeable;
   final List<SpaceTab> tabs;
 
-  /// The tab the space opens on, the uploader's choice.
+  /// The uploader's default tab; the app opens on 投稿 regardless (KaiC: only 投稿 is built).
   final SpaceTabKind defaultTab;
 
   /// 投稿's chips, 视频 first.

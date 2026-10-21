@@ -5,7 +5,8 @@ import 'wbi.dart';
 final class AppSigner {
   const AppSigner({required this._appKey, required this._appSecret});
 
-  /// The official Android app's own pair, the same in every copy of the app and tied to no account.
+  /// The Android app's public pair (PiliPlus's for the app API), the same for everyone and tied to no account, so
+  /// KaiC allowed it in the repo.
   static const android = AppSigner(appKey: 'dfca71928277209b', appSecret: 'b5475a8825547a4fc26c7d518eaaa02e');
 
   final String _appKey;

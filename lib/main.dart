@@ -66,8 +66,8 @@ Future<void> main(List<String> args) async {
     runApp(LaunchFailedApp(error: '$error'));
     return;
   }
-  // PC checks only: the page's actions, 搜索 and UP主空间 answer from memory, so every button can be pressed with no account
-  // traffic.
+  // PC checks only: the page's actions, 搜索 and UP主空间 answer from memory, so every button can be pressed with no
+  // account traffic.
   final fakeAccount = !Platform.isIOS && args.contains('--fake-account');
   if (fakeAccount) environment.useFakeAccount();
   unawaited(environment.refreshAccount());
