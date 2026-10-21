@@ -124,13 +124,37 @@ class _FeedCardViewState extends State<FeedCardView> {
   Widget _card(BuildContext context, ZoomSource source) {
     final card = widget.card;
     final scaler = MediaQuery.textScalerOf(context);
-    // One element for VoiceOver, named by the title; ⋮ and its 稍后再看 are its actions.
+    // Passthrough keeps the grid's tight size on the card.
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        _body(context, card, scaler, source),
+        // ⋮'s own element, over the footer's ⋮: inside the card's excluded subtree it could only be a custom action,
+        // which Windows UIA (and so ghosthand) doesn't offer. Touches pass through it to the ⋮ under it.
+        Positioned(
+          right: 0,
+          bottom: (FeedCardSize.footerHeight - BiliMetrics.cardMoreTarget) / 2,
+          width: BiliMetrics.cardMoreTarget,
+          height: BiliMetrics.cardMoreTarget,
+          child: Semantics(
+            key: const ValueKey('card-more-semantics'),
+            container: true,
+            button: true,
+            label: '更多',
+            onTap: () => unawaited(_more()),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _body(BuildContext context, FeedCard card, TextScaler scaler, ZoomSource source) {
+    // One element for VoiceOver, named by the title, with 稍后再看 as its action.
     return Semantics(
       button: true,
       label: card.title,
       onTap: () => widget.onOpen(source),
       customSemanticsActions: {
-        const CustomSemanticsAction(label: '更多'): () => unawaited(_more()),
         const CustomSemanticsAction(label: '稍后再看'): widget.onWatchLater,
       },
       excludeSemantics: true,

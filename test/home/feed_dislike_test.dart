@@ -52,6 +52,50 @@ class _AskingAuth extends ChangeNotifier implements AppAuth {
   Future<bool> reauthorize(BuildContext context) => request(context);
 }
 
+/// Authorized while the client holds the token, until [drop]; asking is counted and gets nothing new. Like the app's,
+/// it hears of the account before HomePage does, so 退出登录 drops the token just before the page hears of it.
+class _HeldAuth extends ChangeNotifier implements AppAuth {
+  _HeldAuth(this.environment) {
+    environment.addListener(_accountChanged);
+  }
+
+  final AppEnvironment environment;
+  int requests = 0;
+
+  @override
+  bool get authorized => environment.client.appToken != null;
+
+  @override
+  DateTime? get expiresAt => null;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<bool> request(BuildContext context) async {
+    requests++;
+    return authorized;
+  }
+
+  @override
+  Future<bool> reauthorize(BuildContext context) => request(context);
+
+  void drop() {
+    environment.client.appToken = null;
+    notifyListeners();
+  }
+
+  void _accountChanged() {
+    if (environment.account is LoggedOut && authorized) drop();
+  }
+
+  @override
+  void dispose() {
+    environment.removeListener(_accountChanged);
+    super.dispose();
+  }
+}
+
 /// 90, 91 and 92 against the official app: the official feed's cards, their ⋮ sheet, a card after 不感兴趣 and the
 /// reasons sheet. With BILIFAST_SHOTS naming a folder outside the repo, the 3× shots are saved there.
 void main() {
@@ -69,8 +113,15 @@ void main() {
     http.pages[1] = [feedItem('BV1web')];
   });
 
-  /// 首页 at 3× as KaiC's iPhone, on the official feed unless [token] is false, with [auth] as the app token's.
-  Future<void> show(WidgetTester tester, {AppAuth? auth, bool token = true, bool systemFont = false}) async {
+  /// 首页 at 3× as KaiC's iPhone, on the official feed unless [token] is false, with [auth] (or [authFor]'s, made once
+  /// the environment is) as the app token's.
+  Future<void> show(
+    WidgetTester tester, {
+    AppAuth? auth,
+    AppAuth Function(AppEnvironment environment)? authFor,
+    bool token = true,
+    bool systemFont = false,
+  }) async {
     if (systemFont) {
       final saved = BiliFonts.family;
       addTearDown(() => BiliFonts.family = saved);
@@ -94,7 +145,7 @@ void main() {
       fonts: systemFont ? (FontStore.memory()..select(FontChoice.system)) : null,
       loginGate: FakeLoginGate(),
       searchApi: FakeSearchApi(defaultWord: '菲欧妮'),
-      appAuth: auth ?? FakeAppAuth(),
+      appAuth: auth ?? authFor?.call(environment) ?? FakeAppAuth(),
     );
     if (systemFont) BiliFonts.family = BiliFonts.system;
     await tester.pumpWidget(
@@ -203,6 +254,40 @@ void main() {
     await settle(tester, 60);
   });
 
+  for (final code in [-101, -2]) {
+    testWidgets('a 不感兴趣 whose token is turned down ($code) turns the card back and asks for the confirm, no 需要登录', (
+      tester,
+    ) async {
+      http.dislikeCode = code;
+      late _HeldAuth auth;
+      await show(tester, authFor: (environment) => auth = _HeldAuth(environment));
+      await openMore(tester, 'BV1aaa');
+      await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
+      await settle(tester);
+      expect(http.dislikes, hasLength(1));
+      expect(find.byType(FeedDislikedCard), findsNothing);
+      expect(card('BV1aaa'), findsOneWidget);
+      expect(auth.requests, 1);
+      expect(find.text('需要登录'), findsNothing);
+      expect(find.textContaining('B 站返回错误'), findsNothing);
+    });
+  }
+
+  testWidgets('撤销 whose token is turned down keeps the card over and asks for the confirm', (tester) async {
+    late _HeldAuth auth;
+    await show(tester, authFor: (environment) => auth = _HeldAuth(environment));
+    await openMore(tester, 'BV1aaa');
+    await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
+    await settle(tester);
+    http.dislikeCode = -101;
+    await tester.tap(find.byKey(const ValueKey('feed-disliked-undo')));
+    await settle(tester);
+    expect(http.cancels, hasLength(1));
+    expect(find.byType(FeedDislikedCard), findsOneWidget);
+    expect(auth.requests, 1);
+    expect(find.text('需要登录'), findsNothing);
+  });
+
   testWidgets('without the token 不感兴趣 asks for the confirm first, and sends nothing when it is refused', (
     tester,
   ) async {
@@ -243,6 +328,45 @@ void main() {
     expect(http.officialAsked.first, 0, reason: 'a refresh, then the short page asks on');
     expect(card('BV1aaa'), findsOneWidget);
     expect(card('BV1web'), findsNothing);
+  });
+
+  testWidgets("a token lost under the official 推荐 brings the website's in its place", (tester) async {
+    late _HeldAuth auth;
+    await show(tester, authFor: (environment) => auth = _HeldAuth(environment));
+    expect(card('BV1aaa'), findsOneWidget);
+    expect(http.asked, isEmpty);
+    final officialAsks = http.officialAsked.length;
+    auth.drop();
+    await settle(tester, 20);
+    expect(http.asked.first, 1, reason: 'a refresh, then the short page asks on');
+    expect(http.officialAsked, hasLength(officialAsks));
+    expect(card('BV1web'), findsOneWidget);
+    expect(card('BV1aaa'), findsNothing);
+  });
+
+  testWidgets("a token lost under the website's 推荐 changes nothing", (tester) async {
+    http.officialCode = -101;
+    late _HeldAuth auth;
+    await show(tester, authFor: (environment) => auth = _HeldAuth(environment));
+    expect(card('BV1web'), findsOneWidget, reason: 'the official feed refused the token');
+    final asked = List.of(http.asked);
+    auth.drop();
+    await settle(tester, 20);
+    expect(http.asked, asked);
+    expect(card('BV1web'), findsOneWidget);
+  });
+
+  testWidgets('退出登录 under the official 推荐 refreshes it once, for the logout and the token both', (tester) async {
+    // The logout empties the jar, so the fingerprint cookies are fetched again.
+    http.canned.routes['/x/frontend/finger/spi'] = (200, '{"code":0,"message":"ok","data":{"b_3":"B3","b_4":"B4"}}');
+    await show(tester, authFor: _HeldAuth.new);
+    expect(card('BV1aaa'), findsOneWidget);
+    await environment.logout();
+    await settle(tester, 20);
+    expect(environment.client.appToken, isNull);
+    expect(http.asked.where((index) => index == 1), hasLength(1));
+    expect(card('BV1web'), findsOneWidget);
+    expect(card('BV1aaa'), findsNothing);
   });
 
   testWidgets('the sheet, the turned-over card and the reasons are buttons by name', (tester) async {

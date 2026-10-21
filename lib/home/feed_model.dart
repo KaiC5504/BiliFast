@@ -29,6 +29,32 @@ enum FeedSource {
   web,
 }
 
+/// A 不感兴趣, 撤销 or reason that didn't go through; the card is already back as it was.
+sealed class DislikeFailure {
+  const DislikeFailure();
+}
+
+/// Bilibili or the connection said no, in [message]'s words.
+final class DislikeError extends DislikeFailure {
+  const DislikeError(this.message);
+
+  final String message;
+}
+
+/// The app token was turned down (-101, -2) or isn't held. The web login is fine, so this is no 需要登录: the
+/// token's confirm is what answers it.
+final class DislikeTokenRefused extends DislikeFailure {
+  const DislikeTokenRefused();
+}
+
+/// A failure's log fields: its type, and Bilibili's code or the HTTP status. Never `'$error'`, as a transport
+/// error's text can carry the request's URL and with it the app token.
+Map<String, Object> feedLogFields(Object error) => {
+  'error': '${error.runtimeType}',
+  if (error case BiliAPIError(:final code)) 'code': code,
+  if (error case BiliHTTPError(:final status)) 'status': status,
+};
+
 /// A card after 不感兴趣: the reason it went with, and the 反馈 picked in the reasons sheet, if any.
 @immutable
 class CardDislike {
@@ -125,7 +151,7 @@ class FeedModel extends ChangeNotifier {
       }
     } catch (error) {
       if (mine != _generation) return null;
-      _logger.warn(LogCategory.ui, 'feed refresh failed', {'error': '$error'});
+      _logger.warn(LogCategory.ui, 'feed refresh failed', feedLogFields(error));
       failure = requestFailureMessage(error);
     }
     _loading = false;
@@ -163,7 +189,7 @@ class FeedModel extends ChangeNotifier {
       _exhausted = added == 0;
     } catch (error) {
       if (mine != _generation) return;
-      _logger.warn(LogCategory.ui, 'feed load more failed', {'error': '$error'});
+      _logger.warn(LogCategory.ui, 'feed load more failed', feedLogFields(error));
       _error = requestFailureMessage(error);
     } finally {
       if (mine == _generation) {
@@ -185,7 +211,7 @@ class FeedModel extends ChangeNotifier {
         return (cards: await _client.officialFeed(index: index), source: FeedSource.official, index: index);
       } catch (error) {
         if (!_refused(error)) rethrow;
-        _logger.warn(LogCategory.ui, 'official feed refused, web feed instead', {'error': '$error'});
+        _logger.warn(LogCategory.ui, 'official feed refused, web feed instead', feedLogFields(error));
         _officialRefused = true;
       }
     }
@@ -208,8 +234,8 @@ class FeedModel extends ChangeNotifier {
   }
 
   /// 不感兴趣 with [reason] (one of the card's [FeedDislike.reasons]): the card turns over at once and turns back if
-  /// the call fails, whose words come back for a toast. Taps on a card whose call is still out are dropped.
-  Future<String?> dislike(FeedCard card, FeedReason reason) async {
+  /// the call fails, which comes back for the page. Taps on a card whose call is still out are dropped.
+  Future<DislikeFailure?> dislike(FeedCard card, FeedReason reason) async {
     final data = card.dislike;
     final key = card.bvid;
     if (data == null || _dislikes.containsKey(key) || !_dislikeBusy.add(key)) return null;
@@ -219,9 +245,9 @@ class FeedModel extends ChangeNotifier {
       await _send(data, reason);
       return null;
     } catch (error) {
-      _logger.warn(LogCategory.ui, 'feed dislike failed', {'error': '$error'});
+      _logger.warn(LogCategory.ui, 'feed dislike failed', feedLogFields(error));
       _dislikes.remove(key);
-      return requestFailureMessage(error);
+      return _failure(error);
     } finally {
       _dislikeBusy.remove(key);
       _notify();
@@ -229,7 +255,7 @@ class FeedModel extends ChangeNotifier {
   }
 
   /// 撤销: the card comes back at once, and goes over again if the server keeps the 不感兴趣.
-  Future<String?> undo(FeedCard card) async {
+  Future<DislikeFailure?> undo(FeedCard card) async {
     final data = card.dislike;
     final key = card.bvid;
     final standing = _dislikes[key];
@@ -246,9 +272,9 @@ class FeedModel extends ChangeNotifier {
       );
       return null;
     } catch (error) {
-      _logger.warn(LogCategory.ui, 'feed dislike undo failed', {'error': '$error'});
+      _logger.warn(LogCategory.ui, 'feed dislike undo failed', feedLogFields(error));
       _dislikes[key] = standing;
-      return requestFailureMessage(error);
+      return _failure(error);
     } finally {
       _dislikeBusy.remove(key);
       _notify();
@@ -256,7 +282,7 @@ class FeedModel extends ChangeNotifier {
   }
 
   /// The reasons sheet's pick on a card already turned over; it is forgotten again if the call fails.
-  Future<String?> sendReason(FeedCard card, FeedReason feedback) async {
+  Future<DislikeFailure?> sendReason(FeedCard card, FeedReason feedback) async {
     final data = card.dislike;
     final key = card.bvid;
     final standing = _dislikes[key];
@@ -267,14 +293,17 @@ class FeedModel extends ChangeNotifier {
       await _send(data, feedback);
       return null;
     } catch (error) {
-      _logger.warn(LogCategory.ui, 'feed dislike reason failed', {'error': '$error'});
+      _logger.warn(LogCategory.ui, 'feed dislike reason failed', feedLogFields(error));
       if (_dislikes[key]?.feedback == feedback) _dislikes[key] = standing;
-      return requestFailureMessage(error);
+      return _failure(error);
     } finally {
       _dislikeBusy.remove(key);
       _notify();
     }
   }
+
+  static DislikeFailure _failure(Object error) =>
+      _refused(error) ? const DislikeTokenRefused() : DislikeError(requestFailureMessage(error));
 
   Future<void> _send(FeedDislike data, FeedReason reason) => _client.feedDislike(
     goto: data.goto,

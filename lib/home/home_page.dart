@@ -57,12 +57,16 @@ class _HomePageState extends State<HomePage> {
   /// Whether the feed on screen was fetched logged in; null until the first account check has answered.
   bool? _feedSignedIn;
 
-  /// Whether the app token was held when last heard, so a new one can bring the official 推荐.
+  /// Whether the app token was held when last heard, so a new one can bring the official 推荐 and a lost one take it
+  /// away.
   bool _authorized = false;
 
   /// The refresh of 推荐 running, from the first load, an account change, a pull, 首页 or 重试; a pull or a tap while
   /// it runs waits on it instead of asking again.
   Future<void>? _refreshing;
+
+  /// Counts the refreshes started, so a lost token's refresh can tell whether another came first.
+  int _refreshesStarted = 0;
 
   AppEnvironment get _environment => _services.environment;
 
@@ -126,13 +130,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// A token that arrives after 推荐 came from the website (at launch the stored one may land after the first load,
-  /// or the confirm was just given) brings the official feed in its place.
+  /// or the confirm was just given) brings the official feed in its place. One lost (rejected, another account's,
+  /// 退出登录) takes the official cards away, as they were that token's.
   void _authChanged() {
     final authorized = _services.appAuth.authorized;
     final gained = authorized && !_authorized;
+    final lost = !authorized && _authorized;
     _authorized = authorized;
     if (gained && PlayerPrefs.shared.officialFeed && _feed?.source != FeedSource.official) {
       unawaited(_refreshFeed(restart: true));
+    } else if (lost && _feed?.source == FeedSource.official) {
+      // 退出登录 drops the token just before the account hears of it, and the account's refresh is the one wanted:
+      // waiting out this turn keeps that to one call.
+      final started = _refreshesStarted;
+      scheduleMicrotask(() {
+        if (mounted && _refreshesStarted == started) unawaited(_refreshFeed(restart: true));
+      });
     }
   }
 
@@ -141,6 +154,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _refreshFeed({bool restart = false}) {
     final running = _refreshing;
     if (running != null && !restart) return running;
+    _refreshesStarted += 1;
     late final Future<void> refresh;
     refresh = _fetchFeed().whenComplete(() {
       if (identical(_refreshing, refresh)) _refreshing = null;
@@ -199,7 +213,7 @@ class _HomePageState extends State<HomePage> {
         if (mounted) await _services.loginGate.request(context);
         return;
       }
-      Logger.shared.warn(LogCategory.ui, 'watch later failed', {'error': '$error'});
+      Logger.shared.warn(LogCategory.ui, 'watch later failed', feedLogFields(error));
       if (mounted) showToast(context, requestFailureMessage(error));
     }
   }
@@ -212,21 +226,29 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _dislike(FeedCard card, FeedReason reason) async {
     if (!await _authorize() || !mounted) return;
-    final failure = await _feed!.dislike(card, reason);
-    if (failure != null && mounted) showToast(context, failure);
+    _dislikeFailed(await _feed!.dislike(card, reason));
   }
 
   Future<void> _undoDislike(FeedCard card) async {
     if (!await _authorize() || !mounted) return;
-    final failure = await _feed!.undo(card);
-    if (failure != null && mounted) showToast(context, failure);
+    _dislikeFailed(await _feed!.undo(card));
   }
 
   /// The official app says nothing after a reason is picked, so neither does this, unless it fails.
   Future<void> _dislikeReason(FeedCard card, FeedReason reason) async {
     if (!await _authorize() || !mounted) return;
-    final failure = await _feed!.sendReason(card, reason);
-    if (failure != null && mounted) showToast(context, failure);
+    _dislikeFailed(await _feed!.sendReason(card, reason));
+  }
+
+  /// A refused token asks for the confirm again, as the video page's 不喜欢 does; the tap isn't replayed.
+  void _dislikeFailed(DislikeFailure? failure) {
+    if (failure == null || !mounted) return;
+    switch (failure) {
+      case DislikeTokenRefused():
+        unawaited(_services.appAuth.request(context));
+      case DislikeError(:final message):
+        showToast(context, message);
+    }
   }
 
   @override
