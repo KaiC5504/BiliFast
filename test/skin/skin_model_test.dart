@@ -90,7 +90,8 @@ Uint8List zipOf(Map<String, List<int>> entries) {
   for (final MapEntry(key: name, value: bytes) in entries.entries) {
     archive.add(ArchiveFile.bytes(name, bytes));
   }
-  return ZipEncoder().encodeBytes(archive);
+  // Without a time every entry is stamped now, so the same package built a second later has another md5.
+  return ZipEncoder().encodeBytes(archive, modified: DateTime(2026, 10, 22));
 }
 
 /// A package with every picture role, its bytes telling [ver] apart.
@@ -115,6 +116,25 @@ SkinEquip equipFor(List<int> package, {int id = 7, int ver = 1, String url = pac
 );
 
 String nameOf(FileSystemEntity entity) => entity.path.split(RegExp(r'[\\/]')).last;
+
+/// What the client throws for an answer [SkinEquip.fromJson] refuses.
+BiliError decodingError(Map<String, Object?> data) {
+  try {
+    SkinEquip.fromJson(data);
+  } on DecodeError catch (error) {
+    return BiliError.decoding('$error');
+  }
+  throw StateError('$data decodes');
+}
+
+/// Real file work finishes on the event loop, not within a pump of it.
+Future<void> until(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) fail('timed out');
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+}
 
 void main() {
   late Directory folder;
@@ -456,23 +476,28 @@ void main() {
     expect(api.calls, ['equipped', 'download', 'equipped']);
   });
 
-  test('a package off Bilibili\'s CDN, or over plain http, is never downloaded', () async {
-    for (final url in ['https://example.com/7.zip', 'http://i0.hdslb.com/7.zip']) {
-      final package = packageFor(1);
-      final api = FakeSkinApi(
-        equip: equipFor(package, url: url),
-        package: package,
-      );
-      final (:model, environment: _) = make(api, keep: false);
-      await settle(model);
-      expect(model.value, isNull, reason: url);
-      expect(api.calls, ['equipped'], reason: url);
-    }
-    expect(
-      logged('skin not installed, keeping what is shown').map((event) => event.f['error']),
-      everyElement(const LogString('package host not allowed')),
-    );
-  });
+  test(
+    'a package off Bilibili\'s CDN, or over plain http, is never downloaded; the log names scheme and host',
+    () async {
+      for (final url in ['https://example.com/7.zip?sign=secret', 'http://i0.hdslb.com/7.zip']) {
+        final package = packageFor(1);
+        final api = FakeSkinApi(
+          equip: equipFor(package, url: url),
+          package: package,
+        );
+        final (:model, environment: _) = make(api, keep: false);
+        await settle(model);
+        expect(model.value, isNull, reason: url);
+        expect(api.calls, ['equipped'], reason: url);
+      }
+      expect(logged('skin not installed, keeping what is shown').map((event) => event.f['error']), [
+        const LogString('package host not allowed: https://example.com'),
+        const LogString('package host not allowed: http://i0.hdslb.com'),
+      ]);
+      expect(allLogText(), isNot(contains('7.zip')));
+      expect(allLogText(), isNot(contains('secret')));
+    },
+  );
 
   test('a download past 40 MB is refused', () async {
     final api = apiWith(1)..package = Uint8List(SkinLimits.packageBytes + 1);
@@ -480,6 +505,199 @@ void main() {
     await settle(model);
     expect(model.value, isNull);
     expect(logged('skin not installed, keeping what is shown').single.f['error'], const LogString('package too large'));
+  });
+
+  test('an answer it does not understand keeps the skin, its files and current.json, naming only keys', () async {
+    final api = apiWith(1);
+    final (:model, environment: _) = make(api);
+    await settle(model);
+    final shown = model.value;
+    final current = File('${folder.path}/current.json').readAsStringSync();
+
+    api.failures['equipped'] = decodingError({
+      'user_equip': {'id': 7, 'name': 'skin 7', 'ver': 2},
+    });
+    await model.refresh();
+    await model.settle();
+    expect(model.value, same(shown));
+    expect(versionExists(7, 1), isTrue);
+    expect(File('${folder.path}/current.json').readAsStringSync(), current);
+    expect(logged('skin stays stock'), isEmpty);
+    expect(
+      logged('skin answer not understood, keeping what is shown').single.f['reason'],
+      const LogString('DecodeError: skin: user_equip has no package_url (user_equip keys: id, name, ver)'),
+    );
+  });
+
+  test('a package without an md5 is refused before it is downloaded', () async {
+    final package = packageFor(1);
+    final api = FakeSkinApi(
+      equip: equipFor(package, md5Text: ' '),
+      package: package,
+    );
+    final (:model, environment: _) = make(api);
+    await settle(model);
+    expect(model.value, isNull);
+    expect(api.calls, ['equipped']);
+    expect(logged('skin not installed, keeping what is shown').single.f['error'], const LogString('no md5 in answer'));
+  });
+
+  test('a bug goes to the crash log with its stack and keeps what is shown', () async {
+    final api = apiWith(1);
+    final (:model, environment: _) = make(api);
+    await settle(model);
+    final shown = model.value;
+
+    api.failures['equipped'] = StateError('a bug');
+    await expectLater(model.refresh(), completes);
+    expect(model.value, same(shown));
+
+    final newer = packageFor(2);
+    api
+      ..failures.clear()
+      ..equip = equipFor(newer, ver: 2)
+      ..package = newer
+      ..failures['download'] = RangeError('another bug');
+    await expectLater(model.refresh(), completes);
+    expect(model.value, same(shown));
+
+    final crashes = logged('crash').where((event) => event.f['part'] == const LogInt(1)).toList();
+    expect(crashes.map((event) => event.f['error']), [
+      const LogString('Bad state: a bug'),
+      const LogString('RangeError: another bug'),
+    ]);
+    expect(crashes.map((event) => event.f['source']), everyElement(const LogString('skin refresh')));
+    expect(crashes.every((event) => (event.f['stack']! as LogString).value.isNotEmpty), isTrue);
+    expect(logged('skin check failed, keeping what is shown'), isEmpty);
+    expect(logged('skin not installed, keeping what is shown'), isEmpty);
+
+    api.failures.clear();
+    await model.refresh();
+    expect(model.value!.equip.ver, 2, reason: 'a bug is not remembered as a bad package');
+  });
+
+  test('a package that failed is not fetched again this run, until the equip names another', () async {
+    final package = packageFor(1);
+    final api = FakeSkinApi(
+      equip: equipFor(package, md5Text: md5.convert([0]).toString()),
+      package: package,
+    );
+    final (:model, environment: _) = make(api);
+    await settle(model);
+    await model.refresh();
+    expect(api.calls, ['equipped', 'download', 'equipped'], reason: 'the same id, version and md5');
+    expect(
+      logged('skin not installed, keeping what is shown').last.f['reason'],
+      const LogString('failed earlier this run'),
+    );
+
+    api.equip = equipFor(package);
+    await model.refresh();
+    expect(api.calls, ['equipped', 'download', 'equipped', 'equipped', 'download']);
+    expect(model.value, isNotNull);
+
+    final newer = packageFor(2);
+    api
+      ..equip = equipFor(newer, ver: 2)
+      ..package = newer
+      ..failures['download'] = const SkinPackageError('download answered 404');
+    await model.refresh();
+    await model.refresh();
+    expect(api.calls.where((call) => call == 'download'), hasLength(3), reason: 'a 404 is kept too');
+  });
+
+  test('a timeout or a dropped connection is tried again at the next refresh', () async {
+    final api = apiWith(1)..failures['download'] = const SkinPackageError('download timed out', passing: true);
+    final (:model, environment: _) = make(api);
+    await settle(model);
+    api.failures['download'] = _TransportError();
+    await model.refresh();
+    api.failures.remove('download');
+    await model.refresh();
+    expect(api.calls, ['equipped', 'download', 'equipped', 'download', 'equipped', 'download']);
+    expect(model.value, isNotNull);
+  });
+
+  test('a logout during a download writes none at once; the download is then dropped', () async {
+    final api = apiWith(1);
+    final hold = api.holds['download'] = Completer<void>();
+    final (:model, :environment) = make(api);
+    await model.start();
+    final check = model.refresh();
+    await until(() => api.calls.contains('download'));
+
+    environment.account = const LoggedOut();
+    await model.settle().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => fail('the write waited for the download'),
+    );
+    expect(jsonDecode(File('${folder.path}/current.json').readAsStringSync()), {'equip': null});
+
+    hold.complete();
+    await check;
+    await model.settle();
+    expect(model.value, isNull);
+    expect(versionExists(7, 1), isFalse, reason: 'nothing unpacked for an account that left');
+    expect(jsonDecode(File('${folder.path}/current.json').readAsStringSync()), {'equip': null});
+  });
+
+  test('an unchanged skin still deletes versions an earlier refresh could not', () async {
+    final api = apiWith(1);
+    final (:model, environment: _) = make(api);
+    await settle(model);
+    final leftover = Directory('${folder.path}/7/0-00000000')..createSync(recursive: true);
+    File('${leftover.path}/head_bg.png').writeAsBytesSync([1]);
+    Directory('${folder.path}/6/1-11111111').createSync(recursive: true);
+
+    await model.refresh();
+    expect(api.calls, ['equipped', 'download', 'equipped']);
+    expect(leftover.existsSync(), isFalse);
+    expect(Directory('${folder.path}/6').existsSync(), isFalse);
+    expect(versionExists(7, 1), isTrue);
+    expect(model.value!.headBg!.existsSync(), isTrue);
+  });
+
+  test('an unknown launch shows the cache; a check that answers logged out goes stock, writes none, and the next '
+      'launch starts stock', () async {
+    await settle(make(apiWith(1)).model);
+
+    final api = apiWith(1);
+    final (:model, :environment) = make(api, account: const AccountUnknown());
+    await model.start();
+    expect(model.value, isNotNull);
+
+    environment.account = const LoggedOut();
+    expect(model.value, isNull);
+    await model.settle();
+    expect(jsonDecode(File('${folder.path}/current.json').readAsStringSync()), {'equip': null});
+    expect(logged('skin stays stock').last.f['reason'], const LogString('logged out'));
+    expect(versionExists(7, 1), isTrue, reason: 'the files stay for the next login');
+    expect(api.calls, isEmpty);
+
+    final next = make(apiWith(1), account: const AccountUnknown());
+    await next.model.start();
+    expect(next.model.value, isNull);
+  });
+
+  test('files of a role\'s name it cannot draw are logged once by name', () async {
+    final package = zipOf({
+      'head_bg.gif': [1],
+      'tail_bg.png': [2],
+      'head_myself_mp4_bg.webm': [3],
+    });
+    final api = FakeSkinApi(equip: equipFor(package), package: package);
+    final (:model, environment: _) = make(api);
+    await settle(model);
+    expect(model.value!.headBg, isNull);
+    expect(model.value!.tailBg, isNotNull);
+    expect(
+      logged('skin files skipped').single.f['skipped'],
+      const LogString('head_bg.gif: not a picture, head_myself_mp4_bg.webm: not a video'),
+    );
+
+    final next = make(FakeSkinApi(), account: const AccountUnknown());
+    await next.model.start();
+    expect(next.model.value!.headBg, isNull, reason: 'the cache resolves the same way');
   });
 
   test('a second refresh while one is out joins it', () async {

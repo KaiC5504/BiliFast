@@ -7,18 +7,21 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
 import '../app/app_environment.dart';
+import '../devtools/crash_log.dart';
 import 'skin.dart';
 import 'skin_api.dart';
 import 'skin_package.dart';
 
-/// The equipped 装扮, asked at launch and on every login, its package downloaded once per id and version and
+/// The equipped 装扮, asked at launch and on every login, its package downloaded once per id, version and md5 and
 /// unpacked under [folder] (the support folder's `skins`). Answers from the last unpacked skin at once, so a launch
-/// draws the theme from the first frame; a failure keeps what is shown.
+/// draws the theme from the first frame; a failure keeps what is shown, and a package that failed isn't fetched again
+/// this run.
 ///
 /// On disk: `current.json` names the skin last equipped (or none), and each package is unpacked into
-/// `<id>/<ver>-<md5>`, whole once its `.skin.json` is there (the unpack goes to a `.partial` folder and is renamed into
-/// place). A package changed under the same version gets a folder of its own, so files on screen are never replaced in
-/// place. Logging out shows the stock look and the next launch starts stock, but the files stay for the next login.
+/// `<id>/<ver>-<first 8 of md5>`, whole once its `.skin.json` is there (the unpack goes to a `.partial` folder and is
+/// renamed into place). A package changed under the same version gets a folder of its own, so files on screen are
+/// never replaced in place. Logging out shows the stock look and the next launch starts stock, but the files stay for
+/// the next login.
 class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   SkinModel({required this._api, required this._environment, required this._folder, Logger? logger})
     : _logger = logger ?? Logger.shared;
@@ -36,8 +39,15 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   Future<void> _cacheRead = Future.value();
   Future<void>? _refreshing;
 
-  /// Unpacking, writing `current.json` and deleting versions run one after another.
+  /// Unpacking, writing `current.json` and deleting versions run one after another; a download waits outside, so a
+  /// logout's write never waits for one.
   Future<void> _disk = Future.value();
+
+  /// Packages that failed to install this run, by [_installKey], until the equip names another.
+  final Set<String> _failed = {};
+
+  /// Versions whose skipped files were logged.
+  final Set<String> _skippedLogged = {};
 
   /// Where versions are unpacked without [_folder]: a temporary folder, made on first use.
   Future<String>? _scratch;
@@ -82,8 +92,12 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     if (_refreshing case final running?) return running;
     late final Future<void> run;
     run = _refresh(_generation)
-        .catchError((Object error) {
-          _logger.warn(LogCategory.ui, 'skin refresh failed, keeping what is shown', {'error': _describe(error)});
+        .catchError((Object error, StackTrace stack) {
+          if (error is Error) {
+            CrashLog.report(error, stack, source: 'skin refresh', logger: _logger);
+          } else {
+            _logger.warn(LogCategory.ui, 'skin refresh failed, keeping what is shown', {'error': _describe(error)});
+          }
         })
         .whenComplete(() {
           if (identical(_refreshing, run)) _refreshing = null;
@@ -97,17 +111,18 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     final SkinEquip? equip;
     try {
       equip = await _api.equipped();
-    } catch (error) {
-      if (error is BiliNoAppTokenError) {
-        if (!_toldNoToken) {
-          _logger.info(LogCategory.ui, 'skin waits for the app token, keeping what is shown', {
-            'shown': _value != null,
-          });
-        }
-        _toldNoToken = true;
-      } else {
-        _logger.warn(LogCategory.ui, 'skin check failed, keeping what is shown', {'error': _describe(error)});
+    } on BiliNoAppTokenError {
+      if (!_toldNoToken) {
+        _logger.info(LogCategory.ui, 'skin waits for the app token, keeping what is shown', {'shown': _value != null});
       }
+      _toldNoToken = true;
+      return;
+    } on BiliDecodingError catch (error) {
+      // A changed answer must not read as nothing equipped, which would delete the theme's files.
+      _logger.warn(LogCategory.ui, 'skin answer not understood, keeping what is shown', {'reason': error.detail});
+      return;
+    } on Exception catch (error) {
+      _logger.warn(LogCategory.ui, 'skin check failed, keeping what is shown', {'error': _describe(error)});
       return;
     }
     _toldNoToken = false;
@@ -122,48 +137,90 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
       return;
     }
     final SkinEquip next = equip;
-    if (_value case final shown? when _cacheText(shown.equip) == _cacheText(next)) return;
+    if (_value case final shown? when _cacheText(shown.equip) == _cacheText(next)) {
+      await _exclusive(() => _deleteVersions(keep: next));
+      return;
+    }
+    final key = _installKey(next);
+    if (_failed.contains(key)) {
+      _logger.info(LogCategory.ui, 'skin not installed, keeping what is shown', {
+        'id': next.id,
+        'ver': next.ver,
+        'reason': 'failed earlier this run',
+      });
+      return;
+    }
     try {
-      final (skin, from) = await _exclusive(() => _install(next));
-      if (!_current(generation)) return;
+      final installed = await _install(next, generation);
+      if (installed == null || !_current(generation)) return;
+      final (skin, from) = installed;
       _show(skin, from: from);
       await _exclusive(() async {
         await _writeCurrent(next);
         await _deleteVersions(keep: next);
       });
-    } catch (error) {
+    } on Exception catch (error) {
+      if (error is SkinPackageError && !error.passing) _failed.add(key);
       _logger.warn(LogCategory.ui, 'skin not installed, keeping what is shown', {
-        'id': equip.id,
-        'ver': equip.ver,
+        'id': next.id,
+        'ver': next.ver,
         'error': _describe(error),
       });
     }
   }
 
-  /// The version's files, unpacked already or downloaded, checked and unpacked now.
-  Future<(Skin, String)> _install(SkinEquip equip) async {
+  /// The version's files, unpacked already, or downloaded, checked and unpacked now; null when the account changed
+  /// while it downloaded.
+  Future<(Skin, String)?> _install(SkinEquip equip, int generation) async {
     final target = Directory(_versionPath(await _root(), equip));
-    if (await _wholeVersion(target, equip) case final files?) return (resolveSkin(equip, files), 'unpacked');
+    if (await _exclusive(() => _wholeVersion(target, equip)) case final files?) {
+      return (_resolve(equip, files), 'unpacked');
+    }
+    final md5 = equip.packageMd5.trim().toLowerCase();
+    if (md5.isEmpty) throw const SkinPackageError('no md5 in answer');
+    if (!_md5.hasMatch(md5)) throw const SkinPackageError('md5 in answer malformed');
     final url = Uri.tryParse(equip.packageUrl);
-    if (url == null || !isSkinPackageUrl(url)) throw const SkinPackageError('package host not allowed');
+    if (url == null) throw const SkinPackageError('package link unreadable');
+    if (!isSkinPackageUrl(url)) throw SkinPackageError.hostNotAllowed(url);
     final download = await _api.download(url);
+    if (!_current(generation)) return null;
     if (download.length > SkinLimits.packageBytes) throw const SkinPackageError('package too large');
     final bytes = download is Uint8List ? download : Uint8List.fromList(download);
-    final partial = Directory('${target.path}.partial');
-    if (await partial.exists()) await partial.delete(recursive: true);
-    final unpacked = await unpackSkinPackage(bytes, md5: equip.packageMd5, folder: partial.path);
-    if (unpacked.skipped.isNotEmpty) {
-      _logger.warn(LogCategory.ui, 'skin package entries skipped', {
+    return _exclusive(() async {
+      if (!_current(generation)) return null;
+      final partial = Directory('${target.path}.partial');
+      if (await partial.exists()) await partial.delete(recursive: true);
+      final unpacked = await unpackSkinPackage(bytes, md5: md5, folder: partial.path);
+      if (unpacked.skipped.isNotEmpty) {
+        _logger.warn(LogCategory.ui, 'skin package entries skipped', {
+          'id': equip.id,
+          'ver': equip.ver,
+          'skipped': unpacked.skipped.join(', '),
+        });
+      }
+      await File('${partial.path}/$_manifestName').writeAsString(jsonEncode({'md5': md5}), flush: true);
+      if (await target.exists()) await _retried(() => target.delete(recursive: true));
+      await _retried(() => partial.rename(target.path));
+      return (_resolve(equip, await listSkinFiles(target)), 'package');
+    });
+  }
+
+  static final _md5 = RegExp(r'^[0-9a-f]{32}$');
+
+  static String _installKey(SkinEquip equip) => '${equip.id}|${equip.ver}|${equip.packageMd5.trim().toLowerCase()}';
+
+  /// [resolveSkin], logging once per version the files of a role's name it couldn't draw.
+  Skin _resolve(SkinEquip equip, List<SkinFile> files) {
+    final skipped = <String>[];
+    final skin = resolveSkin(equip, files, skipped: skipped);
+    if (skipped.isNotEmpty && _skippedLogged.add(_installKey(equip))) {
+      _logger.warn(LogCategory.ui, 'skin files skipped', {
         'id': equip.id,
         'ver': equip.ver,
-        'skipped': unpacked.skipped.join(', '),
+        'skipped': skipped.join(', '),
       });
     }
-    await File('${partial.path}/$_manifestName')
-        .writeAsString(jsonEncode({'md5': equip.packageMd5.trim().toLowerCase()}), flush: true);
-    if (await target.exists()) await _retried(() => target.delete(recursive: true));
-    await _retried(() => partial.rename(target.path));
-    return (resolveSkin(equip, await listSkinFiles(target)), 'package');
+    return skin;
   }
 
   /// The files of [folder] when it holds [equip]'s package whole; null otherwise, so it is unpacked again.
@@ -198,9 +255,12 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
         _logger.warn(LogCategory.ui, 'skin stays stock', {'reason': 'cached version incomplete', 'id': equip.id});
         return null;
       }
-      return resolveSkin(equip, files);
-    } catch (error) {
+      return _resolve(equip, files);
+    } on Exception catch (error) {
       _logger.warn(LogCategory.ui, 'skin stays stock', {'reason': 'cache unreadable', 'error': _describe(error)});
+      return null;
+    } on Error catch (error, stack) {
+      CrashLog.report(error, stack, source: 'skin cache', logger: _logger);
       return null;
     }
   }
@@ -213,7 +273,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
       final temporary = File('$folder/$_currentName.tmp');
       await temporary.writeAsString(jsonEncode({'equip': equip == null ? null : _cacheJson(equip)}), flush: true);
       await _retried(() => temporary.rename('$folder/$_currentName'));
-    } catch (error) {
+    } on Exception catch (error) {
       _logger.warn(LogCategory.ui, 'skin choice not saved', {'error': _describe(error)});
     }
   }
@@ -240,7 +300,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     } on FileSystemException {
       failed++;
     }
-    // A file still open (the old header's video on Windows) can't go; the next refresh tries again.
+    // A file Windows still holds (see [_retried]) can't go; a later refresh tries again.
     if (failed > 0) _logger.warn(LogCategory.ui, 'old skin files not deleted', {'count': failed});
   }
 
@@ -431,7 +491,7 @@ SkinEquip? _equipFromCache(Object? json) {
   T need<T>(Map<String, Object?> map, String key) =>
       map[key] is T ? map[key] as T : throw FormatException('$key missing');
   int? color(String key) => colors[key] is int ? colors[key] as int : null;
-  bool flag(String key, {bool otherwise = false}) => colors[key] is bool ? colors[key] as bool : otherwise;
+  bool flag(String key) => colors[key] == true;
   return SkinEquip(
     id: need<int>(json, 'id'),
     name: need<String>(json, 'name'),
@@ -450,7 +510,7 @@ SkinEquip? _equipFromCache(Object? json) {
       tailIconColorSelected: color('tailIconColorSelected'),
       tailIconAnimated: flag('tailIconAnimated'),
       tailIconCycle: flag('tailIconCycle'),
-      headMyselfVideoLoop: flag('headMyselfVideoLoop', otherwise: true),
+      headMyselfVideoLoop: flag('headMyselfVideoLoop'),
     ),
   );
 }

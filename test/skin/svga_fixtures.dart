@@ -162,7 +162,7 @@ Uint8List movie1(Map<String, Object?>? spec, {Map<String, List<int>> files = con
   for (final MapEntry(:key, :value) in files.entries) {
     archive.addFile(ArchiveFile.bytes(key, value));
   }
-  return ZipEncoder().encodeBytes(archive);
+  return ZipEncoder().encodeBytes(archive, modified: DateTime(2026, 10, 22));
 }
 
 /// A PNG of one colour (0xAARRGGBB), [width] × [height].
