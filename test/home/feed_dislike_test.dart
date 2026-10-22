@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_core/devlog.dart';
@@ -11,6 +12,7 @@ import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/settings/font_store.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -206,6 +208,96 @@ void main() {
     await settle(tester);
     expect(find.byType(FeedDislikedCard), findsNothing);
     expect(http.cancels, hasLength(1));
+  });
+
+  group("while a refresh's covers load", () {
+    var holding = false;
+    final held = <Completer<bool>>[];
+
+    setUp(() {
+      holding = false;
+      held.clear();
+      HomePage.precacheCover = (_, _, _) {
+        if (!holding) return Future.value(true);
+        final cover = Completer<bool>();
+        held.add(cover);
+        return cover.future;
+      };
+    });
+
+    tearDown(() => HomePage.precacheCover = RemoteImage.precache);
+
+    Finder going(String bvid) => find.byKey(ValueKey('feed-card-going-$bvid'));
+
+    Finder turnedOver(Finder slot) => find.descendant(of: slot, matching: find.byType(FeedDislikedCard));
+
+    /// A pull whose answer has come, its covers held; the old cards stay for at most [FeedModel.coverWait], so what
+    /// follows keeps its frames short.
+    Future<void> pullHeld(WidgetTester tester) async {
+      holding = true;
+      http.officialPages[0] = [for (var i = 0; i < 4; i++) officialItem('BV1new$i')];
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
+      await settle(tester, 2);
+      expect(held, isNotEmpty, reason: 'the answer came and its covers are loading');
+    }
+
+    Future<void> frames(WidgetTester tester, int count) async {
+      for (var i = 0; i < count; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+      }
+    }
+
+    /// The covers ready, then 1 ms frames until the old card [bvid] is fading out over the new one.
+    Future<void> handOff(WidgetTester tester, String bvid) async {
+      for (final cover in held) {
+        if (!cover.isCompleted) cover.complete(true);
+      }
+      for (var i = 0; i < 20 && going(bvid).evaluate().isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 1));
+      }
+      expect(going(bvid), findsOneWidget, reason: 'the hand-off has begun');
+    }
+
+    testWidgets('a 不感兴趣 made meanwhile stays on the card as it fades out', (tester) async {
+      await show(tester);
+      await pullHeld(tester);
+      await tester.tap(more('BV1aaa'));
+      await frames(tester, 6);
+      await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
+      await frames(tester, 6);
+      expect(card('BV1new0'), findsNothing, reason: 'still waiting on the covers');
+      expect(turnedOver(card('BV1aaa')), findsOneWidget);
+
+      await handOff(tester, 'BV1aaa');
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(going('BV1aaa'), findsOneWidget);
+      expect(turnedOver(going('BV1aaa')), findsOneWidget, reason: 'it fades out as the user left it');
+      expect(turnedOver(card('BV1new0')), findsOneWidget, reason: 'only the going card is turned over');
+      await settle(tester, 10);
+      expect(find.byType(FeedDislikedCard), findsNothing);
+      expect(http.dislikes, hasLength(1));
+    });
+
+    testWidgets('a 撤销 made meanwhile brings the card back before it fades out', (tester) async {
+      await show(tester);
+      await openMore(tester, 'BV1aaa');
+      await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
+      await settle(tester);
+      expect(turnedOver(card('BV1aaa')), findsOneWidget);
+
+      await pullHeld(tester);
+      await tester.tap(find.byKey(const ValueKey('feed-disliked-undo')));
+      await frames(tester, 8);
+      expect(card('BV1new0'), findsNothing, reason: 'still waiting on the covers');
+      expect(turnedOver(card('BV1aaa')), findsNothing);
+
+      await handOff(tester, 'BV1aaa');
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(going('BV1aaa'), findsOneWidget);
+      expect(turnedOver(card('BV1new0')), findsNothing, reason: 'the card fading out is the one taken back');
+      await settle(tester, 10);
+      expect(http.cancels, hasLength(1));
+    });
   });
 
   testWidgets("不感兴趣：UP sends the uploader's reason", (tester) async {

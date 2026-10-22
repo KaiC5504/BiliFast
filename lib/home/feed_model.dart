@@ -5,6 +5,7 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
+import '../devtools/crash_log.dart';
 import '../playback/playback_controller.dart' show PlaybackFailure;
 import '../video/player_prefs.dart';
 
@@ -55,6 +56,21 @@ Map<String, Object> feedLogFields(Object error) => {
   if (error case BiliHTTPError(:final status)) 'status': status,
 };
 
+/// Why a refresh asked for no covers before showing its cards.
+enum CoverSkip { noGrid, unmounted, noLayout, noRows }
+
+/// What [FeedModel.beforeShow] started for a refresh's cards: a future per cover it asked for, true once that cover
+/// is ready and false if it failed; or, having asked for none, why.
+@immutable
+class CoverWait {
+  const CoverWait(this.covers) : skipped = null;
+
+  const CoverWait.skipped(CoverSkip this.skipped) : covers = const [];
+
+  final List<Future<bool>> covers;
+  final CoverSkip? skipped;
+}
+
 /// A card after 不感兴趣: the reason it went with, and the 反馈 picked in the reasons sheet, if any.
 @immutable
 class CardDislike {
@@ -104,9 +120,9 @@ class FeedModel extends ChangeNotifier {
   final _dislikeBusy = <String>{};
 
   /// Called with a refresh's cards before they replace [cards], which still hold the ones going: it starts getting
-  /// the first screen's covers ready, each future true once its cover is. The cards show once all are, or after
-  /// [coverWait], so the loading TV leaves with the pictures in place, as the official app's does (14).
-  List<Future<bool>> Function(List<FeedCard> fresh)? beforeShow;
+  /// the first screen's covers ready. The cards show once every cover's future has finished, or after [coverWait],
+  /// so the loading TV leaves with the pictures in place, as the official app's does (14).
+  CoverWait Function(List<FeedCard> fresh)? beforeShow;
 
   /// A refresh replaces the list, so a load more that was already running must not append to the new one.
   int _generation = 0;
@@ -233,31 +249,48 @@ class FeedModel extends ChangeNotifier {
     return (cards: await _client.recommendFeed(index: index), source: FeedSource.web, index: index);
   }
 
-  /// Waits on [beforeShow]'s covers, at most [coverWait], and logs how many were ready. Never throws.
+  /// Waits on [beforeShow]'s covers, at most [coverWait], and logs how many were ready, how many failed (the rest
+  /// were still loading) or why none were asked for. Never throws.
   Future<void> _coversReady(List<FeedCard> fresh) async {
-    final List<Future<bool>> covers;
+    final hook = beforeShow;
+    final CoverWait wait;
     try {
-      covers = beforeShow?.call(fresh) ?? const [];
-    } catch (error) {
-      _logger.warn(LogCategory.ui, 'feed covers failed', {'error': '${error.runtimeType}'});
+      wait = hook == null ? const CoverWait.skipped(CoverSkip.noGrid) : hook(fresh);
+    } catch (error, stack) {
+      CrashLog.report(error, stack, source: 'feed covers', logger: _logger);
       return;
     }
-    if (covers.isEmpty) return;
+    final covers = wait.covers;
+    if (covers.isEmpty) {
+      _logger.info(LogCategory.ui, 'feed covers', {'of': 0, if (wait.skipped case final why?) 'why': why.name});
+      return;
+    }
     final waited = Stopwatch()..start();
     var ready = 0;
+    var failed = 0;
     var timedOut = false;
     try {
       await Future.wait([
         for (final cover in covers)
-          cover.then<void>((ok) {
-            if (ok) ready++;
-          }, onError: (Object _) {}),
+          cover.then<void>(
+            (ok) {
+              if (ok) {
+                ready++;
+              } else {
+                failed++;
+              }
+            },
+            onError: (Object _) {
+              failed++;
+            },
+          ),
       ]).timeout(coverWait);
     } on TimeoutException {
       timedOut = true;
     }
     _logger.info(LogCategory.ui, 'feed covers', {
       'ready': ready,
+      'failed': failed,
       'of': covers.length,
       'waitedMs': waited.elapsedMilliseconds,
       'timedOut': timedOut,

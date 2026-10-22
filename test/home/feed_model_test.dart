@@ -183,25 +183,26 @@ void main() {
   });
 
   group("a refresh's covers", () {
-    LogEvent coversLine() => logs.events.singleWhere((event) => event.msg == 'feed covers');
+    List<LogEvent> coverLines() => [for (final event in logs.events) if (event.msg == 'feed covers') event];
 
-    test('its cards show only once beforeShow\'s covers are ready, the old ones still there meanwhile', () async {
+    test('its cards show only once beforeShow\'s covers have finished, the old ones still there meanwhile; the log '
+        'counts the failed apart from the ready', () async {
       http.pages[1] = [feedItem('BV1')];
       final feed = make();
       await feed.refresh();
-      http.pages[1] = [feedItem('BV2'), feedItem('BV3')];
+      http.pages[1] = [feedItem('BV2'), feedItem('BV3'), feedItem('BV4')];
       final cover = Completer<bool>();
       List<String>? asked;
       List<String>? shownThen;
       feed.beforeShow = (fresh) {
         asked = [for (final card in fresh) card.bvid];
         shownThen = bvids(feed);
-        return [cover.future, Future.value(false)];
+        return CoverWait([cover.future, Future.value(false), Future.error(StateError('decode'))]);
       };
       var done = false;
       final refresh = feed.refresh().then((_) => done = true);
       await pumpEventQueue();
-      expect(asked, ['BV2', 'BV3']);
+      expect(asked, ['BV2', 'BV3', 'BV4']);
       expect(shownThen, ['BV1'], reason: 'called before the cards are replaced');
       expect(bvids(feed), ['BV1']);
       expect(feed.loading, isTrue);
@@ -209,19 +210,21 @@ void main() {
 
       cover.complete(true);
       await refresh;
-      expect(bvids(feed), ['BV2', 'BV3']);
+      expect(bvids(feed), ['BV2', 'BV3', 'BV4']);
       expect(feed.loading, isFalse);
-      final line = coversLine();
+      final line = coverLines().last;
       expect(line.f['ready']?.toJson(), 1);
-      expect(line.f['of']?.toJson(), 2);
+      expect(line.f['failed']?.toJson(), 2);
+      expect(line.f['of']?.toJson(), 3);
       expect(line.f['timedOut']?.toJson(), false);
-      expect(line.f.keys, unorderedEquals(['ready', 'of', 'waitedMs', 'timedOut']), reason: 'no address');
+      expect(line.f.keys, unorderedEquals(['ready', 'failed', 'of', 'waitedMs', 'timedOut']), reason: 'no address');
     });
 
-    test('they are waited on for at most coverWait after the answer', () {
+    test('they are waited on for at most coverWait after the answer; the slow ones are neither ready nor failed', () {
       fakeAsync((async) {
         http.pages[1] = [feedItem('BV1')];
-        final feed = make()..beforeShow = (_) => [Completer<bool>().future];
+        final feed = make()
+          ..beforeShow = (_) => CoverWait([Completer<bool>().future, Future.value(true), Future.value(false)]);
         var done = false;
         unawaited(feed.refresh().then((_) => done = true));
         async.elapse(FeedModel.coverWait - const Duration(milliseconds: 1));
@@ -230,9 +233,10 @@ void main() {
         async.elapse(const Duration(milliseconds: 2));
         expect(done, isTrue);
         expect(bvids(feed), ['BV1']);
-        final line = coversLine();
-        expect(line.f['ready']?.toJson(), 0);
-        expect(line.f['of']?.toJson(), 1);
+        final line = coverLines().single;
+        expect(line.f['ready']?.toJson(), 1);
+        expect(line.f['failed']?.toJson(), 1);
+        expect(line.f['of']?.toJson(), 3);
         expect(line.f['timedOut']?.toJson(), true);
       });
     });
@@ -242,7 +246,7 @@ void main() {
       final feed = make();
       final first = Completer<bool>();
       var calls = 0;
-      feed.beforeShow = (_) => [if (calls++ == 0) first.future else Future.value(true)];
+      feed.beforeShow = (_) => CoverWait([if (calls++ == 0) first.future else Future.value(true)]);
       final stale = feed.refresh();
       await pumpEventQueue();
       expect(calls, 1);
@@ -255,16 +259,30 @@ void main() {
       expect(feed.loading, isFalse);
     });
 
-    test('a hook that throws or asks for nothing holds nothing up', () async {
+    test('a hook that throws holds nothing up and goes to the crash log', () async {
       http.pages[1] = [feedItem('BV1')];
       final feed = make()..beforeShow = (_) => throw StateError('no layout');
       await feed.refresh();
       expect(bvids(feed), ['BV1']);
-      feed.beforeShow = (_) => const [];
+      final crash = logs.events.singleWhere((event) => event.msg == 'crash');
+      expect(crash.cat, LogCategory.app);
+      expect(crash.f['source']?.toJson(), 'feed covers');
+      expect(crash.f['error']?.toJson(), contains('no layout'));
+      expect(coverLines(), isEmpty);
+    });
+
+    test('with none asked for, the log still says so, and why', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = make();
+      await feed.refresh();
+      feed.beforeShow = (_) => const CoverWait.skipped(CoverSkip.noLayout);
       http.pages[1] = [feedItem('BV2')];
       await feed.refresh();
       expect(bvids(feed), ['BV2']);
-      expect(logs.events.where((event) => event.msg == 'feed covers'), isEmpty);
+      expect([for (final line in coverLines()) line.f.map((key, value) => MapEntry(key, value.toJson()))], [
+        {'of': 0, 'why': 'noGrid'},
+        {'of': 0, 'why': 'noLayout'},
+      ]);
     });
 
     test('an empty answer asks for no covers', () async {
@@ -272,11 +290,12 @@ void main() {
       final feed = make()
         ..beforeShow = (_) {
           asked = true;
-          return const [];
+          return const CoverWait([]);
         };
       await feed.refresh();
       expect(feed.error, FeedModel.emptyMessage);
       expect(asked, isFalse);
+      expect(coverLines(), isEmpty);
     });
   });
 

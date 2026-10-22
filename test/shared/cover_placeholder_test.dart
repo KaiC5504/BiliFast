@@ -4,9 +4,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('the official grey with the 小电视 tinted faint, about 39 × 37 pt, in the middle of the cover', (
-    tester,
-  ) async {
+  testWidgets("the official grey with the 小电视 tinted faint, the asset's 117 × 109 px at 3×, in the middle of the "
+      'cover', (tester) async {
     await tester.pumpWidget(
       const Center(child: SizedBox(width: 211, height: 158.25, child: CoverPlaceholder())),
     );
@@ -17,7 +16,10 @@ void main() {
     expect(tv.color, CoverPlaceholderTheme.ink);
     expect(tv.colorBlendMode, BlendMode.srcIn);
     expect(tv.fit, BoxFit.contain);
-    expect(tester.getRect(find.byType(Image)), Rect.fromCenter(center: box.center, width: 39, height: 37));
+    final drawn = tester.getRect(find.byType(Image));
+    expect(drawn.width, moreOrLessEquals(39));
+    expect(drawn.height, moreOrLessEquals(109 / 3));
+    expect((drawn.center - box.center).distance, moreOrLessEquals(0));
     expect(tv.excludeFromSemantics, isTrue);
   });
 }

@@ -11,6 +11,7 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_glyphs.dart';
 import 'package:bilifast/settings/font_store.dart';
+import 'package:bilifast/shared/cover_placeholder.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
@@ -107,6 +108,31 @@ void main() {
 
     final shots = Platform.environment['BILIFAST_SHOTS'];
     if (shots != null) await saveShot(tester, find.byKey(_screen), '$shots/01-home-ours.png');
+  });
+
+  testWidgets("推荐's cards under the system font: covers 248 pt apart from under the hairline, a loading one the "
+      "official grey with its 小电视, as 01's and 14's", (tester) async {
+    await _showHome(tester, _feed());
+    await tester.runAsync(
+      () => precacheImage(const AssetImage(CoverPlaceholder.asset), tester.element(find.byType(CoverPlaceholder).first)),
+    );
+    await tester.pump();
+
+    final hairline = tester.getRect(find.byType(Divider).first);
+    expect(hairline.height, moreOrLessEquals(1 / 3), reason: "one pixel, as 01's");
+    final first = tester.getTopLeft(find.byKey(const ValueKey('feed-card-BV1aaa'))).dy;
+    final third = tester.getTopLeft(find.byKey(const ValueKey('feed-card-BV1ccc'))).dy;
+    expect(first, moreOrLessEquals(hairline.bottom + BiliMetrics.feedSpacing));
+    expect(third - first, moreOrLessEquals(248), reason: "01's rows at 148, 396 and 644");
+
+    final cover = tester.getRect(find.byType(CoverPlaceholder).first);
+    final tv = tester.getRect(find.descendant(of: find.byType(CoverPlaceholder).first, matching: find.byType(Image)));
+    expect(tv.width, moreOrLessEquals(39));
+    expect(tv.height, moreOrLessEquals(109 / 3));
+    expect((tv.center - cover.center).distance, moreOrLessEquals(0), reason: "14's 小电视 is centred within 0.33 pt");
+
+    final shots = Platform.environment['BILIFAST_SHOTS'];
+    if (shots != null) await saveShot(tester, find.byKey(_screen), '$shots/14-home-loading-ours.png');
   });
 
   testWidgets("首页's tap under the system font: the TV in its 60 pt band where 14 has it", (tester) async {

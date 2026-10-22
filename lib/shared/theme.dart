@@ -552,18 +552,38 @@ abstract final class BiliMetrics {
   /// 633 × 475 px on 01, so 4:3, not the 16:10 the spec guessed.
   static const coverAspect = 4 / 3;
   static const cardInset = 8.0;
-  static const cardTitleTop = 10.0;
+
+  /// 01's title lines are 20 pt apart. With the footer the card is 242 pt tall on a 211 pt column, its covers 248 pt
+  /// apart.
+  static const cardTitleTop = 9.75;
+  static const cardTitleLine = 20.0;
   static const cardFooterInset = 9.0;
   static const cardTitleText = 14.0;
   static const cardFooterText = 12.0;
   static const cardTagText = 11.0;
   static const cardTagHeight = 16.0;
-  static const cardStatText = 11.0;
-  static const cardStatIcon = 13.0;
+
+  /// The counts over the cover (01, 14), in proportional figures: digits 7.33 pt tall, "94.7万" 28.67 and "405" 16.67
+  /// wide, as the system font draws them at 9.67 pt. The play and danmaku icons start [cardStatLead] from the
+  /// cover's left edge; a count's ink starts 5.67 after its icon and the next icon 15 after the count's ink, the
+  /// digits' side bearings taken off the gaps. Icons and digits are centred [cardStatCentre] above the cover's bottom;
+  /// a line centred there draws its digits [cardStatTextDrop] high.
+  static const cardStatText = 29 / 3;
+  static const cardStatIconWidth = 40 / 3;
+  static const cardStatIconHeight = 34 / 3;
+  static const cardStatLead = 31 / 3;
+  static const cardStatIconGap = 16 / 3;
+  static const cardStatGap = 44 / 3;
+  static const cardStatTrail = 8.0;
+  static const cardStatCentre = 13.0;
+  static const cardStatTextDrop = 0.5;
   static const coverShadeHeight = 36.0;
   static const upBadgeHeight = 12.0;
   static const upBadgeText = 8.0;
   static const cardMoreTarget = 24.0;
+
+  /// 01's ⋮ sits this far under the footer's middle, where the tag and the name are.
+  static const cardMoreDrop = 1.0;
   static const cardMenuWidth = 168.0;
   static const cardMenuGap = 4.0;
   static const feedSpinnerRadius = 10.0;
@@ -3277,6 +3297,8 @@ abstract final class HomeTabBarTheme {
   /// 49 pt from the hairline's top to the home indicator's safe area, in five slots of a fifth of the width each.
   static const height = 49.0;
   static const hairline = BiliColors.divider;
+
+  /// One pixel, as 01's: this bar's and the one under the tab row.
   static const hairlineWidth = 1 / 3;
 
   /// Below the bar's top: a glyph's centre, the pink +'s (centred under the hairline) and a label's line box top.
@@ -3306,8 +3328,9 @@ abstract final class HomeTabBarTheme {
   static const reloadScroll = Duration(milliseconds: 300);
   static const reloadHeader = Duration(milliseconds: 200);
 
-  /// The hand-off once a refresh's cards come (14, both refreshes): from the same frame, the TV's room closes and the
-  /// cards on screen cross-fade into the new ones in place, with no rise. Fitted to the recording's frames.
+  /// Once a refresh's cards come (14), from the same frame: [reloadCollapse] closes the room 首页's tap opened for its
+  /// TV (a pull's room closes by the scroll's own spring), and over [handOff] the cards on screen fade out over the new
+  /// ones, which stand in place at full opacity, with no rise. Fitted to the recording's frames.
   static const reloadCollapse = Duration(milliseconds: 100);
   static const reloadCollapseCurve = Curves.easeInOut;
   static const handOff = Duration(milliseconds: 180);
@@ -3339,13 +3362,13 @@ abstract final class HomeTabBarTheme {
   static const skinIconRise = 20.0;
 }
 
-/// A 推荐 cover still loading (14): the official grey with its faint 小电视, centred on the cover. Measured in px / 3,
-/// the 小电视's ink is 116-117 × 108-111 px of #CDCDCD; the asset's own grey is about the fill's, so it is tinted.
+/// A 推荐 cover still loading (14): the official grey with its faint 小电视, centred on the cover. The asset is cut to
+/// its ink, 117 × 109 px at 3× (the clip's is 117 × 110 px of #CDCDCD); it is drawn white and tinted.
 abstract final class CoverPlaceholderTheme {
   static const fill = Color(0xFFDEDFE1);
   static const ink = Color(0xFFCDCDCD);
-  static const width = 39.0;
-  static const height = 37.0;
+  static const width = 117 / 3;
+  static const height = 109 / 3;
 }
 
 /// The bottom bar's glyphs (01, 02): their size, strokes and colours, and the + on its pink rounded square.
