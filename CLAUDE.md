@@ -117,7 +117,10 @@ the system-font check, shipped in (15) and (16); its leftovers are set aside, be
    rest scrolls under the card; no pinned bar), 107 (the pull opens under the 会员 card, refreshing on release), 108
    (the avatar opens the account's own space, a different layout from others' spaces). Not built: 我的服务, 更多服务,
    发布你的第一个视频; the top icons (投屏, 扫一扫, 装扮, 夜间模式) toast. Calls: nav (adds B币) and
-   `/x/web-interface/nav/stat`. Undecided: the own space (108) now or the others' layout for now. Unshipped on main
+   `/x/web-interface/nav/stat`. The own space is its own slice (KaiC: split): 我的's avatar and 空间 open the
+   others' layout until then. Its references: 108 (投稿), 114 (主页: 收藏 cards, 追番, then 115 scrolled: the black bar
+   with the name and the tabs pinned, 最近投币的视频, 最近点赞的视频, 我的游戏, 拥有的个性装扮), 116 (收藏: 我创建的收藏夹),
+   117 (追番: a 3-column grid, 再怎么找也没有啦); the banner is the 空间头图 theme item. Unshipped on main
    since (24): 我的收藏's 视频 fixed (its tab id is in 收藏's `uri`, `sub_tab=`, checked live on the PC) and the PC
    login. After 我的: 装扮, following the theme equipped in the official app (`x/resource/show/skin`; 109 我的, 110
    首页 and the bottom bar, 108 the space banner; the shop 111-113 stays the official app's), then 动态.
