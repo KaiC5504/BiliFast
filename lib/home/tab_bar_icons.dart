@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
+import '../skin/skin.dart';
+import '../skin/svga_view.dart';
 import 'home_tab_bar.dart';
 
 /// A bottom-bar glyph, drawn as 01 (首页 selected, the rest not) and 02 (首页 not selected, 我的 selected) show it.
@@ -193,4 +196,96 @@ class PostButtonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(PostButtonPainter old) => false;
+}
+
+/// A place's icon in a bar dressed by the 装扮 (109, 110): its picture, or its selected one while [selected]. A
+/// selected animation plays from its first frame each time the place is selected, looping with [loop]. With [rise]
+/// every change fades the incoming picture in, rising [HomeTabBarTheme.skinIconRise] into place.
+class SkinTabIcon extends StatefulWidget {
+  const SkinTabIcon({
+    super.key,
+    required this.icon,
+    required this.selectedIcon,
+    required this.selected,
+    this.loop = false,
+    this.rise = false,
+  });
+
+  final SkinIcon icon;
+  final SkinIcon selectedIcon;
+  final bool selected;
+  final bool loop;
+  final bool rise;
+
+  @override
+  State<SkinTabIcon> createState() => _SkinTabIconState();
+}
+
+class _SkinTabIconState extends State<SkinTabIcon> with SingleTickerProviderStateMixin {
+  late final AnimationController _motion = AnimationController(
+    vsync: this,
+    duration: HomeTabBarTheme.skinIconMotion,
+    value: 1,
+  );
+  late final CurvedAnimation _curve = CurvedAnimation(parent: _motion, curve: Curves.easeOut);
+
+  /// Counts the selections, so each one starts a selected animation afresh.
+  int _plays = 0;
+
+  @override
+  void didUpdateWidget(SkinTabIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected == oldWidget.selected) return;
+    if (widget.selected) _plays++;
+    if (widget.rise && !MediaQuery.disableAnimationsOf(context)) {
+      unawaited(_motion.forward(from: 0));
+    } else {
+      _motion.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final picture = widget.selected
+        ? SkinPicture(
+            widget.selectedIcon,
+            key: ValueKey('skin-play-$_plays'),
+            play: !MediaQuery.disableAnimationsOf(context),
+            loop: widget.loop,
+            fallback: SkinPicture(widget.icon),
+          )
+        : SkinPicture(widget.icon);
+    return FadeTransition(
+      opacity: _curve,
+      child: AnimatedBuilder(
+        animation: _curve,
+        builder: (context, child) =>
+            Transform.translate(offset: Offset(0, HomeTabBarTheme.skinIconRise * (1 - _curve.value)), child: child),
+        child: picture,
+      ),
+    );
+  }
+}
+
+/// One of the 装扮's pictures, fit centre in its box: a still picture, or an animation that stays on its first frame
+/// unless [play]. [fallback] shows while an animation decodes or when it can't be read.
+class SkinPicture extends StatelessWidget {
+  const SkinPicture(this.icon, {super.key, this.play = false, this.loop = false, this.fallback});
+
+  final SkinIcon icon;
+  final bool play;
+  final bool loop;
+  final Widget? fallback;
+
+  @override
+  Widget build(BuildContext context) => icon.animated
+      ? SvgaView(file: icon.file, play: play, loop: loop, fallback: fallback)
+      : Image.file(icon.file, fit: BoxFit.contain, gaplessPlayback: true, excludeFromSemantics: true);
 }
