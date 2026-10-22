@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show Material;
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../favourites/favourites_page.dart';
@@ -20,10 +21,11 @@ import '../watch_later/watch_later_page.dart';
 import 'me_glyphs.dart';
 import 'me_header.dart';
 import 'me_model.dart';
+import 'official_link.dart';
 
 Future<bool> _openOutside(Uri link) => launchUrl(link, mode: LaunchMode.externalApplication);
 
-/// 我的, the bottom bar's Me page (87, 106, 107), apart from the avatar's page (49).
+/// 我的, the bottom bar's Me page (02, 87, 106, 107), apart from the avatar's page (49).
 class MePage extends StatefulWidget {
   const MePage({
     super.key,
@@ -42,7 +44,7 @@ class MePage extends StatefulWidget {
   /// The model to show in place of one made from [AppScope]; the page leaves it undisposed.
   final MeModel? model;
 
-  /// Opens the 会员 centre outside the app; false when nothing could.
+  /// Opens a link outside the app, the official app's first; false (or a throw) when it couldn't.
   final Future<bool> Function(Uri link) openLink;
 
   static final vipCentre = Uri.parse('https://big.bilibili.com/mobile/home');
@@ -54,21 +56,31 @@ class MePage extends StatefulWidget {
 class _MePageState extends State<MePage> {
   MeModel? _model;
   bool _owned = false;
+  late AppEnvironment _environment;
+  late MeView _lastView;
+
+  /// Pulls still out; each toasts its own answer, so a failure landing meanwhile isn't toasted twice.
+  int _pulls = 0;
+
+  /// The header has been drawn once, so a card coming after that fades in.
+  bool _headerDrawn = false;
 
   MeModel get _me => _model!;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _environment = AppScope.of(context).environment;
     if (_model != null) return;
     final given = widget.model;
     if (given != null) {
       _model = given;
     } else {
-      final services = AppScope.of(context);
-      _model = MeModel(api: services.meApi, environment: services.environment);
+      _model = MeModel(api: AppScope.of(context).meApi, environment: _environment);
       _owned = true;
     }
+    _lastView = _me.view;
+    _me.addListener(_viewChanged);
     if (widget.active) _me.shown();
   }
 
@@ -80,32 +92,64 @@ class _MePageState extends State<MePage> {
 
   @override
   void dispose() {
+    _model?.removeListener(_viewChanged);
     if (_owned) _model?.dispose();
     super.dispose();
+  }
+
+  /// There is no screenshot of a failed header, so a first load that fails says why in a toast, once.
+  void _viewChanged() {
+    final view = _me.view;
+    final was = _lastView;
+    _lastView = view;
+    if (view is MeFailed && was is! MeFailed && _pulls == 0 && mounted) showToast(context, view.message);
   }
 
   void _soon() => showToast(context, '即将推出');
 
   void _push(WidgetBuilder builder) =>
-      unawaited(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: builder)));
+      unawaited(_visit(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: builder))));
+
+  /// Back from a pushed page, a launch check that failed is tried again, as 首页 does.
+  Future<void> _visit(Future<void> pushed) async {
+    await pushed;
+    if (mounted && _environment.account is AccountUnknown && _environment.accountCheckFailed) {
+      await _environment.refreshAccount();
+    }
+  }
 
   void _openSpace() {
-    if (_me.view case MeShown(:final profile)) {
-      unawaited(openSpace(context, UploaderRef(mid: profile.mid, name: profile.name, face: profile.face)));
+    if (_me.view case MeShown(:final profile) when (profile.mid ?? 0) > 0) {
+      final ref = UploaderRef(mid: profile.mid!, name: profile.name, face: profile.face);
+      unawaited(_visit(openSpace(context, ref)));
     }
   }
 
   void _login() => unawaited(AppScope.of(context).loginGate.request(context));
 
   Future<void> _openVipCentre() async {
-    final opened = await widget.openLink(MePage.vipCentre);
+    final opened = await openInOfficialApp(MePage.vipCentre, open: widget.openLink);
     if (!opened && mounted) showToast(context, '无法打开链接');
   }
 
   Future<void> _refresh() async {
-    final message = await _me.refresh();
+    _pulls++;
+    final String? message;
+    try {
+      message = await _me.refresh();
+    } finally {
+      _pulls--;
+    }
     if (message != null && mounted) showToast(context, message);
   }
+
+  /// A 大会员 known from the launch's check keeps the card's room until the profile answers.
+  bool _reserveCard(MeView view) =>
+      (view is MeLoading || view is MeFailed) &&
+      switch (_environment.account) {
+        LoggedIn(:final vip) => vip,
+        _ => false,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -121,18 +165,32 @@ class _MePageState extends State<MePage> {
       child: Material(
         color: MeTheme.background,
         child: ListenableBuilder(
-          listenable: _me,
+          listenable: Listenable.merge([_me, _environment]),
           builder: (context, _) {
             final view = _me.view;
+            final reduceMotion = MediaQuery.disableAnimationsOf(context);
+            final animate = _headerDrawn && !reduceMotion;
+            _headerDrawn = true;
+            final header = Stack(
+              children: [
+                MeHeader(view: view, actions: actions, reserveCard: _reserveCard(view), animate: animate),
+                _TopRow(onTap: _soon),
+              ],
+            );
             return Column(
               children: [
                 SizedBox(height: top),
-                Stack(
-                  children: [
-                    MeHeader(view: view, actions: actions),
-                    _TopRow(onTap: _soon),
-                  ],
-                ),
+                // AnimatedSize can't take a zero duration, so Reduce Motion leaves it out.
+                if (reduceMotion)
+                  header
+                else
+                  AnimatedSize(
+                    duration: MeTheme.cardFade,
+                    curve: MeTheme.cardFadeCurve,
+                    alignment: Alignment.topCenter,
+                    child: header,
+                  ),
+                const SizedBox(height: MeTheme.listCut),
                 Expanded(
                   child: _List(onRefresh: _refresh, onSoon: _soon, push: _push, developerPage: widget.developerPage),
                 ),
@@ -191,7 +249,7 @@ class _TopRow extends StatelessWidget {
   }
 }
 
-/// What scrolls under the 会员 card, cut at its bottom edge: the pull, the four shortcuts and 更多服务.
+/// What scrolls under the header, cut 8 pt under it: the pull, the four shortcuts and 更多服务.
 class _List extends StatelessWidget {
   const _List({required this.onRefresh, required this.onSoon, required this.push, required this.developerPage});
 
@@ -208,7 +266,7 @@ class _List extends StatelessWidget {
       ReleaseRefreshControl(onRefresh: onRefresh),
       SliverToBoxAdapter(
         child: SizedBox(
-          height: MeTheme.shortcutHeight,
+          height: MeTheme.shortcutHeight - MeTheme.listCut,
           child: Row(
             children: [
               _Shortcut(key: const ValueKey('me-offline'), label: '离线缓存', glyph: ShortcutGlyph.offline, onTap: onSoon),
@@ -299,24 +357,25 @@ class _Shortcut extends StatelessWidget {
             alignment: Alignment.topCenter,
             children: [
               Positioned(
-                top: MeTheme.shortcutIconCentre - AvatarPageTheme.shortcutIconBox / 2,
+                top: MeTheme.shortcutIconCentre - MeTheme.listCut - AvatarPageTheme.shortcutIconBox / 2,
                 child: CustomPaint(
                   size: const Size.square(AvatarPageTheme.shortcutIconBox),
                   painter: ShortcutPainter(glyph, color: MeTheme.shortcutGlyph),
                 ),
               ),
               Positioned(
-                top: 0,
-                height: MeTheme.shortcutLabelCentre * 2,
+                top: MeTheme.shortcutLabelCentre - MeTheme.listCut - MeTheme.lineBox / 2,
+                height: MeTheme.lineBox,
                 child: Center(
                   child: Text(
                     label,
                     maxLines: 1,
-                    // CupertinoButton's own text style would drop the page's fallback to PingFang.
+                    // CupertinoButton's own text style would drop the page's fallback to PingFang and track by -0.41.
                     style: TextStyle(
                       fontFamily: BiliFonts.family,
                       fontFamilyFallback: BiliFonts.fallback,
                       fontSize: MeTheme.shortcutText,
+                      letterSpacing: 0,
                       color: MeTheme.shortcutLabel,
                     ),
                   ),
@@ -342,6 +401,7 @@ class _ServiceRow extends StatelessWidget {
   Widget build(BuildContext context) => MeTap(
     label: label,
     onTap: onTap,
+    feedback: MeTapFeedback.highlight,
     child: SizedBox(
       height: MeTheme.serviceRow,
       child: Stack(

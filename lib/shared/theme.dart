@@ -2253,7 +2253,7 @@ abstract final class MeTheme {
   static const pendantFace = 49.0;
   static const pendantScale = CommentRowTheme.pendantScale;
 
-  /// Logged out, 首页's grey head: a person glyph at this share of the circle.
+  /// With no profile (logged out, loading, failed), 首页's grey head: a person glyph at this share of the circle.
   static const blankHead = 0.55;
 
   /// The 大 disc on its corner, in a white ring: flush with the avatar's box, 3 in from it under a frame.
@@ -2272,7 +2272,7 @@ abstract final class MeTheme {
   /// A line of text sits centred in a box this tall at its middle.
   static const lineBox = 30.0;
 
-  /// The name's, the pill's and the B币 line's middles below the safe area.
+  /// The name's middle below the safe area.
   static const nameCentre = 74.0;
   static const nameText = 16.0;
   static const nameWeight = FontWeight.w500;
@@ -2300,21 +2300,23 @@ abstract final class MeTheme {
   ];
   static const levelInk = Color(0xFFFFFFFF);
 
-  /// 年度大会员: a darker pink than the accent.
   static const vipLabelTop = 90.0;
   static const vipLabelHeight = 14.0;
   static const vipLabelPad = 6.3;
   static const vipLabelText = 11.0;
   static const vipLabelWeight = FontWeight.w600;
+
+  /// The pill after the level (年度大会员), a darker pink than the accent.
   static const vipLabelFill = Color(0xFFFF548C);
   static const vipLabelInk = Color(0xFFFFFFFF);
 
+  /// The B币 line's middle below the safe area.
   static const coinsCentre = 121.2;
   static const coinsText = 12.0;
   static const coins = BiliColors.secondaryText;
   static const coinsGap = 20.5;
 
-  /// 空间 ›, its middle level with the avatar's.
+  /// 空间 ›, its middle within a point of the avatar's.
   static const spaceCentre = 95.2;
   static const spaceText = 12.0;
   static const space = BiliColors.secondaryText;
@@ -2362,6 +2364,14 @@ abstract final class MeTheme {
   static const cardButtonFill = BiliColors.pink;
   static const cardButtonInk = Color(0xFFFFFFFF);
 
+  /// A 大会员's card coming in once the profile answers; the header's height follows at the same pace.
+  static const cardFade = Duration(milliseconds: 250);
+  static const cardFadeCurve = Curves.easeOut;
+
+  /// The list's viewport starts this far under the header, leaving 106's white band under the card; what it holds
+  /// keeps the rest positions below, measured from the card's bottom.
+  static const listCut = 8.0;
+
   /// The four shortcuts: a quarter of the width each, in 87's blue, their icon box and label centred below the card.
   static const shortcutIconCentre = 26.0;
   static const shortcutLabelCentre = 51.4;
@@ -2380,7 +2390,9 @@ abstract final class MeTheme {
   static const serviceGlyphCentre = 37.0;
   static const serviceGlyphBox = 30.0;
   static const serviceGlyphStroke = 1.5;
-  static const serviceGlyph = Color(0xFFFA709E);
+  /// 106's glyphs differ a little (sRGB): 听视频's is pinker than 联系客服's and 设置's.
+  static const serviceGlyph = Color(0xFFF9739D);
+  static const listenGlyph = Color(0xFFFD679D);
   static const serviceTextLeft = 60.5;
   static const serviceText = 14.0;
   static const serviceLabel = BiliColors.text;

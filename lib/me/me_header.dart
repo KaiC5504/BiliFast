@@ -1,29 +1,62 @@
 import 'package:bili_core/logic.dart' show CountFormat;
+import 'package:flutter/cupertino.dart' show CupertinoButton;
 import 'package:flutter/material.dart';
 
 import '../comments/comment_badges.dart' show DecorImage;
+import '../shared/menu.dart' show PressHighlight;
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import 'me_glyphs.dart';
 import 'me_model.dart';
 
+/// How a [MeTap] answers a finger: glyphs and short labels fade as iOS buttons do, rows and the 会员 card darken.
+enum MeTapFeedback { fade, highlight }
+
 /// A control with its own accessibility press, so VoiceOver and ghosthand reach it.
 class MeTap extends StatelessWidget {
-  const MeTap({super.key, required this.label, required this.onTap, required this.child});
+  const MeTap({
+    super.key,
+    required this.label,
+    required this.onTap,
+    required this.child,
+    this.feedback = MeTapFeedback.fade,
+  });
 
   final String label;
   final VoidCallback? onTap;
   final Widget child;
+  final MeTapFeedback feedback;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    button: true,
-    label: label,
-    excludeSemantics: true,
-    onTap: onTap,
-    child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: child),
-  );
+  Widget build(BuildContext context) {
+    final outer = DefaultTextStyle.of(context);
+    return Semantics(
+      container: true,
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: switch (feedback) {
+        MeTapFeedback.highlight => PressHighlight(onTap: onTap, child: child),
+        // CupertinoButton's own text style brings -0.41 pt tracking and drops the page's fallback to PingFang.
+        MeTapFeedback.fade => CupertinoButton(
+          onPressed: onTap,
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          child: DefaultTextStyle(
+            style: outer.style,
+            textAlign: outer.textAlign,
+            softWrap: outer.softWrap,
+            overflow: outer.overflow,
+            maxLines: outer.maxLines,
+            textWidthBasis: outer.textWidthBasis,
+            textHeightBehavior: outer.textHeightBehavior,
+            child: child,
+          ),
+        ),
+      },
+    );
+  }
 }
 
 /// What the header's controls do; the page fills them in.
@@ -41,13 +74,26 @@ class MeActions {
 /// 我的's fixed part under the top row (87): the avatar, the name and what follows it, 空间 ›, the counts and, for a
 /// 大会员, the 会员 card. Laid out from the safe area's top, as [MeTheme] measures it.
 class MeHeader extends StatelessWidget {
-  const MeHeader({super.key, required this.view, required this.actions});
+  const MeHeader({
+    super.key,
+    required this.view,
+    required this.actions,
+    this.reserveCard = false,
+    this.animate = false,
+  });
 
   final MeView view;
   final MeActions actions;
 
+  /// Keeps the card's room, the card unseen, while a 大会员's profile is still to come, so the list doesn't jump.
+  final bool reserveCard;
+
+  /// Whether the card fades in and out as it comes and goes, rather than at once.
+  final bool animate;
+
   /// How far below the safe area's top the header ends: at the card's bottom, or where the card would start.
-  static double extent(MeView view) => hasCard(view) ? MeTheme.cardTop + MeTheme.cardHeight : MeTheme.cardTop;
+  static double extent(MeView view, {bool reserveCard = false}) =>
+      hasCard(view) || reserveCard ? MeTheme.cardTop + MeTheme.cardHeight : MeTheme.cardTop;
 
   static bool hasCard(MeView view) => view is MeShown && view.profile.vip;
 
@@ -67,8 +113,9 @@ class MeHeader extends StatelessWidget {
     final profile = view is MeShown ? view.profile : null;
     final textLeft = MeTheme.textLeft + (profile?.pendant != null ? MeTheme.pendantTextShift : 0);
     final counts = view is MeShown ? view.counts : null;
+    final card = hasCard(view);
     return SizedBox(
-      height: extent(view),
+      height: extent(view, reserveCard: reserveCard),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -166,13 +213,17 @@ class MeHeader extends StatelessWidget {
             height: MeTheme.countTap,
             child: _Counts(counts: counts, onTap: actions.soon),
           ),
-          if (profile != null && profile.vip)
+          if (card || reserveCard)
             Positioned(
               left: MeTheme.cardInset,
               right: MeTheme.cardInset,
               top: MeTheme.cardTop,
               height: MeTheme.cardHeight,
-              child: _VipCard(onOpen: actions.openVipCentre),
+              child: _CardFade(
+                visible: card,
+                animate: animate,
+                child: _VipCard(onOpen: actions.openVipCentre),
+              ),
             ),
         ],
       ),
@@ -197,7 +248,7 @@ class _CentredRow extends StatelessWidget {
   );
 }
 
-/// The face, its frame when it wears one and the 大 on its corner; Bilibili's grey head with no account.
+/// The face, its frame when it wears one and the 大 on its corner; Bilibili's grey head until a profile shows.
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.profile});
 
@@ -353,9 +404,6 @@ class _Counts extends StatelessWidget {
           Expanded(
             child: Stack(
               children: [
-                Positioned.fill(
-                  child: MeTap(key: ValueKey(key), label: '$label $number', onTap: onTap, child: const SizedBox()),
-                ),
                 if (index > 0)
                   const Positioned(
                     left: 0,
@@ -364,23 +412,36 @@ class _Counts extends StatelessWidget {
                     height: MeTheme.countRuleHeight,
                     child: ColoredBox(color: MeTheme.countRule),
                   ),
-                _CountLine(
-                  centre: MeTheme.countCentre - MeTheme.countRuleTop + lift,
-                  text: number,
-                  style: TextStyle(
-                    fontFamily: BiliFonts.family,
-                    fontSize: MeTheme.countText,
-                    fontWeight: MeTheme.countWeight,
-                    color: MeTheme.count,
-                  ),
-                ),
-                _CountLine(
-                  centre: MeTheme.countLabelCentre - MeTheme.countRuleTop + lift,
-                  text: label,
-                  style: TextStyle(
-                    fontFamily: BiliFonts.family,
-                    fontSize: MeTheme.countLabelText,
-                    color: MeTheme.countLabel,
+                Positioned.fill(
+                  child: MeTap(
+                    key: ValueKey(key),
+                    label: '$label $number',
+                    onTap: onTap,
+                    child: SizedBox.expand(
+                      child: Stack(
+                        children: [
+                          _CountLine(
+                            centre: MeTheme.countCentre - MeTheme.countRuleTop + lift,
+                            text: number,
+                            style: TextStyle(
+                              fontFamily: BiliFonts.family,
+                              fontSize: MeTheme.countText,
+                              fontWeight: MeTheme.countWeight,
+                              color: MeTheme.count,
+                            ),
+                          ),
+                          _CountLine(
+                            centre: MeTheme.countLabelCentre - MeTheme.countRuleTop + lift,
+                            text: label,
+                            style: TextStyle(
+                              fontFamily: BiliFonts.family,
+                              fontSize: MeTheme.countLabelText,
+                              color: MeTheme.countLabel,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -410,89 +471,156 @@ class _CountLine extends StatelessWidget {
   );
 }
 
-/// 续订会员 and 更多独家内容 › beside the pink 会员中心; the card and the button both open the 会员 centre.
+/// The 会员 card's room: the card fades in when a profile shows it and out when one doesn't.
+class _CardFade extends StatefulWidget {
+  const _CardFade({required this.visible, required this.animate, required this.child});
+
+  final bool visible;
+  final bool animate;
+  final Widget child;
+
+  @override
+  State<_CardFade> createState() => _CardFadeState();
+}
+
+class _CardFadeState extends State<_CardFade> with SingleTickerProviderStateMixin {
+  late final _opacity = AnimationController(vsync: this, duration: MeTheme.cardFade);
+  late final _curved = CurvedAnimation(parent: _opacity, curve: MeTheme.cardFadeCurve);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.visible && widget.animate) {
+      _opacity.forward();
+    } else {
+      _opacity.value = widget.visible ? 1 : 0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(_CardFade oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.visible == oldWidget.visible) return;
+    if (!widget.animate) {
+      _opacity.value = widget.visible ? 1 : 0;
+    } else if (widget.visible) {
+      _opacity.forward();
+    } else {
+      _opacity.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _curved.dispose();
+    _opacity.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    ignoring: !widget.visible,
+    child: ExcludeSemantics(
+      excluding: !widget.visible,
+      child: FadeTransition(opacity: _curved, child: widget.child),
+    ),
+  );
+}
+
+/// 续订会员 and 更多独家内容 › beside the pink 会员中心; the card and the button both open the 会员 centre. The button
+/// lies over the card rather than in it, so each keeps its own accessibility press.
 class _VipCard extends StatelessWidget {
   const _VipCard({required this.onOpen});
 
   final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) => MeTap(
-    key: const ValueKey('me-vip-card'),
-    label: '续订会员',
-    onTap: onOpen,
-    child: DecoratedBox(
-      decoration: BoxDecoration(color: MeTheme.card, borderRadius: BorderRadius.circular(MeTheme.cardRadius)),
-      child: Stack(
-        children: [
-          _CentredRow(
-            left: MeTheme.cardInset,
-            centre: MeTheme.cardLineCentre,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const MeVipDisc(),
-                const SizedBox(width: MeTheme.cardTitleGap),
-                Text(
-                  '续订会员',
-                  style: TextStyle(
-                    fontFamily: BiliFonts.family,
-                    fontSize: MeTheme.cardTitleText,
-                    fontWeight: MeTheme.cardTitleWeight,
-                    color: MeTheme.cardTitle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _CentredRow(
-            left: MeTheme.cardInset,
-            centre: MeTheme.cardMoreCentre,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '更多独家内容',
-                  style: TextStyle(
-                    fontFamily: BiliFonts.family,
-                    fontSize: MeTheme.cardMoreText,
-                    color: MeTheme.cardMore,
-                  ),
-                ),
-                const SizedBox(width: MeTheme.cardMoreChevronGap),
-                const CustomPaint(
-                  size: Size(MeTheme.cardMoreChevronWidth, MeTheme.cardMoreChevronHeight),
-                  painter: MeChevronPainter(color: MeTheme.cardMore, stroke: MeTheme.cardMoreChevronStroke),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            right: MeTheme.cardInset,
-            top: (MeTheme.cardHeight - MeTheme.cardButtonHeight) / 2,
-            width: MeTheme.cardButtonWidth,
-            height: MeTheme.cardButtonHeight,
-            child: MeTap(
-              key: const ValueKey('me-vip-centre'),
-              label: '会员中心',
-              onTap: onOpen,
-              child: DecoratedBox(
-                decoration: const ShapeDecoration(color: MeTheme.cardButtonFill, shape: StadiumBorder()),
-                child: Center(
-                  child: Text(
-                    '会员中心',
-                    style: TextStyle(
-                      fontFamily: BiliFonts.family,
-                      fontSize: MeTheme.cardButtonText,
-                      color: MeTheme.cardButtonInk,
+  Widget build(BuildContext context) => Stack(
+    children: [
+      Positioned.fill(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(MeTheme.cardRadius),
+          child: MeTap(
+            key: const ValueKey('me-vip-card'),
+            label: '续订会员',
+            onTap: onOpen,
+            feedback: MeTapFeedback.highlight,
+            child: ColoredBox(
+              color: MeTheme.card,
+              child: Stack(
+                children: [
+                  _CentredRow(
+                    left: MeTheme.cardInset,
+                    centre: MeTheme.cardLineCentre,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const MeVipDisc(),
+                        const SizedBox(width: MeTheme.cardTitleGap),
+                        Text(
+                          '续订会员',
+                          style: TextStyle(
+                            fontFamily: BiliFonts.family,
+                            fontSize: MeTheme.cardTitleText,
+                            fontWeight: MeTheme.cardTitleWeight,
+                            color: MeTheme.cardTitle,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  _CentredRow(
+                    left: MeTheme.cardInset,
+                    centre: MeTheme.cardMoreCentre,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '更多独家内容',
+                          style: TextStyle(
+                            fontFamily: BiliFonts.family,
+                            fontSize: MeTheme.cardMoreText,
+                            color: MeTheme.cardMore,
+                          ),
+                        ),
+                        const SizedBox(width: MeTheme.cardMoreChevronGap),
+                        const CustomPaint(
+                          size: Size(MeTheme.cardMoreChevronWidth, MeTheme.cardMoreChevronHeight),
+                          painter: MeChevronPainter(color: MeTheme.cardMore, stroke: MeTheme.cardMoreChevronStroke),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        right: MeTheme.cardInset,
+        top: (MeTheme.cardHeight - MeTheme.cardButtonHeight) / 2,
+        width: MeTheme.cardButtonWidth,
+        height: MeTheme.cardButtonHeight,
+        child: MeTap(
+          key: const ValueKey('me-vip-centre'),
+          label: '会员中心',
+          onTap: onOpen,
+          child: DecoratedBox(
+            decoration: const ShapeDecoration(color: MeTheme.cardButtonFill, shape: StadiumBorder()),
+            child: Center(
+              child: Text(
+                '会员中心',
+                style: TextStyle(
+                  fontFamily: BiliFonts.family,
+                  fontSize: MeTheme.cardButtonText,
+                  color: MeTheme.cardButtonInk,
                 ),
               ),
             ),
           ),
-        ],
+        ),
       ),
-    ),
+    ],
   );
 }

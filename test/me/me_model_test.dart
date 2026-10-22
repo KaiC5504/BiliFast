@@ -27,6 +27,18 @@ class _Environment extends ChangeNotifier implements AppEnvironment {
   final ValueNotifier<int> logins = ValueNotifier(0);
 
   @override
+  bool accountCheckFailed = false;
+
+  /// How often the account was asked to be checked again.
+  int checks = 0;
+
+  @override
+  Future<bool> refreshAccount() async {
+    checks++;
+    return true;
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -277,12 +289,12 @@ void main() {
     expect(model.view, isA<MeShown>());
   });
 
-  test('a pull on the failed page has no toast: the page shows the reason', () async {
+  test('a pull on the failed page returns the reason to toast, and the page stays failed', () async {
     api.failures['nav'] = const BiliError.http(503);
     final model = make();
-    expect(await model.refresh(), isNull);
+    expect(await model.refresh(), '网络请求失败（HTTP 503）');
     expect(model.view, const MeFailed('网络请求失败（HTTP 503）'));
-    expect(await model.refresh(), isNull);
+    expect(await model.refresh(), '网络请求失败（HTTP 503）');
     expect(model.view, isA<MeFailed>());
 
     api.failures.clear();
@@ -308,10 +320,10 @@ void main() {
     expect(await model.refresh(), isNull);
   });
 
-  test('a stat failure still shows the profile and keeps the counts it had', () async {
+  test('a stat failure still shows the profile, keeps the counts it had and returns the reason', () async {
     api.failures['stat'] = const BiliError.network('TimeoutException');
     final model = make();
-    expect(await model.refresh(), isNull);
+    expect(await model.refresh(), '网络连接失败，请检查网络后重试');
     var view = shownView(model);
     expect(view.profile.name, '测试账号');
     expect(view.counts, isNull, reason: 'none yet');
@@ -322,10 +334,39 @@ void main() {
 
     api.failures['stat'] = const BiliError.http(500);
     api.navInfo = renamed;
-    expect(await model.refresh(), isNull);
+    expect(await model.refresh(), requestFailureMessage(const BiliError.http(500)));
     view = shownView(model);
     expect(view.profile.name, '改了名字');
     expect(view.counts, demoCounts);
+  });
+
+  test('nav with no mid gives a profile with none, not 0', () {
+    expect(MeProfile.fromNav(const NavInfo(isLogin: true, uname: '无号')).mid, isNull);
+    expect(MeProfile.fromNav(api.navInfo).mid, 1);
+  });
+
+  test('nav answering while the launch\'s check failed asks the environment to check again', () async {
+    final model = make(account: const AccountUnknown());
+    environment.accountCheckFailed = true;
+    await model.refresh();
+    expect(model.view, isA<MeShown>());
+    expect(environment.checks, 1);
+
+    api.failures['nav'] = const BiliError.network('SocketException');
+    clock = clock.add(const Duration(seconds: 30));
+    await model.refresh();
+    expect(environment.checks, 1, reason: 'a failed nav says nothing of the network');
+  });
+
+  test('a check still running or one that never failed is left be', () async {
+    final unknown = make(account: const AccountUnknown());
+    await unknown.refresh();
+    expect(environment.checks, 0, reason: 'the launch\'s check is still out');
+
+    final loggedInModel = make();
+    environment.accountCheckFailed = true;
+    await loggedInModel.refresh();
+    expect(environment.checks, 0, reason: 'the account is known');
   });
 
   test('nav answering not logged in shows 点击登录 and leaves the environment be', () async {

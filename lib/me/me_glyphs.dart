@@ -141,14 +141,18 @@ class MeTopGlyphPainter extends CustomPainter {
 /// 更多服务's pink line icons, traced on 106 at 16× in a box [MeTheme.serviceGlyphBox] square, their middle at the
 /// box's.
 class MeServiceGlyphPainter extends CustomPainter {
-  const MeServiceGlyphPainter(this.glyph, {this.color = MeTheme.serviceGlyph});
+  const MeServiceGlyphPainter(this.glyph, {this.color});
 
   final MeServiceGlyph glyph;
-  final Color color;
+
+  /// Null draws each glyph in 106's own pink.
+  final Color? color;
+
+  Color get ink => color ?? (glyph == MeServiceGlyph.listen ? MeTheme.listenGlyph : MeTheme.serviceGlyph);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = _stroke(MeTheme.serviceGlyphStroke, color);
+    final paint = _stroke(MeTheme.serviceGlyphStroke, ink);
     // Each was traced around its own ink's middle; this puts that middle at the box's.
     final middle = glyph == MeServiceGlyph.support ? const Offset(15, 15.15) : const Offset(15, 14);
     canvas.translate(size.width / 2 - middle.dx, size.height / 2 - middle.dy);
