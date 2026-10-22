@@ -16,7 +16,7 @@ import 'feed_more_sheet.dart';
 
 /// Card sizes that depend on the text size, so the grid can give every card the same height.
 abstract final class FeedCardSize {
-  static const _lineHeight = 1.3;
+  static const _lineHeight = BiliMetrics.cardTitleLine / BiliMetrics.cardTitleText;
 
   static double titleHeight(TextScaler scaler) => scaler.scale(BiliMetrics.cardTitleText) * _lineHeight * 2;
 
@@ -78,7 +78,7 @@ class _FeedCardViewState extends State<FeedCardView> {
     color: BiliColors.text,
     height: FeedCardSize._lineHeight,
   );
-  static const _owner = TextStyle(fontSize: BiliMetrics.cardFooterText, color: BiliColors.secondaryText);
+  static const _owner = TextStyle(fontSize: BiliMetrics.cardFooterText, color: BiliColors.secondaryText, height: 1);
 
   void _press(bool pressed) {
     if (_pressed != pressed) setState(() => _pressed = pressed);
@@ -221,12 +221,15 @@ class _FeedCardViewState extends State<FeedCardView> {
                               key: const ValueKey('card-more'),
                               behavior: HitTestBehavior.opaque,
                               onTap: () => unawaited(_more()),
-                              child: const SizedBox.square(
+                              child: SizedBox.square(
                                 dimension: BiliMetrics.cardMoreTarget,
-                                child: Icon(
-                                  Icons.more_vert,
-                                  size: BiliMetrics.cardFooterText + 4,
-                                  color: BiliColors.secondaryText,
+                                child: Transform.translate(
+                                  offset: const Offset(0, BiliMetrics.cardMoreDrop),
+                                  child: const Icon(
+                                    Icons.more_vert,
+                                    size: BiliMetrics.cardFooterText + 4,
+                                    color: BiliColors.secondaryText,
+                                  ),
                                 ),
                               ),
                             ),
@@ -258,28 +261,34 @@ class _Cover extends StatelessWidget {
       children: [
         Hero(
           tag: VideoRoute.coverTag(card.bvid),
-          child: RemoteImage(card.cover, placeholder: const CoverPlaceholder()),
-        ),
-        const Align(
-          alignment: Alignment.bottomCenter,
-          child: SizedBox(
-            height: BiliMetrics.coverShadeHeight,
-            width: double.infinity,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [BiliColors.chromeShadeClear, BiliColors.coverShade],
+          // A cover still loading is the official flat grey with no shade, and a late one pops in (14).
+          child: RemoteImage(
+            card.cover,
+            placeholder: const CoverPlaceholder(),
+            fadeIn: false,
+            overlay: const Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                height: BiliMetrics.coverShadeHeight,
+                width: double.infinity,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [BiliColors.chromeShadeClear, BiliColors.coverShade],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         ),
         Positioned(
-          left: BiliMetrics.cardInset,
-          right: BiliMetrics.cardInset,
-          bottom: 6,
+          left: BiliMetrics.cardStatLead,
+          right: BiliMetrics.cardStatTrail,
+          bottom: 0,
+          height: BiliMetrics.cardStatCentre * 2,
           child: MediaQuery.withClampedTextScaling(
             maxScaleFactor: 1,
             child: DefaultTextStyle(
@@ -288,7 +297,6 @@ class _Cover extends StatelessWidget {
                 fontFamilyFallback: BiliFonts.fallback,
                 fontSize: BiliMetrics.cardStatText,
                 color: BiliColors.onCover,
-                fontFeatures: [FontFeature.tabularFigures()],
               ),
               maxLines: 1,
               softWrap: false,
@@ -299,22 +307,18 @@ class _Cover extends StatelessWidget {
                   Expanded(
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.smart_display_outlined,
-                          size: BiliMetrics.cardStatIcon,
-                          color: BiliColors.onCover,
-                        ),
-                        const SizedBox(width: 3),
-                        Flexible(child: Text(card.viewsText ?? CountFormat.short(card.views))),
-                        const SizedBox(width: 10),
-                        const Icon(Icons.subtitles_outlined, size: BiliMetrics.cardStatIcon, color: BiliColors.onCover),
-                        const SizedBox(width: 3),
-                        Flexible(child: Text(card.danmakuText ?? CountFormat.short(card.danmaku))),
+                        const _StatIcon(_StatIcon.play),
+                        const SizedBox(width: BiliMetrics.cardStatIconGap),
+                        Flexible(child: _StatText(card.viewsText ?? CountFormat.short(card.views))),
+                        const SizedBox(width: BiliMetrics.cardStatGap),
+                        const _StatIcon(_StatIcon.danmaku),
+                        const SizedBox(width: BiliMetrics.cardStatIconGap),
+                        Flexible(child: _StatText(card.danmakuText ?? CountFormat.short(card.danmaku))),
                       ],
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Text(FeedCardView.duration(card.duration)),
+                  _StatText(FeedCardView.duration(card.duration)),
                 ],
               ),
             ),
@@ -323,6 +327,36 @@ class _Cover extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// The official play or danmaku count icon, drawn white.
+class _StatIcon extends StatelessWidget {
+  const _StatIcon(this.asset);
+
+  static const play = 'assets/images/card/stat_play.png';
+  static const danmaku = 'assets/images/card/stat_danmaku.png';
+
+  final String asset;
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    asset,
+    width: BiliMetrics.cardStatIconWidth,
+    height: BiliMetrics.cardStatIconHeight,
+    color: BiliColors.onCover,
+    colorBlendMode: BlendMode.srcIn,
+    excludeFromSemantics: true,
+  );
+}
+
+class _StatText extends StatelessWidget {
+  const _StatText(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) =>
+      Transform.translate(offset: const Offset(0, BiliMetrics.cardStatTextDrop), child: Text(text));
 }
 
 class _Badge extends StatelessWidget {

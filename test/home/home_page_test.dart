@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
@@ -18,6 +21,7 @@ import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_api.dart';
 import 'package:bilifast/search/search_page.dart';
 import 'package:bilifast/shared/cover_placeholder.dart';
+import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/release_refresh.dart';
 import 'package:bilifast/shared/remote_image.dart';
@@ -74,6 +78,16 @@ class _Covers {
       if ((bvids == null || bvids.contains(bvid)) && !waiting.isCompleted) waiting.complete(true);
     }
   }
+}
+
+/// A grey picture, as a cover's download.
+Future<Uint8List> _coverPng() async {
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder).drawRect(const Rect.fromLTWH(0, 0, 4, 3), Paint()..color = const Color(0xFF808080));
+  final image = await recorder.endRecording().toImage(4, 3);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  return bytes!.buffer.asUint8List();
 }
 
 class _FailingSearchApi extends FakeSearchApi {
@@ -871,9 +885,13 @@ void main() {
       await tapHome(tester);
       await settle(tester, 10);
       final band = tester.getRect(find.byKey(const ValueKey('feed-reload')));
-      expect(band.height, LoadingTvTheme.size);
-      expect(tester.getRect(reloadTv()), Rect.fromCenter(center: band.center, width: 60, height: 60));
-      expect(tester.getTopLeft(card('BV1c0')).dy, cardTop + LoadingTvTheme.size);
+      // The band starts under a one-pixel hairline, at a third of a point.
+      expect(band.height, moreOrLessEquals(LoadingTvTheme.size));
+      final tv = tester.getRect(reloadTv());
+      expect((tv.center - band.center).distance, moreOrLessEquals(0));
+      expect(tv.width, moreOrLessEquals(60));
+      expect(tv.height, moreOrLessEquals(60));
+      expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + LoadingTvTheme.size));
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('feed-reload')),
@@ -1045,6 +1063,21 @@ void main() {
 
     List<LogEvent> coverLines() => [for (final event in logs.events) if (event.msg == 'feed covers') event];
 
+    /// Pumps 1 ms frames until the hand-off has begun (the old card [bvid] drawn over the new), so what follows counts
+    /// from its first frame however many frames the covers' futures took to land.
+    Future<void> untilHandOff(WidgetTester tester, [String bvid = 'BV1c0']) async {
+      for (var i = 0; i < 20 && going(bvid).evaluate().isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 1));
+      }
+      expect(going(bvid), findsOneWidget, reason: 'the hand-off has begun');
+    }
+
+    /// The opacity the slot gives the card itself (under the going one, if any).
+    double slotOpacity(WidgetTester tester, String bvid) => tester
+        .widget<FadeTransition>(find.descendant(of: card(bvid), matching: find.byType(FadeTransition)).first)
+        .opacity
+        .value;
+
     /// The new cards whose top is inside the list, once it rests at the top: both columns of every row it shows.
     List<String> firstScreen(WidgetTester tester) {
       final bottom = tester.getRect(find.byKey(const ValueKey('feed'))).bottom;
@@ -1075,11 +1108,12 @@ void main() {
       expect(coverLines(), hasLength(1), reason: 'the first load');
 
       covers.ready();
-      await tester.pump();
+      await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 50));
       expect(card('BV1n0'), findsOneWidget);
       expect(going('BV1c0'), findsOneWidget, reason: 'the old card fading out over the new one');
       expect(goingOpacity(tester, 'BV1c0'), inExclusiveRange(0, 1));
+      expect(slotOpacity(tester, 'BV1n0'), 1, reason: 'the new card stands at full opacity under it');
       expect(tester.getTopLeft(going('BV1c0')), tester.getTopLeft(card('BV1n0')), reason: 'in its slot');
       expect(
         tester.getSize(find.ancestor(of: reload, matching: find.byType(SizeTransition))).height,
@@ -1110,6 +1144,7 @@ void main() {
       expect(covers.asked['BV1n0'], tester.getSize(cover('BV1n0')), reason: "the size the card's cover asks for");
       final line = coverLines().last;
       expect(line.f['ready']?.toJson(), screen.length);
+      expect(line.f['failed']?.toJson(), 0);
       expect(line.f['of']?.toJson(), screen.length);
       expect(line.f['timedOut']?.toJson(), false);
       await settle(tester, 10);
@@ -1132,14 +1167,14 @@ void main() {
       expect(card('BV1c0'), findsOneWidget);
       expect(card('BV1n0'), findsNothing);
       await tester.pump(const Duration(milliseconds: 30));
-      await tester.pump();
+      await untilHandOff(tester);
       expect(card('BV1n0'), findsOneWidget);
-      expect(going('BV1c0'), findsOneWidget);
       await settle(tester, 10);
       expect(reload, findsNothing);
       expect(going('BV1c0'), findsNothing);
       final line = coverLines().last;
       expect(line.f['ready']?.toJson(), 0);
+      expect(line.f['failed']?.toJson(), 0, reason: 'still loading, not failed');
       expect(line.f['of']?.toJson(), greaterThan(0));
       expect(line.f['timedOut']?.toJson(), true);
       expect(find.descendant(of: cover('BV1n0'), matching: find.byType(CoverPlaceholder)), findsOneWidget);
@@ -1162,6 +1197,7 @@ void main() {
       expect(card('BV1c0'), findsOneWidget);
       expect(card('BV1n0'), findsNothing);
       await tester.pump(const Duration(milliseconds: 30));
+      await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 50));
       expect(card('BV1n0'), findsOneWidget);
       expect(going('BV1c0'), findsOneWidget);
@@ -1178,10 +1214,8 @@ void main() {
       expect(find.byType(LoadingTv), findsOneWidget, reason: 'held for the covers');
       expect(card('BV1n0'), findsOneWidget);
       covers.ready();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await untilHandOff(tester, 'BV1n0');
       expect(card('BV1c0'), findsOneWidget);
-      expect(going('BV1n0'), findsOneWidget);
       await settle(tester, 30);
       expect(find.byType(LoadingTv), findsNothing);
       expect(coverLines().last.f['timedOut']?.toJson(), false);
@@ -1215,7 +1249,7 @@ void main() {
       await tapHome(tester);
       await settle(tester, 10);
       covers.ready();
-      await tester.pump();
+      await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 40));
       expect(going('BV1c0'), findsOneWidget);
       expect(find.semantics.byLabel('视频 BV1c0'), findsNothing);
@@ -1272,6 +1306,121 @@ void main() {
       await tester.pump();
       expect(reload, findsNothing);
       expect(tester.binding.transientCallbackCount, 0);
+    });
+
+    testWidgets('a refresh that lands while 首页 is out of sight swaps at once: nothing fades when 首页 comes back', (
+      tester,
+    ) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('home-tab-mine')));
+      await settle(tester, 10);
+      http.pages[1] = fresh();
+      http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+      await environment.refreshAccount();
+      await settle(tester, 10);
+      expect(http.asked, [1, 1], reason: 'the account changed: a refresh, 首页 hidden');
+      expect(find.byKey(const ValueKey('feed-card-BV1n0'), skipOffstage: false), findsOneWidget);
+      expect(find.byKey(const ValueKey('feed-card-going-BV1c0'), skipOffstage: false), findsNothing);
+
+      await tapHome(tester);
+      await tester.pump();
+      expect(card('BV1n0'), findsOneWidget);
+      expect(going('BV1c0'), findsNothing);
+      expect(slotOpacity(tester, 'BV1n0'), 1);
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(going('BV1c0'), findsNothing);
+      expect(slotOpacity(tester, 'BV1n0'), 1);
+    });
+
+    testWidgets('more new cards than old: the slots with no old card fade the new one in, then it stands at full '
+        'opacity', (tester) async {
+      http.pages[1] = [feedItem('BV1c0'), feedItem('BV1c1')];
+      await show(tester);
+      await settle(tester, 20);
+      covers.holding = true;
+      http.pages[1] = fresh();
+      await tapHome(tester);
+      await settle(tester, 10);
+      covers.ready();
+      await untilHandOff(tester);
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(going('BV1c1'), findsOneWidget);
+      expect(slotOpacity(tester, 'BV1n0'), 1, reason: 'an old card fades out over it');
+      expect(slotOpacity(tester, 'BV1n1'), 1);
+      expect(slotOpacity(tester, 'BV1n2'), inExclusiveRange(0, 1), reason: 'no old card here: it fades in');
+      expect(going('BV1n2'), findsNothing);
+      await settle(tester, 10);
+      expect(slotOpacity(tester, 'BV1n2'), 1);
+      expect(going('BV1c0'), findsNothing);
+      expect(tester.binding.transientCallbackCount, 0);
+    });
+
+    testWidgets("with the real precache the first screen's new covers are downloaded once, at the size their cards "
+        'ask for, and drawn the frame the cards come', (tester) async {
+      HomePage.precacheCover = RemoteImage.precache;
+      final picture = (await tester.runAsync(_coverPng))!;
+      final folder = (await tester.runAsync(() => Directory.systemTemp.createTemp('feed_covers')))!;
+      final downloads = <String, int>{};
+      final cache = ImageDiskCache(
+        folder: folder.path,
+        fetch: (url, _) async {
+          downloads.update('$url', (count) => count + 1, ifAbsent: () => 1);
+          return picture;
+        },
+      );
+      ImageDiskCache.shared = cache;
+      addTearDown(() => ImageDiskCache.shared = null);
+      int downloadsOf(String bvid) => [
+        for (final MapEntry(:key, :value) in downloads.entries)
+          if (key.contains('/$bvid.jpg')) value,
+      ].fold(0, (sum, count) => sum + count);
+      // The slot's own card comes first; the one fading out over it, second.
+      bool drawn(String bvid) =>
+          tester.widget<RawImage>(find.descendant(of: cover(bvid).first, matching: find.byType(RawImage)).first).image !=
+          null;
+
+      /// Frames, with real time between them for the disk and the decoder.
+      Future<void> run(int rounds, {bool Function()? until}) async {
+        for (var i = 0; i < rounds && !(until?.call() ?? false); i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+          await tester.pump(const Duration(milliseconds: 5));
+        }
+      }
+
+      http.pages[1] = twenty();
+      await show(tester);
+      await run(60, until: () => card('BV1c0').evaluate().isNotEmpty);
+      expect(card('BV1c0'), findsOneWidget);
+      expect(drawn('BV1c0'), isTrue, reason: 'the first load waits for its covers too');
+      await run(10);
+
+      http.pages[1] = fresh();
+      await tapHome(tester);
+      await run(100, until: () => card('BV1n0').evaluate().isNotEmpty);
+      expect(card('BV1n0'), findsOneWidget);
+      final screen = firstScreen(tester);
+      expect(screen, isNotEmpty);
+      for (final bvid in screen) {
+        expect(drawn(bvid), isTrue, reason: '$bvid drawn the frame its card came');
+      }
+      final line = coverLines().last;
+      expect(line.f['timedOut']?.toJson(), false);
+      expect(line.f['failed']?.toJson(), 0);
+      expect(line.f['ready']?.toJson(), screen.length);
+
+      await run(20);
+      await settle(tester, 10);
+      for (final bvid in screen) {
+        expect(downloadsOf(bvid), 1, reason: "$bvid: the card's own picture is the precached one");
+      }
+      expect(downloads.values.every((count) => count == 1), isTrue, reason: 'no address downloaded twice');
+      // The store's steps wait on frames as well as on the disk.
+      var stored = false;
+      unawaited(cache.settle().then((_) => stored = true));
+      await run(50, until: () => stored);
+      await tester.runAsync(() => folder.delete(recursive: true));
     });
 
     testWidgets("a cover still loading shows the official placeholder under the picture", (tester) async {

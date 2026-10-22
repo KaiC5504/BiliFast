@@ -317,8 +317,8 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 Divider(
-                  height: 0.5,
-                  thickness: 0.5,
+                  height: HomeTabBarTheme.hairlineWidth,
+                  thickness: HomeTabBarTheme.hairlineWidth,
                   color: head != null ? HomeTabBarTheme.headDivider : BiliColors.divider,
                 ),
                 Expanded(
@@ -727,13 +727,16 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   /// The cards fading out, by grid slot, while a refresh's cards come in; null otherwise.
   List<_Going>? _going;
 
-  /// The refresh [FeedModel.beforeShow] last saw: its cards, and the ones they replace.
-  ({List<FeedCard> fresh, List<_Going> old})? _coming;
+  /// The refresh [FeedModel.beforeShow] last saw while its covers load: its cards, the ones they replace, and those
+  /// as they will fade out.
+  ({List<FeedCard> fresh, List<FeedCard> old, List<_Going> going})? _coming;
 
-  /// What the last layout gave the grid, for the first screen's covers.
+  /// What the last build and layout gave the grid, to ask for the first screen's covers at their cards' size.
   Size? _viewport;
   double _inset = 0;
   TextScaler _scaler = TextScaler.noScaling;
+
+  /// Whether the last build asked for Reduce Motion or had 首页 out of sight; either makes a hand-off instant.
   bool _still = false;
   bool _ticking = true;
 
@@ -774,24 +777,35 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
 
   /// Notes the cards going and starts the covers of the rows the top of the list shows, both columns, at the size
   /// their cards will ask for.
-  List<Future<bool>> _beforeShow(List<FeedCard> fresh) {
+  CoverWait _beforeShow(List<FeedCard> fresh) {
+    if (!mounted) return const CoverWait.skipped(CoverSkip.unmounted);
     final feed = widget.feed;
-    _coming = (fresh: fresh, old: [for (final card in feed.cards) (card: card, dislike: feed.dislikeOf(card))]);
+    final old = feed.cards;
+    _coming = (fresh: fresh, old: old, going: _goingOf(old));
     final viewport = _viewport;
-    if (!mounted || viewport == null) return const [];
+    if (viewport == null) return const CoverWait.skipped(CoverSkip.noLayout);
     const spacing = BiliMetrics.feedSpacing;
     final width = _columnWidth(viewport.width);
     final rowExtent = FeedCardSize.height(width, _scaler) + spacing;
     final rows = math.max(((viewport.height - _inset - spacing) / rowExtent).ceil(), 0);
+    if (rows == 0) return const CoverWait.skipped(CoverSkip.noRows);
     final size = FeedCardSize.cover(width);
-    return [for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover, size)];
+    return CoverWait([for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover, size)]);
   }
 
+  List<_Going> _goingOf(List<FeedCard> cards) => [
+    for (final card in cards) (card: card, dislike: widget.feed.dislikeOf(card)),
+  ];
+
   void _feedChanged() {
+    final cards = widget.feed.cards;
     final coming = _coming;
-    if (coming != null && identical(widget.feed.cards, coming.fresh)) {
+    if (coming != null && identical(cards, coming.fresh)) {
       _coming = null;
-      _handOffFrom(coming.old, coming.fresh);
+      _handOffFrom(coming.going, coming.fresh);
+    } else if (coming != null && identical(cards, coming.old)) {
+      // A 不感兴趣 or 撤销 while the covers load, read now: by the swap the refresh has dropped every one.
+      _coming = (fresh: coming.fresh, old: coming.old, going: _goingOf(cards));
     }
     setState(() {});
     // A page too short to scroll leaves the end on screen with no scrolling to notice it; look once it is laid out.
@@ -800,8 +814,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     });
   }
 
-  /// A refresh's cards replacing cards on screen make no entrance: the old ones fade out over them in place, slot by
-  /// slot, as the official app's do (14). At once with Reduce Motion, or while 首页 is out of sight.
+  /// A refresh's cards replacing cards on screen make no entrance: the old ones fade out over them, each in its own
+  /// slot, all at once, as the official app's do (14). At once with Reduce Motion, or while 首页 is out of sight.
   void _handOffFrom(List<_Going> old, List<FeedCard> fresh) {
     if (old.isEmpty) return;
     _entered.addAll([for (final card in fresh) card.bvid]);
