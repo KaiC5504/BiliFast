@@ -79,7 +79,7 @@ class MeHarness {
   /// Whether 我的 is the bar's current tab.
   final ValueNotifier<bool> active;
 
-  /// The links the page asked to open outside the app.
+  /// The links the page asked to open outside the app, in order, whether or not they opened.
   final List<Uri> opened;
 }
 
@@ -94,7 +94,9 @@ Future<MeHarness> showMe(
   ThemeData? theme,
   FontStore? fonts,
   bool openSucceeds = true,
+  Future<bool> Function(Uri link)? open,
   WidgetBuilder? developerPage,
+  bool checkAccount = false,
 }) async {
   tester.view
     ..physicalSize = const Size(440, 956) * pixelRatio
@@ -108,6 +110,8 @@ Future<MeHarness> showMe(
     http: Canned.http(),
     logger: logger,
   );
+  // Canned's nav answers a 大会员.
+  if (checkAccount) await environment.refreshAccount();
   final model = FixedMeModel(view, api: FakeMeApi.demo(), environment: environment);
   addTearDown(model.dispose);
   final playback = AppPlayback(() => throw StateError('no playback here'));
@@ -125,9 +129,9 @@ Future<MeHarness> showMe(
   final shownTab = ValueNotifier(active);
   addTearDown(shownTab.dispose);
   final opened = <Uri>[];
-  Future<bool> open(Uri link) async {
+  Future<bool> record(Uri link) async {
     opened.add(link);
-    return openSucceeds;
+    return open == null ? openSucceeds : open(link);
   }
 
   await tester.pumpWidget(
@@ -148,7 +152,7 @@ Future<MeHarness> showMe(
                 builder: (context, active, _) => MediaQuery.removePadding(
                   context: context,
                   removeBottom: true,
-                  child: MePage(active: active, developerPage: developerPage, model: model, openLink: open),
+                  child: MePage(active: active, developerPage: developerPage, model: model, openLink: record),
                 ),
               ),
             ),

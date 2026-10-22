@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/favourites/favourites_page.dart';
 import 'package:bilifast/history/watch_history_page.dart';
+import 'package:bilifast/home/shortcut_glyphs.dart';
 import 'package:bilifast/me/me_header.dart';
 import 'package:bilifast/me/me_model.dart';
 import 'package:bilifast/me/me_page.dart';
@@ -10,13 +14,14 @@ import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/space/space_page.dart';
 import 'package:bilifast/watch_later/watch_later_page.dart';
-import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
+import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator, CupertinoButton;
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../home/fake_login_gate.dart';
+import '../video/mixed_lines.dart';
 import 'me_page_support.dart';
 
 Future<void> _settle(WidgetTester tester, [int frames = 20]) async {
@@ -31,6 +36,19 @@ Future<void> _toastGone(WidgetTester tester) => _settle(tester, 60);
 Finder _key(String key) => find.byKey(ValueKey(key));
 
 const _plain = MeProfile(mid: 7, name: '普通用户', face: '', level: 3, coins: 12.5, bcoin: 0);
+
+/// The 会员 centre handed to the official app's own browser.
+final _inApp = Uri.parse('bilibili://browser?url=https%3A%2F%2Fbig.bilibili.com%2Fmobile%2Fhome');
+
+/// The card's opacity as drawn now.
+double _cardOpacity(WidgetTester tester) =>
+    tester.widget<FadeTransition>(find.ancestor(of: _key('me-vip-card'), matching: find.byType(FadeTransition)).first)
+        .opacity
+        .value;
+
+/// The style a Text is laid out with, the inherited one merged in.
+TextStyle? _laidOut(WidgetTester tester, String text) =>
+    tester.renderObject<RenderParagraph>(find.text(text)).text.style;
 
 void main() {
   testWidgets("a 大会员 reads as 87: the pink name, the pill, B币 and 硬币, the counts and the 会员 card", (tester) async {
@@ -64,7 +82,7 @@ void main() {
       for (final key in ['me-vip-card', 'me-vip-label', 'me-vip-badge', 'me-pendant']) {
         expect(_key(key), findsNothing, reason: key);
       }
-      expect(tester.getTopLeft(_key('me-list')).dy, 266);
+      expect(tester.getTopLeft(_key('me-list')).dy, 274, reason: 'cut 8 under the counts');
     },
   );
 
@@ -80,6 +98,16 @@ void main() {
     await showMe(tester, view: const MeShown(kaiProfile, MeCounts(dynamics: 3, following: 120, followers: 23456)));
     expect(find.text('2.3万'), findsOneWidget);
     expect(find.text('120'), findsOneWidget);
+  });
+
+  testWidgets('with no mid, the avatar and 空间 › open nothing', (tester) async {
+    const noMid = MeProfile(name: '无号', face: '', level: 1, coins: 0, bcoin: 0);
+    await showMe(tester, view: const MeShown(noMid, kaiCounts));
+    await tester.tap(_key('me-avatar'));
+    await _settle(tester);
+    await tester.tap(_key('me-space'));
+    await _settle(tester);
+    expect(find.byType(SpacePage), findsNothing);
   });
 
   testWidgets('the avatar and 空间 › open the account\'s own space; the name opens nothing', (tester) async {
@@ -146,22 +174,37 @@ void main() {
     expect(tester.widget<SettingsPage>(find.byType(SettingsPage)).developerPage, developer);
   });
 
-  testWidgets('the 会员 card and 会员中心 open the 会员 centre in the browser', (tester) async {
+  testWidgets('the 会员 card and 会员中心 open the 会员 centre inside the official app', (tester) async {
     final harness = await showMe(tester);
     await tester.tap(_key('me-vip-centre'));
     await tester.tap(find.text('更多独家内容'));
     await tester.pump();
-    expect(harness.opened, [MePage.vipCentre, MePage.vipCentre]);
+    expect(harness.opened, [_inApp, _inApp]);
     expect(MePage.vipCentre.toString(), 'https://big.bilibili.com/mobile/home');
+    expect(find.text('无法打开链接'), findsNothing);
   });
 
-  testWidgets('a link nothing could open says so', (tester) async {
-    await showMe(tester, openSucceeds: false);
-    await tester.tap(_key('me-vip-centre'));
-    await tester.pump();
-    expect(find.text('无法打开链接'), findsOneWidget);
-    await _toastGone(tester);
-  });
+  for (final (name, answer) in [
+    ('answers false', () async => false),
+    ('throws', () async => throw PlatformException(code: 'ACTIVITY_NOT_FOUND')),
+  ]) {
+    testWidgets('without the official app (it $name) the browser opens the 会员 centre', (tester) async {
+      final harness = await showMe(tester, open: (link) => link.scheme == 'bilibili' ? answer() : Future.value(true));
+      await tester.tap(_key('me-vip-card'));
+      await tester.pump();
+      expect(harness.opened, [_inApp, MePage.vipCentre]);
+      expect(find.text('无法打开链接'), findsNothing);
+    });
+
+    testWidgets('when the browser also $name, it says so', (tester) async {
+      final harness = await showMe(tester, open: (_) => answer());
+      await tester.tap(_key('me-vip-centre'));
+      await tester.pump();
+      expect(harness.opened, [_inApp, MePage.vipCentre]);
+      expect(find.text('无法打开链接'), findsOneWidget);
+      await _toastGone(tester);
+    });
+  }
 
   testWidgets('logged out: the grey head and 点击登录, counts as -, no card; both ask for the login', (tester) async {
     final gate = FakeLoginGate();
@@ -198,6 +241,135 @@ void main() {
     });
   }
 
+  testWidgets('a first load failing toasts its reason once; failing again after a retry toasts again', (tester) async {
+    final harness = await showMe(tester, view: const MeLoading());
+    harness.model.view = const MeFailed('网络不太好');
+    await tester.pump();
+    expect(find.text('网络不太好'), findsOneWidget);
+    harness.model.view = const MeFailed('请求过于频繁，请稍后再试');
+    await tester.pump();
+    expect(find.text('请求过于频繁，请稍后再试'), findsNothing, reason: 'still failed: no second toast');
+    await _toastGone(tester);
+
+    harness.model.view = const MeLoading();
+    await tester.pump();
+    harness.model.view = const MeFailed('网络不太好');
+    await tester.pump();
+    expect(find.text('网络不太好'), findsOneWidget);
+    await _toastGone(tester);
+  });
+
+  testWidgets('a pull that a failure lands under toasts once, its own answer', (tester) async {
+    final harness = await showMe(tester, view: const MeLoading());
+    harness.model
+      ..refreshGate = Completer<void>()
+      ..refreshAnswer = '网络不太好';
+    await tester.drag(_key('me-list'), const Offset(0, 300));
+    await tester.pump();
+    harness.model.view = const MeFailed('网络不太好');
+    await tester.pump();
+    expect(find.text('网络不太好'), findsNothing, reason: 'the pull says it');
+    harness.model.refreshGate!.complete();
+    await _settle(tester, 4);
+    expect(find.text('网络不太好'), findsOneWidget);
+    await _toastGone(tester);
+  });
+
+  testWidgets('a 大会员 still loading keeps the card\'s room unseen; the card then fades in, nothing moving', (
+    tester,
+  ) async {
+    final harness = await showMe(tester, view: const MeLoading(), checkAccount: true);
+    expect(harness.services.environment.account, isA<LoggedIn>());
+    expect(tester.getTopLeft(_key('me-list')).dy, 328);
+    expect(_cardOpacity(tester), 0);
+    expect(find.bySemanticsLabel('续订会员'), findsNothing);
+    await tester.tap(_key('me-vip-centre'), warnIfMissed: false);
+    await tester.pump();
+    expect(harness.opened, isEmpty, reason: 'an unseen card takes no taps');
+
+    harness.model.view = const MeShown(kaiProfile, kaiCounts);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.getTopLeft(_key('me-list')).dy, 328);
+    expect(_cardOpacity(tester), inExclusiveRange(0, 1));
+    await _settle(tester, 6);
+    expect(_cardOpacity(tester), 1);
+
+    harness.model.view = const MeLoading();
+    await _settle(tester, 6);
+    harness.model.view = const MeShown(_plain, kaiCounts);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final top = tester.getTopLeft(_key('me-list')).dy;
+    expect(top, inExclusiveRange(274, 328), reason: 'not a 大会员 after all: the room closes over 250 ms');
+    await _settle(tester, 6);
+    expect(tester.getTopLeft(_key('me-list')).dy, 274);
+  });
+
+  testWidgets('without a 大会员 known, the card grows in and fades in once the profile shows it', (tester) async {
+    final harness = await showMe(tester, view: const MeLoading());
+    expect(tester.getTopLeft(_key('me-list')).dy, 274);
+    expect(_key('me-vip-card'), findsNothing);
+    harness.model.view = const MeShown(kaiProfile, kaiCounts);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.getTopLeft(_key('me-list')).dy, inExclusiveRange(274, 328));
+    expect(_cardOpacity(tester), inExclusiveRange(0, 1));
+    await _settle(tester, 6);
+    expect(tester.getTopLeft(_key('me-list')).dy, 328);
+    expect(_cardOpacity(tester), 1);
+  });
+
+  testWidgets('under Reduce Motion the card and its room come at once', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final harness = await showMe(tester, view: const MeLoading());
+    harness.model.view = const MeShown(kaiProfile, kaiCounts);
+    await tester.pump();
+    await tester.pump();
+    expect(tester.getTopLeft(_key('me-list')).dy, 328);
+    expect(_cardOpacity(tester), 1);
+  });
+
+  testWidgets('rows and the 会员 card darken under a finger; glyphs, 空间, counts and shortcuts fade', (tester) async {
+    await showMe(tester);
+    for (final key in ['me-settings', 'me-vip-card']) {
+      final finger = await tester.startGesture(tester.getTopLeft(_key(key)) + const Offset(30, 20));
+      // In the list a tap down waits out the scroll's 100 ms.
+      await tester.pump(const Duration(milliseconds: 150));
+      final fill = tester.widget<DecoratedBox>(
+        find.descendant(of: _key(key), matching: find.byType(DecoratedBox)).first,
+      );
+      expect((fill.decoration as BoxDecoration).color, BiliColors.pressedFill, reason: key);
+      await finger.cancel();
+      await tester.pump();
+    }
+    for (final key in ['me-cast', 'me-edit', 'me-space', 'me-following', 'me-offline', 'me-vip-centre', 'me-avatar']) {
+      final finger = await tester.startGesture(tester.getCenter(_key(key)));
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pump(const Duration(milliseconds: 200));
+      final fade = tester.widget<FadeTransition>(
+        find.descendant(
+          of: find.descendant(of: _key(key), matching: find.byType(CupertinoButton)),
+          matching: find.byType(FadeTransition),
+        ).first,
+      );
+      expect(fade.opacity.value, lessThan(1), reason: key);
+      await finger.cancel();
+      await _settle(tester, 6);
+    }
+  });
+
+  testWidgets('labels in fading buttons keep the page\'s text style: untracked, with its fallback', (tester) async {
+    await showMe(tester, theme: appTheme());
+    for (final text in ['离线缓存', '空间', '关注', '13', '会员中心']) {
+      final style = _laidOut(tester, text);
+      expect(style?.letterSpacing ?? 0, 0, reason: text);
+    }
+    final page = _laidOut(tester, '更多服务');
+    expect(_laidOut(tester, '空间')?.fontFamilyFallback, page?.fontFamilyFallback);
+  });
+
   testWidgets('the page follows its model: a load landing shows the account', (tester) async {
     final harness = await showMe(tester, view: const MeLoading());
     expect(find.text('KaiC5504'), findsNothing);
@@ -232,16 +404,18 @@ void main() {
     expect(find.text('更多服务'), findsOneWidget);
   });
 
-  testWidgets('the top row, header, counts and card stay put; the list scrolls under the card, cut at its bottom', (
+  testWidgets('the top row, header, counts and card stay put; the list scrolls under the card, cut 8 under it', (
     tester,
   ) async {
     await showMe(tester);
     final card = tester.getRect(_key('me-vip-card'));
     final name = tester.getRect(_key('me-name'));
     final viewport = tester.getRect(_key('me-list'));
-    expect(viewport.top, card.bottom);
+    expect(viewport.top, card.bottom + 8, reason: "106's white band under the card");
     final restTop = tester.getTopLeft(_key('me-offline')).dy;
-    expect(restTop, card.bottom);
+    expect(restTop, viewport.top);
+    final icon = find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is ShortcutPainter);
+    expect(tester.getCenter(icon.first).dy, card.bottom + 26, reason: 'the rest position kept');
 
     final gesture = await tester.startGesture(tester.getCenter(_key('me-settings')));
     for (var i = 0; i < 5; i++) {
@@ -250,6 +424,7 @@ void main() {
     }
     final under = find.byKey(const ValueKey('me-offline'), skipOffstage: false);
     expect(tester.getTopLeft(under).dy, lessThan(card.bottom - 20), reason: 'under the card');
+    expect(tester.getRect(_key('me-list')).top, viewport.top);
     expect(tester.getRect(_key('me-vip-card')), card);
     expect(tester.getRect(_key('me-name')), name);
     expect(tester.getRect(_key('me-cast')).center.dy, 84);
@@ -306,6 +481,19 @@ void main() {
       expect(node.label, isNotEmpty, reason: key);
       expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue, reason: key);
     }
+    handle.dispose();
+  });
+
+  testWidgets('the 会员 card and 会员中心 are pressable by their own labels', (tester) async {
+    final handle = tester.ensureSemantics();
+    final harness = await showMe(tester);
+    for (final label in ['续订会员', '会员中心']) {
+      final node = find.semantics.byLabel(label);
+      expect(node, findsOne, reason: label);
+      tester.semantics.tap(node);
+      await tester.pump();
+    }
+    expect(harness.opened, [_inApp, _inApp]);
     handle.dispose();
   });
 

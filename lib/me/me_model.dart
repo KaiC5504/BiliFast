@@ -12,7 +12,7 @@ import 'me_api.dart';
 @immutable
 final class MeProfile {
   const MeProfile({
-    required this.mid,
+    this.mid,
     required this.name,
     required this.face,
     required this.level,
@@ -25,7 +25,7 @@ final class MeProfile {
   });
 
   factory MeProfile.fromNav(NavInfo nav) => MeProfile(
-    mid: nav.mid ?? 0,
+    mid: nav.mid,
     name: nav.uname ?? '',
     face: nav.face ?? '',
     pendant: nav.pendant,
@@ -37,7 +37,8 @@ final class MeProfile {
     vipBadge: nav.vipBadge,
   );
 
-  final int mid;
+  /// Null when nav left it out; the space then opens nothing.
+  final int? mid;
   final String name;
   final String face;
 
@@ -111,7 +112,7 @@ final class MeLoading extends MeView {
   const MeLoading();
 }
 
-/// The account, with [counts] null until (or if) nav/stat answers.
+/// The account, with [counts] null until stat first answers.
 final class MeShown extends MeView {
   const MeShown(this.profile, this.counts);
 
@@ -166,7 +167,7 @@ class MeModel extends ChangeNotifier {
   final DateTime Function() _now;
   final Logger _logger;
 
-  /// The least time between two loads that [shown] starts on its own.
+  /// How long after any load [shown] waits before loading again.
   final Duration quietGap;
 
   /// The account as it last settled. Unknown only until the launch's check answers, and counted as logged in then,
@@ -197,8 +198,8 @@ class MeModel extends ChangeNotifier {
     unawaited(_load());
   }
 
-  /// The pull. Completes when the answer is in; with the page shown, a failure keeps it and returns the message to
-  /// toast. Null on success.
+  /// The pull. Completes when the answer is in, with the message to toast when nav or stat failed (a failure keeps
+  /// the page as it was). Null on success.
   Future<String?> refresh() => _signedIn ? _load() : Future<String?>.value();
 
   Future<String?> _load() {
@@ -212,10 +213,12 @@ class MeModel extends ChangeNotifier {
   }
 
   Future<String?> _fetch(int generation) async {
+    Object? statError;
     final stat = Future.sync(_api.stat).then<NavStat?>(
       (stat) => stat,
       onError: (Object error) {
         _logger.warn(LogCategory.ui, 'me stat failed', {'error': _describe(error)});
+        statError = error;
         return null;
       },
     );
@@ -230,9 +233,8 @@ class MeModel extends ChangeNotifier {
       _logger.warn(LogCategory.ui, 'me nav failed', {'error': _describe(error)});
       if (!_current(generation)) return null;
       final message = requestFailureMessage(error);
-      if (_view is MeShown || _view is MeLoggedOut) return message;
-      _show(MeFailed(message));
-      return null;
+      if (_view is! MeShown && _view is! MeLoggedOut) _show(MeFailed(message));
+      return message;
     }
     final counts = await stat;
     if (!_current(generation)) return null;
@@ -245,7 +247,19 @@ class MeModel extends ChangeNotifier {
       _ => null,
     };
     _show(MeShown(MeProfile.fromNav(nav), counts == null ? kept : MeCounts.fromStat(counts)));
-    return null;
+    _recheckAccount();
+    return switch (statError) {
+      final error? => requestFailureMessage(error),
+      null => null,
+    };
+  }
+
+  /// Nav answered, so the network is back: a launch check that failed for want of it is asked again, as 首页 does on
+  /// coming back to it.
+  void _recheckAccount() {
+    if (_environment.account is AccountUnknown && _environment.accountCheckFailed) {
+      unawaited(_environment.refreshAccount());
+    }
   }
 
   /// The environment has checks of its own, so it is left as it is.
