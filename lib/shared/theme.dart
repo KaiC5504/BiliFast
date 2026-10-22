@@ -3306,6 +3306,13 @@ abstract final class HomeTabBarTheme {
   static const reloadScroll = Duration(milliseconds: 300);
   static const reloadHeader = Duration(milliseconds: 200);
 
+  /// The hand-off once a refresh's cards come (14, both refreshes): from the same frame, the TV's room closes and the
+  /// cards on screen cross-fade into the new ones in place, with no rise. Fitted to the recording's frames.
+  static const reloadCollapse = Duration(milliseconds: 100);
+  static const reloadCollapseCurve = Curves.easeInOut;
+  static const handOff = Duration(milliseconds: 180);
+  static const handOffCurve = Curves.easeOutQuad;
+
   /// 首页's top dressed by the equipped 装扮 (110): `head_bg` reaches from the screen's top to the top row's bottom
   /// (318 px, where 110's picture meets the tab strip's), `head_tab_bg` fills the tab strip to its hairline, which
   /// takes the page's grey (110's grey starts at 142 pt). The field is filled white with no rim; the avatar, the
@@ -3330,6 +3337,15 @@ abstract final class HomeTabBarTheme {
   /// With `tail_icon_ani`, each change of place fades the incoming picture in, rising this far into place.
   static const skinIconMotion = Duration(milliseconds: 300);
   static const skinIconRise = 20.0;
+}
+
+/// A 推荐 cover still loading (14): the official grey with its faint 小电视, centred on the cover. Measured in px / 3,
+/// the 小电视's ink is 116-117 × 108-111 px of #CDCDCD; the asset's own grey is about the fill's, so it is tinted.
+abstract final class CoverPlaceholderTheme {
+  static const fill = Color(0xFFDEDFE1);
+  static const ink = Color(0xFFCDCDCD);
+  static const width = 39.0;
+  static const height = 37.0;
 }
 
 /// The bottom bar's glyphs (01, 02): their size, strokes and colours, and the + on its pink rounded square.

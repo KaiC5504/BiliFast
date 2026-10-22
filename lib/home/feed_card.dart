@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
 import '../app/zoom_back_route.dart';
+import '../shared/cover_placeholder.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../video/video_route.dart';
@@ -25,6 +26,9 @@ abstract final class FeedCardSize {
   /// The whole card for a column [width] wide: 4:3 cover, two title lines, the footer and their gaps.
   static double height(double width, TextScaler scaler) =>
       width / BiliMetrics.coverAspect + BiliMetrics.cardTitleTop + titleHeight(scaler) + footerHeight;
+
+  /// The cover's box on a card [width] wide: the size its picture is asked for at.
+  static Size cover(double width) => Size(width, width / BiliMetrics.coverAspect);
 }
 
 /// One 推荐 card (01, port of FeedCard.swift): the cover with counts and duration, a two-line title, and the tag,
@@ -252,7 +256,10 @@ class _Cover extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        Hero(tag: VideoRoute.coverTag(card.bvid), child: RemoteImage(card.cover)),
+        Hero(
+          tag: VideoRoute.coverTag(card.bvid),
+          child: RemoteImage(card.cover, placeholder: const CoverPlaceholder()),
+        ),
         const Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(

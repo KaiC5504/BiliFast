@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/home/feed_model.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
@@ -179,6 +180,104 @@ void main() {
     await more;
     expect(bvids(feed), ['BV9']);
     expect(feed.loading, isFalse);
+  });
+
+  group("a refresh's covers", () {
+    LogEvent coversLine() => logs.events.singleWhere((event) => event.msg == 'feed covers');
+
+    test('its cards show only once beforeShow\'s covers are ready, the old ones still there meanwhile', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = make();
+      await feed.refresh();
+      http.pages[1] = [feedItem('BV2'), feedItem('BV3')];
+      final cover = Completer<bool>();
+      List<String>? asked;
+      List<String>? shownThen;
+      feed.beforeShow = (fresh) {
+        asked = [for (final card in fresh) card.bvid];
+        shownThen = bvids(feed);
+        return [cover.future, Future.value(false)];
+      };
+      var done = false;
+      final refresh = feed.refresh().then((_) => done = true);
+      await pumpEventQueue();
+      expect(asked, ['BV2', 'BV3']);
+      expect(shownThen, ['BV1'], reason: 'called before the cards are replaced');
+      expect(bvids(feed), ['BV1']);
+      expect(feed.loading, isTrue);
+      expect(done, isFalse, reason: 'the refresh, and with it the loading TV, waits');
+
+      cover.complete(true);
+      await refresh;
+      expect(bvids(feed), ['BV2', 'BV3']);
+      expect(feed.loading, isFalse);
+      final line = coversLine();
+      expect(line.f['ready']?.toJson(), 1);
+      expect(line.f['of']?.toJson(), 2);
+      expect(line.f['timedOut']?.toJson(), false);
+      expect(line.f.keys, unorderedEquals(['ready', 'of', 'waitedMs', 'timedOut']), reason: 'no address');
+    });
+
+    test('they are waited on for at most coverWait after the answer', () {
+      fakeAsync((async) {
+        http.pages[1] = [feedItem('BV1')];
+        final feed = make()..beforeShow = (_) => [Completer<bool>().future];
+        var done = false;
+        unawaited(feed.refresh().then((_) => done = true));
+        async.elapse(FeedModel.coverWait - const Duration(milliseconds: 1));
+        expect(done, isFalse);
+        expect(feed.cards, isEmpty);
+        async.elapse(const Duration(milliseconds: 2));
+        expect(done, isTrue);
+        expect(bvids(feed), ['BV1']);
+        final line = coversLine();
+        expect(line.f['ready']?.toJson(), 0);
+        expect(line.f['of']?.toJson(), 1);
+        expect(line.f['timedOut']?.toJson(), true);
+      });
+    });
+
+    test('a refresh restarted while they load drops the first answer', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = make();
+      final first = Completer<bool>();
+      var calls = 0;
+      feed.beforeShow = (_) => [if (calls++ == 0) first.future else Future.value(true)];
+      final stale = feed.refresh();
+      await pumpEventQueue();
+      expect(calls, 1);
+      http.pages[1] = [feedItem('BV2')];
+      await feed.refresh();
+      expect(bvids(feed), ['BV2']);
+      first.complete(true);
+      expect(await stale, isNull);
+      expect(bvids(feed), ['BV2']);
+      expect(feed.loading, isFalse);
+    });
+
+    test('a hook that throws or asks for nothing holds nothing up', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = make()..beforeShow = (_) => throw StateError('no layout');
+      await feed.refresh();
+      expect(bvids(feed), ['BV1']);
+      feed.beforeShow = (_) => const [];
+      http.pages[1] = [feedItem('BV2')];
+      await feed.refresh();
+      expect(bvids(feed), ['BV2']);
+      expect(logs.events.where((event) => event.msg == 'feed covers'), isEmpty);
+    });
+
+    test('an empty answer asks for no covers', () async {
+      var asked = false;
+      final feed = make()
+        ..beforeShow = (_) {
+          asked = true;
+          return const [];
+        };
+      await feed.refresh();
+      expect(feed.error, FeedModel.emptyMessage);
+      expect(asked, isFalse);
+    });
   });
 
   test('load more with nothing shown refreshes, and does not run twice at once', () async {

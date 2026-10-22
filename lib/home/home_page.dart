@@ -49,6 +49,10 @@ class HomePage extends StatefulWidget {
   /// The equipped 装扮: with a `head_bg` it dresses the top (110).
   final Skin? skin;
 
+  /// Gets a 推荐 cover ready before its card shows; tests stand in for [RemoteImage.precache], as they have no network.
+  @visibleForTesting
+  static Future<bool> Function(BuildContext context, String? url, Size size) precacheCover = RemoteImage.precache;
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -376,12 +380,14 @@ class _Presence extends StatefulWidget {
     required this.visible,
     required this.duration,
     this.reverseDuration,
+    this.reverseCurve = Curves.easeIn,
     required this.builder,
   });
 
   final bool visible;
   final Duration duration;
   final Duration? reverseDuration;
+  final Curve reverseCurve;
   final Widget Function(BuildContext context, Animation<double> animation) builder;
 
   @override
@@ -398,7 +404,7 @@ class _PresenceState extends State<_Presence> with SingleTickerProviderStateMixi
   late final CurvedAnimation _curved = CurvedAnimation(
     parent: _controller,
     curve: Curves.easeOut,
-    reverseCurve: Curves.easeIn,
+    reverseCurve: widget.reverseCurve,
   );
 
   void _statusChanged(AnimationStatus status) {
@@ -690,7 +696,10 @@ class _FeedGrid extends StatefulWidget {
   State<_FeedGrid> createState() => _FeedGridState();
 }
 
-class _FeedGridState extends State<_FeedGrid> {
+/// A card leaving in a refresh's hand-off, drawn as it was.
+typedef _Going = ({FeedCard card, CardDislike? dislike});
+
+class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixin {
   static const _skeletons = 6;
 
   /// The next page is asked for once fewer than this many rows of cards are left below the screen.
@@ -710,34 +719,103 @@ class _FeedGridState extends State<_FeedGrid> {
   /// Whether 首页's refresh shows the pull-to-refresh TV at the top.
   bool _reloadHeader = false;
 
+  late final AnimationController _handOff = AnimationController(vsync: this, duration: HomeTabBarTheme.handOff)
+    ..addStatusListener(_handOffStatus);
+  late final CurvedAnimation _incoming = CurvedAnimation(parent: _handOff, curve: HomeTabBarTheme.handOffCurve);
+  late final Animation<double> _outgoing = ReverseAnimation(_incoming);
+
+  /// The cards fading out, by grid slot, while a refresh's cards come in; null otherwise.
+  List<_Going>? _going;
+
+  /// The refresh [FeedModel.beforeShow] last saw: its cards, and the ones they replace.
+  ({List<FeedCard> fresh, List<_Going> old})? _coming;
+
+  /// What the last layout gave the grid, for the first screen's covers.
+  Size? _viewport;
+  double _inset = 0;
+  TextScaler _scaler = TextScaler.noScaling;
+  bool _still = false;
+  bool _ticking = true;
+
   @override
   void initState() {
     super.initState();
-    widget.feed.addListener(_feedChanged);
+    _attach(widget.feed);
   }
 
   @override
   void didUpdateWidget(_FeedGrid oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.feed, widget.feed)) {
-      oldWidget.feed.removeListener(_feedChanged);
-      widget.feed.addListener(_feedChanged);
+      _detach(oldWidget.feed);
+      _attach(widget.feed);
     }
   }
 
   @override
   void dispose() {
-    widget.feed.removeListener(_feedChanged);
+    _detach(widget.feed);
+    _incoming.dispose();
+    _handOff.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
+  void _attach(FeedModel feed) => feed
+    ..addListener(_feedChanged)
+    ..beforeShow = _beforeShow;
+
+  void _detach(FeedModel feed) {
+    feed.removeListener(_feedChanged);
+    if (feed.beforeShow == _beforeShow) feed.beforeShow = null;
+  }
+
+  static double _columnWidth(double gridWidth) => (gridWidth - BiliMetrics.feedSpacing * 3) / 2;
+
+  /// Notes the cards going and starts the covers of the rows the top of the list shows, both columns, at the size
+  /// their cards will ask for.
+  List<Future<bool>> _beforeShow(List<FeedCard> fresh) {
+    final feed = widget.feed;
+    _coming = (fresh: fresh, old: [for (final card in feed.cards) (card: card, dislike: feed.dislikeOf(card))]);
+    final viewport = _viewport;
+    if (!mounted || viewport == null) return const [];
+    const spacing = BiliMetrics.feedSpacing;
+    final width = _columnWidth(viewport.width);
+    final rowExtent = FeedCardSize.height(width, _scaler) + spacing;
+    final rows = math.max(((viewport.height - _inset - spacing) / rowExtent).ceil(), 0);
+    final size = FeedCardSize.cover(width);
+    return [for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover, size)];
+  }
+
   void _feedChanged() {
+    final coming = _coming;
+    if (coming != null && identical(widget.feed.cards, coming.fresh)) {
+      _coming = null;
+      _handOffFrom(coming.old, coming.fresh);
+    }
     setState(() {});
     // A page too short to scroll leaves the end on screen with no scrolling to notice it; look once it is laid out.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _scroll.hasClients) _loadMoreNearEnd(_scroll.position);
     });
+  }
+
+  /// A refresh's cards replacing cards on screen make no entrance: the old ones fade out over them in place, slot by
+  /// slot, as the official app's do (14). At once with Reduce Motion, or while 首页 is out of sight.
+  void _handOffFrom(List<_Going> old, List<FeedCard> fresh) {
+    if (old.isEmpty) return;
+    _entered.addAll([for (final card in fresh) card.bvid]);
+    if (_still || !_ticking) {
+      _going = null;
+      _handOff.value = 1;
+      return;
+    }
+    _going = old;
+    unawaited(_handOff.forward(from: 0));
+  }
+
+  void _handOffStatus(AnimationStatus status) {
+    if (status.isCompleted && _going != null && mounted) setState(() => _going = null);
   }
 
   /// 首页's tap, as the official app's: back to the top and 推荐 refreshed at once, whether scrolled or already at the
@@ -786,14 +864,16 @@ class _FeedGridState extends State<_FeedGrid> {
   @override
   Widget build(BuildContext context) {
     final feed = widget.feed;
-    final scaler = MediaQuery.textScalerOf(context);
-    final still = MediaQuery.disableAnimationsOf(context);
+    final scaler = _scaler = MediaQuery.textScalerOf(context);
+    final still = _still = MediaQuery.disableAnimationsOf(context);
+    _ticking = TickerMode.valuesOf(context).enabled;
     // Under a dressed bar the feed runs to the screen's bottom; its end stays above the bar's row.
-    final inset = MediaQuery.paddingOf(context).bottom;
+    final inset = _inset = MediaQuery.paddingOf(context).bottom;
     return LayoutBuilder(
       builder: (context, constraints) {
         const spacing = BiliMetrics.feedSpacing;
-        final width = (constraints.maxWidth - spacing * 3) / 2;
+        _viewport = constraints.biggest;
+        final width = _columnWidth(constraints.maxWidth);
         final extent = FeedCardSize.height(width, scaler);
         _rowExtent = extent + spacing;
         final grid = SliverGridDelegateWithFixedCrossAxisCount(
@@ -844,6 +924,8 @@ class _FeedGridState extends State<_FeedGrid> {
                         child: _Presence(
                           visible: _reloadHeader,
                           duration: still ? Duration.zero : HomeTabBarTheme.reloadHeader,
+                          reverseDuration: still ? Duration.zero : HomeTabBarTheme.reloadCollapse,
+                          reverseCurve: HomeTabBarTheme.reloadCollapseCurve,
                           builder: (context, animation) => SizeTransition(
                             sizeFactor: animation,
                             alignment: Alignment.topCenter,
@@ -878,17 +960,32 @@ class _FeedGridState extends State<_FeedGrid> {
                               (context, index) {
                                 final card = cards[index];
                                 final enter = !still && _entered.add(card.bvid);
+                                final going = _going;
+                                final gone = going != null && index < going.length ? going[index] : null;
                                 return _Entrance(
                                   key: ValueKey('feed-card-${card.bvid}'),
                                   delay: enter ? _nextStagger() : null,
-                                  child: FeedCardView(
-                                    card: card,
-                                    onOpen: (source) => widget.onOpen(card, source),
-                                    onWatchLater: () => widget.onWatchLater(card),
-                                    dislike: feed.dislikeOf(card),
-                                    onDislike: (reason) => widget.onDislike(card, reason),
-                                    onUndo: () => widget.onUndo(card),
-                                    onReason: (reason) => widget.onReason(card, reason),
+                                  child: _HandOffSlot(
+                                    incoming: going == null ? null : _incoming,
+                                    outgoing: _outgoing,
+                                    going: gone == null
+                                        ? null
+                                        : FeedCardView(
+                                            key: ValueKey('feed-card-going-${gone.card.bvid}'),
+                                            card: gone.card,
+                                            onOpen: (_) {},
+                                            onWatchLater: () {},
+                                            dislike: gone.dislike,
+                                          ),
+                                    child: FeedCardView(
+                                      card: card,
+                                      onOpen: (source) => widget.onOpen(card, source),
+                                      onWatchLater: () => widget.onWatchLater(card),
+                                      dislike: feed.dislikeOf(card),
+                                      onDislike: (reason) => widget.onDislike(card, reason),
+                                      onUndo: () => widget.onUndo(card),
+                                      onReason: (reason) => widget.onReason(card, reason),
+                                    ),
                                   ),
                                 );
                               },
@@ -964,6 +1061,39 @@ class _EntranceState extends State<_Entrance> with SingleTickerProviderStateMixi
     return FadeTransition(
       opacity: curve,
       child: SlideTransition(position: offset, child: widget.child),
+    );
+  }
+}
+
+/// A grid slot in a refresh's hand-off: the card that was here ([going]) fades out over the new one, or the new one
+/// fades in where there was none. Taps, VoiceOver and the cover's Hero belong to the new card alone. Outside a
+/// hand-off ([incoming] null) it is just the card, in the same tree, so the card's state lives on when one ends.
+class _HandOffSlot extends StatelessWidget {
+  const _HandOffSlot({required this.incoming, required this.outgoing, required this.going, required this.child});
+
+  final Animation<double>? incoming;
+  final Animation<double> outgoing;
+  final Widget? going;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final incoming = this.incoming;
+    final going = this.going;
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        FadeTransition(opacity: incoming != null && going == null ? incoming : kAlwaysCompleteAnimation, child: child),
+        if (incoming != null && going != null)
+          IgnorePointer(
+            child: ExcludeSemantics(
+              child: HeroMode(
+                enabled: false,
+                child: FadeTransition(opacity: outgoing, child: going),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

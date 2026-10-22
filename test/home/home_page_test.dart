@@ -11,11 +11,13 @@ import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/feed_more_sheet.dart';
+import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_api.dart';
 import 'package:bilifast/search/search_page.dart';
+import 'package:bilifast/shared/cover_placeholder.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/release_refresh.dart';
 import 'package:bilifast/shared/remote_image.dart';
@@ -47,6 +49,32 @@ const _loggedOutCookies = {'buvid3': 'b3', 'buvid4': 'b4'};
 
 /// The search entry's default word.
 const _word = '崩铁新版本即将上线';
+
+/// Stands in for the network's covers, as [HomePage.precacheCover]: ready at once, or while [holding] only once
+/// [ready] says so.
+class _Covers {
+  bool holding = false;
+
+  /// Each cover asked for, by its card's bvid, with the size it was asked at.
+  final asked = <String, Size>{};
+  final _waiting = <String, Completer<bool>>{};
+
+  static String bvidOf(String url) => url.substring(url.lastIndexOf('/') + 1, url.lastIndexOf('.'));
+
+  Future<bool> precache(BuildContext context, String? url, Size size) {
+    final bvid = bvidOf(url!);
+    asked[bvid] = size;
+    if (!holding) return Future.value(true);
+    return (_waiting[bvid] ??= Completer<bool>()).future;
+  }
+
+  /// Every cover held so far ready, or only [bvids]'.
+  void ready([Iterable<String>? bvids]) {
+    for (final MapEntry(key: bvid, value: waiting) in _waiting.entries) {
+      if ((bvids == null || bvids.contains(bvid)) && !waiting.isCompleted) waiting.complete(true);
+    }
+  }
+}
 
 class _FailingSearchApi extends FakeSearchApi {
   @override
@@ -982,6 +1010,280 @@ void main() {
       expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
       expect(card('BV1c0'), findsOneWidget);
       await toastGone(tester);
+    });
+  });
+
+  group("a refresh's covers and hand-off", () {
+    late _Covers covers;
+    late MemorySink logs;
+
+    setUp(() {
+      covers = _Covers();
+      HomePage.precacheCover = covers.precache;
+      logs = MemorySink();
+      Logger.shared.add(logs);
+    });
+
+    tearDown(() {
+      HomePage.precacheCover = RemoteImage.precache;
+      Logger.shared.remove(logs);
+    });
+
+    List<Map<String, Object?>> fresh() => [for (var i = 0; i < 20; i++) feedItem('BV1n$i')];
+
+    Future<void> tapHome(WidgetTester tester) => tester.tap(find.byKey(const ValueKey('home-tab-home')));
+
+    final reload = find.byKey(const ValueKey('feed-reload'));
+    final reloadTv = find.descendant(of: reload, matching: find.byType(LoadingTv));
+
+    Finder going(String bvid) => find.byKey(ValueKey('feed-card-going-$bvid'));
+
+    double goingOpacity(WidgetTester tester, String bvid) {
+      final fade = find.ancestor(of: going(bvid), matching: find.byType(FadeTransition)).first;
+      return tester.widget<FadeTransition>(fade).opacity.value;
+    }
+
+    List<LogEvent> coverLines() => [for (final event in logs.events) if (event.msg == 'feed covers') event];
+
+    /// The new cards whose top is inside the list, once it rests at the top: both columns of every row it shows.
+    List<String> firstScreen(WidgetTester tester) {
+      final bottom = tester.getRect(find.byKey(const ValueKey('feed'))).bottom;
+      final built = [for (var i = 0; i < 20; i++) 'BV1n$i'].where((bvid) => card(bvid).evaluate().isNotEmpty);
+      return [
+        for (final bvid in built)
+          if (tester.getTopLeft(card(bvid)).dy < bottom) bvid,
+      ];
+    }
+
+    testWidgets("首页's TV stays, over the old cards, until the first screen's covers are ready; then it closes as the "
+        'old cards cross-fade into the new in place', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      expect(covers.asked.keys, contains('BV1c0'), reason: 'the first load gets its covers ready too');
+      covers
+        ..holding = true
+        ..asked.clear();
+      http.pages[1] = fresh();
+      await tapHome(tester);
+      await settle(tester, 14);
+      expect(http.asked, [1, 1]);
+      expect(covers.asked, isNotEmpty);
+      expect(reloadTv, findsOneWidget, reason: '700 ms after the answer, the covers still loading');
+      expect(card('BV1c0'), findsOneWidget, reason: 'the old cards stay, fully drawn');
+      expect(card('BV1n0'), findsNothing);
+      expect(coverLines(), hasLength(1), reason: 'the first load');
+
+      covers.ready();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(card('BV1n0'), findsOneWidget);
+      expect(going('BV1c0'), findsOneWidget, reason: 'the old card fading out over the new one');
+      expect(goingOpacity(tester, 'BV1c0'), inExclusiveRange(0, 1));
+      expect(tester.getTopLeft(going('BV1c0')), tester.getTopLeft(card('BV1n0')), reason: 'in its slot');
+      expect(
+        tester.getSize(find.ancestor(of: reload, matching: find.byType(SizeTransition))).height,
+        inExclusiveRange(0, LoadingTvTheme.size),
+        reason: "the TV's room closing meanwhile",
+      );
+      expect(
+        find.ancestor(of: going('BV1c0'), matching: find.byWidgetPredicate((w) => w is HeroMode && !w.enabled)),
+        findsOneWidget,
+      );
+      expect(
+        find.ancestor(of: going('BV1c0'), matching: find.byWidgetPredicate((w) => w is IgnorePointer && w.ignoring)),
+        findsWidgets,
+      );
+
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(reload, findsNothing, reason: 'the TV room closes in 100 ms');
+      expect(going('BV1c0'), findsOneWidget, reason: 'the cards fade a little longer');
+      await tester.pump(HomeTabBarTheme.handOff);
+      expect(going('BV1c0'), findsNothing);
+      expect(find.byKey(const ValueKey('feed-card-going-BV1c1')), findsNothing);
+      expect(card('BV1c0'), findsNothing);
+      expect(card('BV1n0'), findsOneWidget);
+
+      final screen = firstScreen(tester);
+      expect(screen.length % 2, 0, reason: 'both columns');
+      expect(covers.asked.keys, screen, reason: 'the rows that show, no more');
+      expect(covers.asked['BV1n0'], tester.getSize(cover('BV1n0')), reason: "the size the card's cover asks for");
+      final line = coverLines().last;
+      expect(line.f['ready']?.toJson(), screen.length);
+      expect(line.f['of']?.toJson(), screen.length);
+      expect(line.f['timedOut']?.toJson(), false);
+      await settle(tester, 10);
+      expect(tester.binding.transientCallbackCount, 0);
+    });
+
+    testWidgets("首页's TV leaves 800 ms after the answer when the covers never come", (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      covers.holding = true;
+      http.pages[1] = fresh();
+      http.gates[1] = Completer<void>();
+      await tapHome(tester);
+      await settle(tester, 10);
+      http.gates[1]!.complete();
+      await tester.pump();
+      await tester.pump(FeedModel.coverWait - const Duration(milliseconds: 20));
+      expect(reloadTv, findsOneWidget);
+      expect(card('BV1c0'), findsOneWidget);
+      expect(card('BV1n0'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 30));
+      await tester.pump();
+      expect(card('BV1n0'), findsOneWidget);
+      expect(going('BV1c0'), findsOneWidget);
+      await settle(tester, 10);
+      expect(reload, findsNothing);
+      expect(going('BV1c0'), findsNothing);
+      final line = coverLines().last;
+      expect(line.f['ready']?.toJson(), 0);
+      expect(line.f['of']?.toJson(), greaterThan(0));
+      expect(line.f['timedOut']?.toJson(), true);
+      expect(find.descendant(of: cover('BV1n0'), matching: find.byType(CoverPlaceholder)), findsOneWidget);
+    });
+
+    testWidgets('the pull holds its TV the same way, at most 800 ms, and its cards cross-fade too', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      covers.holding = true;
+      http.pages[1] = fresh();
+      http.gates[1] = Completer<void>();
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
+      await settle(tester, 10);
+      expect(http.asked, [1, 1]);
+      http.gates[1]!.complete();
+      await tester.pump();
+      await tester.pump(FeedModel.coverWait - const Duration(milliseconds: 20));
+      expect(find.byType(LoadingTv), findsOneWidget);
+      expect(card('BV1c0'), findsOneWidget);
+      expect(card('BV1n0'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 30));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(card('BV1n0'), findsOneWidget);
+      expect(going('BV1c0'), findsOneWidget);
+      expect(goingOpacity(tester, 'BV1c0'), inExclusiveRange(0, 1));
+      await settle(tester, 30);
+      expect(find.byType(LoadingTv), findsNothing);
+      expect(going('BV1c0'), findsNothing);
+      expect(coverLines().last.f['timedOut']?.toJson(), true);
+
+      covers.asked.clear();
+      http.pages[1] = twenty();
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
+      await settle(tester, 10);
+      expect(find.byType(LoadingTv), findsOneWidget, reason: 'held for the covers');
+      expect(card('BV1n0'), findsOneWidget);
+      covers.ready();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(card('BV1c0'), findsOneWidget);
+      expect(going('BV1n0'), findsOneWidget);
+      await settle(tester, 30);
+      expect(find.byType(LoadingTv), findsNothing);
+      expect(coverLines().last.f['timedOut']?.toJson(), false);
+    });
+
+    testWidgets("a refresh's cards make no entrance; the first load's still rise", (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester, 2);
+      expect(entrance('BV1c0'), findsOneWidget);
+      await settle(tester, 20);
+      http.pages[1] = fresh();
+      await tapHome(tester);
+      await tester.pump();
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+        if (card('BV1n0').evaluate().isNotEmpty) expect(entrance('BV1n0'), findsNothing);
+      }
+      expect(card('BV1n0'), findsOneWidget);
+      expect(entrance('BV1n0'), findsNothing);
+      expect(entrance('BV1n7'), findsNothing);
+    });
+
+    testWidgets('a tap mid-fade opens the new card, and only the new card is read out', (tester) async {
+      final semantics = tester.ensureSemantics();
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      covers.holding = true;
+      http.pages[1] = fresh();
+      await tapHome(tester);
+      await settle(tester, 10);
+      covers.ready();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(going('BV1c0'), findsOneWidget);
+      expect(find.semantics.byLabel('视频 BV1c0'), findsNothing);
+      expect(find.semantics.byLabel('视频 BV1n0'), findsOne);
+      await tester.tap(card('BV1n0'), warnIfMissed: false);
+      await settle(tester, 20);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.title, '视频 BV1n0');
+      semantics.dispose();
+    });
+
+    testWidgets('a refresh restarted while the covers load drops the stale answer', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      covers.holding = true;
+      http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1s$i')];
+      await tapHome(tester);
+      await settle(tester, 6);
+      expect(covers.asked.keys, contains('BV1s0'));
+
+      http.pages[1] = fresh();
+      http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+      await environment.refreshAccount();
+      await settle(tester, 2);
+      expect(http.asked, [1, 1, 1], reason: 'the account changed: a new refresh');
+      expect(covers.asked.keys, contains('BV1n0'));
+
+      covers.ready([for (var i = 0; i < 20; i++) 'BV1s$i']);
+      await settle(tester, 4);
+      expect(card('BV1s0'), findsNothing, reason: 'the stale answer is dropped');
+      expect(card('BV1c0'), findsOneWidget);
+
+      covers.ready();
+      await settle(tester, 20);
+      expect(card('BV1n0'), findsOneWidget);
+      expect(card('BV1s0'), findsNothing);
+      expect(card('BV1c0'), findsNothing);
+    });
+
+    testWidgets('with Reduce Motion the new cards replace the old at once', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester, still: true);
+      await settle(tester);
+      covers.holding = true;
+      http.pages[1] = fresh();
+      await tapHome(tester);
+      await settle(tester, 4);
+      expect(reloadTv, findsOneWidget);
+      covers.ready();
+      await tester.pump();
+      expect(card('BV1n0'), findsOneWidget);
+      expect(card('BV1c0'), findsNothing);
+      expect(going('BV1c0'), findsNothing);
+      await tester.pump();
+      expect(reload, findsNothing);
+      expect(tester.binding.transientCallbackCount, 0);
+    });
+
+    testWidgets("a cover still loading shows the official placeholder under the picture", (tester) async {
+      await show(tester);
+      await tester.pump();
+      await tester.pump();
+      await settle(tester, 2);
+      final placeholder = find.descendant(of: cover('BV1aaa'), matching: find.byType(CoverPlaceholder));
+      expect(placeholder, findsOneWidget);
+      final stack = tester.widget<Stack>(find.descendant(of: cover('BV1aaa'), matching: find.byType(Stack)).first);
+      expect(stack.children.first, isA<CoverPlaceholder>(), reason: 'under the picture');
+      expect(tester.getRect(placeholder), tester.getRect(cover('BV1aaa')), reason: 'filling the cover');
     });
   });
 }
