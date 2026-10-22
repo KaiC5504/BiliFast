@@ -177,6 +177,14 @@ Open items, each waiting on its slice:
      (`DeviceControls.swift`'s `saveBrightness`/`restoreBrightness`, spec 4.4); drop the save and the restore, and
      the spec's line. Volume already stays: it is the system volume, set through the hidden MPVolumeView. iOS itself
      may still change the brightness (auto-brightness, locking the phone).
+  4. The seek bar's TV looks the way it is dragged (KaiC: ours is still; the official one looks right dragged later,
+     left dragged earlier). The official art is two Lotties in the APK, `assets/player_seek_bar_tv_1.json` (18×18,
+     25 frames: the eyes slide from left at 0 to right at 1, centred at 0.5) and `_2.json` (12 frames: a blink).
+     The Android player (`playerbizcommon` `PlayerSeekWidget` and its `$e.onProgressChanged`): at rest and on touch,
+     `_1` at 0.5; each progress change while dragged moves it 0.05 toward the drag's way (clamped 0-1), and a change
+     of none steps it 0.05 back toward 0.5; on release `_2` plays once. Use these Lotties in place of our drawn
+     `paintTVThumb` (small player and landscape; 竖屏's dot stays), sized and checked against 15, 04 and KaiC's
+     `102-player-seek-drag.mov`; note them in `assets/README.md`.
 - Pictures and 推荐 on the phone (28): `images cleared` in the log confirms iOS's memory warning as the blanking's
   trigger; `feed covers` shows how often 800 ms is too short. Not built: the pull's TV closing as fast as 首页's (no
   official pull recording), the official UP badge icon (01's is 14 × 12 pt, ours a drawn box), and cards with a reason
