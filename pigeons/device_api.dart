@@ -37,11 +37,6 @@ abstract class DeviceHostApi {
 
   void setBrightness(double value);
 
-  /// Remembers the brightness from before full screen, once, until [restoreBrightness] puts it back.
-  void saveBrightness();
-
-  void restoreBrightness();
-
   double volume();
 
   /// Through the hidden MPVolumeView's slider; does nothing while that view is detached, and throws

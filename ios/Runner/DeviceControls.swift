@@ -10,20 +10,6 @@ enum DeviceControls {
     set { screen?.brightness = CGFloat(min(max(newValue, 0), 1)) }
   }
 
-  /// The brightness from before full screen, put back when the player returns inline, as the official app does.
-  private static var savedBrightness: CGFloat?
-
-  static func saveBrightness() {
-    guard savedBrightness == nil, let screen else { return }
-    savedBrightness = screen.brightness
-  }
-
-  static func restoreBrightness() {
-    guard let saved = savedBrightness else { return }
-    savedBrightness = nil
-    screen?.brightness = saved
-  }
-
   static func volume() -> Double {
     Double(AVAudioSession.sharedInstance().outputVolume)
   }

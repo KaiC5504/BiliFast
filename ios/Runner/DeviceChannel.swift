@@ -98,14 +98,6 @@ final class DeviceHostApiImpl: DeviceHostApi {
     MainActor.assumeIsolated { DeviceControls.brightness = value }
   }
 
-  func saveBrightness() throws {
-    MainActor.assumeIsolated { DeviceControls.saveBrightness() }
-  }
-
-  func restoreBrightness() throws {
-    MainActor.assumeIsolated { DeviceControls.restoreBrightness() }
-  }
-
   func volume() throws -> Double {
     MainActor.assumeIsolated { DeviceControls.volume() }
   }

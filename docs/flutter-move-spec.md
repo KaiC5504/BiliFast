@@ -115,7 +115,7 @@ One Dart interface (`BiliPlayer`) with iOS and Windows implementations, over Pig
   (`lib/device/orientation.dart`). Don't rely on `SystemChrome.setPreferredOrientations` alone.
 - **Full screen is the same page rotated** (a layout switch), never a new route.
 - Volume goes through a hidden `MPVolumeView` slider that exists only in full screen (it also stops the system HUD).
-  The saved brightness is restored when leaving.
+  A brightness set in full screen is kept after leaving it and after leaving the app (KaiC, 2026-10-23).
 
 ### 4.5 Login, keychain and storage
 

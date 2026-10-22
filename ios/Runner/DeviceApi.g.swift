@@ -190,9 +190,6 @@ protocol DeviceHostApi {
   func requestOrientations(request: Int64, mask: NativeOrientationMask) throws
   func brightness() throws -> Double
   func setBrightness(value: Double) throws
-  /// Remembers the brightness from before full screen, once, until [restoreBrightness] puts it back.
-  func saveBrightness() throws
-  func restoreBrightness() throws
   func volume() throws -> Double
   /// Through the hidden MPVolumeView's slider; does nothing while that view is detached, and throws
   /// `no-volume-slider` when it is attached but has no slider.
@@ -304,33 +301,6 @@ class DeviceHostApiSetup {
       }
     } else {
       setBrightnessChannel.setMessageHandler(nil)
-    }
-    /// Remembers the brightness from before full screen, once, until [restoreBrightness] puts it back.
-    let saveBrightnessChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.saveBrightness\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
-    if let api = api {
-      saveBrightnessChannel.setMessageHandler { _, reply in
-        do {
-          try api.saveBrightness()
-          reply(wrapResult(nil))
-        } catch {
-          reply(wrapError(error))
-        }
-      }
-    } else {
-      saveBrightnessChannel.setMessageHandler(nil)
-    }
-    let restoreBrightnessChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.restoreBrightness\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
-    if let api = api {
-      restoreBrightnessChannel.setMessageHandler { _, reply in
-        do {
-          try api.restoreBrightness()
-          reply(wrapResult(nil))
-        } catch {
-          reply(wrapError(error))
-        }
-      }
-    } else {
-      restoreBrightnessChannel.setMessageHandler(nil)
     }
     let volumeChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.volume\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

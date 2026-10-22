@@ -254,43 +254,6 @@ class DeviceHostApi {
     ;
   }
 
-  /// Remembers the brightness from before full screen, once, until [restoreBrightness] puts it back.
-  Future<void> saveBrightness() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.saveBrightness$pigeonVar_messageChannelSuffix';
-    final pigeonVar_channel = BasicMessageChannel<Object?>(
-      pigeonVar_channelName,
-      pigeonChannelCodec,
-      binaryMessenger: pigeonVar_binaryMessenger,
-    );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
-    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
-
-    _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
-  }
-
-  Future<void> restoreBrightness() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.restoreBrightness$pigeonVar_messageChannelSuffix';
-    final pigeonVar_channel = BasicMessageChannel<Object?>(
-      pigeonVar_channelName,
-      pigeonChannelCodec,
-      binaryMessenger: pigeonVar_binaryMessenger,
-    );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
-    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
-
-    _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
-  }
-
   Future<double> volume() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.volume$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

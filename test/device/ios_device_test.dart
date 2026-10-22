@@ -24,15 +24,14 @@ const _methods = [
   'requestOrientations',
   'brightness',
   'setBrightness',
-  'saveBrightness',
-  'restoreBrightness',
   'volume',
   'setVolume',
   'attachVolumeView',
   'detachVolumeView',
 ];
 
-/// DeviceChannel.swift on the far end of the test messenger: records each message as it arrives, in order.
+/// DeviceChannel.swift on the far end of the test messenger: records each message as it arrives, in order, and keeps
+/// the brightness it is set to, as the screen does.
 final class _NativeSide {
   final calls = <String>[];
   final replies = <String, Object?>{
@@ -53,6 +52,7 @@ final class _NativeSide {
         calls.add([method, for (final arg in args) arg is Enum ? arg.name : '$arg'].join(' '));
         final error = errors[method];
         if (error != null) return _codec.encodeMessage(<Object?>[error.code, error.message, error.details]);
+        if (method == 'setBrightness') replies['brightness'] = args.single;
         return _codec.encodeMessage(<Object?>[replies[method]]);
       });
     }
@@ -111,11 +111,19 @@ void main() {
       expect(native.calls, ['brightness', 'volume', 'setBrightness 1.0', 'setVolume 0.0', 'setVolume 0.5']);
     });
 
-    test('full screen saves the brightness and attaches the volume view; leaving undoes both, in order', () async {
+    test('full screen only attaches the volume view and leaving only detaches it, in order', () async {
       final entering = controls.enterFullScreen();
       final leaving = controls.leaveFullScreen();
       await Future.wait([entering, leaving]);
-      expect(native.calls, ['saveBrightness', 'attachVolumeView', 'detachVolumeView', 'restoreBrightness']);
+      expect(native.calls, ['attachVolumeView', 'detachVolumeView']);
+    });
+
+    test('a brightness set in full screen is still the brightness after leaving it', () async {
+      await controls.enterFullScreen();
+      await controls.setBrightness(0.8);
+      await controls.leaveFullScreen();
+      expect(await controls.brightness(), 0.8);
+      expect(native.calls, ['attachVolumeView', 'setBrightness 0.8', 'detachVolumeView', 'brightness']);
     });
 
     test('a volume view without a slider is logged once and the gesture goes on', () async {
@@ -194,7 +202,6 @@ void main() {
       await settle();
       expect(native.calls, [
         'setOrientationEvents true',
-        'saveBrightness',
         'attachVolumeView',
         'deviceOrientation',
         'requestOrientations 1 landscape',
@@ -204,7 +211,7 @@ void main() {
       await native.send('onOrientationRefused', [1, 'UISceneErrorDomain 101']);
       await settle();
       expect(orientation.presentation, Presentation.inline);
-      expect(native.calls, ['detachVolumeView', 'restoreBrightness', 'requestOrientations 1 portrait']);
+      expect(native.calls, ['detachVolumeView', 'requestOrientations 1 portrait']);
 
       native.calls.clear();
       await native.send('onDeviceOrientation', [NativeDeviceOrientation.landscapeRight]);
@@ -215,6 +222,27 @@ void main() {
       expect(orientation.presentation, Presentation.inline);
       expect(native.calls.last, 'requestOrientations 3 portrait');
       expect(native.calls, contains('setOrientationEvents false'));
+      orientation.dispose();
+    });
+
+    test('a brightness set in landscape stays after going back inline', () async {
+      final device = PlayerDevice.ios(events: events);
+      final orientation = device.orientation;
+      final page = Object();
+      orientation.begin(page, videoIsVertical: false);
+      orientation.enterLandscape();
+      await settle();
+      await device.controls.setBrightness(0.8);
+      orientation.exitToInline();
+      await settle();
+      expect(orientation.presentation, Presentation.inline);
+      expect(await device.controls.brightness(), 0.8);
+      expect(native.calls.where((call) => call.toLowerCase().contains('brightness')), [
+        'setBrightness 0.8',
+        'brightness',
+      ]);
+      orientation.end(page);
+      await settle();
       orientation.dispose();
     });
 
