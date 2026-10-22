@@ -460,6 +460,8 @@ class _List extends StatelessWidget {
         ],
       ),
       const SliverToBoxAdapter(child: SizedBox(height: MeTheme.bottomPad)),
+      // A themed bar lays its art over the page and leaves its height here (0 under the stock bar).
+      SliverToBoxAdapter(child: SizedBox(height: MediaQuery.paddingOf(context).bottom)),
     ],
   );
 }
