@@ -58,7 +58,8 @@ enum PictureDecoder {
             width: outWidth,
             height: outHeight,
             bitsPerComponent: 8,
-            bytesPerRow: 0,
+            // Tight rows: Dart hands rowBytes on, but no padding leaves nothing for the engine's upload to misread.
+            bytesPerRow: outWidth * 4,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
           ) else {
