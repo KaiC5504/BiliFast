@@ -36,6 +36,7 @@ class SeekBar extends StatefulWidget {
     required this.onCommit,
     required this.onCancel,
     this.onRest,
+    this.onHold,
     this.chapters = const [],
     this.style = SeekBarStyle.tv,
   });
@@ -64,6 +65,9 @@ class SeekBar extends StatefulWidget {
 
   /// The finger has stayed at one spot for [restDelay] while on the bar, where the user is likely to let go.
   final ValueChanged<double>? onRest;
+
+  /// True once a drag starts moving the position, false when it lifts or gives way.
+  final ValueChanged<bool>? onHold;
 
   /// 看点: a tick at each start, and the title of the one under the thumb while dragging.
   final List<Chapter> chapters;
@@ -97,8 +101,15 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
   /// The latest scrubbed position, committed when the finger lifts.
   double _scrubbed = 0;
 
+  bool _holding = false;
+
   @override
   void dispose() {
+    // The tree is locked while it unmounts, so the hold is let go just after.
+    if (_holding) {
+      final onHold = widget.onHold;
+      scheduleMicrotask(() => onHold?.call(false));
+    }
     _restTimer?.cancel();
     _dragCurve.dispose();
     _drag.dispose();
@@ -125,6 +136,10 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
     _anchor = null;
     _from = null;
     _drag.reverse();
+    if (_holding) {
+      _holding = false;
+      widget.onHold?.call(false);
+    }
   }
 
   static String _readout(double seconds, double duration) =>
@@ -177,7 +192,11 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
                 _fromX = details.localPosition.dx;
                 _drag.forward();
               },
-              onHorizontalDragStart: (details) => scrub(details.localPosition),
+              onHorizontalDragStart: (details) {
+                _holding = true;
+                widget.onHold?.call(true);
+                scrub(details.localPosition);
+              },
               onHorizontalDragUpdate: (details) => scrub(details.localPosition),
               onHorizontalDragEnd: (_) {
                 _lifted();

@@ -29,6 +29,44 @@ void main() {
         logger: Logger(session: 'test'));
   });
 
+  group('the seek preview', () {
+    // Made-up sheets of 2 × 2 frames, every 5 s; the index opens with its extra 0.
+    const answer = '''
+{"code":0,"message":"0","ttl":1,"data":{"pvdata":"//i0.hdslb.com/bfs/videoshot/x.bin",
+ "img_x_len":2,"img_y_len":2,"img_x_size":160,"img_y_size":90,
+ "image":["//i0.hdslb.com/bfs/videoshot/a.jpg","http://i0.hdslb.com/bfs/videoshot/b.jpg"],
+ "index":[0,0,5,10,15,20,25]}}''';
+
+    test('asks for the frames with their times and reads the sheets over https', () async {
+      fakeHTTP.routes['/x/player/videoshot'] = (200, answer);
+      final shot = await client.videoShot(bvid: 'BV1GJ411x7h7', cid: 99);
+      expect(fakeHTTP.query(fakeHTTP.requestsTo('/x/player/videoshot').single), {
+        'bvid': 'BV1GJ411x7h7',
+        'cid': '99',
+        'index': '1',
+      });
+      expect(shot.sheets, ['https://i0.hdslb.com/bfs/videoshot/a.jpg', 'https://i0.hdslb.com/bfs/videoshot/b.jpg']);
+      expect((shot.columns, shot.rows, shot.cellWidth, shot.cellHeight), (2, 2, 160.0, 90.0));
+      expect(shot.usable, isTrue);
+    });
+
+    test('a time finds the frame shown last before it, across sheets, held at the ends', () {
+      final shot = VideoShot.fromJson(decode(answer, (json) => json));
+      expect(shot.frameAt(0), (sheet: shot.sheets[0], column: 0, row: 0));
+      expect(shot.frameAt(4.9), (sheet: shot.sheets[0], column: 0, row: 0));
+      expect(shot.frameAt(5), (sheet: shot.sheets[0], column: 1, row: 0));
+      expect(shot.frameAt(12), (sheet: shot.sheets[0], column: 0, row: 1));
+      expect(shot.frameAt(20), (sheet: shot.sheets[1], column: 0, row: 0));
+      expect(shot.frameAt(999), (sheet: shot.sheets[1], column: 1, row: 0));
+    });
+
+    test('an answer without frames is unusable and finds none', () {
+      final shot = VideoShot.fromJson(<String, Object?>{'image': <Object?>[], 'index': <Object?>[]});
+      expect(shot.usable, isFalse);
+      expect(shot.frameAt(10), isNull);
+    });
+  });
+
   test('video detail decodes season, staff, stats and shape', () async {
     fakeHTTP.routes[viewPath] = (200, Fixtures.viewDetail);
     final detail = await client.videoDetail(bvid: 'BV1GJ411x7h7');

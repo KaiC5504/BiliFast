@@ -8,6 +8,7 @@ import 'package:bili_core/api.dart'
         QualityOption,
         UploaderCard,
         VideoDetail,
+        VideoShot,
         VideoTag,
         VideoTagKind;
 import 'package:bili_core/devlog.dart' show Logger;
@@ -512,8 +513,17 @@ void main() {
     await tester.pumpAndSettle();
     final root = find.byKey(const ValueKey('landscape-chrome'));
     expect(tester.widget<IgnorePointer>(root).ignoring, isTrue);
-    final fades = tester.widgetList<AnimatedOpacity>(find.descendant(of: root, matching: find.byType(AnimatedOpacity)));
-    expect(fades.map((fade) => fade.opacity), everyElement(0));
+    // Each fade is out, or sits inside one that is (the bottom bar's own fades for the seek preview).
+    final fades = find.descendant(of: root, matching: find.byType(AnimatedOpacity));
+    for (final element in fades.evaluate()) {
+      final hidden = [
+        element.widget as AnimatedOpacity,
+        ...tester.widgetList<AnimatedOpacity>(
+          find.ancestor(of: find.byWidget(element.widget), matching: find.byType(AnimatedOpacity)),
+        ),
+      ].any((fade) => fade.opacity == 0);
+      expect(hidden, isTrue);
+    }
     await tester.tap(find.byKey(const ValueKey('landscape-play')), warnIfMissed: false);
     expect(rig.session.calls, isEmpty);
 
@@ -1312,6 +1322,89 @@ void main() {
       await Rig().mount(tester);
       expect(find.byKey(const ValueKey('landscape-danmaku-settings')), findsNothing);
       expect(find.byKey(const ValueKey('landscape-danmaku-field')), findsNothing);
+    });
+  });
+
+  group('the seek preview (102)', () {
+    double fade(WidgetTester tester, String key) => tester
+        .widget<AnimatedOpacity>(find.ancestor(of: find.byKey(ValueKey(key)), matching: find.byType(AnimatedOpacity)).first)
+        .opacity;
+
+    double previewOpacity(WidgetTester tester) =>
+        tester.widget<AnimatedOpacity>(find.byKey(const ValueKey('seek-preview'))).opacity;
+
+    testWidgets('holding the bar fades everything but the bar for the time, asks for the frames, and lifting brings them back', (
+      tester,
+    ) async {
+      final rig = Rig();
+      rig.session.duration.value = 251;
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(previewOpacity(tester), 0);
+
+      final bar = tester.getCenter(find.byKey(const ValueKey('landscape-bar')));
+      final finger = await tester.startGesture(bar);
+      await finger.moveBy(const Offset(30, 0));
+      await tester.pumpAndSettle();
+      expect(rig.session.calls, contains('wantSeekFrames'));
+      expect(previewOpacity(tester), 1);
+      for (final key in ['landscape-back', 'landscape-play', 'landscape-time', 'landscape-speed']) {
+        expect(fade(tester, key), 0, reason: key);
+      }
+      expect(fade(tester, 'landscape-bar'), 1, reason: 'the bar stays under the finger');
+      expect(find.byKey(const ValueKey('seek-preview-frame')), findsNothing, reason: 'no frames yet: the time alone');
+      final time = tester.getRect(find.byKey(const ValueKey('seek-preview-time')));
+      expect(time.center.dy, closeTo(220 - 36 + 95 + 15 + 7.5, 1));
+
+      await finger.up();
+      await tester.pumpAndSettle();
+      expect(previewOpacity(tester), 0);
+      expect(fade(tester, 'landscape-back'), 1);
+      expect(rig.chrome.barHeld, isFalse);
+    });
+
+    testWidgets("the frame for the dragged time, 170 × 95 with the measured border, from its sheet's cell", (
+      tester,
+    ) async {
+      final rig = Rig();
+      rig.session
+        ..duration.value = 100
+        ..seekFrames.value = const VideoShot(
+          sheets: ['https://i0.hdslb.com/bfs/videoshot/a.jpg', 'https://i0.hdslb.com/bfs/videoshot/b.jpg'],
+          columns: 2,
+          rows: 2,
+          times: [0, 0, 5, 10, 15, 20, 25],
+        );
+      await rig.mount(tester);
+      final finger = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('landscape-bar'))));
+      await finger.moveBy(const Offset(20, 0));
+      rig.session.scrubbing.value = 12;
+      await tester.pumpAndSettle();
+
+      final box = tester.getRect(find.byKey(const ValueKey('seek-preview-frame')));
+      expect(box.size, const Size(170, 95));
+      expect(box.center.dx, 478);
+      expect(box.top, 184);
+      final cell = tester.widget<Transform>(
+        find.descendant(of: find.byKey(const ValueKey('seek-preview-frame')), matching: find.byType(Transform)),
+      );
+      final shift = cell.transform.getTranslation();
+      expect((shift.x, shift.y), (0.0, -93.0), reason: '12 s is the third frame: column 0, row 1 of the first sheet');
+      expect(
+        tester.widget<Image>(find.byType(Image).last).image,
+        isA<NetworkImage>().having((image) => image.url, 'url', 'https://i0.hdslb.com/bfs/videoshot/a.jpg'),
+      );
+      final text = tester.widget<Text>(find.byKey(const ValueKey('seek-preview-time'))).textSpan!.toPlainText();
+      expect(text, '00:12/01:40');
+
+      rig.session.scrubbing.value = 22;
+      await tester.pump();
+      expect(
+        tester.widget<Image>(find.byType(Image).last).image,
+        isA<NetworkImage>().having((image) => image.url, 'url', 'https://i0.hdslb.com/bfs/videoshot/b.jpg'),
+      );
+      await finger.up();
+      await tester.pumpAndSettle();
     });
   });
 }

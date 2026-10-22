@@ -1,4 +1,5 @@
-import 'package:bili_core/api.dart' show Chapter, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoView;
+import 'package:bili_core/api.dart'
+    show Chapter, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
 import 'package:flutter/foundation.dart';
 
 import '../playback/overlay_stats.dart';
@@ -132,6 +133,12 @@ abstract interface class PlayerSession implements Listenable {
 
   /// The drag ended without a seek.
   void cancelScrub();
+
+  /// The seek preview's frames for the part playing; null until [wantSeekFrames] has fetched them, or when it failed.
+  ValueListenable<VideoShot?> get seekFrames;
+
+  /// Fetches [seekFrames] for the part playing, once per part.
+  void wantSeekFrames();
 
   /// Seeks at the keyframe nearest [seconds] (not precise) and holds [scrubbing] there until the seek lands.
   Future<void> commitSeek(double seconds);

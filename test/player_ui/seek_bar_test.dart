@@ -141,6 +141,41 @@ void main() {
     expect(rig.commits.single, closeTo(75, 0.01));
   });
 
+  testWidgets('a drag holds the bar until it lifts; a tap never holds it', (tester) async {
+    final holds = <bool>[];
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: SizedBox(
+            width: 218,
+            child: SeekBar(
+              position: () => 50,
+              duration: () => 100,
+              buffered: () => 0,
+              repaint: ValueNotifier(0),
+              onScrub: (_) {},
+              onCommit: (_) {},
+              onCancel: () {},
+              onHold: holds.add,
+            ),
+          ),
+        ),
+      ),
+    );
+    final centre = tester.getCenter(find.byType(SeekBar));
+    await tester.tapAt(centre);
+    await tester.pumpAndSettle();
+    expect(holds, isEmpty);
+
+    final finger = await tester.startGesture(centre);
+    await finger.moveBy(const Offset(30, 0));
+    expect(holds, [true]);
+    await finger.up();
+    expect(holds, [true, false]);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('a tap on the bar seeks nowhere', (tester) async {
     final rig = Rig()..position = 50;
     await rig.mount(tester);

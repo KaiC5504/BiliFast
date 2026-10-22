@@ -17,6 +17,14 @@ extension BiliClientVideo on BiliClient {
   Future<PlayerInfo> playerInfo({required String bvid, required int cid}) =>
       get('/x/player/wbi/v2', query: {'bvid': bvid, 'cid': '$cid'}, signed: true, decode: PlayerInfo.fromJson);
 
+  /// The seek preview's frames for one part.
+  Future<VideoShot> videoShot({required String bvid, required int cid}) => get(
+    '/x/player/videoshot',
+    query: {'bvid': bvid, 'cid': '$cid', 'index': '1'},
+    signed: false,
+    decode: VideoShot.fromJson,
+  );
+
   /// The server's display string ("1.2万+"), not a number.
   Future<String> onlineCount({required int aid, required String bvid, required int cid}) => get(
     '/x/player/online/total',

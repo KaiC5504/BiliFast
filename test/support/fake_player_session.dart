@@ -1,4 +1,5 @@
-import 'package:bili_core/api.dart' show Chapter, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoView;
+import 'package:bili_core/api.dart'
+    show Chapter, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
 import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
@@ -92,6 +93,12 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
     calls.add('cancelScrub');
     scrubbing.value = null;
   }
+
+  @override
+  final ValueNotifier<VideoShot?> seekFrames = ValueNotifier(null);
+
+  @override
+  void wantSeekFrames() => calls.add('wantSeekFrames');
 
   @override
   Future<void> commitSeek(double seconds) async {

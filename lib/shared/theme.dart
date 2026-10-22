@@ -1915,6 +1915,24 @@ abstract final class CommentTextTheme {
   static const viewerThrowBack = Duration(milliseconds: 250);
 }
 
+/// Landscape's seek preview while the bar is dragged, measured on KaiC's recording 102 (956 × 440): the frame in a
+/// 1 pt white border with 6 pt corners, 184 pt from the top of the screen, and the time 15 pt under it, centred.
+abstract final class SeekPreviewTheme {
+  static const frameWidth = 168.0;
+  static const frameHeight = 93.0;
+  static const border = 1.0;
+  static const radius = 6.0;
+  static const borderColor = Color(0xFFFFFFFF);
+
+  /// The frame's top above the screen's middle.
+  static const aboveMiddle = 36.0;
+  static const timeGap = 15.0;
+  static const timeFont = 15.0;
+  static const time = Color(0xFFFFFFFF);
+  static const duration = Color(0x99FFFFFF);
+  static const fade = Duration(milliseconds: 200);
+}
+
 /// The composer and its emote panel (14), measured at 3 px per pt.
 abstract final class ComposerTheme {
   static const gutter = BiliMetrics.gutter;

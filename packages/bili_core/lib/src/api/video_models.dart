@@ -484,3 +484,60 @@ final class VideoCard {
   @override
   int get hashCode => Object.hash(aid, bvid, cid, title, cover, duration, ownerMid, ownerName, views, danmaku, likes);
 }
+
+/// The seek preview's frames (`/x/player/videoshot`): sheets of [columns] × [rows] small frames, each [cellWidth] ×
+/// [cellHeight], and the time each frame shows.
+final class VideoShot {
+  const VideoShot({
+    required this.sheets,
+    required this.columns,
+    required this.rows,
+    required this.times,
+    this.cellWidth = 160,
+    this.cellHeight = 90,
+  });
+
+  factory VideoShot.fromJson(Object? json) {
+    final object = JsonObject.from(json);
+    String secure(String url) => url.startsWith('//')
+        ? 'https:$url'
+        : url.startsWith('http://')
+        ? 'https://${url.substring(7)}'
+        : url;
+    return VideoShot(
+      sheets: [
+        for (final url in object.lenientList('image', (json) => json is String ? json : null))
+          if (url != null && url.isNotEmpty) secure(url),
+      ],
+      columns: object.integer('img_x_len') ?? 0,
+      rows: object.integer('img_y_len') ?? 0,
+      times: [for (final time in object.lenientList('index', asInt)) ?time],
+      cellWidth: object.number('img_x_size') ?? 160,
+      cellHeight: object.number('img_y_size') ?? 90,
+    );
+  }
+
+  final List<String> sheets;
+  final int columns;
+  final int rows;
+
+  /// Asked for with `index=1`. It opens with an extra 0, so frame k shows `times[k + 1]` (as PiliPlus reads it).
+  final List<int> times;
+  final double cellWidth;
+  final double cellHeight;
+
+  bool get usable => sheets.isNotEmpty && columns > 0 && rows > 0 && times.length > 1;
+
+  /// The frame nearest before [seconds], or null when there are no frames.
+  ({String sheet, int column, int row})? frameAt(double seconds) {
+    if (!usable) return null;
+    var shown = 0;
+    for (var i = 1; i < times.length && times[i] <= seconds; i++) {
+      shown = i;
+    }
+    final perSheet = columns * rows;
+    final frame = (shown - 1).clamp(0, sheets.length * perSheet - 1);
+    final at = frame % perSheet;
+    return (sheet: sheets[frame ~/ perSheet], column: at % columns, row: at ~/ columns);
+  }
+}

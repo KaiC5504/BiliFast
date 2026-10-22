@@ -102,8 +102,12 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   `/x/v3/fav/tab?tab_id=0` holds only the top tabs (收藏=1, 追更=2), so 视频 is looked for among 收藏's sub tabs
   (`tab_id=1`, two calls at most). The comment picture viewer (105): a vertical swipe carries the picture with the
   finger, shrinking to 60% while the black fades to the comments; past 100 pt or a flick it flies off and closes,
-  otherwise it settles back. Long pictures (scrolling) and zoomed ones keep their drags. Not built: the frame preview
-  above the seek bar (102), and the viewer's 查看原图, ⋮ sheet (分享, 保存图片) and comment bar (103, 104).
+  otherwise it settles back. Long pictures (scrolling) and zoomed ones keep their drags. Not built: the viewer's
+  查看原图, ⋮ sheet (分享, 保存图片) and comment bar (103, 104).
+- The seek preview, 1.0.0 (24) (102): holding landscape's bar fades every control but the bar and shows the frame
+  (170 × 95 pt, 1 pt white border, 6 pt corners, 184 pt from the top) with the time 15 pt under it. Frames are
+  `/x/player/videoshot` (`index=1`), fetched once per part on the first hold, every sheet cached as it arrives; the
+  time shows alone until then. The small player and 竖屏 keep their bars as they were (no screenshot of theirs).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):

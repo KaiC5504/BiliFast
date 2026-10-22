@@ -376,6 +376,30 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     }
   }
 
+  @override
+  ValueListenable<VideoShot?> get seekFrames => _seekFrames;
+  final _seekFrames = ValueNotifier<VideoShot?>(null);
+  logic.PlayItem? _seekFramesFor;
+
+  @override
+  void wantSeekFrames() {
+    final item = _current;
+    if (item == null || item == _seekFramesFor) return;
+    _seekFramesFor = item;
+    _seekFrames.value = null;
+    unawaited(_loadSeekFrames(item));
+  }
+
+  Future<void> _loadSeekFrames(logic.PlayItem item) async {
+    try {
+      final shot = await _client.videoShot(bvid: item.bvid, cid: item.cid);
+      if (_disposed || _seekFramesFor != item) return;
+      _seekFrames.value = shot.usable ? shot : null;
+    } catch (error) {
+      _logger.warn(LogCategory.api, 'seek frames failed', {'bvid': item.bvid, 'cid': item.cid, 'error': '$error'});
+    }
+  }
+
   Future<void> _loadChapters(logic.PlayItem item) async {
     try {
       final info = await _client.playerInfo(bvid: item.bvid, cid: item.cid);
@@ -827,6 +851,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     if (_speedingUp) _quietly(() => player.setRate(_controller.rate), 'speed up');
     readout.dispose();
     scrubbing.dispose();
+    _seekFrames.dispose();
     sleepRemaining.dispose();
     super.dispose();
   }

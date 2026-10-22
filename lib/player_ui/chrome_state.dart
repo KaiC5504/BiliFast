@@ -61,6 +61,16 @@ class ChromeState extends ChangeNotifier {
     _schedule();
   }
 
+  /// A finger is dragging the full-screen bar: the other controls give way to the seek preview.
+  bool get barHeld => _barHeld;
+  bool _barHeld = false;
+
+  void holdBar(bool held) {
+    if (held == _barHeld) return;
+    _barHeld = held;
+    notifyListeners();
+  }
+
   final ValueNotifier<Hud?> _hud = ValueNotifier(null);
   ValueListenable<Hud?> get hud => _hud;
 

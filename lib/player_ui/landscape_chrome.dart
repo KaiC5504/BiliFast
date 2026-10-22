@@ -15,6 +15,7 @@ import 'panels/panel_controller.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
 import 'seek_bar.dart';
+import 'seek_preview.dart';
 import 'status_bar_view.dart';
 import 'uploader_source.dart';
 
@@ -25,6 +26,7 @@ const _fade = Duration(milliseconds: 220);
 /// 充电 分享 and ⋮, 截图 and the rotation lock on the right edge, the time, the bar and the bottom row. The bars slide in
 /// from their edges as the controls show and stand aside while a panel is open; the status bar goes with the top one,
 /// as 25, 27 and the panels (05, 06, 20) show none. The page details' parts have their room kept until they arrive.
+/// While the bar is dragged everything but the bar fades for the seek preview (102).
 class LandscapeChrome extends StatelessWidget {
   const LandscapeChrome({super.key, required this.ui});
 
@@ -61,80 +63,84 @@ class LandscapeChrome extends StatelessWidget {
               shown: !ui.chrome.visible && ui.panels.value == null && ui.overlay?.value == null,
             ),
             _controls(context, insets, shown),
+            SeekPreview(session: ui.session, shown: shown && ui.chrome.barHeld),
           ],
         );
       },
     );
   }
 
-  Widget _controls(BuildContext context, EdgeInsets insets, bool shown) => IgnorePointer(
-    key: const ValueKey('landscape-chrome'),
-    ignoring: !shown,
-    child: DefaultTextStyle(
-      style: fullScreenText,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ChromeSlide(
-            shown: shown,
-            from: Offset.zero,
-            child: const Column(
-              children: [
-                ChromeShade(height: BiliMetrics.chromeTopShade, fromTop: true),
-                Spacer(),
-                ChromeShade(height: BiliMetrics.chromeBottomShade, fromTop: false),
-              ],
+  Widget _controls(BuildContext context, EdgeInsets insets, bool shown) {
+    final aside = shown && !ui.chrome.barHeld;
+    return IgnorePointer(
+      key: const ValueKey('landscape-chrome'),
+      ignoring: !shown,
+      child: DefaultTextStyle(
+        style: fullScreenText,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ChromeSlide(
+              shown: aside,
+              from: Offset.zero,
+              child: const Column(
+                children: [
+                  ChromeShade(height: BiliMetrics.chromeTopShade, fromTop: true),
+                  Spacer(),
+                  ChromeShade(height: BiliMetrics.chromeBottomShade, fromTop: false),
+                ],
+              ),
             ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: ChromeSlide(
-              shown: shown,
-              from: const Offset(0, -BiliMetrics.chromeSlide),
-              child: _topBar(insets),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: ChromeSlide(
+                shown: aside,
+                from: const Offset(0, -BiliMetrics.chromeSlide),
+                child: _topBar(insets),
+              ),
             ),
-          ),
-          Positioned(
-            left: insets.left + BiliMetrics.landscapeEdge,
-            right: insets.right,
-            top: insets.top + LandscapeActionTheme.onlineTop,
-            child: ChromeSlide(
-              shown: shown,
-              from: const Offset(0, -BiliMetrics.chromeSlide),
-              child: _UploaderBlock(ui: ui, touch: _touch),
+            Positioned(
+              left: insets.left + BiliMetrics.landscapeEdge,
+              right: insets.right,
+              top: insets.top + LandscapeActionTheme.onlineTop,
+              child: ChromeSlide(
+                shown: aside,
+                from: const Offset(0, -BiliMetrics.chromeSlide),
+                child: _UploaderBlock(ui: ui, touch: _touch),
+              ),
             ),
-          ),
-          Positioned(
-            right: insets.right,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: Transform.translate(
-                offset: const Offset(0, -BiliMetrics.chromeSideLift),
-                child: ChromeSlide(
-                  shown: shown,
-                  from: const Offset(BiliMetrics.chromeSlide, 0),
-                  child: _sideColumn(context),
+            Positioned(
+              right: insets.right,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: Transform.translate(
+                  offset: const Offset(0, -BiliMetrics.chromeSideLift),
+                  child: ChromeSlide(
+                    shown: aside,
+                    from: const Offset(BiliMetrics.chromeSlide, 0),
+                    child: _sideColumn(context),
+                  ),
                 ),
               ),
             ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: ChromeSlide(
-              shown: shown,
-              from: const Offset(0, BiliMetrics.chromeSlide),
-              child: _bottomBar(insets),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ChromeSlide(
+                shown: shown,
+                from: const Offset(0, BiliMetrics.chromeSlide),
+                child: _bottomBar(insets, aside: !ui.chrome.barHeld),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   VoidCallback _touch(VoidCallback action) => () {
     ui.chrome.show();
@@ -238,7 +244,8 @@ class LandscapeChrome extends StatelessWidget {
     if (context.mounted) showToast(context, message);
   }
 
-  Widget _bottomBar(EdgeInsets insets) {
+  /// [aside] false keeps only the bar.
+  Widget _bottomBar(EdgeInsets insets, {required bool aside}) {
     final session = ui.session;
     final next = session.next;
     final bar = FullScreenSeekBar.repaintOf(ui);
@@ -252,19 +259,22 @@ class LandscapeChrome extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: BiliMetrics.chromeTimeBox,
-            child: Padding(
-              padding: const EdgeInsets.only(left: BiliMetrics.chromeTimeInset),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: ListenableBuilder(
-                  listenable: bar,
-                  builder: (context, _) => Text(
-                    TimeFormat.pair(session.position, session.duration.value),
-                    key: const ValueKey('landscape-time'),
-                    style: _timeStyle,
-                    maxLines: 1,
+          _GiveWay(
+            shown: aside,
+            child: SizedBox(
+              height: BiliMetrics.chromeTimeBox,
+              child: Padding(
+                padding: const EdgeInsets.only(left: BiliMetrics.chromeTimeInset),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ListenableBuilder(
+                    listenable: bar,
+                    builder: (context, _) => Text(
+                      TimeFormat.pair(session.position, session.duration.value),
+                      key: const ValueKey('landscape-time'),
+                      style: _timeStyle,
+                      maxLines: 1,
+                    ),
                   ),
                 ),
               ),
@@ -272,92 +282,109 @@ class LandscapeChrome extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(top: BiliMetrics.chromeBarTop),
-            child: FullScreenSeekBar(key: const ValueKey('landscape-bar'), ui: ui, repaint: bar),
+            child: FullScreenSeekBar(key: const ValueKey('landscape-bar'), ui: ui, repaint: bar, preview: true),
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: BiliMetrics.chromeRowTop, right: BiliMetrics.chromeRowTrailing),
-            child: Row(
-              children: [
-                // 04's play glyph is larger and rounder than the small player's, its pause bars shorter.
-                PlayPauseButton(
-                  key: const ValueKey('landscape-play'),
-                  session: session,
-                  onTap: _touch(session.togglePlay),
-                  glyphSize: const Size(BiliMetrics.chromePlayWidth, BiliMetrics.chromePlayHeight),
-                  glyphShift: BiliMetrics.chromePlayShift,
-                  cornerRadius: BiliMetrics.chromePlayCorner,
-                  pauseBar: BiliMetrics.chromePauseBar,
-                  pauseGap: BiliMetrics.chromePauseGap,
-                  pauseHeight: BiliMetrics.chromePauseShare,
-                ),
-                if (next != null || session.episodes.isNotEmpty) ...[
-                  const SizedBox(width: BiliMetrics.landscapeDanmakuLead),
-                  _NextButton(
-                    onTap: next == null ? null : _touch(() => session.playEpisode(next)),
-                    keepUp: ui.chrome.show,
+          _GiveWay(
+            shown: aside,
+            child: Padding(
+              padding: const EdgeInsets.only(top: BiliMetrics.chromeRowTop, right: BiliMetrics.chromeRowTrailing),
+              child: Row(
+                children: [
+                  // 04's play glyph is larger and rounder than the small player's, its pause bars shorter.
+                  PlayPauseButton(
+                    key: const ValueKey('landscape-play'),
+                    session: session,
+                    onTap: _touch(session.togglePlay),
+                    glyphSize: const Size(BiliMetrics.chromePlayWidth, BiliMetrics.chromePlayHeight),
+                    glyphShift: BiliMetrics.chromePlayShift,
+                    cornerRadius: BiliMetrics.chromePlayCorner,
+                    pauseBar: BiliMetrics.chromePauseBar,
+                    pauseGap: BiliMetrics.chromePauseGap,
+                    pauseHeight: BiliMetrics.chromePauseShare,
                   ),
-                ],
-                Padding(
-                  padding: const EdgeInsets.only(left: BiliMetrics.landscapeDanmakuLead),
-                  child: ChromeTap(
-                    key: const ValueKey('landscape-danmaku'),
-                    label: session.danmakuOn ? '关闭弹幕' : '开启弹幕',
-                    onTap: _touch(() => session.setDanmakuOn(!session.danmakuOn)),
-                    child: DanmakuGlyph(on: session.danmakuOn),
-                  ),
-                ),
-                // With danmaku off, 34 closes the row up behind the toggle.
-                if (ui.danmaku case final danmaku? when session.danmakuOn) ...[
-                  const SizedBox(width: BiliMetrics.chromeSettingsGap),
-                  ChromeTap(
-                    key: const ValueKey('landscape-danmaku-settings'),
-                    label: '弹幕设置',
-                    onTap: _touch(() => ui.panels.open(PlayerPanel.danmakuSettings)),
-                    child: const DanmakuSettingsGlyph(),
-                  ),
-                  const SizedBox(width: BiliMetrics.chromeFieldGap),
-                  Expanded(
-                    child: _DanmakuField(
-                      closed: danmaku.closed,
-                      onTap: danmaku.closed ? ui.chrome.show : _touch(danmaku.openSend),
+                  if (next != null || session.episodes.isNotEmpty) ...[
+                    const SizedBox(width: BiliMetrics.landscapeDanmakuLead),
+                    _NextButton(
+                      onTap: next == null ? null : _touch(() => session.playEpisode(next)),
+                      keepUp: ui.chrome.show,
+                    ),
+                  ],
+                  Padding(
+                    padding: const EdgeInsets.only(left: BiliMetrics.landscapeDanmakuLead),
+                    child: ChromeTap(
+                      key: const ValueKey('landscape-danmaku'),
+                      label: session.danmakuOn ? '关闭弹幕' : '开启弹幕',
+                      onTap: _touch(() => session.setDanmakuOn(!session.danmakuOn)),
+                      child: DanmakuGlyph(on: session.danmakuOn),
                     ),
                   ),
-                ] else
-                  const Expanded(child: SizedBox.shrink()),
-                const SizedBox(width: BiliMetrics.chromeSpeedGap),
-                if (session.episodes.isNotEmpty) ...[
+                  // With danmaku off, 34 closes the row up behind the toggle.
+                  if (ui.danmaku case final danmaku? when session.danmakuOn) ...[
+                    const SizedBox(width: BiliMetrics.chromeSettingsGap),
+                    ChromeTap(
+                      key: const ValueKey('landscape-danmaku-settings'),
+                      label: '弹幕设置',
+                      onTap: _touch(() => ui.panels.open(PlayerPanel.danmakuSettings)),
+                      child: const DanmakuSettingsGlyph(),
+                    ),
+                    const SizedBox(width: BiliMetrics.chromeFieldGap),
+                    Expanded(
+                      child: _DanmakuField(
+                        closed: danmaku.closed,
+                        onTap: danmaku.closed ? ui.chrome.show : _touch(danmaku.openSend),
+                      ),
+                    ),
+                  ] else
+                    const Expanded(child: SizedBox.shrink()),
+                  const SizedBox(width: BiliMetrics.chromeSpeedGap),
+                  if (session.episodes.isNotEmpty) ...[
+                    _TextButton(
+                      key: const ValueKey('landscape-episodes'),
+                      label: '选集',
+                      text: '选集',
+                      onTap: _touch(() => ui.panels.open(PlayerPanel.episodes)),
+                    ),
+                    const SizedBox(width: LandscapeActionTheme.episodesGap),
+                  ],
                   _TextButton(
-                    key: const ValueKey('landscape-episodes'),
-                    label: '选集',
-                    text: '选集',
-                    onTap: _touch(() => ui.panels.open(PlayerPanel.episodes)),
+                    key: const ValueKey('landscape-speed'),
+                    label: '倍速',
+                    text: speedLabel(session.rate),
+                    onTap: _touch(() => ui.panels.open(PlayerPanel.speed)),
                   ),
-                  const SizedBox(width: LandscapeActionTheme.episodesGap),
+                  const SizedBox(width: BiliMetrics.chromeQualityGap),
+                  _TextButton(
+                    key: const ValueKey('landscape-quality'),
+                    label: '清晰度',
+                    text: QualityNames.short(
+                      qn: session.playingQuality,
+                      serverText: session.qualityName(session.playingQuality),
+                    ),
+                    bold: true,
+                    onTap: _touch(() => ui.panels.open(PlayerPanel.quality)),
+                  ),
                 ],
-                _TextButton(
-                  key: const ValueKey('landscape-speed'),
-                  label: '倍速',
-                  text: speedLabel(session.rate),
-                  onTap: _touch(() => ui.panels.open(PlayerPanel.speed)),
-                ),
-                const SizedBox(width: BiliMetrics.chromeQualityGap),
-                _TextButton(
-                  key: const ValueKey('landscape-quality'),
-                  label: '清晰度',
-                  text: QualityNames.short(
-                    qn: session.playingQuality,
-                    serverText: session.qualityName(session.playingQuality),
-                  ),
-                  bold: true,
-                  onTap: _touch(() => ui.panels.open(PlayerPanel.quality)),
-                ),
-              ],
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// The bottom bar's time and row, faded while the bar is dragged; they keep their room so the bar stays put.
+class _GiveWay extends StatelessWidget {
+  const _GiveWay({required this.shown, required this.child});
+
+  final bool shown;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    ignoring: !shown,
+    child: AnimatedOpacity(opacity: shown ? 1 : 0, duration: _fade, curve: Curves.easeOut, child: child),
+  );
 }
 
 /// The full-screen controls draw over the page's own text style, which may be outside any Material.
@@ -1339,11 +1366,20 @@ class _MarkedTv extends StatelessWidget {
 
 /// The [SeekBar] driven by the session: a drag scrubs, a resting finger hints, a lift seeks.
 class FullScreenSeekBar extends StatelessWidget {
-  const FullScreenSeekBar({super.key, required this.ui, required this.repaint, this.style = SeekBarStyle.tv});
+  const FullScreenSeekBar({
+    super.key,
+    required this.ui,
+    required this.repaint,
+    this.style = SeekBarStyle.tv,
+    this.preview = false,
+  });
 
   final PlayerUi ui;
   final Listenable repaint;
   final SeekBarStyle style;
+
+  /// Holding it shows the seek preview (102), landscape's.
+  final bool preview;
 
   /// What the bar and the time redraw on.
   static Listenable repaintOf(PlayerUi ui) {
@@ -1364,6 +1400,12 @@ class FullScreenSeekBar extends StatelessWidget {
       onScrub: session.scrub,
       onRest: session.hint,
       onCancel: session.cancelScrub,
+      onHold: preview
+          ? (held) {
+              if (held) session.wantSeekFrames();
+              ui.chrome.holdBar(held);
+            }
+          : null,
       onCommit: (seconds) {
         ui.chrome.show();
         unawaited(session.commitSeek(seconds));
