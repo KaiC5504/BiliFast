@@ -19,6 +19,7 @@ import 'form_encoding.dart';
 import 'http.dart';
 import 'json.dart';
 import 'link_parser.dart';
+import 'login_models.dart';
 import 'models.dart';
 import 'search_models.dart';
 import 'space_models.dart';
@@ -31,6 +32,7 @@ part 'bili_client_app.dart';
 part 'bili_client_comments.dart';
 part 'bili_client_danmaku.dart';
 part 'bili_client_fav.dart';
+part 'bili_client_login.dart';
 part 'bili_client_feed.dart';
 part 'bili_client_feed_official.dart';
 part 'bili_client_official.dart';
@@ -332,6 +334,9 @@ final class BiliClient {
   Future<HTTPResponse> _sendOver(HTTPRequest request, String path) async {
     try {
       return await _transport.send(request);
+    } on BiliError {
+      // The Windows guard's refusals, which must reach the caller as they are.
+      rethrow;
     } catch (error, stack) {
       if (error is! Exception) {
         _logger.error(LogCategory.api, path, {'error': '${error.runtimeType}'});

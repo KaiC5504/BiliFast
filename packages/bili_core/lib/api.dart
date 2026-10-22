@@ -19,9 +19,11 @@ export 'src/api/comment_models.dart'
 export 'src/api/cookie_jar.dart';
 export 'src/api/fav_models.dart';
 export 'src/api/feed_models.dart';
+export 'src/api/guarded_transport.dart';
 export 'src/api/http.dart';
 export 'src/api/json.dart' show DecodeError;
 export 'src/api/link_parser.dart';
+export 'src/api/login_models.dart';
 export 'src/api/models.dart';
 export 'src/api/rich_text.dart';
 export 'src/api/search_models.dart';
