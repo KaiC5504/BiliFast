@@ -266,7 +266,7 @@ void main() {
     expect(shownView(model).profile.name, '另一个账号');
   });
 
-  test('the first load failing shows the reason; a showing past the gap tries again', () async {
+  test('the first load failing shows the reason; showing the page again tries again, gap or not', () async {
     const error = BiliError.network('SocketException');
     api.failures['nav'] = error;
     final model = make();
@@ -276,11 +276,7 @@ void main() {
     expect((model.view as MeFailed).message, '网络连接失败，请检查网络后重试');
 
     api.failures.clear();
-    model.shown();
-    await idle();
-    expect(api.calls.length, 2, reason: 'within the gap');
-
-    clock = clock.add(const Duration(seconds: 30));
+    clock = clock.add(const Duration(seconds: 1));
     final hold = api.holds['nav'] = Completer<void>();
     model.shown();
     expect(model.view, isA<MeLoading>());

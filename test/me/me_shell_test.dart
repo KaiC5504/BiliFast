@@ -208,4 +208,24 @@ void main() {
     expect(me.calls.where((call) => call == 'nav'), hasLength(2));
     await settle(tester, 80);
   });
+
+  testWidgets('a login whose 我的 load fails behind 首页 toasts nothing there; showing 我的 retries and says why', (
+    tester,
+  ) async {
+    me.failures['nav'] = const BiliError.network('SocketException');
+    await show(tester, cookies: _loggedOutCookies);
+    await settle(tester, 40);
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+    await environment.didLogin({'SESSDATA': 's', 'bili_jct': 'j'});
+    await settle(tester, 10);
+    final reason = find.text('网络连接失败，请检查网络后重试');
+    expect(me.calls.where((call) => call == 'nav'), hasLength(1), reason: 'the login loads 我的 at once');
+    expect(reason, findsNothing, reason: '首页 is in front');
+
+    await openMine(tester);
+    await settle(tester, 4);
+    expect(me.calls.where((call) => call == 'nav'), hasLength(2), reason: 'a failed page retries inside the gap');
+    expect(reason, findsOneWidget);
+    await settle(tester, 80);
+  });
 }

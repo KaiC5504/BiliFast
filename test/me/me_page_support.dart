@@ -94,6 +94,7 @@ Future<MeHarness> showMe(
   ThemeData? theme,
   FontStore? fonts,
   bool openSucceeds = true,
+  bool officialAppThere = true,
   Future<bool> Function(Uri link)? open,
   WidgetBuilder? developerPage,
   bool checkAccount = false,
@@ -152,7 +153,13 @@ Future<MeHarness> showMe(
                 builder: (context, active, _) => MediaQuery.removePadding(
                   context: context,
                   removeBottom: true,
-                  child: MePage(active: active, developerPage: developerPage, model: model, openLink: record),
+                  child: MePage(
+                    active: active,
+                    developerPage: developerPage,
+                    model: model,
+                    openLink: record,
+                    canOpenLink: (_) async => officialAppThere,
+                  ),
                 ),
               ),
             ),

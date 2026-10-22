@@ -108,22 +108,24 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   (170 × 95 pt, 1 pt white border, 6 pt corners, 184 pt from the top) with the time 15 pt under it. Frames are
   `/x/player/videoshot` (`index=1`), fetched once per part on the first hold, every sheet cached as it arrives; the
   time shows alone until then. The small player and 竖屏 keep their bars as they were (no screenshot of theirs).
+- 我的, 1.0.0 (25) (87, 02, 106, 107): the bottom bar switches 首页 and 我的 (`MainShell`, both kept alive, the
+  hidden one's tickers and Heroes off; 首页 tapped on 首页 still refreshes 推荐). 我的: the top icons, ✏️ and the
+  counts toast; the header (frame, 大 badge, LV, the vip pill, B币 and 硬币 from nav), the counts from
+  `/x/web-interface/nav/stat`, the 会员 card (opens big.bilibili.com in the official app, the browser without it),
+  the shortcuts, and 更多服务 (设置 works; 联系客服 and 听视频 toast); header, counts and card fixed, the rest
+  scrolling 8 pt under the card. Not built (KaiC): 我的服务, 发布你的第一个视频. Logged out (no screenshot): the grey
+  head, 点击登录, counts -, no card. Every pull now refreshes on release (`ReleaseRefreshControl`). Also carries the
+  unshipped 我的收藏 视频 fix (its tab id from 收藏's `uri`) and the PC login (`--real-account`).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
 1. KaiC's phone check of (20), then the milestone's closing build and both checklists.
-2. Next slice (KaiC, 2026-10-22; plan for his go after the compact): 我的, the bottom bar's Me page, apart from the
-   avatar page (49). References: 87 and 02 (the page), 106 (scrolled: the header, counts and 会员 card stay; the
-   rest scrolls under the card; no pinned bar), 107 (the pull opens under the 会员 card, refreshing on release), 108
-   (the avatar opens the account's own space, a different layout from others' spaces). Not built: 我的服务, 更多服务,
-   发布你的第一个视频; the top icons (投屏, 扫一扫, 装扮, 夜间模式) toast. Calls: nav (adds B币) and
-   `/x/web-interface/nav/stat`. The own space is its own slice (KaiC: split): 我的's avatar and 空间 open the
-   others' layout until then. Its references: 108 (投稿), 114 (主页: 收藏 cards, 追番, then 115 scrolled: the black bar
-   with the name and the tabs pinned, 最近投币的视频, 最近点赞的视频, 我的游戏, 拥有的个性装扮), 116 (收藏: 我创建的收藏夹),
-   117 (追番: a 3-column grid, 再怎么找也没有啦); the banner is the 空间头图 theme item. Unshipped on main
-   since (24): 我的收藏's 视频 fixed (its tab id is in 收藏's `uri`, `sub_tab=`, checked live on the PC) and the PC
-   login. After 我的: 装扮, following the theme equipped in the official app (`x/resource/show/skin`; 109 我的, 110
-   首页 and the bottom bar, 108 the space banner; the shop 111-113 stays the official app's), then 动态.
+2. Next slice: the account's own space (KaiC: split from 我的), until then 我的's avatar and 空间 open the others'
+   layout. References: 108 (投稿), 114 (主页: 收藏 cards, 追番, then 115 scrolled: the black bar with the name and the
+   tabs pinned, 最近投币的视频, 最近点赞的视频, 我的游戏, 拥有的个性装扮), 116 (收藏: 我创建的收藏夹), 117 (追番: a
+   3-column grid, 再怎么找也没有啦); the banner is the 空间头图 theme item. Then 装扮, following the theme equipped in
+   the official app (`x/resource/show/skin`; 109 我的, 110 首页 and the bottom bar, 108 the space banner; the shop
+   111-113 stays the official app's), then 动态.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
@@ -180,8 +182,10 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     page-route observer (a page counts as covered only when a page route is pushed over it), Reduce Motion, and
     `phone_frame.dart` (Windows only: the window as KaiC's iPhone).
   - `lib/account/`: keychain and cookie persistence, the login page and `LoginGate`, the web view's cookies.
-  - `lib/home/`: home, the feed, the bottom bar (`home_tab_bar.dart`, its glyphs in `tab_bar_icons.dart`), the avatar
-    page (49) and 最近打开.
+  - `lib/home/`: `main_shell.dart` (the bottom bar's places), home, the feed, the bottom bar (`home_tab_bar.dart`,
+    its glyphs in `tab_bar_icons.dart`), the avatar page (49), the shared shortcut glyphs and 最近打开.
+  - `lib/me/`: 我的: `MeModel` over `MeApi` (`fake_me_api.dart` for tests and `--fake-account`), the page and header,
+    its glyphs, and `official_link.dart` (a page opened in the official app).
   - `lib/search/`: 搜索: the page, the empty page and suggestions, `SearchModel` over `SearchApi` (`fake_search_api.dart`
     for tests and `--fake-account`), the history store, `search_glyphs.dart`, and `results/` (tabs, rows, 筛选, the ⋮
     sheet). `lib/video/link_opener.dart` opens a pasted link's video for 搜索 and `--play=`.
@@ -328,7 +332,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   that adds no row (a 筛选 cut them all) stalls until the user asks again, so nothing loops against the account.
   The keyword is the user's text: never log it, nor an error's `toString` (cupertino_http's carries the URL).
 - Every pull to refresh refreshes when the finger lets go, never while still pulled (KaiC, 2026-10-22: all of the
-  official app works so; 107).
+  official app works so; 107). Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`.
 - Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's
   `PlayerLoading`), never a spinning circle, except for loading more under a list and inside buttons, where the
   official app keeps the small system spinner too.

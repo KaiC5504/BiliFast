@@ -206,6 +206,16 @@ void main() {
     });
   }
 
+  testWidgets("where the official app isn't there (the PC), the 会员 centre goes straight to the browser", (
+    tester,
+  ) async {
+    final harness = await showMe(tester, officialAppThere: false);
+    await tester.tap(_key('me-vip-centre'));
+    await tester.pump();
+    expect(harness.opened, [MePage.vipCentre], reason: "the official app's link is never launched");
+    expect(find.text('无法打开链接'), findsNothing);
+  });
+
   testWidgets('logged out: the grey head and 点击登录, counts as -, no card; both ask for the login', (tester) async {
     final gate = FakeLoginGate();
     await showMe(tester, view: const MeLoggedOut(), loginGate: gate);

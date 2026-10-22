@@ -189,12 +189,13 @@ class MeModel extends ChangeNotifier {
   bool get _signedIn => _account is LoggedIn || _account is AccountUnknown;
 
   /// The tab came on screen: loads the first time, then again quietly (the page stays as it is) at most every
-  /// [quietGap]. Logged out it calls nothing.
+  /// [quietGap]; a failed page tries again whenever it shows. Logged out it calls nothing.
   void shown() {
     if (!_signedIn || _loading != null) return;
     final last = _lastLoad;
-    if (last != null && _now().difference(last) < quietGap) return;
-    if (_view is MeFailed) _show(const MeLoading());
+    final failed = _view is MeFailed;
+    if (!failed && last != null && _now().difference(last) < quietGap) return;
+    if (failed) _show(const MeLoading());
     unawaited(_load());
   }
 

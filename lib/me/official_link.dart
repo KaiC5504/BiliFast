@@ -1,11 +1,24 @@
+import 'dart:io' show Platform;
+
 import 'package:bili_core/devlog.dart';
 
-/// Opens [page] in the official app's own browser, where the account is logged in (Safari isn't), as the official
-/// login's confirm is handed over; without the official app, in the browser. False when neither opened.
-Future<bool> openInOfficialApp(Uri page, {required Future<bool> Function(Uri link) open, Logger? logger}) async {
+import '../account/app_auth_client.dart';
+
+/// Opens [page] in the official app's own browser, where the account is logged in (Safari isn't), as 授权 hands over
+/// its confirm page; without the official app, in the browser. False when neither opened.
+Future<bool> openInOfficialApp(
+  Uri page, {
+  required Future<bool> Function(Uri link) open,
+  required Future<bool> Function(Uri link) canOpen,
+  bool? isIOS,
+  Logger? logger,
+}) async {
   final log = logger ?? Logger.shared;
-  final inApp = Uri.parse('bilibili://browser?url=${Uri.encodeComponent(page.toString())}');
-  if (await _tryOpen(inApp, open, log)) return true;
+  final inApp = officialAppLink(page);
+  // As 授权's hand-off: iOS answers canLaunchUrl only for schemes listed in Info.plist, so there it just tries; a PC
+  // without the official app may answer launchUrl true behind its own pick-an-app dialog, so there it asks first.
+  final worthTrying = (isIOS ?? Platform.isIOS) || await _tryOpen(inApp, canOpen, log);
+  if (worthTrying && await _tryOpen(inApp, open, log)) return true;
   log.info(LogCategory.ui, 'official app not opened, trying the browser');
   return _tryOpen(page, open, log);
 }

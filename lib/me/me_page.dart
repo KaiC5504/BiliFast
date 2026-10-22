@@ -33,6 +33,7 @@ class MePage extends StatefulWidget {
     this.developerPage,
     @visibleForTesting this.model,
     @visibleForTesting this.openLink = _openOutside,
+    @visibleForTesting this.canOpenLink = canLaunchUrl,
   });
 
   /// Whether 我的 is the bar's current tab; turning true is a showing ([MeModel.shown]).
@@ -46,6 +47,9 @@ class MePage extends StatefulWidget {
 
   /// Opens a link outside the app, the official app's first; false (or a throw) when it couldn't.
   final Future<bool> Function(Uri link) openLink;
+
+  /// Whether a link's app is there; asked before the official app's link except on iOS.
+  final Future<bool> Function(Uri link) canOpenLink;
 
   static final vipCentre = Uri.parse('https://big.bilibili.com/mobile/home');
 
@@ -97,12 +101,15 @@ class _MePageState extends State<MePage> {
     super.dispose();
   }
 
-  /// There is no screenshot of a failed header, so a first load that fails says why in a toast, once.
+  /// There is no screenshot of a failed header, so a first load that fails says why in a toast, once. Not while
+  /// 我的 is hidden (a login loads it behind 首页); showing it again retries, and that failure toasts.
   void _viewChanged() {
     final view = _me.view;
     final was = _lastView;
     _lastView = view;
-    if (view is MeFailed && was is! MeFailed && _pulls == 0 && mounted) showToast(context, view.message);
+    if (view is MeFailed && was is! MeFailed && _pulls == 0 && widget.active && mounted) {
+      showToast(context, view.message);
+    }
   }
 
   void _soon() => showToast(context, '即将推出');
@@ -128,7 +135,11 @@ class _MePageState extends State<MePage> {
   void _login() => unawaited(AppScope.of(context).loginGate.request(context));
 
   Future<void> _openVipCentre() async {
-    final opened = await openInOfficialApp(MePage.vipCentre, open: widget.openLink);
+    final opened = await openInOfficialApp(
+      MePage.vipCentre,
+      open: widget.openLink,
+      canOpen: widget.canOpenLink,
+    );
     if (!opened && mounted) showToast(context, '无法打开链接');
   }
 

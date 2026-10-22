@@ -13,7 +13,7 @@ Future<bool> confirmInBilibili(
   Future<bool> Function(Uri link) canOpen = canLaunchUrl,
   Future<bool> Function(Uri link) open = _openOutside,
 }) async {
-  final link = Uri.parse('bilibili://browser?url=${Uri.encodeComponent(page.toString())}');
+  final link = officialAppLink(page);
   // iOS answers canLaunchUrl only for schemes listed in Info.plist; launchUrl itself says whether the app opened.
   if (!(isIOS ?? Platform.isIOS) && !await canOpen(link)) return false;
   final back = _BackInFront();
@@ -28,6 +28,9 @@ Future<bool> confirmInBilibili(
     back.dispose();
   }
 }
+
+/// [page] in the official app's own browser.
+Uri officialAppLink(Uri page) => Uri.parse('bilibili://browser?url=${Uri.encodeComponent(page.toString())}');
 
 Future<bool> _openOutside(Uri link) => launchUrl(link, mode: LaunchMode.externalApplication);
 
