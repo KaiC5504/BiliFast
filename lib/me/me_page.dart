@@ -37,7 +37,7 @@ class MePage extends StatefulWidget {
     required this.active,
     this.developerPage,
     @visibleForTesting this.model,
-    @visibleForTesting this.skin,
+    this.skin,
     @visibleForTesting this.openLink = _openOutside,
     @visibleForTesting this.canOpenLink = canLaunchUrl,
   });

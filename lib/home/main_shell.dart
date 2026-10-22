@@ -96,8 +96,6 @@ class _MainShellState extends State<MainShell> {
                     shown: mine,
                     child: AnnotatedRegion<SystemUiOverlayStyle>(
                       value: SystemUiOverlayStyle.dark,
-                      // A seam handed to a seam: only a test sets the shell's skin.
-                      // ignore: invalid_use_of_visible_for_testing_member
                       child: MePage(active: mine, developerPage: widget.developerPage, skin: widget.skin),
                     ),
                   ),
