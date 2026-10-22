@@ -126,6 +126,9 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   audio track), 首页's top (110) and the bottom bar (art, the icons by position, a selected `.svga` icon played by
   our own SVGA player, `lib/skin/svga/`). Not built (KaiC): 我的游戏. Toasts: 编辑资料, 勋章, 详情, 👕, search, ⋮,
   追番 posters, 装扮 cards, 投币/点赞's 更多, 我要投稿, 去创作中心领奖.
+- 1.0.0 (27): on (26) the skin dressed 首页, 我的 and the bar (KaiC's package: png/jpg only, no svga), but 最近投币 (13)
+  and 最近点赞 (600) decoded no item; their previews now take the id from `param`/`aid`, the BV from the aid and the
+  length text as the duration, and `own space sections` logs why a section's first item was dropped.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
