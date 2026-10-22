@@ -134,9 +134,9 @@ final class CoverFormat {
 
   static Future<ui.Codec> _codecOf(DecodedPicture picture) async {
     final buffer = await ui.ImmutableBuffer.fromUint8List(picture.pixels);
-    ui.ImageDescriptor? descriptor;
     try {
-      descriptor = ui.ImageDescriptor.raw(
+      // The codec reads the descriptor as it makes frames, so the descriptor is left to its finalizer.
+      final descriptor = ui.ImageDescriptor.raw(
         buffer,
         width: picture.width,
         height: picture.height,
@@ -145,7 +145,6 @@ final class CoverFormat {
       );
       return await descriptor.instantiateCodec();
     } finally {
-      descriptor?.dispose();
       buffer.dispose();
     }
   }
