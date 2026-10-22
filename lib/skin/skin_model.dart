@@ -353,16 +353,24 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     if (now is! LoggedIn) {
       _signedOut(was);
     } else if (was is! LoggedIn) {
+      // The cached skin shown before the check answered is taken as this account's.
+      if (_value != null) _shownMid ??= _environment.mid;
       _loginRefreshed = true;
       _restart();
     }
   }
 
   /// A login over an account that already read logged in leaves the account where it was, and may be another one.
+  /// Another account's skin goes at once: its refresh can't replace it until that account's own token is confirmed.
   void _loginCompleted() {
     if (_loginRefreshed) {
       _loginRefreshed = false;
     } else if (_account is LoggedIn) {
+      if (_value != null && _environment.mid != _shownMid) {
+        _logger.info(LogCategory.ui, 'skin stays stock', {'reason': 'another account'});
+        _show(null);
+        unawaited(_exclusive(() => _writeCurrent(null)));
+      }
       _restart();
     }
   }
@@ -385,9 +393,13 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
 
   bool _current(int generation) => generation == _generation && !_disposed;
 
+  /// The account whose skin is shown.
+  int? _shownMid;
+
   void _show(Skin? skin, {String? from}) {
     if (_disposed || identical(skin, _value)) return;
     _value = skin;
+    _shownMid = skin == null ? null : _environment.mid ?? _shownMid;
     if (skin != null && from != null) _log(skin, from);
     notifyListeners();
   }

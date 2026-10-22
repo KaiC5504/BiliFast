@@ -31,6 +31,9 @@ class _Environment extends ChangeNotifier implements AppEnvironment {
   @override
   final _Logins logins = _Logins();
 
+  @override
+  int? mid = 1;
+
   /// How many listeners were added, so a model can be shown to listen to nothing before it starts.
   int listening = 0;
 
@@ -268,6 +271,23 @@ void main() {
     await model.refresh();
     expect(api.calls, ['equipped', 'download', 'equipped', 'equipped']);
     expect(model.value, isNotNull);
+  });
+
+  test("another account logging in over this one drops this one's skin before its own token is there", () async {
+    final api = apiWith(1);
+    final (:model, :environment) = make(api);
+    await settle(model);
+    expect(model.value, isNotNull);
+
+    environment.logins.value++;
+    await model.refresh();
+    expect(model.value, isNotNull, reason: 'the same account logging in again keeps its skin');
+
+    api.failures['equipped'] = BiliError.noAppToken;
+    environment.mid = 2;
+    environment.logins.value++;
+    await model.refresh();
+    expect(model.value, isNull);
   });
 
   test('logging out shows stock and keeps the files; the next launch starts stock, a login reuses them', () async {

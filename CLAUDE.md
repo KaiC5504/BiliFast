@@ -116,20 +116,33 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   scrolling 8 pt under the card. Not built (KaiC): 我的服务, 发布你的第一个视频. Logged out (no screenshot): the grey
   head, 点击登录, counts -, no card. Every pull now refreshes on release (`ReleaseRefreshControl`). Also carries the
   unshipped 我的收藏 视频 fix (its tab id from 收藏's `uri`) and the PC login (`--real-account`).
+- The own space and 装扮, 1.0.0 (26) (108-117): the account's own mid opens its own space (`lib/space/own/`, asked with
+  the app token; without one only 投稿 and 收藏, and 收藏's list asks for 授权): the 空间头图 banner with its NO. label
+  and 👕, frame and 大, 编辑资料, the 勋章 pills, LV with the exp bar; 主页 (收藏, 追番, 最近投币/点赞, 拥有的个性装扮,
+  the eye-slash on hidden sections), 投稿 (108's empty page), 收藏 (116), 追番 (117), each tab's pages kept across
+  switches; scrolled, the bar in the skin's `color_second_page`. 装扮 (`lib/skin/`): the equipped skin from the
+  official `/x/resource/show/skin`, its package from the CDN, md5-checked, unpacked and kept across launches, asked
+  at launch, login, 授权 and 我的's pull; 我的's header art (109; an mp4 header plays muted in a native view with no
+  audio track), 首页's top (110) and the bottom bar (art, the icons by position, a selected `.svga` icon played by
+  our own SVGA player, `lib/skin/svga/`). Not built (KaiC): 我的游戏. Toasts: 编辑资料, 勋章, 详情, 👕, search, ⋮,
+  追番 posters, 装扮 cards, 投币/点赞's 更多, 我要投稿, 去创作中心领奖.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
 1. KaiC's phone check of (20), then the milestone's closing build and both checklists.
-2. Next slice: the account's own space (KaiC: split from 我的), until then 我的's avatar and 空间 open the others'
-   layout. References: 108 (投稿), 114 (主页: 收藏 cards, 追番, then 115 scrolled: the black bar with the name and the
-   tabs pinned, 最近投币的视频, 最近点赞的视频, 我的游戏, 拥有的个性装扮), 116 (收藏: 我创建的收藏夹), 117 (追番: a
-   3-column grid, 再怎么找也没有啦); the banner is the 空间头图 theme item. Then 装扮, following the theme equipped in
-   the official app (`x/resource/show/skin`; 109 我的, 110 首页 and the bottom bar, 108 the space banner; the shop
-   111-113 stays the official app's), then 动态.
+2. Next slice: 动态 (KaiC's order after the own space and 装扮).
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- The own space and 装扮 on the phone (26): the skin is the Android package (the calls sign as the Android app), so
+  the log's `skin` line (files, extensions, sizes, colours, whether the bar is themed or its gaps) settles the formats,
+  the icon order (首页=main, 关注=channel, 消息=shop, 我的=myself, as the official app drops the middle one) and whether
+  the selected icons are `.svga`; `own space sections` tells if `fans_dress` or `collection_top_simple` came. Guesses:
+  the 装扮 cards' height and gradient (115 cuts them), 👕 and the banner shade without a label. Not built: skins that
+  only tint the stock icons (`tail_icon_mode` color), 我的游戏, the own space's verification line. 投稿 with videos
+  reloads when its tab comes back (`SpaceVideosSliver` keeps its own state). On the phone: music from another app keeps
+  playing over a skin's header video.
 - The drawn turn, shipped in 1.0.0 (15): (14)'s recording
   (`local/differences/10-ours-rotate-testing-v5.MP4`, measured with `tools/turn_video.py`) matched the official turn
   with 请求前关, the picture cut and the turn started at once. (15) keeps only that as 开发者 → 旋转动画 自绘, beside
@@ -186,6 +199,9 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     its glyphs in `tab_bar_icons.dart`), the avatar page (49), the shared shortcut glyphs and 最近打开.
   - `lib/me/`: 我的: `MeModel` over `MeApi` (`fake_me_api.dart` for tests and `--fake-account`), the page and header,
     its glyphs, and `official_link.dart` (a page opened in the official app).
+  - `lib/skin/`: 装扮: `SkinModel` (`AppServices.skin`) over `SkinApi` (`fake_skin_api.dart`'s drawn demo for tests and
+    `--fake-account`), the package's download, check and unpack (`skin_package.dart`), `Skin` (its files by role),
+    `svga/` and `SvgaView` (our SVGA player), and `SkinVideo` over `SkinVideoView.swift`.
   - `lib/search/`: 搜索: the page, the empty page and suggestions, `SearchModel` over `SearchApi` (`fake_search_api.dart`
     for tests and `--fake-account`), the history store, `search_glyphs.dart`, and `results/` (tabs, rows, 筛选, the ⋮
     sheet). `lib/video/link_opener.dart` opens a pasted link's video for 搜索 and `--play=`.
@@ -193,7 +209,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/space/`: UP主空间: `SpaceApi` (the official app's calls; `fake_space_api.dart` for tests and `--fake-account`),
     the route and `UploaderTap` / `openUploader` (the video page's sheet, else the space), `SpaceFollow` and
     `FollowBook` (关注 in step across pages), the uploader sheet, the space page (header, bar, tabs, the 取消关注 sheet)
-    and 投稿's list (`space_videos.dart`).
+    and 投稿's list (`space_videos.dart`). `own/`: the account's own space (the page, header, bar, the tab bodies and
+    `OwnPager`, one per tab, kept by the page).
   - `lib/favourites/`: 我的收藏 (folders, a folder, 视频, the 创建 page `new_folder_page.dart` that 稍后再看 shares).
   - `lib/watch_later/`: 稍后再看 (the list, its sheets and 批量管理).
   - `lib/account/app_auth*.dart`: the official login's token, its confirm, and the hand-off of Bilibili's confirm page
@@ -336,6 +353,11 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's
   `PlayerLoading`), never a spinning circle, except for loading more under a list and inside buttons, where the
   official app keeps the small system spinner too.
+- 装扮: the skin call needs the app token (none on the PC: `--fake-account` draws a stand-in skin into `skins_fake`).
+  Its package comes only from Bilibili's CDN hosts, and its URL never reaches a log or a file. A dressed screen waits
+  until its pictures decode and drops back to stock on any failure; an answer in an unknown shape keeps what is shown
+  (only an explicit "nothing equipped" clears it). The official art (skins, the own banner) is KaiC's, on his phone:
+  never in a fixture or a commit; tests draw stand-ins.
 - Two logins, split by host as PiliPlus does: a call to `app.bilibili.com` carries the app token (`access_key`) and
   the Android signature, never cookies (`bili_client_official.dart`); every other call carries the web login's cookies.
   The token never reaches a log, a fixture or an error message; an official account call without it throws
