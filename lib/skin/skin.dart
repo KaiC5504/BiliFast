@@ -27,6 +27,7 @@ final class Skin {
     this.tailIconsSelected = const [],
     this.pubButton,
     this.pubButtonSelected,
+    this.files = const {},
   });
 
   final SkinEquip equip;
@@ -50,6 +51,10 @@ final class Skin {
   final List<SkinIcon> tailIconsSelected;
   final SkinIcon? pubButton;
   final SkinIcon? pubButtonSelected;
+
+  /// Every file the package unpacked, by its name without the extension (the official app's key), roles above
+  /// included.
+  final Map<String, File> files;
 
   Color? get color => _color(equip.colors.color);
   Color? get tailColor => _color(equip.colors.tailColor);

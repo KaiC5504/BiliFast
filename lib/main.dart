@@ -114,7 +114,8 @@ Future<void> main(List<String> args) async {
     watchLaterApi: fakeAccount ? FakeWatchLaterApi.demo() : null,
     meApi: fakeAccount ? FakeMeApi.demo() : null,
     skinApi: fakeAccount ? FakeSkinApi.demo() : null,
-    skinFolder: supportFilePath('skins'),
+    // The demo skin keeps a folder of its own, so a later run never starts from it.
+    skinFolder: supportFilePath(fakeAccount ? 'skins_fake' : 'skins'),
     appAuth: appAuth,
     navigator: navigator,
     searchHistory: searchHistory,
@@ -122,7 +123,8 @@ Future<void> main(List<String> args) async {
     logFiles: logFiles,
     logs: logs,
   );
-  unawaited(services.skin.start());
+  // Only the cache read is awaited, so the first frame has the theme; the check runs on.
+  await services.skin.start();
   runApp(BiliFastApp(services: services, initialLink: _argument(args, '--play=')));
 }
 
