@@ -178,7 +178,7 @@ Open items, each waiting on its slice:
 - (31) on the phone: `cover format` should read avif and `feed covers done` show decodeMsMax with thirdMs/lastMs
   below (30)'s (615-1120 / 796-1790 ms); any `avif decode failed`/`avif off` means ImageIO or the Swift side failed
   (the covers then come as webp). Covers are only checked live on the phone: the PC's fake lists have none.
-- (30) on the phone, passed (KaiC, 2026-10-23) apart from the seek TV's eyes against the official app; still to read:
+- (30) on the phone, passed (KaiC, 2026-10-23: status bar, brightness, seek TV); still to read:
   `feed covers done` with warm/warmed and thirdMs/lastMs against (29)'s; `skin status bar` for
   幸运塔罗星 (home, me, meNoCard and their picks: white expected); the brightness after full screen and after leaving
   the app; the seek TV's eyes and blink against the official app (102 shows the iPhone's eyes pausing and topping out
