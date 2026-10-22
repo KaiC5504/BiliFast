@@ -6,6 +6,7 @@ import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/home/feed_model.dart' show requestFailureMessage;
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_model.dart';
+import 'package:bilifast/me/me_profile_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,6 +29,15 @@ class _Environment extends ChangeNotifier implements AppEnvironment {
 
   @override
   bool accountCheckFailed = false;
+
+  @override
+  int? mid;
+
+  @override
+  final CookieJar cookies = CookieJar();
+
+  @override
+  ({NavInfo nav, DateTime at})? accountNav;
 
   /// How often the account was asked to be checked again.
   int checks = 0;
@@ -66,9 +76,10 @@ void main() {
     logger = Logger(session: 'test')..add(sink);
   });
 
-  MeModel make({Account account = loggedIn}) {
-    environment = _Environment(account);
-    final model = MeModel(api: api, environment: environment, now: () => clock, logger: logger);
+  MeModel make({Account account = loggedIn, MeProfileStore? store, int? mid, String? cookieMid}) {
+    environment = _Environment(account)..mid = mid;
+    if (cookieMid != null) environment.cookies.set('DedeUserID', cookieMid);
+    final model = MeModel(api: api, environment: environment, store: store, now: () => clock, logger: logger);
     addTearDown(model.dispose);
     return model;
   }
@@ -413,5 +424,253 @@ void main() {
     environment.logins.value += 1;
     await idle();
     expect(api.calls, isEmpty);
+  });
+
+  group('the kept account', () {
+    const keptProfile = MeProfile(
+      mid: 1,
+      name: '上次的名字',
+      face: 'https://i0.hdslb.com/bfs/face/kept.jpg',
+      level: 4,
+      coins: 12,
+      bcoin: 0,
+    );
+    const kept = MeShown(keptProfile, MeCounts(dynamics: 1, following: 2, followers: 3));
+
+    MeProfileStore keeping({int mid = 1}) => MeProfileStore.memory(logger: logger)..save(mid, kept);
+
+    test(
+      'at launch, before the check answers, the login cookie\'s account shows at once; the load replaces it',
+      () async {
+        final store = keeping();
+        final model = make(account: const AccountUnknown(), store: store, cookieMid: '1');
+        expect(model.view, kept, reason: 'not MeLoading');
+
+        final hold = api.holds['nav'] = Completer<void>();
+        var notified = 0;
+        model.addListener(() => notified++);
+        model.shown();
+        await idle();
+        expect(model.view, kept, reason: 'it stays while the load is out');
+        expect(notified, 0);
+
+        hold.complete();
+        await idle();
+        expect(shownView(model).profile.name, '测试账号');
+        expect(store.kept?.view, model.view, reason: 'every answer is kept');
+        expect(store.kept?.mid, 1);
+      },
+    );
+
+    test('logged in, the check\'s mid decides', () {
+      expect(make(store: keeping(), mid: 1).view, kept);
+      expect(
+        make(store: keeping(), mid: 1, cookieMid: '2').view,
+        kept,
+        reason: 'the check wins over the cookie',
+      );
+    });
+
+    test('a failed load keeps it, as a failed pull keeps the page', () async {
+      api.failures['nav'] = const BiliError.network('SocketException');
+      final model = make(store: keeping(), mid: 1);
+      model.shown();
+      await idle();
+      expect(model.view, kept);
+      expect(await model.refresh(), '网络连接失败，请检查网络后重试');
+      expect(model.view, kept);
+    });
+
+    test('another account\'s is never shown, and is deleted', () async {
+      final store = keeping(mid: 2);
+      final model = make(account: const AccountUnknown(), store: store, cookieMid: '1');
+      expect(model.view, isA<MeLoading>());
+      expect(store.kept, isNull);
+
+      final other = keeping(mid: 2);
+      expect(make(store: other, mid: 1).view, isA<MeLoading>());
+      expect(other.kept, isNull);
+    });
+
+    test('with no mid known it isn\'t shown, nor deleted', () {
+      final store = keeping();
+      expect(make(account: const AccountUnknown(), store: store).view, isA<MeLoading>());
+      expect(store.kept, isNotNull);
+    });
+
+    for (final account in const [LoggedOut(), LoginExpired()]) {
+      test('a launch ${account.runtimeType} never shows it and deletes it', () {
+        final store = keeping();
+        expect(make(account: account, store: store, cookieMid: '1').view, isA<MeLoggedOut>());
+        expect(store.kept, isNull);
+      });
+
+      test('turning ${account.runtimeType} deletes it', () {
+        final store = keeping();
+        final model = make(store: store, mid: 1);
+        expect(model.view, kept);
+        environment.account = account;
+        expect(model.view, isA<MeLoggedOut>());
+        expect(store.kept, isNull);
+      });
+    }
+
+    test('nav saying logged out deletes it', () async {
+      final store = keeping();
+      api.navInfo = const NavInfo(isLogin: false);
+      final model = make(store: store, mid: 1);
+      await model.refresh();
+      expect(model.view, isA<MeLoggedOut>());
+      expect(store.kept, isNull);
+    });
+
+    test('a login deletes it and loads afresh', () async {
+      final store = keeping();
+      final model = make(account: const LoggedOut(), store: store);
+      expect(store.kept, isNull);
+      store.save(1, kept);
+
+      api.navInfo = const NavInfo(isLogin: true, mid: 2, uname: '另一个账号');
+      environment.account = const AccountUnknown();
+      environment
+        ..mid = 2
+        ..account = const LoggedIn(name: '另一个账号', vip: false);
+      expect(model.view, isA<MeLoading>());
+      expect(store.kept, isNull);
+      await idle();
+      expect(store.kept?.mid, 2);
+      expect(store.kept?.view.profile.name, '另一个账号');
+    });
+
+    test('the check finding another account than the one shown drops it at once and loads that one', () async {
+      final store = keeping();
+      api.navInfo = const NavInfo(isLogin: true, mid: 2, uname: '另一个账号');
+      final model = make(account: const AccountUnknown(), store: store, cookieMid: '1');
+      expect(model.view, kept);
+
+      environment
+        ..mid = 2
+        ..account = const LoggedIn(name: '另一个账号', vip: false);
+      expect(model.view, isA<MeLoading>());
+      expect(store.kept, isNull);
+      await idle();
+      expect(shownView(model).profile.name, '另一个账号');
+      environment.logins.value += 1;
+      await idle();
+      expect(api.calls, hasLength(2), reason: 'one load');
+    });
+
+    test('the check finding the same account leaves it be', () async {
+      final model = make(account: const AccountUnknown(), store: keeping(), cookieMid: '1');
+      environment
+        ..mid = 1
+        ..account = loggedIn;
+      await idle();
+      expect(model.view, kept);
+      expect(api.calls, isEmpty);
+    });
+  });
+
+  group('the background load', () {
+    test('once, logged in or unknown, and it counts toward the gap', () async {
+      final model = make(account: const AccountUnknown());
+      model.preload();
+      await idle();
+      expect(api.calls, unorderedEquals(['nav', 'stat']));
+      expect(model.view, isA<MeShown>());
+
+      model.preload();
+      clock = clock.add(const Duration(seconds: 29));
+      model.shown();
+      await idle();
+      expect(api.calls, hasLength(2), reason: 'opening within 30 s asks nothing');
+
+      clock = clock.add(const Duration(seconds: 1));
+      model.shown();
+      await idle();
+      expect(api.calls, hasLength(4), reason: 'later, the quiet reload as before');
+      model.preload();
+      await idle();
+      expect(api.calls, hasLength(4), reason: 'never twice');
+    });
+
+    test('not after another load', () async {
+      final model = make();
+      await model.refresh();
+      model.preload();
+      await idle();
+      expect(api.calls, hasLength(2));
+    });
+
+    for (final account in const [LoggedOut(), LoginExpired()]) {
+      test('${account.runtimeType}, it asks nothing', () async {
+        make(account: account).preload();
+        await idle();
+        expect(api.calls, isEmpty);
+      });
+    }
+
+    test('a failed one leaves opening the page to try again; it keeps the kept account meanwhile', () async {
+      const keptView = MeShown(MeProfile(mid: 1, name: '上次的名字', face: '', level: 4, coins: 0, bcoin: 0), null);
+      api.failures['nav'] = const BiliError.network('SocketException');
+      final model = make(store: MeProfileStore.memory()..save(1, keptView), mid: 1);
+      model.preload();
+      await idle();
+      expect(model.view, keptView);
+
+      api.failures.clear();
+      clock = clock.add(const Duration(seconds: 1));
+      model.shown();
+      await idle();
+      expect(api.calls.where((call) => call == 'nav'), hasLength(2));
+      expect(shownView(model).profile.name, '测试账号');
+    });
+
+    test('the account check\'s nav, when fresh, stands in for its own: it asks stat only', () async {
+      final model = make(mid: 1);
+      environment.accountNav = (nav: renamed, at: clock.subtract(const Duration(seconds: 3)));
+      model.preload();
+      await idle();
+      expect(api.calls, ['stat']);
+      final view = shownView(model);
+      expect(view.profile, MeProfile.fromNav(renamed));
+      expect(view.counts, demoCounts);
+
+      clock = clock.add(const Duration(seconds: 30));
+      await model.refresh();
+      expect(api.calls, ['stat', 'stat', 'nav'], reason: 'a pull asks both');
+    });
+
+    test('an account check\'s nav 30 s old or more is asked again', () async {
+      final model = make(mid: 1);
+      environment.accountNav = (nav: renamed, at: clock.subtract(const Duration(seconds: 30)));
+      model.preload();
+      await idle();
+      expect(api.calls, unorderedEquals(['nav', 'stat']));
+      expect(shownView(model).profile.name, '测试账号');
+    });
+
+    test('a showing and a pull ask nav themselves, fresh check or not', () async {
+      final model = make(mid: 1);
+      environment.accountNav = (nav: renamed, at: clock);
+      model.shown();
+      await idle();
+      expect(api.calls, unorderedEquals(['nav', 'stat']));
+      expect(shownView(model).profile.name, '测试账号');
+    });
+  });
+
+  test('nothing of the account reaches the log', () async {
+    final store = MeProfileStore.memory(logger: logger);
+    final model = make(account: const AccountUnknown(), store: store, cookieMid: '1');
+    environment.accountNav = (nav: api.navInfo, at: clock);
+    model.preload();
+    await idle();
+    await model.refresh();
+    environment.account = const LoggedOut();
+    final logged = sink.events.map((event) => '${event.toJson()}').join();
+    for (final secret in ['测试账号', 'noface', 'hdslb', '"mid"']) {
+      expect(logged, isNot(contains(secret)));
+    }
   });
 }
