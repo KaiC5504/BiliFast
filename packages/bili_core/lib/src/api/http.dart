@@ -6,8 +6,14 @@ import 'package:http/http.dart' as http;
 import 'bili_hosts.dart';
 
 final class HTTPRequest {
-  HTTPRequest({required this.url, Map<String, String>? headers, this.method = 'GET', this.body, this.timeout})
-    : headers = headers ?? {};
+  HTTPRequest({
+    required this.url,
+    Map<String, String>? headers,
+    this.method = 'GET',
+    this.body,
+    this.timeout,
+    this.abort,
+  }) : headers = headers ?? {};
 
   final Uri url;
   final Map<String, String> headers;
@@ -16,6 +22,10 @@ final class HTTPRequest {
 
   /// Overrides the transport's timeout for this request only.
   final Duration? timeout;
+
+  /// Completing it cancels the request at whatever hop it is on. The timeout bounds each wait, not the whole, so a
+  /// caller with a deadline for the whole request cancels it with this.
+  final Future<void>? abort;
 }
 
 final class HTTPResponse {
@@ -55,7 +65,13 @@ final class ClientHTTPTransport implements HTTPTransport {
   static HTTPRequest redirectedRequest(HTTPRequest request) {
     if (BiliHosts.isBilibili(request.url.host)) return request;
     final headers = Map.of(request.headers)..removeWhere((name, _) => name.toLowerCase() == 'cookie');
-    return HTTPRequest(url: request.url, headers: headers, method: request.method, timeout: request.timeout);
+    return HTTPRequest(
+      url: request.url,
+      headers: headers,
+      method: request.method,
+      timeout: request.timeout,
+      abort: request.abort,
+    );
   }
 
   @override
@@ -64,7 +80,9 @@ final class ClientHTTPTransport implements HTTPTransport {
     for (var hop = 0; ; hop++) {
       // A timed-out request is aborted, not left running behind the TimeoutException.
       final abort = Completer<void>();
-      final outgoing = http.AbortableRequest(current.method, current.url, abortTrigger: abort.future)
+      final cancelled = current.abort;
+      final trigger = cancelled == null ? abort.future : Future.any([abort.future, cancelled]);
+      final outgoing = http.AbortableRequest(current.method, current.url, abortTrigger: trigger)
         ..followRedirects = false
         ..headers.addAll(current.headers);
       final body = current.body;
@@ -105,9 +123,10 @@ final class ClientHTTPTransport implements HTTPTransport {
         method: request.method,
         body: request.body,
         timeout: request.timeout,
+        abort: request.abort,
       );
     }
     final headers = Map.of(request.headers)..removeWhere((name, _) => name.toLowerCase() == 'content-type');
-    return HTTPRequest(url: next, headers: headers, timeout: request.timeout);
+    return HTTPRequest(url: next, headers: headers, timeout: request.timeout, abort: request.abort);
   }
 }

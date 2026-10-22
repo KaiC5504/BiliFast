@@ -260,5 +260,33 @@ void main() {
         const Duration(seconds: 7),
       );
     });
+
+    test("a request's abort cancels it on whatever hop it is, and the transport's own timeout still does", () async {
+      final triggers = <Future<void>?>[];
+      final client = MockClient.streaming((request, _) async {
+        final trigger = (request as http.Abortable).abortTrigger;
+        triggers.add(trigger);
+        if (request.url.path == '/a') {
+          return http.StreamedResponse(const Stream.empty(), 302, headers: {'location': 'https://evil.example/b'});
+        }
+        final answer = Completer<http.StreamedResponse>();
+        unawaited(trigger?.then((_) => answer.completeError(http.RequestAbortedException(request.url))));
+        return answer.future;
+      });
+      final transport = ClientHTTPTransport(client: client, timeout: const Duration(seconds: 10));
+      final abort = Completer<void>();
+      final sent = transport.send(HTTPRequest(url: Uri.parse('https://api.bilibili.com/a'), abort: abort.future));
+      await pumpEventQueue();
+      expect(triggers, hasLength(2), reason: 'the redirect off Bilibili carries it too');
+      abort.complete();
+      await expectLater(sent, throwsA(isA<http.RequestAbortedException>()));
+
+      triggers.clear();
+      final timed = ClientHTTPTransport(client: client, timeout: const Duration(milliseconds: 50));
+      await expectLater(
+          timed.send(HTTPRequest(url: Uri.parse('https://api.bilibili.com/b'), abort: Completer<void>().future)),
+          throwsA(isA<TimeoutException>()));
+      await expectLater(triggers.single, completes, reason: 'timed out, the request is aborted');
+    });
   });
 }
