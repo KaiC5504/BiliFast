@@ -77,13 +77,17 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     if (_environment.account is LoggedIn) unawaited(refresh());
   }
 
-  /// Asks for the equipped skin again; a call while one is out joins it.
+  /// Asks for the equipped skin again; a call while one is out joins it. Never throws: pages fire it unawaited.
   Future<void> refresh() {
     if (_refreshing case final running?) return running;
     late final Future<void> run;
-    run = _refresh(_generation).whenComplete(() {
-      if (identical(_refreshing, run)) _refreshing = null;
-    });
+    run = _refresh(_generation)
+        .catchError((Object error) {
+          _logger.warn(LogCategory.ui, 'skin refresh failed, keeping what is shown', {'error': _describe(error)});
+        })
+        .whenComplete(() {
+          if (identical(_refreshing, run)) _refreshing = null;
+        });
     return _refreshing = run;
   }
 

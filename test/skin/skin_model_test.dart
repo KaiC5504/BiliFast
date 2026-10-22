@@ -7,6 +7,7 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/skin/fake_skin_api.dart';
+import 'package:bilifast/skin/skin.dart';
 import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/skin/skin_package.dart';
 import 'package:crypto/crypto.dart';
@@ -28,10 +29,50 @@ class _Environment extends ChangeNotifier implements AppEnvironment {
   }
 
   @override
-  final ValueNotifier<int> logins = ValueNotifier(0);
+  final _Logins logins = _Logins();
+
+  /// How many listeners were added, so a model can be shown to listen to nothing before it starts.
+  int listening = 0;
+
+  @override
+  void addListener(VoidCallback listener) {
+    listening++;
+    super.addListener(listener);
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Logins extends ValueNotifier<int> {
+  _Logins() : super(0);
+
+  int listening = 0;
+
+  @override
+  void addListener(VoidCallback listener) {
+    listening++;
+    super.addListener(listener);
+  }
+}
+
+/// A stand-in as other pages' tests make one: a fixed value, a refresh that asks nothing.
+class _FixedSkinModel extends SkinModel {
+  _FixedSkinModel(this._skin, {required super.environment}) : super(api: FakeSkinApi(), folder: null);
+
+  Skin? _skin;
+  int refreshes = 0;
+
+  @override
+  Skin? get value => _skin;
+
+  set skin(Skin? skin) {
+    _skin = skin;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> refresh() async => refreshes++;
 }
 
 /// A transport error whose words end with the request's URL, as dart:io's do.
@@ -473,6 +514,50 @@ void main() {
     expect(files, contains('tail_bg webp 2'));
     expect(files, contains('tail_icon_selected_main svga 2'));
     expect(allLogText(), isNot(contains('hdslb')));
+  });
+
+  test('made, it listens to nothing and asks nothing until start', () async {
+    final api = apiWith(1);
+    final (:model, :environment) = make(api);
+    await pumpEventQueue();
+    expect(environment.listening, 0);
+    expect(environment.logins.listening, 0);
+    expect(api.calls, isEmpty);
+    expect(model.value, isNull);
+
+    await settle(model);
+    expect(environment.listening, 1);
+    expect(environment.logins.listening, 1);
+  });
+
+  test('a subclass can stand in with its own value and refresh', () async {
+    final environment = _Environment(loggedIn);
+    final model = _FixedSkinModel(null, environment: environment);
+    addTearDown(model.dispose);
+    var notified = 0;
+    model.addListener(() => notified++);
+    final skin = Skin(equip: equipFor(const [1]));
+    model.skin = skin;
+    await model.refresh();
+    expect(model.value, same(skin));
+    expect(notified, 1);
+    expect(model.refreshes, 1);
+    expect(environment.listening, 0);
+  });
+
+  test('refresh never throws, even when nothing can be written', () async {
+    final blocked = File('${folder.path}/blocked')..writeAsStringSync('a file where the folder should be');
+    final api = apiWith(1);
+    final environment = _Environment(loggedIn);
+    final model = SkinModel(api: api, environment: environment, folder: blocked.path, logger: logger);
+    addTearDown(model.dispose);
+    await model.start();
+    await expectLater(model.refresh(), completes);
+    expect(model.value, isNull);
+
+    api.equip = null;
+    await expectLater(model.refresh(), completes);
+    expect(model.value, isNull);
   });
 
   test('a cache that can\'t be read starts stock', () async {
