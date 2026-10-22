@@ -264,8 +264,15 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 
 - Public repo. Never commit, print or log secrets, cookies, tokens, signed playurl responses, or anything in `local/`
   or `logs/` (both gitignored). The build log and artifacts are public too.
-- KaiC's Bilibili account: no second login (the one exception, KaiC's call in slice 13: the app token, confirmed once with
-  the web login), few live calls, no loops against the API. Tests never touch the network.
+- KaiC's Bilibili account: no second login (the exceptions, KaiC's calls: the app token in slice 13, confirmed once with
+  the web login; and one Windows login, 2026-10-22, below), few live calls, no loops against the API. Tests never
+  touch the network.
+- The Windows login (KaiC: "make sure you won't do anything that could get it restricted"): the website's QR login,
+  scanned in the official app, kept DPAPI-encrypted in the support folder's `login.bin`. Every call the Windows
+  `BiliClient` makes passes `GuardedTransport`: writes refused unsent (only `/login/exit/v2`), reads paced (8 at
+  once, then one a second), 200 a run at most. Never loosen the guard to test something: a write is checked under
+  `--fake-account`. On Windows, 退出登录 also ends the session on Bilibili's side. No app token on the PC. Logged
+  in, a Windows check opens at most 3 videos and reads only.
 - No Mac: iOS checks run in GitHub Actions and on his phone.
 - Layout comes only from the official app's screenshots (`local/official-app-reference/`, his iPhone 17 Pro Max,
   440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or
