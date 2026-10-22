@@ -14,8 +14,8 @@ abstract interface class DeviceControls {
   /// Volume changes from the hardware buttons while full screen keeps the system HUD away.
   Stream<double> get hardwareVolume;
 
-  /// Puts up the hidden volume view; [leaveFullScreen] takes it down. A brightness set in full screen stays after
-  /// both (KaiC, 2026-10-23).
+  /// Puts up the hidden volume view; [leaveFullScreen] takes it down. A brightness set in full screen is kept after
+  /// leaving it (spec 4.4).
   Future<void> enterFullScreen();
 
   Future<void> leaveFullScreen();
