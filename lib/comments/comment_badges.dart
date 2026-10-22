@@ -466,7 +466,7 @@ class _ThumbPainter extends CustomPainter {
 }
 
 /// Transparent art (pendants, fan cards) at its own aspect with nothing behind it, faded in once it arrives.
-class DecorImage extends StatelessWidget {
+class DecorImage extends StatefulWidget {
   const DecorImage(this.url, {super.key, this.alignment = Alignment.center, this.fit = BoxFit.contain});
 
   final String url;
@@ -474,21 +474,36 @@ class DecorImage extends StatelessWidget {
   final BoxFit fit;
 
   @override
-  Widget build(BuildContext context) => Image(
-    image: StoredNetworkImage(secureImageUrl(url), headers: BiliClient.mediaHeaders, still: false),
-    fit: fit,
-    alignment: alignment,
-    width: double.infinity,
-    height: double.infinity,
-    gaplessPlayback: true,
-    frameBuilder: (context, child, frame, synchronous) => synchronous
-        ? child
-        : AnimatedOpacity(
-            opacity: frame == null ? 0 : 1,
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            child: child,
-          ),
-    errorBuilder: (context, error, stack) => const SizedBox.shrink(),
-  );
+  State<DecorImage> createState() => _DecorImageState();
+}
+
+class _DecorImageState extends State<DecorImage> {
+  /// The address a frame has shown for: when the page comes back after the memory cache let it go, the Image asks
+  /// again and its new stream starts with no frame, but gapless playback still paints the old one, so it stays up
+  /// (RemoteImage's faces do the same).
+  String? _shown;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = secureImageUrl(widget.url);
+    return Image(
+      image: StoredNetworkImage(address, headers: BiliClient.mediaHeaders, still: false),
+      fit: widget.fit,
+      alignment: widget.alignment,
+      width: double.infinity,
+      height: double.infinity,
+      gaplessPlayback: true,
+      frameBuilder: (context, child, frame, synchronous) {
+        if (frame != null) _shown = address;
+        if (synchronous) return child;
+        return AnimatedOpacity(
+          opacity: _shown == address ? 1 : 0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          child: child,
+        );
+      },
+      errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+    );
+  }
 }

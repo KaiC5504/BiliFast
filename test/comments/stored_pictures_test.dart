@@ -49,6 +49,36 @@ void main() {
     await pictures.drop(tester);
   });
 
+  testWidgets('an avatar frame stays up while it reloads after its page comes back', (tester) async {
+    final pictures = await StoredPictures.keep(tester);
+    Widget frame({required bool ticking}) => TickerMode(
+      enabled: ticking,
+      child: const Center(
+        child: SizedBox.square(dimension: 60, child: DecorImage('//i0.hdslb.com/bfs/garb/item/pendant.gif')),
+      ),
+    );
+    double opacity() => tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity)).opacity;
+
+    await show(tester, frame(ticking: true));
+    await StoredPictures.arrive(tester);
+    expect(opacity(), 1);
+
+    // The page covered while iOS empties the memory cache (leaving the app does it too), then shown again.
+    await show(tester, frame(ticking: false));
+    PaintingBinding.instance.imageCache
+      ..clear()
+      ..clearLiveImages();
+    await show(tester, frame(ticking: true));
+    await tester.pump();
+    expect(opacity(), 1, reason: 'the frame shown before stays up while it is read back');
+    expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull);
+
+    await StoredPictures.arrive(tester);
+    expect(opacity(), 1);
+    expect(pictures.downloads, hasLength(1), reason: 'read back from the phone, not downloaded again');
+    await pictures.drop(tester);
+  });
+
   testWidgets("a comment's pictures come from the pictures kept on the phone, and the viewer shows the list's own "
       'thumbnail while its picture loads', (tester) async {
     final pictures = await StoredPictures.keep(tester);
