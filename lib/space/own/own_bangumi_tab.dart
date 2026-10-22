@@ -1,7 +1,6 @@
 import 'package:bili_core/api.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../app/app_scope.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../space_api.dart';
@@ -11,60 +10,58 @@ import 'own_tab_paging.dart';
 /// 追番 (117): three posters a row with the title and progress over each, paged, ending in 再怎么找也没有啦. 番剧 isn't
 /// built, so a poster says so.
 class OwnBangumiSliver extends StatefulWidget {
-  const OwnBangumiSliver({super.key, required this.mid});
+  const OwnBangumiSliver({super.key, required this.pager});
 
-  final int mid;
+  final OwnBangumiPager pager;
 
   static const endMessage = '再怎么找也没有啦';
+
+  /// What the posters lie on.
+  static const fill = OwnSpaceTabsTheme.greyPage;
 
   @override
   State<OwnBangumiSliver> createState() => _OwnBangumiSliverState();
 }
 
-class _OwnBangumiSliverState extends State<OwnBangumiSliver> with OwnPaging<OwnBangumiSliver, SpaceBangumiCard> {
-  late SpaceApi _api;
-  bool _started = false;
+/// 追番's posters, kept by the page. The call needs the app token.
+final class OwnBangumiPager extends OwnPager<SpaceBangumiCard> {
+  OwnBangumiPager({required this.api, required this.mid, super.authorize});
+
+  final SpaceApi api;
+  final int mid;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_started) return;
-    _started = true;
-    _api = AppScope.of(context).spaceApi;
-    restartPaging();
-  }
-
-  @override
-  void didUpdateWidget(OwnBangumiSliver oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.mid != widget.mid) restartPaging();
-  }
-
-  @override
-  String get pagingName => 'own bangumi';
+  String get name => 'own bangumi';
 
   @override
   Object idOf(SpaceBangumiCard item) => item.seasonId;
 
   @override
   Future<OwnPage<SpaceBangumiCard>> fetchPage(int page) async {
-    final answer = await _api.bangumi(widget.mid, page: page);
+    final answer = await api.bangumi(mid, page: page);
     return (items: answer.items, hasMore: answer.hasMore);
   }
+}
+
+class _OwnBangumiSliverState extends State<OwnBangumiSliver> with OwnPagerView<OwnBangumiSliver, SpaceBangumiCard> {
+  @override
+  OwnBangumiPager get pager => widget.pager;
 
   @override
   Widget build(BuildContext context) {
-    final posters = items;
+    final pager = this.pager;
+    final posters = pager.items;
+    final failed = pager.failed;
     final rows = (posters.length + 2) ~/ 3;
     final end = ownStyle(OwnSpaceTabsTheme.endText, OwnSpaceTabsTheme.endInk, line: OwnSpaceTabsTheme.endLine);
     const endTop = OwnSpaceTabsTheme.endCentre - OwnSpaceTabsTheme.endLine / 2;
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: OwnSpaceTabsTheme.greyPage),
+      decoration: const BoxDecoration(color: OwnBangumiSliver.fill),
       sliver: SliverMainAxisGroup(
         slivers: [
-          if (posters.isEmpty && (!loaded || failed))
+          if (posters.isEmpty && (!pager.loaded || failed))
             SliverToBoxAdapter(
-              child: OwnFirstLoad(keyPrefix: 'own-bangumi', failed: failed, onRetry: retryPaging),
+              child: OwnFirstLoad(keyPrefix: 'own-bangumi', failed: failed, onRetry: pager.retry),
             )
           else ...[
             SliverPadding(
@@ -97,9 +94,9 @@ class _OwnBangumiSliverState extends State<OwnBangumiSliver> with OwnPaging<OwnB
               ),
             ),
             SliverToBoxAdapter(
-              child: loading || failed
-                  ? OwnPagingFooter(keyPrefix: 'own-bangumi', failed: failed, onRetry: retryPaging)
-                  : !hasMore
+              child: pager.loading || failed
+                  ? OwnPagingFooter(keyPrefix: 'own-bangumi', failed: failed, onRetry: pager.retry)
+                  : !pager.hasMore
                   ? Padding(
                       padding: const EdgeInsets.only(top: endTop, bottom: OwnSpaceTabsTheme.endBottom),
                       child: Text(

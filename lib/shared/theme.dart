@@ -5050,7 +5050,7 @@ abstract final class AppAuthTheme {
 }
 
 /// The account's own space (108, 115): the tall banner, 编辑资料, the name line's pills, the level's exp bar and the
-/// black bar scrolled.
+/// bar scrolled.
 abstract final class OwnSpaceTheme {
   /// The banner's bottom edge, measured on 108. The face, the counts and 编辑资料 sit where others' spaces have them
   /// (SpaceTheme), [drop] lower.
@@ -5059,9 +5059,9 @@ abstract final class OwnSpaceTheme {
   static const topBlock = SpaceTheme.topBlock + drop;
 
   /// The 空间头图's label over the banner's foot: a 40 pt band shading from clear at 270 to 60% black at the right edge;
-  /// the title (11 pt) ending 390, over the number ending 389.33, their middles 27.83 and 11.67 above the banner's
-  /// foot; then a 1 × 10 rule of 40% white 9 after them, its middle 20 above the foot, and 👕 (17.33 × 15.33 of
-  /// 1.33 pt line) centred 418 across and 20.33 above the foot.
+  /// the title (11 pt) set to end 390.67, its last glyph's ink ending 390 as on 108, over the number ending 389.33,
+  /// their middles 27.83 and 11.67 above the banner's foot; then a 1 × 10 rule of 40% white 9 after them, its middle
+  /// 20 above the foot, and 👕 (17.33 × 15.33 of 1.33 pt line) centred 418 across and 20.33 above the foot.
   static const labelShade = 40.0;
   static const labelShadeLeft = 270.0;
   static const labelShadeClear = Color(0x00000000);

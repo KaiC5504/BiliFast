@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
+import 'package:bilifast/account/app_auth.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
@@ -11,6 +12,7 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
+import 'package:bilifast/space/fake_space_api.dart';
 import 'package:bilifast/space/own/own_bangumi_tab.dart';
 import 'package:bilifast/space/own/own_contribute_tab.dart';
 import 'package:bilifast/space/own/own_favourites_tab.dart';
@@ -22,6 +24,7 @@ import 'package:bilifast/space/space_route.dart';
 import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -68,14 +71,15 @@ SpaceProfile _profile({
       : null,
 );
 
-/// The space calls: the own one and anyone's, each answered with [answer]; [ownFailure] and [profileFailure] make
-/// them throw, [hold] keeps the own one waiting. The lists answer empty.
+/// The space calls: the own one and anyone's, each answered with [answer]; [ownFailure], [profileFailure] and
+/// [bangumiFailure] make them throw, [hold] keeps the own one waiting. The lists answer empty.
 final class _Api implements SpaceApi {
   _Api(this.answer);
 
   SpaceProfile answer;
   Object? ownFailure;
   Object? profileFailure;
+  Object? bangumiFailure;
   Completer<void>? hold;
   final calls = <String>[];
 
@@ -95,8 +99,11 @@ final class _Api implements SpaceApi {
   }
 
   @override
-  Future<SpaceBangumiPage> bangumi(int mid, {required int page}) async =>
-      const SpaceBangumiPage(items: [], hasMore: false, total: 0);
+  Future<SpaceBangumiPage> bangumi(int mid, {required int page}) async {
+    calls.add('bangumi mid=$mid page=$page');
+    if (bangumiFailure case final failure?) throw failure;
+    return const SpaceBangumiPage(items: [], hasMore: false, total: 0);
+  }
 
   @override
   Future<SpaceVideoPage> videos(int mid, {required SpaceOrder order, String? next}) async =>
@@ -119,13 +126,34 @@ Skin _skin({bool primaryOnly = false}) => Skin(
   ),
 );
 
+/// Authorized when asked, counting the asks; [onAsk] runs as the token comes.
+final class _CountingAuth extends FakeAppAuth {
+  _CountingAuth() : super(authorized: false);
+
+  int asks = 0;
+  VoidCallback? onAsk;
+
+  @override
+  Future<bool> request(BuildContext context) {
+    asks++;
+    onAsk?.call();
+    return super.request(context);
+  }
+}
+
 void main() {
   final logger = Logger(session: 'test')..add(MemorySink());
   late _Api api;
+  late FakeFavouritesApi favourites;
+  late _CountingAuth auth;
   late ValueNotifier<Skin?> skin;
 
   setUp(() {
     api = _Api(_profile());
+    favourites = FakeFavouritesApi(
+      folders: const [FavFolder(id: 9, title: '默认收藏夹', count: 0, isPrivate: false, contains: false, isDefault: true)],
+    );
+    auth = _CountingAuth();
     skin = ValueNotifier(null);
   });
 
@@ -160,7 +188,8 @@ void main() {
       recents: await RecentStore.load(null, logger: logger),
       pageApi: FakePageApi(),
       spaceApi: api,
-      favouritesApi: FakeFavouritesApi(),
+      favouritesApi: favourites,
+      appAuth: auth,
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -203,14 +232,18 @@ void main() {
       recents: await RecentStore.load(null, logger: logger),
       pageApi: FakePageApi(),
       spaceApi: api,
-      favouritesApi: FakeFavouritesApi(),
+      favouritesApi: favourites,
+      appAuth: auth,
     );
     final navigator = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(
-        navigatorKey: navigator,
-        builder: (context, child) => AppScope(services: services, child: child!),
-        home: const Text('home'),
+      RepaintBoundary(
+        key: const ValueKey('screen'),
+        child: MaterialApp(
+          navigatorKey: navigator,
+          builder: (context, child) => AppScope(services: services, child: child!),
+          home: const Text('home'),
+        ),
       ),
     );
     unawaited(
@@ -294,8 +327,11 @@ void main() {
   });
 
   testWidgets('without the app token the space is asked as anyone\'s: the header draws what it has', (tester) async {
+    final logs = MemorySink();
+    Logger.shared.add(logs);
+    addTearDown(() => Logger.shared.remove(logs));
     api
-      ..answer = _profile(own: false)
+      ..answer = _profile(own: false, defaultTab: SpaceTabKind.home)
       ..ownFailure = BiliError.noAppToken;
     await showOwn(tester);
     expect(api.calls, ['ownProfile mid=$_mid', 'profile mid=$_mid']);
@@ -305,6 +341,67 @@ void main() {
     expect(key('own-space-exp'), findsNothing, reason: 'no exp without the extras');
     expect(key('own-space-label-title'), findsNothing);
     expect(key('space-retry'), findsNothing);
+    expect(logs.events.where((event) => event.msg == 'own space without app token'), hasLength(1));
+    expect(logs.events.where((event) => event.msg == 'own space sections'), isEmpty);
+
+    // 主页 would be empty and 追番 can only fail, so neither is offered, and the default 主页 opens 投稿.
+    expect(key('space-tab-home'), findsNothing);
+    expect(key('space-tab-bangumi'), findsNothing);
+    expect(key('space-tab-contribute'), findsOneWidget);
+    expect(key('space-tab-favourite'), findsOneWidget);
+    expectSelected(tester, SpaceTabKind.contribute);
+    expect(find.byType(OwnContributeSliver, skipOffstage: false), findsOneWidget);
+
+    // 收藏 is the web login's, so it lists without the token.
+    await tester.tap(key('space-tab-favourite'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('own-favourites-row-9'), skipOffstage: false), findsOneWidget);
+    expect(auth.asks, 0);
+  });
+
+  testWidgets('the fake account\'s own mid answers the plain call without the extras, as the real one does', (
+    tester,
+  ) async {
+    final space = FakeSpaceApi.demo();
+    final profile = await space.profile(_mid);
+    api
+      ..answer = profile
+      ..ownFailure = BiliError.noAppToken;
+    await showOwn(tester);
+    expect(profile.own, isNull);
+    expect(key('space-tab-home'), findsNothing);
+    expect(key('space-tab-bangumi'), findsNothing);
+    expectSelected(tester, SpaceTabKind.contribute);
+  });
+
+  testWidgets('a successful own load logs what each 主页 section brought, counts only', (tester) async {
+    final logs = MemorySink();
+    Logger.shared.add(logs);
+    addTearDown(() => Logger.shared.remove(logs));
+    List<Map<String, Object>> lines() => [
+      for (final event in logs.events)
+        if (event.msg == 'own space sections') event.f.map((name, value) => MapEntry(name, value.toJson())),
+    ];
+    api.answer = FakeSpaceApi.demoOwn(_mid);
+    await showOwn(tester);
+    expect(lines(), [
+      {
+        'favourites': 'count 2 items 2',
+        'bangumi': 'count 5 items 3',
+        'coins': 'count 2 items 2',
+        'likes': 'count 2 items 2',
+        'garbs': 'count 2 items 2',
+        'garbTotal': 7779,
+        'banner': false,
+        'bannerLabel': true,
+      },
+    ]);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    api.answer = _profile();
+    await showOwn(tester);
+    expect(lines(), hasLength(2));
+    expect(lines().last['favourites'], 'absent');
   });
 
   testWidgets('a failed load says why and offers a retry, which loads the space', (tester) async {
@@ -404,14 +501,85 @@ void main() {
     tester.widget<OwnHomeSliver>(find.byType(OwnHomeSliver, skipOffstage: false)).onMore(SpaceTabKind.favourite);
     await tester.pumpAndSettle();
     expectSelected(tester, SpaceTabKind.favourite);
-    expect(tester.widget<OwnFavouritesSliver>(find.byType(OwnFavouritesSliver, skipOffstage: false)).mid, _mid);
+    expect(tester.widget<OwnFavouritesSliver>(find.byType(OwnFavouritesSliver, skipOffstage: false)).pager.mid, _mid);
 
     await tester.tap(key('space-tab-home'));
     await tester.pumpAndSettle();
     tester.widget<OwnHomeSliver>(find.byType(OwnHomeSliver, skipOffstage: false)).onMore(SpaceTabKind.bangumi);
     await tester.pumpAndSettle();
     expectSelected(tester, SpaceTabKind.bangumi);
-    expect(tester.widget<OwnBangumiSliver>(find.byType(OwnBangumiSliver, skipOffstage: false)).mid, _mid);
+    expect(tester.widget<OwnBangumiSliver>(find.byType(OwnBangumiSliver, skipOffstage: false)).pager.mid, _mid);
+  });
+
+  testWidgets('收藏 and 追番 keep what they loaded across tab switches: no call on the way back', (tester) async {
+    await showOwn(tester);
+    for (final kind in [
+      SpaceTabKind.favourite,
+      SpaceTabKind.home,
+      SpaceTabKind.favourite,
+      SpaceTabKind.bangumi,
+      SpaceTabKind.contribute,
+      SpaceTabKind.bangumi,
+      SpaceTabKind.favourite,
+    ]) {
+      await tester.tap(key('space-tab-${kind.name}'));
+      await tester.pumpAndSettle();
+      expectSelected(tester, kind);
+    }
+    expect(favourites.calls, ['folders mid=$_mid']);
+    expect(api.calls.where((call) => call.startsWith('bangumi')), ['bangumi mid=$_mid page=1']);
+    expect(find.byKey(const ValueKey('own-favourites-row-9'), skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('收藏\'s first page landing after a switch away is kept for the way back', (tester) async {
+    final hold = favourites.holds['folders'] = Completer<void>();
+    await showOwn(tester);
+    await tester.tap(key('space-tab-favourite'));
+    await frames(tester);
+    expect(find.byType(LoadingTvState), findsOneWidget);
+
+    await tester.tap(key('space-tab-home'));
+    await tester.pumpAndSettle();
+    hold.complete();
+    await tester.pumpAndSettle();
+
+    await tester.tap(key('space-tab-favourite'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LoadingTvState), findsNothing);
+    expect(find.byKey(const ValueKey('own-favourites-row-9'), skipOffstage: false), findsOneWidget);
+    expect(favourites.calls, ['folders mid=$_mid']);
+  });
+
+  testWidgets('收藏\'s header counts the space\'s folders at once', (tester) async {
+    api.answer = SpaceProfile(
+      mid: _mid,
+      name: '测试账号',
+      face: '',
+      tabs: _tabs,
+      own: const OwnSpace(favourites: SpaceSection(count: 7)),
+    );
+    favourites.holds['folders'] = Completer<void>();
+    await showOwn(tester);
+    await tester.tap(key('space-tab-favourite'));
+    await frames(tester);
+    expect(tester.widget<Text>(key('own-favourites-count')).data, '7');
+    favourites.holds['folders']!.complete();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('追番 without the app token asks for it, and lists again once it is given', (tester) async {
+    api.bangumiFailure = BiliError.noAppToken;
+    auth.onAsk = () => api.bangumiFailure = null;
+    await showOwn(tester);
+    await tester.tap(key('space-tab-bangumi'));
+    await tester.pumpAndSettle();
+    expect(auth.asks, 1);
+    expect(api.calls.where((call) => call.startsWith('bangumi')), [
+      'bangumi mid=$_mid page=1',
+      'bangumi mid=$_mid page=1',
+    ]);
+    expect(find.text(OwnBangumiSliver.endMessage), findsOneWidget);
+    expect(key('own-bangumi-retry'), findsNothing);
   });
 
   testWidgets('scrolled past the name the bar comes in; a tab chosen there keeps the row pinned under it', (
@@ -559,5 +727,53 @@ void main() {
     expect(tester.getRect(key('own-space-edit')).top, greaterThan(OwnSpaceTheme.editTop + 40));
     await tester.pumpAndSettle();
     expect(tester.getRect(key('own-space-banner-default')), banner);
+  });
+
+  testWidgets('the 勋章 pills take taps across the name row\'s height, drawn where they were', (tester) async {
+    await showOwn(tester);
+    for (final target in ['own-space-medal', 'own-space-fan-medal']) {
+      final pill = tester.getRect(key(target));
+      expect(pill.height, OwnSpaceTheme.pillHeight, reason: target);
+      expect(pill.center.dy, moreOrLessEquals(tester.getCenter(key('own-space-name')).dy), reason: target);
+      for (final dy in [-SpaceTheme.nameBox / 2 + 1, SpaceTheme.nameBox / 2 - 1]) {
+        await tester.tapAt(pill.center.translate(0, dy));
+        await tester.pump();
+        await expectToast(tester, '暂未开放');
+      }
+    }
+  });
+
+  testWidgets('scrolled to the pinned row, each short body\'s background runs to the screen\'s bottom', (tester) async {
+    Future<int> pixelAt(int x, int y) async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(key('screen'));
+      return (await tester.runAsync(() async {
+        final image = await boundary.toImage();
+        final bytes = (await image.toByteData())!;
+        final at = (y * image.width + x) * 4;
+        image.dispose();
+        return bytes.getUint8(at + 3) << 24 |
+            bytes.getUint8(at) << 16 |
+            bytes.getUint8(at + 1) << 8 |
+            bytes.getUint8(at + 2);
+      }))!;
+    }
+
+    for (final (kind, fill) in [
+      (SpaceTabKind.home, OwnSpaceTabsTheme.greyPage),
+      (SpaceTabKind.contribute, OwnSpaceTabsTheme.whitePage),
+      (SpaceTabKind.favourite, OwnSpaceTabsTheme.whitePage),
+      (SpaceTabKind.bangumi, OwnSpaceTabsTheme.greyPage),
+    ]) {
+      await tester.pumpWidget(const SizedBox.shrink());
+      api.answer = _profile(defaultTab: kind);
+      await showOwn(tester);
+      expectSelected(tester, kind);
+      scroll(tester).jumpTo(scroll(tester).maxScrollExtent);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(key('space-tabs')).top, moreOrLessEquals(62 + 32), reason: kind.name);
+      for (final y in [700, 900, 955]) {
+        expect(await pixelAt(220, y), fill.toARGB32(), reason: '${kind.name} at $y');
+      }
+    }
   });
 }

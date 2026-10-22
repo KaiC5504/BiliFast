@@ -39,6 +39,9 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
   static const _soon = '暂未开放';
   static const _kinds = {SpaceTabKind.home, SpaceTabKind.contribute, SpaceTabKind.favourite, SpaceTabKind.bangumi};
 
+  /// Without the own call's extras 主页 would be an empty page and 追番 can only fail.
+  static const _plainKinds = {SpaceTabKind.contribute, SpaceTabKind.favourite};
+
   final _scroll = ScrollController();
 
   SpaceProfile? _profile;
@@ -46,6 +49,10 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
   SpaceTabKind _tab = SpaceTabKind.contribute;
   bool _collapsed = false;
   bool _started = false;
+
+  /// 收藏's and 追番's lists, made on the first visit and kept while the page is open.
+  OwnFolderPager? _folders;
+  OwnBangumiPager? _bangumi;
 
   /// How far the space scrolls before the bar comes in, and where the tab row pins; set where the page is built.
   double _barAt = OwnSpaceHeader.nameCentre;
@@ -67,6 +74,8 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
 
   @override
   void dispose() {
+    _folders?.dispose();
+    _bangumi?.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -80,13 +89,15 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
       SpaceProfile profile;
       try {
         profile = await api.ownProfile(mid);
+        if (profile.own case final own?) _logSections(own);
       } on BiliNoAppTokenError {
+        Logger.shared.info(LogCategory.api, 'own space without app token');
         profile = await api.profile(mid);
       }
       if (!mounted) return;
       setState(() {
         _profile = profile;
-        _tab = _kinds.contains(profile.defaultTab) && _tabsOf(profile).any((tab) => tab.kind == profile.defaultTab)
+        _tab = profile.own != null && _tabsOf(profile).any((tab) => tab.kind == profile.defaultTab)
             ? profile.defaultTab
             : SpaceTabKind.contribute;
       });
@@ -96,12 +107,37 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
     }
   }
 
-  /// 主页, 投稿, 收藏 and 追番 as the profile orders them, 投稿 added when it has none.
-  static List<SpaceTab> _tabsOf(SpaceProfile profile) => [
-    ...profile.tabs.where((tab) => _kinds.contains(tab.kind)),
-    if (!profile.tabs.any((tab) => tab.kind == SpaceTabKind.contribute))
-      const SpaceTab(kind: SpaceTabKind.contribute, title: '投稿'),
-  ];
+  /// What each 主页 section's key brought, counts only, so a key the answer renamed shows in the phone's log.
+  static void _logSections(OwnSpace own) {
+    String state(SpaceSection<Object?> section) =>
+        section.count == 0 && section.items.isEmpty ? 'absent' : 'count ${section.count} items ${section.items.length}';
+    Logger.shared.info(LogCategory.api, 'own space sections', {
+      'favourites': state(own.favourites),
+      'bangumi': state(own.bangumi),
+      'coins': state(own.coins),
+      'likes': state(own.likes),
+      'garbs': state(own.garbs),
+      'garbTotal': own.garbTotal,
+      'banner': own.banner != null,
+      'bannerLabel': own.bannerLabel != null,
+    });
+  }
+
+  /// 主页, 投稿, 收藏 and 追番 as the profile orders them, 投稿 added when it has none; without the extras only 投稿
+  /// and 收藏.
+  static List<SpaceTab> _tabsOf(SpaceProfile profile) {
+    final kinds = profile.own == null ? _plainKinds : _kinds;
+    return [
+      ...profile.tabs.where((tab) => kinds.contains(tab.kind)),
+      if (!profile.tabs.any((tab) => tab.kind == SpaceTabKind.contribute))
+        const SpaceTab(kind: SpaceTabKind.contribute, title: '投稿'),
+    ];
+  }
+
+  Future<bool> _authorize() async {
+    if (!mounted) return false;
+    return AppScope.of(context).appAuth.request(context);
+  }
 
   /// The bar comes in once the name's line has passed under the status bar, as on others' spaces.
   void _scrolled() {
@@ -195,12 +231,42 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
         ),
         switch (_tab) {
           SpaceTabKind.home => OwnHomeSliver(key: const ValueKey('own-tab-home'), profile: profile, onMore: _select),
-          SpaceTabKind.favourite => OwnFavouritesSliver(key: const ValueKey('own-tab-favourite'), mid: profile.mid),
-          SpaceTabKind.bangumi => OwnBangumiSliver(key: const ValueKey('own-tab-bangumi'), mid: profile.mid),
+          SpaceTabKind.favourite => OwnFavouritesSliver(
+            key: const ValueKey('own-tab-favourite'),
+            pager: _folders ??= OwnFolderPager(
+              api: AppScope.of(context).favouritesApi,
+              mid: profile.mid,
+              authorize: _authorize,
+            ),
+            count: _folderCount(profile),
+          ),
+          SpaceTabKind.bangumi => OwnBangumiSliver(
+            key: const ValueKey('own-tab-bangumi'),
+            pager: _bangumi ??= OwnBangumiPager(
+              api: AppScope.of(context).spaceApi,
+              mid: profile.mid,
+              authorize: _authorize,
+            ),
+          ),
           _ => OwnContributeSliver(key: const ValueKey('own-tab-contribute'), profile: profile),
         },
-        SpaceTailFiller(headerHeight: headerHeight, barHeight: barHeight),
+        SpaceTailFiller(
+          headerHeight: headerHeight,
+          barHeight: barHeight,
+          color: switch (_tab) {
+            SpaceTabKind.home => OwnHomeSliver.fill,
+            SpaceTabKind.favourite => OwnFavouritesSliver.fill,
+            SpaceTabKind.bangumi => OwnBangumiSliver.fill,
+            _ => OwnContributeSliver.fill,
+          },
+        ),
       ],
     );
   }
+
+  /// Every account has 默认收藏夹, so a 0 means the answer left 收藏 out; the list then counts the folders itself.
+  static int? _folderCount(SpaceProfile profile) => switch (profile.own?.favourites.count) {
+    final count? when count > 0 => count,
+    _ => null,
+  };
 }

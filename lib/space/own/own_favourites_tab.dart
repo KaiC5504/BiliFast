@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:bili_core/api.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../app/app_scope.dart';
 import '../../app/swipe_back_route.dart';
 import '../../favourites/favourite_rows.dart' show FavTap;
 import '../../favourites/favourites_api.dart';
@@ -16,56 +15,50 @@ import 'own_tab_paging.dart';
 /// 收藏 (116): 我创建的收藏夹 with its count, folding and unfolding at a tap, its rows opening the folder. The folders
 /// come a page at a time as the list nears the end.
 class OwnFavouritesSliver extends StatefulWidget {
-  const OwnFavouritesSliver({super.key, required this.mid, this.count});
+  const OwnFavouritesSliver({super.key, required this.pager, this.count});
 
-  final int mid;
+  final OwnFolderPager pager;
 
-  /// The folders in all, from the space's answer; null counts them as they come.
+  /// The folders in all; null shows the count once the last page has come.
   final int? count;
+
+  /// What the list lies on.
+  static const fill = OwnSpaceTabsTheme.whitePage;
 
   @override
   State<OwnFavouritesSliver> createState() => _OwnFavouritesSliverState();
 }
 
-class _OwnFavouritesSliverState extends State<OwnFavouritesSliver> with OwnPaging<OwnFavouritesSliver, FavFolder> {
-  late FavouritesApi _api;
-  bool _started = false;
-  bool _open = true;
-  final _covers = <int, String>{};
+/// 收藏's folders with their covers, kept by the page.
+final class OwnFolderPager extends OwnPager<FavFolder> {
+  OwnFolderPager({required this.api, required this.mid, super.authorize});
+
+  final FavouritesApi api;
+  final int mid;
+  final covers = <int, String>{};
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_started) return;
-    _started = true;
-    _api = AppScope.of(context).favouritesApi;
-    restartPaging();
-  }
-
-  @override
-  void didUpdateWidget(OwnFavouritesSliver oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.mid != widget.mid) {
-      _covers.clear();
-      restartPaging();
-    }
-  }
-
-  @override
-  String get pagingName => 'own favourites';
-
-  @override
-  bool get pagingWanted => _open;
+  String get name => 'own favourites';
 
   @override
   Object idOf(FavFolder item) => item.id;
 
   @override
   Future<OwnPage<FavFolder>> fetchPage(int page) async {
-    final answer = await _api.folders(mid: widget.mid, page: page);
-    _covers.addAll(answer.covers);
+    final answer = await api.folders(mid: mid, page: page);
+    covers.addAll(answer.covers);
     return (items: answer.folders, hasMore: answer.hasMore);
   }
+}
+
+class _OwnFavouritesSliverState extends State<OwnFavouritesSliver> with OwnPagerView<OwnFavouritesSliver, FavFolder> {
+  bool _open = true;
+
+  @override
+  OwnFolderPager get pager => widget.pager;
+
+  @override
+  bool get pagingWanted => _open;
 
   void _toggle() {
     setState(() => _open = !_open);
@@ -75,7 +68,7 @@ class _OwnFavouritesSliverState extends State<OwnFavouritesSliver> with OwnPagin
   void _openFolder(FavFolder folder) => unawaited(
     Navigator.of(context).push(
       SwipeBackPageRoute<void>(
-        builder: (_) => FolderPage(folder: folder, api: _api),
+        builder: (_) => FolderPage(folder: folder, api: pager.api),
       ),
     ),
   );
@@ -83,14 +76,17 @@ class _OwnFavouritesSliverState extends State<OwnFavouritesSliver> with OwnPagin
   String? get _count {
     final given = widget.count;
     if (given != null) return '$given';
-    return loaded && !hasMore ? '${items.length}' : null;
+    return pager.loaded && !pager.hasMore ? '${pager.items.length}' : null;
   }
 
   @override
   Widget build(BuildContext context) {
-    final folders = items;
+    final pager = this.pager;
+    final folders = pager.items;
+    final loaded = pager.loaded;
+    final failed = pager.failed;
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: OwnSpaceTabsTheme.whitePage),
+      decoration: const BoxDecoration(color: OwnFavouritesSliver.fill),
       sliver: SliverMainAxisGroup(
         slivers: [
           SliverToBoxAdapter(
@@ -102,7 +98,7 @@ class _OwnFavouritesSliverState extends State<OwnFavouritesSliver> with OwnPagin
               SliverToBoxAdapter(
                 child: loaded && !failed
                     ? const SizedBox.shrink()
-                    : OwnFirstLoad(keyPrefix: 'own-favourites', failed: failed, onRetry: retryPaging),
+                    : OwnFirstLoad(keyPrefix: 'own-favourites', failed: failed, onRetry: pager.retry),
               )
             else ...[
               SliverList.builder(
@@ -114,15 +110,15 @@ class _OwnFavouritesSliverState extends State<OwnFavouritesSliver> with OwnPagin
                     child: OwnFolderRow(
                       key: ValueKey('own-favourites-row-${folder.id}'),
                       folder: folder,
-                      cover: _covers[folder.id] ?? '',
+                      cover: pager.covers[folder.id] ?? '',
                       onOpen: () => _openFolder(folder),
                     ),
                   );
                 },
               ),
-              if (loading || failed)
+              if (pager.loading || failed)
                 SliverToBoxAdapter(
-                  child: OwnPagingFooter(keyPrefix: 'own-favourites', failed: failed, onRetry: retryPaging),
+                  child: OwnPagingFooter(keyPrefix: 'own-favourites', failed: failed, onRetry: pager.retry),
                 ),
               const SliverToBoxAdapter(
                 child: Padding(

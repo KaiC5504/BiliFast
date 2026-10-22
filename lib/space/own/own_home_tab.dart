@@ -14,8 +14,8 @@ import '../space_videos.dart' show OpenSpaceVideo;
 import 'own_tab_cards.dart';
 import 'own_tab_glyphs.dart';
 
-/// 主页 (114, 115): 收藏, 追番, 最近投币的视频, 最近点赞的视频 and 拥有的个性装扮, each with its count and 更多 ›, from the
-/// own space's answer. [onMore] switches to 收藏's or 追番's tab.
+/// 主页 (114, 115): 收藏, 追番, 最近投币的视频, 最近点赞的视频 and 拥有的个性装扮, each with its count (none on the two
+/// video sections) and 更多 ›, from the own space's answer. [onMore] switches to 收藏's or 追番's tab.
 ///
 /// Each section shows one row of what the answer previews and is left out when there is nothing to show. A folder
 /// opens its page, a video its page; 追番, 装扮 and the other 更多 aren't built.
@@ -27,6 +27,9 @@ class OwnHomeSliver extends StatelessWidget {
 
   /// Tests pass their own; null pushes the video page.
   final OpenSpaceVideo? open;
+
+  /// What the sections lie on.
+  static const fill = OwnSpaceTabsTheme.greyPage;
 
   void _soon(BuildContext context) => showToast(context, '暂未开放');
 
@@ -137,7 +140,7 @@ class OwnHomeSliver extends StatelessWidget {
       ],
     ];
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: OwnSpaceTabsTheme.greyPage),
+      decoration: const BoxDecoration(color: fill),
       sliver: SliverMainAxisGroup(
         slivers: [
           SliverToBoxAdapter(

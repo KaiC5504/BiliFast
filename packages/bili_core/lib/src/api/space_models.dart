@@ -315,8 +315,8 @@ final class OwnSpace {
   /// The 大 on the avatar.
   final bool vipBadge;
 
-  /// The tall banner art: `images.collection_top_simple`'s first item (the equipped 空间头图), when the answer has
-  /// one; otherwise [SpaceProfile.banner].
+  /// The tall banner art: `images.collection_top_simple`'s first item (the equipped 空间头图); null without one (the
+  /// header then draws [SpaceProfile.banner]).
   final String? banner;
   final SpaceBannerLabel? bannerLabel;
   final SpaceSection<SpaceFolderCard> favourites;

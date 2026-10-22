@@ -5,9 +5,10 @@ import 'package:bili_core/api.dart';
 import 'space_api.dart';
 
 /// Made-up answers for tests and `--fake-account` on the PC: no space call leaves the machine. Every mid gets
-/// [profileFor]'s profile, and the account's own space (and [ownMid]'s profile) [ownProfileFor]'s; the lists are paged
-/// [pageSize] at a time, the most played order sorting by play count, and 追番 [bangumiPageSize] at a time. [calls]
-/// lists what was asked, in order; [holds] keeps a call waiting and [failures] makes it throw.
+/// [profileFor]'s profile, and the account's own space [ownProfileFor]'s; [ownMid]'s plain profile is that one without
+/// its extras, as the real call answers without the app token. The lists are paged [pageSize] at a time, the most
+/// played order sorting by play count, and 追番 [bangumiPageSize] at a time. [calls] lists what was asked, in order;
+/// [holds] keeps a call waiting and [failures] makes it throw.
 class FakeSpaceApi implements SpaceApi {
   FakeSpaceApi({
     SpaceProfile Function(int mid)? profileFor,
@@ -170,7 +171,32 @@ class FakeSpaceApi implements SpaceApi {
 
   @override
   Future<SpaceProfile> profile(int mid) =>
-      _answer('profile', 'profile mid=$mid', () => mid == ownMid ? _ownProfileFor(mid) : _profileFor(mid));
+      _answer('profile', 'profile mid=$mid', () => mid == ownMid ? _withoutOwn(_ownProfileFor(mid)) : _profileFor(mid));
+
+  static SpaceProfile _withoutOwn(SpaceProfile profile) => SpaceProfile(
+    mid: profile.mid,
+    name: profile.name,
+    face: profile.face,
+    sign: profile.sign,
+    level: profile.level,
+    seniorMember: profile.seniorMember,
+    vip: profile.vip,
+    vipLabel: profile.vipLabel,
+    official: profile.official,
+    officialTitle: profile.officialTitle,
+    fans: profile.fans,
+    following: profile.following,
+    likes: profile.likes,
+    videoCount: profile.videoCount,
+    banner: profile.banner,
+    tagLines: profile.tagLines,
+    entries: profile.entries,
+    chargeable: profile.chargeable,
+    tabs: profile.tabs,
+    defaultTab: profile.defaultTab,
+    chips: profile.chips,
+    orders: profile.orders,
+  );
 
   @override
   Future<SpaceProfile> ownProfile(int mid) => _answer('ownProfile', 'ownProfile mid=$mid', () => _ownProfileFor(mid));
