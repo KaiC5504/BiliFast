@@ -11,20 +11,20 @@ import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/feed_more_sheet.dart';
-import 'package:bilifast/home/home_page.dart';
-import 'package:bilifast/home/home_tab_bar.dart';
+import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_api.dart';
 import 'package:bilifast/search/search_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
+import 'package:bilifast/shared/release_refresh.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/video/intro/title_block.dart';
 import 'package:bilifast/video/video_page.dart';
-import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator, CupertinoSliverRefreshControl;
+import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/gestures.dart' show kPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -128,7 +128,7 @@ void main() {
       MaterialApp(
         theme: theme,
         builder: (context, child) => AppScope(services: services, child: child!),
-        home: HomePage(developerPage: developer ? (context) => const Text('开发者页面') : null, initialLink: initialLink),
+        home: MainShell(developerPage: developer ? (context) => const Text('开发者页面') : null, initialLink: initialLink),
       ),
     );
   }
@@ -293,7 +293,7 @@ void main() {
     await show(tester);
     await settle(tester);
     Finder spinners() => find.descendant(
-      of: find.byType(CupertinoSliverRefreshControl),
+      of: find.byType(ReleaseRefreshControl),
       matching: find.byType(CupertinoActivityIndicator),
     );
     final feed = find.byKey(const ValueKey('feed'));
@@ -782,60 +782,6 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('home-search')));
       await settle(tester, 20);
       expect(tester.widget<SearchPage>(find.byType(SearchPage)).placeholder, isNull);
-    });
-  });
-
-  group('the bottom bar', () {
-    testWidgets('five slots across the bottom over the home indicator, the feed ending at it', (tester) async {
-      final semantics = tester.ensureSemantics();
-      await show(tester);
-      tester.view
-        ..padding = const FakeViewPadding(bottom: 34)
-        ..viewPadding = const FakeViewPadding(bottom: 34);
-      await settle(tester);
-      final bar = tester.getRect(find.byType(HomeTabBar));
-      expect(bar.bottom, 900);
-      expect(bar.height, 49 + 34);
-      expect(tester.getRect(find.byKey(const ValueKey('feed'))).bottom, bar.top);
-
-      for (final (i, tab) in HomeTab.values.indexed) {
-        final slot = find.byKey(ValueKey('home-tab-${tab.name}'));
-        expect(tester.getRect(slot), Rect.fromLTWH(88.0 * i, bar.top, 88, 49));
-        expect(
-          tester.getSemantics(slot),
-          isSemantics(
-            label: tab.label,
-            isButton: true,
-            hasTapAction: true,
-            hasSelectedState: true,
-            isSelected: tab == HomeTab.home,
-          ),
-        );
-        if (tab == HomeTab.post) {
-          expect(find.text(tab.label), findsNothing, reason: 'the + has no label');
-          continue;
-        }
-        final label = find.text(tab.label);
-        expect(tester.getCenter(label).dx, 44 + 88.0 * i);
-        expect(tester.getTopLeft(label).dy, greaterThan(bar.top + 30));
-        expect(tester.widget<Text>(label).style?.color, tab == HomeTab.home ? BiliColors.pink : HomeTabBarTheme.label);
-      }
-      semantics.dispose();
-    });
-
-    testWidgets('关注, +, 消息 and 我的 say 暂未开放 and change nothing', (tester) async {
-      await show(tester);
-      await settle(tester, 40);
-      final asked = List.of(http.asked);
-      for (final tab in [HomeTab.follow, HomeTab.post, HomeTab.messages, HomeTab.mine]) {
-        await tester.tap(find.byKey(ValueKey('home-tab-${tab.name}')));
-        await tester.pump();
-        expect(find.text('暂未开放'), findsOneWidget, reason: tab.label);
-        await toastGone(tester);
-        expect(find.byType(HomePage), findsOneWidget);
-        expect(find.byType(SearchPage), findsNothing);
-        expect(http.asked, asked, reason: 'no refresh');
-      }
     });
   });
 
