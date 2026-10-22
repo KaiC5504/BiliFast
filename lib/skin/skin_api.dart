@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:bili_core/api.dart';
+
+import 'skin_package.dart';
 
 /// The equipped 装扮 and its package.
 abstract interface class SkinApi {
@@ -10,13 +14,15 @@ abstract interface class SkinApi {
 }
 
 class ClientSkinApi implements SkinApi {
-  ClientSkinApi(this._client);
+  ClientSkinApi(this._client, {this._http = HttpClient.new});
 
   final BiliClient _client;
+  final HttpClient Function() _http;
 
   @override
   Future<SkinEquip?> equipped() => _client.skin();
 
+  /// Outside [BiliClient], whose transport carries the login's cookies.
   @override
-  Future<List<int>> download(Uri package) => throw UnimplementedError('skin data builder');
+  Future<List<int>> download(Uri package) => downloadSkinPackage(package, client: _http);
 }
