@@ -19,24 +19,33 @@ final class Rig {
   final commits = <double>[];
   int cancels = 0;
 
-  Future<void> mount(WidgetTester tester, {List<Chapter> chapters = const [], SeekBarStyle? style}) {
+  Future<void> mount(
+    WidgetTester tester, {
+    List<Chapter> chapters = const [],
+    SeekBarStyle? style,
+    bool still = false,
+  }) async {
     addTearDown(repaint.dispose);
-    return tester.pumpWidget(
-      Directionality(
-        textDirection: TextDirection.ltr,
-        child: Center(
-          child: SizedBox(
-            width: 218,
-            child: SeekBar(
-              position: () => position,
-              duration: () => duration,
-              buffered: () => 0,
-              repaint: repaint,
-              onScrub: _scrub,
-              onCommit: commits.add,
-              onCancel: () => cancels++,
-              chapters: chapters,
-              style: style ?? SeekBarStyle.tv,
+    await tester.runAsync(SeekBar.precache);
+    await tester.pumpWidget(
+      MediaQuery(
+        data: MediaQueryData(disableAnimations: still),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: SizedBox(
+              width: 218,
+              child: SeekBar(
+                position: () => position,
+                duration: () => duration,
+                buffered: () => 0,
+                repaint: repaint,
+                onScrub: _scrub,
+                onCommit: commits.add,
+                onCancel: () => cancels++,
+                chapters: chapters,
+                style: style ?? SeekBarStyle.tv,
+              ),
             ),
           ),
         ),
@@ -54,6 +63,24 @@ final class Rig {
       tester.renderObject(find.descendant(of: find.byType(SeekBar), matching: find.byType(CustomPaint)).first);
 
   Rect rect(WidgetTester tester) => tester.getRect(find.byType(SeekBar));
+
+  SeekBarState state(WidgetTester tester) => tester.state<SeekBarState>(find.byType(SeekBar));
+
+  /// Where the thumb's centre is for [seconds]: the bar is 218 wide, so the TV's centre travels 200 for 100 s.
+  Offset thumb(WidgetTester tester, double seconds) =>
+      rect(tester).centerLeft + Offset(BiliMetrics.thumbWidth / 2 + (218 - BiliMetrics.thumbWidth) * seconds / 100, 0);
+}
+
+/// Lets a finger take hold of the bar and move it past the slop, then [steps] more moves of [by].
+Future<TestGesture> _hold(WidgetTester tester, Rig rig, {double by = 4, int steps = 0}) async {
+  final finger = await tester.startGesture(rig.thumb(tester, rig.position));
+  await finger.moveBy(Offset(by.sign * 20, 0));
+  await tester.pump();
+  for (var i = 0; i < steps; i++) {
+    await finger.moveBy(Offset(by, 0));
+  }
+  await tester.pump();
+  return finger;
 }
 
 void main() {
@@ -322,4 +349,239 @@ void main() {
     await tester.pumpAndSettle();
     expect(rig.painter(tester), paints..circle(radius: BiliMetrics.verticalDot / 2));
   });
+
+  group('the TV', () {
+    test('each change moves the eyes a step its way, up to the ends, and none steps them back', () {
+      var look = 0;
+      for (var i = 0; i < 3; i++) {
+        look = SeekBar.lookAfter(look, 0.4);
+      }
+      expect(SeekBar.eyesOf(look), closeTo(0.65, 1e-9));
+      for (var i = 0; i < 20; i++) {
+        look = SeekBar.lookAfter(look, 2);
+      }
+      expect(SeekBar.eyesOf(look), 1);
+      look = SeekBar.lookAfter(look, 0);
+      expect(SeekBar.eyesOf(look), closeTo(0.95, 1e-9));
+      for (var i = 0; i < 40; i++) {
+        look = SeekBar.lookAfter(look, -0.01);
+      }
+      expect(SeekBar.eyesOf(look), 0);
+      for (var i = 0; i < 9; i++) {
+        look = SeekBar.lookAfter(look, 0);
+      }
+      expect(SeekBar.eyesOf(look), closeTo(0.45, 1e-9));
+      look = SeekBar.lookAfter(look, 0);
+      expect(SeekBar.eyesOf(look), SeekBar.eyesAtRest);
+      expect(SeekBar.lookAfter(look, 0), 0, reason: 'at rest a change of none leaves them centred');
+    });
+
+    testWidgets('draws the official Lottie in its 18 pt box, centred on the bar and the played part\'s end', (
+      tester,
+    ) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final box = Rect.fromCenter(
+        center: rig.thumb(tester, 50) - rig.rect(tester).topLeft,
+        width: BiliMetrics.thumbWidth,
+        height: BiliMetrics.thumbHeight,
+      );
+      expect(box.top, (BiliMetrics.barTouchHeight - BiliMetrics.thumbHeight) / 2);
+      expect(
+        rig.painter(tester),
+        paints
+          ..rrect(color: BiliColors.chromeTrack)
+          ..rrect(color: BiliColors.chromeBuffered)
+          ..rrect(color: BiliColors.pink)
+          ..save()
+          ..translate(x: box.left, y: box.top),
+      );
+      expect(rig.state(tester).eyes, SeekBar.eyesAtRest);
+      expect(rig.state(tester).blink, isNull);
+    });
+
+    testWidgets('the eyes step with each move of the drag, each way, and stop at the ends', (tester) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final finger = await _hold(tester, rig);
+      final state = rig.state(tester);
+      final first = state.eyes;
+      expect(first, greaterThan(SeekBar.eyesAtRest), reason: 'taking hold moved it later');
+
+      for (var i = 1; i <= 3; i++) {
+        await finger.moveBy(const Offset(4, 0));
+        expect(state.eyes, closeTo(first + i * SeekBar.eyesStep, 1e-9));
+      }
+      await finger.moveBy(const Offset(-4, 0));
+      expect(state.eyes, closeTo(first + 2 * SeekBar.eyesStep, 1e-9));
+
+      for (var i = 0; i < 12; i++) {
+        await finger.moveBy(const Offset(2, 0));
+      }
+      expect(state.eyes, 1);
+      for (var i = 0; i < 25; i++) {
+        await finger.moveBy(const Offset(-2, 0));
+      }
+      expect(state.eyes, 0);
+      expect(rig.position, greaterThan(0), reason: 'the eyes stopped before the bar did');
+      await finger.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('a move that changes nothing steps the eyes back toward the centre', (tester) async {
+      final rig = Rig()..position = 80;
+      await rig.mount(tester);
+      final finger = await _hold(tester, rig, steps: 5);
+      final state = rig.state(tester);
+      expect(rig.position, 100, reason: 'the last move reached the end');
+      final looking = state.eyes;
+      expect(looking, greaterThan(SeekBar.eyesAtRest + SeekBar.eyesStep));
+
+      await finger.moveBy(const Offset(4, 0));
+      expect(state.eyes, closeTo(looking - SeekBar.eyesStep, 1e-9));
+      for (var i = 0; i < 20; i++) {
+        await finger.moveBy(const Offset(4, 0));
+      }
+      expect(state.eyes, SeekBar.eyesAtRest);
+      await finger.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('a touch centres the eyes before it moves anything', (tester) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final finger = await _hold(tester, rig, steps: 4);
+      await finger.up();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(rig.state(tester).eyes, isNot(SeekBar.eyesAtRest), reason: 'still on the way back');
+
+      final again = await tester.startGesture(rig.thumb(tester, rig.position));
+      await tester.pump();
+      expect(rig.state(tester).eyes, SeekBar.eyesAtRest);
+      expect(rig.state(tester).blink, isNull);
+      await again.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('when a drag lifts the eyes come back, then the TV blinks once and rests', (tester) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final finger = await _hold(tester, rig, steps: 6);
+      final state = rig.state(tester);
+      final away = state.eyes - SeekBar.eyesAtRest;
+      expect(away, greaterThan(0.2));
+
+      await finger.up();
+      await tester.pump();
+      expect(state.blink, isNull, reason: 'not before the eyes are back');
+      final back = SeekBar.eyesReturn * (away / SeekBar.eyesAtRest);
+      await tester.pump(back ~/ 2);
+      expect(state.eyes, inExclusiveRange(SeekBar.eyesAtRest, SeekBar.eyesAtRest + away));
+      await tester.pump(back ~/ 2 + const Duration(milliseconds: 20));
+      expect(state.eyes, SeekBar.eyesAtRest);
+
+      final blinks = <double>[];
+      for (var i = 0; i < 30 && tester.hasRunningAnimations; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        if (state.blink case final blink?) blinks.add(blink);
+      }
+      expect(blinks, isNotEmpty);
+      expect(blinks.first, lessThan(0.1));
+      expect(blinks.last, greaterThan(0.9));
+      // 12 frames at 29.97 fps.
+      expect(blinks.length * 16, closeTo(400, 32));
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(state.blink, isNull);
+      expect(state.eyes, SeekBar.eyesAtRest);
+      expect(rig.commits, hasLength(1));
+    });
+
+    testWidgets('a tap and a touch that never became a drag do not blink', (tester) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final state = rig.state(tester);
+      await tester.tapAt(rig.thumb(tester, 50));
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.blink, isNull);
+      }
+
+      final cancels = rig.cancels;
+      final finger = await tester.startGesture(rig.thumb(tester, 50));
+      await finger.moveBy(const Offset(5, 0));
+      await finger.cancel();
+      expect(rig.cancels, cancels + 1);
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.blink, isNull);
+      }
+      expect(state.eyes, SeekBar.eyesAtRest);
+    });
+
+    testWidgets('Reduce Motion puts the eyes back at once and skips the blink', (tester) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester, still: true);
+      final finger = await _hold(tester, rig, steps: 6);
+      final state = rig.state(tester);
+      expect(state.eyes, greaterThan(SeekBar.eyesAtRest), reason: 'the eyes still follow the finger');
+
+      await finger.up();
+      expect(state.eyes, SeekBar.eyesAtRest);
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.blink, isNull);
+      }
+      expect(tester.hasRunningAnimations, isFalse);
+    });
+
+    testWidgets('the TV keeps its size while held, and the bar thickens to 4 pt', (tester) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final box = rig.thumb(tester, 50) - rig.rect(tester).topLeft - const Offset(9, 9);
+      const rest = BiliMetrics.barHeight;
+      expect(rig.painter(tester), paints..rrect(rrect: _capsule(218, rest), color: BiliColors.chromeTrack));
+
+      final finger = await tester.startGesture(rig.thumb(tester, 50));
+      await tester.pumpAndSettle();
+      expect(
+        rig.painter(tester),
+        paints
+          ..rrect(rrect: _capsule(218, BiliMetrics.tvBarDragHeight), color: BiliColors.chromeTrack)
+          ..save()
+          ..translate(x: box.dx, y: box.dy),
+      );
+      await finger.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('the 竖屏 dot has no eyes to move and never blinks', (tester) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester, style: SeekBarStyle.dot);
+      final finger = await tester.startGesture(rig.rect(tester).center);
+      await tester.pumpAndSettle();
+      expect(
+        rig.painter(tester),
+        paints..rrect(rrect: _capsule(218, BiliMetrics.barDragHeight), color: BiliColors.verticalTrack),
+      );
+      for (var i = 0; i < 5; i++) {
+        await finger.moveBy(const Offset(10, 0));
+      }
+      await finger.up();
+      final state = rig.state(tester);
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.blink, isNull);
+      }
+      expect(rig.painter(tester), paintsExactlyCountTimes(#drawPath, 0));
+      expect(rig.painter(tester), paints..circle(radius: BiliMetrics.verticalDot / 2, color: BiliColors.verticalThumb));
+    });
+  });
 }
+
+RRect _capsule(double width, double height) => RRect.fromLTRBR(
+  0,
+  (BiliMetrics.barTouchHeight - height) / 2,
+  width,
+  (BiliMetrics.barTouchHeight + height) / 2,
+  Radius.circular(height / 2),
+);

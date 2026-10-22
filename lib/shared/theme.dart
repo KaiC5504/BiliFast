@@ -75,9 +75,6 @@ abstract final class BiliColors {
   static const chromeBuffered = Color(0x66FFFFFF);
   static const chromeShade = Color(0x73000000);
   static const chromeShadeClear = Color(0x00000000);
-  static const thumbRim = Color(0x4DFF6699);
-  static const thumbBody = Color(0xFF000000);
-  static const thumbScreen = Color(0xFFFFFFFF);
 
   /// The small player's controls and end screen, and the bar's chapter ticks and 竖屏 style, measured on the official
   /// app's 03, 09, 15 and 26.
@@ -300,15 +297,19 @@ abstract final class BiliMetrics {
   static const chromeTimeTrailing = 10.0;
   static const barHeight = 2.0;
   static const barTouchHeight = 24.0;
+
+  /// The official TV's Lottie box, centred on the bar and on the played part's end (04, 15 and 102: its 15 pt ink and
+  /// 12 pt screen land there in each). It keeps this size while a finger holds it.
   static const thumbWidth = 18.0;
-  static const thumbHeight = 16.0;
+  static const thumbHeight = 18.0;
   static const hiddenLine = 2.0;
 
   /// The small player's controls and end screen, and the bar's chapter title and 竖屏 dot, measured on the official
-  /// app's 03, 09, 15 and 26. While dragged, the thumb and the bar grow a little.
+  /// app's 03, 09, 15 and 26. While dragged, the bar thickens: the TV style's to 4 pt (102), 竖屏's a little, and its
+  /// dot grows.
   static const verticalDot = 4.0;
   static const verticalDotDragging = 10.0;
-  static const thumbDragScale = 1.25;
+  static const tvBarDragHeight = 4.0;
   static const barDragHeight = 3.0;
   static const chapterTitleFont = 13.0;
   static const chapterTitleHeight = 24.0;
