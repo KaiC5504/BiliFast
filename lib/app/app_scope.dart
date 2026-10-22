@@ -15,6 +15,7 @@ import '../devtools/log_files.dart';
 import '../devtools/log_forwarder.dart';
 import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
+import '../me/me_api.dart';
 import '../playback/codec_memory.dart';
 import '../playback/playback_controller.dart';
 import '../playback/shared_engine.dart';
@@ -140,7 +141,7 @@ class AppPlayback with WidgetsBindingObserver {
 }
 
 /// What every page reaches: the account and API client, the official API's token, the players, 最近打开, the phone's
-/// rotation and levels, the font, the page body's, 搜索's, UP主空间's, 我的收藏's and 稍后再看's calls, 关注 changes,
+/// rotation and levels, the font, the page body's, 搜索's, UP主空间's, 我的收藏's, 稍后再看's and 我的's calls, 关注 changes,
 /// 搜索历史, the login page, the log kept on the phone, and the log forwarder in dev builds (null otherwise).
 class AppServices {
   AppServices({
@@ -154,6 +155,7 @@ class AppServices {
     this._spaceApi,
     this._favouritesApi,
     this._watchLaterApi,
+    this._meApi,
     AppAuth? appAuth,
     GlobalKey<NavigatorState>? navigator,
     SearchHistoryStore? searchHistory,
@@ -226,6 +228,11 @@ class AppServices {
 
   /// 稍后再看's calls, made on first use like [searchApi].
   late final WatchLaterApi watchLaterApi = _watchLaterApi ?? ClientWatchLaterApi(environment.client);
+
+  final MeApi? _meApi;
+
+  /// 我的's calls, made on first use like [searchApi].
+  late final MeApi meApi = _meApi ?? ClientMeApi(environment.client);
 
   /// The official API's login token.
   final AppAuth appAuth;

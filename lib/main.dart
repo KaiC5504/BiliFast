@@ -21,8 +21,9 @@ import 'devtools/crash_log.dart';
 import 'devtools/log_files.dart';
 import 'devtools/log_forwarder.dart';
 import 'favourites/fake_favourites_api.dart';
-import 'home/home_page.dart';
+import 'home/main_shell.dart';
 import 'home/recent_store.dart';
+import 'me/fake_me_api.dart';
 import 'playback/codec_memory.dart';
 import 'playback/playback_setup.dart';
 import 'playback/shared_engine.dart';
@@ -111,6 +112,7 @@ Future<void> main(List<String> args) async {
       spaceApi: fakeAccount ? FakeSpaceApi.demo() : null,
       favouritesApi: fakeAccount ? FakeFavouritesApi.demo() : null,
       watchLaterApi: fakeAccount ? FakeWatchLaterApi.demo() : null,
+      meApi: fakeAccount ? FakeMeApi.demo() : null,
       appAuth: appAuth,
       navigator: navigator,
       searchHistory: searchHistory,
@@ -232,7 +234,7 @@ class BiliFastApp extends StatelessWidget {
           services: services,
           child: PhoneFrame.wrap(context, ReduceMotion(child: MediaQuery.withNoTextScaling(child: child!))),
         ),
-        home: HomePage(
+        home: MainShell(
           initialLink: initialLink,
           developerPage: services.logs == null
               ? null

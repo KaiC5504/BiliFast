@@ -2230,6 +2230,9 @@ abstract final class AvatarPageTheme {
   static const shown = 5;
 }
 
+/// 我的 (87, 106, 107), measured from the safe area's top. Filled in by the page agent.
+abstract final class MeTheme {}
+
 /// The swipe back from a 推荐 card (03, 04 in local/differences, measured frame by frame): the page shrinks into a
 /// floating card over the dimmed home and flies into the card it came from.
 abstract final class ZoomBackTheme {

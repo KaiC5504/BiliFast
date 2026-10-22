@@ -24,6 +24,7 @@ export 'src/api/http.dart';
 export 'src/api/json.dart' show DecodeError;
 export 'src/api/link_parser.dart';
 export 'src/api/login_models.dart';
+export 'src/api/me_models.dart';
 export 'src/api/models.dart';
 export 'src/api/rich_text.dart';
 export 'src/api/search_models.dart';

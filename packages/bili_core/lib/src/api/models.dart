@@ -57,6 +57,12 @@ final class NavInfo {
     this.vipType = 0,
     this.imgURL = '',
     this.subURL = '',
+    this.level = 0,
+    this.coins = 0,
+    this.bcoin = 0,
+    this.vipLabel = '',
+    this.vipBadge = false,
+    this.pendant,
   });
 
   factory NavInfo.fromJson(Object? json) {
@@ -71,6 +77,12 @@ final class NavInfo {
       vipType: object.integer('vipType') ?? 0,
       imgURL: images?.string('img_url') ?? '',
       subURL: images?.string('sub_url') ?? '',
+      level: object.nested('level_info')?.integer('current_level') ?? 0,
+      coins: object.number('money') ?? 0,
+      bcoin: object.nested('wallet')?.number('bcoin_balance') ?? 0,
+      vipLabel: object.nested('vip_label')?.string('text') ?? '',
+      vipBadge: (object.integer('vip_avatar_subscript') ?? 0) == 1,
+      pendant: _nonEmpty(object.nested('pendant')?.string('image')),
     );
   }
 
@@ -83,7 +95,27 @@ final class NavInfo {
   final String imgURL;
   final String subURL;
 
+  /// `level_info.current_level`, 0 when absent.
+  final int level;
+
+  /// 硬币 (`money`); halves are possible.
+  final double coins;
+
+  /// B币 (`wallet.bcoin_balance`).
+  final double bcoin;
+
+  /// `vip_label.text`, such as 年度大会员; empty for accounts without one.
+  final String vipLabel;
+
+  /// `vip_avatar_subscript` 1: the 大 badge on the avatar's corner.
+  final bool vipBadge;
+
+  /// The avatar frame (`pendant.image`), null without one.
+  final String? pendant;
+
   bool get isVip => vipStatus == 1;
+
+  static String? _nonEmpty(String? value) => value == null || value.isEmpty ? null : value;
 
   @override
   bool operator ==(Object other) =>
@@ -95,10 +127,31 @@ final class NavInfo {
       other.vipStatus == vipStatus &&
       other.vipType == vipType &&
       other.imgURL == imgURL &&
-      other.subURL == subURL;
+      other.subURL == subURL &&
+      other.level == level &&
+      other.coins == coins &&
+      other.bcoin == bcoin &&
+      other.vipLabel == vipLabel &&
+      other.vipBadge == vipBadge &&
+      other.pendant == pendant;
 
   @override
-  int get hashCode => Object.hash(isLogin, mid, uname, face, vipStatus, vipType, imgURL, subURL);
+  int get hashCode => Object.hash(
+    isLogin,
+    mid,
+    uname,
+    face,
+    vipStatus,
+    vipType,
+    imgURL,
+    subURL,
+    level,
+    coins,
+    bcoin,
+    vipLabel,
+    vipBadge,
+    pendant,
+  );
 }
 
 final class SPIInfo {

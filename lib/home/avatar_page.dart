@@ -25,6 +25,7 @@ import '../watch_later/watch_later_page.dart';
 import '../video/video_route.dart';
 import 'feed_card.dart';
 import 'recents_page.dart';
+import 'shortcut_glyphs.dart';
 
 /// What the avatar opens (49): back, the one tab 最近 (49's 看视频 and 听视频 are left out), ⚙ for 设置, the four
 /// shortcuts, and the last few videos watched in a white card. The account, logging in and out, and 开发者 are in 设置.
@@ -53,23 +54,23 @@ class AvatarPage extends StatelessWidget {
               height: AvatarPageTheme.shortcutsHeight,
               child: Row(
                 children: [
-                  _Shortcut(key: const ValueKey('avatar-offline'), label: '离线缓存', glyph: _Glyph.offline, onTap: soon),
+                  _Shortcut(key: const ValueKey('avatar-offline'), label: '离线缓存', glyph: ShortcutGlyph.offline, onTap: soon),
                   _Shortcut(
                     key: const ValueKey('avatar-history'),
                     label: '历史记录',
-                    glyph: _Glyph.history,
+                    glyph: ShortcutGlyph.history,
                     onTap: () => _push(context, (_) => const WatchHistoryPage()),
                   ),
                   _Shortcut(
                     key: const ValueKey('avatar-favourites'),
                     label: '我的收藏',
-                    glyph: _Glyph.star,
+                    glyph: ShortcutGlyph.star,
                     onTap: () => _push(context, (_) => const FavouritesPage()),
                   ),
                   _Shortcut(
                     key: const ValueKey('avatar-later'),
                     label: '稍后再看',
-                    glyph: _Glyph.later,
+                    glyph: ShortcutGlyph.later,
                     onTap: () => _push(context, (_) => const WatchLaterPage()),
                   ),
                 ],
@@ -183,7 +184,7 @@ class _Shortcut extends StatelessWidget {
   const _Shortcut({super.key, required this.label, required this.glyph, required this.onTap});
 
   final String label;
-  final _Glyph glyph;
+  final ShortcutGlyph glyph;
   final VoidCallback onTap;
 
   @override
@@ -205,7 +206,7 @@ class _Shortcut extends StatelessWidget {
                 top: AvatarPageTheme.shortcutIconCentre - AvatarPageTheme.shortcutIconBox / 2,
                 child: CustomPaint(
                   size: const Size.square(AvatarPageTheme.shortcutIconBox),
-                  painter: _ShortcutPainter(glyph),
+                  painter: ShortcutPainter(glyph),
                 ),
               ),
               Positioned(
@@ -826,99 +827,4 @@ class _CrossPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CrossPainter oldDelegate) => false;
-}
-
-enum _Glyph { offline, history, star, later }
-
-/// 49's four line icons, drawn on a 32 pt box from the screenshot.
-class _ShortcutPainter extends CustomPainter {
-  const _ShortcutPainter(this.glyph);
-
-  final _Glyph glyph;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.scale(size.width / AvatarPageTheme.shortcutIconBox);
-    final paint = _stroke(AvatarPageTheme.shortcutStroke, BiliColors.text);
-    switch (glyph) {
-      case _Glyph.offline:
-        const corner = Radius.circular(3);
-        final folder = Path()
-          ..moveTo(5.6, 10.3)
-          ..arcToPoint(const Offset(8.6, 7.3), radius: corner)
-          ..lineTo(13.2, 7.3)
-          ..lineTo(15.8, 10.8)
-          ..lineTo(23.3, 10.8)
-          ..arcToPoint(const Offset(26.3, 13.8), radius: corner)
-          ..lineTo(26.3, 21.6)
-          ..arcToPoint(const Offset(23.3, 24.6), radius: corner)
-          ..lineTo(8.6, 24.6)
-          ..arcToPoint(const Offset(5.6, 21.6), radius: corner)
-          ..close();
-        final arrow = Path()
-          ..moveTo(16, 14.6)
-          ..lineTo(16, 20.2)
-          ..moveTo(12.9, 17.3)
-          ..lineTo(16, 20.4)
-          ..lineTo(19.1, 17.3);
-        canvas
-          ..drawPath(folder, paint)
-          ..drawLine(const Offset(19.2, 7.3), const Offset(24.2, 7.3), paint)
-          ..drawPath(arrow, paint);
-      case _Glyph.history:
-        _circleArrow(canvas, paint, centre: const Offset(17.5, 16), onRight: false);
-        canvas.drawPath(
-          Path()
-            ..moveTo(17.5, 10.8)
-            ..lineTo(17.5, 15.8)
-            ..lineTo(22.6, 15.8),
-          paint,
-        );
-      case _Glyph.star:
-        const centre = Offset(16, 16.6);
-        final star = Path();
-        for (var i = 0; i < 10; i++) {
-          final radius = i.isEven ? 11.2 : 6.3;
-          final point = centre + Offset.fromDirection(-math.pi / 2 + i * math.pi / 5, radius);
-          if (i == 0) {
-            star.moveTo(point.dx, point.dy);
-          } else {
-            star.lineTo(point.dx, point.dy);
-          }
-        }
-        canvas.drawPath(star..close(), paint);
-      case _Glyph.later:
-        _circleArrow(canvas, paint, centre: const Offset(15.2, 16), onRight: true);
-        canvas.drawPath(
-          Path()
-            ..moveTo(13.2, 13.4)
-            ..lineTo(17.5, 16.05)
-            ..lineTo(13.2, 18.7)
-            ..close(),
-          paint..strokeWidth = AvatarPageTheme.shortcutStroke * 0.85,
-        );
-    }
-  }
-
-  /// A ring with a short gap beside its arrowhead, which points down: 历史记录's on the left, 稍后再看's on the right.
-  void _circleArrow(Canvas canvas, Paint paint, {required Offset centre, required bool onRight}) {
-    const radius = 10.2;
-    const gap = 15 * math.pi / 180;
-    const tip = 8 * math.pi / 180;
-    final end = onRight ? tip : math.pi - tip;
-    final start = onRight ? end + gap : end;
-    canvas.drawArc(Rect.fromCircle(center: centre, radius: radius), start, 2 * math.pi - gap, false, paint);
-    final head = centre + Offset.fromDirection(end, radius);
-    const arm = 3.4;
-    canvas.drawPath(
-      Path()
-        ..moveTo(head.dx - arm, head.dy - arm)
-        ..lineTo(head.dx, head.dy)
-        ..lineTo(head.dx + arm, head.dy - arm),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_ShortcutPainter oldDelegate) => oldDelegate.glyph != glyph;
 }
