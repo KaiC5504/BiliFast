@@ -76,6 +76,9 @@ class FeedModel extends ChangeNotifier {
   static const emptyMessage = '暂时没有推荐的视频';
   static const endMessage = '没有更多了';
 
+  /// How long a refresh's answer waits for [beforeShow]'s covers before its cards show anyway.
+  static const coverWait = Duration(milliseconds: 800);
+
   /// Pages in a row that may add nothing before a load more gives up and the feed counts as [exhausted].
   static const _emptyPagesAllowed = 3;
 
@@ -99,6 +102,11 @@ class FeedModel extends ChangeNotifier {
 
   final _dislikes = <String, CardDislike>{};
   final _dislikeBusy = <String>{};
+
+  /// Called with a refresh's cards before they replace [cards], which still hold the ones going: it starts getting
+  /// the first screen's covers ready, each future true once its cover is. The cards show once all are, or after
+  /// [coverWait], so the loading TV leaves with the pictures in place, as the official app's does (14).
+  List<Future<bool>> Function(List<FeedCard> fresh)? beforeShow;
 
   /// A refresh replaces the list, so a load more that was already running must not append to the new one.
   int _generation = 0;
@@ -139,6 +147,10 @@ class FeedModel extends ChangeNotifier {
       if (mine != _generation) return null;
       final fresh = _appending(page.cards, const []);
       _logPage(page, fresh.length);
+      if (fresh.isNotEmpty) {
+        await _coversReady(fresh);
+        if (mine != _generation) return null;
+      }
       if (fresh.isEmpty) {
         failure = emptyMessage;
       } else {
@@ -219,6 +231,37 @@ class FeedModel extends ChangeNotifier {
     if (refresh) await _client.ensureRiskCookies();
     final index = refresh ? 1 : _nextWebIndex;
     return (cards: await _client.recommendFeed(index: index), source: FeedSource.web, index: index);
+  }
+
+  /// Waits on [beforeShow]'s covers, at most [coverWait], and logs how many were ready. Never throws.
+  Future<void> _coversReady(List<FeedCard> fresh) async {
+    final List<Future<bool>> covers;
+    try {
+      covers = beforeShow?.call(fresh) ?? const [];
+    } catch (error) {
+      _logger.warn(LogCategory.ui, 'feed covers failed', {'error': '${error.runtimeType}'});
+      return;
+    }
+    if (covers.isEmpty) return;
+    final waited = Stopwatch()..start();
+    var ready = 0;
+    var timedOut = false;
+    try {
+      await Future.wait([
+        for (final cover in covers)
+          cover.then<void>((ok) {
+            if (ok) ready++;
+          }, onError: (Object _) {}),
+      ]).timeout(coverWait);
+    } on TimeoutException {
+      timedOut = true;
+    }
+    _logger.info(LogCategory.ui, 'feed covers', {
+      'ready': ready,
+      'of': covers.length,
+      'waitedMs': waited.elapsedMilliseconds,
+      'timedOut': timedOut,
+    });
   }
 
   static bool _refused(Object error) =>
