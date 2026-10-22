@@ -71,9 +71,9 @@ void main() {
     expect(favourites.calls, ['folders mid=$ownMid']);
   });
 
-  testWidgets('the header counts the space’s folders, or the list once it is all in', (tester) async {
+  testWidgets('the header counts the list once it is all in, even where the space’s count disagrees', (tester) async {
     await show(tester, api(2), count: 7);
-    expect(tester.widget<Text>(find.byKey(const ValueKey('own-favourites-count'))).data, '7');
+    expect(tester.widget<Text>(find.byKey(const ValueKey('own-favourites-count'))).data, '2');
 
     await show(tester, api(3));
     expect(tester.widget<Text>(find.byKey(const ValueKey('own-favourites-count'))).data, '3');

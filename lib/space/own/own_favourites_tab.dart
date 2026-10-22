@@ -19,7 +19,7 @@ class OwnFavouritesSliver extends StatefulWidget {
 
   final OwnFolderPager pager;
 
-  /// The folders in all; null shows the count once the last page has come.
+  /// The folders in all, shown until the list is whole; null shows nothing until then.
   final int? count;
 
   /// What the list lies on.
@@ -73,10 +73,11 @@ class _OwnFavouritesSliverState extends State<OwnFavouritesSliver> with OwnPager
     ),
   );
 
+  /// The list's own count once it is whole, so the header agrees with its rows; the space's count until then.
   String? get _count {
+    if (pager.loaded && !pager.hasMore) return '${pager.items.length}';
     final given = widget.count;
-    if (given != null) return '$given';
-    return pager.loaded && !pager.hasMore ? '${pager.items.length}' : null;
+    return given == null ? null : '$given';
   }
 
   @override
