@@ -12,6 +12,7 @@ import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
+import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/feed_more_sheet.dart';
 import 'package:bilifast/home/home_page.dart';
@@ -59,15 +60,15 @@ const _word = '崩铁新版本即将上线';
 class _Covers {
   bool holding = false;
 
-  /// Each cover asked for, by its card's bvid, with the size it was asked at.
-  final asked = <String, Size>{};
+  /// Each cover asked for, by its card's bvid, in order.
+  final asked = <String>{};
   final _waiting = <String, Completer<bool>>{};
 
   static String bvidOf(String url) => url.substring(url.lastIndexOf('/') + 1, url.lastIndexOf('.'));
 
-  Future<bool> precache(BuildContext context, String? url, Size size) {
+  Future<bool> precache(BuildContext context, String? url) {
     final bvid = bvidOf(url!);
-    asked[bvid] = size;
+    asked.add(bvid);
     if (!holding) return Future.value(true);
     return (_waiting[bvid] ??= Completer<bool>()).future;
   }
@@ -1043,7 +1044,7 @@ void main() {
     });
 
     tearDown(() {
-      HomePage.precacheCover = RemoteImage.precache;
+      HomePage.precacheCover = FeedCardView.precacheCover;
       Logger.shared.remove(logs);
     });
 
@@ -1093,16 +1094,16 @@ void main() {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
-      expect(covers.asked.keys, contains('BV1c0'), reason: 'the first load gets its covers ready too');
+      expect(covers.asked, contains('BV1c0'), reason: 'the first load gets its covers ready too');
       covers
         ..holding = true
         ..asked.clear();
       http.pages[1] = fresh();
       await tapHome(tester);
-      await settle(tester, 14);
+      await settle(tester, 5);
       expect(http.asked, [1, 1]);
       expect(covers.asked, isNotEmpty);
-      expect(reloadTv, findsOneWidget, reason: '700 ms after the answer, the covers still loading');
+      expect(reloadTv, findsOneWidget, reason: '250 ms after the tap, the covers still loading');
       expect(card('BV1c0'), findsOneWidget, reason: 'the old cards stay, fully drawn');
       expect(card('BV1n0'), findsNothing);
       expect(coverLines(), hasLength(1), reason: 'the first load');
@@ -1140,8 +1141,7 @@ void main() {
 
       final screen = firstScreen(tester);
       expect(screen.length % 2, 0, reason: 'both columns');
-      expect(covers.asked.keys, screen, reason: 'the rows that show, no more');
-      expect(covers.asked['BV1n0'], tester.getSize(cover('BV1n0')), reason: "the size the card's cover asks for");
+      expect(covers.asked, screen, reason: 'the rows that show, no more');
       final line = coverLines().last;
       expect(line.f['ready']?.toJson(), screen.length);
       expect(line.f['failed']?.toJson(), 0);
@@ -1151,7 +1151,7 @@ void main() {
       expect(tester.binding.transientCallbackCount, 0);
     });
 
-    testWidgets("首页's TV leaves 800 ms after the answer when the covers never come", (tester) async {
+    testWidgets("首页's TV leaves 300 ms after the answer when the covers never come", (tester) async {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
@@ -1180,7 +1180,7 @@ void main() {
       expect(find.descendant(of: cover('BV1n0'), matching: find.byType(CoverPlaceholder)), findsOneWidget);
     });
 
-    testWidgets('the pull holds its TV the same way, at most 800 ms, and its cards cross-fade too', (tester) async {
+    testWidgets('the pull holds its TV the same way, at most 300 ms, and its cards cross-fade too', (tester) async {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
@@ -1210,7 +1210,7 @@ void main() {
       covers.asked.clear();
       http.pages[1] = twenty();
       await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
-      await settle(tester, 10);
+      await settle(tester, 4);
       expect(find.byType(LoadingTv), findsOneWidget, reason: 'held for the covers');
       expect(card('BV1n0'), findsOneWidget);
       covers.ready();
@@ -1247,7 +1247,7 @@ void main() {
       covers.holding = true;
       http.pages[1] = fresh();
       await tapHome(tester);
-      await settle(tester, 10);
+      await settle(tester, 4);
       covers.ready();
       await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 40));
@@ -1267,18 +1267,18 @@ void main() {
       covers.holding = true;
       http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1s$i')];
       await tapHome(tester);
-      await settle(tester, 6);
-      expect(covers.asked.keys, contains('BV1s0'));
+      await settle(tester, 3);
+      expect(covers.asked, contains('BV1s0'));
 
       http.pages[1] = fresh();
       http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
       await environment.refreshAccount();
       await settle(tester, 2);
       expect(http.asked, [1, 1, 1], reason: 'the account changed: a new refresh');
-      expect(covers.asked.keys, contains('BV1n0'));
+      expect(covers.asked, contains('BV1n0'));
 
       covers.ready([for (var i = 0; i < 20; i++) 'BV1s$i']);
-      await settle(tester, 4);
+      await settle(tester, 2);
       expect(card('BV1s0'), findsNothing, reason: 'the stale answer is dropped');
       expect(card('BV1c0'), findsOneWidget);
 
@@ -1342,7 +1342,7 @@ void main() {
       covers.holding = true;
       http.pages[1] = fresh();
       await tapHome(tester);
-      await settle(tester, 10);
+      await settle(tester, 4);
       covers.ready();
       await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 60));
@@ -1359,7 +1359,7 @@ void main() {
 
     testWidgets("with the real precache the first screen's new covers are downloaded once, at the size their cards "
         'ask for, and drawn the frame the cards come', (tester) async {
-      HomePage.precacheCover = RemoteImage.precache;
+      HomePage.precacheCover = FeedCardView.precacheCover;
       final picture = (await tester.runAsync(_coverPng))!;
       final folder = (await tester.runAsync(() => Directory.systemTemp.createTemp('feed_covers')))!;
       final downloads = <String, int>{};
@@ -1416,6 +1416,12 @@ void main() {
         expect(downloadsOf(bvid), 1, reason: "$bvid: the card's own picture is the precached one");
       }
       expect(downloads.values.every((count) => count == 1), isTrue, reason: 'no address downloaded twice');
+      final coverAddresses = [
+        for (final url in downloads.keys)
+          if (url.contains('/bfs/archive/')) url,
+      ];
+      expect(coverAddresses, isNotEmpty);
+      expect(coverAddresses, everyElement(endsWith('.jpg${BiliMetrics.feedCoverSuffix}')), reason: "the CDN's size");
       // The store's steps wait on frames as well as on the disk.
       var stored = false;
       unawaited(cache.settle().then((_) => stored = true));

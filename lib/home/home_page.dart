@@ -49,9 +49,10 @@ class HomePage extends StatefulWidget {
   /// The equipped 装扮: with a `head_bg` it dresses the top (110).
   final Skin? skin;
 
-  /// Gets a 推荐 cover ready before its card shows; tests stand in for [RemoteImage.precache], as they have no network.
+  /// Gets a 推荐 cover ready before its card shows; tests stand in for [FeedCardView.precacheCover], as they have no
+  /// network.
   @visibleForTesting
-  static Future<bool> Function(BuildContext context, String? url, Size size) precacheCover = RemoteImage.precache;
+  static Future<bool> Function(BuildContext context, String? url) precacheCover = FeedCardView.precacheCover;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -775,8 +776,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
 
   static double _columnWidth(double gridWidth) => (gridWidth - BiliMetrics.feedSpacing * 3) / 2;
 
-  /// Notes the cards going and starts the covers of the rows the top of the list shows, both columns, at the size
-  /// their cards will ask for.
+  /// Notes the cards going and starts the covers of the rows the top of the list shows, both columns, as their cards
+  /// will ask for them.
   CoverWait _beforeShow(List<FeedCard> fresh) {
     if (!mounted) return const CoverWait.skipped(CoverSkip.unmounted);
     final feed = widget.feed;
@@ -789,8 +790,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     final rowExtent = FeedCardSize.height(width, _scaler) + spacing;
     final rows = math.max(((viewport.height - _inset - spacing) / rowExtent).ceil(), 0);
     if (rows == 0) return const CoverWait.skipped(CoverSkip.noRows);
-    final size = FeedCardSize.cover(width);
-    return CoverWait([for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover, size)]);
+    return CoverWait([for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover)]);
   }
 
   List<_Going> _goingOf(List<FeedCard> cards) => [

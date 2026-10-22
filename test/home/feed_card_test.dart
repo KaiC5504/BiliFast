@@ -9,6 +9,7 @@ import 'package:bili_core/logic.dart' show CountFormat;
 import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/shared/cover_placeholder.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
@@ -55,8 +56,34 @@ void main() {
   testWidgets("on 01's 211 pt column a card is 242 pt tall, so with the grid's gap its covers are 248 pt apart", (
     tester,
   ) async {
-    expect(FeedCardSize.cover(211), const Size(211, 158.25));
     expect(FeedCardSize.height(211, TextScaler.noScaling) + BiliMetrics.feedSpacing, moreOrLessEquals(248));
+  });
+
+  testWidgets("the cover asks the CDN for its pre-made size, whatever the column's width and the pixel ratio", (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final ratio in [2.0, 3.0]) {
+      tester.view.devicePixelRatio = ratio;
+      for (final width in [160.0, 211.0, 300.0]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: width,
+                child: FeedCardView(card: card, onOpen: (_) {}, onWatchLater: () {}),
+              ),
+            ),
+          ),
+        );
+        final pictures = tester
+            .widgetList<Image>(find.descendant(of: find.byType(FeedCardView), matching: find.byType(Image)))
+            .map((image) => image.image)
+            .whereType<StoredNetworkImage>();
+        expect(pictures.single.url, '${card.cover}${BiliMetrics.feedCoverSuffix}', reason: '$width pt at ${ratio}x');
+      }
+    }
   });
 
   group('the counts over the cover', () {

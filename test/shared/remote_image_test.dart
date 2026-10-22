@@ -299,7 +299,8 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       final context = tester.element(find.byType(SizedBox));
       for (var ask = 0; ask < 2; ask++) {
-        expect(await tester.runAsync(() => RemoteImage.precache(context, refused, const Size(160, 100))), isFalse);
+        final ready = await tester.runAsync(() => RemoteImage.precache(context, refused, size: const Size(160, 100)));
+        expect(ready, isFalse);
       }
       expect(downloads, 2);
       final warning = logs.events.where((event) => event.msg == 'image failed').single;
@@ -308,6 +309,76 @@ void main() {
       expect('${warning.f['path']?.toJson()}', startsWith('/bfs/archive/refused.jpg@'));
       await drop(tester);
     });
+
+    testWidgets('a picture got ready ahead with a CDN suffix is the one a box of any size with that suffix draws', (
+      tester,
+    ) async {
+      await keep(tester);
+      answers.add(animatedGif);
+      const cover = 'https://i0.hdslb.com/bfs/archive/ahead.jpg';
+      const suffix = '@672w_378h_1c.webp';
+      await tester.pumpWidget(const SizedBox());
+      final context = tester.element(find.byType(SizedBox));
+      expect(await tester.runAsync(() => RemoteImage.precache(context, cover, cdnSuffix: suffix)), isTrue);
+
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: SizedBox(width: 50, height: 30, child: RemoteImage(cover, cdnSuffix: suffix)),
+          ),
+        ),
+      );
+      expect((tester.widget<Image>(find.byType(Image)).image as StoredNetworkImage).url, '$cover$suffix');
+      expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull, reason: 'drawn the frame it shows');
+      expect(downloads, 1);
+      await drop(tester);
+    });
+  });
+
+  testWidgets('a CDN suffix is asked for whatever the box and the pixel ratio; without one the box is rounded up', (
+    tester,
+  ) async {
+    const cover = 'https://i0.hdslb.com/bfs/archive/fixed.jpg';
+    const suffix = '@672w_378h_1c.webp';
+    for (final ratio in [1.0, 2.0, 3.0]) {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: MediaQueryData(devicePixelRatio: ratio),
+          child: const Directionality(
+            textDirection: TextDirection.ltr,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(width: 211, height: 158.25, child: RemoteImage(cover, cdnSuffix: suffix)),
+                SizedBox(width: 100, height: 100, child: RemoteImage(cover, cdnSuffix: suffix)),
+                SizedBox(width: 40, height: 40, child: RemoteImage(cover)),
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: RemoteImage('https://i0.hdslb.com/bfs/archive/signed.jpg?sign=x', cdnSuffix: suffix),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      final addresses = [
+        for (final image in tester.widgetList<Image>(find.byType(Image))) (image.image as StoredNetworkImage).url,
+      ];
+      final bucket = (40 * ratio / 60).ceil() * 60;
+      expect(addresses, [
+        '$cover$suffix',
+        '$cover$suffix',
+        sizedImageUrl(cover, width: bucket, height: bucket),
+        'https://i0.hdslb.com/bfs/archive/signed.jpg?sign=x',
+      ], reason: 'at ${ratio}x');
+    }
+    const schemeless = '//i1.hdslb.com/bfs/archive/a.jpg';
+    expect(suffixedImageUrl(schemeless, suffix), 'https:$schemeless$suffix');
+    expect(suffixedImageUrl('https://example.com/a.jpg', suffix), 'https://example.com/a.jpg');
+    const sized = 'https://i0.hdslb.com/bfs/archive/a.jpg@100w.webp';
+    expect(suffixedImageUrl(sized, suffix), sized);
   });
 
   group('a picture shown once', () {

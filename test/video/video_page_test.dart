@@ -569,51 +569,64 @@ void main() {
     await back(tester);
   });
 
-  testWidgets('a push asks for at most two cover sizes: the card flies, the player box loads once', (tester) async {
-    final requested = <String>[];
-    debugNetworkImageHttpClientProvider = () => _RecordingHttpClient(requested);
-    try {
-      const route = VideoRoute(bvid: bv, cid: p1, start: 0, cover: cover);
-      await host(
-        tester,
-        home: Builder(
-          builder: (context) => Center(
-            child: GestureDetector(
-              key: const ValueKey('card'),
-              // openVideoPage's push, with the test's session.
-              onTap: () => Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route))),
-              child: SizedBox(
-                width: 214,
-                height: 160,
-                child: Hero(tag: VideoRoute.coverTag(bv), child: const RemoteImage(cover)),
+  for (final (name, card, address) in [
+    ('a card sized by its box', const RemoteImage(cover), sizedImageUrl(cover, width: 240, height: 180)),
+    (
+      "a 推荐 card at the CDN's size",
+      const RemoteImage(cover, cdnSuffix: BiliMetrics.feedCoverSuffix),
+      suffixedImageUrl(cover, BiliMetrics.feedCoverSuffix),
+    ),
+  ]) {
+    testWidgets('a push from $name asks for at most two cover sizes: the card flies on its own download, the player '
+        'box loads once', (tester) async {
+      final requested = <String>[];
+      debugNetworkImageHttpClientProvider = () => _RecordingHttpClient(requested);
+      try {
+        const route = VideoRoute(bvid: bv, cid: p1, start: 0, cover: cover);
+        await host(
+          tester,
+          home: Builder(
+            builder: (context) => Center(
+              child: GestureDetector(
+                key: const ValueKey('card'),
+                // openVideoPage's push, with the test's session.
+                onTap: () => Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route))),
+                child: SizedBox(
+                  width: 214,
+                  height: 160,
+                  child: Hero(tag: VideoRoute.coverTag(bv), child: card),
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pump();
-      expect(requested, [sizedImageUrl(cover, width: 240, height: 180)]);
-      requested.clear();
-      await tester.tap(find.byKey(const ValueKey('card')));
-      final shuttle = find.byWidgetPredicate((widget) => widget is RemoteImage && widget.placeholder != null);
-      var flew = false;
-      for (var i = 0; i < 40; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-        flew |= shuttle.evaluate().isNotEmpty;
+        );
+        await tester.pump();
+        expect(requested, [address]);
+        requested.clear();
+        await tester.tap(find.byKey(const ValueKey('card')));
+        final shuttle = find.byWidgetPredicate((widget) => widget is RemoteImage && widget.placeholder != null);
+        var flew = false;
+        for (var i = 0; i < 40; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          flew |= shuttle.evaluate().isNotEmpty;
+        }
+        expect(flew, isTrue, reason: 'the card image flew under the player-sized cover');
+        expect(
+          requested,
+          [sizedImageUrl(cover, width: 480, height: 300)],
+          reason: "the card's picture is the one it already asked for; the player box's, once",
+        );
+        await back(tester);
+        // The recording client never answers; the downloads give up.
+        await tester.pump(ImageDiskCache.downloadTimeout);
+      } finally {
+        debugNetworkImageHttpClientProvider = null;
+        imageCache
+          ..clear()
+          ..clearLiveImages();
       }
-      expect(flew, isTrue, reason: 'the card image flew under the player-sized cover');
-      expect(requested.toSet().length, lessThanOrEqualTo(2));
-      expect(requested.where((url) => url == sizedImageUrl(cover, width: 480, height: 300)), hasLength(1));
-      await back(tester);
-      // The recording client never answers; the downloads give up.
-      await tester.pump(ImageDiskCache.downloadTimeout);
-    } finally {
-      debugNetworkImageHttpClientProvider = null;
-      imageCache
-        ..clear()
-        ..clearLiveImages();
-    }
-  });
+    });
+  }
 
   group('a card opened during the pop', () {
     testWidgets('another part: the page reports its own part at its last position, nothing of the newer one',

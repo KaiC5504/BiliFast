@@ -6,6 +6,7 @@ import 'package:bilifast/account/app_auth.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/home/feed_dislike.dart';
 import 'package:bilifast/home/feed_more_sheet.dart';
 import 'package:bilifast/home/home_page.dart';
@@ -116,13 +117,14 @@ void main() {
   });
 
   /// 首页 at 3× as KaiC's iPhone, on the official feed unless [token] is false, with [auth] (or [authFor]'s, made once
-  /// the environment is) as the app token's.
+  /// the environment is) as the app token's. [reloads] stands in for the bar's 首页 taps.
   Future<void> show(
     WidgetTester tester, {
     AppAuth? auth,
     AppAuth Function(AppEnvironment environment)? authFor,
     bool token = true,
     bool systemFont = false,
+    Listenable? reloads,
   }) async {
     if (systemFont) {
       final saved = BiliFonts.family;
@@ -157,7 +159,7 @@ void main() {
           key: _screen,
           child: AppScope(services: services, child: child!),
         ),
-        home: const HomePage(),
+        home: HomePage(reloads: reloads),
       ),
     );
     await settle(tester, 40);
@@ -195,12 +197,22 @@ void main() {
   });
 
   testWidgets('不感兴趣：当前视频 turns the card over, 撤销 brings it back, each sent once', (tester) async {
+    StoredNetworkImage coverIn(Finder within) => tester
+        .widgetList<Image>(find.descendant(of: within, matching: find.byType(Image)))
+        .map((image) => image.image)
+        .whereType<StoredNetworkImage>()
+        .single;
+
     await show(tester);
+    final live = coverIn(card('BV1aaa'));
+    expect(live.url, endsWith(BiliMetrics.feedCoverSuffix));
     await openMore(tester, 'BV1aaa');
     await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
     await settle(tester);
     expect(find.byType(FeedSheetRow), findsNothing);
-    expect(find.descendant(of: card('BV1aaa'), matching: find.byType(FeedDislikedCard)), findsOneWidget);
+    final turned = find.descendant(of: card('BV1aaa'), matching: find.byType(FeedDislikedCard));
+    expect(turned, findsOneWidget);
+    expect(coverIn(turned), live, reason: "the blurred cover is the card's own download");
     expect(find.text('已减少此类内容推荐'), findsOneWidget);
     expect(http.dislikes.single['reason_id'], '1');
 
@@ -213,11 +225,13 @@ void main() {
   group("while a refresh's covers load", () {
     var holding = false;
     final held = <Completer<bool>>[];
+    late ValueNotifier<int> reloads;
 
     setUp(() {
       holding = false;
       held.clear();
-      HomePage.precacheCover = (_, _, _) {
+      reloads = ValueNotifier(0);
+      HomePage.precacheCover = (_, _) {
         if (!holding) return Future.value(true);
         final cover = Completer<bool>();
         held.add(cover);
@@ -225,19 +239,25 @@ void main() {
       };
     });
 
-    tearDown(() => HomePage.precacheCover = RemoteImage.precache);
+    tearDown(() {
+      HomePage.precacheCover = FeedCardView.precacheCover;
+      reloads.dispose();
+    });
 
     Finder going(String bvid) => find.byKey(ValueKey('feed-card-going-$bvid'));
 
     Finder turnedOver(Finder slot) => find.descendant(of: slot, matching: find.byType(FeedDislikedCard));
 
-    /// A pull whose answer has come, its covers held; the old cards stay for at most [FeedModel.coverWait], so what
-    /// follows keeps its frames short.
-    Future<void> pullHeld(WidgetTester tester) async {
+    /// A refresh by the bar's 首页 whose answer has come, its covers held; the old cards stay for at most
+    /// [FeedModel.coverWait], so what follows keeps its frames short. Not a pull: while the list springs back it
+    /// takes no taps, and that outlasts the wait.
+    Future<void> refreshHeld(WidgetTester tester) async {
       holding = true;
       http.officialPages[0] = [for (var i = 0; i < 4; i++) officialItem('BV1new$i')];
-      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
-      await settle(tester, 2);
+      reloads.value++;
+      for (var i = 0; i < 20 && held.isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 1));
+      }
       expect(held, isNotEmpty, reason: 'the answer came and its covers are loading');
     }
 
@@ -259,12 +279,12 @@ void main() {
     }
 
     testWidgets('a 不感兴趣 made meanwhile stays on the card as it fades out', (tester) async {
-      await show(tester);
-      await pullHeld(tester);
-      await tester.tap(more('BV1aaa'));
-      await frames(tester, 6);
+      await show(tester, reloads: reloads);
+      // The sheet takes longer to open than the covers are waited for, so the refresh starts under it.
+      await openMore(tester, 'BV1aaa');
+      await refreshHeld(tester);
       await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
-      await frames(tester, 6);
+      await frames(tester, 3);
       expect(card('BV1new0'), findsNothing, reason: 'still waiting on the covers');
       expect(turnedOver(card('BV1aaa')), findsOneWidget);
 
@@ -279,22 +299,24 @@ void main() {
     });
 
     testWidgets('a 撤销 made meanwhile brings the card back before it fades out', (tester) async {
-      await show(tester);
+      await show(tester, reloads: reloads);
       await openMore(tester, 'BV1aaa');
       await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
       await settle(tester);
       expect(turnedOver(card('BV1aaa')), findsOneWidget);
 
-      await pullHeld(tester);
+      await refreshHeld(tester);
       await tester.tap(find.byKey(const ValueKey('feed-disliked-undo')));
-      await frames(tester, 8);
+      await frames(tester, 3);
       expect(card('BV1new0'), findsNothing, reason: 'still waiting on the covers');
-      expect(turnedOver(card('BV1aaa')), findsNothing);
+      expect(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('feed-card-live'))), findsOne);
+      expect(http.cancels, hasLength(1));
 
       await handOff(tester, 'BV1aaa');
       await tester.pump(const Duration(milliseconds: 60));
       expect(going('BV1aaa'), findsOneWidget);
-      expect(turnedOver(card('BV1new0')), findsNothing, reason: 'the card fading out is the one taken back');
+      expect(turnedOver(going('BV1aaa')), findsNothing, reason: 'the card fading out is the one taken back');
+      expect(turnedOver(card('BV1new0')), findsNothing);
       await settle(tester, 10);
       expect(http.cancels, hasLength(1));
     });
