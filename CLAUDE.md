@@ -138,6 +138,16 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   placeholder (#DEDFE1 with the faint 小电视, no shade) and pops in. The card took the official stat icons, 9.67 pt
   counts and 248 pt row pitch (01). 设置's 清除图片缓存 shows the size. Logs: `image cache` at launch, `images cleared`
   on iOS's low-memory warning, `feed covers` per refresh (ready, failed, of, waitedMs, timedOut).
+- 1.0.0 (29), from KaiC's (28) log and use: `images cleared` fired four times in three minutes (leaving the app does
+  it), and the cover wait made a refresh ~1.8 s against the official ~1.0 s. 推荐's swap no longer waits for covers:
+  they are asked for the moment the answer lands and pop in over the placeholder (`feed covers` at the swap: ready,
+  failed, of, early, heldMs), at the box's own size (1×; the CDN's pre-made 672×378 was 1.26× soft). A pull held past
+  the trigger fetches page 1 at once, shown on release (the rule below). 我的 keeps the last profile and counts on the
+  phone (`me.json`, the account's only, deleted on logout) and draws them at once, then loads quietly; hidden, it
+  loads ~3 s after launch with the account check's nav, so only `/nav/stat` goes out and the face and frame are in
+  before it opens. Launch asks nav once (`BiliClient.nav` shares one out). Avatar frames stay up through a reload, as
+  faces do. The official app's own requests go around a Wi-Fi proxy (its `libignet` speaks HTTP/3 over QUIC with its
+  own DNS), so its iPhone cover sizes are unknown; its Android rule is `@{w}w_{h}h_1e_1c.webp` from a size table.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -257,7 +267,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     loading TV every list and page uses (`lib/player_ui/player_loading.dart` is the player's).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
     `font.json`, `emotes_recent.json`, `search_history.json`, `node_memory.json`, `danmaku_settings.json`,
-    `codec_memory.json`, `log_server.json`); the log is in the caches folder.
+    `codec_memory.json`, `log_server.json`, `me.json`); the log and the pictures (`images`) are in the caches folder.
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`: `shared`, `devlog`,
   `danmaku`, `api`, `logic`, `dash_hls`, `local_http`, `engine`, and `bin/ripper_bench.dart`.
 - `ios/Runner/`: native Swift (player registry and host view, keychain, the login web view's cookies, device
@@ -374,8 +384,12 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - 搜索 keeps one search call out at a time, suggestions included, with a gap between result pages; a load round
   that adds no row (a 筛选 cut them all) stalls until the user asks again, so nothing loops against the account.
   The keyword is the user's text: never log it, nor an error's `toString` (cupertino_http's carries the URL).
-- Every pull to refresh refreshes when the finger lets go, never while still pulled (KaiC, 2026-10-22: all of the
-  official app works so; 107). Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`.
+- Every pull to refresh changes nothing on screen until the finger lets go (KaiC, 2026-10-22: all of the official app
+  works so; 107). A list may start its refresh's work once the pull is held past the trigger (`ReleaseRefreshControl`'s
+  `onArmed`/`onDisarmed`; KaiC saw the official 推荐 load while held, 2026-10-23): 推荐 fetches page 1 then, at most
+  one call per arming, keeps it unseen and shows it the moment the finger lets go. Pushed back until the TV is gone
+  and let go there, nothing refreshes (`feed pull cancelled`); the unseen answer may serve another pull within 10 s.
+  Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`.
 - Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's
   `PlayerLoading`), never a spinning circle, except for loading more under a list and inside buttons, where the
   official app keeps the small system spinner too.
