@@ -1,4 +1,4 @@
-import 'dart:async' show TimeoutException, unawaited;
+import 'dart:async' show Completer, TimeoutException, Timer, unawaited;
 import 'dart:io' show IOException;
 
 import 'package:bili_core/api.dart';
@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 
 import '../devtools/crash_log.dart';
 import '../playback/playback_controller.dart' show PlaybackFailure;
+import '../shared/image_disk_cache.dart';
+import '../shared/remote_image.dart' show secureImageUrl;
 import '../video/player_prefs.dart';
 
 /// The words for a failed request: the BiliError's or PlaybackFailure's message (a 番剧 link), a network message
@@ -106,19 +108,25 @@ class CoverPrefetch {
 
 /// A [CoverPrefetch]'s covers, counted as they finish.
 class _CoverCount {
-  _CoverCount(CoverPrefetch prefetch) : of = prefetch.covers.length, skipped = prefetch.skipped {
+  _CoverCount(CoverPrefetch prefetch, {required DateTime Function() now, required this.warm, required this.warming})
+    : of = prefetch.covers.length,
+      skipped = prefetch.skipped,
+      asked = now() {
     for (final cover in prefetch.covers) {
       unawaited(
         cover.then<void>(
           (ok) {
             if (ok) {
               ready++;
+              readyMs.add(now().difference(asked).inMilliseconds);
             } else {
               failed++;
             }
+            _check();
           },
           onError: (Object _) {
             failed++;
+            _check();
           },
         ),
       );
@@ -127,8 +135,30 @@ class _CoverCount {
 
   final int of;
   final CoverSkip? skipped;
+
+  /// When they were asked for, as the answer landed.
+  final DateTime asked;
+
+  /// Whether the picture connection was open then, and whether a warm was still opening it.
+  final bool warm;
+  final bool warming;
+
   int ready = 0;
   int failed = 0;
+
+  /// Each ready cover's ms after [asked], in the order they came.
+  final readyMs = <int>[];
+
+  final _done = Completer<void>();
+
+  bool get finished => ready + failed == of;
+
+  /// Completes once every cover is ready or failed.
+  Future<void> get done => _done.future;
+
+  void _check() {
+    if (finished && !_done.isCompleted) _done.complete();
+  }
 }
 
 /// A card after 不感兴趣: the reason it went with, and the 反馈 picked in the reasons sheet, if any.
@@ -145,10 +175,16 @@ class CardDislike {
 /// feed is generic without one. When the official feed answers that the token is refused, the same load is done
 /// from the website's, so 推荐 never goes blank.
 class FeedModel extends ChangeNotifier {
-  FeedModel({required this._client, Logger? logger, bool Function()? officialWanted, DateTime Function()? now})
-    : _logger = logger ?? Logger.shared,
-      _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
-      _now = now ?? DateTime.now;
+  FeedModel({
+    required this._client,
+    Logger? logger,
+    bool Function()? officialWanted,
+    DateTime Function()? now,
+    PictureSession? Function()? pictures,
+  }) : _logger = logger ?? Logger.shared,
+       _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
+       _now = now ?? DateTime.now,
+       _pictures = pictures ?? (() => ImageDiskCache.session);
 
   static const emptyMessage = '暂时没有推荐的视频';
   static const endMessage = '没有更多了';
@@ -156,6 +192,9 @@ class FeedModel extends ChangeNotifier {
   /// How long a pull's early page, once in, still serves a pull armed again after the last one went back under its
   /// trigger. Within it an arming asks nothing, so wiggling across the trigger costs one call.
   static const earlyReuse = Duration(seconds: 10);
+
+  /// How long after its covers were asked for a page shown logs `feed covers done` with some still out.
+  static const coversDoneAfter = Duration(seconds: 10);
 
   /// Pages in a row that may add nothing before a load more gives up and the feed counts as [exhausted].
   static const _emptyPagesAllowed = 3;
@@ -167,6 +206,7 @@ class FeedModel extends ChangeNotifier {
   final Logger _logger;
   final bool Function() _officialWanted;
   final DateTime Function() _now;
+  final PictureSession? Function() _pictures;
   List<FeedCard> _cards = const [];
   bool _loading = false;
   String? _error;
@@ -191,6 +231,7 @@ class FeedModel extends ChangeNotifier {
   int _generation = 0;
 
   _EarlyPage? _early;
+  final _coverTimers = <Timer>{};
   bool _disposed = false;
 
   List<FeedCard> get cards => _cards;
@@ -229,6 +270,7 @@ class FeedModel extends ChangeNotifier {
     final mine = ++_generation;
     _loading = true;
     _officialRefused = false;
+    if (early == null) _openPictures();
     _notify();
     final heldMs = early == null ? null : _now().difference(early.started).inMilliseconds;
     String? failure;
@@ -243,7 +285,9 @@ class FeedModel extends ChangeNotifier {
       } else {
         final asked = _askCovers(fresh);
         // A held pull's covers were asked for when its page came in; those are the ones that can be ready by now.
-        _logCovers(early?.covers ?? asked, heldMs: heldMs);
+        final shown = early?.covers ?? asked;
+        _logCovers(shown, heldMs: heldMs);
+        if (shown != null) _whenCoversDone(shown, early: heldMs != null);
         _cards = fresh;
         _advance(page);
         _source = page.source;
@@ -315,6 +359,7 @@ class FeedModel extends ChangeNotifier {
       _warm(held);
       return;
     }
+    _openPictures();
     final early = _EarlyPage(
       generation: _generation,
       official: _officialPossible,
@@ -381,11 +426,24 @@ class FeedModel extends ChangeNotifier {
     if (fresh.isNotEmpty) early.covers = _askCovers(fresh);
   }
 
+  /// Opens the picture connection while page 1 is out, so the covers it brings start on it. Before any picture has
+  /// downloaded, the top card's cover is the one asked for.
+  void _openPictures() {
+    final cover = _cards.firstOrNull?.cover;
+    _pictures()?.warm(picture: cover == null || cover.isEmpty ? null : secureImageUrl(cover));
+  }
+
   /// Hands [fresh] to [beforeShow]; null if it threw, which goes to the crash log.
   _CoverCount? _askCovers(List<FeedCard> fresh) {
     final hook = beforeShow;
+    final pictures = _pictures();
     try {
-      return _CoverCount(hook == null ? const CoverPrefetch.skipped(CoverSkip.noGrid) : hook(fresh));
+      return _CoverCount(
+        hook == null ? const CoverPrefetch.skipped(CoverSkip.noGrid) : hook(fresh),
+        now: _now,
+        warm: pictures?.open ?? false,
+        warming: pictures?.warming ?? false,
+      );
     } catch (error, stack) {
       CrashLog.report(error, stack, source: 'feed covers', logger: _logger);
       return null;
@@ -404,6 +462,40 @@ class FeedModel extends ChangeNotifier {
       'early': heldMs != null,
       'heldMs': ?heldMs,
     });
+  }
+
+  /// Once a shown page's covers are all ready or failed, or [coversDoneAfter] after they were asked for: when the 3rd
+  /// and the last ready one came (ms after asking), and whether the picture connection was open or opening then.
+  void _whenCoversDone(_CoverCount count, {required bool early}) {
+    if (count.of == 0) return;
+    var logged = false;
+    void log() {
+      if (logged || _disposed) return;
+      logged = true;
+      _logger.info(LogCategory.ui, 'feed covers done', {
+        'of': count.of,
+        'ready': count.ready,
+        'failed': count.failed,
+        'thirdMs': ?count.readyMs.elementAtOrNull(2),
+        'lastMs': ?count.readyMs.lastOrNull,
+        'warm': count.warm,
+        if (count.warming) 'warming': true,
+        'early': early,
+        if (!count.finished) 'timedOut': true,
+      });
+    }
+
+    if (count.finished) return log();
+    late final Timer timer;
+    void finish() {
+      timer.cancel();
+      _coverTimers.remove(timer);
+      log();
+    }
+
+    timer = Timer(coversDoneAfter - _now().difference(count.asked), finish);
+    _coverTimers.add(timer);
+    unawaited(count.done.then((_) => finish()));
   }
 
   /// One page from the source this load should read, with the index it asked for. The indexes only move once the
@@ -540,6 +632,10 @@ class FeedModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    for (final timer in _coverTimers) {
+      timer.cancel();
+    }
+    _coverTimers.clear();
     super.dispose();
   }
 }

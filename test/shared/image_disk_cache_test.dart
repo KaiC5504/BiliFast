@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:bili_core/api.dart' show BiliClient, HTTPRequest, HTTPResponse, HTTPTransport;
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:flutter/painting.dart';
@@ -112,6 +113,35 @@ final class _Response extends Stream<List<int>> implements HttpClientResponse {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Stands in for the iPhone's URLSession: records each request and answers [status] with [body]; while [hold] is
+/// pending, answers wait for it, and [error] is thrown in place of an answer.
+final class _Transport implements HTTPTransport {
+  final sent = <HTTPRequest>[];
+  int status = HttpStatus.ok;
+  List<int> body = const [1, 2, 3];
+  Future<void>? hold;
+  Object? error;
+
+  @override
+  Future<HTTPResponse> send(HTTPRequest request) async {
+    sent.add(request);
+    await hold;
+    final failure = error;
+    if (failure != null) throw failure;
+    return HTTPResponse(status: status, headers: const {}, body: Uint8List.fromList(body), finalURL: request.url);
+  }
+}
+
+/// As cupertino_http's errors, whose text carries the address.
+final class _AddressedError implements Exception {
+  const _AddressedError(this.url);
+
+  final Uri url;
+
+  @override
+  String toString() => 'ClientException: connection lost, uri=$url';
 }
 
 /// A cache whose folder can't be listed while [listError] is set; [listings] counts the tries.
@@ -444,6 +474,150 @@ void main() {
       await expectLater(cache.bytes(_b), throwsA(isA<NetworkImageLoadException>()));
       await cache.settle();
       expect(names(), isEmpty);
+    });
+  });
+
+  group('the picture session', () {
+    const cover = 'https://i0.hdslb.com/bfs/archive/cover.jpg@660w_480h_1c.webp';
+    late _Transport transport;
+    late DateTime now;
+    late PictureSession session;
+
+    setUp(() {
+      transport = _Transport();
+      now = DateTime(2026, 10, 23, 12);
+      session = PictureSession(transport, now: () => now);
+    });
+
+    tearDown(() {
+      ImageDiskCache.session = null;
+      debugNetworkImageHttpClientProvider = null;
+    });
+
+    test('the PC has none: pictures come through dart:io there', () {
+      expect(PictureSession.platform(), isNull);
+      expect(ImageDiskCache.session, isNull);
+    });
+
+    test(
+      'with one, every download goes through it: a GET with the headers and a 15 s wait, the body for a 200',
+      () async {
+        final dartIo = _Client(HttpStatus.ok, [9]);
+        debugNetworkImageHttpClientProvider = () => dartIo;
+        ImageDiskCache.session = session;
+        final cache = ImageDiskCache(folder: folder.path);
+        caches.add(cache);
+        expect(await cache.bytes(_a, headers: const {'User-Agent': 'test'}), [1, 2, 3]);
+        final request = transport.sent.single;
+        expect(request.method, 'GET');
+        expect('${request.url}', _a);
+        expect(request.headers, {'User-Agent': 'test'});
+        expect(request.timeout, PictureSession.requestTimeout);
+        expect(PictureSession.requestTimeout, const Duration(seconds: 15));
+        expect(request.body, isNull);
+        expect(dartIo.asked, isEmpty, reason: 'dart:io is not asked as well');
+        expect(session.open, isTrue);
+      },
+    );
+
+    test('a status other than 200 throws NetworkImageLoadException; the connection still answered', () async {
+      transport.status = HttpStatus.notFound;
+      await expectLater(
+        session.download(Uri.parse(_b), null),
+        throwsA(isA<NetworkImageLoadException>().having((error) => error.statusCode, 'statusCode', 404)),
+      );
+      expect(session.open, isTrue);
+    });
+
+    test('one that never answers gives up after its timeout with a TimeoutException', () async {
+      transport.hold = Completer<void>().future;
+      expect(ImageDiskCache.downloadTimeout, const Duration(seconds: 30));
+      await expectLater(
+        session.download(Uri.parse(_a), null, timeout: const Duration(milliseconds: 50)),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(session.open, isFalse);
+    });
+
+    test("a failure on the way is a network failure whose text leaves the address out", () async {
+      transport.error = _AddressedError(Uri.parse(_a));
+      final failure = await session.download(Uri.parse(_a), null).then<Object?>((_) => null, onError: (Object e) => e);
+      expect(failure, isA<PictureDownloadException>().having((error) => error.reason, 'reason', '_AddressedError'));
+      expect(failure, isA<IOException>(), reason: 'kept on disk: a network failure is no bad picture');
+      expect('$failure', isNot(contains('hdslb')));
+    });
+
+    group('warmed as a refresh starts', () {
+      test(
+        'sends a HEAD with the picture headers for the given picture before any download, at most one at once',
+        () async {
+          final hold = Completer<void>();
+          transport.hold = hold.future;
+          expect(session.warm(picture: cover), isTrue);
+          final head = transport.sent.single;
+          expect(head.method, 'HEAD');
+          expect('${head.url}', cover);
+          expect(head.headers, BiliClient.mediaHeaders);
+          expect(head.headers.keys.map((name) => name.toLowerCase()), isNot(contains('cookie')));
+          expect(session.warming, isTrue);
+          expect(session.warm(picture: cover), isFalse, reason: 'one is out');
+          expect(transport.sent, hasLength(1));
+
+          hold.complete();
+          await pumpEventQueue();
+          expect(session.warming, isFalse);
+          expect(session.open, isTrue);
+        },
+      );
+
+      test('skipped while the connection answered within 10 s; sent again after', () async {
+        expect(session.warm(picture: cover), isTrue);
+        await pumpEventQueue();
+        now = now.add(const Duration(seconds: 9));
+        expect(session.warm(picture: cover), isFalse);
+        await session.download(Uri.parse(cover), null);
+        now = now.add(const Duration(seconds: 9));
+        expect(session.warm(picture: cover), isFalse, reason: 'a download answered 9 s ago');
+        now = now.add(PictureSession.keepAlive);
+        expect(session.warm(picture: cover), isTrue);
+        expect([for (final request in transport.sent) request.method], ['HEAD', 'GET', 'HEAD']);
+      });
+
+      test('asks for the last picture downloaded on i0 without a query, in place of the one given', () async {
+        const face = 'https://i0.hdslb.com/bfs/face/f.jpg@120w_120h_1c.webp';
+        await session.download(Uri.parse(face), null);
+        await session.download(Uri.parse('https://i0.hdslb.com/bfs/face/signed.jpg?sign=x'), null);
+        await session.download(Uri.parse('https://archive.biliimg.com/bfs/archive/x.jpg'), null);
+        now = now.add(PictureSession.keepAlive);
+        expect(session.warm(picture: cover), isTrue);
+        expect('${transport.sent.last.url}', face);
+      });
+
+      test('skipped with no picture, or one on another host', () {
+        expect(session.warm(), isFalse);
+        expect(session.warm(picture: 'https://i1.hdslb.com/bfs/archive/a.jpg'), isFalse);
+        expect(session.warm(picture: 'https://archive.biliimg.com/bfs/archive/a.jpg'), isFalse);
+        expect(session.warm(picture: 'http://i0.hdslb.com/bfs/archive/a.jpg'), isFalse);
+        expect(transport.sent, isEmpty);
+      });
+
+      test('a failed warm or download leaves the connection closed, so the next refresh warms it', () async {
+        transport.error = _AddressedError(Uri.parse(cover));
+        expect(session.warm(picture: cover), isTrue);
+        await pumpEventQueue();
+        expect(session.warming, isFalse);
+        expect(session.open, isFalse);
+        expect(session.warm(picture: cover), isTrue);
+        await pumpEventQueue();
+
+        transport.error = null;
+        await session.download(Uri.parse(cover), null);
+        expect(session.open, isTrue);
+        transport.error = _AddressedError(Uri.parse(cover));
+        await expectLater(session.download(Uri.parse(cover), null), throwsA(isA<PictureDownloadException>()));
+        expect(session.open, isFalse);
+        expect(session.warm(picture: cover), isTrue);
+      });
     });
   });
 

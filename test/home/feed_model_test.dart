@@ -1,12 +1,28 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/home/feed_model.dart';
+import 'package:bilifast/shared/image_disk_cache.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
 import 'feed_fakes.dart';
+
+/// Stands in for the iPhone's picture connection: records each request and answers it at once, or once [hold] does.
+final class _PictureHttp implements HTTPTransport {
+  final sent = <HTTPRequest>[];
+  Future<void>? hold;
+
+  @override
+  Future<HTTPResponse> send(HTTPRequest request) async {
+    sent.add(request);
+    await hold;
+    return HTTPResponse(status: 200, headers: const {}, body: Uint8List(0), finalURL: request.url);
+  }
+}
 
 void main() {
   late FeedHttp http;
@@ -463,6 +479,202 @@ void main() {
       expect(http.asked, [1, 1, 1]);
       expect(bvids(feed), ['BV2']);
       expect(lines('feed early page failed').single.f.keys, unorderedEquals(['error', 'status']));
+    });
+  });
+
+  group('the picture connection', () {
+    late DateTime now;
+    late _PictureHttp pictureHttp;
+    late PictureSession pictures;
+
+    setUp(() {
+      now = DateTime(2026, 10, 23, 12);
+      pictureHttp = _PictureHttp();
+      pictures = PictureSession(pictureHttp, now: () => now);
+    });
+
+    FeedModel connected({PictureSession? Function()? session, DateTime Function()? clock}) => FeedModel(
+      client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test')),
+      logger: Logger(session: 'test')..add(logs),
+      officialWanted: () => false,
+      now: clock ?? () => now,
+      pictures: session ?? () => pictures,
+    )..beforeShow = (fresh) => CoverPrefetch([for (final _ in fresh) Future.value(true)]);
+
+    List<LogEvent> lines(String msg) => [for (final event in logs.events) if (event.msg == msg) event];
+
+    List<Map<String, Object?>> done() => [
+      for (final line in lines('feed covers done')) line.f.map((key, value) => MapEntry(key, value.toJson())),
+    ];
+
+    test("a refresh opens it while page 1 is out, asking i0 for the top card's cover; the first load has none",
+        () async {
+      http.pages[1] = [
+        {...feedItem('BV1'), 'pic': 'http://i1.hdslb.com/bfs/archive/BV1.jpg'},
+      ];
+      final feed = connected();
+      await feed.refresh();
+      expect(pictureHttp.sent, isEmpty, reason: 'no picture shown yet to ask for');
+
+      now = now.add(const Duration(minutes: 1));
+      http.pages[1] = [feedItem('BV2')];
+      final gate = http.gates[1] = Completer<void>();
+      final refresh = feed.refresh();
+      await pumpEventQueue();
+      expect(http.asked, [1, 1]);
+      expect(gate.isCompleted, isFalse, reason: 'page 1 still out');
+      final head = pictureHttp.sent.single;
+      expect(head.method, 'HEAD');
+      expect('${head.url}', 'https://i0.hdslb.com/bfs/archive/BV1.jpg');
+      gate.complete();
+      await refresh;
+
+      await feed.refresh();
+      expect(pictureHttp.sent, hasLength(1), reason: 'answered moments ago: the connection is still open');
+    });
+
+    test('a pull armed opens it once; the release that takes its page asks nothing more', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = connected();
+      await feed.refresh();
+      now = now.add(const Duration(minutes: 1));
+      http.pages[1] = [feedItem('BV2')];
+      final hold = Completer<void>();
+      pictureHttp.hold = hold.future;
+      feed.pullArmed();
+      await pumpEventQueue();
+      expect(pictureHttp.sent.single.method, 'HEAD');
+      feed.pullDisarmed();
+      feed.pullArmed();
+      await feed.refresh(pulled: true);
+      hold.complete();
+      await pumpEventQueue();
+      expect(pictureHttp.sent, hasLength(1));
+      expect(http.asked, [1, 1]);
+    });
+
+    test("once the shown covers are all in or failed, one line says when the 3rd and the last came and whether the "
+        'connection was open as they were asked for', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = connected();
+      await feed.refresh();
+      now = now.add(const Duration(minutes: 1));
+      http.pages[1] = [for (var i = 2; i < 7; i++) feedItem('BV$i')];
+      final covers = [for (var i = 0; i < 5; i++) Completer<bool>()];
+      feed.beforeShow = (_) => CoverPrefetch([for (final cover in covers) cover.future]);
+      await feed.refresh();
+      final asked = now;
+      expect(done(), hasLength(1), reason: 'the first load only');
+
+      for (final (ms, index, ok) in [(120, 0, true), (180, 3, false), (260, 1, true), (310, 4, true), (700, 2, true)]) {
+        now = asked.add(Duration(milliseconds: ms));
+        covers[index].complete(ok);
+        await pumpEventQueue();
+      }
+      expect(done(), hasLength(2));
+      expect(done().last, {
+        'of': 5,
+        'ready': 4,
+        'failed': 1,
+        'thirdMs': 310,
+        'lastMs': 700,
+        'warm': true,
+        'early': false,
+      });
+      expect(lines('feed covers').last.f.keys, unorderedEquals(['ready', 'failed', 'of', 'early']));
+    });
+
+    test('a warm still out as the covers are asked for is noted; on the PC there is no connection to warm', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = connected();
+      await feed.refresh();
+      now = now.add(const Duration(minutes: 1));
+      pictureHttp.hold = Completer<void>().future;
+      http.pages[1] = [feedItem('BV2')];
+      await feed.refresh();
+      await pumpEventQueue();
+      expect(done().last, {
+        'of': 1,
+        'ready': 1,
+        'failed': 0,
+        'lastMs': 0,
+        'warm': false,
+        'warming': true,
+        'early': false,
+      });
+
+      final pc = connected(session: () => null);
+      http.pages[1] = [feedItem('BV3')];
+      await pc.refresh();
+      await pumpEventQueue();
+      expect(done(), hasLength(3));
+      expect(done().last['warm'], false);
+      expect(done().last.containsKey('warming'), isFalse);
+    });
+
+    test("a held pull's covers count from when its page came in, and the line says early", () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = connected();
+      await feed.refresh();
+      now = now.add(const Duration(minutes: 1));
+      http.pages[1] = [feedItem('BV2'), feedItem('BV3'), feedItem('BV4')];
+      final covers = [for (var i = 0; i < 3; i++) Completer<bool>()];
+      feed.beforeShow = (_) => CoverPrefetch([for (final cover in covers) cover.future]);
+      feed.pullArmed();
+      await pumpEventQueue();
+      final landed = now;
+      now = landed.add(const Duration(milliseconds: 200));
+      covers[0].complete(true);
+      covers[1].complete(true);
+      await pumpEventQueue();
+      now = landed.add(const Duration(milliseconds: 900));
+      await feed.refresh(pulled: true);
+      expect(done(), hasLength(1), reason: 'one still out');
+      now = landed.add(const Duration(milliseconds: 1000));
+      covers[2].complete(true);
+      await pumpEventQueue();
+      expect(done(), hasLength(2));
+      expect(done().last, {
+        'of': 3,
+        'ready': 3,
+        'failed': 0,
+        'thirdMs': 1000,
+        'lastMs': 1000,
+        'warm': true,
+        'early': true,
+      });
+    });
+
+    test('with covers still out 10 s after they were asked for, it logs what came, timed out; a model disposed first '
+        'logs nothing and leaves no timer', () {
+      fakeAsync((async) {
+        final start = DateTime(2026, 10, 23, 12);
+        final feed = connected(session: () => null, clock: () => start.add(async.elapsed));
+        http.pages[1] = [feedItem('BV1'), feedItem('BV2')];
+        final first = Completer<bool>();
+        feed.beforeShow = (_) => CoverPrefetch([first.future, Completer<bool>().future]);
+        unawaited(feed.refresh());
+        async.flushMicrotasks();
+        expect(feed.cards, hasLength(2));
+        async.elapse(const Duration(milliseconds: 400));
+        first.complete(true);
+        async.elapse(const Duration(seconds: 9));
+        expect(done(), isEmpty);
+        async.elapse(const Duration(seconds: 1));
+        expect(done(), [
+          {'of': 2, 'ready': 1, 'failed': 0, 'lastMs': 400, 'warm': false, 'early': false, 'timedOut': true},
+        ]);
+
+        http.pages[1] = [feedItem('BV3')];
+        feed.beforeShow = (_) => CoverPrefetch([Completer<bool>().future]);
+        unawaited(feed.refresh());
+        async.flushMicrotasks();
+        expect(feed.cards.single.bvid, 'BV3');
+        feed.dispose();
+        expect(async.pendingTimers, isEmpty);
+        async.elapse(const Duration(seconds: 11));
+        expect(done(), hasLength(1));
+      });
     });
   });
 
