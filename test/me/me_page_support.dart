@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:bili_core/api.dart' show SkinColors, SkinEquip;
 
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
@@ -12,6 +16,9 @@ import 'package:bilifast/me/me_model.dart';
 import 'package:bilifast/me/me_page.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/skin/fake_skin_api.dart';
+import 'package:bilifast/skin/skin.dart';
+import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/space/fake_space_api.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
@@ -69,11 +76,80 @@ class FixedMeModel extends MeModel {
   }
 }
 
+/// A skin model answering whatever [skin] the test sets, counting pulls; it never asks the account.
+class FixedSkinModel extends SkinModel {
+  FixedSkinModel(this._skin, {required super.environment}) : super(api: FakeSkinApi(), folder: null);
+
+  Skin? _skin;
+  int refreshes = 0;
+
+  @override
+  Skin? get value => _skin;
+
+  set skin(Skin? next) {
+    _skin = next;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> refresh() async => refreshes++;
+}
+
+/// 109's colours: white text and icons, light text over the picture.
+SkinEquip skinEquip({int? color = 0xFFFFFFFF, bool lightText = true, bool videoLoop = true}) => SkinEquip(
+  id: 1,
+  name: '测试装扮',
+  ver: 1,
+  packageUrl: '',
+  packageMd5: '',
+  colors: SkinColors(color: color, lightText: lightText, headMyselfVideoLoop: videoLoop),
+);
+
+/// Writes a PNG of [width] × [height] px into [folder], painted by [paint]; run it under `tester.runAsync`.
+Future<File> drawPicture(
+  Directory folder,
+  String name,
+  int width,
+  int height,
+  void Function(Canvas canvas) paint,
+) async {
+  final recorder = ui.PictureRecorder();
+  paint(Canvas(recorder));
+  final image = await recorder.endRecording().toImage(width, height);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  return File('${folder.path}/$name')..writeAsBytesSync(bytes!.buffer.asUint8List());
+}
+
+/// A fresh folder for a test's pictures, deleted after it.
+Directory pictureFolder() {
+  final folder = Directory.systemTemp.createTempSync('me_skin');
+  addTearDown(() => folder.deleteSync(recursive: true));
+  return folder;
+}
+
+/// Lets 我的 read and decode its skin's picture until it shows, [rounds] at most. Its loading started in the test's
+/// fake time, so each real step (reading, decoding) needs real time and each step after it a pump.
+Future<void> settlePicture(WidgetTester tester, {int rounds = 40}) async {
+  final picture = find.byKey(const ValueKey('me-skin-picture'));
+  for (var i = 0; i < rounds && picture.evaluate().isEmpty; i++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+    await tester.pump();
+  }
+}
+
 /// What a test of 我的 holds on to.
 class MeHarness {
-  MeHarness({required this.model, required this.services, required this.opened, required this.active});
+  MeHarness({
+    required this.model,
+    required this.skin,
+    required this.services,
+    required this.opened,
+    required this.active,
+  });
 
   final FixedMeModel model;
+  final FixedSkinModel skin;
   final AppServices services;
 
   /// Whether 我的 is the bar's current tab.
@@ -98,6 +174,7 @@ Future<MeHarness> showMe(
   Future<bool> Function(Uri link)? open,
   WidgetBuilder? developerPage,
   bool checkAccount = false,
+  Skin? skin,
 }) async {
   tester.view
     ..physicalSize = const Size(440, 956) * pixelRatio
@@ -115,6 +192,8 @@ Future<MeHarness> showMe(
   if (checkAccount) await environment.refreshAccount();
   final model = FixedMeModel(view, api: FakeMeApi.demo(), environment: environment);
   addTearDown(model.dispose);
+  final skins = FixedSkinModel(skin, environment: environment);
+  addTearDown(skins.dispose);
   final playback = AppPlayback(() => throw StateError('no playback here'));
   addTearDown(playback.dispose);
   final services = AppServices(
@@ -157,6 +236,7 @@ Future<MeHarness> showMe(
                     active: active,
                     developerPage: developerPage,
                     model: model,
+                    skin: skins,
                     openLink: record,
                     canOpenLink: (_) async => officialAppThere,
                   ),
@@ -170,5 +250,5 @@ Future<MeHarness> showMe(
     ),
   );
   await tester.pump();
-  return MeHarness(model: model, services: services, opened: opened, active: shownTab);
+  return MeHarness(model: model, skin: skins, services: services, opened: opened, active: shownTab);
 }

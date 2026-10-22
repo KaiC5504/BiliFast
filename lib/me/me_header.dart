@@ -80,10 +80,14 @@ class MeHeader extends StatelessWidget {
     required this.actions,
     this.reserveCard = false,
     this.animate = false,
+    this.ink,
   });
 
   final MeView view;
   final MeActions actions;
+
+  /// The text and icons over a 装扮's picture (109), the counts' rules left out; null for 87's colours.
+  final Color? ink;
 
   /// Keeps the card's room, the card unseen, while a 大会员's profile is still to come, so the list doesn't jump.
   final bool reserveCard;
@@ -114,6 +118,7 @@ class MeHeader extends StatelessWidget {
     final textLeft = MeTheme.textLeft + (profile?.pendant != null ? MeTheme.pendantTextShift : 0);
     final counts = view is MeShown ? view.counts : null;
     final card = hasCard(view);
+    final ink = this.ink;
     return SizedBox(
       height: extent(view, reserveCard: reserveCard),
       child: Stack(
@@ -150,7 +155,7 @@ class MeHeader extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: BiliFonts.family,
                       fontSize: MeTheme.loggedOutText,
-                      color: MeTheme.name,
+                      color: ink ?? MeTheme.name,
                     ),
                   ),
                 ),
@@ -160,7 +165,7 @@ class MeHeader extends StatelessWidget {
             _CentredRow(
               left: textLeft,
               centre: MeTheme.nameCentre,
-              child: _NameRow(profile: profile, onEdit: actions.soon),
+              child: _NameRow(profile: profile, onEdit: actions.soon, ink: ink),
             ),
             if (profile.vipLabel.isNotEmpty)
               Positioned(
@@ -172,7 +177,7 @@ class MeHeader extends StatelessWidget {
             _CentredRow(
               left: textLeft,
               centre: MeTheme.coinsCentre,
-              child: _Coins(profile: profile),
+              child: _Coins(profile: profile, ink: ink),
             ),
             Positioned(
               right: 0,
@@ -192,13 +197,13 @@ class MeHeader extends StatelessWidget {
                         style: TextStyle(
                           fontFamily: BiliFonts.family,
                           fontSize: MeTheme.spaceText,
-                          color: MeTheme.space,
+                          color: ink ?? MeTheme.space,
                         ),
                       ),
                       const SizedBox(width: MeTheme.spaceChevronGap),
-                      const CustomPaint(
-                        size: Size(MeTheme.chevronWidth, MeTheme.chevronHeight),
-                        painter: MeChevronPainter(color: MeTheme.space, stroke: MeTheme.chevronStroke),
+                      CustomPaint(
+                        size: const Size(MeTheme.chevronWidth, MeTheme.chevronHeight),
+                        painter: MeChevronPainter(color: ink ?? MeTheme.space, stroke: MeTheme.chevronStroke),
                       ),
                     ],
                   ),
@@ -211,7 +216,7 @@ class MeHeader extends StatelessWidget {
             right: 0,
             top: MeTheme.countRuleTop - (MeTheme.countTap - MeTheme.countRuleHeight) / 2,
             height: MeTheme.countTap,
-            child: _Counts(counts: counts, onTap: actions.soon),
+            child: _Counts(counts: counts, onTap: actions.soon, ink: ink),
           ),
           if (card || reserveCard)
             Positioned(
@@ -302,39 +307,46 @@ class _Avatar extends StatelessWidget {
 }
 
 class _NameRow extends StatelessWidget {
-  const _NameRow({required this.profile, required this.onEdit});
+  const _NameRow({required this.profile, required this.onEdit, required this.ink});
 
   final MeProfile profile;
   final VoidCallback onEdit;
+  final Color? ink;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(
-        profile.name,
-        key: const ValueKey('me-name'),
-        maxLines: 1,
-        style: TextStyle(
-          fontFamily: BiliFonts.family,
-          fontSize: MeTheme.nameText,
-          fontWeight: MeTheme.nameWeight,
-          color: profile.vip ? MeTheme.vipName : MeTheme.name,
+  Widget build(BuildContext context) {
+    final ink = this.ink;
+    const pencil = CustomPaint(size: Size.square(MeTheme.pencilBox), painter: MePencilPainter());
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          profile.name,
+          key: const ValueKey('me-name'),
+          maxLines: 1,
+          style: TextStyle(
+            fontFamily: BiliFonts.family,
+            fontSize: MeTheme.nameText,
+            fontWeight: MeTheme.nameWeight,
+            color: ink ?? (profile.vip ? MeTheme.vipName : MeTheme.name),
+          ),
         ),
-      ),
-      MeTap(
-        key: const ValueKey('me-edit'),
-        label: '编辑资料',
-        onTap: onEdit,
-        child: const Padding(
-          padding: EdgeInsets.only(left: MeTheme.pencilGap - (MeTheme.pencilBox - MeTheme.pencilInk) / 2),
-          child: CustomPaint(size: Size.square(MeTheme.pencilBox), painter: MePencilPainter()),
+        MeTap(
+          key: const ValueKey('me-edit'),
+          label: '编辑资料',
+          onTap: onEdit,
+          child: Padding(
+            padding: const EdgeInsets.only(left: MeTheme.pencilGap - (MeTheme.pencilBox - MeTheme.pencilInk) / 2),
+            child: ink == null
+                ? pencil
+                : ColorFiltered(colorFilter: ColorFilter.mode(ink, BlendMode.srcIn), child: pencil),
+          ),
         ),
-      ),
-      const SizedBox(width: MeTheme.levelGap - (MeTheme.pencilBox - MeTheme.pencilInk) / 2),
-      MeLevelBadge(level: profile.level),
-    ],
-  );
+        const SizedBox(width: MeTheme.levelGap - (MeTheme.pencilBox - MeTheme.pencilInk) / 2),
+        MeLevelBadge(level: profile.level),
+      ],
+    );
+  }
 }
 
 class _VipLabel extends StatelessWidget {
@@ -363,13 +375,14 @@ class _VipLabel extends StatelessWidget {
 }
 
 class _Coins extends StatelessWidget {
-  const _Coins({required this.profile});
+  const _Coins({required this.profile, required this.ink});
 
   final MeProfile profile;
+  final Color? ink;
 
   @override
   Widget build(BuildContext context) {
-    final style = TextStyle(fontFamily: BiliFonts.family, fontSize: MeTheme.coinsText, color: MeTheme.coins);
+    final style = TextStyle(fontFamily: BiliFonts.family, fontSize: MeTheme.coinsText, color: ink ?? MeTheme.coins);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -383,14 +396,16 @@ class _Coins extends StatelessWidget {
 
 /// 动态, 关注 and 粉丝, each a third of the width; - until the counts answer.
 class _Counts extends StatelessWidget {
-  const _Counts({required this.counts, required this.onTap});
+  const _Counts({required this.counts, required this.onTap, required this.ink});
 
   final MeCounts? counts;
   final VoidCallback onTap;
+  final Color? ink;
 
   @override
   Widget build(BuildContext context) {
     final counts = this.counts;
+    final ink = this.ink;
     String value(int Function(MeCounts counts) of) => counts == null ? '-' : CountFormat.short(of(counts));
     final columns = [
       ('me-dynamics', '动态', value((c) => c.dynamics)),
@@ -404,7 +419,7 @@ class _Counts extends StatelessWidget {
           Expanded(
             child: Stack(
               children: [
-                if (index > 0)
+                if (index > 0 && ink == null)
                   const Positioned(
                     left: 0,
                     top: lift,
@@ -427,7 +442,7 @@ class _Counts extends StatelessWidget {
                               fontFamily: BiliFonts.family,
                               fontSize: MeTheme.countText,
                               fontWeight: MeTheme.countWeight,
-                              color: MeTheme.count,
+                              color: ink ?? MeTheme.count,
                             ),
                           ),
                           _CountLine(
@@ -436,7 +451,7 @@ class _Counts extends StatelessWidget {
                             style: TextStyle(
                               fontFamily: BiliFonts.family,
                               fontSize: MeTheme.countLabelText,
-                              color: MeTheme.countLabel,
+                              color: ink ?? MeTheme.countLabel,
                             ),
                           ),
                         ],
