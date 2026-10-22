@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -223,6 +224,18 @@ class LaunchFailedApp extends StatelessWidget {
 String? _argument(List<String> args, String prefix) =>
     args.where((arg) => arg.startsWith(prefix)).map((arg) => arg.substring(prefix.length)).firstOrNull;
 
+/// Dark status bar icons under any page that asks for none: the engine keeps the last style it found, so a light
+/// page's stayed on over the next (设置 over a dressed 我的 drew white on white). A page's own region still wins.
+class DefaultStatusBar extends StatelessWidget {
+  const DefaultStatusBar({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      AnnotatedRegion<SystemUiOverlayStyle>(value: SystemUiOverlayStyle.dark, child: child);
+}
+
 class BiliFastApp extends StatelessWidget {
   const BiliFastApp({super.key, required this.services, this.initialLink});
 
@@ -253,7 +266,8 @@ class BiliFastApp extends StatelessWidget {
         // The official app keeps its sizes whatever iOS Text Size says, and every size here is measured off it.
         builder: (context, child) => AppScope(
           services: services,
-          child: PhoneFrame.wrap(context, ReduceMotion(child: MediaQuery.withNoTextScaling(child: child!))),
+          child: PhoneFrame.wrap(
+              context, ReduceMotion(child: MediaQuery.withNoTextScaling(child: DefaultStatusBar(child: child!)))),
         ),
         home: MainShell(
           initialLink: initialLink,

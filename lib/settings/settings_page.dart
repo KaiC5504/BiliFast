@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show appBuildName, appBuildNumber;
+import 'package:flutter/services.dart' show SystemUiOverlayStyle, appBuildName, appBuildNumber;
 
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
@@ -375,56 +375,61 @@ class SettingsScaffold extends StatelessWidget {
       fontWeight: SettingsTheme.barTitleWeight,
       color: SettingsTheme.barTitle,
     );
-    return Scaffold(
-      backgroundColor: SettingsTheme.page,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ColoredBox(
-            color: SettingsTheme.bar,
-            child: Padding(
-              padding: EdgeInsets.only(top: padding.top),
-              child: SizedBox(
-                height: SettingsTheme.barHeight,
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Transform.translate(
-                        offset: Offset(0, SettingsTheme.barTitleDrop),
-                        // Under the Scaffold's Material, whose style the title takes.
-                        child: Builder(
-                          builder: (context) => Text(
-                            title,
-                            maxLines: 1,
-                            style: titleStyle,
-                            strutStyle: BiliFonts.strutOf(context, titleStyle),
+    // Its own, not the app's default: pushed or swiped back over a dressed 我的, the page under it is still drawn and
+    // its light style would be found through this one.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: SettingsTheme.page,
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ColoredBox(
+              color: SettingsTheme.bar,
+              child: Padding(
+                padding: EdgeInsets.only(top: padding.top),
+                child: SizedBox(
+                  height: SettingsTheme.barHeight,
+                  child: Stack(
+                    children: [
+                      Center(
+                        child: Transform.translate(
+                          offset: Offset(0, SettingsTheme.barTitleDrop),
+                          // Under the Scaffold's Material, whose style the title takes.
+                          child: Builder(
+                            builder: (context) => Text(
+                              title,
+                              maxLines: 1,
+                              style: titleStyle,
+                              strutStyle: BiliFonts.strutOf(context, titleStyle),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const Positioned(
-                      left: SettingsTheme.backLeft - (SettingsTheme.backTarget - SettingsTheme.backGlyphWidth) / 2,
-                      top: 0,
-                      bottom: 0,
-                      width: SettingsTheme.backTarget,
-                      child: _BackButton(),
-                    ),
-                  ],
+                      const Positioned(
+                        left: SettingsTheme.backLeft - (SettingsTheme.backTarget - SettingsTheme.backGlyphWidth) / 2,
+                        top: 0,
+                        bottom: 0,
+                        width: SettingsTheme.backTarget,
+                        child: _BackButton(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: MediaQuery.removePadding(
-              context: context,
-              removeTop: true,
-              child: ListView(
-                padding: EdgeInsets.only(bottom: padding.bottom),
-                children: children,
+            Expanded(
+              child: MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                child: ListView(
+                  padding: EdgeInsets.only(bottom: padding.bottom),
+                  children: children,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

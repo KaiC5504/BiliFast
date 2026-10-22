@@ -11,6 +11,7 @@ import '../devtools/crash_log.dart';
 import 'skin.dart';
 import 'skin_api.dart';
 import 'skin_package.dart';
+import 'skin_status_bar.dart';
 
 /// The equipped 装扮, asked at launch and on every login, its package downloaded once per id, version and md5 and
 /// unpacked under [folder] (the support folder's `skins`). Answers from the last unpacked skin at once, so a launch
@@ -21,7 +22,8 @@ import 'skin_package.dart';
 /// `<id>/<ver>-<first 8 of md5>`, whole once its `.skin.json` is there (the unpack goes to a `.partial` folder and is
 /// renamed into place). A package changed under the same version gets a folder of its own, so files on screen are
 /// never replaced in place. Logging out shows the stock look and the next launch starts stock, but the files stay for
-/// the next login.
+/// the next login. Each version's headers are measured behind the status bar on its first showing and the result kept
+/// in its `.status.json`, so later launches have it with the cache.
 class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   SkinModel({required this._api, required this._environment, required this._folder, Logger? logger})
     : _logger = logger ?? Logger.shared;
@@ -33,6 +35,10 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
 
   static const _currentName = 'current.json';
   static const _manifestName = '.skin.json';
+  static const _statusName = '.status.json';
+
+  /// Bumped when the measure changes, so kept results are measured again.
+  static const _statusMeasure = 1;
 
   Skin? _value;
   Future<void>? _started;
@@ -51,6 +57,10 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
 
   /// Where versions are unpacked without [_folder]: a temporary folder, made on first use.
   Future<String>? _scratch;
+
+  /// Status bar measures, one at a time.
+  Future<void> _measuring = Future.value();
+  String? _statusLogged;
 
   /// The account as it last settled; unknown only until the launch's check answers.
   Account _account = const AccountUnknown();
@@ -83,7 +93,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     final read = _readCache();
     _cacheRead = read;
     final cached = await read;
-    if (cached != null && _signedIn && _value == null) _show(cached, from: 'cache');
+    if (cached != null && _signedIn && _value == null) _showDressed(cached, from: 'cache');
     if (_environment.account is LoggedIn) unawaited(refresh());
   }
 
@@ -154,7 +164,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
       final installed = await _install(next, generation);
       if (installed == null || !_current(generation)) return;
       final (skin, from) = installed;
-      _show(skin, from: from);
+      _showDressed(skin, from: from);
       await _exclusive(() async {
         await _writeCurrent(next);
         await _deleteVersions(keep: next);
@@ -174,7 +184,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   Future<(Skin, String)?> _install(SkinEquip equip, int generation) async {
     final target = Directory(_versionPath(await _root(), equip));
     if (await _exclusive(() => _wholeVersion(target, equip)) case final files?) {
-      return (_resolve(equip, files), 'unpacked');
+      return (await _withKeptStatus(_resolve(equip, files), target), 'unpacked');
     }
     final md5 = equip.packageMd5.trim().toLowerCase();
     if (md5.isEmpty) throw const SkinPackageError('no md5 in answer');
@@ -237,6 +247,39 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     }
   }
 
+  /// [skin] with the status bar measure kept in [version], when there is one of the current measure.
+  Future<Skin> _withKeptStatus(Skin skin, Directory version) async {
+    try {
+      final file = File('${version.path}/$_statusName');
+      if (!await file.exists()) return skin;
+      final json = jsonDecode(await file.readAsString());
+      if (json is! Map<String, Object?> || json['v'] != _statusMeasure) return skin;
+      double? luminance(String key) => switch (json[key]) {
+        final num value => value.toDouble(),
+        _ => null,
+      };
+      return skin.withStatusBar(SkinStatusBar(home: luminance('home'), me: luminance('me')));
+    } on Exception {
+      return skin;
+    }
+  }
+
+  Future<void> _keepStatus(SkinEquip equip, SkinStatusBar status) async {
+    try {
+      final version = _versionPath(await _root(), equip);
+      // Deleted meanwhile, or being unpacked again.
+      if (!await File('$version/$_manifestName').exists()) return;
+      final temporary = File('$version/$_statusName.tmp');
+      await temporary.writeAsString(
+        jsonEncode({'v': _statusMeasure, 'home': status.home, 'me': status.me}),
+        flush: true,
+      );
+      await _retried(() => temporary.rename('$version/$_statusName'));
+    } on Exception catch (error) {
+      _logger.warn(LogCategory.ui, 'skin status bar not kept', {'error': _describe(error)});
+    }
+  }
+
   Future<Skin?> _readCache() async {
     final folder = _folder;
     if (folder == null) return null;
@@ -250,12 +293,13 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
         _logger.info(LogCategory.ui, 'skin stays stock', {'reason': 'none at the last check'});
         return null;
       }
-      final files = await _wholeVersion(Directory(_versionPath(folder, equip)), equip);
+      final version = Directory(_versionPath(folder, equip));
+      final files = await _wholeVersion(version, equip);
       if (files == null) {
         _logger.warn(LogCategory.ui, 'skin stays stock', {'reason': 'cached version incomplete', 'id': equip.id});
         return null;
       }
-      return _resolve(equip, files);
+      return await _withKeptStatus(_resolve(equip, files), version);
     } on Exception catch (error) {
       _logger.warn(LogCategory.ui, 'skin stays stock', {'reason': 'cache unreadable', 'error': _describe(error)});
       return null;
@@ -331,8 +375,11 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     }
   }
 
-  /// Waits for the disk work so far; for tests.
-  Future<void> settle() => _disk;
+  /// Waits for the status bar measures and disk work so far; for tests.
+  Future<void> settle() async {
+    await _measuring;
+    await _disk;
+  }
 
   Future<T> _exclusive<T>(Future<T> Function() task) {
     final run = _disk.then((_) => task());
@@ -402,6 +449,63 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     _shownMid = skin == null ? null : _environment.mid ?? _shownMid;
     if (skin != null && from != null) _log(skin, from);
     notifyListeners();
+  }
+
+  /// Shows [skin], and with it what its headers are like behind the status bar: kept from the version's first
+  /// showing, or measured now. The measure isn't awaited, so the page dresses meanwhile by `color_mode`.
+  void _showDressed(Skin skin, {required String from}) {
+    _show(skin, from: from);
+    if (!identical(_value, skin)) return;
+    if (skin.statusBar != null) {
+      _logStatus(skin);
+    } else {
+      _measuring = _measuring.then((_) => _measure(skin));
+    }
+  }
+
+  Future<void> _measure(Skin skin) async {
+    if (_disposed) return;
+    final SkinStatusBar status;
+    try {
+      status = await measureSkinStatusBar(skin);
+    } on Exception catch (error) {
+      _logger.warn(LogCategory.ui, 'skin status bar not measured', {'error': _describe(error)});
+      return;
+    } on Error catch (error, stack) {
+      CrashLog.report(error, stack, source: 'skin status bar', logger: _logger);
+      return;
+    }
+    if (_disposed) return;
+    final measured = skin.withStatusBar(status);
+    _logStatus(measured);
+    final shown = _value;
+    // A measure that agrees with `color_mode` changes nothing on screen.
+    if (shown != null &&
+        shown.statusBar == null &&
+        _cacheText(shown.equip) == _cacheText(skin.equip) &&
+        (measured.lightStatusHome != shown.lightStatusHome || measured.lightStatusMe != shown.lightStatusMe)) {
+      _show(shown.withStatusBar(status));
+    }
+    await _exclusive(() => _keepStatus(skin.equip, status));
+  }
+
+  /// Once per skin as it changes: never a file's path.
+  void _logStatus(Skin skin) {
+    final key = _cacheText(skin.equip);
+    if (key == _statusLogged) return;
+    _statusLogged = key;
+    final status = skin.statusBar;
+    Object measure(File? picture, double? luminance) => switch ((picture, luminance)) {
+      (null, _) => 'none',
+      (_, null) => 'unreadable',
+      (_, final value?) => (value * 100).round() / 100,
+    };
+    _logger.info(LogCategory.ui, 'skin status bar', {
+      'home': measure(skin.headBg, status?.home),
+      'homeLight': skin.lightStatusHome,
+      'me': skin.headMyselfVideo != null ? 'color' : measure(skin.headMyself, status?.me),
+      'meLight': skin.lightStatusMe,
+    });
   }
 
   /// Once per skin as it changes: never the package's URL.

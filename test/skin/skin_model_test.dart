@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:archive/archive.dart';
 import 'package:bili_core/api.dart';
@@ -12,6 +13,7 @@ import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/skin/skin_package.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The account half [SkinModel] follows: the test sets the account and counts the logins.
@@ -109,14 +111,36 @@ Uint8List packageFor(int ver) => zipOf({
   },
 });
 
-SkinEquip equipFor(List<int> package, {int id = 7, int ver = 1, String url = packageUrl, String? md5Text}) => SkinEquip(
+SkinEquip equipFor(
+  List<int> package, {
+  int id = 7,
+  int ver = 1,
+  String url = packageUrl,
+  String? md5Text,
+  SkinColors palette = colors,
+}) => SkinEquip(
   id: id,
   name: 'skin $id',
   ver: ver,
   packageUrl: url,
   packageMd5: md5Text ?? md5.convert(package).toString(),
-  colors: colors,
+  colors: palette,
 );
+
+/// A stand-in picture of one colour, drawn here.
+Future<Uint8List> solidPng(Color color, int width, int height) async {
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder).drawRect(Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()), Paint()..color = color);
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(width, height);
+  try {
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return data!.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  } finally {
+    image.dispose();
+    picture.dispose();
+  }
+}
 
 String nameOf(FileSystemEntity entity) => entity.path.split(RegExp(r'[\\/]')).last;
 
@@ -836,6 +860,135 @@ void main() {
     for (final icon in [...skin.tailIcons, ...skin.tailIconsSelected, skin.pubButton!, skin.pubButtonSelected!]) {
       expect(pngSize(icon.file), (180, 135));
     }
+  });
+
+  group('the status bar over the headers', () {
+    const darkText = SkinColors(color: 0xFF222222, tailColor: 0xFF101010, tailColorSelected: 0xFFFF0000);
+    late Uint8List darkHead;
+    late Uint8List lightMe;
+
+    setUpAll(() async {
+      darkHead = await solidPng(const Color(0xFF161513), 1320, 318);
+      lightMe = await solidPng(const Color(0xFFF5EBD7), 1320, 1320);
+    });
+
+    FakeSkinApi pictured({Map<String, List<int>>? entries, SkinColors palette = darkText}) {
+      final package = zipOf(entries ?? {'head_bg.png': darkHead, 'head_myself_bg.png': lightMe});
+      return FakeSkinApi(
+        equip: equipFor(package, palette: palette),
+        package: package,
+      );
+    }
+
+    File kept() => File('${versionFolders(7, 1).single.path}/.status.json');
+
+    test("measured once the skin shows, by the pictures over color_mode's dark text: white over a dark head_bg, "
+        "black over a light 我的; logged without a path or the package's URL", () async {
+      final (:model, environment: _) = make(pictured());
+      var notified = 0;
+      model.addListener(() => notified++);
+      await settle(model);
+      await model.settle();
+
+      expect(model.value!.lightText, isFalse);
+      expect(model.value!.lightStatusHome, isTrue);
+      expect(model.value!.lightStatusMe, isFalse);
+      expect(notified, 2, reason: 'shown, then the measure that changes 首页');
+      final line = logged('skin status bar').single;
+      expect(line.f['home']!.toJson(), 0.01);
+      expect(line.f['homeLight'], const LogBool(true));
+      expect(line.f['me']!.toJson(), closeTo(0.84, 0.01));
+      expect(line.f['meLight'], const LogBool(false));
+      expect(allLogText(), isNot(contains('skin_model_test')));
+      expect(allLogText(), isNot(contains('garb/zip')));
+      expect(jsonDecode(kept().readAsStringSync()), {
+        'v': 1,
+        'home': closeTo(0.0075, 0.001),
+        'me': closeTo(0.84, 0.01),
+      });
+    });
+
+    test('kept beside the version, so a launch has it with the cache: nothing measured again, nothing flips', () async {
+      final first = make(pictured()).model;
+      await settle(first);
+      await first.settle();
+      // Kept values the pictures would never give, to show they are what the launch reads.
+      kept().writeAsStringSync(jsonEncode({'v': 1, 'home': 0.9, 'me': 0.01}));
+
+      final (:model, environment: _) = make(pictured());
+      await model.start();
+      expect(model.value!.statusBar, isNotNull);
+      expect(model.value!.lightStatusHome, isFalse);
+      expect(model.value!.lightStatusMe, isTrue);
+      var notified = 0;
+      model.addListener(() => notified++);
+      await model.refresh();
+      await model.settle();
+      expect(notified, 0);
+      expect(model.value!.lightStatusHome, isFalse);
+      expect(logged('skin status bar').map((line) => line.f['homeLight']), const [LogBool(true), LogBool(false)]);
+    });
+
+    test('a kept measure of an older kind is measured again', () async {
+      final first = make(pictured()).model;
+      await settle(first);
+      await first.settle();
+      kept().writeAsStringSync(jsonEncode({'v': 0, 'home': 0.9, 'me': 0.01}));
+
+      final (:model, environment: _) = make(pictured());
+      await model.start();
+      expect(model.value!.statusBar, isNull);
+      await model.settle();
+      expect(model.value!.lightStatusHome, isTrue);
+      expect(model.value!.lightStatusMe, isFalse);
+      expect(jsonDecode(kept().readAsStringSync())['v'], 1);
+    });
+
+    test("a head_bg that can't be read keeps color_mode's choice, logged as such; no 我的 picture is none", () async {
+      final api = pictured(
+        entries: {
+          'head_bg.png': [for (var i = 0; i < 200; i++) i * 31 % 256],
+        },
+        palette: colors,
+      );
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      await model.settle();
+      expect(model.value!.lightStatusHome, isTrue);
+      final line = logged('skin status bar').single;
+      expect(line.f['home'], const LogString('unreadable'));
+      expect(line.f['homeLight'], const LogBool(true));
+      expect(line.f['me'], const LogString('none'));
+    });
+
+    test("我的 with a header video goes by the skin's text colour, its picture unmeasured", () async {
+      final api = pictured(
+        entries: {
+          'head_myself_bg.png': lightMe,
+          'head_myself_mp4_bg.mp4': [0, 0, 0, 0x18],
+        },
+        palette: const SkinColors(color: 0xFFFFFFFF),
+      );
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      await model.settle();
+      expect(model.value!.lightStatusMe, isTrue);
+      final line = logged('skin status bar').single;
+      expect(line.f['me'], const LogString('color'));
+      expect(line.f['meLight'], const LogBool(true));
+      expect(line.f['home'], const LogString('none'));
+    });
+
+    test("the demo's dark pictures give white icons on both", () async {
+      final (:model, environment: _) = make(FakeSkinApi.demo());
+      await settle(model);
+      await model.settle();
+      final line = logged('skin status bar').single;
+      expect(line.f['homeLight'], const LogBool(true));
+      expect(line.f['meLight'], const LogBool(true));
+      expect(line.f['home']!.toJson() as double, lessThan(SkinStatusBar.crossover));
+      expect(line.f['me']!.toJson() as double, lessThan(SkinStatusBar.crossover));
+    });
   });
 }
 
