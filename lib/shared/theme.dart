@@ -2959,7 +2959,7 @@ abstract final class LoginTheme {
 
   static const spinnerRadius = 14.0;
 
-  /// 请在手机上登录, a load error or a login that didn't take, with 重试 under the last two.
+  /// A load error or a login that didn't take, with 重试 under it; the QR login's messages too.
   static const message = BiliColors.secondaryText;
   static const messageText = BiliMetrics.bodyText;
   static const inset = BiliMetrics.sectionGap;
@@ -2973,6 +2973,18 @@ abstract final class LoginTheme {
   static TextStyle get messageStyle => TextStyle(fontFamily: BiliFonts.family, fontSize: messageText, color: message);
 
   static TextStyle get retryStyle => TextStyle(fontFamily: BiliFonts.family, fontSize: messageText, color: retry);
+
+  /// The PC's QR login (`qr_login.dart`), which the official app has no screen for: the code centred on the white
+  /// page with a quiet zone of about 4 modules, the message [qrGap] under it.
+  static const qrSize = 200.0;
+  static const qrQuietZone = 16.0;
+  static const qrModule = BiliColors.text;
+  static const qrBackground = BiliColors.card;
+  static const qrGap = BiliMetrics.sectionGap;
+
+  /// Once scanned, the code steps back while 确认 is waited for on the phone.
+  static const qrScannedOpacity = 0.3;
+  static const qrFade = Duration(milliseconds: 200);
 }
 
 /// 设置's sections beyond 字体, and its confirms: 50 and 51, measured at 3 px per pt.

@@ -3,7 +3,12 @@ import 'dart:async';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/account/login_page.dart';
+import 'package:bilifast/account/qr_login.dart';
 import 'package:bilifast/app/app_environment.dart';
+import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/video/fake_page_api.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,10 +20,28 @@ import '../playback/fakes.dart';
 import 'fake_web_cookies.dart';
 
 void main() {
-  testWidgets('on the PC the page says 请在手机上登录 under a 登录 bar with a close control', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: LoginPage()));
+  testWidgets('on the PC the page shows the QR login under a 登录 bar with a close control', (tester) async {
+    final environment = await AppEnvironment.load(
+      keychain: FakeKeychain(const NoStoredCookies()),
+      webCookies: FakeWebCookies(),
+      http: CannedHttp(),
+      logger: Logger(session: 'test'),
+    );
+    final services = AppServices(
+      environment: environment,
+      playback: AppPlayback(() => Completer<PlaybackController>().future),
+      recents: await RecentStore.load(null, logger: Logger(session: 'test')),
+      pageApi: FakePageApi(),
+    );
+    addTearDown(services.playback.dispose);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => AppScope(services: services, child: child!),
+      home: const LoginPage(),
+    ));
+    await tester.pump();
     expect(find.text('登录'), findsOneWidget);
-    expect(find.text('请在手机上登录'), findsOneWidget);
+    expect(find.byType(QrLogin), findsOneWidget);
+    expect(find.text('加载失败'), findsOneWidget, reason: 'no route answers the code here');
     expect(find.bySemanticsLabel('关闭'), findsOneWidget);
     expect(find.byType(WebViewWidget), findsNothing);
   });
