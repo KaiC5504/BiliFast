@@ -157,6 +157,21 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- Planned for 1.0.0 (30), agreed with KaiC (2026-10-23), held until he has gathered more fixes to ship with them:
+  1. Covers about 0.5 s sooner. On (29) every swap logged `feed covers` ready 0 of 6. Timed from the PC: each cover
+     opens its own connection (dart:io's `HttpClient`, closed after 15 s idle), and the handshake costs ~0.4-0.5 s;
+     six covers took 0.9-1.4 s on new connections and 0.6-0.8 s on one already open. No CDN size that stays 1× was
+     reliably faster (12 tried). Fix: on iOS, pictures through URLSession (`cupertino_http`, HTTP/2, one connection
+     kept open); every cover from `i0.hdslb.com` (it serves i1's and i2's paths: checked); the connection opened as a
+     refresh starts (首页's tap, a pull armed) with a request for a cover already shown, while the feed call is out.
+     The swap stays instant. Log the 3rd and 6th covers' ms after the answer and whether the connection was warm.
+     Not doing: a next page fetched ahead (a call per launch, recommendations older than what was just watched).
+  2. The status bar's icons by the skin's picture: KaiC's 幸运塔罗星 skin (dark header) drew them black, since
+     `color_mode` isn't `light` (the official Android app reads that field the same way; the iPhone app judges the
+     picture). Measure the brightness behind the clock and the icons (the two top corners) of `head_bg` (首页) and
+     `head_myself_bg` (我的; an mp4 header goes by the skin's `color`, the header text colour), white icons over dark;
+     the own space's scrolled bar by `color_second_page`. Pages pushed over a dressed 我的 set their own (设置's white
+     on white, below). Log the brightness and the choice.
 - Pictures and 推荐 on the phone (28): `images cleared` in the log confirms iOS's memory warning as the blanking's
   trigger; `feed covers` shows how often 800 ms is too short. Not built: the pull's TV closing as fast as 首页's (no
   official pull recording), the official UP badge icon (01's is 14 × 12 pt, ours a drawn box), and cards with a reason
