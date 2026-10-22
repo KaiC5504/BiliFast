@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/home/feed_model.dart';
-import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
@@ -185,8 +184,8 @@ void main() {
   group("a refresh's covers", () {
     List<LogEvent> coverLines() => [for (final event in logs.events) if (event.msg == 'feed covers') event];
 
-    test('its cards show only once beforeShow\'s covers have finished, the old ones still there meanwhile; the log '
-        'counts the failed apart from the ready', () async {
+    test("its cards show the moment the answer is in, beforeShow called just before with the old ones still there; "
+        "the log counts the covers ready by then, the failed apart", () async {
       http.pages[1] = [feedItem('BV1')];
       final feed = make();
       await feed.refresh();
@@ -197,64 +196,34 @@ void main() {
       feed.beforeShow = (fresh) {
         asked = [for (final card in fresh) card.bvid];
         shownThen = bvids(feed);
-        return CoverWait([cover.future, Future.value(false), Future.error(StateError('decode'))]);
+        return CoverPrefetch([cover.future, Future.value(false), Future.error(StateError('decode'))]);
       };
-      var done = false;
-      final refresh = feed.refresh().then((_) => done = true);
-      await pumpEventQueue();
+      await feed.refresh();
       expect(asked, ['BV2', 'BV3', 'BV4']);
       expect(shownThen, ['BV1'], reason: 'called before the cards are replaced');
-      expect(bvids(feed), ['BV1']);
-      expect(feed.loading, isTrue);
-      expect(done, isFalse, reason: 'the refresh, and with it the loading TV, waits');
-
-      cover.complete(true);
-      await refresh;
-      expect(bvids(feed), ['BV2', 'BV3', 'BV4']);
+      expect(bvids(feed), ['BV2', 'BV3', 'BV4'], reason: 'no cover is waited on');
       expect(feed.loading, isFalse);
+      expect(cover.isCompleted, isFalse);
       final line = coverLines().last;
-      expect(line.f['ready']?.toJson(), 1);
-      expect(line.f['failed']?.toJson(), 2);
+      expect(line.f['ready']?.toJson(), 0);
+      expect(line.f['failed']?.toJson(), 0, reason: 'none had finished as the cards showed');
       expect(line.f['of']?.toJson(), 3);
-      expect(line.f['timedOut']?.toJson(), false);
-      expect(line.f.keys, unorderedEquals(['ready', 'failed', 'of', 'waitedMs', 'timedOut']), reason: 'no address');
+      expect(line.f['early']?.toJson(), false);
+      expect(line.f.keys, unorderedEquals(['ready', 'failed', 'of', 'early']), reason: 'no address');
     });
 
-    test('they are waited on for at most 300 ms after the answer; the slow ones are neither ready nor failed', () {
-      expect(FeedModel.coverWait, const Duration(milliseconds: 300));
-      fakeAsync((async) {
-        http.pages[1] = [feedItem('BV1')];
-        final feed = make()
-          ..beforeShow = (_) => CoverWait([Completer<bool>().future, Future.value(true), Future.value(false)]);
-        var done = false;
-        unawaited(feed.refresh().then((_) => done = true));
-        async.elapse(FeedModel.coverWait - const Duration(milliseconds: 1));
-        expect(done, isFalse);
-        expect(feed.cards, isEmpty);
-        async.elapse(const Duration(milliseconds: 2));
-        expect(done, isTrue);
-        expect(bvids(feed), ['BV1']);
-        final line = coverLines().single;
-        expect(line.f['ready']?.toJson(), 1);
-        expect(line.f['failed']?.toJson(), 1);
-        expect(line.f['of']?.toJson(), 3);
-        expect(line.f['timedOut']?.toJson(), true);
-      });
-    });
-
-    test('a refresh restarted while they load drops the first answer', () async {
+    test('a refresh restarted while the first is out drops the first answer', () async {
       http.pages[1] = [feedItem('BV1')];
       final feed = make();
-      final first = Completer<bool>();
-      var calls = 0;
-      feed.beforeShow = (_) => CoverWait([if (calls++ == 0) first.future else Future.value(true)]);
+      http.gates[1] = Completer<void>();
       final stale = feed.refresh();
       await pumpEventQueue();
-      expect(calls, 1);
       http.pages[1] = [feedItem('BV2')];
+      final gate = http.gates.remove(1)!;
       await feed.refresh();
       expect(bvids(feed), ['BV2']);
-      first.complete(true);
+      http.pages[1] = [feedItem('BV1')];
+      gate.complete();
       expect(await stale, isNull);
       expect(bvids(feed), ['BV2']);
       expect(feed.loading, isFalse);
@@ -276,13 +245,13 @@ void main() {
       http.pages[1] = [feedItem('BV1')];
       final feed = make();
       await feed.refresh();
-      feed.beforeShow = (_) => const CoverWait.skipped(CoverSkip.noLayout);
+      feed.beforeShow = (_) => const CoverPrefetch.skipped(CoverSkip.noLayout);
       http.pages[1] = [feedItem('BV2')];
       await feed.refresh();
       expect(bvids(feed), ['BV2']);
       expect([for (final line in coverLines()) line.f.map((key, value) => MapEntry(key, value.toJson()))], [
-        {'of': 0, 'why': 'noGrid'},
-        {'of': 0, 'why': 'noLayout'},
+        {'ready': 0, 'failed': 0, 'of': 0, 'why': 'noGrid', 'early': false},
+        {'ready': 0, 'failed': 0, 'of': 0, 'why': 'noLayout', 'early': false},
       ]);
     });
 
@@ -291,12 +260,209 @@ void main() {
       final feed = make()
         ..beforeShow = (_) {
           asked = true;
-          return const CoverWait([]);
+          return const CoverPrefetch([]);
         };
       await feed.refresh();
       expect(feed.error, FeedModel.emptyMessage);
       expect(asked, isFalse);
       expect(coverLines(), isEmpty);
+    });
+  });
+
+  group("a held pull's early page", () {
+    late DateTime now;
+    late List<String> asked;
+    late BiliClient client;
+
+    FeedModel held() {
+      now = DateTime(2026, 10, 23, 12);
+      asked = [];
+      client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'));
+      return FeedModel(
+        client: client,
+        officialWanted: () => true,
+        logger: Logger(session: 'test')..add(logs),
+        now: () => now,
+      )..beforeShow = (fresh) {
+        asked.addAll([for (final card in fresh) card.bvid]);
+        return CoverPrefetch([for (final _ in fresh) Future.value(true)]);
+      };
+    }
+
+    List<LogEvent> lines(String msg) => [for (final event in logs.events) if (event.msg == msg) event];
+
+    test('armed, page 1 is asked for at once and its covers once it is in, but nothing shows until the release',
+        () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = held();
+      await feed.refresh();
+      asked.clear();
+      http.pages[1] = [feedItem('BV2'), feedItem('BV3')];
+      var notified = 0;
+      feed.addListener(() => notified++);
+      feed.pullArmed();
+      await pumpEventQueue();
+      expect(http.asked, [1, 1]);
+      expect(asked, ['BV2', 'BV3'], reason: 'covers on their way');
+      expect(bvids(feed), ['BV1']);
+      expect(feed.loading, isFalse);
+      expect(notified, 0, reason: 'nothing on screen changed');
+      expect(lines('feed page'), hasLength(1), reason: 'the first load only');
+
+      now = now.add(const Duration(milliseconds: 1500));
+      await feed.refresh(pulled: true);
+      expect(http.asked, [1, 1], reason: 'the release joined the early page');
+      expect(bvids(feed), ['BV2', 'BV3']);
+      final line = lines('feed covers').last;
+      expect(line.f['early']?.toJson(), true);
+      expect(line.f['heldMs']?.toJson(), 1500);
+      expect(line.f['ready']?.toJson(), 2, reason: 'asked for while held, ready by the release');
+      expect(line.f['of']?.toJson(), 2);
+    });
+
+    test('released before the answer, it shows when the answer comes', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = held();
+      await feed.refresh();
+      http.pages[1] = [feedItem('BV2')];
+      http.gates[1] = Completer<void>();
+      feed.pullArmed();
+      await pumpEventQueue();
+      final refresh = feed.refresh(pulled: true);
+      await pumpEventQueue();
+      expect(bvids(feed), ['BV1']);
+      http.gates[1]!.complete();
+      await refresh;
+      expect(http.asked, [1, 1]);
+      expect(bvids(feed), ['BV2']);
+      expect(lines('feed covers').last.f['early']?.toJson(), true);
+    });
+
+    test('pulled back under and let go: nothing shows, the answer is kept unseen, and a pull armed again within '
+        '10 s takes it without asking', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = held();
+      await feed.refresh();
+      http.pages[1] = [feedItem('BV2')];
+      var notified = 0;
+      feed.addListener(() => notified++);
+      feed.pullArmed();
+      await pumpEventQueue();
+      feed.pullDisarmed();
+      await pumpEventQueue();
+      expect(notified, 0);
+      expect(bvids(feed), ['BV1']);
+      expect(lines('feed covers'), hasLength(1), reason: 'the first load only');
+      final cancelled = lines('feed pull cancelled').single;
+      expect(cancelled.f['answered']?.toJson(), true);
+
+      now = now.add(const Duration(seconds: 9));
+      feed.pullArmed();
+      await pumpEventQueue();
+      expect(http.asked, [1, 1], reason: 'within the window: no new call');
+      await feed.refresh(pulled: true);
+      expect(http.asked, [1, 1]);
+      expect(bvids(feed), ['BV2']);
+    });
+
+    test('armed again after the window, it asks once more', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = held();
+      feed.pullArmed();
+      await pumpEventQueue();
+      feed.pullDisarmed();
+      now = now.add(FeedModel.earlyReuse + const Duration(seconds: 1));
+      feed.pullArmed();
+      await pumpEventQueue();
+      expect(http.asked, [1, 1]);
+    });
+
+    test('wiggling across the trigger many times makes one request', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = held();
+      http.gates[1] = Completer<void>();
+      for (var i = 0; i < 20; i++) {
+        feed.pullArmed();
+        await pumpEventQueue();
+        feed.pullDisarmed();
+        now = now.add(const Duration(milliseconds: 100));
+      }
+      http.gates[1]!.complete();
+      await pumpEventQueue();
+      for (var i = 0; i < 20; i++) {
+        feed.pullArmed();
+        feed.pullDisarmed();
+      }
+      feed.pullArmed();
+      await feed.refresh(pulled: true);
+      expect(http.asked, [1]);
+      expect(bvids(feed), ['BV1']);
+    });
+
+    test('any other refresh drops it: the next pull asks again', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = held();
+      await feed.refresh();
+      http.pages[1] = [feedItem('BV2')];
+      feed.pullArmed();
+      await pumpEventQueue();
+      http.pages[1] = [feedItem('BV3')];
+      await feed.refresh();
+      expect(bvids(feed), ['BV3']);
+      expect(http.asked, [1, 1, 1]);
+      await feed.refresh(pulled: true);
+      expect(http.asked, [1, 1, 1, 1], reason: 'nothing held to take');
+    });
+
+    test('dropped by a refresh while still out, its late answer never shows', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = held();
+      await feed.refresh();
+      http.pages[1] = [feedItem('BV2')];
+      final gate = http.gates[1] = Completer<void>();
+      feed.pullArmed();
+      await pumpEventQueue();
+      http.gates.remove(1);
+      http.pages[1] = [feedItem('BV3')];
+      await feed.refresh();
+      asked.clear();
+      gate.complete();
+      await pumpEventQueue();
+      expect(bvids(feed), ['BV3']);
+      expect(asked, isEmpty, reason: 'no covers for a stale page');
+    });
+
+    test('a new app token makes it stale: the release asks the official feed instead', () async {
+      http.pages[1] = [feedItem('BV1')];
+      http.officialPages[0] = [officialItem('BV9')];
+      final feed = held();
+      feed.pullArmed();
+      await pumpEventQueue();
+      expect(http.asked, [1]);
+      client.appToken = fakeAppToken;
+      await feed.refresh(pulled: true);
+      expect(http.officialAsked, [0]);
+      expect(bvids(feed), ['BV9']);
+      expect(feed.source, FeedSource.official);
+    });
+
+    test('a failed early page is not shown as the release\'s answer: the release asks again', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = held();
+      await feed.refresh();
+      http.failing.add(1);
+      feed.pullArmed();
+      await pumpEventQueue();
+      feed.pullDisarmed();
+      feed.pullArmed();
+      await pumpEventQueue();
+      expect(http.asked, [1, 1], reason: 'a failure within the window is not asked again by an arming');
+      http.failing.clear();
+      http.pages[1] = [feedItem('BV2')];
+      await feed.refresh(pulled: true);
+      expect(http.asked, [1, 1, 1]);
+      expect(bvids(feed), ['BV2']);
+      expect(lines('feed early page failed').single.f.keys, unorderedEquals(['error', 'status']));
     });
   });
 

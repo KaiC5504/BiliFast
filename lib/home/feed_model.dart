@@ -1,4 +1,4 @@
-import 'dart:async' show TimeoutException;
+import 'dart:async' show TimeoutException, unawaited;
 import 'dart:io' show IOException;
 
 import 'package:bili_core/api.dart';
@@ -56,19 +56,79 @@ Map<String, Object> feedLogFields(Object error) => {
   if (error case BiliHTTPError(:final status)) 'status': status,
 };
 
-/// Why a refresh asked for no covers before showing its cards.
+typedef _Page = ({List<FeedCard> cards, FeedSource source, int index});
+
+/// Page 1 asked for while a pull is held past its trigger, kept out of sight until the pull lets go there.
+class _EarlyPage {
+  _EarlyPage({
+    required this.generation,
+    required this.official,
+    required this.token,
+    required this.started,
+    required this.page,
+  });
+
+  /// What it was asked under: a refresh since, another source or another token make it stale.
+  final int generation;
+  final bool official;
+  final AppToken? token;
+
+  final DateTime started;
+  final Future<_Page> page;
+
+  /// When it answered or failed; null while still out.
+  DateTime? landed;
+  _Page? answer;
+  bool failed = false;
+
+  /// Whether the pull is past its trigger now.
+  bool armed = true;
+
+  /// Whether its first screen's covers have been asked for, and how they are doing if any were.
+  bool warmed = false;
+  _CoverCount? covers;
+}
+
+/// Why a refresh asked for no covers for its cards.
 enum CoverSkip { noGrid, unmounted, noLayout, noRows }
 
 /// What [FeedModel.beforeShow] started for a refresh's cards: a future per cover it asked for, true once that cover
 /// is ready and false if it failed; or, having asked for none, why.
 @immutable
-class CoverWait {
-  const CoverWait(this.covers) : skipped = null;
+class CoverPrefetch {
+  const CoverPrefetch(this.covers) : skipped = null;
 
-  const CoverWait.skipped(CoverSkip this.skipped) : covers = const [];
+  const CoverPrefetch.skipped(CoverSkip this.skipped) : covers = const [];
 
   final List<Future<bool>> covers;
   final CoverSkip? skipped;
+}
+
+/// A [CoverPrefetch]'s covers, counted as they finish.
+class _CoverCount {
+  _CoverCount(CoverPrefetch prefetch) : of = prefetch.covers.length, skipped = prefetch.skipped {
+    for (final cover in prefetch.covers) {
+      unawaited(
+        cover.then<void>(
+          (ok) {
+            if (ok) {
+              ready++;
+            } else {
+              failed++;
+            }
+          },
+          onError: (Object _) {
+            failed++;
+          },
+        ),
+      );
+    }
+  }
+
+  final int of;
+  final CoverSkip? skipped;
+  int ready = 0;
+  int failed = 0;
 }
 
 /// A card after 不感兴趣: the reason it went with, and the 反馈 picked in the reasons sheet, if any.
@@ -85,16 +145,17 @@ class CardDislike {
 /// feed is generic without one. When the official feed answers that the token is refused, the same load is done
 /// from the website's, so 推荐 never goes blank.
 class FeedModel extends ChangeNotifier {
-  FeedModel({required this._client, Logger? logger, bool Function()? officialWanted})
+  FeedModel({required this._client, Logger? logger, bool Function()? officialWanted, DateTime Function()? now})
     : _logger = logger ?? Logger.shared,
-      _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed);
+      _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
+      _now = now ?? DateTime.now;
 
   static const emptyMessage = '暂时没有推荐的视频';
   static const endMessage = '没有更多了';
 
-  /// How long a refresh's answer waits for [beforeShow]'s covers before its cards show anyway, a late cover popping
-  /// in over its placeholder: the official app's whole hold, call and covers, is about 1.0 s.
-  static const coverWait = Duration(milliseconds: 300);
+  /// How long a pull's early page, once in, still serves a pull armed again after the last one went back under its
+  /// trigger. Within it an arming asks nothing, so wiggling across the trigger costs one call.
+  static const earlyReuse = Duration(seconds: 10);
 
   /// Pages in a row that may add nothing before a load more gives up and the feed counts as [exhausted].
   static const _emptyPagesAllowed = 3;
@@ -105,6 +166,7 @@ class FeedModel extends ChangeNotifier {
   final BiliClient _client;
   final Logger _logger;
   final bool Function() _officialWanted;
+  final DateTime Function() _now;
   List<FeedCard> _cards = const [];
   bool _loading = false;
   String? _error;
@@ -120,13 +182,15 @@ class FeedModel extends ChangeNotifier {
   final _dislikes = <String, CardDislike>{};
   final _dislikeBusy = <String>{};
 
-  /// Called with a refresh's cards before they replace [cards], which still hold the ones going: it starts getting
-  /// the first screen's covers ready. The cards show once every cover's future has finished, or after [coverWait],
-  /// so the loading TV leaves with the pictures in place, as the official app's does (14).
-  CoverWait Function(List<FeedCard> fresh)? beforeShow;
+  /// Called with a refresh's cards just before they replace [cards], which still hold the ones going, and with a held
+  /// pull's page as soon as it is in: it starts getting the first screen's covers ready. Nothing waits on them; a
+  /// cover still loading when its card shows pops in over the placeholder rather than holding the swap.
+  CoverPrefetch Function(List<FeedCard> fresh)? beforeShow;
 
   /// A refresh replaces the list, so a load more that was already running must not append to the new one.
   int _generation = 0;
+
+  _EarlyPage? _early;
   bool _disposed = false;
 
   List<FeedCard> get cards => _cards;
@@ -146,31 +210,40 @@ class FeedModel extends ChangeNotifier {
   bool get canLoadMore => _cards.isNotEmpty && !_loading && _error == null && !_exhausted;
 
   /// Whether the next load would read the official feed.
-  bool get wantsOfficial => _officialWanted() && _client.appToken != null && !_officialRefused;
+  bool get wantsOfficial => _officialPossible && !_officialRefused;
+
+  /// Whether a refresh would read the official feed.
+  bool get _officialPossible => _officialWanted() && _client.appToken != null;
 
   /// The card's 不感兴趣, while it stands.
   CardDislike? dislikeOf(FeedCard card) => _dislikes[card.bvid];
 
   /// Page 1 again. With cards on screen a failure (or an empty page) keeps them, and its words come back for a toast;
   /// with none, it becomes [error]. Null otherwise.
-  Future<String?> refresh() async {
+  ///
+  /// A [pulled] refresh takes the page [pullArmed] asked for, if it still counts, instead of asking again; any other
+  /// refresh drops it.
+  Future<String?> refresh({bool pulled = false}) async {
+    final early = pulled ? _joinable() : null;
+    _early = null;
     final mine = ++_generation;
     _loading = true;
     _officialRefused = false;
     _notify();
+    final heldMs = early == null ? null : _now().difference(early.started).inMilliseconds;
     String? failure;
     try {
-      final page = await _fetch(refresh: true);
+      final page = await (early?.page ?? _fetch(refresh: true));
       if (mine != _generation) return null;
+      if (early != null && early.official && page.source == FeedSource.web) _officialRefused = true;
       final fresh = _appending(page.cards, const []);
       _logPage(page, fresh.length);
-      if (fresh.isNotEmpty) {
-        await _coversReady(fresh);
-        if (mine != _generation) return null;
-      }
       if (fresh.isEmpty) {
         failure = emptyMessage;
       } else {
+        final asked = _askCovers(fresh);
+        // A held pull's covers were asked for when its page came in; those are the ones that can be ready by now.
+        _logCovers(early?.covers ?? asked, heldMs: heldMs);
         _cards = fresh;
         _advance(page);
         _source = page.source;
@@ -231,17 +304,119 @@ class FeedModel extends ChangeNotifier {
   /// 重试 under a message: page 1 when no cards are shown (the refresh is what failed), otherwise the next page.
   Future<void> retry() => _cards.isEmpty ? refresh() : loadMore();
 
+  /// A pull is held past its trigger: page 1 is asked for now and its first screen's covers once it is in, but
+  /// nothing changes on screen until a [refresh] with `pulled` takes it. One still out, or one in within
+  /// [earlyReuse] of the pull going back under, is kept instead of asking again.
+  void pullArmed() {
+    if (_disposed) return;
+    final held = _early;
+    if (held != null && _current(held) && !_expired(held)) {
+      held.armed = true;
+      _warm(held);
+      return;
+    }
+    final early = _EarlyPage(
+      generation: _generation,
+      official: _officialPossible,
+      token: _client.appToken,
+      started: _now(),
+      page: _fetch(refresh: true, early: true),
+    );
+    _early = early;
+    unawaited(
+      early.page.then(
+        (page) {
+          early
+            ..landed = _now()
+            ..answer = page;
+          _warm(early);
+        },
+        onError: (Object error) {
+          early
+            ..landed = _now()
+            ..failed = true;
+          if (identical(_early, early)) _logger.warn(LogCategory.ui, 'feed early page failed', feedLogFields(error));
+        },
+      ),
+    );
+  }
+
+  /// The pull went back under its trigger, or ended without refreshing: the early page stays out of sight, kept for
+  /// [earlyReuse] in case the pull comes back.
+  void pullDisarmed() {
+    final early = _early;
+    if (early == null || !early.armed) return;
+    early.armed = false;
+    _logger.info(LogCategory.ui, 'feed pull cancelled', {
+      'answered': early.landed != null,
+      'heldMs': _now().difference(early.started).inMilliseconds,
+    });
+  }
+
+  bool _current(_EarlyPage early) =>
+      early.generation == _generation &&
+      early.official == _officialPossible &&
+      identical(early.token, _client.appToken);
+
+  bool _expired(_EarlyPage early) {
+    final landed = early.landed;
+    return !early.armed && landed != null && _now().difference(landed) > earlyReuse;
+  }
+
+  /// The early page a pull's refresh may take: a failed one is asked again, as the release is a new request.
+  _EarlyPage? _joinable() {
+    final held = _early;
+    if (held == null || held.failed || !_current(held) || _expired(held)) return null;
+    return held;
+  }
+
+  /// Asks for the first screen's covers of an early page that is in while its pull is armed, so they are ready by
+  /// the release; the refresh asks again then, finding them done or joining their downloads.
+  void _warm(_EarlyPage early) {
+    final answer = early.answer;
+    if (_disposed || answer == null || early.warmed || !early.armed) return;
+    if (!identical(_early, early) || !_current(early)) return;
+    early.warmed = true;
+    final fresh = _appending(answer.cards, const []);
+    if (fresh.isNotEmpty) early.covers = _askCovers(fresh);
+  }
+
+  /// Hands [fresh] to [beforeShow]; null if it threw, which goes to the crash log.
+  _CoverCount? _askCovers(List<FeedCard> fresh) {
+    final hook = beforeShow;
+    try {
+      return _CoverCount(hook == null ? const CoverPrefetch.skipped(CoverSkip.noGrid) : hook(fresh));
+    } catch (error, stack) {
+      CrashLog.report(error, stack, source: 'feed covers', logger: _logger);
+      return null;
+    }
+  }
+
+  /// As the cards show: how many of the first screen's covers were ready then and how many had failed (the rest still
+  /// loading), or why none were asked for, and whether the page was a held pull's ([heldMs] since it was asked for).
+  void _logCovers(_CoverCount? count, {int? heldMs}) {
+    if (count == null) return;
+    _logger.info(LogCategory.ui, 'feed covers', {
+      'ready': count.ready,
+      'failed': count.failed,
+      'of': count.of,
+      if (count.skipped case final why?) 'why': why.name,
+      'early': heldMs != null,
+      'heldMs': ?heldMs,
+    });
+  }
+
   /// One page from the source this load should read, with the index it asked for. The indexes only move once the
-  /// caller knows the page still counts.
-  Future<({List<FeedCard> cards, FeedSource source, int index})> _fetch({required bool refresh}) async {
-    if (wantsOfficial) {
+  /// caller knows the page still counts. An [early] page leaves the refused token for its refresh to note.
+  Future<_Page> _fetch({required bool refresh, bool early = false}) async {
+    if (early ? _officialPossible : wantsOfficial) {
       final index = refresh ? 0 : _nextOfficialIndex;
       try {
         return (cards: await _client.officialFeed(index: index), source: FeedSource.official, index: index);
       } catch (error) {
         if (!_refused(error)) rethrow;
         _logger.warn(LogCategory.ui, 'official feed refused, web feed instead', feedLogFields(error));
-        _officialRefused = true;
+        if (!early) _officialRefused = true;
       }
     }
     // The first launch reaches here before the account check has fetched the fingerprint cookies.
@@ -250,58 +425,10 @@ class FeedModel extends ChangeNotifier {
     return (cards: await _client.recommendFeed(index: index), source: FeedSource.web, index: index);
   }
 
-  /// Waits on [beforeShow]'s covers, at most [coverWait], and logs how many were ready, how many failed (the rest
-  /// were still loading) or why none were asked for. Never throws.
-  Future<void> _coversReady(List<FeedCard> fresh) async {
-    final hook = beforeShow;
-    final CoverWait wait;
-    try {
-      wait = hook == null ? const CoverWait.skipped(CoverSkip.noGrid) : hook(fresh);
-    } catch (error, stack) {
-      CrashLog.report(error, stack, source: 'feed covers', logger: _logger);
-      return;
-    }
-    final covers = wait.covers;
-    if (covers.isEmpty) {
-      _logger.info(LogCategory.ui, 'feed covers', {'of': 0, if (wait.skipped case final why?) 'why': why.name});
-      return;
-    }
-    final waited = Stopwatch()..start();
-    var ready = 0;
-    var failed = 0;
-    var timedOut = false;
-    try {
-      await Future.wait([
-        for (final cover in covers)
-          cover.then<void>(
-            (ok) {
-              if (ok) {
-                ready++;
-              } else {
-                failed++;
-              }
-            },
-            onError: (Object _) {
-              failed++;
-            },
-          ),
-      ]).timeout(coverWait);
-    } on TimeoutException {
-      timedOut = true;
-    }
-    _logger.info(LogCategory.ui, 'feed covers', {
-      'ready': ready,
-      'failed': failed,
-      'of': covers.length,
-      'waitedMs': waited.elapsedMilliseconds,
-      'timedOut': timedOut,
-    });
-  }
-
   static bool _refused(Object error) =>
       error is BiliNoAppTokenError || error is BiliAPIError && _refusedCodes.contains(error.code);
 
-  void _advance(({List<FeedCard> cards, FeedSource source, int index}) page) {
+  void _advance(_Page page) {
     switch (page.source) {
       case FeedSource.official:
         _nextOfficialIndex = page.index + 1;
@@ -389,11 +516,12 @@ class FeedModel extends ChangeNotifier {
     feedbackId: reason.kind == FeedReasonKind.feedback ? reason.id : null,
   );
 
-  void _logPage(({List<FeedCard> cards, FeedSource source, int index}) page, int added) => _logger.info(
-    LogCategory.ui,
-    'feed page',
-    {'source': page.source.name, 'index': page.index, 'got': page.cards.length, 'new': added},
-  );
+  void _logPage(_Page page, int added) => _logger.info(LogCategory.ui, 'feed page', {
+    'source': page.source.name,
+    'index': page.index,
+    'got': page.cards.length,
+    'new': added,
+  });
 
   /// The feed repeats videos across pages, and the grid must not show one twice.
   static List<FeedCard> _appending(List<FeedCard> page, List<FeedCard> cards) {

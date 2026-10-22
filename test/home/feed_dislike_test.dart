@@ -6,7 +6,6 @@ import 'package:bilifast/account/app_auth.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
-import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/home/feed_dislike.dart';
 import 'package:bilifast/home/feed_more_sheet.dart';
 import 'package:bilifast/home/home_page.dart';
@@ -205,7 +204,7 @@ void main() {
 
     await show(tester);
     final live = coverIn(card('BV1aaa'));
-    expect(live.url, endsWith(BiliMetrics.feedCoverSuffix));
+    expect(live.url, 'https://i0.hdslb.com/bfs/archive/BV1aaa.jpg@660w_480h_1c.webp', reason: "211 pt's box at 3x");
     await openMore(tester, 'BV1aaa');
     await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
     await settle(tester);
@@ -222,43 +221,29 @@ void main() {
     expect(http.cancels, hasLength(1));
   });
 
-  group("while a refresh's covers load", () {
-    var holding = false;
-    final held = <Completer<bool>>[];
+  group("while a refresh's call is out", () {
     late ValueNotifier<int> reloads;
+    late Completer<void> answer;
 
-    setUp(() {
-      holding = false;
-      held.clear();
-      reloads = ValueNotifier(0);
-      HomePage.precacheCover = (_, _) {
-        if (!holding) return Future.value(true);
-        final cover = Completer<bool>();
-        held.add(cover);
-        return cover.future;
-      };
-    });
+    setUp(() => reloads = ValueNotifier(0));
 
-    tearDown(() {
-      HomePage.precacheCover = FeedCardView.precacheCover;
-      reloads.dispose();
-    });
+    tearDown(() => reloads.dispose());
 
     Finder going(String bvid) => find.byKey(ValueKey('feed-card-going-$bvid'));
 
     Finder turnedOver(Finder slot) => find.descendant(of: slot, matching: find.byType(FeedDislikedCard));
 
-    /// A refresh by the bar's 首页 whose answer has come, its covers held; the old cards stay for at most
-    /// [FeedModel.coverWait], so what follows keeps its frames short. Not a pull: while the list springs back it
-    /// takes no taps, and that outlasts the wait.
+    /// A refresh by the bar's 首页 whose call is out, its answer held. Not a pull: while the list springs back it
+    /// takes no taps.
     Future<void> refreshHeld(WidgetTester tester) async {
-      holding = true;
       http.officialPages[0] = [for (var i = 0; i < 4; i++) officialItem('BV1new$i')];
+      answer = http.officialGates[0] = Completer<void>();
+      final asked = http.officialAsked.length;
       reloads.value++;
-      for (var i = 0; i < 20 && held.isEmpty; i++) {
+      for (var i = 0; i < 20 && http.officialAsked.length == asked; i++) {
         await tester.pump(const Duration(milliseconds: 1));
       }
-      expect(held, isNotEmpty, reason: 'the answer came and its covers are loading');
+      expect(http.officialAsked, hasLength(asked + 1), reason: 'the refresh is out');
     }
 
     Future<void> frames(WidgetTester tester, int count) async {
@@ -267,11 +252,9 @@ void main() {
       }
     }
 
-    /// The covers ready, then 1 ms frames until the old card [bvid] is fading out over the new one.
+    /// The answer in, then 1 ms frames until the old card [bvid] is fading out over the new one.
     Future<void> handOff(WidgetTester tester, String bvid) async {
-      for (final cover in held) {
-        if (!cover.isCompleted) cover.complete(true);
-      }
+      answer.complete();
       for (var i = 0; i < 20 && going(bvid).evaluate().isEmpty; i++) {
         await tester.pump(const Duration(milliseconds: 1));
       }
@@ -280,12 +263,11 @@ void main() {
 
     testWidgets('a 不感兴趣 made meanwhile stays on the card as it fades out', (tester) async {
       await show(tester, reloads: reloads);
-      // The sheet takes longer to open than the covers are waited for, so the refresh starts under it.
       await openMore(tester, 'BV1aaa');
       await refreshHeld(tester);
       await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
       await frames(tester, 3);
-      expect(card('BV1new0'), findsNothing, reason: 'still waiting on the covers');
+      expect(card('BV1new0'), findsNothing, reason: 'still waiting on the answer');
       expect(turnedOver(card('BV1aaa')), findsOneWidget);
 
       await handOff(tester, 'BV1aaa');
@@ -308,7 +290,7 @@ void main() {
       await refreshHeld(tester);
       await tester.tap(find.byKey(const ValueKey('feed-disliked-undo')));
       await frames(tester, 3);
-      expect(card('BV1new0'), findsNothing, reason: 'still waiting on the covers');
+      expect(card('BV1new0'), findsNothing, reason: 'still waiting on the answer');
       expect(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('feed-card-live'))), findsOne);
       expect(http.cancels, hasLength(1));
 

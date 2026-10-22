@@ -17,14 +17,23 @@ void main() {
   late List<Completer<void>> refreshes;
   late List<RefreshIndicatorMode> modes;
 
+  /// What the list heard: each refresh, and with [show]'s `early` each arming and disarming.
+  late List<String> heard;
+
   /// The list under the bar; [around] puts something over or around it.
-  Future<void> show(WidgetTester tester, {int rows = 30, Widget Function(Widget list)? around}) async {
+  Future<void> show(
+    WidgetTester tester, {
+    int rows = 30,
+    Widget Function(Widget list)? around,
+    bool early = false,
+  }) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     refreshes = [];
     modes = [];
+    heard = [];
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(size: Size(440, 956)),
@@ -40,7 +49,10 @@ void main() {
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     slivers: [
                       ReleaseRefreshControl(
+                        onArmed: early ? () => heard.add('armed') : null,
+                        onDisarmed: early ? () => heard.add('disarmed') : null,
                         onRefresh: () {
+                          heard.add('refresh');
                           final refresh = Completer<void>();
                           refreshes.add(refresh);
                           return refresh.future;
@@ -269,6 +281,92 @@ void main() {
     await wait(tester);
     expect(refreshes, isEmpty);
     expect(find.byType(LoadingTv), findsNothing);
+  });
+
+  group('told early', () {
+    testWidgets('held past the trigger it says armed once; the release refreshes with no disarm', (tester) async {
+      await show(tester, early: true);
+      final finger = await pullDown(tester, 300);
+      await wait(tester);
+      expect(heard, ['armed']);
+      await finger.up();
+      await wait(tester);
+      expect(heard, ['armed', 'refresh']);
+      await finish(tester);
+      expect(heard, ['armed', 'refresh']);
+    });
+
+    testWidgets('short of the trigger it says nothing', (tester) async {
+      await show(tester, early: true);
+      final finger = await pullDown(tester, 75);
+      await finger.up();
+      await wait(tester);
+      expect(heard, isEmpty);
+    });
+
+    testWidgets('back under the trigger with the finger down it disarms, armed again past it, and lifted under it '
+        'nothing more', (tester) async {
+      await show(tester, early: true);
+      final finger = await pullDown(tester, 300);
+      await drag(tester, finger, -150);
+      await tester.pump();
+      expect(heard, ['armed', 'disarmed']);
+      await drag(tester, finger, 150);
+      await tester.pump();
+      expect(heard, ['armed', 'disarmed', 'armed']);
+      await drag(tester, finger, -150);
+      await finger.up();
+      await wait(tester);
+      expect(heard, ['armed', 'disarmed', 'armed', 'disarmed']);
+      expect(refreshes, isEmpty);
+    });
+
+    testWidgets('back under and lifted within one frame it disarms', (tester) async {
+      await show(tester, early: true);
+      final finger = await pullDown(tester, 300);
+      await finger.moveBy(const Offset(0, -150));
+      await finger.up();
+      await wait(tester);
+      expect(heard, ['armed', 'disarmed']);
+      expect(refreshes, isEmpty);
+    });
+
+    testWidgets('a touch the system cancels disarms', (tester) async {
+      await show(tester, early: true);
+      final finger = await pullDown(tester, 300);
+      await finger.cancel();
+      await wait(tester);
+      expect(heard, ['armed', 'disarmed']);
+    });
+
+    testWidgets('the list going while armed disarms', (tester) async {
+      await show(tester, early: true);
+      final finger = await pullDown(tester, 300);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(heard, ['armed', 'disarmed']);
+      await finger.up();
+    });
+
+    testWidgets('a bounce past the trigger with no finger says nothing', (tester) async {
+      await show(tester, early: true);
+      tester.state<ScrollableState>(find.byType(Scrollable)).position.jumpTo(-150);
+      await tester.pump();
+      await wait(tester);
+      expect(heard, isEmpty);
+    });
+
+    testWidgets('a pull while it refreshes says nothing', (tester) async {
+      await show(tester, early: true);
+      var finger = await pullDown(tester, 300);
+      await finger.up();
+      await wait(tester);
+      finger = await pullDown(tester, 300);
+      await finger.up();
+      await wait(tester);
+      expect(heard, ['armed', 'refresh']);
+      await finish(tester);
+    });
   });
 
   /// Leaves the list bouncing back from 150 pt past its top, with no finger on it.

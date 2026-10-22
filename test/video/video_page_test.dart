@@ -8,6 +8,7 @@ import 'package:bili_core/api.dart'
         CommentMember,
         CommentSort,
         CommentPicture,
+        FeedCard,
         OfficialKind,
         RichRun,
         SpaceVideo,
@@ -43,6 +44,7 @@ import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/device/player_device.dart';
+import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/playback/playback_controller.dart';
@@ -90,6 +92,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
+import '../home/feed_fakes.dart' show feedItem;
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
 import '../support/fake_player_session.dart';
@@ -569,12 +572,28 @@ void main() {
     await back(tester);
   });
 
-  for (final (name, card, address) in [
-    ('a card sized by its box', const RemoteImage(cover), sizedImageUrl(cover, width: 240, height: 180)),
+  final feedCard = FeedCard.fromJson({...feedItem(bv), 'pic': cover});
+  for (final (name, Widget Function(VoidCallback open) card, address) in [
     (
-      "a 推荐 card at the CDN's size",
-      const RemoteImage(cover, cdnSuffix: BiliMetrics.feedCoverSuffix),
-      suffixedImageUrl(cover, BiliMetrics.feedCoverSuffix),
+      'a card sized by its box',
+      (open) => GestureDetector(
+        onTap: open,
+        child: SizedBox(
+          width: 214,
+          height: 160,
+          child: Hero(tag: VideoRoute.coverTag(bv), child: const RemoteImage(cover)),
+        ),
+      ),
+      sizedImageUrl(cover, width: 240, height: 180),
+    ),
+    (
+      // 211 × 158.25 pt, its own box's size in 60 px steps.
+      'a 推荐 card on a 211 pt column',
+      (open) => SizedBox(
+        width: 211,
+        child: FeedCardView(card: feedCard, onOpen: (_) => open(), onWatchLater: () {}),
+      ),
+      sizedImageUrl(cover, width: 240, height: 180),
     ),
   ]) {
     testWidgets('a push from $name asks for at most two cover sizes: the card flies on its own download, the player '
@@ -587,15 +606,10 @@ void main() {
           tester,
           home: Builder(
             builder: (context) => Center(
-              child: GestureDetector(
+              child: KeyedSubtree(
                 key: const ValueKey('card'),
                 // openVideoPage's push, with the test's session.
-                onTap: () => Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route))),
-                child: SizedBox(
-                  width: 214,
-                  height: 160,
-                  child: Hero(tag: VideoRoute.coverTag(bv), child: card),
-                ),
+                child: card(() => Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route)))),
               ),
             ),
           ),

@@ -14,10 +14,15 @@ import 'theme.dart';
 ///
 /// The first sliver of a downward scroll view whose physics overscroll at the top ([BouncingScrollPhysics]). While
 /// [onRefresh] runs the gap holds at [refreshIndicatorExtent]; a pull meanwhile starts nothing.
+///
+/// [onArmed] and [onDisarmed] let a list start its refresh's work while the finger still holds the pull, as the
+/// official 推荐 does, as long as nothing on screen changes before [onRefresh].
 class ReleaseRefreshControl extends StatefulWidget {
   const ReleaseRefreshControl({
     super.key,
     required this.onRefresh,
+    this.onArmed,
+    this.onDisarmed,
     this.builder = loadingTvRefreshIndicator,
     this.refreshTriggerPullDistance = 100,
     this.refreshIndicatorExtent = LoadingTvTheme.size,
@@ -26,6 +31,14 @@ class ReleaseRefreshControl extends StatefulWidget {
        assert(refreshTriggerPullDistance >= refreshIndicatorExtent);
 
   final RefreshCallback? onRefresh;
+
+  /// The pull is held past [refreshTriggerPullDistance]: letting go now would refresh. Once per arming.
+  final VoidCallback? onArmed;
+
+  /// An armed pull ended without refreshing: back under the trigger with the finger still down, a touch the system
+  /// took, or the list gone. Never after [onRefresh].
+  final VoidCallback? onDisarmed;
+
   final RefreshControlIndicatorBuilder? builder;
   final double refreshTriggerPullDistance;
   final double refreshIndicatorExtent;
@@ -44,6 +57,9 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
 
   /// The pointers that went down on this list and haven't lifted.
   final _fingers = <int>{};
+
+  /// Whether [ReleaseRefreshControl.onArmed] was the last word the list heard.
+  bool _toldArmed = false;
 
   @override
   void initState() {
@@ -65,6 +81,7 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
   @override
   void dispose() {
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_pointer);
+    _disarm();
     super.dispose();
   }
 
@@ -117,12 +134,30 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
     final idle = _mode != RefreshIndicatorMode.refresh && _mode != RefreshIndicatorMode.done;
     if (refresh && idle && _pulled() >= widget.refreshTriggerPullDistance) {
       _refresh();
-    } else if (_mode == RefreshIndicatorMode.armed) {
-      setState(() => _mode = RefreshIndicatorMode.drag);
+      return;
     }
+    _disarm();
+    if (_mode == RefreshIndicatorMode.armed) setState(() => _mode = RefreshIndicatorMode.drag);
+  }
+
+  /// The callbacks run in a microtask: arming is seen during layout, where a listener must not rebuild anything.
+  void _arm() {
+    if (_toldArmed) return;
+    _toldArmed = true;
+    final onArmed = widget.onArmed;
+    if (onArmed != null) scheduleMicrotask(onArmed);
+  }
+
+  void _disarm() {
+    if (!_toldArmed) return;
+    _toldArmed = false;
+    final onDisarmed = widget.onDisarmed;
+    if (onDisarmed != null) scheduleMicrotask(onDisarmed);
   }
 
   void _refresh() {
+    // The arming is spent on this refresh.
+    _toldArmed = false;
     final onRefresh = widget.onRefresh;
     if (onRefresh == null) {
       setState(() => _mode = RefreshIndicatorMode.done);
@@ -145,10 +180,13 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
     // The closing gap plays on until it's shut, unless a finger catches its last bit for a new pull.
     final caught = _fingers.isNotEmpty && extent <= trigger * _caughtFraction;
     if (_mode == RefreshIndicatorMode.done && extent > 0 && !caught) return RefreshIndicatorMode.done;
-    if (extent <= 0) return RefreshIndicatorMode.inactive;
     // A bounce past the trigger with no finger on the list arms nothing.
-    if (extent < trigger || _fingers.isEmpty) return RefreshIndicatorMode.drag;
+    if (extent < trigger || _fingers.isEmpty) {
+      _disarm();
+      return extent <= 0 ? RefreshIndicatorMode.inactive : RefreshIndicatorMode.drag;
+    }
     if (_mode != RefreshIndicatorMode.armed) unawaited(HapticFeedback.mediumImpact());
+    _arm();
     return RefreshIndicatorMode.armed;
   }
 

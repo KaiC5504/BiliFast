@@ -101,17 +101,20 @@ void main() {
       )
       .position;
 
-  testWidgets('首页: held past the trigger refreshes 推荐 only when the finger lifts', (tester) async {
+  testWidgets('首页: held past the trigger asks for 推荐 at once but shows it only when the finger lifts', (tester) async {
     await show(tester);
     await settle(tester, 40);
     final asked = List.of(http.asked);
+    http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1n$i')];
     final finger = await pullAndHold(tester, feed);
     await settle(tester, 20);
     expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isTrue, reason: 'armed');
-    expect(http.asked, asked, reason: 'held for 1 s past the trigger');
+    expect(http.asked, [...asked, 1], reason: 'asked as it armed');
+    expect(find.byKey(const ValueKey('feed-card-BV1c0')), findsOneWidget, reason: 'held for 1 s: nothing shown');
     await finger.up();
     await settle(tester, 30);
-    expect(http.asked, [...asked, 1]);
+    expect(http.asked, [...asked, 1], reason: 'the release took that answer');
+    expect(find.byKey(const ValueKey('feed-card-BV1n0')), findsOneWidget);
     expect(find.byType(LoadingTv), findsNothing);
   });
 
