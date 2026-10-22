@@ -299,7 +299,7 @@ class _HomePageState extends State<HomePage> {
   Widget _page(BuildContext context, Skin? head) {
     final still = MediaQuery.disableAnimationsOf(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: head != null && head.lightText ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      value: head != null && head.lightStatusHome ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: BiliColors.pageGrey,
         resizeToAvoidBottomInset: false,

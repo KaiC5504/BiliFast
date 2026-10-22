@@ -299,7 +299,7 @@ class _MePageState extends State<MePage> with RouteAware {
             ],
           );
           return AnnotatedRegion<SystemUiOverlayStyle>(
-            value: skin != null && skin.lightText ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+            value: skin != null && skin.lightStatusMe ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
             child: Column(
               children: [
                 Stack(

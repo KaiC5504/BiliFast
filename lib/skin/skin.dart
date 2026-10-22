@@ -63,6 +63,12 @@ final class Skin {
   /// Light text and icons over the themed headers.
   bool get lightText => equip.colors.lightText;
 
+  /// White status bar icons over 首页's dressed top.
+  bool get lightStatusHome => lightText;
+
+  /// White status bar icons over 我的's dressed header.
+  bool get lightStatusMe => lightText;
+
   /// Whether the bottom bar takes the skin: its picture, all five icons each way and both label colours are there.
   bool get themesBar =>
       tailBg != null &&
