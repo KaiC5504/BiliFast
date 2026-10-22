@@ -109,8 +109,10 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
 
   /// What each 主页 section's key brought, counts only, so a key the answer renamed shows in the phone's log.
   static void _logSections(OwnSpace own) {
-    String state(SpaceSection<Object?> section) =>
-        section.count == 0 && section.items.isEmpty ? 'absent' : 'count ${section.count} items ${section.items.length}';
+    String state(SpaceSection<Object?> section) => [
+      section.count == 0 && section.items.isEmpty ? 'absent' : 'count ${section.count} items ${section.items.length}',
+      if (section.dropped case final dropped?) 'dropped ($dropped)',
+    ].join(' ');
     Logger.shared.info(LogCategory.api, 'own space sections', {
       'favourites': state(own.favourites),
       'bangumi': state(own.bangumi),

@@ -272,6 +272,30 @@ void main() {
       expect(own.likes.items.map((video) => video.aid), [100000000000601, 100000000000602]);
     });
 
+    test('最近投币/点赞 previews without bvid or duration: the BV from the aid, the length as seconds; why one dropped', () {
+      final data = dataOf(OwnSpaceFixtures.space)
+        ..['coin_archive'] = {
+          'count': 13,
+          'item': [
+            {'title': '没有BV', 'param': '170001', 'goto': 'av', 'length': '1:02:03'},
+            {'title': '没有goto', 'aid': 170001, 'duration': 12},
+            {'title': '课程', 'param': '170002', 'goto': 'cheese'},
+          ],
+        }
+        ..['like_archive'] = {
+          'count': 600,
+          'item': [
+            {'title': '没有编号'},
+          ],
+        };
+      final own = ownOf(data);
+      expect(own.coins.items.map((video) => (video.bvid, video.duration)), [('BV17x411w7KC', 3723), ('BV17x411w7KC', 12)]);
+      expect(own.coins.dropped, 'not a video: cheese');
+      expect(own.likes.items, isEmpty);
+      expect(own.likes.dropped, 'missing param');
+      expect(ownOf(dataOf(OwnSpaceFixtures.space)).likes.dropped, isNull);
+    });
+
     test('拥有的个性装扮: at most 3 cards, each with its number and colours, and the total', () async {
       final own = (await client.ownSpace(mid: 20000001)).own!;
       expect(own.garbs.count, 4);

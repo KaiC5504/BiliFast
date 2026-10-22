@@ -1,3 +1,4 @@
+import 'bvid.dart';
 import 'json.dart';
 
 final class FeedCard {
@@ -61,7 +62,7 @@ final class FeedCard {
     final goto = object.text('card_goto') ?? object.text('goto') ?? 'av';
     return FeedCard(
       aid: aid,
-      bvid: sentBvid == null || sentBvid.isEmpty ? _avToBv(aid) : sentBvid,
+      bvid: sentBvid == null || sentBvid.isEmpty ? avToBv(aid) : sentBvid,
       cid: asInt(player?.map['cid']) ?? 0,
       title: object.text('title') ?? '',
       cover: object.text('cover') ?? '',
@@ -86,28 +87,6 @@ final class FeedCard {
     final height = int.tryParse(query['player_height'] ?? '') ?? 0;
     final rotated = query['player_rotate'] == '1';
     return rotated ? width > height : height > width;
-  }
-
-  static const _bvAlphabet = 'FcwAPNKTMug3GV5Lj7EJnHpWsx4tb8haYeviqBz6rkCy12mUSDQX9RdoZf';
-
-  /// The aid's BV id by Bilibili's published conversion: the official feed leaves `bvid` out of some cards.
-  static String _avToBv(int aid) {
-    const xor = 23442827791579;
-    final chars = 'BV1000000000'.split('');
-    var value = ((1 << 51) | aid) ^ xor;
-    for (var index = chars.length - 1; value > 0; index--) {
-      chars[index] = _bvAlphabet[value % 58];
-      value ~/= 58;
-    }
-    void swap(int a, int b) {
-      final kept = chars[a];
-      chars[a] = chars[b];
-      chars[b] = kept;
-    }
-
-    swap(3, 9);
-    swap(4, 7);
-    return chars.join();
   }
 
   /// A file stored rotated (`rotate == 1`) is shown with width and height swapped, as in `VideoDetail`.

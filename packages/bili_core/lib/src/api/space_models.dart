@@ -1,3 +1,4 @@
+import 'bvid.dart';
 import 'json.dart';
 import 'skin_models.dart' show argbColour;
 
@@ -188,11 +189,14 @@ final class SpaceProfile {
 /// One of the own space's 主页 sections: its count, the few items the answer previews, and whether it is hidden from
 /// others (`setting`'s flag false: the eye-slash after its title, 114).
 final class SpaceSection<T> {
-  const SpaceSection({this.count = 0, this.items = const [], this.hidden = false});
+  const SpaceSection({this.count = 0, this.items = const [], this.hidden = false, this.dropped});
 
   final int count;
   final List<T> items;
   final bool hidden;
+
+  /// Why the first item the answer listed was left out (a decode error's message, no values), for the phone's log.
+  final String? dropped;
 }
 
 /// A folder of the own space's 收藏 (114, 116).
@@ -348,8 +352,8 @@ OwnSpace _ownSpace(JsonObject data, JsonObject card) {
     bannerLabel: banner == null ? null : _bannerLabel(banner.nested('title')),
     favourites: _section(data.nested('favourite2'), _folder, hidden: _hidden(setting, 'fav_video')),
     bangumi: _section(data.nested('season'), _bangumi, hidden: _hidden(setting, 'bangumi')),
-    coins: _section(data.nested('coin_archive'), _video, hidden: _hidden(setting, 'coins_video')),
-    likes: _section(data.nested('like_archive'), _video, hidden: _hidden(setting, 'likes_video')),
+    coins: _section(data.nested('coin_archive'), _previewVideo, hidden: _hidden(setting, 'coins_video')),
+    likes: _section(data.nested('like_archive'), _previewVideo, hidden: _hidden(setting, 'likes_video')),
     garbs: _section(dress, _garb, hidden: _hidden(setting, 'dress_up'), limit: 3),
     garbTotal: dress?.count('total') ?? 0,
   );
@@ -373,11 +377,21 @@ SpaceBannerLabel? _bannerLabel(JsonObject? title) {
 }
 
 SpaceSection<T> _section<T>(JsonObject? section, T Function(Object? json) decode, {required bool hidden, int? limit}) {
-  final items = section?.lenientList('item', decode) ?? <T>[];
+  final rows = section?.map['item'];
+  final items = <T>[];
+  String? dropped;
+  for (final row in rows is List ? rows : const []) {
+    try {
+      items.add(decode(row));
+    } on DecodeError catch (error) {
+      dropped ??= error.message;
+    }
+  }
   return SpaceSection(
     count: section?.count('count') ?? 0,
     items: limit != null && items.length > limit ? items.sublist(0, limit) : items,
     hidden: hidden,
+    dropped: dropped,
   );
 }
 
@@ -536,6 +550,41 @@ SpaceVideo _video(Object? json) {
     publishedText: object.text('publish_time_text') ?? '',
     badges: object.lenientList('badges', (json) => _filled(JsonObject.from(json).text('text')) ?? _noText()),
   );
+}
+
+/// 最近投币/点赞's previews: 投稿's rows in looser form. The phone's (26) found every one of them refused by [_video],
+/// so the id is taken from `param` or `aid`, a missing `bvid` comes from the aid, `length` ("0:12") stands in for
+/// `duration`, and only kinds known not to be videos are left out.
+SpaceVideo _previewVideo(Object? json) {
+  final object = JsonObject.from(json, 'video');
+  final goto = object.text('goto');
+  if (goto != null && _notVideos.contains(goto)) throw DecodeError('not a video: $goto');
+  final aid = _id(object.map['param']) ?? _id(object.map['aid']);
+  if (aid == null || aid <= 0) throw const DecodeError('missing param');
+  final duration = object.count('duration');
+  return SpaceVideo(
+    aid: aid,
+    bvid: _filled(object.text('bvid')) ?? avToBv(aid),
+    title: object.text('title') ?? '',
+    cover: _secure(object.text('cover') ?? ''),
+    duration: duration > 0 ? duration : _seconds(object.text('length')),
+    play: object.count('play'),
+    danmaku: object.count('danmaku'),
+  );
+}
+
+const _notVideos = {'cheese', 'pgc', 'bangumi', 'article', 'live', 'audio', 'pugv'};
+
+/// "1:02:03" or "0:12" in seconds; 0 when it isn't one.
+int _seconds(String? length) {
+  if (length == null) return 0;
+  var total = 0;
+  for (final part in length.split(':')) {
+    final value = int.tryParse(part.trim());
+    if (value == null) return 0;
+    total = total * 60 + value;
+  }
+  return total;
 }
 
 SpaceTabKind _tabKind(String? param) => switch (param) {
