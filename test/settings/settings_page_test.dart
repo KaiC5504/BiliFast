@@ -8,6 +8,7 @@ import 'package:bilifast/settings/font_page.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/node_page.dart';
 import 'package:bilifast/settings/settings_page.dart';
+import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
@@ -29,12 +30,13 @@ void main() {
     Completer<void>? startGate,
     bool reduceMotion = false,
     ThemeData? theme,
+    ImageDiskCache? imageCache,
   }) async {
     tester.view
       ..physicalSize = const Size(440, 956) * 3
       ..devicePixelRatio = 3;
     addTearDown(tester.view.reset);
-    world = await SettingsWorld.create(account: account, startGate: startGate);
+    world = await SettingsWorld.create(account: account, startGate: startGate, imageCache: imageCache);
     addTearDown(world.dispose);
     await tester.pumpWidget(
       MaterialApp(
@@ -305,6 +307,64 @@ void main() {
       await tester.tap(confirmButton('清除'));
       await tester.pumpAndSettle();
       expect(world.logFiles.clears, 1);
+    });
+
+    testWidgets('清除图片缓存 follows 清除日志 and shows what the stored pictures take', (tester) async {
+      final pictures = FakeImageDiskCache(12345678);
+      await show(tester, imageCache: pictures);
+      final titles = [for (final row in tester.widgetList<SettingsRow>(find.byType(SettingsRow))) row.title];
+      expect(titles.indexOf('清除图片缓存'), titles.indexOf('清除日志') + 1);
+      expect(find.descendant(of: row('settings-images'), matching: find.text('11.8 MB')), findsOneWidget);
+    });
+
+    testWidgets('清除图片缓存 asks first, then clears the pictures and shows the new size', (tester) async {
+      final pictures = FakeImageDiskCache(3 * 1024 * 1024);
+      await show(tester, imageCache: pictures);
+      expect(find.descendant(of: row('settings-images'), matching: find.text('3.0 MB')), findsOneWidget);
+      await tapRow(tester, 'settings-images');
+      expect(find.descendant(of: confirm, matching: find.text('清除图片缓存？')), findsOneWidget);
+      expect(find.descendant(of: confirm, matching: find.text('保存在手机上的图片会被删除，再看到时会重新下载。')), findsOneWidget);
+      expect(pictures.clears, 0);
+      await tester.tap(confirmButton('清除'));
+      await tester.pumpAndSettle();
+      expect(pictures.clears, 1);
+      expect(confirm, findsNothing);
+      expect(find.descendant(of: row('settings-images'), matching: find.text('0.0 MB')), findsOneWidget);
+    });
+
+    testWidgets('清除图片缓存 and its 清除 press through accessibility', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final pictures = FakeImageDiskCache(1024);
+      await show(tester, imageCache: pictures);
+      await tester.ensureVisible(row('settings-images'));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel(RegExp('^清除图片缓存')));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('清除'));
+      await tester.pumpAndSettle();
+      expect(pictures.clears, 1);
+      semantics.dispose();
+    });
+
+    testWidgets('取消 on 清除图片缓存 keeps the pictures', (tester) async {
+      final pictures = FakeImageDiskCache(1024);
+      await show(tester, imageCache: pictures);
+      await tapRow(tester, 'settings-images');
+      await tester.tap(confirmButton('取消'));
+      await tester.pumpAndSettle();
+      expect(pictures.clears, 0);
+      expect(find.descendant(of: row('settings-images'), matching: find.text('0.0 MB')), findsOneWidget);
+    });
+
+    testWidgets('without pictures kept on the phone there is no 清除图片缓存', (tester) async {
+      await show(tester);
+      expect(row('settings-images'), findsNothing);
+    });
+
+    test('a size reads in MB with one decimal', () {
+      expect(megabytesLabel(0), '0.0 MB');
+      expect(megabytesLabel(12900000), '12.3 MB');
+      expect(megabytesLabel(500 * 1024 * 1024), '500.0 MB');
     });
 
     testWidgets('取消, the dim and back each close a confirm with nothing done', (tester) async {

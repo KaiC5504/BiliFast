@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show appBuildName, appBuildNumber;
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
+import '../shared/image_disk_cache.dart';
 import '../shared/menu.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -21,6 +22,7 @@ enum SettingsConfirmKind {
   codecMemory('重置编码记忆？', '本机播放失败过的编码会重新参与尝试。', '重置'),
   recents('清除最近观看？', '「最近在看的视频」列表会被清空。', '清除'),
   logs('清除日志？', '手机上保存的调试日志会被删除，已发送到电脑的不受影响。', '清除'),
+  images('清除图片缓存？', '保存在手机上的图片会被删除，再看到时会重新下载。', '清除'),
   logout('退出登录', null, '确定');
 
   const SettingsConfirmKind(this.title, this.message, this.action);
@@ -29,6 +31,9 @@ enum SettingsConfirmKind {
   final String? message;
   final String action;
 }
+
+/// A size as 设置 shows it, "12.3 MB".
+String megabytesLabel(int bytes) => '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 
 /// The build's version, as "1.0.0 (9)".
 String buildVersionLabel() => switch ((appBuildName, appBuildNumber)) {
@@ -72,6 +77,10 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   SettingsConfirmKind? _shown;
   bool _loggingOut = false;
 
+  /// What the stored pictures take, once read.
+  int? _imageBytes;
+  bool _imageBytesAsked = false;
+
   PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
 
   @override
@@ -81,6 +90,21 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     _confirmMotion
       ..duration = still ? Duration.zero : SettingsTheme.confirmIn
       ..reverseDuration = still ? Duration.zero : SettingsTheme.confirmOut;
+    if (!_imageBytesAsked) {
+      _imageBytesAsked = true;
+      final images = AppScope.of(context).imageCache;
+      if (images != null) unawaited(_readImageBytes(images));
+    }
+  }
+
+  Future<void> _readImageBytes(ImageDiskCache images) async {
+    final bytes = await images.sizeBytes();
+    if (mounted) setState(() => _imageBytes = bytes);
+  }
+
+  Future<void> _clearImages(ImageDiskCache images) async {
+    await images.clear();
+    await _readImageBytes(images);
   }
 
   @override
@@ -120,6 +144,8 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
             Logger.shared.warn(LogCategory.app, 'log files not cleared', {'error': '${error.runtimeType}'});
           }),
         );
+      case SettingsConfirmKind.images:
+        if (services.imageCache case final images?) unawaited(_clearImages(images));
       case SettingsConfirmKind.logout:
         await _logout(services.environment);
         return;
@@ -163,6 +189,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     final recents = services.recents;
     final fonts = services.fonts;
     final developerPage = widget.developerPage;
+    final imageBytes = _imageBytes;
     return PopScope(
       canPop: _confirm == null,
       onPopInvokedWithResult: (didPop, _) {
@@ -255,6 +282,13 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                         title: '清除日志',
                         onTap: () => _ask(SettingsConfirmKind.logs),
                       ),
+                      if (services.imageCache != null)
+                        SettingsRow(
+                          key: const ValueKey('settings-images'),
+                          title: '清除图片缓存',
+                          value: imageBytes == null ? null : megabytesLabel(imageBytes),
+                          onTap: () => _ask(SettingsConfirmKind.images),
+                        ),
                     ],
                   ),
                   if (developerPage != null)

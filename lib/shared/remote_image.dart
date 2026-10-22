@@ -6,6 +6,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import 'image_disk_cache.dart';
 import 'theme.dart';
 
 /// Bilibili's JSON hands out `//host/path` and `http://` addresses; iOS wants https.
@@ -27,7 +28,7 @@ String sizedImageUrl(String url, {required int width, required int height}) {
 /// Fills the box it is given with the image, grey (or [placeholder]) until it arrives and then faded in. Sizes are
 /// rounded up to steps, so cards of nearly the same width share one cached download.
 ///
-/// Only emotes and 装扮 pictures move; anything else shows its first frame (see [StillNetworkImage]).
+/// Only emotes and 装扮 pictures move; anything else shows its first frame (see [StoredNetworkImage]).
 class RemoteImage extends StatelessWidget {
   const RemoteImage(this.url, {super.key, this.fit = BoxFit.cover, this.size, this.placeholder, this.fallback});
 
@@ -90,30 +91,11 @@ class RemoteImage extends StatelessWidget {
     return sizedImageUrl(source, width: _bucket(logical.width * ratio), height: _bucket(logical.height * ratio));
   }
 
-  static ImageProvider _provider(String address, String source) => animates(source)
-      ? NetworkImage(address, headers: BiliClient.mediaHeaders)
-      : StillNetworkImage(address, headers: BiliClient.mediaHeaders);
+  static StoredNetworkImage _provider(String address, String source) =>
+      StoredNetworkImage(address, headers: BiliClient.mediaHeaders, still: !animates(source));
 
-  Widget _image(BuildContext context, String source, Size logical) {
-    final address = _address(context, source, logical);
-    final instead = fallback;
-    return Image(
-      image: _provider(address, source),
-      fit: fit,
-      width: double.infinity,
-      height: double.infinity,
-      gaplessPlayback: true,
-      frameBuilder: (context, child, frame, synchronous) {
-        if (synchronous) return child;
-        if (instead != null) return _FadeOver(loaded: frame != null, under: instead, child: child);
-        return AnimatedOpacity(opacity: frame == null ? 0 : 1, duration: _fade, curve: Curves.easeOut, child: child);
-      },
-      errorBuilder: (context, error, stack) {
-        _logFailure(address, error);
-        return instead ?? const SizedBox.expand();
-      },
-    );
-  }
+  Widget _image(BuildContext context, String source, Size logical) =>
+      _Picture(image: _provider(_address(context, source, logical), source), fit: fit, fallback: fallback);
 
   static const _fade = Duration(milliseconds: 150);
 
@@ -139,50 +121,66 @@ class RemoteImage extends StatelessWidget {
   }
 }
 
-/// A network picture's first frame only. The CDN serves a GIF original (a cover, a face) as an animated webp through
-/// the size suffix, and a moving picture decodes a frame every few tens of ms for as long as it is on screen. It is a
-/// [NetworkImage] of its own type, so it never shares a cache entry with the moving one.
-class StillNetworkImage extends ImageProvider<NetworkImage> implements NetworkImage {
-  StillNetworkImage(String url, {Map<String, String>? headers}) : _network = NetworkImage(url, headers: headers);
-
-  final NetworkImage _network;
-
-  @override
-  String get url => _network.url;
+/// A network picture through [ImageDiskCache.shared] (straight from the network without one, as [NetworkImage]),
+/// only its first frame unless it moves. The CDN serves a GIF original (a cover, a face) as an animated webp through
+/// the size suffix, and a moving picture decodes a frame every few tens of ms for as long as it is on screen. A still
+/// one is cached under its own type, so it never shares an entry with the moving one; a moving one under the
+/// [NetworkImage] of its address.
+class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkImage {
+  const StoredNetworkImage(this.url, {this.headers, this.still = true});
 
   @override
-  double get scale => _network.scale;
+  final String url;
 
   @override
-  Map<String, String>? get headers => _network.headers;
+  final Map<String, String>? headers;
+
+  final bool still;
 
   @override
-  WebHtmlElementStrategy get webHtmlElementStrategy => _network.webHtmlElementStrategy;
+  double get scale => 1;
 
   @override
-  Future<NetworkImage> obtainKey(ImageConfiguration configuration) => SynchronousFuture<NetworkImage>(this);
+  WebHtmlElementStrategy get webHtmlElementStrategy => WebHtmlElementStrategy.never;
+
+  @override
+  Future<NetworkImage> obtainKey(ImageConfiguration configuration) =>
+      SynchronousFuture<NetworkImage>(still ? this : NetworkImage(url, headers: headers));
 
   @override
   ImageStreamCompleter loadImage(NetworkImage key, ImageDecoderCallback decode) {
-    Future<ui.Codec> firstFrame(ui.ImmutableBuffer buffer, {ui.TargetImageSizeCallback? getTargetSize}) async =>
-        _FirstFrame(await decode(buffer, getTargetSize: getTargetSize));
-    final completer = _network.loadImage(_network, firstFrame);
-    // NetworkImage evicts its own key when the download fails, not this one; without this a failed picture would
-    // stay failed in the cache.
-    completer.addEphemeralErrorListener((_, _) {
+    final completer = MultiFrameImageStreamCompleter(codec: _load(decode), scale: scale);
+    completer.addEphemeralErrorListener((error, _) {
+      // A failed picture must not stay failed in the cache, nor a stored copy that didn't decode be read again.
       scheduleMicrotask(() => PaintingBinding.instance.imageCache.evict(key));
+      if (error is! NetworkImageLoadException) unawaited(ImageDiskCache.shared?.forget(url));
     });
     return completer;
   }
 
-  @override
-  bool operator ==(Object other) => other is StillNetworkImage && other._network == _network;
+  Future<ui.Codec> _load(ImageDecoderCallback decode) async {
+    final stored = ImageDiskCache.shared;
+    final bytes = stored != null
+        ? await stored.bytes(url, headers: headers)
+        : await ImageDiskCache.download(Uri.base.resolve(url), headers);
+    if (bytes.isEmpty) throw StateError('empty picture');
+    final codec = await decode(await ui.ImmutableBuffer.fromUint8List(bytes));
+    return still ? _FirstFrame(codec) : codec;
+  }
 
   @override
-  int get hashCode => Object.hash(StillNetworkImage, _network);
+  bool operator ==(Object other) =>
+      other is StoredNetworkImage && other.url == url && other.still == still && mapEquals(other.headers, headers);
 
   @override
-  String toString() => 'StillNetworkImage("$url")';
+  int get hashCode => Object.hash(StoredNetworkImage, url, still);
+
+  /// Host and path only: a query can carry a signature.
+  @override
+  String toString() {
+    final uri = Uri.tryParse(url);
+    return 'StoredNetworkImage("${uri?.host}${uri?.path}", still: $still)';
+  }
 }
 
 /// One frame, played once, so the image stream never asks for the next.
@@ -204,6 +202,53 @@ final class _FirstFrame implements ui.Codec {
   void dispose() => _codec.dispose();
 }
 
+/// The picture at [image]'s address, faded in the first time. Once a frame of that address has shown, a reload of it
+/// (the Image re-resolving when its page comes back and the memory cache has let the picture go) keeps it at full
+/// opacity: gapless playback still paints the old frame, but the new stream starts with no frame number.
+class _Picture extends StatefulWidget {
+  const _Picture({required this.image, required this.fit, required this.fallback});
+
+  final StoredNetworkImage image;
+  final BoxFit fit;
+  final Widget? fallback;
+
+  @override
+  State<_Picture> createState() => _PictureState();
+}
+
+class _PictureState extends State<_Picture> {
+  String? _shown;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = widget.image.url;
+    final instead = widget.fallback;
+    return Image(
+      image: widget.image,
+      fit: widget.fit,
+      width: double.infinity,
+      height: double.infinity,
+      gaplessPlayback: true,
+      frameBuilder: (context, child, frame, synchronous) {
+        if (frame != null) _shown = address;
+        if (synchronous) return child;
+        final loaded = _shown == address;
+        if (instead != null) return _FadeOver(loaded: loaded, under: instead, child: child);
+        return AnimatedOpacity(
+          opacity: loaded ? 1 : 0,
+          duration: RemoteImage._fade,
+          curve: Curves.easeOut,
+          child: child,
+        );
+      },
+      errorBuilder: (context, error, stack) {
+        RemoteImage._logFailure(address, error);
+        return instead ?? const SizedBox.expand();
+      },
+    );
+  }
+}
+
 /// The image fading in over [under], which goes once the fade is done.
 class _FadeOver extends StatefulWidget {
   const _FadeOver({required this.loaded, required this.under, required this.child});
@@ -217,7 +262,8 @@ class _FadeOver extends StatefulWidget {
 }
 
 class _FadeOverState extends State<_FadeOver> {
-  bool _covered = false;
+  // Made already loaded (a picture shown at once, now reloading), there is no fade to wait for.
+  late bool _covered = widget.loaded;
 
   @override
   Widget build(BuildContext context) => Stack(

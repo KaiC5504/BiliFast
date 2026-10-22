@@ -10,6 +10,7 @@ import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/playback/shared_engine.dart';
 import 'package:bilifast/settings/font_store.dart';
+import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
@@ -105,13 +106,34 @@ class FakeLogFiles implements LogFiles {
   Future<String?> export() async => null;
 }
 
+/// Pictures kept on the phone, without a folder: [size] bytes until [clear] empties them.
+class FakeImageDiskCache extends ImageDiskCache {
+  FakeImageDiskCache(this.size) : super(folder: 'unused');
+
+  int size;
+  int clears = 0;
+
+  @override
+  Future<int> sizeBytes() async => size;
+
+  @override
+  Future<void> clear() async {
+    clears += 1;
+    size = 0;
+  }
+}
+
 /// 设置's world: the app's players, with no page open, on the [shared] engine (the fake [engine], running unless a
 /// [startGate] holds its start until the test completes it) and the codec [memory]; an empty 最近打开 and the fakes
 /// above.
 class SettingsWorld {
   SettingsWorld._(this.services, this.environment, this.gate, this.logFiles, this.engine, this.shared, this.memory);
 
-  static Future<SettingsWorld> create({Account account = const LoggedOut(), Completer<void>? startGate}) async {
+  static Future<SettingsWorld> create({
+    Account account = const LoggedOut(),
+    Completer<void>? startGate,
+    ImageDiskCache? imageCache,
+  }) async {
     final environment = FakeEnvironment(account);
     final gate = FakeLoginGate();
     final logFiles = FakeLogFiles();
@@ -136,6 +158,7 @@ class SettingsWorld {
       fonts: FontStore.memory(logger: logger),
       pageApi: FakePageApi(),
       loginGate: gate,
+      imageCache: imageCache,
       logFiles: logFiles,
     );
     return SettingsWorld._(services, environment, gate, logFiles, engine, shared, memory);
