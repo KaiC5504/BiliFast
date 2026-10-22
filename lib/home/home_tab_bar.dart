@@ -37,12 +37,7 @@ class HomeTabBar extends StatelessWidget {
 
   /// Whether [skin] dresses the bar: its picture, both label colours and all five icons each way. Without any of
   /// them the bar stays stock.
-  static bool dresses(Skin? skin) =>
-      skin != null &&
-      skin.themesBar &&
-      skin.tailBg != null &&
-      skin.tailIcons.length >= 5 &&
-      skin.tailIconsSelected.length >= 5;
+  static bool dresses(Skin? skin) => skin != null && skin.themesBar;
 
   /// The still pictures a dressed bar draws. Animated icons wait on their own decode, over a still fallback.
   static List<File> _stills(Skin skin) => [

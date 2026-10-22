@@ -63,9 +63,13 @@ final class Skin {
   /// Light text and icons over the themed headers.
   bool get lightText => equip.colors.lightText;
 
-  /// Whether the bottom bar takes the skin: its icons and both label colours are there.
+  /// Whether the bottom bar takes the skin: its picture, all five icons each way and both label colours are there.
   bool get themesBar =>
-      tailIcons.isNotEmpty && tailIconsSelected.isNotEmpty && tailColor != null && tailColorSelected != null;
+      tailBg != null &&
+      tailIcons.length >= 5 &&
+      tailIconsSelected.length >= 5 &&
+      tailColor != null &&
+      tailColorSelected != null;
 
   static Color? _color(int? argb) => argb == null ? null : Color(argb);
 }
