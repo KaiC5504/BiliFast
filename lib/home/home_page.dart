@@ -14,6 +14,7 @@ import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../app/zoom_back_route.dart';
 import '../player_ui/player_loading.dart';
+import '../player_ui/seek_bar.dart';
 import '../search/search_glyphs.dart';
 import '../search/results/video_row.dart' show searchLogReason;
 import '../search/search_page.dart';
@@ -109,6 +110,7 @@ class _HomePageState extends State<HomePage> {
     _feed = FeedModel(client: _environment.client);
     unawaited(LoadingTv.precache(context));
     unawaited(PlayerLoading.precache());
+    unawaited(SeekBar.precache());
     unawaited(_refreshFeed());
     _environment.addListener(_accountChanged);
     _accountChanged();
