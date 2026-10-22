@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 // Stand-in art drawn here, never the official pictures.
 const _dark = Color(0xFF161513);
 const _light = Color(0xFFF5EBD7);
+const _white = Color(0xFFFFFFFF);
 
 late Directory _folder;
 
@@ -73,8 +74,10 @@ void main() {
     );
     expect(skin.statusBar!.home, closeTo(_dark.computeLuminance(), 0.002));
     expect(skin.statusBar!.me, closeTo(_dark.computeLuminance(), 0.002));
+    expect(skin.statusBar!.meNoCard, closeTo(_dark.computeLuminance(), 0.002));
     expect(skin.lightStatusHome, isTrue);
-    expect(skin.lightStatusMe, isTrue);
+    expect(skin.lightStatusMe(card: true), isTrue);
+    expect(skin.lightStatusMe(card: false), isTrue);
   });
 
   test('a light header gives black icons on both over a skin asking for light text', () async {
@@ -83,7 +86,8 @@ void main() {
     );
     expect(skin.statusBar!.home, closeTo(_light.computeLuminance(), 0.01));
     expect(skin.lightStatusHome, isFalse);
-    expect(skin.lightStatusMe, isFalse);
+    expect(skin.lightStatusMe(card: true), isFalse);
+    expect(skin.lightStatusMe(card: false), isFalse);
   });
 
   test(
@@ -104,10 +108,10 @@ void main() {
       final tab = await _solid('tab.png', _dark, height: 108);
       final dark = await _measured(_skin(head: darkTop, tab: tab, me: darkTopSquare));
       expect(dark.lightStatusHome, isTrue);
-      expect(dark.lightStatusMe, isTrue);
+      expect(dark.lightStatusMe(card: true), isTrue);
       final light = await _measured(_skin(head: lightTop, tab: tab, me: lightTopSquare, lightText: true));
       expect(light.lightStatusHome, isFalse);
-      expect(light.lightStatusMe, isFalse);
+      expect(light.lightStatusMe(card: true), isFalse);
     },
   );
 
@@ -121,11 +125,29 @@ void main() {
     });
     final skin = await _measured(_skin(head: picture, me: picture));
     expect(skin.lightStatusHome, isTrue);
-    expect(skin.lightStatusMe, isFalse, reason: "我的's top 186 px are light");
+    expect(skin.lightStatusMe(card: true), isFalse, reason: "我的's top 186 px are light");
+    expect(skin.lightStatusMe(card: false), isFalse);
+  });
+
+  test("我的's box ends 8 pt under the 大会员 card, or 8 pt under where it would start without one", () {
+    expect(StatusBarPlacement.me(card: true).box, const Size(440, 62 + 204 + 54 + 8));
+    expect(StatusBarPlacement.me(card: false).box, const Size(440, 62 + 204 + 8));
+  });
+
+  test("a short wide 我的 picture is measured as each box lays it: grey under the status bar with the card, its white "
+      'reaching in without', () async {
+    // 1320 × 600 px is 440 × 200 pt. With the card it fills 328 pt, so the status bar shows px 0 to 113.4, all
+    // grey; without, 274 pt, so it shows px 0 to 135.8, and its last sixth is white.
+    final picture = await _banded('short.png', height: 600, split: 114, top: const Color(0xFF6F6F6F), bottom: _white);
+    final skin = await _measured(_skin(me: picture));
+    expect(skin.statusBar!.me, closeTo(const Color(0xFF6F6F6F).computeLuminance(), 0.005));
+    expect(skin.statusBar!.meNoCard, inInclusiveRange(0.20, 0.25));
+    expect(skin.lightStatusMe(card: true), isTrue);
+    expect(skin.lightStatusMe(card: false), isFalse);
   });
 
   test("fine dark lines on a light ground read by their share, as 109's ornament does: white", () async {
-    // Half #0A0A0A and half beige: the plain mean, 0.30, would pick black; the log average is 0.13.
+    // Half #0A0A0A and half beige: the plain mean, 0.30, would pick black; the geometric one is 0.13.
     const beige = Color(0xFFD9C9A3);
     final lines = await _png('lines.png', 1320, 1320, (canvas, size) {
       canvas.drawRect(Offset.zero & size, Paint()..color = beige);
@@ -135,7 +157,7 @@ void main() {
     });
     final skin = await _measured(_skin(me: lines));
     expect(skin.statusBar!.me, inInclusiveRange(0.10, 0.16));
-    expect(skin.lightStatusMe, isTrue);
+    expect(skin.lightStatusMe(card: true), isTrue);
   });
 
   test("a see-through picture is judged over what is drawn under it, 首页's grey", () async {
@@ -145,16 +167,32 @@ void main() {
     expect(skin.lightStatusHome, isFalse);
   });
 
-  test("a picture that can't be read keeps color_mode's choice", () async {
+  test("a file that is no picture measures null, keeping color_mode's choice", () async {
     final broken = File('${_folder.path}/broken.png')..writeAsBytesSync([for (var i = 0; i < 200; i++) i * 31 % 256]);
     for (final lightText in [true, false]) {
       final skin = await _measured(_skin(head: broken, me: broken, lightText: lightText));
       expect(skin.statusBar!.home, isNull);
       expect(skin.statusBar!.me, isNull);
+      expect(skin.statusBar!.meNoCard, isNull);
       expect(skin.lightStatusHome, lightText);
-      expect(skin.lightStatusMe, lightText);
+      expect(skin.lightStatusMe(card: true), lightText);
+      expect(skin.lightStatusMe(card: false), lightText);
     }
     expect(_skin(head: broken, lightText: true).lightStatusHome, isTrue, reason: 'unmeasured, the same');
+  });
+
+  test('a picture that fails past its header, or a file that is gone, throws rather than measuring null', () async {
+    final whole = await _solid('whole.png', _dark);
+    final bytes = whole.readAsBytesSync();
+    final cut = File('${_folder.path}/cut.png')..writeAsBytesSync(bytes.sublist(0, bytes.length ~/ 2));
+    await expectLater(
+      measureSkinStatusBar(_skin(head: cut)),
+      throwsA(isA<StatusBarMeasureError>().having((error) => error.step, 'step', 'frame')),
+    );
+    await expectLater(
+      measureSkinStatusBar(_skin(me: File('${_folder.path}/gone.png'))),
+      throwsA(isA<FileSystemException>()),
+    );
   });
 
   test("我的 with a header video goes by the header's text colour, color_mode without one", () async {
@@ -162,13 +200,15 @@ void main() {
     final light = await _solid('me.png', _light, height: 1320);
     final white = await _measured(_skin(me: light, video: video, color: 0xFFFFFFFF));
     expect(white.statusBar!.me, isNull, reason: 'the picture under the video is not measured');
-    expect(white.lightStatusMe, isTrue);
+    expect(white.statusBar!.meNoCard, isNull);
+    expect(white.lightStatusMe(card: true), isTrue);
+    expect(white.lightStatusMe(card: false), isTrue);
     expect(
-      (await _measured(_skin(me: light, video: video, color: 0xFF222222, lightText: true))).lightStatusMe,
+      (await _measured(_skin(me: light, video: video, color: 0xFF222222, lightText: true))).lightStatusMe(card: true),
       isFalse,
     );
-    expect((await _measured(_skin(me: light, video: video, lightText: true))).lightStatusMe, isTrue);
-    expect((await _measured(_skin(me: light, video: video))).lightStatusMe, isFalse);
+    expect((await _measured(_skin(me: light, video: video, lightText: true))).lightStatusMe(card: true), isTrue);
+    expect((await _measured(_skin(me: light, video: video))).lightStatusMe(card: true), isFalse);
   });
 
   test('white wins where its contrast ratio beats black\'s', () {

@@ -26,11 +26,19 @@ import '../playback/fakes.dart';
 
 late SkinPictures _pictures;
 
-/// Light stand-ins in the shapes of [SkinPictures]' dark head_bg and 我的 header.
-Future<void> _drawLight() async {
-  for (final (name, height) in [('light_head.png', 318), ('light_me.png', 1320)]) {
+/// Light stand-ins in the shapes of [SkinPictures]' dark head_bg and 我的 header, and a short wide 我的 header (440 ×
+/// 200 pt) grey for its first 114 px and white below.
+Future<void> _drawMore() async {
+  const light = Color(0xFFF5EBD7);
+  for (final (name, height, top, split, bottom) in [
+    ('light_head.png', 318, light, 0, light),
+    ('light_me.png', 1320, light, 0, light),
+    ('short_me.png', 600, const Color(0xFF6F6F6F), 114, const Color(0xFFFFFFFF)),
+  ]) {
     final recorder = ui.PictureRecorder();
-    Canvas(recorder).drawRect(Rect.fromLTWH(0, 0, 1320, height.toDouble()), Paint()..color = const Color(0xFFF5EBD7));
+    Canvas(recorder)
+      ..drawRect(Rect.fromLTWH(0, 0, 1320, split.toDouble()), Paint()..color = top)
+      ..drawRect(Rect.fromLTRB(0, split.toDouble(), 1320, height.toDouble()), Paint()..color = bottom);
     final picture = recorder.endRecording();
     final image = await picture.toImage(1320, height);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -40,15 +48,21 @@ Future<void> _drawLight() async {
   }
 }
 
+/// A 测试账号 without 大会员, so 我的 shows no card.
+FakeMeApi _withoutCard() => FakeMeApi(
+  navInfo: const NavInfo(isLogin: true, mid: 1, uname: '测试账号', level: 5),
+  counts: const NavStat(following: 13, follower: 0, dynamicCount: 0),
+);
+
 void main() {
   setUpAll(() async {
     _pictures = await SkinPictures.draw();
-    await _drawLight();
+    await _drawMore();
   });
   tearDownAll(() => _pictures.dispose());
 
-  /// [skin] measured as the model measures it, then the shell over it on KaiC's iPhone.
-  Future<void> show(WidgetTester tester, Skin skin) async {
+  /// [skin] measured as the model measures it, then the shell over it on KaiC's iPhone, 我的 from [me].
+  Future<FixedSkinModel> show(WidgetTester tester, Skin skin, {FakeMeApi? me}) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1
@@ -73,7 +87,7 @@ void main() {
       recents: await RecentStore.load(null, logger: logger),
       fonts: FontStore.memory(),
       searchApi: FakeSearchApi(defaultWord: '搜索'),
-      meApi: FakeMeApi.demo(),
+      meApi: me ?? FakeMeApi.demo(),
       loginGate: FakeLoginGate(),
     );
     final skins = FixedSkinModel(measured, environment: environment);
@@ -86,6 +100,7 @@ void main() {
       ),
     );
     await settle(tester);
+    return skins;
   }
 
   Brightness? icons() => SystemChrome.latestStyle?.statusBarIconBrightness;
@@ -94,6 +109,21 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-tab-mine')));
     await settle(tester);
     expect(find.byKey(const ValueKey('me-skin-picture')), findsOneWidget, reason: '我的 dressed');
+  }
+
+  /// The stand-in skin with [headMyself] for 我的's header.
+  Skin withMe(String headMyself) {
+    final dark = _pictures.skin();
+    return Skin(
+      equip: dark.equip,
+      headBg: dark.headBg,
+      headTabBg: dark.headTabBg,
+      headMyself: _pictures[headMyself],
+      tailBg: dark.tailBg,
+      tailIcons: dark.tailIcons,
+      tailIconsSelected: dark.tailIconsSelected,
+      pubButton: dark.pubButton,
+    );
   }
 
   testWidgets("a dark stand-in header gives white icons on 首页 and 我的 though the skin's color_mode asks dark", (
@@ -132,6 +162,32 @@ void main() {
     expect(find.byKey(const ValueKey('home-head-art')), findsOneWidget);
     expect(icons(), Brightness.dark);
     await openMe(tester);
+    expect(icons(), Brightness.dark);
+  });
+
+  for (final (card, expected) in [(true, Brightness.light), (false, Brightness.dark)]) {
+    testWidgets("我的's icons go by its header as tall as the 大会员 card makes it: ${card ? 'with' : 'without'} the "
+        'card, ${expected == Brightness.light ? 'white' : 'black'} over a short picture', (tester) async {
+      await show(tester, withMe('short_me.png'), me: card ? null : _withoutCard());
+      await openMe(tester);
+      expect(find.byKey(const ValueKey('me-vip-card')), card ? findsOneWidget : findsNothing);
+      expect(icons(), expected);
+    });
+  }
+
+  testWidgets('when the skin goes away, as at a logout, 我的 and then 首页 go back to dark icons', (tester) async {
+    final skins = await show(tester, _pictures.skin());
+    expect(icons(), Brightness.light);
+    await openMe(tester);
+    expect(icons(), Brightness.light);
+
+    skins.skin = null;
+    await settle(tester);
+    expect(find.byKey(const ValueKey('me-skin-picture')), findsNothing);
+    expect(icons(), Brightness.dark);
+    await tester.tap(find.byKey(const ValueKey('home-tab-home')));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('home-head-art')), findsNothing);
     expect(icons(), Brightness.dark);
   });
 }

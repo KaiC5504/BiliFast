@@ -175,9 +175,9 @@ void main() {
     logger = Logger(session: 'test')..add(sink);
   });
 
-  ({SkinModel model, _Environment environment}) make(FakeSkinApi api, {Account account = loggedIn, bool keep = true}) {
+  ({SkinModel model, _Environment environment}) make(FakeSkinApi api, {Account account = loggedIn}) {
     final environment = _Environment(account);
-    final model = SkinModel(api: api, environment: environment, folder: keep ? folder.path : null, logger: logger);
+    final model = SkinModel(api: api, environment: environment, folder: folder.path, logger: logger);
     addTearDown(() async {
       model.dispose();
       await model.settle();
@@ -529,7 +529,7 @@ void main() {
           equip: equipFor(package, url: url),
           package: package,
         );
-        final (:model, environment: _) = make(api, keep: false);
+        final (:model, environment: _) = make(api);
         await settle(model);
         expect(model.value, isNull, reason: url);
         expect(api.calls, ['equipped'], reason: url);
@@ -892,19 +892,23 @@ void main() {
 
       expect(model.value!.lightText, isFalse);
       expect(model.value!.lightStatusHome, isTrue);
-      expect(model.value!.lightStatusMe, isFalse);
+      expect(model.value!.lightStatusMe(card: true), isFalse);
+      expect(model.value!.lightStatusMe(card: false), isFalse);
       expect(notified, 2, reason: 'shown, then the measure that changes 首页');
       final line = logged('skin status bar').single;
       expect(line.f['home']!.toJson(), 0.01);
       expect(line.f['homeLight'], const LogBool(true));
       expect(line.f['me']!.toJson(), closeTo(0.84, 0.01));
       expect(line.f['meLight'], const LogBool(false));
+      expect(line.f['meNoCard']!.toJson(), closeTo(0.84, 0.01));
+      expect(line.f['meNoCardLight'], const LogBool(false));
       expect(allLogText(), isNot(contains('skin_model_test')));
       expect(allLogText(), isNot(contains('garb/zip')));
       expect(jsonDecode(kept().readAsStringSync()), {
-        'v': 1,
+        'v': 2,
         'home': closeTo(0.0075, 0.001),
         'me': closeTo(0.84, 0.01),
+        'meNoCard': closeTo(0.84, 0.01),
       });
     });
 
@@ -913,13 +917,14 @@ void main() {
       await settle(first);
       await first.settle();
       // Kept values the pictures would never give, to show they are what the launch reads.
-      kept().writeAsStringSync(jsonEncode({'v': 1, 'home': 0.9, 'me': 0.01}));
+      kept().writeAsStringSync(jsonEncode({'v': 2, 'home': 0.9, 'me': 0.01, 'meNoCard': 0.9}));
 
       final (:model, environment: _) = make(pictured());
       await model.start();
       expect(model.value!.statusBar, isNotNull);
       expect(model.value!.lightStatusHome, isFalse);
-      expect(model.value!.lightStatusMe, isTrue);
+      expect(model.value!.lightStatusMe(card: true), isTrue);
+      expect(model.value!.lightStatusMe(card: false), isFalse);
       var notified = 0;
       model.addListener(() => notified++);
       await model.refresh();
@@ -929,22 +934,40 @@ void main() {
       expect(logged('skin status bar').map((line) => line.f['homeLight']), const [LogBool(true), LogBool(false)]);
     });
 
-    test('a kept measure of an older kind is measured again', () async {
+    test('a kept measure of an older kind (我的 measured with the card only) is measured again', () async {
       final first = make(pictured()).model;
       await settle(first);
       await first.settle();
-      kept().writeAsStringSync(jsonEncode({'v': 0, 'home': 0.9, 'me': 0.01}));
+      kept().writeAsStringSync(jsonEncode({'v': 1, 'home': 0.9, 'me': 0.01}));
 
       final (:model, environment: _) = make(pictured());
       await model.start();
       expect(model.value!.statusBar, isNull);
       await model.settle();
       expect(model.value!.lightStatusHome, isTrue);
-      expect(model.value!.lightStatusMe, isFalse);
-      expect(jsonDecode(kept().readAsStringSync())['v'], 1);
+      expect(model.value!.lightStatusMe(card: true), isFalse);
+      expect(jsonDecode(kept().readAsStringSync()), containsPair('v', 2));
+      expect(jsonDecode(kept().readAsStringSync()), contains('meNoCard'));
     });
 
-    test("a head_bg that can't be read keeps color_mode's choice, logged as such; no 我的 picture is none", () async {
+    test('a kept measure that can\'t be read is logged without a path and measured again', () async {
+      final first = make(pictured()).model;
+      await settle(first);
+      await first.settle();
+      kept().writeAsStringSync('{not json');
+
+      final (:model, environment: _) = make(pictured());
+      await model.start();
+      expect(model.value!.statusBar, isNull);
+      expect(logged('kept skin status bar unreadable, measuring again').single.f['error'], isNotNull);
+      await model.settle();
+      expect(model.value!.lightStatusHome, isTrue);
+      expect(jsonDecode(kept().readAsStringSync()), containsPair('v', 2));
+      expect(allLogText(), isNot(contains('skin_model_test')));
+    });
+
+    test("a head_bg that isn't a picture keeps color_mode's choice, logged as such and kept, so no launch measures it "
+        'again; no 我的 picture is none', () async {
       final api = pictured(
         entries: {
           'head_bg.png': [for (var i = 0; i < 200; i++) i * 31 % 256],
@@ -959,6 +982,37 @@ void main() {
       expect(line.f['home'], const LogString('unreadable'));
       expect(line.f['homeLight'], const LogBool(true));
       expect(line.f['me'], const LogString('none'));
+      expect(line.f['meNoCard'], const LogString('none'));
+      expect(jsonDecode(kept().readAsStringSync()), {'v': 2, 'home': null, 'me': null, 'meNoCard': null});
+
+      final next = make(api).model;
+      await next.start();
+      expect(next.value!.statusBar, isNotNull, reason: 'read with the cache, not measured again');
+      expect(next.value!.lightStatusHome, isTrue);
+    });
+
+    test('a measure that fails past the picture\'s header is logged without a path and kept nowhere, so the next '
+        'launch measures again', () async {
+      final whole = await solidPng(const Color(0xFF161513), 1320, 318);
+      final api = pictured(entries: {'head_bg.png': whole.sublist(0, whole.length ~/ 2)});
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      await model.settle();
+      expect(model.value!.statusBar, isNull);
+      expect(model.value!.lightStatusHome, isFalse, reason: "color_mode's dark text meanwhile");
+      expect(logged('skin status bar not measured').single.f['error'], const LogString('frame failed: _Exception'));
+      expect(logged('skin status bar'), isEmpty);
+      expect(kept().existsSync(), isFalse);
+      expect(allLogText(), isNot(contains('skin_model_test')));
+
+      // The failure has passed: the same version's picture now decodes.
+      File('${versionFolders(7, 1).single.path}/head_bg.png').writeAsBytesSync(whole);
+      final next = make(api).model;
+      await next.start();
+      expect(next.value!.statusBar, isNull);
+      await next.settle();
+      expect(next.value!.lightStatusHome, isTrue);
+      expect(jsonDecode(kept().readAsStringSync()), containsPair('home', closeTo(0.0075, 0.001)));
     });
 
     test("我的 with a header video goes by the skin's text colour, its picture unmeasured", () async {
@@ -972,10 +1026,13 @@ void main() {
       final (:model, environment: _) = make(api);
       await settle(model);
       await model.settle();
-      expect(model.value!.lightStatusMe, isTrue);
+      expect(model.value!.lightStatusMe(card: true), isTrue);
+      expect(model.value!.lightStatusMe(card: false), isTrue);
       final line = logged('skin status bar').single;
       expect(line.f['me'], const LogString('color'));
       expect(line.f['meLight'], const LogBool(true));
+      expect(line.f['meNoCard'], const LogString('color'));
+      expect(line.f['meNoCardLight'], const LogBool(true));
       expect(line.f['home'], const LogString('none'));
     });
 
@@ -986,8 +1043,10 @@ void main() {
       final line = logged('skin status bar').single;
       expect(line.f['homeLight'], const LogBool(true));
       expect(line.f['meLight'], const LogBool(true));
+      expect(line.f['meNoCardLight'], const LogBool(true));
       expect(line.f['home']!.toJson() as double, lessThan(SkinStatusBar.crossover));
       expect(line.f['me']!.toJson() as double, lessThan(SkinStatusBar.crossover));
+      expect(line.f['meNoCard']!.toJson() as double, lessThan(SkinStatusBar.crossover));
     });
   });
 }
