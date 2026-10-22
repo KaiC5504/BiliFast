@@ -2,6 +2,7 @@ import 'package:bili_core/api.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/favourites/new_folder_page.dart';
 import 'package:bilifast/home/feed_model.dart' show requestFailureMessage;
+import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:bilifast/watch_later/fake_watch_later_api.dart';
@@ -341,6 +342,23 @@ void main() {
     await tap(tester, 'later-retry');
     expect(api.calls, ['list all newest page=1', 'list all newest page=1']);
     expect(find.text('测试视频 1'), findsOneWidget);
+  });
+
+  testWidgets('a pull reloads only when the finger lets go', (tester) async {
+    await show(tester);
+    // About 1500 px/s, a step a frame.
+    final finger = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('later-list'))));
+    for (var i = 0; i < 12; i++) {
+      await finger.moveBy(const Offset(0, 25));
+      await tester.pump(const Duration(microseconds: 16667));
+    }
+    await settle(tester, 20);
+    expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isTrue, reason: 'past the trigger');
+    expect(api.calls, ['list all newest page=1'], reason: 'still held');
+    await finger.up();
+    await settle(tester, 40);
+    expect(api.calls, ['list all newest page=1', 'list all newest page=1']);
+    expect(find.byType(LoadingTv), findsNothing);
   });
 
   testWidgets('a failed pull keeps the rows and toasts why', (tester) async {

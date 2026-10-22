@@ -12,7 +12,7 @@ import '../comments/comments_tab.dart' show NearEndPaging;
 import '../history/history_glyphs.dart' show HistoryBackPainter;
 import '../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSystem;
 import '../shared/action_glyphs.dart';
-import '../shared/loading_tv.dart';
+import '../shared/release_refresh.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/video_route.dart';
@@ -178,11 +178,7 @@ class _FolderPageState extends State<FolderPage> {
                             key: const ValueKey('fav-folder-list'),
                             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                             slivers: [
-                              CupertinoSliverRefreshControl(
-                                onRefresh: _refresh,
-                                builder: loadingTvRefreshIndicator,
-                                refreshIndicatorExtent: LoadingTvTheme.size,
-                              ),
+                              ReleaseRefreshControl(onRefresh: _refresh),
                               SliverToBoxAdapter(
                                 child: _FolderHeader(
                                   info: model.info,

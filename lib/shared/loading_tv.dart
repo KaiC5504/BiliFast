@@ -122,10 +122,9 @@ class LoadingTvState extends StatelessWidget {
   }
 }
 
-/// [CupertinoSliverRefreshControl]'s `builder` with the TV in place of the spinner: it comes down out from under
-/// what's above as the list is pulled, holding its first face until the pull would refresh, then cycles until the
-/// refresh is done and the gap closes. Callers set `refreshIndicatorExtent` to [LoadingTvTheme.size], the gap 14 holds
-/// while refreshing.
+/// [ReleaseRefreshControl]'s `builder`, the TV in place of the spinner: it comes down out from under what's above as
+/// the list is pulled, holding its first face until letting go would refresh, then cycles until the refresh is done
+/// and the gap closes. The gap holds at [LoadingTvTheme.size] while refreshing (14).
 Widget loadingTvRefreshIndicator(
   BuildContext context,
   RefreshIndicatorMode mode,

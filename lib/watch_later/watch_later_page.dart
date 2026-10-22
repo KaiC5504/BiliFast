@@ -10,6 +10,7 @@ import '../app/app_scope.dart';
 import '../comments/comments_tab.dart' show NearEndPaging;
 import '../favourites/new_folder_page.dart';
 import '../shared/loading_tv.dart';
+import '../shared/release_refresh.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/video_route.dart';
@@ -306,11 +307,7 @@ class _WatchLaterPageState extends State<WatchLaterPage> {
         key: const ValueKey('later-list'),
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          CupertinoSliverRefreshControl(
-            onRefresh: _refresh,
-            builder: loadingTvRefreshIndicator,
-            refreshIndicatorExtent: LoadingTvTheme.size,
-          ),
+          ReleaseRefreshControl(onRefresh: _refresh),
           SliverFixedExtentList.builder(
             itemExtent: WatchLaterTheme.rowHeight,
             itemCount: items.length,

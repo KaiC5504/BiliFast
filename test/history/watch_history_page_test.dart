@@ -318,6 +318,25 @@ void main() {
     expect(find.text('刚看的'), findsOneWidget);
   });
 
+  testWidgets('a pull reloads only when the finger lets go', (tester) async {
+    await show(tester);
+    final asked = api.calls.length;
+    // About 1500 px/s, a step a frame.
+    final finger = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('history-list'))));
+    for (var i = 0; i < 12; i++) {
+      await finger.moveBy(const Offset(0, 25));
+      await tester.pump(const Duration(microseconds: 16667));
+    }
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isTrue, reason: 'past the trigger');
+    expect(api.calls, hasLength(asked), reason: 'still held');
+    await finger.up();
+    await tester.pumpAndSettle();
+    expect(api.calls.sublist(asked).first, 'history after=0');
+    expect(api.calls.sublist(asked).where((call) => call == 'history after=0'), hasLength(1));
+    expect(find.byType(LoadingTv), findsNothing);
+  });
+
   testWidgets('scrolling near the end loads the next page', (tester) async {
     final rows = historyRows(30, from: wall(19, 9, 0));
     await show(tester, items: rows);

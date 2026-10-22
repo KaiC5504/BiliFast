@@ -13,6 +13,7 @@ import '../comments/comments_tab.dart' show NearEndPaging;
 import '../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSystem;
 import '../shared/loading_tv.dart';
 import '../shared/menu.dart';
+import '../shared/release_refresh.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -203,11 +204,7 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
         key: const ValueKey('history-list'),
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          CupertinoSliverRefreshControl(
-            onRefresh: _refresh,
-            builder: loadingTvRefreshIndicator,
-            refreshIndicatorExtent: LoadingTvTheme.size,
-          ),
+          ReleaseRefreshControl(onRefresh: _refresh),
           for (final section in sections)
             SliverMainAxisGroup(
               slivers: [
