@@ -112,6 +112,15 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
 1. KaiC's phone check of (20), then the milestone's closing build and both checklists.
+2. Next slice (KaiC, 2026-10-22; plan for his go after the compact): 我的, the bottom bar's Me page, apart from the
+   avatar page (49). References: 87 and 02 (the page), 106 (scrolled: the header, counts and 会员 card stay; the
+   rest scrolls under the card; no pinned bar), 107 (the pull opens under the 会员 card, refreshing on release), 108
+   (the avatar opens the account's own space, a different layout from others' spaces). Not built: 我的服务, 更多服务,
+   发布你的第一个视频; the top icons (投屏, 扫一扫, 装扮, 夜间模式) toast. Calls: nav (adds B币) and
+   `/x/web-interface/nav/stat`. Undecided: the own space (108) now or the others' layout for now. Unshipped on main
+   since (24): 我的收藏's 视频 fixed (its tab id is in 收藏's `uri`, `sub_tab=`, checked live on the PC) and the PC
+   login. After 我的: 装扮, following the theme equipped in the official app (`x/resource/show/skin`; 109 我的, 110
+   首页 and the bottom bar, 108 the space banner; the shop 111-113 stays the official app's), then 动态.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
@@ -315,6 +324,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - 搜索 keeps one search call out at a time, suggestions included, with a gap between result pages; a load round
   that adds no row (a 筛选 cut them all) stalls until the user asks again, so nothing loops against the account.
   The keyword is the user's text: never log it, nor an error's `toString` (cupertino_http's carries the URL).
+- Every pull to refresh refreshes when the finger lets go, never while still pulled (KaiC, 2026-10-22: all of the
+  official app works so; 107).
 - Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's
   `PlayerLoading`), never a spinning circle, except for loading more under a list and inside buttons, where the
   official app keeps the small system spinner too.
