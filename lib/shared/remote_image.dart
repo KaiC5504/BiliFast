@@ -10,12 +10,21 @@ import 'package:flutter/widgets.dart';
 import 'image_disk_cache.dart';
 import 'theme.dart';
 
-/// Bilibili's JSON hands out `//host/path` and `http://` addresses; iOS wants https.
+/// Bilibili's JSON hands out `//host/path` and `http://` addresses; iOS wants https. Pictures on i1 and i2 are asked
+/// from i0 ([PictureSession.host]), which serves the same paths, so one connection carries every picture.
 String secureImageUrl(String url) {
-  if (url.startsWith('//')) return 'https:$url';
-  if (url.startsWith('http://')) return 'https://${url.substring('http://'.length)}';
-  return url;
+  final secure = url.startsWith('//')
+      ? 'https:$url'
+      : url.startsWith('http://')
+      ? 'https://${url.substring('http://'.length)}'
+      : url;
+  for (final mirror in _pictureMirrors) {
+    if (secure.startsWith(mirror)) return 'https://${PictureSession.host}/${secure.substring(mirror.length)}';
+  }
+  return secure;
 }
+
+const _pictureMirrors = ['https://i1.hdslb.com/', 'https://i2.hdslb.com/'];
 
 /// [url] from Bilibili's image CDN scaled and cropped there to [width]×[height] px (`@…w_…h_1c.webp`), so a feed card
 /// downloads tens of KB instead of the full-size cover.
@@ -154,7 +163,11 @@ class RemoteImage extends StatelessWidget {
     final uri = Uri.tryParse(address);
     final host = uri?.host ?? '';
     final status = error is NetworkImageLoadException ? error.statusCode : null;
-    final kind = status == null ? '${error.runtimeType}' : '$status';
+    final kind = status != null
+        ? '$status'
+        : error is PictureDownloadException
+        ? error.reason
+        : '${error.runtimeType}';
     if (!_loggedFailures.add('$host $kind')) return;
     Logger.shared.warn(LogCategory.ui, 'image failed', {
       'host': host,

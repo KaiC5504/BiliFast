@@ -3,10 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:bili_core/api.dart' show BiliClient, ClientHTTPTransport, HTTPRequest, HTTPResponse, HTTPTransport;
 import 'package:bili_core/devlog.dart';
 import 'package:crypto/crypto.dart';
+import 'package:cupertino_http/cupertino_http.dart'
+    show CupertinoClient, NSErrorClientException, NSHTTPCookieAcceptPolicy, URLSessionConfiguration;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:objective_c/objective_c.dart' show NSError$Methods;
 
 /// Downloads a picture's bytes; throws `NetworkImageLoadException` for a status other than 200.
 typedef ImageFetch = Future<Uint8List> Function(Uri url, Map<String, String>? headers);
@@ -354,8 +358,14 @@ class ImageDiskCache {
     _ => '${error.runtimeType}',
   };
 
-  /// The app's download, as [NetworkImage] makes it; a [TimeoutException] once [timeout] has passed.
+  /// The iPhone's picture connection; null on the PC, where dart:io downloads, and in tests unless they stand one in.
+  static PictureSession? session = PictureSession.platform();
+
+  /// The app's download: through [session] on the iPhone, otherwise as [NetworkImage] makes it; a [TimeoutException]
+  /// once [timeout] has passed.
   static Future<Uint8List> download(Uri url, Map<String, String>? headers, {Duration timeout = downloadTimeout}) {
+    final pictures = session;
+    if (pictures != null) return pictures.download(url, headers, timeout: timeout);
     HttpClientRequest? request;
     Future<Uint8List> fetch() async {
       final asking = request = await _client.getUrl(url);
@@ -391,6 +401,120 @@ class ImageDiskCache {
     }());
     return client ?? _sharedClient;
   }
+}
+
+/// The iPhone's picture downloads, all through one URLSession, so HTTP/2 carries them over one connection it keeps
+/// open. dart:io opened a connection per picture, each paying the CDN's ~0.4 s handshake.
+final class PictureSession {
+  PictureSession(this._transport, {DateTime Function()? now}) : _now = now ?? DateTime.now;
+
+  /// The host every Bilibili picture is asked from: i0 serves i1's and i2's paths, so one connection carries them all.
+  static const host = 'i0.hdslb.com';
+
+  /// The longest wait for an answer's headers, or between its body's chunks; the request is cancelled past it.
+  static const requestTimeout = Duration(seconds: 15);
+
+  /// How long after an answer the connection still counts as open.
+  static const keepAlive = Duration(seconds: 10);
+
+  final HTTPTransport _transport;
+  final DateTime Function() _now;
+
+  DateTime? _answered;
+  String? _lastPicture;
+  bool _warming = false;
+
+  /// The app's on the iPhone, ephemeral (this folder is the cache) and without cookies (the CDN takes none); null
+  /// elsewhere, and when URLSession can't be reached.
+  static PictureSession? platform() {
+    if (!Platform.isIOS) return null;
+    try {
+      final configuration = URLSessionConfiguration.ephemeralSessionConfiguration()
+        ..cache = null
+        ..httpShouldSetCookies = false
+        ..httpCookieAcceptPolicy = NSHTTPCookieAcceptPolicy.NSHTTPCookieAcceptPolicyNever
+        ..timeoutIntervalForRequest = requestTimeout;
+      final client = CupertinoClient.fromSessionConfiguration(configuration);
+      return PictureSession(ClientHTTPTransport(client: client, timeout: requestTimeout));
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'picture session failed, using dart:io', {'error': '${error.runtimeType}'});
+      return null;
+    }
+  }
+
+  /// Whether a picture or a [warm] was answered within [keepAlive], so the connection is still open.
+  bool get open {
+    final answered = _answered;
+    return answered != null && _now().difference(answered) < keepAlive;
+  }
+
+  /// Whether a [warm] is out.
+  bool get warming => _warming;
+
+  /// As [ImageDiskCache.download]; a failure on the way is a [PictureDownloadException].
+  Future<Uint8List> download(
+    Uri url,
+    Map<String, String>? headers, {
+    Duration timeout = ImageDiskCache.downloadTimeout,
+  }) async {
+    final HTTPResponse response;
+    try {
+      response = await _transport
+          .send(HTTPRequest(url: url, headers: {...?headers}, timeout: requestTimeout))
+          .timeout(timeout, onTimeout: () => throw TimeoutException('picture download', timeout));
+    } on TimeoutException {
+      _answered = null;
+      rethrow;
+    } on Exception catch (error) {
+      _answered = null;
+      throw PictureDownloadException.of(error);
+    }
+    _answered = _now();
+    if (response.status != HttpStatus.ok) throw NetworkImageLoadException(statusCode: response.status, uri: url);
+    if (url.host == host && !url.hasQuery) _lastPicture = '$url';
+    return response.body;
+  }
+
+  /// Opens the connection ahead of pictures about to be asked for: a HEAD for the last picture downloaded, or for
+  /// [picture] before any was. Skipped while one is out, while the connection is [open], and for a picture on another
+  /// host. True if sent.
+  bool warm({String? picture}) {
+    if (_warming || open) return false;
+    final address = _lastPicture ?? picture;
+    final url = address == null ? null : Uri.tryParse(address);
+    if (url == null || url.scheme != 'https' || url.host != host) return false;
+    _warming = true;
+    unawaited(
+      _transport
+          .send(HTTPRequest(url: url, method: 'HEAD', headers: BiliClient.mediaHeaders, timeout: requestTimeout))
+          .then<void>(
+            (_) {
+              _answered = _now();
+            },
+            onError: (Object _) {
+              _answered = null;
+            },
+          )
+          .whenComplete(() => _warming = false),
+    );
+    return true;
+  }
+}
+
+/// A picture download that failed on its way. It stands in for the transport's error, whose text carries the address.
+final class PictureDownloadException implements IOException {
+  const PictureDownloadException(this.reason);
+
+  factory PictureDownloadException.of(Object error) => PictureDownloadException(switch (error) {
+    NSErrorClientException(error: final cause) => 'URLSession ${cause.code}',
+    _ => '${error.runtimeType}',
+  });
+
+  /// The failure's type, or URLSession's error code.
+  final String reason;
+
+  @override
+  String toString() => 'PictureDownloadException: $reason';
 }
 
 final class _Load {

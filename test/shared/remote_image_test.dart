@@ -205,11 +205,13 @@ void main() {
     late ImageDiskCache cache;
     late List<Uint8List> answers;
     late int downloads;
+    late List<String> asked;
     Object? failure;
 
     setUp(() {
       answers = [];
       downloads = 0;
+      asked = [];
       failure = null;
     });
 
@@ -219,8 +221,9 @@ void main() {
       folder = await Directory.systemTemp.createTemp('remote_image');
       cache = ImageDiskCache(
         folder: folder.path,
-        fetch: (_, _) async {
+        fetch: (url, _) async {
           downloads++;
+          asked.add('$url');
           if (failure case final failure?) throw failure;
           return answers.removeAt(0);
         },
@@ -310,6 +313,21 @@ void main() {
       await drop(tester);
     });
 
+    testWidgets("a picture lost on URLSession's way logs its error code", (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await keep(tester);
+      failure = const PictureDownloadException('URLSession -1009');
+      await tester.pumpWidget(const SizedBox());
+      final context = tester.element(find.byType(SizedBox));
+      const offline = 'https://i4.hdslb.com/bfs/archive/offline.jpg';
+      expect(await tester.runAsync(() => RemoteImage.precache(context, offline, size: const Size(160, 100))), isFalse);
+      final warning = logs.events.where((event) => event.msg == 'image failed').single;
+      expect(warning.f['error']?.toJson(), 'URLSession -1009');
+      await drop(tester);
+    });
+
     testWidgets('a picture got ready ahead with a CDN suffix is the one a box of any size with that suffix draws', (
       tester,
     ) async {
@@ -330,6 +348,39 @@ void main() {
         ),
       );
       expect((tester.widget<Image>(find.byType(Image)).image as StoredNetworkImage).url, '$cover$suffix');
+      expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull, reason: 'drawn the frame it shows');
+      expect(downloads, 1);
+      await drop(tester);
+    });
+
+    testWidgets("an i1 cover got ready ahead is asked from i0, and the same path on i2 draws it without asking again", (
+      tester,
+    ) async {
+      await keep(tester);
+      answers.add(animatedGif);
+      const suffix = '@672w_378h_1c.webp';
+      await tester.pumpWidget(const SizedBox());
+      final context = tester.element(find.byType(SizedBox));
+      expect(
+        await tester.runAsync(
+          () => RemoteImage.precache(context, 'http://i1.hdslb.com/bfs/archive/m.jpg', cdnSuffix: suffix),
+        ),
+        isTrue,
+      );
+      expect(asked, ['https://i0.hdslb.com/bfs/archive/m.jpg$suffix']);
+
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: SizedBox(
+              width: 50,
+              height: 30,
+              child: RemoteImage('//i2.hdslb.com/bfs/archive/m.jpg', cdnSuffix: suffix),
+            ),
+          ),
+        ),
+      );
       expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull, reason: 'drawn the frame it shows');
       expect(downloads, 1);
       await drop(tester);
@@ -374,11 +425,41 @@ void main() {
         'https://i0.hdslb.com/bfs/archive/signed.jpg?sign=x',
       ], reason: 'at ${ratio}x');
     }
-    const schemeless = '//i1.hdslb.com/bfs/archive/a.jpg';
+    const schemeless = '//i0.hdslb.com/bfs/archive/a.jpg';
     expect(suffixedImageUrl(schemeless, suffix), 'https:$schemeless$suffix');
     expect(suffixedImageUrl('https://example.com/a.jpg', suffix), 'https://example.com/a.jpg');
     const sized = 'https://i0.hdslb.com/bfs/archive/a.jpg@100w.webp';
     expect(suffixedImageUrl(sized, suffix), sized);
+  });
+
+  test("i1's and i2's pictures are asked from i0, so one connection carries them all; other hosts stay", () {
+    expect(PictureSession.host, 'i0.hdslb.com');
+    for (final (given, asked) in [
+      ('https://i1.hdslb.com/bfs/archive/a.jpg', 'https://i0.hdslb.com/bfs/archive/a.jpg'),
+      ('http://i2.hdslb.com/bfs/face/b.jpg', 'https://i0.hdslb.com/bfs/face/b.jpg'),
+      ('//i1.hdslb.com/bfs/garb/item/c.png', 'https://i0.hdslb.com/bfs/garb/item/c.png'),
+      (
+        'https://i2.hdslb.com/bfs/archive/d.jpg@672w_378h_1c.webp',
+        'https://i0.hdslb.com/bfs/archive/d.jpg@672w_378h_1c.webp',
+      ),
+      ('https://i1.hdslb.com/bfs/archive/e.jpg?sign=x', 'https://i0.hdslb.com/bfs/archive/e.jpg?sign=x'),
+      ('https://i0.hdslb.com/bfs/archive/f.jpg', 'https://i0.hdslb.com/bfs/archive/f.jpg'),
+      ('https://i3.hdslb.com/bfs/archive/g.jpg', 'https://i3.hdslb.com/bfs/archive/g.jpg'),
+      ('https://s1.hdslb.com/bfs/static/h.png', 'https://s1.hdslb.com/bfs/static/h.png'),
+      ('https://archive.biliimg.com/bfs/archive/i.jpg', 'https://archive.biliimg.com/bfs/archive/i.jpg'),
+      ('https://i1.hdslb.com.example.com/j.jpg', 'https://i1.hdslb.com.example.com/j.jpg'),
+      ('https://example.com/i1.hdslb.com/k.jpg', 'https://example.com/i1.hdslb.com/k.jpg'),
+    ]) {
+      expect(secureImageUrl(given), asked, reason: given);
+    }
+    const suffix = '@120w_120h_1c.webp';
+    expect(suffixedImageUrl('//i1.hdslb.com/bfs/face/a.jpg', suffix), 'https://i0.hdslb.com/bfs/face/a.jpg$suffix');
+    expect(
+      sizedImageUrl('http://i2.hdslb.com/bfs/archive/a.jpg', width: 660, height: 480),
+      'https://i0.hdslb.com/bfs/archive/a.jpg@660w_480h_1c.webp',
+    );
+    const suffixed = 'https://i2.hdslb.com/bfs/archive/a.jpg@100w.webp';
+    expect(suffixedImageUrl(suffixed, suffix), 'https://i0.hdslb.com/bfs/archive/a.jpg@100w.webp');
   });
 
   group('a picture shown once', () {
