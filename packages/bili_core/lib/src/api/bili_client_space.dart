@@ -5,7 +5,8 @@ const _spaceArchivePath = '/x/v2/space/archive/cursor';
 const _spaceSeasonPath = '/x/v2/space/season/videos';
 const _spaceSeriesPath = '/x/v2/space/series';
 const _spaceBangumiPath = '/x/v2/space/bangumi';
-const _spacePageSize = '20';
+const _spacePageCount = 20;
+const _spacePageSize = '$_spacePageCount';
 
 /// A space from the official app's API, signed as the Android app signs it. It goes without the account's cookies,
 /// as the app's own calls do; the relation to the uploader is the web card's (`uploaderCard`).
@@ -21,7 +22,7 @@ extension BiliClientSpace on BiliClient {
   Future<SpaceBangumiPage> spaceBangumi({required int mid, required int page}) => _officialGet(
     _spaceBangumiPath,
     {'vmid': '$mid', 'pn': '$page', 'ps': _spacePageSize},
-    SpaceBangumiPage.fromJson,
+    (json) => SpaceBangumiPage.fromJson(json, page: page, pageSize: _spacePageCount),
   );
 
   /// 投稿's videos by [order]; [next] is the last page's `SpaceVideoPage.next`.

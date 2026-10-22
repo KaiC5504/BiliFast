@@ -1,4 +1,5 @@
 import 'json.dart';
+import 'skin_models.dart' show argbColour;
 
 /// A space's tabs as the official app names them (`tab2`'s `param`). Anything else is [other], drawn but not opened.
 enum SpaceTabKind { home, dynamic, contribute, shop, favourite, bangumi, other }
@@ -233,7 +234,24 @@ final class SpaceBangumiPage {
   final bool hasMore;
   final int? total;
 
-  static SpaceBangumiPage fromJson(Object? json) => throw UnimplementedError('core builder');
+  /// The `data` of [page] (from 1), asked [pageSize] at a time. The answer carries only `count` and the page's
+  /// rows (a `has_next`, should one come, wins), so the list goes on while the rows so far are fewer than the
+  /// count, or, without a count, until a page comes back empty, as the official app pages it.
+  static SpaceBangumiPage fromJson(Object? json, {int page = 1, int pageSize = 20}) {
+    final data = JsonObject.from(json, 'bangumi');
+    final rows = data.lenientList('item', (json) => json);
+    final total = _id(data.map['count']);
+    final bool hasMore;
+    if (rows.isEmpty) {
+      hasMore = false;
+    } else if (data.map['has_next'] != null) {
+      hasMore = data.flag('has_next');
+    } else {
+      // Rows that fail to decode still count, or a bad row would end the list early.
+      hasMore = total == null || (page - 1) * pageSize + rows.length < total;
+    }
+    return SpaceBangumiPage(items: lossy(rows, _bangumi), hasMore: hasMore, total: total);
+  }
 }
 
 /// An owned 装扮 card of 拥有的个性装扮 (115), from `fans_dress.item`.
@@ -313,7 +331,119 @@ final class OwnSpace {
   final int garbTotal;
 }
 
-OwnSpace _ownSpace(JsonObject data, JsonObject card) => const OwnSpace();
+OwnSpace _ownSpace(JsonObject data, JsonObject card) {
+  final level = card.nested('level_info');
+  final banner = _bannerItem(data);
+  final setting = data.nested('setting');
+  final dress = data.nested('fans_dress');
+  return OwnSpace(
+    exp: level?.count('current_exp') ?? 0,
+    // At the top level (6) next_exp reads "--".
+    nextExp: level?.count('next_exp') ?? 0,
+    pendant: _picture(card.nested('pendant')?.text('image')),
+    vipBadge: _id(card.nested('vip')?.map['avatar_subscript']) == 1,
+    banner: banner == null
+        ? null
+        : _picture(banner.nested('item')?.nested('image')?.text('default_image')) ?? _picture(banner.text('cover')),
+    bannerLabel: banner == null ? null : _bannerLabel(banner.nested('title')),
+    favourites: _section(data.nested('favourite2'), _folder, hidden: _hidden(setting, 'fav_video')),
+    bangumi: _section(data.nested('season'), _bangumi, hidden: _hidden(setting, 'bangumi')),
+    coins: _section(data.nested('coin_archive'), _video, hidden: _hidden(setting, 'coins_video')),
+    likes: _section(data.nested('like_archive'), _video, hidden: _hidden(setting, 'likes_video')),
+    garbs: _section(dress, _garb, hidden: _hidden(setting, 'dress_up'), limit: 3),
+    garbTotal: dress?.count('total') ?? 0,
+  );
+}
+
+/// The equipped 空间头图: `images.collection_top_simple.top.result`'s first item.
+JsonObject? _bannerItem(JsonObject data) {
+  final top = data.nested('images')?.nested('collection_top_simple')?.nested('top');
+  return top?.lenientList('result', (json) => JsonObject.from(json)).firstOrNull;
+}
+
+SpaceBannerLabel? _bannerLabel(JsonObject? title) {
+  final text = _filled(title?.text('title'));
+  if (title == null || text == null) return null;
+  final colours = title.nested('sub_title_color_format')?.lenientList('colors', (json) => json) ?? const [];
+  return SpaceBannerLabel(
+    title: text,
+    subtitle: title.text('sub_title') ?? '',
+    subtitleColor: colours.isEmpty ? null : argbColour(colours.last),
+  );
+}
+
+SpaceSection<T> _section<T>(JsonObject? section, T Function(Object? json) decode, {required bool hidden, int? limit}) {
+  final items = section?.lenientList('item', decode) ?? <T>[];
+  return SpaceSection(
+    count: section?.count('count') ?? 0,
+    items: limit != null && items.length > limit ? items.sublist(0, limit) : items,
+    hidden: hidden,
+  );
+}
+
+/// `setting`'s flags are whether others may see a section; a missing one hides nothing.
+bool _hidden(JsonObject? setting, String key) => switch (setting?.map[key]) {
+  final bool shown => !shown,
+  final value => asInt(value) == 0,
+};
+
+SpaceFolderCard _folder(Object? json) {
+  final object = JsonObject.from(json, 'folder');
+  final id = _id(object.map['media_id']);
+  if (id == null || id <= 0) throw const DecodeError('missing media_id');
+  return SpaceFolderCard(
+    id: id,
+    title: object.text('title') ?? '',
+    cover: _secure(object.text('cover') ?? ''),
+    count: object.count('count', 'media_count'),
+    // The official app reads is_public 0 as public, so 1 is a private folder.
+    isPrivate: object.flag('is_public'),
+  );
+}
+
+SpaceBangumiCard _bangumi(Object? json) {
+  final object = JsonObject.from(json, 'season');
+  final id = _id(object.map['param']) ?? _id(object.map['season_id']);
+  if (id == null || id <= 0) throw const DecodeError('missing param');
+  return SpaceBangumiCard(
+    seasonId: id,
+    title: object.text('title') ?? '',
+    cover: _secure(object.text('cover') ?? ''),
+    progress: _progress(object),
+  );
+}
+
+/// The poster's line as the official app words it.
+String _progress(JsonObject season) {
+  if (season.flag('finish')) {
+    final total = _scalar(season.map['total_count']);
+    return total == null ? '' : '全$total话';
+  }
+  if (!season.flag('is_started')) return '即将开播';
+  return switch (_scalar(season.map['newest_ep_index'])) {
+    null || '-1' => '连载中',
+    final index when RegExp(r'^\d+$').hasMatch(index) => '更新至$index话',
+    final index => '更新至$index',
+  };
+}
+
+SpaceGarbCard _garb(Object? json) {
+  final object = JsonObject.from(json, 'garb');
+  return SpaceGarbCard(
+    title: object.text('garb_title') ?? '',
+    image: _picture(object.text('image')) ?? (throw const DecodeError('missing image')),
+    fansNumber: _scalar(object.map['fans_number']) ?? '',
+    numberColor: argbColour(object.map['fan_bg_color']),
+    maskColor: argbColour(object.map['suit_bg_color']),
+  );
+}
+
+/// A text the answer gives as a string or a number; null when empty or neither.
+String? _scalar(Object? value) => switch (value) {
+  final String text => _filled(text),
+  final num number => '${asInt(number) ?? number}',
+  _ => null,
+};
 
 /// One video of a space's lists. Only its ids and what is drawn are kept: the answer's `uri` carries a signed play
 /// link, which must never be stored or logged.
