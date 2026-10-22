@@ -307,7 +307,7 @@ void main() {
   });
 
   group('tabs', () {
-    test("keep the uploader's tabs in order, the unknown ones as other with their titles", () async {
+    test("keep the uploader's tabs in order, 追番 as bangumi, the unknown ones as other with their titles", () async {
       final profile = await client.space(mid: 10000001);
       expect(profile.tabs.map((tab) => (tab.kind, tab.title)), [
         (SpaceTabKind.home, '主页'),
@@ -315,11 +315,11 @@ void main() {
         (SpaceTabKind.contribute, '投稿'),
         (SpaceTabKind.shop, '小店'),
         (SpaceTabKind.favourite, '收藏'),
-        (SpaceTabKind.other, '追番'),
+        (SpaceTabKind.bangumi, '追番'),
       ]);
     });
 
-    test('the default tab: video, contribute and archive are 投稿; home and dynamic stay; anything else is 投稿', () {
+    test('the default tab: video, contribute and archive are 投稿; home, dynamic and bangumi stay; anything else is 投稿', () {
       SpaceTabKind opening(String? tab) => SpaceProfile.fromJson({
         'card': {'mid': 1, 'name': 'x'},
         'default_tab': ?tab,
@@ -330,7 +330,8 @@ void main() {
       expect(opening('archive'), SpaceTabKind.contribute);
       expect(opening('home'), SpaceTabKind.home);
       expect(opening('dynamic'), SpaceTabKind.dynamic);
-      expect(opening('bangumi'), SpaceTabKind.contribute);
+      expect(opening('bangumi'), SpaceTabKind.bangumi);
+      expect(opening('comic'), SpaceTabKind.contribute);
       expect(opening(null), SpaceTabKind.contribute);
     });
   });
