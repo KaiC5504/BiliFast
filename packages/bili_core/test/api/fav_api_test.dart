@@ -224,6 +224,21 @@ void main() {
     );
   });
 
+  test("视频 is found in 收藏's uri, whose sub_tab holds the sub tabs as JSON, encoded or plain", () {
+    const subTabs = '[{"tab_id":11,"tab_name":"收藏夹","uri":""},{"tab_id":12,"tab_name":"视频","uri":""}]';
+    Map<String, Object?> answer(String uri) => {
+      'tabs': [
+        {'tab_id': 1, 'tab_name': '收藏', 'uri': uri, 'search_uri': 'bilibili://main/favorite/search'},
+        {'tab_id': 2, 'tab_name': '追更', 'uri': 'bilibili://main/favorite?tab=2'},
+      ],
+      'default_tab': 1,
+    };
+    expect(favVideosTabId(answer('bilibili://main/favorite?sub_tab=${Uri.encodeComponent(subTabs)}')), 12);
+    expect(favVideosTabId(answer('bilibili://main/favorite?sub_tab=$subTabs')), 12);
+    expect(favVideosTabId(answer('bilibili://main/favorite?sub_tab=${Uri.encodeComponent(subTabs)}&from=x')), 12);
+    expect(favVideosTabId(answer('bilibili://main/favorite?sub_tab=not-json')), isNull);
+  });
+
   test('a 视频 named under any naming key is found, its id under any key ending in id', () {
     expect(
       favVideosTabId({

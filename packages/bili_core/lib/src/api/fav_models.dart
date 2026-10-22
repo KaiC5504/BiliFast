@@ -1,6 +1,8 @@
 /// 我的收藏's folders and their videos.
 library;
 
+import 'dart:convert';
+
 import 'action_models.dart';
 import 'json.dart';
 
@@ -260,13 +262,16 @@ final class FavTabPage {
 }
 
 /// 视频's id among `/x/v3/fav/tab`'s tabs (`FavoritesTabs`): any object in the answer named 视频 under a key that
-/// names (`tab_name`, `sub_tab_name`, `title`…), its id under a key ending in `id`, as a number or a string; null when
-/// the answer has none. On 1.0.0 (22) and (23) the phone's answer held only 收藏=1 and 追更=2, whatever `tab_id` asked.
+/// names (`tab_name`, `sub_tab_name`, `title`…), its id under a key ending in `id`, as a number or a string, the
+/// sub tabs in a tab's `uri` included; null when the answer has none. The answer's tabs are only 收藏 and 追更: 视频 is
+/// in 收藏's `uri` (the PC's login, 2026-10-22, and the official app's `sub_tab=` parsing).
 int? favVideosTabId(Object? json) {
   int? found;
   void visit(Object? node) {
     if (found != null) return;
-    if (node is Map) {
+    if (node is String) {
+      visit(_subTabs(node));
+    } else if (node is Map) {
       if (_names(node).any((name) => name.trim() == _videosTabName)) found = _tabId(node);
       for (final value in node.values) {
         visit(value);
@@ -280,6 +285,31 @@ int? favVideosTabId(Object? json) {
 
   visit(json);
   return found;
+}
+
+/// A tab's `uri` names its sub tabs as JSON after `sub_tab=` (`bilibili://…?sub_tab=[{"tab_id":…,"tab_name":"视频"}]`,
+/// as the official app reads it): 收藏夹 and 视频 are 收藏's. Null for any other string.
+Object? _subTabs(String uri) {
+  final at = uri.indexOf('sub_tab=');
+  if (at < 0) return null;
+  final rest = uri.substring(at + 'sub_tab='.length);
+  // The official app reads to the end of the link; the part before the next parameter is the fallback.
+  for (final raw in [rest, rest.split('&').first]) {
+    var tabs = raw;
+    try {
+      tabs = Uri.decodeComponent(raw);
+    } on ArgumentError {
+      // Already plain, as the official app allows.
+    } on FormatException {
+      // As above.
+    }
+    try {
+      return jsonDecode(tabs);
+    } on FormatException {
+      continue;
+    }
+  }
+  return null;
 }
 
 /// 收藏's id by its name, else the answer's `default_tab`: the list 视频 falls back to when no tab is named 视频.
