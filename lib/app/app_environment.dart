@@ -36,7 +36,7 @@ final class LoginExpired extends Account {
 
 /// The keychain login, the cookie jar and the API client (port of AppEnvironment.swift's account half). On the
 /// iPhone the jar starts from the Swift app's keychain item, so the app opens logged in with no login screen;
-/// Windows has no keychain and runs logged out.
+/// Windows keeps its own login in a DPAPI-encrypted file (`DpapiKeychainStore`).
 class AppEnvironment extends ChangeNotifier {
   AppEnvironment._(
       {required this.cookies,
@@ -44,28 +44,39 @@ class AppEnvironment extends ChangeNotifier {
       required this._persistence,
       required this._keychain,
       required this.webCookies,
+      required this._serverLogout,
       required this._logger});
 
-  /// `http`, `httpFactory`, `keychain` and `webCookies` are for tests; the app passes none.
+  /// `http`, `httpFactory`, `keychain` and `webCookies` are for tests; the app passes none, except the Windows
+  /// build's keychain. [guarded] (Windows, where KaiC's real login is read only) sends every call through
+  /// [GuardedTransport], whose only allowed write is the website's logout; [serverLogout] has 退出登录 end the
+  /// session on Bilibili's side first.
   static Future<AppEnvironment> load(
       {KeychainStore? keychain,
       WebCookies? webCookies,
       HTTPTransport? http,
       HTTPTransport Function() httpFactory = platformHttpTransport,
+      bool guarded = false,
+      bool serverLogout = false,
       Logger? logger}) async {
     final log = logger ?? Logger.shared;
-    final guarded = _GuardedKeychain(keychain ?? KeychainStore.platform(), log);
-    final persistence = CookiePersistence(guarded, logger: log);
+    final store = _GuardedKeychain(keychain ?? KeychainStore.platform(), log);
+    final persistence = CookiePersistence(store, logger: log);
     final jar = CookieJar(await persistence.load());
     if (persistence.blocked) log.warn(LogCategory.app, 'keychain read failed, cookie writes held back');
     jar.onChange = (_) => unawaited(persistence.save(jar.all));
-    final client = BiliClient(transport: http ?? httpTransportOrFallback(httpFactory, log), cookies: jar, logger: log);
+    final transport = http ?? httpTransportOrFallback(httpFactory, log);
+    final client = BiliClient(
+        transport: guarded ? GuardedTransport(transport, writesAllowed: {'/login/exit/v2'}, logger: log) : transport,
+        cookies: jar,
+        logger: log);
     return AppEnvironment._(
         cookies: jar,
         client: client,
         persistence: persistence,
-        keychain: guarded,
+        keychain: store,
         webCookies: webCookies ?? WebCookies.platform(),
+        serverLogout: serverLogout,
         logger: log);
   }
 
@@ -79,6 +90,7 @@ class AppEnvironment extends ChangeNotifier {
 
   /// The login web view's store, read by the login page and cleared on logout.
   final WebCookies webCookies;
+  final bool _serverLogout;
   final Logger _logger;
   Account _account = const AccountUnknown();
   int? _mid;
@@ -167,8 +179,9 @@ class AppEnvironment extends ChangeNotifier {
   }
 
   /// 退出登录 (BiliNative `AppEnvironment.logout`): empties the jar, deletes the keychain cookies and app token, and
-  /// clears the web view's data. A step that fails is logged and the rest still run. A `--fake-account` run, which
-  /// stored nothing, just stops being fake.
+  /// clears the web view's data. With `serverLogout` the website's logout goes first, while the jar still holds the
+  /// login. A step that fails is logged and the rest still run. A `--fake-account` run, which stored nothing, just
+  /// stops being fake.
   ///
   /// Throws [LogoutIncomplete] when the jar or the keychain cookies couldn't be emptied. The account still reads
   /// logged out, which is true of this run (the jar sends no login), but the keychain may hold the login for the
@@ -183,6 +196,7 @@ class AppEnvironment extends ChangeNotifier {
       return;
     }
     _persistence.unblock();
+    if (_serverLogout) await _logoutStep('server', client.webLogout);
     final jarEmptied = await _logoutStep('jar', () async => cookies.removeAll());
     final keychainEmptied = await _logoutStep('keychain cookies', _keychain.deleteCookies);
     await _logoutStep('app token', _keychain.deleteAppToken);

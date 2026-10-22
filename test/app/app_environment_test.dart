@@ -144,6 +144,38 @@ void main() {
     expect(environment.accountLabel, '测试账号');
   });
 
+  group('guarded (Windows)', () {
+    const likePath = '/x/web-interface/archive/like';
+    const logoutPath = '/login/exit/v2';
+    const ok = (200, '{"code":0,"message":"0"}');
+
+    test("a write is refused before it is sent, reads go, and the website's logout is let through", () async {
+      final http = Canned.http()
+        ..routes[likePath] = ok
+        ..routes[logoutPath] = ok;
+      final environment = await AppEnvironment.load(
+          keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
+          http: http,
+          guarded: true,
+          logger: Logger(session: 'test'));
+
+      await expectLater(environment.client.like(aid: 1, bvid: 'BV1GJ411x7h7', on: true),
+          throwsA(const BiliAPIError(code: GuardedTransport.readOnlyCode, message: 'PC 只读，未发送')));
+      expect(http.to(likePath), isEmpty);
+      expect(await environment.refreshAccount(), isTrue);
+      expect(environment.account, isA<LoggedIn>());
+      await environment.client.postVoid(logoutPath, host: BiliClient.passport);
+      expect(http.to(logoutPath).single.url.host, 'passport.bilibili.com');
+    });
+
+    test('unguarded (the phone), writes go out as before', () async {
+      final http = Canned.http()..routes[likePath] = ok;
+      final environment = await load(FakeKeychain(const StoredCookies(Canned.cookies)), http);
+      await environment.client.like(aid: 1, bvid: 'BV1GJ411x7h7', on: true);
+      expect(http.to(likePath).single.method, 'POST');
+    });
+  });
+
   test('checks asked for while one is running share its request; a later one asks again', () async {
     final http = Canned.http();
     final environment = await load(FakeKeychain(const StoredCookies(Canned.cookies)), http);
