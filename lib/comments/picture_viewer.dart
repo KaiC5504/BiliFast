@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:bili_core/api.dart' hide RichText;
 import 'package:bili_core/devlog.dart';
@@ -10,7 +11,8 @@ import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import 'comment_row.dart' show CommentPictures;
 
-/// A comment's pictures over the whole page: swipe between them, pinch to zoom, tap to close.
+/// A comment's pictures over the whole page: swipe sideways between them, pinch to zoom, tap or swipe up or down to
+/// close.
 class PictureViewer extends StatefulWidget {
   const PictureViewer({super.key, required this.pictures, required this.initialIndex, required this.onClose});
 
@@ -22,12 +24,20 @@ class PictureViewer extends StatefulWidget {
   State<PictureViewer> createState() => _PictureViewerState();
 }
 
-class _PictureViewerState extends State<PictureViewer> {
+class _PictureViewerState extends State<PictureViewer> with SingleTickerProviderStateMixin {
   late int _index = _start;
   late final _pages = PageController(initialPage: _index);
 
   /// A zoomed picture pans under the finger instead of paging.
   bool _zoomed = false;
+
+  /// How far a vertical swipe has carried the picture.
+  Offset _thrown = Offset.zero;
+  Offset _grabbedAt = Offset.zero;
+  late final _throw = AnimationController(vsync: this)..addListener(_throwStep);
+  final _throwPath = Tween<Offset>();
+  CurvedAnimation? _throwCurve;
+  bool _thrownAway = false;
 
   int get _start => widget.pictures.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.pictures.length - 1);
 
@@ -37,13 +47,63 @@ class _PictureViewerState extends State<PictureViewer> {
     if (listEquals(oldWidget.pictures, widget.pictures) && oldWidget.initialIndex == widget.initialIndex) return;
     _index = _start;
     _zoomed = false;
+    _throw.stop();
+    _thrown = Offset.zero;
+    _thrownAway = false;
     if (_pages.hasClients) _pages.jumpToPage(_index);
   }
 
   @override
   void dispose() {
+    _throwCurve?.dispose();
+    _throw.dispose();
     _pages.dispose();
     super.dispose();
+  }
+
+  void _throwStep() {
+    final curve = _throwCurve;
+    if (curve != null) setState(() => _thrown = _throwPath.evaluate(curve));
+  }
+
+  void _grab(DragStartDetails details) {
+    _throw.stop();
+    _grabbedAt = details.globalPosition - _thrown;
+  }
+
+  void _carry(DragUpdateDetails details) => setState(() => _thrown = details.globalPosition - _grabbedAt);
+
+  void _letGo(DragEndDetails details) {
+    final flick = details.velocity.pixelsPerSecond.dy;
+    final away =
+        _thrown.dy.abs() > CommentTextTheme.viewerThrowCommit ||
+        (flick.abs() > CommentTextTheme.viewerThrowFlick && (_thrown.dy == 0 || flick.sign == _thrown.dy.sign));
+    if (!away) {
+      _settleBack();
+      return;
+    }
+    _thrownAway = true;
+    final direction = (_thrown.dy == 0 ? flick : _thrown.dy).sign;
+    final end = Offset(_thrown.dx, direction * MediaQuery.sizeOf(context).height);
+    _settle(end, CommentTextTheme.viewerThrowAway, Curves.easeIn).whenComplete(() {
+      if (mounted) widget.onClose();
+    });
+  }
+
+  void _settleBack() => _settle(Offset.zero, CommentTextTheme.viewerThrowBack, Curves.easeOutCubic);
+
+  Future<void> _settle(Offset end, Duration duration, Curve curve) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      setState(() => _thrown = end);
+      return Future.value();
+    }
+    _throwPath
+      ..begin = _thrown
+      ..end = end;
+    _throwCurve?.dispose();
+    _throwCurve = CurvedAnimation(parent: _throw, curve: curve);
+    _throw.duration = duration;
+    return _throw.forward(from: 0).orCancel.catchError((Object _) {});
   }
 
   @override
@@ -51,70 +111,96 @@ class _PictureViewerState extends State<PictureViewer> {
     final pictures = widget.pictures;
     final top = MediaQuery.paddingOf(context).top;
     final still = MediaQuery.disableAnimationsOf(context);
+    final screen = MediaQuery.sizeOf(context);
+    final thrown = screen.height <= 0
+        ? 0.0
+        : (_thrown.dy.abs() / (screen.height * CommentTextTheme.viewerThrowFade)).clamp(0.0, 1.0);
+    // A long picture's vertical drags scroll it, so only a tap closes it.
+    final throwable = !_zoomed && !_thrownAway && pictures.isNotEmpty && !isLongPicture(pictures[_index], screen);
     return BlockSemantics(
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: still ? 1 : 0, end: 1),
         duration: CommentTextTheme.viewerFadeIn,
         curve: Curves.easeOut,
         builder: (context, opacity, child) => Opacity(opacity: opacity, child: child),
-        child: ColoredBox(
-          color: CommentTextTheme.viewerBackground,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              PageView.builder(
-                controller: _pages,
-                physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
-                itemCount: pictures.length,
-                onPageChanged: (index) => setState(() => _index = index),
-                itemBuilder: (context, index) => _PicturePage(
-                  key: ValueKey((index, pictures[index].url)),
-                  picture: pictures[index],
-                  label: '图片 ${index + 1}/${pictures.length}',
-                  onClose: widget.onClose,
-                  onZoomChanged: (zoomed) => setState(() => _zoomed = zoomed),
-                ),
-              ),
-              if (pictures.isEmpty)
-                GestureDetector(behavior: HitTestBehavior.opaque, excludeFromSemantics: true, onTap: widget.onClose),
-              if (pictures.length > 1)
-                Positioned(
-                  top: top + CommentTextTheme.viewerCountTop,
-                  left: 0,
-                  right: 0,
-                  child: IgnorePointer(
-                    child: ExcludeSemantics(
-                      child: Text(
-                        '${_index + 1}/${pictures.length}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: BiliFonts.family,
-                          fontSize: CommentTextTheme.viewerCountText,
-                          fontWeight: FontWeight.w500,
-                          color: CommentTextTheme.viewerText,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
+        child: GestureDetector(
+          // VoiceOver closes with 关闭; a swipe there would read as a scroll.
+          excludeFromSemantics: true,
+          onVerticalDragStart: throwable ? _grab : null,
+          onVerticalDragUpdate: throwable ? _carry : null,
+          onVerticalDragEnd: throwable ? _letGo : null,
+          onVerticalDragCancel: throwable ? _settleBack : null,
+          child: ColoredBox(
+            color: CommentTextTheme.viewerBackground.withValues(alpha: 1 - thrown),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Transform.translate(
+                  key: const ValueKey('picture-thrown'),
+                  offset: _thrown,
+                  child: Transform.scale(
+                    key: const ValueKey('picture-shrunk'),
+                    scale: lerpDouble(1, CommentTextTheme.viewerThrownScale, thrown),
+                    child: PageView.builder(
+                      controller: _pages,
+                      physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
+                      itemCount: pictures.length,
+                      onPageChanged: (index) => setState(() => _index = index),
+                      itemBuilder: (context, index) => _PicturePage(
+                        key: ValueKey((index, pictures[index].url)),
+                        picture: pictures[index],
+                        label: '图片 ${index + 1}/${pictures.length}',
+                        onClose: widget.onClose,
+                        onZoomChanged: (zoomed) => setState(() => _zoomed = zoomed),
                       ),
                     ),
                   ),
                 ),
-              Positioned(
-                top: top,
-                left: 0,
-                width: CommentTextTheme.viewerCloseTarget,
-                height: CommentTextTheme.viewerCloseTarget,
-                child: Semantics(
-                  button: true,
-                  label: '关闭',
-                  onTap: widget.onClose,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    excludeFromSemantics: true,
+                if (pictures.isEmpty)
+                  GestureDetector(behavior: HitTestBehavior.opaque, excludeFromSemantics: true, onTap: widget.onClose),
+                if (pictures.length > 1)
+                  Positioned(
+                    top: top + CommentTextTheme.viewerCountTop,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
+                        child: Opacity(
+                          opacity: 1 - thrown,
+                          child: Text(
+                            '${_index + 1}/${pictures.length}',
+                            key: const ValueKey('picture-count'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: BiliFonts.family,
+                              fontSize: CommentTextTheme.viewerCountText,
+                              fontWeight: FontWeight.w500,
+                              color: CommentTextTheme.viewerText,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  top: top,
+                  left: 0,
+                  width: CommentTextTheme.viewerCloseTarget,
+                  height: CommentTextTheme.viewerCloseTarget,
+                  child: Semantics(
+                    button: true,
+                    label: '关闭',
                     onTap: widget.onClose,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      excludeFromSemantics: true,
+                      onTap: widget.onClose,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

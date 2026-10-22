@@ -43,20 +43,31 @@ extension BiliClientFav on BiliClient {
     return answer ?? FavFolderPage.empty;
   }
 
-  /// 视频's tab id, from the tabs the official app's 我的收藏 is built from.
-  /// An answer without it logs its tabs' names and ids.
+  /// 视频's tab id, from the tabs the official app's 我的收藏 is built from: the top tabs, then 收藏's sub tabs when
+  /// 视频 isn't among them (two calls at most). A miss logs the tabs' names and ids.
   Future<int?> favVideosTab() async {
-    const path = '/x/v3/fav/tab';
+    final top = await _favTabs(0);
+    if (top.videos != null) return top.videos;
+    final collect = top.collect;
+    if (collect != null && collect != 0) {
+      final sub = await _favTabs(collect);
+      if (sub.videos != null) return sub.videos;
+      _logger.warn(LogCategory.api, 'fav tabs without 视频', {'tabs': top.outline, 'sub': sub.outline});
+      return null;
+    }
+    _logger.warn(LogCategory.api, 'fav tabs without 视频', {'tabs': top.outline});
+    return null;
+  }
+
+  Future<({int? videos, int? collect, String outline})> _favTabs(int tabId) async {
     final envelope = await _getEnvelope(
-      path,
-      query: {'tab_id': '0'},
+      '/x/v3/fav/tab',
+      query: {'tab_id': '$tabId'},
       signed: false,
-      decode: (json) => (id: favVideosTabId(json), outline: favTabsOutline(json)),
+      decode: (json) => (videos: favVideosTabId(json), collect: favCollectTabId(json), outline: favTabsOutline(json)),
     );
     if (envelope.code != 0) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');
-    final id = envelope.data?.id;
-    if (id == null) _logger.warn(LogCategory.api, 'fav tabs without 视频', {'tabs': envelope.data?.outline ?? 'no data'});
-    return id;
+    return envelope.data ?? (videos: null, collect: null, outline: 'no data');
   }
 
   /// A page of 视频, the latest favourite first; [after] is the last page's `FavTabPage.next`.

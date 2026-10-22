@@ -1903,6 +1903,16 @@ abstract final class CommentTextTheme {
   static const viewerFailedGlyphStroke = 2.0;
   static const viewerFailedGlyphColor = Color(0x80FFFFFF);
   static const viewerCrossFade = Duration(milliseconds: 200);
+
+  /// A vertical swipe throws the picture back to the comments, as 105 shows: it follows the finger, shrinking to 60%
+  /// while the black fades out over a third of the screen's height. Let go past [viewerThrowCommit] or flicked
+  /// faster than [viewerThrowFlick], it flies on off the screen; otherwise it settles back.
+  static const viewerThrownScale = 0.6;
+  static const viewerThrowFade = 1 / 3;
+  static const viewerThrowCommit = 100.0;
+  static const viewerThrowFlick = 700.0;
+  static const viewerThrowAway = Duration(milliseconds: 220);
+  static const viewerThrowBack = Duration(milliseconds: 250);
 }
 
 /// The composer and its emote panel (14), measured at 3 px per pt.

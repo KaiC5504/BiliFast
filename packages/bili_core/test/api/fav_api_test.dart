@@ -34,6 +34,12 @@ const tabsAnswer = r'''
  {"tab_id":2,"tab_name":"追更","uri":"","red_dot":false}
 ]}}''';
 
+/// The phone's answer to `tab_id=0` on 1.0.0 (22): the top tabs only.
+const topTabsAnswer = r'''
+{"code":0,"message":"0","ttl":1,"data":{"default_tab":1,"tabs":[
+ {"tab_id":1,"tab_name":"收藏","uri":"","red_dot":false},{"tab_id":2,"tab_name":"追更","uri":"","red_dot":false}
+]}}''';
+
 const tabFavAnswer = r'''
 {"code":0,"message":"0","ttl":1,"data":{"total":9,"has_more":true,"has_invalid":false,"list":[
  {"oid":80433022,"otype":2,"title":"第一个","cover":"https://i0.hdslb.com/bfs/archive/c1.jpg","link":"",
@@ -125,6 +131,26 @@ void main() {
       client.favFolderVideos(folderId: 1, page: 1),
       throwsA(isA<BiliAPIError>().having((error) => error.code, 'code', -101)),
     );
+  });
+
+  test("视频 not among the top tabs is found among 收藏's, asked for by its id", () async {
+    http.answer = (request) => request.url.path != tabsPath
+        ? null
+        : http.query(request)['tab_id'] == '0'
+        ? (200, topTabsAnswer)
+        : (200, tabsAnswer);
+    expect(await client.favVideosTab(), 12);
+    expect([for (final request in http.requestsTo(tabsPath)) http.query(request)['tab_id']], ['0', '1']);
+  });
+
+  test('without 收藏 among the tabs, the default tab is asked; a miss there too is null', () async {
+    http.answer = (request) => request.url.path != tabsPath
+        ? null
+        : http.query(request)['tab_id'] == '0'
+        ? (200, '{"code":0,"message":"0","ttl":1,"data":{"default_tab":3,"tabs":[{"tab_id":3,"tab_name":"其他"}]}}')
+        : (200, '{"code":0,"message":"0","ttl":1,"data":{"tabs":[]}}');
+    expect(await client.favVideosTab(), isNull);
+    expect([for (final request in http.requestsTo(tabsPath)) http.query(request)['tab_id']], ['0', '3']);
   });
 
   test('the 视频 tab is found among the sub tabs by its name', () async {

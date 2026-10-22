@@ -15,11 +15,17 @@ final class FakeHTTP implements HTTPTransport {
   /// Keyed by host + path: answers 200 with this final URL, as a followed redirect would.
   Map<String, Uri> redirects = {};
 
+  /// Checked before everything else; null passes the request on to the routes.
+  (int, String)? Function(HTTPRequest request)? answer;
+
   final List<HTTPRequest> requests = [];
 
   @override
   Future<HTTPResponse> send(HTTPRequest request) async {
     requests.add(request);
+    if (answer?.call(request) case (final int status, final String body)) {
+      return HTTPResponse(status: status, headers: {}, body: utf8.encode(body), finalURL: request.url);
+    }
     final key = request.url.host + request.url.path;
     final redirected = redirects[key];
     if (redirected != null) {

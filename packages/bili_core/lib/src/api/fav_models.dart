@@ -255,7 +255,8 @@ final class FavTabPage {
 }
 
 /// 视频's id among `/x/v3/fav/tab`'s tabs and their sub tabs (`FavoritesTabs`), found by its name at any depth, the
-/// id as a number or a string; null when the answer has no such tab. 1.0.0 (21) found none with the stricter read.
+/// id as a number or a string; null when the answer has no such tab. Asked with `tab_id=0`, the phone's answer has
+/// only the top tabs (收藏=1, 追更=2, 1.0.0 (22)); 视频 is among 收藏's sub tabs, which [favCollectTabId] asks for.
 int? favVideosTabId(Object? json) {
   int? found;
   void visit(Object? node) {
@@ -274,6 +275,18 @@ int? favVideosTabId(Object? json) {
 
   visit(json);
   return found;
+}
+
+/// The tab whose sub tabs hold 视频: 收藏 by its name, else the answer's `default_tab`.
+int? favCollectTabId(Object? json) {
+  if (json is! Map) return null;
+  final tabs = json['tabs'];
+  if (tabs is List) {
+    for (final tab in tabs) {
+      if (tab is Map && _tabName(tab)?.trim() == '收藏') return _tabId(tab);
+    }
+  }
+  return _tabId({'tab_id': json['default_tab']});
 }
 
 /// The tabs' names and ids, nested as the answer has them, for the log when [favVideosTabId] finds nothing.

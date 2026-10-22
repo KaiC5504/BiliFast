@@ -56,6 +56,11 @@ String? _countText(WidgetTester tester) => tester.widgetList<Text>(_count).map((
 
 InteractiveViewer _viewer(WidgetTester tester) => tester.widget<InteractiveViewer>(find.byType(InteractiveViewer));
 
+Offset _offsetOf(Transform transform) {
+  final moved = transform.transform.getTranslation();
+  return Offset(moved.x, moved.y);
+}
+
 double _scale(WidgetTester tester) => _viewer(tester).transformationController!.value.getMaxScaleOnAxis();
 
 ScrollPhysics? _physics(WidgetTester tester) => tester.widget<PageView>(find.byType(PageView)).physics;
@@ -259,6 +264,104 @@ void main() {
     await tester.tapAt(const Offset(220, 478));
     await tester.pumpAndSettle();
     expect(rig.closes, 3);
+  });
+
+  group('a vertical swipe', () {
+    double backdrop(WidgetTester tester) =>
+        tester.widget<ColoredBox>(find.descendant(of: find.byType(PictureViewer), matching: find.byType(ColoredBox)).first).color.a;
+
+    Offset carried(WidgetTester tester) =>
+        _offsetOf(tester.widget<Transform>(find.byKey(const ValueKey('picture-thrown'))));
+
+    testWidgets('carries the picture with the finger, shrinking it while the black fades to the comments', (
+      tester,
+    ) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(backdrop(tester), 1);
+
+      final finger = await tester.startGesture(const Offset(220, 478));
+      await finger.moveBy(const Offset(0, 20));
+      await finger.moveBy(const Offset(30, 140));
+      await tester.pump();
+      expect(carried(tester).dy, greaterThan(100), reason: 'it follows the finger, sideways too');
+      expect(carried(tester).dx, greaterThan(0));
+      // 160 of a third of 956 pt: about half faded, about 80% of its size.
+      expect(backdrop(tester), closeTo(1 - 160 / (956 / 3), 0.08));
+      final scale = tester.widget<Transform>(find.byKey(const ValueKey('picture-shrunk')));
+      expect(scale.transform.entry(0, 0), closeTo(1 - 0.4 * 160 / (956 / 3), 0.04), reason: 'z keeps 1');
+      expect(tester.widget<Opacity>(find.ancestor(of: _count, matching: find.byType(Opacity)).first).opacity, lessThan(0.6));
+      await finger.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('down or up past 100 pt throws it off the screen and closes', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      await tester.timedDragFrom(const Offset(220, 478), const Offset(0, 160), const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(rig.closes, 0, reason: 'still flying');
+      await tester.pumpAndSettle();
+      expect(rig.closes, 1);
+      expect(backdrop(tester), 0);
+    });
+
+    testWidgets('up works the same', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      await tester.timedDragFrom(const Offset(220, 478), const Offset(0, -160), const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(rig.closes, 1);
+      expect(_offsetOf(tester.widget<Transform>(find.byKey(const ValueKey('picture-thrown')))).dy, -956);
+    });
+
+    testWidgets('a short flick at 1500 pt/s throws it too', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      await tester.flingFrom(const Offset(220, 478), const Offset(0, 60), 1500);
+      await tester.pumpAndSettle();
+      expect(rig.closes, 1);
+    });
+
+    testWidgets('a short slow one settles back, full size on black', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      await tester.timedDragFrom(const Offset(220, 478), const Offset(0, 60), const Duration(milliseconds: 800));
+      await tester.pumpAndSettle();
+      expect(rig.closes, 0);
+      expect(carried(tester), Offset.zero);
+      expect(backdrop(tester), 1);
+    });
+
+    testWidgets('sideways swipes still page, and a zoomed picture pans instead', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      await tester.timedDragFrom(const Offset(400, 478), const Offset(-300, 0), const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(_countText(tester), '2/3');
+      expect(rig.closes, 0);
+
+      await _doubleTap(tester, const Offset(220, 478));
+      await tester.pumpAndSettle();
+      await tester.timedDragFrom(const Offset(220, 478), const Offset(0, 200), const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(rig.closes, 0);
+      expect(backdrop(tester), 1);
+    });
+
+    testWidgets('under Reduce Motion it closes at once', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester, disableAnimations: true);
+      await tester.timedDragFrom(const Offset(220, 478), const Offset(0, 160), const Duration(milliseconds: 400));
+      await tester.pump();
+      expect(rig.closes, 1);
+    });
   });
 
   testWidgets('accessibility: each picture is 图片 i/N, and 关闭 closes', (tester) async {
