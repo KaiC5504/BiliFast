@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material;
 import 'package:flutter/services.dart';
@@ -15,6 +17,9 @@ import '../settings/settings_page.dart';
 import '../shared/release_refresh.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../skin/skin.dart';
+import '../skin/skin_model.dart';
+import '../skin/skin_video.dart';
 import '../space/space_route.dart';
 import '../space/uploader_tap.dart';
 import '../watch_later/watch_later_page.dart';
@@ -32,6 +37,7 @@ class MePage extends StatefulWidget {
     required this.active,
     this.developerPage,
     @visibleForTesting this.model,
+    @visibleForTesting this.skin,
     @visibleForTesting this.openLink = _openOutside,
     @visibleForTesting this.canOpenLink = canLaunchUrl,
   });
@@ -44,6 +50,9 @@ class MePage extends StatefulWidget {
 
   /// The model to show in place of one made from [AppScope]; the page leaves it undisposed.
   final MeModel? model;
+
+  /// The equipped 装扮 in place of [AppServices.skin].
+  final SkinModel? skin;
 
   /// Opens a link outside the app, the official app's first; false (or a throw) when it couldn't.
   final Future<bool> Function(Uri link) openLink;
@@ -69,6 +78,12 @@ class _MePageState extends State<MePage> {
   /// The header has been drawn once, so a card coming after that fades in.
   bool _headerDrawn = false;
 
+  late SkinModel _skin;
+
+  /// The 装扮's picture once it has decoded. Only then does the header take the skin's colours, so a picture that
+  /// fails leaves 87's look rather than white text on the white page.
+  File? _pictureReady;
+
   MeModel get _me => _model!;
 
   @override
@@ -76,6 +91,9 @@ class _MePageState extends State<MePage> {
     super.didChangeDependencies();
     _environment = AppScope.of(context).environment;
     if (_model != null) return;
+    _skin = widget.skin ?? AppScope.of(context).skin;
+    _skin.addListener(_skinChanged);
+    _skinChanged();
     final given = widget.model;
     if (given != null) {
       _model = given;
@@ -96,9 +114,38 @@ class _MePageState extends State<MePage> {
 
   @override
   void dispose() {
+    _skin.removeListener(_skinChanged);
     _model?.removeListener(_viewChanged);
     if (_owned) _model?.dispose();
     super.dispose();
+  }
+
+  void _skinChanged() {
+    final picture = _skin.value?.headMyself;
+    if (picture == null || picture.path == _pictureReady?.path) return;
+    var failed = false;
+    unawaited(
+      precacheImage(
+        FileImage(picture),
+        context,
+        onError: (error, _) {
+          failed = true;
+          Logger.shared.error(LogCategory.ui, 'skin picture failed', {'error': '${error.runtimeType}'});
+        },
+      ).then((_) {
+        if (failed || !mounted || _skin.value?.headMyself?.path != picture.path) return;
+        setState(() => _pictureReady = picture);
+      }),
+    );
+  }
+
+  /// The skin 我的 wears now: none logged out, nor before its picture is ready. A video comes only over its picture,
+  /// which stands in until the video draws.
+  Skin? _dress(MeView view) {
+    final skin = _skin.value;
+    if (skin == null || view is MeLoggedOut) return null;
+    final picture = skin.headMyself;
+    return picture != null && picture.path == _pictureReady?.path ? skin : null;
   }
 
   /// There is no screenshot of a failed header, so a first load that fails says why in a toast, once. Not while
@@ -144,6 +191,7 @@ class _MePageState extends State<MePage> {
   }
 
   Future<void> _refresh() async {
+    unawaited(_skin.refresh());
     _pulls++;
     final String? message;
     try {
@@ -171,44 +219,111 @@ class _MePageState extends State<MePage> {
       soon: _soon,
       openVipCentre: () => unawaited(_openVipCentre()),
     );
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
-      child: Material(
-        color: MeTheme.background,
-        child: ListenableBuilder(
-          listenable: Listenable.merge([_me, _environment]),
-          builder: (context, _) {
-            final view = _me.view;
-            final reduceMotion = MediaQuery.disableAnimationsOf(context);
-            final animate = _headerDrawn && !reduceMotion;
-            _headerDrawn = true;
-            final header = Stack(
+    return Material(
+      color: MeTheme.background,
+      child: ListenableBuilder(
+        listenable: Listenable.merge([_me, _environment, _skin]),
+        builder: (context, _) {
+          final view = _me.view;
+          final skin = _dress(view);
+          final picture = skin?.headMyself;
+          final ink = skin == null ? null : skin.color ?? (skin.lightText ? MeTheme.skinLightInk : null);
+          final reduceMotion = MediaQuery.disableAnimationsOf(context);
+          final animate = _headerDrawn && !reduceMotion;
+          _headerDrawn = true;
+          final header = Stack(
+            children: [
+              MeHeader(view: view, actions: actions, reserveCard: _reserveCard(view), animate: animate, ink: ink),
+              _TopRow(onTap: _soon, color: ink ?? MeTheme.topGlyph),
+            ],
+          );
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: skin != null && skin.lightText ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+            child: Column(
               children: [
-                MeHeader(view: view, actions: actions, reserveCard: _reserveCard(view), animate: animate),
-                _TopRow(onTap: _soon),
-              ],
-            );
-            return Column(
-              children: [
-                SizedBox(height: top),
-                // AnimatedSize can't take a zero duration, so Reduce Motion leaves it out.
-                if (reduceMotion)
-                  header
-                else
-                  AnimatedSize(
-                    duration: MeTheme.cardFade,
-                    curve: MeTheme.cardFadeCurve,
-                    alignment: Alignment.topCenter,
-                    child: header,
-                  ),
-                const SizedBox(height: MeTheme.listCut),
+                Stack(
+                  children: [
+                    if (skin != null && picture != null)
+                      Positioned.fill(
+                        child: _SkinPicture(skin: skin, picture: picture),
+                      ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(height: top),
+                        // AnimatedSize can't take a zero duration, so Reduce Motion leaves it out.
+                        if (reduceMotion)
+                          header
+                        else
+                          AnimatedSize(
+                            duration: MeTheme.cardFade,
+                            curve: MeTheme.cardFadeCurve,
+                            alignment: Alignment.topCenter,
+                            child: header,
+                          ),
+                        const SizedBox(height: MeTheme.listCut),
+                      ],
+                    ),
+                  ],
+                ),
                 Expanded(
                   child: _List(onRefresh: _refresh, onSoon: _soon, push: _push, developerPage: widget.developerPage),
                 ),
               ],
-            );
-          },
-        ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 109's picture (or its video, the picture standing in until it plays) from the screen's top to the list's: as
+/// wide as the screen and cut at the bottom, a short wide one filling the height instead and cut at both sides, as
+/// the official Android app draws `head_myself_squared_bg` and `head_myself_bg`.
+class _SkinPicture extends StatelessWidget {
+  const _SkinPicture({required this.skin, required this.picture});
+
+  final Skin skin;
+  final File picture;
+
+  @override
+  Widget build(BuildContext context) {
+    final still = Image.file(
+      picture,
+      key: const ValueKey('me-skin-picture'),
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      gaplessPlayback: true,
+      excludeFromSemantics: true,
+    );
+    final video = skin.headMyselfVideo;
+    return IgnorePointer(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (video == null)
+            still
+          else
+            SkinVideo(file: video, loop: skin.equip.colors.headMyselfVideoLoop, placeholder: still),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: MeTheme.skinFade,
+            child: DecoratedBox(
+              key: ValueKey('me-skin-fade'),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: MeTheme.skinFadeColors,
+                  stops: MeTheme.skinFadeStops,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -216,9 +331,10 @@ class _MePageState extends State<MePage> {
 
 /// 投屏, 扫一扫, 装扮 and 夜间模式, none built yet.
 class _TopRow extends StatelessWidget {
-  const _TopRow({required this.onTap});
+  const _TopRow({required this.onTap, required this.color});
 
   final VoidCallback onTap;
+  final Color color;
 
   static const _glyphs = [
     (MeTopGlyph.cast, 'me-cast', '投屏'),
@@ -250,7 +366,10 @@ class _TopRow extends StatelessWidget {
                 label: label,
                 onTap: onTap,
                 child: Center(
-                  child: CustomPaint(size: const Size.square(MeTheme.topGlyphBox), painter: MeTopGlyphPainter(glyph)),
+                  child: CustomPaint(
+                    size: const Size.square(MeTheme.topGlyphBox),
+                    painter: MeTopGlyphPainter(glyph, color: color),
+                  ),
                 ),
               ),
             ),
