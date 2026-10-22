@@ -539,6 +539,19 @@ void main() {
       expect(session.open, isFalse);
     });
 
+    test('past its timeout the request is cancelled too, as URLSession only gives up on a wait between chunks',
+        () async {
+      transport.hold = Completer<void>().future;
+      var cancelled = false;
+      final download = session.download(Uri.parse(_a), null, timeout: const Duration(milliseconds: 200));
+      unawaited(transport.sent.single.abort!.then((_) => cancelled = true));
+      await pumpEventQueue();
+      expect(cancelled, isFalse);
+      await expectLater(download, throwsA(isA<TimeoutException>()));
+      await pumpEventQueue();
+      expect(cancelled, isTrue);
+    });
+
     test("a failure on the way is a network failure whose text leaves the address out", () async {
       transport.error = _AddressedError(Uri.parse(_a));
       final failure = await session.download(Uri.parse(_a), null).then<Object?>((_) => null, onError: (Object e) => e);
@@ -553,33 +566,35 @@ void main() {
         () async {
           final hold = Completer<void>();
           transport.hold = hold.future;
-          expect(session.warm(picture: cover), isTrue);
+          final sent = session.warm(picture: cover);
+          expect(sent, isNotNull);
           final head = transport.sent.single;
           expect(head.method, 'HEAD');
           expect('${head.url}', cover);
           expect(head.headers, BiliClient.mediaHeaders);
           expect(head.headers.keys.map((name) => name.toLowerCase()), isNot(contains('cookie')));
           expect(session.warming, isTrue);
-          expect(session.warm(picture: cover), isFalse, reason: 'one is out');
+          expect(session.warm(picture: cover), isNull, reason: 'one is out');
           expect(transport.sent, hasLength(1));
 
           hold.complete();
-          await pumpEventQueue();
+          expect(await sent, isTrue);
           expect(session.warming, isFalse);
           expect(session.open, isTrue);
+          expect(logged('picture warm failed'), isEmpty);
         },
       );
 
       test('skipped while the connection answered within 10 s; sent again after', () async {
-        expect(session.warm(picture: cover), isTrue);
+        expect(session.warm(picture: cover), isNotNull);
         await pumpEventQueue();
         now = now.add(const Duration(seconds: 9));
-        expect(session.warm(picture: cover), isFalse);
+        expect(session.warm(picture: cover), isNull);
         await session.download(Uri.parse(cover), null);
         now = now.add(const Duration(seconds: 9));
-        expect(session.warm(picture: cover), isFalse, reason: 'a download answered 9 s ago');
+        expect(session.warm(picture: cover), isNull, reason: 'a download answered 9 s ago');
         now = now.add(PictureSession.keepAlive);
-        expect(session.warm(picture: cover), isTrue);
+        expect(session.warm(picture: cover), isNotNull);
         expect([for (final request in transport.sent) request.method], ['HEAD', 'GET', 'HEAD']);
       });
 
@@ -589,26 +604,24 @@ void main() {
         await session.download(Uri.parse('https://i0.hdslb.com/bfs/face/signed.jpg?sign=x'), null);
         await session.download(Uri.parse('https://archive.biliimg.com/bfs/archive/x.jpg'), null);
         now = now.add(PictureSession.keepAlive);
-        expect(session.warm(picture: cover), isTrue);
+        expect(session.warm(picture: cover), isNotNull);
         expect('${transport.sent.last.url}', face);
       });
 
       test('skipped with no picture, or one on another host', () {
-        expect(session.warm(), isFalse);
-        expect(session.warm(picture: 'https://i1.hdslb.com/bfs/archive/a.jpg'), isFalse);
-        expect(session.warm(picture: 'https://archive.biliimg.com/bfs/archive/a.jpg'), isFalse);
-        expect(session.warm(picture: 'http://i0.hdslb.com/bfs/archive/a.jpg'), isFalse);
+        expect(session.warm(), isNull);
+        expect(session.warm(picture: 'https://i1.hdslb.com/bfs/archive/a.jpg'), isNull);
+        expect(session.warm(picture: 'https://archive.biliimg.com/bfs/archive/a.jpg'), isNull);
+        expect(session.warm(picture: 'http://i0.hdslb.com/bfs/archive/a.jpg'), isNull);
         expect(transport.sent, isEmpty);
       });
 
       test('a failed warm or download leaves the connection closed, so the next refresh warms it', () async {
         transport.error = _AddressedError(Uri.parse(cover));
-        expect(session.warm(picture: cover), isTrue);
-        await pumpEventQueue();
+        expect(await session.warm(picture: cover), isFalse);
         expect(session.warming, isFalse);
         expect(session.open, isFalse);
-        expect(session.warm(picture: cover), isTrue);
-        await pumpEventQueue();
+        expect(await session.warm(picture: cover), isFalse);
 
         transport.error = null;
         await session.download(Uri.parse(cover), null);
@@ -616,7 +629,27 @@ void main() {
         transport.error = _AddressedError(Uri.parse(cover));
         await expectLater(session.download(Uri.parse(cover), null), throwsA(isA<PictureDownloadException>()));
         expect(session.open, isFalse);
-        expect(session.warm(picture: cover), isTrue);
+        expect(session.warm(picture: cover), isNotNull);
+      });
+
+      test('a failed warm warns once per reason, the reason without the address', () async {
+        transport.error = _AddressedError(Uri.parse(cover));
+        await session.warm(picture: cover);
+        await session.warm(picture: cover);
+        transport.error = TimeoutException('head');
+        await session.warm(picture: cover);
+        await session.warm(picture: cover);
+        final warnings = logged('picture warm failed').toList();
+        expect([for (final warning in warnings) warning.f['reason']?.toJson()], ['_AddressedError', 'TimeoutException']);
+        expect(warnings.map((warning) => (warning.level, warning.cat)), everyElement((LogLevel.warn, LogCategory.api)));
+        expect(warnings.map((warning) => warning.f.keys.toList()), everyElement(['reason']));
+      });
+
+      test('an Error in a warm is a bug, not a failed warm: it is thrown, not logged', () async {
+        transport.error = StateError('bug');
+        await expectLater(session.warm(picture: cover), throwsStateError);
+        expect(session.warming, isFalse);
+        expect(logged('picture warm failed'), isEmpty);
       });
     });
   });

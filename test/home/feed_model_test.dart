@@ -11,15 +11,19 @@ import 'package:flutter_test/flutter_test.dart';
 import '../playback/fakes.dart';
 import 'feed_fakes.dart';
 
-/// Stands in for the iPhone's picture connection: records each request and answers it at once, or once [hold] does.
+/// Stands in for the iPhone's picture connection: records each request and answers it at once, or once [hold] does;
+/// [error] is thrown in place of an answer.
 final class _PictureHttp implements HTTPTransport {
   final sent = <HTTPRequest>[];
   Future<void>? hold;
+  Object? error;
 
   @override
   Future<HTTPResponse> send(HTTPRequest request) async {
     sent.add(request);
     await hold;
+    final failure = error;
+    if (failure != null) throw failure;
     return HTTPResponse(status: 200, headers: const {}, body: Uint8List(0), finalURL: request.url);
   }
 }
@@ -579,6 +583,7 @@ void main() {
         'thirdMs': 310,
         'lastMs': 700,
         'warm': true,
+        'warmed': 'ok',
         'early': false,
       });
       expect(lines('feed covers').last.f.keys, unorderedEquals(['ready', 'failed', 'of', 'early']));
@@ -600,6 +605,7 @@ void main() {
         'lastMs': 0,
         'warm': false,
         'warming': true,
+        'warmed': 'pending',
         'early': false,
       });
 
@@ -609,7 +615,38 @@ void main() {
       await pumpEventQueue();
       expect(done(), hasLength(3));
       expect(done().last['warm'], false);
+      expect(done().last['warmed'], 'none');
       expect(done().last.containsKey('warming'), isFalse);
+    });
+
+    test("the line says what the refresh's warm came to: none when it sent none, failed apart from ok", () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = connected();
+      await feed.refresh();
+      await pumpEventQueue();
+      expect(done().last['warmed'], 'none', reason: 'no picture shown yet to ask for');
+
+      now = now.add(const Duration(minutes: 1));
+      pictureHttp.error = TimeoutException('head');
+      http.pages[1] = [feedItem('BV2')];
+      await feed.refresh();
+      await pumpEventQueue();
+      expect(pictureHttp.sent, hasLength(1));
+      expect(done().last['warm'], false);
+      expect(done().last['warmed'], 'failed');
+
+      pictureHttp.error = null;
+      http.pages[1] = [feedItem('BV3')];
+      await feed.refresh();
+      await pumpEventQueue();
+      expect(done().last['warmed'], 'ok');
+
+      http.pages[1] = [feedItem('BV4')];
+      await feed.refresh();
+      await pumpEventQueue();
+      expect(pictureHttp.sent, hasLength(2), reason: 'answered moments ago: no warm sent');
+      expect(done().last['warm'], true);
+      expect(done().last['warmed'], 'none');
     });
 
     test("a held pull's covers count from when its page came in, and the line says early", () async {
@@ -641,6 +678,7 @@ void main() {
         'thirdMs': 1000,
         'lastMs': 1000,
         'warm': true,
+        'warmed': 'ok',
         'early': true,
       });
     });
@@ -662,7 +700,16 @@ void main() {
         expect(done(), isEmpty);
         async.elapse(const Duration(seconds: 1));
         expect(done(), [
-          {'of': 2, 'ready': 1, 'failed': 0, 'lastMs': 400, 'warm': false, 'early': false, 'timedOut': true},
+          {
+            'of': 2,
+            'ready': 1,
+            'failed': 0,
+            'lastMs': 400,
+            'warm': false,
+            'warmed': 'none',
+            'early': false,
+            'timedOut': true,
+          },
         ]);
 
         http.pages[1] = [feedItem('BV3')];
@@ -674,6 +721,33 @@ void main() {
         expect(async.pendingTimers, isEmpty);
         async.elapse(const Duration(seconds: 11));
         expect(done(), hasLength(1));
+      });
+    });
+
+    test('a model disposed while page 1 is out asks for no covers when the page lands, logs nothing and leaves no '
+        'timer', () {
+      fakeAsync((async) {
+        final start = DateTime(2026, 10, 23, 12);
+        final feed = connected(clock: () => start.add(async.elapsed));
+        var asked = false;
+        feed.beforeShow = (_) {
+          asked = true;
+          return CoverPrefetch([Completer<bool>().future]);
+        };
+        http.pages[1] = [feedItem('BV1')];
+        final gate = http.gates[1] = Completer<void>();
+        String? result = 'unfinished';
+        unawaited(feed.refresh().then((value) => result = value));
+        async.flushMicrotasks();
+        feed.dispose();
+        gate.complete();
+        async.flushMicrotasks();
+        expect(result, isNull);
+        expect(asked, isFalse);
+        expect(feed.cards, isEmpty);
+        expect(async.pendingTimers, isEmpty);
+        async.elapse(const Duration(seconds: 11));
+        expect(logs.events, isEmpty);
       });
     });
   });

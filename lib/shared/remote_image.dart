@@ -11,7 +11,7 @@ import 'image_disk_cache.dart';
 import 'theme.dart';
 
 /// Bilibili's JSON hands out `//host/path` and `http://` addresses; iOS wants https. Pictures on i1 and i2 are asked
-/// from i0 ([PictureSession.host]), which serves the same paths, so one connection carries every picture.
+/// from i0 ([PictureSession.host]), which serves the same paths, so one connection carries them all.
 String secureImageUrl(String url) {
   final secure = url.startsWith('//')
       ? 'https:$url'

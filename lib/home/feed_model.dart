@@ -67,6 +67,7 @@ class _EarlyPage {
     required this.official,
     required this.token,
     required this.started,
+    required this.warm,
     required this.page,
   });
 
@@ -76,6 +77,9 @@ class _EarlyPage {
   final AppToken? token;
 
   final DateTime started;
+
+  /// The warm sent as the pull armed; the release that takes this page sends none.
+  final _Warm warm;
   final Future<_Page> page;
 
   /// When it answered or failed; null while still out.
@@ -93,6 +97,18 @@ class _EarlyPage {
 
 /// Why a refresh asked for no covers for its cards.
 enum CoverSkip { noGrid, unmounted, noLayout, noRows }
+
+/// A refresh's [PictureSession.warm]: [none] when it sent none (the connection was open, one was already out, there
+/// was no picture to ask for, or no session).
+enum _WarmState { none, pending, ok, failed }
+
+class _Warm {
+  _Warm(Future<bool>? sent) : state = sent == null ? _WarmState.none : _WarmState.pending {
+    if (sent != null) unawaited(sent.then((ok) => state = ok ? _WarmState.ok : _WarmState.failed));
+  }
+
+  _WarmState state;
+}
 
 /// What [FeedModel.beforeShow] started for a refresh's cards: a future per cover it asked for, true once that cover
 /// is ready and false if it failed; or, having asked for none, why.
@@ -193,7 +209,7 @@ class FeedModel extends ChangeNotifier {
   /// trigger. Within it an arming asks nothing, so wiggling across the trigger costs one call.
   static const earlyReuse = Duration(seconds: 10);
 
-  /// How long after its covers were asked for a page shown logs `feed covers done` with some still out.
+  /// A shown page logs `feed covers done` this long after asking for its covers, if some are still out.
   static const coversDoneAfter = Duration(seconds: 10);
 
   /// Pages in a row that may add nothing before a load more gives up and the feed counts as [exhausted].
@@ -270,13 +286,13 @@ class FeedModel extends ChangeNotifier {
     final mine = ++_generation;
     _loading = true;
     _officialRefused = false;
-    if (early == null) _openPictures();
+    final warm = early == null ? _openPictures() : early.warm;
     _notify();
     final heldMs = early == null ? null : _now().difference(early.started).inMilliseconds;
     String? failure;
     try {
       final page = await (early?.page ?? _fetch(refresh: true));
-      if (mine != _generation) return null;
+      if (_disposed || mine != _generation) return null;
       if (early != null && early.official && page.source == FeedSource.web) _officialRefused = true;
       final fresh = _appending(page.cards, const []);
       _logPage(page, fresh.length);
@@ -287,7 +303,7 @@ class FeedModel extends ChangeNotifier {
         // A held pull's covers were asked for when its page came in; those are the ones that can be ready by now.
         final shown = early?.covers ?? asked;
         _logCovers(shown, heldMs: heldMs);
-        if (shown != null) _whenCoversDone(shown, early: heldMs != null);
+        if (shown != null) _whenCoversDone(shown, early: heldMs != null, warm: warm);
         _cards = fresh;
         _advance(page);
         _source = page.source;
@@ -296,7 +312,7 @@ class FeedModel extends ChangeNotifier {
         _exhausted = false;
       }
     } catch (error) {
-      if (mine != _generation) return null;
+      if (_disposed || mine != _generation) return null;
       _logger.warn(LogCategory.ui, 'feed refresh failed', feedLogFields(error));
       failure = requestFailureMessage(error);
     }
@@ -324,7 +340,7 @@ class FeedModel extends ChangeNotifier {
       var added = 0;
       for (var attempt = 0; attempt < _emptyPagesAllowed && added == 0; attempt++) {
         final page = await _fetch(refresh: false);
-        if (mine != _generation) return;
+        if (_disposed || mine != _generation) return;
         final before = _cards.length;
         _cards = _appending(page.cards, _cards);
         _advance(page);
@@ -334,7 +350,7 @@ class FeedModel extends ChangeNotifier {
       }
       _exhausted = added == 0;
     } catch (error) {
-      if (mine != _generation) return;
+      if (_disposed || mine != _generation) return;
       _logger.warn(LogCategory.ui, 'feed load more failed', feedLogFields(error));
       _error = requestFailureMessage(error);
     } finally {
@@ -359,12 +375,13 @@ class FeedModel extends ChangeNotifier {
       _warm(held);
       return;
     }
-    _openPictures();
+    final warm = _openPictures();
     final early = _EarlyPage(
       generation: _generation,
       official: _officialPossible,
       token: _client.appToken,
       started: _now(),
+      warm: warm,
       page: _fetch(refresh: true, early: true),
     );
     _early = early;
@@ -380,7 +397,9 @@ class FeedModel extends ChangeNotifier {
           early
             ..landed = _now()
             ..failed = true;
-          if (identical(_early, early)) _logger.warn(LogCategory.ui, 'feed early page failed', feedLogFields(error));
+          if (!_disposed && identical(_early, early)) {
+            _logger.warn(LogCategory.ui, 'feed early page failed', feedLogFields(error));
+          }
         },
       ),
     );
@@ -428,9 +447,9 @@ class FeedModel extends ChangeNotifier {
 
   /// Opens the picture connection while page 1 is out, so the covers it brings start on it. Before any picture has
   /// downloaded, the top card's cover is the one asked for.
-  void _openPictures() {
+  _Warm _openPictures() {
     final cover = _cards.firstOrNull?.cover;
-    _pictures()?.warm(picture: cover == null || cover.isEmpty ? null : secureImageUrl(cover));
+    return _Warm(_pictures()?.warm(picture: cover == null || cover.isEmpty ? null : secureImageUrl(cover)));
   }
 
   /// Hands [fresh] to [beforeShow]; null if it threw, which goes to the crash log.
@@ -464,10 +483,11 @@ class FeedModel extends ChangeNotifier {
     });
   }
 
-  /// Once a shown page's covers are all ready or failed, or [coversDoneAfter] after they were asked for: when the 3rd
-  /// and the last ready one came (ms after asking), and whether the picture connection was open or opening then.
-  void _whenCoversDone(_CoverCount count, {required bool early}) {
-    if (count.of == 0) return;
+  /// Logs `feed covers done` once a shown page's covers are all ready or failed, or [coversDoneAfter] after they were
+  /// asked for: when the 3rd and the last ready one came (ms after asking), whether the picture connection was open or
+  /// opening then, and what the page's [warm] came to.
+  void _whenCoversDone(_CoverCount count, {required bool early, required _Warm warm}) {
+    if (count.of == 0 || _disposed) return;
     var logged = false;
     void log() {
       if (logged || _disposed) return;
@@ -480,6 +500,7 @@ class FeedModel extends ChangeNotifier {
         'lastMs': ?count.readyMs.lastOrNull,
         'warm': count.warm,
         if (count.warming) 'warming': true,
+        'warmed': warm.state.name,
         'early': early,
         if (!count.finished) 'timedOut': true,
       });

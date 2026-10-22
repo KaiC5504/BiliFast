@@ -404,11 +404,11 @@ class ImageDiskCache {
 }
 
 /// The iPhone's picture downloads, all through one URLSession, so HTTP/2 carries them over one connection it keeps
-/// open. dart:io opened a connection per picture, each paying the CDN's ~0.4 s handshake.
+/// open. dart:io opens a connection per picture in flight, each paying the CDN's ~0.4 s handshake.
 final class PictureSession {
   PictureSession(this._transport, {DateTime Function()? now}) : _now = now ?? DateTime.now;
 
-  /// The host every Bilibili picture is asked from: i0 serves i1's and i2's paths, so one connection carries them all.
+  /// The host every i0-i2 picture is asked from: i0 serves i1's and i2's paths, so one connection carries them all.
   static const host = 'i0.hdslb.com';
 
   /// The longest wait for an answer's headers, or between its body's chunks; the request is cancelled past it.
@@ -424,8 +424,11 @@ final class PictureSession {
   String? _lastPicture;
   bool _warming = false;
 
-  /// The app's on the iPhone, ephemeral (this folder is the cache) and without cookies (the CDN takes none); null
-  /// elsewhere, and when URLSession can't be reached.
+  /// Why warms failed this run, each warned of once: a network that refuses one refuses every refresh's.
+  final _warmFailures = <String>{};
+
+  /// The app's on the iPhone, ephemeral (ImageDiskCache's folder is the cache) and without cookies (the CDN takes
+  /// none); null elsewhere, and when URLSession can't be reached.
   static PictureSession? platform() {
     if (!Platform.isIOS) return null;
     try {
@@ -457,11 +460,19 @@ final class PictureSession {
     Map<String, String>? headers, {
     Duration timeout = ImageDiskCache.downloadTimeout,
   }) async {
+    final abort = Completer<void>();
     final HTTPResponse response;
     try {
       response = await _transport
-          .send(HTTPRequest(url: url, headers: {...?headers}, timeout: requestTimeout))
-          .timeout(timeout, onTimeout: () => throw TimeoutException('picture download', timeout));
+          .send(HTTPRequest(url: url, headers: {...?headers}, timeout: requestTimeout, abort: abort.future))
+          .timeout(
+            timeout,
+            onTimeout: () {
+              // The transport gives up only on a 15 s wait between chunks, so a trickling body would run on.
+              abort.complete();
+              throw TimeoutException('picture download', timeout);
+            },
+          );
     } on TimeoutException {
       _answered = null;
       rethrow;
@@ -476,28 +487,32 @@ final class PictureSession {
   }
 
   /// Opens the connection ahead of pictures about to be asked for: a HEAD for the last picture downloaded, or for
-  /// [picture] before any was. Skipped while one is out, while the connection is [open], and for a picture on another
-  /// host. True if sent.
-  bool warm({String? picture}) {
-    if (_warming || open) return false;
+  /// [picture] before any was. Skipped (null) while one is out, while the connection is [open], and for a picture on
+  /// another host. Once sent, completes true when answered and false when it failed; an [Error] is not caught.
+  Future<bool>? warm({String? picture}) {
+    if (_warming || open) return null;
     final address = _lastPicture ?? picture;
     final url = address == null ? null : Uri.tryParse(address);
-    if (url == null || url.scheme != 'https' || url.host != host) return false;
+    if (url == null || url.scheme != 'https' || url.host != host) return null;
     _warming = true;
-    unawaited(
-      _transport
-          .send(HTTPRequest(url: url, method: 'HEAD', headers: BiliClient.mediaHeaders, timeout: requestTimeout))
-          .then<void>(
-            (_) {
-              _answered = _now();
-            },
-            onError: (Object _) {
-              _answered = null;
-            },
-          )
-          .whenComplete(() => _warming = false),
-    );
-    return true;
+    return _warm(url);
+  }
+
+  Future<bool> _warm(Uri url) async {
+    try {
+      await _transport.send(
+        HTTPRequest(url: url, method: 'HEAD', headers: BiliClient.mediaHeaders, timeout: requestTimeout),
+      );
+      _answered = _now();
+      return true;
+    } on Exception catch (error) {
+      _answered = null;
+      final reason = PictureDownloadException.of(error).reason;
+      if (_warmFailures.add(reason)) Logger.shared.warn(LogCategory.api, 'picture warm failed', {'reason': reason});
+      return false;
+    } finally {
+      _warming = false;
+    }
   }
 }
 
