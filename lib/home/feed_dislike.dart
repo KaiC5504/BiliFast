@@ -180,7 +180,7 @@ class FeedDislikedCard extends StatelessWidget {
                             sigmaY: FeedDislikeTheme.coverBlur,
                             tileMode: TileMode.clamp,
                           ),
-                          child: RemoteImage(card.cover),
+                          child: RemoteImage(card.cover, cdnSuffix: BiliMetrics.feedCoverSuffix),
                         ),
                       ),
                       const ColoredBox(color: FeedDislikeTheme.coverShade),

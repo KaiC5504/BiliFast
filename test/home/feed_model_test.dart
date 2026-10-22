@@ -220,7 +220,8 @@ void main() {
       expect(line.f.keys, unorderedEquals(['ready', 'failed', 'of', 'waitedMs', 'timedOut']), reason: 'no address');
     });
 
-    test('they are waited on for at most coverWait after the answer; the slow ones are neither ready nor failed', () {
+    test('they are waited on for at most 300 ms after the answer; the slow ones are neither ready nor failed', () {
+      expect(FeedModel.coverWait, const Duration(milliseconds: 300));
       fakeAsync((async) {
         http.pages[1] = [feedItem('BV1')];
         final feed = make()

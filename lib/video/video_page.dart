@@ -1631,8 +1631,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return Size(width, width / BiliMetrics.videoAspect);
   }
 
-  /// The card's image, already loaded at the card's size, flies; the page's cover, the same download as the page's
-  /// own, fades in over it once it arrives.
+  /// The card's image, already loaded as the card asked for it (its size, or its CDN suffix), flies; the page's cover,
+  /// the same download as the page's own, fades in over it once it arrives.
   Widget _coverInFlight(
     BuildContext flight,
     Animation<double> animation,
@@ -1641,12 +1641,17 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     BuildContext to,
   ) {
     final cover = widget.route.cover;
-    final card = (direction == HeroFlightDirection.push ? from : to).findRenderObject();
+    final cardHero = direction == HeroFlightDirection.push ? from : to;
+    final card = cardHero.findRenderObject();
     final cardSize = card is RenderBox && card.hasSize ? card.size : null;
+    final cardSuffix = switch (cardHero.widget) {
+      Hero(child: RemoteImage(:final cdnSuffix)) => cdnSuffix,
+      _ => null,
+    };
     return RemoteImage(
       cover,
       size: _coverSize(flight),
-      placeholder: cardSize == null ? null : RemoteImage(cover, size: cardSize),
+      placeholder: cardSize == null ? null : RemoteImage(cover, size: cardSize, cdnSuffix: cardSuffix),
     );
   }
 }

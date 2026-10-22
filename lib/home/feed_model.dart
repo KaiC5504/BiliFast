@@ -92,8 +92,9 @@ class FeedModel extends ChangeNotifier {
   static const emptyMessage = '暂时没有推荐的视频';
   static const endMessage = '没有更多了';
 
-  /// How long a refresh's answer waits for [beforeShow]'s covers before its cards show anyway.
-  static const coverWait = Duration(milliseconds: 800);
+  /// How long a refresh's answer waits for [beforeShow]'s covers before its cards show anyway, a late cover popping
+  /// in over its placeholder: the official app's whole hold, call and covers, is about 1.0 s.
+  static const coverWait = Duration(milliseconds: 300);
 
   /// Pages in a row that may add nothing before a load more gives up and the feed counts as [exhausted].
   static const _emptyPagesAllowed = 3;

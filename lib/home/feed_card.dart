@@ -26,9 +26,6 @@ abstract final class FeedCardSize {
   /// The whole card for a column [width] wide: 4:3 cover, two title lines, the footer and their gaps.
   static double height(double width, TextScaler scaler) =>
       width / BiliMetrics.coverAspect + BiliMetrics.cardTitleTop + titleHeight(scaler) + footerHeight;
-
-  /// The cover's box on a card [width] wide: the size its picture is asked for at.
-  static Size cover(double width) => Size(width, width / BiliMetrics.coverAspect);
 }
 
 /// One 推荐 card (01, port of FeedCard.swift): the cover with counts and duration, a two-line title, and the tag,
@@ -59,6 +56,10 @@ class FeedCardView extends StatefulWidget {
 
   /// The reasons sheet's pick.
   final ValueChanged<FeedReason>? onReason;
+
+  /// Gets [url] ready as a card's cover asks for it, so the card draws it the frame it comes.
+  static Future<bool> precacheCover(BuildContext context, String? url) =>
+      RemoteImage.precache(context, url, cdnSuffix: BiliMetrics.feedCoverSuffix);
 
   /// Covers say 0:18, not 00:18 (01).
   static String duration(int seconds) {
@@ -264,6 +265,7 @@ class _Cover extends StatelessWidget {
           // A cover still loading is the official flat grey with no shade, and a late one pops in (14).
           child: RemoteImage(
             card.cover,
+            cdnSuffix: BiliMetrics.feedCoverSuffix,
             placeholder: const CoverPlaceholder(),
             fadeIn: false,
             overlay: const Align(

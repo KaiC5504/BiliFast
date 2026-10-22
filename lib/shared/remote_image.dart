@@ -19,11 +19,15 @@ String secureImageUrl(String url) {
 
 /// [url] from Bilibili's image CDN scaled and cropped there to [width]×[height] px (`@…w_…h_1c.webp`), so a feed card
 /// downloads tens of KB instead of the full-size cover.
-String sizedImageUrl(String url, {required int width, required int height}) {
+String sizedImageUrl(String url, {required int width, required int height}) =>
+    suffixedImageUrl(url, '@${width}w_${height}h_1c.webp');
+
+/// [url] with the CDN's processing [suffix] (`@…`), on Bilibili's image hosts and only where the address has none yet.
+String suffixedImageUrl(String url, String suffix) {
   final secure = secureImageUrl(url);
   final uri = Uri.tryParse(secure);
   if (uri == null || !uri.host.endsWith('hdslb.com') || uri.hasQuery || uri.path.contains('@')) return secure;
-  return '$secure@${width}w_${height}h_1c.webp';
+  return '$secure$suffix';
 }
 
 /// Fills the box it is given with the image, grey (or [placeholder]) until it arrives and then faded in. Sizes are
@@ -40,6 +44,7 @@ class RemoteImage extends StatelessWidget {
     this.fallback,
     this.fadeIn = true,
     this.overlay,
+    this.cdnSuffix,
   });
 
   /// An avatar: Bilibili's default face while it loads, if it fails and when there is none.
@@ -48,7 +53,8 @@ class RemoteImage extends StatelessWidget {
       placeholder = null,
       fallback = const DefaultAvatar(),
       fadeIn = true,
-      overlay = null;
+      overlay = null,
+      cdnSuffix = null;
 
   final String? url;
   final BoxFit fit;
@@ -56,6 +62,10 @@ class RemoteImage extends StatelessWidget {
   /// Asks for the image at this size instead of the box's, so a box that changes size every frame (a Hero flight)
   /// keeps one download.
   final Size? size;
+
+  /// The CDN's suffix (`@…`) asked for in place of the box's size rounded up, whatever the box: a size the CDN keeps
+  /// pre-made answers sooner.
+  final String? cdnSuffix;
 
   /// Shown instead of the grey until the image arrives, and if it fails.
   final Widget? placeholder;
@@ -85,7 +95,7 @@ class RemoteImage extends StatelessWidget {
     final Widget image;
     if (source == null || source.isEmpty) {
       image = instead ?? const SizedBox.expand();
-    } else if (fixed != null) {
+    } else if (fixed != null || cdnSuffix != null) {
       image = _image(context, source, fixed);
     } else {
       image = LayoutBuilder(builder: (context, constraints) => _image(context, source, constraints.biggest));
@@ -95,11 +105,11 @@ class RemoteImage extends StatelessWidget {
     return Stack(fit: StackFit.expand, children: [under, image]);
   }
 
-  /// Fetches and decodes [url] as a RemoteImage of [logical] size shows it, so that box shows it at once. True once
-  /// it is ready, false if it failed or there is none; never throws.
-  static Future<bool> precache(BuildContext context, String? url, Size logical) async {
+  /// Fetches and decodes [url] as a RemoteImage of [size] or [cdnSuffix] shows it, so that box shows it at once. True
+  /// once it is ready, false if it failed or there is none; never throws.
+  static Future<bool> precache(BuildContext context, String? url, {Size? size, String? cdnSuffix}) async {
     if (url == null || url.isEmpty) return false;
-    final address = _address(context, url, logical);
+    final address = _address(context, url, size, cdnSuffix);
     var ok = true;
     // Without an onError, precacheImage hands the failure to FlutterError, and CrashLog would log the signed address.
     await precacheImage(
@@ -113,16 +123,17 @@ class RemoteImage extends StatelessWidget {
     return ok;
   }
 
-  static String _address(BuildContext context, String source, Size logical) {
-    final ratio = MediaQuery.devicePixelRatioOf(context);
-    return sizedImageUrl(source, width: _bucket(logical.width * ratio), height: _bucket(logical.height * ratio));
+  static String _address(BuildContext context, String source, Size? logical, String? suffix) {
+    if (suffix != null) return suffixedImageUrl(source, suffix);
+    final pixels = (logical ?? Size.infinite) * MediaQuery.devicePixelRatioOf(context);
+    return sizedImageUrl(source, width: _bucket(pixels.width), height: _bucket(pixels.height));
   }
 
   static StoredNetworkImage _provider(String address, String source) =>
       StoredNetworkImage(address, headers: BiliClient.mediaHeaders, still: !animates(source));
 
-  Widget _image(BuildContext context, String source, Size logical) => _Picture(
-    image: _provider(_address(context, source, logical), source),
+  Widget _image(BuildContext context, String source, Size? logical) => _Picture(
+    image: _provider(_address(context, source, logical, cdnSuffix), source),
     fit: fit,
     fallback: fallback,
     fadeIn: fadeIn,
