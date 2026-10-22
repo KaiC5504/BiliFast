@@ -3,30 +3,20 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// A 1×1 GIF of two frames, 100 ms each, looping forever: a red pixel, then a blue one.
-final _animatedGif = Uint8List.fromList([
-  ...'GIF89a'.codeUnits,
-  0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, // 1×1, a global table of two colours
-  0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF,
-  0x21, 0xFF, 0x0B, ...'NETSCAPE2.0'.codeUnits, 0x03, 0x01, 0x00, 0x00, 0x00, // loop forever
-  for (final pixel in [0x44, 0x4C]) ...[
-    0x21, 0xF9, 0x04, 0x00, 0x0A, 0x00, 0x00, 0x00, // 100 ms
-    0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-    0x02, 0x02, pixel, 0x01, 0x00, // colour 0, then colour 1
-  ],
-  0x3B,
-]);
+import 'stored_pictures.dart';
 
-/// Answers every image request with [_animatedGif]; nothing reaches the network. While [hold] is pending, answers
+/// Answers every image request with [animatedGif]; nothing reaches the network. While [hold] is pending, answers
 /// wait for it.
 final class _GifClient implements HttpClient {
   final asked = <Uri>[];
   Future<void>? hold;
+  int aborted = 0;
 
   @override
   bool autoUncompress = false;
@@ -34,7 +24,7 @@ final class _GifClient implements HttpClient {
   @override
   Future<HttpClientRequest> getUrl(Uri url) async {
     asked.add(url);
-    return _GifRequest(hold);
+    return _GifRequest(this, hold);
   }
 
   @override
@@ -42,8 +32,9 @@ final class _GifClient implements HttpClient {
 }
 
 final class _GifRequest implements HttpClientRequest {
-  _GifRequest(this._hold);
+  _GifRequest(this._client, this._hold);
 
+  final _GifClient _client;
   final Future<void>? _hold;
 
   @override
@@ -54,6 +45,9 @@ final class _GifRequest implements HttpClientRequest {
     await _hold;
     return _GifResponse();
   }
+
+  @override
+  void abort([Object? exception, StackTrace? stackTrace]) => _client.aborted++;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -72,7 +66,7 @@ final class _GifResponse extends Stream<List<int>> implements HttpClientResponse
   int get statusCode => HttpStatus.ok;
 
   @override
-  int get contentLength => _animatedGif.length;
+  int get contentLength => animatedGif.length;
 
   @override
   HttpClientResponseCompressionState get compressionState => HttpClientResponseCompressionState.notCompressed;
@@ -84,7 +78,7 @@ final class _GifResponse extends Stream<List<int>> implements HttpClientResponse
     void Function()? onDone,
     bool? cancelOnError,
   }) =>
-      Stream.value(_animatedGif as List<int>)
+      Stream.value(animatedGif as List<int>)
           .listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
 
   @override
@@ -172,16 +166,51 @@ void main() {
     );
   });
 
+  testWidgets('a download that stalls gives up after 30 s, logged by kind with the host and path only', (tester) async {
+    final logs = MemorySink();
+    Logger.shared.add(logs);
+    addTearDown(() => Logger.shared.remove(logs));
+    final client = _GifClient()..hold = Completer<void>().future;
+    debugNetworkImageHttpClientProvider = () => client;
+    try {
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: SizedBox.square(
+              dimension: 40,
+              child: RemoteImage('https://i5.hdslb.com/bfs/archive/stalled.jpg?sign=SECRET'),
+            ),
+          ),
+        ),
+      );
+      Iterable<LogEvent> failures() => logs.events.where((event) => event.msg == 'image failed');
+      await tester.pump(const Duration(seconds: 29));
+      expect(failures(), isEmpty);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      final failure = failures().single;
+      expect(failure.f['error']?.toJson(), 'TimeoutException');
+      expect(failure.f['host']?.toJson(), 'i5.hdslb.com');
+      expect(failure.f['path']?.toJson(), '/bfs/archive/stalled.jpg');
+      expect(client.aborted, 1, reason: 'the connection is closed');
+    } finally {
+      debugNetworkImageHttpClientProvider = null;
+    }
+  });
+
   group('with pictures kept on the phone', () {
     const url = 'https://i0.hdslb.com/bfs/archive/kept.jpg@240w_180h_1c.webp';
     late Directory folder;
     late ImageDiskCache cache;
     late List<Uint8List> answers;
     late int downloads;
+    Object? failure;
 
     setUp(() {
       answers = [];
       downloads = 0;
+      failure = null;
     });
 
     tearDown(() => ImageDiskCache.shared = null);
@@ -192,6 +221,7 @@ void main() {
         folder: folder.path,
         fetch: (_, _) async {
           downloads++;
+          if (failure case final failure?) throw failure;
           return answers.removeAt(0);
         },
       );
@@ -229,7 +259,7 @@ void main() {
 
     testWidgets('a picture the memory cache let go comes back from storage, not the network', (tester) async {
       await keep(tester);
-      answers.add(_animatedGif);
+      answers.add(animatedGif);
       expect(await resolve(tester, const StoredNetworkImage(url)), isA<ImageInfo>());
       PaintingBinding.instance.imageCache
         ..clear()
@@ -253,9 +283,29 @@ void main() {
       expect(cache.fileOf(url).existsSync(), isFalse);
       await tester.pump();
 
-      answers.add(_animatedGif);
+      answers.add(animatedGif);
       expect(await resolve(tester, const StoredNetworkImage(url)), isA<ImageInfo>());
       expect(downloads, 2);
+      await drop(tester);
+    });
+
+    testWidgets('a picture got ready ahead that fails answers false, logged once by host and status', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await keep(tester);
+      const refused = 'https://i3.hdslb.com/bfs/archive/refused.jpg';
+      failure = NetworkImageLoadException(statusCode: 403, uri: Uri.parse(refused));
+      await tester.pumpWidget(const SizedBox());
+      final context = tester.element(find.byType(SizedBox));
+      for (var ask = 0; ask < 2; ask++) {
+        expect(await tester.runAsync(() => RemoteImage.precache(context, refused, const Size(160, 100))), isFalse);
+      }
+      expect(downloads, 2);
+      final warning = logs.events.where((event) => event.msg == 'image failed').single;
+      expect(warning.f['host']?.toJson(), 'i3.hdslb.com');
+      expect(warning.f['status']?.toJson(), 403);
+      expect('${warning.f['path']?.toJson()}', startsWith('/bfs/archive/refused.jpg@'));
       await drop(tester);
     });
   });
@@ -369,7 +419,7 @@ void main() {
       await arrive(tester);
       await show(tester, const SizedBox());
       await show(tester, image);
-      expect(find.byType(AnimatedOpacity), findsNothing, reason: 'shown at once, with no fade');
+      expect(client.asked, hasLength(1), reason: 'shown again from memory, not downloaded');
       expect(defaultFace, findsNothing);
 
       final release = await comeBack(tester, image);
@@ -378,6 +428,26 @@ void main() {
       release.complete();
       await arrive(tester);
       expect(defaultFace, findsNothing);
+    });
+
+    testPicture('an avatar given a new address shows the default face until the new face is in', (tester) async {
+      final defaultFace = find.byKey(const ValueKey('default-avatar'));
+      await show(tester, const RemoteImage.avatar('https://i0.hdslb.com/bfs/face/before.jpg'));
+      await arrive(tester);
+      expect(defaultFace, findsNothing);
+
+      final release = Completer<void>();
+      client.hold = release.future;
+      await show(tester, const RemoteImage.avatar('https://i0.hdslb.com/bfs/face/after.jpg'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(defaultFace, findsOneWidget);
+      expect(opacity(tester), 0);
+
+      release.complete();
+      await arrive(tester);
+      expect(defaultFace, findsNothing);
+      expect(opacity(tester), 1);
+      expect(client.asked, hasLength(2));
     });
 
     testPicture('a new address still fades in', (tester) async {

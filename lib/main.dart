@@ -110,7 +110,7 @@ Future<void> main(List<String> args) async {
     ImageDiskCache.shared = imageCache;
     unawaited(imageCache.start());
   } catch (error, stack) {
-    // Pictures then come from the network every time, as they did before the cache.
+    // Without the cache, pictures come from the network every time.
     CrashLog.report(error, stack, source: 'image cache');
   }
   final services = AppServices(

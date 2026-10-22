@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show IOException;
 import 'dart:ui' as ui;
 
 import 'package:bili_core/api.dart';
@@ -98,8 +99,17 @@ class RemoteImage extends StatelessWidget {
   /// it is ready, false if it failed or there is none; never throws.
   static Future<bool> precache(BuildContext context, String? url, Size logical) async {
     if (url == null || url.isEmpty) return false;
+    final address = _address(context, url, logical);
     var ok = true;
-    await precacheImage(_provider(_address(context, url, logical), url), context, onError: (_, _) => ok = false);
+    // Without an onError, precacheImage hands the failure to FlutterError, and CrashLog would log the signed address.
+    await precacheImage(
+      _provider(address, url),
+      context,
+      onError: (error, _) {
+        ok = false;
+        _logFailure(address, error);
+      },
+    );
     return ok;
   }
 
@@ -143,11 +153,10 @@ class RemoteImage extends StatelessWidget {
   }
 }
 
-/// A network picture through [ImageDiskCache.shared] (straight from the network without one, as [NetworkImage]),
-/// only its first frame unless it moves. The CDN serves a GIF original (a cover, a face) as an animated webp through
+/// A network picture through [ImageDiskCache.shared] (straight from the network without one, as [NetworkImage]).
+/// [still] shows only its first frame: the CDN serves a GIF original (a cover, a face) as an animated webp through
 /// the size suffix, and a moving picture decodes a frame every few tens of ms for as long as it is on screen. A still
-/// one is cached under its own type, so it never shares an entry with the moving one; a moving one under the
-/// [NetworkImage] of its address.
+/// one is cached under its own key, so it never shares an entry with the moving one.
 class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkImage {
   const StoredNetworkImage(this.url, {this.headers, this.still = true});
 
@@ -165,9 +174,11 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
   @override
   WebHtmlElementStrategy get webHtmlElementStrategy => WebHtmlElementStrategy.never;
 
+  /// What the image cache holds this picture under.
+  NetworkImage get cacheKey => still ? this : NetworkImage(url, headers: headers);
+
   @override
-  Future<NetworkImage> obtainKey(ImageConfiguration configuration) =>
-      SynchronousFuture<NetworkImage>(still ? this : NetworkImage(url, headers: headers));
+  Future<NetworkImage> obtainKey(ImageConfiguration configuration) => SynchronousFuture<NetworkImage>(cacheKey);
 
   @override
   ImageStreamCompleter loadImage(NetworkImage key, ImageDecoderCallback decode) {
@@ -175,7 +186,8 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
     completer.addEphemeralErrorListener((error, _) {
       // A failed picture must not stay failed in the cache, nor a stored copy that didn't decode be read again.
       scheduleMicrotask(() => PaintingBinding.instance.imageCache.evict(key));
-      if (error is! NetworkImageLoadException) unawaited(ImageDiskCache.shared?.forget(url));
+      final network = error is NetworkImageLoadException || error is TimeoutException || error is IOException;
+      if (!network) unawaited(ImageDiskCache.shared?.forget(url));
     });
     return completer;
   }
@@ -296,6 +308,13 @@ class _FadeOver extends StatefulWidget {
 class _FadeOverState extends State<_FadeOver> {
   // Made already loaded (a picture shown at once, now reloading), there is no fade to wait for.
   late bool _covered = widget.loaded;
+
+  @override
+  void didUpdateWidget(_FadeOver oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A new address: [under] shows again until it has a frame.
+    if (!widget.loaded) _covered = false;
+  }
 
   @override
   Widget build(BuildContext context) => Stack(

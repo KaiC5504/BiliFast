@@ -319,11 +319,11 @@ class _PicturePageState extends State<_PicturePage> with SingleTickerProviderSta
 
   /// The largest of the list's thumbnails already in the image cache, so it shows at once while the picture loads.
   /// The rows ask in 60 px steps, as [CommentPictures] builds them.
-  late final String? _thumbnail = () {
+  late final StoredNetworkImage? _thumbnail = () {
     final cache = PaintingBinding.instance.imageCache;
     for (var width = _thumbnailWidest; width > 0; width -= 60) {
-      final address = CommentPictures.thumbnail(widget.picture.url, width: width);
-      if (cache.statusForKey(NetworkImage(address, headers: BiliClient.mediaHeaders)).tracked) return address;
+      final thumbnail = CommentPictures.thumbnailImage(widget.picture.url, width: width);
+      if (cache.statusForKey(thumbnail.cacheKey).tracked) return thumbnail;
     }
     return null;
   }();
@@ -359,7 +359,7 @@ class _LoadingPicture extends StatelessWidget {
   const _LoadingPicture({required this.address, required this.thumbnail, this.firstScreen});
 
   final String address;
-  final String? thumbnail;
+  final StoredNetworkImage? thumbnail;
 
   /// A long picture's spinner and glyph sit in the middle of its first screenful, where the viewer opens.
   final double? firstScreen;
@@ -378,9 +378,8 @@ class _LoadingPicture extends StatelessWidget {
     final still = MediaQuery.disableAnimationsOf(context);
     final fade = still ? Duration.zero : CommentTextTheme.viewerCrossFade;
     final under = thumbnail;
-    return Image.network(
-      address,
-      headers: BiliClient.mediaHeaders,
+    return Image(
+      image: StoredNetworkImage(address, headers: BiliClient.mediaHeaders, still: false),
       fit: BoxFit.contain,
       width: double.infinity,
       height: double.infinity,
@@ -395,9 +394,8 @@ class _LoadingPicture extends StatelessWidget {
               AnimatedOpacity(
                 opacity: loading ? 1 : 0,
                 duration: fade,
-                child: Image.network(
-                  under,
-                  headers: BiliClient.mediaHeaders,
+                child: Image(
+                  image: under,
                   fit: BoxFit.contain,
                   gaplessPlayback: true,
                   errorBuilder: (context, error, stack) => const SizedBox.shrink(),

@@ -145,7 +145,13 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
           }),
         );
       case SettingsConfirmKind.images:
-        if (services.imageCache case final images?) unawaited(_clearImages(images));
+        if (services.imageCache case final images?) {
+          unawaited(
+            _clearImages(images).catchError((Object error) {
+              Logger.shared.warn(LogCategory.ui, 'image cache not cleared', {'error': '${error.runtimeType}'});
+            }),
+          );
+        }
       case SettingsConfirmKind.logout:
         await _logout(services.environment);
         return;

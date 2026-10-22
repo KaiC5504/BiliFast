@@ -962,6 +962,10 @@ class CommentPictures extends StatelessWidget {
     return '$secure@${width}w.webp';
   }
 
+  /// The row's picture at [thumbnail]'s address, moving if it moves; the viewer looks for it under its cache key.
+  static StoredNetworkImage thumbnailImage(String url, {required int width}) =>
+      StoredNetworkImage(thumbnail(url, width: width), headers: BiliClient.mediaHeaders, still: false);
+
   /// The single picture's size: tall ones narrower and cut at 3:4, wide ones wider and no flatter than 16:9.
   static Size single(CommentPicture picture, {bool compact = false}) {
     final ratio = picture.width > 0 && picture.height > 0 ? picture.height / picture.width : 1.0;
@@ -1038,9 +1042,8 @@ class _PictureCell extends StatelessWidget {
             size: size,
             child: ColoredBox(
               color: CommentRowTheme.picturePlaceholder,
-              child: Image.network(
-                CommentPictures.thumbnail(picture.url, width: pixels),
-                headers: BiliClient.mediaHeaders,
+              child: Image(
+                image: CommentPictures.thumbnailImage(picture.url, width: pixels),
                 fit: BoxFit.cover,
                 alignment: long ? Alignment.topCenter : Alignment.center,
                 width: size.width,

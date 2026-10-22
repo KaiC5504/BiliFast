@@ -9,6 +9,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../shared/stored_pictures.dart';
+
 const _pictures = [
   CommentPicture(url: 'https://i0.hdslb.com/bfs/new_dyn/a.jpg', width: 1080, height: 1920),
   CommentPicture(url: 'http://i0.hdslb.com/bfs/new_dyn/b.png', width: 0, height: 0),
@@ -448,6 +450,7 @@ void main() {
       tester,
     ) async {
       _clearImages();
+      final stored = await StoredPictures.keep(tester);
       final full = await _cache(tester, fullAddress);
       final rig = Rig();
       await rig.mount(tester, pictures: _pictures.take(1).toList());
@@ -462,8 +465,8 @@ void main() {
       await tester.pump();
       expect(_spinner, findsNothing);
       expect(_urls(tester), [fullAddress]);
-      expect(find.byType(AnimatedOpacity), findsNothing);
-      _clearImages();
+      expect(stored.downloads, isEmpty, reason: 'shown from memory');
+      await stored.drop(tester);
     });
 
     testWidgets('a picture that fails shows the picture glyph in the middle, and a tap still closes', (tester) async {

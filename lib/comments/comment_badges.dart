@@ -474,9 +474,8 @@ class DecorImage extends StatelessWidget {
   final BoxFit fit;
 
   @override
-  Widget build(BuildContext context) => Image.network(
-    secureImageUrl(url),
-    headers: BiliClient.mediaHeaders,
+  Widget build(BuildContext context) => Image(
+    image: StoredNetworkImage(secureImageUrl(url), headers: BiliClient.mediaHeaders, still: false),
     fit: fit,
     alignment: alignment,
     width: double.infinity,

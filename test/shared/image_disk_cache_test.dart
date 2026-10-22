@@ -30,7 +30,8 @@ final class _Fetch {
   }
 }
 
-/// Answers every request with [status] and [body], recording what was asked.
+/// Answers every request with [status] and [body], recording what was asked; while [hold] is pending, answers wait
+/// for it.
 final class _Client implements HttpClient {
   _Client(this.status, this.body);
 
@@ -38,6 +39,8 @@ final class _Client implements HttpClient {
   final List<int> body;
   final asked = <Uri>[];
   final sentHeaders = <String, Object>{};
+  Future<void>? hold;
+  int aborted = 0;
 
   @override
   bool autoUncompress = true;
@@ -45,7 +48,7 @@ final class _Client implements HttpClient {
   @override
   Future<HttpClientRequest> getUrl(Uri url) async {
     asked.add(url);
-    return _Request(this);
+    return _Request(this, hold);
   }
 
   @override
@@ -53,15 +56,22 @@ final class _Client implements HttpClient {
 }
 
 final class _Request implements HttpClientRequest {
-  _Request(this._client);
+  _Request(this._client, this._hold);
 
   final _Client _client;
+  final Future<void>? _hold;
 
   @override
   late final HttpHeaders headers = _Headers(_client.sentHeaders);
 
   @override
-  Future<HttpClientResponse> close() async => _Response(_client.status, _client.body);
+  Future<HttpClientResponse> close() async {
+    await _hold;
+    return _Response(_client.status, _client.body);
+  }
+
+  @override
+  void abort([Object? exception, StackTrace? stackTrace]) => _client.aborted++;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -104,6 +114,23 @@ final class _Response extends Stream<List<int>> implements HttpClientResponse {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// A cache whose folder can't be listed while [listError] is set; [listings] counts the tries.
+final class _Unlisted extends ImageDiskCache {
+  _Unlisted({required super.folder, required super.capBytes, required ImageFetch fetch}) : super(fetch: fetch);
+
+  Object? listError;
+  int listings = 0;
+
+  @override
+  Stream<FileSystemEntity> listFolder() {
+    listings += 1;
+    final error = listError;
+    return error == null ? super.listFolder() : Stream.error(error);
+  }
+}
+
+const _denied = FileSystemException('Directory listing failed', '', OSError('Access is denied.', 5));
+
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -114,6 +141,12 @@ void main() {
 
   ImageDiskCache cacheOf({int capBytes = ImageDiskCache.defaultCapBytes, String? at}) {
     final cache = ImageDiskCache(folder: at ?? folder.path, capBytes: capBytes, fetch: fetch.call);
+    caches.add(cache);
+    return cache;
+  }
+
+  _Unlisted unlisted({int capBytes = ImageDiskCache.defaultCapBytes, String? at}) {
+    final cache = _Unlisted(folder: at ?? folder.path, capBytes: capBytes, fetch: fetch.call);
     caches.add(cache);
     return cache;
   }
@@ -257,6 +290,41 @@ void main() {
     expect(cache.fileOf(_b).existsSync(), isFalse);
   });
 
+  test('after a start that could not list the folder, the next store counts it afresh and the cap holds', () async {
+    final cache = unlisted(capBytes: 1000)..listError = _denied;
+    await cache.start();
+    expect(logged('image cache not read').single.f['error']?.toJson(), 'Access is denied.');
+    cache.listError = null;
+    fetch.size = 400;
+    await cache.bytes(_a);
+    await cache.settle();
+    expect(logged('image cache').single.f['files']?.toJson(), 1, reason: 'counted afresh');
+    await age(cache.fileOf(_a), const Duration(hours: 2));
+    await cache.bytes(_b);
+    await cache.settle();
+    await age(cache.fileOf(_b), const Duration(hours: 1));
+
+    await cache.bytes(_c);
+    await cache.settle();
+    expect(cache.fileOf(_a).existsSync(), isFalse);
+    expect(await cache.sizeBytes(), 800);
+  });
+
+  test('a trim that cannot list the folder warns once and is tried again only after more stores', () async {
+    final cache = unlisted(capBytes: 1000);
+    await cache.start();
+    cache.listError = _denied;
+    final before = cache.listings;
+    fetch.size = 400;
+    for (var i = 0; i < 20; i++) {
+      await cache.bytes('$_c?n=$i');
+      await cache.settle();
+    }
+    expect(logged('image cache not trimmed').single.f['error']?.toJson(), 'Access is denied.');
+    // The third store passed the cap and its trim failed; the next 16 were let by, and the twentieth tried again.
+    expect(cache.listings - before, 2);
+  });
+
   test('sizeBytes totals the folder; a folder not made yet is empty', () async {
     expect(await cacheOf(at: '${folder.path}${Platform.pathSeparator}missing').sizeBytes(), 0);
     final cache = cacheOf();
@@ -265,6 +333,23 @@ void main() {
     await cache.bytes(_b);
     await cache.settle();
     expect(await cache.sizeBytes(), 350);
+  });
+
+  test('a folder that cannot be listed warns with the reason; one not made yet is quietly empty', () async {
+    final missing = cacheOf(at: '${folder.path}${Platform.pathSeparator}missing');
+    expect(await missing.sizeBytes(), 0);
+    await missing.clear();
+    expect(logged('image cache cleared').single.f['files']?.toJson(), 0);
+    expect(logs.events.where((event) => event.level == LogLevel.warn), isEmpty);
+
+    final denied = unlisted()..listError = _denied;
+    expect(await denied.sizeBytes(), 0);
+    expect(logged('image cache size not read').single.f['error']?.toJson(), 'Access is denied.');
+    await denied.clear();
+    final warning = logged('image cache not cleared').single;
+    expect(warning.f['error']?.toJson(), 'Access is denied.');
+    expect(warning.f['files']?.toJson(), 0);
+    expect(logged('image cache cleared'), hasLength(1), reason: "only the missing folder's");
   });
 
   test('clear deletes every stored picture, and a download in flight is not stored after it', () async {
@@ -322,6 +407,32 @@ void main() {
       expect(client.sentHeaders, {'User-Agent': 'test'});
     });
 
+    test('one that stalls gives up after its timeout with a TimeoutException and closes the connection', () async {
+      final client = _Client(HttpStatus.ok, [1, 2, 3])..hold = Completer<void>().future;
+      debugNetworkImageHttpClientProvider = () => client;
+      expect(ImageDiskCache.downloadTimeout, const Duration(seconds: 30));
+      await expectLater(
+        ImageDiskCache.download(Uri.parse(_a), null, timeout: const Duration(milliseconds: 50)),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(client.aborted, 1);
+    });
+
+    test('after one stalled, the next ask for that address downloads afresh', () async {
+      final client = _Client(HttpStatus.ok, [1, 2, 3])..hold = Completer<void>().future;
+      debugNetworkImageHttpClientProvider = () => client;
+      final cache = ImageDiskCache(
+        folder: folder.path,
+        fetch: (url, headers) => ImageDiskCache.download(url, headers, timeout: const Duration(milliseconds: 50)),
+      );
+      caches.add(cache);
+      await expectLater(cache.bytes(_a), throwsA(isA<TimeoutException>()));
+      await cache.settle();
+      client.hold = null;
+      expect(await cache.bytes(_a), [1, 2, 3]);
+      expect(client.asked, hasLength(2));
+    });
+
     test('a status other than 200 throws NetworkImageLoadException and stores nothing', () async {
       debugNetworkImageHttpClientProvider = () => _Client(HttpStatus.notFound, const []);
       await expectLater(
@@ -347,6 +458,35 @@ void main() {
     final warning = logged('image not stored').single;
     expect(warning.level, LogLevel.warn);
     expect('${warning.f['error']?.toJson()}', isNotEmpty);
+  });
+
+  test('a store failure warns once per reason, and the next trim line counts the pictures not stored', () async {
+    final cache = cacheOf(capBytes: 250);
+    await cache.start();
+    // A folder where each picture's file should be: the rename into place fails.
+    Directory(cache.fileOf(_a).path).createSync();
+    Directory(cache.fileOf(_b).path).createSync();
+    expect(await cache.bytes(_a), hasLength(100));
+    expect(await cache.bytes(_b), hasLength(100));
+    await cache.settle();
+    expect(logged('image not stored'), hasLength(1), reason: 'the same reason twice');
+
+    // A file where the folder should be: the folder can't be made again.
+    folder.deleteSync(recursive: true);
+    File(folder.path).writeAsStringSync('a file, not a folder');
+    expect(await cache.bytes(_c), hasLength(100));
+    await cache.settle();
+    final reasons = [for (final warning in logged('image not stored')) '${warning.f['error']?.toJson()}'];
+    expect(reasons, hasLength(2), reason: 'another reason');
+    expect(reasons.toSet(), hasLength(2));
+
+    File(folder.path).deleteSync();
+    folder.createSync();
+    for (var i = 0; i < 3; i++) {
+      await cache.bytes('$_c?n=$i');
+      await cache.settle();
+    }
+    expect(logged('image cache trimmed').single.f['notStored']?.toJson(), 3);
   });
 
   test('a low-memory warning logs images cleared with what the memory cache still holds live', () async {

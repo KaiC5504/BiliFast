@@ -432,10 +432,9 @@ class _VipLabel extends StatelessWidget {
   Widget build(BuildContext context) => ConstrainedBox(
     constraints: const BoxConstraints(maxWidth: OwnSpaceTheme.vipLabelGap + OwnSpaceTheme.vipLabelMaxWidth),
     child: ExcludeSemantics(
-      child: Image.network(
-        secureImageUrl(url),
+      child: Image(
         key: const ValueKey('own-space-vip-label'),
-        headers: BiliClient.mediaHeaders,
+        image: StoredNetworkImage(secureImageUrl(url), headers: BiliClient.mediaHeaders, still: false),
         height: OwnSpaceTheme.vipLabelHeight,
         fit: BoxFit.contain,
         alignment: Alignment.centerLeft,
