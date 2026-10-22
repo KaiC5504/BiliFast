@@ -91,7 +91,8 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 - The official login's confirm, 1.0.0 (21): on (20) the confirm call with the web login got -101 (it takes only the
   official app's own token, PiliPlus issue 2933), and its page in a web view said 请在哔哩哔哩客户端内打开. 授权 now
   opens that page in the official app (`bilibili://browser?url=`); the user taps 确认 there and comes back, and the
-  return polls for the token (at most 5 polls). Without the official app it toasts 请先安装哔哩哔哩客户端.
+  return polls for the token (at most 5 polls). Without the official app it toasts 请先安装哔哩哔哩客户端. Passed on
+  KaiC's phone.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -114,8 +115,8 @@ Open items, each waiting on its slice:
   stand-in sweep's findings (re-measure, then one fix round by screen group), the landscape title marquee with 章节,
   竖屏's 联合创作 and 合集 prefix, 弹幕设置's 查看更多 variant for the small player (waiting on KaiC's screenshot), and
   12's first comment drawing about 3% wide on (16), cause unknown.
-- The official login on the phone (1.0.0 (21)): the confirm in the official app (`bilibili://browser?url=` is
-  untried on iOS; if it fails, the next way is the TV QR saved to Photos and scanned from 扫一扫's album), 推荐's mix against the official 首页, 不感兴趣's reason ids (inferred), 我的收藏's
+- The official login on the phone: the confirm in the official app worked on (21) (token for 180 days, the official
+  推荐 answered). Still to check: 推荐's mix against the official 首页, 不感兴趣's reason ids (inferred), 我的收藏's
   视频 (the official app's `/x/v3/fav/tab/fav` with cookies, untried), the cover upload, and the launch log's
   `support folder` line (on (20) the danmaku settings came back after a relaunch: loaded, changed true).
   Not built: 追更, the folder search, 批量 in folders, folder rows' progress line (the web list has none), 卡片/列表
