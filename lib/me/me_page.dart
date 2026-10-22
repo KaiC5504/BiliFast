@@ -130,7 +130,13 @@ class _MePageState extends State<MePage> {
         context,
         onError: (error, _) {
           failed = true;
-          Logger.shared.error(LogCategory.ui, 'skin picture failed', {'error': '${error.runtimeType}'});
+          final name = picture.uri.pathSegments.last;
+          final dot = name.lastIndexOf('.');
+          Logger.shared.error(LogCategory.ui, 'skin picture failed', {
+            'error': '${error.runtimeType}',
+            'ext': dot < 0 ? '' : name.substring(dot + 1),
+            'bytes': picture.existsSync() ? picture.lengthSync() : -1,
+          });
         },
       ).then((_) {
         if (failed || !mounted || _skin.value?.headMyself?.path != picture.path) return;
