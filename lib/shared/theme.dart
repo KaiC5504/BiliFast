@@ -2230,8 +2230,163 @@ abstract final class AvatarPageTheme {
   static const shown = 5;
 }
 
-/// 我的 (87, 106, 107), measured from the safe area's top. Filled in by the page agent.
-abstract final class MeTheme {}
+/// 我的 (87, 106, 107). The fixed part (the top icons, the header, the counts and the 会员 card) is measured from the
+/// safe area's top; the list that scrolls under the card from the card's bottom, its viewport's top.
+abstract final class MeTheme {
+  static const background = BiliColors.card;
+
+  /// The top row: four glyphs 40.67 apart, the last centred 24.67 from the right edge, all 22 below the safe area.
+  static const topCentre = 22.0;
+  static const topLastFromRight = 24.67;
+  static const topPitch = 40.67;
+  static const topGlyphBox = 24.0;
+  static const topGlyphStroke = 1.5;
+  static const topGlyph = Color(0xFF61666D);
+  static const castDot = 1.1;
+  static const topTapHeight = 44.0;
+
+  /// The avatar: 64 across without a frame; under a frame the face shrinks to 49 about the same middle and the frame
+  /// is 评论's 1.75 times the face.
+  static const avatarLeft = 15.0;
+  static const avatarTop = 64.0;
+  static const avatar = 64.0;
+  static const pendantFace = 49.0;
+  static const pendantScale = CommentRowTheme.pendantScale;
+
+  /// Logged out, 首页's grey head: a person glyph at this share of the circle.
+  static const blankHead = 0.55;
+
+  /// The 大 disc on its corner, in a white ring: flush with the avatar's box, 3 in from it under a frame.
+  static const vipDisc = 16.0;
+  static const vipRing = 2.0;
+  static const vipPendantInset = 3.0;
+  static const vipDiscFill = BiliColors.pink;
+  static const vipDiscInk = Color(0xFFFFFFFF);
+  static const vipRingInk = Color(0xFFFFFFFF);
+  static const vipDiscStroke = 1.6;
+
+  /// The column right of the avatar starts 2 further right under a frame.
+  static const textLeft = 94.33;
+  static const pendantTextShift = 2.0;
+
+  /// A line of text sits centred in a box this tall at its middle.
+  static const lineBox = 30.0;
+
+  /// The name's, the pill's and the B币 line's middles below the safe area.
+  static const nameCentre = 74.0;
+  static const nameText = 16.0;
+  static const nameWeight = FontWeight.w500;
+  static const name = BiliColors.text;
+  static const vipName = BiliColors.pink;
+  static const loggedOutText = 16.0;
+
+  /// ✏️ and the LV badge after the name, the gaps between their inks.
+  static const pencilGap = 8.3;
+  static const pencilBox = 20.8;
+  static const pencilInk = 13.7;
+  static const pencilStroke = 1.4;
+  static const pencil = BiliColors.secondaryText;
+  static const levelGap = 9.5;
+  static const levelWidth = 20.0;
+  static const levelHeight = 10.0;
+  static const levels = [
+    Color(0xFFC0C4CC),
+    Color(0xFFC0C4CC),
+    Color(0xFF8BD29B),
+    Color(0xFF7BCDEF),
+    Color(0xFFFEBB8B),
+    Color(0xFFED672A),
+    Color(0xFFE3524E),
+  ];
+  static const levelInk = Color(0xFFFFFFFF);
+
+  /// 年度大会员: a darker pink than the accent.
+  static const vipLabelTop = 90.0;
+  static const vipLabelHeight = 14.0;
+  static const vipLabelPad = 6.3;
+  static const vipLabelText = 11.0;
+  static const vipLabelWeight = FontWeight.w600;
+  static const vipLabelFill = Color(0xFFFF548C);
+  static const vipLabelInk = Color(0xFFFFFFFF);
+
+  static const coinsCentre = 121.2;
+  static const coinsText = 12.0;
+  static const coins = BiliColors.secondaryText;
+  static const coinsGap = 20.5;
+
+  /// 空间 ›, its middle level with the avatar's.
+  static const spaceCentre = 95.2;
+  static const spaceText = 12.0;
+  static const space = BiliColors.secondaryText;
+  static const spaceChevronGap = 7.3;
+  static const spaceRight = 16.67;
+  static const chevronWidth = 20 / 3;
+  static const chevronHeight = 12.0;
+  static const chevronStroke = 1.0;
+
+  /// 动态, 关注 and 粉丝 in thirds of the width, a 1 pt rule 20 tall at each third.
+  static const countCentre = 167.5;
+  static const countText = 15.0;
+  static const countWeight = FontWeight.w500;
+  static const count = BiliColors.text;
+  static const countLabelCentre = 186.0;
+  static const countLabelText = 12.0;
+  static const countLabel = BiliColors.secondaryText;
+  static const countRuleTop = 166.0;
+  static const countRuleHeight = 20.0;
+  static const countRuleWidth = 1.0;
+  static const countRule = BiliColors.divider;
+  static const countTap = 44.0;
+
+  /// The 会员 card, 12 in from each side.
+  static const cardTop = 204.0;
+  static const cardHeight = 54.0;
+  static const cardInset = 12.0;
+  static const cardRadius = 8.0;
+  static const card = Color(0xFFFFECF1);
+  static const cardLineCentre = 18.0;
+  static const cardTitleGap = 4.0;
+  static const cardTitleText = 14.0;
+  static const cardTitleWeight = FontWeight.w400;
+  static const cardTitle = BiliColors.pink;
+  static const cardMoreCentre = 38.5;
+  static const cardMoreText = 12.0;
+  static const cardMore = Color(0x9918191C);
+  static const cardMoreChevronGap = 3.0;
+  static const cardMoreChevronWidth = 16 / 3;
+  static const cardMoreChevronHeight = 28 / 3;
+  static const cardMoreChevronStroke = 0.8;
+  static const cardButtonWidth = 80.0;
+  static const cardButtonHeight = 30.0;
+  static const cardButtonText = 14.0;
+  static const cardButtonFill = BiliColors.pink;
+  static const cardButtonInk = Color(0xFFFFFFFF);
+
+  /// The four shortcuts: a quarter of the width each, in 87's blue, their icon box and label centred below the card.
+  static const shortcutIconCentre = 26.0;
+  static const shortcutLabelCentre = 51.4;
+  static const shortcutHeight = 72.0;
+  static const shortcutGlyph = Color(0xFF2CA1DD);
+  static const shortcutText = 12.0;
+  static const shortcutLabel = BiliColors.text;
+
+  /// 更多服务: its title 48 below the shortcuts' labels, as 87's is below 我的服务's last labels, then 106's rows.
+  static const servicesTitleCentre = 99.5;
+  static const servicesTitleText = 14.0;
+  static const servicesTitleWeight = FontWeight.w500;
+  static const servicesTitle = BiliColors.text;
+  static const serviceFirstCentre = 141.2;
+  static const serviceRow = 48.0;
+  static const serviceGlyphCentre = 37.0;
+  static const serviceGlyphBox = 30.0;
+  static const serviceGlyphStroke = 1.5;
+  static const serviceGlyph = Color(0xFFFA709E);
+  static const serviceTextLeft = 60.5;
+  static const serviceText = 14.0;
+  static const serviceLabel = BiliColors.text;
+  static const serviceChevron = Color(0xFF999999);
+  static const bottomPad = 24.0;
+}
 
 /// The swipe back from a 推荐 card (03, 04 in local/differences, measured frame by frame): the page shrinks into a
 /// floating card over the dimmed home and flies into the card it came from.
