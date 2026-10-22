@@ -54,15 +54,17 @@ final class GuardedTransport implements HTTPTransport {
   @override
   Future<HTTPResponse> send(HTTPRequest request) async {
     final path = request.url.path;
-    if (request.method.toUpperCase() != 'GET' && !writesAllowed.contains(path)) {
+    final write = request.method.toUpperCase() != 'GET';
+    if (write && !writesAllowed.contains(path)) {
       // A heartbeat is refused every few seconds; once per path says as much.
       if (_refusedPaths.add(path)) {
         _logger.warn(LogCategory.api, 'pc guard refused', {'method': request.method, 'path': path});
       }
       throw const BiliError.api(code: readOnlyCode, message: 'PC 只读，未发送');
     }
-    // Counted when let through rather than when sent, so nothing waits its turn only to be refused at the cap.
-    if (_admitted >= cap) {
+    // Counted when let through rather than when sent, so nothing waits its turn only to be refused at the cap. An
+    // allowed write (the logout) passes even then: a capped run must still be able to end its session.
+    if (_admitted >= cap && !write) {
       if (!_capLogged) {
         _capLogged = true;
         _logger.error(LogCategory.api, 'pc guard cap reached', {'cap': cap});

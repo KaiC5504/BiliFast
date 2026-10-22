@@ -137,6 +137,8 @@ class WatchReporter {
       try {
         await _client.heartbeat(bvid: item.bvid, cid: item.cid, playedTime: played);
       } catch (error) {
+        // The Windows guard refuses every beat and logs the first itself.
+        if (error is BiliAPIError && error.code == GuardedTransport.readOnlyCode) return;
         _logger.warn(LogCategory.api, 'heartbeat failed', {'played': played, 'error': '$error'});
       }
     });

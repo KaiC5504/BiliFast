@@ -58,7 +58,9 @@ Future<void> main(List<String> args) async {
   final DanmakuSettingsStore danmakuSettings;
   final CodecMemory codecMemory;
   try {
-    environment = await (Platform.isWindows ? loadWindowsEnvironment() : AppEnvironment.load());
+    environment = await (Platform.isWindows
+        ? loadWindowsEnvironment(fakeAccount: args.contains('--fake-account'))
+        : AppEnvironment.load());
     recents = await RecentStore.load(supportFilePath('recents.json'));
     PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
     fonts = await FontStore.load(supportFilePath('font.json'));
@@ -121,9 +123,10 @@ Future<void> main(List<String> args) async {
 
 /// KaiC's real login on the PC (2026-10-22), on the condition that nothing the PC does can get the account
 /// restricted: kept DPAPI-encrypted in the support folder, every call through the guard (reads only, paced and capped
-/// per run), and 退出登录 ending the session on Bilibili's side too.
-Future<AppEnvironment> loadWindowsEnvironment() {
-  final loginFile = supportFilePath('login.bin');
+/// per run), and 退出登录 ending the session on Bilibili's side too. A [fakeAccount] run never loads the login, so
+/// its reads carry no account.
+Future<AppEnvironment> loadWindowsEnvironment({bool fakeAccount = false}) {
+  final loginFile = fakeAccount ? null : supportFilePath('login.bin');
   return AppEnvironment.load(
       keychain: loginFile == null ? const NoKeychainStore() : DpapiKeychainStore(loginFile),
       guarded: true,

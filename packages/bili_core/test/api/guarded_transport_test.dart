@@ -225,6 +225,25 @@ void main() {
       expect(reached.f, {'cap': const LogInt(3)});
     });
 
+    test('the logout still goes past the cap, so a capped run can end its session', () async {
+      final transport = guard(cap: 1, writesAllowed: {'/login/exit/v2'});
+      await transport.send(_get('/r0'));
+      await expectLater(transport.send(_get('/over')), throwsA(_capped));
+      await transport.send(_post('/login/exit/v2', host: 'https://passport.bilibili.com'));
+      expect(inner.paths, ['/r0', '/login/exit/v2']);
+    });
+
+    test("the refusals tell the user they never reached Bilibili", () {
+      expect(
+        const BiliError.api(code: GuardedTransport.readOnlyCode, message: 'PC 只读，未发送').userMessage,
+        'PC 只读，未发送',
+      );
+      expect(
+        const BiliError.api(code: GuardedTransport.capCode, message: 'PC 本次调用已达上限，请重启应用').userMessage,
+        'PC 本次调用已达上限，请重启应用',
+      );
+    });
+
     test('one that could only wait to be refused is refused at once', () async {
       final transport = guard(cap: 9);
       final answers = [for (var index = 0; index < 9; index++) transport.send(_get('/r$index'))];

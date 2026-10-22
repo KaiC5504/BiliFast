@@ -1,3 +1,5 @@
+import 'guarded_transport.dart';
+
 sealed class BiliError implements Exception {
   const BiliError();
 
@@ -23,6 +25,8 @@ sealed class BiliError implements Exception {
     BiliAPIError(code: -101) => '需要登录',
     BiliAPIError(code: -352 || -412) => '请求过于频繁，请稍后再试',
     BiliAPIError(code: -404 || 62002 || 62004) => '视频不存在或已被删除',
+    // The Windows guard's refusals never reached Bilibili.
+    BiliAPIError(code: GuardedTransport.readOnlyCode || GuardedTransport.capCode, :final message) => message,
     BiliAPIError(:final code, :final message) => 'B 站返回错误 $code：$message',
     BiliDecodingError() => 'B 站返回的数据无法解析',
     BiliNotDashError() => '这个视频不是 DASH 格式，暂不支持',
