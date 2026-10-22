@@ -172,6 +172,11 @@ Open items, each waiting on its slice:
      `head_myself_bg` (我的; an mp4 header goes by the skin's `color`, the header text colour), white icons over dark;
      the own space's scrolled bar by `color_second_page`. Pages pushed over a dressed 我的 set their own (设置's white
      on white, below). Log the brightness and the choice.
+  3. Full screen's brightness stays (KaiC: whatever it was set to is kept, after full screen and after leaving the
+     app). Today `IosDeviceControls.enterFullScreen` saves the screen's brightness and `leaveFullScreen` puts it back
+     (`DeviceControls.swift`'s `saveBrightness`/`restoreBrightness`, spec 4.4); drop the save and the restore, and
+     the spec's line. Volume already stays: it is the system volume, set through the hidden MPVolumeView. iOS itself
+     may still change the brightness (auto-brightness, locking the phone).
 - Pictures and 推荐 on the phone (28): `images cleared` in the log confirms iOS's memory warning as the blanking's
   trigger; `feed covers` shows how often 800 ms is too short. Not built: the pull's TV closing as fast as 首页's (no
   official pull recording), the official UP badge icon (01's is 14 × 12 pt, ours a drawn box), and cards with a reason
