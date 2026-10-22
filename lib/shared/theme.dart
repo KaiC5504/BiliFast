@@ -551,11 +551,6 @@ abstract final class BiliMetrics {
 
   /// 633 × 475 px on 01, so 4:3, not the 16:10 the spec guessed.
   static const coverAspect = 4 / 3;
-
-  /// The size a 推荐 cover is asked for at, whatever its box: the web's, which Bilibili's image CDN keeps pre-made,
-  /// where our own 3× size was cut on each request (first byte 795 ms median against 546). The box crops the 16:9
-  /// picture's sides, as the CDN's own crop did.
-  static const feedCoverSuffix = '@672w_378h_1c.webp';
   static const cardInset = 8.0;
 
   /// 01's title lines are 20 pt apart. With the footer the card is 242 pt tall on a 211 pt column, its covers 248 pt

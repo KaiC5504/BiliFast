@@ -60,15 +60,17 @@ const _word = '崩铁新版本即将上线';
 class _Covers {
   bool holding = false;
 
-  /// Each cover asked for, by its card's bvid, in order.
+  /// Each cover asked for, by its card's bvid, in order, and the cover box it was asked for.
   final asked = <String>{};
+  final sizes = <String, Size>{};
   final _waiting = <String, Completer<bool>>{};
 
   static String bvidOf(String url) => url.substring(url.lastIndexOf('/') + 1, url.lastIndexOf('.'));
 
-  Future<bool> precache(BuildContext context, String? url) {
+  Future<bool> precache(BuildContext context, String? url, Size size) {
     final bvid = bvidOf(url!);
     asked.add(bvid);
+    sizes[bvid] = size;
     if (!holding) return Future.value(true);
     return (_waiting[bvid] ??= Completer<bool>()).future;
   }
@@ -1089,8 +1091,8 @@ void main() {
       ];
     }
 
-    testWidgets("首页's TV stays, over the old cards, until the first screen's covers are ready; then it closes as the "
-        'old cards cross-fade into the new in place', (tester) async {
+    testWidgets("首页's TV stays over the old cards until the answer; then it closes as the old cards cross-fade into "
+        "the new in place, the first screen's covers asked for at their cards' size, never waited on", (tester) async {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
@@ -1099,19 +1101,20 @@ void main() {
         ..holding = true
         ..asked.clear();
       http.pages[1] = fresh();
+      final answer = http.gates[1] = Completer<void>();
       await tapHome(tester);
       await settle(tester, 5);
       expect(http.asked, [1, 1]);
-      expect(covers.asked, isNotEmpty);
-      expect(reloadTv, findsOneWidget, reason: '250 ms after the tap, the covers still loading');
+      expect(covers.asked, isEmpty, reason: 'no answer yet');
+      expect(reloadTv, findsOneWidget);
       expect(card('BV1c0'), findsOneWidget, reason: 'the old cards stay, fully drawn');
       expect(card('BV1n0'), findsNothing);
       expect(coverLines(), hasLength(1), reason: 'the first load');
 
-      covers.ready();
+      answer.complete();
       await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 50));
-      expect(card('BV1n0'), findsOneWidget);
+      expect(card('BV1n0'), findsOneWidget, reason: 'the covers still loading');
       expect(going('BV1c0'), findsOneWidget, reason: 'the old card fading out over the new one');
       expect(goingOpacity(tester, 'BV1c0'), inExclusiveRange(0, 1));
       expect(slotOpacity(tester, 'BV1n0'), 1, reason: 'the new card stands at full opacity under it');
@@ -1142,61 +1145,31 @@ void main() {
       final screen = firstScreen(tester);
       expect(screen.length % 2, 0, reason: 'both columns');
       expect(covers.asked, screen, reason: 'the rows that show, no more');
+      expect(covers.sizes['BV1n0'], tester.getSize(cover('BV1n0')), reason: "the size the card's cover asks for");
       final line = coverLines().last;
-      expect(line.f['ready']?.toJson(), screen.length);
+      expect(line.f['ready']?.toJson(), 0, reason: 'none ready as the cards showed');
       expect(line.f['failed']?.toJson(), 0);
       expect(line.f['of']?.toJson(), screen.length);
-      expect(line.f['timedOut']?.toJson(), false);
+      expect(line.f['early']?.toJson(), false);
+
+      covers.ready();
       await settle(tester, 10);
       expect(tester.binding.transientCallbackCount, 0);
     });
 
-    testWidgets("首页's TV leaves 300 ms after the answer when the covers never come", (tester) async {
+    testWidgets("the pull's cards show at the answer and cross-fade too", (tester) async {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
       covers.holding = true;
       http.pages[1] = fresh();
-      http.gates[1] = Completer<void>();
-      await tapHome(tester);
-      await settle(tester, 10);
-      http.gates[1]!.complete();
-      await tester.pump();
-      await tester.pump(FeedModel.coverWait - const Duration(milliseconds: 20));
-      expect(reloadTv, findsOneWidget);
-      expect(card('BV1c0'), findsOneWidget);
-      expect(card('BV1n0'), findsNothing);
-      await tester.pump(const Duration(milliseconds: 30));
-      await untilHandOff(tester);
-      expect(card('BV1n0'), findsOneWidget);
-      await settle(tester, 10);
-      expect(reload, findsNothing);
-      expect(going('BV1c0'), findsNothing);
-      final line = coverLines().last;
-      expect(line.f['ready']?.toJson(), 0);
-      expect(line.f['failed']?.toJson(), 0, reason: 'still loading, not failed');
-      expect(line.f['of']?.toJson(), greaterThan(0));
-      expect(line.f['timedOut']?.toJson(), true);
-      expect(find.descendant(of: cover('BV1n0'), matching: find.byType(CoverPlaceholder)), findsOneWidget);
-    });
-
-    testWidgets('the pull holds its TV the same way, at most 300 ms, and its cards cross-fade too', (tester) async {
-      http.pages[1] = twenty();
-      await show(tester);
-      await settle(tester);
-      covers.holding = true;
-      http.pages[1] = fresh();
-      http.gates[1] = Completer<void>();
+      final answer = http.gates[1] = Completer<void>();
       await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
       await settle(tester, 10);
       expect(http.asked, [1, 1]);
-      http.gates[1]!.complete();
-      await tester.pump();
-      await tester.pump(FeedModel.coverWait - const Duration(milliseconds: 20));
       expect(find.byType(LoadingTv), findsOneWidget);
       expect(card('BV1c0'), findsOneWidget);
-      expect(card('BV1n0'), findsNothing);
-      await tester.pump(const Duration(milliseconds: 30));
+      answer.complete();
       await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 50));
       expect(card('BV1n0'), findsOneWidget);
@@ -1205,20 +1178,191 @@ void main() {
       await settle(tester, 30);
       expect(find.byType(LoadingTv), findsNothing);
       expect(going('BV1c0'), findsNothing);
-      expect(coverLines().last.f['timedOut']?.toJson(), true);
+    });
 
-      covers.asked.clear();
-      http.pages[1] = twenty();
-      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
-      await settle(tester, 4);
-      expect(find.byType(LoadingTv), findsOneWidget, reason: 'held for the covers');
-      expect(card('BV1n0'), findsOneWidget);
-      covers.ready();
-      await untilHandOff(tester, 'BV1n0');
-      expect(card('BV1c0'), findsOneWidget);
-      await settle(tester, 30);
-      expect(find.byType(LoadingTv), findsNothing);
-      expect(coverLines().last.f['timedOut']?.toJson(), false);
+    group('a pull held past the trigger', () {
+      final feedList = find.byKey(const ValueKey('feed'));
+
+      List<LogEvent> lines(String msg) => [for (final event in logs.events) if (event.msg == msg) event];
+
+      /// Down [steps] × 25 px at about 1500 px/s, a frame each; negative goes back up.
+      Future<void> move(WidgetTester tester, TestGesture finger, int steps) async {
+        for (var i = 0; i < steps.abs(); i++) {
+          await finger.moveBy(Offset(0, steps.sign * 25.0));
+          await tester.pump(const Duration(microseconds: 16667));
+        }
+      }
+
+      Future<TestGesture> armed(WidgetTester tester) async {
+        final finger = await tester.startGesture(tester.getCenter(feedList));
+        await move(tester, finger, 12);
+        expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isTrue, reason: 'armed');
+        return finger;
+      }
+
+      /// Shown on the first load, and the rest let settle.
+      Future<void> shown(WidgetTester tester) async {
+        http.pages[1] = twenty();
+        await show(tester);
+        await settle(tester);
+        covers.asked.clear();
+        http.pages[1] = fresh();
+      }
+
+      testWidgets('asks for page 1 once at the trigger and its covers once in, and shows nothing until the finger '
+          'lifts; then the cards come at once', (tester) async {
+        await shown(tester);
+        final pages = lines('feed page').length;
+        final finger = await armed(tester);
+        await settle(tester, 4);
+        expect(http.asked, [1, 1], reason: 'asked while held');
+        expect(covers.asked, isNotEmpty, reason: "the first screen's covers on their way");
+        await settle(tester, 20);
+        expect(card('BV1c0'), findsOneWidget, reason: 'held for 1 s: nothing changes');
+        expect(card('BV1n0'), findsNothing);
+        expect(going('BV1c0'), findsNothing);
+        expect(lines('feed page'), hasLength(pages));
+
+        await finger.up();
+        await untilHandOff(tester);
+        expect(card('BV1n0'), findsOneWidget);
+        expect(http.asked, [1, 1], reason: 'the release joined the early call');
+        final line = coverLines().last;
+        expect(line.f['early']?.toJson(), true);
+        expect(line.f['heldMs']?.toJson(), greaterThan(0));
+        expect(line.f['ready']?.toJson(), line.f['of']?.toJson(), reason: 'ready by the release');
+        await settle(tester, 30);
+        expect(find.byType(LoadingTv), findsNothing);
+      });
+
+      testWidgets('let go before the answer, the cards come with it', (tester) async {
+        await shown(tester);
+        final answer = http.gates[1] = Completer<void>();
+        final finger = await armed(tester);
+        await settle(tester, 2);
+        expect(http.asked, [1, 1]);
+        await finger.up();
+        await settle(tester, 10);
+        expect(find.byType(LoadingTv), findsOneWidget, reason: 'refreshing');
+        expect(card('BV1c0'), findsOneWidget);
+        expect(http.asked, [1, 1]);
+        answer.complete();
+        await untilHandOff(tester);
+        expect(card('BV1n0'), findsOneWidget);
+        expect(coverLines().last.f['early']?.toJson(), true);
+        await settle(tester, 30);
+      });
+
+      for (final answerFirst in [true, false]) {
+        testWidgets('pushed back up until the TV is gone and let go there refreshes nothing, the answer '
+            '${answerFirst ? 'in before' : 'coming after'} the lift; a pull armed again soon asks nothing more', (
+          tester,
+        ) async {
+          await shown(tester);
+          final answer = http.gates[1] = Completer<void>();
+          final pages = lines('feed page').length;
+          final coverLog = coverLines().length;
+          final finger = await armed(tester);
+          await settle(tester, 2);
+          expect(http.asked, [1, 1], reason: 'the early call is out');
+          await move(tester, finger, -16);
+          expect(find.byType(LoadingTv), findsNothing, reason: 'the TV gone');
+          if (answerFirst) {
+            answer.complete();
+            await settle(tester, 4);
+          }
+          await finger.up();
+          if (!answerFirst) {
+            await settle(tester, 4);
+            answer.complete();
+          }
+          await settle(tester, 30);
+          expect(card('BV1c0'), findsOneWidget, reason: 'the cards untouched');
+          expect(card('BV1n0'), findsNothing);
+          expect(going('BV1c0'), findsNothing, reason: 'no hand-off');
+          expect(find.byType(LoadingTv), findsNothing, reason: 'no TV held');
+          expect(http.asked, [1, 1]);
+          expect(lines('feed page'), hasLength(pages));
+          expect(coverLines(), hasLength(coverLog));
+          final cancelled = lines('feed pull cancelled').single;
+          expect(cancelled.f.keys, unorderedEquals(['answered', 'heldMs']));
+
+          final again = await armed(tester);
+          await settle(tester, 2);
+          expect(http.asked, [1, 1], reason: 'the unseen answer is taken again');
+          await again.up();
+          await untilHandOff(tester);
+          expect(card('BV1n0'), findsOneWidget);
+          expect(http.asked, [1, 1]);
+          await settle(tester, 30);
+        });
+      }
+
+      testWidgets('wiggled across the trigger many times, it asks once', (tester) async {
+        await shown(tester);
+        final answer = http.gates[1] = Completer<void>();
+        final finger = await armed(tester);
+        bool playing() => tester.widget<LoadingTv>(find.byType(LoadingTv)).playing;
+        for (var i = 0; i < 6; i++) {
+          await move(tester, finger, -6);
+          expect(playing(), isFalse, reason: 'under the trigger');
+          await move(tester, finger, 6);
+          expect(playing(), isTrue, reason: 'armed again');
+        }
+        answer.complete();
+        await settle(tester, 2);
+        for (var i = 0; i < 4; i++) {
+          await move(tester, finger, -6);
+          await move(tester, finger, 6);
+        }
+        expect(http.asked, [1, 1]);
+        await finger.up();
+        await untilHandOff(tester);
+        expect(card('BV1n0'), findsOneWidget);
+        expect(http.asked, [1, 1]);
+        await settle(tester, 30);
+      });
+
+      testWidgets("首页's tap after a cancelled pull drops its unseen answer: the next pull asks again", (tester) async {
+        await shown(tester);
+        final finger = await armed(tester);
+        await settle(tester, 2);
+        await move(tester, finger, -16);
+        await finger.up();
+        await settle(tester, 20);
+        expect(http.asked, [1, 1]);
+        http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1t$i')];
+        await tapHome(tester);
+        await settle(tester, 30);
+        expect(http.asked, [1, 1, 1], reason: 'the tap asks for itself');
+        expect(card('BV1t0'), findsOneWidget);
+        expect(card('BV1n0'), findsNothing, reason: 'the unseen answer never shows');
+        final again = await armed(tester);
+        await settle(tester, 2);
+        expect(http.asked, [1, 1, 1, 1]);
+        await again.up();
+        await settle(tester, 30);
+      });
+
+      testWidgets('an account change while an answer is held drops it', (tester) async {
+        await shown(tester);
+        final finger = await armed(tester);
+        await settle(tester, 2);
+        await move(tester, finger, -16);
+        await finger.up();
+        await settle(tester, 20);
+        http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1t$i')];
+        http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+        await environment.refreshAccount();
+        await settle(tester, 30);
+        expect(http.asked, [1, 1, 1]);
+        expect(card('BV1t0'), findsOneWidget);
+        final again = await armed(tester);
+        await settle(tester, 2);
+        expect(http.asked, [1, 1, 1, 1], reason: "the old account's answer is not taken");
+        await again.up();
+        await settle(tester, 30);
+      });
     });
 
     testWidgets("a refresh's cards make no entrance; the first load's still rise", (tester) async {
@@ -1244,11 +1388,11 @@ void main() {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
-      covers.holding = true;
       http.pages[1] = fresh();
+      final answer = http.gates[1] = Completer<void>();
       await tapHome(tester);
       await settle(tester, 4);
-      covers.ready();
+      answer.complete();
       await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 40));
       expect(going('BV1c0'), findsOneWidget);
@@ -1260,46 +1404,44 @@ void main() {
       semantics.dispose();
     });
 
-    testWidgets('a refresh restarted while the covers load drops the stale answer', (tester) async {
+    testWidgets('a refresh restarted while the first is out drops the stale answer', (tester) async {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
-      covers.holding = true;
       http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1s$i')];
+      final stale = http.gates[1] = Completer<void>();
       await tapHome(tester);
       await settle(tester, 3);
-      expect(covers.asked, contains('BV1s0'));
+      expect(http.asked, [1, 1]);
 
+      http.gates.remove(1);
       http.pages[1] = fresh();
       http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
       await environment.refreshAccount();
-      await settle(tester, 2);
-      expect(http.asked, [1, 1, 1], reason: 'the account changed: a new refresh');
-      expect(covers.asked, contains('BV1n0'));
-
-      covers.ready([for (var i = 0; i < 20; i++) 'BV1s$i']);
-      await settle(tester, 2);
-      expect(card('BV1s0'), findsNothing, reason: 'the stale answer is dropped');
-      expect(card('BV1c0'), findsOneWidget);
-
-      covers.ready();
       await settle(tester, 20);
+      expect(http.asked, [1, 1, 1], reason: 'the account changed: a new refresh');
       expect(card('BV1n0'), findsOneWidget);
-      expect(card('BV1s0'), findsNothing);
-      expect(card('BV1c0'), findsNothing);
+
+      http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1s$i')];
+      stale.complete();
+      await settle(tester, 20);
+      expect(card('BV1s0'), findsNothing, reason: 'the stale answer is dropped');
+      expect(card('BV1n0'), findsOneWidget);
     });
 
     testWidgets('with Reduce Motion the new cards replace the old at once', (tester) async {
       http.pages[1] = twenty();
       await show(tester, still: true);
       await settle(tester);
-      covers.holding = true;
       http.pages[1] = fresh();
+      final answer = http.gates[1] = Completer<void>();
       await tapHome(tester);
       await settle(tester, 4);
       expect(reloadTv, findsOneWidget);
-      covers.ready();
-      await tester.pump();
+      answer.complete();
+      for (var i = 0; i < 10 && card('BV1n0').evaluate().isEmpty; i++) {
+        await tester.pump();
+      }
       expect(card('BV1n0'), findsOneWidget);
       expect(card('BV1c0'), findsNothing);
       expect(going('BV1c0'), findsNothing);
@@ -1339,11 +1481,11 @@ void main() {
       http.pages[1] = [feedItem('BV1c0'), feedItem('BV1c1')];
       await show(tester);
       await settle(tester, 20);
-      covers.holding = true;
       http.pages[1] = fresh();
+      final answer = http.gates[1] = Completer<void>();
       await tapHome(tester);
       await settle(tester, 4);
-      covers.ready();
+      answer.complete();
       await untilHandOff(tester);
       await tester.pump(const Duration(milliseconds: 60));
       expect(going('BV1c1'), findsOneWidget);
@@ -1358,7 +1500,7 @@ void main() {
     });
 
     testWidgets("with the real precache the first screen's new covers are downloaded once, at the size their cards "
-        'ask for, and drawn the frame the cards come', (tester) async {
+        'ask for', (tester) async {
       HomePage.precacheCover = FeedCardView.precacheCover;
       final picture = (await tester.runAsync(_coverPng))!;
       final folder = (await tester.runAsync(() => Directory.systemTemp.createTemp('feed_covers')))!;
@@ -1393,7 +1535,6 @@ void main() {
       await show(tester);
       await run(60, until: () => card('BV1c0').evaluate().isNotEmpty);
       expect(card('BV1c0'), findsOneWidget);
-      expect(drawn('BV1c0'), isTrue, reason: 'the first load waits for its covers too');
       await run(10);
 
       http.pages[1] = fresh();
@@ -1402,16 +1543,13 @@ void main() {
       expect(card('BV1n0'), findsOneWidget);
       final screen = firstScreen(tester);
       expect(screen, isNotEmpty);
-      for (final bvid in screen) {
-        expect(drawn(bvid), isTrue, reason: '$bvid drawn the frame its card came');
-      }
-      final line = coverLines().last;
-      expect(line.f['timedOut']?.toJson(), false);
-      expect(line.f['failed']?.toJson(), 0);
-      expect(line.f['ready']?.toJson(), screen.length);
+      expect(coverLines().last.f['of']?.toJson(), screen.length);
 
       await run(20);
       await settle(tester, 10);
+      for (final bvid in screen) {
+        expect(drawn(bvid), isTrue, reason: '$bvid drawn once in');
+      }
       for (final bvid in screen) {
         expect(downloadsOf(bvid), 1, reason: "$bvid: the card's own picture is the precached one");
       }
@@ -1421,7 +1559,8 @@ void main() {
           if (url.contains('/bfs/archive/')) url,
       ];
       expect(coverAddresses, isNotEmpty);
-      expect(coverAddresses, everyElement(endsWith('.jpg${BiliMetrics.feedCoverSuffix}')), reason: "the CDN's size");
+      // 211 × 158.25 pt at 1x, in 60 px steps.
+      expect(coverAddresses, everyElement(endsWith('.jpg@240w_180h_1c.webp')), reason: "the cover box's own size");
       // The store's steps wait on frames as well as on the disk.
       var stored = false;
       unawaited(cache.settle().then((_) => stored = true));

@@ -59,10 +59,10 @@ void main() {
     expect(FeedCardSize.height(211, TextScaler.noScaling) + BiliMetrics.feedSpacing, moreOrLessEquals(248));
   });
 
-  testWidgets("the cover asks the CDN for its pre-made size, whatever the column's width and the pixel ratio", (
-    tester,
-  ) async {
+  testWidgets("the cover asks for its own box's size in 60 px steps at the screen's ratio", (tester) async {
+    expect(FeedCardSize.cover(211), const Size(211, 158.25));
     addTearDown(tester.view.resetDevicePixelRatio);
+    int step(double pixels) => (pixels / 60).ceil() * 60;
     for (final ratio in [2.0, 3.0]) {
       tester.view.devicePixelRatio = ratio;
       for (final width in [160.0, 211.0, 300.0]) {
@@ -81,7 +81,13 @@ void main() {
             .widgetList<Image>(find.descendant(of: find.byType(FeedCardView), matching: find.byType(Image)))
             .map((image) => image.image)
             .whereType<StoredNetworkImage>();
-        expect(pictures.single.url, '${card.cover}${BiliMetrics.feedCoverSuffix}', reason: '$width pt at ${ratio}x');
+        final box = FeedCardSize.cover(width);
+        expect(
+          pictures.single.url,
+          sizedImageUrl(card.cover, width: step(box.width * ratio), height: step(box.height * ratio)),
+          reason: '$width pt at ${ratio}x',
+        );
+        if (width == 211 && ratio == 3) expect(pictures.single.url, '${card.cover}@660w_480h_1c.webp');
       }
     }
   });

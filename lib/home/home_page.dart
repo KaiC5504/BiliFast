@@ -52,7 +52,8 @@ class HomePage extends StatefulWidget {
   /// Gets a 推荐 cover ready before its card shows; tests stand in for [FeedCardView.precacheCover], as they have no
   /// network.
   @visibleForTesting
-  static Future<bool> Function(BuildContext context, String? url) precacheCover = FeedCardView.precacheCover;
+  static Future<bool> Function(BuildContext context, String? url, Size size) precacheCover =
+      FeedCardView.precacheCover;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -180,23 +181,33 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// The running refresh, or a new one. [restart] starts one even while another runs (whose answer the feed then
-  /// drops), as a refresh asked for before the account changed would bring the old account's 推荐.
-  Future<void> _refreshFeed({bool restart = false}) {
+  /// drops), as a refresh asked for before the account changed would bring the old account's 推荐. A [pulled] one
+  /// takes the page its pull already asked for.
+  Future<void> _refreshFeed({bool restart = false, bool pulled = false}) {
     final running = _refreshing;
     if (running != null && !restart) return running;
     _refreshesStarted += 1;
     late final Future<void> refresh;
-    refresh = _fetchFeed().whenComplete(() {
+    refresh = _fetchFeed(pulled: pulled).whenComplete(() {
       if (identical(_refreshing, refresh)) _refreshing = null;
     });
     return _refreshing = refresh;
   }
 
   /// A refresh that fails with cards on screen keeps them and says why in a toast.
-  Future<void> _fetchFeed() async {
-    final failure = await _feed?.refresh();
+  Future<void> _fetchFeed({required bool pulled}) async {
+    final failure = await _feed?.refresh(pulled: pulled);
     if (failure != null && mounted) showToast(context, failure);
   }
+
+  Future<void> _pullRefresh() => _refreshFeed(pulled: true);
+
+  /// A pull held past its trigger starts its page, unless a refresh is already out: the release joins that one.
+  void _pullArmed() {
+    if (_refreshing == null) _feed?.pullArmed();
+  }
+
+  void _pullDisarmed() => _feed?.pullDisarmed();
 
   /// Back on home from a pushed page, an account check that failed is tried again, as Swift's HomeView.task did on
   /// every return; one still running is left to answer.
@@ -332,6 +343,9 @@ class _HomePageState extends State<HomePage> {
                     onUndo: _undoDislike,
                     onReason: _dislikeReason,
                     onRefresh: _refreshFeed,
+                    onPull: _pullRefresh,
+                    onPullArmed: _pullArmed,
+                    onPullDisarmed: _pullDisarmed,
                     refreshing: () => _refreshing,
                   ),
                 ),
@@ -677,6 +691,9 @@ class _FeedGrid extends StatefulWidget {
     required this.onUndo,
     required this.onReason,
     required this.onRefresh,
+    required this.onPull,
+    required this.onPullArmed,
+    required this.onPullDisarmed,
     required this.refreshing,
   });
 
@@ -689,6 +706,11 @@ class _FeedGrid extends StatefulWidget {
 
   /// The page's refresh: the one running, or a new one.
   final Future<void> Function() onRefresh;
+
+  /// The pull's refresh, and its arming past the trigger and falling back, which fetch ahead of the release.
+  final Future<void> Function() onPull;
+  final VoidCallback onPullArmed;
+  final VoidCallback onPullDisarmed;
 
   /// The refresh running, if any.
   final Future<void>? Function() refreshing;
@@ -728,8 +750,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   /// The cards fading out, by grid slot, while a refresh's cards come in; null otherwise.
   List<_Going>? _going;
 
-  /// The refresh [FeedModel.beforeShow] last saw while its covers load: its cards, the ones they replace, and those
-  /// as they will fade out.
+  /// The refresh [FeedModel.beforeShow] last saw, until its cards show (a held pull's may never): its cards, the
+  /// ones they replace, and those as they will fade out.
   ({List<FeedCard> fresh, List<FeedCard> old, List<_Going> going})? _coming;
 
   /// What the last build and layout gave the grid, to ask for the first screen's covers at their cards' size.
@@ -776,21 +798,22 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
 
   static double _columnWidth(double gridWidth) => (gridWidth - BiliMetrics.feedSpacing * 3) / 2;
 
-  /// Notes the cards going and starts the covers of the rows the top of the list shows, both columns, as their cards
-  /// will ask for them.
-  CoverWait _beforeShow(List<FeedCard> fresh) {
-    if (!mounted) return const CoverWait.skipped(CoverSkip.unmounted);
+  /// Notes the cards going and starts the covers of the rows the top of the list shows, both columns, at the size
+  /// their cards will ask for.
+  CoverPrefetch _beforeShow(List<FeedCard> fresh) {
+    if (!mounted) return const CoverPrefetch.skipped(CoverSkip.unmounted);
     final feed = widget.feed;
     final old = feed.cards;
     _coming = (fresh: fresh, old: old, going: _goingOf(old));
     final viewport = _viewport;
-    if (viewport == null) return const CoverWait.skipped(CoverSkip.noLayout);
+    if (viewport == null) return const CoverPrefetch.skipped(CoverSkip.noLayout);
     const spacing = BiliMetrics.feedSpacing;
     final width = _columnWidth(viewport.width);
     final rowExtent = FeedCardSize.height(width, _scaler) + spacing;
     final rows = math.max(((viewport.height - _inset - spacing) / rowExtent).ceil(), 0);
-    if (rows == 0) return const CoverWait.skipped(CoverSkip.noRows);
-    return CoverWait([for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover)]);
+    if (rows == 0) return const CoverPrefetch.skipped(CoverSkip.noRows);
+    final size = FeedCardSize.cover(width);
+    return CoverPrefetch([for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover, size)]);
   }
 
   List<_Going> _goingOf(List<FeedCard> cards) => [
@@ -804,7 +827,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
       _coming = null;
       _handOffFrom(coming.going, coming.fresh);
     } else if (coming != null && identical(cards, coming.old)) {
-      // A 不感兴趣 or 撤销 while the covers load, read now: by the swap the refresh has dropped every one.
+      // A 不感兴趣 or 撤销 before the swap, read now: by the swap the refresh has dropped every one.
       _coming = (fresh: coming.fresh, old: coming.old, going: _goingOf(cards));
     }
     setState(() {});
@@ -903,7 +926,9 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
         final pull = ReleaseRefreshControl(
           refreshIndicatorExtent: LoadingTvTheme.size,
           builder: _reloadHeader ? null : loadingTvRefreshIndicator,
-          onRefresh: _reloadHeader ? null : widget.onRefresh,
+          onRefresh: _reloadHeader ? null : widget.onPull,
+          onArmed: _reloadHeader ? null : widget.onPullArmed,
+          onDisarmed: widget.onPullDisarmed,
         );
         return AnimatedSwitcher(
           duration: still ? Duration.zero : const Duration(milliseconds: 320),

@@ -93,8 +93,10 @@ final class FeedHttp implements HTTPTransport {
   final gates = <int, Completer<void>>{};
   final asked = <int>[];
 
-  /// The official feed's pages by `idx`, the code it answers with, and the `idx`es asked for.
+  /// The official feed's pages by `idx`, the code it answers with, the `idx`es asked for, and gates holding a
+  /// page's answer until completed.
   final officialPages = <int, List<Map<String, Object?>>>{};
+  final officialGates = <int, Completer<void>>{};
   int officialCode = 0;
   final officialAsked = <int>[];
 
@@ -110,6 +112,7 @@ final class FeedHttp implements HTTPTransport {
       case officialFeedPath:
         final index = int.parse(request.url.queryParameters['idx']!);
         officialAsked.add(index);
+        await officialGates[index]?.future;
         return _json(request, {
           'code': officialCode,
           'message': officialCode == 0 ? '0' : '账号未登录',
