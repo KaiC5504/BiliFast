@@ -111,7 +111,7 @@ void main() {
     expect(fetches(), 0);
   });
 
-  test('a token confirmed mid-session (授权) asks for the skin once; later notices that keep it don't ask again', () async {
+  test("a token confirmed mid-session (授权) asks for the skin once; later notices that keep it don't ask again", () async {
     final environment = await AppEnvironment.load(
       keychain: FakeKeychain(const NoStoredCookies()),
       http: Canned.http(),
