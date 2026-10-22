@@ -22,7 +22,7 @@ class MeProfileStore {
     if (path == null) return MeProfileStore._(null, null, false, log);
     final file = File(path);
     try {
-      if (!await file.exists()) return MeProfileStore._(path, null, false, log);
+      if (!await file.exists()) return MeProfileStore._(path, null, await File('$path.tmp').exists(), log);
       return MeProfileStore._(path, _decode(await file.readAsString()), true, log);
     } catch (error) {
       log.warn(LogCategory.app, 'me profile unreadable, starting empty', {
@@ -69,18 +69,25 @@ class MeProfileStore {
 
   Future<void> _write(String path, String text) async {
     final file = File(path);
+    final temporary = File('$path.tmp');
     try {
       await file.parent.create(recursive: true);
-      final temporary = File('$path.tmp');
       await temporary.writeAsString(text, flush: true);
       await temporary.rename(path);
     } catch (error) {
       _logger.warn(LogCategory.app, 'me profile not saved', {'file': _name(file), 'error': _reason(error)});
+      // It holds the account too.
+      await _deleteFile(temporary);
     }
   }
 
+  /// A write killed before its rename leaves the account in the temporary file, so that goes as well.
   Future<void> _remove(String path) async {
-    final file = File(path);
+    await _deleteFile(File(path));
+    await _deleteFile(File('$path.tmp'));
+  }
+
+  Future<void> _deleteFile(File file) async {
     try {
       if (await file.exists()) await file.delete();
     } catch (error) {

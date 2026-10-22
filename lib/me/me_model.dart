@@ -214,8 +214,14 @@ class MeModel extends ChangeNotifier {
   /// The hidden page's load a few seconds after launch ([preloadDelay]), so 我的 is drawn complete the first time it
   /// opens. Once per launch and only before any other load; it counts toward [quietGap] as any load does, unless nav
   /// failed, so opening the page then tries again. The account check's nav stands in for its own while it is fresh.
+  /// Not while a failed check leaves the account unknown: the keychain may be unread, and nav would say logged out.
   void preload() {
-    if (_preloaded || !_signedIn || _lastLoad != null) return;
+    final checkable = switch (_account) {
+      LoggedIn() => true,
+      AccountUnknown() => !_environment.accountCheckFailed,
+      LoggedOut() || LoginExpired() => false,
+    };
+    if (_preloaded || !checkable || _lastLoad != null) return;
     _preloaded = true;
     unawaited(_load(background: true));
   }
@@ -341,7 +347,12 @@ class MeModel extends ChangeNotifier {
     _account = now;
     if (now is! LoggedIn) {
       _signedOut();
-    } else if (was is LoggedOut || was is LoginExpired || _showsAnotherAccount) {
+    } else if (was is LoggedOut ||
+        was is LoginExpired ||
+        (was is AccountUnknown && _view is MeLoggedOut) ||
+        _showsAnotherAccount) {
+      // Unknown and 点击登录: nav said logged out while the check couldn't read the login (an unread keychain), and
+      // now it has. Left as it was, 点击登录 would invite a second login on the account.
       _loginLoaded = true;
       _restart();
     }

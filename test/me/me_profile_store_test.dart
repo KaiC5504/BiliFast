@@ -74,6 +74,40 @@ void main() {
     expect((await MeProfileStore.load(path, logger: logger)).kept, isNull);
   });
 
+  test('delete removes a temporary file a killed write left beside it', () async {
+    final first = await MeProfileStore.load(path, logger: logger);
+    first.save(2233, const MeShown(profile, counts));
+    await first.settle();
+    File('$path.tmp').writeAsStringSync('{"mid": 2233, "profile": {"name": "保存的名字"}}');
+    final store = await MeProfileStore.load(path, logger: logger);
+    expect(store.kept?.mid, 2233);
+    store.delete();
+    await store.settle();
+    expect(File(path).existsSync(), isFalse);
+    expect(File('$path.tmp').existsSync(), isFalse);
+  });
+
+  test('a launch logged out deletes a temporary file left by the first write, with no file of its own', () async {
+    File('$path.tmp').writeAsStringSync('{"mid": 2233, "profile": {"name": "保存的名字"}}');
+    final store = await MeProfileStore.load(path, logger: logger);
+    expect(store.kept, isNull);
+    store.delete();
+    await store.settle();
+    expect(File('$path.tmp').existsSync(), isFalse);
+  });
+
+  test('a failed rename deletes the temporary file, which holds the account', () async {
+    final store = await MeProfileStore.load(path, logger: logger);
+    // A folder in the file's place makes the rename fail.
+    Directory(path).createSync();
+    File('$path${Platform.pathSeparator}inside').writeAsStringSync('');
+    store.save(2233, const MeShown(profile, counts));
+    await store.settle();
+    expect(sink.events.map((event) => event.msg), contains('me profile not saved'));
+    expect(File('$path.tmp').existsSync(), isFalse);
+    expect(logged(), isNot(contains('保存的名字')));
+  });
+
   for (final (name, text) in [
     ('not JSON', '{"mid": 2233, "profile": {"name": "保存的名'),
     ('not an object', '["保存的名字"]'),

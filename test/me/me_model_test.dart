@@ -365,6 +365,30 @@ void main() {
     expect(environment.checks, 1, reason: 'a failed nav says nothing of the network');
   });
 
+  test('nav saying logged out while the account was unknown gives way when the check then finds the login', () async {
+    final account = api.navInfo;
+    final model = make(account: const AccountUnknown());
+    environment.accountCheckFailed = true;
+    api.navInfo = const NavInfo(isLogin: false);
+    model.shown();
+    await idle();
+    expect(model.view, isA<MeLoggedOut>());
+
+    api.navInfo = account;
+    environment
+      ..accountCheckFailed = false
+      ..mid = 1
+      ..account = loggedIn;
+    expect(model.view, isA<MeLoading>(), reason: '点击登录 goes at once');
+    await idle();
+    expect(shownView(model).profile.name, '测试账号');
+    expect(api.calls.where((call) => call == 'nav'), hasLength(2));
+
+    environment.account = loggedIn;
+    await idle();
+    expect(api.calls.where((call) => call == 'nav'), hasLength(2), reason: 'only the turn to logged in loads');
+  });
+
   test('a check still running or one that never failed is left be', () async {
     final unknown = make(account: const AccountUnknown());
     await unknown.refresh();
@@ -610,6 +634,15 @@ void main() {
       });
     }
 
+    test('unknown after a failed check (the keychain may be unread), it asks nothing', () async {
+      final model = make(account: const AccountUnknown());
+      environment.accountCheckFailed = true;
+      model.preload();
+      await idle();
+      expect(api.calls, isEmpty);
+      expect(model.view, isA<MeLoading>(), reason: 'not 点击登录, which would invite a second login');
+    });
+
     test('a failed one leaves opening the page to try again; it keeps the kept account meanwhile', () async {
       const keptView = MeShown(MeProfile(mid: 1, name: '上次的名字', face: '', level: 4, coins: 0, bcoin: 0), null);
       api.failures['nav'] = const BiliError.network('SocketException');
@@ -661,15 +694,24 @@ void main() {
   });
 
   test('nothing of the account reaches the log', () async {
+    const mid = 31415926;
+    final demo = api.navInfo;
+    api.navInfo = NavInfo(isLogin: true, mid: mid, uname: demo.uname, face: demo.face, pendant: demo.pendant);
     final store = MeProfileStore.memory(logger: logger);
-    final model = make(account: const AccountUnknown(), store: store, cookieMid: '1');
+    final model = make(account: const AccountUnknown(), store: store, cookieMid: '$mid');
     environment.accountNav = (nav: api.navInfo, at: clock);
     model.preload();
     await idle();
+    clock = clock.add(const Duration(seconds: 30));
+    api.failures['stat'] = const BiliError.http(500);
+    await model.refresh();
+    api.navInfo = const NavInfo(isLogin: false);
     await model.refresh();
     environment.account = const LoggedOut();
-    final logged = sink.events.map((event) => '${event.toJson()}').join();
-    for (final secret in ['测试账号', 'noface', 'hdslb', '"mid"']) {
+    expect(sink.events.map((event) => event.msg), containsAll(['me stat failed', 'me logged out by nav']));
+    // Encoded as the log file writes them; a Map's toString would quote no key.
+    final logged = sink.events.map((event) => event.encode()).join();
+    for (final secret in ['测试账号', 'noface', 'hdslb', '"mid"', '$mid']) {
       expect(logged, isNot(contains(secret)));
     }
   });
