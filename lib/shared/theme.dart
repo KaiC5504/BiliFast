@@ -5013,8 +5013,113 @@ abstract final class AppAuthTheme {
 /// The account's own space (108, 115): the tall banner, 编辑资料, the name line's pills, the level's exp bar and the
 /// black bar scrolled.
 abstract final class OwnSpaceTheme {
-  /// The banner's bottom edge, measured on 108.
-  static const bannerHeight = 295.3;
+  /// The banner's bottom edge, measured on 108. The face, the counts and 编辑资料 sit where others' spaces have them
+  /// (SpaceTheme), [drop] lower.
+  static const bannerHeight = 887 / 3;
+  static const drop = bannerHeight - SpaceTheme.bannerHeight;
+  static const topBlock = SpaceTheme.topBlock + drop;
+
+  /// The 空间头图's label over the banner's foot: a 40 pt band shading from clear at 270 to 60% black at the right edge;
+  /// the title (11 pt) ending 390, over the number ending 389.33, their middles 27.83 and 11.67 above the banner's
+  /// foot; then a 1 × 10 rule of 40% white 9 after them, its middle 20 above the foot, and 👕 (17.33 × 15.33 of
+  /// 1.33 pt line) centred 418 across and 20.33 above the foot.
+  static const labelShade = 40.0;
+  static const labelShadeLeft = 270.0;
+  static const labelShadeClear = Color(0x00000000);
+  static const labelShadeInk = Color(0x99000000);
+  static const labelTitleRight = 148 / 3;
+  static const labelNumberRight = 152 / 3;
+  static const labelTitleText = 11.0;
+  static const labelTitleLine = 14.0;
+  static const labelTitleRise = 83.5 / 3;
+  static const labelSubtitleText = 14.0;
+  static const labelSubtitleLine = 17.0;
+  static const labelSubtitleRise = 35 / 3;
+
+  /// The number's block letters (评论's fan card's): 10 tall, 7.83 wide with 2.1 strokes, 2.5 apart. A subtitle they
+  /// can't spell is set in 14 pt bold.
+  static const labelNumberHeight = 10.0;
+  static const labelNumberWidth = 23.5 / 3;
+  static const labelNumberWeight = 2.1;
+  static const labelNumberGap = 2.5;
+  static const labelInk = Color(0xFFFFFFFF);
+  static const labelRuleLeft = 399.0;
+  static const labelRule = 1.0;
+  static const labelRuleHeight = 10.0;
+  static const labelRuleInk = Color(0x66FFFFFF);
+  static const labelIconRise = 20.0;
+  static const skinRise = 61 / 3;
+  static const skinCentre = 418.0;
+  static const skinWidth = 52 / 3;
+  static const skinHeight = 46 / 3;
+  static const skinStroke = 4 / 3;
+  static const skinInk = Color(0xFFFFFFFF);
+  static const skinTarget = 44.0;
+
+  /// The face's middle, where others' spaces have it. Under a frame it is a 62 pt circle with no ring and the frame
+  /// 评论's 1.75 times it; the 大 is a 20 pt disc in a 2 pt white ring, its middle 25.33 right of the face's and 26.67
+  /// below. Without a frame the face and its badge are others' (SpaceTheme.face, faceBadge).
+  static const faceCentreX = SpaceTheme.faceLeft + SpaceTheme.face / 2;
+  static const faceCentreY = SpaceTheme.faceTop + SpaceTheme.face / 2 + drop;
+  static const pendantFace = 62.0;
+  static const pendantScale = CommentRowTheme.pendantScale;
+  static const vipDisc = 20.0;
+  static const vipRing = 2.0;
+  static const vipRingInk = Color(0xFFFFFFFF);
+  static const vipPendantShift = Offset(76 / 3, 80 / 3);
+
+  /// 编辑资料 in place of + 关注: the same box, outlined in 1 pt pink with the label centred.
+  static const editTop = SpaceTheme.followTop + drop;
+  static const editBorder = 1.0;
+  static const editInk = BiliColors.pink;
+  static const editFill = SpaceTheme.page;
+
+  /// After the name: the 大会员 label's picture 14.67 tall, 6.67 on; then "+ 成就勋章" and "+ 粉丝勋章", 16 tall
+  /// stadiums of 1 pt grey dashes (3 on, 3 off), 6.67 after the label and 6.33 apart, the + (8.67 square) 6.67 in and
+  /// the 10 pt words 4.33 after it.
+  static const vipLabelGap = 20 / 3;
+  static const vipLabelHeight = 44 / 3;
+  static const vipLabelMaxWidth = 120.0;
+  static const pillGap = 20 / 3;
+  static const pillSpacing = 19 / 3;
+  static const pillHeight = 16.0;
+  static const pillBorder = 1.0;
+  static const pillDash = 3.0;
+  static const pillDashGap = 3.0;
+  static const pillRim = Color(0xFFC9CCD0);
+  static const pillPad = 20 / 3;
+  static const pillPlus = 26 / 3;
+  static const pillPlusGap = 13 / 3;
+  static const pillText = 10.0;
+  static const pillInk = BiliColors.secondaryText;
+
+  /// The level's row between the name and the bio (37.83 from the name's box to the bio's): the LV badge 10.67 tall
+  /// from 13.33, its middle 14.67 down; "14805/28800" in 11 pt grey from 42.33, its line's middle 14.5 down (the
+  /// digits' ink 14.83); under them a 2 pt bar 101.67 long from the gutter, 23.67 down, filled in the level's colour
+  /// by exp / next.
+  static const levelBlock = 227 / 6;
+  static const levelLeft = 40 / 3;
+  static const levelCentre = 44 / 3;
+  static const levelHeight = 32 / 3;
+  static const expLeft = 127 / 3;
+  static const expCentre = 43.5 / 3;
+  static const expText = 11.0;
+  static const expLine = 14.0;
+  static const expInk = BiliColors.secondaryText;
+  static const expBarTop = 71 / 3;
+  static const expBarWidth = 305 / 3;
+  static const expBarHeight = 2.0;
+  static const expTrack = BiliColors.divider;
+
+  /// Scrolled (115): the bar of others' spaces with the name centred in 17 pt, white with the stock look; under a
+  /// skin that dresses second pages, the skin's colours.
+  static const barName = 17.0;
+  static const barNameWidth = 240.0;
+  static const bar = SpaceTheme.bar;
+  static const barInk = SpaceTheme.barInk;
+
+  /// A skin's light text without a colour of its own.
+  static const barLightInk = Color(0xFFFFFFFF);
 }
 
 /// The own space's tabs: 主页's sections (114, 115), 收藏 (116), 追番 (117) and 投稿's empty page (108).

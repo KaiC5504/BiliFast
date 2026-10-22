@@ -4,12 +4,14 @@ import 'package:flutter/widgets.dart';
 import '../shared/theme.dart';
 import 'space_header.dart';
 
-/// The space's own tabs (63, 69, 72, 78) between hairlines. Only 投稿 opens, so it is always the one shown.
+/// The space's own tabs (63, 69, 72, 78) between hairlines, [selected] pink over its bar. Others' spaces open only 投稿,
+/// so it is always the one shown there.
 class SpaceTabRow extends StatelessWidget {
-  const SpaceTabRow({super.key, required this.tabs, required this.onTap});
+  const SpaceTabRow({super.key, required this.tabs, required this.onTap, this.selected = SpaceTabKind.contribute});
 
   final List<SpaceTab> tabs;
   final ValueChanged<SpaceTab> onTap;
+  final SpaceTabKind selected;
 
   /// The profile's tabs, with 投稿 added at the end when the uploader's list has none.
   static List<SpaceTab> of(SpaceProfile profile) => [
@@ -43,7 +45,7 @@ class SpaceTabRow extends StatelessWidget {
                           width: cell,
                           top: 0,
                           bottom: 0,
-                          child: _Tab(tab: tab, onTap: () => onTap(tab)),
+                          child: _Tab(tab: tab, shown: tab.kind == selected, onTap: () => onTap(tab)),
                         ),
                     ],
                   );
@@ -59,14 +61,14 @@ class SpaceTabRow extends StatelessWidget {
 }
 
 class _Tab extends StatelessWidget {
-  const _Tab({required this.tab, required this.onTap});
+  const _Tab({required this.tab, required this.shown, required this.onTap});
 
   final SpaceTab tab;
+  final bool shown;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final shown = tab.kind == SpaceTabKind.contribute;
     return Semantics(
       button: true,
       selected: shown,

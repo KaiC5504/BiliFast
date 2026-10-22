@@ -15,6 +15,7 @@ import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/space/fake_space_api.dart';
+import 'package:bilifast/space/own/own_space_page.dart';
 import 'package:bilifast/space/space_page.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
@@ -180,13 +181,16 @@ void main() {
   });
 
   testWidgets('the avatar on 我的 opens the account\'s own space (mid 1)', (tester) async {
+    // The login's mid is 我的's, so the space is the account's own.
+    http.canned.routes[Canned.navPath] = (200, Canned.navLoggedIn.replaceFirst('"mid":12345', '"mid":1'));
     await show(tester);
     await settle(tester, 40);
     await openMine(tester);
     await settle(tester, 20);
     await tester.tap(find.byKey(const ValueKey('me-avatar')));
     await settle(tester, 20);
-    expect(tester.widget<SpacePage>(find.byType(SpacePage)).uploader.mid, 1);
+    expect(tester.widget<OwnSpacePage>(find.byType(OwnSpacePage)).uploader.mid, 1);
+    expect(find.byType(SpacePage), findsNothing);
   });
 
   testWidgets('a failed first load on 我的 toasts its reason, and a pull on it says it again', (tester) async {
