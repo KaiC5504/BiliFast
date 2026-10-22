@@ -115,7 +115,14 @@ void main() {
 
   String allLogText() => sink.events.map((event) => event.encode()).join('\n');
 
-  bool versionExists(int id, int ver) => Directory('${folder.path}/$id/$ver').existsSync();
+  /// The unpacked folders of [id]'s version [ver], one per package.
+  List<Directory> versionFolders(int id, int ver) {
+    final skin = Directory('${folder.path}/$id');
+    if (!skin.existsSync()) return const [];
+    return skin.listSync().whereType<Directory>().where((each) => nameOf(each).startsWith('$ver-')).toList();
+  }
+
+  bool versionExists(int id, int ver) => versionFolders(id, ver).isNotEmpty;
 
   test('logged in, it downloads, checks and unpacks the package and shows it', () async {
     final api = apiWith(1);
@@ -338,7 +345,7 @@ void main() {
   test('a half-written version is unpacked again', () async {
     await settle(make(apiWith(1)).model);
     File('${folder.path}/current.json').deleteSync();
-    File('${folder.path}/7/1/.skin.json').deleteSync();
+    File('${versionFolders(7, 1).single.path}/.skin.json').deleteSync();
 
     final api = apiWith(1);
     final (:model, environment: _) = make(api);
@@ -369,6 +376,25 @@ void main() {
     await model.refresh();
     expect(model.value!.equip.id, 8);
     expect(folder.listSync().map(nameOf).toSet(), {'8', 'current.json'});
+  });
+
+  test('a package changed under the same version unpacks beside the shown one, which then goes', () async {
+    final api = apiWith(1);
+    final (:model, environment: _) = make(api);
+    await settle(model);
+    final before = model.value!.headBg!.path;
+
+    final changed = zipOf({
+      'head_bg.png': [9, 9],
+    });
+    api
+      ..equip = equipFor(changed)
+      ..package = changed;
+    await model.refresh();
+    expect(model.value!.headBg!.readAsBytesSync(), [9, 9]);
+    expect(model.value!.headBg!.path, isNot(before));
+    expect(File(before).existsSync(), isFalse);
+    expect(versionFolders(7, 1), hasLength(1));
   });
 
   test('a changed colour on the same version shows without a download', () async {

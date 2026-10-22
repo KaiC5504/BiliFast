@@ -15,9 +15,10 @@ import 'skin_package.dart';
 /// unpacked under [folder] (the support folder's `skins`). Answers from the last unpacked skin at once, so a launch
 /// draws the theme from the first frame; a failure keeps what is shown.
 ///
-/// On disk: `current.json` names the skin last equipped (or none), and each version is unpacked into `<id>/<ver>`,
-/// whole once its `.skin.json` is there (the unpack goes to `<ver>.partial` and is renamed into place). Logging out
-/// shows the stock look and the next launch starts stock, but the files stay for the next login.
+/// On disk: `current.json` names the skin last equipped (or none), and each package is unpacked into
+/// `<id>/<ver>-<md5>`, whole once its `.skin.json` is there (the unpack goes to a `.partial` folder and is renamed into
+/// place). A package changed under the same version gets a folder of its own, so files on screen are never replaced in
+/// place. Logging out shows the stock look and the next launch starts stock, but the files stay for the next login.
 class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   SkinModel({required this._api, required this._environment, required this._folder, Logger? logger})
     : _logger = logger ?? Logger.shared;
@@ -223,7 +224,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
         if (skin is! Directory) continue;
         final id = _nameOf(skin.path);
         await for (final version in skin.list(followLinks: false)) {
-          if (keep != null && id == '${keep.id}' && _nameOf(version.path) == '${keep.ver}') continue;
+          if (keep != null && id == '${keep.id}' && _nameOf(version.path) == _versionName(keep)) continue;
           try {
             await version.delete(recursive: true);
           } on FileSystemException {
@@ -244,7 +245,13 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     return _scratch ??= Directory.systemTemp.createTemp('bilifast_skin_').then((folder) => folder.path);
   }
 
-  static String _versionPath(String root, SkinEquip equip) => '$root/${equip.id}/${equip.ver}';
+  static String _versionPath(String root, SkinEquip equip) => '$root/${equip.id}/${_versionName(equip)}';
+
+  /// The md5 comes from an answer, so only its hex digits reach the path.
+  static String _versionName(SkinEquip equip) {
+    final digits = equip.packageMd5.toLowerCase().replaceAll(RegExp('[^0-9a-f]'), '');
+    return '${equip.ver}-${digits.length > 8 ? digits.substring(0, 8) : digits}';
+  }
 
   static String _nameOf(String path) => path.split(RegExp(r'[\\/]')).last;
 

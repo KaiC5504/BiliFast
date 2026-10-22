@@ -227,13 +227,83 @@ final class DemoSkin {
     _text(canvas, '+', size.center(Offset.zero), 80, selected ? _night : _white);
   }
 
-  /// [text] centred on [center].
+  /// [text] in stroked capitals centred on [center]. Stroked rather than set in a font: which font the engine has
+  /// loaded at launch changed the drawing, and with it the package's md5, from one PC run to the next.
   static void _text(Canvas canvas, String text, Offset center, double fontSize, Color color) {
-    final builder = ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, fontWeight: FontWeight.w700))
-      ..pushStyle(ui.TextStyle(color: color, fontSize: fontSize))
-      ..addText(text);
-    final paragraph = builder.build()..layout(const ui.ParagraphConstraints(width: 1320));
-    canvas.drawParagraph(paragraph, center - Offset(paragraph.width / 2, paragraph.height / 2));
-    paragraph.dispose();
+    final height = fontSize * 0.7;
+    final width = height * 0.6;
+    final gap = height * 0.25;
+    final total = text.length * width + (text.length - 1) * gap;
+    final pen = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = height * 0.14
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = color;
+    var left = center.dx - total / 2;
+    final top = center.dy - height / 2;
+    // One path, so translucent strokes don't darken where they cross.
+    final path = Path();
+    for (final letter in text.split('')) {
+      for (final stroke in _strokes[letter] ?? const <List<(double, double)>>[]) {
+        final (startX, startY) = stroke.first;
+        path.moveTo(left + startX * width, top + startY * height);
+        for (final (x, y) in stroke.skip(1)) {
+          path.lineTo(left + x * width, top + y * height);
+        }
+      }
+      left += width + gap;
+    }
+    canvas.drawPath(path, pen);
   }
+
+  /// The few capitals the demo writes, as polylines in a unit box.
+  static const _strokes = <String, List<List<(double, double)>>>{
+    'A': [
+      [(0, 1), (0.5, 0), (1, 1)],
+      [(0.25, 0.55), (0.75, 0.55)],
+    ],
+    'B': [
+      [(0, 0), (0, 1), (0.75, 1), (1, 0.8), (1, 0.65), (0.75, 0.5), (0, 0.5)],
+      [(0.75, 0.5), (0.95, 0.35), (0.95, 0.15), (0.75, 0), (0, 0)],
+    ],
+    'C': [
+      [(1, 0.15), (0.8, 0), (0.2, 0), (0, 0.2), (0, 0.8), (0.2, 1), (0.8, 1), (1, 0.85)],
+    ],
+    'D': [
+      [(0, 0), (0, 1), (0.6, 1), (1, 0.7), (1, 0.3), (0.6, 0), (0, 0)],
+    ],
+    'E': [
+      [(1, 0), (0, 0), (0, 1), (1, 1)],
+      [(0, 0.5), (0.8, 0.5)],
+    ],
+    'H': [
+      [(0, 0), (0, 1)],
+      [(1, 0), (1, 1)],
+      [(0, 0.5), (1, 0.5)],
+    ],
+    'I': [
+      [(0.5, 0), (0.5, 1)],
+      [(0.2, 0), (0.8, 0)],
+      [(0.2, 1), (0.8, 1)],
+    ],
+    'L': [
+      [(0, 0), (0, 1), (1, 1)],
+    ],
+    'M': [
+      [(0, 1), (0, 0), (0.5, 0.55), (1, 0), (1, 1)],
+    ],
+    'S': [
+      [(1, 0.1), (0.8, 0), (0.2, 0), (0, 0.15), (0, 0.35), (0.2, 0.5), (0.8, 0.5), (1, 0.65), (1, 0.85), (0.8, 1)],
+      [(0.8, 1), (0.2, 1), (0, 0.9)],
+    ],
+    'T': [
+      [(0, 0), (1, 0)],
+      [(0.5, 0), (0.5, 1)],
+    ],
+    '+': [
+      [(0.5, 0.1), (0.5, 0.9)],
+      [(0.1, 0.5), (0.9, 0.5)],
+    ],
+  };
 }
