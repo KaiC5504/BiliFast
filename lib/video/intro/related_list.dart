@@ -122,6 +122,7 @@ class _RelatedRow extends StatelessWidget {
     final cover = RemoteImage(
       card.cover,
       size: const Size(IntroListTheme.relatedCoverWidth, IntroListTheme.relatedCoverHeight),
+      cover: true,
     );
     final title = TextStyle(
       fontFamily: BiliFonts.family,

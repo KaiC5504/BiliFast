@@ -333,7 +333,11 @@ class _Cover extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            RemoteImage(card.cover, size: const Size(BiliMetrics.endCoverWidth, BiliMetrics.endCoverHeight)),
+            RemoteImage(
+              card.cover,
+              size: const Size(BiliMetrics.endCoverWidth, BiliMetrics.endCoverHeight),
+              cover: true,
+            ),
             const Positioned(
               left: 0,
               right: 0,

@@ -1,0 +1,163 @@
+import 'dart:io';
+
+import 'package:bili_core/api.dart' show SpaceVideo, VideoCard;
+import 'package:bilifast/shared/remote_image.dart';
+import 'package:bilifast/space/own/own_tab_cards.dart';
+import 'package:bilifast/space/space_video_row.dart';
+import 'package:bilifast/space/uploader_sheet_grid.dart';
+import 'package:bilifast/video/intro/related_list.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+const _cover = 'http://i1.hdslb.com/bfs/archive/site.jpg';
+const _asked = 'https://i0.hdslb.com/bfs/archive/site.jpg@.webp';
+
+const _video = SpaceVideo(aid: 1, bvid: 'BV1site', title: '演示视频', cover: _cover, duration: 61, play: 1200);
+
+/// Every place a video's cover is drawn, by file; each must ask for the full-size picture.
+const _sites = [
+  'lib/home/feed_card.dart',
+  'lib/home/feed_dislike.dart',
+  'lib/home/avatar_page.dart',
+  'lib/history/watch_history_page.dart',
+  'lib/search/results/video_row.dart',
+  'lib/space/space_video_row.dart',
+  'lib/space/uploader_sheet_grid.dart',
+  'lib/space/own/own_tab_cards.dart',
+  'lib/watch_later/watch_later_row.dart',
+  'lib/favourites/favourite_rows.dart',
+  'lib/favourites/favourites_page.dart',
+  'lib/video/intro/related_list.dart',
+  'lib/video/video_page.dart',
+  'lib/player_ui/end_screen_portrait.dart',
+  'lib/player_ui/end_screen_landscape.dart',
+  'lib/player_ui/panels/episodes_panel.dart',
+];
+
+/// Covers that aren't a video's: 追番's posters.
+const _notVideoCovers = ['bangumi.cover'];
+
+/// The arguments of each `RemoteImage(…)` in [source] (not `.avatar` or `.precache`).
+List<String> _remoteImageCalls(String source) {
+  final calls = <String>[];
+  for (final match in RegExp(r'RemoteImage\(').allMatches(source)) {
+    var depth = 1;
+    var at = match.end;
+    while (depth > 0 && at < source.length) {
+      final char = source[at++];
+      if (char == '(') depth++;
+      if (char == ')') depth--;
+    }
+    calls.add(source.substring(match.end, at - 1));
+  }
+  return calls;
+}
+
+/// The call's first argument, up to its first comma outside brackets.
+String _firstArgument(String arguments) {
+  var depth = 0;
+  for (var i = 0; i < arguments.length; i++) {
+    final char = arguments[i];
+    if ('([{'.contains(char)) depth++;
+    if (')]}'.contains(char)) depth--;
+    if (char == ',' && depth == 0) return arguments.substring(0, i);
+  }
+  return arguments;
+}
+
+void main() {
+  List<StoredNetworkImage> pictures(WidgetTester tester) => [
+    for (final image in tester.widgetList<Image>(find.byType(Image)))
+      if (image.image case final StoredNetworkImage network) network,
+  ];
+
+  Future<void> show(WidgetTester tester, Widget child) => tester.pumpWidget(
+    MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(devicePixelRatio: 1, size: Size(440, 956)),
+        child: Material(child: child),
+      ),
+    ),
+  );
+
+  void expectFullSize(WidgetTester tester) {
+    final covers = pictures(tester).where((image) => image.url.contains('/bfs/archive/'));
+    expect(covers, isNotEmpty);
+    for (final cover in covers) {
+      expect(cover.url, _asked);
+      expect(cover.box, isNotNull, reason: 'decoded for its box');
+    }
+  }
+
+  testWidgets('a related video asks for the full-size cover', (tester) async {
+    const card = VideoCard(
+      aid: 1,
+      bvid: 'BV1site',
+      cid: 1,
+      title: '相关视频',
+      cover: _cover,
+      duration: 61,
+      ownerMid: 1,
+      ownerName: 'UP',
+      views: 1,
+      danmaku: 1,
+      likes: 0,
+    );
+    await show(
+      tester,
+      CustomScrollView(
+        slivers: [
+          RelatedSliver(cards: const [card], onOpen: (_) {}, onWatchLater: (_) {}),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expectFullSize(tester);
+  });
+
+  testWidgets("UP主空间's row, the uploader sheet's card and the own space's video card and folder ask for the "
+      'full-size cover', (tester) async {
+    await show(
+      tester,
+      // A Column rather than a lazy list, so all four are built.
+      SingleChildScrollView(
+        child: Column(
+          children: [
+            SpaceVideoRow(video: _video, onOpen: () {}, onMore: (_) {}),
+            SizedBox(
+              width: 200,
+              child: UploaderVideoCard(video: _video, playing: false, onOpen: () {}),
+            ),
+            SizedBox(
+              width: 200,
+              height: 200,
+              child: OwnVideoCard(video: _video, onOpen: () {}),
+            ),
+            const SizedBox(
+              width: 200,
+              height: 120,
+              child: FolderCover(cover: _cover, tv: Size(40, 30), tvInk: Colors.white, badgeBottom: 4),
+            ),
+          ],
+        ),
+      ),
+    );
+    expectFullSize(tester);
+    expect(pictures(tester).where((image) => image.url.contains('/bfs/archive/')), hasLength(4));
+  });
+
+  test('every video cover in the app is drawn as a cover', () {
+    for (final path in _sites) {
+      final calls = [
+        for (final arguments in _remoteImageCalls(File(path).readAsStringSync()))
+          if (_firstArgument(arguments).trim() case final first
+              when first.contains('cover') && !_notVideoCovers.contains(first))
+            arguments,
+      ];
+      expect(calls, isNotEmpty, reason: '$path draws a cover');
+      for (final arguments in calls) {
+        expect(arguments, matches(RegExp(r'\bcover:\s*\w+')), reason: '$path: RemoteImage($arguments)');
+      }
+    }
+  });
+}

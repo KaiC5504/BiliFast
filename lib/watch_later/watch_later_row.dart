@@ -229,7 +229,11 @@ class _Cover extends StatelessWidget {
           if (item.cover.isEmpty)
             const ColoredBox(color: WatchLaterTheme.coverPlaceholder)
           else
-            RemoteImage(item.cover, size: const Size(WatchLaterTheme.coverWidth, WatchLaterTheme.coverHeight)),
+            RemoteImage(
+              item.cover,
+              size: const Size(WatchLaterTheme.coverWidth, WatchLaterTheme.coverHeight),
+              cover: true,
+            ),
           Positioned(
             right: WatchLaterTheme.progressRight,
             bottom: WatchLaterTheme.progressBottom,

@@ -1618,7 +1618,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           child: Hero(
             tag: route.heroTag,
             flightShuttleBuilder: _coverInFlight,
-            child: RemoteImage(cover, size: _coverSize(context)),
+            child: RemoteImage(cover, size: _coverSize(context), cover: true),
           ),
         ),
       ),
@@ -1631,8 +1631,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return Size(width, width / BiliMetrics.videoAspect);
   }
 
-  /// The card's image, already loaded as the card asked for it (its size, or its CDN suffix), flies; the page's cover,
-  /// the same download as the page's own, fades in over it once it arrives.
+  /// The card's image, already loaded as the card asked for it (its size, its CDN suffix, or as a full-size cover),
+  /// flies; the page's cover, the same download as the page's own, fades in over it once it arrives.
   Widget _coverInFlight(
     BuildContext flight,
     Animation<double> animation,
@@ -1644,14 +1644,17 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final cardHero = direction == HeroFlightDirection.push ? from : to;
     final card = cardHero.findRenderObject();
     final cardSize = card is RenderBox && card.hasSize ? card.size : null;
-    final cardSuffix = switch (cardHero.widget) {
-      Hero(child: RemoteImage(:final cdnSuffix)) => cdnSuffix,
-      _ => null,
+    final (cardSuffix, cardCover) = switch (cardHero.widget) {
+      Hero(child: RemoteImage(:final cdnSuffix, cover: final fullSize)) => (cdnSuffix, fullSize),
+      _ => (null, false),
     };
     return RemoteImage(
       cover,
       size: _coverSize(flight),
-      placeholder: cardSize == null ? null : RemoteImage(cover, size: cardSize, cdnSuffix: cardSuffix),
+      cover: true,
+      placeholder: cardSize == null
+          ? null
+          : RemoteImage(cover, size: cardSize, cdnSuffix: cardSuffix, cover: cardCover),
     );
   }
 }

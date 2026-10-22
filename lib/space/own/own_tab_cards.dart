@@ -87,6 +87,7 @@ class FolderCover extends StatelessWidget {
       children: [
         RemoteImage(
           cover.isEmpty ? null : cover,
+          cover: true,
           fallback: Center(
             child: CoverTv(size: tv, color: tvInk),
           ),
@@ -189,7 +190,7 @@ class OwnVideoCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  RemoteImage(video.cover),
+                  RemoteImage(video.cover, cover: true),
                   const Align(
                     alignment: Alignment.bottomCenter,
                     child: SizedBox(

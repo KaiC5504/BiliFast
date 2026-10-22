@@ -204,7 +204,8 @@ void main() {
 
     await show(tester);
     final live = coverIn(card('BV1aaa'));
-    expect(live.url, 'https://i0.hdslb.com/bfs/archive/BV1aaa.jpg@660w_480h_1c.webp', reason: "211 pt's box at 3x");
+    expect(live.url, 'https://i0.hdslb.com/bfs/archive/BV1aaa.jpg@.webp');
+    expect(live.box, const Size(660, 480), reason: "211 pt's box at 3x");
     await openMore(tester, 'BV1aaa');
     await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
     await settle(tester);

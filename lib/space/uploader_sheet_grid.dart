@@ -54,7 +54,7 @@ class UploaderVideoCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    RemoteImage(video.cover),
+                    RemoteImage(video.cover, cover: true),
                     const Align(
                       alignment: Alignment.bottomCenter,
                       child: SizedBox(

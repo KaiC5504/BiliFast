@@ -285,7 +285,11 @@ class _Cover extends StatelessWidget {
       children: [
         const ColoredBox(color: FavouritesTheme.coverEmpty),
         if (row.cover.isNotEmpty)
-          RemoteImage(row.cover, size: const Size(FavouritesTheme.coverWidth, FavouritesTheme.coverHeight)),
+          RemoteImage(
+            row.cover,
+            size: const Size(FavouritesTheme.coverWidth, FavouritesTheme.coverHeight),
+            cover: true,
+          ),
         if (row.length.isNotEmpty)
           Positioned(
             right: FavouritesTheme.pillRight,

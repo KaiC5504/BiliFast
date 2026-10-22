@@ -452,6 +452,7 @@ class _CoverRow extends StatelessWidget {
                       RemoteImage(
                         episode.cover,
                         size: const Size(BiliMetrics.sheetCoverWidth, BiliMetrics.sheetCoverHeight),
+                        cover: true,
                       ),
                       if (duration != null && duration > 0)
                         Positioned(
