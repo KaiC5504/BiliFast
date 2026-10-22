@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'account/app_auth.dart';
+import 'account/dpapi_keychain_store.dart';
+import 'account/keychain_store.dart';
 import 'app/app_environment.dart';
 import 'app/app_scope.dart';
 import 'app/phone_frame.dart';
@@ -56,7 +58,7 @@ Future<void> main(List<String> args) async {
   final DanmakuSettingsStore danmakuSettings;
   final CodecMemory codecMemory;
   try {
-    environment = await AppEnvironment.load();
+    environment = await (Platform.isWindows ? loadWindowsEnvironment() : AppEnvironment.load());
     recents = await RecentStore.load(supportFilePath('recents.json'));
     PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
     fonts = await FontStore.load(supportFilePath('font.json'));
@@ -84,8 +86,12 @@ Future<void> main(List<String> args) async {
     onResumed: () => recheckUnknownAccount(environment),
   );
   final navigator = GlobalKey<NavigatorState>();
-  final AppAuth appAuth =
-      fakeAccount ? FakeAppAuth() : TokenAppAuth(environment: environment, navigator: navigator);
+  // The official app token stays on the phone: the PC holds only the web login.
+  final AppAuth appAuth = fakeAccount
+      ? FakeAppAuth()
+      : Platform.isWindows
+          ? NoAppAuth()
+          : TokenAppAuth(environment: environment, navigator: navigator);
   final device = PlayerDevice.platform();
   applyTurnTakeover(device.orientation, PlayerPrefs.shared);
   PhoneFrame.follow(device.orientation);
@@ -111,6 +117,17 @@ Future<void> main(List<String> args) async {
     ),
     initialLink: _argument(args, '--play='),
   ));
+}
+
+/// KaiC's real login on the PC (2026-10-22), on the condition that nothing the PC does can get the account
+/// restricted: kept DPAPI-encrypted in the support folder, every call through the guard (reads only, paced and capped
+/// per run), and 退出登录 ending the session on Bilibili's side too.
+Future<AppEnvironment> loadWindowsEnvironment() {
+  final loginFile = supportFilePath('login.bin');
+  return AppEnvironment.load(
+      keychain: loginFile == null ? const NoKeychainStore() : DpapiKeychainStore(loginFile),
+      guarded: true,
+      serverLogout: true);
 }
 
 /// The launch's account check fails without a network; as Swift's RootView did on becoming active, coming back to

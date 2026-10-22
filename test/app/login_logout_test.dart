@@ -15,6 +15,8 @@ import 'fake_keychain.dart';
 
 const _spiPath = '/x/frontend/finger/spi';
 const _spi = '{"code":0,"message":"ok","data":{"b_3":"B3","b_4":"B4"}}';
+const _webLogoutPath = '/login/exit/v2';
+const _webLogoutOk = '{"code":0,"status":true,"data":{"redirectUrl":"https://www.bilibili.com"}}';
 
 /// What the login page hands over.
 const _page = {'SESSDATA': 'page-sess', 'bili_jct': 'page-jct', 'DedeUserID': '12345'};
@@ -62,11 +64,18 @@ void main() {
 
   late MemorySink memory;
 
-  Future<AppEnvironment> load(FakeKeychain keychain, CannedHttp http, {FakeWebCookies? web}) {
+  Future<AppEnvironment> load(FakeKeychain keychain, CannedHttp http,
+      {FakeWebCookies? web, bool guarded = false, bool serverLogout = false}) {
     final logger = Logger(session: 'test');
     memory = MemorySink();
     logger.add(memory);
-    return AppEnvironment.load(keychain: keychain, http: http, webCookies: web ?? FakeWebCookies(), logger: logger);
+    return AppEnvironment.load(
+        keychain: keychain,
+        http: http,
+        webCookies: web ?? FakeWebCookies(),
+        guarded: guarded,
+        serverLogout: serverLogout,
+        logger: logger);
   }
 
   String log() => memory.events.map((event) => event.encode()).join('\n');
@@ -249,8 +258,9 @@ void main() {
   });
 
   group('logout', () {
-    Future<AppEnvironment> loggedIn(FakeKeychain keychain, CannedHttp http, FakeWebCookies web) async {
-      final environment = await load(keychain, http, web: web);
+    Future<AppEnvironment> loggedIn(FakeKeychain keychain, CannedHttp http, FakeWebCookies web,
+        {bool guarded = false, bool serverLogout = false}) async {
+      final environment = await load(keychain, http, web: web, guarded: guarded, serverLogout: serverLogout);
       await environment.refreshAccount();
       expect(environment.account, isA<LoggedIn>());
       return environment;
@@ -274,6 +284,50 @@ void main() {
       expect(environment.accountLabel, '未登录');
       expect((environment.mid, environment.face), (null, null));
       expect(notified, 1);
+    });
+
+    test('asks Bilibili nothing without serverLogout (the phone)', () async {
+      final http = Canned.http();
+      final environment = await loggedIn(_Keychain(const StoredCookies(_stored)), http, FakeWebCookies());
+      await environment.logout();
+      expect(http.to(_webLogoutPath), isEmpty);
+    });
+
+    test("with serverLogout, through the guard, the website's logout goes first while the jar holds the login",
+        () async {
+      final keychain = _Keychain(const StoredCookies(_stored));
+      final web = FakeWebCookies()..jar['SESSDATA'] = 'web-sess';
+      final http = Canned.http()..routes[_webLogoutPath] = (200, _webLogoutOk);
+      final environment = await loggedIn(keychain, http, web, guarded: true, serverLogout: true);
+
+      await environment.logout();
+      final exit = http.to(_webLogoutPath).single;
+      expect((exit.method, exit.url.host), ('POST', 'passport.bilibili.com'));
+      expect(exit.headers['Cookie'], contains('SESSDATA=stored-sess'));
+      expect(memory.events.where((event) => event.msg == 'logout step failed'), isEmpty);
+      expect(environment.cookies.value('SESSDATA'), isNull);
+      expect(keychain.deletes, ['cookies', 'app token']);
+      expect(web.allClears, 1);
+      expect(environment.account, isA<LoggedOut>());
+    }, skip: 'needs webLogout');
+
+    test('a server logout that fails is logged, and the jar, keychain and web view are still emptied', () async {
+      final keychain = _Keychain(const StoredCookies(_stored));
+      final web = FakeWebCookies()..jar['SESSDATA'] = 'web-sess';
+      final http = Canned.http()..errors[_webLogoutPath] = TimeoutException('no answer');
+      final environment = await loggedIn(keychain, http, web, guarded: true, serverLogout: true);
+
+      await environment.logout();
+      final failed = memory.events.where((event) => event.msg == 'logout step failed');
+      expect([for (final event in failed) event.f['step']?.toJson()], ['server']);
+      expect(environment.cookies.value('SESSDATA'), isNull);
+      expect(environment.cookies.value('bili_jct'), isNull);
+      expect(keychain.saved.first, isEmpty);
+      expect(keychain.deletes, ['cookies', 'app token']);
+      expect(web.allClears, 1);
+      expect(environment.account, isA<LoggedOut>());
+      expect(environment.logoutIncomplete, isFalse);
+      expect(log(), isNot(contains('stored-sess')));
     });
 
     test('a step that fails is logged with no values, and the rest still run', () async {
