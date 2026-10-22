@@ -96,6 +96,10 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 - 我的收藏's 视频, 1.0.0 (22): on (21) `/x/v3/fav/tab` answered code 0, but no tab named 视频 was found. The finder
   now looks at any depth and takes the id as a number or a string; a miss logs the tabs' names and ids (`fav tabs
   without 视频`).
+- The seek bar, 1.0.0 (23) (KaiC's recording `102-player-seek-drag.mov`): a touch takes hold of the current position
+  instead of jumping to the finger; a drag moves it by the distance dragged (the bar's travel is the whole video), and
+  a tap on the bar seeks nowhere. Every presentation's bar. Not built: the official frame preview above the bar while
+  dragging (102).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):

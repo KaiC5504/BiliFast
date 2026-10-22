@@ -103,7 +103,7 @@ void main() {
   });
 
   testWidgets('a chapter without a title shows nothing', (tester) async {
-    final rig = Rig();
+    final rig = Rig()..position = 80;
     await rig.mount(tester, chapters: _chapters);
     final rect = rig.rect(tester);
     final gesture = await tester.startGesture(rect.centerRight - const Offset(10, 0));
@@ -122,19 +122,35 @@ void main() {
     expect(SeekBar.chapterTitle(const [Chapter(from: 20, to: 40, title: '中段')], 10), isNull);
   });
 
-  testWidgets('a drag scrubs as the finger moves and commits where it lifts', (tester) async {
-    final rig = Rig();
+  testWidgets('a drag moves the position by the distance dragged, wherever the finger lands, and commits it', (
+    tester,
+  ) async {
+    final rig = Rig()..position = 50;
     await rig.mount(tester);
     final rect = rig.rect(tester);
-    final thumb = BiliMetrics.thumbWidth / 2;
+    final travel = rect.width - BiliMetrics.thumbWidth;
 
-    final gesture = await tester.startGesture(rect.centerLeft + Offset(thumb, 0));
-    await gesture.moveTo(rect.centerRight - Offset(thumb, 0));
+    // Near the start of the bar, far from the thumb at the middle: nothing jumps there.
+    final gesture = await tester.startGesture(rect.centerLeft + const Offset(20, 0));
+    await tester.pump();
+    expect(rig.scrubs, isEmpty);
+    await gesture.moveBy(Offset(travel / 4, 0));
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(rig.scrubs.first, 0);
-    expect(rig.scrubs.last, closeTo(100, 0.01));
-    expect(rig.commits.single, closeTo(100, 0.01));
+    expect(rig.scrubs.last, closeTo(75, 0.01));
+    expect(rig.commits.single, closeTo(75, 0.01));
+  });
+
+  testWidgets('a tap on the bar seeks nowhere', (tester) async {
+    final rig = Rig()..position = 50;
+    await rig.mount(tester);
+    final rect = rig.rect(tester);
+    await tester.tapAt(rect.centerLeft + const Offset(20, 0));
+    await tester.tapAt(rect.centerRight - const Offset(20, 0));
+    await tester.pumpAndSettle();
+    expect(rig.scrubs, isEmpty);
+    expect(rig.commits, isEmpty);
+    expect(rig.position, 50);
   });
 
   testWidgets('the 竖屏 style draws a white dot and no TV face', (tester) async {
@@ -163,18 +179,21 @@ void main() {
     );
   });
 
-  testWidgets('the 竖屏 style maps the bar\'s ends by the dot\'s width', (tester) async {
+  testWidgets('the 竖屏 style drags the whole video across the bar less the dot, and stops at the ends', (tester) async {
     final rig = Rig();
     await rig.mount(tester, style: SeekBarStyle.dot);
     final rect = rig.rect(tester);
-    const dot = BiliMetrics.verticalDot / 2;
+    final travel = rect.width - BiliMetrics.verticalDot;
 
-    await tester.tapAt(rect.centerRight - const Offset(dot, 0));
+    await tester.dragFrom(rect.center, Offset(travel, 0));
     await tester.pumpAndSettle();
     expect(rig.commits.last, closeTo(100, 0.01));
-    await tester.tapAt(rect.centerLeft + const Offset(dot, 0));
+    await tester.dragFrom(rect.center, Offset(travel * 2, 0));
     await tester.pumpAndSettle();
-    expect(rig.commits.last, closeTo(0, 0.01));
+    expect(rig.commits.last, 100);
+    await tester.dragFrom(rect.center, Offset(-travel * 3, 0));
+    await tester.pumpAndSettle();
+    expect(rig.commits.last, 0);
   });
 
   testWidgets('VoiceOver reads the time and steps it by ten seconds through the commit', (tester) async {

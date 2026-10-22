@@ -238,8 +238,8 @@ void main() {
     expect(tester.widget<SeekBar>(find.byType(SeekBar)).chapters, rig.session.chapters);
 
     final bar = rig.bar(tester);
-    final gesture = await tester.startGesture(bar.centerRight - const Offset(20, 0));
-    await gesture.moveBy(const Offset(-5, 0));
+    final gesture = await tester.startGesture(bar.centerLeft + const Offset(20, 0));
+    await gesture.moveBy(Offset(bar.width * 0.7, 0));
     await tester.pumpAndSettle();
     expect(find.text('后半'), findsOneWidget);
     await gesture.up();

@@ -112,7 +112,9 @@ void main() {
     expect(rig.player.calls, ['seek 0.0 precise', 'play']);
   });
 
-  testWidgets('a drag on the bar follows the finger and seeks once, to a keyframe, on release', (tester) async {
+  testWidgets('a drag on the bar moves the time by the distance dragged and seeks once, to a keyframe, on release', (
+    tester,
+  ) async {
     final rig = Rig();
     await rig.mount(tester);
     rig.status(PlayerStatus.playing);
@@ -124,12 +126,15 @@ void main() {
     final travel = bar.width - BiliMetrics.thumbWidth;
     Offset at(double seconds) => Offset(bar.left + BiliMetrics.thumbWidth / 2 + travel * seconds / 120, bar.center.dy);
 
-    final finger = await tester.startGesture(at(10));
+    // Landing at 40 s on the bar takes hold of 00:05; 25 s of bar later it reads 00:30.
+    final finger = await tester.startGesture(at(40));
     await tester.pump();
-    await finger.moveTo(at(30));
+    expect(rig.timeLabel(tester), '00:05/02:00');
+    await finger.moveTo(at(65));
     await tester.pump();
     expect(rig.timeLabel(tester), '00:30/02:00');
-    await finger.moveTo(at(60));
+    // A hair past, so a sum like 59.9999 still reads as the minute.
+    await finger.moveTo(at(95) + const Offset(0.01, 0));
     await tester.pump();
     expect(rig.timeLabel(tester), '01:00/02:00');
     expect(rig.seekCalls(), isEmpty, reason: 'nothing seeks until the finger lifts');
@@ -154,7 +159,7 @@ void main() {
     await tester.pump();
     final bar = tester.getRect(find.byKey(const ValueKey('player-bar')));
     final travel = bar.width - BiliMetrics.thumbWidth;
-    await tester.tapAt(Offset(bar.left + BiliMetrics.thumbWidth / 2 + travel / 2, bar.center.dy));
+    await tester.dragFrom(bar.center, Offset(travel * 55 / 120, 0));
     await tester.pump();
     expect(rig.clock.seconds, closeTo(60, 0.01));
     // The keyframe before 60 s is at 56.5 s, further than a precise seek's 1.5 s.
@@ -171,7 +176,8 @@ void main() {
     final travel = bar.width - BiliMetrics.thumbWidth;
     Offset at(double seconds) => Offset(bar.left + BiliMetrics.thumbWidth / 2 + travel * seconds / 120, bar.center.dy);
 
-    final finger = await tester.startGesture(at(10));
+    // From 00:00, so where the finger is on the bar is also the time it drags to.
+    final finger = await tester.startGesture(at(0));
     await finger.moveTo(at(30));
     await tester.pump(const Duration(milliseconds: 100));
     await finger.moveTo(at(90));
@@ -194,29 +200,28 @@ void main() {
     expect(rig.seeks.single, closeTo(45, 0.01));
   });
 
-  testWidgets('a drag that turns into a scroll after a hint cancels the hint', (tester) async {
+  testWidgets('a finger held still on the bar hints nothing, and a cancel seeks nothing', (tester) async {
     final rig = Rig();
     await rig.mount(tester);
     final bar = tester.getRect(find.byKey(const ValueKey('player-bar')));
     final finger = await tester.startGesture(bar.center);
     await tester.pump(const Duration(milliseconds: 200));
-    expect(rig.hints, hasLength(1), reason: 'a finger held still on the bar is resting too');
+    expect(rig.hints, isEmpty, reason: 'it holds the current spot, which is already loaded');
     await finger.cancel();
     await tester.pump();
-    expect(rig.hints.last, isNull);
+    expect(rig.hints, isEmpty);
     expect(rig.seekCalls(), isEmpty);
   });
 
-  testWidgets('a tap on the bar seeks there', (tester) async {
+  testWidgets('a tap on the bar seeks nowhere', (tester) async {
     final rig = Rig();
     await rig.mount(tester);
     final bar = tester.getRect(find.byKey(const ValueKey('player-bar')));
     final travel = bar.width - BiliMetrics.thumbWidth;
     await tester.tapAt(Offset(bar.left + BiliMetrics.thumbWidth / 2 + travel / 4, bar.center.dy));
-    await tester.pump();
-    expect(double.parse(rig.seekCalls().single.split(' ')[1]), closeTo(30, 0.01));
-    expect(rig.seeks.single, closeTo(30, 0.01));
-    expect(rig.precise.single, isFalse, reason: 'any seek on the bar starts at a keyframe');
+    await tester.pump(_tapSettles);
+    expect(rig.seekCalls(), isEmpty);
+    expect(rig.seeks, isEmpty);
   });
 
   testWidgets('a page scroll that starts on the bar scrolls, seeks nothing and lets go of the target', (tester) async {

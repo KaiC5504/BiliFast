@@ -21,8 +21,9 @@ enum SeekBarStyle {
 
 /// The seek bar (port of BiliNative `ProgressBar.swift`): played in pink, buffered in white at 40%, the rest at 20%, a
 /// tick where each chapter starts, and the TV-face thumb, or the 竖屏 [SeekBarStyle.dot]. It paints from [repaint]
-/// without rebuilding. A touch scrubs at once and the finger is followed; [onCommit] comes when it lifts. While a finger
-/// is on it the thumb grows and the chapter under it shows its title above. VoiceOver reads the time and steps it by
+/// without rebuilding. As in the official app, a touch takes hold of the current position rather than jumping to the
+/// finger: a drag moves it by the distance dragged, [onCommit] comes when it lifts, and a tap seeks nowhere. While a
+/// finger is on it the thumb grows and the chapter under it shows its title above. VoiceOver reads the time and steps it by
 /// [step] through [onCommit].
 class SeekBar extends StatefulWidget {
   const SeekBar({
@@ -71,12 +72,6 @@ class SeekBar extends StatefulWidget {
   @override
   State<SeekBar> createState() => _SeekBarState();
 
-  static double _seconds(double x, {required double width, required double duration, required double thumbWidth}) {
-    final travel = math.max(width - thumbWidth, 1.0);
-    final ratio = ((x - thumbWidth / 2) / travel).clamp(0.0, 1.0);
-    return ratio * math.max(duration, 0);
-  }
-
   /// The chapter holding [position], when it has a title.
   @visibleForTesting
   static String? chapterTitle(List<Chapter> chapters, double position) {
@@ -95,6 +90,13 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
   /// Where the finger last came to rest.
   double? _anchor;
 
+  /// The position and the finger's x when it touched down; null while no finger is on the bar.
+  double? _from;
+  double _fromX = 0;
+
+  /// The latest scrubbed position, committed when the finger lifts.
+  double _scrubbed = 0;
+
   @override
   void dispose() {
     _restTimer?.cancel();
@@ -105,7 +107,7 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
 
   double get _thumbWidth => widget.style.thumbWidth;
 
-  void _follow(double x, double width) {
+  void _follow(double x, double seconds) {
     if (widget.onRest == null) return;
     final anchor = _anchor;
     if (anchor != null && (x - anchor).abs() <= SeekBar.restSlop) return;
@@ -113,11 +115,7 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
     _restTimer?.cancel();
     _restTimer = Timer(SeekBar.restDelay, () {
       _restTimer = null;
-      if (mounted) {
-        widget.onRest?.call(
-          SeekBar._seconds(x, width: width, duration: widget.duration(), thumbWidth: _thumbWidth),
-        );
-      }
+      if (mounted) widget.onRest?.call(seconds);
     });
   }
 
@@ -125,6 +123,7 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
     _restTimer?.cancel();
     _restTimer = null;
     _anchor = null;
+    _from = null;
     _drag.reverse();
   }
 
@@ -161,31 +160,35 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            double at(Offset local) =>
-                SeekBar._seconds(local.dx, width: width, duration: widget.duration(), thumbWidth: _thumbWidth);
+            final travel = math.max(width - _thumbWidth, 1.0);
             void scrub(Offset local) {
-              _drag.forward();
-              widget.onScrub(at(local));
-              _follow(local.dx, width);
+              final duration = math.max(widget.duration(), 0.0);
+              final from = _from ?? widget.position();
+              _scrubbed = (from + (local.dx - _fromX) / travel * duration).clamp(0.0, duration);
+              widget.onScrub(_scrubbed);
+              _follow(local.dx, _scrubbed);
             }
 
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onHorizontalDragDown: (details) => scrub(details.localPosition),
+              // Anchored where the finger lands, so the slop the drag waits for still moves the thumb.
+              onHorizontalDragDown: (details) {
+                _from = widget.position();
+                _fromX = details.localPosition.dx;
+                _drag.forward();
+              },
               onHorizontalDragStart: (details) => scrub(details.localPosition),
               onHorizontalDragUpdate: (details) => scrub(details.localPosition),
-              onHorizontalDragEnd: (details) {
+              onHorizontalDragEnd: (_) {
                 _lifted();
-                widget.onCommit(at(details.localPosition));
+                widget.onCommit(_scrubbed);
               },
               onHorizontalDragCancel: () {
                 _lifted();
                 widget.onCancel();
               },
-              onTapUp: (details) {
-                _lifted();
-                widget.onCommit(at(details.localPosition));
-              },
+              // Held by the bar, so a tap on it neither seeks nor reaches the player under it.
+              onTapUp: (_) => _lifted(),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
