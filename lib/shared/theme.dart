@@ -2959,7 +2959,8 @@ abstract final class LoginTheme {
 
   static const spinnerRadius = 14.0;
 
-  /// A load error or a login that didn't take, with 重试 under it; the QR login's messages too.
+  /// 请在手机上登录, a load error or a login that didn't take, with 重试 under the last two; the QR login's messages
+  /// too.
   static const message = BiliColors.secondaryText;
   static const messageText = BiliMetrics.bodyText;
   static const inset = BiliMetrics.sectionGap;

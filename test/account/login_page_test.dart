@@ -40,8 +40,8 @@ void main() {
     ));
     await tester.pump();
     expect(find.text('登录'), findsOneWidget);
-    expect(find.byType(QrLogin), findsOneWidget);
-    expect(find.text('加载失败'), findsOneWidget, reason: 'no route answers the code here');
+    expect(find.byType(QrLogin), findsNothing, reason: 'the QR login is only for a --real-account run');
+    expect(find.byKey(const ValueKey('login-on-phone')), findsOneWidget);
     expect(find.bySemanticsLabel('关闭'), findsOneWidget);
     expect(find.byType(WebViewWidget), findsNothing);
   });

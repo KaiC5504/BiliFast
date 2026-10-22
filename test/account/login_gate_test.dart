@@ -4,7 +4,6 @@ import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/account/login_page.dart';
-import 'package:bilifast/account/qr_login.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -62,7 +61,7 @@ void main() {
     expect(identical(first, second), isTrue, reason: 'a second request waits on the page already up');
     await tester.pumpAndSettle();
     expect(find.byType(LoginPage), findsOneWidget);
-    expect(find.byType(QrLogin), findsOneWidget);
+    expect(find.byKey(const ValueKey('login-on-phone')), findsOneWidget);
 
     bool? answer;
     unawaited(first.then((value) => answer = value));

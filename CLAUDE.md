@@ -234,8 +234,9 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - The window is KaiC's iPhone: 440×956 with its safe areas and a drawn status bar, turned to 956×440 for landscape
     full screen. It runs logged out; there is no keychain on Windows.
   - Every button answers accessibility presses, so ghosthand can drive it (`视频画面` toggles the controls).
-  - Flags: `--mute` (always), `--play=<BV>`, and `--fake-account` (a made-up account with the page's calls answered
-    by `FakePageApi`: actions and a demo comment section, no account traffic).
+  - Flags: `--mute` (always), `--play=<BV>`, `--fake-account` (a made-up account with the page's calls answered
+    by `FakePageApi`: actions and a demo comment section, no account traffic), and `--real-account` (KaiC's PC
+    login, only with his OK each time: Rules that bite).
   - ghosthand can't scroll or drag, and the 956 pt window is taller than this PC's screen (the bottom ~10 pt of a
     capture is stale). Scrolls, drags and swipes are covered by widget tests at ~1500 px/s instead.
 - Look-alike checks render our screens in widget tests at 440×956 (or 956×440), 3×, against KaiC's official
@@ -267,7 +268,10 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - KaiC's Bilibili account: no second login (the exceptions, KaiC's calls: the app token in slice 13, confirmed once with
   the web login; and one Windows login, 2026-10-22, below), few live calls, no loops against the API. Tests never
   touch the network.
-- The Windows login (KaiC: "make sure you won't do anything that could get it restricted"): the website's QR login,
+- The Windows login (KaiC: "make sure you won't do anything that could get it restricted"): the last fallback for
+  checking APIs, never for everyday development or tests. Ask KaiC before every `--real-account` launch, each time;
+  his OK covers that one run. Without the flag (every other run, checks and `--fake-account` included) the PC loads
+  no login and its 登录 says 请在手机上登录. With it: the website's QR login,
   scanned in the official app, kept DPAPI-encrypted in the support folder's `login.bin`. Every call the Windows
   `BiliClient` makes passes `GuardedTransport`: writes refused unsent (only passport's `/login/exit/v2`; 不感兴趣's
   GETs count as writes), reads paced (8 at once, then one a second), 200 a run at most (the QR login's calls aside),

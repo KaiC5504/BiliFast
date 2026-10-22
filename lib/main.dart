@@ -59,7 +59,8 @@ Future<void> main(List<String> args) async {
   final CodecMemory codecMemory;
   try {
     environment = await (Platform.isWindows
-        ? loadWindowsEnvironment(fakeAccount: args.contains('--fake-account'))
+        ? loadWindowsEnvironment(
+            realAccount: args.contains('--real-account') && !args.contains('--fake-account'))
         : AppEnvironment.load());
     recents = await RecentStore.load(supportFilePath('recents.json'));
     PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
@@ -121,16 +122,17 @@ Future<void> main(List<String> args) async {
   ));
 }
 
-/// KaiC's real login on the PC (2026-10-22), on the condition that nothing the PC does can get the account
-/// restricted: kept DPAPI-encrypted in the support folder, every call through the guard (reads only, paced and capped
-/// per run), and 退出登录 ending the session on Bilibili's side too. A [fakeAccount] run never loads the login, so
-/// its reads carry no account.
-Future<AppEnvironment> loadWindowsEnvironment({bool fakeAccount = false}) {
-  final loginFile = fakeAccount ? null : supportFilePath('login.bin');
+/// Every PC run goes through the guard (reads only, paced and capped per run). KaiC's real login (2026-10-22) is
+/// loaded and offered only with [realAccount] (`--real-account`): his last fallback for checking APIs, never for
+/// everyday development or tests, and launched only with his OK each time. It is kept DPAPI-encrypted in the
+/// support folder, and 退出登录 ends the session on Bilibili's side too.
+Future<AppEnvironment> loadWindowsEnvironment({bool realAccount = false}) {
+  final loginFile = realAccount ? supportFilePath('login.bin') : null;
   return AppEnvironment.load(
       keychain: loginFile == null ? const NoKeychainStore() : DpapiKeychainStore(loginFile),
       guarded: true,
-      serverLogout: true);
+      serverLogout: true,
+      pcLogin: loginFile != null);
 }
 
 /// The launch's account check fails without a network; as Swift's RootView did on becoming active, coming back to

@@ -502,6 +502,7 @@ void main() {
         keychain: FakeKeychain(const StoredCookies({'buvid3': 'b3', 'buvid4': 'b4'})),
         webCookies: FakeWebCookies(),
         http: http,
+        pcLogin: true,
         logger: Logger(session: 'test'),
       );
       final services = AppServices(

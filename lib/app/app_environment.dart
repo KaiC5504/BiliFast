@@ -45,12 +45,13 @@ class AppEnvironment extends ChangeNotifier {
       required this._keychain,
       required this.webCookies,
       required this._serverLogout,
+      required this.pcLogin,
       required this._logger});
 
   /// `http`, `httpFactory`, `keychain` and `webCookies` are for tests; the app passes none, except the Windows
   /// build's keychain. [guarded] (Windows, where KaiC's real login is read only) sends every call through
   /// [GuardedTransport], whose only allowed write is the website's logout; [serverLogout] has 退出登录 end the
-  /// session on Bilibili's side first.
+  /// session on Bilibili's side first; [pcLogin] has the PC's 登录 page offer the QR login.
   static Future<AppEnvironment> load(
       {KeychainStore? keychain,
       WebCookies? webCookies,
@@ -58,6 +59,7 @@ class AppEnvironment extends ChangeNotifier {
       HTTPTransport Function() httpFactory = platformHttpTransport,
       bool guarded = false,
       bool serverLogout = false,
+      bool pcLogin = false,
       Logger? logger}) async {
     final log = logger ?? Logger.shared;
     final store = _GuardedKeychain(keychain ?? KeychainStore.platform(), log);
@@ -84,6 +86,7 @@ class AppEnvironment extends ChangeNotifier {
         keychain: store,
         webCookies: webCookies ?? WebCookies.platform(),
         serverLogout: serverLogout,
+        pcLogin: pcLogin,
         logger: log);
   }
 
@@ -98,6 +101,10 @@ class AppEnvironment extends ChangeNotifier {
   /// The login web view's store, read by the login page and cleared on logout.
   final WebCookies webCookies;
   final bool _serverLogout;
+
+  /// A `--real-account` run on the PC: its 登录 page offers the QR login (KaiC's last fallback for checking APIs,
+  /// launched only with his OK each time). Every other PC run says 请在手机上登录.
+  final bool pcLogin;
   final Logger _logger;
   Account _account = const AccountUnknown();
   int? _mid;

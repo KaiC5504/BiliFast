@@ -13,7 +13,8 @@ import 'qr_login.dart';
 import 'web_cookies.dart';
 
 /// 登录: Bilibili's own login page in a web view (BiliNative `LoginView.swift`); on the PC, which has no web view, the
-/// website's QR login (`qr_login.dart`). Pops true once the account is logged in.
+/// website's QR login (`qr_login.dart`) in a `--real-account` run, else a note to log in on the phone. Pops true once
+/// the account is logged in.
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -38,9 +39,13 @@ class _LoginPageState extends State<LoginPage> {
             environment: AppScope.of(context).environment,
             onLoggedIn: () => Navigator.of(context).pop(true),
           )
-        : QrLogin(
+        : AppScope.of(context).environment.pcLogin
+        ? QrLogin(
             environment: AppScope.of(context).environment,
             onLoggedIn: () => Navigator.of(context).pop(true),
+          )
+        : Center(
+            child: Text('请在手机上登录', key: const ValueKey('login-on-phone'), style: LoginTheme.messageStyle),
           ),
   );
 }
