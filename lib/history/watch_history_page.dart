@@ -471,7 +471,7 @@ class _Cover extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          RemoteImage(item.cover, size: const Size(HistoryTheme.coverWidth, HistoryTheme.coverHeight)),
+          RemoteImage(item.cover, size: const Size(HistoryTheme.coverWidth, HistoryTheme.coverHeight), cover: true),
           Positioned(
             right: HistoryTheme.pillRight,
             bottom: HistoryTheme.pillBottom,

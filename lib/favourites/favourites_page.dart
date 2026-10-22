@@ -780,7 +780,11 @@ class _Tile extends StatelessWidget {
           color: FavouritesTheme.tileEmpty,
           child: cover.isEmpty
               ? null
-              : RemoteImage(cover, size: const Size(FavouritesTheme.tileWidth, FavouritesTheme.tileHeight)),
+              : RemoteImage(
+                  cover,
+                  size: const Size(FavouritesTheme.tileWidth, FavouritesTheme.tileHeight),
+                  cover: true,
+                ),
         ),
       ),
     );
@@ -845,6 +849,7 @@ class _FolderRow extends StatelessWidget {
                                   cover,
                                   key: const ValueKey('fav-row-cover'),
                                   size: const Size(FavouritesTheme.rowCoverWidth, FavouritesTheme.rowCoverHeight),
+                                  cover: true,
                                 ),
                         ),
                       ),

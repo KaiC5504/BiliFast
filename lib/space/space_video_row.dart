@@ -221,7 +221,11 @@ class _Cover extends StatelessWidget {
   Widget build(BuildContext context) {
     final picture = video.cover.isEmpty
         ? const ColoredBox(key: ValueKey('space-cover-placeholder'), color: SpaceVideosTheme.coverPlaceholder)
-        : RemoteImage(video.cover, size: const Size(SpaceVideosTheme.coverWidth, SpaceVideosTheme.coverHeight));
+        : RemoteImage(
+            video.cover,
+            size: const Size(SpaceVideosTheme.coverWidth, SpaceVideosTheme.coverHeight),
+            cover: true,
+          );
     return ClipRRect(
       borderRadius: BorderRadius.circular(SpaceVideosTheme.coverRadius),
       child: Stack(

@@ -277,7 +277,11 @@ class _Cover extends StatelessWidget {
           if (video.cover.isEmpty)
             const ColoredBox(key: ValueKey('search-cover-placeholder'), color: SearchResultTheme.coverPlaceholder)
           else
-            RemoteImage(video.cover, size: const Size(SearchResultTheme.coverWidth, SearchResultTheme.coverHeight)),
+            RemoteImage(
+              video.cover,
+              size: const Size(SearchResultTheme.coverWidth, SearchResultTheme.coverHeight),
+              cover: true,
+            ),
           if (video.duration > 0)
             Positioned(
               right: SearchResultTheme.durationRight,

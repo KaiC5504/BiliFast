@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show IOException;
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:bili_core/api.dart';
@@ -7,6 +8,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import 'cover_format.dart';
 import 'image_disk_cache.dart';
 import 'theme.dart';
 
@@ -26,8 +28,8 @@ String secureImageUrl(String url) {
 
 const _pictureMirrors = ['https://i1.hdslb.com/', 'https://i2.hdslb.com/'];
 
-/// [url] from Bilibili's image CDN scaled and cropped there to [width]×[height] px (`@…w_…h_1c.webp`), so a feed card
-/// downloads tens of KB instead of the full-size cover.
+/// [url] from Bilibili's image CDN scaled and cropped there to [width]×[height] px (`@…w_…h_1c.webp`). Covers are
+/// asked for at full size instead ([RemoteImage.cover]).
 String sizedImageUrl(String url, {required int width, required int height}) =>
     suffixedImageUrl(url, '@${width}w_${height}h_1c.webp');
 
@@ -54,6 +56,7 @@ class RemoteImage extends StatelessWidget {
     this.fadeIn = true,
     this.overlay,
     this.cdnSuffix,
+    this.cover = false,
   });
 
   /// An avatar: Bilibili's default face while it loads, if it fails and when there is none.
@@ -63,7 +66,8 @@ class RemoteImage extends StatelessWidget {
       fallback = const DefaultAvatar(),
       fadeIn = true,
       overlay = null,
-      cdnSuffix = null;
+      cdnSuffix = null,
+      cover = false;
 
   final String? url;
   final BoxFit fit;
@@ -75,6 +79,10 @@ class RemoteImage extends StatelessWidget {
   /// The CDN's suffix (`@…`) asked for in place of the box's size rounded up, whatever the box: a size the CDN keeps
   /// pre-made answers sooner.
   final String? cdnSuffix;
+
+  /// A video's cover: the full-size picture ([CoverFormat]), which the CDN has ready where a box-sized one is made on
+  /// demand, decoded only as large as the box (rounded up) needs. One download serves every box it is drawn in.
+  final bool cover;
 
   /// Shown instead of the grey until the image arrives, and if it fails.
   final Widget? placeholder;
@@ -104,7 +112,7 @@ class RemoteImage extends StatelessWidget {
     final Widget image;
     if (source == null || source.isEmpty) {
       image = instead ?? const SizedBox.expand();
-    } else if (fixed != null || cdnSuffix != null) {
+    } else if (fixed != null || (cdnSuffix != null && !cover)) {
       image = _image(context, source, fixed);
     } else {
       image = LayoutBuilder(builder: (context, constraints) => _image(context, source, constraints.biggest));
@@ -114,35 +122,71 @@ class RemoteImage extends StatelessWidget {
     return Stack(fit: StackFit.expand, children: [under, image]);
   }
 
-  /// Fetches and decodes [url] as a RemoteImage of [size] or [cdnSuffix] shows it, so that box shows it at once. True
-  /// once it is ready, false if it failed or there is none; never throws.
-  static Future<bool> precache(BuildContext context, String? url, {Size? size, String? cdnSuffix}) async {
+  /// Fetches and decodes [url] as a RemoteImage of [size] or [cdnSuffix] (or a [cover] of [size]) shows it, so that
+  /// box shows it at once. True once it is ready, false if it failed or there is none; never throws. [onDecoded] gets
+  /// ImageIO's ms for a cover this decoded from AVIF.
+  static Future<bool> precache(
+    BuildContext context,
+    String? url, {
+    Size? size,
+    String? cdnSuffix,
+    bool cover = false,
+    ValueChanged<double>? onDecoded,
+  }) async {
     if (url == null || url.isEmpty) return false;
-    final address = _address(context, url, size, cdnSuffix);
+    final provider = _provider(context, url, size, cdnSuffix: cdnSuffix, cover: cover);
     var ok = true;
     // Without an onError, precacheImage hands the failure to FlutterError, and CrashLog would log the signed address.
     await precacheImage(
-      _provider(address, url),
+      provider,
       context,
       onError: (error, _) {
         ok = false;
-        _logFailure(address, error);
+        _logFailure(provider.url, error);
       },
     );
+    if (ok && onDecoded != null) {
+      if (StoredNetworkImage._avifDecodeMs[provider] case final ms?) onDecoded(ms);
+    }
     return ok;
   }
 
-  static String _address(BuildContext context, String source, Size? logical, String? suffix) {
-    if (suffix != null) return suffixedImageUrl(source, suffix);
+  /// A cover's box is the same rounded-up size in device pixels as a sized address's, so a precache and its draw
+  /// share one decode.
+  static StoredNetworkImage _provider(
+    BuildContext context,
+    String source,
+    Size? logical, {
+    String? cdnSuffix,
+    bool cover = false,
+  }) {
+    final suffix = cover ? null : cdnSuffix;
+    if (suffix != null) {
+      return StoredNetworkImage(
+        suffixedImageUrl(source, suffix),
+        headers: BiliClient.mediaHeaders,
+        still: !animates(source),
+      );
+    }
     final pixels = (logical ?? Size.infinite) * MediaQuery.devicePixelRatioOf(context);
-    return sizedImageUrl(source, width: _bucket(pixels.width), height: _bucket(pixels.height));
+    final width = _bucket(pixels.width);
+    final height = _bucket(pixels.height);
+    if (cover) {
+      return StoredNetworkImage(
+        CoverFormat.shared.address(source),
+        headers: BiliClient.mediaHeaders,
+        box: Size(width.toDouble(), height.toDouble()),
+      );
+    }
+    return StoredNetworkImage(
+      sizedImageUrl(source, width: width, height: height),
+      headers: BiliClient.mediaHeaders,
+      still: !animates(source),
+    );
   }
 
-  static StoredNetworkImage _provider(String address, String source) =>
-      StoredNetworkImage(address, headers: BiliClient.mediaHeaders, still: !animates(source));
-
   Widget _image(BuildContext context, String source, Size? logical) => _Picture(
-    image: _provider(_address(context, source, logical, cdnSuffix), source),
+    image: _provider(context, source, logical, cdnSuffix: cdnSuffix, cover: cover),
     fit: fit,
     fallback: fallback,
     fadeIn: fadeIn,
@@ -182,7 +226,7 @@ class RemoteImage extends StatelessWidget {
 /// the size suffix, and a moving picture decodes a frame every few tens of ms for as long as it is on screen. A still
 /// one is cached under its own key, so it never shares an entry with the moving one.
 class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkImage {
-  const StoredNetworkImage(this.url, {this.headers, this.still = true});
+  const StoredNetworkImage(this.url, {this.headers, this.still = true, this.box});
 
   @override
   final String url;
@@ -192,6 +236,14 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
 
   final bool still;
 
+  /// A full-size cover's box in device pixels: it is decoded only as large as covering the box needs (never the whole
+  /// original), and is a cache entry of its own per box. An AVIF ([CoverFormat]) that doesn't decode is shown from
+  /// its webp instead. Always still.
+  final Size? box;
+
+  /// ImageIO's ms for the AVIF cover a provider decoded, read by [RemoteImage.precache].
+  static final _avifDecodeMs = Expando<double>();
+
   @override
   double get scale => 1;
 
@@ -199,7 +251,7 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
   WebHtmlElementStrategy get webHtmlElementStrategy => WebHtmlElementStrategy.never;
 
   /// What the image cache holds this picture under.
-  NetworkImage get cacheKey => still ? this : NetworkImage(url, headers: headers);
+  NetworkImage get cacheKey => still || box != null ? this : NetworkImage(url, headers: headers);
 
   @override
   Future<NetworkImage> obtainKey(ImageConfiguration configuration) => SynchronousFuture<NetworkImage>(cacheKey);
@@ -210,34 +262,100 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
     completer.addEphemeralErrorListener((error, _) {
       // A failed picture must not stay failed in the cache, nor a stored copy that didn't decode be read again.
       scheduleMicrotask(() => PaintingBinding.instance.imageCache.evict(key));
-      final network = error is NetworkImageLoadException || error is TimeoutException || error is IOException;
-      if (!network) unawaited(ImageDiskCache.shared?.forget(url));
+      if (!_network(error)) unawaited(ImageDiskCache.shared?.forget(url));
     });
     return completer;
   }
 
   Future<ui.Codec> _load(ImageDecoderCallback decode) async {
+    final box = this.box;
+    if (box == null) {
+      final codec = await decode(await ui.ImmutableBuffer.fromUint8List(await _bytes(url)));
+      return still ? _FirstFrame(codec) : codec;
+    }
+    if (CoverFormat.isAvif(url)) {
+      final avif = await _avif(box);
+      if (avif != null) return avif;
+      final webp = CoverFormat.webpOf(url);
+      try {
+        return await _covering(await _bytes(webp), box, decode);
+      } catch (error) {
+        if (!_network(error)) unawaited(ImageDiskCache.shared?.forget(webp));
+        rethrow;
+      }
+    }
+    return _covering(await _bytes(url), box, decode);
+  }
+
+  /// Null when the AVIF can't be shown and its webp is to be asked for; a stored copy that didn't decode is deleted.
+  Future<ui.Codec?> _avif(Size box) async {
+    final Uint8List bytes;
+    try {
+      bytes = await _bytes(url);
+    } on NetworkImageLoadException catch (error) {
+      CoverFormat.shared.refused(url, error.statusCode);
+      return null;
+    }
+    final decoded = await CoverFormat.shared.decodeAvif(url, bytes, box.width.round(), box.height.round());
+    if (decoded == null) {
+      unawaited(ImageDiskCache.shared?.forget(url));
+      return null;
+    }
+    _avifDecodeMs[this] = decoded.decodeMs;
+    return decoded.codec;
+  }
+
+  Future<Uint8List> _bytes(String address) async {
     final stored = ImageDiskCache.shared;
     final bytes = stored != null
-        ? await stored.bytes(url, headers: headers)
-        : await ImageDiskCache.download(Uri.base.resolve(url), headers);
+        ? await stored.bytes(address, headers: headers)
+        : await ImageDiskCache.download(Uri.base.resolve(address), headers);
     if (bytes.isEmpty) throw StateError('empty picture');
-    final codec = await decode(await ui.ImmutableBuffer.fromUint8List(bytes));
-    return still ? _FirstFrame(codec) : codec;
+    return bytes;
+  }
+
+  static bool _network(Object error) =>
+      error is NetworkImageLoadException || error is TimeoutException || error is IOException;
+
+  static Future<ui.Codec> _covering(Uint8List bytes, Size box, ImageDecoderCallback decode) async {
+    final codec = await decode(
+      await ui.ImmutableBuffer.fromUint8List(bytes),
+      getTargetSize: (width, height) => covering(width, height, box),
+    );
+    return _FirstFrame(codec);
+  }
+
+  /// The size a [width] × [height] picture decodes at to cover [box], keeping its shape; its own size when it is no
+  /// larger. Only the side that binds is given, so the engine keeps the aspect.
+  @visibleForTesting
+  static ui.TargetImageSize covering(int width, int height, Size box) {
+    if (width <= 0 || height <= 0) return const ui.TargetImageSize();
+    final across = box.width / width;
+    final down = box.height / height;
+    if (math.max(across, down) >= 1) return const ui.TargetImageSize();
+    return across >= down
+        ? ui.TargetImageSize(width: math.max(box.width.round(), 1))
+        : ui.TargetImageSize(height: math.max(box.height.round(), 1));
   }
 
   @override
   bool operator ==(Object other) =>
-      other is StoredNetworkImage && other.url == url && other.still == still && mapEquals(other.headers, headers);
+      other is StoredNetworkImage &&
+      other.url == url &&
+      other.still == still &&
+      other.box == box &&
+      mapEquals(other.headers, headers);
 
   @override
-  int get hashCode => Object.hash(StoredNetworkImage, url, still);
+  int get hashCode => Object.hash(StoredNetworkImage, url, still, box);
 
   /// Host and path only: a query can carry a signature.
   @override
   String toString() {
     final uri = Uri.tryParse(url);
-    return 'StoredNetworkImage("${uri?.host}${uri?.path}", still: $still)';
+    final cover = box;
+    return 'StoredNetworkImage("${uri?.host}${uri?.path}", still: $still'
+        '${cover == null ? '' : ', box: ${cover.width.round()}×${cover.height.round()}'})';
   }
 }
 
@@ -287,10 +405,12 @@ class _PictureState extends State<_Picture> {
 
   @override
   Widget build(BuildContext context) {
-    final address = widget.image.url;
+    final image = widget.image;
+    // A cover asked for as webp after its AVIF failed (or AVIF went off) is still the picture already shown.
+    final address = image.box == null ? image.url : CoverFormat.sameCover(image.url);
     final instead = widget.fallback;
     return Image(
-      image: widget.image,
+      image: image,
       fit: widget.fit,
       width: double.infinity,
       height: double.infinity,
@@ -310,7 +430,7 @@ class _PictureState extends State<_Picture> {
         );
       },
       errorBuilder: (context, error, stack) {
-        RemoteImage._logFailure(address, error);
+        RemoteImage._logFailure(image.url, error);
         return instead ?? const SizedBox.expand();
       },
     );

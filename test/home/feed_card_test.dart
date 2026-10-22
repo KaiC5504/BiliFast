@@ -59,10 +59,11 @@ void main() {
     expect(FeedCardSize.height(211, TextScaler.noScaling) + BiliMetrics.feedSpacing, moreOrLessEquals(248));
   });
 
-  testWidgets("the cover asks for its own box's size in 60 px steps at the screen's ratio", (tester) async {
+  testWidgets("the cover asks for the full-size picture, decoded for its own box's size in 60 px steps at the "
+      "screen's ratio", (tester) async {
     expect(FeedCardSize.cover(211), const Size(211, 158.25));
     addTearDown(tester.view.resetDevicePixelRatio);
-    int step(double pixels) => (pixels / 60).ceil() * 60;
+    double step(double pixels) => ((pixels / 60).ceil() * 60).toDouble();
     for (final ratio in [2.0, 3.0]) {
       tester.view.devicePixelRatio = ratio;
       for (final width in [160.0, 211.0, 300.0]) {
@@ -82,12 +83,9 @@ void main() {
             .map((image) => image.image)
             .whereType<StoredNetworkImage>();
         final box = FeedCardSize.cover(width);
-        expect(
-          pictures.single.url,
-          sizedImageUrl(card.cover, width: step(box.width * ratio), height: step(box.height * ratio)),
-          reason: '$width pt at ${ratio}x',
-        );
-        if (width == 211 && ratio == 3) expect(pictures.single.url, '${card.cover}@660w_480h_1c.webp');
+        expect(pictures.single.url, '${card.cover}@.webp', reason: '$width pt at ${ratio}x');
+        expect(pictures.single.box, Size(step(box.width * ratio), step(box.height * ratio)));
+        if (width == 211 && ratio == 3) expect(pictures.single.box, const Size(660, 480));
       }
     }
   });

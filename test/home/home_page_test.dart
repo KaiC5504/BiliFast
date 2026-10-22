@@ -67,7 +67,7 @@ class _Covers {
 
   static String bvidOf(String url) => url.substring(url.lastIndexOf('/') + 1, url.lastIndexOf('.'));
 
-  Future<bool> precache(BuildContext context, String? url, Size size) {
+  Future<bool> precache(BuildContext context, String? url, Size size, {ValueChanged<double>? onDecoded}) {
     final bvid = bvidOf(url!);
     asked.add(bvid);
     sizes[bvid] = size;
@@ -1559,8 +1559,16 @@ void main() {
           if (url.contains('/bfs/archive/')) url,
       ];
       expect(coverAddresses, isNotEmpty);
+      expect(coverAddresses, everyElement(endsWith('.jpg@.webp')), reason: 'the full-size cover');
       // 211 × 158.25 pt at 1x, in 60 px steps.
-      expect(coverAddresses, everyElement(endsWith('.jpg@240w_180h_1c.webp')), reason: "the cover box's own size");
+      Iterable<Image> images(String bvid) =>
+          tester.widgetList<Image>(find.descendant(of: cover(bvid).first, matching: find.byType(Image)));
+      final boxes = {
+        for (final bvid in screen)
+          for (final image in images(bvid))
+            if (image.image case StoredNetworkImage(:final box?)) box,
+      };
+      expect(boxes, {const Size(240, 180)}, reason: "decoded for the cover box's own size");
       // The store's steps wait on frames as well as on the disk.
       var stored = false;
       unawaited(cache.settle().then((_) => stored = true));

@@ -531,7 +531,11 @@ class _RelatedCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  RemoteImage(card.cover, placeholder: const ColoredBox(color: BiliColors.landscapeEndPlaceholder)),
+                  RemoteImage(
+                    card.cover,
+                    cover: true,
+                    placeholder: const ColoredBox(color: BiliColors.landscapeEndPlaceholder),
+                  ),
                   const Align(
                     alignment: Alignment.bottomCenter,
                     child: SizedBox(

@@ -656,7 +656,11 @@ class _VideoRow extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     if (cover != null && cover.isNotEmpty)
-                      RemoteImage(cover, size: const Size(AvatarPageTheme.coverWidth, AvatarPageTheme.coverHeight))
+                      RemoteImage(
+                        cover,
+                        size: const Size(AvatarPageTheme.coverWidth, AvatarPageTheme.coverHeight),
+                        cover: true,
+                      )
                     else
                       const ColoredBox(color: BiliColors.pageGrey),
                     if (duration > 0)
