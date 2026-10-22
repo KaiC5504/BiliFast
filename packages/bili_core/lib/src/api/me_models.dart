@@ -5,9 +5,12 @@ final class NavStat {
   const NavStat({required this.following, required this.follower, required this.dynamicCount});
 
   factory NavStat.fromJson(Object? json) {
-    // Filled in by the core agent.
-    JsonObject.from(json);
-    throw UnimplementedError();
+    final object = JsonObject.from(json);
+    return NavStat(
+      following: object.count('following'),
+      follower: object.count('follower'),
+      dynamicCount: object.count('dynamic_count'),
+    );
   }
 
   /// 关注.

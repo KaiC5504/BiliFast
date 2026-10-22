@@ -65,6 +65,8 @@ final class NavInfo {
     this.pendant,
   });
 
+  /// The WBI keys come from this answer too, so 我的's fields read an unexpected shape as their default instead of
+  /// failing every signed call.
   factory NavInfo.fromJson(Object? json) {
     final object = JsonObject.from(json);
     final images = object.nested('wbi_img');
@@ -77,12 +79,12 @@ final class NavInfo {
       vipType: object.integer('vipType') ?? 0,
       imgURL: images?.string('img_url') ?? '',
       subURL: images?.string('sub_url') ?? '',
-      level: object.nested('level_info')?.integer('current_level') ?? 0,
-      coins: object.number('money') ?? 0,
-      bcoin: object.nested('wallet')?.number('bcoin_balance') ?? 0,
-      vipLabel: object.nested('vip_label')?.string('text') ?? '',
-      vipBadge: (object.integer('vip_avatar_subscript') ?? 0) == 1,
-      pendant: _nonEmpty(object.nested('pendant')?.string('image')),
+      level: object.nested('level_info')?.count('current_level') ?? 0,
+      coins: asDouble(object.map['money']) ?? 0,
+      bcoin: asDouble(object.nested('wallet')?.map['bcoin_balance']) ?? 0,
+      vipLabel: object.nested('vip_label')?.text('text') ?? '',
+      vipBadge: asInt(object.map['vip_avatar_subscript']) == 1,
+      pendant: _picture(object.nested('pendant')?.text('image')),
     );
   }
 
@@ -115,7 +117,13 @@ final class NavInfo {
 
   bool get isVip => vipStatus == 1;
 
-  static String? _nonEmpty(String? value) => value == null || value.isEmpty ? null : value;
+  /// Empty without a frame; pictures can come as http or protocol-relative.
+  static String? _picture(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('//')) return 'https:$url';
+    if (url.startsWith('http://')) return 'https://${url.substring(7)}';
+    return url;
+  }
 
   @override
   bool operator ==(Object other) =>
