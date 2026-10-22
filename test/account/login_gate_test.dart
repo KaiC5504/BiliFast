@@ -4,7 +4,12 @@ import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/account/login_page.dart';
+import 'package:bilifast/account/qr_login.dart';
 import 'package:bilifast/app/app_environment.dart';
+import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,7 +27,15 @@ void main() {
       http: CannedHttp(),
       logger: Logger(session: 'test'),
     );
+    final services = AppServices(
+      environment: environment,
+      playback: AppPlayback(() => Completer<PlaybackController>().future),
+      recents: await RecentStore.load(null, logger: Logger(session: 'test')),
+      pageApi: FakePageApi(),
+    );
+    addTearDown(services.playback.dispose);
     await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => AppScope(services: services, child: child!),
       home: Builder(builder: (context) {
         host = context;
         return const SizedBox.expand();
@@ -49,7 +62,7 @@ void main() {
     expect(identical(first, second), isTrue, reason: 'a second request waits on the page already up');
     await tester.pumpAndSettle();
     expect(find.byType(LoginPage), findsOneWidget);
-    expect(find.text('请在手机上登录'), findsOneWidget);
+    expect(find.byType(QrLogin), findsOneWidget);
 
     bool? answer;
     unawaited(first.then((value) => answer = value));
