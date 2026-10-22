@@ -6,7 +6,8 @@ import '../space_header.dart' show spaceLine, spaceStyle;
 import '../space_header_glyphs.dart';
 
 /// The scrolled bar's colours. The official app dresses it in the equipped 装扮 when the skin has a package and
-/// reaches past the main pages (`colorSecondPage`, with the skin's text colour and status bar); otherwise it is white.
+/// reaches past the main pages (`colorSecondPage`, with the skin's text colour); otherwise it is white. The status bar
+/// over it goes by the fill, as 首页's and 我的's go by their pictures.
 final class OwnBarLook {
   const OwnBarLook({required this.fill, required this.ink, required this.lightStatus});
 
@@ -15,11 +16,11 @@ final class OwnBarLook {
   factory OwnBarLook.of(Skin? skin) {
     final page = skin?.equip.colors.colorSecondPage;
     if (skin == null || skin.equip.primaryOnly || page == null) return stock;
-    final light = skin.lightText;
+    final fill = Color(page);
     return OwnBarLook(
-      fill: Color(page),
-      ink: skin.color ?? (light ? OwnSpaceTheme.barLightInk : OwnSpaceTheme.barInk),
-      lightStatus: light,
+      fill: fill,
+      ink: skin.color ?? (skin.lightText ? OwnSpaceTheme.barLightInk : OwnSpaceTheme.barInk),
+      lightStatus: SkinStatusBar.whiteOverColor(fill),
     );
   }
 

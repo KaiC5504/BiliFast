@@ -114,7 +114,10 @@ final class _Api implements SpaceApi {
       const SpaceVideoPage(items: [], hasMore: false);
 }
 
-Skin _skin({bool primaryOnly = false}) => Skin(
+Skin _skin({
+  bool primaryOnly = false,
+  SkinColors colors = const SkinColors(color: 0xFFFFFFFF, colorSecondPage: 0xFF161513, lightText: true),
+}) => Skin(
   equip: SkinEquip(
     id: 7,
     name: '测试装扮',
@@ -122,7 +125,7 @@ Skin _skin({bool primaryOnly = false}) => Skin(
     packageUrl: '',
     packageMd5: '',
     primaryOnly: primaryOnly,
-    colors: const SkinColors(color: 0xFFFFFFFF, colorSecondPage: 0xFF161513, lightText: true),
+    colors: colors,
   ),
 );
 
@@ -644,6 +647,21 @@ void main() {
     await tester.pump();
     expect(barFill(tester), const Color(0xFFFFFFFF));
     expect(statusStyle(tester), SystemUiOverlayStyle.dark);
+  });
+
+  testWidgets("the status bar over the bar goes by its fill, not the skin's color_mode", (tester) async {
+    skin.value = _skin(colors: const SkinColors(color: 0xFF4A3B2C, colorSecondPage: 0xFFF5EBD7, lightText: true));
+    await showOwn(tester);
+    scroll(tester).jumpTo(scroll(tester).maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(barFill(tester), const Color(0xFFF5EBD7));
+    expect(barNameInk(tester), const Color(0xFF4A3B2C));
+    expect(statusStyle(tester), SystemUiOverlayStyle.dark, reason: 'a light fill under light color_mode');
+
+    skin.value = _skin(colors: const SkinColors(colorSecondPage: 0xFF2B2F4A));
+    await tester.pump();
+    expect(barFill(tester), const Color(0xFF2B2F4A));
+    expect(statusStyle(tester), SystemUiOverlayStyle.light, reason: 'a dark fill under dark color_mode');
   });
 
   testWidgets('a primary-only skin leaves the bar stock', (tester) async {
