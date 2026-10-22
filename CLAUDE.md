@@ -322,7 +322,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   the Swift app.
 - Art (icons, placeholders, loading pictures, Lottie) comes first from the official Android APK in `local/`
   (`iBiliPlayer-bili.apk`, 8.43.0) through `uv run tools/apk_asset.py` (`find`, `show`, `extract`; vectors drawn white
-  at 3× for tinting), then PiliPlus's assets, and only then our own drawing. The APK holds the app's own art only:
+  at 3× for tinting; everything is already dumped by real name in `local/apk-assets/`, with `index.csv` to search and
+  vectors drawn as PNGs to browse), then PiliPlus's assets, and only then our own drawing. The APK holds the app's own art only:
   skins, emotes, frames, medals and banners come from the server, and the iPhone app sometimes draws differently
   (its cover placeholder is the APK's `bili_default_image_tv_2023`, not `bili_default_image_tv`), so every piece is
   checked against KaiC's iPhone screenshots or recordings and sized from them. Note each in `assets/README.md`.
