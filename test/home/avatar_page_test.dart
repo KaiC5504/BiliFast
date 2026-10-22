@@ -16,12 +16,13 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
+import 'package:bilifast/shared/release_refresh.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/watch_later/watch_later_page.dart';
-import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator, CupertinoSliverRefreshControl;
+import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -388,7 +389,7 @@ void main() {
       await pull.up();
       await settle(tester);
       expect(historyCalls(), 2);
-      final tv = find.descendant(of: find.byType(CupertinoSliverRefreshControl), matching: find.byType(LoadingTv));
+      final tv = find.descendant(of: find.byType(ReleaseRefreshControl), matching: find.byType(LoadingTv));
       expect(tv, findsOneWidget);
       expect(tester.getSize(tv).height, LoadingTvTheme.size);
       expect(find.byType(CupertinoActivityIndicator), findsNothing);
@@ -398,6 +399,24 @@ void main() {
       expect((tester.widget<Image>(face).key! as ValueKey<String>).value, isNot(first), reason: 'cycling');
       hold.complete();
       await settle(tester, 30);
+      expect(find.byType(LoadingTv), findsNothing);
+    });
+
+    testWidgets('a pull asks again only when the finger lets go', (tester) async {
+      await show(tester, loggedIn: true, history: watched);
+      final asked = historyCalls();
+      // About 1500 px/s, a step a frame.
+      final finger = await tester.startGesture(tester.getCenter(find.byType(CustomScrollView)));
+      for (var i = 0; i < 12; i++) {
+        await finger.moveBy(const Offset(0, 25));
+        await tester.pump(const Duration(microseconds: 16667));
+      }
+      await settle(tester, 20);
+      expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isTrue, reason: 'past the trigger');
+      expect(historyCalls(), asked, reason: 'still held');
+      await finger.up();
+      await settle(tester, 30);
+      expect(historyCalls(), asked + 1);
       expect(find.byType(LoadingTv), findsNothing);
     });
 

@@ -15,6 +15,7 @@ import '../history/history_glyphs.dart' show HistoryBackPainter;
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSystem;
 import '../shared/loading_tv.dart';
+import '../shared/release_refresh.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -324,11 +325,7 @@ class _FavouritesPageState extends State<FavouritesPage> {
           // Only the cards on screen are built, so only they ask for their covers.
           scrollCacheExtent: const ScrollCacheExtent.pixels(0),
           slivers: [
-            CupertinoSliverRefreshControl(
-              onRefresh: _refreshFolders,
-              builder: loadingTvRefreshIndicator,
-              refreshIndicatorExtent: LoadingTvTheme.size,
-            ),
+            ReleaseRefreshControl(onRefresh: _refreshFolders),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                 FavouritesTheme.cardInset,
@@ -374,11 +371,7 @@ class _FavouritesPageState extends State<FavouritesPage> {
         key: const ValueKey('fav-videos-list'),
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          CupertinoSliverRefreshControl(
-            onRefresh: _refreshVideos,
-            builder: loadingTvRefreshIndicator,
-            refreshIndicatorExtent: LoadingTvTheme.size,
-          ),
+          ReleaseRefreshControl(onRefresh: _refreshVideos),
           ...favouriteRowSlivers(
             context: context,
             model: model,

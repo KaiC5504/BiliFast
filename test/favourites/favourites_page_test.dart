@@ -78,6 +78,18 @@ void main() {
     open: (context, route) => opened.add(route),
   );
 
+  /// Pulls [list] past the trigger at about 1500 px/s, a step a frame, and holds it there.
+  Future<TestGesture> pullAndHold(WidgetTester tester, Finder list) async {
+    final finger = await tester.startGesture(tester.getCenter(list));
+    for (var i = 0; i < 12; i++) {
+      await finger.moveBy(const Offset(0, 25));
+      await tester.pump(const Duration(microseconds: 16667));
+    }
+    await settle(tester, 20);
+    expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isTrue, reason: 'past the trigger');
+    return finger;
+  }
+
   Future<void> expectSoon(WidgetTester tester, Finder control) async {
     await tester.tap(control);
     await tester.pump();
@@ -189,6 +201,19 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('fav-folders-retry')));
       await settle(tester);
       expect(find.byKey(const ValueKey('fav-folder-2')), findsOneWidget);
+    });
+
+    testWidgets('a pull reloads the folders only when the finger lets go', (tester) async {
+      final api = demo();
+      await show(tester, favourites(api), api);
+      int asked() => api.calls.where((call) => call.startsWith('folders')).length;
+      final before = asked();
+      final finger = await pullAndHold(tester, find.byKey(const ValueKey('fav-folders-cards')));
+      expect(asked(), before, reason: 'still held');
+      await finger.up();
+      await settle(tester, 30);
+      expect(asked(), before + 1);
+      expect(find.byType(LoadingTv), findsNothing);
     });
   });
 
@@ -400,6 +425,21 @@ void main() {
       expect(find.byKey(const ValueKey('fav-videos-row-7000')), findsOneWidget);
       await toastGone(tester);
     });
+
+    testWidgets('a pull reloads 视频 only when the finger lets go', (tester) async {
+      final api = demo();
+      await show(tester, favourites(api), api);
+      await tester.tap(find.byKey(const ValueKey('fav-chip-videos')));
+      await settle(tester);
+      int asked() => api.calls.where((call) => call.startsWith('allVideos')).length;
+      final before = asked();
+      final finger = await pullAndHold(tester, find.byKey(const ValueKey('fav-videos-list')));
+      expect(asked(), before, reason: 'still held');
+      await finger.up();
+      await settle(tester, 30);
+      expect(asked(), before + 1);
+      expect(find.byType(LoadingTv), findsNothing);
+    });
   });
 
   group('a folder (81, 82)', () {
@@ -449,6 +489,18 @@ void main() {
       await show(tester, folderPage(api, favFolder(1, '默认收藏夹', isDefault: true)), api);
       expect(find.text('0 个内容'), findsOneWidget);
       expect(find.byKey(const ValueKey('fav-folder-empty')), findsOneWidget);
+    });
+
+    testWidgets('a pull reloads the folder only when the finger lets go', (tester) async {
+      final api = demo();
+      await show(tester, folderPage(api, favFolder(3, '公开的', count: 2)), api);
+      expect(api.calls, ['folderVideos folder=3 page=1 size=20']);
+      final finger = await pullAndHold(tester, find.byKey(const ValueKey('fav-folder-list')));
+      expect(api.calls, hasLength(1), reason: 'still held');
+      await finger.up();
+      await settle(tester, 30);
+      expect(api.calls, ['folderVideos folder=3 page=1 size=20', 'folderVideos folder=3 page=1 size=20']);
+      expect(find.byType(LoadingTv), findsNothing);
     });
 
     testWidgets('🔍, multi-select, ⋮, 点赞 and 收藏 say 暂未开放; 分享 shares the folder’s link', (tester) async {
