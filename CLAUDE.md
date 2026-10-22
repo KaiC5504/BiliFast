@@ -148,6 +148,16 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   before it opens. Launch asks nav once (`BiliClient.nav` shares one out). Avatar frames stay up through a reload, as
   faces do. The official app's own requests go around a Wi-Fi proxy (its `libignet` speaks HTTP/3 over QUIC with its
   own DNS), so its iPhone cover sizes are unknown; its Android rule is `@{w}w_{h}h_1e_1c.webp` from a size table.
+- 1.0.0 (30), from KaiC's (29) log and use. Covers sooner: (29) logged `feed covers` ready 0 of 6 at every swap;
+  each cover opened its own connection (dart:io, closed after 15 s idle) and paid the CDN's ~0.4-0.5 s handshake. On
+  iOS every picture now goes through one URLSession (`PictureSession`: ephemeral, HTTP/2, kept open), every i0-i2
+  picture is asked from `i0.hdslb.com`, and a refresh starting (首页's tap, a pull armed) sends one HEAD for a picture
+  already shown while the feed call is out; `feed covers done` logs ready, thirdMs, lastMs and warm/warmed. Status bar
+  icons over a dressed header follow its picture (`lib/skin/skin_status_bar.dart`; the rule below): KaiC's skin drew
+  them black over a dark header. Full screen's brightness is kept after leaving it (the save and restore are gone).
+  The seek bar's TV is the official Lottie (`player_seek_bar_tv_1/2.json`): the eyes step 0.05 per drag update toward
+  the drag's way, glide back on release, then it blinks; it no longer grows while held, the bar thickens to 4 pt
+  (102).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -157,39 +167,15 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
-- Planned for 1.0.0 (30), agreed with KaiC (2026-10-23), held until he has gathered more fixes to ship with them:
-  1. Covers about 0.5 s sooner. On (29) every swap logged `feed covers` ready 0 of 6. Timed from the PC: each cover
-     opens its own connection (dart:io's `HttpClient`, closed after 15 s idle), and the handshake costs ~0.4-0.5 s;
-     six covers took 0.9-1.4 s on new connections and 0.6-0.8 s on one already open. No CDN size that stays 1× was
-     reliably faster (12 tried). Fix: on iOS, pictures through URLSession (`cupertino_http`, HTTP/2, one connection
-     kept open); every cover from `i0.hdslb.com` (it serves i1's and i2's paths: checked); the connection opened as a
-     refresh starts (首页's tap, a pull armed) with a request for a cover already shown, while the feed call is out.
-     The swap stays instant. Log the 3rd and 6th covers' ms after the answer and whether the connection was warm.
-     Not doing: a next page fetched ahead (a call per launch, recommendations older than what was just watched).
-  2. The status bar's icons by the skin's picture: KaiC's 幸运塔罗星 skin (dark header) drew them black, since
-     `color_mode` isn't `light` (the official Android app reads that field the same way; the iPhone app judges the
-     picture). Measure the brightness behind the clock and the icons (the two top corners) of `head_bg` (首页) and
-     `head_myself_bg` (我的; an mp4 header goes by the skin's `color`, the header text colour), white icons over dark;
-     the own space's scrolled bar by `color_second_page`. Pages pushed over a dressed 我的 set their own (设置's white
-     on white, below). Log the brightness and the choice.
-  3. Full screen's brightness stays (KaiC: whatever it was set to is kept, after full screen and after leaving the
-     app). Today `IosDeviceControls.enterFullScreen` saves the screen's brightness and `leaveFullScreen` puts it back
-     (`DeviceControls.swift`'s `saveBrightness`/`restoreBrightness`, spec 4.4); drop the save and the restore, and
-     the spec's line. Volume already stays: it is the system volume, set through the hidden MPVolumeView. iOS itself
-     may still change the brightness (auto-brightness, locking the phone).
-  4. The seek bar's TV looks the way it is dragged (KaiC: ours is still; the official one looks right dragged later,
-     left dragged earlier). The official art is two Lotties in the APK, `assets/player_seek_bar_tv_1.json` (18×18,
-     25 frames: the eyes slide from left at 0 to right at 1, centred at 0.5) and `_2.json` (12 frames: a blink).
-     The Android player (`playerbizcommon` `PlayerSeekWidget` and its `$e.onProgressChanged`): at rest and on touch,
-     `_1` at 0.5; each progress change while dragged moves it 0.05 toward the drag's way (clamped 0-1), and a change
-     of none steps it 0.05 back toward 0.5; on release `_2` plays once. Use these Lotties in place of our drawn
-     `paintTVThumb` (small player and landscape; 竖屏's dot stays), sized and checked against 15, 04 and KaiC's
-     `102-player-seek-drag.mov`; note them in `assets/README.md`.
+- (30) on the phone: `feed covers done` with warm/warmed and thirdMs/lastMs against (29)'s; `skin status bar` for
+  幸运塔罗星 (home, me, meNoCard and their picks: white expected); the brightness after full screen and after leaving
+  the app; the seek TV's eyes and blink against the official app (102 shows the iPhone's eyes pausing and topping out
+  near 0.85, which the Android rule doesn't; ours follows Android). Seen on the PC: 04's played part starts square and a
+  duller pink (ours round); landscape's drawn clock writes 03:29 where portrait writes 3:29.
 - Pictures and 推荐 on the phone (28): `images cleared` in the log confirms iOS's memory warning as the blanking's
   trigger; `feed covers` shows how often 800 ms is too short. Not built: the pull's TV closing as fast as 首页's (no
   official pull recording), the official UP badge icon (01's is 14 × 12 pt, ours a drawn box), and cards with a reason
   tag (2万点赞) hiding the uploader's name as 01 does; the seek preview's sheets stay off the disk cache.
-  Seen on Windows, not yet on the phone: 设置 opened from a dressed 我的 drew the status bar white on white.
 - The own space and 装扮 on the phone (26): the skin is the Android package (the calls sign as the Android app), so
   the log's `skin` line (files, extensions, sizes, colours, whether the bar is themed or its gaps) settles the formats,
   the icon order (首页=main, 关注=channel, 消息=shop, 我的=myself, as the official app drops the middle one) and whether
@@ -290,7 +276,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
   - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server.
   - `lib/speedtest/`: the speed test (dev builds only).
-  - `lib/shared/remote_image.dart` and `image_disk_cache.dart`: every network picture, kept on the phone.
+  - `lib/shared/remote_image.dart` and `image_disk_cache.dart`: every network picture, kept on the phone; on iOS
+    downloaded through `PictureSession` (one URLSession).
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours). `lib/shared/loading_tv.dart`: the
     loading TV every list and page uses (`lib/player_ui/player_loading.dart` is the player's).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
@@ -418,6 +405,15 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   one call per arming, keeps it unseen and shows it the moment the finger lets go. Pushed back until the TV is gone
   and let go there, nothing refreshes (`feed pull cancelled`); the unseen answer may serve another pull within 10 s.
   Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`.
+- Pictures: every address passes `secureImageUrl` (https, and i1/i2.hdslb.com asked from i0, so one connection serves
+  them all and a precache and its draw share one address). On iOS downloads go through `PictureSession`'s one
+  ephemeral URLSession (no cookies, no URL cache: `ImageDiskCache` is the cache); Windows and tests keep dart:io. A
+  transport error's text carries the URL (cupertino_http's): log `PictureDownloadException`'s reason, never the text.
+- The status bar over a dressed header goes by the picture behind the clock and the icons (`skin_status_bar.dart`):
+  the geometric mean of L + 0.05 less 0.05, white icons under 0.1791 (white's and black's contrast equal), measured
+  after the skin shows and kept per version in `.status.json`; 我的 has a height with its 会员 card and one without;
+  a video header goes by the skin's text colour. Pages without their own `AnnotatedRegion` get `DefaultStatusBar`'s
+  dark (above the Navigator); a page drawn over a light one (设置 over 我的) sets its own.
 - Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's
   `PlayerLoading`), never a spinning circle, except for loading more under a list and inside buttons, where the
   official app keeps the small system spinner too.
