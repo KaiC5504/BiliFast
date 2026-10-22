@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
@@ -344,6 +345,21 @@ void main() {
       await tester.pumpAndSettle();
       expect(pictures.clears, 1);
       semantics.dispose();
+    });
+
+    testWidgets('清除图片缓存 that fails is logged, not thrown', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      final pictures = FakeImageDiskCache(1024)..clearError = const FileSystemException('Deletion failed');
+      await show(tester, imageCache: pictures);
+      await tapRow(tester, 'settings-images');
+      await tester.tap(confirmButton('清除'));
+      await tester.pumpAndSettle();
+      expect(pictures.clears, 1);
+      expect(confirm, findsNothing);
+      final warning = logs.events.where((event) => event.msg == 'image cache not cleared').single;
+      expect(warning.f['error']?.toJson(), 'FileSystemException');
     });
 
     testWidgets('取消 on 清除图片缓存 keeps the pictures', (tester) async {

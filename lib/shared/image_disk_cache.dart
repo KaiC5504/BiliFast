@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:bili_core/devlog.dart';
 import 'package:crypto/crypto.dart';
@@ -10,15 +11,20 @@ import 'package:flutter/widgets.dart';
 /// Downloads a picture's bytes; throws `NetworkImageLoadException` for a status other than 200.
 typedef ImageFetch = Future<Uint8List> Function(Uri url, Map<String, String>? headers);
 
-/// Every network picture kept on the phone, so a picture asked for again (iOS emptied the memory cache, a page came
-/// back, the app relaunched) comes from storage instead of the network. Files are named by a hash of the address, in
-/// the caches folder iOS may empty when storage runs short; past [capBytes] the oldest go first.
+/// The pictures shown through `StoredNetworkImage`, kept on the phone, so a picture asked for again (iOS emptied the
+/// memory cache, a page came back, the app relaunched) comes from storage instead of the network. Files are named by a
+/// hash of the address, in the caches folder iOS may empty when storage runs short; past [capBytes] the least recently
+/// read go first.
 class ImageDiskCache {
   ImageDiskCache({required this.folder, this.capBytes = defaultCapBytes, this._fetch});
 
   static const defaultCapBytes = 500 * 1024 * 1024;
 
-  /// The app's, set at launch; null in tests, where pictures come straight from the network as before.
+  /// How long a download, request and body together, may take.
+  static const downloadTimeout = Duration(seconds: 30);
+
+  /// The app's, set at launch; null in tests and when launch couldn't get the caches folder, and pictures then come
+  /// straight from the network.
   static ImageDiskCache? shared;
 
   final String folder;
@@ -28,11 +34,19 @@ class ImageDiskCache {
   /// Asks in flight by address, so a second ask for one shares the first's download.
   final _loads = <String, _Load>{};
 
-  /// What the folder holds, known once [start] has totalled it.
+  /// What the folder holds, known once a trim has totalled it.
   int? _bytes;
   int? _files;
 
+  /// Whether [start] has ended, whether or not it could total the folder.
+  bool _started = false;
+
   Future<void>? _trimming;
+
+  /// After a trim failed, stores to let by before the next is tried; doubled for each failure in a row.
+  int _trimBackoff = 0;
+  int _trimSkips = 0;
+  bool _warnedTrim = false;
 
   /// Bumped by [clear], so a download that started before it is not stored after it.
   int _generation = 0;
@@ -41,10 +55,15 @@ class ImageDiskCache {
   final String _run = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
   int _serial = 0;
 
-  bool _warnedStore = false;
+  /// Pictures shown but not stored this run, and the reasons already warned of.
+  int _notStored = 0;
+  final _storeReasons = <String>{};
+
   _MemoryPressure? _observer;
 
-  /// Trims to the cap, oldest first, and logs `image cache`. Never throws.
+  /// Makes the folder, deletes the temporary files earlier runs left and totals what is stored; past the cap, trims to
+  /// 80% of it, so the next stores don't trim again at once. Watches for memory pressure and logs `image cache`. Never
+  /// throws.
   Future<void> start() async {
     if (_observer == null) {
       try {
@@ -58,13 +77,11 @@ class ImageDiskCache {
     try {
       await Directory(folder).create(recursive: true);
       final trim = await _trim(leftovers: true);
-      Logger.shared.info(LogCategory.ui, 'image cache', {
-        'files': trim.files,
-        'mb': _megabytes(trim.bytes),
-        'trimmed': trim.trimmed,
-      });
+      Logger.shared.info(LogCategory.ui, 'image cache', _summary(trim));
     } catch (error) {
       Logger.shared.warn(LogCategory.ui, 'image cache not read', {'error': _describe(error)});
+    } finally {
+      _started = true;
     }
   }
 
@@ -144,49 +161,59 @@ class ImageDiskCache {
       return;
     }
     final total = _bytes;
-    if (total == null) return;
+    if (total == null) {
+      // [start] couldn't total the folder, or a clear couldn't list it: a trim counts it afresh.
+      if (_started) _trimInBackground();
+      return;
+    }
     _bytes = total + bytes.length;
     _files = (_files ?? 0) + 1;
     if (total + bytes.length > capBytes) _trimInBackground();
   }
 
-  /// Once a run: a full disk or a folder iOS refuses fails every picture alike.
+  /// Each reason once a run: a full disk or a folder iOS refuses fails every picture alike.
   void _storeFailed(Object error) {
-    if (_warnedStore) return;
-    _warnedStore = true;
-    Logger.shared.warn(LogCategory.ui, 'image not stored', {'error': _describe(error)});
+    _notStored += 1;
+    final reason = _describe(error);
+    if (!_storeReasons.add(reason)) return;
+    Logger.shared.warn(LogCategory.ui, 'image not stored', {'error': reason});
   }
 
   void _trimInBackground() {
     if (_trimming != null) return;
+    if (_trimSkips > 0) {
+      _trimSkips -= 1;
+      return;
+    }
     _trimming = _trim(leftovers: false)
         .then((trim) {
-          Logger.shared.info(LogCategory.ui, 'image cache trimmed', {
-            'files': trim.files,
-            'mb': _megabytes(trim.bytes),
-            'trimmed': trim.trimmed,
-          });
+          _trimBackoff = 0;
+          Logger.shared.info(LogCategory.ui, trim.trimmed > 0 ? 'image cache trimmed' : 'image cache', _summary(trim));
         })
         .catchError((Object error) {
+          // A folder that can't be listed fails every trim alike.
+          _trimBackoff = _trimBackoff == 0 ? 16 : math.min(_trimBackoff * 2, 1024);
+          _trimSkips = _trimBackoff;
+          if (_warnedTrim) return;
+          _warnedTrim = true;
           Logger.shared.warn(LogCategory.ui, 'image cache not trimmed', {'error': _describe(error)});
         })
         .whenComplete(() => _trimming = null);
   }
 
-  /// Totals the folder and, past the cap, deletes the oldest-modified pictures until well under it. With
+  /// Totals the folder and, past the cap, deletes the least recently read pictures until well under it. With
   /// [leftovers], also deletes the temporary files a run that died mid-write left behind.
   Future<({int files, int bytes, int trimmed})> _trim({required bool leftovers}) async {
     final pictures = <(File, int, DateTime)>[];
     var total = 0;
-    await for (final entity in Directory(folder).list(followLinks: false)) {
-      if (entity is! File) continue;
-      if (entity.path.endsWith('.tmp')) {
-        if (leftovers && !entity.path.contains('.$_run-')) await _delete(entity);
+    await for (final file in _listed()) {
+      if (file.path.endsWith('.tmp')) {
+        if (leftovers && !file.path.contains('.$_run-')) await _delete(file);
         continue;
       }
       try {
-        final stat = await entity.stat();
-        pictures.add((entity, stat.size, stat.modified));
+        final stat = await file.stat();
+        pictures.add((file, stat.size, stat.modified));
         total += stat.size;
       } on FileSystemException {
         continue;
@@ -209,6 +236,13 @@ class ImageDiskCache {
     return (files: pictures.length - trimmed, bytes: total, trimmed: trimmed);
   }
 
+  Map<String, Object> _summary(({int files, int bytes, int trimmed}) trim) => {
+    'files': trim.files,
+    'mb': _megabytes(trim.bytes),
+    'trimmed': trim.trimmed,
+    if (_notStored > 0) 'notStored': _notStored,
+  };
+
   /// Deletes the stored copy of [url], as one that would not decode; the next ask downloads it again.
   Future<void> forget(String url) async {
     await _loads[url]?.done;
@@ -225,40 +259,41 @@ class ImageDiskCache {
     }
   }
 
-  /// What the stored pictures take, in bytes.
+  /// What the folder takes in bytes, temporary files included.
   Future<int> sizeBytes() async {
     var total = 0;
     try {
-      await for (final entity in Directory(folder).list(followLinks: false)) {
-        if (entity is! File) continue;
+      await for (final file in _listed()) {
         try {
-          total += await entity.length();
+          total += await file.length();
         } on FileSystemException {
           continue;
         }
       }
-    } on FileSystemException {
-      // No folder yet.
+    } on FileSystemException catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'image cache size not read', {'error': _describe(error)});
     }
     return total;
   }
 
-  /// Deletes every stored picture.
+  /// Deletes every stored picture. A download under way is not stored once it lands.
   Future<void> clear() async {
     _generation += 1;
     var deleted = 0;
     var failed = 0;
     try {
-      await for (final entity in Directory(folder).list(followLinks: false)) {
-        if (entity is! File) continue;
-        if (await _delete(entity)) {
+      await for (final file in _listed()) {
+        if (await _delete(file)) {
           deleted += 1;
         } else {
           failed += 1;
         }
       }
-    } on FileSystemException {
-      // No folder yet.
+    } on FileSystemException catch (error) {
+      _bytes = null;
+      _files = null;
+      Logger.shared.warn(LogCategory.ui, 'image cache not cleared', {'error': _describe(error), 'files': deleted});
+      return;
     }
     if (_bytes != null) {
       _bytes = 0;
@@ -266,6 +301,21 @@ class ImageDiskCache {
     }
     Logger.shared.info(LogCategory.ui, 'image cache cleared', {'files': deleted, if (failed > 0) 'failed': failed});
   }
+
+  /// The folder's files, none while there is no folder; any other failure to list it throws.
+  Stream<File> _listed() async* {
+    try {
+      await for (final entity in listFolder()) {
+        if (entity is File) yield entity;
+      }
+    } on PathNotFoundException {
+      // Not made yet, or iOS emptied the caches folder under the running app.
+    }
+  }
+
+  /// The folder's entries; a test stands in a listing that fails.
+  @visibleForTesting
+  Stream<FileSystemEntity> listFolder() => Directory(folder).list(followLinks: false);
 
   /// Every load and trim under way, finished.
   @visibleForTesting
@@ -304,20 +354,34 @@ class ImageDiskCache {
     _ => '${error.runtimeType}',
   };
 
-  /// The app's download, as [NetworkImage] makes it.
-  static Future<Uint8List> download(Uri url, Map<String, String>? headers) async {
-    final request = await _client.getUrl(url);
-    headers?.forEach(request.headers.add);
-    final response = await request.close();
-    if (response.statusCode != HttpStatus.ok) {
-      await response.drain<List<int>>(<int>[]);
-      throw NetworkImageLoadException(statusCode: response.statusCode, uri: url);
+  /// The app's download, as [NetworkImage] makes it; a [TimeoutException] once [timeout] has passed.
+  static Future<Uint8List> download(Uri url, Map<String, String>? headers, {Duration timeout = downloadTimeout}) {
+    HttpClientRequest? request;
+    Future<Uint8List> fetch() async {
+      final asking = request = await _client.getUrl(url);
+      headers?.forEach(asking.headers.add);
+      final response = await asking.close();
+      if (response.statusCode != HttpStatus.ok) {
+        await response.drain<List<int>>(<int>[]);
+        throw NetworkImageLoadException(statusCode: response.statusCode, uri: url);
+      }
+      return consolidateHttpClientResponseBytes(response);
     }
-    return consolidateHttpClientResponseBytes(response);
+
+    return fetch().timeout(
+      timeout,
+      onTimeout: () {
+        // Without this a stalled server would keep the connection.
+        request?.abort();
+        throw TimeoutException('picture download', timeout);
+      },
+    );
   }
 
-  // Content-Length stays trustworthy only uncompressed; consolidateHttpClientResponseBytes inflates.
-  static final HttpClient _sharedClient = HttpClient()..autoUncompress = false;
+  // The same client setup as NetworkImage's, with a connection timeout.
+  static final HttpClient _sharedClient = HttpClient()
+    ..autoUncompress = false
+    ..connectionTimeout = const Duration(seconds: 15);
 
   static HttpClient get _client {
     HttpClient? client;

@@ -106,12 +106,13 @@ class FakeLogFiles implements LogFiles {
   Future<String?> export() async => null;
 }
 
-/// Pictures kept on the phone, without a folder: [size] bytes until [clear] empties them.
+/// Pictures kept on the phone, without a folder: [size] bytes until [clear] empties them, or throws [clearError].
 class FakeImageDiskCache extends ImageDiskCache {
   FakeImageDiskCache(this.size) : super(folder: 'unused');
 
   int size;
   int clears = 0;
+  Object? clearError;
 
   @override
   Future<int> sizeBytes() async => size;
@@ -119,6 +120,7 @@ class FakeImageDiskCache extends ImageDiskCache {
   @override
   Future<void> clear() async {
     clears += 1;
+    if (clearError case final error?) throw error;
     size = 0;
   }
 }
