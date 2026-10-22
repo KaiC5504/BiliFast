@@ -129,6 +129,15 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 - 1.0.0 (27): on (26) the skin dressed 首页, 我的 and the bar (KaiC's package: png/jpg only, no svga), but 最近投币 (13)
   and 最近点赞 (600) decoded no item; their previews now take the id from `param`/`aid`, the BV from the aid and the
   length text as the duration, and `own space sections` logs why a section's first item was dropped.
+- Pictures and 推荐's refresh, 1.0.0 (28) (KaiC: covers and 我的's face went blank, then reloaded, on coming back; the
+  clip `14-official-home-tab-reload.mp4`): every picture RemoteImage, DecorImage, comment pictures and the viewer show
+  is kept on the phone (`ImageDiskCache`, the caches folder's `images`, 500 MB, least recently read out first, 30 s
+  download limit), and a picture once shown stays up while the same address reloads. 推荐's refresh (首页's tap, a
+  pull, account changes) waits for the first screen's covers, at most 800 ms after the answer, then the TV's room
+  closes in 100 ms as the old cards fade off the new in place (180 ms, no rise); a late cover shows the iPhone's
+  placeholder (#DEDFE1 with the faint 小电视, no shade) and pops in. The card took the official stat icons, 9.67 pt
+  counts and 248 pt row pitch (01). 设置's 清除图片缓存 shows the size. Logs: `image cache` at launch, `images cleared`
+  on iOS's low-memory warning, `feed covers` per refresh (ready, failed, of, waitedMs, timedOut).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -138,6 +147,11 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- Pictures and 推荐 on the phone (28): `images cleared` in the log confirms iOS's memory warning as the blanking's
+  trigger; `feed covers` shows how often 800 ms is too short. Not built: the pull's TV closing as fast as 首页's (no
+  official pull recording), the official UP badge icon (01's is 14 × 12 pt, ours a drawn box), and cards with a reason
+  tag (2万点赞) hiding the uploader's name as 01 does; the seek preview's sheets stay off the disk cache.
+  Seen on Windows, not yet on the phone: 设置 opened from a dressed 我的 drew the status bar white on white.
 - The own space and 装扮 on the phone (26): the skin is the Android package (the calls sign as the Android app), so
   the log's `skin` line (files, extensions, sizes, colours, whether the bar is themed or its gaps) settles the formats,
   the icon order (首页=main, 关注=channel, 消息=shop, 我的=myself, as the official app drops the middle one) and whether
@@ -238,6 +252,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
   - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server.
   - `lib/speedtest/`: the speed test (dev builds only).
+  - `lib/shared/remote_image.dart` and `image_disk_cache.dart`: every network picture, kept on the phone.
   - `lib/shared/theme.dart`: the colour and size tokens (never hardcode colours). `lib/shared/loading_tv.dart`: the
     loading TV every list and page uses (`lib/player_ui/player_loading.dart` is the player's).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
