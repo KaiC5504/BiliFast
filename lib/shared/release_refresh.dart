@@ -40,6 +40,7 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
 
   RefreshIndicatorMode _mode = RefreshIndicatorMode.inactive;
   ScrollableState? _scrollable;
+  bool _ticking = true;
 
   /// The pointers that went down on this list and haven't lifted.
   final _fingers = <int>{};
@@ -57,6 +58,8 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _scrollable = Scrollable.maybeOf(context);
+    // Off for a page kept alive out of sight, as 首页 under 我的 is.
+    _ticking = TickerMode.valuesOf(context).enabled;
   }
 
   @override
@@ -68,7 +71,7 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
   void _pointer(PointerEvent event) {
     switch (event) {
       case PointerDownEvent() || PointerPanZoomStartEvent():
-        if (_onList(event.position)) _fingers.add(event.pointer);
+        if (_touches(event)) _fingers.add(event.pointer);
       case PointerUpEvent() || PointerPanZoomEndEvent():
         if (_fingers.remove(event.pointer) && _fingers.isEmpty) _letGo(refresh: true);
       case PointerCancelEvent():
@@ -78,11 +81,27 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
     }
   }
 
-  bool _onList(Offset global) {
-    if (!mounted) return false;
+  /// Whether [event] went down on this list itself. Its rectangle isn't enough: a page hidden in an [IndexedStack],
+  /// one under a route or a list under an in-page sheet has the same rectangle but takes no touch.
+  bool _touches(PointerEvent event) {
+    if (!mounted || !_ticking) return false;
     final box = _scrollable?.context.findRenderObject();
     if (box is! RenderBox || !box.attached || !box.hasSize) return false;
-    return (Offset.zero & box.size).contains(box.globalToLocal(global));
+    return _hitPath(event).any((entry) => identical(entry.target, box));
+  }
+
+  static PointerEvent? _hitEvent;
+  static Iterable<HitTestEntry> _hitEntries = const [];
+
+  /// What's under [event], hit tested once for all the lists on screen.
+  static Iterable<HitTestEntry> _hitPath(PointerEvent event) {
+    if (!identical(event, _hitEvent)) {
+      final result = HitTestResult();
+      RendererBinding.instance.hitTestInView(result, event.position, event.viewId);
+      _hitEvent = event;
+      _hitEntries = result.path;
+    }
+    return _hitEntries;
   }
 
   /// How far the list is pulled past its top now. The last layout can be a frame behind the finger, as when the pull
@@ -119,7 +138,7 @@ class _ReleaseRefreshControlState extends State<ReleaseRefreshControl> {
   }
 
   /// The mode for the space the sliver now gives the indicator. Refreshing begins and ends outside layout, in
-  /// [_letGo] and when [ReleaseRefreshControl.onRefresh] completes.
+  /// [_letGo] and when [ReleaseRefreshControl.onRefresh] completes. It buzzes once as the pull arms.
   RefreshIndicatorMode _settle(double extent) {
     final trigger = widget.refreshTriggerPullDistance;
     if (_mode == RefreshIndicatorMode.refresh) return RefreshIndicatorMode.refresh;

@@ -17,7 +17,8 @@ void main() {
   late List<Completer<void>> refreshes;
   late List<RefreshIndicatorMode> modes;
 
-  Future<void> show(WidgetTester tester, {int rows = 30}) async {
+  /// The list under the bar; [around] puts something over or around it.
+  Future<void> show(WidgetTester tester, {int rows = 30, Widget Function(Widget list)? around}) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1;
@@ -33,26 +34,28 @@ void main() {
             children: [
               const SizedBox(key: ValueKey('bar'), height: _bar),
               Expanded(
-                child: CustomScrollView(
-                  key: const ValueKey('list'),
-                  physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                  slivers: [
-                    ReleaseRefreshControl(
-                      onRefresh: () {
-                        final refresh = Completer<void>();
-                        refreshes.add(refresh);
-                        return refresh.future;
-                      },
-                      builder: (context, mode, pulled, trigger, extent) {
-                        if (modes.lastOrNull != mode) modes.add(mode);
-                        return loadingTvRefreshIndicator(context, mode, pulled, trigger, extent);
-                      },
-                    ),
-                    SliverList.builder(
-                      itemCount: rows,
-                      itemBuilder: (context, index) => SizedBox(key: ValueKey('row-$index'), height: 80),
-                    ),
-                  ],
+                child: (around ?? (list) => list)(
+                  CustomScrollView(
+                    key: const ValueKey('list'),
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    slivers: [
+                      ReleaseRefreshControl(
+                        onRefresh: () {
+                          final refresh = Completer<void>();
+                          refreshes.add(refresh);
+                          return refresh.future;
+                        },
+                        builder: (context, mode, pulled, trigger, extent) {
+                          if (modes.lastOrNull != mode) modes.add(mode);
+                          return loadingTvRefreshIndicator(context, mode, pulled, trigger, extent);
+                        },
+                      ),
+                      SliverList.builder(
+                        itemCount: rows,
+                        itemBuilder: (context, index) => SizedBox(key: ValueKey('row-$index'), height: 80),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -62,7 +65,8 @@ void main() {
     );
   }
 
-  double pulled(WidgetTester tester) => -tester.state<ScrollableState>(find.byType(Scrollable)).position.pixels;
+  double pulled(WidgetTester tester) =>
+      -tester.state<ScrollableState>(find.byType(Scrollable, skipOffstage: false)).position.pixels;
   double firstRowTop(WidgetTester tester) => tester.getTopLeft(find.byKey(const ValueKey('row-0'))).dy;
   bool playing(WidgetTester tester) => tester.widget<LoadingTv>(find.byType(LoadingTv)).playing;
 
@@ -265,5 +269,81 @@ void main() {
     await wait(tester);
     expect(refreshes, isEmpty);
     expect(find.byType(LoadingTv), findsNothing);
+  });
+
+  /// Leaves the list bouncing back from 150 pt past its top, with no finger on it.
+  Future<void> bounce(WidgetTester tester) async {
+    tester.state<ScrollableState>(find.byType(Scrollable)).position.jumpTo(-150);
+    await tester.pump();
+    expect(pulled(tester), greaterThan(100));
+  }
+
+  testWidgets('a touch on a sheet over the list is not a finger on the list', (tester) async {
+    await show(
+      tester,
+      around: (list) => Stack(
+        children: [
+          list,
+          Positioned.fill(
+            child: GestureDetector(key: const ValueKey('sheet'), behavior: HitTestBehavior.opaque, onTap: () {}),
+          ),
+        ],
+      ),
+    );
+    await bounce(tester);
+    final finger = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('sheet'))));
+    await tester.pump();
+    expect(modes.last, RefreshIndicatorMode.drag, reason: 'armed by nothing');
+    await finger.up();
+    await wait(tester);
+    expect(refreshes, isEmpty);
+    expect(pulled(tester), 0);
+  });
+
+  testWidgets('a list hidden in an IndexedStack takes no finger from the page over it', (tester) async {
+    var hidden = false;
+    late StateSetter setHidden;
+    await show(
+      tester,
+      around: (list) => StatefulBuilder(
+        builder: (context, setState) {
+          setHidden = setState;
+          return IndexedStack(
+            index: hidden ? 1 : 0,
+            sizing: StackFit.expand,
+            children: [
+              TickerMode(enabled: !hidden, child: list),
+              const ColoredBox(key: ValueKey('other'), color: Color(0xFFFFFFFF)),
+            ],
+          );
+        },
+      ),
+    );
+    await bounce(tester);
+    setHidden(() => hidden = true);
+    await tester.pump();
+    final frozen = pulled(tester);
+    expect(frozen, greaterThan(100), reason: 'its bounce stopped with its ticker');
+    final finger = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('other'))));
+    await wait(tester, const Duration(milliseconds: 200));
+    await finger.up();
+    await wait(tester);
+    expect(refreshes, isEmpty);
+    expect(pulled(tester), frozen);
+    expect(modes.last, RefreshIndicatorMode.drag);
+
+    setHidden(() => hidden = false);
+    await wait(tester);
+    expect(refreshes, isEmpty, reason: 'shown again, it settles without refreshing');
+    expect(pulled(tester), 0);
+  });
+
+  testWidgets('a list whose tickers are off takes no finger, even where it shows', (tester) async {
+    await show(tester, around: (list) => TickerMode(enabled: false, child: list));
+    await bounce(tester);
+    final finger = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('list'))));
+    await finger.up();
+    await wait(tester);
+    expect(refreshes, isEmpty);
   });
 }

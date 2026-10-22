@@ -117,7 +117,7 @@ final class NavInfo {
 
   bool get isVip => vipStatus == 1;
 
-  /// Empty without a frame; pictures can come as http or protocol-relative.
+  /// Null without a frame; http and protocol-relative pictures come back as https.
   static String? _picture(String? url) {
     if (url == null || url.isEmpty) return null;
     if (url.startsWith('//')) return 'https:$url';

@@ -896,9 +896,16 @@ void main() {
       await settle(tester, 10);
       await tapHome(tester);
       await settle(tester, 10);
-      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
+      final finger = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('feed'))));
+      for (var i = 0; i < 12; i++) {
+        await finger.moveBy(const Offset(0, 25));
+        await tester.pump(const Duration(microseconds: 16667));
+      }
+      expect(find.byType(LoadingTv), findsOneWidget, reason: 'held past the trigger: only the tap\'s TV');
+      await finger.up();
       await settle(tester, 10);
       expect(http.asked, [1, 1]);
+      expect(find.byType(LoadingTv), findsOneWidget, reason: 'released: no second gap opens');
       http.gates[1]!.complete();
       await settle(tester, 20);
       expect(http.asked, [1, 1]);

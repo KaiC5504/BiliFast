@@ -716,10 +716,12 @@ class _FeedGridState extends State<_FeedGrid> {
         );
         final cards = feed.cards;
         final loadingFirst = cards.isEmpty && (feed.loading || feed.error == null);
+        // While 首页's tap holds its TV at the top, a pull draws and opens nothing: the refresh it would join is
+        // already showing.
         final pull = ReleaseRefreshControl(
           refreshIndicatorExtent: LoadingTvTheme.size,
-          builder: loadingTvRefreshIndicator,
-          onRefresh: widget.onRefresh,
+          builder: _reloadHeader ? null : loadingTvRefreshIndicator,
+          onRefresh: _reloadHeader ? null : widget.onRefresh,
         );
         return AnimatedSwitcher(
           duration: still ? Duration.zero : const Duration(milliseconds: 320),

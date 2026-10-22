@@ -24,6 +24,7 @@ import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/watch_later/watch_later_page.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -158,6 +159,17 @@ void main() {
     expect(find.text('听视频'), findsNothing);
     expect(find.text('开发者'), findsNothing);
     expect(find.text('登录'), findsNothing);
+  });
+
+  testWidgets("under the system font the shortcuts' labels keep the PingFang fallback and no tracking", (tester) async {
+    await useSystemFont(tester);
+    await show(tester, theme: appTheme(), fonts: FontStore.memory()..select(FontChoice.system));
+    for (final label in ['离线缓存', '历史记录', '我的收藏', '稍后再看']) {
+      final style = tester.renderObject<RenderParagraph>(find.text(label)).text.style!;
+      expect(style.fontFamilyFallback, isNotNull, reason: label);
+      expect(style.fontFamilyFallback, BiliFonts.fallback, reason: label);
+      expect(style.letterSpacing, 0, reason: label);
+    }
   });
 
   testWidgets('up to five recents in 49\'s rows: cover, duration, title, when, and ✕', (tester) async {

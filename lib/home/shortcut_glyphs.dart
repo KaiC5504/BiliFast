@@ -7,7 +7,7 @@ import '../shared/theme.dart';
 /// The four shortcuts both the avatar's page (49) and 我的 (87) show.
 enum ShortcutGlyph { offline, history, star, later }
 
-/// 49's four line icons, drawn on a 32 pt box from the screenshot, in [color].
+/// The shortcuts' line icons, traced on 49 on a 32 pt box, in [color].
 class ShortcutPainter extends CustomPainter {
   const ShortcutPainter(this.glyph, {this.color = BiliColors.text});
 

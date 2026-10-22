@@ -216,8 +216,11 @@ class _Shortcut extends StatelessWidget {
                   child: Text(
                     label,
                     maxLines: 1,
+                    // Not CupertinoButton's action style: its tracking, and no fallback to PingFang.
                     style: TextStyle(
                       fontFamily: BiliFonts.family,
+                      fontFamilyFallback: BiliFonts.fallback,
+                      letterSpacing: 0,
                       fontSize: AvatarPageTheme.shortcutText,
                       color: BiliColors.text,
                     ),

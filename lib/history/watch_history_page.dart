@@ -22,8 +22,9 @@ import 'history_glyphs.dart';
 import 'history_model.dart';
 import 'history_sheet.dart';
 
-/// 历史记录 (28, 45-48), pushed from the avatar page's 历史记录 shortcut (49): the title bar and the list grouped 今天, 昨天, 更早, without the
-/// official 🔍, ⋮ and tab row (the app only plays videos). A row's ⋮ opens 48's sheet over the page.
+/// 历史记录 (28, 45-48), pushed from the shortcut on the avatar page (49) and 我的 (87): the title bar and the list
+/// grouped 今天, 昨天, 更早, without the official 🔍, ⋮ and tab row (the app only plays videos). A row's ⋮ opens 48's
+/// sheet over the page.
 class WatchHistoryPage extends StatefulWidget {
   const WatchHistoryPage({super.key, this.model, this.loginGate, this.share = shareThroughSystem, this.open});
 

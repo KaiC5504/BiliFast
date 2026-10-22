@@ -38,9 +38,9 @@ enum FavouritesLayout { cards, list }
 @visibleForTesting
 FavouritesLayout favouritesLayout = FavouritesLayout.cards;
 
-/// 我的收藏 (80, 83, 84, 99), from the avatar page's shortcut: 收藏 (追更 is 暂未开放), then 收藏夹, the account's
-/// folders as cards or a list, or 视频, every favourite across them. A folder opens its page (81); + and 新建收藏夹 open
-/// 创建 (100).
+/// 我的收藏 (80, 83, 84, 99), from the shortcut on the avatar page (49) and 我的 (87): 收藏 (追更 is 暂未开放), then
+/// 收藏夹, the account's folders as cards or a list, or 视频, every favourite across them. A folder opens its page
+/// (81); + and 新建收藏夹 open 创建 (100).
 class FavouritesPage extends StatefulWidget {
   const FavouritesPage({super.key, this.api, this.loginGate, this.share = shareThroughSystem, this.open});
 

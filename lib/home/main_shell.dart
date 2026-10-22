@@ -57,16 +57,16 @@ class _MainShellState extends State<MainShell> {
                 index: mine ? 1 : 0,
                 sizing: StackFit.expand,
                 children: [
-                  TickerMode(
-                    enabled: !mine,
+                  _Place(
+                    shown: !mine,
                     child: HomePage(
                       developerPage: widget.developerPage,
                       initialLink: widget.initialLink,
                       reloads: _reloads,
                     ),
                   ),
-                  TickerMode(
-                    enabled: mine,
+                  _Place(
+                    shown: mine,
                     child: AnnotatedRegion<SystemUiOverlayStyle>(
                       value: SystemUiOverlayStyle.dark,
                       child: MePage(active: mine, developerPage: widget.developerPage),
@@ -81,6 +81,21 @@ class _MainShellState extends State<MainShell> {
       ),
     );
   }
+}
+
+/// A place kept alive while hidden: still, and out of Hero flights, which an [IndexedStack] doesn't stop. Otherwise a
+/// hidden 推荐 cover flies over 我的 to or from a pushed page holding the same tag (a space row's `cover-<bvid>`).
+class _Place extends StatelessWidget {
+  const _Place({required this.shown, required this.child});
+
+  final bool shown;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => TickerMode(
+    enabled: shown,
+    child: HeroMode(enabled: shown, child: child),
+  );
 }
 
 class _Reloads extends ChangeNotifier {

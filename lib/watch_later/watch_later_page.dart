@@ -21,9 +21,10 @@ import 'watch_later_row.dart';
 import 'watch_later_sheets.dart';
 import 'watch_later_text.dart';
 
-/// 稍后再看 (85, 86), from the avatar page's shortcut: the bar with 管理, the chips with the sort and 播放全部, the list
-/// and its note, or the empty TV. 管理 opens 93's sheet, a row's ⋮ 94's; 批量管理 is the edit mode (95, 96) with its
-/// bar, whose 复制到 and 移动到 open the folders (97, 98). Sheets close first on back, then the edit mode.
+/// 稍后再看 (85, 86), from the shortcut on the avatar page (49) and 我的 (87): the bar with 管理, the chips with the
+/// sort and 播放全部, the list and its note, or the empty TV. 管理 opens 93's sheet, a row's ⋮ 94's; 批量管理 is the
+/// edit mode (95, 96) with its bar, whose 复制到 and 移动到 open the folders (97, 98). Sheets close first on back, then
+/// the edit mode.
 class WatchLaterPage extends StatefulWidget {
   const WatchLaterPage({super.key, this.api, this.loginGate, this.open});
 
