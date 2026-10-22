@@ -9,3 +9,6 @@ needs). No PiliPlus code is copied. `fonts/MiSans-Regular.ttf` is Xiaomi's MiSan
 `lottie/player_loading_tv.json` (the player's pink 正在缓冲 TV) come from the official Bilibili Android app 8.43.0's
 APK, which KaiC downloaded for them (2026-10-21): `indicatorFrame1-4.webp` of its pull-to-refresh resources and
 `assets/player_loading_tv.json`, unchanged. The APK itself stays in `local/`.
+
+`images/loading/cover_placeholder.png` (the faint 小电视 on a cover still loading) is the same APK's
+`bili_default_image_tv` (xxhdpi), its transparent edge trimmed.

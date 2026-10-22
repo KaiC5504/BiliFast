@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'account/app_auth.dart';
 import 'account/dpapi_keychain_store.dart';
@@ -34,6 +35,7 @@ import 'search/search_history_store.dart';
 import 'settings/follow_font.dart';
 import 'settings/font_store.dart';
 import 'space/fake_space_api.dart';
+import 'shared/image_disk_cache.dart';
 import 'shared/theme.dart';
 import 'video/fake_page_api.dart';
 import 'video/player_prefs.dart';
@@ -101,6 +103,16 @@ Future<void> main(List<String> args) async {
   applyTurnTakeover(device.orientation, PlayerPrefs.shared);
   PhoneFrame.follow(device.orientation);
   await appAuth.start();
+  ImageDiskCache? imageCache;
+  try {
+    final caches = await getApplicationCacheDirectory();
+    imageCache = ImageDiskCache(folder: '${caches.path}${Platform.pathSeparator}images');
+    ImageDiskCache.shared = imageCache;
+    unawaited(imageCache.start());
+  } catch (error, stack) {
+    // Pictures then come from the network every time, as they did before the cache.
+    CrashLog.report(error, stack, source: 'image cache');
+  }
   final services = AppServices(
     environment: environment,
     playback: playback,
@@ -120,6 +132,7 @@ Future<void> main(List<String> args) async {
     navigator: navigator,
     searchHistory: searchHistory,
     danmakuSettings: danmakuSettings,
+    imageCache: imageCache,
     logFiles: logFiles,
     logs: logs,
   );

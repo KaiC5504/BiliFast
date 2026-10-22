@@ -22,6 +22,7 @@ import '../playback/shared_engine.dart';
 import '../search/search_api.dart';
 import '../search/search_history_store.dart';
 import '../settings/font_store.dart';
+import '../shared/image_disk_cache.dart';
 import '../skin/skin_api.dart';
 import '../skin/skin_model.dart';
 import '../space/follow_book.dart';
@@ -161,6 +162,7 @@ class AppServices {
     this._skinApi,
     this.skinFolder,
     this._skin,
+    this.imageCache,
     AppAuth? appAuth,
     GlobalKey<NavigatorState>? navigator,
     SearchHistoryStore? searchHistory,
@@ -263,6 +265,9 @@ class AppServices {
 
   /// The equipped 装扮 (its value null for the stock look): the one given, else made on first use. `main` starts it.
   late final SkinModel skin = _skin ?? SkinModel(api: skinApi, environment: environment, folder: skinFolder);
+
+  /// The pictures kept on the phone (`ImageDiskCache.shared` in the app); null in tests that don't give one.
+  final ImageDiskCache? imageCache;
 
   /// The official API's login token.
   final AppAuth appAuth;

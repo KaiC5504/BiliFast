@@ -76,15 +76,29 @@ class RemoteImage extends StatelessWidget {
     return Stack(fit: StackFit.expand, children: [under, image]);
   }
 
-  Widget _image(BuildContext context, String source, Size logical) {
+  /// Fetches and decodes [url] as a RemoteImage of [logical] size shows it, so that box shows it at once. True once
+  /// it is ready, false if it failed or there is none; never throws.
+  static Future<bool> precache(BuildContext context, String? url, Size logical) async {
+    if (url == null || url.isEmpty) return false;
+    var ok = true;
+    await precacheImage(_provider(_address(context, url, logical), url), context, onError: (_, _) => ok = false);
+    return ok;
+  }
+
+  static String _address(BuildContext context, String source, Size logical) {
     final ratio = MediaQuery.devicePixelRatioOf(context);
-    final address =
-        sizedImageUrl(source, width: _bucket(logical.width * ratio), height: _bucket(logical.height * ratio));
+    return sizedImageUrl(source, width: _bucket(logical.width * ratio), height: _bucket(logical.height * ratio));
+  }
+
+  static ImageProvider _provider(String address, String source) => animates(source)
+      ? NetworkImage(address, headers: BiliClient.mediaHeaders)
+      : StillNetworkImage(address, headers: BiliClient.mediaHeaders);
+
+  Widget _image(BuildContext context, String source, Size logical) {
+    final address = _address(context, source, logical);
     final instead = fallback;
     return Image(
-      image: animates(source)
-          ? NetworkImage(address, headers: BiliClient.mediaHeaders)
-          : StillNetworkImage(address, headers: BiliClient.mediaHeaders),
+      image: _provider(address, source),
       fit: fit,
       width: double.infinity,
       height: double.infinity,
