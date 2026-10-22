@@ -5017,7 +5017,222 @@ abstract final class OwnSpaceTheme {
   static const bannerHeight = 295.3;
 }
 
-/// The own space's tabs: 主页's sections (114, 115), 收藏 (116), 追番 (117) and 投稿's empty page (108).
+/// The own space's tabs: 主页's sections (114, 115), 收藏 (116), 追番 (117) and 投稿's empty page (108), measured in
+/// px / 3 from the tab row's lower hairline, where a tab's body starts.
 abstract final class OwnSpaceTabsTheme {
   static const gutter = SpaceTheme.gutter;
+
+  /// 主页 and 追番 lie on the page's grey, 收藏 and 投稿 on white; either runs on to the screen's bottom.
+  static const greyPage = BiliColors.softGrey;
+  static const whitePage = BiliColors.card;
+
+  /// 主页's section header: its line centred 22 down a 44.5 band, the cards under it, then 16.5 to the next band. The
+  /// title and its count 14 pt, the count 9 after the title, the eye-slash 8 after the count (9 after a title with
+  /// none); 更多 13 pt with its › 9.17 after it, ending 15 from the edge.
+  static const headerHeight = 44.5;
+  static const headerCentre = 22.0;
+  static const headerLine = 20.0;
+  static const sectionBottom = 16.5;
+  static const titleText = 14.0;
+  static const titleInk = BiliColors.text;
+  static const countText = 14.0;
+  static const countInk = BiliColors.secondaryText;
+  static const countGap = 9.0;
+  static const eyeGap = 8.0;
+  static const eyeWidth = 46 / 3;
+  static const eyeHeight = 34 / 3;
+  static const eyeStroke = 1.0;
+  static const eyeInk = BiliColors.secondaryText;
+  static const moreText = 13.0;
+  static const moreInk = BiliColors.secondaryText;
+
+  /// 更多's words sit half a point above the header's line, its › on it.
+  static const moreLift = 0.5;
+  static const moreChevronGap = 55 / 6;
+  static const moreChevronWidth = 5.0;
+  static const moreChevronHeight = 28 / 3;
+  static const moreChevronStroke = 1.1;
+  static const moreRight = 15.0;
+
+  /// 收藏's folders and the videos: two white cards a row 10 apart, 173 tall with a 6 corner and a soft shadow, the
+  /// cover 126 tall across the top.
+  static const pairGap = 10.0;
+  static const cardHeight = 173.0;
+  static const cardRadius = 6.0;
+  static const cardFill = BiliColors.card;
+  static const cardShadow = Color(0x1B000000);
+  static const cardShadowBlur = 2.0;
+  static const cardShadowDrop = 1.0;
+  static const coverHeight = 126.0;
+  static const coverEmpty = BiliColors.pageGrey;
+
+  /// Under the cover, 10 in: the title 13 pt, its middle 13.33 below (a video's in up to two lines 18 apart); a
+  /// folder's "N个内容 · 公开" 12 pt grey, its middle 34.17 below.
+  static const cardPadX = 10.0;
+  static const cardTitleText = 13.0;
+  static const cardTitleLine = 18.0;
+  static const cardTitleInk = BiliColors.text;
+  static const folderTitleCentre = 40 / 3;
+  static const folderCountCentre = 205 / 6;
+  static const folderCountText = 12.0;
+  static const folderCountLine = 17.0;
+  static const folderCountInk = BiliColors.secondaryText;
+  static const videoTitleCentre = 40 / 3;
+
+  /// A video's cover darkens over its bottom 46 for the counts: ▶ and the danmaku box (13.33 × 11.33) in white,
+  /// 7.33 in, the 11 pt counts 3.67 after each box and the next box 9.75 after the plays; the length ending 6.5 from
+  /// the right; all on a line centred 12 above the cover's bottom.
+  static const shadeHeight = 46.0;
+  static const shade = Color(0x8C000000);
+  static const statText = 11.0;
+  static const statLine = 14.0;
+  static const statCentre = 12.0;
+  static const statLeft = 22 / 3;
+  static const statRight = 6.5;
+  static const statIconWidth = 40 / 3;
+  static const statIconHeight = 34 / 3;
+  static const statIconGap = 11 / 3;
+  static const statGroupGap = 9.75;
+  static const statInk = BiliColors.onCover;
+
+  /// A folder without a cover: the TV in a lighter grey, 81.67 × 76.33 and centred (114). 116's rows draw it smaller
+  /// and darker.
+  static const tvInk = Color(0xFFF6F7F8);
+  static const tvWidth = 245 / 3;
+  static const tvHeight = 229 / 3;
+
+  /// The folder's badge: a 20 pt square of black at half with a 2.33 corner, 4 in from the cover's lower right (5 up
+  /// on 116's rows); the stacked bars and the ▶ card in white.
+  static const stackSize = 20.0;
+  static const stackRadius = 7 / 3;
+  static const stackFill = Color(0x80000000);
+  static const stackInk = Color(0xFFFFFFFF);
+  static const stackInset = 4.0;
+
+  /// 追番's posters (114, 117): three a row 12 apart, 130.67 × 175 with a 6 corner, darkening over their bottom 47 to
+  /// black at 80%; the title 13 pt and the progress 11 pt in white, 5.33 in, their middles 29.5 and 11.33 above the
+  /// bottom, the title cut with … 7 short of the right.
+  static const posterWidth = 392 / 3;
+  static const posterHeight = 175.0;
+  static const posterGap = 12.0;
+  static const posterRadius = 6.0;
+  static const posterEmpty = BiliColors.pageGrey;
+  static const posterShadeHeight = 47.0;
+  static const posterShade = Color(0xCC000000);
+  static const posterInk = BiliColors.onCover;
+  static const posterTextLeft = 16 / 3;
+  static const posterTextRight = 7.0;
+  static const posterTitleText = 13.0;
+  static const posterTitleLine = 18.0;
+  static const posterTitleCentre = 29.5;
+  static const posterProgressText = 11.0;
+  static const posterProgressLine = 15.0;
+  static const posterProgressCentre = 34 / 3;
+
+  /// 拥有的个性装扮 (115): three cards a row 13 apart, 130 wide with a 6 corner. 115 cuts them off 198 down, the title's
+  /// 12 pt ink starting 193.17 down; the 9:16 height, the gradient's 60 and the NO. pill are guesses until a
+  /// screenshot shows a card whole.
+  static const garbWidth = 130.0;
+  static const garbHeight = garbWidth * 16 / 9;
+  static const garbGap = 13.0;
+  static const garbRadius = 6.0;
+  static const garbShadeHeight = 60.0;
+  static const garbShade = Color(0xB3000000);
+  static const garbInk = BiliColors.onCover;
+  static const garbTextLeft = 6.5;
+  static const garbTextRight = 6.5;
+  static const garbTitleText = 12.0;
+  static const garbTitleLine = 17.0;
+  static const garbTitleCentre = garbHeight - 198.7;
+  static const garbNumberCentre = 14.0;
+  static const garbNumberHeight = 14.0;
+  static const garbNumberPadX = 4.0;
+  static const garbNumberRadius = 2.0;
+  static const garbNumberText = 9.0;
+  static const garbNumberFill = Color(0x66000000);
+
+  /// The section's cards at most: one row of each.
+  static const homeFolders = 2;
+  static const homeBangumi = 3;
+  static const homeVideos = 2;
+  static const homeGarbs = 3;
+
+  /// 收藏 (116): the header 48.33 tall, ^ (12 × 6.33, grey) 14 in, 我创建的收藏夹 14 pt from 36.17 and its count 12
+  /// pt grey 8.67 after it; a 1 pt #F6F7F8 band under it and after the last row. Each row 12 under the one before:
+  /// the 117 × 73 cover with a 4 corner, the title 14 pt 10 after it, its middle 10 under the cover's top, and the
+  /// count 12 pt grey, its middle 64.33 under it.
+  static const folderHeaderHeight = 145 / 3;
+  static const folderChevronLeft = 14.0;
+  static const folderChevronWidth = 12.0;
+  static const folderChevronHeight = 19 / 3;
+  static const folderChevronStroke = 0.9;
+  static const folderChevronInk = BiliColors.secondaryText;
+  static const folderChevronTurn = Duration(milliseconds: 200);
+  static const folderHeaderTitleLeft = 217 / 6;
+  static const folderHeaderTitleText = 14.0;
+  static const folderHeaderCountText = 12.0;
+  static const folderHeaderCountGap = 26 / 3;
+  static const folderBand = 1.0;
+  static const folderBandInk = BiliColors.softGrey;
+  static const rowGap = 12.0;
+  static const rowCoverWidth = 117.0;
+  static const rowCoverHeight = 73.0;
+  static const rowCoverRadius = 4.0;
+  static const rowTextGap = 10.0;
+  static const rowTitleText = 14.0;
+  static const rowTitleLine = 20.0;
+  static const rowTitleCentre = 10.0;
+  static const rowCountText = 12.0;
+  static const rowCountLine = 17.0;
+  static const rowCountCentre = 193 / 3;
+  static const rowTvInk = Color(0xFFCCCCCC);
+  static const rowTvWidth = 34.0;
+  static const rowTvHeight = 33.0;
+  static const rowStackBottom = 5.0;
+
+  /// 追番 (117): the posters from 11.33 under the hairline, rows 12 apart; 再怎么找也没有啦 14 pt grey, its middle 21.17
+  /// under the last row.
+  static const bangumiTop = 34 / 3;
+  static const endText = 14.0;
+  static const endLine = 20.0;
+  static const endInk = BiliColors.secondaryText;
+  static const endCentre = 127 / 6;
+  static const endBottom = 20.0;
+
+  /// 投稿 with no videos (108): a 48 disc of #F5F7F9 centred 63.33 down with the upload glyph (#61666D, 1.2 lines);
+  /// 发布第一个视频，领新人福利 16 pt grey, its middle 120.67 down; 我要投稿, a 140 × 44 pill rimmed 1 pt pink with 16
+  /// pt pink words, centred 173.33 down; 去创作中心领奖 12 pt link blue and its › 7 after it, centred 225.83 down.
+  static const emptyDisc = 48.0;
+  static const emptyDiscFill = Color(0xFFF5F7F9);
+  static const emptyDiscCentre = 190 / 3;
+  static const uploadInk = Color(0xFF61666D);
+  static const uploadStroke = 1.2;
+  static const uploadSize = 20.0;
+  static const emptyText = 16.0;
+  static const emptyLine = 22.0;
+  static const emptyInk = BiliColors.secondaryText;
+  static const emptyTextCentre = 362 / 3;
+  static const uploadPillWidth = 140.0;
+  static const uploadPillHeight = 44.0;
+  static const uploadPillRim = 1.0;
+  static const uploadPillInk = BiliColors.pink;
+  static const uploadPillText = 16.0;
+  static const uploadPillCentre = 520 / 3;
+  static const rewardText = 12.0;
+  static const rewardLine = 17.0;
+  static const rewardInk = BiliColors.link;
+  static const rewardCentre = 677.5 / 3;
+  static const rewardChevronGap = 7.0;
+  static const emptyBottom = 40.0;
+
+  /// The first load's TV, the next page's small spinner and 加载失败，点击重试, as 我的收藏's.
+  static const stateTop = 40.0;
+  static const footerPad = FavouritesTheme.footerPad;
+  static const footerText = FavouritesTheme.footerText;
+  static const footerInk = FavouritesTheme.footerInk;
+  static const footerRetryInk = BiliColors.link;
+  static const spinnerRadius = FavouritesTheme.spinnerRadius;
+
+  /// Lists scrolled this close to the end ask for the next page.
+  static const loadAhead = 360.0;
 }
