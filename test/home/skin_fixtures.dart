@@ -18,7 +18,8 @@ const standInColors = SkinColors(
 
 /// Drawn stand-ins for a 装扮's pictures (never the official art), as PNGs in a temp folder, in the shapes 110 and 109
 /// measure: the head 1320 × 318 px down to the top row's bottom, the tab strip's 108 px, the bar's picture 83 pt tall
-/// with a wavy top, icons whose ink is 41 of their 45 pt box, 发布's cross 30 of its 38.
+/// with a wavy top, icons whose ink is 41 of their 45 pt box, 发布's cross 30 of its 38, and 我的's header a square in
+/// the dark of 109's frame. `broken.png` is no picture at all.
 class SkinPictures {
   SkinPictures._(this.folder);
 
@@ -56,6 +57,10 @@ class SkinPictures {
       );
     }
     await _png(pictures['pub.png'], 114, 114, _pub);
+    await _png(pictures['head_myself.png'], 1320, 1320, (canvas, size) {
+      canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF292323));
+    });
+    await pictures['broken.png'].writeAsBytes([for (var i = 0; i < 200; i++) i * 31 % 256]);
     // SvgaView reads its own files; these bytes only need to exist.
     for (final i in [0, 4]) {
       await pictures['tail_icon_selected_$i.svga'].writeAsBytes([0x53, 0x56, 0x47, 0x41]);
@@ -65,14 +70,23 @@ class SkinPictures {
 
   void dispose() => folder.deleteSync(recursive: true);
 
-  /// A skin over these pictures. [icons] cuts the bar's icons short; [animated] makes those selected icons `.svga`.
+  /// A skin over these pictures. [icons] cuts the bar's icons short; [animated] makes those selected icons `.svga`
+  /// ([svga] in place of the stand-in bytes); [iconFiles] swaps unselected icons' pictures by index; [me] dresses
+  /// 我的's header too, [video] over it.
   Skin skin({
     bool head = true,
+    String headPicture = 'head_bg.png',
     bool tab = true,
+    String tabPicture = 'head_tab_bg.png',
     String? tail = 'tail_bg.png',
     int icons = 5,
     Set<int> animated = const {},
+    File? svga,
+    Map<int, String> iconFiles = const {},
     bool pub = true,
+    String pubFile = 'pub.png',
+    bool me = true,
+    File? video,
     SkinColors colors = standInColors,
   }) => Skin(
     equip: SkinEquip(
@@ -83,25 +97,29 @@ class SkinPictures {
       packageMd5: '00000000000000000000000000000000',
       colors: colors,
     ),
-    headBg: head ? this['head_bg.png'] : null,
-    headTabBg: head && tab ? this['head_tab_bg.png'] : null,
+    headBg: head ? this[headPicture] : null,
+    headTabBg: head && tab ? this[tabPicture] : null,
+    headMyself: me ? this['head_myself.png'] : null,
+    headMyselfVideo: me ? video : null,
     tailBg: tail == null ? null : this[tail],
-    tailIcons: [for (var i = 0; i < icons; i++) SkinIcon(this['tail_icon_$i.png'])],
+    tailIcons: [for (var i = 0; i < icons; i++) SkinIcon(this[iconFiles[i] ?? 'tail_icon_$i.png'])],
     tailIconsSelected: [
       for (var i = 0; i < icons; i++)
         animated.contains(i)
-            ? SkinIcon(this['tail_icon_selected_$i.svga'], animated: true)
+            ? SkinIcon(svga ?? this['tail_icon_selected_$i.svga'], animated: true)
             : SkinIcon(this['tail_icon_selected_$i.png']),
     ],
-    pubButton: pub ? SkinIcon(this['pub.png']) : null,
+    pubButton: pub ? SkinIcon(this[pubFile]) : null,
   );
 
   /// Decodes [skin]'s still pictures into the image cache, which a widget test can't do in its fake time. Call it
-  /// before anything shows them: a picture asked for first would wait on that fake time for ever.
+  /// before anything shows them: a picture asked for first would wait on that fake time for ever. One that won't
+  /// decode stays cached as failed, so a gate on it answers at once too.
   static Future<void> load(WidgetTester tester, Skin skin) async {
     final files = <File>[
       ?skin.headBg,
       ?skin.headTabBg,
+      ?skin.headMyself,
       ?skin.tailBg,
       for (final icon in [...skin.tailIcons, ...skin.tailIconsSelected, ?skin.pubButton])
         if (!icon.animated) icon.file,
@@ -110,7 +128,7 @@ class SkinPictures {
     final context = tester.binding.rootElement!;
     await tester.runAsync(
       () =>
-          Future.wait([for (final file in files) precacheImage(FileImage(file), context)])
+          Future.wait([for (final file in files) precacheImage(FileImage(file), context, onError: (_, _) {})])
               .timeout(const Duration(seconds: 20)),
     );
   }

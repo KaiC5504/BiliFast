@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
 import 'package:bilifast/home/tab_bar_icons.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -26,8 +27,9 @@ void main() {
     pageTaps = 0;
   });
 
-  /// The bar at the bottom of a 440×956 page over a 34 pt home indicator, the page's taps counted.
-  Future<void> show(WidgetTester tester, Skin? skin, {bool still = false}) async {
+  /// The bar at the bottom of a 440×956 page over a 34 pt home indicator, the page's taps counted; [load] decodes the
+  /// skin's pictures first.
+  Future<void> show(WidgetTester tester, Skin? skin, {bool still = false, bool load = true}) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1
@@ -35,7 +37,7 @@ void main() {
       ..viewPadding = const FakeViewPadding(bottom: 34);
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const SizedBox.shrink());
-    if (skin != null) await SkinPictures.load(tester, skin);
+    if (skin != null && load) await SkinPictures.load(tester, skin);
     await tester.pumpWidget(
       MaterialApp(
         theme: appTheme(),
@@ -71,6 +73,10 @@ void main() {
     ('no skin', () => null),
     ('four icons each way', () => _pictures.skin(icons: 4)),
     ('no label colours', () => _pictures.skin(colors: const SkinColors(color: 0xFFFFFFFF))),
+    ('no tail_bg', () => _pictures.skin(tail: null)),
+    ('a tail_bg that won\'t decode', () => _pictures.skin(tail: 'broken.png')),
+    ('an icon that won\'t decode', () => _pictures.skin(iconFiles: {3: 'broken.png'})),
+    ('a pub button that won\'t decode', () => _pictures.skin(pubFile: 'broken.png')),
   ]) {
     testWidgets('$name: the stock bar, its hairline, glyphs and labels', (tester) async {
       await show(tester, skin());
@@ -93,7 +99,12 @@ void main() {
       'hairline',
       (tester) async {
         await show(tester, _pictures.skin(tail: picture));
-        expect(tester.getRect(find.byType(HomeTabBar)), const Rect.fromLTRB(0, _barTop, 440, 956));
+        expect(
+          tester.getRect(find.byType(HomeTabBar)),
+          const Rect.fromLTRB(0, _barTop - HomeTabBarTheme.skinIconOverhang, 440, 956),
+          reason: 'grown by the icons\' rise, its row where it was',
+        );
+        expect(tester.getRect(slot(HomeTab.home)).top, _barTop);
         expect(tester.getRect(art()), Rect.fromLTRB(0, 956 - height, 440, 956));
         final image = tester.widget<Image>(find.descendant(of: art(), matching: find.byType(Image)));
         expect((image.image as FileImage).file.path, file(picture));
@@ -103,13 +114,6 @@ void main() {
       },
     );
   }
-
-  testWidgets('without its picture a dressed bar keeps the white bar and hairline under its icons', (tester) async {
-    await show(tester, _pictures.skin(tail: null));
-    expect(art(), findsNothing);
-    expect(hasHairline(tester), isTrue);
-    expect(find.byType(SkinTabIcon), findsNWidgets(4));
-  });
 
   testWidgets('icons by place: 首页 main, 关注 channel, 消息 shop, 我的 myself, 发布 the pub button, in their boxes', (
     tester,
@@ -295,11 +299,10 @@ void main() {
     }
   });
 
-  testWidgets('presses reach every place, over its icon and its label; above the bar the page keeps its taps', (
-    tester,
-  ) async {
+  testWidgets('presses reach every place over its icon, its label and the icon\'s rise over the bar; beside and '
+      'above the icons the page keeps its taps, under the rest of the picture too', (tester) async {
     final semantics = tester.ensureSemantics();
-    await show(tester, _pictures.skin());
+    await show(tester, _pictures.skin(tail: 'tail_bg_tall.png'));
     for (final (i, tab) in HomeTab.values.indexed) {
       expect(tester.getRect(slot(tab)), Rect.fromLTWH(88.0 * i, _barTop, 88, HomeTabBarTheme.height));
       await tester.tapAt(Offset(44 + 88.0 * i, _barTop + 4));
@@ -319,13 +322,84 @@ void main() {
         ),
         reason: tab.label,
       );
+      if (tab == HomeTab.post) continue;
+      final icon = tester.getRect(find.descendant(of: dressedBox(tab), matching: find.byType(SkinPicture)).first);
+      expect(icon.top, lessThan(_barTop - 16));
+      expect(
+        tester.getRect(find.byKey(ValueKey('home-tab-${tab.name}-rise'))),
+        rectMoreOrLessEquals(Rect.fromLTRB(icon.left, icon.top, icon.right, _barTop)),
+        reason: tab.label,
+      );
+      for (final at in [
+        icon.topLeft + const Offset(1, 1),
+        icon.topRight + const Offset(-1, 1),
+        Offset(icon.center.dx, _barTop - 1),
+      ]) {
+        await tester.tapAt(at);
+        await tester.pump();
+      }
+      expect(taps, [tab, tab, tab], reason: "${tab.label}'s rise");
+      taps.clear();
     }
+    expect(find.byKey(const ValueKey('home-tab-post-rise')), findsNothing, reason: "发布's picture stays under the top");
     expect(pageTaps, 0);
-    await tester.tapAt(const Offset(44, _barTop - 8));
-    await tester.pump();
-    expect(pageTaps, 1, reason: "the icon's rise over the bar takes no taps");
+    final rise = _barTop - HomeTabBarTheme.skinIconOverhang;
+    for (final at in [
+      Offset(44, rise - 1),
+      const Offset(88, _barTop - 8),
+      const Offset(220, _barTop - 8),
+      const Offset(5, _barTop - 8),
+      const Offset(44, _barTop - 24),
+    ]) {
+      await tester.tapAt(at);
+      await tester.pump();
+    }
+    expect(pageTaps, 5, reason: 'the picture rising beside and above the icons takes no taps');
     expect(taps, isEmpty);
     semantics.dispose();
+  });
+
+  group('the decode gate', () {
+    testWidgets('stock until the picture and the icons have decoded, then dressed', (tester) async {
+      imageCache
+        ..clear()
+        ..clearLiveImages();
+      await show(tester, _pictures.skin(), load: false);
+      expect(art(), findsNothing);
+      expect(hasHairline(tester), isTrue);
+      expect(find.byType(HomeTabIcon), findsNWidgets(HomeTab.values.length));
+      expect(labelColour(tester, HomeTab.home), HomeTabBarTheme.selected, reason: 'no skin colour without its picture');
+      for (var i = 0; i < 100 && art().evaluate().isEmpty; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump();
+      }
+      expect(art(), findsOneWidget);
+      expect(find.byType(SkinTabIcon), findsNWidgets(4));
+      expect(labelColour(tester, HomeTab.home), const Color(0xFFFFDA76));
+    });
+
+    testWidgets("a broken picture the bar doesn't draw (dynamic's icon) leaves it dressed", (tester) async {
+      await show(tester, _pictures.skin(iconFiles: {2: 'broken.png'}));
+      expect(art(), findsOneWidget);
+      expect(find.byType(SkinTabIcon), findsNWidgets(4));
+    });
+
+    testWidgets('a picture failing as it draws drops the bar back to stock, logged', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await show(tester, _pictures.skin());
+      final image = find.descendant(of: dressedBox(HomeTab.mine), matching: find.byType(Image));
+      tester.widget<Image>(image).errorBuilder!(tester.element(image), Exception('gone'), null);
+      await tester.pump();
+      await tester.pump();
+      expect(art(), findsNothing);
+      expect(hasHairline(tester), isTrue);
+      expect(find.byType(HomeTabIcon), findsNWidgets(HomeTab.values.length));
+      final logged = logs.events.where((event) => event.msg == 'skin picture failed').toList();
+      expect(logged, hasLength(1));
+      expect(logged.single.f['file']?.toJson(), 'tail_icon_4.png');
+    });
   });
 }
 

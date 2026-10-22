@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
@@ -17,77 +19,124 @@ enum HomeTab {
   final String label;
 
   /// Which of a 装扮's five icons (main, channel, dynamic, shop, myself) is this place's. The official app drops the
-  /// middle ones when it has fewer places, so 关注 takes channel and 消息 shop.
+  /// middle one (dynamic) when it has fewer places, so 关注 takes channel and 消息 shop.
   final int? skinIcon;
 }
 
 /// The bottom bar under 首页 and 我的 (01, 02): 首页, 关注, the pink +, 消息 and 我的 over the home indicator, [selected]
-/// pink. A [skin] that [dresses] it draws its picture, icons and label colours instead (109, 110).
+/// pink. A [skin] that [dresses] it draws its picture, icons and label colours instead (109, 110), once its still
+/// pictures have decoded; until then, or for good when one won't, the bar stays stock.
 class HomeTabBar extends StatelessWidget {
   const HomeTabBar({super.key, required this.selected, required this.onTap, this.skin});
 
   final HomeTab selected;
   final ValueChanged<HomeTab> onTap;
 
-  /// The equipped 装扮; null, or one that doesn't [dresses] the bar, leaves it stock.
+  /// The equipped 装扮; null, or one [dresses] refuses, leaves it stock.
   final Skin? skin;
 
-  /// Whether [skin] dresses the bar: both label colours and all five icons each way. With fewer the bar stays stock.
+  /// Whether [skin] dresses the bar: its picture, both label colours and all five icons each way. Without any of
+  /// them the bar stays stock.
   static bool dresses(Skin? skin) =>
-      skin != null && skin.themesBar && skin.tailIcons.length >= 5 && skin.tailIconsSelected.length >= 5;
+      skin != null &&
+      skin.themesBar &&
+      skin.tailBg != null &&
+      skin.tailIcons.length >= 5 &&
+      skin.tailIconsSelected.length >= 5;
+
+  /// The still pictures a dressed bar draws. Animated icons wait on their own decode, over a still fallback.
+  static List<File> _stills(Skin skin) => [
+    skin.tailBg!,
+    for (final icon in [
+      for (final tab in HomeTab.values)
+        if (tab.skinIcon case final index?) ...[skin.tailIcons[index], skin.tailIconsSelected[index]],
+      ?skin.pubButton,
+    ])
+      if (!icon.animated) icon.file,
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final dressed = dresses(skin) ? skin : null;
+    final skin = dresses(this.skin) ? this.skin : null;
+    return SkinDecodeGate(
+      pictures: skin == null ? const [] : _stills(skin),
+      builder: (context, decoded) => skin != null && decoded ? _dressed(context, skin) : _stock(context),
+    );
+  }
+
+  Widget _row(BuildContext context, Skin? skin) => Padding(
+    padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
+    child: SizedBox(
+      height: HomeTabBarTheme.height,
+      child: Row(
+        children: [
+          for (final tab in HomeTab.values)
+            Expanded(
+              child: _Slot(tab: tab, selected: tab == selected, skin: skin, onTap: () => onTap(tab)),
+            ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _stock(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      color: HomeTabBarTheme.bar,
+      border: Border(
+        top: BorderSide(color: HomeTabBarTheme.hairline, width: HomeTabBarTheme.hairlineWidth),
+      ),
+    ),
+    child: _row(context, null),
+  );
+
+  /// The picture's own shape sets how far it rises over the row; one too flat to reach the row's top is cropped at
+  /// the sides to cover it. Above the row the bar takes taps only over the icons' tops: the rest of a rising picture
+  /// leaves them to the page under it.
+  Widget _dressed(BuildContext context, Skin skin) {
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final row = Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: SizedBox(
-        height: HomeTabBarTheme.height,
-        child: Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: HomeTabBarTheme.skinIconOverhang,
+          child: Row(
+            children: [
+              for (final tab in HomeTab.values)
+                Expanded(
+                  child: tab.skinIcon == null
+                      ? const SizedBox.shrink()
+                      : Center(
+                          child: GestureDetector(
+                            key: ValueKey('home-tab-${tab.name}-rise'),
+                            behavior: HitTestBehavior.opaque,
+                            excludeFromSemantics: true,
+                            onTap: () => onTap(tab),
+                            child: const SizedBox(
+                              width: HomeTabBarTheme.skinIconWidth,
+                              height: HomeTabBarTheme.skinIconOverhang,
+                            ),
+                          ),
+                        ),
+                ),
+            ],
+          ),
+        ),
+        Stack(
+          clipBehavior: Clip.none,
           children: [
-            for (final tab in HomeTab.values)
-              Expanded(
-                child: _Slot(tab: tab, selected: tab == selected, skin: dressed, onTap: () => onTap(tab)),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ConstrainedBox(
+                key: const ValueKey('home-tab-art'),
+                constraints: BoxConstraints(minHeight: HomeTabBarTheme.height + bottom),
+                child: SkinDecodeGate.image(skin.tailBg!, alignment: Alignment.bottomCenter),
               ),
+            ),
+            _row(context, skin),
           ],
         ),
-      ),
-    );
-    final art = dressed?.tailBg;
-    if (art == null) {
-      return DecoratedBox(
-        decoration: const BoxDecoration(
-          color: HomeTabBarTheme.bar,
-          border: Border(
-            top: BorderSide(color: HomeTabBarTheme.hairline, width: HomeTabBarTheme.hairlineWidth),
-          ),
-        ),
-        child: row,
-      );
-    }
-    // The picture's own shape sets how far it rises over the row; one too flat to reach the row's top is cropped at
-    // the sides to cover it.
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: ConstrainedBox(
-            key: const ValueKey('home-tab-art'),
-            constraints: BoxConstraints(minHeight: HomeTabBarTheme.height + bottom),
-            child: Image.file(
-              art,
-              fit: BoxFit.cover,
-              alignment: Alignment.bottomCenter,
-              gaplessPlayback: true,
-              excludeFromSemantics: true,
-            ),
-          ),
-        ),
-        row,
       ],
     );
   }

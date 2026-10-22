@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:bili_core/devlog.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
@@ -287,5 +290,128 @@ class SkinPicture extends StatelessWidget {
   @override
   Widget build(BuildContext context) => icon.animated
       ? SvgaView(file: icon.file, play: play, loop: loop, fallback: fallback)
-      : Image.file(icon.file, fit: BoxFit.contain, gaplessPlayback: true, excludeFromSemantics: true);
+      : SkinDecodeGate.image(icon.file, fit: BoxFit.contain);
+}
+
+/// Holds a 装扮 back until its still [pictures] have decoded, as 我的's header waits for its picture: [builder] gets
+/// false until every one has, and again for good once one fails, here or later while [image] draws it. So the skin's
+/// colours never come without the pictures they were chosen for.
+class SkinDecodeGate extends StatefulWidget {
+  const SkinDecodeGate({super.key, required this.pictures, required this.builder});
+
+  final List<File> pictures;
+  final Widget Function(BuildContext context, bool decoded) builder;
+
+  /// One of the gate's pictures; one that fails to draw drops the gate around it back to stock.
+  static Widget image(File file, {Key? key, BoxFit fit = BoxFit.cover, Alignment alignment = Alignment.center}) =>
+      Image.file(
+        file,
+        key: key,
+        fit: fit,
+        alignment: alignment,
+        gaplessPlayback: true,
+        excludeFromSemantics: true,
+        errorBuilder: (context, error, _) {
+          context.findAncestorStateOfType<_SkinDecodeGateState>()?._drawFailed(file, error);
+          return const SizedBox.shrink();
+        },
+      );
+
+  @override
+  State<SkinDecodeGate> createState() => _SkinDecodeGateState();
+}
+
+class _SkinDecodeGateState extends State<SkinDecodeGate> {
+  final _decoded = <String>{};
+  final _failed = <String>{};
+  final _pending = <String, (ImageStream, ImageStreamListener)>{};
+
+  /// A picture already in the image cache answers while it is asked for, before this build: no setState then.
+  bool _asking = false;
+
+  bool get _ready => widget.pictures.every((file) => _decoded.contains(file.path) && !_failed.contains(file.path));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ask();
+  }
+
+  @override
+  void didUpdateWidget(SkinDecodeGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _ask();
+  }
+
+  @override
+  void dispose() {
+    for (final (stream, listener) in _pending.values) {
+      stream.removeListener(listener);
+    }
+    _pending.clear();
+    super.dispose();
+  }
+
+  void _ask() {
+    final wanted = {for (final file in widget.pictures) file.path};
+    _pending.removeWhere((path, entry) {
+      if (wanted.contains(path)) return false;
+      entry.$1.removeListener(entry.$2);
+      return true;
+    });
+    _asking = true;
+    for (final file in widget.pictures) {
+      final path = file.path;
+      if (_decoded.contains(path) || _failed.contains(path) || _pending.containsKey(path)) continue;
+      final stream = FileImage(file).resolve(createLocalImageConfiguration(context));
+      late final ImageStreamListener listener;
+      listener = ImageStreamListener(
+        (image, _) {
+          image.dispose();
+          _answered(path, failed: false);
+        },
+        onError: (error, _) {
+          _log(file, error);
+          _answered(path, failed: true);
+        },
+      );
+      _pending[path] = (stream, listener);
+      stream.addListener(listener);
+    }
+    _asking = false;
+  }
+
+  void _answered(String path, {required bool failed}) {
+    final entry = _pending.remove(path);
+    if (entry == null) return;
+    final (stream, listener) = entry;
+    if (failed) {
+      _failed.add(path);
+      stream.removeListener(listener);
+    } else {
+      _decoded.add(path);
+      // As precacheImage does: the picture's Image subscribes in the frame this brings, before it can be let go.
+      SchedulerBinding.instance.addPostFrameCallback((_) => stream.removeListener(listener));
+    }
+    if (!_asking && mounted) setState(() {});
+  }
+
+  /// Called while the picture's Image builds, so the gate rebuilds after this frame.
+  void _drawFailed(File file, Object error) {
+    if (!_failed.add(file.path)) return;
+    _log(file, error);
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      })
+      ..ensureVisualUpdate();
+  }
+
+  static void _log(File file, Object error) => Logger.shared.error(LogCategory.ui, 'skin picture failed', {
+    'file': file.uri.pathSegments.last,
+    'error': '${error.runtimeType}',
+  });
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _ready);
 }

@@ -3323,6 +3323,10 @@ abstract final class HomeTabBarTheme {
   static const skinPostCentre = 88 / 3;
   static const skinPostSize = TabIconTheme.postSquare;
 
+  /// How far an icon's box rises over the bar's top. The bar takes taps that high over each icon (pages run under a
+  /// dressed bar, so a press on the icon's top would otherwise land on the page), not over the rest of its picture.
+  static const skinIconOverhang = skinIconHeight / 2 - skinIconCentre;
+
   /// With `tail_icon_ani`, each change of place fades the incoming picture in, rising this far into place.
   static const skinIconMotion = Duration(milliseconds: 300);
   static const skinIconRise = 20.0;
