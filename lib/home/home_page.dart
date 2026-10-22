@@ -29,6 +29,7 @@ import '../video/video_route.dart';
 import 'avatar_page.dart';
 import 'feed_card.dart';
 import 'feed_model.dart';
+import 'tab_bar_icons.dart' show SkinDecodeGate;
 
 /// 首页 (01, port of HomeView.swift): the avatar and the search entry, the 推荐 tab and its feed, above the bottom bar
 /// `MainShell` holds. The entry opens 搜索 with the default word; the avatar opens its page (49), with 设置, the
@@ -271,8 +272,16 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final still = MediaQuery.disableAnimationsOf(context);
     final head = widget.skin?.headBg != null ? widget.skin : null;
+    return SkinDecodeGate(
+      pictures: [?head?.headBg, ?head?.headTabBg],
+      builder: (context, decoded) => _page(context, decoded ? head : null),
+    );
+  }
+
+  /// [head] dresses the top once its pictures have decoded; null keeps 01's.
+  Widget _page(BuildContext context, Skin? head) {
+    final still = MediaQuery.disableAnimationsOf(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: head != null && head.lightText ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
@@ -453,7 +462,7 @@ class _AccountAvatar extends StatelessWidget {
 class _Head extends StatelessWidget {
   const _Head({required this.skin, required this.child});
 
-  /// A skin with a `head_bg`, or null.
+  /// A skin with a `head_bg`, its pictures decoded, or null.
   final Skin? skin;
   final Widget child;
 
@@ -488,8 +497,7 @@ class _Head extends StatelessWidget {
     );
   }
 
-  static Widget _picture(File file) =>
-      Image.file(file, fit: BoxFit.cover, gaplessPlayback: true, excludeFromSemantics: true);
+  static Widget _picture(File file) => SkinDecodeGate.image(file);
 }
 
 /// The avatar and the search entry (01): a rounded bar with the magnifier and the default word, which opens 搜索.

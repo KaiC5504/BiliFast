@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,21 +6,22 @@ import '../me/me_page.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../skin/skin.dart';
+import '../skin/skin_model.dart';
 import 'home_page.dart';
 import 'home_tab_bar.dart';
 
 /// The bottom bar's places: 首页 and 我的 kept alive side by side, the bar under both (01, 02). A bar dressed by the
 /// equipped 装扮 lies over the pages' bottom instead, so they show behind its picture (109, 110).
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, this.developerPage, this.initialLink, this.skin});
+  const MainShell({super.key, this.developerPage, this.initialLink, @visibleForTesting this.skin});
 
   final WidgetBuilder? developerPage;
 
   /// Passed to 首页 (`--play=` on the PC).
   final String? initialLink;
 
-  /// The equipped 装扮; null reads `AppScope`'s.
-  final ValueListenable<Skin?>? skin;
+  /// The equipped 装扮 in place of [AppServices.skin], for 首页, the bar and 我的 alike.
+  final SkinModel? skin;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -96,7 +96,9 @@ class _MainShellState extends State<MainShell> {
                     shown: mine,
                     child: AnnotatedRegion<SystemUiOverlayStyle>(
                       value: SystemUiOverlayStyle.dark,
-                      child: MePage(active: mine, developerPage: widget.developerPage),
+                      // A seam handed to a seam: only a test sets the shell's skin.
+                      // ignore: invalid_use_of_visible_for_testing_member
+                      child: MePage(active: mine, developerPage: widget.developerPage, skin: widget.skin),
                     ),
                   ),
                 ],
