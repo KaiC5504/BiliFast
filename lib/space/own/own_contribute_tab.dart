@@ -19,6 +19,9 @@ class OwnContributeSliver extends StatelessWidget {
   /// Tests pass their own; null pushes the video page.
   final OpenSpaceVideo? open;
 
+  /// What the videos and the empty page lie on.
+  static const fill = OwnSpaceTabsTheme.whitePage;
+
   @override
   Widget build(BuildContext context) {
     if (profile.videoCount > 0) {
@@ -41,7 +44,7 @@ class OwnContributeSliver extends StatelessWidget {
     const pillTop = OwnSpaceTabsTheme.uploadPillCentre - OwnSpaceTabsTheme.uploadPillHeight / 2;
     const rewardTop = OwnSpaceTabsTheme.rewardCentre - OwnSpaceTabsTheme.rewardLine / 2;
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: OwnSpaceTabsTheme.whitePage),
+      decoration: const BoxDecoration(color: fill),
       sliver: SliverMainAxisGroup(
         slivers: [
           SliverToBoxAdapter(

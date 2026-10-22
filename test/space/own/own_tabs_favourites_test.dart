@@ -26,16 +26,24 @@ void main() {
     folderPageSize: pageSize,
   );
 
-  Future<void> show(WidgetTester tester, FakeFavouritesApi favourites, {int? count, bool settled = true}) async {
+  Future<OwnFolderPager> show(
+    WidgetTester tester,
+    FakeFavouritesApi favourites, {
+    int? count,
+    bool settled = true,
+  }) async {
     final services = await ownTabServices(favouritesApi: favourites);
+    final pager = OwnFolderPager(api: favourites, mid: ownMid);
+    addTearDown(pager.dispose);
     await tester.pumpWidget(const SizedBox.shrink());
     await pumpOwnTab(
       tester,
       services,
-      OwnFavouritesSliver(mid: ownMid, count: count),
+      OwnFavouritesSliver(pager: pager, count: count),
       controller: scroll,
     );
     if (settled) await settle(tester);
+    return pager;
   }
 
   Finder row(int i) => find.byKey(ValueKey('own-favourites-row-${100 + i}'), skipOffstage: false);

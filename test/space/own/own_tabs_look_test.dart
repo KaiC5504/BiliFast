@@ -83,6 +83,13 @@ const _bangumi117 = [
   SpaceBangumiCard(seasonId: 5, title: 'MADEUP to SHOWING the Live', cover: '', progress: '全1话'),
 ];
 
+FakeFavouritesApi _folders116() => FakeFavouritesApi(
+  folders: const [
+    FavFolder(id: 1, title: '默认收藏夹', count: 0, isPrivate: false, contains: false, isDefault: true),
+    FavFolder(id: 2, title: '测试', count: 8, isPrivate: true, contains: false, isDefault: false),
+  ],
+);
+
 /// The own space's tab bodies as KaiC's iPhone draws them, under the system font, against 108's and 114-117's
 /// measures (px / 3), each under a blank stand-in for the page's header ending where the tab row does. With
 /// BILIFAST_SHOTS naming a folder outside the repo, the 3× shots are saved there for tools/screen_diff.py.
@@ -95,12 +102,7 @@ void main() {
         services ??
         await ownTabServices(
           spaceApi: FakeSpaceApi(bangumiList: _bangumi117),
-          favouritesApi: FakeFavouritesApi(
-            folders: const [
-              FavFolder(id: 1, title: '默认收藏夹', count: 0, isPrivate: false, contains: false, isDefault: true),
-              FavFolder(id: 2, title: '测试', count: 8, isPrivate: true, contains: false, isDefault: false),
-            ],
-          ),
+          favouritesApi: _folders116(),
         );
     BiliFonts.family = BiliFonts.system;
     await tester.runAsync(loadSystemFontStandIns);
@@ -193,7 +195,9 @@ void main() {
   });
 
   testWidgets('116: 我创建的收藏夹 and its rows where 116 has them', (tester) async {
-    await show(tester, const OwnFavouritesSliver(mid: ownMid, count: 2), top: _body);
+    final pager = OwnFolderPager(api: _folders116(), mid: ownMid);
+    addTearDown(pager.dispose);
+    await show(tester, OwnFavouritesSliver(pager: pager, count: 2), top: _body);
     await shoot(tester, '116-own-space-favourites-ours');
 
     expect(tester.getCenter(find.text('我创建的收藏夹')).dy, moreOrLessEquals(1723 / 3, epsilon: 0.34));
@@ -208,7 +212,12 @@ void main() {
   });
 
   testWidgets('117: the posters and 再怎么找也没有啦 where 117 has them', (tester) async {
-    await show(tester, const OwnBangumiSliver(mid: ownMid), top: _body);
+    final pager = OwnBangumiPager(
+      api: FakeSpaceApi(bangumiList: _bangumi117),
+      mid: ownMid,
+    );
+    addTearDown(pager.dispose);
+    await show(tester, OwnBangumiSliver(pager: pager), top: _body);
     await shoot(tester, '117-own-space-bangumi-ours');
 
     final first = tester.getRect(find.byKey(const ValueKey('own-bangumi-1')));

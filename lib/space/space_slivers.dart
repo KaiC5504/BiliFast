@@ -131,20 +131,27 @@ class SpaceTabsDelegate extends SliverPersistentHeaderDelegate {
 
 /// However short the tab's body is, the header can still scroll away and the tabs pin under the bar.
 class SpaceTailFiller extends StatelessWidget {
-  const SpaceTailFiller({super.key, required this.headerHeight, required this.barHeight});
+  const SpaceTailFiller({super.key, required this.headerHeight, required this.barHeight, this.color});
 
   final double headerHeight;
   final double barHeight;
 
+  /// The body's background, carried on under it; null leaves the page's.
+  final Color? color;
+
   @override
   Widget build(BuildContext context) => SliverLayoutBuilder(
-    builder: (context, constraints) => SliverToBoxAdapter(
-      child: SizedBox(
+    builder: (context, constraints) {
+      final filler = SizedBox(
         height: math.max(
           0,
           constraints.viewportMainAxisExtent + headerHeight - barHeight - constraints.precedingScrollExtent,
         ),
-      ),
-    ),
+      );
+      final color = this.color;
+      return SliverToBoxAdapter(
+        child: color == null ? filler : ColoredBox(color: color, child: filler),
+      );
+    },
   );
 }

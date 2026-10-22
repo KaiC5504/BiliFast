@@ -67,7 +67,7 @@ class OwnSpaceBar extends StatelessWidget {
               child: AnimatedOpacity(
                 opacity: collapsed ? 1 : 0,
                 duration: fade,
-                // Up, the bar takes the taps meant for what has scrolled under it.
+                // Once in, the bar takes the taps meant for what has scrolled under it.
                 child: GestureDetector(
                   key: const ValueKey('own-space-bar'),
                   behavior: HitTestBehavior.opaque,

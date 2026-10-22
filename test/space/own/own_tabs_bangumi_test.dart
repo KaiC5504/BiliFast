@@ -21,10 +21,17 @@ void main() {
   FakeSpaceApi api(int count, {int pageSize = 30}) =>
       FakeSpaceApi(bangumiList: [for (var i = 0; i < count; i++) ownBangumi(i)], bangumiPageSize: pageSize);
 
-  Future<void> show(WidgetTester tester, FakeSpaceApi space, {bool settled = true}) async {
+  Future<void> show(
+    WidgetTester tester,
+    FakeSpaceApi space, {
+    bool settled = true,
+    Future<bool> Function()? authorize,
+  }) async {
     final services = await ownTabServices(spaceApi: space);
+    final pager = OwnBangumiPager(api: space, mid: ownMid, authorize: authorize);
+    addTearDown(pager.dispose);
     await tester.pumpWidget(const SizedBox.shrink());
-    await pumpOwnTab(tester, services, const OwnBangumiSliver(mid: ownMid), controller: scroll);
+    await pumpOwnTab(tester, services, OwnBangumiSliver(pager: pager), controller: scroll);
     if (settled) await settle(tester);
   }
 
@@ -151,6 +158,58 @@ void main() {
     await settle(tester, 2);
     expect(find.text('暂未开放'), findsOneWidget);
     await toastGone(tester);
+  });
+
+  testWidgets('without the app token it asks for one, and starts again from page 1 once given', (tester) async {
+    final space = api(4)..failures['bangumi'] = BiliError.noAppToken;
+    final asked = Completer<bool>();
+    var asks = 0;
+    await show(
+      tester,
+      space,
+      authorize: () {
+        asks++;
+        return asked.future;
+      },
+    );
+    expect(asks, 1);
+    expect(space.calls, ['bangumi mid=$ownMid page=1']);
+    expect(find.byType(LoadingTvState), findsOneWidget, reason: 'still loading while the confirm is up');
+    expect(find.byKey(const ValueKey('own-bangumi-retry')), findsNothing);
+
+    space.failures.clear();
+    asked.complete(true);
+    await settle(tester);
+    expect(space.calls, ['bangumi mid=$ownMid page=1', 'bangumi mid=$ownMid page=1']);
+    expect(find.byType(OwnPoster), findsNWidgets(4));
+    expect(asks, 1);
+  });
+
+  testWidgets('without the app token, a confirm turned down leaves the retry line and asks nothing more', (
+    tester,
+  ) async {
+    final space = api(4)..failures['bangumi'] = BiliError.noAppToken;
+    var asks = 0;
+    await show(
+      tester,
+      space,
+      authorize: () async {
+        asks++;
+        return false;
+      },
+    );
+    await settle(tester, 20);
+    expect(asks, 1);
+    expect(space.calls, ['bangumi mid=$ownMid page=1']);
+    expect(find.byKey(const ValueKey('own-bangumi-retry')), findsOneWidget);
+
+    // With a token by then, 点击重试 loads the list.
+    space.failures.clear();
+    await tester.tap(find.byKey(const ValueKey('own-bangumi-retry')));
+    await settle(tester);
+    expect(find.byType(OwnPoster), findsNWidgets(4));
+    expect(space.calls, ['bangumi mid=$ownMid page=1', 'bangumi mid=$ownMid page=1']);
+    expect(asks, 1);
   });
 
   testWidgets('no 追番 at all ends at once', (tester) async {

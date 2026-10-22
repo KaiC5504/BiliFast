@@ -46,7 +46,16 @@ void main() {
     final api = FakeSpaceApi.demo();
     expect((await api.profile(7)).name, '演示UP主');
     expect((await api.profile(7)).own, isNull);
-    expect((await api.profile(1)).own, isNotNull);
+    expect((await api.ownProfile(1)).own, isNotNull);
+  });
+
+  test('the own mid’s plain profile is the own space without its extras, as the real call without the token', () async {
+    final api = FakeSpaceApi.demo();
+    final plain = await api.profile(1);
+    final own = await api.ownProfile(1);
+    expect(plain.own, isNull);
+    expect((plain.mid, plain.name, plain.level, plain.vip), (own.mid, own.name, own.level, own.vip));
+    expect(plain.tabs.map((tab) => tab.kind), own.tabs.map((tab) => tab.kind));
   });
 
   test('追番 comes a page at a time, from 1', () async {

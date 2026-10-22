@@ -413,9 +413,9 @@ class _NameRow extends StatelessWidget {
           ),
           if (label != null && label.isNotEmpty) _VipLabel(label),
           const SizedBox(width: OwnSpaceTheme.pillGap),
-          _MedalPill(key: const ValueKey('own-space-medal'), title: '成就勋章', onTap: onSoon),
+          _MedalPill(pillKey: const ValueKey('own-space-medal'), title: '成就勋章', onTap: onSoon),
           const SizedBox(width: OwnSpaceTheme.pillSpacing),
-          _MedalPill(key: const ValueKey('own-space-fan-medal'), title: '粉丝勋章', onTap: onSoon),
+          _MedalPill(pillKey: const ValueKey('own-space-fan-medal'), title: '粉丝勋章', onTap: onSoon),
         ],
       ),
     );
@@ -452,10 +452,11 @@ class _VipLabel extends StatelessWidget {
   );
 }
 
-/// "+ 成就勋章" and "+ 粉丝勋章" in their dashed stadiums.
+/// "+ 成就勋章" and "+ 粉丝勋章" in their dashed stadiums, each taking taps across the name row's height.
 class _MedalPill extends StatelessWidget {
-  const _MedalPill({super.key, required this.title, required this.onTap});
+  const _MedalPill({required this.pillKey, required this.title, required this.onTap});
 
+  final Key pillKey;
   final String title;
   final VoidCallback onTap;
 
@@ -469,29 +470,30 @@ class _MedalPill extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: SizedBox(
-        height: OwnSpaceTheme.pillHeight,
-        child: CustomPaint(
-          painter: const OwnDashedPillPainter(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: OwnSpaceTheme.pillPad),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SpaceGlyphIcon(
-                  SpaceGlyph.plus,
-                  width: OwnSpaceTheme.pillPlus,
-                  height: OwnSpaceTheme.pillPlus,
-                  color: OwnSpaceTheme.pillInk,
-                ),
-                const SizedBox(width: OwnSpaceTheme.pillPlusGap),
-                spaceLine(
-                  title,
-                  spaceStyle(OwnSpaceTheme.pillText, OwnSpaceTheme.pillInk, line: OwnSpaceTheme.pillHeight),
-                ),
-              ],
-            ),
-          ),
+        height: SpaceTheme.nameBox,
+        child: Center(
+          child: SizedBox(key: pillKey, height: OwnSpaceTheme.pillHeight, child: _pill()),
         ),
+      ),
+    ),
+  );
+
+  Widget _pill() => CustomPaint(
+    painter: const OwnDashedPillPainter(),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: OwnSpaceTheme.pillPad),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SpaceGlyphIcon(
+            SpaceGlyph.plus,
+            width: OwnSpaceTheme.pillPlus,
+            height: OwnSpaceTheme.pillPlus,
+            color: OwnSpaceTheme.pillInk,
+          ),
+          const SizedBox(width: OwnSpaceTheme.pillPlusGap),
+          spaceLine(title, spaceStyle(OwnSpaceTheme.pillText, OwnSpaceTheme.pillInk, line: OwnSpaceTheme.pillHeight)),
+        ],
       ),
     ),
   );
