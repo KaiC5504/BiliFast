@@ -17,6 +17,7 @@ import '../search/search_glyphs.dart';
 import '../search/results/video_row.dart' show searchLogReason;
 import '../search/search_page.dart';
 import '../shared/loading_tv.dart';
+import '../shared/release_refresh.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -26,19 +27,21 @@ import '../video/video_route.dart';
 import 'avatar_page.dart';
 import 'feed_card.dart';
 import 'feed_model.dart';
-import 'home_tab_bar.dart';
 
-/// 首页 (01, port of HomeView.swift): the avatar and the search entry, the 推荐 tab and its feed, the bottom bar. The
-/// entry opens 搜索 with the default word; the avatar opens its page (49), with 设置, the shortcuts and the last of
-/// 最近打开; 首页 in the bar goes back to the top and refreshes 推荐.
+/// 首页 (01, port of HomeView.swift): the avatar and the search entry, the 推荐 tab and its feed, above the bottom bar
+/// `MainShell` holds. The entry opens 搜索 with the default word; the avatar opens its page (49), with 设置, the
+/// shortcuts and the last of 最近打开.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.developerPage, this.initialLink});
+  const HomePage({super.key, this.developerPage, this.initialLink, this.reloads});
 
   /// Builds the developer page (dev builds), passed on to 设置 through the avatar's page; null leaves 开发者 out.
   final WidgetBuilder? developerPage;
 
   /// Opened as a pasted link once home is up (`--play=<BV or link>` on the PC).
   final String? initialLink;
+
+  /// Notifies for each tap on the bar's 首页 while 首页 shows: 推荐 goes back to the top and refreshes.
+  final Listenable? reloads;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -71,6 +74,21 @@ class _HomePageState extends State<HomePage> {
   AppEnvironment get _environment => _services.environment;
 
   @override
+  void initState() {
+    super.initState();
+    widget.reloads?.addListener(_reload);
+  }
+
+  @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.reloads, widget.reloads)) {
+      oldWidget.reloads?.removeListener(_reload);
+      widget.reloads?.addListener(_reload);
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_feed != null) return;
@@ -95,6 +113,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    widget.reloads?.removeListener(_reload);
     _opener.dispose();
     _environment.removeListener(_accountChanged);
     _services.appAuth.removeListener(_authChanged);
@@ -184,13 +203,7 @@ class _HomePageState extends State<HomePage> {
 
   void _openSearch() => unawaited(_visit(openSearchPage(context, placeholder: _searchWord)));
 
-  void _tabTapped(HomeTab tab) {
-    if (tab == HomeTab.home) {
-      unawaited(_grid.currentState?.reload());
-    } else {
-      showToast(context, '暂未开放');
-    }
-  }
+  void _reload() => unawaited(_grid.currentState?.reload());
 
   void _openCard(FeedCard card, ZoomSource source) => unawaited(
     _visit(
@@ -297,7 +310,6 @@ class _HomePageState extends State<HomePage> {
                     refreshing: () => _refreshing,
                   ),
                 ),
-                HomeTabBar(onTap: _tabTapped),
               ],
             ),
             IgnorePointer(
@@ -704,7 +716,7 @@ class _FeedGridState extends State<_FeedGrid> {
         );
         final cards = feed.cards;
         final loadingFirst = cards.isEmpty && (feed.loading || feed.error == null);
-        final pull = CupertinoSliverRefreshControl(
+        final pull = ReleaseRefreshControl(
           refreshIndicatorExtent: LoadingTvTheme.size,
           builder: loadingTvRefreshIndicator,
           onRefresh: widget.onRefresh,

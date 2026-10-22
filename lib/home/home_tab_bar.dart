@@ -16,10 +16,12 @@ enum HomeTab {
   final String label;
 }
 
-/// 首页's bottom bar (01): 首页 selected, 关注, the pink +, 消息 and 我的, over the home indicator.
+/// The bottom bar under 首页 and 我的 (01, 02): 首页, 关注, the pink +, 消息 and 我的 over the home indicator, [selected]
+/// pink.
 class HomeTabBar extends StatelessWidget {
-  const HomeTabBar({super.key, required this.onTap});
+  const HomeTabBar({super.key, required this.selected, required this.onTap});
 
+  final HomeTab selected;
   final ValueChanged<HomeTab> onTap;
 
   @override
@@ -38,7 +40,7 @@ class HomeTabBar extends StatelessWidget {
           children: [
             for (final tab in HomeTab.values)
               Expanded(
-                child: _Slot(tab: tab, selected: tab == HomeTab.home, onTap: () => onTap(tab)),
+                child: _Slot(tab: tab, selected: tab == selected, onTap: () => onTap(tab)),
               ),
           ],
         ),

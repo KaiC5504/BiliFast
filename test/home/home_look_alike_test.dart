@@ -5,8 +5,8 @@ import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
-import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
+import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_glyphs.dart';
@@ -66,7 +66,7 @@ Future<void> _showHome(WidgetTester tester, FeedHttp http) async {
         key: _screen,
         child: AppScope(services: services, child: child!),
       ),
-      home: const HomePage(),
+      home: const MainShell(),
     ),
   );
   for (var i = 0; i < 40; i++) {
