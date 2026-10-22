@@ -30,13 +30,24 @@ String sizedImageUrl(String url, {required int width, required int height}) {
 ///
 /// Only emotes and 装扮 pictures move; anything else shows its first frame (see [StoredNetworkImage]).
 class RemoteImage extends StatelessWidget {
-  const RemoteImage(this.url, {super.key, this.fit = BoxFit.cover, this.size, this.placeholder, this.fallback});
+  const RemoteImage(
+    this.url, {
+    super.key,
+    this.fit = BoxFit.cover,
+    this.size,
+    this.placeholder,
+    this.fallback,
+    this.fadeIn = true,
+    this.overlay,
+  });
 
   /// An avatar: Bilibili's default face while it loads, if it fails and when there is none.
   const RemoteImage.avatar(this.url, {super.key, this.size})
     : fit = BoxFit.cover,
       placeholder = null,
-      fallback = const DefaultAvatar();
+      fallback = const DefaultAvatar(),
+      fadeIn = true,
+      overlay = null;
 
   final String? url;
   final BoxFit fit;
@@ -51,6 +62,12 @@ class RemoteImage extends StatelessWidget {
   /// Shown in place of the image while it loads, if it fails and for an empty [url]. Unlike [placeholder] it is gone
   /// once the image is in, so it never shows through a transparent one.
   final Widget? fallback;
+
+  /// False shows the picture the frame it arrives, as 推荐's covers do in the official app (14).
+  final bool fadeIn;
+
+  /// Drawn over the picture once it is in, never over [placeholder] or [fallback]: a cover's shade.
+  final Widget? overlay;
 
   static const _step = 60;
 
@@ -94,8 +111,13 @@ class RemoteImage extends StatelessWidget {
   static StoredNetworkImage _provider(String address, String source) =>
       StoredNetworkImage(address, headers: BiliClient.mediaHeaders, still: !animates(source));
 
-  Widget _image(BuildContext context, String source, Size logical) =>
-      _Picture(image: _provider(_address(context, source, logical), source), fit: fit, fallback: fallback);
+  Widget _image(BuildContext context, String source, Size logical) => _Picture(
+    image: _provider(_address(context, source, logical), source),
+    fit: fit,
+    fallback: fallback,
+    fadeIn: fadeIn,
+    overlay: overlay,
+  );
 
   static const _fade = Duration(milliseconds: 150);
 
@@ -206,11 +228,19 @@ final class _FirstFrame implements ui.Codec {
 /// (the Image re-resolving when its page comes back and the memory cache has let the picture go) keeps it at full
 /// opacity: gapless playback still paints the old frame, but the new stream starts with no frame number.
 class _Picture extends StatefulWidget {
-  const _Picture({required this.image, required this.fit, required this.fallback});
+  const _Picture({
+    required this.image,
+    required this.fit,
+    required this.fallback,
+    required this.fadeIn,
+    required this.overlay,
+  });
 
   final StoredNetworkImage image;
   final BoxFit fit;
   final Widget? fallback;
+  final bool fadeIn;
+  final Widget? overlay;
 
   @override
   State<_Picture> createState() => _PictureState();
@@ -229,14 +259,16 @@ class _PictureState extends State<_Picture> {
       width: double.infinity,
       height: double.infinity,
       gaplessPlayback: true,
-      frameBuilder: (context, child, frame, synchronous) {
+      frameBuilder: (context, picture, frame, synchronous) {
         if (frame != null) _shown = address;
+        final over = widget.overlay;
+        final child = over == null ? picture : Stack(fit: StackFit.expand, children: [picture, over]);
         if (synchronous) return child;
         final loaded = _shown == address;
         if (instead != null) return _FadeOver(loaded: loaded, under: instead, child: child);
         return AnimatedOpacity(
           opacity: loaded ? 1 : 0,
-          duration: RemoteImage._fade,
+          duration: widget.fadeIn ? RemoteImage._fade : Duration.zero,
           curve: Curves.easeOut,
           child: child,
         );

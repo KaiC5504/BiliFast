@@ -10,5 +10,8 @@ needs). No PiliPlus code is copied. `fonts/MiSans-Regular.ttf` is Xiaomi's MiSan
 APK, which KaiC downloaded for them (2026-10-21): `indicatorFrame1-4.webp` of its pull-to-refresh resources and
 `assets/player_loading_tv.json`, unchanged. The APK itself stays in `local/`.
 
-`images/loading/cover_placeholder.png` (the faint 小电视 on a cover still loading) is the same APK's
-`bili_default_image_tv` (xxhdpi), its transparent edge trimmed.
+`images/loading/cover_placeholder.png` (the faint 小电视 on a cover still loading) is the same APK's vector
+`bili_default_image_tv_2023` (the drawing the iPhone app shows; its `bili_default_image_tv` is an older one), and
+`images/card/stat_play.png` and `stat_danmaku.png` (the 推荐 card's play and danmaku counts) its
+`ic_vector_pegasus_play_count` and `ic_vector_pegasus_danmaku_count`: each drawn white at 3×, cut to its ink and
+sized as KaiC's iPhone recording shows it (39 × 36.33 pt and 13.33 × 11.33 pt), drawn tinted.

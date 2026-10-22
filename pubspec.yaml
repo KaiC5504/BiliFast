@@ -47,6 +47,7 @@ flutter:
     - assets/images/paycoins/
     - assets/images/noface.jpeg
     - assets/images/loading/
+    - assets/images/card/
     - assets/lottie/
   fonts:
     - family: MiSans
