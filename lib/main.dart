@@ -29,6 +29,7 @@ import 'playback/playback_setup.dart';
 import 'playback/shared_engine.dart';
 import 'screens/player_test_page.dart';
 import 'search/fake_search_api.dart';
+import 'skin/fake_skin_api.dart';
 import 'search/search_history_store.dart';
 import 'settings/follow_font.dart';
 import 'settings/font_store.dart';
@@ -100,28 +101,29 @@ Future<void> main(List<String> args) async {
   applyTurnTakeover(device.orientation, PlayerPrefs.shared);
   PhoneFrame.follow(device.orientation);
   await appAuth.start();
-  runApp(BiliFastApp(
-    services: AppServices(
-      environment: environment,
-      playback: playback,
-      recents: recents,
-      device: device,
-      fonts: fonts,
-      pageApi: fakeAccount ? FakePageApi.demo() : null,
-      searchApi: fakeAccount ? FakeSearchApi.demo() : null,
-      spaceApi: fakeAccount ? FakeSpaceApi.demo() : null,
-      favouritesApi: fakeAccount ? FakeFavouritesApi.demo() : null,
-      watchLaterApi: fakeAccount ? FakeWatchLaterApi.demo() : null,
-      meApi: fakeAccount ? FakeMeApi.demo() : null,
-      appAuth: appAuth,
-      navigator: navigator,
-      searchHistory: searchHistory,
-      danmakuSettings: danmakuSettings,
-      logFiles: logFiles,
-      logs: logs,
-    ),
-    initialLink: _argument(args, '--play='),
-  ));
+  final services = AppServices(
+    environment: environment,
+    playback: playback,
+    recents: recents,
+    device: device,
+    fonts: fonts,
+    pageApi: fakeAccount ? FakePageApi.demo() : null,
+    searchApi: fakeAccount ? FakeSearchApi.demo() : null,
+    spaceApi: fakeAccount ? FakeSpaceApi.demo() : null,
+    favouritesApi: fakeAccount ? FakeFavouritesApi.demo() : null,
+    watchLaterApi: fakeAccount ? FakeWatchLaterApi.demo() : null,
+    meApi: fakeAccount ? FakeMeApi.demo() : null,
+    skinApi: fakeAccount ? FakeSkinApi.demo() : null,
+    skinFolder: supportFilePath('skins'),
+    appAuth: appAuth,
+    navigator: navigator,
+    searchHistory: searchHistory,
+    danmakuSettings: danmakuSettings,
+    logFiles: logFiles,
+    logs: logs,
+  );
+  unawaited(services.skin.start());
+  runApp(BiliFastApp(services: services, initialLink: _argument(args, '--play=')));
 }
 
 /// Every PC run goes through the guard (reads only, paced and capped per run). KaiC's real login (2026-10-22) is

@@ -5009,3 +5009,15 @@ abstract final class AppAuthTheme {
   static const status = BiliColors.secondaryText;
   static const statusText = BiliMetrics.smallText;
 }
+
+/// The account's own space (108, 115): the tall banner, 编辑资料, the name line's pills, the level's exp bar and the
+/// black bar scrolled.
+abstract final class OwnSpaceTheme {
+  /// The banner's bottom edge, measured on 108.
+  static const bannerHeight = 295.3;
+}
+
+/// The own space's tabs: 主页's sections (114, 115), 收藏 (116), 追番 (117) and 投稿's empty page (108).
+abstract final class OwnSpaceTabsTheme {
+  static const gutter = SpaceTheme.gutter;
+}

@@ -37,6 +37,9 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PasteControl") {
       PasteControl.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SkinVideoView") {
+      SkinVideoView.register(with: registrar)
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LegacyDefaults") {
       LegacyDefaults.register(with: registrar.messenger())
     }

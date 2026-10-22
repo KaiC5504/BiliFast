@@ -54,6 +54,12 @@ class _ScriptedSpaceApi implements SpaceApi {
   Future<SpaceProfile> profile(int mid) async => throw UnimplementedError();
 
   @override
+  Future<SpaceProfile> ownProfile(int mid) async => throw UnimplementedError();
+
+  @override
+  Future<SpaceBangumiPage> bangumi(int mid, {required int page}) async => throw UnimplementedError();
+
+  @override
   Future<SpaceVideoPage> videos(int mid, {required SpaceOrder order, String? next}) async {
     calls.add(next);
     return answer(next);

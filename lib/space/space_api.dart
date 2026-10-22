@@ -4,6 +4,12 @@ import 'package:bili_core/api.dart';
 abstract interface class SpaceApi {
   Future<SpaceProfile> profile(int mid);
 
+  /// The account's own space with its extras ([SpaceProfile.own]), asked with the app token.
+  Future<SpaceProfile> ownProfile(int mid);
+
+  /// Page [page] (from 1) of the account's own 追番.
+  Future<SpaceBangumiPage> bangumi(int mid, {required int page});
+
   /// [next] is the last page's `SpaceVideoPage.next`, null for the first.
   Future<SpaceVideoPage> videos(int mid, {required SpaceOrder order, String? next});
 
@@ -18,6 +24,12 @@ class ClientSpaceApi implements SpaceApi {
 
   @override
   Future<SpaceProfile> profile(int mid) async => _client.space(mid: mid);
+
+  @override
+  Future<SpaceProfile> ownProfile(int mid) async => _client.ownSpace(mid: mid);
+
+  @override
+  Future<SpaceBangumiPage> bangumi(int mid, {required int page}) async => _client.spaceBangumi(mid: mid, page: page);
 
   @override
   Future<SpaceVideoPage> videos(int mid, {required SpaceOrder order, String? next}) async =>

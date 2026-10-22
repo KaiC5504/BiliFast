@@ -28,6 +28,7 @@ export 'src/api/me_models.dart';
 export 'src/api/models.dart';
 export 'src/api/rich_text.dart';
 export 'src/api/search_models.dart';
+export 'src/api/skin_models.dart';
 export 'src/api/space_models.dart';
 export 'src/api/track_selector.dart';
 export 'src/api/video_models.dart';

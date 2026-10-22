@@ -22,6 +22,8 @@ import '../playback/shared_engine.dart';
 import '../search/search_api.dart';
 import '../search/search_history_store.dart';
 import '../settings/font_store.dart';
+import '../skin/skin_api.dart';
+import '../skin/skin_model.dart';
 import '../space/follow_book.dart';
 import '../space/space_api.dart';
 import '../video/page_api.dart';
@@ -156,6 +158,8 @@ class AppServices {
     this._favouritesApi,
     this._watchLaterApi,
     this._meApi,
+    this._skinApi,
+    this.skinFolder,
     AppAuth? appAuth,
     GlobalKey<NavigatorState>? navigator,
     SearchHistoryStore? searchHistory,
@@ -233,6 +237,17 @@ class AppServices {
 
   /// 我的's calls, made on first use like [searchApi].
   late final MeApi meApi = _meApi ?? ClientMeApi(environment.client);
+
+  final SkinApi? _skinApi;
+
+  /// The equipped 装扮's calls, made on first use like [searchApi].
+  late final SkinApi skinApi = _skinApi ?? ClientSkinApi(environment.client);
+
+  /// Where skin packages are unpacked (the support folder's `skins`); null keeps nothing across launches.
+  final String? skinFolder;
+
+  /// The equipped 装扮, null for the stock look. Made on first use and started by `main`.
+  late final SkinModel skin = SkinModel(api: skinApi, environment: environment, folder: skinFolder);
 
   /// The official API's login token.
   final AppAuth appAuth;

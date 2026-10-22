@@ -4,12 +4,25 @@ const _spacePath = '/x/v2/space';
 const _spaceArchivePath = '/x/v2/space/archive/cursor';
 const _spaceSeasonPath = '/x/v2/space/season/videos';
 const _spaceSeriesPath = '/x/v2/space/series';
+const _spaceBangumiPath = '/x/v2/space/bangumi';
 const _spacePageSize = '20';
 
 /// A space from the official app's API, signed as the Android app signs it. It goes without the account's cookies,
 /// as the app's own calls do; the relation to the uploader is the web card's (`uploaderCard`).
 extension BiliClientSpace on BiliClient {
   Future<SpaceProfile> space({required int mid}) => _androidGet(_spacePath, {'vmid': '$mid'}, SpaceProfile.fromJson);
+
+  /// The account's own space, asked with the app token so its private folders, 追番 and extras come
+  /// ([SpaceProfile.own]).
+  Future<SpaceProfile> ownSpace({required int mid}) =>
+      _officialGet(_spacePath, {'vmid': '$mid'}, (json) => SpaceProfile.fromJson(json, own: true));
+
+  /// Page [page] (from 1) of the account's own 追番.
+  Future<SpaceBangumiPage> spaceBangumi({required int mid, required int page}) => _officialGet(
+    _spaceBangumiPath,
+    {'vmid': '$mid', 'pn': '$page', 'ps': _spacePageSize},
+    SpaceBangumiPage.fromJson,
+  );
 
   /// 投稿's videos by [order]; [next] is the last page's `SpaceVideoPage.next`.
   Future<SpaceVideoPage> spaceVideos({required int mid, required SpaceOrder order, String? next}) => _androidGet(

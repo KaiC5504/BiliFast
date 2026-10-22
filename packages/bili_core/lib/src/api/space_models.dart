@@ -1,7 +1,7 @@
 import 'json.dart';
 
 /// A space's tabs as the official app names them (`tab2`'s `param`). Anything else is [other], drawn but not opened.
-enum SpaceTabKind { home, dynamic, contribute, shop, favourite, other }
+enum SpaceTabKind { home, dynamic, contribute, shop, favourite, bangumi, other }
 
 final class SpaceTab {
   const SpaceTab({required this.kind, required this.title});
@@ -83,6 +83,7 @@ final class SpaceProfile {
     this.defaultTab = SpaceTabKind.contribute,
     this.chips = const [],
     this.orders = const [SpaceOrder.latest, SpaceOrder.mostPlayed],
+    this.own,
   });
 
   final int mid;
@@ -128,9 +129,14 @@ final class SpaceProfile {
   final List<SpaceChip> chips;
   final List<SpaceOrder> orders;
 
+  /// What only the account's own space carries, asked with the app token; null for anyone else's.
+  final OwnSpace? own;
+
   /// `/x/v2/space`'s `data`. Only the card's mid is required; the rest reads leniently, so one odd field costs
   /// that field, not the space.
-  static SpaceProfile fromJson(Object? json) {
+  ///
+  /// [own] reads the account's own space's extras into [SpaceProfile.own].
+  static SpaceProfile fromJson(Object? json, {bool own = false}) {
     final data = JsonObject.from(json, 'space');
     final card = data.nested('card') ?? (throw const DecodeError('missing card'));
     final mid = _id(card.map['mid']) ?? (throw const DecodeError('missing mid'));
@@ -173,9 +179,141 @@ final class SpaceProfile {
       },
       chips: contribute?.lenientList('items', _chip) ?? const [],
       orders: orders.isEmpty ? const [SpaceOrder.latest, SpaceOrder.mostPlayed] : orders,
+      own: own ? _ownSpace(data, card) : null,
     );
   }
 }
+
+/// One of the own space's 主页 sections: its count, the few items the answer previews, and whether it is hidden from
+/// others (`setting`'s flag false: the eye-slash after its title, 114).
+final class SpaceSection<T> {
+  const SpaceSection({this.count = 0, this.items = const [], this.hidden = false});
+
+  final int count;
+  final List<T> items;
+  final bool hidden;
+}
+
+/// A folder of the own space's 收藏 (114, 116).
+final class SpaceFolderCard {
+  const SpaceFolderCard({
+    required this.id,
+    required this.title,
+    required this.cover,
+    required this.count,
+    required this.isPrivate,
+  });
+
+  final int id;
+  final String title;
+
+  /// Empty for a folder without a cover, which draws the grey TV.
+  final String cover;
+  final int count;
+  final bool isPrivate;
+}
+
+/// A 追番 poster (114, 117).
+final class SpaceBangumiCard {
+  const SpaceBangumiCard({required this.seasonId, required this.title, required this.cover, this.progress = ''});
+
+  final int seasonId;
+  final String title;
+  final String cover;
+
+  /// "全23话", or the answer's newest-episode line.
+  final String progress;
+}
+
+/// A page of 追番 (`/x/v2/space/bangumi`).
+final class SpaceBangumiPage {
+  const SpaceBangumiPage({required this.items, required this.hasMore, this.total});
+
+  final List<SpaceBangumiCard> items;
+  final bool hasMore;
+  final int? total;
+
+  static SpaceBangumiPage fromJson(Object? json) => throw UnimplementedError('core builder');
+}
+
+/// An owned 装扮 card of 拥有的个性装扮 (115), from `fans_dress.item`.
+final class SpaceGarbCard {
+  const SpaceGarbCard({
+    required this.title,
+    required this.image,
+    this.fansNumber = '',
+    this.numberColor,
+    this.maskColor,
+  });
+
+  /// `garb_title`, the name under the picture.
+  final String title;
+  final String image;
+
+  /// The card's NO., drawn in a pill when not empty.
+  final String fansNumber;
+
+  /// `fan_bg_color` for the number's pill and `suit_bg_color` for the gradient rising from the card's bottom,
+  /// 0xAARRGGBB; null for the defaults.
+  final int? numberColor;
+  final int? maskColor;
+}
+
+/// The label on the own space's banner, "幸运塔罗星 金牛座" over "NO.000067" (108).
+final class SpaceBannerLabel {
+  const SpaceBannerLabel({required this.title, this.subtitle = '', this.subtitleColor});
+
+  final String title;
+  final String subtitle;
+
+  /// 0xAARRGGBB, from the answer's colour; null draws white.
+  final int? subtitleColor;
+}
+
+/// The own space's extras (108, 114-117).
+final class OwnSpace {
+  const OwnSpace({
+    this.exp = 0,
+    this.nextExp = 0,
+    this.pendant,
+    this.vipBadge = false,
+    this.banner,
+    this.bannerLabel,
+    this.favourites = const SpaceSection(),
+    this.bangumi = const SpaceSection(),
+    this.coins = const SpaceSection(),
+    this.likes = const SpaceSection(),
+    this.garbs = const SpaceSection(),
+    this.garbTotal = 0,
+  });
+
+  /// 14805/28800 under the level.
+  final int exp;
+  final int nextExp;
+
+  /// The avatar's frame.
+  final String? pendant;
+
+  /// The 大 on the avatar.
+  final bool vipBadge;
+
+  /// The tall banner art: `images.collection_top_simple`'s first item (the equipped 空间头图), when the answer has
+  /// one; otherwise [SpaceProfile.banner].
+  final String? banner;
+  final SpaceBannerLabel? bannerLabel;
+  final SpaceSection<SpaceFolderCard> favourites;
+  final SpaceSection<SpaceBangumiCard> bangumi;
+
+  /// 最近投币的视频 and 最近点赞的视频.
+  final SpaceSection<SpaceVideo> coins;
+  final SpaceSection<SpaceVideo> likes;
+
+  /// 拥有的个性装扮 (`fans_dress`): [SpaceSection.count] owned of [garbTotal] (2/7779), at most 3 cards.
+  final SpaceSection<SpaceGarbCard> garbs;
+  final int garbTotal;
+}
+
+OwnSpace _ownSpace(JsonObject data, JsonObject card) => const OwnSpace();
 
 /// One video of a space's lists. Only its ids and what is drawn are kept: the answer's `uri` carries a signed play
 /// link, which must never be stored or logged.
@@ -276,6 +414,7 @@ SpaceTabKind _tabKind(String? param) => switch (param) {
   'contribute' || 'archive' || 'video' => SpaceTabKind.contribute,
   'shop' || 'mall' => SpaceTabKind.shop,
   'favorite' || 'favourite' => SpaceTabKind.favourite,
+  'bangumi' => SpaceTabKind.bangumi,
   _ => SpaceTabKind.other,
 };
 

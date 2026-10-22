@@ -83,6 +83,14 @@ class FakeSpaceApi implements SpaceApi {
   Future<SpaceProfile> profile(int mid) => _answer('profile', 'profile mid=$mid', () => _profileFor(mid));
 
   @override
+  Future<SpaceProfile> ownProfile(int mid) =>
+      _answer('ownProfile', 'ownProfile mid=$mid', () => throw UnimplementedError('own tabs builder'));
+
+  @override
+  Future<SpaceBangumiPage> bangumi(int mid, {required int page}) =>
+      _answer('bangumi', 'bangumi mid=$mid page=$page', () => throw UnimplementedError('own tabs builder'));
+
+  @override
   Future<SpaceVideoPage> videos(int mid, {required SpaceOrder order, String? next}) =>
       _answer('videos', 'videos mid=$mid order=${order.value} next=$next', () {
         final sorted = [...videoList];
