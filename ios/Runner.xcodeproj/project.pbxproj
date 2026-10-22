@@ -22,6 +22,8 @@
 		B1F0A5E12F0000000000B102 /* PasteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000B101 /* PasteControl.swift */; };
 		B1F0A5E12F0000000000E102 /* SkinVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000E101 /* SkinVideoView.swift */; };
 		B1F0A5E12F0000000000C102 /* DeviceApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000C101 /* DeviceApi.g.swift */; };
+		B1F0A5E12F0000000000F102 /* PictureDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F101 /* PictureDecoder.swift */; };
+		B1F0A5E12F0000000000F202 /* PictureApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F201 /* PictureApi.g.swift */; };
 		B1F0A5E12F0000000000C104 /* DeviceChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000C103 /* DeviceChannel.swift */; };
 		B1F0A5E12F0000000000D102 /* WebCookies.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000D101 /* WebCookies.swift */; };
 		B1F0A5E12F0000000000D202 /* TurnTakeover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000D201 /* TurnTakeover.swift */; };
@@ -77,6 +79,8 @@
 		B1F0A5E12F0000000000B101 /* PasteControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteControl.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000E101 /* SkinVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinVideoView.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000C101 /* DeviceApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceApi.g.swift; sourceTree = "<group>"; };
+		B1F0A5E12F0000000000F101 /* PictureDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PictureDecoder.swift; sourceTree = "<group>"; };
+		B1F0A5E12F0000000000F201 /* PictureApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PictureApi.g.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000C103 /* DeviceChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceChannel.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000D101 /* WebCookies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebCookies.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000D201 /* TurnTakeover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnTakeover.swift; sourceTree = "<group>"; };
@@ -167,6 +171,8 @@
 				B1F0A5E12F0000000000B101 /* PasteControl.swift */,
 				B1F0A5E12F0000000000E101 /* SkinVideoView.swift */,
 				B1F0A5E12F0000000000C101 /* DeviceApi.g.swift */,
+				B1F0A5E12F0000000000F101 /* PictureDecoder.swift */,
+				B1F0A5E12F0000000000F201 /* PictureApi.g.swift */,
 				B1F0A5E12F0000000000C103 /* DeviceChannel.swift */,
 				B1F0A5E12F0000000000D101 /* WebCookies.swift */,
 				B1F0A5E12F0000000000D201 /* TurnTakeover.swift */,
@@ -345,6 +351,8 @@
 				B1F0A5E12F0000000000B102 /* PasteControl.swift in Sources */,
 				B1F0A5E12F0000000000E102 /* SkinVideoView.swift in Sources */,
 				B1F0A5E12F0000000000C102 /* DeviceApi.g.swift in Sources */,
+				B1F0A5E12F0000000000F102 /* PictureDecoder.swift in Sources */,
+				B1F0A5E12F0000000000F202 /* PictureApi.g.swift in Sources */,
 				B1F0A5E12F0000000000C104 /* DeviceChannel.swift in Sources */,
 				B1F0A5E12F0000000000D102 /* WebCookies.swift in Sources */,
 				B1F0A5E12F0000000000D202 /* TurnTakeover.swift in Sources */,

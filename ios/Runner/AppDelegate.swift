@@ -50,5 +50,8 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "WebCookies") {
       WebCookies.register(with: registrar.messenger())
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PictureDecoder") {
+      PictureDecoder.register(with: registrar.messenger())
+    }
   }
 }
