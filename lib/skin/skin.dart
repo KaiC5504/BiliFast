@@ -68,20 +68,20 @@ final class Skin {
   bool get lightText => equip.colors.lightText;
 
   /// White status bar icons over 首页's dressed top, as the official iPhone app judges `head_bg`; the skin's
-  /// `color_mode` until it is measured or when it can't be read.
+  /// `color_mode` until it is measured or when the picture didn't decode.
   bool get lightStatusHome => switch (statusBar?.home) {
     final luminance? => SkinStatusBar.whiteOver(luminance),
     null => lightText,
   };
 
-  /// White status bar icons over 我的's dressed header: by its picture, or for a header video by the header's text
-  /// colour, light text meaning a dark header.
-  bool get lightStatusMe {
+  /// White status bar icons over 我的's dressed header, as tall as [card] (the 大会员 card showing) makes it: by its
+  /// picture, or for a header video by the header's text colour, light text meaning a dark header.
+  bool lightStatusMe({required bool card}) {
     if (headMyselfVideo != null) {
       final text = color;
       return text == null ? lightText : !SkinStatusBar.whiteOverColor(text);
     }
-    return switch (statusBar?.me) {
+    return switch (card ? statusBar?.me : statusBar?.meNoCard) {
       final luminance? => SkinStatusBar.whiteOver(luminance),
       null => lightText,
     };
@@ -113,15 +113,20 @@ final class Skin {
   static Color? _color(int? argb) => argb == null ? null : Color(argb);
 }
 
-/// The relative luminance (WCAG, linear light) behind the status bar's clock and icons in each dressed header, as a
-/// geometric mean: contrast is a ratio, so a picture of fine dark lines on a lighter ground reads by its share of each
-/// rather than by its highlights. 109's header, a beige and black ornament, has a plain mean of 0.26 and a geometric
-/// one of 0.16, and the official app draws white over it. Null where there is no picture or it couldn't be read.
+/// Each dressed header behind the status bar's clock and icons: the geometric mean of L + 0.05 (the contrast ratio's
+/// term, L the WCAG relative luminance), less 0.05. Contrast is a ratio, so a picture of fine dark lines on a lighter
+/// ground reads by its share of each rather than by its highlights. 109's header, a beige and black ornament, has a
+/// plain mean L of 0.26 and this measure 0.16, and the official app draws white over it. Null where there is no
+/// picture or it didn't decode; a read that fails, or a decode past the picture's header, throws instead.
 final class SkinStatusBar {
-  const SkinStatusBar({this.home, this.me});
+  const SkinStatusBar({this.home, this.me, this.meNoCard});
 
   final double? home;
+
+  /// 我的's header with the 大会员 card and without: the box is shorter without, so a short wide picture is scaled
+  /// less and cut less at the sides.
   final double? me;
+  final double? meNoCard;
 
   /// Where white's contrast ratio with the backdrop and black's are equal: (L + 0.05)² = 1.05 × 0.05.
   static const crossover = 0.1791;

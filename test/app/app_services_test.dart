@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bili_core/danmaku.dart';
 import 'package:bili_core/devlog.dart';
@@ -121,15 +122,23 @@ void main() {
     );
     final auth = FakeAppAuth(authorized: false);
     final skins = FakeSkinApi();
+    // Without a folder the skin model unpacks into one of its own in the system temp, which nothing deletes.
+    final skinFolder = await Directory.systemTemp.createTemp('app_services_skins');
     final services = AppServices(
       environment: environment,
       playback: AppPlayback(() => Completer<PlaybackController>().future),
       recents: await RecentStore.load(null, logger: Logger(session: 'test')),
       pageApi: FakePageApi(),
       skinApi: skins,
+      skinFolder: skinFolder.path,
       appAuth: auth,
     );
     addTearDown(services.playback.dispose);
+    addTearDown(() async {
+      services.skin.dispose();
+      await services.skin.settle();
+      await skinFolder.delete(recursive: true);
+    });
 
     auth.notifyListeners();
     await pumpEventQueue();

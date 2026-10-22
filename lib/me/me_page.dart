@@ -298,8 +298,11 @@ class _MePageState extends State<MePage> with RouteAware {
               _TopRow(onTap: _soon, color: ink ?? MeTheme.topGlyph),
             ],
           );
+          final card = MeHeader.hasCard(view) || _reserveCard(view);
           return AnnotatedRegion<SystemUiOverlayStyle>(
-            value: skin != null && skin.lightStatusMe ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+            value: skin != null && skin.lightStatusMe(card: card)
+                ? SystemUiOverlayStyle.light
+                : SystemUiOverlayStyle.dark,
             child: Column(
               children: [
                 Stack(

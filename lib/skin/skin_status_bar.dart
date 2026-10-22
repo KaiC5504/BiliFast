@@ -22,9 +22,13 @@ final class StatusBarPlacement {
     backdrop: BiliColors.pageGrey,
   );
 
-  /// 我的's header: from the screen's top to the list's under a 大会员's card (109), cut at the bottom.
-  static final me = StatusBarPlacement(
-    box: Size(PhoneFrame.portrait.width, _statusBar + MeTheme.cardTop + MeTheme.cardHeight + MeTheme.listCut),
+  /// 我的's header: from the screen's top down to the list's top, [MeTheme.listCut] under a 大会员 card (109) or, without
+  /// one, under where the card would start, cropped at the bottom.
+  factory StatusBarPlacement.me({required bool card}) => StatusBarPlacement(
+    box: Size(
+      PhoneFrame.portrait.width,
+      _statusBar + MeTheme.cardTop + (card ? MeTheme.cardHeight : 0) + MeTheme.listCut,
+    ),
     alignment: Alignment.topCenter,
     backdrop: MeTheme.background,
   );
@@ -40,9 +44,9 @@ final class StatusBarPlacement {
   final Color backdrop;
 }
 
-/// [skin]'s headers measured behind the status bar: 首页's `head_bg`, and 我的's picture unless a video plays over it
-/// (that one goes by the skin's colour). A file that can't be read throws, so a passing failure is never kept as the
-/// picture's.
+/// [skin]'s headers measured behind the status bar: 首页's `head_bg`, and 我的's picture with the 大会员 card and
+/// without unless a video plays over it (that one goes by the skin's colour). A read or a decode step that fails
+/// throws, so a passing failure is never kept as the picture's.
 Future<SkinStatusBar> measureSkinStatusBar(Skin skin) async {
   final home = skin.headBg;
   final me = skin.headMyselfVideo == null ? skin.headMyself : null;
@@ -50,41 +54,69 @@ Future<SkinStatusBar> measureSkinStatusBar(Skin skin) async {
     home: home == null
         ? null
         : await statusBarLuminance(home, StatusBarPlacement.home(tabPicture: skin.headTabBg != null)),
-    me: me == null ? null : await statusBarLuminance(me, StatusBarPlacement.me),
+    me: me == null ? null : await statusBarLuminance(me, StatusBarPlacement.me(card: true)),
+    meNoCard: me == null ? null : await statusBarLuminance(me, StatusBarPlacement.me(card: false)),
   );
 }
 
-/// The log-average relative luminance of [file] laid as [placement], over the status bar's areas; null when it
-/// doesn't decode. Decoded at one pixel per point at most, as small as the measure needs.
+/// A picture whose header the engine read failed later in its decode. That may pass, so the measure isn't kept.
+final class StatusBarMeasureError implements Exception {
+  const StatusBarMeasureError(this.step, [this.cause]);
+
+  /// `codec`, `frame` or `pixels`.
+  final String step;
+  final Object? cause;
+
+  @override
+  String toString() => cause == null ? '$step failed' : '$step failed: ${cause.runtimeType}';
+}
+
+/// [file] laid as [placement], over the status bar's areas: the geometric mean of L + 0.05 (the contrast ratio's
+/// term, L the relative luminance), less 0.05. Null when it isn't a picture the engine can decode; any other failure
+/// throws. Decoded at one pixel per point at most, as small as the measure needs.
 Future<double?> statusBarLuminance(File file, StatusBarPlacement placement) async {
   final bytes = await file.readAsBytes();
   final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
   ui.ImageDescriptor? descriptor;
   ui.Codec? codec;
   try {
-    final header = descriptor = await ui.ImageDescriptor.encoded(buffer);
+    try {
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+    } on Exception {
+      return null;
+    }
+    final header = descriptor;
     final source = Size(header.width.toDouble(), header.height.toDouble());
     final scale = _coverScale(source, placement.box);
     final decoded = math.min(1.0, scale);
-    codec = await header.instantiateCodec(
-      targetWidth: math.max(1, (header.width * decoded).round()),
-      targetHeight: math.max(1, (header.height * decoded).round()),
+    codec = await _step<ui.Codec>(
+      'codec',
+      () => header.instantiateCodec(
+        targetWidth: math.max(1, (header.width * decoded).round()),
+        targetHeight: math.max(1, (header.height * decoded).round()),
+      ),
     );
-    final image = (await codec.getNextFrame()).image;
+    final image = (await _step('frame', codec.getNextFrame)).image;
     try {
-      final data = await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
-      if (data == null) return null;
+      final data = await _step('pixels', () => image.toByteData(format: ui.ImageByteFormat.rawStraightRgba));
+      if (data == null) throw const StatusBarMeasureError('pixels');
       final drawn = placement.alignment.inscribe(source * scale, Offset.zero & placement.box);
       return _logAverage(data, image.width, image.height, drawn, placement.backdrop);
     } finally {
       image.dispose();
     }
-  } on Exception {
-    return null;
   } finally {
     codec?.dispose();
     descriptor?.dispose();
     buffer.dispose();
+  }
+}
+
+Future<T> _step<T>(String step, Future<T> Function() run) async {
+  try {
+    return await run();
+  } on Exception catch (error) {
+    throw StatusBarMeasureError(step, error);
   }
 }
 

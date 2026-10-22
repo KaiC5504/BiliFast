@@ -38,7 +38,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   static const _statusName = '.status.json';
 
   /// Bumped when the measure changes, so kept results are measured again.
-  static const _statusMeasure = 1;
+  static const _statusMeasure = 2;
 
   Skin? _value;
   Future<void>? _started;
@@ -258,8 +258,11 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
         final num value => value.toDouble(),
         _ => null,
       };
-      return skin.withStatusBar(SkinStatusBar(home: luminance('home'), me: luminance('me')));
-    } on Exception {
+      return skin.withStatusBar(
+        SkinStatusBar(home: luminance('home'), me: luminance('me'), meNoCard: luminance('meNoCard')),
+      );
+    } on Exception catch (error) {
+      _logger.warn(LogCategory.ui, 'kept skin status bar unreadable, measuring again', {'error': _describe(error)});
       return skin;
     }
   }
@@ -271,7 +274,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
       if (!await File('$version/$_manifestName').exists()) return;
       final temporary = File('$version/$_statusName.tmp');
       await temporary.writeAsString(
-        jsonEncode({'v': _statusMeasure, 'home': status.home, 'me': status.me}),
+        jsonEncode({'v': _statusMeasure, 'home': status.home, 'me': status.me, 'meNoCard': status.meNoCard}),
         flush: true,
       );
       await _retried(() => temporary.rename('$version/$_statusName'));
@@ -483,7 +486,9 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     if (shown != null &&
         shown.statusBar == null &&
         _cacheText(shown.equip) == _cacheText(skin.equip) &&
-        (measured.lightStatusHome != shown.lightStatusHome || measured.lightStatusMe != shown.lightStatusMe)) {
+        (measured.lightStatusHome != shown.lightStatusHome ||
+            measured.lightStatusMe(card: true) != shown.lightStatusMe(card: true) ||
+            measured.lightStatusMe(card: false) != shown.lightStatusMe(card: false))) {
       _show(shown.withStatusBar(status));
     }
     await _exclusive(() => _keepStatus(skin.equip, status));
@@ -500,11 +505,14 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
       (_, null) => 'unreadable',
       (_, final value?) => (value * 100).round() / 100,
     };
+    final video = skin.headMyselfVideo != null;
     _logger.info(LogCategory.ui, 'skin status bar', {
       'home': measure(skin.headBg, status?.home),
       'homeLight': skin.lightStatusHome,
-      'me': skin.headMyselfVideo != null ? 'color' : measure(skin.headMyself, status?.me),
-      'meLight': skin.lightStatusMe,
+      'me': video ? 'color' : measure(skin.headMyself, status?.me),
+      'meLight': skin.lightStatusMe(card: true),
+      'meNoCard': video ? 'color' : measure(skin.headMyself, status?.meNoCard),
+      'meNoCardLight': skin.lightStatusMe(card: false),
     });
   }
 
@@ -555,6 +563,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   /// A transport's own words carry the request's URL, and a file error the container's path.
   static String _describe(Object error) => switch (error) {
     SkinPackageError(:final reason) => reason,
+    StatusBarMeasureError() => '$error',
     BiliError() => '$error',
     FileSystemException(:final message, :final osError) => osError == null ? message : '$message: ${osError.message}',
     FormatException(:final message) => message,
