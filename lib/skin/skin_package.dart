@@ -39,9 +39,21 @@ abstract final class SkinNames {
 
 /// Why a package was refused or couldn't be used. Never carries the package's URL.
 final class SkinPackageError implements Exception {
-  const SkinPackageError(this.reason);
+  const SkinPackageError(this.reason, {this.passing = false});
+
+  /// Names the scheme and host (and a port given), never the path or query, which can carry a signature, nor any
+  /// user info.
+  factory SkinPackageError.hostNotAllowed(Uri url) {
+    final host = url.host.length <= 80 ? url.host : '${url.host.substring(0, 80)}…';
+    final port = url.hasPort ? ':${url.port}' : '';
+    final user = url.userInfo.isEmpty ? '' : ' with user info';
+    return SkinPackageError('package host not allowed: ${url.scheme}://$host$port$user');
+  }
 
   final String reason;
+
+  /// The failure may pass (a timeout), so the same package is tried again; any other is kept for the run.
+  final bool passing;
 
   @override
   String toString() => 'SkinPackageError($reason)';
@@ -64,13 +76,16 @@ Future<Uint8List> downloadSkinPackage(
   HttpClient Function() client = HttpClient.new,
   Duration timeout = SkinLimits.downloadTimeout,
 }) async {
-  if (!isSkinPackageUrl(url)) throw const SkinPackageError('package host not allowed');
+  if (!isSkinPackageUrl(url)) throw SkinPackageError.hostNotAllowed(url);
   final http = client()
     ..connectionTimeout = SkinLimits.connectTimeout
     ..userAgent = BiliClient.userAgent;
   try {
     final fetched = _fetch(http, url);
-    return await fetched.timeout(timeout, onTimeout: () => throw const SkinPackageError('download timed out'));
+    return await fetched.timeout(
+      timeout,
+      onTimeout: () => throw const SkinPackageError('download timed out', passing: true),
+    );
   } finally {
     http.close(force: true);
   }
@@ -79,7 +94,7 @@ Future<Uint8List> downloadSkinPackage(
 Future<Uint8List> _fetch(HttpClient http, Uri url) async {
   var next = url;
   for (var hop = 0; hop < 4; hop++) {
-    if (!isSkinPackageUrl(next)) throw const SkinPackageError('package host not allowed');
+    if (!isSkinPackageUrl(next)) throw SkinPackageError.hostNotAllowed(next);
     final request = await http.getUrl(next);
     request.followRedirects = false;
     final response = await request.close();
@@ -158,7 +173,7 @@ SkinUnpacked _unpack(Uint8List zip, String expectedMd5, String folder, int entry
     }
     final Uint8List bytes;
     try {
-      // The archive stops inflating at the declared size, so an entry that lies about it fails here.
+      // A deflated entry that lies about its size fails here.
       bytes = entry.readBytes() ?? Uint8List(0);
     } on Exception {
       skipped.add('$name: unreadable');
@@ -219,44 +234,69 @@ Future<List<SkinFile>> listSkinFiles(Directory folder) async {
 
 String _nameOf(String path) => path.split(RegExp(r'[\\/]')).last;
 
-/// [files] by role, each found by its name without the extension (the first in name order when two share one).
+const _pictures = {'png', 'jpg', 'jpeg', 'webp'};
+const _picturesOrSvga = {..._pictures, 'svga'};
+const _videos = {'mp4', 'mov'};
+
+/// [files] by role, each found by its name without the extension (the first in name order when two share one) among
+/// the kinds the role can draw: pictures (png, jpg, webp), svga too for the selected bar icons, mp4 or mov for the
+/// header video. A file of a role's name and another kind is left out and added to [skipped] (`name: reason`).
 /// `head_myself_squared_bg` comes before `head_myself_bg`; each set of the bar's icons is kept only whole, so a
 /// set missing any of its five leaves the bar stock.
-Skin resolveSkin(SkinEquip equip, List<SkinFile> files) {
+Skin resolveSkin(SkinEquip equip, List<SkinFile> files, {List<String>? skipped}) {
   final byStem = <String, File>{};
   for (final file in files) {
     byStem.putIfAbsent(file.stem, () => file.file);
   }
-  SkinIcon? icon(String stem) => switch (byStem[stem]) {
+  File? role(String stem, (Set<String>, String) kind) {
+    final (extensions, name) = kind;
+    File? found;
+    for (final file in files) {
+      if (file.stem != stem) continue;
+      if (extensions.contains(file.extension)) {
+        found ??= file.file;
+      } else {
+        skipped?.add('${file.name}: not $name');
+      }
+    }
+    return found;
+  }
+
+  SkinIcon? icon(String stem, (Set<String>, String) kind) => switch (role(stem, kind)) {
     final file? => SkinIcon(file, animated: _isSvga(file)),
     null => null,
   };
-  List<SkinIcon> iconSet(List<String> stems) {
-    final icons = [for (final stem in stems) ?icon(stem)];
+  List<SkinIcon> iconSet(List<String> stems, (Set<String>, String) kind) {
+    final icons = [for (final stem in stems) ?icon(stem, kind)];
     return icons.length == stems.length ? icons : const [];
   }
 
+  const picture = (_pictures, 'a picture');
+  final squared = role(SkinNames.headMyselfSquared, picture);
+  final headMyself = role(SkinNames.headMyself, picture);
   return Skin(
     equip: equip,
-    headBg: byStem[SkinNames.headBg],
-    headTabBg: byStem[SkinNames.headTabBg],
-    headMyself: byStem[SkinNames.headMyselfSquared] ?? byStem[SkinNames.headMyself],
-    headMyselfVideo: byStem[SkinNames.headMyselfVideo],
-    tailBg: byStem[SkinNames.tailBg],
-    tailIcons: iconSet(SkinNames.tailIcons),
-    tailIconsSelected: iconSet(SkinNames.tailIconsSelected),
-    pubButton: icon(SkinNames.pubButton),
-    pubButtonSelected: icon(SkinNames.pubButtonSelected),
+    headBg: role(SkinNames.headBg, picture),
+    headTabBg: role(SkinNames.headTabBg, picture),
+    headMyself: squared ?? headMyself,
+    headMyselfVideo: role(SkinNames.headMyselfVideo, (_videos, 'a video')),
+    tailBg: role(SkinNames.tailBg, picture),
+    tailIcons: iconSet(SkinNames.tailIcons, picture),
+    tailIconsSelected: iconSet(SkinNames.tailIconsSelected, (_picturesOrSvga, 'a picture or svga')),
+    pubButton: icon(SkinNames.pubButton, picture),
+    pubButtonSelected: icon(SkinNames.pubButtonSelected, picture),
     files: Map.unmodifiable(byStem),
   );
 }
 
 bool _isSvga(File file) => file.path.toLowerCase().endsWith('.svga');
 
-/// What leaves the themed bar stock, for the log; empty when [skin] themes it.
+/// What leaves the themed bar stock, for the log; empty when [skin] has all the bar needs. A picture that then fails
+/// to decode still leaves it stock.
 List<String> skinBarGaps(Skin skin) => [
-  if (skin.tailIcons.isEmpty) 'tail icons',
-  if (skin.tailIconsSelected.isEmpty) 'selected tail icons',
+  if (skin.tailBg == null) 'tail bg',
+  if (skin.tailIcons.length < SkinNames.tabs.length) 'tail icons',
+  if (skin.tailIconsSelected.length < SkinNames.tabs.length) 'selected tail icons',
   if (skin.tailColor == null) 'tail color',
   if (skin.tailColorSelected == null) 'selected tail color',
 ];

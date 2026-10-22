@@ -13,7 +13,7 @@ final class SkinColors {
     this.tailIconColorSelected,
     this.tailIconAnimated = false,
     this.tailIconCycle = false,
-    this.headMyselfVideoLoop = true,
+    this.headMyselfVideoLoop = false,
   });
 
   /// The text and icons over the themed headers: 首页's tabs and indicator, 我的's top icons.
@@ -33,7 +33,7 @@ final class SkinColors {
   final int? tailIconColor;
   final int? tailIconColorSelected;
 
-  /// `tail_icon_ani`: the selected icons are animations.
+  /// `tail_icon_ani`: a change of place fades and raises the incoming icon.
   final bool tailIconAnimated;
 
   /// `tail_icon_ani_mode` "cycle": the selected icon's animation loops; otherwise it plays once.
@@ -66,24 +66,63 @@ final class SkinEquip {
   /// `conf.attribute` bit 2: the skin dresses only the main pages.
   final bool primaryOnly;
 
-  /// The skin `data` names; null when nothing with a package is equipped (a plain colour theme, or none).
-  /// `common_equip` (an event's skin), `skin_colors` and `load_equip` are not read.
+  /// The skin `data` names; null when nothing is equipped: no `data`, a null, empty or zero (id 0) `user_equip`, or a
+  /// plain colour theme (its id among `skin_colors`), which has no package. Any other answer without a package throws a
+  /// [DecodeError] naming the problem and the keys it found, never their values, so a changed answer never reads as
+  /// none. A missing `package_md5` reads as empty, and the package is then refused before it is downloaded.
+  /// `common_equip` (an event's skin) and `load_equip` are not read.
   static SkinEquip? fromJson(Object? json) {
-    final equip = JsonObject.from(json, 'skin').nested('user_equip');
-    final packageUrl = equip?.text('package_url');
-    if (equip == null || packageUrl == null || packageUrl.isEmpty) return null;
+    final data = JsonObject.from(json, 'skin data');
+    if (data.map.isEmpty) return null;
+    if (!data.map.containsKey('user_equip')) throw DecodeError('skin: no user_equip (data keys: ${_keys(data.map)})');
+    final raw = data.map['user_equip'];
+    if (raw == null) return null;
+    if (raw is! Map<String, Object?>) {
+      throw DecodeError('skin: user_equip is ${_kind(raw)} (data keys: ${_keys(data.map)})');
+    }
+    if (raw.isEmpty) return null;
+    final packageUrl = raw['package_url'];
+    if (packageUrl != null && packageUrl is! String) {
+      throw DecodeError('skin: package_url is ${_kind(packageUrl)} (user_equip keys: ${_keys(raw)})');
+    }
+    if (packageUrl is! String || packageUrl.trim().isEmpty) {
+      final id = _number(raw['id']);
+      if (id == 0 || _colourThemeIds(data).contains(id)) return null;
+      throw DecodeError('skin: user_equip has no package_url (user_equip keys: ${_keys(raw)})');
+    }
+    final equip = JsonObject(raw);
     final attribute = _number(equip.nested('conf')?.map['attribute']) ?? 0;
     return SkinEquip(
-      id: _number(equip.map['id']) ?? 0,
+      id: _number(raw['id']) ?? 0,
       name: equip.text('name') ?? '',
-      ver: _number(equip.map['ver']) ?? 0,
-      packageUrl: _secure(packageUrl),
+      ver: _number(raw['ver']) ?? 0,
+      packageUrl: _secure(packageUrl.trim()),
       packageMd5: equip.text('package_md5') ?? '',
       colors: _colors(equip.nested('data') ?? const JsonObject({})),
       primaryOnly: (attribute & 4) != 0,
     );
   }
 }
+
+Set<int> _colourThemeIds(JsonObject data) => {
+  for (final theme in data.lenientList('skin_colors', (json) => json))
+    if (theme is Map<String, Object?>) ?_number(theme['id']),
+};
+
+/// The answer's own key names for a log, at most 20, each cut to 40 characters.
+String _keys(Map<String, Object?> map) {
+  final names = [for (final key in map.keys) key.length <= 40 ? key : key.substring(0, 40)]..sort();
+  return names.length <= 20 ? names.join(', ') : '${names.take(20).join(', ')}, …';
+}
+
+String _kind(Object value) => switch (value) {
+  String() => 'a string',
+  num() => 'a number',
+  bool() => 'a bool',
+  List<Object?>() => 'a list',
+  Map<String, Object?>() => 'an object',
+  _ => 'of another type',
+};
 
 SkinColors _colors(JsonObject data) => SkinColors(
   color: argbColour(data.map['color']),

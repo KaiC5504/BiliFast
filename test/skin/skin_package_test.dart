@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:bili_core/api.dart';
+import 'package:bilifast/skin/skin.dart';
 import 'package:bilifast/skin/skin_api.dart';
 import 'package:bilifast/skin/skin_package.dart';
 import 'package:crypto/crypto.dart';
@@ -14,7 +15,8 @@ Uint8List zipOf(Map<String, List<int>> entries) {
   for (final MapEntry(key: name, value: bytes) in entries.entries) {
     archive.add(ArchiveFile.bytes(name, bytes));
   }
-  return ZipEncoder().encodeBytes(archive);
+  // Without a time every entry is stamped now, so the same package built a second later has another md5.
+  return ZipEncoder().encodeBytes(archive, modified: DateTime(2026, 10, 22));
 }
 
 String md5Of(List<int> bytes) => md5.convert(bytes).toString();
@@ -77,9 +79,27 @@ void main() {
       );
       await expectLater(
         api.download(Uri.parse('https://example.com/a.zip')),
-        throwsA(isA<SkinPackageError>().having((error) => error.reason, 'reason', 'package host not allowed')),
+        throwsA(
+          isA<SkinPackageError>().having(
+            (error) => error.reason,
+            'reason',
+            'package host not allowed: https://example.com',
+          ),
+        ),
       );
       expect(clients, 0);
+    });
+
+    test('a refusal names the scheme and host, and a port given, but no path, query or user info', () {
+      String reason(String url) => SkinPackageError.hostNotAllowed(Uri.parse(url)).reason;
+      expect(reason('http://i0.hdslb.com/bfs/garb/a.zip?sign=secret'), 'package host not allowed: http://i0.hdslb.com');
+      expect(reason('https://i0.hdslb.com:8443/a.zip'), 'package host not allowed: https://i0.hdslb.com:8443');
+      expect(
+        reason('https://user:secret@i0.hdslb.com/a.zip'),
+        'package host not allowed: https://i0.hdslb.com with user info',
+      );
+      expect(reason('file:///i0.hdslb.com/a.zip'), 'package host not allowed: file://');
+      expect(reason('https://${'a' * 100}.com/a.zip'), 'package host not allowed: https://${'a' * 80}…');
     });
   });
 
@@ -132,17 +152,27 @@ void main() {
       final client = _Client({'https://i0.hdslb.com/a.zip': const _Answer(302, location: 'https://example.com/a.zip')});
       await expectLater(
         downloadSkinPackage(Uri.parse('https://i0.hdslb.com/a.zip'), client: () => client),
-        throwsA(isA<SkinPackageError>().having((error) => error.reason, 'reason', 'package host not allowed')),
+        throwsA(
+          isA<SkinPackageError>().having(
+            (error) => error.reason,
+            'reason',
+            'package host not allowed: https://example.com',
+          ),
+        ),
       );
       expect(client.asked, ['https://i0.hdslb.com/a.zip']);
       expect(client.closed, isTrue);
     });
 
-    test('an answer other than 200, or redirects without end, are refused', () async {
+    test('an answer other than 200, or redirects without end, are refused for the run', () async {
       final missing = _Client({'https://i0.hdslb.com/a.zip': const _Answer(404)});
       await expectLater(
         downloadSkinPackage(Uri.parse('https://i0.hdslb.com/a.zip'), client: () => missing),
-        throwsA(isA<SkinPackageError>().having((error) => error.reason, 'reason', 'download answered 404')),
+        throwsA(
+          isA<SkinPackageError>()
+              .having((error) => error.reason, 'reason', 'download answered 404')
+              .having((error) => error.passing, 'passing', isFalse),
+        ),
       );
 
       final loop = _Client({'https://i0.hdslb.com/a.zip': const _Answer(301, location: '/a.zip')});
@@ -153,7 +183,7 @@ void main() {
       expect(loop.asked, hasLength(4));
     });
 
-    test('a download that never ends times out', () async {
+    test('a download that never ends times out, which may pass', () async {
       final client = _Client({'https://i0.hdslb.com/a.zip': const _Answer(200, endless: true)});
       await expectLater(
         downloadSkinPackage(
@@ -161,7 +191,11 @@ void main() {
           client: () => client,
           timeout: const Duration(milliseconds: 50),
         ),
-        throwsA(isA<SkinPackageError>().having((error) => error.reason, 'reason', 'download timed out')),
+        throwsA(
+          isA<SkinPackageError>()
+              .having((error) => error.reason, 'reason', 'download timed out')
+              .having((error) => error.passing, 'passing', isTrue),
+        ),
       );
       expect(client.closed, isTrue);
     });
@@ -228,7 +262,8 @@ void main() {
   });
 
   group('resolving', () {
-    test('finds each role by its name without the extension, whatever the extension', () async {
+    test('finds each role by its name without the extension, among the kinds it can draw', () async {
+      final skipped = <String>[];
       final skin = resolveSkin(
         _equip,
         await unpackAndList({
@@ -241,10 +276,12 @@ void main() {
             'tail_icon_selected_$tab.svga': [1],
           },
           'tail_icon_pub_btn_bg.png': [1],
-          'tail_icon_selected_pub_btn_bg.svga': [1],
+          'tail_icon_selected_pub_btn_bg.jpeg': [1],
           'something_else.png': [1],
         }),
+        skipped: skipped,
       );
+      expect(skipped, isEmpty);
       expect(skin.headBg!.path, endsWith('head_bg.webp'));
       expect(skin.headTabBg!.path, endsWith('head_tab_bg.jpg'));
       expect(skin.headMyselfVideo!.path, endsWith('head_myself_mp4_bg.mp4'));
@@ -260,9 +297,62 @@ void main() {
       expect(skin.tailIconsSelected, hasLength(5));
       expect(skin.tailIconsSelected.every((icon) => icon.animated), isTrue, reason: '.svga plays');
       expect(skin.pubButton!.animated, isFalse);
-      expect(skin.pubButtonSelected!.animated, isTrue);
+      expect(skin.pubButtonSelected!.file.path, endsWith('tail_icon_selected_pub_btn_bg.jpeg'));
       expect(skin.files.keys, contains('something_else'));
       expect(skin.headMyself, isNull);
+    });
+
+    test('gives pictures to picture roles, svga only to the selected icons, mp4 or mov to the video', () async {
+      final skipped = <String>[];
+      final skin = resolveSkin(
+        _equip,
+        await unpackAndList({
+          'head_bg.gif': [1],
+          'head_bg.png': [1],
+          'head_tab_bg.svga': [1],
+          'head_myself_squared_bg.mp4': [1],
+          'head_myself_bg.WEBP': [1],
+          'head_myself_mp4_bg.png': [1],
+          'head_myself_mp4_bg.MOV': [1],
+          'tail_bg.svga': [1],
+          for (final tab in SkinNames.tabs) ...{
+            'tail_icon_$tab.svga': [1],
+            'tail_icon_selected_$tab.webp': [1],
+          },
+          'tail_icon_pub_btn_bg.svga': [1],
+          'tail_icon_selected_pub_btn_bg.svga': [1],
+        }),
+        skipped: skipped,
+      );
+      expect(skin.headBg!.path, endsWith('head_bg.png'));
+      expect(skin.headTabBg, isNull);
+      expect(skin.headMyself!.path, endsWith('head_myself_bg.WEBP'), reason: 'the squared one is a video');
+      expect(skin.headMyselfVideo!.path, endsWith('head_myself_mp4_bg.MOV'));
+      expect(skin.tailBg, isNull);
+      expect(skin.tailIcons, isEmpty, reason: 'still icons only');
+      expect(skin.tailIconsSelected, hasLength(5));
+      expect(skin.tailIconsSelected.every((icon) => !icon.animated), isTrue);
+      expect(skin.pubButton, isNull);
+      expect(skin.pubButtonSelected, isNull);
+      expect(
+        skipped,
+        unorderedEquals([
+          'head_bg.gif: not a picture',
+          'head_tab_bg.svga: not a picture',
+          'head_myself_squared_bg.mp4: not a picture',
+          'head_myself_mp4_bg.png: not a video',
+          'tail_bg.svga: not a picture',
+          for (final tab in SkinNames.tabs) 'tail_icon_$tab.svga: not a picture',
+          'tail_icon_pub_btn_bg.svga: not a picture',
+          'tail_icon_selected_pub_btn_bg.svga: not a picture',
+        ]),
+      );
+
+      final selectedVideo = resolveSkin(_equip, [
+        for (final tab in SkinNames.tabs) SkinFile(File('${folder()}/tail_icon_selected_$tab.mp4'), 1),
+      ], skipped: skipped..clear());
+      expect(selectedVideo.tailIconsSelected, isEmpty);
+      expect(skipped.first, 'tail_icon_selected_main.mp4: not a picture or svga');
     });
 
     test('takes head_myself_squared_bg over head_myself_bg, and head_myself_bg alone', () async {
@@ -292,6 +382,7 @@ void main() {
 
     test('an icon set missing one of its five, or a missing tail colour, leaves the bar stock', () async {
       final files = await unpackAndList({
+        'tail_bg.png': [1],
         for (final tab in SkinNames.tabs) 'tail_icon_$tab.png': [1],
         for (final tab in SkinNames.tabs.skip(1)) 'tail_icon_selected_$tab.png': [1],
       });
@@ -308,6 +399,32 @@ void main() {
       expect(whole.themesBar, isTrue);
       expect(skinBarGaps(whole), isEmpty);
       expect(skinBarGaps(resolveSkin(_equip, await listSkinFiles(Directory(folder())))), [
+        'tail color',
+        'selected tail color',
+      ]);
+    });
+
+    test('the bar\'s gaps name a missing tail_bg and a set short of five, whatever the colours', () {
+      const colors = SkinColors(tailColor: 0xFF000001, tailColorSelected: 0xFF000002);
+      const equip = SkinEquip(id: 7, name: 'test', ver: 1, packageUrl: '', packageMd5: '', colors: colors);
+      final icon = SkinIcon(File('${folder()}/icon.png'));
+      final five = List.filled(SkinNames.tabs.length, icon);
+      expect(skinBarGaps(Skin(equip: equip, tailIcons: five, tailIconsSelected: five)), ['tail bg']);
+      expect(
+        skinBarGaps(
+          Skin(
+            equip: equip,
+            tailBg: File('${folder()}/tail_bg.png'),
+            tailIcons: five.sublist(1),
+            tailIconsSelected: [icon],
+          ),
+        ),
+        ['tail icons', 'selected tail icons'],
+      );
+      expect(skinBarGaps(Skin(equip: _equip)), [
+        'tail bg',
+        'tail icons',
+        'selected tail icons',
         'tail color',
         'selected tail color',
       ]);

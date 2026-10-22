@@ -35,7 +35,7 @@ final class SvgaSprite {
   /// The [imageKey] of the sprite whose alpha masks this one.
   final String? matteKey;
 
-  /// One per movie frame, with the omitted parts already filled in (see `SvgaDecoder`).
+  /// As the file lists them, KEEP shapes resolved (see SvgaDecoder); [frameAt] reads past the last as hidden.
   final List<SvgaFrame> frames;
 
   SvgaFrame frameAt(int index) => index >= 0 && index < frames.length ? frames[index] : SvgaFrame.hidden;

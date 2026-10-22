@@ -14,7 +14,7 @@ final class SkinIcon {
 }
 
 /// The equipped 装扮, unpacked on the device: its pictures by role (each null when the package has none) and its
-/// colours. Pages read it from `AppServices.skin`; null there means the stock look.
+/// colours. Pages read it from `AppServices.skin.value`; null there means the stock look.
 final class Skin {
   const Skin({
     required this.equip,
@@ -45,8 +45,8 @@ final class Skin {
   /// The bottom bar's picture (109, 110).
   final File? tailBg;
 
-  /// The bar's icons in the package's order (main, channel, dynamic, shop, myself), normal and selected. Both empty
-  /// when the bar stays stock.
+  /// The bar's icons in the package's order (main, channel, dynamic, shop, myself), normal and selected. Each set is
+  /// whole or empty (resolveSkin).
   final List<SkinIcon> tailIcons;
   final List<SkinIcon> tailIconsSelected;
   final SkinIcon? pubButton;

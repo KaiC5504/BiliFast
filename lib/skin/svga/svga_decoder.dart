@@ -55,8 +55,6 @@ abstract final class SvgaDecoder {
     return _decodeJson(spec, files);
   }
 
-  // 2.x
-
   static SvgaMovie _decodeProto(Uint8List bytes, Map<String, Uint8List> files) {
     final reader = ProtoReader(bytes);
     var version = '';
@@ -301,8 +299,6 @@ abstract final class SvgaDecoder {
 
   static SvgaColor _protoColor(ProtoReader reader) => _color(_floats(reader, 4));
 
-  // 1.x
-
   static SvgaMovie _decodeJson(Uint8List bytes, Map<String, Uint8List> files) {
     final Object? json;
     try {
@@ -415,8 +411,6 @@ abstract final class SvgaDecoder {
     if (values.length < 4) return null;
     return _color([for (final value in values.take(4)) _number(value)]);
   }
-
-  // Shared
 
   static SvgaMovie _movie(
     String version,

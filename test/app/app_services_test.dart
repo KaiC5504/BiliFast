@@ -8,6 +8,7 @@ import 'package:bilifast/account/app_auth.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/skin/fake_skin_api.dart';
+import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -143,4 +144,39 @@ void main() {
     await pumpEventQueue();
     expect(skins.calls, ['equipped'], reason: 'only the change to authorized asks');
   });
+
+  test('a skin model given is the one pages read, and a token confirmed refreshes it', () async {
+    final environment = await AppEnvironment.load(
+      keychain: FakeKeychain(const NoStoredCookies()),
+      http: Canned.http(),
+      webCookies: FakeWebCookies(),
+      logger: Logger(session: 'test'),
+    );
+    final auth = FakeAppAuth(authorized: false);
+    final skin = _CountingSkinModel(environment: environment);
+    final services = AppServices(
+      environment: environment,
+      playback: AppPlayback(() => Completer<PlaybackController>().future),
+      recents: await RecentStore.load(null, logger: Logger(session: 'test')),
+      pageApi: FakePageApi(),
+      skin: skin,
+      appAuth: auth,
+    );
+    addTearDown(services.playback.dispose);
+    expect(services.skin, same(skin));
+
+    auth.authorized = true;
+    auth.notifyListeners();
+    await pumpEventQueue();
+    expect(skin.refreshes, 1);
+  });
+}
+
+class _CountingSkinModel extends SkinModel {
+  _CountingSkinModel({required super.environment}) : super(api: FakeSkinApi(), folder: null);
+
+  int refreshes = 0;
+
+  @override
+  Future<void> refresh() async => refreshes++;
 }

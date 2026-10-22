@@ -160,6 +160,7 @@ class AppServices {
     this._meApi,
     this._skinApi,
     this.skinFolder,
+    this._skin,
     AppAuth? appAuth,
     GlobalKey<NavigatorState>? navigator,
     SearchHistoryStore? searchHistory,
@@ -258,8 +259,10 @@ class AppServices {
   /// Where skin packages are unpacked (the support folder's `skins`); null keeps nothing across launches.
   final String? skinFolder;
 
-  /// The equipped 装扮, null for the stock look. Made on first use and started by `main`.
-  late final SkinModel skin = SkinModel(api: skinApi, environment: environment, folder: skinFolder);
+  final SkinModel? _skin;
+
+  /// The equipped 装扮 (its value null for the stock look): the one given, else made on first use. `main` starts it.
+  late final SkinModel skin = _skin ?? SkinModel(api: skinApi, environment: environment, folder: skinFolder);
 
   /// The official API's login token.
   final AppAuth appAuth;

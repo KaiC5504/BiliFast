@@ -83,6 +83,22 @@ void main() {
       http.routes[skinPath] = (200, OwnSpaceFixtures.skinColourTheme);
       expect(await client.skin(), isNull);
     });
+
+    test('an answer of another shape is a decoding error naming its keys, never nothing equipped', () async {
+      final data = skinData();
+      (data['user_equip']! as Map<String, Object?>).remove('package_url');
+      http.routes[skinPath] = (200, jsonEncode({'code': 0, 'message': '0', 'data': data}));
+      await expectLater(
+        client.skin(),
+        throwsA(
+          isA<BiliDecodingError>().having(
+            (error) => error.detail,
+            'detail',
+            'DecodeError: skin: user_equip has no package_url (user_equip keys: conf, data, id, name, package_md5, ver)',
+          ),
+        ),
+      );
+    });
   });
 
   group('the equipped skin', () {
@@ -108,14 +124,110 @@ void main() {
       expect(colors.headMyselfVideoLoop, isTrue);
     });
 
-    test('is null without a user_equip or its package, whatever common_equip, skin_colors or load_equip hold', () {
-      final data = skinData()..remove('user_equip');
-      expect(SkinEquip.fromJson(data), isNull);
-      expect(SkinEquip.fromJson(skinData()..['user_equip'] = 'none'), isNull);
+    test('is null when nothing is equipped: empty data, a null, empty or zero user_equip, or a colour theme', () {
       expect(SkinEquip.fromJson(<String, Object?>{}), isNull);
-      expect(equipWith((equip) => equip.remove('package_url')), isNull);
-      expect(equipWith((equip) => equip['package_url'] = ''), isNull);
-      expect(equipWith((equip) => equip['package_url'] = 7), isNull);
+      expect(SkinEquip.fromJson(skinData()..['user_equip'] = null), isNull);
+      expect(SkinEquip.fromJson(skinData()..['user_equip'] = <String, Object?>{}), isNull);
+      for (final id in [0, '0', 0.0]) {
+        final zero = {
+          'id': id,
+          'name': '',
+          'ver': 0,
+          'package_url': '',
+          'package_md5': '',
+          'data': <String, Object?>{},
+        };
+        expect(SkinEquip.fromJson(skinData()..['user_equip'] = zero), isNull, reason: '$id');
+      }
+      final colourTheme = skinData()
+        ..['user_equip'] = {
+          'id': 8,
+          'name': '测试粉',
+          'data': {'color': '#FB7299'},
+        };
+      expect(SkinEquip.fromJson(colourTheme), isNull, reason: 'id 8 is among skin_colors');
+    });
+
+    test('any other shape throws, naming the problem and the keys but never a value', () {
+      Matcher fails(String message) => throwsA(isA<DecodeError>().having((error) => error.message, 'message', message));
+      expect(
+        () => SkinEquip.fromJson(skinData()..remove('user_equip')),
+        fails('skin: no user_equip (data keys: common_equip, load_equip, skin_colors)'),
+      );
+      expect(
+        () => SkinEquip.fromJson(skinData()..['user_equip'] = 'none'),
+        fails('skin: user_equip is a string (data keys: common_equip, load_equip, skin_colors, user_equip)'),
+      );
+      expect(
+        () => SkinEquip.fromJson(skinData()..['user_equip'] = [1]),
+        fails('skin: user_equip is a list (data keys: common_equip, load_equip, skin_colors, user_equip)'),
+      );
+      expect(
+        () => equipWith((equip) => equip.remove('package_url')),
+        fails('skin: user_equip has no package_url (user_equip keys: conf, data, id, name, package_md5, ver)'),
+      );
+      expect(
+        () => equipWith((equip) => equip['package_url'] = ' '),
+        fails(
+          'skin: user_equip has no package_url (user_equip keys: conf, data, id, name, package_md5, package_url, ver)',
+        ),
+      );
+      expect(
+        () => equipWith((equip) => equip['package_url'] = 7),
+        fails('skin: package_url is a number (user_equip keys: conf, data, id, name, package_md5, package_url, ver)'),
+      );
+      expect(
+        () => equipWith(
+          (equip) => equip
+            ..remove('package_url')
+            ..['id'] = 9,
+        ),
+        throwsA(isA<DecodeError>()),
+        reason: 'an id that is no colour theme',
+      );
+      expect(
+        () => equipWith(
+          (equip) => equip
+            ..remove('package_url')
+            ..remove('id'),
+        ),
+        throwsA(isA<DecodeError>()),
+        reason: 'an object of other keys',
+      );
+      expect(() => SkinEquip.fromJson([1]), throwsA(isA<DecodeError>()));
+
+      final long = skinData()..remove('user_equip');
+      for (var i = 0; i < 30; i++) {
+        long['key_$i${'x' * 50}'] = i;
+      }
+      try {
+        SkinEquip.fromJson(long);
+        fail('no user_equip');
+      } on DecodeError catch (error) {
+        expect(error.message, endsWith(', …)'));
+        expect(error.message.split(', ').where((key) => key.startsWith('key_')), everyElement(hasLength(40)));
+      }
+    });
+
+    test('the messages carry no value of the answer', () {
+      for (final change in <void Function(Map<String, Object?>)>[
+        (equip) => equip.remove('package_url'),
+        (equip) => equip['package_url'] = 7,
+      ]) {
+        try {
+          equipWith(change);
+          fail('should throw');
+        } on DecodeError catch (error) {
+          for (final value in ['34001', '测试', 'hdslb', '0123456789abcdef', '1700000000', '#FFFFFF']) {
+            expect(error.message, isNot(contains(value)));
+          }
+        }
+      }
+    });
+
+    test('loops the header video only for "loop", and so does a SkinColors made without it', () {
+      expect(const SkinColors().headMyselfVideoLoop, isFalse);
+      expect(colorsWith((data) => data.remove('head_myself_mp4_play')).headMyselfVideoLoop, isFalse);
     });
 
     test('primary pages only is bit 2 of conf.attribute', () {
