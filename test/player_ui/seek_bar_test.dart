@@ -2,6 +2,7 @@ import 'package:bili_core/api.dart' show Chapter;
 import 'package:bilifast/player_ui/seek_bar.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,34 +18,54 @@ final class Rig {
   final repaint = ValueNotifier(0);
   final scrubs = <double>[];
   final commits = <double>[];
+  final holds = <bool>[];
   int cancels = 0;
 
+  /// The page's TickerMode: false as when another page covers it.
+  final ticking = ValueNotifier(true);
+
+  /// Whether the bar is in the tree.
+  final shown = ValueNotifier(true);
+
+  /// [vertical] puts a vertical drag above the bar, as the page's swipes are.
   Future<void> mount(
     WidgetTester tester, {
     List<Chapter> chapters = const [],
     SeekBarStyle? style,
     bool still = false,
+    bool vertical = false,
   }) async {
     addTearDown(repaint.dispose);
+    addTearDown(ticking.dispose);
+    addTearDown(shown.dispose);
     await tester.runAsync(SeekBar.precache);
+    final bar = SeekBar(
+      position: () => position,
+      duration: () => duration,
+      buffered: () => 0,
+      repaint: repaint,
+      onScrub: _scrub,
+      onCommit: commits.add,
+      onCancel: () => cancels++,
+      onHold: holds.add,
+      chapters: chapters,
+      style: style ?? SeekBarStyle.tv,
+    );
     await tester.pumpWidget(
       MediaQuery(
         data: MediaQueryData(disableAnimations: still),
         child: Directionality(
           textDirection: TextDirection.ltr,
-          child: Center(
-            child: SizedBox(
-              width: 218,
-              child: SeekBar(
-                position: () => position,
-                duration: () => duration,
-                buffered: () => 0,
-                repaint: repaint,
-                onScrub: _scrub,
-                onCommit: commits.add,
-                onCancel: () => cancels++,
-                chapters: chapters,
-                style: style ?? SeekBarStyle.tv,
+          child: GestureDetector(
+            onVerticalDragUpdate: vertical ? (_) {} : null,
+            child: Center(
+              child: SizedBox(
+                width: 218,
+                child: ListenableBuilder(
+                  listenable: Listenable.merge([ticking, shown]),
+                  builder: (context, _) =>
+                      TickerMode(enabled: ticking.value, child: shown.value ? bar : const SizedBox.shrink()),
+                ),
               ),
             ),
           ),
@@ -496,6 +517,51 @@ void main() {
       expect(rig.commits, hasLength(1));
     });
 
+    testWidgets('covered while the eyes come back, the TV rests at once and doesn\'t blink when shown again', (
+      tester,
+    ) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final finger = await _hold(tester, rig, steps: 6);
+      final state = rig.state(tester);
+      await finger.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(state.eyes, greaterThan(SeekBar.eyesAtRest), reason: 'still on the way back');
+
+      rig.ticking.value = false;
+      await tester.pump();
+      expect(state.eyes, SeekBar.eyesAtRest);
+      await tester.pump(const Duration(seconds: 2));
+      rig.ticking.value = true;
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.blink, isNull);
+        expect(state.eyes, SeekBar.eyesAtRest);
+      }
+      expect(tester.hasRunningAnimations, isFalse);
+    });
+
+    testWidgets('eyes held up on their way back (the app left) end at rest without the blink', (tester) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final finger = await _hold(tester, rig, steps: 6);
+      final state = rig.state(tester);
+      await finger.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(state.eyes, greaterThan(SeekBar.eyesAtRest), reason: 'still on the way back');
+
+      // No frames while the app is away: the next comes seconds later.
+      await tester.pump(const Duration(seconds: 3));
+      expect(state.eyes, SeekBar.eyesAtRest);
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.blink, isNull);
+      }
+      expect(tester.hasRunningAnimations, isFalse);
+    });
+
     testWidgets('a tap and a touch that never became a drag do not blink', (tester) async {
       final rig = Rig()..position = 50;
       await rig.mount(tester);
@@ -516,6 +582,57 @@ void main() {
         expect(state.blink, isNull);
       }
       expect(state.eyes, SeekBar.eyesAtRest);
+    });
+
+    testWidgets('a vertical swipe on the bar gives way: the eyes stay, no blink, no hold, and the bar thins back', (
+      tester,
+    ) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester, vertical: true);
+      final state = rig.state(tester);
+      final finger = await tester.startGesture(rig.thumb(tester, 50));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(
+        rig.painter(tester),
+        isNot(paints..rrect(rrect: _capsule(218, BiliMetrics.barHeight), color: BiliColors.chromeTrack)),
+        reason: 'the touch thickens it',
+      );
+      for (var i = 0; i < 6; i++) {
+        await finger.moveBy(const Offset(1, 10));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.eyes, SeekBar.eyesAtRest);
+      }
+      expect(rig.cancels, 1);
+      await finger.up();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.blink, isNull);
+        expect(state.eyes, SeekBar.eyesAtRest);
+      }
+      expect(rig.holds, isEmpty);
+      expect(rig.scrubs, isEmpty);
+      expect(rig.commits, isEmpty);
+      expect(
+        rig.painter(tester),
+        paints..rrect(rrect: _capsule(218, BiliMetrics.barHeight), color: BiliColors.chromeTrack),
+      );
+    });
+
+    testWidgets('a finger resting on the bar as it goes (a turn, an end screen) lets go without an error', (
+      tester,
+    ) async {
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      final finger = await tester.startGesture(rig.thumb(tester, 50));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      rig.shown.value = false;
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(rig.cancels, 1, reason: 'the owner hears the touch end, just after');
+      await finger.up();
+      await tester.pump();
     });
 
     testWidgets('Reduce Motion puts the eyes back at once and skips the blink', (tester) async {
@@ -576,6 +693,55 @@ void main() {
       expect(rig.painter(tester), paints..circle(radius: BiliMetrics.verticalDot / 2, color: BiliColors.verticalThumb));
     });
   });
+
+  testWidgets(
+    'Lotties that fail to load are reported once, and every bar draws a plain round handle in the TV\'s place',
+    (tester) async {
+      final bundle = _MissingBundle();
+      SeekBar.debugForgetFaces(bundle: bundle);
+      addTearDown(SeekBar.debugForgetFaces);
+      final rig = Rig()..position = 50;
+      await rig.mount(tester);
+      expect(tester.takeException(), isNotNull);
+      final loads = bundle.loads;
+      final centre = rig.thumb(tester, 50) - rig.rect(tester).topLeft;
+      expect(
+        rig.painter(tester),
+        paints
+          ..rrect(color: BiliColors.chromeTrack)
+          ..rrect(color: BiliColors.chromeBuffered)
+          ..rrect(color: BiliColors.pink)
+          ..circle(x: centre.dx, y: centre.dy, radius: BiliMetrics.thumbHandle / 2, color: BiliColors.thumbHandle),
+      );
+
+      // The next page's bar: the failure is kept, so nothing loads or reports again.
+      await tester.pumpWidget(const SizedBox());
+      final again = Rig()..position = 20;
+      await again.mount(tester);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(bundle.loads, loads);
+      expect(again.painter(tester), paintsExactlyCountTimes(#drawCircle, 1));
+
+      final finger = await _hold(tester, again, steps: 4);
+      await finger.up();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(again.state(tester).blink, isNull);
+      }
+      expect(again.painter(tester), paints..circle(radius: BiliMetrics.thumbHandle / 2, color: BiliColors.thumbHandle));
+    },
+  );
+}
+
+final class _MissingBundle extends CachingAssetBundle {
+  int loads = 0;
+
+  @override
+  Future<ByteData> load(String key) {
+    loads++;
+    return Future.error(FlutterError('$key is missing'));
+  }
 }
 
 RRect _capsule(double width, double height) => RRect.fromLTRBR(
