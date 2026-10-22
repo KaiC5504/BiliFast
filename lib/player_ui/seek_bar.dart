@@ -6,6 +6,7 @@ import 'package:bili_core/api.dart' show Chapter;
 import 'package:bili_core/logic.dart' show TimeFormat;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/widgets.dart';
+import 'package:lottie/lottie.dart';
 
 import '../shared/theme.dart';
 
@@ -20,11 +21,12 @@ enum SeekBarStyle {
 }
 
 /// The seek bar (port of BiliNative `ProgressBar.swift`): played in pink, buffered in white at 40%, the rest at 20%, a
-/// tick where each chapter starts, and the TV-face thumb, or the 竖屏 [SeekBarStyle.dot]. It paints from [repaint]
+/// tick where each chapter starts, and the official TV thumb, or the 竖屏 [SeekBarStyle.dot]. It paints from [repaint]
 /// without rebuilding. As in the official app, a touch takes hold of the current position rather than jumping to the
 /// finger: a drag moves it by the distance dragged, [onCommit] comes when it lifts, and a tap seeks nowhere. While a
-/// finger is on it the thumb grows and the chapter under it shows its title above. VoiceOver reads the time and steps it by
-/// [step] through [onCommit].
+/// finger is on it the bar thickens, the TV's eyes look the way it is dragged (the dot grows instead) and the chapter
+/// under it shows its title above; when a drag lifts the eyes come back and the TV blinks. VoiceOver reads the time and
+/// steps it by [step] through [onCommit].
 class SeekBar extends StatefulWidget {
   const SeekBar({
     super.key,
@@ -52,6 +54,35 @@ class SeekBar extends StatefulWidget {
   /// How far one VoiceOver swipe seeks, in seconds.
   static const step = 10.0;
 
+  /// The official TV, the APK's two Lotties: its eyes sliding from the left at 0 to the right at 1, and its blink.
+  static const lookingAsset = 'assets/lottie/player_seek_bar_tv_1.json';
+  static const blinkingAsset = 'assets/lottie/player_seek_bar_tv_2.json';
+
+  /// Parses both Lotties once for every bar. Until they are in, the TV style draws no thumb.
+  static Future<void> precache() => _TvFaces.load();
+
+  /// The official player (`PlayerSeekWidget`) moves the eyes one [eyesStep] toward each change of the dragged position,
+  /// and one back toward [eyesAtRest] for a change of none.
+  static const eyesAtRest = 0.5;
+  static const eyesStep = 0.05;
+  static const _lookSteps = 10;
+
+  /// The eyes' way back to the centre from an end, when a drag lifts, before the blink. 102 shows them back from 0.85
+  /// in 0.2 s, and from nearer sooner.
+  static const eyesReturn = Duration(milliseconds: 285);
+
+  /// The eyes' place in steps from the centre ([-10, 10]) after the dragged position changed by [change] seconds.
+  @visibleForTesting
+  static int lookAfter(int look, double change) {
+    if (change > 0) return math.min(look + 1, _lookSteps);
+    if (change < 0) return math.max(look - 1, -_lookSteps);
+    return look - look.sign;
+  }
+
+  /// The looking Lottie's progress for [look] steps from the centre.
+  @visibleForTesting
+  static double eyesOf(int look) => eyesAtRest + look * eyesStep;
+
   /// Seconds, read when painting.
   final double Function() position;
   final double Function() duration;
@@ -74,7 +105,7 @@ class SeekBar extends StatefulWidget {
   final SeekBarStyle style;
 
   @override
-  State<SeekBar> createState() => _SeekBarState();
+  State<SeekBar> createState() => SeekBarState();
 
   /// The chapter holding [position], when it has a title.
   @visibleForTesting
@@ -86,9 +117,11 @@ class SeekBar extends StatefulWidget {
   static Chapter _none() => const Chapter(from: 0, to: 0, title: '');
 }
 
-class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
+class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
   late final _drag = AnimationController(vsync: this, duration: SeekBar._grow);
   late final _dragCurve = CurvedAnimation(parent: _drag, curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
+  late final _eyes = AnimationController(vsync: this, value: SeekBar.eyesAtRest);
+  late final _blink = AnimationController(vsync: this);
   Timer? _restTimer;
 
   /// Where the finger last came to rest.
@@ -101,7 +134,38 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
   /// The latest scrubbed position, committed when the finger lifts.
   double _scrubbed = 0;
 
+  /// The eyes in steps from the centre, and the position they last moved for.
+  int _look = 0;
+  double _lookedFrom = 0;
+
   bool _holding = false;
+
+  /// The looking Lottie's progress.
+  @visibleForTesting
+  double get eyes => _eyes.value;
+
+  /// The blink Lottie's progress while it plays, else null.
+  @visibleForTesting
+  double? get blink => _blink.status == AnimationStatus.forward ? _blink.value : null;
+
+  @override
+  void initState() {
+    super.initState();
+    _awaitFaces();
+  }
+
+  @override
+  void didUpdateWidget(SeekBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.style != oldWidget.style) _awaitFaces();
+  }
+
+  void _awaitFaces() {
+    if (widget.style != SeekBarStyle.tv || _TvFaces.loaded != null) return;
+    _TvFaces.load().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
@@ -113,6 +177,8 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
     _restTimer?.cancel();
     _dragCurve.dispose();
     _drag.dispose();
+    _eyes.dispose();
+    _blink.dispose();
     super.dispose();
   }
 
@@ -130,16 +196,49 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
     });
   }
 
-  void _lifted() {
+  void _lifted({bool blink = false}) {
     _restTimer?.cancel();
     _restTimer = null;
     _anchor = null;
     _from = null;
     _drag.reverse();
+    _settle(blink: blink);
     if (_holding) {
       _holding = false;
       widget.onHold?.call(false);
     }
+  }
+
+  void _touched(double position) {
+    _look = 0;
+    _lookedFrom = position;
+    _blink.reset();
+    _eyes.value = SeekBar.eyesAtRest;
+  }
+
+  void _looked(double position) {
+    _look = SeekBar.lookAfter(_look, position - _lookedFrom);
+    _lookedFrom = position;
+    _eyes.value = SeekBar.eyesOf(_look);
+  }
+
+  /// The eyes back to the centre, then the blink, as 102 shows; Reduce Motion puts them back at once.
+  void _settle({required bool blink}) {
+    _look = 0;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      _eyes.value = SeekBar.eyesAtRest;
+      return;
+    }
+    final away = (_eyes.value - SeekBar.eyesAtRest).abs() / SeekBar.eyesAtRest;
+    // A touch before the eyes are back stops them, and the blink with them: the future never completes.
+    _eyes.animateTo(SeekBar.eyesAtRest, duration: SeekBar.eyesReturn * away).then((_) {
+      final faces = _TvFaces.loaded;
+      if (!blink || !mounted || faces == null || widget.style != SeekBarStyle.tv) return;
+      _blink.duration = faces.blinkDuration;
+      _blink.forward(from: 0).then((_) {
+        if (mounted) _blink.reset();
+      });
+    });
   }
 
   static String _readout(double seconds, double duration) =>
@@ -180,6 +279,7 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
               final duration = math.max(widget.duration(), 0.0);
               final from = _from ?? widget.position();
               _scrubbed = (from + (local.dx - _fromX) / travel * duration).clamp(0.0, duration);
+              _looked(_scrubbed);
               widget.onScrub(_scrubbed);
               _follow(local.dx, _scrubbed);
             }
@@ -188,8 +288,10 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
               behavior: HitTestBehavior.opaque,
               // Anchored where the finger lands, so the slop the drag waits for still moves the thumb.
               onHorizontalDragDown: (details) {
-                _from = widget.position();
+                final from = widget.position();
+                _from = from;
                 _fromX = details.localPosition.dx;
+                _touched(from);
                 _drag.forward();
               },
               onHorizontalDragStart: (details) {
@@ -199,7 +301,7 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
               },
               onHorizontalDragUpdate: (details) => scrub(details.localPosition),
               onHorizontalDragEnd: (_) {
-                _lifted();
+                _lifted(blink: true);
                 widget.onCommit(_scrubbed);
               },
               onHorizontalDragCancel: () {
@@ -220,7 +322,10 @@ class _SeekBarState extends State<SeekBar> with SingleTickerProviderStateMixin {
                       chapters: widget.chapters,
                       style: widget.style,
                       drag: _dragCurve,
-                      repaint: Listenable.merge([widget.repaint, _drag]),
+                      faces: _TvFaces.loaded,
+                      eyes: _eyes,
+                      blink: _blink,
+                      repaint: Listenable.merge([widget.repaint, _drag, _eyes, _blink]),
                     ),
                   ),
                   if (widget.chapters.isNotEmpty)
@@ -334,6 +439,9 @@ class _SeekBarPainter extends CustomPainter {
     required this.chapters,
     required this.style,
     required this.drag,
+    required this.faces,
+    required this.eyes,
+    required this.blink,
     required Listenable repaint,
   }) : super(repaint: repaint);
 
@@ -343,6 +451,9 @@ class _SeekBarPainter extends CustomPainter {
   final List<Chapter> chapters;
   final SeekBarStyle style;
   final Animation<double> drag;
+  final _TvFaces? faces;
+  final Animation<double> eyes;
+  final Animation<double> blink;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -355,7 +466,8 @@ class _SeekBarPainter extends CustomPainter {
     final bufferedTo = math.min(math.max(travel * _fraction(buffered(), duration) + thumbWidth / 2, playedTo), width);
 
     final grown = drag.value;
-    final barHeight = lerpDouble(BiliMetrics.barHeight, BiliMetrics.barDragHeight, grown.clamp(0.0, 1.0))!;
+    final held = tv ? BiliMetrics.tvBarDragHeight : BiliMetrics.barDragHeight;
+    final barHeight = lerpDouble(BiliMetrics.barHeight, held, grown.clamp(0.0, 1.0))!;
     final top = (size.height - barHeight) / 2;
     final radius = Radius.circular(barHeight / 2);
     RRect capsule(double to) => RRect.fromLTRBR(0, top, to, top + barHeight, radius);
@@ -377,13 +489,13 @@ class _SeekBarPainter extends CustomPainter {
 
     final centre = Offset(playedTo, size.height / 2);
     if (tv) {
-      final scale = 1 + (BiliMetrics.thumbDragScale - 1) * grown;
-      canvas.save();
-      canvas.translate(centre.dx, centre.dy);
-      canvas.scale(scale);
-      canvas.translate(-thumbWidth / 2, -BiliMetrics.thumbHeight / 2);
-      paintTVThumb(canvas, Size(thumbWidth, BiliMetrics.thumbHeight));
-      canvas.restore();
+      final blinking = blink.status == AnimationStatus.forward;
+      faces?.draw(
+        canvas,
+        Rect.fromCenter(center: centre, width: thumbWidth, height: BiliMetrics.thumbHeight),
+        progress: blinking ? blink.value : eyes.value,
+        blinking: blinking,
+      );
     } else {
       final diameter = lerpDouble(BiliMetrics.verticalDot, BiliMetrics.verticalDotDragging, grown)!;
       canvas.drawCircle(centre, diameter / 2, Paint()..color = BiliColors.verticalThumb);
@@ -396,50 +508,42 @@ class _SeekBarPainter extends CustomPainter {
       oldDelegate.duration != duration ||
       oldDelegate.buffered != buffered ||
       !listEquals(oldDelegate.chapters, chapters) ||
-      oldDelegate.style != style;
+      oldDelegate.style != style ||
+      oldDelegate.faces != faces;
 }
 
-/// Our own small TV face (TVThumb.swift): a white screen with two eyes in a dark rounded body with two antennae.
-void paintTVThumb(Canvas canvas, Size size) {
-  final w = size.width, h = size.height;
-  final unit = w / 18;
-  final body = Rect.fromLTWH(1 * unit, 3.2 * unit, 16 * unit, h - 4.2 * unit);
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(body.inflate(0.9 * unit), Radius.circular(4.6 * unit)),
-    Paint()..color = BiliColors.thumbRim,
-  );
+/// Both Lotties, parsed once for the whole app. Every bar paints through the same two drawables, one at a time.
+final class _TvFaces {
+  _TvFaces(LottieComposition looking, LottieComposition blinking)
+    // Frames in between, as the iPhone draws the eyes sliding, rather than the files' 30 fps steps.
+    : _looking = LottieDrawable(looking, frameRate: FrameRate.max),
+      _blinking = LottieDrawable(blinking, frameRate: FrameRate.max),
+      blinkDuration = blinking.duration;
 
-  final antennae = Path()
-    ..moveTo(6.2 * unit, body.top + 0.6 * unit)
-    ..lineTo(4.2 * unit, 0.9 * unit)
-    ..moveTo(11.8 * unit, body.top + 0.6 * unit)
-    ..lineTo(13.8 * unit, 0.9 * unit);
-  canvas.drawPath(
-    antennae,
-    Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5 * unit
-      ..strokeCap = StrokeCap.round
-      ..color = BiliColors.thumbBody,
-  );
+  final LottieDrawable _looking;
+  final LottieDrawable _blinking;
+  final Duration blinkDuration;
 
-  canvas.drawRRect(RRect.fromRectAndRadius(body, Radius.circular(3.8 * unit)), Paint()..color = BiliColors.thumbBody);
-  final screen = Rect.fromLTRB(
-    body.left + 1.7 * unit,
-    body.top + 1.5 * unit,
-    body.right - 1.7 * unit,
-    body.bottom - 1.5 * unit,
-  );
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(screen, Radius.circular(2.2 * unit)),
-    Paint()..color = BiliColors.thumbScreen,
-  );
+  static _TvFaces? loaded;
+  static Future<void>? _loading;
 
-  final eye = Size(1.7 * unit, math.min(4.2 * unit, screen.height * 0.5));
-  final eyePaint = Paint()..color = BiliColors.thumbBody;
-  for (final dx in [-2.7 * unit, 2.7 * unit]) {
-    final rect = Rect.fromCenter(center: screen.center.translate(dx, 0), width: eye.width, height: eye.height);
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, Radius.circular(eye.width / 2)), eyePaint);
+  static Future<void> load() => _loading ??= () async {
+    try {
+      final faces = await Future.wait([
+        AssetLottie(SeekBar.lookingAsset).load(),
+        AssetLottie(SeekBar.blinkingAsset).load(),
+      ]);
+      loaded = _TvFaces(faces[0], faces[1]);
+    } catch (error, stack) {
+      _loading = null;
+      FlutterError.reportError(FlutterErrorDetails(exception: error, stack: stack, library: 'seek bar'));
+    }
+  }();
+
+  void draw(Canvas canvas, Rect rect, {required double progress, required bool blinking}) {
+    final face = blinking ? _blinking : _looking;
+    face.setProgress(progress);
+    face.draw(canvas, rect);
   }
 }
 
