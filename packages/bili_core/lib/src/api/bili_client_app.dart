@@ -41,11 +41,11 @@ final class TVLoginConfirmed extends TVLoginState {
 /// The TV login's code, asked as PiliPlus's `getHDcode` asks it.
 const _tvCodeFields = {'local_id': '0', 'platform': 'android', 'mobi_app': 'android_hd'};
 
-/// The app token's login: a TV login code, confirmed with the web login's cookies, then polled for the token. Both
-/// the code and the poll are signed with [AppSigner.android] (the Android HD key), so the token pairs with every
-/// official call.
+/// The app token's login: a TV login code, confirmed in the official app (its confirm page takes nothing else: a call
+/// with the web login's cookies gets -101), then polled for the token. Both the code and the poll are signed with
+/// [AppSigner.android] (the Android HD key), so the token pairs with every official call.
 extension BiliClientApp on BiliClient {
-  /// The URL is Bilibili's confirm page; [confirmTvLogin] confirms it without the page.
+  /// The URL is Bilibili's confirm page.
   Future<({String url, String authCode})> tvAuthCode() {
     final form = AppSigner.android.signed(_tvCodeFields, ts: _unixSeconds);
     return post(
@@ -62,11 +62,6 @@ extension BiliClientApp on BiliClient {
       },
     );
   }
-
-  /// PiliPlus's "cookie转access_key": the web login confirms the code as tapping 确认 on its page would. The client
-  /// adds the cookies and the `csrf` field; a refusal throws, and the page is the way left.
-  Future<void> confirmTvLogin(String authCode) =>
-      postVoid('/x/passport-tv-login/h5/qrcode/confirm', form: {'auth_code': authCode}, host: BiliClient.passport);
 
   Future<TVLoginState> tvPoll(String authCode) async {
     final form = AppSigner.android.signed({'auth_code': authCode, 'local_id': '0'}, ts: _unixSeconds);

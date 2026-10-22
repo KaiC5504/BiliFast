@@ -4,41 +4,12 @@ import 'package:test/test.dart';
 import 'app_signer_test.dart' show androidSign, makeClient, pollPath;
 import 'fake_http.dart';
 
-const confirmPath = '/x/passport-tv-login/h5/qrcode/confirm';
 const renewPath = '/x/passport-login/oauth2/refresh_token';
 
 // Every value is made up.
 final held = AppToken(accessToken: 'OLD-ACCESS', refreshToken: 'OLD-REFRESH', mid: 7, expiresAt: DateTime.utc(2024, 1));
 
 void main() {
-  group('confirm', () {
-    test('posts the auth code with the web login\'s cookies and csrf', () async {
-      final http = FakeHTTP();
-      http.routes[confirmPath] = (200, '{"code":0,"message":"0","ttl":1}');
-      await makeClient(http).confirmTvLogin('AUTH1');
-      final request = http.requestsTo(confirmPath).single;
-      expect(request.method, 'POST');
-      expect(request.url.toString(), 'https://passport.bilibili.com$confirmPath');
-      expect(formFields(http.bodyText(request)), {'auth_code': 'AUTH1', 'csrf': 'TOKEN'});
-      expect(request.headers['Cookie'], contains('SESSDATA=sess'));
-    });
-
-    test('a refusal throws its code', () async {
-      final http = FakeHTTP();
-      http.routes[confirmPath] = (200, '{"code":86096,"message":"请使用最新版本扫码登录"}');
-      await expectLater(
-        makeClient(http).confirmTvLogin('AUTH1'),
-        throwsA(const BiliError.api(code: 86096, message: '请使用最新版本扫码登录')),
-      );
-    });
-
-    test('without the web login nothing is sent', () async {
-      final http = FakeHTTP();
-      await expectLater(makeTestClient(http).confirmTvLogin('AUTH1'), throwsA(isA<BiliAPIError>()));
-      expect(http.requests, isEmpty);
-    });
-  });
-
   group('poll', () {
     Future<TVLoginState> poll(String data) {
       final http = FakeHTTP();

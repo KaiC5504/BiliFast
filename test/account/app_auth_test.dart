@@ -6,7 +6,6 @@ import 'dart:math';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/app_auth.dart';
-import 'package:bilifast/account/app_auth_page.dart';
 import 'package:bilifast/account/app_auth_prompt.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
@@ -18,7 +17,6 @@ import 'fake_web_cookies.dart';
 
 const spiPath = '/x/frontend/finger/spi';
 const authCodePath = '/x/passport-tv-login/qrcode/auth_code';
-const confirmPath = '/x/passport-tv-login/h5/qrcode/confirm';
 const pollPath = '/x/passport-tv-login/qrcode/poll';
 const renewPath = '/x/passport-login/oauth2/refresh_token';
 const likePath = '/x/v2/view/like';
@@ -103,10 +101,14 @@ class Events implements LogSink {
 class Harness {
   Harness(this.environment, this.auth, this.http, this.keychain, this.pages);
 
+  /// Whether the official app opens; when it does, the user is back at once.
+  bool clientInstalled = true;
+
   final AppEnvironment environment;
   final TokenAppAuth auth;
   final CannedHttp http;
   final TokenKeychain keychain;
+  /// The confirm pages opened in the official app.
   final List<Uri> pages;
 
   BiliClient get client => environment.client;
@@ -115,7 +117,6 @@ class Harness {
 final prompt = find.byKey(const ValueKey('app-auth-prompt'));
 final authorize = find.byKey(const ValueKey('settings-confirm-授权'));
 final cancel = find.byKey(const ValueKey('settings-confirm-取消'));
-final confirmPage = find.text('confirm page');
 
 void main() {
   late BuildContext host;
@@ -137,7 +138,6 @@ void main() {
     final http = Canned.http(loggedIn: loggedIn)
       ..routes[spiPath] = (200, '{"code":0,"message":"ok","data":{"b_3":"B3","b_4":"B4"}}')
       ..routes[authCodePath] = (200, authCodeReply)
-      ..routes[confirmPath] = (200, reply(0))
       ..routes[pollPath] = (200, confirmed);
     final keychain = TokenKeychain(cookies: loggedIn ? Canned.cookies : null, token: token);
     final environment = await AppEnvironment.load(
@@ -148,17 +148,17 @@ void main() {
     );
     final navigator = GlobalKey<NavigatorState>();
     final pages = <Uri>[];
+    late final Harness harness;
     final auth = TokenAppAuth(
       environment: environment,
       navigator: navigator,
       confirm: confirm ?? showAppAuthPrompt,
       devicePath: () => devicePath,
       pollInterval: const Duration(milliseconds: 100),
-      pagePollInterval: const Duration(seconds: 1),
-      pageTimeout: const Duration(seconds: 10),
-      confirmPage: (url, cookies) {
-        pages.add(url);
-        return MaterialPageRoute<bool>(builder: (_) => const Scaffold(body: Text('confirm page')));
+      confirmInClient: (page) async {
+        if (!harness.clientInstalled) return false;
+        pages.add(page);
+        return true;
       },
       logger: logger,
     );
@@ -174,7 +174,7 @@ void main() {
         ),
       ),
     );
-    return Harness(environment, auth, http, keychain, pages);
+    return harness = Harness(environment, auth, http, keychain, pages);
   }
 
   /// The toast's two seconds, so no timer is left when the test ends.
@@ -564,26 +564,10 @@ void main() {
     });
   });
 
-  group('the confirm page', () {
-    testWidgets('on the PC it says to confirm on the phone, and ✕ closes it answering false', (tester) async {
-      await mount(tester);
-      final closed = Navigator.of(host).push(AppAuthPage.route(Uri.parse('https://passport.bilibili.com/x'), {}));
-      await tester.pumpAndSettle();
-      expect(find.text('授权官方接口'), findsOneWidget);
-      expect(find.text('请在手机上授权'), findsOneWidget);
-
-      // As ghosthand presses it on the PC.
-      final semantics = tester.ensureSemantics();
-      tester.semantics.tap(find.semantics.byLabel('关闭'));
-      await tester.pumpAndSettle();
-      semantics.dispose();
-      expect(await closed, isFalse);
-      expect(find.byType(AppAuthPage), findsNothing);
-    });
-  });
-
   group('request', () {
-    testWidgets('授权 confirms with the web login, polls, keeps the token and toasts', (tester) async {
+    testWidgets('授权 opens the confirm page in the official app, polls on return, keeps the token and toasts', (
+      tester,
+    ) async {
       final h = await mount(tester);
       await h.environment.refreshAccount();
       final answer = h.auth.request(host);
@@ -602,11 +586,11 @@ void main() {
       expect(h.auth.authorized, isTrue);
       expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
       expect(jsonDecode(h.keychain.saves.single), h.client.appToken?.toJson());
-      expect(h.http.paths.skip(1), [authCodePath, confirmPath, pollPath]);
-      final confirm = h.http.to(confirmPath).single;
-      expect(utf8.decode(confirm.body!), 'auth_code=FAKE-CODE&csrf=j');
-      expect(confirm.headers['Cookie'], contains('SESSDATA=s'));
-      expect(h.pages, isEmpty);
+      expect(h.http.paths.skip(1), [authCodePath, pollPath]);
+      expect(h.pages.single.toString(), 'https://passport.bilibili.com/h5-app/passport/auth/scan?qrcode_id=QRFAKE');
+      for (final call in h.http.to(authCodePath).followedBy(h.http.to(pollPath))) {
+        expect(call.headers['Cookie'], isNull, reason: 'the TV login is signed, never sent the web login');
+      }
       await settle(tester);
       expectNoSecretsLogged();
     });
@@ -682,75 +666,35 @@ void main() {
       expect(h.http.to(authCodePath), hasLength(1));
     });
 
-    testWidgets('a refused confirm opens the page, polls while it is up, and closes it with the token', (tester) async {
-      final h = await mount(tester);
-      h.http.routes[confirmPath] = (200, '{"code":86096,"message":"请使用最新版本扫码登录"}');
-      h.http.routes[pollPath] = (200, waiting);
+    testWidgets('without the official app nothing is polled and the toast says to install it', (tester) async {
+      final h = await mount(tester)..clientInstalled = false;
       await h.environment.refreshAccount();
       final answer = h.auth.request(host);
       await tester.pumpAndSettle();
       await tester.tap(authorize);
       await tester.pumpAndSettle();
-      expect(confirmPage, findsOneWidget);
-      expect(h.pages.single.toString(), startsWith('https://passport.bilibili.com/h5-app/passport/auth/scan'));
-
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump(const Duration(seconds: 1));
-      expect(h.http.to(pollPath), hasLength(2));
-      expect(h.auth.authorized, isFalse);
-
-      h.http.routes[pollPath] = (200, confirmed);
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-      expect(confirmPage, findsNothing);
-      expect(await answer, isTrue);
-      expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
-      expect(find.text('授权成功'), findsOneWidget);
+      expect(await answer, isFalse);
+      expect(h.http.to(pollPath), isEmpty);
+      expect(find.text('授权失败：请先安装哔哩哔哩客户端'), findsOneWidget);
       await settle(tester);
       expectNoSecretsLogged();
     });
 
-    testWidgets('closing the page stops the polls and answers false', (tester) async {
+    testWidgets('a code that ran out while the user was away toasts 确认已超时', (tester) async {
       final h = await mount(tester);
-      h.http.routes[confirmPath] = (200, '{"code":-403,"message":"访问权限不足"}');
-      h.http.routes[pollPath] = (200, waiting);
+      h.http.routes[pollPath] = (200, '{"code":86038,"message":"二维码已失效","data":null}');
       await h.environment.refreshAccount();
       final answer = h.auth.request(host);
       await tester.pumpAndSettle();
       await tester.tap(authorize);
       await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 1));
-      final polled = h.http.to(pollPath).length;
-
-      Navigator.of(tester.element(confirmPage)).pop(false);
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 5));
       expect(await answer, isFalse);
-      expect(h.http.to(pollPath).length, lessThanOrEqualTo(polled + 1));
-      expect(find.textContaining('授权失败'), findsNothing);
-    });
-
-    testWidgets('a page left up past its time closes with 授权失败', (tester) async {
-      final h = await mount(tester);
-      h.http.routes[confirmPath] = (200, '{"code":-403,"message":"访问权限不足"}');
-      h.http.routes[pollPath] = (200, waiting);
-      await h.environment.refreshAccount();
-      final answer = h.auth.request(host);
-      await tester.pumpAndSettle();
-      await tester.tap(authorize);
-      await tester.pumpAndSettle();
-      for (var second = 0; second < 10; second++) {
-        await tester.pump(const Duration(seconds: 1));
-      }
-      await tester.pumpAndSettle();
-      expect(h.http.to(pollPath), hasLength(10));
-      expect(confirmPage, findsNothing);
-      expect(await answer, isFalse);
-      expect(find.text('授权失败：请稍后重试'), findsOneWidget);
+      expect(h.http.to(pollPath), hasLength(1));
+      expect(find.text('授权失败：确认已超时，请重试'), findsOneWidget);
       await settle(tester);
     });
 
-    testWidgets('a confirm the poll never sees stops after a few polls with 授权失败', (tester) async {
+    testWidgets('back without confirming: a few polls, then 授权失败', (tester) async {
       final h = await mount(tester);
       h.http.routes[pollPath] = (200, waiting);
       await h.environment.refreshAccount();
@@ -762,9 +706,8 @@ void main() {
       }
       expect(await answer, isFalse);
       expect(h.http.to(pollPath), hasLength(TokenAppAuth.quickPolls));
-      expect(h.pages, isEmpty);
       await tester.pump();
-      expect(find.text('授权失败：请稍后重试'), findsOneWidget);
+      expect(find.text('授权失败：未在哔哩哔哩中确认'), findsOneWidget);
       await settle(tester);
     });
 

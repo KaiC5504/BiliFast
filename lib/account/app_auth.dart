@@ -11,11 +11,11 @@ import '../app/app_environment.dart';
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_setup.dart' show supportFilePath;
 import '../shared/toast.dart';
-import 'app_auth_page.dart';
+import 'app_auth_client.dart';
 import 'app_auth_prompt.dart';
 
-/// The official API's login, the app token (PiliPlus's `access_key`): loaded at launch, got by one confirm with the
-/// web login's cookies, renewed once near its end, dropped on 退出登录 or when Bilibili rejects it. What needs it
+/// The official API's login, the app token (PiliPlus's `access_key`): loaded at launch, got by one confirm in the
+/// official app, renewed once near its end, dropped on 退出登录 or when Bilibili rejects it. What needs it
 /// calls [request] rather than failing.
 abstract interface class AppAuth implements Listenable {
   bool get authorized;
@@ -89,12 +89,10 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     required this.environment,
     required this.navigator,
     this.confirm = showAppAuthPrompt,
-    this.confirmPage = AppAuthPage.route,
+    this.confirmInClient = confirmInBilibili,
     this.devicePath = appDevicePath,
     DateTime Function()? now,
     this.pollInterval = const Duration(seconds: 1),
-    this.pagePollInterval = const Duration(seconds: 2),
-    this.pageTimeout = const Duration(minutes: 2),
     Logger? logger,
   }) : _now = now ?? DateTime.now,
        _logger = logger ?? Logger.shared;
@@ -107,27 +105,21 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
   /// Asks before anything is sent, completing with whether 授权 was pressed.
   final Future<bool> Function(BuildContext context) confirm;
 
-  /// Bilibili's own confirm page, opened when the confirm call is refused.
-  final Route<bool> Function(Uri url, Map<String, String> cookies) confirmPage;
+  /// Opens Bilibili's confirm page in the official app and completes once the user is back: false when there was
+  /// no app to open.
+  final Future<bool> Function(Uri page) confirmInClient;
 
   /// Null keeps the device id for this launch only.
   final String? Function() devicePath;
 
-  /// Between the polls after the confirm call, which should find the token at once.
+  /// Between the polls once the user is back, the first of which should find the token.
   final Duration pollInterval;
-
-  /// Between the polls while [confirmPage] is up, for at most [pageTimeout] (the code itself lasts 180 s).
-  final Duration pagePollInterval;
-  final Duration pageTimeout;
 
   final DateTime Function() _now;
   final Logger _logger;
 
-  /// Polls after a confirm call that went through: under 10, so a confirm the poll never sees can't loop.
+  /// Polls once the user is back: under 10, so a confirm the poll never sees can't loop.
   static const quickPolls = 5;
-
-  /// Polls in a row that may fail to reach Bilibili while the page is up.
-  static const pageFailuresAllowed = 5;
 
   static final _buvidShape = RegExp(r'^XY[0-9A-F]{35}$');
 
@@ -208,7 +200,6 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
 
   Future<bool> _ask(BuildContext context) async {
     if (environment.account is! LoggedIn) return false;
-    final pages = Navigator.maybeOf(context, rootNavigator: true);
     if (!await confirm(context)) {
       _logger.info(LogCategory.app, 'app auth declined');
       _setDeclined(true);
@@ -216,11 +207,7 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     }
     _logger.info(LogCategory.app, 'app auth asked');
     try {
-      final token = await _fetch(pages);
-      if (token == null) {
-        _logger.info(LogCategory.app, 'app auth closed');
-        return authorized;
-      }
+      final token = await _fetch();
       // A logout, or another account, while the confirm was out: the token isn't this login's to keep.
       if (environment.account is! LoggedIn || environment.mid != token.mid) {
         _logger.info(LogCategory.app, 'app auth discarded', {'reason': 'account changed'});
@@ -233,83 +220,32 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
       return true;
     } catch (error) {
       _logger.warn(LogCategory.app, 'app auth failed', _failure(error));
-      _toast(context.mounted ? context : null, '授权失败：${requestFailureMessage(error, fallback: '请稍后重试')}');
+      final reason = error is _AuthFailure ? error.message : requestFailureMessage(error, fallback: '请稍后重试');
+      _toast(context.mounted ? context : null, '授权失败：$reason');
       return authorized;
     }
   }
 
-  /// The code, the confirm with the web login, then a few polls; a refused confirm opens Bilibili's page instead.
-  /// Null when the page was closed by hand.
-  Future<AppToken?> _fetch(NavigatorState? pages) async {
+  /// The code, its confirm page in the official app, then a few polls once the user is back.
+  Future<AppToken> _fetch() async {
     final code = await _client.tvAuthCode();
-    try {
-      await _client.confirmTvLogin(code.authCode);
-    } on BiliError catch (error) {
-      if (error is! BiliAPIError && error is! BiliHTTPError) rethrow;
-      _logger.info(LogCategory.app, 'app auth confirm refused', _failure(error));
-      return _confirmOnPage(pages ?? navigator.currentState, code.url, code.authCode);
-    }
+    final page = Uri.tryParse(code.url);
+    if (page == null || page.scheme != 'https') throw const _AuthFailure('bad page', '请稍后重试');
+    final opened = await confirmInClient(page);
+    _logger.info(LogCategory.app, 'app auth client', {'opened': opened});
+    if (!opened) throw const _AuthFailure('no client', '请先安装哔哩哔哩客户端');
     for (var poll = 0; poll < quickPolls; poll++) {
       if (poll > 0) await Future<void>.delayed(pollInterval);
       switch (await _client.tvPoll(code.authCode)) {
         case TVLoginConfirmed(:final token):
           return token;
         case TVLoginExpired():
-          throw const _AuthFailure('expired');
+          throw const _AuthFailure('expired', '确认已超时，请重试');
         case TVLoginWaiting():
           break;
       }
     }
-    throw const _AuthFailure('unconfirmed');
-  }
-
-  Future<AppToken?> _confirmOnPage(NavigatorState? pages, String url, String authCode) async {
-    final page = Uri.tryParse(url);
-    if (pages == null || !pages.mounted || page == null || page.scheme != 'https') {
-      throw const _AuthFailure('no page');
-    }
-    final route = confirmPage(page, environment.cookies.all);
-    var open = true;
-    unawaited(pages.push(route).whenComplete(() => open = false));
-    var failures = 0;
-    try {
-      final polls = pageTimeout.inMilliseconds ~/ pagePollInterval.inMilliseconds;
-      for (var poll = 0; poll < polls; poll++) {
-        await Future<void>.delayed(pagePollInterval);
-        if (!open) return null;
-        final TVLoginState state;
-        try {
-          state = await _client.tvPoll(authCode);
-        } catch (error) {
-          // A dropped connection while the user reads the page; only a run of them ends it.
-          if ((error is BiliError && error is! BiliNetworkError) || ++failures >= pageFailuresAllowed) rethrow;
-          continue;
-        }
-        failures = 0;
-        switch (state) {
-          case TVLoginConfirmed(:final token):
-            return token;
-          case TVLoginExpired():
-            throw const _AuthFailure('expired');
-          case TVLoginWaiting():
-            break;
-        }
-      }
-      if (!open) return null;
-      throw const _AuthFailure('timed out');
-    } finally {
-      if (open) _close(route);
-    }
-  }
-
-  void _close(Route<Object?> route) {
-    final pages = route.navigator;
-    if (pages == null || !route.isActive) return;
-    if (route.isCurrent) {
-      pages.pop();
-    } else {
-      pages.removeRoute(route);
-    }
+    throw const _AuthFailure('unconfirmed', '未在哔哩哔哩中确认');
   }
 
   /// One call; a failure keeps the token, which is good until its date. A rejection drops it through [_rejected].
@@ -513,11 +449,15 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
   }
 }
 
-/// The token didn't come: the code ran out, the poll never saw the confirm, or there was no page to confirm on.
+/// The token didn't come: no official app to confirm in, the code ran out, or the poll never saw the confirm.
 final class _AuthFailure implements Exception {
-  const _AuthFailure(this.reason);
+  const _AuthFailure(this.reason, this.message);
 
+  /// For the log.
   final String reason;
+
+  /// For the toast.
+  final String message;
 
   @override
   String toString() => 'AppAuthFailure($reason)';

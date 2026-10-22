@@ -16,7 +16,7 @@ class AppAuthPromptRoute extends PopupRoute<bool> {
   AppAuthPromptRoute({required this.reduceMotion});
 
   static const title = '授权官方接口';
-  static const message = '将用当前登录获取官方接口的授权，登录设备中会多出一台设备';
+  static const message = '将打开哔哩哔哩客户端，点确认登录后返回本应用即可。登录设备中会多出一台设备';
   static const action = '授权';
 
   final bool reduceMotion;

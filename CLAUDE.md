@@ -81,13 +81,17 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   搜索's 用户 rows open the space. The space's calls are the official app's (`app.bilibili.com`, `AppSigner.android`);
   关注 stays on the web calls, kept in step everywhere by `FollowBook`.
 - Slice 13, 我的收藏, 稍后再看 and the official login, 1.0.0 (20): the app token (`AppAuth`), confirmed once with the
-  web login (its confirm page as the fallback), kept with its expiry, renewed once within 30 days of the end, asked
+  web login (see (21)), kept with its expiry, renewed once within 30 days of the end, asked
   again when rejected; PiliPlus's split by host. Official with the token: 推荐 (personalised, videos only; the web
   feed without the token), its ⋮ sheet with 不感兴趣 and its reasons (90-92), 点赞, 投币 and 不喜欢 (now live, 88,
   89). 我的收藏 (80-84, 99-101): folders as cards or a list, a folder, 视频, 取消收藏, 创建 with a picked cover.
   稍后再看 (85, 86, 93-98): 全部 / 未看完, the sort, 播放全部, 删除, 一键清除, 批量管理 with 复制到 / 移动到. Settings
   files now live in the folder iOS names (path_provider): until (19) none survived a relaunch on the phone. Shipped
   without the Windows press-through (the PC was locked; KaiC's call), on widget tests' accessibility presses.
+- The official login's confirm, 1.0.0 (21): on (20) the confirm call with the web login got -101 (it takes only the
+  official app's own token, PiliPlus issue 2933), and its page in a web view said 请在哔哩哔哩客户端内打开. 授权 now
+  opens that page in the official app (`bilibili://browser?url=`); the user taps 确认 there and comes back, and the
+  return polls for the token (at most 5 polls). Without the official app it toasts 请先安装哔哩哔哩客户端.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -110,10 +114,10 @@ Open items, each waiting on its slice:
   stand-in sweep's findings (re-measure, then one fix round by screen group), the landscape title marquee with 章节,
   竖屏's 联合创作 and 合集 prefix, 弹幕设置's 查看更多 variant for the small player (waiting on KaiC's screenshot), and
   12's first comment drawing about 3% wide on (16), cause unknown.
-- The official login on the phone (1.0.0 (20)): the confirm call (`/x/passport-tv-login/h5/qrcode/confirm`, its fields
-  inferred) or its page fallback, 推荐's mix against the official 首页, 不感兴趣's reason ids (inferred), 我的收藏's
+- The official login on the phone (1.0.0 (21)): the confirm in the official app (`bilibili://browser?url=` is
+  untried on iOS; if it fails, the next way is the TV QR saved to Photos and scanned from 扫一扫's album), 推荐's mix against the official 首页, 不感兴趣's reason ids (inferred), 我的收藏's
   视频 (the official app's `/x/v3/fav/tab/fav` with cookies, untried), the cover upload, and the launch log's
-  `support folder` line showing the settings files kept (字体, 弹幕设置, 搜索历史 reset on every relaunch before).
+  `support folder` line (on (20) the danmaku settings came back after a relaunch: loaded, changed true).
   Not built: 追更, the folder search, 批量 in folders, folder rows' progress line (the web list has none), 卡片/列表
   remembered across launches. The Windows press-through of slice 13 is still owed.
 - Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
@@ -160,7 +164,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     and 投稿's list (`space_videos.dart`).
   - `lib/favourites/`: 我的收藏 (folders, a folder, 视频, the 创建 page `new_folder_page.dart` that 稍后再看 shares).
   - `lib/watch_later/`: 稍后再看 (the list, its sheets and 批量管理).
-  - `lib/account/app_auth*.dart`: the official login's token, its confirm and fallback page.
+  - `lib/account/app_auth*.dart`: the official login's token, its confirm, and the hand-off of Bilibili's confirm page
+    to the official app (`app_auth_client.dart`).
   - `lib/player/`: the `BiliPlayer` interface and its iOS and Windows players. `lib/playback/`: the engine's setup,
     the shared engine (`shared_engine.dart`: one isolate, a lease per controller), the playback controller, codec
     memory, the danmaku feed.
@@ -288,7 +293,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   the Android signature, never cookies (`bili_client_official.dart`); every other call carries the web login's cookies.
   The token never reaches a log, a fixture or an error message; an official account call without it throws
   `BiliError.noAppToken` and its feature asks `AppAuth.request` instead. 推荐 is never fetched from the official feed
-  without the token (that feed is generic).
+  without the token (that feed is generic). The token is confirmed only in the official app: Bilibili's confirm call
+  answers the web login -101, and its page refuses any web view.
 - UP主空间's calls are the official app's (`app.bilibili.com`), signed with `AppSigner.android` (a public pair, the
   same for everyone; KaiC allowed it in the repo) and sent with no cookies. An archive item's `uri` carries a signed
   play link: never keep, log or put it in a fixture. 关注 stays on the web card and `/x/relation/modify`.
