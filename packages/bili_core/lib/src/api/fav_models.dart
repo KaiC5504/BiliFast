@@ -254,20 +254,50 @@ final class FavTabPage {
   final int total;
 }
 
-/// 视频's id among `/x/v3/fav/tab`'s tabs and their sub tabs (`FavoritesTabs`), found by its name; null when the
-/// answer has no such tab.
+/// 视频's id among `/x/v3/fav/tab`'s tabs and their sub tabs (`FavoritesTabs`), found by its name at any depth, the
+/// id as a number or a string; null when the answer has no such tab. 1.0.0 (21) found none with the stricter read.
 int? favVideosTabId(Object? json) {
-  final data = JsonObject.from(json, 'tabs');
-  int? find(List<JsonObject> tabs) {
-    for (final tab in tabs) {
-      if (tab.string('tab_name') == _videosTabName) return tab.integer('tab_id');
+  int? found;
+  void visit(Object? node) {
+    if (found != null) return;
+    if (node is Map) {
+      if (_tabName(node)?.trim() == _videosTabName) found = _tabId(node);
+      for (final value in node.values) {
+        visit(value);
+      }
+    } else if (node is List) {
+      for (final value in node) {
+        visit(value);
+      }
     }
-    return null;
   }
 
-  final tabs = data.lenientList('tabs', (json) => JsonObject.from(json));
-  return find([for (final tab in tabs) ...tab.lenientList('sub_tabs', (json) => JsonObject.from(json))]) ?? find(tabs);
+  visit(json);
+  return found;
 }
+
+/// The tabs' names and ids, nested as the answer has them, for the log when [favVideosTabId] finds nothing.
+String favTabsOutline(Object? json) {
+  if (json is! Map) return json == null ? 'no data' : json.runtimeType.toString();
+  String tabs(Object? list) => list is List
+      ? [
+          for (final tab in list)
+            if (tab is Map) '${_tabName(tab)}=${_tabId(tab)}${tab['sub_tabs'] == null ? '' : '[${tabs(tab['sub_tabs'])}]'}',
+        ].join(', ')
+      : '$list';
+  return 'keys ${json.keys.join(',')}; tabs ${tabs(json['tabs'])}';
+}
+
+String? _tabName(Map<Object?, Object?> tab) => switch (tab['tab_name'] ?? tab['name'] ?? tab['title']) {
+  final String name => name,
+  _ => null,
+};
+
+int? _tabId(Map<Object?, Object?> tab) => switch (tab['tab_id'] ?? tab['sub_tab_id'] ?? tab['id']) {
+  final int id => id,
+  final String id => int.tryParse(id),
+  _ => null,
+};
 
 const _videosTabName = '视频';
 

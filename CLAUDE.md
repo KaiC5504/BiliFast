@@ -93,6 +93,9 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   opens that page in the official app (`bilibili://browser?url=`); the user taps 确认 there and comes back, and the
   return polls for the token (at most 5 polls). Without the official app it toasts 请先安装哔哩哔哩客户端. Passed on
   KaiC's phone.
+- 我的收藏's 视频, 1.0.0 (22): on (21) `/x/v3/fav/tab` answered code 0, but no tab named 视频 was found. The finder
+  now looks at any depth and takes the id as a number or a string; a miss logs the tabs' names and ids (`fav tabs
+  without 视频`).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):

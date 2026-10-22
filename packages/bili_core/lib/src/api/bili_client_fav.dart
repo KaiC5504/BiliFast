@@ -44,8 +44,20 @@ extension BiliClientFav on BiliClient {
   }
 
   /// 视频's tab id, from the tabs the official app's 我的收藏 is built from.
-  Future<int?> favVideosTab() =>
-      _getIfPresent<int?>('/x/v3/fav/tab', query: {'tab_id': '0'}, signed: false, decode: favVideosTabId);
+  /// An answer without it logs its tabs' names and ids.
+  Future<int?> favVideosTab() async {
+    const path = '/x/v3/fav/tab';
+    final envelope = await _getEnvelope(
+      path,
+      query: {'tab_id': '0'},
+      signed: false,
+      decode: (json) => (id: favVideosTabId(json), outline: favTabsOutline(json)),
+    );
+    if (envelope.code != 0) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');
+    final id = envelope.data?.id;
+    if (id == null) _logger.warn(LogCategory.api, 'fav tabs without 视频', {'tabs': envelope.data?.outline ?? 'no data'});
+    return id;
+  }
 
   /// A page of 视频, the latest favourite first; [after] is the last page's `FavTabPage.next`.
   Future<FavTabPage> favAllVideos({required int tabId, FavTabCursor? after}) async {

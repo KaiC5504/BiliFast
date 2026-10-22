@@ -153,7 +153,57 @@ void main() {
     expect(favVideosTabId(<String, Object?>{}), isNull);
   });
 
-  test('视频 starts from zero and pages by the answer’s cursor', () async {
+  test('a 视频 tab is found at any depth, its id a number or a string', () {
+    expect(
+      favVideosTabId({
+        'default_tab': 1,
+        'tabs': {
+          'items': [
+            {
+              'tab_id': '1',
+              'tab_name': '收藏',
+              'sub_tabs': [
+                {'tab_id': '12', 'tab_name': ' 视频 '},
+              ],
+            },
+          ],
+        },
+      }),
+      12,
+    );
+    expect(
+      favVideosTabId({
+        'tabs': [
+          {'id': 7, 'name': '视频'},
+        ],
+      }),
+      7,
+    );
+  });
+
+  test("an answer without 视频 is outlined for the log by its tabs' names and ids", () async {
+    expect(
+      favTabsOutline({
+        'default_tab': 1,
+        'tabs': [
+          {
+            'tab_id': 1,
+            'tab_name': '收藏',
+            'sub_tabs': [
+              {'tab_id': 11, 'tab_name': '收藏夹'},
+            ],
+          },
+          {'tab_id': 2, 'tab_name': '追更'},
+        ],
+      }),
+      'keys default_tab,tabs; tabs 收藏=1[收藏夹=11], 追更=2',
+    );
+    expect(favTabsOutline(null), 'no data');
+    http.routes[tabsPath] = (200, '{"code":0,"message":"0","ttl":1,"data":{"tabs":[]}}');
+    expect(await client.favVideosTab(), isNull);
+  });
+
+    test('视频 starts from zero and pages by the answer’s cursor', () async {
     http.routes[tabFavPath] = (200, tabFavAnswer);
     final page = await client.favAllVideos(tabId: 12);
     expect(http.query(sent(tabFavPath)), {
