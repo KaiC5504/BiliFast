@@ -96,6 +96,39 @@ void main() {
     expect(done.cookies, {'SESSDATA': 'a%2Cb%2Cc%2Ad', 'bili_jct': 'ab', 'DedeUserID': '1', 'sid': 's1'});
   });
 
+  test("a login takes the session from the Set-Cookie headers package:http joined with commas", () async {
+    // As the phone's login answered on 2026-10-22: the session only in the headers, the url without it.
+    final http = FakeHTTP()
+      ..routes[pollPath] = (200, poll(0, url: 'https://www.bilibili.com/'))
+      ..routeHeaders[pollPath] = {
+        'set-cookie':
+            'SESSDATA=1a2b3c4d%2C1792648400%2Cab12c%2A21; Path=/; Domain=bilibili.com; '
+            'Expires=Tue, 20 Apr 2027 04:00:00 GMT; HttpOnly; Secure,'
+            'bili_jct=0123456789abcdef; Path=/; Domain=bilibili.com; Expires=Tue, 20 Apr 2027 04:00:00 GMT,'
+            'DedeUserID=12345; Path=/; Domain=bilibili.com,'
+            'DedeUserID__ckMd5=abcdef0123456789; Path=/; Domain=bilibili.com,'
+            'sid=s1; Path=/; Domain=bilibili.com,'
+            'other=x; Path=/',
+      };
+    final done = await makeTestClient(http).webLoginPoll('KEY1') as WebLoginDone;
+    expect(done.cookies, {
+      'SESSDATA': '1a2b3c4d%2C1792648400%2Cab12c%2A21',
+      'bili_jct': '0123456789abcdef',
+      'DedeUserID': '12345',
+      'DedeUserID__ckMd5': 'abcdef0123456789',
+      'sid': 's1',
+    });
+  });
+
+  test("a login with no session anywhere names what the answer held, never a value", () async {
+    final http = FakeHTTP()
+      ..routes[pollPath] = (200, poll(0, url: 'https://www.bilibili.com/?gourl=SECRETGO'))
+      ..routeHeaders[pollPath] = {'set-cookie': 'buvid=SECRETBUVID; Path=/'};
+    final thrown = await makeTestClient(http).webLoginPoll('KEY1').then<Object?>((_) => null, onError: (Object e) => e);
+    expect('$thrown', contains('headers: buvid; url names: gourl'));
+    expect('$thrown', isNot(contains('SECRET')));
+  });
+
   test('a login without SESSDATA or bili_jct throws without quoting the answer', () async {
     final http = FakeHTTP();
     final client = makeTestClient(http);

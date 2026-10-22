@@ -16,29 +16,33 @@ extension BiliClientLogin on BiliClient {
   );
 
   /// `GET /x/passport-login/web/qrcode/poll?qrcode_key=` on [BiliClient.passport]. The answer's own code is 0 for
-  /// every state; the state is `data.code`.
+  /// every state; the state is `data.code`. The session comes in the success's `Set-Cookie` headers (on 2026-10-22
+  /// its `url` held none), with the `url`'s query as a second source.
   Future<WebLoginPoll> webLoginPoll(String key) async {
+    const path = '/x/passport-login/web/qrcode/poll';
+    final sent = await _send(
+      method: 'GET',
+      path: path,
+      query: {'qrcode_key': key},
+      signed: false,
+      host: BiliClient.passport,
+      accept: 'application/json',
+    );
     final state = _checked(
-      await _getEnvelope(
-        '/x/passport-login/web/qrcode/poll',
-        query: {'qrcode_key': key},
-        signed: false,
-        host: BiliClient.passport,
-        decode: (json) {
-          final object = JsonObject.from(json);
-          return (
-            code: object.required(object.integer('code'), 'code'),
-            message: object.string('message') ?? '',
-            url: object.string('url') ?? '',
-          );
-        },
-      ),
+      _decodeEnvelope(sent, path, (json) {
+        final object = JsonObject.from(json);
+        return (
+          code: object.required(object.integer('code'), 'code'),
+          message: object.string('message') ?? '',
+          url: object.string('url') ?? '',
+        );
+      }),
     );
     return switch (state.code) {
       86101 => const WebLoginWaiting(scanned: false),
       86090 => const WebLoginWaiting(scanned: true),
       86038 => const WebLoginExpired(),
-      0 => WebLoginDone(_sessionCookies(state.url)),
+      0 => WebLoginDone(_sessionCookies(sent.response.headers['set-cookie'] ?? '', state.url)),
       _ => throw BiliError.api(code: state.code, message: state.message),
     };
   }
@@ -54,24 +58,41 @@ extension BiliClientLogin on BiliClient {
     return value;
   }
 
-  /// The session from the success's crossDomain link, whose query carries the cookies. Read by hand rather than with
-  /// [Uri.parse], whose errors quote the link.
-  static Map<String, String> _sessionCookies(String url) {
-    final start = url.indexOf('?');
-    var query = start < 0 ? '' : url.substring(start + 1);
-    final fragment = query.indexOf('#');
-    if (fragment >= 0) query = query.substring(0, fragment);
+  /// The session from the success's `Set-Cookie` headers, then its crossDomain link's query for any it lacks. Read by
+  /// hand rather than with [Uri.parse] or a cookie parser, whose errors quote what they read. A miss names what the
+  /// answer held, never a value.
+  static Map<String, String> _sessionCookies(String setCookie, String url) {
     final cookies = <String, String>{};
-    for (final pair in query.split('&')) {
+    final headerNames = <String>[];
+    // package:http joins the headers with commas, and Expires dates hold commas too: a cookie starts only where a
+    // name and `=` follow the comma.
+    for (final cookie in setCookie.split(RegExp(r',(?=\s*[A-Za-z0-9_]+=)'))) {
+      final pair = cookie.split(';').first.trim();
       final equals = pair.indexOf('=');
       if (equals <= 0) continue;
       final name = pair.substring(0, equals);
+      headerNames.add(name);
       if (!_webLoginCookies.contains(name)) continue;
       final value = _cookieValue(pair.substring(equals + 1));
       if (value != null && value.isNotEmpty) cookies[name] = value;
     }
+    final start = url.indexOf('?');
+    var query = start < 0 ? '' : url.substring(start + 1);
+    final fragment = query.indexOf('#');
+    if (fragment >= 0) query = query.substring(0, fragment);
+    final urlNames = <String>[];
+    for (final pair in query.split('&')) {
+      final equals = pair.indexOf('=');
+      if (equals <= 0) continue;
+      final name = pair.substring(0, equals);
+      urlNames.add(name);
+      if (!_webLoginCookies.contains(name) || cookies.containsKey(name)) continue;
+      final value = _cookieValue(pair.substring(equals + 1));
+      if (value != null && value.isNotEmpty) cookies[name] = value;
+    }
     if (!cookies.containsKey('SESSDATA') || !cookies.containsKey('bili_jct')) {
-      throw const BiliError.decoding('web login: no session in the answer');
+      final inUrl = url.isEmpty ? 'empty' : 'names: ${urlNames.join(',')}';
+      throw BiliError.decoding('web login: no session in the answer (headers: ${headerNames.join(',')}; url $inUrl)');
     }
     return cookies;
   }

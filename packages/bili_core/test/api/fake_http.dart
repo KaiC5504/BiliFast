@@ -15,6 +15,9 @@ final class FakeHTTP implements HTTPTransport {
   /// Keyed by host + path: answers 200 with this final URL, as a followed redirect would.
   Map<String, Uri> redirects = {};
 
+  /// Response headers for a route, keyed by path (lowercased names, as the transport gives them).
+  Map<String, Map<String, String>> routeHeaders = {};
+
   /// Checked before everything else; null passes the request on to the routes.
   (int, String)? Function(HTTPRequest request)? answer;
 
@@ -39,7 +42,12 @@ final class FakeHTTP implements HTTPTransport {
     }
     final route = routes[methodKey] ?? routes[path];
     if (route == null) return HTTPResponse(status: 404, headers: {}, body: Uint8List(0), finalURL: request.url);
-    return HTTPResponse(status: route.$1, headers: {}, body: utf8.encode(route.$2), finalURL: request.url);
+    return HTTPResponse(
+      status: route.$1,
+      headers: routeHeaders[path] ?? {},
+      body: utf8.encode(route.$2),
+      finalURL: request.url,
+    );
   }
 
   List<HTTPRequest> requestsTo(String path) => requests.where((request) => request.url.path == path).toList();
