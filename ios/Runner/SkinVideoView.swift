@@ -217,7 +217,7 @@ final class SkinVideoHostView: UIView {
       observations.append(looper.observe(\.status, options: [.initial, .new]) { @Sendable [weak self] looper, _ in
         guard looper.status == .failed else { return }
         let reason = skinVideoFailure(looper.error)
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
           MainActor.assumeIsolated { self?.fail(reason) }
         }
       })
@@ -228,7 +228,7 @@ final class SkinVideoHostView: UIView {
       observations.append(item.observe(\.status, options: [.initial, .new]) { @Sendable [weak self] item, _ in
         guard item.status == .failed else { return }
         let reason = skinVideoFailure(item.error)
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
           MainActor.assumeIsolated { self?.fail(reason) }
         }
       })
@@ -253,7 +253,7 @@ final class SkinVideoHostView: UIView {
     observations.append(
       playerLayer.observe(\.isReadyForDisplay, options: [.initial, .new]) { @Sendable [weak self] _, change in
         guard change.newValue == true else { return }
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
           MainActor.assumeIsolated { self?.firstFrameShown() }
         }
       })
