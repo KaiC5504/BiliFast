@@ -309,7 +309,7 @@ void main() {
       expect(keychain.deletes, ['cookies', 'app token']);
       expect(web.allClears, 1);
       expect(environment.account, isA<LoggedOut>());
-    }, skip: 'needs webLogout');
+    });
 
     test('a server logout that fails is logged, and the jar, keychain and web view are still emptied', () async {
       final keychain = _Keychain(const StoredCookies(_stored));
