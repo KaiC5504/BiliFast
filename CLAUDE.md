@@ -158,6 +158,14 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   The seek bar's TV is the official Lottie (`player_seek_bar_tv_1/2.json`): the eyes step 0.05 per drag update toward
   the drag's way, glide back on release, then it blinks; it no longer grows while held, the bar thickens to 4 pt
   (102).
+- 1.0.0 (31), covers from (30)'s log: with the connection kept open, covers still took 0.6-1.1 s because our box
+  size is made on demand (the CDN's `X-Cache-Status` said MISS on 8 of 10); the full-size picture is stored as is
+  (`@.avif` ready on 10/10, `@.webp` 8/10; ~0.38-0.41 s against ~0.55 s, the worst ~0.87-1.28 s against ~1.54 s, PC
+  timings). Every video cover asks the full size (`RemoteImage(cover: true)`, `CoverFormat`): AVIF on the iPhone,
+  decoded by Apple's ImageIO straight to the box's size (`PictureDecoder.swift` over Pigeon's `PictureHostApi`;
+  Flutter's engine can't read AVIF), webp on the PC and as the fallback (a failed AVIF fetches its webp; three in a
+  row turn AVIF off for the session). Decodes are keyed by their box, so memory stays as it was. Logs: `cover format`,
+  `avif decode failed`, `avif refused`, `avif off`, and `feed covers done` gains format and decodeMsMax.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -167,7 +175,11 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
-- (30) on the phone: `feed covers done` with warm/warmed and thirdMs/lastMs against (29)'s; `skin status bar` for
+- (31) on the phone: `cover format` should read avif and `feed covers done` show decodeMsMax with thirdMs/lastMs
+  below (30)'s (615-1120 / 796-1790 ms); any `avif decode failed`/`avif off` means ImageIO or the Swift side failed
+  (the covers then come as webp). Covers are only checked live on the phone: the PC's fake lists have none.
+- (30) on the phone, passed (KaiC, 2026-10-23) apart from the seek TV's eyes against the official app; still to read:
+  `feed covers done` with warm/warmed and thirdMs/lastMs against (29)'s; `skin status bar` for
   幸运塔罗星 (home, me, meNoCard and their picks: white expected); the brightness after full screen and after leaving
   the app; the seek TV's eyes and blink against the official app (102 shows the iPhone's eyes pausing and topping out
   near 0.85, which the Android rule doesn't; ours follows Android). Seen on the PC: 04's played part starts square and a
@@ -406,7 +418,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   and let go there, nothing refreshes (`feed pull cancelled`); the unseen answer may serve another pull within 10 s.
   Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`.
 - Pictures: every address passes `secureImageUrl` (https, and i1/i2.hdslb.com asked from i0, so one connection serves
-  them all and a precache and its draw share one address). On iOS downloads go through `PictureSession`'s one
+  them all and a precache and its draw share one address). Video covers ask the full-size picture (`CoverFormat`:
+  AVIF decoded by ImageIO on the iPhone, else webp), decoded at their box's size and keyed by it. On iOS downloads go through `PictureSession`'s one
   ephemeral URLSession (no cookies, no URL cache: `ImageDiskCache` is the cache); Windows and tests keep dart:io. A
   transport error's text carries the URL (cupertino_http's): log `PictureDownloadException`'s reason, never the text.
 - The status bar over a dressed header goes by the picture behind the clock and the icons (`skin_status_bar.dart`):
