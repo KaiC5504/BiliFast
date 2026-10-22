@@ -16,6 +16,7 @@ import '../devtools/log_forwarder.dart';
 import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
 import '../me/me_api.dart';
+import '../me/me_profile_store.dart';
 import '../playback/codec_memory.dart';
 import '../playback/playback_controller.dart';
 import '../playback/shared_engine.dart';
@@ -144,8 +145,9 @@ class AppPlayback with WidgetsBindingObserver {
 }
 
 /// What every page reaches: the account and API client, the official API's token, the players, 最近打开, the phone's
-/// rotation and levels, the font, the page body's, 搜索's, UP主空间's, 我的收藏's, 稍后再看's and 我的's calls, 关注 changes,
-/// 搜索历史, the login page, the log kept on the phone, and the log forwarder in dev builds (null otherwise).
+/// rotation and levels, the font, the page body's, 搜索's, UP主空间's, 我的收藏's, 稍后再看's and 我的's calls, 我的's last
+/// account, 关注 changes, 搜索历史, the login page, the log kept on the phone, and the log forwarder in dev builds (null
+/// otherwise).
 class AppServices {
   AppServices({
     required this.environment,
@@ -159,6 +161,7 @@ class AppServices {
     this._favouritesApi,
     this._watchLaterApi,
     this._meApi,
+    MeProfileStore? meProfile,
     this._skinApi,
     this.skinFolder,
     this._skin,
@@ -180,6 +183,7 @@ class AppServices {
        fonts = fonts ?? FontStore.memory(),
        pageApi = pageApi ?? ClientPageApi(environment.client),
        searchHistory = searchHistory ?? SearchHistoryStore.memory(),
+       meProfile = meProfile ?? MeProfileStore.memory(),
        danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
     this.blockRules =
         blockRules ?? BlockRuleStore(api: this.pageApi, isLoggedIn: () => environment.account is LoggedIn);
@@ -252,6 +256,9 @@ class AppServices {
 
   /// 我的's calls, made on first use like [searchApi].
   late final MeApi meApi = _meApi ?? ClientMeApi(environment.client);
+
+  /// The account 我的 last showed, kept on the phone (`me.json`) so a launch draws it at once.
+  final MeProfileStore meProfile;
 
   final SkinApi? _skinApi;
 

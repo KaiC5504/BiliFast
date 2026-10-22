@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
@@ -184,5 +186,43 @@ void main() {
     expect(http.to(Canned.navPath), hasLength(1));
     await environment.refreshAccount();
     expect(http.to(Canned.navPath), hasLength(2));
+  });
+
+  test('launch asks nav once: 首页\'s search word, signed with the WBI keys, shares the account check\'s', () async {
+    const searchDefaultPath = '/x/web-interface/wbi/search/default';
+    final http = Canned.http()
+      ..routes[searchDefaultPath] = (200, '{"code":0,"message":"0","data":{"show_name":"默认词"}}')
+      ..gates[Canned.navPath] = Completer<void>();
+    final environment = await load(FakeKeychain(const StoredCookies(Canned.cookies)), http);
+    final check = environment.refreshAccount();
+    final word = environment.client.searchDefaultWord();
+    await pumpEventQueue();
+    http.gates[Canned.navPath]!.complete();
+    expect(await check, isTrue);
+    expect(await word, '默认词');
+    expect(http.to(Canned.navPath), hasLength(1));
+    expect(http.to(searchDefaultPath), hasLength(1));
+  });
+
+  test('the check keeps its logged-in nav and when it came, until the account changes', () async {
+    final http = Canned.http();
+    final environment = await load(FakeKeychain(const StoredCookies(Canned.cookies)), http);
+    expect(environment.accountNav, isNull);
+    final before = DateTime.now();
+    await environment.refreshAccount();
+    final answer = environment.accountNav!;
+    expect(answer.nav.mid, 12345);
+    expect(answer.at.isBefore(before), isFalse);
+
+    http.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+    await environment.refreshAccount();
+    expect(environment.account, isA<LoginExpired>());
+    expect(environment.accountNav, isNull);
+
+    http.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+    await environment.refreshAccount();
+    expect(environment.accountNav, isNotNull);
+    await environment.logout();
+    expect(environment.accountNav, isNull);
   });
 }

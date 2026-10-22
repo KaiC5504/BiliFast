@@ -26,6 +26,36 @@ void main() {
     expect(http.requestsTo(navPath).length, 1);
   });
 
+  test('navs asked while one is out share its request, a signed call\'s keys too; one asked later asks again', () async {
+    final http = FakeHTTP()..routes = {navPath: (200, Fixtures.navLoggedIn), playPath: (200, Fixtures.playURL)};
+    final client = makeTestClient(http, cookies: {'SESSDATA': 'abc'});
+    final answers = await Future.wait([
+      client.nav(),
+      client.nav(),
+      client.playURL(bvid: 'BV1GJ411x7h7', cid: 1, quality: 120).then((_) => client.nav()),
+    ]);
+    expect(answers.map((nav) => nav.isLogin), everyElement(isTrue));
+    expect(http.requestsTo(navPath), hasLength(2), reason: 'the third nav came after the first had answered');
+
+    final failing = FakeHTTP()..routes = {navPath: (200, Fixtures.notFound)};
+    final failingClient = makeTestClient(failing);
+    final both = [failingClient.nav(), failingClient.nav()];
+    for (final answer in both) {
+      await expectLater(answer, throwsA(isA<BiliError>()));
+    }
+    expect(failing.requestsTo(navPath), hasLength(1), reason: 'a failure answers both');
+  });
+
+  test('a nav asked after the login changed doesn\'t share the one still out for the old login', () async {
+    final http = FakeHTTP()..routes = {navPath: (200, Fixtures.navLoggedIn)};
+    final client = makeTestClient(http, cookies: {'SESSDATA': 'old'});
+    final old = client.nav();
+    client.cookies.set('SESSDATA', 'new');
+    final fresh = client.nav();
+    await Future.wait([old, fresh]);
+    expect(http.requestsTo(navPath).map((request) => request.headers['Cookie']), ['SESSDATA=old', 'SESSDATA=new']);
+  });
+
   test('play URL sends DASH flags, signature and headers', () async {
     final http = FakeHTTP()..routes = {navPath: (200, Fixtures.navLoggedIn), playPath: (200, Fixtures.playURL)};
     final client = makeTestClient(http, cookies: {'SESSDATA': 'abc', 'buvid3': 'b3'});

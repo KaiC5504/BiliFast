@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../app/app_environment.dart';
 import '../home/feed_model.dart' show requestFailureMessage;
 import 'me_api.dart';
+import 'me_profile_store.dart';
 
 /// What 我的's header shows of the account.
 @immutable
@@ -142,28 +143,38 @@ final class MeFailed extends MeView {
 /// 我的's account and counts, following the login.
 ///
 /// One load is out at a time, nav and stat side by side; a showing or a pull meanwhile joins it. Every login and
-/// logout drops what is still out, so an answer for the account before never shows.
+/// logout drops what is still out, so an answer for the account before never shows. The last account shown is kept
+/// in [MeProfileStore], so a launch as the same account starts from it rather than loading.
 class MeModel extends ChangeNotifier {
   MeModel({
     required this._api,
     required AppEnvironment environment,
+    MeProfileStore? store,
     this.quietGap = const Duration(seconds: 30),
     DateTime Function()? now,
     Logger? logger,
   }) : _environment = environment,
+       _store = store ?? MeProfileStore.memory(),
        _now = now ?? DateTime.now,
        _logger = logger ?? Logger.shared,
-       _account = environment.account,
-       _view = switch (environment.account) {
-         LoggedOut() || LoginExpired() => const MeLoggedOut(),
-         LoggedIn() || AccountUnknown() => const MeLoading(),
-       } {
+       _account = environment.account {
+    switch (_account) {
+      case LoggedOut() || LoginExpired():
+        _store.delete();
+        _view = const MeLoggedOut();
+      case LoggedIn() || AccountUnknown():
+        _view = _keptView() ?? const MeLoading();
+    }
     environment.addListener(_accountChanged);
     environment.logins.addListener(_loginCompleted);
   }
 
+  /// How long after launch the hidden page loads ([preload]): 推荐's first load and playback go first.
+  static const preloadDelay = Duration(seconds: 3);
+
   final MeApi _api;
   final AppEnvironment _environment;
+  final MeProfileStore _store;
   final DateTime Function() _now;
   final Logger _logger;
 
@@ -173,7 +184,7 @@ class MeModel extends ChangeNotifier {
   /// The account as it last settled. Unknown only until the launch's check answers, and counted as logged in then,
   /// as 历史记录 and 我的收藏 do.
   Account _account;
-  MeView _view;
+  MeView _view = const MeLoading();
   Future<String?>? _loading;
   DateTime? _lastLoad;
 
@@ -182,6 +193,7 @@ class MeModel extends ChangeNotifier {
 
   /// The account's turn to logged in has loaded already, so the login count that follows asks nothing more.
   bool _loginLoaded = false;
+  bool _preloaded = false;
   bool _disposed = false;
 
   MeView get view => _view;
@@ -199,21 +211,30 @@ class MeModel extends ChangeNotifier {
     unawaited(_load());
   }
 
+  /// The hidden page's load a few seconds after launch ([preloadDelay]), so 我的 is drawn complete the first time it
+  /// opens. Once per launch and only before any other load; it counts toward [quietGap] as any load does, unless nav
+  /// failed, so opening the page then tries again. The account check's nav stands in for its own while it is fresh.
+  void preload() {
+    if (_preloaded || !_signedIn || _lastLoad != null) return;
+    _preloaded = true;
+    unawaited(_load(background: true));
+  }
+
   /// The pull. Completes when the answer is in, with the message to toast when nav or stat failed (a failure keeps
   /// the page as it was). Null on success.
   Future<String?> refresh() => _signedIn ? _load() : Future<String?>.value();
 
-  Future<String?> _load() {
+  Future<String?> _load({bool background = false}) {
     if (_loading case final running?) return running;
     _lastLoad = _now();
     late final Future<String?> load;
-    load = _fetch(_generation).whenComplete(() {
+    load = _fetch(_generation, background: background).whenComplete(() {
       if (identical(_loading, load)) _loading = null;
     });
     return _loading = load;
   }
 
-  Future<String?> _fetch(int generation) async {
+  Future<String?> _fetch(int generation, {required bool background}) async {
     Object? statError;
     final stat = Future.sync(_api.stat).then<NavStat?>(
       (stat) => stat,
@@ -225,7 +246,7 @@ class MeModel extends ChangeNotifier {
     );
     final NavInfo nav;
     try {
-      nav = await Future.sync(_api.nav);
+      nav = (background ? _freshAccountNav() : null) ?? await Future.sync(_api.nav);
     } catch (error) {
       if (error is BiliError && error.needsLogin) {
         if (_current(generation)) _loggedOutByNav();
@@ -233,6 +254,7 @@ class MeModel extends ChangeNotifier {
       }
       _logger.warn(LogCategory.ui, 'me nav failed', {'error': _describe(error)});
       if (!_current(generation)) return null;
+      if (background) _lastLoad = null;
       final message = requestFailureMessage(error);
       if (_view is! MeShown && _view is! MeLoggedOut) _show(MeFailed(message));
       return message;
@@ -247,11 +269,48 @@ class MeModel extends ChangeNotifier {
       MeShown(:final counts) => counts,
       _ => null,
     };
-    _show(MeShown(MeProfile.fromNav(nav), counts == null ? kept : MeCounts.fromStat(counts)));
+    final shown = MeShown(MeProfile.fromNav(nav), counts == null ? kept : MeCounts.fromStat(counts));
+    _show(shown);
+    _keep(shown);
     _recheckAccount();
     return switch (statError) {
       final error? => requestFailureMessage(error),
       null => null,
+    };
+  }
+
+  /// The launch's account check answered nav for this login moments ago; the same call again would say the same.
+  NavInfo? _freshAccountNav() {
+    final answer = _environment.accountNav;
+    if (answer == null || !answer.nav.isLogin) return null;
+    final age = _now().difference(answer.at);
+    return age.isNegative || age >= quietGap ? null : answer.nav;
+  }
+
+  /// The account's uid: the check's once it has answered, the login cookie's before that.
+  int? get _accountMid => _environment.mid ?? int.tryParse(_environment.cookies.value('DedeUserID') ?? '');
+
+  /// The kept account, when it is this login's; another account's is deleted.
+  MeShown? _keptView() {
+    final kept = _store.kept;
+    final mid = _accountMid;
+    if (kept == null || mid == null) return null;
+    if (kept.mid == mid) return kept.view;
+    _store.delete();
+    return null;
+  }
+
+  void _keep(MeShown view) {
+    final mid = view.profile.mid ?? _accountMid;
+    if (mid != null && mid > 0) _store.save(mid, view);
+  }
+
+  /// The page shows an account other than the one the check found.
+  bool get _showsAnotherAccount {
+    final mid = _environment.mid;
+    return switch (_view) {
+      MeShown(:final profile) => mid != null && profile.mid != null && profile.mid != mid,
+      _ => false,
     };
   }
 
@@ -266,6 +325,7 @@ class MeModel extends ChangeNotifier {
   /// The environment has checks of its own, so it is left as it is.
   void _loggedOutByNav() {
     _logger.info(LogCategory.ui, 'me logged out by nav');
+    _store.delete();
     _show(const MeLoggedOut());
   }
 
@@ -281,7 +341,7 @@ class MeModel extends ChangeNotifier {
     _account = now;
     if (now is! LoggedIn) {
       _signedOut();
-    } else if (was is LoggedOut || was is LoginExpired) {
+    } else if (was is LoggedOut || was is LoginExpired || _showsAnotherAccount) {
       _loginLoaded = true;
       _restart();
     }
@@ -300,6 +360,7 @@ class MeModel extends ChangeNotifier {
   void _restart() {
     _generation++;
     _loading = null;
+    _store.delete();
     _show(const MeLoading());
     unawaited(_load());
   }
@@ -309,6 +370,7 @@ class MeModel extends ChangeNotifier {
     _loading = null;
     _lastLoad = null;
     _loginLoaded = false;
+    _store.delete();
     _show(const MeLoggedOut());
   }
 

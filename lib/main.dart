@@ -25,6 +25,7 @@ import 'favourites/fake_favourites_api.dart';
 import 'home/main_shell.dart';
 import 'home/recent_store.dart';
 import 'me/fake_me_api.dart';
+import 'me/me_profile_store.dart';
 import 'playback/codec_memory.dart';
 import 'playback/playback_setup.dart';
 import 'playback/shared_engine.dart';
@@ -61,6 +62,7 @@ Future<void> main(List<String> args) async {
   final SearchHistoryStore searchHistory;
   final DanmakuSettingsStore danmakuSettings;
   final CodecMemory codecMemory;
+  final MeProfileStore meProfile;
   try {
     environment = await (Platform.isWindows
         ? loadWindowsEnvironment(
@@ -73,6 +75,7 @@ Future<void> main(List<String> args) async {
     danmakuSettings = await DanmakuSettingsStore.load(supportFilePath('danmaku_settings.json'));
     RecentEmotes.shared = await RecentEmotes.load(supportFilePath('emotes_recent.json'));
     codecMemory = await CodecMemory.load(codecMemoryPath());
+    meProfile = await MeProfileStore.load(supportFilePath('me.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
     CrashLog.report(error, stack, source: 'launch');
@@ -125,6 +128,7 @@ Future<void> main(List<String> args) async {
     favouritesApi: fakeAccount ? FakeFavouritesApi.demo() : null,
     watchLaterApi: fakeAccount ? FakeWatchLaterApi.demo() : null,
     meApi: fakeAccount ? FakeMeApi.demo() : null,
+    meProfile: meProfile,
     skinApi: fakeAccount ? FakeSkinApi.demo() : null,
     // The demo skin keeps a folder of its own, so a later run never starts from it.
     skinFolder: supportFilePath(fakeAccount ? 'skins_fake' : 'skins'),

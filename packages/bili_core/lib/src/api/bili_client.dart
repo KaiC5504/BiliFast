@@ -94,7 +94,23 @@ final class BiliClient {
   int get _unixSeconds => now().millisecondsSinceEpoch ~/ 1000;
 
   /// A logged-out reply (-101) still carries the WBI keys, so it is returned, not thrown.
-  Future<NavInfo> nav() async {
+  ///
+  /// A call while one is out for the same login shares its answer: at launch the account check and the first signed
+  /// call's WBI keys (首页's search word) would otherwise ask twice, 40 ms apart.
+  Future<NavInfo> nav() {
+    final session = cookies.value('SESSDATA');
+    if (_navOut case (session: final asked, :final answer) when asked == session) return answer;
+    late final Future<NavInfo> answer;
+    answer = _fetchNav().whenComplete(() {
+      if (identical(_navOut?.answer, answer)) _navOut = null;
+    });
+    _navOut = (session: session, answer: answer);
+    return answer;
+  }
+
+  ({String? session, Future<NavInfo> answer})? _navOut;
+
+  Future<NavInfo> _fetchNav() async {
     final envelope = await _getEnvelope('/x/web-interface/nav', signed: false, decode: NavInfo.fromJson);
     final nav = envelope.data;
     if (nav == null) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');

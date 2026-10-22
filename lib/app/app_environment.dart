@@ -122,6 +122,11 @@ class AppEnvironment extends ChangeNotifier {
   /// The last nav call failed (network, not a verdict), so [account] is still unknown.
   bool get accountCheckFailed => _accountCheckFailed;
 
+  /// The check's answer while it reads logged in, and when it came: 我的 takes the account from it rather than ask nav
+  /// again just after launch.
+  ({NavInfo nav, DateTime at})? get accountNav => _accountNav;
+  ({NavInfo nav, DateTime at})? _accountNav;
+
   /// Counts the logins [didLogin] completed. A login over an account that already read logged in leaves [account]
   /// where it was, so what belongs to the account listens here rather than to its changes.
   ValueListenable<int> get logins => _logins;
@@ -157,6 +162,7 @@ class AppEnvironment extends ChangeNotifier {
     _account = const LoggedIn(name: '测试账号', vip: false);
     _mid = 1;
     _face = null;
+    _accountNav = null;
     notifyListeners();
   }
 
@@ -177,6 +183,7 @@ class AppEnvironment extends ChangeNotifier {
     final saved = _persistence.flush();
     _account = const AccountUnknown();
     _accountCheckFailed = false;
+    _accountNav = null;
     notifyListeners();
     for (var attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await Future<void>.delayed(Duration(seconds: attempt));
@@ -269,6 +276,7 @@ class AppEnvironment extends ChangeNotifier {
     _accountCheckFailed = false;
     _mid = null;
     _face = null;
+    _accountNav = null;
     _logger.info(LogCategory.app, 'logout');
     notifyListeners();
   }
@@ -285,16 +293,19 @@ class AppEnvironment extends ChangeNotifier {
         _account = LoggedIn(name: nav.uname ?? '', vip: nav.isVip);
         _mid = nav.mid;
         _face = nav.face;
+        _accountNav = (nav: nav, at: DateTime.now());
         final mid = nav.mid;
         _logger.info(LogCategory.app, 'account', {'user': mid == null ? '?' : Redactor.mid(mid), 'vip': nav.isVip});
       } else if (_keychainUnread) {
         _account = const AccountUnknown();
         _accountCheckFailed = true;
+        _accountNav = null;
         _logger.warn(LogCategory.app, 'account unknown, keychain unread');
       } else {
         _account = cookies.value('SESSDATA') == null ? const LoggedOut() : const LoginExpired();
         _mid = null;
         _face = null;
+        _accountNav = null;
         _logger.info(LogCategory.app, 'account', {'user': 'none', 'expired': _account is LoginExpired});
       }
       notifyListeners();

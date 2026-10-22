@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
+import '../app/route_observer.dart';
 import '../app/swipe_back_route.dart';
 import '../favourites/favourites_page.dart';
 import '../history/watch_history_page.dart';
@@ -42,7 +43,9 @@ class MePage extends StatefulWidget {
     @visibleForTesting this.canOpenLink = canLaunchUrl,
   });
 
-  /// Whether 我的 is the bar's current tab; turning true is a showing ([MeModel.shown]).
+  /// Whether 我的 is the bar's current tab; turning true is a showing ([MeModel.shown]). Built hidden, the page asks
+  /// its model to load after [MeModel.preloadDelay] ([MeModel.preload]), or that long after a page covering the shell
+  /// leaves.
   final bool active;
 
   /// Passed on to 设置 (更多服务's row), null leaves 开发者 out.
@@ -66,7 +69,7 @@ class MePage extends StatefulWidget {
   State<MePage> createState() => _MePageState();
 }
 
-class _MePageState extends State<MePage> {
+class _MePageState extends State<MePage> with RouteAware {
   MeModel? _model;
   bool _owned = false;
   late AppEnvironment _environment;
@@ -77,6 +80,16 @@ class _MePageState extends State<MePage> {
 
   /// The header has been drawn once, so a card coming after that fades in.
   bool _headerDrawn = false;
+
+  /// Keeps the header's state (its pictures, the card's fade) when [AnimatedSize] comes and goes around it.
+  final _headerKey = GlobalKey();
+
+  Timer? _preload;
+  PageRoute<dynamic>? _route;
+
+  /// A page (a video) is over the shell: the background load waits for it to leave, so playback goes first.
+  bool _covered = false;
+  bool _preloadDue = false;
 
   late SkinModel _skin;
 
@@ -90,6 +103,11 @@ class _MePageState extends State<MePage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _environment = AppScope.of(context).environment;
+    if (ModalRoute.of(context) case final PageRoute<dynamic> route when route != _route) {
+      pageRoutes.unsubscribe(this);
+      _route = route;
+      pageRoutes.subscribe(this, route);
+    }
     if (_model != null) return;
     _skin = widget.skin ?? AppScope.of(context).skin;
     _skin.addListener(_skinChanged);
@@ -98,22 +116,56 @@ class _MePageState extends State<MePage> {
     if (given != null) {
       _model = given;
     } else {
-      _model = MeModel(api: AppScope.of(context).meApi, environment: _environment);
+      final services = AppScope.of(context);
+      _model = MeModel(api: services.meApi, environment: _environment, store: services.meProfile);
       _owned = true;
     }
     _lastView = _me.view;
     _me.addListener(_viewChanged);
-    if (widget.active) _me.shown();
+    if (widget.active) {
+      _me.shown();
+    } else {
+      _armPreload();
+    }
+  }
+
+  void _armPreload() {
+    _preload = Timer(MeModel.preloadDelay, () {
+      _preload = null;
+      if (widget.active) return;
+      if (_covered) {
+        _preloadDue = true;
+      } else {
+        _me.preload();
+      }
+    });
+  }
+
+  @override
+  void didPushNext() => _covered = true;
+
+  @override
+  void didPopNext() {
+    _covered = false;
+    if (!_preloadDue || widget.active) return;
+    _preloadDue = false;
+    _armPreload();
   }
 
   @override
   void didUpdateWidget(MePage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active && !oldWidget.active) _me.shown();
+    if (widget.active && !oldWidget.active) {
+      _preload?.cancel();
+      _preloadDue = false;
+      _me.shown();
+    }
   }
 
   @override
   void dispose() {
+    _preload?.cancel();
+    pageRoutes.unsubscribe(this);
     _skin.removeListener(_skinChanged);
     _model?.removeListener(_viewChanged);
     if (_owned) _model?.dispose();
@@ -235,9 +287,12 @@ class _MePageState extends State<MePage> {
           final picture = skin?.headMyself;
           final ink = skin == null ? null : skin.color ?? (skin.lightText ? MeTheme.skinLightInk : null);
           final reduceMotion = MediaQuery.disableAnimationsOf(context);
-          final animate = _headerDrawn && !reduceMotion;
+          // Hidden, tickers are stopped: a change animated then would play out only when the page shows.
+          final still = reduceMotion || !widget.active;
+          final animate = _headerDrawn && !still;
           _headerDrawn = true;
           final header = Stack(
+            key: _headerKey,
             children: [
               MeHeader(view: view, actions: actions, reserveCard: _reserveCard(view), animate: animate, ink: ink),
               _TopRow(onTap: _soon, color: ink ?? MeTheme.topGlyph),
@@ -257,8 +312,8 @@ class _MePageState extends State<MePage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(height: top),
-                        // AnimatedSize can't take a zero duration, so Reduce Motion leaves it out.
-                        if (reduceMotion)
+                        // AnimatedSize can't take a zero duration, so Reduce Motion and a hidden page leave it out.
+                        if (still)
                           header
                         else
                           AnimatedSize(

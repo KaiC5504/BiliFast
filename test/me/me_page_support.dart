@@ -43,12 +43,13 @@ const kaiProfile = MeProfile(
 
 const kaiCounts = MeCounts(dynamics: 0, following: 13, followers: 0);
 
-/// A model showing whatever [view] the test sets, counting showings and pulls.
+/// A model showing whatever [view] the test sets, counting showings, background loads and pulls.
 class FixedMeModel extends MeModel {
   FixedMeModel(this._view, {required super.api, required super.environment});
 
   MeView _view;
   int showings = 0;
+  int preloads = 0;
   int refreshes = 0;
 
   /// What the pull answers: null on success, else the message to toast.
@@ -67,6 +68,9 @@ class FixedMeModel extends MeModel {
 
   @override
   void shown() => showings++;
+
+  @override
+  void preload() => preloads++;
 
   @override
   Future<String?> refresh() async {
