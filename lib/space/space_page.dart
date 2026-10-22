@@ -1,23 +1,20 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../app/app_environment.dart' show LoggedIn;
 import '../app/app_scope.dart';
-import '../home/feed_model.dart' show requestFailureMessage;
-import '../shared/loading_tv.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import 'space_bar.dart';
 import 'space_follow.dart';
 import 'space_header.dart';
 import 'space_header_tabs.dart';
+import 'space_slivers.dart';
 import 'space_unfollow_sheet.dart';
 import 'space_videos.dart';
 import 'uploader_tap.dart';
@@ -34,15 +31,12 @@ class SpacePage extends StatefulWidget {
 
 class _SpacePageState extends State<SpacePage> {
   static const _soon = '暂未开放';
-  static const _missing = '用户不存在或已注销';
 
   final _scroll = ScrollController();
   final _sheet = ValueNotifier(false);
 
   SpaceProfile? _profile;
-
-  /// Why the profile didn't load, and whether asking again could help.
-  ({String message, bool retry})? _failure;
+  SpaceFailure? _failure;
   SpaceFollow? _follow;
   ValueListenable<int>? _logins;
   bool _collapsed = false;
@@ -92,22 +86,10 @@ class _SpacePageState extends State<SpacePage> {
       final profile = await api.profile(widget.uploader.mid);
       if (mounted) setState(() => _profile = profile);
     } catch (error) {
-      Logger.shared.warn(LogCategory.api, 'space failed', {'error': _reason(error)});
-      if (mounted) setState(() => _failure = _failureOf(error));
+      Logger.shared.warn(LogCategory.api, 'space failed', {'error': spaceFailureReason(error)});
+      if (mounted) setState(() => _failure = spaceFailureOf(error));
     }
   }
-
-  static String _reason(Object error) => switch (error) {
-    BiliHTTPError(:final status) => 'http $status',
-    BiliAPIError(:final code) => 'api $code',
-    _ => '${error.runtimeType}',
-  };
-
-  /// -404 is an uploader who isn't there: asking again won't bring them.
-  static ({String message, bool retry}) _failureOf(Object error) => switch (error) {
-    BiliAPIError(code: -404) => (message: _missing, retry: false),
-    _ => (message: requestFailureMessage(error), retry: true),
-  };
 
   /// A login the environment's `logins` heard is followed there; a gate answering logged in without one still has
   /// the 关注 state asked again.
@@ -175,7 +157,11 @@ class _SpacePageState extends State<SpacePage> {
             color: SpaceTheme.page,
             child: Stack(
               children: [
-                Positioned.fill(child: profile == null ? _waiting() : _space(profile)),
+                Positioned.fill(
+                  child: profile == null
+                      ? SpaceWaiting(failure: _failure, onRetry: () => unawaited(_load()))
+                      : _space(profile),
+                ),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -208,48 +194,6 @@ class _SpacePageState extends State<SpacePage> {
     );
   }
 
-  Widget _waiting() {
-    final top = MediaQuery.paddingOf(context).top + SpaceTheme.barRow;
-    final style = spaceStyle(SpaceTheme.retryText, SpaceTheme.retryInk);
-    void retry() => unawaited(_load());
-    return Padding(
-      padding: EdgeInsets.only(top: top),
-      child: Center(
-        child: switch (_failure) {
-          null => const LoadingTvState(key: ValueKey('space-loading')),
-          (:final message, retry: false) => Padding(
-            padding: const EdgeInsets.all(SpaceTheme.gutter),
-            child: Text(message, key: const ValueKey('space-failed'), textAlign: TextAlign.center, style: style),
-          ),
-          (:final message, retry: true) => Semantics(
-            button: true,
-            label: '$message，点击重试',
-            onTap: retry,
-            excludeSemantics: true,
-            child: GestureDetector(
-              key: const ValueKey('space-retry'),
-              behavior: HitTestBehavior.opaque,
-              onTap: retry,
-              child: Padding(
-                padding: const EdgeInsets.all(SpaceTheme.gutter),
-                child: Text.rich(
-                  key: const ValueKey('space-failed'),
-                  textAlign: TextAlign.center,
-                  TextSpan(
-                    children: [
-                      TextSpan(text: '$message\n', style: style),
-                      TextSpan(text: '点击重试', style: spaceStyle(SpaceTheme.retryText, SpaceTheme.retryAction)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        },
-      ),
-    );
-  }
-
   Widget _space(SpaceProfile profile) {
     final top = MediaQuery.paddingOf(context).top;
     _barAt = SpaceHeader.nameCentre - top;
@@ -262,7 +206,7 @@ class _SpacePageState extends State<SpacePage> {
       slivers: [
         SliverPersistentHeader(
           pinned: true,
-          delegate: _HeaderDelegate(
+          delegate: SpaceHeaderDelegate(
             min: barHeight,
             max: headerHeight,
             builder: (stretch) => SpaceHeader(
@@ -277,79 +221,11 @@ class _SpacePageState extends State<SpacePage> {
         ),
         SliverPersistentHeader(
           pinned: true,
-          delegate: _TabsDelegate(SpaceTabRow(tabs: SpaceTabRow.of(profile), onTap: _tapTab)),
+          delegate: SpaceTabsDelegate(SpaceTabRow(tabs: SpaceTabRow.of(profile), onTap: _tapTab)),
         ),
         SpaceVideosSliver(profile: profile, api: AppScope.of(context).spaceApi),
-        // However short 投稿 is, the header can still scroll away and the tabs pin under the bar.
-        SliverLayoutBuilder(
-          builder: (context, constraints) => SliverToBoxAdapter(
-            child: SizedBox(
-              height: math.max(
-                0,
-                constraints.viewportMainAxisExtent + headerHeight - barHeight - constraints.precedingScrollExtent,
-              ),
-            ),
-          ),
-        ),
+        SpaceTailFiller(headerHeight: headerHeight, barHeight: barHeight),
       ],
     );
   }
-}
-
-/// The header, shrinking from its full height to the bar's and stretching its banner past it when pulled down.
-class _HeaderDelegate extends SliverPersistentHeaderDelegate {
-  _HeaderDelegate({required this.min, required this.max, required this.builder});
-
-  final double min;
-  final double max;
-  final Widget Function(double stretch) builder;
-
-  @override
-  double get minExtent => min;
-
-  @override
-  double get maxExtent => max;
-
-  @override
-  OverScrollHeaderStretchConfiguration get stretchConfiguration => OverScrollHeaderStretchConfiguration();
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => LayoutBuilder(
-    builder: (context, constraints) {
-      final extent = constraints.maxHeight;
-      if (extent >= max) return SizedBox(height: extent, child: builder(extent - max));
-      return SizedBox(
-        height: extent,
-        child: ClipRect(
-          child: OverflowBox(
-            alignment: Alignment.bottomCenter,
-            minHeight: max,
-            maxHeight: max,
-            child: builder(0),
-          ),
-        ),
-      );
-    },
-  );
-
-  @override
-  bool shouldRebuild(_HeaderDelegate oldDelegate) => true;
-}
-
-class _TabsDelegate extends SliverPersistentHeaderDelegate {
-  const _TabsDelegate(this.row);
-
-  final Widget row;
-
-  @override
-  double get minExtent => SpaceTheme.tabsHeight;
-
-  @override
-  double get maxExtent => SpaceTheme.tabsHeight;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => row;
-
-  @override
-  bool shouldRebuild(_TabsDelegate oldDelegate) => true;
 }
