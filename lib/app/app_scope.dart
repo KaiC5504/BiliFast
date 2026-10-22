@@ -183,6 +183,17 @@ class AppServices {
     _account = environment.account;
     environment.addListener(_accountChanged);
     environment.logins.addListener(_loggedIn);
+    _authorized = this.appAuth.authorized;
+    this.appAuth.addListener(_authChanged);
+  }
+
+  late bool _authorized;
+
+  /// The skin's call needs the app token, so a token confirmed mid-session (授权) asks for the skin then.
+  void _authChanged() {
+    final now = appAuth.authorized;
+    if (now && !_authorized) unawaited(skin.refresh());
+    _authorized = now;
   }
 
   late Account _account;
@@ -202,6 +213,7 @@ class AppServices {
   }
 
   void dispose() {
+    appAuth.removeListener(_authChanged);
     appAuth.dispose();
     environment.removeListener(_accountChanged);
     environment.logins.removeListener(_loggedIn);

@@ -4,8 +4,10 @@ import 'package:bili_core/danmaku.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
+import 'package:bilifast/account/app_auth.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/skin/fake_skin_api.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -107,5 +109,38 @@ void main() {
     expect(await environment.didLogin(_login), isTrue);
     await pumpEventQueue();
     expect(fetches(), 0);
+  });
+
+  test('a token confirmed mid-session (授权) asks for the skin once; later notices that keep it don't ask again', () async {
+    final environment = await AppEnvironment.load(
+      keychain: FakeKeychain(const NoStoredCookies()),
+      http: Canned.http(),
+      webCookies: FakeWebCookies(),
+      logger: Logger(session: 'test'),
+    );
+    final auth = FakeAppAuth(authorized: false);
+    final skins = FakeSkinApi();
+    final services = AppServices(
+      environment: environment,
+      playback: AppPlayback(() => Completer<PlaybackController>().future),
+      recents: await RecentStore.load(null, logger: Logger(session: 'test')),
+      pageApi: FakePageApi(),
+      skinApi: skins,
+      appAuth: auth,
+    );
+    addTearDown(services.playback.dispose);
+
+    auth.notifyListeners();
+    await pumpEventQueue();
+    expect(skins.calls, isEmpty, reason: 'still no token');
+
+    auth.authorized = true;
+    auth.notifyListeners();
+    await pumpEventQueue();
+    expect(skins.calls, ['equipped']);
+
+    auth.notifyListeners();
+    await pumpEventQueue();
+    expect(skins.calls, ['equipped'], reason: 'only the change to authorized asks');
   });
 }
