@@ -136,7 +136,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
       Logger.shared.warn(LogCategory.app, 'logout failed', {'error': '${error.runtimeType}'});
       if (!mounted) return;
       _dismiss();
-      showToast(context, '退出登录失败，请重试');
+      showToast(context, error is ServerLogoutFailed ? 'B 站未确认退出，登录已保留，请稍后重试' : '退出登录失败，请重试');
       return;
     } finally {
       _loggingOut = false;
@@ -277,7 +277,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                       ),
                     ],
                   ),
-                  if (account is LoggedIn || environment.logoutIncomplete)
+                  if (account is LoggedIn || environment.logoutIncomplete || environment.loginUnreadable)
                     SettingsSection(
                       children: [
                         SettingsRow(

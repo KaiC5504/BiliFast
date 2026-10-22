@@ -269,10 +269,12 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   touch the network.
 - The Windows login (KaiC: "make sure you won't do anything that could get it restricted"): the website's QR login,
   scanned in the official app, kept DPAPI-encrypted in the support folder's `login.bin`. Every call the Windows
-  `BiliClient` makes passes `GuardedTransport`: writes refused unsent (only `/login/exit/v2`), reads paced (8 at
-  once, then one a second), 200 a run at most. Never loosen the guard to test something: a write is checked under
-  `--fake-account`. On Windows, 退出登录 also ends the session on Bilibili's side. No app token on the PC. Logged
-  in, a Windows check opens at most 3 videos and reads only.
+  `BiliClient` makes passes `GuardedTransport`: writes refused unsent (only passport's `/login/exit/v2`; 不感兴趣's
+  GETs count as writes), reads paced (8 at once, then one a second), 200 a run at most (the QR login's calls aside),
+  and the first 412 or -352/-412 stops every call until a restart. Never loosen the guard to test something: a write
+  is checked under `--fake-account`, which never loads the login. On Windows, 退出登录 ends the session on
+  Bilibili's side first and keeps the login if Bilibili doesn't confirm. No app token on the PC. Logged in, a
+  Windows check opens at most 3 videos and reads only.
 - No Mac: iOS checks run in GitHub Actions and on his phone.
 - Layout comes only from the official app's screenshots (`local/official-app-reference/`, his iPhone 17 Pro Max,
   440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or

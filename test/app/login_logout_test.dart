@@ -311,23 +311,39 @@ void main() {
       expect(environment.account, isA<LoggedOut>());
     });
 
-    test('a server logout that fails is logged, and the jar, keychain and web view are still emptied', () async {
+    test('a server logout that fails keeps the login, so it can be tried again, and says so', () async {
       final keychain = _Keychain(const StoredCookies(_stored));
       final web = FakeWebCookies()..jar['SESSDATA'] = 'web-sess';
       final http = Canned.http()..errors[_webLogoutPath] = TimeoutException('no answer');
       final environment = await loggedIn(keychain, http, web, guarded: true, serverLogout: true);
 
-      await environment.logout();
+      await expectLater(environment.logout(), throwsA(isA<ServerLogoutFailed>()));
       final failed = memory.events.where((event) => event.msg == 'logout step failed');
       expect([for (final event in failed) event.f['step']?.toJson()], ['server']);
-      expect(environment.cookies.value('SESSDATA'), isNull);
-      expect(environment.cookies.value('bili_jct'), isNull);
-      expect(keychain.saved.first, isEmpty);
-      expect(keychain.deletes, ['cookies', 'app token']);
-      expect(web.allClears, 1);
-      expect(environment.account, isA<LoggedOut>());
-      expect(environment.logoutIncomplete, isFalse);
+      expect(environment.cookies.value('SESSDATA'), 'stored-sess');
+      expect(keychain.deletes, isEmpty);
+      expect(web.allClears, 0);
+      expect(environment.account, isA<LoggedIn>());
       expect(log(), isNot(contains('stored-sess')));
+
+      http.errors.remove(_webLogoutPath);
+      http.routes[_webLogoutPath] = (200, _webLogoutOk);
+      await environment.logout();
+      expect(environment.account, isA<LoggedOut>());
+      expect(keychain.deletes, ['cookies', 'app token']);
+    });
+
+    test('a server logout answered -101 (the session already over) goes on with the logout', () async {
+      final keychain = _Keychain(const StoredCookies(_stored));
+      final web = FakeWebCookies();
+      final http = Canned.http()
+        ..routes[_webLogoutPath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
+      final environment = await loggedIn(keychain, http, web, guarded: true, serverLogout: true);
+
+      await environment.logout();
+      expect(environment.cookies.value('SESSDATA'), isNull);
+      expect(keychain.deletes, ['cookies', 'app token']);
+      expect(environment.account, isA<LoggedOut>());
     });
 
     test('a step that fails is logged with no values, and the rest still run', () async {

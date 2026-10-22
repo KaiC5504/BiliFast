@@ -44,6 +44,8 @@ final class _Inner implements HTTPTransport {
   final _Time? time;
   final sent = <({String method, String path, Duration at})>[];
   Object? error;
+  int status = 200;
+  String body = '{}';
 
   List<String> get paths => [for (final request in sent) request.path];
 
@@ -52,7 +54,7 @@ final class _Inner implements HTTPTransport {
     sent.add((method: request.method, path: request.url.path, at: time?.now ?? Duration.zero));
     final failure = error;
     if (failure != null) throw failure;
-    return HTTPResponse(status: 200, headers: {}, body: utf8.encode('{}'), finalURL: request.url);
+    return HTTPResponse(status: status, headers: {}, body: utf8.encode(body), finalURL: request.url);
   }
 }
 
@@ -66,6 +68,7 @@ HTTPRequest _post(String path, {String host = 'https://api.bilibili.com'}) => HT
 
 const _readOnly = BiliAPIError(code: GuardedTransport.readOnlyCode, message: 'PC 只读，未发送');
 const _capped = BiliAPIError(code: GuardedTransport.capCode, message: 'PC 本次调用已达上限，请重启应用');
+const _halted = BiliAPIError(code: GuardedTransport.haltCode, message: 'B 站风控拦截，本次已停止请求，请稍后重启应用');
 
 void main() {
   late _Time time;
@@ -80,9 +83,14 @@ void main() {
     logger = Logger(session: 'test')..add(memory);
   });
 
-  GuardedTransport guard({Set<String> writesAllowed = const {}, int cap = 200}) => GuardedTransport(
+  GuardedTransport guard({
+    Set<String> writesAllowed = const {},
+    Set<String> uncounted = const {},
+    int cap = 200,
+  }) => GuardedTransport(
     inner,
     writesAllowed: writesAllowed,
+    uncounted: uncounted,
     cap: cap,
     logger: logger,
     clock: () => time.now,
@@ -101,7 +109,7 @@ void main() {
     });
 
     test('a write whose path is not allowed is refused before it is sent', () async {
-      final transport = guard(writesAllowed: {'/login/exit/v2'});
+      final transport = guard(writesAllowed: {'passport.bilibili.com/login/exit/v2'});
       for (final method in ['POST', 'PUT', 'DELETE', 'HEAD', 'post']) {
         final request = HTTPRequest(
           url: Uri.parse('https://api.bilibili.com/x/web-interface/archive/like'),
@@ -114,7 +122,7 @@ void main() {
     });
 
     test('a write whose path is allowed is sent', () async {
-      final transport = guard(writesAllowed: {'/login/exit/v2'});
+      final transport = guard(writesAllowed: {'passport.bilibili.com/login/exit/v2'});
       await transport.send(_post('/login/exit/v2', host: 'https://passport.bilibili.com'));
       expect(inner.sent.single, (method: 'POST', path: '/login/exit/v2', at: Duration.zero));
       expect(transport.sent, 1);
@@ -210,7 +218,72 @@ void main() {
     });
   });
 
+  group('more writes', () {
+    test("the allowed write is matched by host too: the logout's path on another host is refused", () async {
+      final transport = guard(writesAllowed: {'passport.bilibili.com/login/exit/v2'});
+      await expectLater(transport.send(_post('/login/exit/v2')), throwsA(_readOnly));
+      expect(inner.sent, isEmpty);
+    });
+
+    test('the GETs that change the account (不感兴趣) are refused as writes', () async {
+      final transport = guard();
+      await expectLater(transport.send(_get('/x/feed/dislike')), throwsA(_readOnly));
+      await expectLater(transport.send(_get('/x/feed/dislike/cancel')), throwsA(_readOnly));
+      expect(inner.sent, isEmpty);
+    });
+  });
+
+  group("Bilibili's risk control", () {
+    test('a 412 stops every request for the rest of the run, and the log says so once', () async {
+      final transport = guard(writesAllowed: {'passport.bilibili.com/login/exit/v2'});
+      inner.status = 412;
+      final answer = await transport.send(_get('/x/web-interface/nav'));
+      expect(answer.status, 412, reason: 'the caller still sees the answer');
+      inner.status = 200;
+      await expectLater(transport.send(_get('/x/web-interface/nav')), throwsA(_halted));
+      await expectLater(transport.send(_get('/x/frontend/finger/spi')), throwsA(_halted));
+      expect(inner.paths, ['/x/web-interface/nav']);
+      await transport.send(_post('/login/exit/v2', host: 'https://passport.bilibili.com'));
+      expect(inner.paths.last, '/login/exit/v2', reason: 'the logout still goes');
+      final halted = memory.events.where((event) => event.msg == 'pc guard halted').single;
+      expect(halted.level, LogLevel.error);
+      expect(halted.f['status'], const LogInt(412));
+    });
+
+    for (final code in [-352, -412]) {
+      test('an answer with code $code stops the run too', () async {
+        final transport = guard();
+        inner.body = '{"code":$code,"message":"风控校验失败","ttl":1}';
+        await transport.send(_get('/x/web-interface/wbi/search/type'));
+        inner.body = '{}';
+        await expectLater(transport.send(_get('/x/web-interface/nav')), throwsA(_halted));
+        expect(inner.sent, hasLength(1));
+      });
+    }
+
+    test('other errors and bodies that are not JSON leave the run going', () async {
+      final transport = guard();
+      inner.body = '{"code":-404,"message":"啥都木有"}';
+      await transport.send(_get('/x/web-interface/view'));
+      inner.body = 'not json';
+      await transport.send(_get('/x/v2/dm/web/seg.so'));
+      inner.body = '{}';
+      await transport.send(_get('/x/web-interface/nav'));
+      expect(inner.sent, hasLength(3));
+    });
+  });
+
   group('cap', () {
+    test("the QR login's calls are paced but not counted", () async {
+      final transport = guard(cap: 1, uncounted: {'/x/passport-login/web/qrcode/poll'});
+      for (var index = 0; index < 5; index++) {
+        await transport.send(_get('/x/passport-login/web/qrcode/poll'));
+      }
+      await transport.send(_get('/x/web-interface/nav'));
+      await expectLater(transport.send(_get('/x/web-interface/nav')), throwsA(_capped));
+      expect(inner.sent, hasLength(6));
+    });
+
     test('past the cap every request is refused without being sent, and the log says so once', () async {
       final transport = guard(cap: 3);
       for (var index = 0; index < 3; index++) {
@@ -226,7 +299,7 @@ void main() {
     });
 
     test('the logout still goes past the cap, so a capped run can end its session', () async {
-      final transport = guard(cap: 1, writesAllowed: {'/login/exit/v2'});
+      final transport = guard(cap: 1, writesAllowed: {'passport.bilibili.com/login/exit/v2'});
       await transport.send(_get('/r0'));
       await expectLater(transport.send(_get('/over')), throwsA(_capped));
       await transport.send(_post('/login/exit/v2', host: 'https://passport.bilibili.com'));

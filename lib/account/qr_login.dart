@@ -9,6 +9,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../app/app_environment.dart';
 import '../shared/loading_tv.dart';
 import '../shared/theme.dart';
+import '../shared/toast.dart';
 
 /// The website's QR login calls, apart from the client so the model is tested without HTTP.
 abstract interface class QrLoginApi {
@@ -261,7 +262,10 @@ class _QrLoginState extends State<QrLogin> {
     api: widget.api ?? ClientQrLoginApi(widget.environment.client),
     didLogin: widget.environment.didLogin,
     checkFailed: () => widget.environment.accountCheckFailed,
-    onLoggedIn: widget.onLoggedIn,
+    onLoggedIn: () {
+      if (!widget.environment.loginSaved) showToast(context, '登录未能保存，下次启动需重新扫码');
+      widget.onLoggedIn();
+    },
   );
 
   @override

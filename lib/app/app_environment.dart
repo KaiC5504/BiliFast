@@ -67,7 +67,14 @@ class AppEnvironment extends ChangeNotifier {
     jar.onChange = (_) => unawaited(persistence.save(jar.all));
     final transport = http ?? httpTransportOrFallback(httpFactory, log);
     final client = BiliClient(
-        transport: guarded ? GuardedTransport(transport, writesAllowed: {'/login/exit/v2'}, logger: log) : transport,
+        transport: guarded
+            ? GuardedTransport(
+                transport,
+                writesAllowed: {'passport.bilibili.com/login/exit/v2'},
+                uncounted: {'/x/passport-login/web/qrcode/generate', '/x/passport-login/web/qrcode/poll'},
+                logger: log,
+              )
+            : transport,
         cookies: jar,
         logger: log);
     return AppEnvironment._(
@@ -173,15 +180,19 @@ class AppEnvironment extends ChangeNotifier {
     final loggedIn = _account is LoggedIn;
     _logger.info(LogCategory.app, 'login', {'count': cookies.length, 'loggedIn': loggedIn});
     // The session works from the jar either way; only the next launch would find itself logged out.
-    if (!await saved) _logger.error(LogCategory.app, 'login not saved to the keychain', {'loggedIn': loggedIn});
+    _loginSaved = await saved;
+    if (!_loginSaved) _logger.error(LogCategory.app, 'login not saved to the keychain', {'loggedIn': loggedIn});
     if (loggedIn && epoch == _epoch) _logins.value += 1;
     return loggedIn;
   }
 
   /// 退出登录 (BiliNative `AppEnvironment.logout`): empties the jar, deletes the keychain cookies and app token, and
-  /// clears the web view's data. With `serverLogout` the website's logout goes first, while the jar still holds the
-  /// login. A step that fails is logged and the rest still run. A `--fake-account` run, which stored nothing, just
-  /// stops being fake.
+  /// clears the web view's data. A step that fails is logged and the rest still run. A `--fake-account` run, which
+  /// stored nothing, just stops being fake.
+  ///
+  /// With `serverLogout` (Windows) the website's logout goes first, while the jar still holds the login. If it fails,
+  /// nothing is touched and [ServerLogoutFailed] is thrown, so the session isn't left alive on Bilibili's side with
+  /// no cookies here to end it; -101 means Bilibili had ended it already, and the logout goes on.
   ///
   /// Throws [LogoutIncomplete] when the jar or the keychain cookies couldn't be emptied. The account still reads
   /// logged out, which is true of this run (the jar sends no login), but the keychain may hold the login for the
@@ -195,8 +206,17 @@ class AppEnvironment extends ChangeNotifier {
       _signedOut();
       return;
     }
+    if (_serverLogout && cookies.value('SESSDATA') != null) {
+      try {
+        await client.webLogout();
+      } catch (error) {
+        if (error is! BiliAPIError || error.code != -101) {
+          _logger.warn(LogCategory.app, 'logout step failed', {'step': 'server', 'error': '${error.runtimeType}'});
+          throw const ServerLogoutFailed();
+        }
+      }
+    }
     _persistence.unblock();
-    if (_serverLogout) await _logoutStep('server', client.webLogout);
     final jarEmptied = await _logoutStep('jar', () async => cookies.removeAll());
     final keychainEmptied = await _logoutStep('keychain cookies', _keychain.deleteCookies);
     await _logoutStep('app token', _keychain.deleteAppToken);
@@ -214,6 +234,15 @@ class AppEnvironment extends ChangeNotifier {
   }
 
   bool _logoutIncomplete = false;
+  bool _loginSaved = true;
+
+  /// Whether the last [didLogin] reached the keychain (on Windows, `login.bin`). The PC's QR login warns when it
+  /// didn't: the next launch would be logged out and ask for another scan, another new device on the account.
+  bool get loginSaved => _loginSaved;
+
+  /// The stored login couldn't be read (on Windows, a `login.bin` DPAPI can't open). 设置 offers 退出登录, which
+  /// deletes it.
+  bool get loginUnreadable => _keychainUnread;
 
   /// The last 退出登录 left the login in the keychain: 设置 keeps offering it so it can be tried again.
   bool get logoutIncomplete => _logoutIncomplete;
@@ -303,6 +332,14 @@ final class LogoutIncomplete implements Exception {
 
   @override
   String toString() => 'LogoutIncomplete';
+}
+
+/// Bilibili didn't confirm the website's logout; the login is kept so 退出登录 can be tried again.
+final class ServerLogoutFailed implements Exception {
+  const ServerLogoutFailed();
+
+  @override
+  String toString() => 'ServerLogoutFailed';
 }
 
 /// URLSession on the iPhone, as the Swift app's API client: ephemeral, with its own cookie store off, since
