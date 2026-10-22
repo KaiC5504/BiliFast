@@ -255,7 +255,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
 - `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
   test plan; `phone_report.py` reads a session; `turn_video.py` measures the turns in a screen recording;
   `screen_diff.py` measures our screenshot against the official one (milestone 3, slice 10); `make_standin_fonts.py`
-  makes the system font's stand-ins in `test/fonts`. Run `uv run tools/logserver.py` in the background before KaiC tests.
+  makes the system font's stand-ins in `test/fonts`; `apk_asset.py` finds and extracts the official APK's art (the
+  Art rule). Run `uv run tools/logserver.py` in the background before KaiC tests.
 
 ## How to test
 
@@ -319,6 +320,12 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Layout comes only from the official app's screenshots (`local/official-app-reference/`, his iPhone 17 Pro Max,
   440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or
   the Swift app.
+- Art (icons, placeholders, loading pictures, Lottie) comes first from the official Android APK in `local/`
+  (`iBiliPlayer-bili.apk`, 8.43.0) through `uv run tools/apk_asset.py` (`find`, `show`, `extract`; vectors drawn white
+  at 3× for tinting), then PiliPlus's assets, and only then our own drawing. The APK holds the app's own art only:
+  skins, emotes, frames, medals and banners come from the server, and the iPhone app sometimes draws differently
+  (its cover placeholder is the APK's `bili_default_image_tv_2023`, not `bili_default_image_tv`), so every piece is
+  checked against KaiC's iPhone screenshots or recordings and sized from them. Note each in `assets/README.md`.
 - PiliPlus (`D:\Repos\Apps\PiliPlus`) is a reference for functions only: the APIs and how a feature behaves, plus its
   asset files of the official app's art (`assets/README.md`, never its logos). Never its layout or design. Read it
   before building (`docs/reference/piliplus-map.md`). It and ATV-Bilibili-demo are GPL: write our own code, never

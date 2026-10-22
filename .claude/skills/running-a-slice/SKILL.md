@@ -17,7 +17,9 @@ helps (GPL: read only), the slice's items in `D:\Repos\Apps\BiliNative\docs\m2-p
 anything on screen the official app's screenshots in `local/official-app-reference/` (iPhone 17 Pro Max at 3×: 440×956
 pt portrait, 956×440 landscape). KaiC wants the layout identical to them, and they are the only source of layout:
 PiliPlus gives APIs, behaviour and assets, never layout. `local/` is
-gitignored: never copy, commit or embed them. Show one screen:
+gitignored: never copy, commit or embed them. For every icon or picture the slice draws, look in the official APK
+first (`uv run tools/apk_asset.py find <words>`, CLAUDE.md's Art rule), then PiliPlus's assets, before planning to
+draw one; extract them into the shared pieces. Show one screen:
 
 1. **Done:** the numbered phone test steps.
 2. **Shared pieces** Claude commits first (step 2).
@@ -57,7 +59,8 @@ are pieces). Each brief contains, in order:
 2. Read CLAUDE.md. Rules: public repo, no secrets in code or logs, tests never touch the network, theme tokens only,
    PiliPlus read only, Flutter through `fvm`.
 3. The job, with its Swift and PiliPlus references (PiliPlus for APIs, behaviour and assets only, never layout), and
-   for UI the reference screenshots it must match (by file name), measured in pt (px/3).
+   for UI the reference screenshots it must match (by file name), measured in pt (px/3). Name the official art
+   already extracted for it; an agent that needs more art uses `tools/apk_asset.py` before drawing its own.
 4. **Your files:** the full list; edit nothing else, and report needs outside it. For a shared file such as
    `theme.dart`, name the exact spot to insert.
 5. Never `dart format` a whole file that wasn't formatted before; it rewraps everything.
