@@ -2398,6 +2398,24 @@ abstract final class MeTheme {
   static const serviceLabel = BiliColors.text;
   static const serviceChevron = Color(0xFF999999);
   static const bottomPad = 24.0;
+
+  /// The equipped 装扮 (109): its picture fills the width from the screen's top to the list's, and its last
+  /// [skinFade] (the card and the band under it) whitens into the list. The stops are the white's measured over the
+  /// picture's dark edges, which give the same curve at every column.
+  static const skinFade = 62.0;
+  static const skinFadeStops = [0.0, 0.086, 0.333, 0.538, 0.634, 1.0];
+  static const skinFadeColors = [
+    Color(0x00FFFFFF),
+    Color(0x1CFFFFFF),
+    Color(0x4DFFFFFF),
+    Color(0xCCFFFFFF),
+    Color(0xE6FFFFFF),
+    Color(0xFFFFFFFF),
+  ];
+
+  /// The text and icons over the picture when the skin asks for light text but names no colour. 109's are this
+  /// white, at 87's places and sizes; the counts' rules go.
+  static const skinLightInk = Color(0xFFFFFFFF);
 }
 
 /// The swipe back from a 推荐 card (03, 04 in local/differences, measured frame by frame): the page shrinks into a
