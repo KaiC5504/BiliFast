@@ -76,6 +76,9 @@ abstract final class BiliColors {
   static const chromeShade = Color(0x73000000);
   static const chromeShadeClear = Color(0x00000000);
 
+  /// The seek bar's plain round handle, in the TV's place while its Lotties aren't there.
+  static const thumbHandle = Color(0xFFFFFFFF);
+
   /// The small player's controls and end screen, and the bar's chapter ticks and 竖屏 style, measured on the official
   /// app's 03, 09, 15 and 26.
   static const chromeTick = Color(0xB3000000);
@@ -299,9 +302,10 @@ abstract final class BiliMetrics {
   static const barTouchHeight = 24.0;
 
   /// The official TV's Lottie box, centred on the bar and on the played part's end (04, 15 and 102: its 15 pt ink and
-  /// 12 pt screen land there in each). It keeps this size while a finger holds it.
+  /// 12 pt screen land there in each). Without its Lotties, a plain round handle as wide as that screen.
   static const thumbWidth = 18.0;
   static const thumbHeight = 18.0;
+  static const thumbHandle = 12.0;
   static const hiddenLine = 2.0;
 
   /// The small player's controls and end screen, and the bar's chapter title and 竖屏 dot, measured on the official
