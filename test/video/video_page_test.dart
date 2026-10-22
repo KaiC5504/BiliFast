@@ -57,6 +57,7 @@ import 'package:bilifast/player_ui/player_loading.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
+import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/space/fake_space_api.dart';
@@ -604,6 +605,8 @@ void main() {
       expect(requested.toSet().length, lessThanOrEqualTo(2));
       expect(requested.where((url) => url == sizedImageUrl(cover, width: 480, height: 300)), hasLength(1));
       await back(tester);
+      // The recording client never answers; the downloads give up.
+      await tester.pump(ImageDiskCache.downloadTimeout);
     } finally {
       debugNetworkImageHttpClientProvider = null;
       imageCache
