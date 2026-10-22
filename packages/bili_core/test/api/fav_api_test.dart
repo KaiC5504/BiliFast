@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:test/test.dart';
 
 import 'fake_http.dart';
@@ -50,6 +53,13 @@ const tabFavAnswer = r'''
   "right_text":"1","is_invalid":true},
  {"oid":7,"otype":12,"title":"一首歌"}
 ],"next_oid":170001,"next_otype":2,"next_score":1699999999}}''';
+
+final class _Events implements LogSink {
+  final List<LogEvent> events = [];
+
+  @override
+  void receive(LogEvent event) => events.add(event);
+}
 
 void main() {
   late FakeHTTP http;
@@ -133,24 +143,31 @@ void main() {
     );
   });
 
-  test("视频 not among the top tabs is found among 收藏's, asked for by its id", () async {
-    http.answer = (request) => request.url.path != tabsPath
-        ? null
-        : http.query(request)['tab_id'] == '0'
-        ? (200, topTabsAnswer)
-        : (200, tabsAnswer);
-    expect(await client.favVideosTab(), 12);
-    expect([for (final request in http.requestsTo(tabsPath)) http.query(request)['tab_id']], ['0', '1']);
+  test("without a 视频 tab, 收藏's own is used from one call, and the answer's shape is logged", () async {
+    final log = _Events();
+    final logged = BiliClient(
+      transport: http,
+      cookies: CookieJar({'SESSDATA': 's', 'buvid3': 'b3', 'buvid4': 'b4'}),
+      now: () => testNow,
+      logger: Logger(session: 'test')..add(log),
+    );
+    http.routes[tabsPath] = (200, topTabsAnswer);
+    expect(await logged.favVideosTab(), 1);
+    expect([for (final request in http.requestsTo(tabsPath)) http.query(request)['tab_id']], ['0']);
+    final warning = log.events.singleWhere((event) => event.msg == 'fav tabs without 视频');
+    final fields = (jsonDecode(warning.encode()) as Map)['f'] as Map;
+    expect(fields['using'], 1);
+    expect(fields['answer'], contains('tab_name:追更'));
   });
 
-  test('without 收藏 among the tabs, the default tab is asked; a miss there too is null', () async {
-    http.answer = (request) => request.url.path != tabsPath
-        ? null
-        : http.query(request)['tab_id'] == '0'
-        ? (200, '{"code":0,"message":"0","ttl":1,"data":{"default_tab":3,"tabs":[{"tab_id":3,"tab_name":"其他"}]}}')
-        : (200, '{"code":0,"message":"0","ttl":1,"data":{"tabs":[]}}');
+  test('without 收藏 the default tab is used, and an answer with neither is null', () async {
+    http.routes[tabsPath] = (
+      200,
+      '{"code":0,"message":"0","ttl":1,"data":{"default_tab":3,"tabs":[{"tab_id":3,"tab_name":"其他"}]}}',
+    );
+    expect(await client.favVideosTab(), 3);
+    http.routes[tabsPath] = (200, '{"code":0,"message":"0","ttl":1,"data":{"tabs":[]}}');
     expect(await client.favVideosTab(), isNull);
-    expect([for (final request in http.requestsTo(tabsPath)) http.query(request)['tab_id']], ['0', '3']);
   });
 
   test('the 视频 tab is found among the sub tabs by its name', () async {
@@ -207,26 +224,47 @@ void main() {
     );
   });
 
-  test("an answer without 视频 is outlined for the log by its tabs' names and ids", () async {
+  test('a 视频 named under any naming key is found, its id under any key ending in id', () {
     expect(
-      favTabsOutline({
-        'default_tab': 1,
+      favVideosTabId({
         'tabs': [
           {
             'tab_id': 1,
             'tab_name': '收藏',
-            'sub_tabs': [
-              {'tab_id': 11, 'tab_name': '收藏夹'},
+            'second_tabs': [
+              {'sub_type': 3, 'sub_tab_name': '收藏夹'},
+              {'sub_type': 4, 'sub_tab_name': '视频', 'filter_id': '21'},
             ],
           },
-          {'tab_id': 2, 'tab_name': '追更'},
         ],
       }),
-      'keys default_tab,tabs; tabs 收藏=1[收藏夹=11], 追更=2',
+      21,
+    );
+    expect(
+      favVideosTabId({
+        'items': [
+          {'text': '视频', 'id': 9},
+        ],
+      }),
+      9,
+    );
+  });
+
+  test("an answer without 视频 is outlined whole for the log: keys, numbers, strings cut short, links hidden", () {
+    expect(
+      favTabsOutline({
+        'default_tab': 1,
+        'tabs': [
+          {'tab_id': 1, 'tab_name': '收藏', 'uri': 'bilibili://main/favorite', 'red_dot': false},
+          {'tab_id': 2, 'tab_name': '一个名字很长很长很长很长很长很长的标签'},
+        ],
+        'list': [1, 2, 3, 4, 5, 6, 7, 8],
+      }),
+      '{default_tab:1,tabs:[{tab_id:1,tab_name:收藏,uri:url,red_dot:false},{tab_id:2,tab_name:一个名字很长很长很长很长很长很长…}],'
+      'list:[1,2,3,4,5,6,…8]}',
     );
     expect(favTabsOutline(null), 'no data');
-    http.routes[tabsPath] = (200, '{"code":0,"message":"0","ttl":1,"data":{"tabs":[]}}');
-    expect(await client.favVideosTab(), isNull);
+    expect(favTabsOutline({'x': 'y' * 4000}).length, lessThanOrEqualTo(1501));
   });
 
     test('视频 starts from zero and pages by the answer’s cursor', () async {

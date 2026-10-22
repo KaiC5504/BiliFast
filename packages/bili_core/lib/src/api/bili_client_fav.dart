@@ -43,34 +43,28 @@ extension BiliClientFav on BiliClient {
     return answer ?? FavFolderPage.empty;
   }
 
-  /// 视频's tab id, from the tabs the official app's 我的收藏 is built from: the top tabs, then 收藏's sub tabs when
-  /// 视频 isn't among them (two calls at most). A miss logs the tabs' names and ids.
+  /// 视频's tab id, from the tabs the official app's 我的收藏 is built from. When none is named 视频 (on 1.0.0 (22) and
+  /// (23) the phone's answer held only 收藏 and 追更, whatever `tab_id` asked), 收藏's own, whose list [favAllVideos]
+  /// keeps only the videos of; the answer's whole shape is logged for the next look.
   Future<int?> favVideosTab() async {
-    final top = await _favTabs(0);
-    if (top.videos != null) return top.videos;
-    final collect = top.collect;
-    if (collect != null && collect != 0) {
-      final sub = await _favTabs(collect);
-      if (sub.videos != null) return sub.videos;
-      _logger.warn(LogCategory.api, 'fav tabs without 视频', {'tabs': top.outline, 'sub': sub.outline});
-      return null;
-    }
-    _logger.warn(LogCategory.api, 'fav tabs without 视频', {'tabs': top.outline});
-    return null;
-  }
-
-  Future<({int? videos, int? collect, String outline})> _favTabs(int tabId) async {
     final envelope = await _getEnvelope(
       '/x/v3/fav/tab',
-      query: {'tab_id': '$tabId'},
+      query: {'tab_id': '0'},
       signed: false,
       decode: (json) => (videos: favVideosTabId(json), collect: favCollectTabId(json), outline: favTabsOutline(json)),
     );
     if (envelope.code != 0) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');
-    return envelope.data ?? (videos: null, collect: null, outline: 'no data');
+    final tabs = envelope.data;
+    if (tabs?.videos case final int videos) return videos;
+    _logger.warn(LogCategory.api, 'fav tabs without 视频', {
+      'answer': tabs?.outline ?? 'no data',
+      'using': tabs?.collect ?? 'none',
+    });
+    return tabs?.collect;
   }
 
-  /// A page of 视频, the latest favourite first; [after] is the last page's `FavTabPage.next`.
+  /// A page of 视频, the latest favourite first; [after] is the last page's `FavTabPage.next`. The first page logs what
+  /// it held, so a list that isn't 视频 shows in the log.
   Future<FavTabPage> favAllVideos({required int tabId, FavTabCursor? after}) async {
     final answer = await _getIfPresent(
       '/x/v3/fav/tab/fav',
@@ -84,7 +78,17 @@ extension BiliClientFav on BiliClient {
       signed: false,
       decode: FavTabPage.fromJson,
     );
-    return answer ?? FavTabPage.empty;
+    final page = answer ?? FavTabPage.empty;
+    if (after == null) {
+      _logger.info(LogCategory.api, 'fav tab list', {
+        'tab': tabId,
+        'listed': page.listed,
+        'videos': page.items.length,
+        'total': page.total,
+        'more': page.hasMore,
+      });
+    }
+    return page;
   }
 
   /// Takes the video out of every folder that holds it (视频's 取消收藏).

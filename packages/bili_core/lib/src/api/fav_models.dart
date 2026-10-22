@@ -230,14 +230,16 @@ final class FavTabVideo {
 
 /// A page of 视频. [next] is passed back for the page after; null when [hasMore] is false.
 final class FavTabPage {
-  const FavTabPage({required this.items, required this.hasMore, this.next, this.total = 0});
+  const FavTabPage({required this.items, required this.hasMore, this.next, this.total = 0, this.listed = 0});
 
   /// The `data` of `/x/v3/fav/tab/fav` (`FavoritesTabList`).
   factory FavTabPage.fromJson(Object? json) {
     final data = JsonObject.from(json, 'page');
     final hasMore = data.flag('has_more');
+    final listed = data.lenientList('list', FavTabVideo.fromJson);
     return FavTabPage(
-      items: [for (final item in data.lenientList('list', FavTabVideo.fromJson)) ?item],
+      items: [for (final item in listed) ?item],
+      listed: listed.length,
       hasMore: hasMore,
       next: hasMore
           ? FavTabCursor(oid: data.count('next_oid'), otype: data.count('next_otype'), score: data.count('next_score'))
@@ -252,17 +254,20 @@ final class FavTabPage {
   final bool hasMore;
   final FavTabCursor? next;
   final int total;
+
+  /// The items the page listed that could be read, videos or not.
+  final int listed;
 }
 
-/// 视频's id among `/x/v3/fav/tab`'s tabs and their sub tabs (`FavoritesTabs`), found by its name at any depth, the
-/// id as a number or a string; null when the answer has no such tab. Asked with `tab_id=0`, the phone's answer has
-/// only the top tabs (收藏=1, 追更=2, 1.0.0 (22)); 视频 is among 收藏's sub tabs, which [favCollectTabId] asks for.
+/// 视频's id among `/x/v3/fav/tab`'s tabs (`FavoritesTabs`): any object in the answer named 视频 under a key that
+/// names (`tab_name`, `sub_tab_name`, `title`…), its id under a key ending in `id`, as a number or a string; null when
+/// the answer has none. On 1.0.0 (22) and (23) the phone's answer held only 收藏=1 and 追更=2, whatever `tab_id` asked.
 int? favVideosTabId(Object? json) {
   int? found;
   void visit(Object? node) {
     if (found != null) return;
     if (node is Map) {
-      if (_tabName(node)?.trim() == _videosTabName) found = _tabId(node);
+      if (_names(node).any((name) => name.trim() == _videosTabName)) found = _tabId(node);
       for (final value in node.values) {
         visit(value);
       }
@@ -277,40 +282,61 @@ int? favVideosTabId(Object? json) {
   return found;
 }
 
-/// The tab whose sub tabs hold 视频: 收藏 by its name, else the answer's `default_tab`.
+/// 收藏's id by its name, else the answer's `default_tab`: the list 视频 falls back to when no tab is named 视频.
 int? favCollectTabId(Object? json) {
   if (json is! Map) return null;
   final tabs = json['tabs'];
   if (tabs is List) {
     for (final tab in tabs) {
-      if (tab is Map && _tabName(tab)?.trim() == '收藏') return _tabId(tab);
+      if (tab is Map && _names(tab).any((name) => name.trim() == '收藏')) return _tabId(tab);
     }
   }
   return _tabId({'tab_id': json['default_tab']});
 }
 
-/// The tabs' names and ids, nested as the answer has them, for the log when [favVideosTabId] finds nothing.
+/// The whole answer's shape for the log when [favVideosTabId] finds nothing: every key, numbers as they are, strings
+/// cut short and links as `url`, lists to their first [_outlineItems], within [_outlineLength] characters.
 String favTabsOutline(Object? json) {
-  if (json is! Map) return json == null ? 'no data' : json.runtimeType.toString();
-  String tabs(Object? list) => list is List
-      ? [
-          for (final tab in list)
-            if (tab is Map) '${_tabName(tab)}=${_tabId(tab)}${tab['sub_tabs'] == null ? '' : '[${tabs(tab['sub_tabs'])}]'}',
-        ].join(', ')
-      : '$list';
-  return 'keys ${json.keys.join(',')}; tabs ${tabs(json['tabs'])}';
+  if (json == null) return 'no data';
+  String shape(Object? node) => switch (node) {
+    Map() => '{${[for (final MapEntry(:key, :value) in node.entries) '$key:${shape(value)}'].join(',')}}',
+    List() => '[${[
+      for (final value in node.take(_outlineItems)) shape(value),
+      if (node.length > _outlineItems) '…${node.length}',
+    ].join(',')}]',
+    String() when node.contains('://') => 'url',
+    String() when node.length > 16 => '${node.substring(0, 16)}…',
+    _ => '$node',
+  };
+  final text = shape(json);
+  return text.length > _outlineLength ? '${text.substring(0, _outlineLength)}…' : text;
 }
 
-String? _tabName(Map<Object?, Object?> tab) => switch (tab['tab_name'] ?? tab['name'] ?? tab['title']) {
-  final String name => name,
-  _ => null,
-};
+const _outlineLength = 1500;
+const _outlineItems = 6;
 
-int? _tabId(Map<Object?, Object?> tab) => switch (tab['tab_id'] ?? tab['sub_tab_id'] ?? tab['id']) {
-  final int id => id,
-  final String id => int.tryParse(id),
-  _ => null,
-};
+Iterable<String> _names(Map<Object?, Object?> tab) sync* {
+  for (final MapEntry(:key, :value) in tab.entries) {
+    if (key is String && value is String && (key.endsWith('name') || key.endsWith('title') || key == 'text')) {
+      yield value;
+    }
+  }
+}
+
+int? _tabId(Map<Object?, Object?> tab) {
+  int? read(Object? id) => switch (id) {
+    final int id => id,
+    final String id => int.tryParse(id),
+    _ => null,
+  };
+  final named = read(tab['tab_id'] ?? tab['sub_tab_id'] ?? tab['id']);
+  if (named != null) return named;
+  for (final MapEntry(:key, :value) in tab.entries) {
+    if (key is! String || !key.endsWith('id')) continue;
+    if (read(value) case final int id) return id;
+  }
+  return null;
+}
 
 const _videosTabName = '视频';
 
