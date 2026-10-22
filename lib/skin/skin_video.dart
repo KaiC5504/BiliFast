@@ -11,8 +11,9 @@ import 'package:flutter/widgets.dart';
 /// sound track left out so it never touches the audio session), [placeholder] elsewhere and until it draws.
 ///
 /// The view's own `bilifast/skin_video/<id>` channel says `ready` once its first frame shows (and `failed` with a
-/// reason when the file won't play), and takes `play` and `pause`: it plays only while this subtree's [TickerMode] is
-/// on, so a hidden 我的 or a covered page holds it.
+/// reason when the file won't load or play, after which the view is dropped for the placeholder until the file
+/// changes), and takes `play` and `pause`: it plays only while this subtree's [TickerMode] is on, so a hidden 我的 or a
+/// covered page holds it.
 class SkinVideo extends StatefulWidget {
   const SkinVideo({super.key, required this.file, required this.loop, required this.placeholder});
 
@@ -32,6 +33,7 @@ class _SkinVideoState extends State<SkinVideo> {
   MethodChannel? _channel;
   ValueListenable<TickerModeData>? _ticking;
   bool _ready = false;
+  bool _failed = false;
   bool? _sent;
 
   bool get _native => defaultTargetPlatform == TargetPlatform.iOS && !kIsWeb;
@@ -51,7 +53,10 @@ class _SkinVideoState extends State<SkinVideo> {
   void didUpdateWidget(SkinVideo oldWidget) {
     super.didUpdateWidget(oldWidget);
     // The new key below makes a new native view; until it draws, the placeholder shows again.
-    if (oldWidget.file.path != widget.file.path || oldWidget.loop != widget.loop) _detach();
+    if (oldWidget.file.path != widget.file.path || oldWidget.loop != widget.loop) {
+      _detach();
+      _failed = false;
+    }
   }
 
   @override
@@ -87,6 +92,9 @@ class _SkinVideoState extends State<SkinVideo> {
             'reason': reason,
           });
         }
+        if (!mounted || _failed) return;
+        _detach();
+        setState(() => _failed = true);
     }
   }
 
@@ -121,18 +129,20 @@ class _SkinVideoState extends State<SkinVideo> {
           maintainSize: true,
           child: widget.placeholder,
         ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: UiKitView(
-              key: ValueKey('${widget.file.path}|${widget.loop}'),
-              viewType: SkinVideo.viewType,
-              creationParams: <String, Object?>{'path': widget.file.path, 'loop': widget.loop},
-              creationParamsCodec: const StandardMessageCodec(),
-              hitTestBehavior: PlatformViewHitTestBehavior.transparent,
-              onPlatformViewCreated: _created,
+        // A dead platform view would still be composited every frame.
+        if (!_failed)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: UiKitView(
+                key: ValueKey('${widget.file.path}|${widget.loop}'),
+                viewType: SkinVideo.viewType,
+                creationParams: <String, Object?>{'path': widget.file.path, 'loop': widget.loop},
+                creationParamsCodec: const StandardMessageCodec(),
+                hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+                onPlatformViewCreated: _created,
+              ),
             ),
           ),
-        ),
       ],
     );
   }

@@ -3,15 +3,18 @@ import Flutter
 import UIKit
 
 /// The 我的 header's `head_myself_mp4_bg` for Dart's SkinVideo: a muted video from a file in the support folder,
-/// looping or played once (`path`, `loop`). Only the video track is played, so it never activates the audio session.
+/// looping or played once (`path`, `loop`). Only the first video track is played, so it never activates the audio
+/// session.
 ///
 /// Each view has its own `bilifast/skin_video/<id>` channel: Dart sends `play` and `pause` (a new view waits paused),
-/// the view sends `ready` once its first frame shows and `failed` with a reason when the file won't play.
+/// the view sends `ready` once its first frame shows and `failed` with "domain code" when the file won't load or play.
 enum SkinVideoView {
   static let viewType = "bilifast/skin_video"
 
   static func register(with registrar: FlutterPluginRegistrar) {
-    registrar.register(SkinVideoFactory(messenger: registrar.messenger()), withId: viewType)
+    // Touchless, and IgnorePointer in Dart: nothing to block, and no delaying recognizer on top (PlayerChannel's).
+    registrar.register(SkinVideoFactory(messenger: registrar.messenger()), withId: viewType,
+                       gestureRecognizersBlockingPolicy: FlutterPlatformViewGestureRecognizersBlockingPolicyDoNotBlockGesture)
   }
 }
 
@@ -60,23 +63,30 @@ final class SkinVideoPlatformView: NSObject, FlutterPlatformView {
   }
 }
 
-/// The video's layer, filling the view as the header's picture does. It takes no touches.
+/// The video laid out as the header's picture is drawn in Dart (BoxFit.cover from the top centre), so it lands
+/// exactly where the picture was. It takes no touches.
 final class SkinVideoHostView: UIView {
-  override class var layerClass: AnyClass { AVPlayerLayer.self }
-  private var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
-
+  private let playerLayer = AVPlayerLayer()
   private let channel: FlutterMethodChannel
   private let loop: Bool
   private var player: AVQueuePlayer?
   private var looper: AVPlayerLooper?
+  private var onceItem: AVPlayerItem?
+  /// The video's size on screen, its track's transform applied; zero until the file has loaded.
+  private var displaySize = CGSize.zero
   private var loadTask: Task<Void, Never>?
-  private var readyObservation: NSKeyValueObservation?
-  private var endToken: NSObjectProtocol?
+  private var observations: [NSKeyValueObservation] = []
+  private var tokens: [NSObjectProtocol] = []
   /// What Dart last asked for; going to the background pauses without changing it.
   private var wantsPlay = false
   private var finished = false
+  private var failed = false
   private var reportedReady = false
   private var tornDown = false
+
+  private var mayPlay: Bool {
+    wantsPlay && !finished && !failed && UIApplication.shared.applicationState != .background
+  }
 
   init(frame: CGRect, path: String, loop: Bool, channel: FlutterMethodChannel) {
     self.channel = channel
@@ -87,6 +97,7 @@ final class SkinVideoHostView: UIView {
     clipsToBounds = true
     isUserInteractionEnabled = false
     playerLayer.videoGravity = .resizeAspectFill
+    layer.addSublayer(playerLayer)
     channel.setMethodCallHandler { [weak self] call, result in
       let method = call.method
       guard method == "play" || method == "pause" else {
@@ -106,6 +117,24 @@ final class SkinVideoHostView: UIView {
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    // A sublayer's frame would animate implicitly; the header's size changes follow Dart's own animation.
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    playerLayer.frame = Self.videoFrame(displaySize, in: bounds)
+    CATransaction.commit()
+  }
+
+  /// Dart's BoxFit.cover with Alignment.topCenter: the whole box covered, the video's top on the box's top.
+  private static func videoFrame(_ size: CGSize, in bounds: CGRect) -> CGRect {
+    guard size.width > 0, size.height > 0, bounds.width > 0, bounds.height > 0 else { return bounds }
+    let scale = max(bounds.width / size.width, bounds.height / size.height)
+    let width = size.width * scale
+    let height = size.height * scale
+    return CGRect(x: bounds.minX + (bounds.width - width) / 2, y: bounds.minY, width: width, height: height)
+  }
+
   func tearDown() {
     guard !tornDown else { return }
     tornDown = true
@@ -113,12 +142,13 @@ final class SkinVideoHostView: UIView {
     NotificationCenter.default.removeObserver(self)
     loadTask?.cancel()
     loadTask = nil
-    readyObservation?.invalidate()
-    readyObservation = nil
-    if let endToken { NotificationCenter.default.removeObserver(endToken) }
-    endToken = nil
+    observations.forEach { $0.invalidate() }
+    observations = []
+    tokens.forEach { NotificationCenter.default.removeObserver($0) }
+    tokens = []
     looper?.disableLooping()
     looper = nil
+    onceItem = nil
     player?.pause()
     player?.removeAllItems()
     player = nil
@@ -128,88 +158,132 @@ final class SkinVideoHostView: UIView {
   private func loadVideo(_ url: URL) {
     loadTask = Task { [weak self] in
       do {
-        let item = try await SkinVideoHostView.videoOnlyItem(url)
+        let video = try await SkinVideoHostView.videoOnlyItem(url)
         guard let self, !Task.isCancelled, !self.tornDown else { return }
-        self.start(item)
+        self.start(video.item, size: video.size)
       } catch {
         guard let self, !Task.isCancelled, !self.tornDown else { return }
-        let nsError = error as NSError
-        self.channel.invokeMethod("failed", arguments: "\(nsError.domain) \(nsError.code)")
+        self.fail(skinVideoFailure(error))
       }
     }
   }
 
-  /// The file's video tracks alone in a composition: with no audio track at all, the player has nothing to play
+  /// The file's first video track alone in a composition: with no audio track at all, the player has nothing to play
   /// through the app's AVAudioSession, which the video player owns.
-  private static func videoOnlyItem(_ url: URL) async throws -> AVPlayerItem {
-    let asset = AVURLAsset(url: url)
-    let tracks = try await asset.loadTracks(withMediaType: .video)
-    guard !tracks.isEmpty else {
+  private static func videoOnlyItem(_ url: URL) async throws -> (item: AVPlayerItem, size: CGSize) {
+    // Without an extension AVFoundation can't tell what the file is.
+    let options: [String: Any]? = url.pathExtension.isEmpty ? [AVURLAssetOverrideMIMETypeKey: "video/mp4"] : nil
+    let asset = AVURLAsset(url: url, options: options)
+    guard let track = try await asset.loadTracks(withMediaType: .video).first else {
       throw NSError(domain: "SkinVideo.noVideoTrack", code: 0)
     }
-    var parts: [(track: AVAssetTrack, range: CMTimeRange, transform: CGAffineTransform)] = []
-    for track in tracks {
-      let range = try await track.load(.timeRange)
-      let transform = try await track.load(.preferredTransform)
-      parts.append((track: track, range: range, transform: transform))
-    }
+    let range = try await track.load(.timeRange)
+    let transform = try await track.load(.preferredTransform)
+    let naturalSize = try await track.load(.naturalSize)
+    let shown = CGRect(origin: .zero, size: naturalSize).applying(transform).size
     // A track holds its asset weakly.
-    let composition = try withExtendedLifetime(asset) { try videoComposition(of: parts) }
-    return AVPlayerItem(asset: composition)
+    let composition = try withExtendedLifetime(asset) {
+      try videoComposition(of: track, range: range, transform: transform)
+    }
+    return (item: AVPlayerItem(asset: composition), size: shown)
   }
 
   /// Synchronous on purpose: inside an async function, insertTimeRange could resolve to an async overload.
   private static func videoComposition(
-    of parts: [(track: AVAssetTrack, range: CMTimeRange, transform: CGAffineTransform)]
+    of track: AVAssetTrack, range: CMTimeRange, transform: CGAffineTransform
   ) throws -> AVMutableComposition {
     let composition = AVMutableComposition()
-    for part in parts {
-      guard let copy = composition.addMutableTrack(withMediaType: .video,
-                                                   preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
-      try copy.insertTimeRange(part.range, of: part.track, at: .zero)
-      copy.preferredTransform = part.transform
+    guard let copy = composition.addMutableTrack(withMediaType: .video,
+                                                 preferredTrackID: kCMPersistentTrackID_Invalid) else {
+      throw NSError(domain: "SkinVideo.noCompositionTrack", code: 0)
     }
+    try copy.insertTimeRange(range, of: track, at: .zero)
+    copy.preferredTransform = transform
     return composition
   }
 
-  private func start(_ item: AVPlayerItem) {
+  private func start(_ item: AVPlayerItem, size: CGSize) {
+    displaySize = size
+    setNeedsLayout()
     let player = AVQueuePlayer()
     player.isMuted = true
     player.allowsExternalPlayback = false
     player.preventsDisplaySleepDuringVideoPlayback = false
+    let center = NotificationCenter.default
+    // KVO calls back on any thread, so the handlers are not main-actor isolated.
     if loop {
-      looper = AVPlayerLooper(player: player, templateItem: item)
+      let looper = AVPlayerLooper(player: player, templateItem: item)
+      self.looper = looper
+      observations.append(looper.observe(\.status, options: [.initial, .new]) { @Sendable [weak self] looper, _ in
+        guard looper.status == .failed else { return }
+        let reason = skinVideoFailure(looper.error)
+        DispatchQueue.main.async {
+          MainActor.assumeIsolated { self?.fail(reason) }
+        }
+      })
     } else {
       player.actionAtItemEnd = .pause
       player.insert(item, after: nil)
-      endToken = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification,
-                                                        object: item, queue: .main) { [weak self] _ in
+      onceItem = item
+      observations.append(item.observe(\.status, options: [.initial, .new]) { @Sendable [weak self] item, _ in
+        guard item.status == .failed else { return }
+        let reason = skinVideoFailure(item.error)
+        DispatchQueue.main.async {
+          MainActor.assumeIsolated { self?.fail(reason) }
+        }
+      })
+      tokens.append(center.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification,
+                                       object: item, queue: .main) { [weak self] _ in
         MainActor.assumeIsolated { self?.finished = true }
-      }
+      })
     }
+    // Any item: the looper plays copies of its template.
+    tokens.append(center.addObserver(forName: AVPlayerItem.failedToPlayToEndTimeNotification,
+                                     object: nil, queue: .main) { [weak self] note in
+      guard let played = note.object as? AVPlayerItem else { return }
+      let id = ObjectIdentifier(played)
+      let reason = skinVideoFailure(note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)
+      MainActor.assumeIsolated {
+        guard let self, self.plays(id) else { return }
+        self.fail(reason)
+      }
+    })
     self.player = player
     playerLayer.player = player
-    readyObservation = playerLayer.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] _, change in
-      guard change.newValue == true else { return }
-      DispatchQueue.main.async {
-        MainActor.assumeIsolated { self?.firstFrameShown() }
-      }
-    }
-    if wantsPlay && UIApplication.shared.applicationState != .background { player.play() }
+    observations.append(
+      playerLayer.observe(\.isReadyForDisplay, options: [.initial, .new]) { @Sendable [weak self] _, change in
+        guard change.newValue == true else { return }
+        DispatchQueue.main.async {
+          MainActor.assumeIsolated { self?.firstFrameShown() }
+        }
+      })
+    if mayPlay { player.play() }
+  }
+
+  private func plays(_ id: ObjectIdentifier) -> Bool {
+    if let onceItem, ObjectIdentifier(onceItem) == id { return true }
+    return looper?.loopingPlayerItems.contains { ObjectIdentifier($0) == id } ?? false
   }
 
   private func firstFrameShown() {
-    guard !reportedReady, !tornDown else { return }
+    guard !reportedReady, !failed, !tornDown else { return }
     reportedReady = true
     channel.invokeMethod("ready", arguments: nil)
+  }
+
+  private func fail(_ reason: String) {
+    guard !failed, !tornDown else { return }
+    failed = true
+    player?.pause()
+    channel.invokeMethod("failed", arguments: reason)
   }
 
   private func setWantsPlay(_ play: Bool) {
     wantsPlay = play
     guard let player else { return }
+    // Played once, it holds its last frame; in the background, willEnterForeground starts it.
     if play {
-      // Played once, it holds its last frame.
-      if !finished { player.play() }
+      if mayPlay { player.play() }
     } else {
       player.pause()
     }
@@ -220,7 +294,13 @@ final class SkinVideoHostView: UIView {
   }
 
   @objc private func willEnterForeground() {
-    guard wantsPlay, !finished else { return }
+    guard wantsPlay, !finished, !failed else { return }
     player?.play()
   }
+}
+
+private func skinVideoFailure(_ error: Error?) -> String {
+  guard let error else { return "SkinVideo.unknown 0" }
+  let nsError = error as NSError
+  return "\(nsError.domain) \(nsError.code)"
 }

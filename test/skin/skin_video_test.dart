@@ -153,7 +153,9 @@ void main() {
       expect(placeholderShown(tester), isFalse);
     }, variant: ios);
 
-    testWidgets('a file that won\'t play keeps the placeholder and is logged once', (tester) async {
+    testWidgets('a file that won\'t play keeps the placeholder, drops the native view and is logged once', (
+      tester,
+    ) async {
       final logs = MemorySink();
       Logger.shared.add(logs);
       addTearDown(() => Logger.shared.remove(logs));
@@ -163,11 +165,49 @@ void main() {
       await fromNative(tester, id, const MethodCall('failed', 'AVFoundationErrorDomain -11829'));
       await tester.pump();
       expect(placeholderShown(tester), isTrue);
+      expect(find.byType(UiKitView), findsNothing);
+      expect(views.where((call) => call.method == 'dispose'), hasLength(1));
+      expect(tester.getSize(find.byKey(placeholderKey)), const Size(440, 300));
       final event = logs.events.singleWhere((event) => event.msg == 'skin video failed');
       expect(event.f.map((key, value) => MapEntry(key, value.toJson())), {
         'file': 'broken.mp4',
         'reason': 'AVFoundationErrorDomain -11829',
       });
+
+      await pump(tester, host(skinVideo(file: File('/support/skin/broken.mp4')), ticking: false));
+      await pump(tester, host(skinVideo(file: File('/support/skin/broken.mp4'))));
+      expect(viewIds(), [id], reason: 'the same file is not tried again');
+      expect(sent[id]!.map((call) => call.method), ['play'], reason: 'nothing more goes to the dropped view');
+    }, variant: ios);
+
+    testWidgets('a failure after the first frame brings the placeholder back', (tester) async {
+      await pump(tester, host(skinVideo(file: File('/support/skin/stalls.mp4'))));
+      final id = viewIds().single;
+      await fromNative(tester, id, const MethodCall('ready'));
+      await tester.pump();
+      expect(placeholderShown(tester), isFalse);
+
+      await fromNative(tester, id, const MethodCall('failed', 'AVFoundationErrorDomain -11819'));
+      await tester.pump();
+      expect(placeholderShown(tester), isTrue);
+      expect(find.byType(UiKitView), findsNothing);
+    }, variant: ios);
+
+    testWidgets('another file after a failure gets a new native view', (tester) async {
+      await pump(tester, host(skinVideo(file: File('/support/skin/missing.mp4'))));
+      await fromNative(tester, viewIds().single, const MethodCall('failed', 'SkinVideo.noVideoTrack 0'));
+      await tester.pump();
+      expect(find.byType(UiKitView), findsNothing);
+
+      await pump(tester, host(skinVideo()));
+      expect(find.byType(UiKitView), findsOneWidget);
+      expect(viewIds(), hasLength(2));
+      final second = viewIds().last;
+      expect(sent[second]!.map((call) => call.method), ['play']);
+      expect(placeholderShown(tester), isTrue);
+      await fromNative(tester, second, const MethodCall('ready'));
+      await tester.pump();
+      expect(placeholderShown(tester), isFalse);
     }, variant: ios);
   });
 }
