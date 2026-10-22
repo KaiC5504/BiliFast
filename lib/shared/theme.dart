@@ -3287,6 +3287,27 @@ abstract final class HomeTabBarTheme {
   /// The 推荐 refresh 首页's tap runs: the scroll back to the top, then the pull-to-refresh TV's room opening.
   static const reloadScroll = Duration(milliseconds: 300);
   static const reloadHeader = Duration(milliseconds: 200);
+
+  /// 首页's top dressed by the equipped 装扮 (110): `head_bg` reaches from the screen's top to the top row's bottom
+  /// (318 px, where 110's picture meets the tab strip's), `head_tab_bg` fills the tab strip to its hairline, which
+  /// takes the page's grey (110's grey starts at 142 pt). The field is filled white with no rim; the avatar, the
+  /// field's ink and 推荐's place are 01's.
+  static const headDivider = BiliColors.pageGrey;
+  static const headField = BiliColors.card;
+
+  /// The bar dressed by the 装扮 (109, 110), its labels where 01's are, in the skin's colours. On both shots every
+  /// icon's ink is 41 pt tall (859-900 pt) and centred 19/3 pt under the bar's top, so its 60 × 45 box (fit centre,
+  /// as Android's) rises 16 pt over the bar. 发布's picture is centred 88/3 pt under the bar's top, in the stock +'s
+  /// square.
+  static const skinIconWidth = 60.0;
+  static const skinIconHeight = 45.0;
+  static const skinIconCentre = 19 / 3;
+  static const skinPostCentre = 88 / 3;
+  static const skinPostSize = TabIconTheme.postSquare;
+
+  /// With `tail_icon_ani`, each change of place fades the incoming picture in, rising this far into place.
+  static const skinIconMotion = Duration(milliseconds: 300);
+  static const skinIconRise = 20.0;
 }
 
 /// The bottom bar's glyphs (01, 02): their size, strokes and colours, and the + on its pink rounded square.

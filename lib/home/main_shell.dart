@@ -1,20 +1,27 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app/app_scope.dart';
 import '../me/me_page.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../skin/skin.dart';
 import 'home_page.dart';
 import 'home_tab_bar.dart';
 
-/// The bottom bar's places: 首页 and 我的 kept alive side by side, the bar under both (01, 02).
+/// The bottom bar's places: 首页 and 我的 kept alive side by side, the bar under both (01, 02). A bar dressed by the
+/// equipped 装扮 lies over the pages' bottom instead, so they show behind its picture (109, 110).
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, this.developerPage, this.initialLink});
+  const MainShell({super.key, this.developerPage, this.initialLink, this.skin});
 
   final WidgetBuilder? developerPage;
 
   /// Passed to 首页 (`--play=` on the PC).
   final String? initialLink;
+
+  /// The equipped 装扮; null reads `AppScope`'s.
+  final ValueListenable<Skin?>? skin;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -43,16 +50,35 @@ class _MainShellState extends State<MainShell> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder<Skin?>(
+    valueListenable: widget.skin ?? AppScope.of(context).skin,
+    builder: (context, skin, _) => _build(context, skin),
+  );
+
+  Widget _build(BuildContext context, Skin? skin) {
     final mine = _tab == HomeTab.mine;
+    final media = MediaQuery.of(context);
+    final dressed = HomeTabBar.dresses(skin);
+    final bar = HomeTabBarTheme.height + media.padding.bottom;
+    // Under a dressed bar the pages run to the screen's bottom, inset by the stock bar, so lists end above its row
+    // and scroll on behind its picture.
+    final pages = dressed
+        ? media.copyWith(
+            padding: media.padding.copyWith(bottom: bar),
+            viewPadding: media.viewPadding.copyWith(bottom: bar),
+          )
+        : media.removePadding(removeBottom: true);
     return Material(
       color: HomeTabBarTheme.bar,
-      child: Column(
+      child: Stack(
         children: [
-          Expanded(
-            child: MediaQuery.removePadding(
-              context: context,
-              removeBottom: true,
+          Positioned(
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: dressed ? 0 : bar,
+            child: MediaQuery(
+              data: pages,
               child: IndexedStack(
                 index: mine ? 1 : 0,
                 sizing: StackFit.expand,
@@ -63,6 +89,7 @@ class _MainShellState extends State<MainShell> {
                       developerPage: widget.developerPage,
                       initialLink: widget.initialLink,
                       reloads: _reloads,
+                      skin: skin,
                     ),
                   ),
                   _Place(
@@ -76,7 +103,12 @@ class _MainShellState extends State<MainShell> {
               ),
             ),
           ),
-          HomeTabBar(selected: _tab, onTap: _tapped),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: HomeTabBar(selected: _tab, onTap: _tapped, skin: skin),
+          ),
         ],
       ),
     );
