@@ -1,9 +1,11 @@
-// Stub for the data agent, who removes this line.
-// ignore_for_file: unused_field, prefer_initializing_formals
+import 'dart:async';
 
+import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
 import '../app/app_environment.dart';
+import '../home/feed_model.dart' show requestFailureMessage;
 import 'me_api.dart';
 
 /// What 我的's header shows of the account.
@@ -21,6 +23,19 @@ final class MeProfile {
     this.vipLabel = '',
     this.vipBadge = false,
   });
+
+  factory MeProfile.fromNav(NavInfo nav) => MeProfile(
+    mid: nav.mid ?? 0,
+    name: nav.uname ?? '',
+    face: nav.face ?? '',
+    pendant: nav.pendant,
+    level: nav.level,
+    coins: nav.coins,
+    bcoin: nav.bcoin,
+    vip: nav.isVip,
+    vipLabel: nav.vipLabel,
+    vipBadge: nav.vipBadge,
+  );
 
   final int mid;
   final String name;
@@ -42,6 +57,23 @@ final class MeProfile {
 
   /// The 大 badge on the avatar's corner.
   final bool vipBadge;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MeProfile &&
+      other.mid == mid &&
+      other.name == name &&
+      other.face == face &&
+      other.pendant == pendant &&
+      other.level == level &&
+      other.coins == coins &&
+      other.bcoin == bcoin &&
+      other.vip == vip &&
+      other.vipLabel == vipLabel &&
+      other.vipBadge == vipBadge;
+
+  @override
+  int get hashCode => Object.hash(mid, name, face, pendant, level, coins, bcoin, vip, vipLabel, vipBadge);
 }
 
 /// 动态, 关注 and 粉丝.
@@ -49,9 +81,19 @@ final class MeProfile {
 final class MeCounts {
   const MeCounts({required this.dynamics, required this.following, required this.followers});
 
+  factory MeCounts.fromStat(NavStat stat) =>
+      MeCounts(dynamics: stat.dynamicCount, following: stat.following, followers: stat.follower);
+
   final int dynamics;
   final int following;
   final int followers;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MeCounts && other.dynamics == dynamics && other.following == following && other.followers == followers;
+
+  @override
+  int get hashCode => Object.hash(dynamics, following, followers);
 }
 
 /// What 我的 draws.
@@ -75,6 +117,12 @@ final class MeShown extends MeView {
 
   final MeProfile profile;
   final MeCounts? counts;
+
+  @override
+  bool operator ==(Object other) => other is MeShown && other.profile == profile && other.counts == counts;
+
+  @override
+  int get hashCode => Object.hash(profile, counts);
 }
 
 /// Logged in, and the first load failed with nothing to show; [message] is the user-facing reason.
@@ -82,33 +130,189 @@ final class MeFailed extends MeView {
   const MeFailed(this.message);
 
   final String message;
+
+  @override
+  bool operator ==(Object other) => other is MeFailed && other.message == message;
+
+  @override
+  int get hashCode => message.hashCode;
 }
 
 /// 我的's account and counts, following the login.
+///
+/// One load is out at a time, nav and stat side by side; a showing or a pull meanwhile joins it. Every login and
+/// logout drops what is still out, so an answer for the account before never shows.
 class MeModel extends ChangeNotifier {
   MeModel({
-    required MeApi api,
+    required this._api,
     required AppEnvironment environment,
     this.quietGap = const Duration(seconds: 30),
     DateTime Function()? now,
-  }) : _api = api,
-       _environment = environment,
-       _now = now ?? DateTime.now;
+    Logger? logger,
+  }) : _environment = environment,
+       _now = now ?? DateTime.now,
+       _logger = logger ?? Logger.shared,
+       _account = environment.account,
+       _view = switch (environment.account) {
+         LoggedOut() || LoginExpired() => const MeLoggedOut(),
+         LoggedIn() || AccountUnknown() => const MeLoading(),
+       } {
+    environment.addListener(_accountChanged);
+    environment.logins.addListener(_loginCompleted);
+  }
 
   final MeApi _api;
   final AppEnvironment _environment;
   final DateTime Function() _now;
+  final Logger _logger;
 
   /// The least time between two loads that [shown] starts on its own.
   final Duration quietGap;
 
-  MeView get view => const MeLoading();
+  /// The account as it last settled. Unknown only until the launch's check answers, and counted as logged in then,
+  /// as 历史记录 and 我的收藏 do.
+  Account _account;
+  MeView _view;
+  Future<String?>? _loading;
+  DateTime? _lastLoad;
+
+  /// Bumped by every login and logout.
+  int _generation = 0;
+
+  /// The account's turn to logged in has loaded already, so the login count that follows asks nothing more.
+  bool _loginLoaded = false;
+  bool _disposed = false;
+
+  MeView get view => _view;
+
+  bool get _signedIn => _account is LoggedIn || _account is AccountUnknown;
 
   /// The tab came on screen: loads the first time, then again quietly (the page stays as it is) at most every
   /// [quietGap]. Logged out it calls nothing.
-  void shown() {}
+  void shown() {
+    if (!_signedIn || _loading != null) return;
+    final last = _lastLoad;
+    if (last != null && _now().difference(last) < quietGap) return;
+    if (_view is MeFailed) _show(const MeLoading());
+    unawaited(_load());
+  }
 
   /// The pull. Completes when the answer is in; with the page shown, a failure keeps it and returns the message to
   /// toast. Null on success.
-  Future<String?> refresh() async => null;
+  Future<String?> refresh() => _signedIn ? _load() : Future<String?>.value();
+
+  Future<String?> _load() {
+    if (_loading case final running?) return running;
+    _lastLoad = _now();
+    late final Future<String?> load;
+    load = _fetch(_generation).whenComplete(() {
+      if (identical(_loading, load)) _loading = null;
+    });
+    return _loading = load;
+  }
+
+  Future<String?> _fetch(int generation) async {
+    final stat = Future.sync(_api.stat).then<NavStat?>(
+      (stat) => stat,
+      onError: (Object error) {
+        _logger.warn(LogCategory.ui, 'me stat failed', {'error': _describe(error)});
+        return null;
+      },
+    );
+    final NavInfo nav;
+    try {
+      nav = await Future.sync(_api.nav);
+    } catch (error) {
+      if (error is BiliError && error.needsLogin) {
+        if (_current(generation)) _loggedOutByNav();
+        return null;
+      }
+      _logger.warn(LogCategory.ui, 'me nav failed', {'error': _describe(error)});
+      if (!_current(generation)) return null;
+      final message = requestFailureMessage(error);
+      if (_view is MeShown || _view is MeLoggedOut) return message;
+      _show(MeFailed(message));
+      return null;
+    }
+    final counts = await stat;
+    if (!_current(generation)) return null;
+    if (!nav.isLogin) {
+      _loggedOutByNav();
+      return null;
+    }
+    final kept = switch (_view) {
+      MeShown(:final counts) => counts,
+      _ => null,
+    };
+    _show(MeShown(MeProfile.fromNav(nav), counts == null ? kept : MeCounts.fromStat(counts)));
+    return null;
+  }
+
+  /// The environment has checks of its own, so it is left as it is.
+  void _loggedOutByNav() {
+    _logger.info(LogCategory.ui, 'me logged out by nav');
+    _show(const MeLoggedOut());
+  }
+
+  void _accountChanged() {
+    final now = _environment.account;
+    if (now is AccountUnknown) {
+      // didLogin passes through here on its way to logged in; the login count after it then knows whether the
+      // turn to logged in has loaded.
+      _loginLoaded = false;
+      return;
+    }
+    final was = _account;
+    _account = now;
+    if (now is! LoggedIn) {
+      _signedOut();
+    } else if (was is LoggedOut || was is LoginExpired) {
+      _loginLoaded = true;
+      _restart();
+    }
+  }
+
+  /// A login over an account that already read logged in leaves the account where it was, and may be another one.
+  void _loginCompleted() {
+    if (_loginLoaded) {
+      _loginLoaded = false;
+    } else if (_account is LoggedIn) {
+      _restart();
+    }
+  }
+
+  /// The page may already be on screen when the login page closes, so a login loads at once.
+  void _restart() {
+    _generation++;
+    _loading = null;
+    _show(const MeLoading());
+    unawaited(_load());
+  }
+
+  void _signedOut() {
+    _generation++;
+    _loading = null;
+    _lastLoad = null;
+    _loginLoaded = false;
+    _show(const MeLoggedOut());
+  }
+
+  bool _current(int generation) => generation == _generation && !_disposed;
+
+  void _show(MeView view) {
+    if (_disposed || view == _view) return;
+    _view = view;
+    notifyListeners();
+  }
+
+  /// A transport's own words end with the request's URL; Bilibili's errors carry none.
+  static String _describe(Object error) => error is BiliError ? '$error' : '${error.runtimeType}';
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _environment.removeListener(_accountChanged);
+    _environment.logins.removeListener(_loginCompleted);
+    super.dispose();
+  }
 }
