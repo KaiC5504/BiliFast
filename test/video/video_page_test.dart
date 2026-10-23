@@ -642,6 +642,25 @@ void main() {
     });
   }
 
+  testWidgets("opening a page asks for the player box's cover at once, the address the page's own cover draws", (
+    tester,
+  ) async {
+    final requested = <String>[];
+    debugNetworkImageHttpClientProvider = () => _RecordingHttpClient(requested);
+    try {
+      await host(tester);
+      VideoPage.precacheCover(nav.currentContext!, cover);
+      await tester.pump();
+      expect(requested, [coverImageUrl(cover, width: 440, height: 248)]);
+      await tester.pump(ImageDiskCache.downloadTimeout);
+    } finally {
+      debugNetworkImageHttpClientProvider = null;
+      imageCache
+        ..clear()
+        ..clearLiveImages();
+    }
+  });
+
   group('a card opened during the pop', () {
     testWidgets('another part: the page reports its own part at its last position, nothing of the newer one',
         (tester) async {

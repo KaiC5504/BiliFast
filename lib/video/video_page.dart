@@ -108,6 +108,11 @@ class VideoPage extends StatefulWidget {
   /// A related video, or a video id in the description, opens a page on top through this.
   final VideoPageOpener openPage;
 
+  /// Asks for [cover] at the player box's size the moment a page is opened: the card's smaller (for 推荐, 4:3) picture
+  /// flies in under it and would otherwise sit stretched in the box until the page's own arrives.
+  static void precacheCover(BuildContext context, String cover) =>
+      unawaited(RemoteImage.precache(context, cover, size: _VideoPageState._coverSize(context), cover: true));
+
   @override
   State<VideoPage> createState() => _VideoPageState();
 }
@@ -1631,7 +1636,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return Size(width, width / BiliMetrics.videoAspect);
   }
 
-  /// The card's image, already loaded as the card asked for it (its size, its CDN suffix, or as a full-size cover),
+  /// The card's image, already loaded as the card asked for it (its size, its CDN suffix, or its cover size),
   /// flies; the page's cover, the same download as the page's own, fades in over it once it arrives.
   Widget _coverInFlight(
     BuildContext flight,
@@ -1645,7 +1650,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final card = cardHero.findRenderObject();
     final cardSize = card is RenderBox && card.hasSize ? card.size : null;
     final (cardSuffix, cardCover) = switch (cardHero.widget) {
-      Hero(child: RemoteImage(:final cdnSuffix, cover: final fullSize)) => (cdnSuffix, fullSize),
+      Hero(child: RemoteImage(:final cdnSuffix, cover: final cardCover)) => (cdnSuffix, cardCover),
       _ => (null, false),
     };
     return RemoteImage(

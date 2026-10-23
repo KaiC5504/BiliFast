@@ -60,8 +60,7 @@ class FeedCardView extends StatefulWidget {
   /// The reasons sheet's pick.
   final ValueChanged<FeedReason>? onReason;
 
-  /// Gets [url] ready as the cover of a card whose cover box is [size] asks for it, so the card draws it the frame it
-  /// comes.
+  /// Gets [url] ready as a card with a [size] cover box asks for it, so the card draws it the frame it comes.
   static Future<bool> precacheCover(BuildContext context, String? url, Size size) =>
       RemoteImage.precache(context, url, size: size, cover: true);
 

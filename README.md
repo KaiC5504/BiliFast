@@ -79,7 +79,7 @@ picture-in-picture, HDR and Dolby Vision behave as they do in Apple's apps.
 
 ### Built for speed
 - [x] Every picture kept on the phone (up to 500 MB) and shown again without reloading
-- [x] Covers as the CDN already stores them, over one kept-open connection, decoded at the size they're drawn
+- [x] Covers from the CDN the official app uses, over one kept-open connection, at the exact size they're drawn
 
 ### Planned
 - [ ] 动态

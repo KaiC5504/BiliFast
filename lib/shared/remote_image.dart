@@ -154,8 +154,7 @@ class RemoteImage extends StatelessWidget {
     return ok;
   }
 
-  /// The address names the box's size in device pixels, so a precache and its draw of one box share one download and
-  /// one decode.
+  /// The address names the size asked for, so a precache and its draw of one box share one download and one decode.
   static StoredNetworkImage _provider(
     BuildContext context,
     String source,

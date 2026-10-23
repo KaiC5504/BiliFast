@@ -166,6 +166,14 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   Flutter's engine can't read AVIF), webp on the PC and as the fallback (a failed AVIF fetches its webp; three in a
   row turn AVIF off for the session). Decodes are keyed by their box, so memory stays as it was. Logs: `cover format`,
   `avif decode failed`, `avif refused`, `avif off`, and `feed covers done` gains format and decodeMsMax.
+- 1.0.0 (32), covers from (31)'s log and a capture of the official app (WireGuard through mitmproxy, picture hosts
+  only): (31)'s full-size AVIF was slower on KaiC's own feed (thirdMs 785-1523, lastMs 1359-1957). The official app
+  asks every picture from i1 (`@630w_473h_85q_!pegasus-ios-v2.avif` for 推荐's 633×475 px box), and i1 is another
+  CDN, about twice as fast here as i0, where (30) had sent everything. Pictures now come from i1, and video covers at
+  their box's exact size as quality 90 JPEG (measured: the default webp soft, JPEG 90 as sharp as the original scaled,
+  ~20 ms slower on a first ask; the official AVIF address never came from cache for us). AVIF, ImageIO
+  (`PictureDecoder.swift`, the Pigeon picture API) and `CoverFormat` are gone; `feed covers done` drops format and
+  decodeMsMax.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -175,9 +183,12 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
-- (31) on the phone: `cover format` should read avif and `feed covers done` show decodeMsMax with thirdMs/lastMs
-  below (30)'s (615-1120 / 796-1790 ms); any `avif decode failed`/`avif off` means ImageIO or the Swift side failed
-  (the covers then come as webp). Covers are only checked live on the phone: the PC's fake lists have none.
+- (32) on the phone: `feed covers done` thirdMs/lastMs should be well under (30)'s (615-1120 / 796-1790 ms) and
+  (31)'s (785-1523 / 1359-1957 ms); covers sharp in 推荐, related, 历史记录 and 搜索; any `image failed` names the
+  host and status. Then KaiC's second capture (agreed, 2026-10-23): the official app's picture request headers (names,
+  and values only for User-Agent/Accept-like ones) and cache headers, and its 630×473 covers kept briefly for a
+  sharpness check, to learn why the CDN serves the official preset from cache for the official app (115-343 ms) but
+  never for us (~0.5 s, even asked twice). The addon and keys wait in the scratchpad's `capture/`.
 - (30) on the phone, passed (KaiC, 2026-10-23: status bar, brightness, seek TV); still to read:
   `feed covers done` with warm/warmed and thirdMs/lastMs against (29)'s; `skin status bar` for
   幸运塔罗星 (home, me, meNoCard and their picks: white expected); the brightness after full screen and after leaving
@@ -326,6 +337,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - Flags: `--mute` (always), `--play=<BV>`, `--fake-account` (a made-up account with the page's calls answered
     by `FakePageApi`: actions and a demo comment section, no account traffic), and `--real-account` (KaiC's PC
     login, only with his OK each time: Rules that bite).
+  - Launched from the Claude desktop app (ghosthand), Windows redirects `%APPDATA%`: that run's support folder and
+    log are under `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roamingilifast\`.
   - ghosthand can't scroll or drag, and the 956 pt window is taller than this PC's screen (the bottom ~10 pt of a
     capture is stale). Scrolls, drags and swipes are covered by widget tests at ~1500 px/s instead.
 - Look-alike checks render our screens in widget tests at 440×956 (or 956×440), 3×, against KaiC's official
@@ -417,10 +430,13 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   one call per arming, keeps it unseen and shows it the moment the finger lets go. Pushed back until the TV is gone
   and let go there, nothing refreshes (`feed pull cancelled`); the unseen answer may serve another pull within 10 s.
   Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`.
-- Pictures: every address passes `secureImageUrl` (https, and i1/i2.hdslb.com asked from i0, so one connection serves
-  them all and a precache and its draw share one address). Video covers ask the full-size picture (`CoverFormat`:
-  AVIF decoded by ImageIO on the iPhone, else webp), decoded at their box's size and keyed by it. On iOS downloads go through `PictureSession`'s one
-  ephemeral URLSession (no cookies, no URL cache: `ImageDiskCache` is the cache); Windows and tests keep dart:io. A
+- Pictures: every address passes `secureImageUrl` (https, and i0/i2.hdslb.com asked from i1, so one connection serves
+  them all and a precache and its draw share one address). i1 is another CDN (Wangsu; i0 and i2 are Baidu's), the one
+  the official app asks, about twice as fast here. Video covers (`RemoteImage(cover: true)`) ask their box's exact
+  device-pixel size as `@{w}w_{h}h_1c_90q.jpg` (`coverImageUrl`): the CDN's default webp is visibly soft, quality 90
+  JPEG is as sharp as the original scaled and barely slower; the box's size is given fixed wherever the box moves, or
+  every frame would be a new address. Other pictures keep webp in 60 px steps. On iOS downloads go through
+  `PictureSession`'s one ephemeral URLSession (no cookies, no URL cache: `ImageDiskCache` is the cache); Windows and tests keep dart:io. A
   transport error's text carries the URL (cupertino_http's): log `PictureDownloadException`'s reason, never the text.
 - The status bar over a dressed header goes by the picture behind the clock and the icons (`skin_status_bar.dart`):
   the geometric mean of L + 0.05 less 0.05, white icons under 0.1791 (white's and black's contrast equal), measured

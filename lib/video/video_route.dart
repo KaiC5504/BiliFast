@@ -46,6 +46,7 @@ final class VideoRoute {
 
 /// Every way of opening a video page (feed cards, pasted links, 最近打开) comes through here.
 Future<void> openVideoPage(BuildContext context, VideoRoute route) {
+  if (route.cover case final cover? when cover.isNotEmpty) VideoPage.precacheCover(context, cover);
   Widget page(BuildContext _) => VideoPage(route: route);
   return Navigator.of(context).push(switch (route.zoomSource) {
     final source? => ZoomBackPageRoute<void>(builder: page, source: source),
