@@ -10,11 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _cover = 'http://i1.hdslb.com/bfs/archive/site.jpg';
-const _asked = 'https://i0.hdslb.com/bfs/archive/site.jpg@.webp';
+const _asked = 'https://i1.hdslb.com/bfs/archive/site.jpg';
 
 const _video = SpaceVideo(aid: 1, bvid: 'BV1site', title: '演示视频', cover: _cover, duration: 61, play: 1200);
 
-/// Every place a video's cover is drawn, by file; each must ask for the full-size picture.
+/// Every place a video's cover is drawn, by file; each must ask for it at its box's size.
 const _sites = [
   'lib/home/feed_card.dart',
   'lib/home/feed_dislike.dart',
@@ -80,16 +80,17 @@ void main() {
     ),
   );
 
-  void expectFullSize(WidgetTester tester) {
+  void expectBoxSized(WidgetTester tester) {
     final covers = pictures(tester).where((image) => image.url.contains('/bfs/archive/'));
     expect(covers, isNotEmpty);
     for (final cover in covers) {
-      expect(cover.url, _asked);
-      expect(cover.box, isNotNull, reason: 'decoded for its box');
+      final box = cover.box;
+      expect(box, isNotNull, reason: 'decoded for its box');
+      expect(cover.url, coverImageUrl(_asked, width: box!.width.round(), height: box.height.round()));
     }
   }
 
-  testWidgets('a related video asks for the full-size cover', (tester) async {
+  testWidgets("a related video asks for the cover at its box's size", (tester) async {
     const card = VideoCard(
       aid: 1,
       bvid: 'BV1site',
@@ -112,11 +113,11 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 1));
-    expectFullSize(tester);
+    expectBoxSized(tester);
   });
 
   testWidgets("UP主空间's row, the uploader sheet's card and the own space's video card and folder ask for the "
-      'full-size cover', (tester) async {
+      "cover at its box's size", (tester) async {
     await show(
       tester,
       // A Column rather than a lazy list, so all four are built.
@@ -142,7 +143,7 @@ void main() {
         ),
       ),
     );
-    expectFullSize(tester);
+    expectBoxSized(tester);
     expect(pictures(tester).where((image) => image.url.contains('/bfs/archive/')), hasLength(4));
   });
 

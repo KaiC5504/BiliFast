@@ -529,7 +529,7 @@ void main() {
       expect(gate.isCompleted, isFalse, reason: 'page 1 still out');
       final head = pictureHttp.sent.single;
       expect(head.method, 'HEAD');
-      expect('${head.url}', 'https://i0.hdslb.com/bfs/archive/BV1.jpg');
+      expect('${head.url}', 'https://i1.hdslb.com/bfs/archive/BV1.jpg');
       gate.complete();
       await refresh;
 

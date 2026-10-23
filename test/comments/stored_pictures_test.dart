@@ -43,7 +43,7 @@ void main() {
       ),
     );
     await StoredPictures.arrive(tester);
-    expect(pictures.downloads, ['https://i0.hdslb.com/bfs/garb/item/pendant.gif']);
+    expect(pictures.downloads, ['https://i1.hdslb.com/bfs/garb/item/pendant.gif']);
     expect(images(tester).single, isA<StoredNetworkImage>().having((image) => image.still, 'still', isFalse));
     expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull);
     await pictures.drop(tester);

@@ -1559,8 +1559,8 @@ void main() {
           if (url.contains('/bfs/archive/')) url,
       ];
       expect(coverAddresses, isNotEmpty);
-      expect(coverAddresses, everyElement(endsWith('.jpg@.webp')), reason: 'the full-size cover');
-      // 211 × 158.25 pt at 1x, in 60 px steps.
+      // 211 × 158.25 pt at 1x, rounded up to whole pixels.
+      expect(coverAddresses, everyElement(endsWith('.jpg@211w_159h_1c_90q.jpg')), reason: "the cover box's size");
       Iterable<Image> images(String bvid) =>
           tester.widgetList<Image>(find.descendant(of: cover(bvid).first, matching: find.byType(Image)));
       final boxes = {
@@ -1568,7 +1568,7 @@ void main() {
           for (final image in images(bvid))
             if (image.image case StoredNetworkImage(:final box?)) box,
       };
-      expect(boxes, {const Size(240, 180)}, reason: "decoded for the cover box's own size");
+      expect(boxes, {const Size(211, 159)}, reason: "decoded for the cover box's own size");
       // The store's steps wait on frames as well as on the disk.
       var stored = false;
       unawaited(cache.settle().then((_) => stored = true));

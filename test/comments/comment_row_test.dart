@@ -625,15 +625,15 @@ void main() {
     test('pictures load scaled from Bilibili\'s image servers', () {
       expect(
         CommentPictures.thumbnail('https://i0.hdslb.com/bfs/new_dyn/a.png', width: 480),
-        'https://i0.hdslb.com/bfs/new_dyn/a.png@480w.webp',
+        'https://i1.hdslb.com/bfs/new_dyn/a.png@480w.webp',
       );
       expect(
         CommentPictures.thumbnail('//i0.hdslb.com/bfs/new_dyn/a.png', width: 480),
-        'https://i0.hdslb.com/bfs/new_dyn/a.png@480w.webp',
+        'https://i1.hdslb.com/bfs/new_dyn/a.png@480w.webp',
       );
       expect(
         CommentPictures.thumbnail('https://i0.hdslb.com/bfs/a.png@1e_1c.webp', width: 480),
-        'https://i0.hdslb.com/bfs/a.png@1e_1c.webp',
+        'https://i1.hdslb.com/bfs/a.png@1e_1c.webp',
       );
       expect(CommentPictures.thumbnail('https://example.com/a.png', width: 480), 'https://example.com/a.png');
     });

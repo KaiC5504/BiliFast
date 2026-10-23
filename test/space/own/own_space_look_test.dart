@@ -31,7 +31,7 @@ import '../../video/mixed_lines.dart' show appTheme;
 
 const _screen = ValueKey('screen');
 const _banner = 'https://i0.hdslb.com/bfs/garb/look-banner.png';
-const _vipLabel = 'https://i0.hdslb.com/bfs/vip/look-label.png';
+const _vipLabel = 'https://i1.hdslb.com/bfs/vip/look-label.png';
 
 /// KaiC's own space as 108, 114 and 115 show it: a 年度大会员 at LV5 with 14805/28800, the 空间头图's label, four tabs.
 SpaceProfile _kaic({SpaceTabKind defaultTab = SpaceTabKind.contribute}) => SpaceProfile(

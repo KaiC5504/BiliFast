@@ -28,8 +28,8 @@ void main() {
       RemoteImage('https://i0.hdslb.com/bfs/archive/b.jpg', size: Size(100, 50)),
     ]);
     expect(urls(tester), [
-      'https://i0.hdslb.com/bfs/archive/a.jpg@480w_360h_1c.webp',
-      'https://i0.hdslb.com/bfs/archive/b.jpg@240w_120h_1c.webp',
+      'https://i1.hdslb.com/bfs/archive/a.jpg@480w_360h_1c.webp',
+      'https://i1.hdslb.com/bfs/archive/b.jpg@240w_120h_1c.webp',
     ]);
   });
 

@@ -587,13 +587,13 @@ void main() {
       sizedImageUrl(cover, width: 240, height: 180),
     ),
     (
-      // The full-size cover, decoded for 211 × 158.25 pt, its own box's size in 60 px steps.
+      // The cover at 211 × 158.25 pt, its box's size rounded up to whole pixels.
       'a 推荐 card on a 211 pt column',
       (open) => SizedBox(
         width: 211,
         child: FeedCardView(card: feedCard, onOpen: (_) => open(), onWatchLater: () {}),
       ),
-      '$cover@.webp',
+      coverImageUrl(cover, width: 211, height: 159),
     ),
   ]) {
     testWidgets('a push from $name asks for at most two pictures: the card flies on its own download, the player '
@@ -625,11 +625,10 @@ void main() {
           flew |= shuttle.evaluate().isNotEmpty;
         }
         expect(flew, isTrue, reason: 'the card image flew under the player-sized cover');
-        // On the phone the disk cache serves the 推荐 card's download to the player box; here each decode downloads.
         expect(
           requested,
-          ['$cover@.webp'],
-          reason: "the card's picture is the one it already asked for; the player box's full-size cover, once",
+          [coverImageUrl(cover, width: 440, height: 248)],
+          reason: "the card's picture is the one it already asked for; the player box's cover at its size, once",
         );
         await back(tester);
         // The recording client never answers; the downloads give up.

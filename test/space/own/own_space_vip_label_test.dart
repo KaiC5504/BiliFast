@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../shared/stored_pictures.dart';
 
-const _label = 'https://i0.hdslb.com/bfs/vip/label.png';
+const _label = 'https://i1.hdslb.com/bfs/vip/label.png';
 
 const _profile = SpaceProfile(
   mid: 1,

@@ -105,7 +105,7 @@ void _clearImages() {
 Finder get _spinner => find.byType(CupertinoActivityIndicator);
 
 const _long = CommentPicture(url: 'https://i0.hdslb.com/bfs/new_dyn/long.jpg', width: 1080, height: 8000);
-const _longAddress = 'https://i0.hdslb.com/bfs/new_dyn/long.jpg@1080w.webp';
+const _longAddress = 'https://i1.hdslb.com/bfs/new_dyn/long.jpg@1080w.webp';
 
 /// The long picture's box: full width and as tall as its shape makes it.
 Finder get _longBox => find.byWidgetPredicate((widget) => widget is SizedBox && widget.height == 440 * 8000 / 1080);
@@ -147,11 +147,11 @@ void main() {
     final rig = Rig();
     await rig.mount(tester, initialIndex: 1);
     await tester.pumpAndSettle();
-    expect(_urls(tester), ['https://i0.hdslb.com/bfs/new_dyn/b.png@1320w_2868h.webp']);
+    expect(_urls(tester), ['https://i1.hdslb.com/bfs/new_dyn/b.png@1320w_2868h.webp']);
     expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.contain);
 
     await _swipe(tester, 300);
-    expect(_urls(tester), ['https://i0.hdslb.com/bfs/new_dyn/a.jpg@1080w_1920h.webp']);
+    expect(_urls(tester), ['https://i1.hdslb.com/bfs/new_dyn/a.jpg@1080w_1920h.webp']);
 
     await rig.mount(tester, initialIndex: 2);
     await tester.pumpAndSettle();
@@ -407,7 +407,7 @@ void main() {
   });
 
   group('loading', () {
-    const fullAddress = 'https://i0.hdslb.com/bfs/new_dyn/a.jpg@1080w_1920h.webp';
+    const fullAddress = 'https://i1.hdslb.com/bfs/new_dyn/a.jpg@1080w_1920h.webp';
 
     Finder image(String url) =>
         find.byWidgetPredicate((widget) => widget is Image && (widget.image as NetworkImage).url == url);
@@ -512,9 +512,9 @@ void main() {
           pixels,
           long: true,
         ),
-        'https://i0.hdslb.com/bfs/new_dyn/w.png@1320w.webp',
+        'https://i1.hdslb.com/bfs/new_dyn/w.png@1320w.webp',
       );
-      expect(viewerAddress(_long, pixels, long: false), 'https://i0.hdslb.com/bfs/new_dyn/long.jpg@1080w_2868h.webp');
+      expect(viewerAddress(_long, pixels, long: false), 'https://i1.hdslb.com/bfs/new_dyn/long.jpg@1080w_2868h.webp');
       expect(viewerAddress(_pictures[2], pixels, long: true), 'https://example.com/c.jpg');
     });
 
