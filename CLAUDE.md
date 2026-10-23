@@ -224,9 +224,11 @@ Open items, each waiting on its slice:
 - (37) on the phone: the 加载动画's size against 15 and 119; the fold against 121 (and scrolling back up, which no
   recording shows: ours opens only near the top); batches against 122. Guessed: the divider's tap acting as 首页's,
   one divider, repeats and 不感兴趣 cards dropped, the 200-card cap, the magnifier's grey on the stock header (its
-  stroke 2.1 pt against 1.83). Not built: the official feed's big inline-playing card (`large_cover_single_v9`,
-  `large_cover_v1`; dropped by the parser, which keeps `av` only), shown muted and playing at once unless loading
-  (KaiC); the tab row's other tabs. Known: folded over a 装扮 header, the status bar keeps the style measured for
+  stroke 2.1 pt against 1.83). Not built: the official feed's big inline-playing card, shown muted and playing at once
+  unless loading (KaiC). The PC's token showed (2026-10-24) the server sends it (`inline_av_v2` / `large_cover_v9`, one
+  per page, last in Android's order) only to the Android phone app (`mobi_app=android`), never to the pad app our feed
+  asks as; the APK's inline fields (`autoplay_card`, `inline_sound`, `inline_danmu`) don't decide it. The tab row's
+  other tabs. Known: folded over a 装扮 header, the status bar keeps the style measured for
   the open header (the picture's 0-62 pt band, not 44-106); a refresh whose page is short enough to show the divider
   shows its old top cards twice for the 180 ms hand-off.
 - (35) on the phone: the 2× hold and its release with danmaku on, against the official app (no forward-back steps,
@@ -440,7 +442,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   touch the network.
 - The Windows login (KaiC: "make sure you won't do anything that could get it restricted"): the last fallback for
   checking APIs, never for everyday development or tests. Ask KaiC before every `--real-account` launch, each time;
-  his OK covers that one run. Without the flag (every other run, checks and `--fake-account` included) the PC loads
+  his OK covers that one run. The PC also holds an app token (KaiC, 2026-10-24: one TV QR login confirmed in the official
+  app, kept DPAPI-encrypted in `local/pc-app-token.bin`), only for scripts KaiC runs himself to read the official API's
+  answer shapes (card types, field names and types, never values); the Windows app never loads it. Without the flag (every other run, checks and `--fake-account` included) the PC loads
   no login and its 登录 says 请在手机上登录. With it: the website's QR login,
   scanned in the official app, kept DPAPI-encrypted in the support folder's `login.bin`. Every call the Windows
   `BiliClient` makes passes `GuardedTransport`: writes refused unsent (only passport's `/login/exit/v2`; 不感兴趣's
