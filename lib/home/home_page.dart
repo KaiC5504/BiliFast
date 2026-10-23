@@ -53,8 +53,8 @@ class HomePage extends StatefulWidget {
   /// Gets a 推荐 cover ready before its card shows; tests stand in for [FeedCardView.precacheCover], as they have no
   /// network.
   @visibleForTesting
-  static Future<bool> Function(BuildContext context, String? url, Size size, {ValueChanged<double>? onDecoded})
-  precacheCover = FeedCardView.precacheCover;
+  static Future<bool> Function(BuildContext context, String? url, Size size) precacheCover =
+      FeedCardView.precacheCover;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -815,11 +815,9 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     final rows = math.max(((viewport.height - _inset - spacing) / rowExtent).ceil(), 0);
     if (rows == 0) return const CoverPrefetch.skipped(CoverSkip.noRows);
     final size = FeedCardSize.cover(width);
-    final decodes = <double>[];
     return CoverPrefetch([
-      for (final card in fresh.take(rows * 2))
-        HomePage.precacheCover(context, card.cover, size, onDecoded: decodes.add),
-    ], decodeMs: decodes);
+      for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover, size),
+    ]);
   }
 
   List<_Going> _goingOf(List<FeedCard> cards) => [

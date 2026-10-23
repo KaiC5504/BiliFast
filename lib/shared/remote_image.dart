@@ -123,16 +123,8 @@ class RemoteImage extends StatelessWidget {
   }
 
   /// Fetches and decodes [url] as a RemoteImage of [size] or [cdnSuffix] (or a [cover] of [size]) shows it, so that
-  /// box shows it at once. True once it is ready, false if it failed or there is none; never throws. [onDecoded] gets
-  /// ImageIO's ms for a cover this decoded from AVIF.
-  static Future<bool> precache(
-    BuildContext context,
-    String? url, {
-    Size? size,
-    String? cdnSuffix,
-    bool cover = false,
-    ValueChanged<double>? onDecoded,
-  }) async {
+  /// box shows it at once. True once it is ready, false if it failed or there is none; never throws.
+  static Future<bool> precache(BuildContext context, String? url, {Size? size, String? cdnSuffix, bool cover = false}) async {
     if (url == null || url.isEmpty) return false;
     final provider = _provider(context, url, size, cdnSuffix: cdnSuffix, cover: cover);
     var ok = true;
@@ -145,9 +137,6 @@ class RemoteImage extends StatelessWidget {
         _logFailure(provider.url, error);
       },
     );
-    if (ok && onDecoded != null) {
-      if (StoredNetworkImage._avifDecodeMs[provider] case final ms?) onDecoded(ms);
-    }
     return ok;
   }
 

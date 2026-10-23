@@ -61,13 +61,9 @@ class FeedCardView extends StatefulWidget {
   final ValueChanged<FeedReason>? onReason;
 
   /// Gets [url] ready as the cover of a card whose cover box is [size] asks for it, so the card draws it the frame it
-  /// comes. [onDecoded] gets ImageIO's ms if it was decoded from AVIF.
-  static Future<bool> precacheCover(
-    BuildContext context,
-    String? url,
-    Size size, {
-    ValueChanged<double>? onDecoded,
-  }) => RemoteImage.precache(context, url, size: size, cover: true, onDecoded: onDecoded);
+  /// comes.
+  static Future<bool> precacheCover(BuildContext context, String? url, Size size) =>
+      RemoteImage.precache(context, url, size: size, cover: true);
 
   /// Covers say 0:18, not 00:18 (01).
   static String duration(int seconds) {

@@ -67,7 +67,7 @@ class _Covers {
 
   static String bvidOf(String url) => url.substring(url.lastIndexOf('/') + 1, url.lastIndexOf('.'));
 
-  Future<bool> precache(BuildContext context, String? url, Size size, {ValueChanged<double>? onDecoded}) {
+  Future<bool> precache(BuildContext context, String? url, Size size) {
     final bvid = bvidOf(url!);
     asked.add(bvid);
     sizes[bvid] = size;

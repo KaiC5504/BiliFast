@@ -193,12 +193,10 @@ void main() {
     await keep(tester);
     await show(tester, [const SizedBox()]);
     final context = tester.element(find.byType(SizedBox));
-    final decoded = <double>[];
     final ready = await tester.runAsync(
-      () => RemoteImage.precache(context, _cover, size: const Size(211, 158.25), cover: true, onDecoded: decoded.add),
+      () => RemoteImage.precache(context, _cover, size: const Size(211, 158.25), cover: true),
     );
     expect(ready, isTrue);
-    expect(decoded, isEmpty);
     await show(tester, [_cardCover]);
     expect(painted(tester).single, isNotNull, reason: 'drawn the frame it shows');
     expect(providers(tester).single.box, const Size(240, 180));
@@ -212,12 +210,10 @@ void main() {
     answers[_avif] = _avifBytes;
     await show(tester, [const SizedBox()]);
     final context = tester.element(find.byType(SizedBox));
-    final decoded = <double>[];
     final ready = await tester.runAsync(
-      () => RemoteImage.precache(context, _cover, size: const Size(211, 158.25), cover: true, onDecoded: decoded.add),
+      () => RemoteImage.precache(context, _cover, size: const Size(211, 158.25), cover: true),
     );
     expect(ready, isTrue);
-    expect(decoded, [37.4]);
     expect(decodes, [(_avifBytes.length, 240, 180)], reason: "the box in device pixels, in the 60 px steps");
 
     await show(tester, [_cardCover]);
