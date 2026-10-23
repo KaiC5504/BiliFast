@@ -227,7 +227,9 @@ Open items, each waiting on its slice:
   stroke 2.1 pt against 1.83). Not built: the official feed's big inline-playing card, shown muted and playing at once
   unless loading (KaiC). The PC's token showed (2026-10-24) the server sends it (`inline_av_v2` / `large_cover_v9`, one
   per page, last in Android's order) only to the Android phone app (`mobi_app=android`), never to the pad app our feed
-  asks as; the APK's inline fields (`autoplay_card`, `inline_sound`, `inline_danmu`) don't decide it. The tab row's
+  asks as; the APK's inline fields (`autoplay_card`, `inline_sound`, `inline_danmu`) don't decide it. Asked as the
+  iPhone app (its key, the same token: accepted, code 0) it sent none either, so the iPhone app's own feed likely
+  comes another way (gRPC); (38) asks as the Android phone. The tab row's
   other tabs. Known: folded over a 装扮 header, the status bar keeps the style measured for
   the open header (the picture's 0-62 pt band, not 44-106); a refresh whose page is short enough to show the divider
   shows its old top cards twice for the 180 ms hand-off.
