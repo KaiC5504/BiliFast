@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../devtools/crash_log.dart';
 import '../playback/playback_controller.dart' show PlaybackFailure;
+import '../shared/cover_format.dart';
 import '../shared/image_disk_cache.dart';
 import '../shared/remote_image.dart' show secureImageUrl;
 import '../video/player_prefs.dart';
@@ -129,6 +130,7 @@ class _CoverCount {
     required DateTime Function() now,
     required this.warm,
     required this.warming,
+    required this.format,
   }) : of = prefetch.covers.length,
        skipped = prefetch.skipped,
        asked = now() {
@@ -162,6 +164,9 @@ class _CoverCount {
   /// Whether the picture connection was open then, and whether a warm was still opening it.
   final bool warm;
   final bool warming;
+
+  /// How 推荐's covers were asked ([CoverFormat.name]).
+  final String format;
 
   int ready = 0;
   int failed = 0;
@@ -201,10 +206,12 @@ class FeedModel extends ChangeNotifier {
     bool Function()? officialWanted,
     DateTime Function()? now,
     PictureSession? Function()? pictures,
+    String Function()? coverFormat,
   }) : _logger = logger ?? Logger.shared,
        _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
        _now = now ?? DateTime.now,
-       _pictures = pictures ?? (() => ImageDiskCache.session);
+       _pictures = pictures ?? (() => ImageDiskCache.session),
+       _coverFormat = coverFormat ?? (() => CoverFormat.shared.name);
 
   static const emptyMessage = '暂时没有推荐的视频';
   static const endMessage = '没有更多了';
@@ -227,6 +234,7 @@ class FeedModel extends ChangeNotifier {
   final bool Function() _officialWanted;
   final DateTime Function() _now;
   final PictureSession? Function() _pictures;
+  final String Function() _coverFormat;
   List<FeedCard> _cards = const [];
   bool _loading = false;
   String? _error;
@@ -466,6 +474,7 @@ class FeedModel extends ChangeNotifier {
         now: _now,
         warm: pictures?.open ?? false,
         warming: pictures?.warming ?? false,
+        format: _coverFormat(),
       );
     } catch (error, stack) {
       CrashLog.report(error, stack, source: 'feed covers', logger: _logger);
@@ -489,7 +498,7 @@ class FeedModel extends ChangeNotifier {
 
   /// Logs `feed covers done` once a shown page's covers are all ready or failed, or [coversDoneAfter] after they were
   /// asked for: when the 3rd and the last ready one came (ms after asking), whether the picture connection was open or
-  /// opening then, and what the page's [warm] came to.
+  /// opening then, what the page's [warm] came to, and the format the covers were asked in.
   void _whenCoversDone(_CoverCount count, {required bool early, required _Warm warm}) {
     if (count.of == 0 || _disposed) return;
     var logged = false;
@@ -507,6 +516,7 @@ class FeedModel extends ChangeNotifier {
         'warmed': warm.state.name,
         'early': early,
         if (!count.finished) 'timedOut': true,
+        'format': count.format,
       });
     }
 
