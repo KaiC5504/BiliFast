@@ -181,6 +181,13 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   failed AVIF falls back to (32)'s JPEG for that address, three in a row turn AVIF off. Logs: `cover downloads` per
   preset every 10 network downloads (first byte median and max, kb, ImageIO's decodeMsMax), `cover format`, the
   `avif …` lines, and `feed covers done` gains format.
+- 1.0.0 (34), from (33)'s log and KaiC's asks: a refresh replacing 推荐's cards (首页's tap, a pull's release) keeps
+  the TV up at least 1.5 s from its start (`FeedModel.minimumRefresh`, KaiC's pace; the covers are asked at the
+  answer, so they are mostly in by the swap); the first load isn't held. The launch's first load warms the picture
+  connection (a HEAD to the host itself when no picture is known; (33)'s launch covers waited ~1 s on it). 搜索's
+  covers ask the exact JPEG (`CoverPreset.exact`: the official search preset isn't made for the web search's results).
+  A video opened from a video page (related, 简介/comment video ids, the uploader sheet) replaces that page
+  (`replaceVideoPage`): back goes to where the first video was opened, never stacking (KaiC).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -190,11 +197,16 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- (34) on the phone: the TV up ~1.5 s on 首页's tap and a pull, the new cards landing with their covers in (`feed
+  covers` at the swap: ready near 6 of 6); the launch's `feed covers done` warmed other than none and well under
+  (33)'s 1113 / 1545 ms; `cover downloads` preset exact for 搜索; a related video, a 简介 video id and an uploader
+  sheet video each replace the page, back lands where the first video was opened, and a small window playing from
+  the replaced page is let go when the new one starts.
 - (33) on the phone (KaiC's log, 2026-10-23): `cover format` avif, 160 推荐 covers as AVIF, no decode failure, ImageIO
   ≤35 ms. `feed covers done` thirdMs 258-335 and lastMs 338-529 ms over five refreshes (better than (32)), but 1113 /
   1545 at launch: the picture connection was cold (warm false; the warm-up only runs on 首页's tap and an armed pull).
   `cover downloads` first byte on the phone: history 151-178, feed 205-265, related 233-433, search 312-537 ms (the
-  search preset isn't made for our web search's results), space too few to log. Proposed (34): warm at launch, 搜索
+  search preset isn't made for our web search's results), space too few to log. (34) warms at launch and puts 搜索
   back to the exact JPEG. KaiC's word on how the covers look still to come.
 - (32) on the phone (KaiC's log, 2026-10-23): `feed covers done` thirdMs 360-388 ms and lastMs 467-570 ms over five
   refreshes (582 / 633 at launch), 6 of 6 ready each time, no `image failed`: about twice (30)'s and (31)'s. The second
@@ -445,7 +457,11 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   `onArmed`/`onDisarmed`; KaiC saw the official 推荐 load while held, 2026-10-23): 推荐 fetches page 1 then, at most
   one call per arming, keeps it unseen and shows it the moment the finger lets go. Pushed back until the TV is gone
   and let go there, nothing refreshes (`feed pull cancelled`); the unseen answer may serve another pull within 10 s.
-  Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`.
+  Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`. 推荐's refresh with cards on screen holds
+  its TV at least `FeedModel.minimumRefresh` (1.5 s, KaiC), a held pull's counted from its arming.
+- A video opened from a video page replaces it (`replaceVideoPage`, KaiC: never stack); the replaced page leaves on its
+  route's `popped` future exactly as a popped one (release or PipKeeper, last heartbeat, orientation). Pages opened
+  from lists (首页, 搜索, 历史记录, a space) push. The M2 checklist's item 38 (a related video on top) is out of date.
 - Pictures: every address passes `secureImageUrl` (https, and i0/i2.hdslb.com asked from i1, so one connection serves
   them all and a precache and its draw share one address). i1 is another CDN (Wangsu; i0 and i2 are Baidu's), the one
   the official app asks, about twice as fast here. Video covers (`RemoteImage(cover: true)`) ask the official iPhone

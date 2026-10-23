@@ -302,11 +302,12 @@ class FeedModel extends ChangeNotifier {
   ///
   /// A [pulled] refresh takes the page [pullArmed] asked for, if it still counts, instead of asking again; any other
   /// refresh drops it. With cards on screen, a page that comes sooner than [minimumRefresh] waits out the rest before
-  /// it replaces them; a failure doesn't wait.
+  /// it replaces them, counted for a held pull from when it armed, so a long hold still shows the page at the release;
+  /// a failure doesn't wait.
   Future<String?> refresh({bool pulled = false}) async {
     final early = pulled ? _joinable() : null;
     _early = null;
-    final hold = _cards.isEmpty ? null : _hold();
+    final hold = _cards.isEmpty ? null : _hold(since: early?.started);
     final mine = ++_generation;
     _loading = true;
     _officialRefused = false;
@@ -473,12 +474,13 @@ class FeedModel extends ChangeNotifier {
     if (fresh.isNotEmpty) early.covers = _askCovers(fresh);
   }
 
-  /// Completes [_minimumRefresh] from now, or at once on dispose; null when there is no minimum.
-  Future<void>? _hold() {
-    if (_minimumRefresh <= Duration.zero) return null;
+  /// Completes [_minimumRefresh] after [since] (now by default), or at once on dispose; null when none is left.
+  Future<void>? _hold({DateTime? since}) {
+    final left = _minimumRefresh - (since == null ? Duration.zero : _now().difference(since));
+    if (left <= Duration.zero) return null;
     final done = Completer<void>();
     late final Timer timer;
-    timer = Timer(_minimumRefresh, () {
+    timer = Timer(left, () {
       _holds.remove(timer);
       done.complete();
     });

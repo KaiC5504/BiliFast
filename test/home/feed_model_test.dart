@@ -862,6 +862,28 @@ void main() {
       });
     });
 
+    for (final (releaseMs, swapMs) in [(2000, 2000), (800, 1500)]) {
+      test('a held pull counts the minimum from when it armed: released at $releaseMs ms, it swaps at $swapMs ms', () {
+        fakeAsync((async) {
+          final feed = showing(async);
+          final till = clockFrom(async, async.elapsed);
+          http.pages[1] = [feedItem('BV2')];
+          feed.pullArmed();
+          till(300);
+          async.flushMicrotasks();
+          till(releaseMs);
+          unawaited(feed.refresh(pulled: true));
+          async.flushMicrotasks();
+          if (swapMs > releaseMs) {
+            till(swapMs - 1);
+            expect(bvids(feed), ['BV1'], reason: 'the rest of 1.5 s from the arming');
+            till(swapMs);
+          }
+          expect(bvids(feed), ['BV2']);
+        });
+      });
+    }
+
     test('a page in after 1500 ms swaps at once', () {
       fakeAsync((async) {
         final feed = showing(async);
