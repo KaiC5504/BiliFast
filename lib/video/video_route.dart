@@ -44,7 +44,7 @@ final class VideoRoute {
   String get heroTag => coverTag(bvid);
 }
 
-/// Every way of opening a video page (feed cards, pasted links, 最近打开) comes through here.
+/// Every way of opening a video page from elsewhere (feed cards, pasted links, 最近打开, a space) comes through here.
 Future<void> openVideoPage(BuildContext context, VideoRoute route) {
   if (route.cover case final cover? when cover.isNotEmpty) VideoPage.precacheCover(context, cover);
   Widget page(BuildContext _) => VideoPage(route: route);
@@ -52,4 +52,17 @@ Future<void> openVideoPage(BuildContext context, VideoRoute route) {
     final source? => ZoomBackPageRoute<void>(builder: page, source: source),
     null => SwipeBackPageRoute<void>(builder: page),
   });
+}
+
+/// A video opened on a video page (a related video, a link in 简介 or a comment, the uploader sheet's videos) takes
+/// that page's place, so back goes to what the first page was opened from: video pages never stack (KaiC). The page
+/// replaced leaves as a popped one does. [page] builds the new page; tests give theirs.
+Future<void> replaceVideoPage(BuildContext context, VideoRoute route, {Widget Function(VideoRoute route)? page}) {
+  if (route.cover case final cover? when cover.isNotEmpty) VideoPage.precacheCover(context, cover);
+  final build = page ?? (route) => VideoPage(route: route);
+  final next = SwipeBackPageRoute<void>(builder: (_) => build(route));
+  final navigator = Navigator.of(context);
+  // pushReplacement replaces whatever route is on top; with anything over the page it goes on top instead.
+  if (ModalRoute.of(context)?.isCurrent ?? false) return navigator.pushReplacement(next);
+  return navigator.push(next);
 }

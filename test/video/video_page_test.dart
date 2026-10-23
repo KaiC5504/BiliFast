@@ -340,8 +340,16 @@ void main() {
   Widget page(VideoRoute route) =>
       VideoPage(route: route, createSession: fakeSession, createDetails: fakeDetails, openPage: openPage);
 
-  /// openVideoPage's push, with the test's session and details.
-  openPage = (context, route) => Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route)));
+  /// openVideoPage's push, with the test's session and details: a page stacked over another, as a space's video is.
+  Future<void> pushing(BuildContext context, VideoRoute route) =>
+      Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route)));
+  openPage = pushing;
+
+  /// The page's own opener, replaceVideoPage, with the test's session and details, until the test ends.
+  void replaceOnOpen() {
+    openPage = (context, route) => replaceVideoPage(context, route, page: page);
+    addTearDown(() => openPage = pushing);
+  }
 
   void pushVideo(VideoRoute route) =>
       unawaited(nav.currentState!.push(SwipeBackPageRoute<void>(builder: (_) => page(route))));
@@ -1789,8 +1797,8 @@ void main() {
       await frames(tester, 20);
     });
 
-    testWidgets('item 38: a related video opens a page on top, pausing the first; back resumes it with no reload',
-        (tester) async {
+    testWidgets('item 38: a video page stacked on another (a space\'s video, opened from the page) pauses the first; '
+        'back resumes it with no reload', (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p2, start: 0));
       await opened(tester);
@@ -1820,6 +1828,63 @@ void main() {
       expect(find.byKey(const ValueKey('fake-video')), findsOneWidget);
       await back(tester);
       expect(first.video, isNull);
+    });
+
+    testWidgets('a related video takes the page\'s place, its cover flying in; three in a row still leave one page, '
+        'and back goes straight to the page the first was opened from', (tester) async {
+      replaceOnOpen();
+      await host(tester, home: const Center(child: Text('首页')));
+      pushVideo(const VideoRoute(bvid: bv, cid: p2, start: 0));
+      await opened(tester);
+      sessions.single
+        ..detail = detail(bv)
+        ..related = [card('BV1xx411c7mD')]
+        ..changed();
+      await tester.pump();
+      final first = controller;
+      intro(tester).onOpenRelated(card('BV1xx411c7mD'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.byWidgetPredicate((widget) => widget is RemoteImage && widget.placeholder != null),
+        findsOneWidget,
+        reason: 'the related row\'s cover flies into the new page\'s player',
+      );
+      expect(first.video, isNull, reason: 'the page replaced let its player go at once, as a popped one does');
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+      final top = tester.widget<VideoPage>(find.byType(VideoPage)).route;
+      expect((top.bvid, top.title, top.cover), ('BV1xx411c7mD', '相关视频', cover));
+      expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isA<SwipeBackPageRoute<void>>());
+
+      for (final next in ['BV1aa411c7mD', 'BV1bb411c7mD']) {
+        await opened(tester, page: sessions.length - 1);
+        intro(tester).onOpenRelated(card(next));
+        await frames(tester, 20);
+        expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+        expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, next);
+      }
+      expect(tester.takeException(), isNull);
+
+      await back(tester);
+      expect(find.byType(VideoPage, skipOffstage: false), findsNothing);
+      expect(find.text('首页'), findsOneWidget);
+      expect(nav.currentState!.canPop(), isFalse);
+      expect(controllers.where((made) => made.video != null), isEmpty);
+    });
+
+    testWidgets('a video id in 简介 takes the page\'s place too', (tester) async {
+      replaceOnOpen();
+      await host(tester, home: const Center(child: Text('首页')));
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      intro(tester).onOpenVideo('BV1xx411c7mD');
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, 'BV1xx411c7mD');
+      await back(tester);
+      expect(find.text('首页'), findsOneWidget);
+      expect(nav.currentState!.canPop(), isFalse);
     });
 
     testWidgets('a sideways swipe over the tabs switches them; only the left edge goes back', (tester) async {
@@ -3559,17 +3624,18 @@ void main() {
       await back(tester);
     });
 
-    testWidgets('a card opens its video on a page above; back there finds the sheet still up', (tester) async {
+    testWidgets('a card opens its video in the page\'s place; back goes to what the page was opened from',
+        (tester) async {
+      replaceOnOpen();
       await openSheet(tester);
       await tester.tap(find.byType(UploaderVideoCard).first);
       await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
       expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, 'BV1sheetpg01');
+      expect(find.byType(UploaderSheet), findsNothing);
       await back(tester);
-      expect(find.byType(VideoPage), findsOneWidget);
-      expect(sheet(tester).isOpen, isTrue);
-      expect(find.byType(UploaderSheet), findsOneWidget);
-      await back(tester);
-      await back(tester);
+      expect(find.byType(VideoPage), findsNothing);
+      expect(nav.currentState!.canPop(), isFalse);
     });
   });
 }

@@ -91,22 +91,24 @@ typedef VideoPageOpener = Future<void> Function(BuildContext context, VideoRoute
 /// player alone over the whole screen in full screen, which is this page laid out again rather than a route of its
 /// own. Paused, the small player shrinks to the 继续播放 bar as the shown tab scrolls, the tab row riding under it.
 /// It plays the route's video on a controller of its own ([PagePlayback]), reports watch progress while logged in, and
-/// hands the playback to the [PipKeeper] when popped, which frees it unless the small window plays it. Covered by
-/// another page it pauses, and shown again it resumes where it was, without a reload.
+/// hands the playback to the [PipKeeper] when popped or replaced, which frees it unless the small window plays it. A
+/// video opened from the page replaces it ([replaceVideoPage]). Covered by another page (a video from a space opened on
+/// it) it pauses, and shown again it resumes where it was, without a reload.
 class VideoPage extends StatefulWidget {
   const VideoPage({
     super.key,
     required this.route,
     this.createSession = pageSession,
     this.createDetails = pageDetails,
-    this.openPage = openVideoPage,
+    this.openPage = replaceVideoPage,
   });
 
   final VideoRoute route;
   final PageSessionFactory createSession;
   final PageDetailsFactory createDetails;
 
-  /// A related video, or a video id in the description, opens a page on top through this.
+  /// A related video, a video id in the description or a comment, or the uploader sheet's video, opens through this:
+  /// in this page's place.
   final VideoPageOpener openPage;
 
   /// Asks for [cover] as the page's own does (the player box's size, [CoverPreset.player]) the moment a page is
@@ -134,8 +136,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   PlaybackController? get _controller => _playback?.controller;
 
-  /// Popped, or disposed without a pop: the playback went to the keeper, and the page acts on it no more.
+  /// Popped, replaced, or disposed without either: the playback went to the keeper, and the page acts on it no more.
   bool _left = false;
+
+  /// Replaced by a video opened on it: the body's Heroes stay up for the cover's flight into the new page.
+  bool _replaced = false;
 
   /// This page's video has played, so a fallback, reload or replay shows the player rather than the cover again.
   bool _played = false;
@@ -545,6 +550,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       pageRoutes.unsubscribe(this);
       _route = route;
       pageRoutes.subscribe(this, route);
+      unawaited(route.popped.then((_) => _routeDone(route)));
     }
   }
 
@@ -1160,6 +1166,16 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return playback.retry;
   }
 
+  /// The route completes on a pop, which has already left, and on a pushReplacement, which reports nothing else: the
+  /// observer hears a replace, not a push, and the route is disposed only after the new page's slide.
+  void _routeDone(PageRoute<dynamic> route) {
+    if (!mounted || _left || !identical(route, _route)) return;
+    setState(() {
+      _replaced = true;
+      _leave();
+    });
+  }
+
   /// Runs at the pop, not at dispose 500 ms later: the sound stops with the swipe, and the page below, shown at once,
   /// finds the small window kept.
   void _leave({bool fromDispose = false}) {
@@ -1573,7 +1589,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final details = _details;
     // Leaving, a related row's cover would otherwise fly back to a feed card showing the same video.
     return HeroMode(
-      enabled: !_left,
+      enabled: !_left || _replaced,
       child: PageTabs(
         controller: _tabs,
         intro: session == null || details == null
