@@ -190,10 +190,12 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
-- (33) on the phone: `cover format` avif; `cover downloads` firstByteMs near the capture's ~150-175 ms for each
-  preset (one well above ~300 ms means the official app doesn't ask that preset on that screen: re-pick it), no
-  `avif decode failed`/`avif off`; `feed covers done` below (32)'s 360-388 / 467-570 ms; covers as the official app's
-  (very slightly softer than (32)'s, KaiC's trade).
+- (33) on the phone (KaiC's log, 2026-10-23): `cover format` avif, 160 推荐 covers as AVIF, no decode failure, ImageIO
+  ≤35 ms. `feed covers done` thirdMs 258-335 and lastMs 338-529 ms over five refreshes (better than (32)), but 1113 /
+  1545 at launch: the picture connection was cold (warm false; the warm-up only runs on 首页's tap and an armed pull).
+  `cover downloads` first byte on the phone: history 151-178, feed 205-265, related 233-433, search 312-537 ms (the
+  search preset isn't made for our web search's results), space too few to log. Proposed (34): warm at launch, 搜索
+  back to the exact JPEG. KaiC's word on how the covers look still to come.
 - (32) on the phone (KaiC's log, 2026-10-23): `feed covers done` thirdMs 360-388 ms and lastMs 467-570 ms over five
   refreshes (582 / 633 at launch), 6 of 6 ready each time, no `image failed`: about twice (30)'s and (31)'s. The second
   capture (both apps side by side, same network): the official app's every picture is a named preset (推荐
