@@ -1,5 +1,6 @@
 import 'dart:async' show Completer, TimeoutException, Timer, unawaited;
 import 'dart:io' show IOException;
+import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -199,6 +200,9 @@ class CardDislike {
 /// token and 开发者's 推荐 on 官方 it reads the official app's feed; without the token it never asks it, since the
 /// feed is generic without one. When the official feed answers that the token is refused, the same load is done
 /// from the website's, so 推荐 never goes blank.
+///
+/// A refresh with cards on screen keeps them as the official app does (122): its page on top, then 刚刚看到这里，点击刷新
+/// ([dividerAt]), then the cards before it, with load more still adding at the bottom.
 class FeedModel extends ChangeNotifier {
   FeedModel({
     required this._client,
@@ -229,6 +233,10 @@ class FeedModel extends ChangeNotifier {
   /// A shown page logs `feed covers done` this long after asking for its covers, if some are still out.
   static const coversDoneAfter = Duration(seconds: 10);
 
+  /// The most cards a refresh leaves on screen, its page included; the oldest go from the bottom. 首页 lives as long as
+  /// the app, and each refresh would otherwise add its page for good, every one walked by each refresh and load more.
+  static const keptCards = 200;
+
   /// Pages in a row that may add nothing before a load more gives up and the feed counts as [exhausted].
   static const _emptyPagesAllowed = 3;
 
@@ -243,6 +251,8 @@ class FeedModel extends ChangeNotifier {
   final String Function() _coverFormat;
   final Duration _minimumRefresh;
   List<FeedCard> _cards = const [];
+  List<FeedCard> _newest = const [];
+  int? _dividerAt;
   bool _loading = false;
   String? _error;
   bool _exhausted = false;
@@ -257,9 +267,9 @@ class FeedModel extends ChangeNotifier {
   final _dislikes = <String, CardDislike>{};
   final _dislikeBusy = <String>{};
 
-  /// Called with a refresh's cards just before they replace [cards], which still hold the ones going, and with a held
-  /// pull's page as soon as it is in: it starts getting the first screen's covers ready. Nothing waits on them; a
-  /// cover still loading when its card shows pops in over the placeholder rather than holding the swap.
+  /// Called with a refresh's cards just before they take the top of [cards], which still hold the ones there, and with
+  /// a held pull's page as soon as it is in: it starts getting the first screen's covers ready. Nothing waits on them;
+  /// a cover still loading when its card shows pops in over the placeholder rather than holding the swap.
   CoverPrefetch Function(List<FeedCard> fresh)? beforeShow;
 
   /// A refresh replaces the list, so a load more that was already running must not append to the new one.
@@ -273,6 +283,14 @@ class FeedModel extends ChangeNotifier {
   bool _disposed = false;
 
   List<FeedCard> get cards => _cards;
+
+  /// The last refresh's page, at the top of [cards]: the list [beforeShow] was handed for it.
+  List<FeedCard> get newest => _newest;
+
+  /// How many of [cards] are above 刚刚看到这里，点击刷新: [newest]'s, when cards from before that refresh follow them.
+  /// Null after the first load and a [refresh] that replaced everything.
+  int? get dividerAt => _dividerAt;
+
   bool get loading => _loading;
 
   /// Where the last page shown came from; null before the first.
@@ -297,14 +315,15 @@ class FeedModel extends ChangeNotifier {
   /// The card's 不感兴趣, while it stands.
   CardDislike? dislikeOf(FeedCard card) => _dislikes[card.bvid];
 
-  /// Page 1 again. With cards on screen a failure (or an empty page) keeps them, and its words come back for a toast;
-  /// with none, it becomes [error]. Null otherwise.
+  /// Page 1 again, on top of the cards shown, or in place of them all when [replace] (another account's or token's
+  /// cards must not stay). With cards on screen a failure (or an empty page) keeps them, and its words come back for a
+  /// toast; with none, it becomes [error]. Null otherwise.
   ///
   /// A [pulled] refresh takes the page [pullArmed] asked for, if it still counts, instead of asking again; any other
   /// refresh drops it. With cards on screen, a page that comes sooner than [minimumRefresh] waits out the rest before
-  /// it replaces them, counted for a held pull from when it armed, so a long hold still shows the page at the release;
-  /// a failure doesn't wait.
-  Future<String?> refresh({bool pulled = false}) async {
+  /// it shows, counted for a held pull from when it armed, so a long hold still shows the page at the release; a
+  /// failure doesn't wait.
+  Future<String?> refresh({bool pulled = false, bool replace = false}) async {
     final early = pulled ? _joinable() : null;
     _early = null;
     final hold = _cards.isEmpty ? null : _hold(since: early?.started);
@@ -333,7 +352,10 @@ class FeedModel extends ChangeNotifier {
         }
         _logCovers(shown, heldMs: heldMs);
         if (shown != null) _whenCoversDone(shown, early: heldMs != null, warm: warm);
-        _cards = fresh;
+        final kept = replace ? const <FeedCard>[] : _keptUnder(fresh);
+        _cards = kept.isEmpty ? fresh : [...fresh, ...kept];
+        _newest = fresh;
+        _dividerAt = kept.isEmpty ? null : fresh.length;
         _advance(page);
         _source = page.source;
         _dislikes.clear();
@@ -680,6 +702,16 @@ class FeedModel extends ChangeNotifier {
     'got': page.cards.length,
     'new': added,
   });
+
+  /// The cards on screen that stay under a refresh's [fresh] page: not one it brings again, nor one turned over by
+  /// 不感兴趣 (its user asked not to see it), and no more than [keptCards] in all.
+  List<FeedCard> _keptUnder(List<FeedCard> fresh) {
+    final shown = {for (final card in fresh) card.bvid};
+    return [
+      for (final card in _cards)
+        if (!shown.contains(card.bvid) && !_dislikes.containsKey(card.bvid)) card,
+    ].take(math.max(keptCards - fresh.length, 0)).toList();
+  }
 
   /// The feed repeats videos across pages, and the grid must not show one twice.
   static List<FeedCard> _appending(List<FeedCard> page, List<FeedCard> cards) {

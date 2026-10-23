@@ -13,6 +13,7 @@ import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_card.dart';
+import 'package:bilifast/home/feed_divider.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/feed_more_sheet.dart';
 import 'package:bilifast/home/home_page.dart';
@@ -1173,6 +1174,178 @@ void main() {
         await settle(tester, 20);
         expect(find.byType(LoadingTv), findsNothing);
       });
+    });
+  });
+
+  group('batches (122)', () {
+    final divider = find.byKey(const ValueKey('feed-divider'));
+
+    List<Map<String, Object?>> page(String prefix, int count) => [
+      for (var i = 0; i < count; i++) feedItem('$prefix$i'),
+    ];
+
+    Future<void> tapHome(WidgetTester tester) => tester.tap(find.byKey(const ValueKey('home-tab-home')));
+
+    ScrollPosition feedScroll(WidgetTester tester) => tester
+        .state<ScrollableState>(
+          find.descendant(of: find.byKey(const ValueKey('feed')), matching: find.byType(Scrollable)).first,
+        )
+        .position;
+
+    /// The first load's twenty cards, then a refresh by 首页 that brings [fresh].
+    Future<void> refreshed(WidgetTester tester, List<Map<String, Object?>> fresh) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      http.pages[1] = fresh;
+      await tapHome(tester);
+      await settle(tester, 30);
+    }
+
+    testWidgets('a refresh puts its page on top, 刚刚看到这里 under it, then the cards from before, unchanged; an odd '
+        'page leaves its last row half full', (tester) async {
+      final semantics = tester.ensureSemantics();
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      expect(divider, findsNothing, reason: 'the first load has none');
+      final left = tester.getRect(card('BV1c0'));
+      final right = tester.getRect(card('BV1c1'));
+      final row = tester.getTopLeft(card('BV1c2')).dy - left.top;
+
+      http.pages[1] = page('BV1n', 3);
+      await tapHome(tester);
+      await settle(tester, 30);
+      expect(tester.getRect(card('BV1n0')), left);
+      expect(tester.getRect(card('BV1n1')), right);
+      final last = tester.getRect(card('BV1n2'));
+      expect(last.topLeft, Offset(left.left, left.top + row), reason: 'alone in its row, on the left');
+      final line = tester.getRect(divider);
+      expect(line.top, moreOrLessEquals(last.bottom));
+      expect(line.height, FeedBatchTheme.dividerGap);
+      expect(line.width, 440);
+      expect(find.descendant(of: divider, matching: find.text(FeedDivider.label)), findsOneWidget);
+      expect(tester.getTopLeft(card('BV1c0')), Offset(left.left, line.bottom));
+      expect(tester.getTopLeft(card('BV1c1')), Offset(right.left, line.bottom));
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('feed-card-BV1c2'), skipOffstage: false)).dy,
+        moreOrLessEquals(line.bottom + row),
+        reason: 'the old rows run on, below the screen',
+      );
+      expect(tester.getSemantics(divider), isSemantics(label: FeedDivider.label, isButton: true, hasTapAction: true));
+      semantics.dispose();
+    });
+
+    testWidgets('a second refresh leaves one divider, under its own page; the batch before runs on into the first', (
+      tester,
+    ) async {
+      await refreshed(tester, page('BV1n', 2));
+      http.pages[1] = page('BV1t', 2);
+      await tapHome(tester);
+      await settle(tester, 30);
+      expect(divider, findsOneWidget);
+      final line = tester.getRect(divider);
+      expect(line.top, moreOrLessEquals(tester.getRect(card('BV1t0')).bottom));
+      expect(tester.getTopLeft(card('BV1n0')).dy, moreOrLessEquals(line.bottom));
+      expect(
+        tester.getTopLeft(card('BV1c0')).dy,
+        moreOrLessEquals(tester.getRect(card('BV1n0')).bottom + BiliMetrics.feedSpacing),
+      );
+    });
+
+    testWidgets('loading more adds at the bottom, after the cards from before', (tester) async {
+      await refreshed(tester, page('BV1n', 4));
+      http.pages[2] = page('BV1m', 2);
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, -4000));
+      await settle(tester, 20);
+      expect(http.asked.take(3), [1, 1, 2]);
+      expect(divider, findsNothing, reason: 'scrolled far past it');
+      final above = tester.getRect(card('BV1c18'));
+      expect(tester.getTopLeft(card('BV1m0')), Offset(above.left, above.bottom + BiliMetrics.feedSpacing));
+    });
+
+    testWidgets("a tap on it goes back to the top and refreshes 推荐 as 首页's tap does, the TV up until the new page", (
+      tester,
+    ) async {
+      await refreshed(tester, page('BV1n', 4));
+      final cardTop = tester.getTopLeft(card('BV1n0')).dy;
+      await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, -300));
+      await settle(tester, 20);
+      final from = feedScroll(tester).pixels;
+      expect(from, greaterThan(0));
+      http.pages[1] = page('BV1t', 4);
+      final answer = http.gates[1] = Completer<void>();
+
+      await tester.tap(divider);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(http.asked, [1, 1, 1], reason: 'straight away');
+      expect(feedScroll(tester).pixels, inExclusiveRange(0, from), reason: 'scrolling back up');
+      await settle(tester, 10);
+      expect(feedScroll(tester).pixels, 0);
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('feed-reload')), matching: find.byType(LoadingTv)),
+        findsOne,
+      );
+      await tester.tap(divider, warnIfMissed: false);
+      await settle(tester, 4);
+      expect(http.asked, [1, 1, 1], reason: 'nothing more while it refreshes');
+
+      answer.complete();
+      await settle(tester, 30);
+      expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
+      expect(tester.getTopLeft(card('BV1t0')).dy, cardTop);
+      final line = tester.getRect(divider);
+      expect(line.top, moreOrLessEquals(tester.getRect(card('BV1t2')).bottom));
+      expect(tester.getTopLeft(card('BV1n0')).dy, moreOrLessEquals(line.bottom));
+    });
+
+    testWidgets("an account change replaces every card with no divider: another account's cards don't stay", (
+      tester,
+    ) async {
+      await refreshed(tester, page('BV1n', 4));
+      expect(divider, findsOneWidget);
+      http.pages[1] = page('BV1t', 4);
+      http.canned.routes[Canned.navPath] = (200, Canned.navLoggedOut);
+      await environment.refreshAccount();
+      await settle(tester, 40);
+      expect(http.asked.take(3), [1, 1, 1]);
+      expect(card('BV1t3'), findsOneWidget);
+      expect(divider, findsNothing);
+      expect(find.text(FeedModel.endMessage), findsOneWidget, reason: 'the 4 cards are all there is');
+      expect(find.byKey(const ValueKey('feed-card-BV1n0'), skipOffstage: false), findsNothing);
+      expect(find.byKey(const ValueKey('feed-card-BV1c0'), skipOffstage: false), findsNothing);
+    });
+
+    testWidgets("a card from before keeps its ⋮ 稍后再看 and opens its page, which flies back into it", (tester) async {
+      http.canned.routes[_watchLaterPath] = (200, '{"code":0,"message":"0","ttl":1}');
+      await show(tester);
+      await settle(tester);
+      http.pages[1] = page('BV1n', 2);
+      await tapHome(tester);
+      await settle(tester, 30);
+      expect(tester.getTopLeft(card('BV1aaa')).dy, moreOrLessEquals(tester.getRect(divider).bottom));
+
+      await tester.tap(find.descendant(of: card('BV1aaa'), matching: find.byKey(const ValueKey('card-more'))));
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('feed-more-watch-later')));
+      await settle(tester);
+      final sent = Uri.splitQueryString(utf8.decode(http.canned.to(_watchLaterPath).single.body!));
+      expect(sent['aid'], '${'BV1aaa'.hashCode.abs()}');
+      await toastGone(tester);
+
+      final resting = tester.getRect(card('BV1aaa'));
+      await tester.tap(card('BV1aaa'));
+      await settle(tester, 20);
+      final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
+      expect(route.title, '视频 BV1aaa');
+      expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isA<ZoomBackPageRoute<void>>());
+      expect(route.zoomSource!()!.size, resting.size);
+      await tester.tap(find.byKey(const ValueKey('video-back')));
+      await settle(tester, 20);
+      expect(find.byType(VideoPage), findsNothing);
+      expect(route.zoomSource!(), resting, reason: 'back where it was once the page has gone');
+      expect(cover('BV1aaa'), findsOneWidget, reason: "the card's cover is back");
     });
   });
 

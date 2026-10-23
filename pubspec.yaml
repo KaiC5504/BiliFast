@@ -50,6 +50,7 @@ flutter:
     - assets/images/loading/
     - assets/images/card/
     - assets/images/player/
+    - assets/images/home/
     - assets/lottie/
   fonts:
     - family: MiSans

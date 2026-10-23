@@ -5501,4 +5501,20 @@ abstract final class HomeHeaderTheme {
 abstract final class FeedBatchTheme {
   /// From the bottom of the cards above to the top of the cards below.
   static const dividerGap = 44.0;
+
+  /// The words and the ⟳ in the app's pink. Both read about rgb(253, 89, 140) at their strongest in the recording,
+  /// which takes 12 to 14 off green and blue of a saturated colour: the cards' #FF6633 reason tags read (253, 90, 37).
+  static const ink = BiliColors.pink;
+
+  /// 11 glyphs from x 138 to 279.67 pt, 13 pt apart.
+  static const text = 13.0;
+
+  /// The APK's `ic_promo_index_refresh` at its own 3× size: 44 px, its ink from x 289.33 to 304 pt.
+  static const icon = 44 / 3;
+  static const iconGap = 28 / 3;
+
+  /// The words and the icon together sit this far right of the screen's middle and [drop] under the gap's: so each
+  /// glyph's ink centre and the icon's (296.38, 731.44) land within a pixel of the recording's.
+  static const right = 0.5;
+  static const drop = 1 / 3;
 }

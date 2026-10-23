@@ -26,6 +26,7 @@ import '../video/player_prefs.dart';
 import '../video/video_route.dart';
 import 'avatar_page.dart';
 import 'feed_card.dart';
+import 'feed_divider.dart';
 import 'feed_model.dart';
 import 'home_header.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
@@ -189,22 +190,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// The running refresh, or a new one. [restart] starts one even while another runs (whose answer the feed then
-  /// drops), as a refresh asked for before the account changed would bring the old account's 推荐. A [pulled] one
-  /// takes the page its pull already asked for.
+  /// drops), as a refresh asked for before the account changed would bring the old account's 推荐; its page replaces
+  /// every card rather than going on top of them. A [pulled] one takes the page its pull already asked for.
   Future<void> _refreshFeed({bool restart = false, bool pulled = false}) {
     final running = _refreshing;
     if (running != null && !restart) return running;
     _refreshesStarted += 1;
     late final Future<void> refresh;
-    refresh = _fetchFeed(pulled: pulled).whenComplete(() {
+    refresh = _fetchFeed(pulled: pulled, replace: restart).whenComplete(() {
       if (identical(_refreshing, refresh)) _refreshing = null;
     });
     return _refreshing = refresh;
   }
 
   /// A refresh that fails with cards on screen keeps them and says why in a toast.
-  Future<void> _fetchFeed({required bool pulled}) async {
-    final failure = await _feed?.refresh(pulled: pulled);
+  Future<void> _fetchFeed({required bool pulled, required bool replace}) async {
+    final failure = await _feed?.refresh(pulled: pulled, replace: replace);
     if (failure != null && mounted) showToast(context, failure);
   }
 
@@ -595,7 +596,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   void _feedChanged() {
     final cards = widget.feed.cards;
     final coming = _coming;
-    if (coming != null && identical(cards, coming.fresh)) {
+    if (coming != null && identical(widget.feed.newest, coming.fresh)) {
       _coming = null;
       _handOffFrom(coming.going, coming.fresh);
     } else if (coming != null && identical(cards, coming.old)) {
@@ -609,8 +610,9 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     });
   }
 
-  /// A refresh's cards replacing cards on screen make no entrance: the old ones fade out over them, each in its own
-  /// slot, all at once, as the official app's do (14). At once with Reduce Motion, or while 首页 is out of sight.
+  /// A refresh's cards taking the top from cards on screen make no entrance: the cards that held their slots fade out
+  /// over them, all at once, as the official app's do (14, 122), and those kept under 刚刚看到这里 just show. At once
+  /// with Reduce Motion, or while 首页 is out of sight.
   void _handOffFrom(List<_Going> old, List<FeedCard> fresh) {
     if (old.isEmpty) return;
     _entered.addAll([for (final card in fresh) card.bvid]);
@@ -673,6 +675,58 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     return _staggerStep * math.min(_batch++, _staggerSteps);
   }
 
+  /// [cards] from [from] up to [to]. A hand-off fades the cards going out over the top grid alone, in the slots they
+  /// held; under 刚刚看到这里 they already stand in their new places.
+  Widget _cardGrid(SliverGridDelegate grid, List<FeedCard> cards, int from, int to, {required bool still}) {
+    final feed = widget.feed;
+    final going = from == 0 ? _going : null;
+    return SliverGrid(
+      gridDelegate: grid,
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final slot = from + index;
+          final card = cards[slot];
+          final enter = !still && _entered.add(card.bvid);
+          final gone = going != null && slot < going.length ? going[slot] : null;
+          return _Entrance(
+            key: ValueKey('feed-card-${card.bvid}'),
+            delay: enter ? _nextStagger() : null,
+            child: _HandOffSlot(
+              incoming: going == null ? null : _incoming,
+              outgoing: _outgoing,
+              going: gone == null
+                  ? null
+                  : FeedCardView(
+                      key: ValueKey('feed-card-going-${gone.card.bvid}'),
+                      card: gone.card,
+                      onOpen: (_) {},
+                      onWatchLater: () {},
+                      dislike: gone.dislike,
+                    ),
+              child: FeedCardView(
+                card: card,
+                onOpen: (source) => widget.onOpen(card, source),
+                onWatchLater: () => widget.onWatchLater(card),
+                dislike: feed.dislikeOf(card),
+                onDislike: (reason) => widget.onDislike(card, reason),
+                onUndo: () => widget.onUndo(card),
+                onReason: (reason) => widget.onReason(card, reason),
+              ),
+            ),
+          );
+        },
+        childCount: to - from,
+        findChildIndexCallback: (key) {
+          if (key is! ValueKey<String>) return null;
+          for (var slot = from; slot < to; slot++) {
+            if ('feed-card-${cards[slot].bvid}' == key.value) return slot - from;
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final feed = widget.feed;
@@ -695,6 +749,10 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
           mainAxisExtent: extent,
         );
         final cards = feed.cards;
+        final divider = switch (feed.dividerAt) {
+          final at? when at > 0 && at < cards.length => at,
+          _ => null,
+        };
         final loadingFirst = cards.isEmpty && (feed.loading || feed.error == null);
         // While 首页's tap holds its TV at the top, a pull draws and opens nothing: the refresh it would join is
         // already showing.
@@ -766,52 +824,25 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
                           ),
                         )
                       else ...[
-                        SliverPadding(
-                          padding: const EdgeInsets.all(spacing),
-                          sliver: SliverGrid(
-                            gridDelegate: grid,
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final card = cards[index];
-                                final enter = !still && _entered.add(card.bvid);
-                                final going = _going;
-                                final gone = going != null && index < going.length ? going[index] : null;
-                                return _Entrance(
-                                  key: ValueKey('feed-card-${card.bvid}'),
-                                  delay: enter ? _nextStagger() : null,
-                                  child: _HandOffSlot(
-                                    incoming: going == null ? null : _incoming,
-                                    outgoing: _outgoing,
-                                    going: gone == null
-                                        ? null
-                                        : FeedCardView(
-                                            key: ValueKey('feed-card-going-${gone.card.bvid}'),
-                                            card: gone.card,
-                                            onOpen: (_) {},
-                                            onWatchLater: () {},
-                                            dislike: gone.dislike,
-                                          ),
-                                    child: FeedCardView(
-                                      card: card,
-                                      onOpen: (source) => widget.onOpen(card, source),
-                                      onWatchLater: () => widget.onWatchLater(card),
-                                      dislike: feed.dislikeOf(card),
-                                      onDislike: (reason) => widget.onDislike(card, reason),
-                                      onUndo: () => widget.onUndo(card),
-                                      onReason: (reason) => widget.onReason(card, reason),
-                                    ),
-                                  ),
-                                );
-                              },
-                              childCount: cards.length,
-                              findChildIndexCallback: (key) {
-                                if (key is! ValueKey<String>) return null;
-                                final index = cards.indexWhere((card) => 'feed-card-${card.bvid}' == key.value);
-                                return index < 0 ? null : index;
-                              },
-                            ),
+                        if (divider == null)
+                          SliverPadding(
+                            padding: const EdgeInsets.all(spacing),
+                            sliver: _cardGrid(grid, cards, 0, cards.length, still: still),
+                          )
+                        else ...[
+                          // Split where 刚刚看到这里 falls, so a page with an odd count leaves its last row half full.
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(spacing, spacing, spacing, 0),
+                            sliver: _cardGrid(grid, cards, 0, divider, still: still),
                           ),
-                        ),
+                          SliverToBoxAdapter(
+                            child: FeedDivider(key: const ValueKey('feed-divider'), onTap: () => unawaited(reload())),
+                          ),
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(spacing, 0, spacing, spacing),
+                            sliver: _cardGrid(grid, cards, divider, cards.length, still: still),
+                          ),
+                        ],
                         SliverToBoxAdapter(child: _Footer(feed: feed)),
                         if (inset > 0) SliverToBoxAdapter(child: SizedBox(height: inset)),
                       ],

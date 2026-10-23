@@ -198,7 +198,7 @@ void main() {
     await feed.refresh();
     http.gates[2]!.complete();
     await more;
-    expect(bvids(feed), ['BV9']);
+    expect(bvids(feed), ['BV9', 'BV1'], reason: 'the late page 2 is not added');
     expect(feed.loading, isFalse);
   });
 
@@ -222,7 +222,7 @@ void main() {
       await feed.refresh();
       expect(asked, ['BV2', 'BV3', 'BV4']);
       expect(shownThen, ['BV1'], reason: 'called before the cards are replaced');
-      expect(bvids(feed), ['BV2', 'BV3', 'BV4'], reason: 'no cover is waited on');
+      expect(bvids(feed), ['BV2', 'BV3', 'BV4', 'BV1'], reason: 'no cover is waited on');
       expect(feed.loading, isFalse);
       expect(cover.isCompleted, isFalse);
       final line = coverLines().last;
@@ -269,7 +269,7 @@ void main() {
       feed.beforeShow = (_) => const CoverPrefetch.skipped(CoverSkip.noLayout);
       http.pages[1] = [feedItem('BV2')];
       await feed.refresh();
-      expect(bvids(feed), ['BV2']);
+      expect(bvids(feed), ['BV2', 'BV1']);
       expect([for (final line in coverLines()) line.f.map((key, value) => MapEntry(key, value.toJson()))], [
         {'ready': 0, 'failed': 0, 'of': 0, 'why': 'noGrid', 'early': false},
         {'ready': 0, 'failed': 0, 'of': 0, 'why': 'noLayout', 'early': false},
@@ -334,7 +334,7 @@ void main() {
       now = now.add(const Duration(milliseconds: 1500));
       await feed.refresh(pulled: true);
       expect(http.asked, [1, 1], reason: 'the release joined the early page');
-      expect(bvids(feed), ['BV2', 'BV3']);
+      expect(bvids(feed), ['BV2', 'BV3', 'BV1']);
       final line = lines('feed covers').last;
       expect(line.f['early']?.toJson(), true);
       expect(line.f['heldMs']?.toJson(), 1500);
@@ -356,7 +356,7 @@ void main() {
       http.gates[1]!.complete();
       await refresh;
       expect(http.asked, [1, 1]);
-      expect(bvids(feed), ['BV2']);
+      expect(bvids(feed), ['BV2', 'BV1']);
       expect(lines('feed covers').last.f['early']?.toJson(), true);
     });
 
@@ -384,7 +384,7 @@ void main() {
       expect(http.asked, [1, 1], reason: 'within the window: no new call');
       await feed.refresh(pulled: true);
       expect(http.asked, [1, 1]);
-      expect(bvids(feed), ['BV2']);
+      expect(bvids(feed), ['BV2', 'BV1']);
     });
 
     test('armed again after the window, it asks once more', () async {
@@ -430,7 +430,7 @@ void main() {
       await pumpEventQueue();
       http.pages[1] = [feedItem('BV3')];
       await feed.refresh();
-      expect(bvids(feed), ['BV3']);
+      expect(bvids(feed), ['BV3', 'BV1']);
       expect(http.asked, [1, 1, 1]);
       await feed.refresh(pulled: true);
       expect(http.asked, [1, 1, 1, 1], reason: 'nothing held to take');
@@ -450,7 +450,7 @@ void main() {
       asked.clear();
       gate.complete();
       await pumpEventQueue();
-      expect(bvids(feed), ['BV3']);
+      expect(bvids(feed), ['BV3', 'BV1']);
       expect(asked, isEmpty, reason: 'no covers for a stale page');
     });
 
@@ -483,7 +483,7 @@ void main() {
       http.pages[1] = [feedItem('BV2')];
       await feed.refresh(pulled: true);
       expect(http.asked, [1, 1, 1]);
-      expect(bvids(feed), ['BV2']);
+      expect(bvids(feed), ['BV2', 'BV1']);
       expect(lines('feed early page failed').single.f.keys, unorderedEquals(['error', 'status']));
     });
   });
@@ -752,7 +752,7 @@ void main() {
         feed.beforeShow = (_) => CoverPrefetch([Completer<bool>().future]);
         unawaited(feed.refresh());
         async.flushMicrotasks();
-        expect(feed.cards.single.bvid, 'BV3');
+        expect(bvids(feed), ['BV3', 'BV1', 'BV2']);
         feed.dispose();
         expect(async.pendingTimers, isEmpty);
         async.elapse(const Duration(seconds: 11));
@@ -847,7 +847,7 @@ void main() {
         expect(result, 'unfinished');
         expect(lines('feed covers'), hasLength(1), reason: 'the first load only');
         till(1500);
-        expect(bvids(feed), ['BV2', 'BV3', 'BV4']);
+        expect(bvids(feed), ['BV2', 'BV3', 'BV4', 'BV1']);
         expect(feed.loading, isFalse);
         expect(result, isNull);
         final line = lines('feed covers').last;
@@ -879,7 +879,7 @@ void main() {
             expect(bvids(feed), ['BV1'], reason: 'the rest of 1.5 s from the arming');
             till(swapMs);
           }
-          expect(bvids(feed), ['BV2']);
+          expect(bvids(feed), ['BV2', 'BV1']);
         });
       });
     }
@@ -894,7 +894,7 @@ void main() {
         expect(bvids(feed), ['BV1']);
         gate.complete();
         async.flushMicrotasks();
-        expect(bvids(feed), ['BV2']);
+        expect(bvids(feed), ['BV2', 'BV1']);
         expect(feed.loading, isFalse);
       });
     });
@@ -948,7 +948,7 @@ void main() {
         till(2499);
         expect(bvids(feed), ['BV1']);
         till(2500);
-        expect(bvids(feed), ['BV3']);
+        expect(bvids(feed), ['BV3', 'BV1']);
         expect(feed.loading, isFalse);
       });
     });
@@ -1211,6 +1211,121 @@ void main() {
         await feed.refresh();
         expect(feed.dislikeOf(feed.cards.first), isNull);
       });
+    });
+  });
+
+  group('batches (122)', () {
+    test('a refresh puts its page on top and the cards before it under 刚刚看到这里, unchanged; load more still adds at '
+        'the bottom', () async {
+      http.pages[1] = [feedItem('BV1'), feedItem('BV2')];
+      http.pages[2] = [feedItem('BV3')];
+      final feed = make();
+      await feed.refresh();
+      await feed.loadMore();
+      final before = feed.cards;
+      http.pages[1] = [feedItem('BV4'), feedItem('BV5'), feedItem('BV6')];
+      await feed.refresh();
+      expect(bvids(feed), ['BV4', 'BV5', 'BV6', 'BV1', 'BV2', 'BV3']);
+      expect(feed.dividerAt, 3);
+      expect([for (final card in feed.newest) card.bvid], ['BV4', 'BV5', 'BV6']);
+      for (var i = 0; i < before.length; i++) {
+        expect(identical(feed.cards[3 + i], before[i]), isTrue, reason: 'the old cards as they were');
+      }
+
+      http.pages[2] = [feedItem('BV7'), feedItem('BV4')];
+      await feed.loadMore();
+      expect(bvids(feed), ['BV4', 'BV5', 'BV6', 'BV1', 'BV2', 'BV3', 'BV7']);
+      expect(feed.dividerAt, 3, reason: 'load more leaves it where it was');
+      expect(http.asked, [1, 2, 1, 2]);
+    });
+
+    test('a second refresh leaves one divider, under its own page', () async {
+      http.pages[1] = [feedItem('BV1'), feedItem('BV2')];
+      final feed = make();
+      await feed.refresh();
+      http.pages[1] = [feedItem('BV3')];
+      await feed.refresh();
+      expect(feed.dividerAt, 1);
+      http.pages[1] = [feedItem('BV4'), feedItem('BV5')];
+      await feed.refresh();
+      expect(bvids(feed), ['BV4', 'BV5', 'BV3', 'BV1', 'BV2']);
+      expect(feed.dividerAt, 2);
+    });
+
+    test('an old card the page brings again moves up into it, one turned over by 不感兴趣 goes, and no 不感兴趣 '
+        'carries over', () async {
+      final client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
+        ..appToken = fakeAppToken;
+      final feed = FeedModel(
+        client: client,
+        logger: Logger(session: 'test')..add(logs),
+        officialWanted: () => true,
+        minimumRefresh: Duration.zero,
+      );
+      http.officialPages[0] = [officialItem('BV1'), officialItem('BV2'), officialItem('BV3'), officialItem('BV4')];
+      await feed.refresh();
+      await feed.dislike(feed.cards[1], feed.cards[1].dislike!.video!);
+      await feed.dislike(feed.cards[2], feed.cards[2].dislike!.video!);
+      http.officialPages[0] = [officialItem('BV5'), officialItem('BV3')];
+      await feed.refresh();
+      expect(bvids(feed), ['BV5', 'BV3', 'BV1', 'BV4']);
+      expect(feed.dividerAt, 2);
+      expect([for (final card in feed.cards) feed.dislikeOf(card)], everyElement(isNull));
+    });
+
+    test('a page that brings back every card shown puts no divider', () async {
+      http.pages[1] = [feedItem('BV1'), feedItem('BV2')];
+      final feed = make();
+      await feed.refresh();
+      http.pages[1] = [feedItem('BV2'), feedItem('BV1')];
+      await feed.refresh();
+      expect(bvids(feed), ['BV2', 'BV1']);
+      expect(feed.dividerAt, isNull);
+    });
+
+    test("the first load and a refresh that replaces put no divider: another account's cards never stay", () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = make();
+      await feed.refresh();
+      expect(feed.dividerAt, isNull);
+      http.pages[1] = [feedItem('BV2')];
+      await feed.refresh();
+      expect(feed.dividerAt, 1);
+      http.pages[1] = [feedItem('BV3'), feedItem('BV1')];
+      await feed.refresh(replace: true);
+      expect(bvids(feed), ['BV3', 'BV1']);
+      expect(feed.dividerAt, isNull);
+      expect([for (final card in feed.newest) card.bvid], ['BV3', 'BV1']);
+    });
+
+    test('a failed or empty refresh leaves the cards and the divider as they were', () async {
+      http.pages[1] = [feedItem('BV1')];
+      final feed = make();
+      await feed.refresh();
+      http.pages[1] = [feedItem('BV2')];
+      await feed.refresh();
+      final shown = feed.cards;
+      http.failing.add(1);
+      expect(await feed.refresh(), isNotNull);
+      http.failing.clear();
+      http.pages[1] = [];
+      expect(await feed.refresh(), FeedModel.emptyMessage);
+      expect(identical(feed.cards, shown), isTrue);
+      expect(feed.dividerAt, 1);
+    });
+
+    test('at most keptCards stay through a refresh, the oldest going from the bottom', () async {
+      const first = FeedModel.keptCards - 50;
+      const page = 100;
+      http.pages[1] = [for (var i = 0; i < first; i++) feedItem('BVa$i')];
+      final feed = make();
+      await feed.refresh();
+      http.pages[1] = [for (var i = 0; i < page; i++) feedItem('BVb$i')];
+      await feed.refresh();
+      expect(feed.cards, hasLength(FeedModel.keptCards));
+      expect(feed.dividerAt, page);
+      expect(bvids(feed)[page], 'BVa0');
+      expect(bvids(feed).last, 'BVa${FeedModel.keptCards - page - 1}');
     });
   });
 }

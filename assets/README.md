@@ -23,3 +23,8 @@ sized as KaiC's iPhone recording shows it (39 × 36.33 pt and 13.33 × 11.33 pt)
 `images/player/paused_play.png` (竖屏's ▶ over the paused video, 118) is the same APK's `bili_player_play` (xxhdpi),
 unchanged: a white 小电视 with the ▶ cut out. KaiC's iPhone draws it at the file's own 3× size (80 × 77 pt; its body
 68 pt wide, as on 118) at a quarter of its white, so the video shows through.
+
+`images/home/batch_refresh.png` (the ⟳ after 推荐's 刚刚看到这里，点击刷新, 122) is the same APK's
+`ic_promo_index_refresh` (xxhdpi), unchanged: two white arcs with solid arrowheads, the drawing KaiC's iPhone shows (the
+APK's `ic_promo_index_refresh_vector` is a newer one, its arrows open and turning the other way). The iPhone draws it at
+the file's own 3× size, 14.67 pt, tinted pink.
