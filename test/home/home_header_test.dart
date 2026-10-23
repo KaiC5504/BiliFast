@@ -384,7 +384,7 @@ void main() {
   testWidgets("the fold lays the feed out again each frame without building its cards again", (tester) async {
     await show(tester);
     final before = tester.element(find.byKey(const ValueKey('feed-card-BV1h2')));
-    final built = <Widget>{(before as Element).widget};
+    final built = <Widget>{before.widget};
     feedScroll(tester).jumpTo(HomeHeaderTheme.trigger);
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 40));
