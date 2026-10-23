@@ -184,11 +184,14 @@ full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 
 
 Open items, each waiting on its slice:
 - (32) on the phone (KaiC's log, 2026-10-23): `feed covers done` thirdMs 360-388 ms and lastMs 467-570 ms over five
-  refreshes (582 / 633 at launch), 6 of 6 ready each time, no `image failed`: about twice (30)'s and (31)'s. KaiC's
-  word on sharpness still to come. Then KaiC's second capture (agreed, 2026-10-23): the official app's picture request headers (names,
-  and values only for User-Agent/Accept-like ones) and cache headers, and its 630×473 covers kept briefly for a
-  sharpness check, to learn why the CDN serves the official preset from cache for the official app (115-343 ms) but
-  never for us (~0.5 s, even asked twice). The addon and keys wait in the scratchpad's `capture/`.
+  refreshes (582 / 633 at launch), 6 of 6 ready each time, no `image failed`: about twice (30)'s and (31)'s. The second
+  capture (both apps side by side, same network): the official app's every picture is a named preset (推荐
+  `@630w_473h_85q_!pegasus-ios-v2.avif`, which answers 719×540; lists `@360w_202h_1e_1c_85q.avif` and
+  `@450w_251h_…`; 搜索 `@540w_305h_1s_85q_!search-normal-fill.avif`; one list `@384w_216h_1e_1c_85q.webp`), first
+  byte ~150-175 ms because millions ask the same addresses, against ~290-330 ms for our exact sizes (made for us
+  alone; 86 KB a 推荐 cover against 27). Headers make no difference (UA, Accept, none of its ids). Our JPEG 90 is the
+  sharpest (gradient 11.7, the original scaled 11.2, the official AVIF 9.6, webp 9.6-9.8). Speed for sharpness is
+  KaiC's call; matching the official presets would need ImageIO back for AVIF.
 - (30) on the phone, passed (KaiC, 2026-10-23: status bar, brightness, seek TV); still to read:
   `feed covers done` with warm/warmed and thirdMs/lastMs against (29)'s; `skin status bar` for
   幸运塔罗星 (home, me, meNoCard and their picks: white expected); the brightness after full screen and after leaving
