@@ -272,7 +272,7 @@ class FeedModel extends ChangeNotifier {
   /// a cover still loading when its card shows pops in over the placeholder rather than holding the swap.
   CoverPrefetch Function(List<FeedCard> fresh)? beforeShow;
 
-  /// A refresh replaces the list, so a load more that was already running must not append to the new one.
+  /// A refresh changes the list (its page on top, or all of it), so a load more already running must not append.
   int _generation = 0;
 
   _EarlyPage? _early;

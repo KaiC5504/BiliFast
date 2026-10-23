@@ -362,6 +362,37 @@ void main() {
       });
     }
   });
+
+  testWidgets('a list too short to scroll folds nothing when dragged up past the trigger, held or let go', (
+    tester,
+  ) async {
+    http.pages[1] = [feedItem('BV1h0'), feedItem('BV1h1')];
+    await show(tester);
+    final open = header(tester);
+    final drag = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('feed'))));
+    for (var i = 0; i < 5; i++) {
+      await drag.moveBy(const Offset(0, -30));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await settle(tester);
+    expectRect(header(tester), open);
+    await drag.up();
+    await settle(tester);
+    expectRect(header(tester), open);
+  });
+
+  testWidgets("the fold lays the feed out again each frame without building its cards again", (tester) async {
+    await show(tester);
+    final before = tester.element(find.byKey(const ValueKey('feed-card-BV1h2')));
+    final built = <Widget>{(before as Element).widget};
+    feedScroll(tester).jumpTo(HomeHeaderTheme.trigger);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+      built.add(tester.element(find.byKey(const ValueKey('feed-card-BV1h2'))).widget);
+    }
+    expect(header(tester).height, moreOrLessEquals(142 - _fold));
+    expect(built, hasLength(1), reason: 'the same card widget throughout');
+  });
 }
 
 void expectRect(Rect actual, Rect expected, {String? reason}) {

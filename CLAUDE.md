@@ -226,7 +226,9 @@ Open items, each waiting on its slice:
   one divider, repeats and 不感兴趣 cards dropped, the 200-card cap, the magnifier's grey on the stock header (its
   stroke 2.1 pt against 1.83). Not built: the official feed's big inline-playing card (`large_cover_single_v9`,
   `large_cover_v1`; dropped by the parser, which keeps `av` only), shown muted and playing at once unless loading
-  (KaiC); the tab row's other tabs.
+  (KaiC); the tab row's other tabs. Known: folded over a 装扮 header, the status bar keeps the style measured for
+  the open header (the picture's 0-62 pt band, not 44-106); a refresh whose page is short enough to show the divider
+  shows its old top cards twice for the 180 ms hand-off.
 - (35) on the phone: the 2× hold and its release with danmaku on, against the official app (no forward-back steps,
   the speed easing up and down); the 60帧 and 高码率 tags beside the official ones. (36): every panel closing to the
   bare video; whether the official app also hides the controls after 投币, 收藏 and the danmaku send bar; 竖屏 against

@@ -527,6 +527,12 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
 
   /// What the last build and layout gave the grid, to ask for the first screen's covers at their cards' size.
   Size? _viewport;
+
+  /// The list as last built, and the width it was built for: the header's fold changes only the height, every frame
+  /// of it, and the list is laid out again without building every card again.
+  Widget? _laidOut;
+  double? _laidOutWidth;
+  bool _rebuilt = true;
   double _inset = 0;
   TextScaler _scaler = TextScaler.noScaling;
 
@@ -651,7 +657,11 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
 
   bool _scrolled(ScrollNotification notification) {
     if (notification.depth == 0) {
-      widget.scrollOffset.value = notification.metrics.pixels;
+      // Only what the list really scrolls: a bounce past either end (a short list, the error page) folds nothing.
+      final metrics = notification.metrics;
+      widget.scrollOffset.value = metrics.hasContentDimensions
+          ? metrics.pixels.clamp(metrics.minScrollExtent, metrics.maxScrollExtent)
+          : metrics.pixels;
       _loadMoreNearEnd(notification.metrics);
     }
     return false;
@@ -735,10 +745,15 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     _ticking = TickerMode.valuesOf(context).enabled;
     // Under a dressed bar the feed runs to the screen's bottom; its end stays above the bar's row.
     final inset = _inset = MediaQuery.paddingOf(context).bottom;
+    _rebuilt = true;
     return LayoutBuilder(
       builder: (context, constraints) {
         const spacing = BiliMetrics.feedSpacing;
         _viewport = constraints.biggest;
+        final laidOut = _laidOut;
+        if (!_rebuilt && laidOut != null && constraints.maxWidth == _laidOutWidth) return laidOut;
+        _rebuilt = false;
+        _laidOutWidth = constraints.maxWidth;
         final width = _columnWidth(constraints.maxWidth);
         final extent = FeedCardSize.height(width, scaler);
         _rowExtent = extent + spacing;
@@ -763,7 +778,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
           onArmed: _reloadHeader ? null : widget.onPullArmed,
           onDisarmed: widget.onPullDisarmed,
         );
-        return AnimatedSwitcher(
+        return _laidOut = AnimatedSwitcher(
           duration: still ? Duration.zero : const Duration(milliseconds: 320),
           layoutBuilder: (current, previous) =>
               Stack(fit: StackFit.expand, children: [...previous, ?current]),
