@@ -11,7 +11,8 @@ const dislikePath = '/x/feed/dislike';
 const cancelPath = '/x/feed/dislike/cancel';
 
 // Every id, name and link is made up. The shape follows PiliPlus's RcmdVideoItemAppModel: an ad, a live room, a
-// 番剧, a banner and an unplayable card around three videos, one without its bvid.
+// 番剧, a banner and an unplayable card around three videos, one without its bvid, and last, as Android lists it, the
+// big inline card (its fields as KaiC's PC check of 2026-10-24 named them).
 const officialFeed = r'''
 {"code":0,"message":"0","ttl":1,"data":{"items":[
 {"card_type":"banner_v8","card_goto":"banner","goto":"banner","param":"","can_play":1,"banner_item":[]},
@@ -48,7 +49,21 @@ const officialFeed = r'''
  "cover_left_text_1":"1.2亿","cover_left_text_2":"-","rcmd_reason":"竖屏","can_play":1},
 {"card_type":"small_cover_v2","card_goto":"av","goto":"av","param":"90000006","bvid":"BV1Te411c3cC","can_play":1,
  "title":"没有三点","player_args":{"aid":90000006,"cid":190000006,"duration":61},"args":{"up_id":603,"up_name":"UP主丙"},
- "cover_left_text_1":"5432","cover_left_text_2":"12"}
+ "cover_left_text_1":"5432","cover_left_text_2":"12"},
+{"card_type":"large_cover_v9","card_goto":"inline_av_v2","goto":"av","param":"90000007",
+ "cover":"https://i0.hdslb.com/bfs/archive/official-0007.jpg","title":"大卡片",
+ "uri":"bilibili://video/90000007?player_width=1920&player_height=1080&player_rotate=0",
+ "args":{"up_id":604,"up_name":"UP主丁","tid":17,"tname":"单机游戏","aid":90000007,"is_follow":0},
+ "player_args":{"aid":90000007,"cid":190000007,"type":"av","duration":95,"report_history":1},
+ "up_args":{"up_id":604,"up_name":"UP主丁","up_face":"https://i0.hdslb.com/bfs/face/official-face-0007.jpg",
+  "selected":0},
+ "idx":1,"track_id":"track-0007","talk_back":"大卡片","official_icon":0,
+ "cover_left_text_1":"3.1万","cover_left_icon_1":1,"cover_left_text_2":"88","cover_left_icon_2":2,
+ "cover_right_text":"1:35","rcmd_reason_style":{"text":"5千点赞","text_color":"#FB7299","icon_url":""},
+ "can_play":1,"like_button":{"aid":90000007,"count":5123,"show_count":true,"event":"like"},"is_atten":0,
+ "share_plane":{"title":"大卡片","bvid":"BV1Te411d4dD","aid":90000007},
+ "three_point_v2":[{"title":"我不想看","type":"dislike","reasons":[
+  {"id":1,"name":"不感兴趣","toast":"将减少相似内容推荐"}]}]}
 ]}}''';
 
 void main() {
@@ -85,7 +100,7 @@ void main() {
     expect(
       (line.f['cards'] as LogString?)?.value,
       'banner/banner_v8 av/small_cover_v2 ad_av/small_cover_v2 av/small_cover_v2/ad live/small_cover_v2 '
-      'bangumi/small_cover_v2 av/small_cover_v2 av/small_cover_v2 av/small_cover_v2',
+      'bangumi/small_cover_v2 av/small_cover_v2 av/small_cover_v2 av/small_cover_v2 inline_av_v2/large_cover_v9',
     );
     final text = line.encode();
     for (final secret in ['hdslb', 'bilibili://', '90000001', 'BV1', token]) {
@@ -96,12 +111,29 @@ void main() {
   test('keeps only playable videos: ads, live, 番剧, banners and unplayable cards are dropped', () async {
     http.routes[feedPath] = (200, officialFeed);
     final cards = await client.officialFeed(index: 0);
-    expect(cards.map((card) => card.aid), [90000001, 170001, 90000006]);
+    expect(cards.map((card) => card.aid), [90000007, 90000001, 170001, 90000006]);
+  });
+
+  test("each page's big cards come first, as the iPhone shows them, the rest in order", () async {
+    http.routes[feedPath] = (200, r'''
+{"code":0,"message":"0","ttl":1,"data":{"items":[
+{"card_goto":"av","param":"90000011","can_play":1,"player_args":{"aid":90000011}},
+{"card_goto":"inline_av_v2","param":"90000012","can_play":1,"player_args":{"aid":90000012},
+ "like_button":{"count":0,"show_count":0}},
+{"card_goto":"av","param":"90000013","can_play":1,"player_args":{"aid":90000013}},
+{"card_goto":"inline_av_v2","param":"90000014","can_play":1,"player_args":{"aid":90000014},"ad_info":{}},
+{"card_goto":"inline_av_v2","param":"90000015","can_play":1,"player_args":{"aid":90000015}}
+]}}''');
+    final cards = await client.officialFeed(index: 1);
+    expect(cards.map((card) => card.aid), [90000012, 90000015, 90000011, 90000013]);
+    expect(cards[0].big, const FeedBig(likes: 0, showLikes: false));
+    expect(cards[1].big, const FeedBig(likes: 0, showLikes: false), reason: 'a big card without like_button');
+    expect(cards[2].big, isNull);
   });
 
   test('a card decodes ids, counts as shown, owner, reason and shape', () async {
     http.routes[feedPath] = (200, officialFeed);
-    final [first, vertical, plain] = await client.officialFeed(index: 0);
+    final [big, first, vertical, plain] = await client.officialFeed(index: 0);
     expect(first.bvid, 'BV1Te411a1aA');
     expect(first.cid, 190000001);
     expect(first.title, '官方推荐一');
@@ -115,6 +147,7 @@ void main() {
     expect(first.ownerMid, 601);
     expect(first.reason, '1千点赞');
     expect(first.isVertical, isFalse);
+    expect(first.big, isNull);
 
     expect(vertical.bvid, 'BV17x411w7KC', reason: "av170001's published BV id");
     expect(vertical.isVertical, isTrue);
@@ -125,11 +158,24 @@ void main() {
 
     expect(plain.dislike, isNull);
     expect(plain.viewsText, '5432');
+
+    expect(big.big, const FeedBig(likes: 5123, showLikes: true));
+    expect(big.bvid, 'BV1Te411d4dD', reason: "the big card's bvid is only in share_plane");
+    expect(big.reason, '5千点赞', reason: 'from rcmd_reason_style');
+    expect(big.cid, 190000007);
+    expect(big.duration, 95);
+    expect(big.viewsText, '3.1万');
+    expect(big.danmaku, 88);
+    expect(big.ownerName, 'UP主丁');
+    expect(big.ownerMid, 604);
+    expect(big.isVertical, isFalse);
+    expect(big.dislike?.goto, 'inline_av_v2', reason: "不感兴趣 names the card by its own card_goto");
+    expect(big.dislike?.id, 90000007);
   });
 
   test("three_point_v2's reasons: the video, the uploader, the tiles and 该内容已推荐过", () async {
     http.routes[feedPath] = (200, officialFeed);
-    final dislike = (await client.officialFeed(index: 0)).first.dislike!;
+    final dislike = (await client.officialFeed(index: 0))[1].dislike!;
     expect(dislike.goto, 'av');
     expect(dislike.id, 90000001);
     expect(dislike.video, const FeedReason(id: 1, name: '不感兴趣', kind: FeedReasonKind.dislike, toast: '将减少相似内容推荐'));
@@ -143,7 +189,7 @@ void main() {
     expect(dislike.feedbacks.length, 4, reason: 'a reason without an id is dropped');
   });
 
-  test("the query is PiliPlus's, signed with the token, without cookies", () async {
+  test("the query is PiliPlus's as the Android phone app with the inline fields, signed, no cookies", () async {
     http.routes[feedPath] = (200, officialFeed);
     await client.officialFeed(index: 0);
     await client.officialFeed(index: 3);
@@ -153,7 +199,12 @@ void main() {
     expect(first['idx'], '0');
     expect(first['pull'], 'true');
     expect(first['disable_rcmd'], '0');
-    expect(first['mobi_app'], 'android_i', reason: "the call's own query wins over the helper's defaults");
+    expect(first['mobi_app'], 'android', reason: 'only the phone app is sent the big inline card');
+    expect(first['device_name'], 'Pixel 9');
+    expect(first['autoplay_card'], '11');
+    expect(first['inline_sound'], '1');
+    expect(first['inline_danmu'], '2');
+    expect(first['auto_refresh_state'], '1');
     expect(first['build'], '8430300');
     expect(first['column'], '2');
     expect(first['access_key'], 'ACCESS');

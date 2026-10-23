@@ -46,7 +46,8 @@ final class FeedCard {
   }
 
   /// A card of the official app's feed (`/x/v2/feed/index`), which the caller has already found to be a video.
-  /// Its counts come as the cover's text ("10.4万", "-"), kept to show as sent.
+  /// Its counts come as the cover's text ("10.4万", "-"), kept to show as sent. The big card (`inline_av_v2`) has no
+  /// top-level bvid (its share_plane does) and names its reason in `rcmd_reason_style`.
   factory FeedCard.fromOfficial(Object? json) {
     final object = JsonObject.from(json);
     final player = object.nested('player_args');
@@ -54,13 +55,15 @@ final class FeedCard {
     final param = int.tryParse(object.text('param') ?? '');
     final aid = asInt(player?.map['aid']) ?? param ?? asInt(args?.map['aid']) ?? 0;
     if (aid <= 0) throw const DecodeError('missing aid');
-    final sentBvid = object.text('bvid');
+    final sentBvid = object.text('bvid') ?? object.nested('share_plane')?.text('bvid');
     final views = object.text('cover_left_text_1');
     final danmaku = object.text('cover_left_text_2');
     var reason = object.text('rcmd_reason');
+    if (reason == null || reason.isEmpty) reason = object.nested('rcmd_reason_style')?.text('text');
     final markedVertical = reason == '竖屏';
     if (markedVertical || reason != null && reason.isEmpty) reason = null;
     final goto = object.text('card_goto') ?? object.text('goto') ?? 'av';
+    final like = object.nested('like_button');
     return FeedCard(
       aid: aid,
       bvid: sentBvid == null || sentBvid.isEmpty ? avToBv(aid) : sentBvid,
@@ -77,6 +80,9 @@ final class FeedCard {
       viewsText: views,
       danmakuText: danmaku,
       dislike: FeedDislike._from(object.map['three_point_v2'], goto: goto, id: param ?? aid),
+      big: goto == 'inline_av_v2'
+          ? FeedBig(likes: like?.count('count') ?? 0, showLikes: like?.flag('show_count') ?? false)
+          : null,
     );
   }
 

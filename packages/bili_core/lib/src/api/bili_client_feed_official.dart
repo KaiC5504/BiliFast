@@ -1,13 +1,16 @@
 part of 'bili_client.dart';
 
-/// PiliPlus's `rcmdVideoListApp` query, less what changes per page.
+/// PiliPlus's `rcmdVideoListApp` query, less what changes per page, asked as the Android phone app with the APK's
+/// inline fields: only that gets the big inline card (`inline_av_v2`), and with the inline fields no ad card comes.
 const _officialFeedQuery = {
+  'auto_refresh_state': '1',
+  'autoplay_card': '11',
   'build': '8430300',
   'c_locale': 'zh_CN',
   'channel': 'master',
   'column': '2',
   'device': 'phone',
-  'device_name': 'android',
+  'device_name': 'Pixel 9',
   'device_type': '0',
   'disable_rcmd': '0',
   'flush': '8',
@@ -17,7 +20,9 @@ const _officialFeedQuery = {
   'fourk': '1',
   'guidance': '1',
   'https_url_req': '1',
-  'mobi_app': 'android_i',
+  'inline_danmu': '2',
+  'inline_sound': '1',
+  'mobi_app': 'android',
   'network': 'wifi',
   'platform': 'android',
   'player_net': '1',
@@ -45,15 +50,23 @@ const _officialFeedHeaders = {
   'bili-http-engine': 'cronet',
 };
 
-/// Only playable video cards: ads (`ad_av`, `ad_web_s`, or any card with `ad_info`), live rooms, 番剧, banners and
-/// the rest are dropped, as PiliPlus's `_filterAppRcmd` does.
+/// Only playable video cards, the big inline one included: ads (`ad_av`, `ad_web_s`, or any card with `ad_info`),
+/// live rooms, 番剧, banners and the rest are dropped, as PiliPlus's `_filterAppRcmd` does.
 FeedCard? _officialFeedItem(Object? json) {
   if (json is! Map<String, Object?>) return null;
   final object = JsonObject(json);
   final goto = object.text('card_goto') ?? object.text('goto');
-  if (goto != 'av' || json['ad_info'] != null || asInt(json['can_play']) != 1) return null;
+  if (!const {'av', 'inline_av_v2'}.contains(goto) || json['ad_info'] != null || asInt(json['can_play']) != 1) {
+    return null;
+  }
   return attempt(() => FeedCard.fromOfficial(json));
 }
+
+/// Android lists a page's big card last; the iPhone app shows it first (recording 122).
+List<FeedCard> _bigFirst(List<FeedCard> cards) => [
+  ...cards.where((card) => card.big != null),
+  ...cards.where((card) => card.big == null),
+];
 
 /// Each page's cards by `card_goto` and `card_type`, in order: which the server makes big (the official app's full-width
 /// inline card) and where, since the app only draws what the answer marks. Names only, never an id or a link.
@@ -93,7 +106,7 @@ extension BiliClientFeedOfficial on BiliClient {
       extraHeaders: _officialHeaders(_officialFeedHeaders),
       decode: (json) {
         _logFeedCardTypes(json);
-        return [for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card];
+        return _bigFirst([for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card]);
       },
     );
     final checked = _officialChecked(envelope, token);
