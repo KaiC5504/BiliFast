@@ -140,3 +140,42 @@ final class FeedHttp implements HTTPTransport {
   static HTTPResponse _json(HTTPRequest request, Object body) =>
       HTTPResponse(status: 200, headers: {}, body: utf8.encode(jsonEncode(body)), finalURL: request.url);
 }
+
+/// A big card (`large_cover_v9`) as the official feed's parser makes it, on the canned video's first part; [fullTitle]
+/// replaces the made-up one.
+FeedCard bigCard(String bvid, {int likes = 27999, bool showLikes = true, String title = '大卡片', String? fullTitle}) =>
+    FeedCard(
+  aid: 80433022,
+  bvid: bvid,
+  cid: 137649199,
+  title: fullTitle ?? '$title $bvid',
+  cover: 'https://i0.hdslb.com/bfs/archive/$bvid.jpg',
+  duration: 712,
+  views: 549000,
+  danmaku: 255,
+  ownerName: 'UP $bvid',
+  ownerMid: 7,
+  reason: null,
+  isVertical: false,
+  viewsText: '54.9万',
+  danmakuText: '255',
+  big: FeedBig(likes: likes, showLikes: showLikes),
+);
+
+/// A small card, as the web feed's.
+FeedCard smallCard(String bvid) => FeedCard(
+  aid: bvid.hashCode.abs(),
+  bvid: bvid,
+  cid: 1,
+  title: '视频 $bvid',
+  cover: 'https://i0.hdslb.com/bfs/archive/$bvid.jpg',
+  duration: 125,
+  views: 12345,
+  danmaku: 67,
+  ownerName: 'UP $bvid',
+  ownerMid: 7,
+  reason: null,
+  isVertical: false,
+);
+
+List<FeedCard> smalls(String prefix, int count) => [for (var i = 0; i < count; i++) smallCard('BV1$prefix$i')];

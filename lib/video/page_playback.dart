@@ -42,13 +42,16 @@ PlayerSession pageSession({
 /// What a video page plays, apart from the page (the playback half of BiliNative's VideoPageModel): a controller of
 /// its own, the session over it (the end rules, 定时关闭), the watch reports, and which video and part it opened. It
 /// outlives its page while the small window plays it ([PipKeeper]), and the page the restore button pushes takes it
-/// over. What needs a page (the login) goes through the page attached, and does nothing without one.
+/// over. What needs a page (the login) goes through the page attached, and does nothing without one. An [inline] one
+/// (推荐's big card) plays muted with its session's rules, watch reports and auto picture in picture off, until a page
+/// attaches and takes it over as it stands.
 class PagePlayback extends ChangeNotifier implements KeptPlayback {
   PagePlayback({
     required this._services,
     required VideoRoute route,
     required this._createSession,
     required this.restorePage,
+    this._inline = false,
   }) : _bvid = route.bvid,
        _cid = route.cid,
        _startAt = route.start,
@@ -61,6 +64,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
 
   /// Builds the page the small window's restore button pushes around this playback.
   final Widget Function(VideoRoute route) restorePage;
+
+  bool _inline;
 
   /// What it plays: the route's video at first, then whatever the session opens on the page. Only the route's own
   /// open starts at its position; another part of the same video reuses the view and detail it has.
@@ -109,6 +114,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
 
   bool get closed => _closed;
 
+  /// Still the card's, before any page took it.
+  bool get inline => _inline;
+
   @override
   bool get pipActive => _controller?.pictureInPicture ?? false;
 
@@ -148,6 +156,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     controller.addListener(_controllerChanged);
     _restores = controller.restoreRequests.listen((_) => _restore());
     if (_covered) controller.holdAutoplay(true);
+    if (_inline) {
+      _quietly(() => controller.player.setMuted(true), 'mute');
+      controller.setAutoPictureInPicture(false);
+    }
     _open();
     final session = _session = _createSession(
       controller: controller,
@@ -160,6 +172,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     if (_covered) {
       session.active = false;
       _hold();
+    } else if (_inline) {
+      session.active = false;
     }
     notifyListeners();
   }
@@ -183,8 +197,11 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     _reporter = WatchReporter(
       controller: controller,
       client: services.environment.client,
-      loggedIn: () => WatchReporter.canReport(services.environment),
-      onProgress: (bvid, cid, seconds) => services.recents.recordProgress(bvid: bvid, cid: cid, seconds: seconds),
+      // Inline play reports nothing; taken over mid-play, the reports go on from the schedule it kept.
+      loggedIn: () => !_inline && WatchReporter.canReport(services.environment),
+      onProgress: (bvid, cid, seconds) {
+        if (!_inline) services.recents.recordProgress(bvid: bvid, cid: cid, seconds: seconds);
+      },
     );
   }
 
@@ -228,6 +245,16 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     _holders.add(page);
     _page = page;
     _requestLogin = requestLogin;
+    if (_inline) _takeOver();
+  }
+
+  /// A page took the card's playback: it goes on where it is, with sound and the page's rules.
+  void _takeOver() {
+    _inline = false;
+    _session?.active = true;
+    _setAutoPictureInPicture(true);
+    final controller = _controller;
+    if (controller != null) _quietly(() => controller.player.setMuted(_services.playback.muted), 'unmute');
   }
 
   /// [page] left: the asks go nowhere until another page attaches.

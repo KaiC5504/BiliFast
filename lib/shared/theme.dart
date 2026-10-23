@@ -5553,4 +5553,87 @@ abstract final class FeedBatchTheme {
 abstract final class FeedBigCardTheme {
   /// The card spans both columns, inside the feed's side spacing.
   static const spacing = BiliMetrics.feedSpacing;
+  static const radius = BiliMetrics.cardRadius;
+
+  /// 6 to 434 pt wide, the video 240.75 pt tall (123, 126).
+  static const videoAspect = 16 / 9;
+
+  /// The title band: one line 40.33 pt, two 59.67 (123 and 126), so lines 19.33 apart with 21 above and below them;
+  /// the first line's ink 15.33 under the video, a point lower than the strut's middle puts it, so [titleDrop] of the
+  /// 21 is above. The ink starts 8.67 in (8 and the glyph's bearing); two-line titles wrap before x 351, 83 pt short of
+  /// the card's right.
+  static const titleText = BiliMetrics.cardTitleText;
+  static const titleLine = 58 / 3;
+  static const titlePad = 10.5;
+  static const titleDrop = 1.0;
+  static const titleInset = BiliMetrics.cardInset;
+  static const titleTrailing = 83.0;
+  static const title = BiliColors.text;
+
+  /// 👍: the APK's `ic_list_inline_dislike` (its ink 52 of 114 px), its ink 16.72 pt square (x 366.43-383.15 in 123
+  /// and 126), centred 59.21 pt from the card's right and 1.6 above the band's middle, #61666D; liked, the APK's
+  /// `inline_click_to_like` Lottie in pink. The count hangs off its top right: 10 pt grey ("2.8万" 23.3 pt wide, as
+  /// 123's), its ink from 3.25 pt left of the thumb's right edge and 3.83 above its top.
+  static const likeInk = 16.72;
+  static const likeAssetInk = 52 / 114;
+  static const likeRight = 59.21;
+  static const likeRise = 1.6;
+  static const like = Color(0xFF61666D);
+  static const liked = BiliColors.pink;
+  static const countText = 10.0;
+  static const countOverlap = 3.25;
+  static const countTop = 5.43;
+  static const count = BiliColors.secondaryText;
+
+  /// The Lottie's thumb at rest is 103 px of its 228 px frame at 3×. Both pictures' ink centre sits 0.77 pt above
+  /// their box's at this size.
+  static const likeLottieInk = 103 / 228;
+  static const likeInkRise = 0.77;
+
+  /// The Lottie's 62 frames at 60 fps.
+  static const likeMotion = Duration(milliseconds: 1033);
+
+  /// ⋮ centred 12 pt from the card's right, 0.67 under the band's middle: the small card's glyph.
+  static const moreRight = 12.0;
+  static const moreDrop = 2 / 3;
+  static const moreTarget = 32.0;
+  static const likeTarget = 40.0;
+
+  /// The counts over the video (12 pt, the small card's icons): 10.67 pt in, centred 16.5 pt above the video's bottom on
+  /// the cover (122) and 15 while it plays (123); the duration 9 pt from the right, on the cover only.
+  static const statText = 12.0;
+  static const statLead = 32 / 3;
+  static const statCentre = 16.5;
+  static const statCentrePlaying = 15.0;
+  static const statIconGap = BiliMetrics.cardStatIconGap;
+  static const statGap = BiliMetrics.cardStatGap;
+  static const durationTrail = 9.0;
+
+  /// The cover's ▶: the APK's `bili_player_play` at 54.9 pt wide (its body 46.67 pt, 204 of 240 px), at 77% of its
+  /// white, centred on the video (122).
+  static const playWidth = 46.67 * 240 / 204;
+  static const playOpacity = 0.77;
+
+  /// 弹 and the speaker while it plays, centred 17 pt above the video's bottom and 69.9 and 22.8 pt from the card's
+  /// right (123, 126). The speaker is the APK's `ic_volumn_inline_switch_off` / `_on` (72 px with its margins) drawn
+  /// 22 pt square; 弹 the player's own glyph.
+  static const buttonCentre = 17.0;
+  static const danmakuRight = 69.9;
+  static const speakerRight = 22.8;
+  static const speakerSize = 22.0;
+  static const buttonTarget = 40.0;
+
+  /// From the second time round (125, 126): the counts are gone and the buttons at half their white, over 0.2 s.
+  static const dimmed = 0.5;
+  static const dim = Duration(milliseconds: 200);
+
+  /// The played part along the video's bottom edge, 2 pt of pink (124), nothing under the rest.
+  static const progress = 2.0;
+  static const progressInk = BiliColors.pink;
+
+  /// The card's video plays only while at least this much of its box is on screen once a scroll comes to rest (KaiC).
+  static const visibleToPlay = 0.5;
+
+  /// Paused this long off screen (or under another page), its player is let go; the card starts again where it was.
+  static const releaseAfter = Duration(seconds: 30);
 }
