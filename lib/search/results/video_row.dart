@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../history/history_glyphs.dart';
 import '../../home/feed_card.dart' show FeedCardView;
+import '../../shared/cover_preset.dart';
 import '../../shared/menu.dart' show PressHighlight;
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
@@ -281,6 +282,7 @@ class _Cover extends StatelessWidget {
               video.cover,
               size: const Size(SearchResultTheme.coverWidth, SearchResultTheme.coverHeight),
               cover: true,
+              preset: CoverPreset.search,
             ),
           if (video.duration > 0)
             Positioned(

@@ -11,6 +11,7 @@ import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../comments/comments_tab.dart' show NearEndPaging;
 import '../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSystem;
+import '../shared/cover_preset.dart';
 import '../shared/loading_tv.dart';
 import '../shared/menu.dart';
 import '../shared/release_refresh.dart';
@@ -471,7 +472,12 @@ class _Cover extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          RemoteImage(item.cover, size: const Size(HistoryTheme.coverWidth, HistoryTheme.coverHeight), cover: true),
+          RemoteImage(
+            item.cover,
+            size: const Size(HistoryTheme.coverWidth, HistoryTheme.coverHeight),
+            cover: true,
+            preset: CoverPreset.history,
+          ),
           Positioned(
             right: HistoryTheme.pillRight,
             bottom: HistoryTheme.pillBottom,

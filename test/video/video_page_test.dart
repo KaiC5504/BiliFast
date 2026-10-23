@@ -59,6 +59,7 @@ import 'package:bilifast/player_ui/player_loading.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
+import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -573,7 +574,7 @@ void main() {
   });
 
   final feedCard = FeedCard.fromJson({...feedItem(bv), 'pic': cover});
-  for (final (name, Widget Function(VoidCallback open) card, address) in [
+  for (final (name, Widget Function(VoidCallback open) card, address, CoverPreset? cardPreset) in [
     (
       'a card sized by its box',
       (open) => GestureDetector(
@@ -585,6 +586,7 @@ void main() {
         ),
       ),
       sizedImageUrl(cover, width: 240, height: 180),
+      null,
     ),
     (
       // The cover at 211 × 158.25 pt, its box's size rounded up to whole pixels.
@@ -594,6 +596,7 @@ void main() {
         child: FeedCardView(card: feedCard, onOpen: (_) => open(), onWatchLater: () {}),
       ),
       coverImageUrl(cover, width: 211, height: 159),
+      CoverPreset.feed,
     ),
   ]) {
     testWidgets('a push from $name asks for at most two pictures: the card flies on its own download, the player '
@@ -618,13 +621,17 @@ void main() {
         expect(requested, [address]);
         requested.clear();
         await tester.tap(find.byKey(const ValueKey('card')));
-        final shuttle = find.byWidgetPredicate((widget) => widget is RemoteImage && widget.placeholder != null);
-        var flew = false;
+        // A 推荐 card's own picture has a placeholder too, the official grey.
+        final shuttle = find.byWidgetPredicate((widget) => widget is RemoteImage && widget.placeholder is RemoteImage);
+        RemoteImage? flew;
         for (var i = 0; i < 40; i++) {
           await tester.pump(const Duration(milliseconds: 16));
-          flew |= shuttle.evaluate().isNotEmpty;
+          if (shuttle.evaluate().isNotEmpty) flew ??= tester.widget<RemoteImage>(shuttle);
         }
-        expect(flew, isTrue, reason: 'the card image flew under the player-sized cover');
+        expect(flew, isNotNull, reason: 'the card image flew under the player-sized cover');
+        expect((flew!.cover, flew.preset), (true, CoverPreset.player));
+        final under = flew.placeholder! as RemoteImage;
+        expect(under.preset, cardPreset, reason: "the card's own provider, its preset included");
         expect(
           requested,
           [coverImageUrl(cover, width: 440, height: 248)],
@@ -652,6 +659,15 @@ void main() {
       VideoPage.precacheCover(nav.currentContext!, cover);
       await tester.pump();
       expect(requested, [coverImageUrl(cover, width: 440, height: 248)]);
+
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0, cover: cover));
+      await frames(tester);
+      final drawn = tester.widget<RemoteImage>(
+        find.descendant(of: find.byKey(const ValueKey('video-cover')), matching: find.byType(RemoteImage)),
+      );
+      expect((drawn.cover, drawn.preset), (true, CoverPreset.player));
+      expect(requested, hasLength(1), reason: "the page's cover is the precached provider, still on its way");
+      await back(tester);
       await tester.pump(ImageDiskCache.downloadTimeout);
     } finally {
       debugNetworkImageHttpClientProvider = null;

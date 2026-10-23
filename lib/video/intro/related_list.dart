@@ -7,6 +7,7 @@ import 'package:flutter/material.dart' show Icons, Material, MaterialType;
 import 'package:flutter/widgets.dart';
 
 import '../../player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
+import '../../shared/cover_preset.dart';
 import '../../shared/menu.dart';
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
@@ -123,6 +124,7 @@ class _RelatedRow extends StatelessWidget {
       card.cover,
       size: const Size(IntroListTheme.relatedCoverWidth, IntroListTheme.relatedCoverHeight),
       cover: true,
+      preset: CoverPreset.related,
     );
     final title = TextStyle(
       fontFamily: BiliFonts.family,

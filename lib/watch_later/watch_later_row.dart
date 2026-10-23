@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../history/history_glyphs.dart' show HistoryUpGlyph;
 import '../player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
+import '../shared/cover_preset.dart';
 import '../shared/menu.dart' show PressHighlight;
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -233,6 +234,7 @@ class _Cover extends StatelessWidget {
               item.cover,
               size: const Size(WatchLaterTheme.coverWidth, WatchLaterTheme.coverHeight),
               cover: true,
+              preset: CoverPreset.history,
             ),
           Positioned(
             right: WatchLaterTheme.progressRight,

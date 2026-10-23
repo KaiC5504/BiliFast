@@ -8,6 +8,7 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/logic.dart' show CountFormat;
 import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/shared/cover_placeholder.dart';
+import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -92,6 +93,91 @@ void main() {
         if (width == 211 && ratio == 3) expect(pictures.single.box, const Size(633, 475));
       }
     }
+  });
+
+  testWidgets("the cover names 推荐's preset", (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 211,
+            child: FeedCardView(card: card, onOpen: (_) {}, onWatchLater: () {}),
+          ),
+        ),
+      ),
+    );
+    final cover = tester.widget<RemoteImage>(
+      find.descendant(of: find.byType(Hero), matching: find.byType(RemoteImage)),
+    );
+    expect((cover.cover, cover.preset), (true, CoverPreset.feed));
+  });
+
+  testWidgets('precacheCover readies the very picture the card draws: the card shows it its first frame, from the one '
+      'download', (tester) async {
+    final picture = (await tester.runAsync(_coverPng))!;
+    final folder = (await tester.runAsync(() => Directory.systemTemp.createTemp('feed_precache')))!;
+    final downloads = <String>[];
+    final cache = ImageDiskCache(
+      folder: folder.path,
+      fetch: (url, _) async {
+        downloads.add('$url');
+        return picture;
+      },
+    );
+    ImageDiskCache.shared = cache;
+    addTearDown(() {
+      ImageDiskCache.shared = null;
+      imageCache
+        ..clear()
+        ..clearLiveImages();
+    });
+    final precached = FeedCard.fromJson(
+      jsonDecode(jsonEncode({...feedItem('BV1early'), 'pic': 'http://i1.hdslb.com/bfs/archive/precached.jpg'})),
+    );
+    const width = 211.0;
+    late BuildContext context;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (built) {
+            context = built;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    final ready = await tester.runAsync(
+      () => FeedCardView.precacheCover(context, precached.cover, FeedCardSize.cover(width)),
+    );
+    expect(ready, isTrue);
+    expect(downloads, hasLength(1));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: width,
+            child: FeedCardView(card: precached, onOpen: (_) {}, onWatchLater: () {}),
+          ),
+        ),
+      ),
+    );
+    final network = find.descendant(
+      of: find.byType(Hero),
+      matching: find.byWidgetPredicate((widget) => widget is Image && widget.image is! AssetImage),
+    );
+    final drawn = tester.widget<RawImage>(find.descendant(of: network, matching: find.byType(RawImage)));
+    expect(drawn.image, isNotNull, reason: "the precache's provider is the card's, already decoded");
+    expect(downloads, hasLength(1), reason: 'no second address');
+    var stored = false;
+    unawaited(cache.settle().then((_) => stored = true));
+    for (var i = 0; i < 50 && !stored; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    await tester.runAsync(() => folder.delete(recursive: true));
   });
 
   group('the counts over the cover', () {

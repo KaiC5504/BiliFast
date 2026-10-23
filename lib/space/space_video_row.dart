@@ -3,6 +3,7 @@ import 'package:bili_core/logic.dart' show CountFormat, TimeFormat;
 import 'package:flutter/widgets.dart';
 
 import '../player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
+import '../shared/cover_preset.dart';
 import '../shared/menu.dart' show PressHighlight;
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -225,6 +226,7 @@ class _Cover extends StatelessWidget {
             video.cover,
             size: const Size(SpaceVideosTheme.coverWidth, SpaceVideosTheme.coverHeight),
             cover: true,
+            preset: CoverPreset.space,
           );
     return ClipRRect(
       borderRadius: BorderRadius.circular(SpaceVideosTheme.coverRadius),

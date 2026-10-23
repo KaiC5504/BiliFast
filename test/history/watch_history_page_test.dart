@@ -9,7 +9,9 @@ import 'package:bilifast/history/history_model.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/loading_tv.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_route.dart';
@@ -97,6 +99,12 @@ void main() {
     await tester.tap(find.byKey(ValueKey('history-more-${item.id}')));
     await tester.pumpAndSettle();
   }
+
+  testWidgets("a row's cover names 历史记录's preset", (tester) async {
+    await show(tester);
+    final covers = tester.widgetList<RemoteImage>(find.descendant(of: row(1), matching: find.byType(RemoteImage)));
+    expect([for (final cover in covers) (cover.cover, cover.preset)], [(true, CoverPreset.history)]);
+  });
 
   testWidgets('draws 今天, 昨天 and 更早 under the bar, without the search, menu or tab row', (tester) async {
     await show(tester);

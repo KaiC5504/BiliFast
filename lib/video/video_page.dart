@@ -27,6 +27,7 @@ import '../player_ui/panels/panel_controller.dart';
 import '../player_ui/panels/panel_layer.dart';
 import '../player_ui/player_loading.dart';
 import '../player_ui/player_ui.dart';
+import '../shared/cover_preset.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -108,10 +109,18 @@ class VideoPage extends StatefulWidget {
   /// A related video, or a video id in the description, opens a page on top through this.
   final VideoPageOpener openPage;
 
-  /// Asks for [cover] at the player box's size the moment a page is opened: the card's smaller (for 推荐, 4:3) picture
-  /// flies in under it and would otherwise sit stretched in the box until the page's own arrives.
-  static void precacheCover(BuildContext context, String cover) =>
-      unawaited(RemoteImage.precache(context, cover, size: _VideoPageState._coverSize(context), cover: true));
+  /// Asks for [cover] as the page's own does (the player box's size, [CoverPreset.player]) the moment a page is
+  /// opened: the card's smaller (for 推荐, 4:3) picture flies in under it and would otherwise sit stretched in the box
+  /// until the page's own arrives.
+  static void precacheCover(BuildContext context, String cover) => unawaited(
+    RemoteImage.precache(
+      context,
+      cover,
+      size: _VideoPageState._coverSize(context),
+      cover: true,
+      preset: CoverPreset.player,
+    ),
+  );
 
   @override
   State<VideoPage> createState() => _VideoPageState();
@@ -1623,7 +1632,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           child: Hero(
             tag: route.heroTag,
             flightShuttleBuilder: _coverInFlight,
-            child: RemoteImage(cover, size: _coverSize(context), cover: true),
+            child: RemoteImage(cover, size: _coverSize(context), cover: true, preset: CoverPreset.player),
           ),
         ),
       ),
@@ -1636,8 +1645,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return Size(width, width / BiliMetrics.videoAspect);
   }
 
-  /// The card's image, already loaded as the card asked for it (its size, its CDN suffix, or its cover size),
-  /// flies; the page's cover, the same download as the page's own, fades in over it once it arrives.
+  /// The card's image, already loaded as the card asked for it (its size, its CDN suffix, or its cover size and
+  /// preset), flies; the page's cover, the same download as the page's own, fades in over it once it arrives.
   Widget _coverInFlight(
     BuildContext flight,
     Animation<double> animation,
@@ -1649,17 +1658,22 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final cardHero = direction == HeroFlightDirection.push ? from : to;
     final card = cardHero.findRenderObject();
     final cardSize = card is RenderBox && card.hasSize ? card.size : null;
-    final (cardSuffix, cardCover) = switch (cardHero.widget) {
-      Hero(child: RemoteImage(:final cdnSuffix, cover: final cardCover)) => (cdnSuffix, cardCover),
-      _ => (null, false),
+    final (cardSuffix, cardCover, cardPreset) = switch (cardHero.widget) {
+      Hero(child: RemoteImage(:final cdnSuffix, cover: final cardCover, :final preset)) => (
+        cdnSuffix,
+        cardCover,
+        preset,
+      ),
+      _ => (null, false, null),
     };
     return RemoteImage(
       cover,
       size: _coverSize(flight),
       cover: true,
+      preset: CoverPreset.player,
       placeholder: cardSize == null
           ? null
-          : RemoteImage(cover, size: cardSize, cdnSuffix: cardSuffix, cover: cardCover),
+          : RemoteImage(cover, size: cardSize, cdnSuffix: cardSuffix, cover: cardCover, preset: cardPreset),
     );
   }
 }

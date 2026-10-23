@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:bili_core/api.dart';
 import 'package:flutter/widgets.dart';
 
+import '../shared/cover_preset.dart';
 import '../shared/menu.dart' show PressHighlight;
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -180,7 +181,7 @@ class FeedDislikedCard extends StatelessWidget {
                             sigmaY: FeedDislikeTheme.coverBlur,
                             tileMode: TileMode.clamp,
                           ),
-                          child: RemoteImage(card.cover, cover: true),
+                          child: RemoteImage(card.cover, cover: true, preset: CoverPreset.feed),
                         ),
                       ),
                       const ColoredBox(color: FeedDislikeTheme.coverShade),

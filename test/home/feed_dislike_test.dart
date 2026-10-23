@@ -12,6 +12,7 @@ import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/settings/font_store.dart';
+import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
@@ -476,6 +477,17 @@ void main() {
     expect(find.bySemanticsLabel('撤销'), findsOneWidget);
     expect(find.bySemanticsLabel('选择不感兴趣原因'), findsOneWidget);
     semantics.dispose();
+  });
+
+  testWidgets("the turned-over card's blurred cover names 推荐's preset, as the card's does", (tester) async {
+    await show(tester);
+    await openMore(tester, 'BV1aaa');
+    await tester.tap(find.byKey(const ValueKey('feed-more-dislike-video')));
+    await settle(tester);
+    final cover = tester.widget<RemoteImage>(
+      find.descendant(of: find.byType(FeedDislikedCard), matching: find.byType(RemoteImage)),
+    );
+    expect((cover.cover, cover.preset), (true, CoverPreset.feed));
   });
 
   group('look-alike under the system font', () {

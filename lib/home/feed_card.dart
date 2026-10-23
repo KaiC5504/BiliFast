@@ -7,6 +7,7 @@ import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
 import '../app/zoom_back_route.dart';
 import '../shared/cover_placeholder.dart';
+import '../shared/cover_preset.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../video/video_route.dart';
@@ -60,9 +61,10 @@ class FeedCardView extends StatefulWidget {
   /// The reasons sheet's pick.
   final ValueChanged<FeedReason>? onReason;
 
-  /// Gets [url] ready as a card with a [size] cover box asks for it, so the card draws it the frame it comes.
+  /// Gets [url] ready as a card with a [size] cover box asks for it (the same [CoverPreset.feed]), so the card draws
+  /// it the frame it comes.
   static Future<bool> precacheCover(BuildContext context, String? url, Size size) =>
-      RemoteImage.precache(context, url, size: size, cover: true);
+      RemoteImage.precache(context, url, size: size, cover: true, preset: CoverPreset.feed);
 
   /// Covers say 0:18, not 00:18 (01).
   static String duration(int seconds) {
@@ -269,6 +271,7 @@ class _Cover extends StatelessWidget {
           child: RemoteImage(
             card.cover,
             cover: true,
+            preset: CoverPreset.feed,
             placeholder: const CoverPlaceholder(),
             fadeIn: false,
             overlay: const Align(

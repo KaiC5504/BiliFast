@@ -1,11 +1,15 @@
 import 'dart:io';
 
-import 'package:bili_core/api.dart' show SpaceVideo, VideoCard;
+import 'package:bili_core/api.dart' show HighlightedText, SearchVideo, SpaceVideo, VideoCard, WatchLaterItem;
+import 'package:bilifast/search/results/video_row.dart';
+import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/remote_image.dart';
+import 'package:bilifast/shared/theme.dart' show UploaderSheetTheme, WatchLaterTheme;
 import 'package:bilifast/space/own/own_tab_cards.dart';
 import 'package:bilifast/space/space_video_row.dart';
 import 'package:bilifast/space/uploader_sheet_grid.dart';
 import 'package:bilifast/video/intro/related_list.dart';
+import 'package:bilifast/watch_later/watch_later_row.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -145,6 +149,107 @@ void main() {
     );
     expectBoxSized(tester);
     expect(pictures(tester).where((image) => image.url.contains('/bfs/archive/')), hasLength(4));
+  });
+
+  testWidgets("搜索's, the related videos', UP主空间's and 稍后再看's rows name their official screen's preset; the "
+      "uploader sheet's 208 pt card, no official size of its own, names none", (tester) async {
+    const related = VideoCard(
+      aid: 1,
+      bvid: 'BV1related',
+      cid: 1,
+      title: '相关视频',
+      cover: _cover,
+      duration: 61,
+      ownerMid: 1,
+      ownerName: 'UP',
+      views: 1,
+      danmaku: 1,
+      likes: 0,
+    );
+    final search = SearchVideo(
+      aid: 2,
+      bvid: 'BV1search',
+      title: HighlightedText.plain('搜索结果'),
+      author: 'UP',
+      mid: 2,
+      cover: _cover,
+      play: 1,
+      danmaku: 1,
+      duration: 61,
+      published: null,
+    );
+    const later = WatchLaterItem(
+      aid: 3,
+      bvid: 'BV1later',
+      cid: 3,
+      title: '稍后再看',
+      cover: _cover,
+      ownerMid: 3,
+      ownerName: 'UP',
+      duration: 61,
+      progress: 30,
+      play: 1,
+      danmaku: 1,
+    );
+    // Two columns across the 440 pt sheet.
+    const sheetCard = (440 - UploaderSheetTheme.gridSide * 2 - UploaderSheetTheme.gridGap) / 2;
+    await show(
+      tester,
+      CustomScrollView(
+        slivers: [
+          KeyedSubtree(
+            key: const ValueKey('related'),
+            child: RelatedSliver(cards: const [related], onOpen: (_) {}, onWatchLater: (_) {}),
+          ),
+          SliverList.list(
+            children: [
+              SizedBox(
+                key: const ValueKey('search'),
+                height: SearchVideoRow.height,
+                child: SearchVideoRow(video: search, now: DateTime(2026, 10, 23), onOpen: () {}, onMore: () {}),
+              ),
+              KeyedSubtree(
+                key: const ValueKey('space'),
+                child: SpaceVideoRow(video: _video, onOpen: () {}, onMore: (_) {}),
+              ),
+              SizedBox(
+                key: const ValueKey('later'),
+                height: WatchLaterTheme.rowHeight,
+                child: WatchLaterRow(
+                  item: later,
+                  editing: false,
+                  chosen: false,
+                  onOpen: () {},
+                  onToggle: () {},
+                  onMore: () {},
+                ),
+              ),
+              Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  key: const ValueKey('sheet'),
+                  width: sheetCard,
+                  child: UploaderVideoCard(video: _video, playing: false, onOpen: () {}),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    Finder covers(String site) => find.descendant(of: find.byKey(ValueKey(site)), matching: find.byType(RemoteImage));
+    for (final (site, preset) in [
+      ('related', CoverPreset.related),
+      ('search', CoverPreset.search),
+      ('space', CoverPreset.space),
+      ('later', CoverPreset.history),
+      ('sheet', null),
+    ]) {
+      final drawn = tester.widgetList<RemoteImage>(covers(site));
+      expect([for (final cover in drawn) (cover.cover, cover.preset)], [(true, preset)], reason: site);
+    }
+    expect(tester.getSize(covers('space')), const Size(128, 72), reason: "space's 384 × 216 at 3×");
+    expect(tester.getSize(covers('sheet')), const Size(208, 117), reason: 'not 128 × 72');
   });
 
   test('every video cover in the app is drawn as a cover', () {
