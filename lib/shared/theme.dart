@@ -5493,7 +5493,29 @@ abstract final class SkinLoadingTheme {
 /// 首页's header folding its top row away as 推荐 scrolls (121, measured in px / 3).
 abstract final class HomeHeaderTheme {
   /// The top row (avatar and search) folds away by its own height: the header ends at 142 pt open, 98 pt folded.
+  /// All of it moves up by the fold, the 装扮's pictures with it (folded, the screen's top 20 pt show what 44-64 pt
+  /// showed open), so the tab row lands under the status bar and the top row fades as it slides under it.
   static const fold = BiliMetrics.topRowHeight;
+
+  /// 推荐 scrolled this far folds it (the first card at the hairline), and back under it opens it again. In 121 the
+  /// fold starts in the first frame that scrolled, 6 pt down.
+  static const trigger = BiliMetrics.feedSpacing;
+
+  /// 121's frames fit UIKit's ease-in-out over 0.3 s within 0.11 pt (rms over 20 frames).
+  static const duration = Duration(milliseconds: 300);
+  static const curve = Curves.easeInOut;
+
+  /// The tab row's magnifier, folded: ink 17 pt square from x 412 and y 71 (9 pt under the tab row's top). Its stroke
+  /// is 1.83 pt; the search glyph scaled to this size draws 2.1. It rides in from [searchSlide] to the right with the
+  /// fold, unfaded, in a [searchTarget] wide tap box at the row's end. The other tabs' grey on white (01's #61666D);
+  /// over a 装扮's picture its colour at the other tabs' 72% (121: #393F35 over #D1E1CA under a black 推荐).
+  static const searchSize = 52 / 3;
+  static const searchRight = 11.0;
+  static const searchTop = 26 / 3;
+  static const searchTarget = 44.0;
+  static const searchSlide = 36.0;
+  static const searchInk = Color(0xFF61666D);
+  static const skinSearchOpacity = 0.72;
 }
 
 /// 推荐's refreshes kept as batches: each refresh's page on top, then 刚刚看到这里，点击刷新, then the cards before it

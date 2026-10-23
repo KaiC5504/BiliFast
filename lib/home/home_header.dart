@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:io' show File;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../search/search_glyphs.dart';
 import '../shared/remote_image.dart';
@@ -10,8 +14,10 @@ import '../skin/skin.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
 
 /// 首页's top (01, 110): the avatar and the search entry over the 推荐 tab, on white or the 装扮's pictures, and the
-/// hairline under it. [feedOffset] is how far 推荐 is scrolled.
-class HomeHeader extends StatelessWidget {
+/// hairline under it. Once [feedOffset], how far 推荐 is scrolled, passes [HomeHeaderTheme.trigger], it folds the top
+/// row away (121): everything moves up under the status bar, the top row fading out and a magnifier riding in at
+/// the tab row's end, which opens 搜索 in its place. Back under the trigger it opens again.
+class HomeHeader extends StatefulWidget {
   const HomeHeader({
     super.key,
     required this.skin,
@@ -31,9 +37,82 @@ class HomeHeader extends StatelessWidget {
   final VoidCallback onSearch;
 
   @override
+  State<HomeHeader> createState() => _HomeHeaderState();
+}
+
+class _HomeHeaderState extends State<HomeHeader>
+    with SingleTickerProviderStateMixin {
+  late bool _folded = _shouldFold;
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: HomeHeaderTheme.duration,
+    value: _folded ? 1 : 0,
+  )..addStatusListener(_statusChanged);
+  late final CurvedAnimation _fold = CurvedAnimation(
+    parent: _controller,
+    curve: HomeHeaderTheme.curve,
+  );
+  late final Animation<double> _shown = ReverseAnimation(_fold);
+  bool _still = false;
+
+  bool get _shouldFold => widget.feedOffset.value >= HomeHeaderTheme.trigger;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.feedOffset.addListener(_offsetChanged);
+  }
+
+  @override
+  void didUpdateWidget(HomeHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.feedOffset, widget.feedOffset)) {
+      oldWidget.feedOffset.removeListener(_offsetChanged);
+      widget.feedOffset.addListener(_offsetChanged);
+      _offsetChanged();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.feedOffset.removeListener(_offsetChanged);
+    _fold.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _offsetChanged() {
+    final fold = _shouldFold;
+    if (fold == _folded) return;
+    // The feed's notifications can come mid-layout, and the fold itself resizes the feed.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _offsetChanged();
+      });
+      return;
+    }
+    setState(() => _folded = fold);
+    if (_still) {
+      _controller.value = fold ? 1 : 0;
+    } else if (fold) {
+      unawaited(_controller.forward());
+    } else {
+      unawaited(_controller.reverse());
+    }
+  }
+
+  /// The magnifier is built only while the header is folded or folding.
+  void _statusChanged(AnimationStatus status) {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final head = skin;
-    return Column(
+    _still = MediaQuery.disableAnimationsOf(context);
+    final head = widget.skin;
+    final colour = head?.color;
+    final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _Head(
@@ -42,14 +121,47 @@ class HomeHeader extends StatelessWidget {
             bottom: false,
             child: Column(
               children: [
-                _TopRow(
-                  face: face,
-                  searchWord: searchWord,
-                  filled: head != null,
-                  onAvatar: onAvatar,
-                  onSearch: onSearch,
+                FadeTransition(
+                  opacity: _shown,
+                  child: IgnorePointer(
+                    ignoring: _folded,
+                    child: ExcludeSemantics(
+                      excluding: _folded,
+                      child: _TopRow(
+                        face: widget.face,
+                        searchWord: widget.searchWord,
+                        filled: head != null,
+                        onAvatar: widget.onAvatar,
+                        onSearch: widget.onSearch,
+                      ),
+                    ),
+                  ),
                 ),
-                _RecommendTab(colour: head?.color ?? BiliColors.pink),
+                SizedBox(
+                  width: double.infinity,
+                  child: Stack(
+                    alignment: Alignment.topCenter,
+                    children: [
+                      _RecommendTab(colour: colour ?? BiliColors.pink),
+                      if (!_controller.isDismissed)
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: _TabSearch(
+                            fold: _fold,
+                            enabled: _folded,
+                            colour:
+                                colour?.withValues(
+                                  alpha: HomeHeaderTheme.skinSearchOpacity,
+                                ) ??
+                                HomeHeaderTheme.searchInk,
+                            onTap: widget.onSearch,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -63,6 +175,167 @@ class HomeHeader extends StatelessWidget {
         ),
       ],
     );
+    return AnimatedBuilder(
+      animation: _fold,
+      builder: (context, child) =>
+          _Fold(by: HomeHeaderTheme.fold * _fold.value, child: child),
+      child: content,
+    );
+  }
+}
+
+/// The tab row's magnifier (121), riding in from the right as the header folds; it takes taps only while folded.
+class _TabSearch extends StatelessWidget {
+  const _TabSearch({
+    required this.fold,
+    required this.enabled,
+    required this.colour,
+    required this.onTap,
+  });
+
+  final Animation<double> fold;
+  final bool enabled;
+  final Color colour;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const lead =
+        HomeHeaderTheme.searchTarget -
+        HomeHeaderTheme.searchSize -
+        HomeHeaderTheme.searchRight;
+    return AnimatedBuilder(
+      animation: fold,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(HomeHeaderTheme.searchSlide * (1 - fold.value), 0),
+        child: child,
+      ),
+      child: IgnorePointer(
+        ignoring: !enabled,
+        child: ExcludeSemantics(
+          excluding: !enabled,
+          child: Semantics(
+            button: true,
+            label: '搜索',
+            child: GestureDetector(
+              key: const ValueKey('home-header-search'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: SizedBox(
+                width: HomeHeaderTheme.searchTarget,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      left: lead,
+                      top: HomeHeaderTheme.searchTop,
+                    ),
+                    child: SearchGlyphIcon(
+                      SearchGlyph.magnifier,
+                      size: HomeHeaderTheme.searchSize,
+                      color: colour,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Its child [by] pt shorter: laid out whole, drawn moved up by [by] and cut at its own top, so what is below
+/// follows the child's bottom.
+class _Fold extends SingleChildRenderObjectWidget {
+  const _Fold({required this.by, super.child});
+
+  final double by;
+
+  @override
+  _RenderFold createRenderObject(BuildContext context) => _RenderFold(by);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderFold renderObject) =>
+      renderObject.by = by;
+}
+
+class _RenderFold extends RenderShiftedBox {
+  _RenderFold(this._by) : super(null);
+
+  double _by;
+
+  set by(double value) {
+    if (value == _by) return;
+    _by = value;
+    markNeedsLayout();
+  }
+
+  final _clip = LayerHandle<ClipRectLayer>();
+
+  BoxConstraints _childConstraints(BoxConstraints constraints) =>
+      constraints.copyWith(minHeight: 0, maxHeight: double.infinity);
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      math.max(super.computeMinIntrinsicHeight(width) - _by, 0);
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      math.max(super.computeMaxIntrinsicHeight(width) - _by, 0);
+
+  Size _sizeFor(BoxConstraints constraints, Size child) =>
+      constraints.constrain(Size(child.width, math.max(child.height - _by, 0)));
+
+  @override
+  Size computeDryLayout(covariant BoxConstraints constraints) {
+    final child = this.child;
+    if (child == null) return constraints.smallest;
+    return _sizeFor(
+      constraints,
+      child.getDryLayout(_childConstraints(constraints)),
+    );
+  }
+
+  @override
+  void performLayout() {
+    final child = this.child;
+    if (child == null) {
+      size = constraints.smallest;
+      return;
+    }
+    child.layout(_childConstraints(constraints), parentUsesSize: true);
+    size = _sizeFor(constraints, child.size);
+    (child.parentData! as BoxParentData).offset = Offset(
+      0,
+      size.height - child.size.height,
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    _clip.layer = context.pushClipRect(
+      needsCompositing,
+      offset,
+      Offset.zero & size,
+      super.paint,
+      oldLayer: _clip.layer,
+    );
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      size.contains(position) &&
+      super.hitTestChildren(result, position: position);
+
+  @override
+  Rect? describeApproximatePaintClip(RenderObject child) => Offset.zero & size;
+
+  @override
+  void dispose() {
+    _clip.layer = null;
+    super.dispose();
   }
 }
 
