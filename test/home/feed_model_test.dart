@@ -497,17 +497,12 @@ void main() {
       pictures = PictureSession(pictureHttp, now: () => now);
     });
 
-    FeedModel connected({
-      PictureSession? Function()? session,
-      DateTime Function()? clock,
-      String Function()? format,
-    }) => FeedModel(
+    FeedModel connected({PictureSession? Function()? session, DateTime Function()? clock}) => FeedModel(
       client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test')),
       logger: Logger(session: 'test')..add(logs),
       officialWanted: () => false,
       now: clock ?? () => now,
       pictures: session ?? () => pictures,
-      coverFormat: format,
     )..beforeShow = (fresh) => CoverPrefetch([for (final _ in fresh) Future.value(true)]);
 
     List<LogEvent> lines(String msg) => [for (final event in logs.events) if (event.msg == msg) event];
@@ -590,34 +585,8 @@ void main() {
         'warm': true,
         'warmed': 'ok',
         'early': false,
-        'format': 'webp',
       });
       expect(lines('feed covers').last.f.keys, unorderedEquals(['ready', 'failed', 'of', 'early']));
-    });
-
-    test('the line gives the format the covers were asked in and the slowest AVIF decode among them', () async {
-      var format = 'avif';
-      http.pages[1] = [feedItem('BV1')];
-      final feed = connected(format: () => format);
-      await feed.refresh();
-      await pumpEventQueue();
-      expect(done().last['format'], 'avif');
-      expect(done().last.containsKey('decodeMsMax'), isFalse, reason: 'none decoded from AVIF');
-
-      now = now.add(const Duration(minutes: 1));
-      http.pages[1] = [for (var i = 2; i < 5; i++) feedItem('BV$i')];
-      final covers = [for (var i = 0; i < 3; i++) Completer<bool>()];
-      final decodes = <double>[];
-      feed.beforeShow = (_) => CoverPrefetch([for (final cover in covers) cover.future], decodeMs: decodes);
-      await feed.refresh();
-      format = 'webp';
-      for (final (index, ms) in [(0, 18.4), (1, 41.6), (2, null)]) {
-        if (ms != null) decodes.add(ms);
-        covers[index].complete(true);
-        await pumpEventQueue();
-      }
-      expect(done().last['format'], 'avif', reason: 'as the covers were asked, though AVIF went off after');
-      expect(done().last['decodeMsMax'], 42);
     });
 
     test('a warm still out as the covers are asked for is noted; on the PC there is no connection to warm', () async {
@@ -638,7 +607,6 @@ void main() {
         'warming': true,
         'warmed': 'pending',
         'early': false,
-        'format': 'webp',
       });
 
       final pc = connected(session: () => null);
@@ -712,7 +680,6 @@ void main() {
         'warm': true,
         'warmed': 'ok',
         'early': true,
-        'format': 'webp',
       });
     });
 
@@ -742,7 +709,6 @@ void main() {
             'warmed': 'none',
             'early': false,
             'timedOut': true,
-            'format': 'webp',
           },
         ]);
 
