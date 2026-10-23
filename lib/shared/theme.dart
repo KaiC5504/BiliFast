@@ -5547,3 +5547,10 @@ abstract final class FeedBatchTheme {
   static const right = 0.5;
   static const drop = 1 / 3;
 }
+
+/// 推荐's big card: the official feed's `large_cover_v9`, full width and playing inline (122; KaiC's screenshot of it
+/// playing, measured in px / 3).
+abstract final class FeedBigCardTheme {
+  /// The card spans both columns, inside the feed's side spacing.
+  static const spacing = BiliMetrics.feedSpacing;
+}
