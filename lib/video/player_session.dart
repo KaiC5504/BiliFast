@@ -217,6 +217,9 @@ abstract interface class PlayerSession implements Listenable {
   /// The video played to its end and nothing plays next: the end screen's moment.
   bool get ended;
 
+  /// Another part, quality or reload is being opened; the player still reports the last one's status until it loads.
+  bool get opening;
+
   /// What 自动连播 would play at the end.
   Episode? get next;
 

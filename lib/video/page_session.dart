@@ -645,6 +645,9 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   @override
   bool get ended => _ended;
 
+  @override
+  bool get opening => _controller.phase == PlaybackPhase.loading;
+
   void _setEnded(bool value) {
     if (_ended == value) return;
     _ended = value;

@@ -802,6 +802,25 @@ void main() {
       expect(barStyle(tester), SeekBarStyle.dot);
     });
 
+    testWidgets('paused while another part opens: the loading TV shows alone, no ▶, time or TV thumb', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      status(rig, PlayerStatus.paused);
+      rig.session
+        ..opening = true
+        ..notifyListeners();
+      await tester.pump();
+      expect(barStyle(tester), SeekBarStyle.dot);
+      expect(find.byKey(const ValueKey('vertical-paused-play')), findsNothing);
+      expect(find.byKey(const ValueKey('vertical-paused-time')), findsNothing);
+
+      rig.session
+        ..opening = false
+        ..notifyListeners();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('vertical-paused-play')), findsOneWidget);
+    });
+
     testWidgets('the ▶ and the time show only while paused, the ▶ hanging from the video\'s centre line', (
       tester,
     ) async {

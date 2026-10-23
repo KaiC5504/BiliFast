@@ -55,7 +55,7 @@ class VerticalChrome extends StatelessWidget {
       ]),
       builder: (context, _) {
         final shown = ui.panels.value == null && ui.overlay?.value == null;
-        final paused = ui.session.readout.status.value == PlayerStatus.paused;
+        final paused = ui.session.readout.status.value == PlayerStatus.paused && !ui.session.opening;
         return IgnorePointer(
           key: const ValueKey('vertical-chrome'),
           ignoring: !shown,

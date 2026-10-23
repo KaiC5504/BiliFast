@@ -260,6 +260,9 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   bool ended = false;
 
   @override
+  bool opening = false;
+
+  @override
   Episode? next;
 
   @override
