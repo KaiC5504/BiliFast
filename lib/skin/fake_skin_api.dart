@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -9,21 +10,28 @@ import 'package:flutter/painting.dart';
 
 import 'skin_api.dart';
 import 'skin_package.dart';
+import 'stand_in_gif.dart';
 
 /// Made-up answers for tests and `--fake-account` on the PC: no skin call leaves the machine. [demo] builds a package
-/// of drawn stand-in pictures (never the official art). [calls] lists what was asked; [holds] keeps a call waiting
-/// and [failures] makes it throw.
+/// of drawn stand-in pictures and a stand-in 加载动画 (never the official art). [calls] lists what was asked; [holds]
+/// keeps a call waiting and [failures] makes it throw.
 class FakeSkinApi implements SkinApi {
-  FakeSkinApi({this.equip, this.package = const []}) : _demo = false;
+  FakeSkinApi({this.equip, this.package = const [], this.loading, this.loadingPicture = const []}) : _demo = false;
 
-  /// [DemoSkin]'s equip and package, drawn on the first call.
-  FakeSkinApi.demo() : _demo = true, package = const [];
+  /// [DemoSkin]'s equip, package and 加载动画, drawn on the first call.
+  FakeSkinApi.demo() : _demo = true, package = const [], loadingPicture = const [];
 
   final bool _demo;
   Future<void>? _demoDrawn;
 
   SkinEquip? equip;
   List<int> package;
+  SkinLoading? loading;
+  List<int> loadingPicture;
+
+  /// Answers with these as [SkinWorn]'s, the halves it didn't understand.
+  String? equipError;
+  String? loadingError;
 
   final calls = <String>[];
   final holds = <String, Completer<void>>{};
@@ -41,13 +49,21 @@ class FakeSkinApi implements SkinApi {
     final demo = await DemoSkin.build();
     equip = demo.equip;
     package = demo.package;
+    loading = DemoSkin.loading;
+    loadingPicture = DemoSkin.loadingGif();
   }
 
   @override
-  Future<SkinEquip?> equipped() => _answer('equipped', () => equip);
+  Future<SkinWorn> equipped() => _answer(
+    'equipped',
+    () => SkinWorn(equip: equip, loading: loading, equipError: equipError, loadingError: loadingError),
+  );
 
   @override
   Future<List<int>> download(Uri package) => _answer('download', () => this.package);
+
+  @override
+  Future<List<int>> downloadLoading(Uri picture) => _answer('loading', () => loadingPicture);
 }
 
 /// A package in the official layout with every picture role, drawn here (gradients, shapes and letters at about the
@@ -69,6 +85,70 @@ final class DemoSkin {
 
   /// Under an allowed CDN host so the model's checks pass; [FakeSkinApi] never fetches it.
   static const packageUrl = 'https://i0.hdslb.com/bilifast-demo/skin.zip';
+
+  static const loading = SkinLoading(
+    id: 1,
+    name: 'BiliFast demo',
+    url: 'https://i0.hdslb.com/bilifast-demo/loading.gif',
+    ver: 1,
+  );
+
+  static const loadingSide = 144;
+  static const loadingFrames = 8;
+
+  /// The stand-in 加载动画: a figure under an umbrella, bobbing while a stripe turns round the canopy, as a looping
+  /// gif of [loadingFrames] frames, [loadingSide] pixels square.
+  static Uint8List loadingGif() => encodeStandInGif(
+    width: loadingSide,
+    height: loadingSide,
+    frames: [for (var frame = 0; frame < loadingFrames; frame++) _loadingFrame(frame)],
+    palette: const [0x000000, 0xFF8FB1, 0xFFFFFF, 0x1B1F3B],
+  );
+
+  static Uint8List _loadingFrame(int frame) {
+    const side = loadingSide;
+    const canopy = 1;
+    const light = 2;
+    const ink = 3;
+    final pixels = Uint8List(side * side);
+    final turn = frame / loadingFrames;
+    final bob = (6 * math.sin(2 * math.pi * turn)).round();
+    final stripe = math.pi + math.pi * turn;
+    void dot(int x, int y, int colour) {
+      if (x >= 0 && x < side && y >= 0 && y < side) pixels[y * side + x] = colour;
+    }
+
+    for (var y = 0; y < side; y++) {
+      for (var x = 0; x < side; x++) {
+        final (cx, cy) = (x - 72, y - (48 + bob));
+        if (cy <= 0 && cx * cx + cy * cy <= 46 * 46) {
+          // From pi (left) to 2 pi (right) over the canopy, as the stripe runs.
+          final angle = math.atan2(cy.toDouble(), cx.toDouble()) + 2 * math.pi;
+          dot(x, y, (angle - stripe).abs() < 0.2 ? light : canopy);
+        }
+      }
+    }
+    for (var y = 48 + bob; y < 92 + bob; y++) {
+      for (var x = 71; x <= 73; x++) {
+        dot(x, y, ink);
+      }
+    }
+    for (var y = 0; y < side; y++) {
+      for (var x = 0; x < side; x++) {
+        final (dx, dy) = (x - 72, y - (106 + bob));
+        final distance = dx * dx + dy * dy;
+        if (distance <= 26 * 26) dot(x, y, distance >= 23 * 23 ? ink : light);
+      }
+    }
+    for (final eye in const [63, 81]) {
+      for (var dy = -3; dy <= 3; dy++) {
+        for (var dx = -3; dx <= 3; dx++) {
+          if (dx * dx + dy * dy <= 9) dot(eye + dx, 102 + bob + dy, ink);
+        }
+      }
+    }
+    return pixels;
+  }
 
   static Future<DemoSkin> _draw() async {
     final pictures = <String, Uint8List>{

@@ -9,6 +9,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/skin/fake_skin_api.dart';
 import 'package:bilifast/skin/skin.dart';
+import 'package:bilifast/skin/skin_loading.dart';
 import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/skin/skin_package.dart';
 import 'package:crypto/crypto.dart';
@@ -845,7 +846,9 @@ void main() {
     await settle(model);
 
     final skin = model.value!;
-    expect(api.calls, ['equipped', 'download']);
+    expect(api.calls, unorderedEquals(['equipped', 'download', 'loading']));
+    final loading = model.loading.value!;
+    expect((loading.format, loading.frames, loading.width, loading.height), (SkinLoadingFormat.gif, 8, 144, 144));
     expect(skin.equip.colors.lightText, isTrue);
     expect(skin.themesBar, isTrue);
     expect(skin.tailIcons, hasLength(5));
@@ -1047,6 +1050,279 @@ void main() {
       expect(line.f['home']!.toJson() as double, lessThan(SkinStatusBar.crossover));
       expect(line.f['me']!.toJson() as double, lessThan(SkinStatusBar.crossover));
       expect(line.f['meNoCard']!.toJson() as double, lessThan(SkinStatusBar.crossover));
+    });
+  });
+
+  group('the 加载动画', () {
+    const loadingUrl = 'https://i0.hdslb.com/bfs/garb/item/made-up-loading.gif';
+    final gif = DemoSkin.loadingGif();
+
+    SkinLoading loadingFor({int id = 2, int ver = 1, String url = loadingUrl}) =>
+        SkinLoading(id: id, name: '测试加载 $id', url: url, ver: ver);
+
+    /// The skin of [apiWith] and a 加载动画 of [picture] (the stand-in gif); [skin] false wears it alone.
+    FakeSkinApi wearing({int ver = 1, List<int>? picture, bool skin = true, String url = loadingUrl}) {
+      final api = skin ? apiWith(1) : FakeSkinApi();
+      return api
+        ..loading = loadingFor(ver: ver, url: url)
+        ..loadingPicture = picture ?? gif;
+    }
+
+    Directory loadingFolder() => Directory('${folder.path}/${SkinLoadingKeeper.folderName}');
+
+    Set<String> loadingFiles() =>
+        loadingFolder().existsSync() ? loadingFolder().listSync().map(nameOf).toSet() : const <String>{};
+
+    int downloads(FakeSkinApi api) => api.calls.where((call) => call == 'loading').length;
+
+    test('is downloaded, checked, kept and shown, logged once without its link', () async {
+      final api = wearing();
+      final (:model, environment: _) = make(api);
+      var notified = 0;
+      model.loading.addListener(() => notified++);
+      await settle(model);
+      await model.settle();
+
+      final shown = model.loading.value!;
+      expect((shown.id, shown.ver, shown.frames, shown.width, shown.height), (2, 1, 8, 144, 144));
+      expect(model.value, isNotNull, reason: 'the skin beside it');
+      expect(notified, 1);
+      expect(downloads(api), 1);
+      expect(loadingFiles(), {'2-1', 'current.json'});
+      expect(File('${loadingFolder().path}/2-1').readAsBytesSync(), gif);
+      final line = logged('skin loading').single;
+      expect(line.f['from'], const LogString('download'));
+      expect(line.f['format'], const LogString('gif'));
+      expect(line.f['frames'], const LogInt(8));
+      expect(line.f['width'], const LogInt(144));
+      expect(line.f['bytes'], LogInt(gif.length));
+      expect(line.f['name'], const LogString('测试加载 2'));
+      expect(line.f, isNot(contains('fallback')));
+      expect(allLogText(), isNot(contains('made-up-loading')));
+
+      await model.refresh();
+      expect(downloads(api), 1, reason: 'the same one shown already');
+      expect(logged('skin loading'), hasLength(1));
+    });
+
+    test('is worn without a skin', () async {
+      final api = wearing(skin: false);
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      expect(model.value, isNull);
+      expect(model.loading.value!.id, 2);
+    });
+
+    test('a relaunch shows it from the disk before the check answers, and downloads nothing', () async {
+      final first = make(wearing()).model;
+      await settle(first);
+      await first.settle();
+
+      final api = wearing();
+      final hold = api.holds['equipped'] = Completer<void>();
+      final (:model, environment: _) = make(api);
+      await model.start();
+      await model.settle();
+      expect(model.loading.value!.id, 2, reason: 'from the cache:\n${allLogText()}');
+      expect(logged('skin loading').last.f['from'], const LogString('cache'));
+      hold.complete();
+      await model.refresh();
+      expect(downloads(api), 0);
+      expect(model.loading.value!.id, 2);
+    });
+
+    test('a new version replaces the file', () async {
+      final api = wearing();
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      final before = model.loading.value!;
+
+      api.loading = loadingFor(ver: 2);
+      await model.refresh();
+      await model.settle();
+      expect(model.loading.value!.ver, 2);
+      expect(model.loading.value, isNot(same(before)));
+      expect(downloads(api), 2);
+      expect(loadingFiles(), {'2-2', 'current.json'});
+    });
+
+    test('none worn hides it and deletes its files; the next launch starts without it', () async {
+      final api = wearing();
+      final (:model, environment: _) = make(api);
+      await settle(model);
+
+      api.loading = null;
+      await model.refresh();
+      await model.settle();
+      expect(model.loading.value, isNull);
+      expect(loadingFiles(), {'current.json'});
+      expect(logged('skin loading stays stock').last.f['reason'], const LogString('none worn'));
+
+      final next = make(FakeSkinApi(), account: const AccountUnknown()).model;
+      await next.start();
+      await next.settle();
+      expect(next.loading.value, isNull);
+    });
+
+    test('a skin without one leaves no folder for it', () async {
+      final (:model, environment: _) = make(apiWith(1));
+      await settle(model);
+      await model.settle();
+      expect(loadingFolder().existsSync(), isFalse);
+    });
+
+    test('logging out hides it and keeps the file; a login shows it again without a download', () async {
+      final api = wearing();
+      final (:model, :environment) = make(api);
+      await settle(model);
+
+      environment.account = const LoggedOut();
+      expect(model.loading.value, isNull);
+      await model.settle();
+      expect(loadingFiles(), contains('2-1'));
+
+      final next = make(wearing(), account: const AccountUnknown()).model;
+      await next.start();
+      await next.settle();
+      expect(next.loading.value, isNull, reason: "a logged-out launch never shows the old account's");
+
+      environment.account = loggedIn;
+      await model.refresh();
+      expect(model.loading.value!.id, 2);
+      expect(downloads(api), 1);
+      expect(logged('skin loading').last.f['from'], const LogString('download'), reason: 'logged once a run');
+    });
+
+    test('another account logging in hides it before its own token is there', () async {
+      final api = wearing();
+      final (:model, :environment) = make(api);
+      await settle(model);
+
+      api.failures['equipped'] = BiliError.noAppToken;
+      environment.mid = 2;
+      environment.logins.value++;
+      await model.refresh();
+      expect(model.loading.value, isNull);
+      expect(logged('skin loading stays stock').last.f['reason'], const LogString('another account'));
+    });
+
+    test('bytes that are no picture keep the TV, say why, and are not fetched again this run', () async {
+      final api = wearing(picture: [1, 2, 3]);
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      await model.settle();
+      expect(model.loading.value, isNull);
+      expect(model.value, isNotNull, reason: 'the skin still shows');
+      final line = logged('skin loading').single;
+      expect(line.level, LogLevel.warn);
+      expect(line.f['format'], const LogString('unknown'));
+      expect(line.f['fallback'], const LogString('not a picture that decodes'));
+      expect(line.f['bytes'], const LogInt(3));
+      expect(loadingFiles(), isNot(contains('2-1')));
+
+      await model.refresh();
+      expect(downloads(api), 1);
+    });
+
+    test("a picture that can't be drawn takes the one shown before away", () async {
+      final api = wearing();
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      api
+        ..loading = loadingFor(ver: 2)
+        ..loadingPicture = [1, 2, 3];
+      await model.refresh();
+      await model.settle();
+      expect(model.loading.value, isNull);
+      expect(loadingFiles(), {'current.json'});
+    });
+
+    test("a zip's first picture is taken out and kept as the file", () async {
+      final api = wearing(picture: zipOf({'readme.txt': 'hello'.codeUnits, 'loading.gif': gif}));
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      await model.settle();
+      expect(model.loading.value!.format, SkinLoadingFormat.gif);
+      expect(model.loading.value!.frames, 8);
+      final line = logged('skin loading').single;
+      expect(line.f['format'], const LogString('zip'));
+      expect(line.f['inner'], const LogString('gif'));
+      expect(File('${loadingFolder().path}/2-1').readAsBytesSync(), gif);
+    });
+
+    test("only Bilibili's CDN hosts are asked, and the log names the host alone", () async {
+      final api = wearing(url: 'https://example.com/private/loading.gif?sign=abc');
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      expect(downloads(api), 0);
+      expect(model.loading.value, isNull);
+      expect(
+        logged('skin loading not downloaded, keeping what is shown').single.f['error'],
+        const LogString('loading host not allowed: https://example.com'),
+      );
+      expect(allLogText(), isNot(contains('private')));
+    });
+
+    test('a failed download keeps what is shown and tries again on the next check', () async {
+      final api = wearing();
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      final shown = model.loading.value;
+
+      api
+        ..loading = loadingFor(ver: 2)
+        ..failures['loading'] = _TransportError();
+      await model.refresh();
+      expect(model.loading.value, same(shown));
+      expect(
+        logged('skin loading not downloaded, keeping what is shown').single.f['error'],
+        const LogString('_TransportError'),
+      );
+      expect(allLogText(), isNot(contains('hdslb')));
+
+      api.failures.remove('loading');
+      await model.refresh();
+      expect(model.loading.value!.ver, 2);
+    });
+
+    test('a load_equip not understood keeps what is shown and its file', () async {
+      final api = wearing();
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      final shown = model.loading.value;
+
+      api
+        ..loading = null
+        ..loadingError = 'skin: load_equip is a string';
+      await model.refresh();
+      await model.settle();
+      expect(model.loading.value, same(shown));
+      expect(loadingFiles(), contains('2-1'));
+      expect(
+        logged('skin loading answer not understood, keeping what is shown').single.f['reason'],
+        const LogString('skin: load_equip is a string'),
+      );
+    });
+
+    test('a user_equip not understood beside it keeps the skin shown, and the 加载动画 still shows', () async {
+      final api = apiWith(1);
+      final (:model, environment: _) = make(api);
+      await settle(model);
+      final skin = model.value;
+
+      api
+        ..equip = null
+        ..equipError = 'skin: no user_equip (data keys: load_equip)'
+        ..loading = loadingFor()
+        ..loadingPicture = gif;
+      await model.refresh();
+      expect(model.value, same(skin));
+      expect(versionExists(7, 1), isTrue);
+      expect(model.loading.value!.id, 2);
+      expect(
+        logged('skin answer not understood, keeping what is shown').single.f['reason'],
+        const LogString('skin: no user_equip (data keys: load_equip)'),
+      );
     });
   });
 }

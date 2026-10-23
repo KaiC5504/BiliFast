@@ -74,18 +74,20 @@ void main() {
       expect(rejected, ['ACCESS']);
     });
 
-    test('an answer without data is nothing equipped, not an error', () async {
+    test('an answer without data is nothing worn, not an error', () async {
       http.routes[skinPath] = (200, OwnSpaceFixtures.skinNone);
-      expect(await client.skin(), isNull);
+      final worn = await client.skin();
+      expect((worn.equip, worn.loading, worn.equipError, worn.loadingError), (null, null, null, null));
     });
 
     test('a plain colour theme is nothing to dress with, not an error', () async {
       http.routes[skinPath] = (200, OwnSpaceFixtures.skinColourTheme);
-      expect(await client.skin(), isNull);
+      final worn = await client.skin();
+      expect((worn.equip, worn.loading), (null, null));
     });
 
     test('an answer of another shape is a decoding error naming its keys, never nothing equipped', () async {
-      final data = skinData();
+      final data = skinData()..remove('load_equip');
       (data['user_equip']! as Map<String, Object?>).remove('package_url');
       http.routes[skinPath] = (200, jsonEncode({'code': 0, 'message': '0', 'data': data}));
       await expectLater(
@@ -103,7 +105,7 @@ void main() {
 
   group('the equipped skin', () {
     test('decodes its id, name, version, package and colours', () async {
-      final skin = (await client.skin())!;
+      final skin = (await client.skin()).equip!;
       expect(skin.id, 34001);
       expect(skin.name, '测试装扮');
       expect(skin.ver, 1700000000);
@@ -314,6 +316,116 @@ void main() {
         equipWith((equip) => equip['package_url'] = 'https://i0.hdslb.com/bfs/garb/zip/b.zip')!.packageUrl,
         'https://i0.hdslb.com/bfs/garb/zip/b.zip',
       );
+    });
+  });
+
+  group('the 加载动画', () {
+    Map<String, Object?> loadingData() => skinData()['load_equip']! as Map<String, Object?>;
+
+    /// The fixture's answer with [change] made to its `load_equip`.
+    SkinWorn wornWith(void Function(Map<String, Object?> loading) change) {
+      final data = skinData();
+      change(data['load_equip']! as Map<String, Object?>);
+      return SkinWorn.fromJson(data);
+    }
+
+    test('decodes its id, name, link and version beside the skin', () async {
+      final worn = await client.skin();
+      expect(worn.equip!.id, 34001);
+      final loading = worn.loading!;
+      expect(loading.id, 2);
+      expect(loading.name, '测试加载');
+      expect(loading.url, 'https://i0.hdslb.com/bfs/garb/zip/made-up-load.zip');
+      expect(loading.ver, 1);
+      expect((worn.equipError, worn.loadingError), (null, null));
+    });
+
+    test('is worn without a skin: a null, an empty or a zero user_equip, or a colour theme', () {
+      final colourTheme = jsonDecode(OwnSpaceFixtures.skinColourTheme) as Map<String, Object?>;
+      for (final (reason, data) in [
+        ('null', skinData()..['user_equip'] = null),
+        ('empty', skinData()..['user_equip'] = <String, Object?>{}),
+        ('zero', skinData()..['user_equip'] = {'id': 0, 'package_url': ''}),
+        ('colour theme', (colourTheme['data']! as Map<String, Object?>)..['load_equip'] = loadingData()),
+      ]) {
+        final worn = SkinWorn.fromJson(data);
+        expect(worn.equip, isNull, reason: reason);
+        expect(worn.equipError, isNull, reason: reason);
+        expect(worn.loading?.id, 2, reason: reason);
+      }
+    });
+
+    test('a user_equip of another shape costs only itself beside a 加载动画, never reading as none', () {
+      final data = skinData();
+      (data['user_equip']! as Map<String, Object?>).remove('package_url');
+      final worn = SkinWorn.fromJson(data);
+      expect(worn.equip, isNull);
+      expect(
+        worn.equipError,
+        'skin: user_equip has no package_url (user_equip keys: conf, data, id, name, package_md5, ver)',
+      );
+      expect(worn.loading!.id, 2);
+
+      final noUserEquip = SkinWorn.fromJson(skinData()..remove('user_equip'));
+      expect(noUserEquip.equipError, 'skin: no user_equip (data keys: common_equip, load_equip, skin_colors)');
+      expect(noUserEquip.loading!.id, 2);
+    });
+
+    test('none: no load_equip, a null or empty one, id 0, or a blank link', () {
+      expect(SkinWorn.fromJson(skinData()..remove('load_equip')).loading, isNull);
+      expect(SkinWorn.fromJson(skinData()..['load_equip'] = null).loading, isNull);
+      expect(SkinWorn.fromJson(skinData()..['load_equip'] = <String, Object?>{}).loading, isNull);
+      expect(wornWith((loading) => loading['loading_url'] = '').loading, isNull);
+      expect(wornWith((loading) => loading['loading_url'] = '  ').loading, isNull);
+      final zero = wornWith(
+        (loading) => loading
+          ..remove('loading_url')
+          ..['id'] = 0,
+      );
+      expect((zero.loading, zero.loadingError), (null, null));
+      expect(SkinWorn.fromJson(<String, Object?>{}).loading, isNull);
+    });
+
+    test('a load_equip of another shape costs only itself, naming its keys but never a value', () {
+      final noLink = wornWith((loading) => loading.remove('loading_url'));
+      expect(noLink.loading, isNull);
+      expect(noLink.loadingError, 'skin: load_equip has no loading_url (load_equip keys: id, name, ver)');
+      expect(noLink.equip!.id, 34001, reason: 'the skin still shows');
+
+      final number = wornWith((loading) => loading['loading_url'] = 7);
+      expect(number.loadingError, 'skin: loading_url is a number (load_equip keys: id, loading_url, name, ver)');
+      expect(SkinWorn.fromJson(skinData()..['load_equip'] = 'none').loadingError, 'skin: load_equip is a string');
+      for (final error in [noLink.loadingError!, number.loadingError!]) {
+        for (final value in ['测试加载', 'hdslb', 'made-up']) {
+          expect(error, isNot(contains(value)));
+        }
+      }
+    });
+
+    test('a link comes back as https; odd ids and versions read as 0 and the name as empty', () {
+      expect(
+        wornWith((loading) => loading['loading_url'] = '//i0.hdslb.com/bfs/garb/a.webp').loading!.url,
+        'https://i0.hdslb.com/bfs/garb/a.webp',
+      );
+      expect(
+        wornWith((loading) => loading['loading_url'] = 'http://i0.hdslb.com/bfs/garb/b.gif').loading!.url,
+        'https://i0.hdslb.com/bfs/garb/b.gif',
+      );
+      final odd = wornWith(
+        (loading) => loading
+          ..['id'] = 'x'
+          ..['ver'] = null
+          ..['name'] = 3,
+      ).loading!;
+      expect((odd.id, odd.ver, odd.name), (0, 0, ''));
+      expect(wornWith((loading) => loading['ver'] = '5').loading!.ver, 5);
+    });
+
+    test('with neither half understood, the answer is a decoding error', () async {
+      final data = skinData()..['load_equip'] = 'none';
+      (data['user_equip']! as Map<String, Object?>).remove('package_url');
+      http.routes[skinPath] = (200, jsonEncode({'code': 0, 'message': '0', 'data': data}));
+      await expectLater(client.skin(), throwsA(isA<BiliDecodingError>()));
     });
   });
 

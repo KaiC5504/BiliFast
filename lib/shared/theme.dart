@@ -5472,3 +5472,20 @@ abstract final class OwnSpaceTabsTheme {
   /// Lists scrolled this close to the end ask for the next page.
   static const loadAhead = 360.0;
 }
+
+/// The equipped 加载动画 in a refresh, in place of the loading TV (119, 推荐 mid-refresh, measured in px / 3): the
+/// header ends at 142 pt and the first card starts at 233.33 pt, so the room the refresh holds open is 85.33 pt
+/// under the feed's 6 pt spacing, the TV's 60 grown as Android grows its spinner (40 to 56 dp). The chibi's ink is
+/// 41.33 × 52.33 pt, 169 to 221.33 pt from the top and centred 3 pt left of the screen's middle, so the picture is
+/// drawn whole (contained) in a box the room's height, centred, with the file's own margins around the ink.
+abstract final class SkinLoadingTheme {
+  static const room = 256 / 3;
+  static const size = room;
+
+  /// Decoded at most this many pixels a side: the box at the phone's 3×.
+  static const decodePixels = 256;
+
+  /// A frame time a file leaves at 0 or 10 ms plays at 100 ms, as browsers play such gifs.
+  static const shortestFrame = Duration(milliseconds: 20);
+  static const defaultFrame = Duration(milliseconds: 100);
+}

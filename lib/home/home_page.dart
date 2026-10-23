@@ -728,7 +728,7 @@ class _FeedGrid extends StatefulWidget {
 /// A card leaving in a refresh's hand-off, drawn as it was.
 typedef _Going = ({FeedCard card, CardDislike? dislike});
 
-class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixin {
+class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixin, SkinRefreshRoom {
   static const _skeletons = 6;
 
   /// The next page is asked for once fewer than this many rows of cards are left below the screen.
@@ -932,7 +932,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
         // While 首页's tap holds its TV at the top, a pull draws and opens nothing: the refresh it would join is
         // already showing.
         final pull = ReleaseRefreshControl(
-          refreshIndicatorExtent: LoadingTvTheme.size,
+          refreshIndicatorExtent: refreshRoom,
           builder: _reloadHeader ? null : loadingTvRefreshIndicator,
           onRefresh: _reloadHeader ? null : widget.onPull,
           onArmed: _reloadHeader ? null : widget.onPullArmed,
@@ -979,7 +979,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
                             child: SizedBox(
                               key: const ValueKey('feed-reload'),
                               height: pull.refreshIndicatorExtent,
-                              child: const Center(child: LoadingTv()),
+                              child: Center(child: RefreshLoading(room: pull.refreshIndicatorExtent)),
                             ),
                           ),
                         ),

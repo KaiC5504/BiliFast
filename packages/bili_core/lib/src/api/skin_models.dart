@@ -70,7 +70,7 @@ final class SkinEquip {
   /// plain colour theme (its id among `skin_colors`), which has no package. Any other answer without a package throws a
   /// [DecodeError] naming the problem and the keys it found, never their values, so a changed answer never reads as
   /// none. A missing `package_md5` reads as empty, and the package is then refused before it is downloaded.
-  /// `common_equip` (an event's skin) and `load_equip` are not read.
+  /// `common_equip` (an event's skin) is not read; `load_equip` is [SkinLoading]'s.
   static SkinEquip? fromJson(Object? json) {
     final data = JsonObject.from(json, 'skin data');
     if (data.map.isEmpty) return null;
@@ -101,6 +101,73 @@ final class SkinEquip {
       colors: _colors(equip.nested('data') ?? const JsonObject({})),
       primaryOnly: (attribute & 4) != 0,
     );
+  }
+}
+
+/// The equipped 加载动画 (`load_equip`): one picture at [url], a public file on Bilibili's CDN (an animated webp or
+/// gif as far as known), drawn in a refresh in place of the loading TV. It is worn apart from the 装扮.
+final class SkinLoading {
+  const SkinLoading({required this.id, required this.name, required this.url, required this.ver});
+
+  final int id;
+  final String name;
+  final String url;
+  final int ver;
+
+  /// The `load_equip` object; null when none is worn: absent, null, empty, id 0 or a blank `loading_url`. Any other
+  /// shape throws a [DecodeError] naming the problem and the keys it found, never their values.
+  static SkinLoading? fromJson(Object? json) {
+    if (json == null) return null;
+    if (json is! Map<String, Object?>) throw DecodeError('skin: load_equip is ${_kind(json)}');
+    if (json.isEmpty) return null;
+    final url = json['loading_url'];
+    if (url != null && url is! String) {
+      throw DecodeError('skin: loading_url is ${_kind(url)} (load_equip keys: ${_keys(json)})');
+    }
+    if (url is! String || url.trim().isEmpty) {
+      if (url is String || _number(json['id']) == 0) return null;
+      throw DecodeError('skin: load_equip has no loading_url (load_equip keys: ${_keys(json)})');
+    }
+    final equip = JsonObject(json);
+    return SkinLoading(
+      id: _number(json['id']) ?? 0,
+      name: equip.text('name') ?? '',
+      url: _secure(url.trim()),
+      ver: _number(json['ver']) ?? 0,
+    );
+  }
+}
+
+/// What `/x/resource/show/skin` says the account wears: the 装扮 and the 加载动画, each null when none.
+final class SkinWorn {
+  const SkinWorn({this.equip, this.loading, this.equipError, this.loadingError});
+
+  final SkinEquip? equip;
+  final SkinLoading? loading;
+
+  /// Why `user_equip` wasn't understood; [equip] is then null but doesn't mean none. Only set beside a [loading].
+  final String? equipError;
+
+  /// Why `load_equip` wasn't understood; [loading] is then null but doesn't mean none.
+  final String? loadingError;
+
+  /// One half not understood costs only itself, so a 加载动画 still shows beside a `user_equip` of a new shape. With
+  /// no 加载动画 to show, [SkinEquip.fromJson]'s [DecodeError] is thrown, as the client has always reported it.
+  static SkinWorn fromJson(Object? json) {
+    final data = JsonObject.from(json, 'skin data');
+    SkinLoading? loading;
+    String? loadingError;
+    try {
+      loading = SkinLoading.fromJson(data.map['load_equip']);
+    } on DecodeError catch (error) {
+      loadingError = error.message;
+    }
+    try {
+      return SkinWorn(equip: SkinEquip.fromJson(data.map), loading: loading, loadingError: loadingError);
+    } on DecodeError catch (error) {
+      if (loading == null) rethrow;
+      return SkinWorn(loading: loading, equipError: error.message);
+    }
   }
 }
 
