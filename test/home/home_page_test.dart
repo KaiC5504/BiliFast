@@ -29,6 +29,8 @@ import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
+import 'package:bilifast/skin/skin_loading_view.dart';
+import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/video/intro/title_block.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
@@ -39,6 +41,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
+import '../skin/skin_loading_fixtures.dart';
 import '../support/fake_player.dart';
 import '../video/mixed_lines.dart';
 import 'fake_login_gate.dart';
@@ -132,6 +135,7 @@ void main() {
     FontStore? fonts,
     SearchApi? search,
     String? initialLink,
+    SkinModel Function(AppEnvironment environment)? skin,
   }) async {
     tester.view.physicalSize = const Size(440, 900);
     tester.view.devicePixelRatio = 1;
@@ -172,6 +176,7 @@ void main() {
       loginGate: gate,
       fonts: fonts,
       searchApi: search ?? FakeSearchApi(defaultWord: _word),
+      skin: skin?.call(environment),
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -379,6 +384,97 @@ void main() {
     await settle(tester, 30);
     expect(card('BV1n0'), findsOneWidget);
     expect(find.byType(LoadingTv), findsNothing);
+  });
+
+  group("推荐's refresh with the 装扮's 加载动画 (119)", () {
+    final view = find.byType(SkinLoadingView);
+
+    /// 推荐 shown, then the stand-in 加载动画 put on.
+    Future<LoadingSkinModel> wearing(WidgetTester tester) async {
+      final animation = await standInLoading(tester);
+      late LoadingSkinModel skin;
+      http.pages[1] = twenty();
+      await show(tester, skin: (environment) => skin = LoadingSkinModel(environment: environment));
+      addTearDown(skin.dispose);
+      await settle(tester);
+      skin.shownLoading.value = animation;
+      await tester.pump();
+      return skin;
+    }
+
+    testWidgets('a pull draws it in place of the TV, held short of the trigger, then playing in its room', (
+      tester,
+    ) async {
+      final skin = await wearing(tester);
+      final cardTop = tester.getTopLeft(card('BV1c0')).dy;
+      final pull = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('feed'))));
+      for (var i = 0; i < 4; i++) {
+        await pull.moveBy(const Offset(0, 20));
+        await tester.pump();
+      }
+      expect(find.byType(LoadingTv), findsNothing);
+      expect(tester.widget<SkinLoadingView>(view).playing, isFalse, reason: 'short of the trigger');
+      expect(identical(tester.widget<SkinLoadingView>(view).animation, skin.shownLoading.value), isTrue);
+      expect(tester.getSize(view).height, SkinLoadingTheme.size);
+      expect(tester.getCenter(view).dx, 220);
+
+      http.gates[1] = Completer<void>();
+      for (var i = 0; i < 10; i++) {
+        await pull.moveBy(const Offset(0, 40));
+        await tester.pump();
+      }
+      expect(tester.widget<SkinLoadingView>(view).playing, isTrue, reason: 'armed');
+      await pull.up();
+      // The bounce back to the room takes a moment.
+      await settle(tester, 40);
+      expect(http.asked, [1, 1]);
+      expect(tester.widget<SkinLoadingView>(view).playing, isTrue);
+      final room = SkinLoadingTheme.room;
+      expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + room), reason: '85.33 pt held open');
+      expect(tester.getRect(view).bottom, moreOrLessEquals(cardTop + room - BiliMetrics.feedSpacing));
+
+      http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1n$i')];
+      http.gates[1]!.complete();
+      await settle(tester, 30);
+      expect(card('BV1n0'), findsOneWidget);
+      expect(view, findsNothing);
+      expect(tester.getTopLeft(card('BV1n0')).dy, moreOrLessEquals(cardTop), reason: 'the room closed');
+    });
+
+    testWidgets("首页's tap holds it centred in its 85.33 pt band", (tester) async {
+      await wearing(tester);
+      final cardTop = tester.getTopLeft(card('BV1c0')).dy;
+      http.gates[1] = Completer<void>();
+      await tester.tap(find.byKey(const ValueKey('home-tab-home')));
+      await settle(tester, 10);
+      final band = tester.getRect(find.byKey(const ValueKey('feed-reload')));
+      expect(band.height, moreOrLessEquals(SkinLoadingTheme.room));
+      final drawn = find.descendant(of: find.byKey(const ValueKey('feed-reload')), matching: view);
+      expect(drawn, findsOneWidget);
+      expect(find.byType(LoadingTv), findsNothing);
+      expect((tester.getRect(drawn).center - band.center).distance, moreOrLessEquals(0));
+      expect(tester.getSize(drawn), const Size.square(SkinLoadingTheme.size));
+      expect(tester.widget<SkinLoadingView>(drawn).playing, isTrue);
+      expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + SkinLoadingTheme.room));
+      http.gates[1]!.complete();
+      await settle(tester, 20);
+      expect(view, findsNothing);
+    });
+
+    testWidgets('taken off, a pull shows the TV in its 60 pt room again', (tester) async {
+      final skin = await wearing(tester);
+      skin.shownLoading.value = null;
+      await tester.pump();
+      final cardTop = tester.getTopLeft(card('BV1c0')).dy;
+      http.gates[1] = Completer<void>();
+      await tester.tap(find.byKey(const ValueKey('home-tab-home')));
+      await settle(tester, 10);
+      expect(view, findsNothing);
+      expect(find.byType(LoadingTv), findsOneWidget);
+      expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + LoadingTvTheme.size));
+      http.gates[1]!.complete();
+      await settle(tester, 20);
+    });
   });
 
   testWidgets('home goes idle once the feed shows: nothing ticks, no frame waits', (tester) async {

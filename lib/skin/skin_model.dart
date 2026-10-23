@@ -10,6 +10,7 @@ import '../app/app_environment.dart';
 import '../devtools/crash_log.dart';
 import 'skin.dart';
 import 'skin_api.dart';
+import 'skin_loading.dart';
 import 'skin_package.dart';
 import 'skin_status_bar.dart';
 
@@ -24,6 +25,9 @@ import 'skin_status_bar.dart';
 /// never replaced in place. Logging out shows the stock look and the next launch starts stock, but the files stay for
 /// the next login. Each version's headers are measured behind the status bar on its first showing and the result kept
 /// in its `.status.json`, so later launches have it with the cache.
+///
+/// The 加载动画 worn with it (or alone) is [loading], kept by [SkinLoadingKeeper] in the folder's `loading`, asked,
+/// shown and hidden at the same moments.
 class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   SkinModel({required this._api, required this._environment, required this._folder, Logger? logger})
     : _logger = logger ?? Logger.shared;
@@ -77,6 +81,15 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   @override
   Skin? get value => _value;
 
+  late final SkinLoadingKeeper _loading = SkinLoadingKeeper(api: _api, root: _root, logger: _logger);
+  Future<void> _loadingRead = Future.value();
+
+  /// The account whose 加载动画 is shown.
+  int? _loadingMid;
+
+  /// The equipped 加载动画, decoded; null shows the loading TV.
+  ValueListenable<SkinLoadingAnimation?> get loading => _loading.shown;
+
   bool get _signedIn => switch (_environment.account) {
     LoggedOut() || LoginExpired() => false,
     LoggedIn() || AccountUnknown() => true,
@@ -90,6 +103,9 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     _account = _environment.account;
     _environment.addListener(_accountChanged);
     _environment.logins.addListener(_loginCompleted);
+    _loading.shown.addListener(_loadingShown);
+    // Not awaited: it shows only in a refresh, never in the first frame.
+    _loadingRead = _readLoadingCache(_generation);
     final read = _readCache();
     _cacheRead = read;
     final cached = await read;
@@ -115,12 +131,22 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     return _refreshing = run;
   }
 
+  Future<void> _readLoadingCache(int generation) async {
+    final cached = await _loading.readCache();
+    if (cached != null && _current(generation) && _signedIn && _loading.shown.value == null) _loading.show(cached);
+  }
+
+  void _loadingShown() {
+    _loadingMid = _loading.shown.value == null ? null : _environment.mid ?? _loadingMid;
+  }
+
   Future<void> _refresh(int generation) async {
     await _cacheRead;
+    await _loadingRead;
     if (!_current(generation) || !_signedIn) return;
-    final SkinEquip? equip;
+    final SkinWorn worn;
     try {
-      equip = await _api.equipped();
+      worn = await _api.equipped();
     } on BiliNoAppTokenError {
       if (!_toldNoToken) {
         _logger.info(LogCategory.ui, 'skin waits for the app token, keeping what is shown', {'shown': _value != null});
@@ -137,6 +163,15 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     }
     _toldNoToken = false;
     if (!_current(generation)) return;
+    await Future.wait([_loading.wear(worn, () => _current(generation)), _wear(worn, generation)]);
+  }
+
+  Future<void> _wear(SkinWorn worn, int generation) async {
+    if (worn.equipError case final reason?) {
+      _logger.warn(LogCategory.ui, 'skin answer not understood, keeping what is shown', {'reason': reason});
+      return;
+    }
+    final equip = worn.equip;
     if (equip == null) {
       _logger.info(LogCategory.ui, 'skin stays stock', {'reason': 'none equipped'});
       _show(null);
@@ -332,7 +367,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
       final root = Directory(await _root());
       if (!await root.exists()) return;
       await for (final skin in root.list(followLinks: false)) {
-        if (skin is! Directory) continue;
+        if (skin is! Directory || _nameOf(skin.path) == SkinLoadingKeeper.folderName) continue;
         final id = _nameOf(skin.path);
         await for (final version in skin.list(followLinks: false)) {
           if (keep != null && id == '${keep.id}' && _nameOf(version.path) == _versionName(keep)) continue;
@@ -382,6 +417,8 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   Future<void> settle() async {
     await _measuring;
     await _disk;
+    await _loadingRead;
+    await _loading.settle();
   }
 
   Future<T> _exclusive<T>(Future<T> Function() task) {
@@ -405,6 +442,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     } else if (was is! LoggedIn) {
       // The cached skin shown before the check answered is taken as this account's.
       if (_value != null) _shownMid ??= _environment.mid;
+      if (_loading.shown.value != null) _loadingMid ??= _environment.mid;
       _loginRefreshed = true;
       _restart();
     }
@@ -420,6 +458,10 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
         _logger.info(LogCategory.ui, 'skin stays stock', {'reason': 'another account'});
         _show(null);
         unawaited(_exclusive(() => _writeCurrent(null)));
+      }
+      if (_loading.shown.value != null && _environment.mid != _loadingMid) {
+        _logger.info(LogCategory.ui, 'skin loading stays stock', {'reason': 'another account'});
+        _loading.hide();
       }
       _restart();
     }
@@ -439,6 +481,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     _logger.info(LogCategory.ui, 'skin stays stock', {'reason': 'logged out', 'shown': _value != null});
     _show(null);
     unawaited(_exclusive(() => _writeCurrent(null)));
+    _loading.hide();
   }
 
   bool _current(int generation) => generation == _generation && !_disposed;
@@ -576,7 +619,9 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     if (_started != null) {
       _environment.removeListener(_accountChanged);
       _environment.logins.removeListener(_loginCompleted);
+      _loading.shown.removeListener(_loadingShown);
     }
+    _loading.dispose();
     super.dispose();
   }
 }

@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' show RefreshIndicatorMode;
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
+import '../app/app_scope.dart';
+import '../skin/skin_loading.dart';
+import '../skin/skin_loading_view.dart';
 import 'theme.dart';
 
 /// The official app's loading TV (14, 64, 67): its four faces in turn, [LoadingTvTheme.frame] each, drawn
@@ -122,9 +126,10 @@ class LoadingTvState extends StatelessWidget {
   }
 }
 
-/// [ReleaseRefreshControl]'s `builder`, the TV in place of the spinner: it comes down out from under what's above as
-/// the list is pulled, holding its first face until letting go would refresh, then cycles until the refresh is done
-/// and the gap closes. The gap holds at [LoadingTvTheme.size] while refreshing (14).
+/// [ReleaseRefreshControl]'s `builder`, the TV in place of the spinner (or the 装扮's 加载动画, [RefreshLoading]): it
+/// comes down out from under what's above as the list is pulled, holding its first face until letting go would
+/// refresh, then cycles until the refresh is done and the gap closes. The gap holds at the list's
+/// `refreshIndicatorExtent` while refreshing (14, 119).
 Widget loadingTvRefreshIndicator(
   BuildContext context,
   RefreshIndicatorMode mode,
@@ -133,12 +138,66 @@ Widget loadingTvRefreshIndicator(
   double refreshIndicatorExtent,
 ) {
   if (mode == RefreshIndicatorMode.inactive) return const SizedBox.shrink();
-  return ClipRect(
-    child: OverflowBox(
-      alignment: Alignment.bottomCenter,
-      minHeight: LoadingTvTheme.size,
-      maxHeight: LoadingTvTheme.size,
-      child: LoadingTv(playing: mode != RefreshIndicatorMode.drag),
-    ),
-  );
+  return RefreshLoading(playing: mode != RefreshIndicatorMode.drag, room: refreshIndicatorExtent, pulled: true);
+}
+
+/// What a refresh shows: the equipped 加载动画 when [AppScope]'s skin has one that decodes, else the TV. The 加载动画
+/// draws in [SkinLoadingTheme.size], or in [room] (the height the refresh holds open) where a list keeps the TV's.
+/// Pages' first loads ([LoadingTvState]) keep the TV.
+class RefreshLoading extends StatelessWidget {
+  const RefreshLoading({super.key, this.playing = true, this.room = SkinLoadingTheme.room, this.pulled = false});
+
+  /// False holds the first frame, as a pull short of the trigger does.
+  final bool playing;
+  final double room;
+
+  /// Drawn at the bottom of what the pull opens, clipped by what's above.
+  final bool pulled;
+
+  @override
+  Widget build(BuildContext context) {
+    final loading = skinLoadingOf(context);
+    if (loading == null) return _draw(null);
+    return ValueListenableBuilder(valueListenable: loading, builder: (context, animation, _) => _draw(animation));
+  }
+
+  Widget _draw(SkinLoadingAnimation? animation) {
+    final size = animation == null ? LoadingTvTheme.size : math.min(SkinLoadingTheme.size, room);
+    final shown = animation == null
+        ? LoadingTv(playing: playing)
+        : SkinLoadingView(animation: animation, playing: playing, size: size);
+    if (!pulled) return shown;
+    return ClipRect(
+      child: OverflowBox(alignment: Alignment.bottomCenter, minHeight: size, maxHeight: size, child: shown),
+    );
+  }
+}
+
+/// The 装扮's 加载动画 as [AppScope] has it; null outside one, where refreshes show the TV.
+ValueListenable<SkinLoadingAnimation?>? skinLoadingOf(BuildContext context) =>
+    context.dependOnInheritedWidgetOfExactType<AppScope>()?.services.skin.loading;
+
+/// For a list that holds its refresh open: [refreshRoom] is the 加载动画's room (119) while one is equipped, else the
+/// TV's, and the state builds again when it changes.
+mixin SkinRefreshRoom<T extends StatefulWidget> on State<T> {
+  ValueListenable<SkinLoadingAnimation?>? _skinLoading;
+
+  double get refreshRoom => _skinLoading?.value == null ? LoadingTvTheme.size : SkinLoadingTheme.room;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final loading = skinLoadingOf(context);
+    if (identical(loading, _skinLoading)) return;
+    _skinLoading?.removeListener(_skinLoadingChanged);
+    _skinLoading = loading?..addListener(_skinLoadingChanged);
+  }
+
+  void _skinLoadingChanged() => setState(() {});
+
+  @override
+  void dispose() {
+    _skinLoading?.removeListener(_skinLoadingChanged);
+    super.dispose();
+  }
 }

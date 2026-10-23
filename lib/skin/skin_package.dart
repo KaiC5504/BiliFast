@@ -14,6 +14,11 @@ abstract final class SkinLimits {
   static const packageBytes = 40 * 1024 * 1024;
   static const entryBytes = 20 * 1024 * 1024;
   static const unpackedBytes = 100 * 1024 * 1024;
+
+  /// A 加载动画's one picture, and its frames' size and count (each decoded frame is held while it shows).
+  static const loadingBytes = 10 * 1024 * 1024;
+  static const loadingSide = 2048;
+  static const loadingFrames = 1000;
   static const connectTimeout = Duration(seconds: 15);
   static const downloadTimeout = Duration(seconds: 90);
 }
@@ -42,12 +47,12 @@ final class SkinPackageError implements Exception {
   const SkinPackageError(this.reason, {this.passing = false});
 
   /// Names the scheme and host (and a port given), never the path or query, which can carry a signature, nor any
-  /// user info.
-  factory SkinPackageError.hostNotAllowed(Uri url) {
+  /// user info. [what] is the file refused.
+  factory SkinPackageError.hostNotAllowed(Uri url, {String what = 'package'}) {
     final host = url.host.length <= 80 ? url.host : '${url.host.substring(0, 80)}…';
     final port = url.hasPort ? ':${url.port}' : '';
     final user = url.userInfo.isEmpty ? '' : ' with user info';
-    return SkinPackageError('package host not allowed: ${url.scheme}://$host$port$user');
+    return SkinPackageError('$what host not allowed: ${url.scheme}://$host$port$user');
   }
 
   final String reason;
@@ -70,18 +75,20 @@ bool isSkinPackageUrl(Uri url) {
 }
 
 /// The package over a plain dart:io client: no cookies, no token, the browser's user agent. Redirects are followed
-/// by hand so each hop passes [isSkinPackageUrl]; [client] is for tests.
+/// by hand so each hop passes [isSkinPackageUrl]; [client] is for tests. The 加载动画's picture comes the same way,
+/// with its own [cap].
 Future<Uint8List> downloadSkinPackage(
   Uri url, {
   HttpClient Function() client = HttpClient.new,
   Duration timeout = SkinLimits.downloadTimeout,
+  int cap = SkinLimits.packageBytes,
 }) async {
   if (!isSkinPackageUrl(url)) throw SkinPackageError.hostNotAllowed(url);
   final http = client()
     ..connectionTimeout = SkinLimits.connectTimeout
     ..userAgent = BiliClient.userAgent;
   try {
-    final fetched = _fetch(http, url);
+    final fetched = _fetch(http, url, cap);
     return await fetched.timeout(
       timeout,
       onTimeout: () => throw const SkinPackageError('download timed out', passing: true),
@@ -91,7 +98,7 @@ Future<Uint8List> downloadSkinPackage(
   }
 }
 
-Future<Uint8List> _fetch(HttpClient http, Uri url) async {
+Future<Uint8List> _fetch(HttpClient http, Uri url, int cap) async {
   var next = url;
   for (var hop = 0; hop < 4; hop++) {
     if (!isSkinPackageUrl(next)) throw SkinPackageError.hostNotAllowed(next);
@@ -105,7 +112,7 @@ Future<Uint8List> _fetch(HttpClient http, Uri url) async {
       continue;
     }
     if (response.statusCode != HttpStatus.ok) throw SkinPackageError('download answered ${response.statusCode}');
-    return readCapped(response, declaredLength: response.contentLength);
+    return readCapped(response, declaredLength: response.contentLength, cap: cap);
   }
   throw const SkinPackageError('too many redirects');
 }
