@@ -39,6 +39,14 @@ enum CoverPreset {
 
   String get suffix => '@${width}w_${height}h$style.${avif ? 'avif' : 'webp'}';
 
-  /// The preset for a cover site that names none, its box [pixels] in device pixels.
-  static CoverPreset forBox(Size pixels) => throw UnimplementedError();
+  /// The preset for a cover site that names none, its box [pixels] in device pixels: [feed] for a box narrower than
+  /// 3:2, otherwise the smallest wide preset at least 95% of the box each way, else [player]. Never [search] or
+  /// [space], each its own screen's.
+  static CoverPreset forBox(Size pixels) {
+    if (pixels.width / pixels.height < 1.5) return feed;
+    for (final preset in const [related, history, list, wide]) {
+      if (preset.width >= pixels.width * 0.95 && preset.height >= pixels.height * 0.95) return preset;
+    }
+    return player;
+  }
 }

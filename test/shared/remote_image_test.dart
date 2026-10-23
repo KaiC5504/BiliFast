@@ -328,6 +328,23 @@ void main() {
       await drop(tester);
     });
 
+    testWidgets('only covers time their downloads', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await keep(tester);
+      await tester.pumpWidget(const SizedBox());
+      final context = tester.element(find.byType(SizedBox));
+      for (var i = 0; i < 10; i++) {
+        answers.add(animatedGif);
+        final face = 'https://i0.hdslb.com/bfs/face/$i.jpg';
+        expect(await tester.runAsync(() => RemoteImage.precache(context, face, size: const Size(40, 40))), isTrue);
+      }
+      expect(downloads, 10);
+      expect(logs.events.where((event) => event.msg == 'cover downloads'), isEmpty);
+      await drop(tester);
+    });
+
     testWidgets('a picture got ready ahead with a CDN suffix is the one a box of any size with that suffix draws', (
       tester,
     ) async {

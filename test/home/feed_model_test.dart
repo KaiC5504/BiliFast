@@ -497,12 +497,17 @@ void main() {
       pictures = PictureSession(pictureHttp, now: () => now);
     });
 
-    FeedModel connected({PictureSession? Function()? session, DateTime Function()? clock}) => FeedModel(
+    FeedModel connected({
+      PictureSession? Function()? session,
+      DateTime Function()? clock,
+      String Function()? format,
+    }) => FeedModel(
       client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test')),
       logger: Logger(session: 'test')..add(logs),
       officialWanted: () => false,
       now: clock ?? () => now,
       pictures: session ?? () => pictures,
+      coverFormat: format,
     )..beforeShow = (fresh) => CoverPrefetch([for (final _ in fresh) Future.value(true)]);
 
     List<LogEvent> lines(String msg) => [for (final event in logs.events) if (event.msg == msg) event];
@@ -585,8 +590,28 @@ void main() {
         'warm': true,
         'warmed': 'ok',
         'early': false,
+        'format': 'jpg',
       });
       expect(lines('feed covers').last.f.keys, unorderedEquals(['ready', 'failed', 'of', 'early']));
+    });
+
+    test('the line gives the format the covers were asked in, as they were asked', () async {
+      var format = 'avif';
+      http.pages[1] = [feedItem('BV1')];
+      final feed = connected(format: () => format);
+      await feed.refresh();
+      await pumpEventQueue();
+      expect(done().last['format'], 'avif');
+
+      now = now.add(const Duration(minutes: 1));
+      http.pages[1] = [feedItem('BV2')];
+      final cover = Completer<bool>();
+      feed.beforeShow = (_) => CoverPrefetch([cover.future]);
+      await feed.refresh();
+      format = 'jpg';
+      cover.complete(true);
+      await pumpEventQueue();
+      expect(done().last['format'], 'avif', reason: 'AVIF went off after the covers were asked');
     });
 
     test('a warm still out as the covers are asked for is noted; on the PC there is no connection to warm', () async {
@@ -607,6 +632,7 @@ void main() {
         'warming': true,
         'warmed': 'pending',
         'early': false,
+        'format': 'jpg',
       });
 
       final pc = connected(session: () => null);
@@ -680,6 +706,7 @@ void main() {
         'warm': true,
         'warmed': 'ok',
         'early': true,
+        'format': 'jpg',
       });
     });
 
@@ -709,6 +736,7 @@ void main() {
             'warmed': 'none',
             'early': false,
             'timedOut': true,
+            'format': 'jpg',
           },
         ]);
 

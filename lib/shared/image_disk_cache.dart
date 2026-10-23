@@ -10,10 +10,16 @@ import 'package:cupertino_http/cupertino_http.dart'
     show CupertinoClient, NSErrorClientException, NSHTTPCookieAcceptPolicy, URLSessionConfiguration;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+// Not in pubspec: it comes with cupertino_http and bili_core.
+// ignore: depend_on_referenced_packages
+import 'package:http/http.dart' as http;
 import 'package:objective_c/objective_c.dart' show NSError$Methods;
 
 /// Downloads a picture's bytes; throws `NetworkImageLoadException` for a status other than 200.
 typedef ImageFetch = Future<Uint8List> Function(Uri url, Map<String, String>? headers);
+
+/// A picture that came over the network: ms until its answer's headers were in and until its body was, and its size.
+typedef PictureDownload = ({int firstByteMs, int totalMs, int bytes});
 
 /// The pictures shown through `StoredNetworkImage`, kept on the phone, so a picture asked for again (iOS emptied the
 /// memory cache, a page came back, the app relaunched) comes from storage instead of the network. Files are named by a
@@ -96,19 +102,26 @@ class ImageDiskCache {
     _observer = null;
   }
 
-  /// The picture at [url] from storage, or downloaded (with [headers]) and stored.
-  Future<Uint8List> bytes(String url, {Map<String, String>? headers}) {
+  /// The picture at [url] from storage, or downloaded (with [headers]) and stored. [onDownloaded] hears of a download
+  /// this ask made, never of a stored copy or a download another ask had under way; it is called before the bytes are
+  /// handed back. An injected fetch can't tell when its headers came, so its first byte is its total.
+  Future<Uint8List> bytes(String url, {Map<String, String>? headers, ValueChanged<PictureDownload>? onDownloaded}) {
     final running = _loads[url];
     if (running != null) return running.bytes.future;
     final load = _Load();
     _loads[url] = load;
-    load.done = _load(url, headers, load.bytes).whenComplete(() {
+    load.done = _load(url, headers, load.bytes, onDownloaded).whenComplete(() {
       if (identical(_loads[url], load)) _loads.remove(url);
     });
     return load.bytes.future;
   }
 
-  Future<void> _load(String url, Map<String, String>? headers, Completer<Uint8List> result) async {
+  Future<void> _load(
+    String url,
+    Map<String, String>? headers,
+    Completer<Uint8List> result,
+    ValueChanged<PictureDownload>? onDownloaded,
+  ) async {
     try {
       final file = fileOf(url);
       final stored = await _read(file);
@@ -119,7 +132,15 @@ class ImageDiskCache {
         return;
       }
       final generation = _generation;
-      final fetched = await (_fetch ?? download)(Uri.base.resolve(url), headers);
+      final clock = Stopwatch()..start();
+      int? answeredMs;
+      final address = Uri.base.resolve(url);
+      final fetch = _fetch;
+      final fetched = fetch != null
+          ? await fetch(address, headers)
+          : await download(address, headers, onAnswered: () => answeredMs ??= clock.elapsedMilliseconds);
+      final totalMs = clock.elapsedMilliseconds;
+      onDownloaded?.call((firstByteMs: answeredMs ?? totalMs, totalMs: totalMs, bytes: fetched.length));
       result.complete(fetched);
       if (fetched.isEmpty || generation != _generation) return;
       await _store(file, fetched, generation);
@@ -362,15 +383,21 @@ class ImageDiskCache {
   static PictureSession? session = PictureSession.platform();
 
   /// The app's download: through [session] on the iPhone, otherwise as [NetworkImage] makes it; a [TimeoutException]
-  /// once [timeout] has passed.
-  static Future<Uint8List> download(Uri url, Map<String, String>? headers, {Duration timeout = downloadTimeout}) {
+  /// once [timeout] has passed. [onAnswered] is called as the answer's headers come in.
+  static Future<Uint8List> download(
+    Uri url,
+    Map<String, String>? headers, {
+    Duration timeout = downloadTimeout,
+    VoidCallback? onAnswered,
+  }) {
     final pictures = session;
-    if (pictures != null) return pictures.download(url, headers, timeout: timeout);
+    if (pictures != null) return pictures.download(url, headers, timeout: timeout, onAnswered: onAnswered);
     HttpClientRequest? request;
     Future<Uint8List> fetch() async {
       final asking = request = await _client.getUrl(url);
       headers?.forEach(asking.headers.add);
       final response = await asking.close();
+      onAnswered?.call();
       if (response.statusCode != HttpStatus.ok) {
         await response.drain<List<int>>(<int>[]);
         throw NetworkImageLoadException(statusCode: response.statusCode, uri: url);
@@ -418,6 +445,12 @@ final class PictureSession {
   /// How long after an answer the connection still counts as open.
   static const keepAlive = Duration(seconds: 10);
 
+  /// Over [client], which is told when each download's headers are in ([download]'s `onAnswered`).
+  factory PictureSession.over(http.Client client, {DateTime Function()? now}) => PictureSession(
+    ClientHTTPTransport(client: _AnsweredClient(client), timeout: requestTimeout),
+    now: now,
+  );
+
   final HTTPTransport _transport;
   final DateTime Function() _now;
 
@@ -438,8 +471,7 @@ final class PictureSession {
         ..httpShouldSetCookies = false
         ..httpCookieAcceptPolicy = NSHTTPCookieAcceptPolicy.NSHTTPCookieAcceptPolicyNever
         ..timeoutIntervalForRequest = requestTimeout;
-      final client = CupertinoClient.fromSessionConfiguration(configuration);
-      return PictureSession(ClientHTTPTransport(client: client, timeout: requestTimeout));
+      return PictureSession.over(CupertinoClient.fromSessionConfiguration(configuration));
     } catch (error) {
       Logger.shared.warn(LogCategory.ui, 'picture session failed, using dart:io', {'error': '${error.runtimeType}'});
       return null;
@@ -455,25 +487,26 @@ final class PictureSession {
   /// Whether a [warm] is out.
   bool get warming => _warming;
 
-  /// As [ImageDiskCache.download]; a failure on the way is a [PictureDownloadException].
+  /// As [ImageDiskCache.download]; a failure on the way is a [PictureDownloadException]. [onAnswered] is called only
+  /// over a client that tells ([PictureSession.over]).
   Future<Uint8List> download(
     Uri url,
     Map<String, String>? headers, {
     Duration timeout = ImageDiskCache.downloadTimeout,
+    VoidCallback? onAnswered,
   }) async {
     final abort = Completer<void>();
+    final request = HTTPRequest(url: url, headers: {...?headers}, timeout: requestTimeout, abort: abort.future);
     final HTTPResponse response;
     try {
-      response = await _transport
-          .send(HTTPRequest(url: url, headers: {...?headers}, timeout: requestTimeout, abort: abort.future))
-          .timeout(
-            timeout,
-            onTimeout: () {
-              // The transport gives up only on a 15 s wait between chunks, so a trickling body would run on.
-              abort.complete();
-              throw TimeoutException('picture download', timeout);
-            },
-          );
+      response = await runZoned(() => _transport.send(request), zoneValues: {_onAnswered: onAnswered}).timeout(
+        timeout,
+        onTimeout: () {
+          // The transport gives up only on a 15 s wait between chunks, so a trickling body would run on.
+          abort.complete();
+          throw TimeoutException('picture download', timeout);
+        },
+      );
     } on TimeoutException {
       _answered = null;
       rethrow;
@@ -531,6 +564,26 @@ final class PictureDownloadException implements IOException {
 
   @override
   String toString() => 'PictureDownloadException: $reason';
+}
+
+/// The zone value under which [PictureSession.download] hands its `onAnswered` to [_AnsweredClient]: the transport
+/// between them answers only once the whole body is in.
+final _onAnswered = Object();
+
+final class _AnsweredClient extends http.BaseClient {
+  _AnsweredClient(this._inner);
+
+  final http.Client _inner;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final response = await _inner.send(request);
+    if (Zone.current[_onAnswered] case final VoidCallback onAnswered) onAnswered();
+    return response;
+  }
+
+  @override
+  void close() => _inner.close();
 }
 
 final class _Load {

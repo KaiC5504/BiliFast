@@ -7,6 +7,9 @@ import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+// Not in pubspec: it comes with cupertino_http and bili_core.
+// ignore: depend_on_referenced_packages
+import 'package:http/http.dart' as http;
 
 /// A signed address, so a log line carrying any of it shows.
 const _a = 'https://i0.hdslb.com/bfs/archive/a.jpg@240w_180h_1c.webp?sign=SECRET1&t=1';
@@ -32,12 +35,14 @@ final class _Fetch {
 }
 
 /// Answers every request with [status] and [body], recording what was asked; while [hold] is pending, answers wait
-/// for it.
+/// for it. [answerDelay] holds each answer's headers back, and [bodyDelay] its body after them.
 final class _Client implements HttpClient {
-  _Client(this.status, this.body);
+  _Client(this.status, this.body, {this.answerDelay = Duration.zero, this.bodyDelay = Duration.zero});
 
   final int status;
   final List<int> body;
+  final Duration answerDelay;
+  final Duration bodyDelay;
   final asked = <Uri>[];
   final sentHeaders = <String, Object>{};
   Future<void>? hold;
@@ -68,7 +73,8 @@ final class _Request implements HttpClientRequest {
   @override
   Future<HttpClientResponse> close() async {
     await _hold;
-    return _Response(_client.status, _client.body);
+    await Future<void>.delayed(_client.answerDelay);
+    return _Response(_client.status, _client.body, _client.bodyDelay);
   }
 
   @override
@@ -91,11 +97,12 @@ final class _Headers implements HttpHeaders {
 }
 
 final class _Response extends Stream<List<int>> implements HttpClientResponse {
-  _Response(this.statusCode, this._body);
+  _Response(this.statusCode, this._body, this._delay);
 
   @override
   final int statusCode;
   final List<int> _body;
+  final Duration _delay;
 
   @override
   int get contentLength => _body.length;
@@ -109,10 +116,30 @@ final class _Response extends Stream<List<int>> implements HttpClientResponse {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) => Stream.value(_body).listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }) => Stream.fromFuture(
+    Future<List<int>>.delayed(_delay, () => _body),
+  ).listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Stands in for URLSession's client under [PictureSession.over]: answers [body] once [answerDelay] has passed, its
+/// body [bodyDelay] after its headers.
+final class _HttpClient extends http.BaseClient {
+  _HttpClient({required this.answerDelay, required this.bodyDelay});
+
+  final Duration answerDelay;
+  final Duration bodyDelay;
+  final List<int> body = List.filled(2048, 7);
+  final sent = <http.BaseRequest>[];
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    sent.add(request);
+    await Future<void>.delayed(answerDelay);
+    return http.StreamedResponse(Stream.fromFuture(Future<List<int>>.delayed(bodyDelay, () => body)), HttpStatus.ok);
+  }
 }
 
 /// Stands in for the iPhone's URLSession: records each request and answers [status] with [body]; while [hold] is
@@ -422,6 +449,71 @@ void main() {
     await cache.forget(_a);
     await cache.settle();
     expect(cache.fileOf(_a).existsSync(), isFalse);
+  });
+
+  group('a download timed', () {
+    const delay = Duration(milliseconds: 80);
+
+    /// Whole ms are cut, never rounded, so a measured wait can read a ms short of [delay].
+    final atLeast = greaterThanOrEqualTo(delay.inMilliseconds - 10);
+
+    tearDown(() {
+      debugNetworkImageHttpClientProvider = null;
+      ImageDiskCache.session = null;
+    });
+
+    test("is handed to the ask that made it, with its size; a stored copy and another ask's download aren't", () async {
+      final cache = cacheOf();
+      final heard = <PictureDownload>[];
+      final release = Completer<void>();
+      fetch.hold = release.future;
+      final first = cache.bytes(_a, onDownloaded: heard.add);
+      final second = cache.bytes(_a, onDownloaded: (_) => fail('it joined the first ask'));
+      release.complete();
+      await Future.wait([first, second]);
+      expect(heard, hasLength(1));
+      expect(heard.single.bytes, 100);
+      expect(heard.single.firstByteMs, heard.single.totalMs, reason: 'an injected fetch tells no headers apart');
+      await cache.settle();
+
+      await cache.bytes(_a, onDownloaded: (_) => fail('stored'));
+      fetch.error = NetworkImageLoadException(statusCode: 404, uri: Uri.parse(_b));
+      await expectLater(cache.bytes(_b, onDownloaded: (_) => fail('no picture came')), throwsA(anything));
+      expect(heard, hasLength(1));
+    });
+
+    test('through dart:io, its first byte is when the headers came and its total when the body had', () async {
+      final client = _Client(HttpStatus.ok, [1, 2, 3], answerDelay: delay, bodyDelay: delay);
+      debugNetworkImageHttpClientProvider = () => client;
+      final cache = ImageDiskCache(folder: folder.path);
+      caches.add(cache);
+      final heard = <PictureDownload>[];
+      expect(await cache.bytes(_a, onDownloaded: heard.add), [1, 2, 3]);
+      final (:firstByteMs, :totalMs, :bytes) = heard.single;
+      expect(firstByteMs, atLeast);
+      expect(totalMs - firstByteMs, atLeast);
+      expect(bytes, 3);
+    });
+
+    test("through the picture session, URLSession's client tells when the headers came", () async {
+      final client = _HttpClient(answerDelay: delay, bodyDelay: delay);
+      ImageDiskCache.session = PictureSession.over(client);
+      final cache = ImageDiskCache(folder: folder.path);
+      caches.add(cache);
+      final heard = <PictureDownload>[];
+      expect(await cache.bytes(_c, headers: const {'User-Agent': 'test'}, onDownloaded: heard.add), client.body);
+      expect('${client.sent.single.url}', _c);
+      expect(client.sent.single.headers, {'User-Agent': 'test'});
+      final (:firstByteMs, :totalMs, :bytes) = heard.single;
+      expect(firstByteMs, atLeast);
+      expect(totalMs - firstByteMs, atLeast);
+      expect(bytes, 2048);
+
+      // Over a transport that doesn't tell, the first byte is the total.
+      ImageDiskCache.session = PictureSession(_Transport());
+      await cache.bytes(_b, onDownloaded: heard.add);
+      expect(heard.last.firstByteMs, heard.last.totalMs);
+    });
   });
 
   group('the download', () {
