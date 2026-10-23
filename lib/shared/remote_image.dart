@@ -8,6 +8,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import 'cover_preset.dart';
 import 'image_disk_cache.dart';
 import 'theme.dart';
 
@@ -62,6 +63,7 @@ class RemoteImage extends StatelessWidget {
     this.overlay,
     this.cdnSuffix,
     this.cover = false,
+    this.preset,
   });
 
   /// An avatar: Bilibili's default face while it loads, if it fails and when there is none.
@@ -72,7 +74,8 @@ class RemoteImage extends StatelessWidget {
       fadeIn = true,
       overlay = null,
       cdnSuffix = null,
-      cover = false;
+      cover = false,
+      preset = null;
 
   final String? url;
   final BoxFit fit;
@@ -88,6 +91,9 @@ class RemoteImage extends StatelessWidget {
   /// A video's cover: made by the CDN at the box's exact size in device pixels ([coverImageUrl]) and drawn pixel for
   /// pixel, since any scaling softens it. Always still.
   final bool cover;
+
+  /// The official screen's address for a [cover]; without one, [CoverPreset.forBox]'s.
+  final CoverPreset? preset;
 
   /// Shown instead of the grey until the image arrives, and if it fails.
   final Widget? placeholder;
@@ -138,6 +144,7 @@ class RemoteImage extends StatelessWidget {
     Size? size,
     String? cdnSuffix,
     bool cover = false,
+    CoverPreset? preset,
   }) async {
     if (url == null || url.isEmpty) return false;
     final provider = _provider(context, url, size, cdnSuffix: cdnSuffix, cover: cover);
