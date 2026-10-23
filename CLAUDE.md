@@ -205,6 +205,13 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   `load_equip` (one animated picture, Android saves it as is) downloaded from the CDN, kept in `skins/loading`, logged
   as `skin loading` (format, frames, size; never the URL), drawn in place of the refresh TV with 推荐's room grown to
   85.33 pt while worn; first loads keep the TV.
+- 1.0.0 (37), from KaiC's 15, 121 and 122: the 加载动画 draws in the TV's own 60 pt box at the bottom of its 85.33 pt
+  room (Violet's 300 px file drew 57 × 73 pt in (36)'s 85.33 pt box, the official 42 × 52). 首页's header folds its
+  44 pt top row away once 推荐 is scrolled 6 pt (300 ms ease-in-out; the row fades with the fold, the art rides up,
+  the header ends at 98 pt) and a magnifier slides in at the tab row's end to open 搜索; it opens again under 6 pt
+  (`lib/home/home_header.dart`). 推荐 keeps its refreshes as batches: each refresh's page on top, then 刚刚看到这里，
+  点击刷新 (the APK's `ic_promo_index_refresh`; its tap is 首页's), then the cards before it; one divider, repeats and
+  不感兴趣 cards dropped from the old ones, account and token restarts replace everything, 200 cards kept at most.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -214,6 +221,12 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- (37) on the phone: the 加载动画's size against 15 and 119; the fold against 121 (and scrolling back up, which no
+  recording shows: ours opens only near the top); batches against 122. Guessed: the divider's tap acting as 首页's,
+  one divider, repeats and 不感兴趣 cards dropped, the 200-card cap, the magnifier's grey on the stock header (its
+  stroke 2.1 pt against 1.83). Not built: the official feed's big inline-playing card (`large_cover_single_v9`,
+  `large_cover_v1`; dropped by the parser, which keeps `av` only), shown muted and playing at once unless loading
+  (KaiC); the tab row's other tabs.
 - (35) on the phone: the 2× hold and its release with danmaku on, against the official app (no forward-back steps,
   the speed easing up and down); the 60帧 and 高码率 tags beside the official ones. (36): every panel closing to the
   bare video; whether the official app also hides the controls after 投币, 收藏 and the danmaku send bar; 竖屏 against

@@ -153,9 +153,12 @@ void main() {
         .position;
     // 122's cards above end at 709.33 pt.
     const above = 2128 / 3;
-    final top = tester.getRect(find.byKey(const ValueKey('feed-divider'), skipOffstage: false)).top;
-    position.jumpTo(position.pixels + top - above);
-    await settle(tester, 4);
+    // Twice: the first scroll folds the header (121), which moves the feed up by the fold.
+    for (var i = 0; i < 2; i++) {
+      final top = tester.getRect(find.byKey(const ValueKey('feed-divider'), skipOffstage: false)).top;
+      position.jumpTo(position.pixels + top - above);
+      await settle(tester, 8);
+    }
 
     final line = tester.getRect(_divider);
     expect(line.top, moreOrLessEquals(above));

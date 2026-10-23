@@ -268,6 +268,8 @@ void main() {
     await settle(tester);
     final at = feedScroll(tester).pixels;
     expect(at, greaterThan(300));
+    // Scrolled, the header has folded its top row away (121).
+    final scrolledFeed = tester.getRect(find.byKey(const ValueKey('feed')));
 
     final dressed = _pictures.skin();
     await SkinPictures.load(tester, dressed);
@@ -285,7 +287,7 @@ void main() {
     expect(find.byKey(const ValueKey('home-tab-art')), findsNothing);
     expect(headArt(), findsNothing);
     expect(find.byType(HomeTabIcon), findsNWidgets(HomeTab.values.length));
-    expect(tester.getRect(find.byKey(const ValueKey('feed'))), stockFeed);
+    expect(tester.getRect(find.byKey(const ValueKey('feed'))), scrolledFeed);
     expect(bottomInset(tester, HomePage), 0);
     expect(feedScroll(tester).pixels, at);
     expect(tester.state(find.byType(HomePage)), same(home));
