@@ -463,6 +463,18 @@ abstract final class BiliMetrics {
   static const chromeTextPad = 8.0;
   static const chromeLabelText = 14.0;
 
+  /// The 60帧 tag over 1080P (KaiC's landscape screenshot, 2026-10-23): 11 pt high with 8 pt text, its middle 15.2 pt
+  /// above the name's and its right 8.8 pt past it. A tagged name keeps only 2.67 pt each side, so 倍速 sits 15 pt
+  /// further left than beside 4K.
+  static const chromeTaggedPad = 2.67;
+  static const chromeTagHeight = 11.0;
+  static const chromeTagText = 8.0;
+  static const chromeTagPad = 3.5;
+  static const chromeTagBorder = 1 / 3;
+  static const chromeTagLine = Color(0xCCFFFFFF);
+  static const chromeTagTop = chromeButton / 2 - 15.2 - chromeTagHeight / 2;
+  static const chromeTagOverhang = 8.8 - chromeTaggedPad;
+
   /// How far a bar slides in, as a share of its own size.
   static const chromeSlide = 0.4;
   static const verticalTopLift = 8.0;

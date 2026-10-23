@@ -360,6 +360,7 @@ class LandscapeChrome extends StatelessWidget {
                       qn: session.playingQuality,
                       serverText: session.qualityName(session.playingQuality),
                     ),
+                    tag: QualityNames.tag(session.playingQuality),
                     bold: true,
                     onTap: _touch(() => ui.panels.open(PlayerPanel.quality)),
                   ),
@@ -450,22 +451,32 @@ class ChromeShade extends StatelessWidget {
 
 /// A line of text on the bottom row, as tall as the glyph buttons.
 class _TextButton extends StatelessWidget {
-  const _TextButton({super.key, required this.label, required this.text, required this.onTap, this.bold = false});
+  const _TextButton({
+    super.key,
+    required this.label,
+    required this.text,
+    required this.onTap,
+    this.tag,
+    this.bold = false,
+  });
 
   final String label;
   final String text;
   final VoidCallback onTap;
+
+  /// Drawn small and outlined over the text's top right, as 1080P's 60帧.
+  final String? tag;
   final bool bold;
 
   @override
-  Widget build(BuildContext context) => ChromeTap(
-    label: label,
-    square: false,
-    onTap: onTap,
-    child: SizedBox(
+  Widget build(BuildContext context) {
+    final tag = this.tag;
+    final button = SizedBox(
       height: BiliMetrics.chromeButton,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.chromeTextPad),
+        padding: EdgeInsets.symmetric(
+          horizontal: tag == null ? BiliMetrics.chromeTextPad : BiliMetrics.chromeTaggedPad,
+        ),
         child: Center(
           widthFactor: 1,
           child: Text(
@@ -480,6 +491,48 @@ class _TextButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+    return ChromeTap(
+      label: label,
+      square: false,
+      onTap: onTap,
+      child: tag == null
+          ? button
+          : Stack(
+              clipBehavior: Clip.none,
+              children: [
+                button,
+                Positioned(
+                  top: BiliMetrics.chromeTagTop,
+                  right: -BiliMetrics.chromeTagOverhang,
+                  child: _Tag(tag),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  const _Tag(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('landscape-quality-tag'),
+    height: BiliMetrics.chromeTagHeight,
+    padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.chromeTagPad),
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      border: Border.all(color: BiliMetrics.chromeTagLine, width: BiliMetrics.chromeTagBorder),
+      borderRadius: BorderRadius.circular(BiliMetrics.chromeTagHeight / 2),
+    ),
+    child: Text(
+      text,
+      maxLines: 1,
+      softWrap: false,
+      style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.chromeTagText, height: 1),
     ),
   );
 }

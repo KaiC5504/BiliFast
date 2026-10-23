@@ -23,6 +23,15 @@ void main() {
     expect(QualityNames.short(qn: 126, serverText: null), '杜比视界');
   });
 
+  test('60 fps shows as the plain name under a 60帧 tag, as the official button does', () {
+    expect(QualityNames.short(qn: 116, serverText: '高清 1080P60'), '1080P');
+    expect(QualityNames.tag(116), '60帧');
+    expect(QualityNames.short(qn: 74, serverText: null), '720P');
+    expect(QualityNames.tag(74), '60帧');
+    expect(QualityNames.tag(80), isNull);
+    expect(QualityNames.tag(120), isNull);
+  });
+
   test("short falls back to the last word of the server's text, then a placeholder", () {
     expect(QualityNames.short(qn: 999, serverText: '高清 900P'), '900P');
     expect(QualityNames.short(qn: 999, serverText: null), '清晰度');

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:bili_core/shared.dart';
 
 import 'bili_player.dart';
@@ -19,8 +21,8 @@ final class PlaybackClock {
   /// A seek that may land on a keyframe instead of the exact spot can land a whole segment away from it.
   static const keyframeJumpSeconds = 10.0;
 
-  /// Readings arrive with tens of milliseconds of jitter; one this close to the prediction only nudges the
-  /// clock, so danmaku glides instead of wobbling.
+  /// Readings arrive with tens of milliseconds of jitter (host time, so twice the media time at 2×); one this
+  /// close to the prediction, per unit of rate, only nudges the clock, so danmaku glides instead of wobbling.
   static const smoothingWindowSeconds = 0.04;
   static const smoothing = 0.1;
 
@@ -35,6 +37,9 @@ final class PlaybackClock {
   bool _running = false;
 
   bool get running => _running;
+
+  /// The rate the playhead moves at while [running].
+  double get rate => _rate;
 
   double get seconds {
     if (!_running) return _seconds;
@@ -52,7 +57,10 @@ final class PlaybackClock {
           _jumpTarget = null;
         }
         final predicted = _seconds + (hostMs - _atMs) / 1000 * _rate;
-        if (!_fresh && _running && rate == _rate && (seconds - predicted).abs() <= smoothingWindowSeconds) {
+        if (!_fresh &&
+            _running &&
+            rate == _rate &&
+            (seconds - predicted).abs() <= smoothingWindowSeconds * math.max(rate, 1)) {
           _seconds = predicted + (seconds - predicted) * smoothing;
         } else {
           _seconds = seconds;

@@ -26,6 +26,15 @@ void main() {
     expect(clock.seconds, closeTo(5.2, 1e-9));
   });
 
+  test('at 2× a reading as late in host time as one at 1× glides rather than snapping', () {
+    clock.handle(const StatusChanged(PlayerStatus.playing));
+    clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 2));
+    time.advance(100);
+    // 30 ms of delivery jitter is 60 ms of media at 2×.
+    clock.handle(PositionChanged(seconds: 5.2 - 0.06, hostMs: time.clock.nowMs(), rate: 2));
+    expect(clock.seconds, closeTo(5.2 - 0.006, 1e-9));
+  });
+
   test('holds still while paused', () {
     clock.handle(const StatusChanged(PlayerStatus.playing));
     clock.handle(PositionChanged(seconds: 5, hostMs: time.clock.nowMs(), rate: 1));

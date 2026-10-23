@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../player/playback_clock.dart';
+import 'danmaku_pace.dart';
 import 'danmaku_scene.dart';
 import 'danmaku_settings.dart';
 import 'danmaku_sprites.dart';
@@ -45,6 +46,7 @@ class DanmakuLayer extends StatefulWidget {
 class DanmakuLayerState extends State<DanmakuLayer> with SingleTickerProviderStateMixin {
   late final DanmakuScene _scene = DanmakuScene(sprites: widget.sprites);
   late final Ticker _ticker = createTicker(_tick);
+  final _pace = DanmakuPace();
 
   @visibleForTesting
   DanmakuScene get scene => _scene;
@@ -103,7 +105,10 @@ class DanmakuLayerState extends State<DanmakuLayer> with SingleTickerProviderSta
   }
 
   void _wake() {
-    if (_active && !_ticker.isActive) _ticker.start();
+    if (_active && !_ticker.isActive) {
+      _pace.restart();
+      _ticker.start();
+    }
   }
 
   /// The scene takes the rest on its next step; only the opacity is the widget's.
@@ -116,14 +121,21 @@ class DanmakuLayerState extends State<DanmakuLayer> with SingleTickerProviderSta
     _wake();
   }
 
-  void _tick(Duration _) {
+  void _tick(Duration elapsed) {
     final timeline = widget.timeline;
     if (timeline == null || !widget.enabled) {
       _ticker.stop();
       return;
     }
-    _scene.step(widget.clock.seconds, timeline: timeline, options: _options);
-    if (!widget.clock.running && !_scene.catchingUp) _ticker.stop();
+    final clock = widget.clock;
+    final seconds = _pace.follow(
+      clock.seconds,
+      rate: clock.rate,
+      running: clock.running,
+      frameSeconds: elapsed.inMicroseconds / Duration.microsecondsPerSecond,
+    );
+    _scene.step(seconds, timeline: timeline, options: _options);
+    if (!clock.running && !_scene.catchingUp) _ticker.stop();
   }
 
   /// Built once: a rebuild for 不透明度 hands Opacity the same child, so the builder doesn't run again.

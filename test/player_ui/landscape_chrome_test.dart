@@ -393,6 +393,37 @@ void main() {
     expect(rig.panels.value, PlayerPanel.quality);
   });
 
+  testWidgets("60 fps reads 1080P under KaiC's screenshot's outlined 60帧 tag, the name kept 2.67 pt each side", (
+    tester,
+  ) async {
+    final rig = Rig();
+    rig.session
+      ..qualities = const [QualityOption(id: 116, name: '1080P 60帧'), QualityOption(id: 80, name: '1080P 高清')]
+      ..quality = 116;
+    await rig.mount(tester);
+    final quality = find.byKey(const ValueKey('landscape-quality'));
+    final name = find.descendant(of: quality, matching: find.text('1080P'));
+    final tag = find.byKey(const ValueKey('landscape-quality-tag'));
+    expect(name, findsOne);
+    expect(find.descendant(of: tag, matching: find.text('60帧')), findsOne);
+
+    final cell = tester.getRect(quality);
+    final text = tester.getRect(name);
+    final pill = tester.getRect(tag);
+    expect(text.left - cell.left, closeTo(BiliMetrics.chromeTaggedPad, 0.01));
+    expect(cell.right - text.right, closeTo(BiliMetrics.chromeTaggedPad, 0.01));
+    expect(pill.right - text.right, closeTo(8.8, 0.01));
+    expect(text.center.dy - pill.center.dy, closeTo(15.2, 0.01));
+    expect(pill.height, BiliMetrics.chromeTagHeight);
+
+    rig.session
+      ..playing = 80
+      ..changed();
+    await tester.pump();
+    expect(tag, findsNothing);
+    expect(find.descendant(of: quality, matching: find.text('1080P')), findsOne);
+  });
+
   testWidgets('sizes as 04: the title at 16, 倍速 and the quality at 14, back a full 44 pt target', (tester) async {
     final rig = Rig()..session.title = 'Dolby Vision 8K HDR 120FPS';
     await rig.mount(tester);
