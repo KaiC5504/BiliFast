@@ -18,6 +18,7 @@ final class FeedCard {
     this.viewsText,
     this.danmakuText,
     this.dislike,
+    this.big,
   });
 
   factory FeedCard.fromJson(Object? json) {
@@ -120,6 +121,9 @@ final class FeedCard {
   /// What ⋮'s 不感兴趣 sends; only official cards carry it.
   final FeedDislike? dislike;
 
+  /// Set on the official feed's big card (`large_cover_v9`), drawn full width and playing inline; null on the rest.
+  final FeedBig? big;
+
   String get id => bvid;
 
   @override
@@ -139,7 +143,8 @@ final class FeedCard {
       other.isVertical == isVertical &&
       other.viewsText == viewsText &&
       other.danmakuText == danmakuText &&
-      other.dislike == dislike;
+      other.dislike == dislike &&
+      other.big == big;
 
   @override
   int get hashCode => Object.hash(
@@ -158,7 +163,25 @@ final class FeedCard {
     viewsText,
     danmakuText,
     dislike,
+    big,
   );
+}
+
+/// What the official feed's big card (`inline_av_v2` / `large_cover_v9`) adds to a card: its 👍 and count.
+final class FeedBig {
+  const FeedBig({required this.likes, required this.showLikes});
+
+  /// `like_button.count`.
+  final int likes;
+
+  /// `like_button.show_count`.
+  final bool showLikes;
+
+  @override
+  bool operator ==(Object other) => other is FeedBig && other.likes == likes && other.showLikes == showLikes;
+
+  @override
+  int get hashCode => Object.hash(likes, showLikes);
 }
 
 /// A count as the official app writes it ("174", "10.4万", "1.2亿"); "-" and anything else unreadable is 0.
