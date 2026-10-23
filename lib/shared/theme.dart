@@ -5473,19 +5473,32 @@ abstract final class OwnSpaceTabsTheme {
   static const loadAhead = 360.0;
 }
 
-/// The equipped 加载动画 in a refresh, in place of the loading TV (119, 推荐 mid-refresh, measured in px / 3): the
-/// header ends at 142 pt and the first card starts at 233.33 pt, so the room the refresh holds open is 85.33 pt
-/// under the feed's 6 pt spacing, the TV's 60 grown as Android grows its spinner (40 to 56 dp). The chibi's ink is
-/// 41.33 × 52.33 pt, 169 to 221.33 pt from the top and centred 3 pt left of the screen's middle, so the picture is
-/// drawn whole (contained) in a box the room's height, centred, with the file's own margins around the ink.
+/// The equipped 加载动画 in a refresh, in place of the loading TV (119 and KaiC's 15, 推荐 mid-refresh, measured in
+/// px / 3): the header ends at 142 pt and the first card starts at 233.33 pt, so the room the refresh holds open is
+/// 85.33 pt under the feed's 6 pt spacing. The picture is drawn whole in the TV's own 60 pt box: Violet's 300 px
+/// file draws its chibi 42 × 52 pt there, as the official app does (an 85.33 pt box drew it 57 × 73). The box sits at
+/// the room's bottom: the ink ends 6 pt above the spacing in 119.
 abstract final class SkinLoadingTheme {
   static const room = 256 / 3;
-  static const size = room;
+  static const size = LoadingTvTheme.size;
 
   /// Decoded at most this many pixels a side: the box at the phone's 3×.
-  static const decodePixels = 256;
+  static const decodePixels = 180;
 
   /// A frame time a file leaves at 0 or 10 ms plays at 100 ms, as browsers play such gifs.
   static const shortestFrame = Duration(milliseconds: 20);
   static const defaultFrame = Duration(milliseconds: 100);
+}
+
+/// 首页's header folding its top row away as 推荐 scrolls (121, measured in px / 3).
+abstract final class HomeHeaderTheme {
+  /// The top row (avatar and search) folds away by its own height: the header ends at 142 pt open, 98 pt folded.
+  static const fold = BiliMetrics.topRowHeight;
+}
+
+/// 推荐's refreshes kept as batches: each refresh's page on top, then 刚刚看到这里，点击刷新, then the cards before it
+/// (122, measured in px / 3).
+abstract final class FeedBatchTheme {
+  /// From the bottom of the cards above to the top of the cards below.
+  static const dividerGap = 44.0;
 }

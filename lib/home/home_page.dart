@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show File;
 import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
@@ -15,12 +14,10 @@ import '../app/swipe_back_route.dart';
 import '../app/zoom_back_route.dart';
 import '../player_ui/player_loading.dart';
 import '../player_ui/seek_bar.dart';
-import '../search/search_glyphs.dart';
 import '../search/results/video_row.dart' show searchLogReason;
 import '../search/search_page.dart';
 import '../shared/loading_tv.dart';
 import '../shared/release_refresh.dart';
-import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../skin/skin.dart';
@@ -30,6 +27,7 @@ import '../video/video_route.dart';
 import 'avatar_page.dart';
 import 'feed_card.dart';
 import 'feed_model.dart';
+import 'home_header.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
 
 /// 首页 (01, port of HomeView.swift): the avatar and the search entry, the 推荐 tab and its feed, above the bottom bar
@@ -68,6 +66,9 @@ class _HomePageState extends State<HomePage> {
   late AppServices _services;
   FeedModel? _feed;
   final _grid = GlobalKey<_FeedGridState>();
+
+  /// How far 推荐 is scrolled, which folds the header's top row away (121).
+  final _feedOffset = ValueNotifier<double>(0);
   late final _opener = LinkOpener(onPushed: (pushed) => unawaited(_visit(pushed)));
   bool _opening = false;
 
@@ -136,6 +137,7 @@ class _HomePageState extends State<HomePage> {
     _environment.removeListener(_accountChanged);
     _services.appAuth.removeListener(_authChanged);
     _feed?.dispose();
+    _feedOffset.dispose();
     super.dispose();
   }
 
@@ -313,31 +315,16 @@ class _HomePageState extends State<HomePage> {
           children: [
             Column(
               children: [
-                _Head(
-                  skin: head,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Column(
-                      children: [
-                        ListenableBuilder(
-                          listenable: _environment,
-                          builder: (context, _) => _TopRow(
-                            face: _environment.face,
-                            searchWord: _searchWord,
-                            filled: head != null,
-                            onAvatar: _openAvatarPage,
-                            onSearch: _openSearch,
-                          ),
-                        ),
-                        _RecommendTab(colour: head?.color ?? BiliColors.pink),
-                      ],
-                    ),
+                ListenableBuilder(
+                  listenable: _environment,
+                  builder: (context, _) => HomeHeader(
+                    skin: head,
+                    face: _environment.face,
+                    searchWord: _searchWord,
+                    feedOffset: _feedOffset,
+                    onAvatar: _openAvatarPage,
+                    onSearch: _openSearch,
                   ),
-                ),
-                Divider(
-                  height: HomeTabBarTheme.hairlineWidth,
-                  thickness: HomeTabBarTheme.hairlineWidth,
-                  color: head != null ? HomeTabBarTheme.headDivider : BiliColors.divider,
                 ),
                 Expanded(
                   child: _FeedGrid(
@@ -353,6 +340,7 @@ class _HomePageState extends State<HomePage> {
                     onPullArmed: _pullArmed,
                     onPullDisarmed: _pullDisarmed,
                     refreshing: () => _refreshing,
+                    scrollOffset: _feedOffset,
                   ),
                 ),
               ],
@@ -459,234 +447,6 @@ class _PresenceState extends State<_Presence> with SingleTickerProviderStateMixi
       _controller.isDismissed ? const SizedBox.shrink() : widget.builder(context, _curved);
 }
 
-/// The account's avatar; a grey head until the account has a face.
-class _AccountAvatar extends StatelessWidget {
-  const _AccountAvatar({required this.face, required this.size});
-
-  final String? face;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final url = face;
-    return ClipOval(
-      child: SizedBox.square(
-        dimension: size,
-        child: url != null && url.isNotEmpty
-            ? RemoteImage.avatar(url)
-            : ColoredBox(
-                color: BiliColors.pageGrey,
-                child: Icon(Icons.person, size: size * 0.55, color: BiliColors.divider),
-              ),
-      ),
-    );
-  }
-}
-
-/// The status bar, the top row and the tab row on white (01), or over the 装扮's pictures (110): [skin]'s `head_bg`
-/// down to the top row's bottom and `head_tab_bg` behind the tab row, or `head_bg` behind all of it when the package
-/// has no tab picture. Both are cropped to their boxes about the centre.
-class _Head extends StatelessWidget {
-  const _Head({required this.skin, required this.child});
-
-  /// A skin with a `head_bg`, its pictures decoded, or null.
-  final Skin? skin;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final head = skin?.headBg;
-    if (head == null) return ColoredBox(color: BiliColors.card, child: child);
-    final tab = skin?.headTabBg;
-    final rowBottom = MediaQuery.paddingOf(context).top + BiliMetrics.topRowHeight;
-    return Stack(
-      children: [
-        Positioned(
-          key: const ValueKey('home-head-art'),
-          top: 0,
-          left: 0,
-          right: 0,
-          height: tab == null ? null : rowBottom,
-          bottom: tab == null ? 0 : null,
-          child: _picture(head),
-        ),
-        if (tab != null)
-          Positioned(
-            key: const ValueKey('home-head-tab-art'),
-            top: rowBottom,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _picture(tab),
-          ),
-        child,
-      ],
-    );
-  }
-
-  static Widget _picture(File file) => SkinDecodeGate.image(file);
-}
-
-/// The avatar and the search entry (01): a rounded bar with the magnifier and the default word, which opens 搜索.
-class _TopRow extends StatelessWidget {
-  const _TopRow({
-    required this.face,
-    required this.searchWord,
-    required this.filled,
-    required this.onAvatar,
-    required this.onSearch,
-  });
-
-  final String? face;
-  final String? searchWord;
-
-  /// The entry filled white without its rim, over the 装扮's picture (110).
-  final bool filled;
-  final VoidCallback onAvatar;
-  final VoidCallback onSearch;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: BiliMetrics.topRowHeight,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.topRowMargin),
-        child: Row(
-          children: [
-            Semantics(
-              button: true,
-              label: '账号',
-              child: GestureDetector(
-                key: const ValueKey('home-avatar'),
-                onTap: onAvatar,
-                child: _AccountAvatar(face: face, size: BiliMetrics.homeAvatar),
-              ),
-            ),
-            const SizedBox(width: HomeTabBarTheme.fieldGap),
-            _SearchField(word: searchWord, filled: filled, onTap: onSearch),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The search entry: the magnifier and the grey word in a stadium, greyed while pressed.
-class _SearchField extends StatefulWidget {
-  const _SearchField({required this.word, required this.filled, required this.onTap});
-
-  final String? word;
-  final bool filled;
-  final VoidCallback onTap;
-
-  @override
-  State<_SearchField> createState() => _SearchFieldState();
-}
-
-class _SearchFieldState extends State<_SearchField> {
-  bool _pressed = false;
-
-  void _press(bool pressed) {
-    if (_pressed != pressed) setState(() => _pressed = pressed);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const word = TextStyle(fontSize: HomeTabBarTheme.fieldText, color: HomeTabBarTheme.fieldInk);
-    const glyphLead = HomeTabBarTheme.fieldGlyphCentre - HomeTabBarTheme.fieldGlyph / 2;
-    return Semantics(
-      button: true,
-      label: '搜索',
-      value: widget.word,
-      child: GestureDetector(
-        key: const ValueKey('home-search'),
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => _press(true),
-        onTapUp: (_) => _press(false),
-        onTapCancel: () => _press(false),
-        onTap: widget.onTap,
-        child: ExcludeSemantics(
-          // The rim is drawn over the contents: as the decoration, its width would inset them (01 measures from the
-          // rim's outer edge).
-          child: Container(
-            key: const ValueKey('home-search-field'),
-            width: HomeTabBarTheme.fieldWidth,
-            height: BiliMetrics.linkFieldHeight,
-            decoration: widget.filled
-                ? const ShapeDecoration(color: HomeTabBarTheme.headField, shape: StadiumBorder())
-                : null,
-            foregroundDecoration: ShapeDecoration(
-              color: _pressed ? BiliColors.pressedFill : null,
-              shape: widget.filled
-                  ? const StadiumBorder()
-                  : const StadiumBorder(
-                      side: BorderSide(color: HomeTabBarTheme.fieldOutline, width: HomeTabBarTheme.fieldOutlineWidth),
-                    ),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: glyphLead),
-                Transform.translate(
-                  offset: const Offset(0, -HomeTabBarTheme.fieldGlyphRise),
-                  child: const SearchGlyphIcon(
-                    SearchGlyph.magnifier,
-                    size: HomeTabBarTheme.fieldGlyph,
-                    color: HomeTabBarTheme.fieldInk,
-                  ),
-                ),
-                const SizedBox(width: HomeTabBarTheme.fieldTextStart - glyphLead - HomeTabBarTheme.fieldGlyph),
-                Expanded(
-                  child: Text(
-                    widget.word ?? '',
-                    key: const ValueKey('home-search-word'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: word,
-                    strutStyle: BiliFonts.strutOf(context, word),
-                  ),
-                ),
-                const SizedBox(width: HomeTabBarTheme.fieldTextEnd),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 01's tab row, with only 推荐 and that one selected: pink, or the 装扮's colour over its picture (110).
-class _RecommendTab extends StatelessWidget {
-  const _RecommendTab({required this.colour});
-
-  final Color colour;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    header: true,
-    selected: true,
-    child: Padding(
-      padding: const EdgeInsets.only(top: BiliMetrics.tabRowTop, bottom: BiliMetrics.tabRowBottom),
-      child: Column(
-        children: [
-          Text(
-            '推荐',
-            key: const ValueKey('home-tab-recommend'),
-            style: TextStyle(fontSize: BiliMetrics.tabText, fontWeight: FontWeight.w600, color: colour),
-          ),
-          const SizedBox(height: BiliMetrics.tabIndicatorGap),
-          Container(
-            key: const ValueKey('home-tab-indicator'),
-            width: BiliMetrics.tabIndicatorWidth,
-            height: BiliMetrics.tabIndicatorHeight,
-            decoration: BoxDecoration(color: colour, borderRadius: BorderRadius.circular(2)),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
 class _FeedGrid extends StatefulWidget {
   const _FeedGrid({
     super.key,
@@ -701,6 +461,7 @@ class _FeedGrid extends StatefulWidget {
     required this.onPullArmed,
     required this.onPullDisarmed,
     required this.refreshing,
+    required this.scrollOffset,
   });
 
   final FeedModel feed;
@@ -720,6 +481,9 @@ class _FeedGrid extends StatefulWidget {
 
   /// The refresh running, if any.
   final Future<void>? Function() refreshing;
+
+  /// Kept at the list's scroll offset.
+  final ValueNotifier<double> scrollOffset;
 
   @override
   State<_FeedGrid> createState() => _FeedGridState();
@@ -884,7 +648,10 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   }
 
   bool _scrolled(ScrollNotification notification) {
-    if (notification.depth == 0) _loadMoreNearEnd(notification.metrics);
+    if (notification.depth == 0) {
+      widget.scrollOffset.value = notification.metrics.pixels;
+      _loadMoreNearEnd(notification.metrics);
+    }
     return false;
   }
 

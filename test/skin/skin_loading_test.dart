@@ -93,7 +93,7 @@ void main() {
     test('a large picture is decoded at most the box at 3× a side, its shape kept', () async {
       final check = await checkSkinLoading(await _png(1000, 500));
       expect((check.format, check.frames, check.width, check.height), (SkinLoadingFormat.png, 1, 1000, 500));
-      expect((check.first!.width, check.first!.height), (SkinLoadingTheme.decodePixels, 128));
+      expect((check.first!.width, check.first!.height), (SkinLoadingTheme.decodePixels, SkinLoadingTheme.decodePixels ~/ 2));
     });
 
     test("a zip's first picture is taken out", () async {

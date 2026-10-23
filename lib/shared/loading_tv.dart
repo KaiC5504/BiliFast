@@ -142,8 +142,8 @@ Widget loadingTvRefreshIndicator(
 }
 
 /// What a refresh shows: the equipped 加载动画 when [AppScope]'s skin has one that decodes, else the TV. The 加载动画
-/// draws in [SkinLoadingTheme.size], or in [room] (the height the refresh holds open) where a list keeps the TV's.
-/// Pages' first loads ([LoadingTvState]) keep the TV.
+/// draws in [SkinLoadingTheme.size] at the bottom of [room] (the height the refresh holds open), or in [room] where
+/// a list keeps a smaller one. Pages' first loads ([LoadingTvState]) keep the TV.
 class RefreshLoading extends StatelessWidget {
   const RefreshLoading({super.key, this.playing = true, this.room = SkinLoadingTheme.room, this.pulled = false});
 
@@ -166,7 +166,13 @@ class RefreshLoading extends StatelessWidget {
     final shown = animation == null
         ? LoadingTv(playing: playing)
         : SkinLoadingView(animation: animation, playing: playing, size: size);
-    if (!pulled) return shown;
+    if (!pulled) {
+      if (animation == null) return shown;
+      return SizedBox(
+        height: math.max(room, size),
+        child: Align(alignment: Alignment.bottomCenter, child: shown),
+      );
+    }
     return ClipRect(
       child: OverflowBox(alignment: Alignment.bottomCenter, minHeight: size, maxHeight: size, child: shown),
     );
