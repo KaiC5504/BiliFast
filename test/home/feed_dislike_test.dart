@@ -7,6 +7,7 @@ import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/home/feed_dislike.dart';
+import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/feed_more_sheet.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -106,6 +107,9 @@ void main() {
   late AppEnvironment environment;
 
   setUp(() {
+    // These follow the swap from the answer, as when it comes after FeedModel.minimumRefresh.
+    HomePage.feedMinimumRefresh = Duration.zero;
+    addTearDown(() => HomePage.feedMinimumRefresh = FeedModel.minimumRefresh);
     http = FeedHttp();
     http.officialPages[0] = [
       officialItem('BV1aaa', title: '真别选错！差距很大！'),
