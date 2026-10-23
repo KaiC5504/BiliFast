@@ -10,8 +10,6 @@ import 'package:cupertino_http/cupertino_http.dart'
     show CupertinoClient, NSErrorClientException, NSHTTPCookieAcceptPolicy, URLSessionConfiguration;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-// Not in pubspec: it comes with cupertino_http and bili_core.
-// ignore: depend_on_referenced_packages
 import 'package:http/http.dart' as http;
 import 'package:objective_c/objective_c.dart' show NSError$Methods;
 

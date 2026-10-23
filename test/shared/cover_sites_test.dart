@@ -84,13 +84,20 @@ void main() {
     ),
   );
 
-  void expectBoxSized(WidgetTester tester) {
+  /// Covers asked at their box's exact size, but for those whose site names a webp preset ([webpPresets]), asked by
+  /// the preset's address and decoded for the box.
+  void expectBoxSized(WidgetTester tester, {Set<CoverPreset> webpPresets = const {}}) {
     final covers = pictures(tester).where((image) => image.url.contains('/bfs/archive/'));
     expect(covers, isNotEmpty);
+    final presetAddresses = {for (final preset in webpPresets) '$_asked${preset.suffix}'};
     for (final cover in covers) {
       final box = cover.box;
       expect(box, isNotNull, reason: 'decoded for its box');
+      if (presetAddresses.contains(cover.url)) continue;
       expect(cover.url, coverImageUrl(_asked, width: box!.width.round(), height: box.height.round()));
+    }
+    for (final address in presetAddresses) {
+      expect(covers.map((cover) => cover.url), contains(address));
     }
   }
 
@@ -120,8 +127,8 @@ void main() {
     expectBoxSized(tester);
   });
 
-  testWidgets("UP主空间's row, the uploader sheet's card and the own space's video card and folder ask for the "
-      "cover at its box's size", (tester) async {
+  testWidgets("UP主空间's row asks for its official preset; the uploader sheet's card and the own space's video card "
+      "and folder ask for the cover at their box's size", (tester) async {
     await show(
       tester,
       // A Column rather than a lazy list, so all four are built.
@@ -147,7 +154,7 @@ void main() {
         ),
       ),
     );
-    expectBoxSized(tester);
+    expectBoxSized(tester, webpPresets: {CoverPreset.space});
     expect(pictures(tester).where((image) => image.url.contains('/bfs/archive/')), hasLength(4));
   });
 

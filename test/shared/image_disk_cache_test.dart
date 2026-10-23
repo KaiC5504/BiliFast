@@ -7,8 +7,6 @@ import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-// Not in pubspec: it comes with cupertino_http and bili_core.
-// ignore: depend_on_referenced_packages
 import 'package:http/http.dart' as http;
 
 /// A signed address, so a log line carrying any of it shows.
