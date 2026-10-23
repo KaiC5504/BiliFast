@@ -1,18 +1,15 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:bili_core/devlog.dart';
-import 'package:bilifast/shared/cover_format.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
-import 'package:bilifast/shared/ios/picture_api.g.dart';
 import 'package:bilifast/shared/remote_image.dart';
-import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// A plain [width] × [height] PNG, standing in for the CDN's webp.
+import 'stored_pictures.dart';
+
+/// A plain [width] × [height] PNG, standing in for the CDN's JPEG.
 Future<Uint8List> _png(int width, int height) async {
   final recorder = ui.PictureRecorder();
   Canvas(recorder)
@@ -23,18 +20,10 @@ Future<Uint8List> _png(int width, int height) async {
   return bytes!.buffer.asUint8List();
 }
 
-/// ImageIO's answer as the fake gives it: [width] × [height] grey pixels.
-DecodedPicture _pixels(int width, int height, {double decodeMs = 20}) => DecodedPicture(
-  pixels: Uint8List.fromList(List.filled(width * height * 4, 0x80)),
-  width: width,
-  height: height,
-  rowBytes: width * 4,
-  decodeMs: decodeMs,
-);
-
 const _cover = 'https://i0.hdslb.com/bfs/archive/cover.jpg';
-const _avif = '$_cover@.avif';
-const _webp = '$_cover@.webp';
+
+/// [_cover] as the CDN is asked for it at [width] × [height] px: from i1, a quality 90 JPEG.
+String _at(int width, int height) => 'https://i1.hdslb.com/bfs/archive/cover.jpg@${width}w_${height}h_1c_90q.jpg';
 
 /// A 推荐 card's cover box.
 const _cardCover = SizedBox(
@@ -43,48 +32,35 @@ const _cardCover = SizedBox(
   child: RemoteImage(_cover, size: Size(211, 158.25), cover: true),
 );
 
-final _avifBytes = Uint8List.fromList([0, 0, 0, 0x1C, ...'ftypavif'.codeUnits]);
-
 void main() {
   late Directory folder;
   late ImageDiskCache cache;
   late List<String> downloads;
-  late Map<String, Object> answers;
-  late MemorySink logs;
-  late Uint8List webpBytes;
-
-  /// The decoder's asks, as (bytes, box width, box height).
-  late List<(int, int, int)> decodes;
+  late Map<String, Uint8List> answers;
+  late Uint8List wide;
 
   setUp(() {
     downloads = [];
     answers = {};
-    decodes = [];
-    logs = MemorySink();
-    Logger.shared.add(logs);
   });
 
   tearDown(() {
-    Logger.shared.remove(logs);
     ImageDiskCache.shared = null;
-    CoverFormat.shared = CoverFormat();
     PaintingBinding.instance.imageCache
       ..clear()
       ..clearLiveImages();
   });
 
-  /// Pictures kept in a temporary folder; each download is answered from [answers] by address (bytes, or an error to
-  /// throw) and recorded in [downloads].
+  /// Pictures kept in a temporary folder; each download is answered from [answers] by address ([wide], a 400×200
+  /// picture, otherwise) and recorded in [downloads].
   Future<void> keep(WidgetTester tester) => tester.runAsync(() async {
-    webpBytes = await _png(400, 200);
+    wide = await _png(400, 200);
     folder = await Directory.systemTemp.createTemp('cover_image');
     cache = ImageDiskCache(
       folder: folder.path,
       fetch: (url, _) async {
         downloads.add('$url');
-        final answer = answers['$url'] ?? webpBytes;
-        if (answer is Uint8List) return answer;
-        throw answer;
+        return answers['$url'] ?? wide;
       },
     );
     ImageDiskCache.shared = cache;
@@ -95,15 +71,6 @@ void main() {
     await folder.delete(recursive: true);
   });
 
-  void avifOn(FutureOr<DecodedPicture?> Function() answer) {
-    CoverFormat.shared = CoverFormat(
-      decode: (data, width, height) async {
-        decodes.add((data.length, width, height));
-        return answer();
-      },
-    );
-  }
-
   /// Downloads, decodes and frames, with real time between them for the disk and the decoder.
   Future<void> arrive(WidgetTester tester, {int rounds = 20}) async {
     for (var i = 0; i < rounds; i++) {
@@ -113,10 +80,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   }
 
-  /// [images] at 1×, so boxes are their sizes in points rounded up to 60.
-  Future<void> show(WidgetTester tester, List<Widget> images) => tester.pumpWidget(
+  /// [images] at [ratio] device pixels to the point.
+  Future<void> show(WidgetTester tester, List<Widget> images, {double ratio = 1}) => tester.pumpWidget(
     MediaQuery(
-      data: const MediaQueryData(devicePixelRatio: 1),
+      data: MediaQueryData(devicePixelRatio: ratio),
       child: Directionality(
         textDirection: TextDirection.ltr,
         child: Align(
@@ -126,10 +93,6 @@ void main() {
       ),
     ),
   );
-
-  /// A new widget each time, so showing it again rebuilds the same element.
-  Widget coverBox(String cover, {double side = 100}) =>
-      SizedBox(width: side, height: side, child: RemoteImage(cover, cover: true));
 
   /// The network pictures shown (an avatar's default face is an asset).
   List<StoredNetworkImage> providers(WidgetTester tester) => [
@@ -141,213 +104,188 @@ void main() {
     for (final raw in tester.widgetList<RawImage>(find.byType(RawImage))) raw.image,
   ];
 
-  Iterable<LogEvent> lines(String msg) => logs.events.where((event) => event.msg == msg);
-
   test('the decode size covers the box, keeps the shape and never passes the picture', () {
     (int?, int?) target(int width, int height, Size box) {
       final size = StoredNetworkImage.covering(width, height, box);
       return (size.width, size.height);
     }
 
-    expect(target(1920, 1080, const Size(660, 480)), (null, 480));
-    expect(target(1080, 1920, const Size(660, 480)), (660, null));
+    expect(target(1920, 1080, const Size(633, 475)), (null, 475));
+    expect(target(1080, 1920, const Size(633, 475)), (633, null));
     expect(target(1920, 1080, const Size(1320, 700)), (1320, null));
-    expect(target(400, 300, const Size(660, 480)), (null, null));
-    expect(target(0, 0, const Size(660, 480)), (null, null));
+    expect(target(633, 475, const Size(633, 475)), (null, null), reason: 'the size asked for decodes as is');
+    expect(target(400, 300, const Size(633, 475)), (null, null));
+    expect(target(0, 0, const Size(633, 475)), (null, null));
   });
 
-  test("a cover's cache key is its address and its box: two boxes are two decodes", () {
-    const small = StoredNetworkImage(_webp, box: Size(240, 180));
-    expect(small, const StoredNetworkImage(_webp, box: Size(240, 180)));
-    expect(small.hashCode, const StoredNetworkImage(_webp, box: Size(240, 180)).hashCode);
-    expect(small, isNot(const StoredNetworkImage(_webp, box: Size(480, 300))));
-    expect(small, isNot(const StoredNetworkImage(_webp)));
-    expect(small.cacheKey, same(small));
-    expect('$small', 'StoredNetworkImage("i0.hdslb.com/bfs/archive/cover.jpg@.webp", still: true, box: 240×180)');
+  test("a cover's address names its size as a quality 90 JPEG, only on Bilibili's hosts and only where the address "
+      'has no suffix or query yet', () {
+    expect(coverImageUrl(_cover, width: 633, height: 475), _at(633, 475));
+    expect(
+      coverImageUrl('//i2.hdslb.com/bfs/archive/cover.jpg', width: 633, height: 475),
+      _at(633, 475),
+      reason: 'i0 and i2 are asked from i1',
+    );
+    expect(coverImageUrl('https://example.com/cover.jpg', width: 633, height: 475), 'https://example.com/cover.jpg');
+    expect(
+      coverImageUrl('https://i0.hdslb.com/bfs/archive/signed.jpg?sign=x', width: 633, height: 475),
+      'https://i1.hdslb.com/bfs/archive/signed.jpg?sign=x',
+    );
+    expect(
+      coverImageUrl('https://i1.hdslb.com/bfs/archive/cover.jpg@100w.webp', width: 633, height: 475),
+      'https://i1.hdslb.com/bfs/archive/cover.jpg@100w.webp',
+    );
   });
 
-  testWidgets('on the PC a cover asks for the full-size webp and decodes it only as large as covering its box needs', (
-    tester,
-  ) async {
+  testWidgets("a 推荐 card's cover is asked at its box's exact size in device pixels, given or laid out", (tester) async {
+    for (final (ratio, width, height) in [(3.0, 633, 475), (2.0, 422, 317)]) {
+      await show(tester, [
+        _cardCover,
+        const SizedBox(width: 211, height: 158.25, child: RemoteImage(_cover, cover: true)),
+      ], ratio: ratio);
+      expect(providers(tester).map((image) => (image.url, image.box)), [
+        (_at(width, height), Size(width.toDouble(), height.toDouble())),
+        (_at(width, height), Size(width.toDouble(), height.toDouble())),
+      ], reason: 'at ${ratio}x');
+    }
+  });
+
+  testWidgets('float error in a box never adds a pixel', (tester) async {
+    const width = 628 / 3;
+    const height = width / (4 / 3);
+    expect(height * 3, greaterThan(471), reason: 'the float error this guards against');
+    await show(tester, [
+      const SizedBox(width: width, height: height, child: RemoteImage(_cover, cover: true)),
+    ], ratio: 3);
+    expect(providers(tester).single.url, _at(628, 471));
+    expect(providers(tester).single.box, const Size(628, 471));
+  });
+
+  testWidgets('a precache and its draw share one download and one decode, drawn the frame it shows', (tester) async {
+    await keep(tester);
+    answers[_at(633, 475)] = (await tester.runAsync(() => _png(633, 475)))!;
+    await show(tester, [const SizedBox()], ratio: 3);
+    final context = tester.element(find.byType(SizedBox));
+    final ready = await tester.runAsync(
+      () => RemoteImage.precache(context, _cover, size: const Size(211, 158.25), cover: true),
+    );
+    expect(ready, isTrue);
+    expect(PaintingBinding.instance.imageCache.currentSize, 1);
+
+    await show(tester, [_cardCover], ratio: 3);
+    final image = painted(tester).single;
+    expect(image, isNotNull, reason: 'drawn the frame it shows');
+    expect((image!.width, image.height), (633, 475), reason: 'decoded as it came');
+    expect(PaintingBinding.instance.imageCache.currentSize, 1);
+    expect(PaintingBinding.instance.imageCache.pendingImageCount, 0, reason: 'no second decode');
+    expect(downloads, [_at(633, 475)]);
+    await drop(tester);
+  });
+
+  testWidgets('a cover whose box has no known size is asked at 480 px a side', (tester) async {
+    await keep(tester);
+    await show(tester, [const SizedBox()]);
+    final context = tester.element(find.byType(SizedBox));
+    expect(await tester.runAsync(() => RemoteImage.precache(context, _cover, cover: true)), isTrue);
+    expect(downloads, [_at(480, 480)]);
+    await drop(tester);
+  });
+
+  testWidgets('two boxes of different size are two addresses, each downloaded', (tester) async {
     await keep(tester);
     await show(tester, [
       const SizedBox(width: 100, height: 100, child: RemoteImage(_cover, cover: true)),
       const SizedBox(width: 600, height: 400, child: RemoteImage(_cover, cover: true)),
     ]);
+    expect(providers(tester).map((image) => image.url), [_at(100, 100), _at(600, 400)]);
+    await arrive(tester);
+    expect(painted(tester), everyElement(isNotNull));
+    expect(downloads, unorderedEquals([_at(100, 100), _at(600, 400)]));
+    await drop(tester);
+  });
+
+  testWidgets('an answer larger than the box decodes only as large as covering it needs; an address that takes no '
+      'size is one download for every box', (tester) async {
+    await keep(tester);
+    const elsewhere = 'https://example.com/cover.jpg';
+    await show(tester, [
+      const SizedBox(width: 100, height: 100, child: RemoteImage(elsewhere, cover: true)),
+      const SizedBox(width: 200, height: 150, child: RemoteImage(elsewhere, cover: true)),
+    ]);
     expect(providers(tester).map((image) => (image.url, image.box)), [
-      (_webp, const Size(120, 120)),
-      (_webp, const Size(600, 420)),
+      (elsewhere, const Size(100, 100)),
+      (elsewhere, const Size(200, 150)),
     ]);
     await arrive(tester);
     final [small!, big!] = painted(tester);
-    expect((small.width, small.height), (240, 120), reason: '400×200 covering 120×120');
-    expect((big.width, big.height), (400, 200), reason: 'never larger than the picture');
-    expect(downloads, [_webp], reason: 'one download serves both boxes');
-    expect(decodes, isEmpty, reason: 'ImageIO is never asked on the PC');
+    expect((small.width, small.height), (200, 100), reason: '400×200 covering 100×100');
+    expect((big.width, big.height), (300, 150), reason: '400×200 covering 200×150');
+    expect(downloads, [elsewhere]);
     await drop(tester);
   });
 
-  testWidgets('a precache and its draw share one decode; the precache says nothing of ImageIO for a webp', (
-    tester,
-  ) async {
-    await keep(tester);
-    await show(tester, [const SizedBox()]);
-    final context = tester.element(find.byType(SizedBox));
-    final ready = await tester.runAsync(
-      () => RemoteImage.precache(context, _cover, size: const Size(211, 158.25), cover: true),
+  test("a cover's key is its address and its box; its description leaves out the query", () {
+    final asked = _at(633, 475);
+    final cover = StoredNetworkImage(asked, box: const Size(633, 475));
+    expect(cover, StoredNetworkImage(asked, box: const Size(633, 475)));
+    expect(cover.hashCode, StoredNetworkImage(asked, box: const Size(633, 475)).hashCode);
+    expect(cover, isNot(StoredNetworkImage(asked, box: const Size(422, 317))));
+    expect(cover, isNot(StoredNetworkImage(asked)));
+    expect(cover.cacheKey, same(cover));
+    expect(
+      '$cover',
+      'StoredNetworkImage("i1.hdslb.com/bfs/archive/cover.jpg@633w_475h_1c_90q.jpg", still: true, box: 633×475)',
     );
-    expect(ready, isTrue);
-    await show(tester, [_cardCover]);
-    expect(painted(tester).single, isNotNull, reason: 'drawn the frame it shows');
-    expect(providers(tester).single.box, const Size(240, 180));
-    expect(downloads, [_webp]);
-    await drop(tester);
-  });
-
-  testWidgets("with ImageIO a cover asks for AVIF and draws ImageIO's pixels at the size it answered", (tester) async {
-    await keep(tester);
-    avifOn(() => _pixels(6, 4, decodeMs: 37.4));
-    answers[_avif] = _avifBytes;
-    await show(tester, [const SizedBox()]);
-    final context = tester.element(find.byType(SizedBox));
-    final ready = await tester.runAsync(
-      () => RemoteImage.precache(context, _cover, size: const Size(211, 158.25), cover: true),
+    expect(
+      '${const StoredNetworkImage('https://i1.hdslb.com/bfs/archive/signed.jpg?sign=SECRET', box: Size(40, 40))}',
+      'StoredNetworkImage("i1.hdslb.com/bfs/archive/signed.jpg", still: true, box: 40×40)',
     );
-    expect(ready, isTrue);
-    expect(decodes, [(_avifBytes.length, 240, 180)], reason: "the box in device pixels, in the 60 px steps");
-
-    await show(tester, [_cardCover]);
-    expect(providers(tester).single.url, _avif);
-    final image = painted(tester).single!;
-    expect((image.width, image.height), (6, 4));
-    expect(downloads, [_avif]);
-    expect(decodes, hasLength(1), reason: 'the draw is the precache');
-    expect(CoverFormat.shared.avif, isTrue);
-    await drop(tester);
   });
 
-  for (final (kind, FutureOr<DecodedPicture?> Function() answer, reason) in [
-    ('answers null', () => null, 'null'),
-    ('throws', () => throw PlatformException(code: 'decode-error'), 'platform decode-error'),
-  ]) {
-    testWidgets('an AVIF ImageIO $kind for shows its webp in the same place, and the stored AVIF is forgotten', (
-      tester,
-    ) async {
-      await keep(tester);
-      avifOn(answer);
-      answers[_avif] = _avifBytes;
-      await show(tester, [const SizedBox(width: 100, height: 100, child: RemoteImage(_cover, cover: true))]);
-      await arrive(tester);
-      final image = painted(tester).single!;
-      expect((image.width, image.height), (240, 120), reason: "the webp's decode");
-      expect(downloads, [_avif, _webp]);
-      await tester.runAsync(cache.settle);
-      await tester.runAsync(() async {
-        for (var i = 0; i < 50 && cache.fileOf(_avif).existsSync(); i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
+  testWidgets('a cover never moves, even when the CDN answers a moving picture', (tester) async {
+    await keep(tester);
+    answers[_at(633, 475)] = animatedGif;
+    await show(tester, [_cardCover], ratio: 3);
+    final cover = providers(tester).single;
+    expect(cover.still, isTrue);
+
+    Future<int> frames(ImageProvider provider) async {
+      var shown = 0;
+      final stream = provider.resolve(ImageConfiguration.empty);
+      final listener = ImageStreamListener((info, _) {
+        shown++;
+        info.dispose();
       });
-      expect(cache.fileOf(_avif).existsSync(), isFalse);
-      expect(cache.fileOf(_webp).existsSync(), isTrue);
-      expect(lines('image failed'), isEmpty, reason: 'no visible error');
-      expect(lines('avif decode failed').single.f['reason']?.toJson(), reason);
-      expect(CoverFormat.shared.address(_cover), _webp, reason: 'the cover asks for webp from now on');
-      expect(CoverFormat.shared.avif, isTrue, reason: 'one failure');
-      await drop(tester);
-    });
-  }
-
-  testWidgets('an AVIF stored on the phone that no longer decodes is deleted, so it is not read again', (tester) async {
-    await keep(tester);
-    avifOn(() => null);
-    await tester.runAsync(() async {
-      await Directory(folder.path).create(recursive: true);
-      await cache.fileOf(_avif).writeAsBytes(_avifBytes);
-    });
-    await show(tester, [const SizedBox(width: 100, height: 100, child: RemoteImage(_cover, cover: true))]);
-    await arrive(tester);
-    expect(painted(tester).single, isNotNull);
-    expect(downloads, [_webp], reason: 'the AVIF came from storage');
-    await tester.runAsync(() async {
-      for (var i = 0; i < 50 && cache.fileOf(_avif).existsSync(); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
+      stream.addListener(listener);
+      for (var step = 0; step < 10; step++) {
+        // Decoding runs on the engine's real clock; the frame timer on the test's.
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump(const Duration(milliseconds: 100));
       }
-    });
-    expect(cache.fileOf(_avif).existsSync(), isFalse);
-    await drop(tester);
-  });
-
-  testWidgets('an AVIF the CDN refuses shows its webp, without counting against ImageIO', (tester) async {
-    await keep(tester);
-    avifOn(() => _pixels(2, 2));
-    answers[_avif] = NetworkImageLoadException(statusCode: 400, uri: Uri.parse(_avif));
-    await show(tester, [const SizedBox(width: 100, height: 100, child: RemoteImage(_cover, cover: true))]);
-    await arrive(tester);
-    expect(painted(tester).single, isNotNull);
-    expect(downloads, [_avif, _webp]);
-    expect(decodes, isEmpty);
-    expect(lines('avif refused').single.f['status']?.toJson(), 400);
-    expect(lines('image failed'), isEmpty);
-    await drop(tester);
-  });
-
-  testWidgets('three AVIF failures in a row turn AVIF off: every cover after asks for webp', (tester) async {
-    await keep(tester);
-    avifOn(() => null);
-    const covers = ['$_cover.1', '$_cover.2', '$_cover.3'];
-    for (final cover in covers) {
-      answers['$cover@.avif'] = _avifBytes;
+      stream.removeListener(listener);
+      return shown;
     }
-    await show(tester, [for (final cover in covers) coverBox(cover, side: 60)]);
-    expect(providers(tester).map((image) => image.url), everyElement(endsWith('@.avif')));
-    await arrive(tester);
-    expect(painted(tester), everyElement(isNotNull), reason: 'each shown from its webp');
-    expect(CoverFormat.shared.avif, isFalse);
-    expect(lines('avif off').single.f['failures']?.toJson(), 3);
-    await show(tester, [coverBox('$_cover.4', side: 60)]);
-    expect(providers(tester).single.url, '$_cover.4@.webp');
-    await arrive(tester);
+
+    expect(await frames(cover), 1);
+    expect(await frames(StoredNetworkImage(cover.url, still: false)), greaterThan(1), reason: 'the picture does move');
     await drop(tester);
   });
 
-  testWidgets('a cover shown from its webp after its AVIF failed stays up when it is next built for the webp', (
-    tester,
-  ) async {
-    await keep(tester);
-    avifOn(() => null);
-    answers[_avif] = _avifBytes;
-    await show(tester, [coverBox(_cover)]);
-    await arrive(tester);
-    final first = painted(tester).single!;
-    expect(providers(tester).single.url, _avif);
-
-    // Rebuilt in place, the cover now asks for its webp, which comes from storage only once real time runs.
-    await show(tester, [coverBox(_cover)]);
-    expect(providers(tester).single.url, _webp);
-    for (var i = 0; i < 4; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-    final opacity = tester.widget<FadeTransition>(find.byType(FadeTransition)).opacity.value;
-    expect(opacity, 1, reason: 'the same cover, not a new picture fading in');
-    expect(painted(tester).single?.isCloneOf(first), isTrue, reason: 'gapless playback paints the old frame');
-    await arrive(tester);
-    expect(painted(tester).single?.isCloneOf(first), isFalse, reason: 'the webp is in');
-    expect(tester.widget<FadeTransition>(find.byType(FadeTransition)).opacity.value, 1);
-    expect(downloads, [_avif, _webp], reason: 'the webp came from storage');
-    await drop(tester);
-  });
-
-  testWidgets('faces and other pictures keep their box-sized addresses while covers go full size', (tester) async {
-    avifOn(() => null);
+  testWidgets('faces and other pictures keep their webp in 60 px steps; a cover takes its exact size whatever its '
+      'CDN suffix', (tester) async {
     await show(tester, [
       const SizedBox(width: 40, height: 40, child: RemoteImage.avatar('https://i0.hdslb.com/bfs/face/f.jpg')),
       const SizedBox(width: 40, height: 40, child: RemoteImage('https://i0.hdslb.com/bfs/garb/frame.png')),
       const SizedBox(width: 40, height: 40, child: RemoteImage(_cover, cover: true)),
+      const SizedBox(width: 40, height: 40, child: RemoteImage(_cover, cdnSuffix: '@672w_378h_1c.webp')),
+      const SizedBox(width: 40, height: 30, child: RemoteImage(_cover, cdnSuffix: '@672w_378h_1c.webp', cover: true)),
     ]);
     expect(providers(tester).map((image) => (image.url, image.box)), [
-      ('https://i0.hdslb.com/bfs/face/f.jpg@60w_60h_1c.webp', null),
-      ('https://i0.hdslb.com/bfs/garb/frame.png@60w_60h_1c.webp', null),
-      (_avif, const Size(60, 60)),
+      ('https://i1.hdslb.com/bfs/face/f.jpg@60w_60h_1c.webp', null),
+      ('https://i1.hdslb.com/bfs/garb/frame.png@60w_60h_1c.webp', null),
+      (_at(40, 40), const Size(40, 40)),
+      ('https://i1.hdslb.com/bfs/archive/cover.jpg@672w_378h_1c.webp', null),
+      (_at(40, 30), const Size(40, 30)),
     ]);
   });
 }
