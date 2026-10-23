@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert' show utf8;
 
+import 'package:bili_core/api.dart' show VideoCard;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart' show ManualClock, MonotonicClock;
 import 'package:bilifast/account/keychain_store.dart';
@@ -18,6 +19,7 @@ import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:bilifast/video/intro/intro_tab.dart';
 import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_playback.dart';
 import 'package:bilifast/video/page_session.dart';
@@ -171,9 +173,11 @@ void main() {
     createDetails: realDetails ? pageDetails : fakeDetails,
     openPage: openPage,
   );
-  openPage = (context, route) => Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route)));
+  Future<void> pushing(BuildContext context, VideoRoute route) =>
+      Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => page(route)));
+  openPage = pushing;
 
-  Future<void> host(WidgetTester tester, {bool real = false}) async {
+  Future<void> host(WidgetTester tester, {bool real = false, Widget home = const SizedBox()}) async {
     realDetails = real;
     screen(tester, portrait, portraitInsets);
     addTearDown(tester.view.reset);
@@ -219,7 +223,7 @@ void main() {
         navigatorKey: services.navigator,
         navigatorObservers: [pageRoutes],
         builder: (context, child) => AppScope(services: services, child: child!),
-        home: const SizedBox(),
+        home: home,
       ),
     );
   }
@@ -978,5 +982,87 @@ void main() {
     player.emit(const StatusChanged(PlayerStatus.playing));
     await frames(tester, 2);
     await back(tester);
+  });
+
+  group('a video opened on a video page takes its place (KaiC: video pages never stack)', () {
+    const home = Center(child: Text('首页'));
+
+    /// 简介's related row tapped on the page shown.
+    void openRelated(WidgetTester tester, String bvid) => tester.widget<IntroTab>(find.byType(IntroTab).last)
+        .onOpenRelated(
+      VideoCard(
+        aid: 2,
+        bvid: bvid,
+        cid: 3,
+        title: '相关视频',
+        cover: '',
+        duration: 60,
+        ownerMid: 4,
+        ownerName: 'UP',
+        views: 1,
+        danmaku: 1,
+        likes: 1,
+      ),
+    );
+
+    testWidgets('a video from 首页 goes on top of it; a related video there replaces that page, whose player is '
+        'released and its watch progress reported as on a pop; back goes straight to 首页', (tester) async {
+      await host(tester, home: home);
+      unawaited(openVideoPage(services.navigator.currentContext!, const VideoRoute(bvid: bv, cid: p1, start: 0)));
+      await frames(tester, 20);
+      expect(services.navigator.currentState!.canPop(), isTrue, reason: 'pushed over 首页');
+      final first = players.single;
+      first
+        ..emit(const DurationChanged(712))
+        ..emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 2);
+      http.routes[Canned.signedViewPath] = (200, otherView);
+      final before = sent().length;
+
+      openRelated(tester, other);
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, other);
+      expect(first.disposed, isTrue);
+      expect(playback.live, 1);
+      expect(sent().skip(before).map((beat) => beat.$1), contains(p1), reason: 'the first video\'s last heartbeat');
+
+      await back(tester);
+      expect(find.byType(VideoPage, skipOffstage: false), findsNothing);
+      expect(find.text('首页'), findsOneWidget);
+      expect(services.navigator.currentState!.canPop(), isFalse);
+      expect(playback.live, 0);
+    });
+
+    testWidgets('replaced while its small window plays, the page goes to the keeper as a popped one does, and the new '
+        'video releases it before it loads', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await host(tester, home: home);
+      openPage = (context, route) => replaceVideoPage(context, route, page: page);
+      addTearDown(() => openPage = pushing);
+      final first = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+      first.emit(const PictureInPictureChanged(true));
+      await tester.pump();
+      http.routes[Canned.signedViewPath] = (200, otherView);
+      List<String>? keptAtCreate;
+      onCreate = () => keptAtCreate ??= [
+        for (final event in logs.events)
+          if (event.msg.startsWith('pip ')) event.msg,
+      ];
+
+      openRelated(tester, other);
+      await frames(tester, 20);
+      expect(keptAtCreate, ['pip kept', 'pip released'],
+          reason: 'kept as on a pop, then released before the new page asked for its player');
+      expect(services.pipKeeper.kept, isNull);
+      expect(first.disposed, isTrue);
+      expect(playback.live, 1);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+      await back(tester);
+      expect(find.text('首页'), findsOneWidget);
+      expect(playback.live, 0);
+    });
   });
 }
