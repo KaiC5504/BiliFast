@@ -183,9 +183,9 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
-- (32) on the phone: `feed covers done` thirdMs/lastMs should be well under (30)'s (615-1120 / 796-1790 ms) and
-  (31)'s (785-1523 / 1359-1957 ms); covers sharp in 推荐, related, 历史记录 and 搜索; any `image failed` names the
-  host and status. Then KaiC's second capture (agreed, 2026-10-23): the official app's picture request headers (names,
+- (32) on the phone (KaiC's log, 2026-10-23): `feed covers done` thirdMs 360-388 ms and lastMs 467-570 ms over five
+  refreshes (582 / 633 at launch), 6 of 6 ready each time, no `image failed`: about twice (30)'s and (31)'s. KaiC's
+  word on sharpness still to come. Then KaiC's second capture (agreed, 2026-10-23): the official app's picture request headers (names,
   and values only for User-Agent/Accept-like ones) and cache headers, and its 630×473 covers kept briefly for a
   sharpness check, to learn why the CDN serves the official preset from cache for the official app (115-343 ms) but
   never for us (~0.5 s, even asked twice). The addon and keys wait in the scratchpad's `capture/`.
