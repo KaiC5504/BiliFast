@@ -772,6 +772,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
         // While 首页's tap holds its TV at the top, a pull draws and opens nothing: the refresh it would join is
         // already showing.
         final pull = ReleaseRefreshControl(
+          refreshTriggerPullDistance: refreshTrigger,
           refreshIndicatorExtent: refreshRoom,
           builder: _reloadHeader ? null : loadingTvRefreshIndicator,
           onRefresh: _reloadHeader ? null : widget.onPull,

@@ -3846,6 +3846,9 @@ abstract final class LoadingTvTheme {
   static const size = 60.0;
   static const frame = Duration(milliseconds: 133);
 
+  /// How far a pull goes before it arms.
+  static const trigger = 100.0;
+
   /// 正在努力加载... under the TV on a page's first load (64, 67).
   static const stateText = 14.0;
   static const stateInk = Color(0xFF86898B);
@@ -5481,6 +5484,10 @@ abstract final class OwnSpaceTabsTheme {
 abstract final class SkinLoadingTheme {
   static const room = 256 / 3;
   static const size = LoadingTvTheme.size;
+
+  /// A pull arms once the whole picture shows, as the official app's starts playing then (KaiC: Violet plays at a
+  /// 68 pt pull, ours waited for the TV's 100). Let go short of the room, the refresh holds what was pulled.
+  static const trigger = size;
 
   /// Decoded at most this many pixels a side: the box at the phone's 3×.
   static const decodePixels = 180;

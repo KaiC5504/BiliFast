@@ -442,6 +442,26 @@ void main() {
       expect(tester.getTopLeft(card('BV1n0')).dy, moreOrLessEquals(cardTop), reason: 'the room closed');
     });
 
+    testWidgets("a pull arms once the whole picture shows, 60 pt, not the TV's 100", (tester) async {
+      await wearing(tester);
+      final cardTop = tester.getTopLeft(card('BV1c0')).dy;
+      http.gates[1] = Completer<void>();
+      final pull = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('feed'))));
+      double? armedAt;
+      for (var i = 0; i < 60 && armedAt == null; i++) {
+        await pull.moveBy(const Offset(0, 4));
+        await tester.pump();
+        if (tester.widget<SkinLoadingView>(view).playing) armedAt = tester.getTopLeft(card('BV1c0')).dy - cardTop;
+      }
+      expect(armedAt, isNotNull);
+      expect(armedAt, inInclusiveRange(SkinLoadingTheme.trigger, SkinLoadingTheme.trigger + 4));
+      await pull.up();
+      await settle(tester, 40);
+      expect(http.asked, [1, 1], reason: 'let go past 60 pt, it refreshes');
+      http.gates[1]!.complete();
+      await settle(tester, 20);
+    });
+
     testWidgets("首页's tap holds it at the bottom of its 85.33 pt band, in the TV's 60 pt box", (tester) async {
       await wearing(tester);
       final cardTop = tester.getTopLeft(card('BV1c0')).dy;

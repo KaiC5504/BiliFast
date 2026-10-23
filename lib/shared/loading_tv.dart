@@ -190,6 +190,9 @@ mixin SkinRefreshRoom<T extends StatefulWidget> on State<T> {
 
   double get refreshRoom => _skinLoading?.value == null ? LoadingTvTheme.size : SkinLoadingTheme.room;
 
+  /// The pull that arms the refresh: [ReleaseRefreshControl]'s own for the TV.
+  double get refreshTrigger => _skinLoading?.value == null ? LoadingTvTheme.trigger : SkinLoadingTheme.trigger;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();

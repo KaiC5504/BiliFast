@@ -55,9 +55,26 @@ FeedCard? _officialFeedItem(Object? json) {
   return attempt(() => FeedCard.fromOfficial(json));
 }
 
+/// Each page's cards by `card_goto` and `card_type`, in order: which the server makes big (the official app's full-width
+/// inline card) and where, since the app only draws what the answer marks. Names only, never an id or a link.
+List<String> _feedCardTypes(Object? json) {
+  if (json is! Map<String, Object?>) return const [];
+  final items = json['items'];
+  if (items is! List) return const [];
+  return [
+    for (final item in items)
+      if (item is Map<String, Object?>)
+        '${item['card_goto'] ?? item['goto'] ?? '?'}/${item['card_type'] ?? '?'}'
+            '${item['ad_info'] != null ? '/ad' : ''}',
+  ];
+}
+
 /// 推荐 from the official app's feed (`/x/v2/feed/index`), personalised by the app token. Only videos come back:
 /// ads, live rooms, 番剧 and other cards are dropped.
 extension BiliClientFeedOfficial on BiliClient {
+  void _logFeedCardTypes(Object? json) =>
+      _logger.info(LogCategory.api, 'feed card types', {'cards': _feedCardTypes(json).join(' ')});
+
   /// [index] counts the pages of one scroll from 0, and 0 is a pull to refresh. Without the app token it throws
   /// [BiliError.noAppToken] and sends nothing: the feed is generic without it.
   Future<List<FeedCard>> officialFeed({required int index}) async {
@@ -74,7 +91,10 @@ extension BiliClientFeedOfficial on BiliClient {
       host: BiliClient.appAPI,
       sendCookies: false,
       extraHeaders: _officialHeaders(_officialFeedHeaders),
-      decode: (json) => [for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card],
+      decode: (json) {
+        _logFeedCardTypes(json);
+        return [for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card];
+      },
     );
     final checked = _officialChecked(envelope, token);
     if (checked.code != 0) throw BiliError.api(code: checked.code, message: checked.message ?? '');

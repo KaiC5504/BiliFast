@@ -24,11 +24,10 @@ class ReleaseRefreshControl extends StatefulWidget {
     this.onArmed,
     this.onDisarmed,
     this.builder = loadingTvRefreshIndicator,
-    this.refreshTriggerPullDistance = 100,
+    this.refreshTriggerPullDistance = LoadingTvTheme.trigger,
     this.refreshIndicatorExtent = LoadingTvTheme.size,
   }) : assert(refreshTriggerPullDistance > 0),
-       assert(refreshIndicatorExtent >= 0),
-       assert(refreshTriggerPullDistance >= refreshIndicatorExtent);
+       assert(refreshIndicatorExtent >= 0);
 
   final RefreshCallback? onRefresh;
 

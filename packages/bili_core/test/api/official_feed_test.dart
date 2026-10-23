@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:test/test.dart';
 
 import 'app_signer_test.dart' show makeClient;
@@ -66,6 +67,30 @@ void main() {
     client.appToken = null;
     await expectLater(client.officialFeed(index: 0), throwsA(BiliError.noAppToken));
     expect(http.requests, isEmpty);
+  });
+
+  test("each page's card types are logged in order, names only: never an id, a cover or a link", () async {
+    final events = _Events();
+    final logged = BiliClient(
+      transport: http,
+      cookies: CookieJar({'SESSDATA': 'sess', 'bili_jct': 'TOKEN', 'buvid3': 'b3'}),
+      now: () => testNow,
+      logger: Logger(session: 'test')..add(events),
+    )
+      ..appToken = token
+      ..appBuvid = 'XYDEVICE';
+    http.routes[feedPath] = (200, officialFeed);
+    await logged.officialFeed(index: 0);
+    final line = events.events.singleWhere((event) => event.msg == 'feed card types');
+    expect(
+      (line.f['cards'] as LogString?)?.value,
+      'banner/banner_v8 av/small_cover_v2 ad_av/small_cover_v2 av/small_cover_v2/ad live/small_cover_v2 '
+      'bangumi/small_cover_v2 av/small_cover_v2 av/small_cover_v2 av/small_cover_v2',
+    );
+    final text = line.encode();
+    for (final secret in ['hdslb', 'bilibili://', '90000001', 'BV1', token]) {
+      expect(text, isNot(contains(secret)));
+    }
   });
 
   test('keeps only playable videos: ads, live, 番剧, banners and unplayable cards are dropped', () async {
@@ -217,4 +242,11 @@ void main() {
     expect(parseCountText('-'), 0);
     expect(parseCountText(null), 0);
   });
+}
+
+final class _Events implements LogSink {
+  final List<LogEvent> events = [];
+
+  @override
+  void receive(LogEvent event) => events.add(event);
 }
