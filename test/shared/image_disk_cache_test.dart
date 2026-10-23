@@ -478,7 +478,7 @@ void main() {
   });
 
   group('the picture session', () {
-    const cover = 'https://i0.hdslb.com/bfs/archive/cover.jpg@660w_480h_1c.webp';
+    const cover = 'https://i1.hdslb.com/bfs/archive/cover.jpg@633w_475h_1c_90q.jpg';
     late _Transport transport;
     late DateTime now;
     late PictureSession session;
@@ -598,10 +598,10 @@ void main() {
         expect([for (final request in transport.sent) request.method], ['HEAD', 'GET', 'HEAD']);
       });
 
-      test('asks for the last picture downloaded on i0 without a query, in place of the one given', () async {
-        const face = 'https://i0.hdslb.com/bfs/face/f.jpg@120w_120h_1c.webp';
+      test('asks for the last picture downloaded on i1 without a query, in place of the one given', () async {
+        const face = 'https://i1.hdslb.com/bfs/face/f.jpg@120w_120h_1c.webp';
         await session.download(Uri.parse(face), null);
-        await session.download(Uri.parse('https://i0.hdslb.com/bfs/face/signed.jpg?sign=x'), null);
+        await session.download(Uri.parse('https://i1.hdslb.com/bfs/face/signed.jpg?sign=x'), null);
         await session.download(Uri.parse('https://archive.biliimg.com/bfs/archive/x.jpg'), null);
         now = now.add(PictureSession.keepAlive);
         expect(session.warm(picture: cover), isNotNull);
@@ -610,9 +610,9 @@ void main() {
 
       test('skipped with no picture, or one on another host', () {
         expect(session.warm(), isNull);
-        expect(session.warm(picture: 'https://i1.hdslb.com/bfs/archive/a.jpg'), isNull);
+        expect(session.warm(picture: 'https://i0.hdslb.com/bfs/archive/a.jpg'), isNull);
         expect(session.warm(picture: 'https://archive.biliimg.com/bfs/archive/a.jpg'), isNull);
-        expect(session.warm(picture: 'http://i0.hdslb.com/bfs/archive/a.jpg'), isNull);
+        expect(session.warm(picture: 'http://i1.hdslb.com/bfs/archive/a.jpg'), isNull);
         expect(transport.sent, isEmpty);
       });
 

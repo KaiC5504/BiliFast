@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 
 import '../devtools/crash_log.dart';
 import '../playback/playback_controller.dart' show PlaybackFailure;
-import '../shared/cover_format.dart';
 import '../shared/image_disk_cache.dart';
 import '../shared/remote_image.dart' show secureImageUrl;
 import '../video/player_prefs.dart';
@@ -221,7 +220,7 @@ class FeedModel extends ChangeNotifier {
        _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
        _now = now ?? DateTime.now,
        _pictures = pictures ?? (() => ImageDiskCache.session),
-       _coverFormat = coverFormat ?? (() => CoverFormat.shared.name);
+       _coverFormat = coverFormat ?? (() => 'jpg');
 
   static const emptyMessage = '暂时没有推荐的视频';
   static const endMessage = '没有更多了';

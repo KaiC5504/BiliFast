@@ -408,8 +408,9 @@ class ImageDiskCache {
 final class PictureSession {
   PictureSession(this._transport, {DateTime Function()? now}) : _now = now ?? DateTime.now;
 
-  /// The host every i0-i2 picture is asked from: i0 serves i1's and i2's paths, so one connection carries them all.
-  static const host = 'i0.hdslb.com';
+  /// The host every i0-i2 picture is asked from: i1, the CDN the official app asks (about twice as fast as i0's and
+  /// i2's), serves their paths too, so one connection carries them all.
+  static const host = 'i1.hdslb.com';
 
   /// The longest wait for an answer's headers, or between its body's chunks; the request is cancelled past it.
   static const requestTimeout = Duration(seconds: 15);

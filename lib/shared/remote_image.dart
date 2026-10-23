@@ -8,12 +8,11 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'cover_format.dart';
 import 'image_disk_cache.dart';
 import 'theme.dart';
 
-/// Bilibili's JSON hands out `//host/path` and `http://` addresses; iOS wants https. Pictures on i1 and i2 are asked
-/// from i0 ([PictureSession.host]), which serves the same paths, so one connection carries them all.
+/// Bilibili's JSON hands out `//host/path` and `http://` addresses; iOS wants https. Pictures on i0 and i2 are asked
+/// from i1 ([PictureSession.host]), which serves the same paths, so one connection carries them all.
 String secureImageUrl(String url) {
   final secure = url.startsWith('//')
       ? 'https:$url'
@@ -26,12 +25,17 @@ String secureImageUrl(String url) {
   return secure;
 }
 
-const _pictureMirrors = ['https://i1.hdslb.com/', 'https://i2.hdslb.com/'];
+const _pictureMirrors = ['https://i0.hdslb.com/', 'https://i2.hdslb.com/'];
 
-/// [url] from Bilibili's image CDN scaled and cropped there to [width]×[height] px (`@…w_…h_1c.webp`). Covers are
-/// asked for at full size instead ([RemoteImage.cover]).
+/// [url] from Bilibili's image CDN scaled and cropped there to [width]×[height] px (`@…w_…h_1c.webp`). Covers take
+/// [coverImageUrl].
 String sizedImageUrl(String url, {required int width, required int height}) =>
     suffixedImageUrl(url, '@${width}w_${height}h_1c.webp');
+
+/// A video cover scaled and cropped by the CDN to [width]×[height] px as a quality 90 JPEG (`@…w_…h_1c_90q.jpg`).
+/// The CDN's default webp smooths detail away; this is as sharp as the ideal, for ~20 ms more on a first ask.
+String coverImageUrl(String url, {required int width, required int height}) =>
+    suffixedImageUrl(url, '@${width}w_${height}h_1c_90q.jpg');
 
 /// [url] with the CDN's processing [suffix] (`@…`), on Bilibili's image hosts and only where the address has none yet.
 String suffixedImageUrl(String url, String suffix) {
@@ -42,7 +46,8 @@ String suffixedImageUrl(String url, String suffix) {
 }
 
 /// Fills the box it is given with the image, grey (or [placeholder]) until it arrives and then faded in. Sizes are
-/// rounded up to steps, so cards of nearly the same width share one cached download.
+/// rounded up to steps, so cards of nearly the same width share one cached download; a [cover] is asked at its exact
+/// size.
 ///
 /// Only emotes and 装扮 pictures move; anything else shows its first frame (see [StoredNetworkImage]).
 class RemoteImage extends StatelessWidget {
@@ -77,11 +82,11 @@ class RemoteImage extends StatelessWidget {
   final Size? size;
 
   /// The CDN's suffix (`@…`) asked for in place of the box's size rounded up, whatever the box: a size the CDN keeps
-  /// pre-made answers sooner.
+  /// pre-made answers sooner. A [cover] ignores it.
   final String? cdnSuffix;
 
-  /// A video's cover: the full-size picture ([CoverFormat]), which the CDN has ready where a box-sized one is made on
-  /// demand, decoded only as large as the box (rounded up) needs. One download serves every box it is drawn in.
+  /// A video's cover: made by the CDN at the box's exact size in device pixels ([coverImageUrl]) and drawn pixel for
+  /// pixel, since any scaling softens it. Always still.
   final bool cover;
 
   /// Shown instead of the grey until the image arrives, and if it fails.
@@ -104,6 +109,9 @@ class RemoteImage extends StatelessWidget {
 
   static int _bucket(double pixels) => pixels.isFinite && pixels > 0 ? ((pixels / _step).ceil() * _step) : 480;
 
+  /// Whole pixels for a cover's side; float error just past a whole pixel (471.0000000000001) adds none.
+  static int _exact(double pixels) => pixels.isFinite && pixels > 0 ? math.max((pixels - 0.01).ceil(), 1) : 480;
+
   @override
   Widget build(BuildContext context) {
     final source = url;
@@ -124,7 +132,13 @@ class RemoteImage extends StatelessWidget {
 
   /// Fetches and decodes [url] as a RemoteImage of [size] or [cdnSuffix] (or a [cover] of [size]) shows it, so that
   /// box shows it at once. True once it is ready, false if it failed or there is none; never throws.
-  static Future<bool> precache(BuildContext context, String? url, {Size? size, String? cdnSuffix, bool cover = false}) async {
+  static Future<bool> precache(
+    BuildContext context,
+    String? url, {
+    Size? size,
+    String? cdnSuffix,
+    bool cover = false,
+  }) async {
     if (url == null || url.isEmpty) return false;
     final provider = _provider(context, url, size, cdnSuffix: cdnSuffix, cover: cover);
     var ok = true;
@@ -140,8 +154,8 @@ class RemoteImage extends StatelessWidget {
     return ok;
   }
 
-  /// A cover's box is the same rounded-up size in device pixels as a sized address's, so a precache and its draw
-  /// share one decode.
+  /// The address names the box's size in device pixels, so a precache and its draw of one box share one download and
+  /// one decode.
   static StoredNetworkImage _provider(
     BuildContext context,
     String source,
@@ -158,15 +172,17 @@ class RemoteImage extends StatelessWidget {
       );
     }
     final pixels = (logical ?? Size.infinite) * MediaQuery.devicePixelRatioOf(context);
-    final width = _bucket(pixels.width);
-    final height = _bucket(pixels.height);
     if (cover) {
+      final width = _exact(pixels.width);
+      final height = _exact(pixels.height);
       return StoredNetworkImage(
-        CoverFormat.shared.address(source),
+        coverImageUrl(source, width: width, height: height),
         headers: BiliClient.mediaHeaders,
         box: Size(width.toDouble(), height.toDouble()),
       );
     }
+    final width = _bucket(pixels.width);
+    final height = _bucket(pixels.height);
     return StoredNetworkImage(
       sizedImageUrl(source, width: width, height: height),
       headers: BiliClient.mediaHeaders,
@@ -211,7 +227,7 @@ class RemoteImage extends StatelessWidget {
 }
 
 /// A network picture through [ImageDiskCache.shared] (straight from the network without one, as [NetworkImage]).
-/// [still] shows only its first frame: the CDN serves a GIF original (a cover, a face) as an animated webp through
+/// [still] shows only its first frame: the CDN serves a GIF original (a face, a badge) as an animated webp through
 /// the size suffix, and a moving picture decodes a frame every few tens of ms for as long as it is on screen. A still
 /// one is cached under its own key, so it never shares an entry with the moving one.
 class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkImage {
@@ -225,13 +241,10 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
 
   final bool still;
 
-  /// A full-size cover's box in device pixels: it is decoded only as large as covering the box needs (never the whole
-  /// original), and is a cache entry of its own per box. An AVIF ([CoverFormat]) that doesn't decode is shown from
-  /// its webp instead. Always still.
+  /// A cover's box in device pixels, the size its address asks for. A larger answer (an address that can't take the
+  /// suffix, or the CDN ignoring it) is decoded only as large as covering the box needs, so the box stays in the key.
+  /// Always still.
   final Size? box;
-
-  /// ImageIO's ms for the AVIF cover a provider decoded, read by [RemoteImage.precache].
-  static final _avifDecodeMs = Expando<double>();
 
   @override
   double get scale => 1;
@@ -257,41 +270,11 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
   }
 
   Future<ui.Codec> _load(ImageDecoderCallback decode) async {
+    final bytes = await _bytes(url);
     final box = this.box;
-    if (box == null) {
-      final codec = await decode(await ui.ImmutableBuffer.fromUint8List(await _bytes(url)));
-      return still ? _FirstFrame(codec) : codec;
-    }
-    if (CoverFormat.isAvif(url)) {
-      final avif = await _avif(box);
-      if (avif != null) return avif;
-      final webp = CoverFormat.webpOf(url);
-      try {
-        return await _covering(await _bytes(webp), box, decode);
-      } catch (error) {
-        if (!_network(error)) unawaited(ImageDiskCache.shared?.forget(webp));
-        rethrow;
-      }
-    }
-    return _covering(await _bytes(url), box, decode);
-  }
-
-  /// Null when the AVIF can't be shown and its webp is to be asked for; a stored copy that didn't decode is deleted.
-  Future<ui.Codec?> _avif(Size box) async {
-    final Uint8List bytes;
-    try {
-      bytes = await _bytes(url);
-    } on NetworkImageLoadException catch (error) {
-      CoverFormat.shared.refused(url, error.statusCode);
-      return null;
-    }
-    final decoded = await CoverFormat.shared.decodeAvif(url, bytes, box.width.round(), box.height.round());
-    if (decoded == null) {
-      unawaited(ImageDiskCache.shared?.forget(url));
-      return null;
-    }
-    _avifDecodeMs[this] = decoded.decodeMs;
-    return decoded.codec;
+    if (box != null) return _covering(bytes, box, decode);
+    final codec = await decode(await ui.ImmutableBuffer.fromUint8List(bytes));
+    return still ? _FirstFrame(codec) : codec;
   }
 
   Future<Uint8List> _bytes(String address) async {
@@ -395,8 +378,6 @@ class _PictureState extends State<_Picture> {
   @override
   Widget build(BuildContext context) {
     final image = widget.image;
-    // A cover asked for as webp after its AVIF failed (or AVIF went off) is still the picture already shown.
-    final address = image.box == null ? image.url : CoverFormat.sameCover(image.url);
     final instead = widget.fallback;
     return Image(
       image: image,
@@ -405,11 +386,11 @@ class _PictureState extends State<_Picture> {
       height: double.infinity,
       gaplessPlayback: true,
       frameBuilder: (context, picture, frame, synchronous) {
-        if (frame != null) _shown = address;
+        if (frame != null) _shown = image.url;
         final over = widget.overlay;
         final child = over == null ? picture : Stack(fit: StackFit.expand, children: [picture, over]);
         if (synchronous) return child;
-        final loaded = _shown == address;
+        final loaded = _shown == image.url;
         if (instead != null) return _FadeOver(loaded: loaded, under: instead, child: child);
         return AnimatedOpacity(
           opacity: loaded ? 1 : 0,
