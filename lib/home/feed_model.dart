@@ -212,6 +212,7 @@ class FeedModel extends ChangeNotifier {
     PictureSession? Function()? pictures,
     String Function()? coverFormat,
     this._minimumRefresh = FeedModel.minimumRefresh,
+    this._webPage,
   }) : _logger = logger ?? Logger.shared,
        _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
        _now = now ?? DateTime.now,
@@ -250,6 +251,9 @@ class FeedModel extends ChangeNotifier {
   final PictureSession? Function() _pictures;
   final String Function() _coverFormat;
   final Duration _minimumRefresh;
+
+  /// Answers the website's pages in place of the client: tests whose cards the web feed can't send (the big card).
+  final Future<List<FeedCard>> Function(int index)? _webPage;
   List<FeedCard> _cards = const [];
   List<FeedCard> _newest = const [];
   int? _dividerAt;
@@ -602,7 +606,8 @@ class FeedModel extends ChangeNotifier {
     // The first launch reaches here before the account check has fetched the fingerprint cookies.
     if (refresh) await _client.ensureRiskCookies();
     final index = refresh ? 1 : _nextWebIndex;
-    return (cards: await _client.recommendFeed(index: index), source: FeedSource.web, index: index);
+    final cards = await (_webPage?.call(index) ?? _client.recommendFeed(index: index));
+    return (cards: cards, source: FeedSource.web, index: index);
   }
 
   static bool _refused(Object error) =>

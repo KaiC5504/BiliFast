@@ -22,11 +22,14 @@ import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../skin/skin.dart';
 import '../video/link_opener.dart';
+import '../video/page_playback.dart';
 import '../video/player_prefs.dart';
 import '../video/video_route.dart';
 import 'avatar_page.dart';
+import 'feed_big_card.dart';
 import 'feed_card.dart';
 import 'feed_divider.dart';
+import 'feed_inline_player.dart';
 import 'feed_model.dart';
 import 'home_header.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
@@ -54,6 +57,15 @@ class HomePage extends StatefulWidget {
   @visibleForTesting
   static Future<bool> Function(BuildContext context, String? url, Size size) precacheCover =
       FeedCardView.precacheCover;
+
+  /// [FeedBigCardView.precacheCover], the big cards' own, for tests as [precacheCover].
+  @visibleForTesting
+  static Future<bool> Function(BuildContext context, String? url, Size size) precacheBigCover =
+      FeedBigCardView.precacheCover;
+
+  /// The website's pages in place of the network's: tests give big cards, which only the official feed sends.
+  @visibleForTesting
+  static Future<List<FeedCard>> Function(int index)? feedPages;
 
   /// [FeedModel.minimumRefresh] for 推荐; tests about what follows a swap set it to zero.
   @visibleForTesting
@@ -113,7 +125,11 @@ class _HomePageState extends State<HomePage> {
     if (_feed != null) return;
     _services = AppScope.of(context);
     _opener.busy.addListener(_busyChanged);
-    _feed = FeedModel(client: _environment.client, minimumRefresh: HomePage.feedMinimumRefresh);
+    _feed = FeedModel(
+      client: _environment.client,
+      minimumRefresh: HomePage.feedMinimumRefresh,
+      webPage: HomePage.feedPages,
+    );
     unawaited(LoadingTv.precache(context));
     unawaited(PlayerLoading.precache());
     unawaited(SeekBar.precache());
@@ -242,6 +258,22 @@ class _HomePageState extends State<HomePage> {
     ),
   );
 
+  /// A big card's page slides in, as the official one does (124). With the card's running [playback] the page goes
+  /// on from the very frame, with sound; without it, it starts from [start] when the card had played.
+  Future<void> _openBig(FeedCard card, PagePlayback? playback, double? start) => _visit(
+    openVideoPage(
+      context,
+      VideoRoute(
+        bvid: card.bvid,
+        cid: playback == null && start != null && card.cid > 0 ? card.cid : null,
+        start: playback == null ? start : null,
+        title: card.title,
+        cover: playback == null ? card.cover : null,
+        playback: playback,
+      ),
+    ),
+  );
+
   /// Logged out it goes to the login page and sends nothing; an account still being checked tries, and goes there
   /// only if Bilibili answers that it needs a login.
   Future<void> _watchLater(FeedCard card) async {
@@ -332,6 +364,7 @@ class _HomePageState extends State<HomePage> {
                     key: _grid,
                     feed: _feed!,
                     onOpen: _openCard,
+                    onOpenBig: _openBig,
                     onWatchLater: _watchLater,
                     onDislike: _dislike,
                     onUndo: _undoDislike,
@@ -453,6 +486,7 @@ class _FeedGrid extends StatefulWidget {
     super.key,
     required this.feed,
     required this.onOpen,
+    required this.onOpenBig,
     required this.onWatchLater,
     required this.onDislike,
     required this.onUndo,
@@ -467,6 +501,7 @@ class _FeedGrid extends StatefulWidget {
 
   final FeedModel feed;
   final void Function(FeedCard card, ZoomSource source) onOpen;
+  final Future<void> Function(FeedCard card, PagePlayback? playback, double? start) onOpenBig;
   final void Function(FeedCard card) onWatchLater;
   final void Function(FeedCard card, FeedReason reason) onDislike;
   final void Function(FeedCard card) onUndo;
@@ -540,6 +575,9 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   bool _still = false;
   bool _ticking = true;
 
+  /// Which big card plays.
+  late final _inline = FeedInlineHost(viewport: _feedArea);
+
   @override
   void initState() {
     super.initState();
@@ -558,6 +596,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   @override
   void dispose() {
     _detach(widget.feed);
+    _inline.dispose();
     _incoming.dispose();
     _handOff.dispose();
     _scroll.dispose();
@@ -575,8 +614,18 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
 
   static double _columnWidth(double gridWidth) => (gridWidth - BiliMetrics.feedSpacing * 3) / 2;
 
-  /// Notes the cards going and starts the covers of the rows the top of the list shows, both columns, at the size
-  /// their cards will ask for.
+  static double _bigWidth(double gridWidth) => gridWidth - FeedBigCardTheme.spacing * 2;
+
+  /// The cards' area on screen, above a dressed bar's row, for the big cards' half-visible rule.
+  Rect? _feedArea() {
+    final box = mounted ? context.findRenderObject() : null;
+    if (box is! RenderBox || !box.hasSize || !box.attached) return null;
+    final area = box.localToGlobal(Offset.zero) & box.size;
+    return Rect.fromLTRB(area.left, area.top, area.right, math.max(area.top, area.bottom - _inset));
+  }
+
+  /// Notes the cards going and starts the covers of the rows the top of the list shows, at the size their cards will
+  /// ask for: both columns of a row, a big card's across both.
   CoverPrefetch _beforeShow(List<FeedCard> fresh) {
     if (!mounted) return const CoverPrefetch.skipped(CoverSkip.unmounted);
     final feed = widget.feed;
@@ -586,13 +635,28 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     if (viewport == null) return const CoverPrefetch.skipped(CoverSkip.noLayout);
     const spacing = BiliMetrics.feedSpacing;
     final width = _columnWidth(viewport.width);
+    final bigWidth = _bigWidth(viewport.width);
     final rowExtent = FeedCardSize.height(width, _scaler) + spacing;
-    final rows = math.max(((viewport.height - _inset - spacing) / rowExtent).ceil(), 0);
-    if (rows == 0) return const CoverPrefetch.skipped(CoverSkip.noRows);
     final size = FeedCardSize.cover(width);
-    return CoverPrefetch([
-      for (final card in fresh.take(rows * 2)) HomePage.precacheCover(context, card.cover, size),
-    ]);
+    final bottom = viewport.height - _inset;
+    final asks = <Future<bool>>[];
+    var top = spacing;
+    var slot = 0;
+    while (slot < fresh.length && top < bottom) {
+      final card = fresh[slot++];
+      if (card.big != null) {
+        asks.add(HomePage.precacheBigCover(context, card.cover, FeedBigCardSize.video(bigWidth)));
+        top += FeedBigCardSize.height(bigWidth) + spacing;
+        continue;
+      }
+      asks.add(HomePage.precacheCover(context, card.cover, size));
+      if (slot < fresh.length && fresh[slot].big == null) {
+        asks.add(HomePage.precacheCover(context, fresh[slot++].cover, size));
+      }
+      top += rowExtent;
+    }
+    if (asks.isEmpty) return const CoverPrefetch.skipped(CoverSkip.noRows);
+    return CoverPrefetch(asks);
   }
 
   List<_Going> _goingOf(List<FeedCard> cards) => [
@@ -610,6 +674,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
       _coming = (fresh: coming.fresh, old: coming.old, going: _goingOf(cards));
     }
     setState(() {});
+    _inline.settleSoon();
     // A page too short to scroll leaves the end on screen with no scrolling to notice it; look once it is laid out.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _scroll.hasClients) _loadMoreNearEnd(_scroll.position);
@@ -663,6 +728,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
           ? metrics.pixels.clamp(metrics.minScrollExtent, metrics.maxScrollExtent)
           : metrics.pixels;
       _loadMoreNearEnd(notification.metrics);
+      // Only once the scroll has come to rest: a big card dragged half off plays on until the finger lets go.
+      if (notification is ScrollEndNotification) _inline.settleSoon();
     }
     return false;
   }
@@ -685,11 +752,17 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     return _staggerStep * math.min(_batch++, _staggerSteps);
   }
 
-  /// [cards] from [from] up to [to]. A hand-off fades the cards going out over the top grid alone, in the slots they
-  /// held; under 刚刚看到这里 they already stand in their new places.
-  Widget _cardGrid(SliverGridDelegate grid, List<FeedCard> cards, int from, int to, {required bool still}) {
+  /// [cards] from [from] up to [to], none of them big. A hand-off fades the cards [going] out over the top batch alone,
+  /// in the slots they held (a small card over a small one); under 刚刚看到这里 they already stand in their new places.
+  Widget _cardGrid(
+    SliverGridDelegate grid,
+    List<FeedCard> cards,
+    int from,
+    int to, {
+    required List<_Going>? going,
+    required bool still,
+  }) {
     final feed = widget.feed;
-    final going = from == 0 ? _going : null;
     return SliverGrid(
       gridDelegate: grid,
       delegate: SliverChildBuilderDelegate(
@@ -697,7 +770,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
           final slot = from + index;
           final card = cards[slot];
           final enter = !still && _entered.add(card.bvid);
-          final gone = going != null && slot < going.length ? going[slot] : null;
+          final gone = going != null && slot < going.length && going[slot].card.big == null ? going[slot] : null;
           return _Entrance(
             key: ValueKey('feed-card-${card.bvid}'),
             delay: enter ? _nextStagger() : null,
@@ -737,12 +810,98 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     );
   }
 
+  /// The big card at [slot], across both columns; built only once scrolled near, as a grid's cards are.
+  Widget _bigCard(List<FeedCard> cards, int slot, {required List<_Going>? going, required bool still}) {
+    final feed = widget.feed;
+    final card = cards[slot];
+    final gone = going != null && slot < going.length && going[slot].card.big != null ? going[slot] : null;
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, _) {
+        final enter = !still && _entered.add(card.bvid);
+        return _Entrance(
+          key: ValueKey('feed-card-${card.bvid}'),
+          delay: enter ? _nextStagger() : null,
+          child: _HandOffSlot(
+            incoming: going == null ? null : _incoming,
+            outgoing: _outgoing,
+            going: gone == null
+                ? null
+                : FeedBigCardView(
+                    key: ValueKey('feed-card-going-${gone.card.bvid}'),
+                    card: gone.card,
+                    onOpen: (_, _) async {},
+                    onWatchLater: () {},
+                    dislike: gone.dislike,
+                  ),
+            child: FeedBigCardView(
+              card: card,
+              host: _inline,
+              onOpen: (playback, start) => widget.onOpenBig(card, playback, start),
+              onWatchLater: () => widget.onWatchLater(card),
+              dislike: feed.dislikeOf(card),
+              onDislike: (reason) => widget.onDislike(card, reason),
+              onUndo: () => widget.onUndo(card),
+              onReason: (reason) => widget.onReason(card, reason),
+            ),
+          ),
+        );
+      }, childCount: 1),
+    );
+  }
+
+  /// The cards as slivers: each batch (the one above 刚刚看到这里, the one under it) split where a big card is, the big
+  /// card across both columns and the cards around it in the grid, the feed's spacing between them all.
+  List<Widget> _cardSlivers(SliverGridDelegate grid, List<FeedCard> cards, int? divider, {required bool still}) {
+    const spacing = BiliMetrics.feedSpacing;
+    final topEnd = divider ?? cards.length;
+    final slivers = <Widget>[];
+    void batch(int from, int to, {required bool first, required bool last}) {
+      final going = from < topEnd ? _going : null;
+      final pieces = <Widget>[];
+      var start = from;
+      for (var slot = from; slot <= to; slot++) {
+        if (slot < to && cards[slot].big == null) continue;
+        if (slot > start) pieces.add(_cardGrid(grid, cards, start, slot, going: going, still: still));
+        if (slot < to) pieces.add(_bigCard(cards, slot, going: going, still: still));
+        start = slot + 1;
+      }
+      for (final (index, piece) in pieces.indexed) {
+        slivers.add(
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              spacing,
+              index > 0 || first ? spacing : 0,
+              spacing,
+              index == pieces.length - 1 && last ? spacing : 0,
+            ),
+            sliver: piece,
+          ),
+        );
+      }
+    }
+
+    if (divider == null) {
+      batch(0, cards.length, first: true, last: true);
+      return slivers;
+    }
+    batch(0, divider, first: true, last: false);
+    slivers.add(
+      SliverToBoxAdapter(
+        child: FeedDivider(key: const ValueKey('feed-divider'), onTap: () => unawaited(reload())),
+      ),
+    );
+    batch(divider, cards.length, first: false, last: true);
+    return slivers;
+  }
+
   @override
   Widget build(BuildContext context) {
     final feed = widget.feed;
     final scaler = _scaler = MediaQuery.textScalerOf(context);
     final still = _still = MediaQuery.disableAnimationsOf(context);
     _ticking = TickerMode.valuesOf(context).enabled;
+    // A route over 首页 (a page, a sheet, ⋮'s menu) or 我的 shown pauses the big card; the app leaving, its host.
+    _inline.shown = _ticking && (ModalRoute.isCurrentOf(context) ?? true);
     // Under a dressed bar the feed runs to the screen's bottom; its end stays above the bar's row.
     final inset = _inset = MediaQuery.paddingOf(context).bottom;
     _rebuilt = true;
@@ -840,25 +999,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
                           ),
                         )
                       else ...[
-                        if (divider == null)
-                          SliverPadding(
-                            padding: const EdgeInsets.all(spacing),
-                            sliver: _cardGrid(grid, cards, 0, cards.length, still: still),
-                          )
-                        else ...[
-                          // Split where 刚刚看到这里 falls, so a page with an odd count leaves its last row half full.
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(spacing, spacing, spacing, 0),
-                            sliver: _cardGrid(grid, cards, 0, divider, still: still),
-                          ),
-                          SliverToBoxAdapter(
-                            child: FeedDivider(key: const ValueKey('feed-divider'), onTap: () => unawaited(reload())),
-                          ),
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(spacing, 0, spacing, spacing),
-                            sliver: _cardGrid(grid, cards, divider, cards.length, still: still),
-                          ),
-                        ],
+                        // Split where 刚刚看到这里 falls, so a page with an odd count leaves its last row half full.
+                        ..._cardSlivers(grid, cards, divider, still: still),
                         SliverToBoxAdapter(child: _Footer(feed: feed)),
                         if (inset > 0) SliverToBoxAdapter(child: SizedBox(height: inset)),
                       ],

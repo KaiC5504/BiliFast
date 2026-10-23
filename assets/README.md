@@ -28,3 +28,12 @@ unchanged: a white 小电视 with the ▶ cut out. KaiC's iPhone draws it at the
 `ic_promo_index_refresh` (xxhdpi), unchanged: two white arcs with solid arrowheads, the drawing KaiC's iPhone shows (the
 APK's `ic_promo_index_refresh_vector` is a newer one, its arrows open and turning the other way). The iPhone draws it at
 the file's own 3× size, 14.67 pt, tinted pink.
+
+推荐's big card (122-126) takes the same APK's inline player art, each unchanged: `images/card/inline_muted.png` and
+`inline_sound.png` are `ic_volumn_inline_switch_off` and `_on` (xxhdpi, the speaker with its x or its waves, white
+with a faint shadow), drawn 22 pt square, as 126's speaker measures; `images/card/inline_like.png` is
+`ic_list_inline_dislike` (xxhdpi, a filled thumb, the selector `selector_inline_like_button` tints it), drawn so its
+ink is 16.72 pt, as 123's 👍, and tinted #61666D; `lottie/feed_like.json` is `assets/inline_click_to_like.json`, the
+thumb turning pink with its burst of small thumbs that 125 shows on a tap. The cover's ▶ is `images/player/paused_play.png`
+again, its body 46.67 pt wide at 77% of its white (122). 弹 is the player's own drawn glyph: the iPhone shows 弹 on the
+TV where the APK's `ic_danmaku_inline_switch_v2_on` draws lines.
