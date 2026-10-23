@@ -60,7 +60,7 @@ const officialFeed = r'''
  "idx":1,"track_id":"track-0007","talk_back":"大卡片","official_icon":0,
  "cover_left_text_1":"3.1万","cover_left_icon_1":1,"cover_left_text_2":"88","cover_left_icon_2":2,
  "cover_right_text":"1:35","rcmd_reason_style":{"text":"5千点赞","text_color":"#FB7299","icon_url":""},
- "can_play":1,"like_button":{"aid":90000007,"count":5123,"show_count":true,"event":"like"},"is_atten":0,
+ "can_play":1,"like_button":{"aid":90000007,"count":5123,"show_count":true,"selected":1,"event":"like"},"is_atten":0,
  "share_plane":{"title":"大卡片","bvid":"BV1Te411d4dD","aid":90000007},
  "three_point_v2":[{"title":"我不想看","type":"dislike","reasons":[
   {"id":1,"name":"不感兴趣","toast":"将减少相似内容推荐"}]}]}
@@ -119,14 +119,14 @@ void main() {
 {"code":0,"message":"0","ttl":1,"data":{"items":[
 {"card_goto":"av","param":"90000011","can_play":1,"player_args":{"aid":90000011}},
 {"card_goto":"inline_av_v2","param":"90000012","can_play":1,"player_args":{"aid":90000012},
- "like_button":{"count":0,"show_count":0}},
+ "like_button":{"count":0,"show_count":0,"selected":true}},
 {"card_goto":"av","param":"90000013","can_play":1,"player_args":{"aid":90000013}},
 {"card_goto":"inline_av_v2","param":"90000014","can_play":1,"player_args":{"aid":90000014},"ad_info":{}},
 {"card_goto":"inline_av_v2","param":"90000015","can_play":1,"player_args":{"aid":90000015}}
 ]}}''');
     final cards = await client.officialFeed(index: 1);
     expect(cards.map((card) => card.aid), [90000012, 90000015, 90000011, 90000013]);
-    expect(cards[0].big, const FeedBig(likes: 0, showLikes: false));
+    expect(cards[0].big, const FeedBig(likes: 0, showLikes: false, liked: true), reason: 'selected as a bool');
     expect(cards[1].big, const FeedBig(likes: 0, showLikes: false), reason: 'a big card without like_button');
     expect(cards[2].big, isNull);
   });
@@ -159,7 +159,7 @@ void main() {
     expect(plain.dislike, isNull);
     expect(plain.viewsText, '5432');
 
-    expect(big.big, const FeedBig(likes: 5123, showLikes: true));
+    expect(big.big, const FeedBig(likes: 5123, showLikes: true, liked: true), reason: 'selected as 0/1');
     expect(big.bvid, 'BV1Te411d4dD', reason: "the big card's bvid is only in share_plane");
     expect(big.reason, '5千点赞', reason: 'from rcmd_reason_style');
     expect(big.cid, 190000007);
@@ -169,7 +169,7 @@ void main() {
     expect(big.ownerName, 'UP主丁');
     expect(big.ownerMid, 604);
     expect(big.isVertical, isFalse);
-    expect(big.dislike?.goto, 'inline_av_v2', reason: "不感兴趣 names the card by its own card_goto");
+    expect(big.dislike?.goto, 'av', reason: "不感兴趣 names the big card by its item's goto, not inline_av_v2");
     expect(big.dislike?.id, 90000007);
   });
 

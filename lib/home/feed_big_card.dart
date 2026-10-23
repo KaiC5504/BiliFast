@@ -102,6 +102,7 @@ class _FeedBigCardViewState extends State<FeedBigCardView> with TickerProviderSt
   void initState() {
     super.initState();
     _likes = widget.card.big?.likes ?? 0;
+    _liked = widget.card.big?.liked ?? false;
     FeedInlineChoices.sound.addListener(_choiceChanged);
     FeedInlineChoices.danmaku.addListener(_choiceChanged);
   }
@@ -185,13 +186,24 @@ class _FeedBigCardViewState extends State<FeedBigCardView> with TickerProviderSt
   Future<void> _open() async {
     final inline = _inline;
     final playback = inline?.handOver();
-    final bvid = widget.card.bvid;
-    final start = playback == null ? widget.host?.positions[bvid] : null;
+    final card = widget.card;
+    final start = playback == null ? widget.host?.positions[card.bvid] : null;
+    // Nothing to hand over yet (still starting) or failed: the page loads it, and the card's own load stops.
+    if (playback == null) inline?.release();
     await widget.onOpen(playback, start);
     if (playback == null) return;
-    // Back on 首页 the card plays again from where the page left the video (124).
-    final at = playback.closed ? playback.restartRoute.start : playback.controller?.currentSeconds;
-    if (at != null) widget.host?.positions[bvid] = at;
+    // Back on 首页 the card plays again from where the page left the video (124), unless 选集 or 自动连播 moved the
+    // page on to another part or video.
+    final ({String bvid, int? cid, double? at}) left = playback.closed
+        ? (bvid: playback.restartRoute.bvid, cid: playback.restartRoute.cid, at: playback.restartRoute.start)
+        : (
+            bvid: playback.controller?.video?.bvid ?? playback.bvid,
+            cid: playback.controller?.page?.cid,
+            at: playback.controller?.currentSeconds,
+          );
+    final at = left.at;
+    final samePart = left.bvid == card.bvid && (card.cid <= 0 || left.cid == null || left.cid == card.cid);
+    if (at != null && samePart) widget.host?.positions[card.bvid] = at;
   }
 
   Future<void> _more() async {
@@ -448,7 +460,6 @@ class _FeedBigCardViewState extends State<FeedBigCardView> with TickerProviderSt
               presentation: Presentation.vertical,
             ),
           ),
-        // The counts' shade, while they show.
         AnimatedOpacity(
           opacity: playing && dimmed ? 0 : 1,
           duration: fade,

@@ -12,6 +12,7 @@ import '../player_ui/player_loading.dart';
 import '../playback/playback_controller.dart';
 import '../shared/theme.dart';
 import '../video/page_playback.dart';
+import '../video/pip_keeper.dart';
 import '../video/player_session.dart';
 import '../video/video_page.dart';
 import '../video/video_route.dart';
@@ -42,7 +43,8 @@ abstract interface class FeedInlineCard {
 /// [FeedBigCardTheme.visibleToPlay] of it, looked at once a scroll has come to rest (KaiC: a card dragged half off keeps
 /// playing until the finger lets go), while 首页 shows with nothing over it and the app is in front. One at a time.
 class FeedInlineHost with WidgetsBindingObserver {
-  FeedInlineHost({required this.viewport}) {
+  FeedInlineHost({required this.viewport, required this._pip}) {
+    _pip.addListener(settleSoon);
     WidgetsBinding.instance.addObserver(this);
     final state = WidgetsBinding.instance.lifecycleState;
     _foreground = state != AppLifecycleState.hidden && state != AppLifecycleState.paused;
@@ -50,6 +52,9 @@ class FeedInlineHost with WidgetsBindingObserver {
 
   /// The part of the screen the feed shows its cards in, in global coordinates.
   final Rect? Function() viewport;
+
+  /// While a page's video is in the small window (or kept for it), no card plays: one video at a time.
+  final PipKeeper _pip;
 
   /// Where each video stood when its player was let go or its page closed, so the card starts again there.
   final positions = <String, double>{};
@@ -97,7 +102,7 @@ class FeedInlineHost with WidgetsBindingObserver {
   }
 
   void settle() {
-    final area = _shown && _foreground ? viewport() : null;
+    final area = _shown && _foreground && !_pip.showing ? viewport() : null;
     FeedInlineCard? best;
     var bestShare = 0.0;
     if (area != null) {
@@ -133,6 +138,7 @@ class FeedInlineHost with WidgetsBindingObserver {
 
   void dispose() {
     _disposed = true;
+    _pip.removeListener(settleSoon);
     WidgetsBinding.instance.removeObserver(this);
   }
 }
@@ -190,7 +196,7 @@ class FeedInlinePlayback extends ChangeNotifier {
   /// The TV and 正在缓冲... show only while it loads: the player still starting, a load, or a wait for data past the
   /// player's grace.
   bool get loading {
-    if (!_wanted) return false;
+    if (!_wanted || failed) return false;
     final controller = _controller;
     final session = _session;
     if (controller == null || session == null) return true;
@@ -202,7 +208,8 @@ class FeedInlinePlayback extends ChangeNotifier {
         (_wait?.value ?? false);
   }
 
-  bool get failed => _controller?.phase == PlaybackPhase.failed;
+  /// The player didn't start, or the video didn't load: the cover and its ▶ again.
+  bool get failed => _playback?.startError != null || _controller?.phase == PlaybackPhase.failed;
 
   void play() {
     _release?.cancel();
@@ -281,13 +288,12 @@ class FeedInlinePlayback extends ChangeNotifier {
   }
 
   /// Played to its end: from the start again, the counts gone and the buttons dimmed from the second time on (125).
+  /// The session's replay tells the watch reports, so a page taking it over later reports again.
   void _lap() {
-    final controller = _controller;
-    if (controller == null || _disposed) return;
+    final session = _session;
+    if (session == null || _disposed || !_wanted) return;
     _laps += 1;
-    _quietly(() => controller.player.seek(0, precise: true), 'seek');
-    controller.userSeeked(0);
-    if (_wanted) _quietly(controller.player.play, 'play');
+    unawaited(session.replay());
     notifyListeners();
   }
 

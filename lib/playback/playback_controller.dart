@@ -672,11 +672,12 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// Whether the small window starts by itself when the app leaves while this plays. It is first turned on at the
-  /// first play, so a page covered before then never gets it.
-  void setAutoPictureInPicture(bool on) {
+  /// first play, so a page covered before then never gets it. [now] turns it on at once, for a page taking 推荐's big
+  /// card over while it plays, which has no first play to come.
+  void setAutoPictureInPicture(bool on, {bool now = false}) {
     _autoPipWanted = on;
     if (!player.capabilities.pictureInPicture) return;
-    if (!on || _autoPipSet) {
+    if (!on || _autoPipSet || now) {
       _autoPipSet = on || _autoPipSet;
       _quietly(() => player.setAutoPictureInPicture(on), 'auto pip');
     }

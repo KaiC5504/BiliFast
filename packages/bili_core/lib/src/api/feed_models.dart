@@ -64,6 +64,9 @@ final class FeedCard {
     if (markedVertical || reason != null && reason.isEmpty) reason = null;
     final goto = object.text('card_goto') ?? object.text('goto') ?? 'av';
     final like = object.nested('like_button');
+    // 不感兴趣 names a card by its item's goto: `av` for the big card too, whose card_goto is `inline_av_v2`; only `av`
+    // is known to be taken.
+    final dislikeGoto = object.text('goto') ?? goto;
     return FeedCard(
       aid: aid,
       bvid: sentBvid == null || sentBvid.isEmpty ? avToBv(aid) : sentBvid,
@@ -79,9 +82,13 @@ final class FeedCard {
       isVertical: markedVertical || _uriVertical(object.text('uri')),
       viewsText: views,
       danmakuText: danmaku,
-      dislike: FeedDislike._from(object.map['three_point_v2'], goto: goto, id: param ?? aid),
+      dislike: FeedDislike._from(object.map['three_point_v2'], goto: dislikeGoto, id: param ?? aid),
       big: goto == 'inline_av_v2'
-          ? FeedBig(likes: like?.count('count') ?? 0, showLikes: like?.flag('show_count') ?? false)
+          ? FeedBig(
+              likes: like?.count('count') ?? 0,
+              showLikes: like?.flag('show_count') ?? false,
+              liked: like?.flag('selected') ?? false,
+            )
           : null,
     );
   }
@@ -175,7 +182,7 @@ final class FeedCard {
 
 /// What the official feed's big card (`inline_av_v2` / `large_cover_v9`) adds to a card: its 👍 and count.
 final class FeedBig {
-  const FeedBig({required this.likes, required this.showLikes});
+  const FeedBig({required this.likes, required this.showLikes, this.liked = false});
 
   /// `like_button.count`.
   final int likes;
@@ -183,11 +190,15 @@ final class FeedBig {
   /// `like_button.show_count`.
   final bool showLikes;
 
-  @override
-  bool operator ==(Object other) => other is FeedBig && other.likes == likes && other.showLikes == showLikes;
+  /// `like_button.selected`: the account has liked it already.
+  final bool liked;
 
   @override
-  int get hashCode => Object.hash(likes, showLikes);
+  bool operator ==(Object other) =>
+      other is FeedBig && other.likes == likes && other.showLikes == showLikes && other.liked == liked;
+
+  @override
+  int get hashCode => Object.hash(likes, showLikes, liked);
 }
 
 /// A count as the official app writes it ("174", "10.4万", "1.2亿"); "-" and anything else unreadable is 0.

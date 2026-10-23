@@ -43,6 +43,10 @@ void main() {
   late List<PlaybackController> controllers;
   late Map<int, List<FeedCard>> pages;
 
+  /// While set, a player asked for comes only once it completes; [createError] fails it instead.
+  Completer<void>? createGate;
+  Object? createError;
+
   setUp(() {
     http = FeedHttp();
     pageApi = FakePageApi();
@@ -52,6 +56,8 @@ void main() {
     pages = {
       1: [bigCard(_bv), ...smalls('a', 12)],
     };
+    createGate = null;
+    createError = null;
     FeedInlineChoices.reset();
     HomePage.feedMinimumRefresh = Duration.zero;
     HomePage.precacheCover = (context, url, size) async => true;
@@ -75,6 +81,8 @@ void main() {
     await environment.refreshAccount();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     final playback = AppPlayback(() async {
+      await createGate?.future;
+      if (createError case final error?) throw error;
       final player = FakePlayer();
       players.add(player);
       final controller = PlaybackController(
@@ -116,12 +124,12 @@ void main() {
   Finder inCard(String bvid, Key key) => find.descendant(of: card(bvid), matching: find.byKey(key));
   FakePlayer player([int index = 0]) => players[index];
 
-  /// The first big card's player is out and its video loaded; [playing] has it report playing.
+  /// The big card's newest player is out and its video loaded; [playing] has it report playing.
   Future<void> started(WidgetTester tester, {bool playing = true}) async {
     await frames(tester, 20);
     expect(players, isNotEmpty, reason: 'the big card asked for a player');
     if (playing) {
-      player().emit(const StatusChanged(PlayerStatus.playing));
+      players.last.emit(const StatusChanged(PlayerStatus.playing));
       await frames(tester, 2);
     }
   }
@@ -481,5 +489,123 @@ void main() {
     expect(http.canned.requests.where((request) => request.url.path == '/x/v2/history/toview/add'), hasLength(1));
     expect(find.text('已添加至稍后再看'), findsOneWidget);
     await frames(tester, 60);
+  });
+
+  group('review fixes', () {
+    NavigatorState navigator(WidgetTester tester) => tester.state<NavigatorState>(find.byType(Navigator).first);
+    FeedInlineHost host(WidgetTester tester) =>
+        tester.widget<FeedBigCardView>(find.byType(FeedBigCardView, skipOffstage: false).first).host!;
+
+    testWidgets('nothing plays inline while a page keeps its video in the small window; ✕ and it plays', (
+      tester,
+    ) async {
+      await show(tester);
+      await started(tester);
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 30);
+      player().emit(const PictureInPictureChanged(true));
+      await frames(tester, 2);
+      navigator(tester).pop();
+      await frames(tester, 30);
+      expect(services.pipKeeper.kept, isNotNull);
+      expect(players, hasLength(1), reason: 'no second player while the small window plays the video');
+      expect(services.pipKeeper.showing, isTrue);
+
+      services.pipKeeper.release();
+      await frames(tester, 30);
+      expect(players, hasLength(2), reason: 'the window closed: the card plays again');
+    });
+
+    testWidgets('a page taking the playing card over turns auto picture in picture on at once', (tester) async {
+      await show(tester);
+      await started(tester);
+      expect(player().calls, isNot(contains('pip auto true')));
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 30);
+      expect(player().calls, contains('pip auto true'));
+    });
+
+    testWidgets('after a lap, the page that takes it over still reports', (tester) async {
+      await show(tester);
+      await started(tester);
+      player().emit(const StatusChanged(PlayerStatus.ended));
+      await frames(tester, 2);
+      player().emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 2);
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 30);
+      final before = http.canned.requests.where((request) => request.url.path == _heartbeat).length;
+      player().emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 4);
+      expect(http.canned.requests.where((request) => request.url.path == _heartbeat).length, before + 1);
+    });
+
+    testWidgets('a card the account liked shows it, and a tap unlikes, put back if refused', (tester) async {
+      pages = {
+        1: [bigCard(_bv, likes: 28000, liked: true), ...smalls('a', 4)],
+      };
+      await show(tester);
+      await frames(tester);
+      expect(inCard(_bv, const ValueKey('big-card-liked')), findsOneWidget);
+      pageApi
+        ..failures['like'] = const BiliAPIError(code: 65004, message: '取消点赞失败')
+        ..holds['like'] = Completer<void>();
+      await tester.tap(inCard(_bv, const ValueKey('big-card-like')));
+      await tester.pump();
+      expect(pageApi.calls, ['like on=false']);
+      expect(find.text('2.7万'), findsOneWidget, reason: 'unliked at once');
+      pageApi.holds.remove('like')!.complete();
+      await frames(tester, 4);
+      expect(find.text('2.8万'), findsOneWidget);
+      expect(inCard(_bv, const ValueKey('big-card-liked')), findsOneWidget);
+      await frames(tester, 60);
+    });
+
+    testWidgets("back from the page, the resume point is kept only while the page still showed the card's part", (
+      tester,
+    ) async {
+      await show(tester);
+      await started(tester);
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 30);
+      navigator(tester).pop();
+      await frames(tester, 30);
+      expect(host(tester).positions, contains(_bv));
+
+      host(tester).positions.clear();
+      await started(tester);
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 30);
+      final page = tester.widget<VideoPage>(find.byType(VideoPage));
+      page.route.playback!.openOnPage(_bv, cid: 137649200);
+      await frames(tester, 20);
+      navigator(tester).pop();
+      await frames(tester, 30);
+      expect(host(tester).positions, isNot(contains(_bv)), reason: '选集 moved the page to the second part');
+    });
+
+    testWidgets('a tap before the inline player is in opens the page alone: the inline load is let go', (tester) async {
+      createGate = Completer<void>();
+      await show(tester);
+      await frames(tester, 10);
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 10);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.playback, isNull);
+      createGate!.complete();
+      await frames(tester, 30);
+      expect(services.playback.live, 1, reason: "the page's player only");
+    });
+
+    testWidgets("a player that can't start leaves the cover and its ▶, and a tap opens the page", (tester) async {
+      createError = StateError('no player');
+      await show(tester);
+      await frames(tester, 20);
+      expect(inCard(_bv, const ValueKey('big-card-play')), findsOneWidget);
+      expect(find.byType(PlayerLoading), findsNothing);
+      createError = null;
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 30);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.playback, isNull);
+    });
   });
 }

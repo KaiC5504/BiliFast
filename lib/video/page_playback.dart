@@ -252,9 +252,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   void _takeOver() {
     _inline = false;
     _session?.active = true;
-    _setAutoPictureInPicture(true);
     final controller = _controller;
-    if (controller != null) _quietly(() => controller.player.setMuted(_services.playback.muted), 'unmute');
+    if (controller == null) return;
+    controller.setAutoPictureInPicture(true, now: controller.phase == PlaybackPhase.playing);
+    _quietly(() => controller.player.setMuted(_services.playback.muted), 'unmute');
   }
 
   /// [page] left: the asks go nowhere until another page attaches.

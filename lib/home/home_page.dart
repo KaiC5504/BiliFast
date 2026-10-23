@@ -575,8 +575,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   bool _still = false;
   bool _ticking = true;
 
-  /// Which big card plays.
-  late final _inline = FeedInlineHost(viewport: _feedArea);
+  late final _inline = FeedInlineHost(viewport: _feedArea, pip: AppScope.of(context).pipKeeper);
 
   @override
   void initState() {

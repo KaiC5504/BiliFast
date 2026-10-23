@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/devlog.dart';
+import 'package:flutter/foundation.dart';
 
 /// A video page's playback as the keeper sees it ([PagePlayback]).
 abstract interface class KeptPlayback {
@@ -25,8 +26,8 @@ abstract interface class KeptPlayback {
 
 /// Keeps a closed video page's playback alive while the small window plays it (port of PiPKeeper.swift): the restore
 /// button pushes the page back on it, ✕ closes it, and another video starting releases it first. One per app, on
-/// AppServices.
-class PipKeeper {
+/// AppServices. It notifies when [showing] may have changed.
+class PipKeeper with ChangeNotifier {
   PipKeeper({this._restoreGrace = const Duration(seconds: 1), Logger? logger}) : _logger = logger ?? Logger.shared;
 
   final Duration _restoreGrace;
@@ -43,6 +44,9 @@ class PipKeeper {
   /// The kept playback the restore button asked for, until its page shows.
   KeptPlayback? get restoring => _restoring;
 
+  /// A page's video is in the small window, or kept for it: 推荐's big card plays nothing meanwhile.
+  bool get showing => _kept != null || _inPiP != null;
+
   /// A page left its stack: its playback is kept while the small window plays it, closed otherwise.
   void pageRemoved(KeptPlayback playback) {
     if (!playback.pipActive) {
@@ -54,6 +58,7 @@ class PipKeeper {
     _kept = playback;
     playback.keep();
     _logger.info(LogCategory.ui, 'pip kept', {'bvid': playback.bvid});
+    notifyListeners();
   }
 
   /// Every page reports here when it shows; the answer is whether it may resume its own playback. The kept playback
@@ -69,6 +74,7 @@ class PipKeeper {
       _grace = null;
       playback.returned();
       _logger.info(LogCategory.ui, 'pip restored', {'bvid': playback.bvid});
+      notifyListeners();
       return true;
     }
     if (opened) {
@@ -95,10 +101,16 @@ class PipKeeper {
     return true;
   }
 
-  void pipStarted(KeptPlayback playback) => _inPiP = playback;
+  void pipStarted(KeptPlayback playback) {
+    _inPiP = playback;
+    notifyListeners();
+  }
 
   void pipStopped(KeptPlayback playback) {
-    if (identical(_inPiP, playback)) _inPiP = null;
+    if (identical(_inPiP, playback)) {
+      _inPiP = null;
+      notifyListeners();
+    }
     if (!identical(_kept, playback)) return;
     if (!identical(_restoring, playback)) {
       release();
@@ -124,5 +136,6 @@ class PipKeeper {
     if (identical(_inPiP, playback)) _inPiP = null;
     _logger.info(LogCategory.ui, 'pip released', {'bvid': playback.bvid});
     playback.close();
+    notifyListeners();
   }
 }

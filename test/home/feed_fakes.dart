@@ -143,7 +143,14 @@ final class FeedHttp implements HTTPTransport {
 
 /// A big card (`large_cover_v9`) as the official feed's parser makes it, on the canned video's first part; [fullTitle]
 /// replaces the made-up one.
-FeedCard bigCard(String bvid, {int likes = 27999, bool showLikes = true, String title = '大卡片', String? fullTitle}) =>
+FeedCard bigCard(
+  String bvid, {
+  int likes = 27999,
+  bool showLikes = true,
+  bool liked = false,
+  String title = '大卡片',
+  String? fullTitle,
+}) =>
     FeedCard(
   aid: 80433022,
   bvid: bvid,
@@ -159,7 +166,7 @@ FeedCard bigCard(String bvid, {int likes = 27999, bool showLikes = true, String 
   isVertical: false,
   viewsText: '54.9万',
   danmakuText: '255',
-  big: FeedBig(likes: likes, showLikes: showLikes),
+  big: FeedBig(likes: likes, showLikes: showLikes, liked: liked),
 );
 
 /// A small card, as the web feed's.
