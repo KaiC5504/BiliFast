@@ -519,6 +519,9 @@ abstract final class BiliMetrics {
   static const verticalBadgeX = 9.0;
   static const verticalBadgeY = -18.0;
 
+  /// 竖屏's danmaku start this far under the top row: 118's first lane is centred at 331.5 px.
+  static const verticalDanmakuDrop = 1.0;
+
   /// The full-screen end screen, measured on 27.
   static const landscapeEndRule = 1.0;
   static const landscapeEndRow = 96.0;
@@ -837,6 +840,11 @@ abstract final class BiliMetrics {
   /// sizes them about by the player's height (22 × 247.5 / 440).
   static const danmakuFont = 12.5;
   static const danmakuFontFullScreen = 22.0;
+
+  /// 竖屏's danmaku are smaller than landscape's (118: CJK advances of 45.25 px, identical lines 69 px apart), and
+  /// run from under the top row over the black above the video, down to the video's bottom.
+  static const danmakuFontVertical = 15.0;
+  static const danmakuLaneVertical = 23.0;
   static const danmakuOutline = 1.0;
   static const danmakuPad = 1.0;
   static const danmakuOwnPadX = 5.0;
@@ -1546,6 +1554,30 @@ abstract final class VerticalActionTheme {
 
   /// The playing episode's title and bars in the light 选集 sheet: 19 draws them in 收藏's pink, not the app's.
   static const sheetPlaying = sheetPill;
+
+  /// Paused, 118's ▶ (the APK's `bili_player_play`, drawn at its file's 3× size) hangs from the video's centre line
+  /// at a quarter of its white, with the time [pausedTimeTop] below the picture's top in 16 pt white over a shade.
+  static const pausedPlayAsset = 'assets/images/player/paused_play.png';
+  static const pausedPlayWidth = 80.0;
+  static const pausedPlayHeight = 77.0;
+  static const pausedPlayOpacity = 0.25;
+  static const pausedTimeText = 16.0;
+  static const pausedTimeTop = 272 / 3;
+  static const pausedTimeShadowBlur = 3.0;
+
+  /// 118's 合集 line in place of the plain title: the layers glyph, 合集 · 第N集 in semibold, a 1 × 10 pt bar, then
+  /// the title. The glyph's 12 pt box starts 2.3 into the title's inset; its three layers are 1.3 pt lines. The dot
+  /// is a 2 pt one centred in 50 px between 合集 and 第N集.
+  static const collectionGlyph = 12.0;
+  static const collectionGlyphLead = 2.3;
+  static const collectionGlyphGap = 6.33;
+  static const collectionGlyphStroke = 1.3;
+  static const collectionDotRoom = 50 / 3;
+  static const collectionDot = 2.0;
+  static const collectionBarWidth = 1.0;
+  static const collectionBarHeight = 10.0;
+  static const collectionBarLead = 25 / 3;
+  static const collectionBarTrail = 20 / 3;
 }
 
 /// A comment row and its badges (10, 12, 13), measured at 3× on KaiC's phone. Heights count down from the row's top,

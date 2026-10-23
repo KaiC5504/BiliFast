@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../device/orientation.dart';
 import '../shared/theme.dart';
 import 'chrome_state.dart';
 import 'player_ui.dart';
@@ -14,7 +15,8 @@ import 'seek_bar.dart';
 
 /// The touch layer over the video, filling the player (port of BiliNative `PlayerGestureView.swift` and
 /// `ChromeState.swift`'s gestures): tap, double tap, hold for 2×, a sideways drag to seek, and in full screen
-/// up and down for brightness (left half) and volume (right half), with the screen edges left to the system.
+/// up and down for brightness (left half) and volume (right half), with the screen edges left to the system. In 竖屏
+/// the controls stay up, as in the official app: a tap plays or pauses at once and a double tap is two taps.
 class PlayerGestureLayer extends StatefulWidget {
   const PlayerGestureLayer({super.key, required this.ui});
 
@@ -147,7 +149,16 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
   bool _allowsDrag(PointerDownEvent event) => _allowsTouch(event) && !_inBackSwipeEdge(event.position);
 
-  void _singleTap() => _ui.chrome.toggle();
+  bool get _vertical => _ui.presentation == Presentation.vertical;
+
+  void _singleTap() {
+    if (_vertical) {
+      _ui.session.togglePlay();
+      _ui.chrome.show();
+    } else {
+      _ui.chrome.toggle();
+    }
+  }
 
   void _doubleTap() {
     _ui.session.togglePlay();
@@ -168,6 +179,10 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   }
 
   void _tapUp(TapUpDetails details) {
+    if (_vertical && !_secondTapDown) {
+      _singleTap();
+      return;
+    }
     if (_secondTapDown) {
       _secondTapDown = false;
       _firstTap = null;
@@ -195,9 +210,8 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     _holding = true;
     _ui.session.speedUp(true);
     unawaited(HapticFeedback.mediumImpact());
-    _ui.chrome
-      ..hide()
-      ..showHud(const SpeedUpHud());
+    if (!_vertical) _ui.chrome.hide();
+    _ui.chrome.showHud(const SpeedUpHud());
   }
 
   void _holdEnded() {
@@ -331,12 +345,12 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   @override
   Widget build(BuildContext context) {
     // RawGestureDetector gives the private recognisers no semantics, so VoiceOver and the Windows test driver need
-    // this node to show or hide the controls.
+    // this node to show or hide the controls (in 竖屏, to play or pause).
     return Semantics(
       container: true,
       button: true,
       label: '视频画面',
-      onTap: _ui.chrome.toggle,
+      onTap: _singleTap,
       child: _gestures(),
     );
   }

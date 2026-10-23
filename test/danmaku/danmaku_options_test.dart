@@ -58,7 +58,7 @@ final class Rig {
             wake: wake,
             sprites: sprites,
             settings: store,
-            fullScreen: true,
+            presentation: Presentation.landscape,
           ),
         ),
       ),
@@ -107,10 +107,40 @@ void main() {
   test('display() hands the store\'s values to the layer, sized for the presentation', () {
     const settings = DanmakuSettings(area: 0.25, opacity: 0.6, scale: 1.5, speed: 4);
     expect(
-      settings.display(fullScreen: true),
-      const DanmakuOptions(area: 0.25, opacity: 0.6, scale: 1.5, scrollDuration: 4, fullScreen: true),
+      settings.display(presentation: Presentation.landscape),
+      const DanmakuOptions(
+        area: 0.25,
+        opacity: 0.6,
+        scale: 1.5,
+        scrollDuration: 4,
+        presentation: Presentation.landscape,
+      ),
     );
-    expect(settings.display(fullScreen: false).fullScreen, isFalse);
+    expect(settings.display(presentation: Presentation.inline).fullScreen, isFalse);
+    expect(settings.display(presentation: Presentation.vertical).presentation, Presentation.vertical);
+  });
+
+  test('竖屏 draws them at the size 118 shows, 15 pt a character and lanes 23 apart; landscape keeps 22 pt, the '
+      'small player 12.5', () {
+    DanmakuScene laidOut(Presentation presentation) {
+      final timeline = DanmakuTimeline()
+        ..add([for (final text in ['今夕是何年', '快带上耳机', '首页通知书', '一二三四']) item(text, 4500, mode: 5)]);
+      final scene = DanmakuScene()..size = const Size(440, 422.5);
+      addTearDown(scene.dispose);
+      scene.step(5, timeline: timeline, options: DanmakuOptions(presentation: presentation));
+      return scene;
+    }
+
+    final vertical = laidOut(Presentation.vertical);
+    expect(vertical.laneHeight, BiliMetrics.danmakuLaneVertical);
+    final shown = {for (final danmaku in vertical.visible) danmaku.text: danmaku.rect};
+    expect(shown, hasLength(4));
+    expect(shown['今夕是何年']!.width - shown['一二三四']!.width, closeTo(BiliMetrics.danmakuFontVertical, 0.01));
+    final centres = [for (final text in ['今夕是何年', '快带上耳机', '首页通知书']) shown[text]!.center.dy]..sort();
+    expect(centres, [11.5, 34.5, 57.5], reason: '23 apart from the top of the area');
+
+    expect(laidOut(Presentation.landscape).laneHeight, closeTo(22 * BiliMetrics.danmakuLaneHeight, 0.01));
+    expect(laidOut(Presentation.inline).laneHeight, greaterThanOrEqualTo(12.5 * BiliMetrics.danmakuLaneHeight));
   });
 
   testWidgets('the layer follows the store, and nothing rebuilds per frame or for a change but 不透明度', (
@@ -129,7 +159,7 @@ void main() {
 
     rig.store.update(rig.store.value.copyWith(speed: 4, area: 1, scale: 1.2));
     await rig.run(tester, 0.5);
-    expect(rig.state(tester).options, rig.store.value.display(fullScreen: true));
+    expect(rig.state(tester).options, rig.store.value.display(presentation: Presentation.landscape));
     expect(painter(), same(first), reason: 'the scene takes these on its next step');
 
     rig.store.update(rig.store.value.copyWith(opacity: 0.4));
@@ -354,9 +384,9 @@ void main() {
     DanmakuOptions options() => tester.state<DanmakuLayerState>(find.byType(DanmakuLayer)).options;
 
     await show(Presentation.inline);
-    expect(options(), store.value.display(fullScreen: false));
+    expect(options(), store.value.display(presentation: Presentation.inline));
     await show(Presentation.landscape);
-    expect(options(), store.value.display(fullScreen: true));
+    expect(options(), store.value.display(presentation: Presentation.landscape));
 
     store.update(store.value.copyWith(scale: 1.3));
     await tester.pump();

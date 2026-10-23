@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../device/orientation.dart';
 import '../player/playback_clock.dart';
 import 'danmaku_pace.dart';
 import 'danmaku_scene.dart';
@@ -22,7 +23,7 @@ class DanmakuLayer extends StatefulWidget {
     this.enabled = true,
     this.options = const DanmakuOptions(),
     this.settings,
-    this.fullScreen = false,
+    this.presentation = Presentation.inline,
     this.sprites,
   });
 
@@ -32,9 +33,9 @@ class DanmakuLayer extends StatefulWidget {
   final bool enabled;
   final DanmakuOptions options;
 
-  /// The 弹幕设置 values, followed live in place of [options], for the presentation [fullScreen] says.
+  /// The 弹幕设置 values, followed live in place of [options], for [presentation].
   final ValueListenable<DanmakuSettings>? settings;
-  final bool fullScreen;
+  final Presentation presentation;
 
   /// Lays out the text; a test passes its own to count layouts.
   final DanmakuSprites? sprites;
@@ -61,7 +62,7 @@ class DanmakuLayerState extends State<DanmakuLayer> with SingleTickerProviderSta
 
   bool get _active => widget.enabled && widget.timeline != null;
 
-  DanmakuOptions _resolve() => widget.settings?.value.display(fullScreen: widget.fullScreen) ?? widget.options;
+  DanmakuOptions _resolve() => widget.settings?.value.display(presentation: widget.presentation) ?? widget.options;
 
   @override
   void initState() {

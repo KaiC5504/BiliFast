@@ -1,6 +1,7 @@
 import 'package:bili_core/danmaku.dart';
 import 'package:flutter/foundation.dart';
 
+import '../device/orientation.dart';
 import 'danmaku_scene.dart';
 
 /// The 弹幕设置 panel's values, kept for every video (BiliNative `DanmakuSettings.swift`). Whether danmaku show at all
@@ -42,12 +43,12 @@ final class DanmakuSettings {
 
   String get speedName => speedNames[speed.clamp(0, speedNames.length - 1)];
 
-  DanmakuOptions display({required bool fullScreen}) => DanmakuOptions(
+  DanmakuOptions display({required Presentation presentation}) => DanmakuOptions(
     area: area,
     opacity: opacity,
     scale: scale,
     scrollDuration: scrollDuration,
-    fullScreen: fullScreen,
+    presentation: presentation,
   );
 
   DanmakuSettings copyWith({double? area, double? opacity, double? scale, int? speed, DanmakuFilterOptions? filter}) =>

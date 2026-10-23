@@ -15,9 +15,16 @@ enum SeekBarStyle {
   tv,
 
   /// 竖屏 full screen, as 09 shows: a white played part and a small dot, no buffered part.
-  dot;
+  dot,
 
+  /// 竖屏 paused, as 118 shows: the dot's track and travel, the played part pink and the TV over its end.
+  pausedDot;
+
+  /// How much of the bar the thumb keeps from its travel.
   double get thumbWidth => this == tv ? BiliMetrics.thumbWidth : BiliMetrics.verticalDot;
+
+  /// Draws the TV for its thumb.
+  bool get face => this != dot;
 }
 
 /// The seek bar (port of BiliNative `ProgressBar.swift`): played in pink, buffered in white at 40%, the rest at 20%, a
@@ -206,7 +213,7 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
   }
 
   void _awaitFaces() {
-    if (widget.style != SeekBarStyle.tv || _TvFaces.loaded != null) return;
+    if (!widget.style.face || _TvFaces.loaded != null) return;
     _TvFaces.load().then((_) {
       if (mounted) setState(() {});
     });
@@ -282,7 +289,7 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
     // A touch before the eyes are back stops them, and the blink with them: the future never completes.
     _eyes.animateTo(SeekBar.eyesAtRest, duration: planned).then((_) {
       final faces = _TvFaces.loaded;
-      if (!blink || !mounted || faces == null || widget.style != SeekBarStyle.tv) return;
+      if (!blink || !mounted || faces == null || !widget.style.face) return;
       final from = _glideFrom;
       if (from != null && WidgetsBinding.instance.currentFrameTimeStamp - from > planned + SeekBar._eyesLate) return;
       _blink.duration = faces.blinkDuration;
@@ -525,6 +532,7 @@ class _SeekBarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final tv = style == SeekBarStyle.tv;
+    final dot = style == SeekBarStyle.dot;
     final thumbWidth = style.thumbWidth;
     final width = size.width;
     final travel = math.max(width - thumbWidth, 1.0);
@@ -533,7 +541,7 @@ class _SeekBarPainter extends CustomPainter {
     final bufferedTo = math.min(math.max(travel * _fraction(buffered(), duration) + thumbWidth / 2, playedTo), width);
 
     final grown = drag.value;
-    final held = tv ? BiliMetrics.tvBarDragHeight : BiliMetrics.barDragHeight;
+    final held = style.face ? BiliMetrics.tvBarDragHeight : BiliMetrics.barDragHeight;
     final barHeight = lerpDouble(BiliMetrics.barHeight, held, grown.clamp(0.0, 1.0))!;
     final top = (size.height - barHeight) / 2;
     final radius = Radius.circular(barHeight / 2);
@@ -542,7 +550,7 @@ class _SeekBarPainter extends CustomPainter {
     if (tv) canvas.drawRRect(capsule(bufferedTo), Paint()..color = BiliColors.chromeBuffered);
     canvas.drawRRect(
       capsule(math.max(playedTo, 0)),
-      Paint()..color = tv ? BiliColors.pink : BiliColors.verticalPlayed,
+      Paint()..color = dot ? BiliColors.verticalPlayed : BiliColors.pink,
     );
 
     if (duration > 0) {
@@ -556,7 +564,7 @@ class _SeekBarPainter extends CustomPainter {
 
     final centre = Offset(playedTo, size.height / 2);
     final faces = this.faces;
-    if (!tv) {
+    if (dot) {
       final diameter = lerpDouble(BiliMetrics.verticalDot, BiliMetrics.verticalDotDragging, grown)!;
       canvas.drawCircle(centre, diameter / 2, Paint()..color = BiliColors.verticalThumb);
     } else if (faces == null) {
@@ -565,7 +573,7 @@ class _SeekBarPainter extends CustomPainter {
       final blinking = blink.status == AnimationStatus.forward;
       faces.draw(
         canvas,
-        Rect.fromCenter(center: centre, width: thumbWidth, height: BiliMetrics.thumbHeight),
+        Rect.fromCenter(center: centre, width: BiliMetrics.thumbWidth, height: BiliMetrics.thumbHeight),
         progress: blinking ? blink.value : eyes.value,
         blinking: blinking,
       );

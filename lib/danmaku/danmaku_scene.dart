@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:bili_core/danmaku.dart';
 import 'package:flutter/foundation.dart';
 
+import '../device/orientation.dart';
 import '../shared/theme.dart';
 import 'danmaku_sprites.dart';
 
@@ -16,7 +17,7 @@ final class DanmakuOptions {
     this.opacity = 1,
     this.scale = 1,
     this.scrollDuration = 7,
-    this.fullScreen = false,
+    this.presentation = Presentation.inline,
   });
 
   /// Share of the video's height the lanes may use.
@@ -26,7 +27,11 @@ final class DanmakuOptions {
 
   /// Seconds a scrolling danmaku takes to cross the screen.
   final double scrollDuration;
-  final bool fullScreen;
+
+  /// The player they fly over: the small player, landscape and 竖屏 each size them their own way.
+  final Presentation presentation;
+
+  bool get fullScreen => presentation.fullScreen;
 
   @override
   bool operator ==(Object other) =>
@@ -35,10 +40,10 @@ final class DanmakuOptions {
       other.opacity == opacity &&
       other.scale == scale &&
       other.scrollDuration == scrollDuration &&
-      other.fullScreen == fullScreen;
+      other.presentation == presentation;
 
   @override
-  int get hashCode => Object.hash(area, opacity, scale, scrollDuration, fullScreen);
+  int get hashCode => Object.hash(area, opacity, scale, scrollDuration, presentation);
 }
 
 /// A danmaku on screen and where it is (tests).
@@ -175,7 +180,7 @@ final class DanmakuScene extends ChangeNotifier {
   Set<DisplayDanmaku> _waiting = const {};
   double _shownUntil = 0;
 
-  (Size, bool, double, double)? _geometry;
+  (Size, Presentation, double, double)? _geometry;
   int _lanes = 0;
   double _laneHeight = 0;
   double _basePointSize = BiliMetrics.danmakuFont;
@@ -237,10 +242,10 @@ final class DanmakuScene extends ChangeNotifier {
     }
     var relay = jumped;
     var scaled = false;
-    final geometry = (size, options.fullScreen, options.area, options.scale);
+    final geometry = (size, options.presentation, options.area, options.scale);
     if (geometry != _geometry) {
       final old = _geometry;
-      scaled = !jumped && old != null && old.$1 == size && old.$2 == options.fullScreen && old.$3 == options.area;
+      scaled = !jumped && old != null && old.$1 == size && old.$2 == options.presentation && old.$3 == options.area;
       _geometry = geometry;
       _configure(options);
       relay = true;
@@ -302,13 +307,22 @@ final class DanmakuScene extends ChangeNotifier {
   }
 
   void _configure(DanmakuOptions options) {
+    final vertical = options.presentation == Presentation.vertical;
     _basePointSize =
-        options.scale * (options.fullScreen ? BiliMetrics.danmakuFontFullScreen : BiliMetrics.danmakuFont);
-    final lineHeight = sprites.lineHeight(_basePointSize);
-    // Tiny fonts: the outline and own box padding must still fit, or neighbouring lanes would touch.
+        options.scale *
+        switch (options.presentation) {
+          Presentation.inline => BiliMetrics.danmakuFont,
+          Presentation.landscape => BiliMetrics.danmakuFontFullScreen,
+          Presentation.vertical => BiliMetrics.danmakuFontVertical,
+        };
+    // Tiny fonts: the outline and own box padding must still fit, or neighbouring lanes would touch. 竖屏's lanes are
+    // tighter than PingFang's line (118), so there only the glyphs' em must.
+    final fits = vertical
+        ? _basePointSize + (BiliMetrics.danmakuOutline + BiliMetrics.danmakuOwnPadY) * 2
+        : sprites.lineHeight(_basePointSize).ceilToDouble() + BiliMetrics.danmakuOwnPadY * 2;
     _laneHeight = math.max(
-      _basePointSize * BiliMetrics.danmakuLaneHeight,
-      lineHeight.ceilToDouble() + BiliMetrics.danmakuOwnPadY * 2,
+      vertical ? options.scale * BiliMetrics.danmakuLaneVertical : _basePointSize * BiliMetrics.danmakuLaneHeight,
+      fits,
     );
     _lanes = _laneHeight > 0 ? math.max((size.height * options.area / _laneHeight).floor(), 0) : 0;
   }

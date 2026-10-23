@@ -1,10 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:bili_core/api.dart' show UploaderCard, VideoDetail;
-import 'package:bili_core/logic.dart' show CountFormat;
+import 'package:bili_core/logic.dart' show CountFormat, TimeFormat;
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
+import '../player/bili_player.dart' show PlayerStatus;
 import '../shared/action_glyphs.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -19,7 +20,9 @@ import 'seek_bar.dart';
 /// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back, N人正在看 and ⋮ at
 /// the top, the action column down the right, the uploader with 粉丝 and 关注, the title and its plays over the bar,
 /// then the 发弹幕 field with the 弹 toggle, 详情页 and 横屏全屏. The search button and the search row have their room
-/// kept so nothing else moves when they come; so does whatever the page details haven't brought yet.
+/// kept so nothing else moves when they come; so does whatever the page details haven't brought yet. As in the official
+/// app they stay up, hiding only for a panel or an action overlay; paused, the bar carries the TV and 118's ▶ and the
+/// time sit over the video.
 class VerticalChrome extends StatelessWidget {
   const VerticalChrome({super.key, required this.ui});
 
@@ -42,9 +45,17 @@ class VerticalChrome extends StatelessWidget {
     final insets = MediaQuery.paddingOf(context);
     final bottom = math.max(insets.bottom - BiliMetrics.verticalBottomDrop, 0.0);
     return ListenableBuilder(
-      listenable: Listenable.merge([ui.chrome, ui.panels, ui.session, ui.danmaku, ui.replyCount]),
+      listenable: Listenable.merge([
+        ui.panels,
+        ui.session,
+        ui.session.readout.status,
+        ui.danmaku,
+        ui.replyCount,
+        ui.overlay,
+      ]),
       builder: (context, _) {
-        final shown = ui.chrome.visible && ui.panels.value == null;
+        final shown = ui.panels.value == null && ui.overlay?.value == null;
+        final paused = ui.session.readout.status.value == PlayerStatus.paused;
         return IgnorePointer(
           key: const ValueKey('vertical-chrome'),
           ignoring: !shown,
@@ -53,6 +64,7 @@ class VerticalChrome extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
+                _PausedPlay(ui: ui, paused: paused, shown: shown),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -66,7 +78,7 @@ class VerticalChrome extends StatelessWidget {
                   child: ChromeSlide(
                     shown: shown,
                     from: const Offset(0, BiliMetrics.chromeSlide / 2),
-                    child: _bottom(),
+                    child: _bottom(paused: paused),
                   ),
                 ),
                 if (ui.details case final details?)
@@ -124,9 +136,10 @@ class VerticalChrome extends StatelessWidget {
     ],
   );
 
-  Widget _bottom() {
+  Widget _bottom({required bool paused}) {
     final session = ui.session;
     final detail = session.detail;
+    final episode = _collectionEpisode();
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -140,8 +153,9 @@ class VerticalChrome extends StatelessWidget {
           padding: const EdgeInsets.only(left: BiliMetrics.verticalInfoInset, right: BiliMetrics.verticalColumnRoom),
           child: Text.rich(
             TextSpan(
-              text: session.title,
               children: [
+                if (episode != null) ..._collection(episode),
+                TextSpan(text: session.title),
                 if (detail != null) ...[
                   const WidgetSpan(child: SizedBox(width: BiliMetrics.verticalViewsGap)),
                   TextSpan(
@@ -186,7 +200,7 @@ class VerticalChrome extends StatelessWidget {
                 key: const ValueKey('vertical-bar'),
                 ui: ui,
                 repaint: FullScreenSeekBar.repaintOf(ui),
-                style: SeekBarStyle.dot,
+                style: paused ? SeekBarStyle.pausedDot : SeekBarStyle.dot,
               ),
             ),
           ),
@@ -218,6 +232,59 @@ class VerticalChrome extends StatelessWidget {
       ],
     );
   }
+
+  /// The playing video's place in its 合集 (from 1), when it is in one; null for parts or a video on its own.
+  int? _collectionEpisode() {
+    final session = ui.session;
+    if (session.detail?.season == null || session.episodesAreParts) return null;
+    final index = session.episodes.indexWhere((episode) => episode.current);
+    return index < 0 ? null : index + 1;
+  }
+
+  /// 118's 合集 · 第N集 and the bar before the title.
+  static List<InlineSpan> _collection(int episode) => [
+    const WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: VerticalActionTheme.collectionGlyphLead,
+          right: VerticalActionTheme.collectionGlyphGap,
+        ),
+        child: CustomPaint(
+          size: Size.square(VerticalActionTheme.collectionGlyph),
+          painter: _LayersPainter(),
+        ),
+      ),
+    ),
+    const TextSpan(text: '合集', style: TextStyle(fontWeight: FontWeight.w600)),
+    const WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: SizedBox(
+        width: VerticalActionTheme.collectionDotRoom,
+        child: Center(
+          child: SizedBox.square(
+            dimension: VerticalActionTheme.collectionDot,
+            child: DecoratedBox(decoration: ShapeDecoration(color: BiliColors.onVideo, shape: CircleBorder())),
+          ),
+        ),
+      ),
+    ),
+    TextSpan(text: '第$episode集', style: const TextStyle(fontWeight: FontWeight.w600)),
+    const WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: VerticalActionTheme.collectionBarLead,
+          right: VerticalActionTheme.collectionBarTrail,
+        ),
+        child: SizedBox(
+          width: VerticalActionTheme.collectionBarWidth,
+          height: VerticalActionTheme.collectionBarHeight,
+          child: ColoredBox(color: BiliColors.onVideo),
+        ),
+      ),
+    ),
+  ];
 
   /// The dark capsule of 09's 发弹幕 field, with the 弹 toggle at its right end. With danmaku off it reads 已关闭弹幕
   /// (35), with the uploader's closed UP主已关闭弹幕, and either way opens nothing.
@@ -824,6 +891,121 @@ Paint _stroke(double width) => Paint()
   ..strokeCap = StrokeCap.round
   ..strokeJoin = StrokeJoin.round
   ..color = BiliColors.onVideo;
+
+/// 118's ▶ over the paused video, hanging from its centre line, with the time under it among the controls. A tap on it
+/// plays, as one anywhere on the video does.
+class _PausedPlay extends StatelessWidget {
+  const _PausedPlay({required this.ui, required this.paused, required this.shown});
+
+  final PlayerUi ui;
+  final bool paused;
+  final bool shown;
+
+  static TextStyle get _timeStyle => fullScreenText.merge(
+    const TextStyle(
+      color: BiliColors.onVideo,
+      fontSize: VerticalActionTheme.pausedTimeText,
+      fontWeight: FontWeight.w600,
+      height: 1,
+      fontFeatures: [FontFeature.tabularFigures()],
+      shadows: [Shadow(color: BiliColors.chromeShade, blurRadius: VerticalActionTheme.pausedTimeShadowBlur)],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!paused) return const SizedBox.shrink();
+    final session = ui.session;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final centre = session.isVertical ? 0.5 : BiliMetrics.verticalVideoCentre;
+        final top = constraints.maxHeight * centre;
+        return Stack(
+          children: [
+            Positioned(
+              top: top,
+              left: (constraints.maxWidth - VerticalActionTheme.pausedPlayWidth) / 2,
+              child: Semantics(
+                key: const ValueKey('vertical-paused-play'),
+                button: true,
+                label: '播放',
+                onTap: session.togglePlay,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: session.togglePlay,
+                  child: Image.asset(
+                    VerticalActionTheme.pausedPlayAsset,
+                    width: VerticalActionTheme.pausedPlayWidth,
+                    height: VerticalActionTheme.pausedPlayHeight,
+                    opacity: const AlwaysStoppedAnimation(VerticalActionTheme.pausedPlayOpacity),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: top + VerticalActionTheme.pausedTimeTop,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: ChromeSlide(
+                  shown: shown,
+                  from: Offset.zero,
+                  child: ListenableBuilder(
+                    listenable: FullScreenSeekBar.repaintOf(ui),
+                    builder: (context, _) => Text(
+                      '${TimeFormat.clock(session.position)} / ${TimeFormat.clock(session.duration.value)}',
+                      key: const ValueKey('vertical-paused-time'),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: _timeStyle,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 118's 合集 glyph: a diamond with two more layers under it, each a chevron.
+class _LayersPainter extends CustomPainter {
+  const _LayersPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const inset = VerticalActionTheme.collectionGlyphStroke / 2;
+    final w = size.width, h = size.height;
+    final paint = _stroke(VerticalActionTheme.collectionGlyphStroke);
+    final mid = w / 2;
+    // Traced off 118 at 3x: the diamond from 0 to 0.47 with its sides at 0.24, the layers 0.25 and 0.45 lower.
+    final top = inset, side = h * 0.24, bottom = h * 0.47;
+    canvas.drawPath(
+      Path()
+        ..moveTo(mid, top)
+        ..lineTo(w - inset, side)
+        ..lineTo(mid, bottom)
+        ..lineTo(inset, side)
+        ..close(),
+      paint,
+    );
+    for (final drop in [h * 0.25, h * 0.45]) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(inset, side + drop)
+          ..lineTo(mid, math.min(bottom + drop, h - inset))
+          ..lineTo(w - inset, side + drop),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LayersPainter oldDelegate) => false;
+}
 
 /// The ⌄ after the plays.
 class _ChevronDownPainter extends CustomPainter {

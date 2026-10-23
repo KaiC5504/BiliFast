@@ -997,6 +997,33 @@ void main() {
       await back(tester);
     });
 
+    testWidgets('in 竖屏 the controls never hide by themselves, and a closed panel leaves them up (118)', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester, vertical: true);
+      await rotate(tester, Presentation.vertical);
+      final chrome = ui(tester).chrome;
+      final panels = ui(tester).panels;
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await tester.pump();
+      expect(chrome.autoHide, isFalse);
+      await tester.pump(chrome.hideDelay * 2);
+      expect(chrome.visible, isTrue);
+
+      for (final panel in PlayerPanel.values) {
+        panels.open(panel);
+        await tester.pump();
+        panels.close();
+        await tester.pump();
+        expect(chrome.visible, isTrue, reason: '$panel');
+      }
+
+      await rotate(tester, Presentation.landscape);
+      expect(chrome.autoHide, isTrue, reason: 'landscape hides them again');
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
     testWidgets('two stacked pages: the latest begin wins and the page below takes the orientation back',
         (tester) async {
       await host(tester);
@@ -1650,20 +1677,25 @@ void main() {
       await back(tester);
     });
 
-    testWidgets('the danmaku keep below the status bar in 竖屏, as inline and in landscape', (tester) async {
+    testWidgets('the danmaku keep below the status bar, and in 竖屏 below the top row down to the video bottom (118)',
+        (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
       await opened(tester, vertical: true);
       double top() => tester.getRect(find.byType(DanmakuLayer)).top;
+      double bottom() => tester.getRect(find.byType(DanmakuLayer)).bottom;
       expect(top(), 62, reason: 'inline: under the status bar band, at the top of the player');
       await rotate(tester, Presentation.vertical);
       expect(tester.getRect(find.byKey(const ValueKey('fake-video'))).top, 0, reason: 'the video runs under it');
-      expect(top(), 62);
+      // 62 for the island, less the top row's 8 pt lift, then its 44 pt row and the 1 pt 118 leaves under it.
+      expect(top(), 99);
+      expect(bottom(), 956, reason: 'a vertical video fills the screen');
       sessions.single
         ..isVertical = false
         ..changed();
       await tester.pump();
-      expect(top(), 62, reason: 'a landscape video in 竖屏 too');
+      expect(top(), 99, reason: 'a landscape video in 竖屏 too: over the black above it, as on 118');
+      expect(bottom(), closeTo(956 * BiliMetrics.verticalVideoCentre + 440 / BiliMetrics.videoAspect / 2, 0.01));
       await rotate(tester, Presentation.landscape);
       expect(top(), 0);
       await rotate(tester, Presentation.inline);

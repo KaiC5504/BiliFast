@@ -19,3 +19,7 @@ APK, which KaiC downloaded for them (2026-10-21): `indicatorFrame1-4.webp` of it
 `images/card/stat_play.png` and `stat_danmaku.png` (the 推荐 card's play and danmaku counts) its
 `ic_vector_pegasus_play_count` and `ic_vector_pegasus_danmaku_count`: each drawn white at 3×, cut to its ink and
 sized as KaiC's iPhone recording shows it (39 × 36.33 pt and 13.33 × 11.33 pt), drawn tinted.
+
+`images/player/paused_play.png` (竖屏's ▶ over the paused video, 118) is the same APK's `bili_player_play` (xxhdpi),
+unchanged: a white 小电视 with the ▶ cut out. KaiC's iPhone draws it at the file's own 3× size (80 × 77 pt; its body
+68 pt wide, as on 118) at a quarter of its white, so the video shows through.

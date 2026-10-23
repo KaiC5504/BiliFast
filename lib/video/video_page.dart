@@ -702,8 +702,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     session.addListener(_sessionChanged);
     session.readout.status.addListener(_syncCollapse);
     _dataWait = PlayerWait(session.readout.status)..active = !_covered;
-    _autoHideInputs = Listenable.merge([session.readout.status, session.scrubbing, _panels, _overlays, danmaku.sendOpen])
-      ..addListener(_syncAutoHide);
+    _autoHideInputs = Listenable.merge([
+      session.readout.status,
+      session.scrubbing,
+      _panels,
+      _overlays,
+      danmaku.sendOpen,
+      _laidOut,
+    ])..addListener(_syncAutoHide);
     _syncAutoHide();
     if (follow) _sessionChanged();
   }
@@ -908,7 +914,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final controller = _controller;
     if (session == null || controller == null) return;
     // Another part opening on the page keeps the last one's status until its own load starts, so the phase counts.
+    // 竖屏's controls never hide by themselves.
     _chrome.autoHide = _attached &&
+        _laidOut.value != Presentation.vertical &&
         controller.phase == PlaybackPhase.playing &&
         session.readout.wantsPlay &&
         session.scrubbing.value == null &&
@@ -962,8 +970,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _panelChanged() {
     final closed = _openPanel;
     _openPanel = _panels.value;
-    // A panel closed, by a pick, a tap outside or back, goes back to the bare video, as the official app does (KaiC).
-    if (_openPanel == null && closed != null) _chrome.hide();
+    // A panel closed, by a pick, a tap outside or back, goes back to the bare video, as the official app does (KaiC);
+    // in 竖屏, where the controls stay up, back to them.
+    if (_openPanel == null && closed != null && _laidOut.value != Presentation.vertical) _chrome.hide();
     if (mounted) setState(() {});
   }
 

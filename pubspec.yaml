@@ -49,6 +49,7 @@ flutter:
     - assets/images/noface.jpeg
     - assets/images/loading/
     - assets/images/card/
+    - assets/images/player/
     - assets/lottie/
   fonts:
     - family: MiSans

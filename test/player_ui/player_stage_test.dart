@@ -5,6 +5,7 @@ import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/danmaku/danmaku_scene.dart';
 import 'package:bilifast/danmaku/danmaku_settings.dart';
 import 'package:bilifast/danmaku/danmaku_settings_store.dart';
+import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
@@ -435,7 +436,7 @@ void main() {
 
     final store = DanmakuSettingsStore.memory(const DanmakuSettings(area: 0.75, opacity: 0.5, scale: 0.8, speed: 1));
     await rig.mount(tester, danmaku: DanmakuTimeline(), settings: store);
-    expect(options(), store.value.display(fullScreen: false));
+    expect(options(), store.value.display(presentation: Presentation.inline));
     store.update(store.value.copyWith(speed: 3));
     await tester.pump();
     expect(options().scrollDuration, 5.5);

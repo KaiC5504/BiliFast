@@ -6,13 +6,16 @@ import 'package:bilifast/danmaku/danmaku_session.dart';
 import 'package:bilifast/danmaku/danmaku_settings_store.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/playback/danmaku_feed.dart';
+import 'package:bilifast/player/bili_player.dart' show PlayerStatus, StatusChanged;
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/player_ui/seek_bar.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:bilifast/video/player_session.dart' show Episode;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
@@ -48,6 +51,9 @@ final class Rig {
   /// Set before [mount]: 评论's count as the page's tab row has it.
   ValueNotifier<int?>? replyCount;
 
+  /// Set before [mount]: the page's action overlay.
+  ValueNotifier<Object?>? overlay;
+
   late final ui = PlayerUi(
     session: session,
     chrome: chrome,
@@ -59,6 +65,7 @@ final class Rig {
     onComments: () => comments += 1,
     danmaku: danmaku?.session,
     replyCount: replyCount,
+    overlay: overlay,
   );
 
   Future<void> mount(WidgetTester tester, {bool still = false}) async {
@@ -365,26 +372,42 @@ void main() {
     expect(rig.chrome.shows, 1);
   });
 
-  testWidgets('hidden controls fade out and take no touches; a panel hides them too', (tester) async {
-    final rig = Rig();
+  testWidgets('the controls stay up whatever the chrome says; a panel or an action overlay fades them out and takes '
+      'their touches', (tester) async {
+    final overlay = ValueNotifier<Object?>(null);
+    addTearDown(overlay.dispose);
+    final rig = Rig()..overlay = overlay;
     await rig.mount(tester);
     final root = find.byKey(const ValueKey('vertical-chrome'));
+    List<double> fades() => [
+      for (final fade in tester.widgetList<AnimatedOpacity>(
+        find.descendant(of: root, matching: find.byType(AnimatedOpacity)),
+      ))
+        fade.opacity,
+    ];
 
     rig.chrome.hide();
     await tester.pumpAndSettle();
-    expect(tester.widget<IgnorePointer>(root).ignoring, isTrue);
-    final fades = tester.widgetList<AnimatedOpacity>(find.descendant(of: root, matching: find.byType(AnimatedOpacity)));
-    expect(fades.map((fade) => fade.opacity), everyElement(0));
-    await tester.tap(find.byKey(const ValueKey('vertical-detail')), warnIfMissed: false);
-    expect(rig.orientation.presentation, Presentation.vertical);
-
-    rig.chrome.show();
-    await tester.pumpAndSettle();
     expect(tester.widget<IgnorePointer>(root).ignoring, isFalse);
+    expect(fades(), everyElement(1));
 
     rig.panels.open(PlayerPanel.more);
     await tester.pumpAndSettle();
     expect(tester.widget<IgnorePointer>(root).ignoring, isTrue);
+    expect(fades(), everyElement(0));
+    await tester.tap(find.byKey(const ValueKey('vertical-detail')), warnIfMissed: false);
+    expect(rig.orientation.presentation, Presentation.vertical);
+
+    rig.panels.close();
+    await tester.pumpAndSettle();
+    expect(tester.widget<IgnorePointer>(root).ignoring, isFalse);
+
+    overlay.value = Object();
+    await tester.pumpAndSettle();
+    expect(tester.widget<IgnorePointer>(root).ignoring, isTrue);
+    overlay.value = null;
+    await tester.pumpAndSettle();
+    expect(tester.widget<IgnorePointer>(root).ignoring, isFalse);
   });
 
   group('the page details (09)', () {
@@ -741,16 +764,141 @@ void main() {
       expect(textColour(tester, find.byKey(const ValueKey('vertical-name'))), BiliColors.onVideo);
     });
 
-    testWidgets('hidden controls take the column and 关注 with them', (tester) async {
+    testWidgets('a panel takes the column and 关注 with the rest', (tester) async {
       final rig = rig09();
       await rig.mount(tester);
       await tester.pumpAndSettle();
 
-      rig.chrome.hide();
+      rig.panels.open(PlayerPanel.more);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('vertical-like')), warnIfMissed: false);
       await tester.tap(find.byKey(const ValueKey('vertical-follow')), warnIfMissed: false);
       expect(actionsOf(rig).calls, isEmpty);
+    });
+  });
+
+  group('paused (118)', () {
+    void status(Rig rig, PlayerStatus status) => rig.session.player.emit(StatusChanged(status));
+
+    SeekBarStyle barStyle(WidgetTester tester) => tester
+        .widget<SeekBar>(find.descendant(of: find.byKey(const ValueKey('vertical-bar')), matching: find.byType(SeekBar)))
+        .style;
+
+    testWidgets('the bar carries the TV only while paused; playing, it is 09\'s dot', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      status(rig, PlayerStatus.playing);
+      await tester.pump();
+      expect(barStyle(tester), SeekBarStyle.dot);
+
+      status(rig, PlayerStatus.paused);
+      await tester.pump();
+      expect(barStyle(tester), SeekBarStyle.pausedDot);
+      expect(SeekBarStyle.pausedDot.face, isTrue);
+      expect(SeekBarStyle.pausedDot.thumbWidth, SeekBarStyle.dot.thumbWidth, reason: 'the played end stays put');
+
+      status(rig, PlayerStatus.buffering);
+      await tester.pump();
+      expect(barStyle(tester), SeekBarStyle.dot);
+    });
+
+    testWidgets('the ▶ and the time show only while paused, the ▶ hanging from the video\'s centre line', (
+      tester,
+    ) async {
+      final rig = Rig();
+      rig.session.duration.value = 62;
+      rig.session.clock.jump(5.4);
+      await rig.mount(tester);
+      final play = find.byKey(const ValueKey('vertical-paused-play'));
+      final time = find.byKey(const ValueKey('vertical-paused-time'));
+      status(rig, PlayerStatus.playing);
+      await tester.pump();
+      expect(play, findsNothing);
+      expect(time, findsNothing);
+
+      status(rig, PlayerStatus.paused);
+      await tester.pump();
+      expect(play, findsOneWidget);
+      expect(find.text('00:05 / 01:02'), findsOneWidget);
+      final glyph = tester.getRect(find.descendant(of: play, matching: find.byType(Image)));
+      expect(glyph.size, const Size(80, 77));
+      expect(glyph.center.dx, 220);
+      expect(glyph.top, closeTo(956 * BiliMetrics.verticalVideoCentre, 0.01));
+      final image = tester.widget<Image>(find.descendant(of: play, matching: find.byType(Image)));
+      expect((image.image as AssetImage).assetName, VerticalActionTheme.pausedPlayAsset);
+      expect(image.opacity!.value, VerticalActionTheme.pausedPlayOpacity);
+
+      rig.session
+        ..isVertical = true
+        ..changed();
+      await tester.pump();
+      expect(tester.getRect(find.descendant(of: play, matching: find.byType(Image))).top, 478, reason: 'its centre');
+
+      status(rig, PlayerStatus.ended);
+      await tester.pump();
+      expect(play, findsNothing);
+    });
+
+    testWidgets('a tap on the ▶ plays; it answers an accessibility press too', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      status(rig, PlayerStatus.paused);
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('vertical-paused-play')));
+      expect(rig.session.calls, ['togglePlay']);
+      tester.semantics.tap(find.semantics.byLabel('播放'));
+      expect(rig.session.calls, ['togglePlay', 'togglePlay']);
+    });
+
+    testWidgets('a panel takes the time with the controls; the ▶ stays', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      status(rig, PlayerStatus.paused);
+      await tester.pump();
+      rig.panels.open(PlayerPanel.more);
+      await tester.pumpAndSettle();
+      final fade = tester.widget<AnimatedOpacity>(
+        find.ancestor(of: find.byKey(const ValueKey('vertical-paused-time')), matching: find.byType(AnimatedOpacity)),
+      );
+      expect(fade.opacity, 0);
+      expect(find.byKey(const ValueKey('vertical-paused-play')), findsOneWidget);
+    });
+  });
+
+  group('合集 (118)', () {
+    Episode episode(int i, {bool current = false}) => Episode(bvid: 'BV$i', cid: i, title: '第$i集', current: current);
+
+    VideoDetail inCollection() => VideoDetail.fromJson({
+      'bvid': 'BV18',
+      'title': '“没错，你触发保底了”',
+      'owner': {'mid': 1, 'name': '小小小小小小小流萤', 'face': ''},
+      'stat': {'view': 34000},
+      'ugc_season': {'id': 1, 'title': '合集', 'sections': <Object>[]},
+    });
+
+    testWidgets('a video in a 合集 reads 合集 · 第N集 and a bar before its title', (tester) async {
+      final rig = Rig()
+        ..session.title = '“没错，你触发保底了”'
+        ..session.detail = inCollection()
+        ..session.episodesAreParts = false
+        ..session.episodes = [for (var i = 1; i <= 20; i++) episode(i, current: i == 18)];
+      await rig.mount(tester);
+      final title = find.byKey(const ValueKey('vertical-title'));
+      final text = tester.renderObject<RenderParagraph>(title).text.toPlainText();
+      expect(text.indexOf('合集'), lessThan(text.indexOf('第18集')));
+      expect(text.indexOf('第18集'), lessThan(text.indexOf('“没错，你触发保底了”')));
+      expect(text, contains('3.4万播放'));
+    });
+
+    testWidgets('parts, or a video on its own, keep the plain title', (tester) async {
+      final rig = Rig()
+        ..session.title = '【VIT赛后】我们接受了LOUD的回溯！！'
+        ..session.detail = detail()
+        ..session.episodes = [episode(1, current: true), episode(2)];
+      await rig.mount(tester);
+      final title = find.byKey(const ValueKey('vertical-title'));
+      final text = tester.renderObject<RenderParagraph>(title).text.toPlainText();
+      expect(text, isNot(contains('合集')));
     });
   });
 }

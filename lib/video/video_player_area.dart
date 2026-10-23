@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -131,14 +133,12 @@ class VideoPlayerArea extends StatelessWidget {
               children: [
                 KeyedSubtree(key: const ValueKey('video-view'), child: video),
                 if (session != null)
-                  // 竖屏's video runs under the status bar; its danmaku start below it.
                   _unseen(
                     turn != null,
-                    SafeArea(
+                    _DanmakuArea(
                       key: const ValueKey('video-danmaku-area'),
-                      left: false,
-                      right: false,
-                      bottom: false,
+                      vertical: presentation == Presentation.vertical,
+                      videoIsVertical: session.isVertical,
                       child: ClipRect(
                         clipBehavior: shrunk ? Clip.hardEdge : Clip.none,
                         child: _Pinned(
@@ -155,7 +155,7 @@ class VideoPlayerArea extends StatelessWidget {
                               enabled: session.danmakuOn && !ended,
                               wake: session.readout.any,
                               settings: ui?.danmaku?.settings,
-                              fullScreen: presentation.fullScreen,
+                              presentation: presentation,
                             ),
                           ),
                         ),
@@ -295,6 +295,36 @@ class VideoPlayerArea extends StatelessWidget {
       },
     ),
   };
+}
+
+/// Where the danmaku fly: below the status bar, and in 竖屏 from under the top row to the video's bottom, over the
+/// black above a landscape video as 118 shows, clear of the uploader and the title below it.
+class _DanmakuArea extends StatelessWidget {
+  const _DanmakuArea({super.key, required this.vertical, required this.videoIsVertical, required this.child});
+
+  final bool vertical;
+  final bool videoIsVertical;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final inset = MediaQuery.paddingOf(context).top;
+    // One shape in every presentation, so the danmaku keep their state through a turn.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!vertical) return Padding(padding: EdgeInsets.only(top: inset), child: child);
+        final top =
+            math.max(inset - BiliMetrics.verticalTopLift, 0.0) + BiliMetrics.chromeButton + BiliMetrics.verticalDanmakuDrop;
+        final band = constraints.maxHeight;
+        // The band centres the video, which a vertical one fills.
+        final videoBottom = videoIsVertical ? band : band / 2 + constraints.maxWidth / BiliMetrics.videoAspect / 2;
+        return Padding(
+          padding: EdgeInsets.only(top: math.min(top, band), bottom: math.max(band - math.max(videoBottom, top), 0)),
+          child: child,
+        );
+      },
+    );
+  }
 }
 
 class _Failure extends StatelessWidget {

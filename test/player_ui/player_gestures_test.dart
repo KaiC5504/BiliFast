@@ -105,6 +105,12 @@ final class Rig {
     ),
   );
 
+  /// 竖屏, the player filling the upright screen.
+  Future<void> mountVertical(WidgetTester tester) {
+    orientation.enterVertical();
+    return tester.pumpWidget(Directionality(textDirection: TextDirection.ltr, child: player()));
+  }
+
   /// The player filling the screen.
   Future<void> mountFullScreen(WidgetTester tester) {
     orientation.enterLandscape();
@@ -256,6 +262,66 @@ void main() {
       expect(rig.calls, isEmpty);
       expect(rig.chrome.hud.value, isNull);
       expect(rig.chrome.visible, isTrue);
+    });
+  });
+
+  group('竖屏 (118), where the controls stay up', () {
+    testWidgets('a tap plays or pauses at once and leaves the controls up', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.tapAt(const Offset(400, 300));
+      expect(rig.calls, ['togglePlay'], reason: 'no double-tap window to wait out');
+      expect(rig.chrome.visible, isTrue);
+      await tester.pump(_tapSettles);
+      expect(rig.calls, ['togglePlay']);
+      expect(rig.chrome.visible, isTrue);
+    });
+
+    testWidgets('a double tap is two taps, with no action of its own', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.tapAt(const Offset(400, 300));
+      await tester.pump(const Duration(milliseconds: 120));
+      await tester.tapAt(const Offset(405, 305));
+      await tester.pump(_tapSettles);
+      expect(rig.calls, ['togglePlay', 'togglePlay']);
+      expect(rig.chrome.visible, isTrue);
+    });
+
+    testWidgets("the picture's accessibility press plays or pauses too", (tester) async {
+      final semantics = tester.ensureSemantics();
+      await rig.mountVertical(tester);
+      tester.semantics.tap(find.semantics.byLabel('视频画面'));
+      await tester.pump();
+      expect(rig.calls, ['togglePlay']);
+      expect(rig.chrome.visible, isTrue);
+      semantics.dispose();
+    });
+
+    testWidgets('holding still plays at 2×, and leaves the controls up', (tester) async {
+      rig.playing();
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(400, 300));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(rig.calls, ['speedUp true']);
+      expect(rig.chrome.hud.value, isA<SpeedUpHud>());
+      expect(rig.chrome.visible, isTrue);
+      await gesture.up();
+      await tester.pump(_tapSettles);
+      expect(rig.calls, ['speedUp true', 'speedUp false'], reason: 'the hold was not also a tap');
+      expect(rig.chrome.visible, isTrue);
+    });
+
+    testWidgets('landscape keeps its gestures: a tap toggles the controls, a double tap plays', (tester) async {
+      await rig.mountFullScreen(tester);
+      await tester.tapAt(const Offset(400, 300));
+      expect(rig.chrome.visible, isTrue, reason: 'inside the double-tap window');
+      await tester.pump(_tapSettles);
+      expect(rig.chrome.visible, isFalse);
+      expect(rig.calls, isEmpty);
+      await tester.tapAt(const Offset(400, 300));
+      await tester.pump(const Duration(milliseconds: 120));
+      await tester.tapAt(const Offset(405, 305));
+      await tester.pump(_tapSettles);
+      expect(rig.calls, ['togglePlay']);
     });
   });
 
