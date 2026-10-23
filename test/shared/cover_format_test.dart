@@ -102,7 +102,7 @@ void main() {
   });
 
   test(
-    'null or a throw three times in a row turns AVIF off for the session; each failed cover asks its exact size',
+    'null or a throw three times in a row turns AVIF off for the session; each failed cover is marked failed',
     () async {
       final answers = <Future<DecodedPicture?> Function()>[
         () async => null,
@@ -114,7 +114,8 @@ void main() {
         final address = format.address('$cover.$i', CoverPreset.feed)!;
         expect(address, endsWith('.$i@630w_473h_85q_!pegasus-ios-v2.avif'), reason: 'before AVIF went off');
         expect(await format.decodeAvif(address, avifData, 60, 60), isNull);
-        expect(format.address('$cover.$i', CoverPreset.feed), isNull, reason: 'its AVIF failed');
+        expect(format.failed(address), isTrue, reason: 'its AVIF failed');
+        if (i < 2) expect(format.address('$cover.$i', CoverPreset.feed), address, reason: 'its provider stays one');
       }
       expect(lines('avif decode failed'), [
         {'reason': 'null'},
@@ -154,18 +155,22 @@ void main() {
     }
     expect(format.avif, isTrue);
     expect(lines('avif off'), isEmpty);
-    expect(format.address('$cover.0', CoverPreset.feed), isNull, reason: 'a failed cover stays at its exact size');
-    expect(format.address('$cover.2', CoverPreset.feed), endsWith('.avif'));
+    expect(format.failed(format.address('$cover.0', CoverPreset.feed)!), isTrue, reason: 'a failed cover stays failed');
+    expect(format.failed(format.address('$cover.2', CoverPreset.feed)!), isFalse);
   });
 
-  test('a status from the CDN moves that cover to its exact size without counting against the decoder', () {
+  test('a status from the CDN marks that cover failed without counting against the decoder', () {
     final format = CoverFormat(decode: (_, _, _) async => null, logger: logger);
     for (var i = 0; i < 4; i++) {
       format.refused(format.address('$cover.$i', CoverPreset.feed)!, 404);
     }
     expect(format.avif, isTrue);
-    expect(format.address('$cover.1', CoverPreset.feed), isNull);
-    expect(format.address('$cover.1', CoverPreset.related), endsWith('.avif'), reason: 'another preset, another ask');
+    expect(format.failed(format.address('$cover.1', CoverPreset.feed)!), isTrue);
+    expect(
+      format.failed(format.address('$cover.1', CoverPreset.related)!),
+      isFalse,
+      reason: 'another preset, another ask',
+    );
     expect(lines('avif refused'), [
       {'status': 404},
     ]);

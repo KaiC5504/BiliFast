@@ -174,6 +174,13 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   ~20 ms slower on a first ask; the official AVIF address never came from cache for us). AVIF, ImageIO
   (`PictureDecoder.swift`, the Pigeon picture API) and `CoverFormat` are gone; `feed covers done` drops format and
   decodeMsMax.
+- 1.0.0 (33), from the second capture (KaiC's call: the CDN having covers ready matters most): covers ask the official
+  app's own preset addresses (`lib/shared/cover_preset.dart`): 推荐 `feed` (630×473 pegasus, answers 719×540), 搜索
+  `search`, related `related` (360×202), UP主空间 `space` (384×216 webp), 历史记录 and 稍后再看 `history` (450×251), the
+  player box `player` (1260×709); unnamed sites by box size. AVIF through ImageIO again ((31)'s decoder restored), a
+  failed AVIF falls back to (32)'s JPEG for that address, three in a row turn AVIF off. Logs: `cover downloads` per
+  preset every 10 network downloads (first byte median and max, kb, ImageIO's decodeMsMax), `cover format`, the
+  `avif …` lines, and `feed covers done` gains format.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -183,6 +190,10 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- (33) on the phone: `cover format` avif; `cover downloads` firstByteMs near the capture's ~150-175 ms for each
+  preset (one well above ~300 ms means the official app doesn't ask that preset on that screen: re-pick it), no
+  `avif decode failed`/`avif off`; `feed covers done` below (32)'s 360-388 / 467-570 ms; covers as the official app's
+  (very slightly softer than (32)'s, KaiC's trade).
 - (32) on the phone (KaiC's log, 2026-10-23): `feed covers done` thirdMs 360-388 ms and lastMs 467-570 ms over five
   refreshes (582 / 633 at launch), 6 of 6 ready each time, no `image failed`: about twice (30)'s and (31)'s. The second
   capture (both apps side by side, same network): the official app's every picture is a named preset (推荐
@@ -435,12 +446,15 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   Lists use `ReleaseRefreshControl`, never `CupertinoSliverRefreshControl`.
 - Pictures: every address passes `secureImageUrl` (https, and i0/i2.hdslb.com asked from i1, so one connection serves
   them all and a precache and its draw share one address). i1 is another CDN (Wangsu; i0 and i2 are Baidu's), the one
-  the official app asks, about twice as fast here. Video covers (`RemoteImage(cover: true)`) ask their box's exact
-  device-pixel size as `@{w}w_{h}h_1c_90q.jpg` (`coverImageUrl`): the CDN's default webp is visibly soft, quality 90
-  JPEG is as sharp as the original scaled and barely slower; the box's size is given fixed wherever the box moves, or
-  every frame would be a new address. Other pictures keep webp in 60 px steps. On iOS downloads go through
-  `PictureSession`'s one ephemeral URLSession (no cookies, no URL cache: `ImageDiskCache` is the cache); Windows and tests keep dart:io. A
-  transport error's text carries the URL (cupertino_http's): log `PictureDownloadException`'s reason, never the text.
+  the official app asks, about twice as fast here. Video covers (`RemoteImage(cover: true)`) ask the official iPhone
+  app's preset addresses (`CoverPreset`: a site names its official screen's, others take `forBox`'s), which the CDN
+  keeps made because every official user asks them; AVIF presets are decoded by ImageIO (`PictureDecoder.swift`) to
+  the box, and fall back per address to the box's exact size as `@{w}w_{h}h_1c_90q.jpg` (`coverImageUrl`), as on the
+  PC and in tests. A size only we ask is made on demand (~0.3 s against ~0.15 s). The box's size is given fixed
+  wherever the box moves, or every frame would be a new address. Other pictures keep webp in 60 px steps. On iOS
+  downloads go through `PictureSession`'s one ephemeral URLSession (no cookies, no URL cache: `ImageDiskCache` is the
+  cache); Windows and tests keep dart:io. A transport error's text carries the URL (cupertino_http's): log
+  `PictureDownloadException`'s reason, never the text.
 - The status bar over a dressed header goes by the picture behind the clock and the icons (`skin_status_bar.dart`):
   the geometric mean of L + 0.05 less 0.05, white icons under 0.1791 (white's and black's contrast equal), measured
   after the skin shows and kept per version in `.status.json`; 我的 has a height with its 会员 card and one without;

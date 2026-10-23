@@ -21,7 +21,7 @@ typedef CoverDecode = Future<DecodedPicture?> Function(Uint8List data, int boxWi
 final class CoverFormat {
   CoverFormat({this._decode, this._logger});
 
-  /// The iPhone's decodes AVIF through ImageIO; the PC and tests ask for JPEG and never reach the channel.
+  /// The iPhone decodes AVIF through ImageIO; the PC and tests ask for JPEG and never reach the channel.
   static CoverFormat shared = CoverFormat.platform();
 
   static CoverFormat platform() => Platform.isIOS ? CoverFormat(decode: PictureHostApi().decodeCover) : CoverFormat();
@@ -54,7 +54,8 @@ final class CoverFormat {
   String get name => avif ? 'avif' : 'jpg';
 
   /// [cover]'s address by [preset], through [suffixedImageUrl]; null when it is to be asked at its exact size: an AVIF
-  /// preset without ImageIO, after its AVIF failed, or on an address that takes no suffix.
+  /// preset without ImageIO, or an address that takes no suffix. An address whose AVIF failed keeps it, so its
+  /// provider (a precache's and its draw's) stays one; its load goes straight to the JPEG ([failed]).
   String? address(String cover, CoverPreset preset) {
     if (!_announced) {
       _announced = true;
@@ -63,8 +64,11 @@ final class CoverFormat {
     if (!preset.avif) return suffixedImageUrl(cover, preset.suffix);
     if (!avif) return null;
     final asked = suffixedImageUrl(cover, preset.suffix);
-    return asked.endsWith(preset.suffix) && !_failed.contains(asked) ? asked : null;
+    return asked.endsWith(preset.suffix) ? asked : null;
   }
+
+  /// Whether [address]'s AVIF was refused or didn't decode this session.
+  bool failed(String address) => _failed.contains(address);
 
   /// One cover whichever suffix it is asked with.
   static String sameCover(String address) {

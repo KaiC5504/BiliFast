@@ -473,7 +473,7 @@ void main() {
         expect(downloads, [_feedAvif, _at(633, 475)], reason: 'the JPEG at the same box');
         expect(decodes, hasLength(decoded));
         expect(lines('image failed'), isEmpty, reason: 'no visible error');
-        expect(CoverFormat.shared.address(_cover, CoverPreset.feed), isNull, reason: 'its exact size from now on');
+        expect(CoverFormat.shared.failed(_feedAvif), isTrue, reason: 'its JPEG from now on, under the same provider');
         expect(CoverFormat.shared.avif, isTrue, reason: 'one failure');
         if (decoded == 0) {
           expect(lines('avif refused').single.f['status']?.toJson(), 404);
@@ -508,9 +508,8 @@ void main() {
       await drop(tester);
     });
 
-    testWidgets('a cover shown from its JPEG after its AVIF failed stays up when it is next built for the JPEG', (
-      tester,
-    ) async {
+    testWidgets('a cover whose AVIF failed keeps one provider: a rebuild draws it at once, a reload goes straight to '
+        'its JPEG', (tester) async {
       await keep(tester);
       avifOn(() => null);
       answers[_feedAvif] = _avifBytes;
@@ -519,18 +518,23 @@ void main() {
       final first = painted(tester).single!;
       expect(providers(tester).single.url, _feedAvif);
 
-      // Rebuilt in place, the cover now asks its JPEG, which comes from storage only once real time runs.
       await show(tester, [coverBox(_cover)]);
-      expect(providers(tester).single.url, _at(100, 100));
+      expect(providers(tester).single.url, _feedAvif, reason: 'the precache and its draw stay one provider');
+      expect(painted(tester).single?.isCloneOf(first), isTrue, reason: 'from the memory cache, no reload');
+
+      // The memory cache let it go (iOS's warning, a page coming back): the load skips the AVIF it knows failed.
+      PaintingBinding.instance.imageCache
+        ..clear()
+        ..clearLiveImages();
+      await show(tester, [coverBox(_cover)]);
       for (var i = 0; i < 4; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
       expect(tester.widget<FadeTransition>(find.byType(FadeTransition)).opacity.value, 1, reason: 'no new fade');
-      expect(painted(tester).single?.isCloneOf(first), isTrue, reason: 'gapless playback paints the old frame');
       await arrive(tester);
-      expect(painted(tester).single?.isCloneOf(first), isFalse, reason: 'the JPEG is in');
-      expect(tester.widget<FadeTransition>(find.byType(FadeTransition)).opacity.value, 1);
-      expect(downloads, [_feedAvif, _at(100, 100)], reason: 'the JPEG came from storage');
+      expect(painted(tester).single, isNotNull);
+      expect(downloads, [_feedAvif, _at(100, 100)], reason: 'the AVIF not asked again; the JPEG from storage');
+      expect(decodes, hasLength(1), reason: 'ImageIO not asked again');
       await drop(tester);
     });
 

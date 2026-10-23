@@ -30,7 +30,7 @@ String secureImageUrl(String url) {
 const _pictureMirrors = ['https://i0.hdslb.com/', 'https://i2.hdslb.com/'];
 
 /// [url] from Bilibili's image CDN scaled and cropped there to [width]×[height] px (`@…w_…h_1c.webp`). Covers take
-/// [coverImageUrl].
+/// their [CoverPreset], or [coverImageUrl].
 String sizedImageUrl(String url, {required int width, required int height}) =>
     suffixedImageUrl(url, '@${width}w_${height}h_1c.webp');
 
@@ -301,7 +301,7 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
     if (jpeg == null) {
       return _covering(await _bytes(url, onDownloaded: _timed(url.endsWith('.webp') ? 'webp' : 'jpg')), box, decode);
     }
-    final avif = await _avif(box);
+    final avif = CoverFormat.shared.failed(url) ? null : await _avif(box);
     if (avif != null) return avif;
     try {
       return await _covering(await _bytes(jpeg, onDownloaded: _timed('jpg')), box, decode);

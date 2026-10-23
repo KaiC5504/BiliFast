@@ -28,7 +28,7 @@ abstract final class FeedCardSize {
   static double height(double width, TextScaler scaler) =>
       width / BiliMetrics.coverAspect + BiliMetrics.cardTitleTop + titleHeight(scaler) + footerHeight;
 
-  /// The cover's box on a card [width] wide: the size its picture is asked for at.
+  /// The cover's box on a card [width] wide: what its picture is decoded to cover, and a precache's size.
   static Size cover(double width) => Size(width, width / BiliMetrics.coverAspect);
 }
 
