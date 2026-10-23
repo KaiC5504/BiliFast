@@ -44,6 +44,7 @@ void main() {
       logger: Logger(session: 'test'),
     ),
     logger: Logger(session: 'test')..add(logs),
+    minimumRefresh: Duration.zero,
   );
 
   List<String> bvids(FeedModel feed) => [for (final card in feed.cards) card.bvid];
@@ -303,6 +304,7 @@ void main() {
         officialWanted: () => true,
         logger: Logger(session: 'test')..add(logs),
         now: () => now,
+        minimumRefresh: Duration.zero,
       )..beforeShow = (fresh) {
         asked.addAll([for (final card in fresh) card.bvid]);
         return CoverPrefetch([for (final _ in fresh) Future.value(true)]);
@@ -501,6 +503,7 @@ void main() {
       PictureSession? Function()? session,
       DateTime Function()? clock,
       String Function()? format,
+      Duration minimumRefresh = Duration.zero,
     }) => FeedModel(
       client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test')),
       logger: Logger(session: 'test')..add(logs),
@@ -508,6 +511,7 @@ void main() {
       now: clock ?? () => now,
       pictures: session ?? () => pictures,
       coverFormat: format,
+      minimumRefresh: minimumRefresh,
     )..beforeShow = (fresh) => CoverPrefetch([for (final _ in fresh) Future.value(true)]);
 
     List<LogEvent> lines(String msg) => [for (final event in logs.events) if (event.msg == msg) event];
@@ -516,14 +520,17 @@ void main() {
       for (final line in lines('feed covers done')) line.f.map((key, value) => MapEntry(key, value.toJson())),
     ];
 
-    test("a refresh opens it while page 1 is out, asking i0 for the top card's cover; the first load has none",
+    test("a refresh opens it while page 1 is out, asking i1 for the top card's cover; the first load asks the host",
         () async {
       http.pages[1] = [
         {...feedItem('BV1'), 'pic': 'http://i1.hdslb.com/bfs/archive/BV1.jpg'},
       ];
       final feed = connected();
       await feed.refresh();
-      expect(pictureHttp.sent, isEmpty, reason: 'no picture shown yet to ask for');
+      final launch = pictureHttp.sent.single;
+      expect(launch.method, 'HEAD');
+      expect('${launch.url}', 'https://i1.hdslb.com/', reason: 'no picture shown yet to ask for');
+      pictureHttp.sent.clear();
 
       now = now.add(const Duration(minutes: 1));
       http.pages[1] = [feedItem('BV2')];
@@ -546,6 +553,7 @@ void main() {
       http.pages[1] = [feedItem('BV1')];
       final feed = connected();
       await feed.refresh();
+      pictureHttp.sent.clear();
       now = now.add(const Duration(minutes: 1));
       http.pages[1] = [feedItem('BV2')];
       final hold = Completer<void>();
@@ -650,14 +658,14 @@ void main() {
       final feed = connected();
       await feed.refresh();
       await pumpEventQueue();
-      expect(done().last['warmed'], 'none', reason: 'no picture shown yet to ask for');
+      expect(done().last['warmed'], 'ok', reason: 'the host itself was asked');
 
       now = now.add(const Duration(minutes: 1));
       pictureHttp.error = TimeoutException('head');
       http.pages[1] = [feedItem('BV2')];
       await feed.refresh();
       await pumpEventQueue();
-      expect(pictureHttp.sent, hasLength(1));
+      expect(pictureHttp.sent, hasLength(2));
       expect(done().last['warm'], false);
       expect(done().last['warmed'], 'failed');
 
@@ -670,7 +678,7 @@ void main() {
       http.pages[1] = [feedItem('BV4')];
       await feed.refresh();
       await pumpEventQueue();
-      expect(pictureHttp.sent, hasLength(2), reason: 'answered moments ago: no warm sent');
+      expect(pictureHttp.sent, hasLength(3), reason: 'answered moments ago: no warm sent');
       expect(done().last['warm'], true);
       expect(done().last['warmed'], 'none');
     });
@@ -780,6 +788,170 @@ void main() {
     });
   });
 
+  group('the minimum refresh', () {
+    late FakeAsync clock;
+    final start = DateTime(2026, 10, 23, 12);
+
+    FeedModel timed() => FeedModel(
+      client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test')),
+      logger: Logger(session: 'test')..add(logs),
+      officialWanted: () => false,
+      now: () => start.add(clock.elapsed),
+      pictures: () => null,
+    )..beforeShow = (fresh) => CoverPrefetch([for (final _ in fresh) Future.value(true)]);
+
+    /// A model showing BV1 after its first load.
+    FeedModel showing(FakeAsync async) {
+      clock = async;
+      http.pages[1] = [feedItem('BV1')];
+      final feed = timed();
+      unawaited(feed.refresh());
+      async.flushMicrotasks();
+      expect(bvids(feed), ['BV1'], reason: 'the first load');
+      return feed;
+    }
+
+    /// Moves the clock to [ms] after [from].
+    void Function(int ms) clockFrom(FakeAsync async, Duration from) =>
+        (ms) => async.elapse(Duration(milliseconds: ms) - (async.elapsed - from));
+
+    List<LogEvent> lines(String msg) => [for (final event in logs.events) if (event.msg == msg) event];
+
+    test('with cards shown, a page in at 300 ms swaps at 1500 ms, its covers asked at 300 ms and counted at the swap',
+        () {
+      fakeAsync((async) {
+        final feed = showing(async);
+        final t0 = async.elapsed;
+        final till = clockFrom(async, t0);
+        http.pages[1] = [feedItem('BV2'), feedItem('BV3'), feedItem('BV4')];
+        final gate = http.gates[1] = Completer<void>();
+        final covers = [for (var i = 0; i < 3; i++) Completer<bool>()];
+        int? askedAt;
+        feed.beforeShow = (_) {
+          askedAt = (async.elapsed - t0).inMilliseconds;
+          return CoverPrefetch([for (final cover in covers) cover.future]);
+        };
+        String? result = 'unfinished';
+        unawaited(feed.refresh().then((value) => result = value));
+        till(300);
+        gate.complete();
+        async.flushMicrotasks();
+        expect(askedAt, 300, reason: 'asked for as the answer lands');
+        till(800);
+        covers[0].complete(true);
+        till(1100);
+        covers[1].complete(true);
+        till(1499);
+        expect(bvids(feed), ['BV1']);
+        expect(feed.loading, isTrue, reason: 'the TV stays up');
+        expect(result, 'unfinished');
+        expect(lines('feed covers'), hasLength(1), reason: 'the first load only');
+        till(1500);
+        expect(bvids(feed), ['BV2', 'BV3', 'BV4']);
+        expect(feed.loading, isFalse);
+        expect(result, isNull);
+        final line = lines('feed covers').last;
+        expect(line.f['ready']?.toJson(), 2, reason: 'loaded during the wait');
+        expect(line.f['of']?.toJson(), 3);
+        till(1700);
+        covers[2].complete(true);
+        async.flushMicrotasks();
+        final done = lines('feed covers done').last;
+        expect(done.f['thirdMs']?.toJson(), 1400, reason: 'from the answer, not the swap');
+        expect(done.f['lastMs']?.toJson(), 1400);
+      });
+    });
+
+    test('a page in after 1500 ms swaps at once', () {
+      fakeAsync((async) {
+        final feed = showing(async);
+        http.pages[1] = [feedItem('BV2')];
+        final gate = http.gates[1] = Completer<void>();
+        unawaited(feed.refresh());
+        async.elapse(const Duration(milliseconds: 1800));
+        expect(bvids(feed), ['BV1']);
+        gate.complete();
+        async.flushMicrotasks();
+        expect(bvids(feed), ['BV2']);
+        expect(feed.loading, isFalse);
+      });
+    });
+
+    test('the first load is not held', () {
+      fakeAsync((async) {
+        clock = async;
+        http.pages[1] = [feedItem('BV1')];
+        final gate = http.gates[1] = Completer<void>();
+        final feed = timed();
+        unawaited(feed.refresh());
+        async.elapse(const Duration(milliseconds: 300));
+        gate.complete();
+        async.flushMicrotasks();
+        expect(bvids(feed), ['BV1']);
+        expect(feed.loading, isFalse);
+      });
+    });
+
+    test('a failure with cards shown is reported without waiting', () {
+      fakeAsync((async) {
+        final feed = showing(async);
+        http.failing.add(1);
+        String? result;
+        unawaited(feed.refresh().then((value) => result = value));
+        async.flushMicrotasks();
+        expect(result, '网络请求失败（HTTP 500）');
+        expect(bvids(feed), ['BV1']);
+      });
+    });
+
+    test('a refresh started during the wait wins: the first never shows, the second waits its own 1500 ms', () {
+      fakeAsync((async) {
+        final feed = showing(async);
+        final till = clockFrom(async, async.elapsed);
+        http.pages[1] = [feedItem('BV2')];
+        final first = http.gates[1] = Completer<void>();
+        String? firstResult = 'unfinished';
+        unawaited(feed.refresh().then((value) => firstResult = value));
+        till(300);
+        first.complete();
+        till(1000);
+        http.pages[1] = [feedItem('BV3')];
+        final second = http.gates[1] = Completer<void>();
+        unawaited(feed.refresh());
+        till(1100);
+        second.complete();
+        till(1500);
+        expect(firstResult, isNull);
+        expect(bvids(feed), ['BV1']);
+        till(2499);
+        expect(bvids(feed), ['BV1']);
+        till(2500);
+        expect(bvids(feed), ['BV3']);
+        expect(feed.loading, isFalse);
+      });
+    });
+
+    test('disposed during the wait, the refresh ends at once with nothing shown and no timer left', () {
+      fakeAsync((async) {
+        final feed = showing(async);
+        http.pages[1] = [feedItem('BV2')];
+        final gate = http.gates[1] = Completer<void>();
+        String? result = 'unfinished';
+        unawaited(feed.refresh().then((value) => result = value));
+        async.elapse(const Duration(milliseconds: 300));
+        gate.complete();
+        async.elapse(const Duration(milliseconds: 700));
+        feed.dispose();
+        async.flushMicrotasks();
+        expect(result, isNull);
+        expect(bvids(feed), ['BV1']);
+        expect(async.pendingTimers, isEmpty);
+        async.elapse(const Duration(seconds: 2));
+        expect(lines('feed covers'), hasLength(1), reason: 'the first load only');
+      });
+    });
+  });
+
   test('load more with nothing shown refreshes, and does not run twice at once', () async {
     http.pages[1] = [feedItem('BV1')];
     final feed = make();
@@ -801,7 +973,12 @@ void main() {
       wanted = true;
       client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
         ..appToken = fakeAppToken;
-      return FeedModel(client: client, logger: Logger(session: 'test')..add(logs), officialWanted: () => wanted);
+      return FeedModel(
+        client: client,
+        logger: Logger(session: 'test')..add(logs),
+        officialWanted: () => wanted,
+        minimumRefresh: Duration.zero,
+      );
     }
 
     test('without the app token it is never asked, whatever 开发者 says', () async {

@@ -114,6 +114,10 @@ void main() {
     http.pages[1] = [feedItem('BV1aaa', reason: '1万点赞'), feedItem('BV1bbb')];
     player = FakePlayer();
     gate = FakeLoginGate();
+    // These tests follow the swap from the answer, as when it comes after the minimum; 'the minimum refresh' turns it
+    // back on.
+    HomePage.feedMinimumRefresh = Duration.zero;
+    addTearDown(() => HomePage.feedMinimumRefresh = FeedModel.minimumRefresh);
   });
 
   List<Map<String, Object?>> twenty() => [for (var i = 0; i < 20; i++) feedItem('BV1c$i')];
@@ -1031,6 +1035,47 @@ void main() {
       expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
       expect(card('BV1c0'), findsOneWidget);
       await toastGone(tester);
+    });
+
+    group('the minimum refresh', () {
+      setUp(() => HomePage.feedMinimumRefresh = FeedModel.minimumRefresh);
+
+      testWidgets('answered at once, the TV is still up 1.4 s after the tap over the old cards, gone after the swap', (
+        tester,
+      ) async {
+        http.pages[1] = twenty();
+        await show(tester);
+        await settle(tester);
+        http.pages[1] = fresh();
+        await tapHome(tester);
+        await tester.pump();
+        await settle(tester, 28);
+        expect(http.asked, [1, 1]);
+        expect(reloadTv(), findsOneWidget);
+        expect(card('BV1c0'), findsOneWidget);
+        expect(card('BV1n0'), findsNothing);
+        await settle(tester, 4);
+        expect(card('BV1n0'), findsOneWidget);
+        await settle(tester, 20);
+        expect(find.byKey(const ValueKey('feed-reload')), findsNothing);
+        expect(find.byType(LoadingTv), findsNothing);
+      });
+
+      testWidgets("a pull's TV stays 1.4 s after the release, gone after the swap", (tester) async {
+        http.pages[1] = twenty();
+        await show(tester);
+        await settle(tester);
+        http.pages[1] = fresh();
+        await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, 500));
+        await tester.pump();
+        await settle(tester, 28);
+        expect(find.byType(LoadingTv), findsOneWidget);
+        expect(card('BV1c0'), findsOneWidget);
+        await settle(tester, 4);
+        expect(card('BV1n0'), findsOneWidget);
+        await settle(tester, 20);
+        expect(find.byType(LoadingTv), findsNothing);
+      });
     });
   });
 

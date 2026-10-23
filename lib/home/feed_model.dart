@@ -99,8 +99,8 @@ class _EarlyPage {
 /// Why a refresh asked for no covers for its cards.
 enum CoverSkip { noGrid, unmounted, noLayout, noRows }
 
-/// A refresh's [PictureSession.warm]: [none] when it sent none (the connection was open, one was already out, there
-/// was no picture to ask for, or no session).
+/// A refresh's [PictureSession.warm]: [none] when it sent none (the connection was open, one was already out, the
+/// top card's cover was on another host, or no session).
 enum _WarmState { none, pending, ok, failed }
 
 class _Warm {
@@ -207,6 +207,7 @@ class FeedModel extends ChangeNotifier {
     DateTime Function()? now,
     PictureSession? Function()? pictures,
     String Function()? coverFormat,
+    this._minimumRefresh = FeedModel.minimumRefresh,
   }) : _logger = logger ?? Logger.shared,
        _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
        _now = now ?? DateTime.now,
@@ -219,6 +220,11 @@ class FeedModel extends ChangeNotifier {
   /// How long a pull's early page, once in, still serves a pull armed again after the last one went back under its
   /// trigger. Within it an arming asks nothing, so wiggling across the trigger costs one call.
   static const earlyReuse = Duration(seconds: 10);
+
+  /// The shortest a refresh that replaces cards on screen takes, from its start (the tap, the pull's release or the
+  /// account's change) to the swap, so its TV stays up that long; the covers asked for as the answer lands load
+  /// meanwhile. A later answer swaps at once; the first load, with no cards to replace, is never held.
+  static const minimumRefresh = Duration(milliseconds: 1500);
 
   /// A shown page logs `feed covers done` this long after asking for its covers, if some are still out.
   static const coversDoneAfter = Duration(seconds: 10);
@@ -235,6 +241,7 @@ class FeedModel extends ChangeNotifier {
   final DateTime Function() _now;
   final PictureSession? Function() _pictures;
   final String Function() _coverFormat;
+  final Duration _minimumRefresh;
   List<FeedCard> _cards = const [];
   bool _loading = false;
   String? _error;
@@ -260,6 +267,9 @@ class FeedModel extends ChangeNotifier {
 
   _EarlyPage? _early;
   final _coverTimers = <Timer>{};
+
+  /// Each refresh's [minimumRefresh] still running, ended by dispose so no refresh is left waiting.
+  final _holds = <Timer, Completer<void>>{};
   bool _disposed = false;
 
   List<FeedCard> get cards => _cards;
@@ -291,10 +301,12 @@ class FeedModel extends ChangeNotifier {
   /// with none, it becomes [error]. Null otherwise.
   ///
   /// A [pulled] refresh takes the page [pullArmed] asked for, if it still counts, instead of asking again; any other
-  /// refresh drops it.
+  /// refresh drops it. With cards on screen, a page that comes sooner than [minimumRefresh] waits out the rest before
+  /// it replaces them; a failure doesn't wait.
   Future<String?> refresh({bool pulled = false}) async {
     final early = pulled ? _joinable() : null;
     _early = null;
+    final hold = _cards.isEmpty ? null : _hold();
     final mine = ++_generation;
     _loading = true;
     _officialRefused = false;
@@ -314,6 +326,10 @@ class FeedModel extends ChangeNotifier {
         final asked = _askCovers(fresh);
         // A held pull's covers were asked for when its page came in; those are the ones that can be ready by now.
         final shown = early?.covers ?? asked;
+        if (hold != null) {
+          await hold;
+          if (_disposed || mine != _generation) return null;
+        }
         _logCovers(shown, heldMs: heldMs);
         if (shown != null) _whenCoversDone(shown, early: heldMs != null, warm: warm);
         _cards = fresh;
@@ -457,8 +473,21 @@ class FeedModel extends ChangeNotifier {
     if (fresh.isNotEmpty) early.covers = _askCovers(fresh);
   }
 
+  /// Completes [_minimumRefresh] from now, or at once on dispose; null when there is no minimum.
+  Future<void>? _hold() {
+    if (_minimumRefresh <= Duration.zero) return null;
+    final done = Completer<void>();
+    late final Timer timer;
+    timer = Timer(_minimumRefresh, () {
+      _holds.remove(timer);
+      done.complete();
+    });
+    _holds[timer] = done;
+    return done.future;
+  }
+
   /// Opens the picture connection while page 1 is out, so the covers it brings start on it. Before any picture has
-  /// downloaded, the top card's cover is the one asked for.
+  /// downloaded, the top card's cover is the one asked for, or with no cards (the first load) the host itself.
   _Warm _openPictures() {
     final cover = _cards.firstOrNull?.cover;
     return _Warm(_pictures()?.warm(picture: cover == null || cover.isEmpty ? null : secureImageUrl(cover)));
@@ -671,6 +700,11 @@ class FeedModel extends ChangeNotifier {
       timer.cancel();
     }
     _coverTimers.clear();
+    for (final MapEntry(key: timer, value: done) in _holds.entries) {
+      timer.cancel();
+      done.complete();
+    }
+    _holds.clear();
     super.dispose();
   }
 }

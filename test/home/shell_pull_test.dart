@@ -4,6 +4,8 @@ import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/home/feed_model.dart';
+import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
 import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -27,6 +29,9 @@ void main() {
   late FakeMeApi me;
 
   setUp(() {
+    // These follow the swap from the answer, as when it comes after FeedModel.minimumRefresh.
+    HomePage.feedMinimumRefresh = Duration.zero;
+    addTearDown(() => HomePage.feedMinimumRefresh = FeedModel.minimumRefresh);
     http = FeedHttp()..pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1c$i')];
     me = FakeMeApi.demo();
   });

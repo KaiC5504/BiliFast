@@ -56,6 +56,10 @@ class HomePage extends StatefulWidget {
   static Future<bool> Function(BuildContext context, String? url, Size size) precacheCover =
       FeedCardView.precacheCover;
 
+  /// [FeedModel.minimumRefresh] for 推荐; tests about what follows a swap set it to zero.
+  @visibleForTesting
+  static Duration feedMinimumRefresh = FeedModel.minimumRefresh;
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -107,7 +111,7 @@ class _HomePageState extends State<HomePage> {
     if (_feed != null) return;
     _services = AppScope.of(context);
     _opener.busy.addListener(_busyChanged);
-    _feed = FeedModel(client: _environment.client);
+    _feed = FeedModel(client: _environment.client, minimumRefresh: HomePage.feedMinimumRefresh);
     unawaited(LoadingTv.precache(context));
     unawaited(PlayerLoading.precache());
     unawaited(SeekBar.precache());
@@ -860,8 +864,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   }
 
   /// 首页's tap, as the official app's: back to the top and 推荐 refreshed at once, whether scrolled or already at the
-  /// top, with the pull-to-refresh TV held at the top until the new cards come. Nothing more while a refresh
-  /// (or the first load) runs.
+  /// top, with the pull-to-refresh TV held at the top until the new cards come (not before
+  /// [FeedModel.minimumRefresh]). Nothing more while a refresh (or the first load) runs.
   Future<void> reload() async {
     final feed = widget.feed;
     if (widget.refreshing() case final running?) return running;

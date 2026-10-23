@@ -519,12 +519,14 @@ final class PictureSession {
   }
 
   /// Opens the connection ahead of pictures about to be asked for: a HEAD for the last picture downloaded, or for
-  /// [picture] before any was. Skipped (null) while one is out, while the connection is [open], and for a picture on
-  /// another host. Once sent, completes true when answered and false when it failed; an [Error] is not caught.
+  /// [picture] before any was, or with neither (at launch) for the [host] itself. Skipped (null) while one is out,
+  /// while the connection is [open], and for a picture on another host. Once sent, completes true when answered,
+  /// whatever the status (a 404 opens the connection as well), and false when it failed on the way; an [Error] is not
+  /// caught.
   Future<bool>? warm({String? picture}) {
     if (_warming || open) return null;
-    final address = _lastPicture ?? picture;
-    final url = address == null ? null : Uri.tryParse(address);
+    final address = _lastPicture ?? picture ?? 'https://$host/';
+    final url = Uri.tryParse(address);
     if (url == null || url.scheme != 'https' || url.host != host) return null;
     _warming = true;
     return _warm(url);

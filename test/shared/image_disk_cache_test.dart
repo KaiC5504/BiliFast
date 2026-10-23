@@ -698,8 +698,20 @@ void main() {
         expect('${transport.sent.last.url}', face);
       });
 
-      test('skipped with no picture, or one on another host', () {
-        expect(session.warm(), isNull);
+      test('with nothing downloaded and no picture given (at launch), the host itself; a 404 still opens it', () async {
+        transport.status = HttpStatus.notFound;
+        final sent = session.warm();
+        expect(sent, isNotNull);
+        final head = transport.sent.single;
+        expect(head.method, 'HEAD');
+        expect('${head.url}', 'https://${PictureSession.host}/');
+        expect(head.headers, BiliClient.mediaHeaders);
+        expect(await sent, isTrue);
+        expect(session.open, isTrue);
+        expect(logged('picture warm failed'), isEmpty);
+      });
+
+      test('skipped for a picture on another host', () {
         expect(session.warm(picture: 'https://i0.hdslb.com/bfs/archive/a.jpg'), isNull);
         expect(session.warm(picture: 'https://archive.biliimg.com/bfs/archive/a.jpg'), isNull);
         expect(session.warm(picture: 'http://i1.hdslb.com/bfs/archive/a.jpg'), isNull);
