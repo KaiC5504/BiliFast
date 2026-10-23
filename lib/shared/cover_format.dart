@@ -53,14 +53,15 @@ final class CoverFormat {
   /// How AVIF presets' covers are asked now: `avif`, or `jpg` at their exact size.
   String get name => avif ? 'avif' : 'jpg';
 
-  /// [cover]'s address by [preset], through [suffixedImageUrl]; null when it is to be asked at its exact size: an AVIF
-  /// preset without ImageIO, or an address that takes no suffix. An address whose AVIF failed keeps it, so its
+  /// [cover]'s address by [preset], through [suffixedImageUrl]; null when it is to be asked at its exact size:
+  /// [CoverPreset.exact], an AVIF preset without ImageIO, or an address that takes no suffix. An address whose AVIF failed keeps it, so its
   /// provider (a precache's and its draw's) stays one; its load goes straight to the JPEG ([failed]).
   String? address(String cover, CoverPreset preset) {
     if (!_announced) {
       _announced = true;
       _log.info(LogCategory.ui, 'cover format', {'format': name});
     }
+    if (preset == CoverPreset.exact) return null;
     if (!preset.avif) return suffixedImageUrl(cover, preset.suffix);
     if (!avif) return null;
     final asked = suffixedImageUrl(cover, preset.suffix);

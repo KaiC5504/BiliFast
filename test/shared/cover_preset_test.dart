@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test("the presets' addresses are the official app's", () {
     expect(CoverPreset.feed.suffix, '@630w_473h_85q_!pegasus-ios-v2.avif');
-    expect(CoverPreset.search.suffix, '@540w_305h_1s_85q_!search-normal-fill.avif');
     expect(CoverPreset.related.suffix, '@360w_202h_1e_1c_85q.avif');
     expect(CoverPreset.space.suffix, '@384w_216h_1e_1c_85q.webp');
     expect(CoverPreset.history.suffix, '@450w_251h_1e_1c_85q.avif');
@@ -33,11 +32,11 @@ void main() {
     }
   });
 
-  test("a box never takes 搜索's or the space's own preset", () {
+  test("a box never takes the space's own preset or exact", () {
     for (var width = 60.0; width <= 2400; width += 7) {
       for (final aspect in [1.5, 16 / 9, 2.0, 3.0]) {
         final preset = CoverPreset.forBox(Size(width, width / aspect));
-        expect(preset, isNot(anyOf(CoverPreset.search, CoverPreset.space)), reason: '$width at $aspect');
+        expect(preset, isNot(anyOf(CoverPreset.space, CoverPreset.exact)), reason: '$width at $aspect');
       }
     }
   });

@@ -282,7 +282,7 @@ class _Cover extends StatelessWidget {
               video.cover,
               size: const Size(SearchResultTheme.coverWidth, SearchResultTheme.coverHeight),
               cover: true,
-              preset: CoverPreset.search,
+              preset: CoverPreset.exact,
             ),
           if (video.duration > 0)
             Positioned(

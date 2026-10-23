@@ -35,8 +35,8 @@ String sizedImageUrl(String url, {required int width, required int height}) =>
     suffixedImageUrl(url, '@${width}w_${height}h_1c.webp');
 
 /// A video cover scaled and cropped by the CDN to [width]×[height] px as a quality 90 JPEG (`@…w_…h_1c_90q.jpg`), for
-/// a cover whose preset can't be read here ([CoverFormat]). As sharp as the original scaled, but made for this app
-/// alone: ~300 ms to a first byte where a preset takes ~150-175.
+/// a cover whose preset can't be read here ([CoverFormat]) or that asks [CoverPreset.exact]. As sharp as the original
+/// scaled, but made for this app alone: ~300 ms to a first byte where a preset takes ~150-175.
 String coverImageUrl(String url, {required int width, required int height}) =>
     suffixedImageUrl(url, '@${width}w_${height}h_1c_90q.jpg');
 
@@ -91,8 +91,8 @@ class RemoteImage extends StatelessWidget {
   final String? cdnSuffix;
 
   /// A video's cover, decoded to cover its box in device pixels, always still: asked by [preset], which the CDN keeps
-  /// made, and an AVIF one decoded by ImageIO ([CoverFormat]); where AVIF can't be read, at the box's exact size as
-  /// JPEG ([coverImageUrl]).
+  /// made, and an AVIF one decoded by ImageIO ([CoverFormat]); by [CoverPreset.exact] or where AVIF can't be read, at
+  /// the box's exact size as JPEG ([coverImageUrl]).
   final bool cover;
 
   /// The official screen's preset for a [cover]; without one, [CoverPreset.forBox]'s.

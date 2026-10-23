@@ -54,6 +54,7 @@ void main() {
     expect(format.address(cover, CoverPreset.feed), feedAvif);
     expect(format.address('//i2.hdslb.com/bfs/archive/a.jpg', CoverPreset.related), '$asked@360w_202h_1e_1c_85q.avif');
     expect(format.address(cover, CoverPreset.space), '$asked@384w_216h_1e_1c_85q.webp');
+    expect(format.address(cover, CoverPreset.exact), isNull, reason: 'exact is its exact size, AVIF or not');
     for (final given in [
       'https://i0.hdslb.com/bfs/archive/d.jpg?sign=x',
       'https://i0.hdslb.com/bfs/archive/e.jpg@100w.webp',

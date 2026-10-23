@@ -3,14 +3,16 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:bili_core/api.dart' show HighlightedText, SearchVideo;
 import 'package:bili_core/devlog.dart';
+import 'package:bilifast/search/results/video_row.dart';
 import 'package:bilifast/shared/cover_format.dart';
 import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/ios/picture_api.g.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:flutter/services.dart' show PlatformException;
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'stored_pictures.dart';
@@ -431,6 +433,66 @@ void main() {
       expect(PaintingBinding.instance.imageCache.currentSize, 1);
       expect(CoverFormat.shared.avif, isTrue);
       expect(lines('cover format').single.f['format']?.toJson(), 'avif');
+      await drop(tester);
+    });
+
+    testWidgets("搜索's row asks its box's exact JPEG even with ImageIO, and never asks ImageIO", (tester) async {
+      await keep(tester);
+      avifOn(() => _pixels(2, 2));
+      final video = SearchVideo(
+        aid: 1,
+        bvid: 'BV1search',
+        title: HighlightedText.plain('搜索结果'),
+        author: 'UP',
+        mid: 1,
+        cover: _cover,
+        play: 1,
+        danmaku: 1,
+        duration: 61,
+        published: null,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(devicePixelRatio: 3, size: Size(440, 956)),
+            child: Material(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  height: SearchVideoRow.height,
+                  child: SearchVideoRow(video: video, now: DateTime(2026, 10, 23), onOpen: () {}, onMore: () {}),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final provider = providers(tester).single;
+      expect((provider.url, provider.box, provider.preset, provider.jpegFallback), (
+        _at(516, 291),
+        const Size(516, 291),
+        CoverPreset.exact,
+        null,
+      ));
+      await arrive(tester);
+      expect(painted(tester).single, isNotNull);
+      expect(downloads, [_at(516, 291)]);
+      expect(decodes, isEmpty);
+      expect(CoverFormat.shared.avif, isTrue);
+      await drop(tester);
+    });
+
+    testWidgets('exact covers log their downloads as `exact` and `jpg`', (tester) async {
+      await keep(tester);
+      avifOn(() => _pixels(2, 2));
+      await show(tester, [
+        for (var i = 0; i < 10; i++) coverBox('$_cover.$i', width: 20, height: 10, preset: CoverPreset.exact),
+      ]);
+      await arrive(tester);
+      expect(downloads, hasLength(10));
+      expect(decodes, isEmpty);
+      final line = lines('cover downloads').single.f.map((key, value) => MapEntry(key, value.toJson()));
+      expect((line['preset'], line['format'], line['n']), ('exact', 'jpg', 10));
       await drop(tester);
     });
 

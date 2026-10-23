@@ -158,8 +158,8 @@ void main() {
     expect(pictures(tester).where((image) => image.url.contains('/bfs/archive/')), hasLength(4));
   });
 
-  testWidgets("搜索's, the related videos', UP主空间's and 稍后再看's rows name their official screen's preset; the "
-      "uploader sheet's 208 pt card, no official size of its own, names none", (tester) async {
+  testWidgets("the related videos', UP主空间's and 稍后再看's rows name their official screen's preset, 搜索's the exact "
+      "JPEG; the uploader sheet's 208 pt card, no official size of its own, names none", (tester) async {
     const related = VideoCard(
       aid: 1,
       bvid: 'BV1related',
@@ -247,7 +247,7 @@ void main() {
     Finder covers(String site) => find.descendant(of: find.byKey(ValueKey(site)), matching: find.byType(RemoteImage));
     for (final (site, preset) in [
       ('related', CoverPreset.related),
-      ('search', CoverPreset.search),
+      ('search', CoverPreset.exact),
       ('space', CoverPreset.space),
       ('later', CoverPreset.history),
       ('sheet', null),
