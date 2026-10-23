@@ -212,6 +212,14 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   (`lib/home/home_header.dart`). 推荐 keeps its refreshes as batches: each refresh's page on top, then 刚刚看到这里，
   点击刷新 (the APK's `ic_promo_index_refresh`; its tap is 首页's), then the cards before it; one divider, repeats and
   不感兴趣 cards dropped from the old ones, account and token restarts replace everything, 200 cards kept at most.
+- 1.0.0 (38), from KaiC's use and recordings 123-126: a worn 加载动画 arms 推荐's pull at 60 pt, when its whole box shows
+  (the TV keeps 100). 推荐's official feed asks as the Android phone app (`mobi_app=android`) with the APK's inline
+  fields, which brings one big card per page (`inline_av_v2` / `large_cover_v9`, moved to its page's front as the
+  iPhone shows it; `feed card types` logs every page's types). The big card (`lib/home/feed_big_card.dart`) spans the
+  feed, plays muted at once (`lib/home/feed_inline_player.dart`, an inline `PagePlayback`: no heartbeats, PiP or
+  最近打开) while half its video shows when the scroll settles and 首页 is shown, uncovered and no small window is up;
+  TV only while loading; 弹 and the speaker for the run; loops, the counts fading from the second lap; 👍 from
+  `like_button.selected`, optimistic, the APK's Lottie. A tap hands the running playback to the video page with sound.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -221,6 +229,11 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- (38) on the phone: Violet's pull arming at 60 pt; the big card against 123-126 (size, danmaku, counts, the speaker
+  and 弹, the loop, 👍), its tap carrying on with sound, pausing half off once the finger lets go, and whether 推荐's
+  mix changed asking as the Android phone (KaiC's worry; a 开发者 switch back to the pad if so). Guessed: release 30 s
+  after a pause, starting at 0, the paused card's last frame, heartbeats ~15 s after the take-over, the page's quality
+  inline (4K by default), 不感兴趣 sending `goto=av`.
 - (37) on the phone: the 加载动画's size against 15 and 119; the fold against 121 (and scrolling back up, which no
   recording shows: ours opens only near the top); batches against 122. Guessed: the divider's tap acting as 首页's,
   one divider, repeats and 不感兴趣 cards dropped, the 200-card cap, the magnifier's grey on the stock header (its
