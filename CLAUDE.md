@@ -338,7 +338,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     by `FakePageApi`: actions and a demo comment section, no account traffic), and `--real-account` (KaiC's PC
     login, only with his OK each time: Rules that bite).
   - Launched from the Claude desktop app (ghosthand), Windows redirects `%APPDATA%`: that run's support folder and
-    log are under `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roamingilifast\`.
+    log are under `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\bilifast\`.
   - ghosthand can't scroll or drag, and the 956 pt window is taller than this PC's screen (the bottom ~10 pt of a
     capture is stale). Scrolls, drags and swipes are covered by widget tests at ~1500 px/s instead.
 - Look-alike checks render our screens in widget tests at 440×956 (or 956×440), 3×, against KaiC's official
