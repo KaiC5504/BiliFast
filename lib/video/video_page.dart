@@ -161,6 +161,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   PlayerWait? _dataWait;
   final _chrome = ChromeState();
   final _panels = PanelController();
+  PlayerPanel? _openPanel;
   final _overlays = ActionOverlayController();
   final _tabs = PageTabsController();
 
@@ -959,6 +960,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   /// Rebuilds the PopScope, which lets a pop through only with no overlay or panel open.
   void _panelChanged() {
+    final closed = _openPanel;
+    _openPanel = _panels.value;
+    // 清晰度 closed, by a pick or a tap outside, goes back to the bare video, as the official app does (KaiC).
+    if (_openPanel == null && (closed == PlayerPanel.quality || closed == PlayerPanel.codec)) _chrome.hide();
     if (mounted) setState(() {});
   }
 

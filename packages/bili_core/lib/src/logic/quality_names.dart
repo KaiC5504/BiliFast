@@ -17,15 +17,15 @@ abstract final class QualityNames {
     16: '360P 流畅',
   };
 
-  /// What the player's quality button shows: the official app prints just "4K" there, and 60 fps as "1080P" under a
-  /// small 60帧 tag ([tag]).
+  /// What the player's quality button shows: the official app prints just "4K" there, and 1080P 60帧 and 1080P 高码率
+  /// as "1080P" under a small tag ([tag]).
   static const Map<int, String> _shortNames = {
     127: '8K',
     126: '杜比视界',
     125: 'HDR',
     120: '4K',
     116: '1080P',
-    112: '1080P+',
+    112: '1080P',
     80: '1080P',
     74: '720P',
     64: '720P',
@@ -37,6 +37,7 @@ abstract final class QualityNames {
   /// The tag over the quality button's name, for qualities its name alone doesn't tell apart.
   static String? tag(int qn) => switch (qn) {
     116 || 74 => '60帧',
+    112 => '高码率',
     _ => null,
   };
 

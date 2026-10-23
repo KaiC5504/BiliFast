@@ -962,6 +962,44 @@ void main() {
       expect(find.byType(VideoPage), findsNothing);
     });
 
+    testWidgets('清晰度 closed, by a pick, a tap outside or back, leaves the controls hidden; 倍速 brings them back',
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await rotate(tester, Presentation.landscape);
+      final chrome = ui(tester).chrome;
+      final panels = ui(tester).panels;
+
+      chrome.show();
+      panels.open(PlayerPanel.quality);
+      await tester.pump();
+      panels.close();
+      await tester.pump();
+      expect(chrome.visible, isFalse, reason: 'a pick or a tap outside closes the panel');
+
+      chrome.show();
+      panels
+        ..open(PlayerPanel.quality)
+        ..open(PlayerPanel.codec);
+      await tester.pump();
+      ui(tester).onBack();
+      await frames(tester, 2);
+      expect(panels.value, isNull);
+      expect(chrome.visible, isFalse, reason: 'back from 高级设置 too');
+
+      chrome.show();
+      panels.open(PlayerPanel.speed);
+      await tester.pump();
+      panels.close();
+      await tester.pump();
+      expect(chrome.visible, isTrue);
+
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester, 2);
+      await back(tester);
+    });
+
     testWidgets('two stacked pages: the latest begin wins and the page below takes the orientation back',
         (tester) async {
       await host(tester);

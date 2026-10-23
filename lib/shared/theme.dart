@@ -463,9 +463,9 @@ abstract final class BiliMetrics {
   static const chromeTextPad = 8.0;
   static const chromeLabelText = 14.0;
 
-  /// The 60帧 tag over 1080P (KaiC's landscape screenshot, 2026-10-23): 11 pt high with 8 pt text, its middle 15.2 pt
-  /// above the name's and its right 8.8 pt past it. A tagged name keeps only 2.67 pt each side, so 倍速 sits 15 pt
-  /// further left than beside 4K.
+  /// The 60帧 or 高码率 tag over 1080P (KaiC's landscape screenshots, 2026-10-23): 11 pt high with 8 pt text, its
+  /// middle 15.2 pt above the name's and its right 8.8 pt past it. A tagged name keeps only 2.67 pt each side, so 倍速
+  /// sits 15 pt further left than beside 4K.
   static const chromeTaggedPad = 2.67;
   static const chromeTagHeight = 11.0;
   static const chromeTagText = 8.0;

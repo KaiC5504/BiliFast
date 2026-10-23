@@ -422,6 +422,13 @@ void main() {
     await tester.pump();
     expect(tag, findsNothing);
     expect(find.descendant(of: quality, matching: find.text('1080P')), findsOne);
+
+    rig.session
+      ..playing = 112
+      ..changed();
+    await tester.pump();
+    expect(find.descendant(of: tag, matching: find.text('高码率')), findsOne);
+    expect(find.descendant(of: quality, matching: find.text('1080P')), findsOne);
   });
 
   testWidgets('sizes as 04: the title at 16, 倍速 and the quality at 14, back a full 44 pt target', (tester) async {

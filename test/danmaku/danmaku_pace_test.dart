@@ -81,6 +81,16 @@ void main() {
     expect(second, greaterThanOrEqualTo(first));
   });
 
+  test('a playhead that stops while still playing holds danmaku just ahead of it, never looping back', () {
+    final pace = DanmakuPace();
+    pace.follow(10, rate: 1, running: true, frameSeconds: 0);
+    final shown = [for (var i = 1; i <= 600; i++) pace.follow(10, rate: 1, running: true, frameSeconds: i / 120)];
+    for (var i = 1; i < shown.length; i++) {
+      expect(shown[i], greaterThanOrEqualTo(shown[i - 1]));
+    }
+    expect(shown.last, closeTo(10 + DanmakuPace.maxLeadSeconds, 1e-9));
+  });
+
   test('a seek, a pause and a restart are taken at once', () {
     final pace = DanmakuPace();
     pace.follow(10, rate: 1, running: true, frameSeconds: 0);

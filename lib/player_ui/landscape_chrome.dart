@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:bili_core/api.dart' show VideoTagKind;
 import 'package:bili_core/logic.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/widgets.dart';
 
 import '../shared/action_glyphs.dart';
@@ -528,11 +529,16 @@ class _Tag extends StatelessWidget {
       border: Border.all(color: BiliMetrics.chromeTagLine, width: BiliMetrics.chromeTagBorder),
       borderRadius: BorderRadius.circular(BiliMetrics.chromeTagHeight / 2),
     ),
-    child: Text(
-      text,
-      maxLines: 1,
-      softWrap: false,
-      style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.chromeTagText, height: 1),
+    // The text keeps its own line height, centred, though the font's line is taller than the tag.
+    child: OverflowBox(
+      maxHeight: double.infinity,
+      fit: OverflowBoxFit.deferToChild,
+      child: Text(
+        text,
+        maxLines: 1,
+        softWrap: false,
+        style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.chromeTagText),
+      ),
     ),
   );
 }

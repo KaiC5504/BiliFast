@@ -28,6 +28,8 @@ void main() {
     expect(QualityNames.tag(116), '60帧');
     expect(QualityNames.short(qn: 74, serverText: null), '720P');
     expect(QualityNames.tag(74), '60帧');
+    expect(QualityNames.short(qn: 112, serverText: null), '1080P');
+    expect(QualityNames.tag(112), '高码率');
     expect(QualityNames.tag(80), isNull);
     expect(QualityNames.tag(120), isNull);
   });

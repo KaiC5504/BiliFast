@@ -9,6 +9,10 @@ final class DanmakuPace {
   static const catchUpPerSecond = 1.5;
   static const snapSeconds = 0.5;
 
+  /// How far danmaku may run ahead of a playhead that stops moving while still said to play (a seek not landed, a
+  /// stall not yet reported); easing down from 2× leads it by at most ~0.12 s.
+  static const maxLeadSeconds = 0.2;
+
   /// A frame longer than this (a hitch, the app coming back) advances no further, so the gap is caught up instead.
   static const maxFrameSeconds = 0.1;
 
@@ -37,7 +41,7 @@ final class DanmakuPace {
     _rate += (rate - _rate) * (1 - math.exp(-dt / easeSeconds));
     final eased = shown + _rate * dt;
     final next = eased + (target - eased) * (1 - math.exp(-dt * catchUpPerSecond));
-    return _shown = math.max(shown, next);
+    return _shown = math.max(shown, math.min(next, target + maxLeadSeconds));
   }
 
   /// The ticker starts again from zero: the next frame takes the playhead as it is.

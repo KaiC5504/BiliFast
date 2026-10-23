@@ -188,6 +188,13 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   covers ask the exact JPEG (`CoverPreset.exact`: the official search preset isn't made for the web search's results).
   A video opened from a video page (related, 简介/comment video ids, the uploader sheet) replaces that page
   (`replaceVideoPage`): back goes to where the first video was opened, never stacking (KaiC).
+- 1.0.0 (35), from KaiC's use: danmaku during the 2× hold stepped a little forward and back, then sped up. Position
+  readings (~10 Hz, stamped on arrival in Dart) carry tens of ms of jitter, twice that in media time at 2×, past the
+  clock's 40 ms smoothing window, so each one snapped it; the window now scales with the rate. Danmaku draws at
+  `DanmakuPace`'s time: it eases between rates over 0.2 s (the official app speeds up and slows down smoothly), closes
+  gaps gently, never steps back and leads a stalled playhead by 0.2 s at most; a seek, a pause or a gap past 0.5 s is
+  taken at once. 1080P 60帧 and 1080P 高码率 (and 720P 60帧) read `1080P` under an outlined tag, as in KaiC's
+  landscape screenshots (`QualityNames.tag`). 清晰度 closed (a pick, a tap outside, back) leaves the controls hidden.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -197,6 +204,8 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- (35) on the phone: the 2× hold and its release with danmaku on, against the official app (no forward-back steps,
+  the speed easing up and down); the 60帧 and 高码率 tags beside the official ones; 清晰度 closing to the bare video.
 - (34) on the phone: the TV up ~1.5 s on 首页's tap and a pull, the new cards landing with their covers in (`feed
   covers` at the swap: ready near 6 of 6); the launch's `feed covers done` warmed other than none and well under
   (33)'s 1113 / 1545 ms; `cover downloads` preset exact for 搜索; a related video, a 简介 video id and an uploader
