@@ -962,8 +962,7 @@ void main() {
       expect(find.byType(VideoPage), findsNothing);
     });
 
-    testWidgets('清晰度 closed, by a pick, a tap outside or back, leaves the controls hidden; 倍速 brings them back',
-        (tester) async {
+    testWidgets('every panel closed, by a pick, a tap outside or back, leaves the controls hidden', (tester) async {
       await host(tester);
       pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
       await opened(tester);
@@ -971,29 +970,27 @@ void main() {
       final chrome = ui(tester).chrome;
       final panels = ui(tester).panels;
 
-      chrome.show();
-      panels.open(PlayerPanel.quality);
-      await tester.pump();
-      panels.close();
-      await tester.pump();
-      expect(chrome.visible, isFalse, reason: 'a pick or a tap outside closes the panel');
+      for (final panel in PlayerPanel.values) {
+        chrome.show();
+        panels.open(panel);
+        await tester.pump();
+        panels.close();
+        await tester.pump();
+        expect(chrome.visible, isFalse, reason: '$panel');
+      }
 
+      // Moving between panels keeps them up; only the last close goes back to the video.
       chrome.show();
       panels
-        ..open(PlayerPanel.quality)
-        ..open(PlayerPanel.codec);
+        ..open(PlayerPanel.more)
+        ..open(PlayerPanel.danmakuSettings)
+        ..open(PlayerPanel.danmakuList);
       await tester.pump();
+      expect(chrome.visible, isTrue);
       ui(tester).onBack();
       await frames(tester, 2);
       expect(panels.value, isNull);
-      expect(chrome.visible, isFalse, reason: 'back from 高级设置 too');
-
-      chrome.show();
-      panels.open(PlayerPanel.speed);
-      await tester.pump();
-      panels.close();
-      await tester.pump();
-      expect(chrome.visible, isTrue);
+      expect(chrome.visible, isFalse);
 
       unawaited(nav.currentState!.maybePop());
       await frames(tester, 2);

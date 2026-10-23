@@ -962,8 +962,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _panelChanged() {
     final closed = _openPanel;
     _openPanel = _panels.value;
-    // 清晰度 closed, by a pick or a tap outside, goes back to the bare video, as the official app does (KaiC).
-    if (_openPanel == null && (closed == PlayerPanel.quality || closed == PlayerPanel.codec)) _chrome.hide();
+    // A panel closed, by a pick, a tap outside or back, goes back to the bare video, as the official app does (KaiC).
+    if (_openPanel == null && closed != null) _chrome.hide();
     if (mounted) setState(() {});
   }
 
