@@ -26,6 +26,12 @@ sized as KaiC's iPhone recording shows it (39 × 36.33 pt and 13.33 × 11.33 pt)
 unchanged: a white 小电视 with the ▶ cut out. KaiC's iPhone draws it at the file's own 3× size (80 × 77 pt; its body
 68 pt wide, as on 118) at a quarter of its white, so the video shows through.
 
+`images/player/screen_mode_normal.png` (竖屏's last bottom button for an upright video, 16) is the same APK's vector
+`bili_story_ctrl_normal`, level 0 of its `bili_story_screen_mode_selector` (1 is `bili_story_ctrl_clean`, 2
+`bili_story_ctrl_full`, the corners a wide video shows): an upright phone with two lines beside half a landscape screen
+at 60% white. Drawn white at 3× of its own 24 dp (72 px; 24 pt as 16 measures it) with its stroke alpha and round line
+caps, which `apk_asset.py`'s drawings leave out.
+
 `images/home/batch_refresh.png` (the ⟳ after 推荐's 刚刚看到这里，点击刷新, 122) is the same APK's
 `ic_promo_index_refresh` (xxhdpi), unchanged: two white arcs with solid arrowheads, the drawing KaiC's iPhone shows (the
 APK's `ic_promo_index_refresh_vector` is a newer one, its arrows open and turning the other way). The iPhone draws it at

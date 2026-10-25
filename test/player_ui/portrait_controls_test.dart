@@ -8,10 +8,13 @@ import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/seek_bar.dart';
 import 'package:bilifast/shared/theme.dart';
-import 'package:flutter/widgets.dart';
+import 'package:bilifast/video/player_box.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
+import '../support/stand_in_fonts.dart';
+import '../video/mixed_lines.dart' show appTheme;
 
 final class Rig {
   final session = FakePlayerSession();
@@ -29,13 +32,15 @@ final class Rig {
     onBack: () => backs++,
   );
 
+  void _disposeAfter() => addTearDown(() {
+    chrome.dispose();
+    panels.dispose();
+    orientation.dispose();
+    session.dispose();
+  });
+
   Future<void> mount(WidgetTester tester, {TextScaler textScaler = TextScaler.noScaling}) async {
-    addTearDown(() {
-      chrome.dispose();
-      panels.dispose();
-      orientation.dispose();
-      session.dispose();
-    });
+    _disposeAfter();
     await tester.pumpWidget(
       MediaQuery(
         data: MediaQueryData(textScaler: textScaler),
@@ -43,6 +48,39 @@ final class Rig {
           textDirection: TextDirection.ltr,
           child: Center(
             child: SizedBox(width: 440, height: 247.5, child: PortraitControls(ui: ui)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// On KaiC's phone under the system font's stand-ins, in the box the page gives the video's shape (17's 3:4 is
+  /// 586.67 pt tall), under the island.
+  Future<void> mountAsPhone(WidgetTester tester) async {
+    final saved = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = saved);
+    await tester.runAsync(loadSystemFontStandIns);
+    BiliFonts.family = BiliFonts.system;
+    tester.view
+      ..physicalSize = const Size(440, 956)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    _disposeAfter();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme(),
+        home: Material(
+          color: BiliColors.videoBackground,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0,
+                top: 62,
+                width: 440,
+                height: inlinePlayerHeight(440, video: session.videoShape),
+                child: PortraitControls(ui: ui),
+              ),
+            ],
           ),
         ),
       ),
@@ -145,13 +183,23 @@ void main() {
     expect(rig.orientation.presentation, Presentation.landscape);
   });
 
-  testWidgets('full screen on a vertical video goes to 竖屏', (tester) async {
+  testWidgets('an upright video has no 全屏, only 竖屏, which goes to 竖屏; the row follows the shape once known', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
     final rig = Rig();
-    rig.session.isVertical = true;
     await rig.mount(tester);
+    expect(find.byKey(const ValueKey('portrait-fullscreen')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('portrait-fullscreen')));
+    rig.session
+      ..isVertical = true
+      ..changed();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('portrait-fullscreen')), findsNothing);
+    expect(find.bySemanticsLabel('全屏'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('portrait-vertical')));
     expect(rig.orientation.presentation, Presentation.vertical);
+    semantics.dispose();
   });
 
   testWidgets('竖屏 goes to 竖屏 whatever the video', (tester) async {
@@ -160,6 +208,74 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('portrait-vertical')));
     expect(rig.orientation.presentation, Presentation.vertical);
+  });
+
+  group('the bottom row on the phone (440 × 956, the system font)', () {
+    Rect rectOf(WidgetTester tester, Finder finder) => tester.getRect(finder);
+    Rect pill(WidgetTester tester) =>
+        rectOf(tester, find.ancestor(of: find.text('竖屏'), matching: find.byType(Container)).first);
+    Rect corners(WidgetTester tester) => rectOf(
+      tester,
+      find.descendant(
+        of: find.byKey(const ValueKey('portrait-vertical')),
+        matching: find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is CornersPainter),
+      ),
+    );
+
+    testWidgets('17: an upright video ends at 竖屏, where a wide one has 全屏, and the bar takes the room', (
+      tester,
+    ) async {
+      final rig = Rig()
+        ..session.isVertical = true
+        ..session.videoShape = (width: 1080, height: 1440)
+        ..session.duration.value = 31;
+      await rig.mountAsPhone(tester);
+
+      expect(find.byKey(const ValueKey('portrait-fullscreen')), findsNothing);
+      // 17: the corners' ink 409.67-424.33 × 618-635.33 pt, the pill 412-434 × 604.67-616.67.
+      expect(corners(tester).center.dx, closeTo(417, 0.01));
+      expect(corners(tester).center.dy, closeTo(626.67, 0.01));
+      expect(pill(tester).center.dx, closeTo(423, 0.01));
+      expect(pill(tester).center.dy, closeTo(610.67, 0.01));
+      expect(pill(tester).right, lessThanOrEqualTo(434.5));
+      // 17: 00:00/00:31's ink ends at 384.33 pt, the bar at 306.33. The stand-in's time starts 1.3 pt further left
+      // than 17's SF (its colons are narrower), and the bar ends 2.3 pt short with it.
+      final time = rectOf(tester, find.byKey(const ValueKey('portrait-time')));
+      expect(time.right, 385);
+      expect(rig.bar(tester).right, time.left - BiliMetrics.chromeTimeLeading);
+      expect(rig.bar(tester).right, closeTo(306.33, 2.5));
+    });
+
+    testWidgets('the bar an upright video gets is longer by 全屏 and its gap', (tester) async {
+      final wide = Rig()..session.duration.value = 31;
+      await wide.mountAsPhone(tester);
+      final wideBar = wide.bar(tester);
+
+      final upright = Rig()
+        ..session.isVertical = true
+        ..session.videoShape = (width: 1080, height: 1440)
+        ..session.duration.value = 31;
+      await upright.mountAsPhone(tester);
+      expect(upright.bar(tester).left, wideBar.left);
+      expect(
+        upright.bar(tester).right - wideBar.right,
+        closeTo(BiliMetrics.chromeButton + BiliMetrics.fullScreenGap, 0.01),
+      );
+    });
+
+    testWidgets('03: a wide video keeps 竖屏 and 全屏 side by side', (tester) async {
+      final rig = Rig()
+        ..session.videoShape = (width: 1920, height: 1080)
+        ..session.duration.value = 31;
+      await rig.mountAsPhone(tester);
+
+      final fullScreen = rectOf(tester, find.byKey(const ValueKey('portrait-fullscreen')));
+      expect(fullScreen, Rect.fromLTRB(395, 265.5, 439, 309.5));
+      expect(corners(tester).center, within(distance: 0.01, from: const Offset(371, 287.5)));
+      expect(pill(tester).center.dx, closeTo(383, 0.01));
+      expect(rectOf(tester, find.byKey(const ValueKey('portrait-time'))).right, 339);
+      expect(rig.bar(tester).right, lessThan(270));
+    });
   });
 
   testWidgets('hidden controls fade out, let touches through and leave the thin line', (tester) async {

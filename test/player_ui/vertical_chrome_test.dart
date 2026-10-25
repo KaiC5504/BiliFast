@@ -10,6 +10,7 @@ import 'package:bilifast/player/bili_player.dart' show PlayerStatus, StatusChang
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/player_ui/portrait_controls.dart' show FullScreenPainter;
 import 'package:bilifast/player_ui/seek_bar.dart';
 import 'package:bilifast/player_ui/seek_preview.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
@@ -225,6 +226,60 @@ void main() {
     // The title stops short of where the action column goes.
     expect(tester.getTopRight(find.byKey(const ValueKey('vertical-title'))).dx, lessThanOrEqualTo(378));
     expect(find.text('详情页'), findsOneWidget);
+  });
+
+  testWidgets("the bar draws 0.5 pt above its row's place, as 118 and 19 have it; the rows around it stay", (
+    tester,
+  ) async {
+    final rig = rig09();
+    await rig.mount(tester);
+    await tester.pumpAndSettle();
+    final bar = tester.getRect(find.byKey(const ValueKey('vertical-bar')));
+    // At rest the line is drawn 11-13 pt into the 24 pt touch box: 870-872 pt, 118's rows 2610-2616 px.
+    expect(bar.top, 859);
+    expect(bar.height, BiliMetrics.barTouchHeight);
+    expect(centre(tester, 'vertical-detail').dy, 901);
+    expect(centre(tester, 'vertical-danmaku').dy, 901);
+    expect(tester.getBottomLeft(find.byKey(const ValueKey('vertical-title'))).dy, 822.5);
+  });
+
+  testWidgets("16: an upright video's last button is the APK's phone and half screen, 24 pt where 16 has it; a wide "
+      "one keeps 09's corners; both still go to landscape", (tester) async {
+    final rig = Rig()..session.isVertical = true;
+    await rig.mount(tester);
+    final glyph = find.descendant(
+      of: find.byKey(const ValueKey('vertical-landscape')),
+      matching: find.byKey(const ValueKey('vertical-screen-mode')),
+    );
+    expect(glyph, findsOneWidget);
+    // 16: the phone's ink 402-414 × 891-911 pt, 1 and 2 into the drawing's 24 pt box.
+    expect(tester.getRect(glyph), const Rect.fromLTWH(401, 889, 24, 24));
+    final image = tester.widget<Image>(glyph);
+    expect((image.image as AssetImage).assetName, VerticalActionTheme.screenModeAsset);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('vertical-landscape')),
+        matching: find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is FullScreenPainter),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('vertical-landscape')));
+    expect(rig.orientation.presentation, Presentation.landscape);
+
+    rig.orientation.enterVertical();
+    rig.session
+      ..isVertical = false
+      ..changed();
+    await tester.pump();
+    expect(glyph, findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('vertical-landscape')),
+        matching: find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is FullScreenPainter),
+      ),
+      findsOneWidget,
+    );
+    expect(centre(tester, 'vertical-landscape'), const Offset(413, 901));
   });
 
   testWidgets('the uploader and the plays come with the detail, where 09 has them', (tester) async {

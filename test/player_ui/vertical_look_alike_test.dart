@@ -219,7 +219,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     final context = tester.element(find.byType(VerticalChrome));
-    await tester.runAsync(() => precacheImage(const AssetImage(VerticalActionTheme.pausedPlayAsset), context));
+    await tester.runAsync(() async {
+      await precacheImage(const AssetImage(VerticalActionTheme.pausedPlayAsset), context);
+      await precacheImage(const AssetImage(VerticalActionTheme.screenModeAsset), context);
+    });
     await tester.pumpAndSettle();
 
     final shots = Platform.environment['BILIFAST_SHOTS'];

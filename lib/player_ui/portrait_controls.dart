@@ -10,8 +10,9 @@ import 'player_ui.dart';
 import 'seek_bar.dart';
 
 /// The small player's controls, filling the player (BiliNative `PortraitControls.swift`, laid out as the official
-/// app's 15): back and ⋮ at the top; play, the bar with the TV face, the time, 竖屏 and full screen at the bottom.
-/// While they are hidden the thin line runs along the bottom edge instead.
+/// app's 15): back and ⋮ at the top; play, the bar with the TV face, the time, 竖屏 and full screen at the bottom. An
+/// upright video's row ends at 竖屏, in full screen's place, the bar taking the room (17). While they are hidden the
+/// thin line runs along the bottom edge instead.
 class PortraitControls extends StatefulWidget {
   const PortraitControls({super.key, required this.ui});
 
@@ -80,14 +81,6 @@ class _PortraitControlsState extends State<PortraitControls> {
     _ui.chrome.show();
     if (_duration() <= 0) return;
     unawaited(_session.commitSeek(seconds));
-  }
-
-  void _fullScreen() {
-    if (_session.isVertical) {
-      _ui.orientation.enterVertical();
-    } else {
-      _ui.orientation.enterLandscape();
-    }
   }
 
   @override
@@ -163,6 +156,7 @@ class _PortraitControlsState extends State<PortraitControls> {
   }
 
   Widget _bottomRow() {
+    final upright = _session.isVertical;
     return Row(
       children: [
         PlayPauseButton(key: const ValueKey('portrait-play'), session: _session, onTap: _tap(_session.togglePlay)),
@@ -201,20 +195,21 @@ class _PortraitControlsState extends State<PortraitControls> {
           key: const ValueKey('portrait-vertical'),
           label: '竖屏',
           onTap: _tap(_ui.orientation.enterVertical),
-          child: const _VerticalGlyph(),
+          child: _VerticalGlyph(badgeX: upright ? BiliMetrics.badgeEdgeOffsetX : BiliMetrics.badgeOffsetX),
         ),
-        Padding(
-          padding: const EdgeInsets.only(left: BiliMetrics.fullScreenGap),
-          child: ChromeTap(
-            key: const ValueKey('portrait-fullscreen'),
-            label: '全屏',
-            onTap: _tap(_fullScreen),
-            child: const CustomPaint(
-              size: Size.square(BiliMetrics.fullScreenGlyph),
-              painter: FullScreenPainter(),
+        if (!upright)
+          Padding(
+            padding: const EdgeInsets.only(left: BiliMetrics.fullScreenGap),
+            child: ChromeTap(
+              key: const ValueKey('portrait-fullscreen'),
+              label: '全屏',
+              onTap: _tap(_ui.orientation.enterLandscape),
+              child: const CustomPaint(
+                size: Size.square(BiliMetrics.fullScreenGlyph),
+                painter: FullScreenPainter(),
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -584,9 +579,11 @@ class PlayPausePainter extends CustomPainter {
       oldDelegate.pauseHeight != pauseHeight;
 }
 
-/// The 竖屏 button: four corner brackets with a small 竖屏 pill above to the right.
+/// The 竖屏 button: four corner brackets with a small 竖屏 pill above to the right, its centre [badgeX] right of theirs.
 class _VerticalGlyph extends StatelessWidget {
-  const _VerticalGlyph();
+  const _VerticalGlyph({required this.badgeX});
+
+  final double badgeX;
 
   @override
   Widget build(BuildContext context) {
@@ -601,7 +598,7 @@ class _VerticalGlyph extends StatelessWidget {
             painter: CornersPainter(),
           ),
           Transform.translate(
-            offset: const Offset(BiliMetrics.badgeOffsetX, BiliMetrics.badgeOffsetY),
+            offset: Offset(badgeX, BiliMetrics.badgeOffsetY),
             child: Container(
               height: BiliMetrics.badgeHeight,
               padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.badgePadding),
