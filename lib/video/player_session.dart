@@ -99,6 +99,15 @@ abstract interface class PlayerSession implements Listenable {
 
   bool get isVertical;
 
+  /// The video's width and height, rotation applied: the stream's once known, before that the signed view's; null
+  /// until either is in.
+  ({int width, int height})? get videoShape;
+
+  /// 竖屏 starts the video over at its end, whatever 自动连播 and the loop mode say; the page sets it with the
+  /// presentation.
+  bool get loopsAtEnd;
+  set loopsAtEnd(bool value);
+
   /// 看点, empty without them.
   List<Chapter> get chapters;
 

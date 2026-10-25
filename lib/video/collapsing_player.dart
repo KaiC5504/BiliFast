@@ -8,6 +8,8 @@ import '../player_ui/portrait_controls.dart' show BackGlyph, ChromeTap, MoreDots
 import '../shared/theme.dart';
 import 'page_details.dart' show PageTab;
 import 'page_tabs.dart';
+import 'player_box.dart';
+import 'player_session.dart';
 
 /// The room each tab's scroll view leaves above its content for the shrinking player (BiliNative
 /// `CollapsingPlayer`'s reserve). Each tab's list starts with a gap this tall and scrolls with the page's primary
@@ -57,6 +59,12 @@ class CollapsingPlayer extends ChangeNotifier {
     _full = value;
     _height = _compute();
   }
+
+  /// The page's width as it lays out; [full] follows it and the session's video. It notifies nobody.
+  set width(double value) => full = inlinePlayerHeight(value);
+
+  /// The session whose video shape and end the box follows; null while the page has none.
+  set session(PlayerSession? value) {}
 
   /// Loaded, paused and not at the end: only then does scrolling shrink the player.
   bool get paused => _paused;

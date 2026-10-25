@@ -227,6 +227,17 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   }
 
   @override
+  ({int width, int height})? get videoShape {
+    if (_controller.videoSize case final size?) return size;
+    final detail = this.detail;
+    if (detail == null || detail.width <= 0 || detail.height <= 0) return null;
+    return (width: detail.width, height: detail.height);
+  }
+
+  @override
+  bool loopsAtEnd = false;
+
+  @override
   List<Chapter> get chapters => _chapters;
 
   @override

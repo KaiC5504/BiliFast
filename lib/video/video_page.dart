@@ -648,6 +648,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final controller = playback.controller!;
     final session = playback.session!;
     _session = session;
+    session.loopsAtEnd = _presentation == Presentation.vertical;
+    _collapse.session = session;
     controller.addListener(_follow);
     final details = widget.createDetails(
       session: session,
@@ -878,6 +880,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _commentOverlays.close();
     }
     if (_presentation.fullScreen) _uploaderSheet.close();
+    _session?.loopsAtEnd = _presentation == Presentation.vertical;
     setState(() {});
     _applySystemUi();
     _standAside();
@@ -1345,7 +1348,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   final media = MediaQuery.of(context);
                   final top = media.padding.top;
                   if (!fullScreen) {
-                    _collapse.full = constraints.maxWidth / BiliMetrics.videoAspect;
+                    _collapse.width = constraints.maxWidth;
                     _uprightFrame = (size: constraints.biggest, top: top);
                   }
                   final upright = _uprightFrame ?? (size: constraints.biggest, top: top);

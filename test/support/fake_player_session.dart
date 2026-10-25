@@ -48,6 +48,12 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   bool isVertical = false;
 
   @override
+  ({int width, int height})? videoShape;
+
+  @override
+  bool loopsAtEnd = false;
+
+  @override
   List<Chapter> chapters = const [];
 
   @override

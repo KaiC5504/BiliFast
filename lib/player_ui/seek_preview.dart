@@ -8,10 +8,13 @@ import '../video/player_session.dart';
 /// The frame and time over the middle of landscape while the bar is dragged (102). Before the frames arrive, or for a
 /// part without them, the time shows alone in its place.
 class SeekPreview extends StatefulWidget {
-  const SeekPreview({super.key, required this.session, required this.shown});
+  const SeekPreview({super.key, required this.session, required this.shown, this.upright = false});
 
   final PlayerSession session;
   final bool shown;
+
+  /// 竖屏's (19, 20): the frame in the video's orientation above the bar, the time under it.
+  final bool upright;
 
   @override
   State<SeekPreview> createState() => _SeekPreviewState();
