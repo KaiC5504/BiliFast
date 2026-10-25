@@ -1361,7 +1361,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   Widget hideable(bool hidden, Widget child) =>
                       Offstage(offstage: hidden, child: TickerMode(enabled: !hidden, child: child));
                   // Laid out as if the player were already the bar; each tab leaves the rest of the full height free.
-                  final pager = belowPlayer(PlayerReserve(height: _collapse.reserve, child: _pager(context)));
+                  final pager = belowPlayer(CollapseReserve(collapse: _collapse, child: _pager(context)));
                   final tabRow = belowPlayer(_tabRow(context));
                   // Full screen runs under the notch and the home indicator, so its chrome keeps clear of them itself;
                   // the small player sits below the status bar with no insets of its own.
@@ -1370,25 +1370,29 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                     // An open panel covers the player for VoiceOver too, as landscape's panel does.
                     child: ExcludeSemantics(
                       excluding: _panels.value != null,
-                      child: VideoPlayerArea(
-                        key: _areaKey,
-                        presentation: layout,
-                        onBack: _back,
-                        ui: ui,
-                        video: mine ? _videoView : null,
-                        danmaku: mine ? controller.danmaku : null,
-                        cover: _cover(context),
-                        loading: _loading(controller, mine),
-                        waiting: mine ? _dataWait : null,
-                        failure: _failure(controller, mine),
-                        onRetry: _retry,
-                        endScreenAside: _overlayAside,
-                        shrunk: _shrunk && !fullScreen,
-                        barred: _barred && !fullScreen,
-                        danmakuHeight: fullScreen ? null : _collapse.full,
-                        pin: _pin,
-                        turning: _turningPlayer,
-                        verticalTurn: _verticalTurn,
+                      // The danmaku's height follows where an upright video's box is heading, once per reshape.
+                      child: ValueListenableBuilder<double>(
+                        valueListenable: _collapse.shape,
+                        builder: (context, shape, _) => VideoPlayerArea(
+                          key: _areaKey,
+                          presentation: layout,
+                          onBack: _back,
+                          ui: ui,
+                          video: mine ? _videoView : null,
+                          danmaku: mine ? controller.danmaku : null,
+                          cover: _cover(context),
+                          loading: _loading(controller, mine),
+                          waiting: mine ? _dataWait : null,
+                          failure: _failure(controller, mine),
+                          onRetry: _retry,
+                          endScreenAside: _overlayAside,
+                          shrunk: _shrunk && !fullScreen,
+                          barred: _barred && !fullScreen,
+                          danmakuHeight: fullScreen ? null : shape,
+                          pin: _pin,
+                          turning: _turningPlayer,
+                          verticalTurn: _verticalTurn,
+                        ),
                       ),
                     ),
                   );

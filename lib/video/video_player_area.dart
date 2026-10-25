@@ -140,7 +140,9 @@ class VideoPlayerArea extends StatelessWidget {
                       vertical: presentation == Presentation.vertical,
                       videoIsVertical: session.isVertical,
                       child: ClipRect(
-                        clipBehavior: shrunk ? Clip.hardEdge : Clip.none,
+                        // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still run
+                        // the full height.
+                        clipBehavior: shrunk || danmakuHeight != null ? Clip.hardEdge : Clip.none,
                         child: _Pinned(
                           size: pin?.value,
                           child: OverflowBox(
