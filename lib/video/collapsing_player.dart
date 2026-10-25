@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/widgets.dart';
 
 import '../player_ui/portrait_controls.dart' show BackGlyph, ChromeTap, MoreDots, PlayPausePainter;
@@ -68,6 +69,14 @@ class CollapsingPlayer extends ChangeNotifier {
   double _shapeFrom = 0;
   final _shape = ValueNotifier<double>(0);
 
+  /// What [shape] was last taken from.
+  ({int width, int height})? _shapeVideo;
+  bool _shapeEnded = false;
+
+  int? _retargetFrame;
+  bool _applyQueued = false;
+  bool _disposed = false;
+
   /// Each tab's offset when playback paused: the player shrinks only by what is scrolled after it, so a pause halfway
   /// down a tab doesn't snap it to the bar, and switching to a tab scrolled while playing doesn't either.
   final _from = <PageTab, double>{};
@@ -96,6 +105,7 @@ class CollapsingPlayer extends ChangeNotifier {
     _floor = inlinePlayerHeight(value);
     _reshape.stop();
     _shape.value = _shapeFor();
+    _shapeFrom = _shape.value;
     _setFull(_shape.value);
     final (height, progress) = _compute();
     _height = height;
@@ -103,13 +113,13 @@ class CollapsingPlayer extends ChangeNotifier {
   }
 
   /// The session whose video shape and end the box follows, changing shape over [CollapseTheme.reshape] once laid
-  /// out; null while the page has none.
+  /// out; null while the page has none. An in-page open keeps the shape the box has until the next video's is known.
   set session(PlayerSession? value) {
     if (identical(value, _session)) return;
-    _session?.removeListener(_retarget);
+    _session?.removeListener(_sessionChanged);
     _session = value;
-    value?.addListener(_retarget);
-    _retarget();
+    value?.addListener(_sessionChanged);
+    _sessionChanged();
   }
 
   /// Loaded, paused and not at the end: only then does scrolling shrink the player past 16:9.
@@ -167,7 +177,22 @@ class CollapsingPlayer extends ChangeNotifier {
 
   double _shapeFor() {
     final session = _session;
-    return inlinePlayerHeight(_width, video: session?.videoShape, ended: session?.ended ?? false);
+    // An in-page open (合集's next, 选集, a related video) clears the last video's shape before the next one's is in;
+    // following that would take the box to 16:9 and back.
+    if (session == null || !session.opening || session.videoShape != null) {
+      _shapeVideo = session?.videoShape;
+      _shapeEnded = session?.ended ?? false;
+    }
+    return inlinePlayerHeight(_width, video: _shapeVideo, ended: _shapeEnded);
+  }
+
+  /// Retargets once per frame, at its start: a related video from the end screen lifts the end before its open
+  /// clears the shape, and taking each change as it came would grow the box for the old video meanwhile.
+  void _sessionChanged() {
+    _retargetFrame ??= SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _retargetFrame = null;
+      _retarget();
+    });
   }
 
   void _retarget() {
@@ -176,15 +201,26 @@ class CollapsingPlayer extends ChangeNotifier {
     _shape.value = target;
     if (still) {
       _reshape.stop();
-      _setFull(target);
-      _update();
+      _shapeFrom = target;
+      _reshaped();
     } else {
       _shapeFrom = _full;
       unawaited(_reshape.forward(from: 0));
     }
   }
 
+  /// The reshape's ticks and the retarget come at the frame's start, among the scroll positions' own ticks; [_apply]
+  /// waits for the microtasks after them all, since a fling sets its position outright on each tick and would undo a
+  /// correction made before it.
   void _reshaped() {
+    if (_applyQueued) return;
+    _applyQueued = true;
+    scheduleMicrotask(_apply);
+  }
+
+  void _apply() {
+    _applyQueued = false;
+    if (_disposed) return;
     _setFull(lerpDouble(_shapeFrom, _shape.value, CollapseTheme.reshapeCurve.transform(_reshape.value))!);
     _update();
   }
@@ -204,8 +240,7 @@ class CollapsingPlayer extends ChangeNotifier {
       if (offset <= 0) continue;
       final moved = math.max(0.0, offset + change) - offset;
       for (final position in tabs.scrollOf(tab).positions) {
-        // A layout-time correction, which the new gap's layout in this frame takes up; a fling carries on from it
-        // rather than undoing it.
+        // A layout-time correction, which the new gap's layout in this frame takes up; a fling restarts from it.
         if (position.hasPixels) position.correctBy(moved);
       }
       _from[tab] = math.max(0, (_from[tab] ?? 0) + moved);
@@ -252,7 +287,9 @@ class CollapsingPlayer extends ChangeNotifier {
 
   @override
   void dispose() {
-    _session?.removeListener(_retarget);
+    _disposed = true;
+    if (_retargetFrame case final id?) SchedulerBinding.instance.cancelFrameCallbackWithId(id);
+    _session?.removeListener(_sessionChanged);
     tabs.motion.removeListener(_scrolled);
     _grow.dispose();
     _reshape.dispose();
@@ -273,7 +310,7 @@ class CollapsedPlayerBar extends StatelessWidget {
     required this.onMore,
   });
 
-  /// 0 at full height, 1 once it is the bar.
+  /// 0 where the pause's shrink started, 1 once it is the bar.
   final double progress;
   final VoidCallback onResume;
   final VoidCallback onBack;

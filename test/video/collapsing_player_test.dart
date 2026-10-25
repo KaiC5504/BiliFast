@@ -241,10 +241,11 @@ void main() {
     });
 
     /// A tab as the page's are: the reserve's gap, then the content.
-    Widget list(String name) => Builder(
+    Widget list(String name, {ScrollPhysics? physics}) => Builder(
       builder: (context) => CustomScrollView(
         key: PageStorageKey(name),
         primary: true,
+        physics: physics,
         slivers: [
           SliverToBoxAdapter(child: SizedBox(height: PlayerReserve.of(context))),
           SliverList.list(children: [for (var i = 0; i < 100; i++) SizedBox(height: 60, child: Text('$name $i'))]),
@@ -308,9 +309,9 @@ void main() {
         ..width = 440;
       expect(collapse.full, full);
       shaped();
+      await tester.pump();
       expect(collapse.full, full, reason: 'it starts from where it is');
       expect(collapse.shape.value, closeTo(tall, 1e-9), reason: 'the shape it is taking, at once');
-      await tester.pump();
       await tester.pump(CollapseTheme.reshape ~/ 4);
       expect(collapse.full, closeTo(full + (tall - full) * CollapseTheme.reshapeCurve.transform(0.25), 0.01));
       expect(collapse.full, lessThan(full + (tall - full) * 0.25), reason: 'easing in');
@@ -391,6 +392,181 @@ void main() {
         expect(collapse.height, full, reason: 'scrolled, it stays 16:9');
       }
       expect(tabs.offsetOf(PageTab.intro), closeTo(600, 0.01));
+    });
+
+    testWidgets('a fling under the box carries its content through a change of shape exactly as it would without '
+        'one, every frame, with Reduce Motion too', (tester) async {
+      tester.view.physicalSize = const Size(440, 956);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      /// 简介 25's top each frame of a fling up from 1200 pt, the end screen taking the box to 16:9 as it starts.
+      Future<({List<double> tops, double offset, double full})> fling({
+        required bool reshape,
+        bool still = false,
+      }) async {
+        final tabs = PageTabsController();
+        final session = FakePlayerSession()..videoShape = upright;
+        final collapse = CollapsingPlayer(tabs: tabs, vsync: const TestVSync())
+          ..still = still
+          ..session = session
+          ..width = 440;
+        addTearDown(() {
+          collapse.dispose();
+          tabs.dispose();
+          session.dispose();
+        });
+        // The phone's physics: a fling restarted from where it is carries on exactly as before.
+        const physics = BouncingScrollPhysics();
+        await tester.pumpWidget(
+          MaterialApp(
+            key: UniqueKey(),
+            home: CollapseReserve(
+              collapse: collapse,
+              child: PageTabs(
+                controller: tabs,
+                intro: list('简介', physics: physics),
+                comments: list('评论', physics: physics),
+              ),
+            ),
+          ),
+        );
+        tabs.scrollOf(PageTab.intro).jumpTo(1200);
+        await tester.pump();
+        await tester.fling(find.text('简介 20'), const Offset(0, -200), 1500);
+        await tester.pump();
+        if (reshape) {
+          session
+            ..ended = true
+            ..changed();
+        }
+        final tops = <double>[];
+        for (var i = 0; i < 12; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          tops.add(top(tester, '简介 25'));
+        }
+        return (tops: tops, offset: tabs.offsetOf(PageTab.intro), full: collapse.full);
+      }
+
+      final kept = await fling(reshape: false);
+      final reshaped = await fling(reshape: true);
+      final still = await fling(reshape: true, still: true);
+      expect(kept.tops.last, lessThan(kept.tops.first - 100), reason: 'still flinging all along');
+      for (final (name, run) in [('animated', reshaped), ('Reduce Motion', still)]) {
+        expect(run.full, full, reason: name);
+        expect(run.offset, closeTo(kept.offset - (tall - full), 0.01), reason: '$name: the offset took the change');
+        for (var i = 0; i < kept.tops.length; i++) {
+          expect(run.tops[i], closeTo(kept.tops[i], 0.01), reason: '$name, frame $i');
+        }
+      }
+    });
+
+    testWidgets('a drag held through a change of shape keeps the content under the finger', (tester) async {
+      session.videoShape = upright;
+      collapse
+        ..session = session
+        ..width = 440;
+      await host(tester);
+      scroll(PageTab.intro).jumpTo(800);
+      await tester.pump();
+      final gesture = await tester.startGesture(Offset(220, top(tester, '简介 12') + 10));
+      await gesture.moveBy(const Offset(0, -30));
+      await tester.pump();
+      final start = top(tester, '简介 12');
+
+      shaped(ended: true);
+      for (var i = 1; i <= 12; i++) {
+        await gesture.moveBy(const Offset(0, -10));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(top(tester, '简介 12'), closeTo(start - 10 * i, 0.01), reason: 'frame $i');
+      }
+      expect(collapse.full, full);
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('an in-page open (合集\'s next, 选集) keeps the tall box until the next video\'s shape is known, then '
+        'takes that over 150 ms if it differs', (tester) async {
+      session.videoShape = upright;
+      collapse
+        ..session = session
+        ..width = 440;
+      await host(tester);
+      scroll(PageTab.intro).jumpTo(200);
+      await tester.pump();
+      expect(collapse.height, closeTo(tall - 200, 1e-9));
+      final before = top(tester, '简介 3');
+
+      session
+        ..videoShape = null
+        ..opening = true
+        ..changed();
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(CollapseTheme.reshape ~/ 4);
+        expect(collapse.full, closeTo(tall, 1e-9), reason: 'frame $i');
+        expect(collapse.shape.value, closeTo(tall, 1e-9));
+      }
+      expect(tabs.offsetOf(PageTab.intro), 200, reason: 'not clamped by a 16:9 box');
+      expect(top(tester, '简介 3'), before);
+
+      session
+        ..videoShape = upright
+        ..changed();
+      await tester.pump();
+      session
+        ..opening = false
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(collapse.full, closeTo(tall, 1e-9), reason: 'the same shape again');
+      expect(collapse.height, closeTo(tall - 200, 1e-9));
+
+      scroll(PageTab.intro).jumpTo(0);
+      session
+        ..videoShape = null
+        ..opening = true
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(collapse.full, closeTo(tall, 1e-9));
+      session
+        ..videoShape = (width: 1920, height: 1080)
+        ..changed();
+      await tester.pump();
+      await tester.pump(CollapseTheme.reshape ~/ 2);
+      expect(collapse.full, closeTo((tall + full) / 2, 0.01), reason: 'a wide video: to 16:9 over 150 ms');
+      await tester.pumpAndSettle();
+      expect(collapse.full, full);
+    });
+
+    testWidgets('a related video opened from the end screen keeps its 16:9 box until its own shape is known', (
+      tester,
+    ) async {
+      session.videoShape = upright;
+      collapse
+        ..session = session
+        ..width = 440;
+      await host(tester);
+      shaped(ended: true);
+      await tester.pumpAndSettle();
+      expect(collapse.full, full);
+
+      // playRelated: the end lifts, then the open clears the shape, in one go.
+      session
+        ..ended = false
+        ..changed()
+        ..videoShape = null
+        ..opening = true
+        ..changed();
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(CollapseTheme.reshape ~/ 4);
+        expect(collapse.full, full, reason: 'frame $i');
+        expect(collapse.shape.value, full);
+      }
+
+      session
+        ..videoShape = upright
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(collapse.full, closeTo(tall, 1e-9));
     });
 
     testWidgets('playing, a scroll takes its height above 16:9 one for one, then the tab scrolls under it; scrolled '
@@ -502,9 +678,11 @@ void main() {
         ..session = session
         ..width = 440;
       shaped();
-      expect(collapse.height, closeTo(tall, 1e-9));
+      await tester.pump();
+      expect(collapse.height, closeTo(tall, 1e-9), reason: 'in the next frame');
       expect(heard, 1);
       shaped(ended: true);
+      await tester.pump();
       expect(collapse.height, full);
     });
 
