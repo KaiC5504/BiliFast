@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -6,9 +7,11 @@ import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
+import 'package:bilifast/player/playback_clock.dart';
 import 'package:bilifast/video/page_session.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
+import 'package:bilifast/video/watch_reporter.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -21,6 +24,7 @@ const p2 = 137649200;
 const playerInfoPath = '/x/player/wbi/v2';
 const relatedPath = '/x/web-interface/archive/related';
 const watchLaterPath = '/x/v2/history/toview/add';
+const heartbeatPath = '/x/click-interface/web/heartbeat';
 
 String playerInfo({int lastPlayCid = 0, String chapter = '开场'}) =>
     '{"code":0,"data":{"last_play_cid":$lastPlayCid,"view_points":['
@@ -83,6 +87,7 @@ void main() {
   late FakeTimers timers;
   late PlayerPrefs prefs;
   late List<String> opened;
+  late List<double> seeks;
   late PlaybackController controller;
   late Set<String> refused;
   late MemorySink logs;
@@ -102,6 +107,7 @@ void main() {
     timers = FakeTimers();
     prefs = PlayerPrefs.memory();
     opened = [];
+    seeks = [];
     refused = {};
     logs = MemorySink();
     loggedIn = true;
@@ -137,8 +143,8 @@ void main() {
   }
 
   /// A session as the video page makes it: `open` plays on the same controller. [on] is a controller another page's
-  /// session already has.
-  PagePlayerSession makeSession({PlaybackController? on}) {
+  /// session already has; [onSeeked] hears the seeks the page's watch reports would, else [seeks] keeps them.
+  PagePlayerSession makeSession({PlaybackController? on, void Function(double seconds)? onSeeked}) {
     final controller = on ?? makeController();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     final session = PagePlayerSession(
@@ -151,6 +157,7 @@ void main() {
       isVip: () => false,
       isLoggedIn: () => loggedIn,
       requestLogin: () => logins += 1,
+      onSeeked: onSeeked ?? seeks.add,
       prefs: prefs,
       clock: time.clock,
       periodic: periodic.start,
@@ -337,6 +344,169 @@ void main() {
       await settle();
       expect(player.calls, containsAllInOrder(['seek 0.0 precise', 'play']));
       expect(session.ended, isFalse);
+    });
+  });
+
+  group('in 竖屏 (loopsAtEnd)', () {
+    test('with 自动连播 on and a next part, the end plays the same part again from 0', () async {
+      final session = makeSession()..loopsAtEnd = true;
+      await controller.openVideo(bv, cid: p1);
+      expect(session.next?.cid, p2);
+      playing();
+      player.calls.clear();
+      await ended();
+      expect(player.calls, containsAllInOrder(['seek 0.0 precise', 'play']));
+      expect(opened, isEmpty);
+      expect(controller.page?.cid, p1);
+      expect(session.ended, isFalse);
+      expect(seeks, [0], reason: 'the page hears the jump to 0, as 单集循环 tells it');
+      expect(logs.events.map((event) => event.msg), contains('vertical loop'));
+    });
+
+    test('with 自动连播 and the loop off, the last part plays again instead of the end screen, every time', () async {
+      final session = makeSession()
+        ..setAutoplayNext(false)
+        ..loopsAtEnd = true;
+      expect(session.loop, LoopMode.off);
+      await controller.openVideo(bv, cid: p2);
+      playing();
+      player.calls.clear();
+      await ended();
+      playing();
+      await ended();
+      expect(player.calls.where((call) => call == 'seek 0.0 precise'), hasLength(2));
+      expect(session.ended, isFalse);
+      expect(opened, isEmpty);
+    });
+
+    test('列表循环 and a 合集\'s next episode give way to it too', () async {
+      http.routes[Canned.signedViewPath] = (200, seasonView('BV1AA411a1aa', 1001));
+      final session = makeSession()
+        ..setLoop(LoopMode.list)
+        ..loopsAtEnd = true;
+      await controller.openVideo('BV1AA411a1aa');
+      expect(session.next?.bvid, 'BV1BB411b1bb');
+      playing();
+      player.calls.clear();
+      await ended();
+      expect(player.calls, containsAllInOrder(['seek 0.0 precise', 'play']));
+      expect(opened, isEmpty);
+    });
+
+    test('out of 竖屏 again, the end follows 自动连播 and shows the end screen as before', () async {
+      final session = makeSession()
+        ..loopsAtEnd = true
+        ..loopsAtEnd = false;
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await ended();
+      expect(opened, ['$bv $p2']);
+      expect(controller.page?.cid, p2);
+
+      session.setAutoplayNext(false);
+      playing();
+      player.calls.clear();
+      await ended();
+      expect(session.ended, isTrue);
+      expect(player.calls, isNot(contains('seek 0.0 precise')));
+      expect(logs.events.map((event) => event.msg), isNot(contains('vertical loop')));
+    });
+
+    test('turned on over the end screen, it plays again from 0 at once; otherwise turning it does nothing', () async {
+      final session = makeSession()..setAutoplayNext(false);
+      await controller.openVideo(bv, cid: p2);
+      playing();
+      await ended();
+      expect(session.ended, isTrue);
+      player.calls.clear();
+      session.loopsAtEnd = false;
+      await settle();
+      expect(player.calls, isEmpty);
+      expect(session.ended, isTrue);
+
+      session.loopsAtEnd = true;
+      await settle();
+      expect(player.calls, containsAllInOrder(['seek 0.0 precise', 'play']));
+      expect(session.ended, isFalse);
+      expect(seeks, [0]);
+
+      player.calls.clear();
+      session.loopsAtEnd = false;
+      session.loopsAtEnd = true;
+      await settle();
+      expect(player.calls, isEmpty, reason: 'playing, nothing restarts');
+    });
+
+    test('a covered page turned on over its end screen plays nothing', () async {
+      final session = makeSession()..setAutoplayNext(false);
+      await controller.openVideo(bv, cid: p2);
+      playing();
+      await ended();
+      session.active = false;
+      player.calls.clear();
+      session.loopsAtEnd = true;
+      await settle();
+      expect(player.calls, isEmpty);
+      expect(session.ended, isTrue);
+    });
+
+    test('in the background it starts over too: paused by the background check without picture in picture, '
+        'playing on in it', () async {
+      final session = makeSession()..loopsAtEnd = true;
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      player.calls.clear();
+      await ended();
+      expect(player.calls, containsAllInOrder(['seek 0.0 precise', 'play']));
+      expect(opened, isEmpty);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+      expect(player.calls.last, 'pause');
+
+      session.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      player.emit(const PictureInPictureChanged(true));
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      player.calls.clear();
+      await ended();
+      expect(player.calls, containsAllInOrder(['seek 0.0 precise', 'play']));
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+      expect(player.calls, isNot(contains('pause')));
+      expect(opened, isEmpty);
+    });
+
+    test('the watch reports go on over the loop: the end, 0, then every 15 s again', () async {
+      http.routes[heartbeatPath] = (200, '{"code":0,"message":"0"}');
+      final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
+      WatchReporter? reporter;
+      makeSession(onSeeked: (seconds) => reporter?.seeked(seconds)).loopsAtEnd = true;
+      final opening = controller.openVideo(bv, cid: p1);
+      reporter = WatchReporter(
+        controller: controller,
+        client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), now: () => now),
+        loggedIn: () => true,
+      );
+      await opening;
+      void position(double seconds) {
+        time.advance(PlaybackClock.jumpSettleMs);
+        player.emit(PositionChanged(seconds: seconds, hostMs: time.clock.nowMs(), rate: 1));
+      }
+
+      playing();
+      position(16);
+      await ended();
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      position(5);
+      position(16);
+      await ended();
+      await reporter.leave();
+      final played = [
+        for (final request in http.to(heartbeatPath))
+          Uri.splitQueryString(utf8.decode(request.body!))['played_time'],
+      ];
+      expect(played, ['0', '16', '-1', '0', '16', '-1', '0', '0'], reason: 'the last is leaving, back at 0');
     });
   });
 

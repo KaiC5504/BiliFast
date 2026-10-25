@@ -235,7 +235,19 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   }
 
   @override
-  bool loopsAtEnd = false;
+  bool get loopsAtEnd => _loopsAtEnd;
+  bool _loopsAtEnd = false;
+
+  /// Turned on over the end screen (entering 竖屏 after the end), it plays again from 0 at once. A covered page plays
+  /// nothing.
+  @override
+  set loopsAtEnd(bool value) {
+    _loopsAtEnd = value;
+    final current = _current;
+    if (!value || !_ended || _disposed || !_active || current == null) return;
+    _logger.info(LogCategory.ui, 'vertical loop', {'cid': current.cid, 'ended': true});
+    unawaited(replay());
+  }
 
   @override
   List<Chapter> get chapters => _chapters;
@@ -668,6 +680,12 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   Future<void> _handleEnd() async {
     final current = _current;
     if (_disposed || !_active || current == null) return;
+    // The same video, so unlike autoplay it isn't held back in the background: 单集循环's replay does the same.
+    if (_loopsAtEnd) {
+      _logger.info(LogCategory.ui, 'vertical loop', {'cid': current.cid});
+      await replay();
+      return;
+    }
     final step = logic.Autoplay.next(
       after: current,
       parts: _partItems,
