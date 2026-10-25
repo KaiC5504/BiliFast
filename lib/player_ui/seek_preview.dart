@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:bili_core/api.dart' show BiliClient, VideoShot;
 import 'package:bili_core/logic.dart' show TimeFormat;
 import 'package:flutter/widgets.dart';
@@ -5,8 +7,8 @@ import 'package:flutter/widgets.dart';
 import '../shared/theme.dart';
 import '../video/player_session.dart';
 
-/// The frame and time over the middle of landscape while the bar is dragged (102). Before the frames arrive, or for a
-/// part without them, the time shows alone in its place.
+/// The frame and time over the middle of landscape while the bar is dragged (102), or above 竖屏's bar ([upright]).
+/// Before the frames arrive, or for a part without them, the time shows alone in its place.
 class SeekPreview extends StatefulWidget {
   const SeekPreview({super.key, required this.session, required this.shown, this.upright = false});
 
@@ -62,7 +64,9 @@ class _SeekPreviewState extends State<SeekPreview> {
                     _warm(shot);
                     return ListenableBuilder(
                       listenable: Listenable.merge([session.scrubbing, session.readout.seconds, session.duration]),
-                      builder: (context, _) => _layout(context, shot, session.position, session.duration.value),
+                      builder: (context, _) => widget.upright
+                          ? _uprightLayout(context, shot, session.position, session.duration.value)
+                          : _layout(context, shot, session.position, session.duration.value),
                     );
                   },
                 ),
@@ -85,50 +89,93 @@ class _SeekPreviewState extends State<SeekPreview> {
             left: 0,
             right: 0,
             child: Center(
-              child: Container(
-                key: const ValueKey('seek-preview-frame'),
-                width: size.width + border,
-                height: size.height + border,
-                decoration: BoxDecoration(
-                  border: Border.all(color: SeekPreviewTheme.borderColor, width: SeekPreviewTheme.border),
-                  borderRadius: BorderRadius.circular(SeekPreviewTheme.radius),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(SeekPreviewTheme.radius - SeekPreviewTheme.border),
-                  child: _Cell(shot: shot, sheet: frame.sheet, column: frame.column, row: frame.row, size: size),
-                ),
-              ),
+              child: _frame(shot, frame, box: size, cell: size),
             ),
           ),
         Positioned(
           top: top + SeekPreviewTheme.frameHeight + border + SeekPreviewTheme.timeGap,
           left: 0,
           right: 0,
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: TimeFormat.clock(position)),
-                TextSpan(
-                  text: '/${TimeFormat.clock(duration)}',
-                  style: const TextStyle(color: SeekPreviewTheme.duration),
-                ),
+          child: _time(position, duration, upright: false),
+        ),
+      ],
+    );
+  }
+
+  /// 竖屏's: the frame and the time over its bottom rows, the time kept in its place with or without the frame.
+  Widget _uprightLayout(BuildContext context, VideoShot? shot, double position, double duration) {
+    final frame = shot?.frameAt(position);
+    const border = SeekPreviewTheme.border * 2;
+    final outer = widget.session.isVertical
+        ? const Size(SeekPreviewTheme.uprightShort, SeekPreviewTheme.uprightLong)
+        : const Size(SeekPreviewTheme.uprightLong, SeekPreviewTheme.uprightShort);
+    final box = Size(outer.width - border, outer.height - border);
+    // Where VerticalChrome sets its bottom rows, so the frame keeps its distance from the bar.
+    final rows = math.max(MediaQuery.paddingOf(context).bottom - BiliMetrics.verticalBottomDrop, 0.0);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: rows + SeekPreviewTheme.uprightTimeLift,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (shot != null && frame != null) ...[
+                _frame(shot, frame, box: box, cell: _cover(shot, box)),
+                const SizedBox(height: SeekPreviewTheme.uprightTimeGap),
               ],
-            ),
-            key: const ValueKey('seek-preview-time'),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            style: TextStyle(
-              fontFamily: BiliFonts.family,
-              fontSize: SeekPreviewTheme.timeFont,
-              fontWeight: FontWeight.w600,
-              height: 1,
-              color: SeekPreviewTheme.time,
-              decoration: TextDecoration.none,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+              _time(position, duration, upright: true),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _frame(VideoShot shot, ({String sheet, int column, int row}) frame, {required Size box, required Size cell}) {
+    const border = SeekPreviewTheme.border * 2;
+    return Container(
+      key: const ValueKey('seek-preview-frame'),
+      width: box.width + border,
+      height: box.height + border,
+      decoration: BoxDecoration(
+        border: Border.all(color: SeekPreviewTheme.borderColor, width: SeekPreviewTheme.border),
+        borderRadius: BorderRadius.circular(SeekPreviewTheme.radius),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(SeekPreviewTheme.radius - SeekPreviewTheme.border),
+        child: _Cell(shot: shot, sheet: frame.sheet, column: frame.column, row: frame.row, box: box, cell: cell),
+      ),
+    );
+  }
+
+  /// 102 runs the time into the duration; 竖屏 (19, 20) sets them apart with a spaced slash, a point larger.
+  Widget _time(double position, double duration, {required bool upright}) {
+    final total = TimeFormat.clock(duration);
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: TimeFormat.clock(position)),
+          TextSpan(
+            text: upright ? ' / $total' : '/$total',
+            style: const TextStyle(color: SeekPreviewTheme.duration),
+          ),
+        ],
+      ),
+      key: const ValueKey('seek-preview-time'),
+      textAlign: TextAlign.center,
+      maxLines: 1,
+      style: TextStyle(
+        fontFamily: BiliFonts.family,
+        fontSize: upright ? SeekPreviewTheme.uprightTimeFont : SeekPreviewTheme.timeFont,
+        fontWeight: FontWeight.w600,
+        height: 1,
+        color: SeekPreviewTheme.time,
+        decoration: TextDecoration.none,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
     );
   }
 
@@ -139,24 +186,39 @@ class _SeekPreviewState extends State<SeekPreview> {
     }
     return Size(SeekPreviewTheme.frameHeight * shot.cellWidth / shot.cellHeight, SeekPreviewTheme.frameHeight);
   }
+
+  /// A cell at its own shape, just covering [box]: 19 cuts a 3:4 frame's sides to fill its 9:16 box.
+  static Size _cover(VideoShot shot, Size box) {
+    if (shot.cellWidth <= 0 || shot.cellHeight <= 0) return box;
+    final scale = math.max(box.width / shot.cellWidth, box.height / shot.cellHeight);
+    return Size(shot.cellWidth * scale, shot.cellHeight * scale);
+  }
 }
 
-/// One frame of a sheet: the whole sheet drawn at [size] per frame, shifted so the frame fills the box.
+/// One frame of a sheet: the whole sheet drawn at [cell] per frame, shifted so the frame lands centred in [box].
 class _Cell extends StatelessWidget {
-  const _Cell({required this.shot, required this.sheet, required this.column, required this.row, required this.size});
+  const _Cell({
+    required this.shot,
+    required this.sheet,
+    required this.column,
+    required this.row,
+    required this.box,
+    required this.cell,
+  });
 
   final VideoShot shot;
   final String sheet;
   final int column;
   final int row;
-  final Size size;
+  final Size box;
+  final Size cell;
 
   @override
   Widget build(BuildContext context) {
-    final width = size.width * shot.columns;
-    final height = size.height * shot.rows;
+    final width = cell.width * shot.columns;
+    final height = cell.height * shot.rows;
     return SizedBox.fromSize(
-      size: size,
+      size: box,
       child: OverflowBox(
         alignment: Alignment.topLeft,
         minWidth: width,
@@ -164,7 +226,10 @@ class _Cell extends StatelessWidget {
         minHeight: height,
         maxHeight: height,
         child: Transform.translate(
-          offset: Offset(-column * size.width, -row * size.height),
+          offset: Offset(
+            (box.width - cell.width) / 2 - column * cell.width,
+            (box.height - cell.height) / 2 - row * cell.height,
+          ),
           child: Image.network(
             sheet,
             key: ValueKey(sheet),

@@ -14,16 +14,18 @@ enum SeekBarStyle {
   /// The small player and landscape, as 15 and 04 show: pink played part, white buffered part and the TV face.
   tv,
 
-  /// 竖屏 full screen, as 09 shows: a white played part and a small dot, no buffered part.
+  /// 竖屏 full screen, as 09 shows: a white played part and a small dot, no buffered part. Held, as 19 and 20 show, the
+  /// bar thickens upward to 6 pt, its played part turns pink and a larger TV takes the dot's place.
   dot,
 
-  /// 竖屏 paused, as 118 shows: the dot's track and travel, the played part pink and the TV over its end.
+  /// 竖屏 paused, as 118 shows: the dot's track and travel, the played part pink and the TV over its end; held, as
+  /// [dot].
   pausedDot;
 
   /// How much of the bar the thumb keeps from its travel.
   double get thumbWidth => this == tv ? BiliMetrics.thumbWidth : BiliMetrics.verticalDot;
 
-  /// Draws the TV for its thumb.
+  /// Draws the TV for its thumb at rest; every style draws it while held.
   bool get face => this != dot;
 }
 
@@ -31,9 +33,9 @@ enum SeekBarStyle {
 /// tick where each chapter starts, and the official TV thumb, or the 竖屏 [SeekBarStyle.dot]. It paints from [repaint]
 /// without rebuilding. As in the official app, a touch takes hold of the current position rather than jumping to the
 /// finger: a drag moves it by the distance dragged, [onCommit] comes when it lifts, and a tap seeks nowhere. While a
-/// finger is on it the bar thickens, the TV's eyes look the way it is dragged (the dot grows instead) and the chapter
-/// under it shows its title above; when a drag lifts the eyes come back and the TV blinks. VoiceOver reads the time and
-/// steps it by [step] through [onCommit].
+/// finger is on it the bar thickens, the TV's eyes look the way it is dragged (竖屏's dot gives way to the TV) and the
+/// chapter under it shows its title above; when a drag lifts the eyes come back and the TV blinks. VoiceOver reads the
+/// time and steps it by [step] through [onCommit].
 class SeekBar extends StatefulWidget {
   const SeekBar({
     super.key,
@@ -65,8 +67,11 @@ class SeekBar extends StatefulWidget {
   static const lookingAsset = 'assets/lottie/player_seek_bar_tv_1.json';
   static const blinkingAsset = 'assets/lottie/player_seek_bar_tv_2.json';
 
-  /// Parses both Lotties once for every bar. Until they are in, or if they failed, the TV style draws a plain round
-  /// handle.
+  /// 竖屏's (118, 19), the APK's story pair: the same TV with a #333 body where the player's is black.
+  static const storyLookingAsset = 'assets/lottie/story_seek_bar_icon_1.json';
+  static const storyBlinkingAsset = 'assets/lottie/story_seek_bar_icon_2.json';
+
+  /// Parses the Lotties once for every bar. Until they are in, or if they failed, the TV draws as a plain round handle.
   static Future<void> precache() => _TvFaces.load();
 
   /// Drops the parsed Lotties, or their failure, so the next [precache] loads them again from [bundle].
@@ -206,14 +211,8 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
     _gone = false;
   }
 
-  @override
-  void didUpdateWidget(SeekBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.style != oldWidget.style) _awaitFaces();
-  }
-
   void _awaitFaces() {
-    if (!widget.style.face || _TvFaces.loaded != null) return;
+    if (_TvFaces.loaded != null) return;
     _TvFaces.load().then((_) {
       if (mounted) setState(() {});
     });
@@ -541,16 +540,23 @@ class _SeekBarPainter extends CustomPainter {
     final bufferedTo = math.min(math.max(travel * _fraction(buffered(), duration) + thumbWidth / 2, playedTo), width);
 
     final grown = drag.value;
-    final held = style.face ? BiliMetrics.tvBarDragHeight : BiliMetrics.barDragHeight;
-    final barHeight = lerpDouble(BiliMetrics.barHeight, held, grown.clamp(0.0, 1.0))!;
-    final top = (size.height - barHeight) / 2;
+    final shown = grown.clamp(0.0, 1.0);
+    final held = tv ? BiliMetrics.tvBarDragHeight : BiliMetrics.verticalBarDragHeight;
+    final barHeight = lerpDouble(BiliMetrics.barHeight, held, shown)!;
+    // 竖屏's keeps its bottom edge as it thickens (09 against 19 and 20); landscape's grows about its middle.
+    final top = tv ? (size.height - barHeight) / 2 : (size.height + BiliMetrics.barHeight) / 2 - barHeight;
     final radius = Radius.circular(barHeight / 2);
     RRect capsule(double to) => RRect.fromLTRBR(0, top, to, top + barHeight, radius);
     canvas.drawRRect(capsule(width), Paint()..color = tv ? BiliColors.chromeTrack : BiliColors.verticalTrack);
     if (tv) canvas.drawRRect(capsule(bufferedTo), Paint()..color = BiliColors.chromeBuffered);
     canvas.drawRRect(
       capsule(math.max(playedTo, 0)),
-      Paint()..color = dot ? BiliColors.verticalPlayed : BiliColors.pink,
+      Paint()
+        ..color = switch (style) {
+          SeekBarStyle.tv => BiliColors.pink,
+          SeekBarStyle.dot => Color.lerp(BiliColors.verticalPlayed, BiliColors.verticalPink, shown)!,
+          SeekBarStyle.pausedDot => BiliColors.verticalPink,
+        },
     );
 
     if (duration > 0) {
@@ -562,20 +568,29 @@ class _SeekBarPainter extends CustomPainter {
       }
     }
 
-    final centre = Offset(playedTo, size.height / 2);
+    final centre = Offset(playedTo, top + barHeight / 2);
+    if (dot && shown < 1) {
+      canvas.drawCircle(centre, BiliMetrics.verticalDot * (1 - shown) / 2, Paint()..color = BiliColors.verticalThumb);
+    }
+    // With the bar's growth, overshoot included; the dot's TV grows from nothing.
+    final face = switch (style) {
+      SeekBarStyle.tv => BiliMetrics.thumbWidth,
+      SeekBarStyle.pausedDot => lerpDouble(BiliMetrics.thumbWidth, BiliMetrics.verticalThumbHeld, grown)!,
+      SeekBarStyle.dot => BiliMetrics.verticalThumbHeld * grown,
+    };
+    if (face <= 0) return;
     final faces = this.faces;
-    if (dot) {
-      final diameter = lerpDouble(BiliMetrics.verticalDot, BiliMetrics.verticalDotDragging, grown)!;
-      canvas.drawCircle(centre, diameter / 2, Paint()..color = BiliColors.verticalThumb);
-    } else if (faces == null) {
-      canvas.drawCircle(centre, BiliMetrics.thumbHandle / 2, Paint()..color = BiliColors.thumbHandle);
+    if (faces == null) {
+      final handle = BiliMetrics.thumbHandle * face / BiliMetrics.thumbWidth;
+      canvas.drawCircle(centre, handle / 2, Paint()..color = BiliColors.thumbHandle);
     } else {
       final blinking = blink.status == AnimationStatus.forward;
       faces.draw(
         canvas,
-        Rect.fromCenter(center: centre, width: BiliMetrics.thumbWidth, height: BiliMetrics.thumbHeight),
+        Rect.fromCenter(center: centre, width: face, height: face * BiliMetrics.thumbHeight / BiliMetrics.thumbWidth),
         progress: blinking ? blink.value : eyes.value,
         blinking: blinking,
+        story: !tv,
       );
     }
   }
@@ -590,16 +605,20 @@ class _SeekBarPainter extends CustomPainter {
       oldDelegate.faces != faces;
 }
 
-/// Both Lotties, parsed once for the whole app. Every bar paints through the same two drawables, one at a time.
+/// Both pairs of Lotties, parsed once for the whole app. Every bar paints through the same drawables, one at a time.
 final class _TvFaces {
-  _TvFaces(LottieComposition looking, LottieComposition blinking)
+  _TvFaces(List<LottieComposition> faces)
     // Frames in between, as the iPhone draws the eyes sliding, rather than the files' 30 fps steps.
-    : _looking = LottieDrawable(looking, frameRate: FrameRate.max),
-      _blinking = LottieDrawable(blinking, frameRate: FrameRate.max),
-      blinkDuration = blinking.duration;
+    : _looking = LottieDrawable(faces[0], frameRate: FrameRate.max),
+      _blinking = LottieDrawable(faces[1], frameRate: FrameRate.max),
+      _storyLooking = LottieDrawable(faces[2], frameRate: FrameRate.max),
+      _storyBlinking = LottieDrawable(faces[3], frameRate: FrameRate.max),
+      blinkDuration = faces[1].duration;
 
   final LottieDrawable _looking;
   final LottieDrawable _blinking;
+  final LottieDrawable _storyLooking;
+  final LottieDrawable _storyBlinking;
   final Duration blinkDuration;
 
   static _TvFaces? loaded;
@@ -609,20 +628,27 @@ final class _TvFaces {
   // A failure is kept: the assets ship with the app, so a retry per bar would only report it again.
   static Future<void> load() => _loading ??= () async {
     try {
-      final faces = await Future.wait([
-        AssetLottie(SeekBar.lookingAsset, bundle: _bundle).load(),
-        AssetLottie(SeekBar.blinkingAsset, bundle: _bundle).load(),
-      ]);
-      loaded = _TvFaces(faces[0], faces[1]);
+      loaded = _TvFaces(
+        await Future.wait([
+          for (final asset in [
+            SeekBar.lookingAsset,
+            SeekBar.blinkingAsset,
+            SeekBar.storyLookingAsset,
+            SeekBar.storyBlinkingAsset,
+          ])
+            AssetLottie(asset, bundle: _bundle).load(),
+        ]),
+      );
     } catch (error, stack) {
       FlutterError.reportError(FlutterErrorDetails(exception: error, stack: stack, library: 'seek bar'));
     }
   }();
 
-  void draw(Canvas canvas, Rect rect, {required double progress, required bool blinking}) {
-    final face = blinking ? _blinking : _looking;
+  void draw(Canvas canvas, Rect rect, {required double progress, required bool blinking, required bool story}) {
+    final face = story ? (blinking ? _storyBlinking : _storyLooking) : (blinking ? _blinking : _looking);
     face.setProgress(progress);
-    face.draw(canvas, rect);
+    // The files are 18 pt; 竖屏's held TV draws them larger.
+    face.draw(canvas, rect, fit: BoxFit.contain);
   }
 }
 

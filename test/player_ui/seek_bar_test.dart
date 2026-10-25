@@ -357,18 +357,93 @@ void main() {
     expect(line(), paintsNothing);
   });
 
-  testWidgets('the dot grows under the finger and shrinks back', (tester) async {
+  testWidgets('held, the 竖屏 bar thickens upward to 6 pt in pink and the TV takes the dot\'s place; let go, back (19)', (
+    tester,
+  ) async {
     final rig = Rig()..position = 50;
     await rig.mount(tester, style: SeekBarStyle.dot);
-    expect(rig.painter(tester), paints..circle(radius: BiliMetrics.verticalDot / 2));
+    // The dot's travel: 214 for 100 s, from 2.
+    const centre = 2 + 214 * 0.5;
+    expect(
+      rig.painter(tester),
+      paints
+        ..rrect(rrect: _capsule(218, BiliMetrics.barHeight), color: BiliColors.verticalTrack)
+        ..rrect(color: BiliColors.verticalPlayed)
+        ..circle(x: centre, radius: BiliMetrics.verticalDot / 2, color: BiliColors.verticalThumb),
+    );
+    expect(rig.painter(tester), paintsExactlyCountTimes(#drawPath, 0), reason: 'no TV at rest');
 
     final gesture = await tester.startGesture(rig.rect(tester).center);
     await tester.pumpAndSettle();
-    expect(rig.painter(tester), paints..circle(radius: BiliMetrics.verticalDotDragging / 2));
+    const held = BiliMetrics.verticalBarDragHeight;
+    final bar = _risen(218, held);
+    final tv = Rect.fromCenter(
+      center: Offset(centre, bar.center.dy),
+      width: BiliMetrics.verticalThumbHeld,
+      height: BiliMetrics.verticalThumbHeld,
+    );
+    expect(bar.bottom, _capsule(218, BiliMetrics.barHeight).bottom, reason: 'it keeps its bottom edge');
+    expect(
+      rig.painter(tester),
+      paints
+        ..rrect(rrect: bar, color: BiliColors.verticalTrack)
+        ..rrect(rrect: _risen(centre, held), color: BiliColors.verticalPink)
+        ..save()
+        ..translate(x: tv.left, y: tv.top),
+    );
+    expect(rig.painter(tester), paintsExactlyCountTimes(#drawCircle, 0), reason: 'the dot gave way');
 
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(rig.painter(tester), paints..circle(radius: BiliMetrics.verticalDot / 2));
+    expect(
+      rig.painter(tester),
+      paints
+        ..rrect(rrect: _capsule(218, BiliMetrics.barHeight), color: BiliColors.verticalTrack)
+        ..rrect(color: BiliColors.verticalPlayed)
+        ..circle(x: centre, radius: BiliMetrics.verticalDot / 2, color: BiliColors.verticalThumb),
+    );
+    expect(rig.painter(tester), paintsExactlyCountTimes(#drawPath, 0));
+  });
+
+  testWidgets('paused, the 竖屏 TV grows with the bar from its 18 pt to 22 and back, in Bilibili\'s pink (118, 19)', (
+    tester,
+  ) async {
+    final rig = Rig()..position = 50;
+    await rig.mount(tester, style: SeekBarStyle.pausedDot);
+    const centre = 2 + 214 * 0.5;
+    Rect box(double side, double y) => Rect.fromCenter(center: Offset(centre, y), width: side, height: side);
+    final rest = box(BiliMetrics.thumbWidth, BiliMetrics.barTouchHeight / 2);
+    expect(
+      rig.painter(tester),
+      paints
+        ..rrect(rrect: _capsule(218, BiliMetrics.barHeight), color: BiliColors.verticalTrack)
+        ..rrect(color: BiliColors.verticalPink)
+        ..save()
+        ..translate(x: rest.left, y: rest.top),
+    );
+
+    final gesture = await tester.startGesture(rig.rect(tester).center);
+    await tester.pumpAndSettle();
+    final bar = _risen(218, BiliMetrics.verticalBarDragHeight);
+    final held = box(BiliMetrics.verticalThumbHeld, bar.center.dy);
+    expect(
+      rig.painter(tester),
+      paints
+        ..rrect(rrect: bar, color: BiliColors.verticalTrack)
+        ..rrect(color: BiliColors.verticalPink)
+        ..save()
+        ..translate(x: held.left, y: held.top),
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(
+      rig.painter(tester),
+      paints
+        ..rrect(rrect: _capsule(218, BiliMetrics.barHeight))
+        ..save()
+        ..translate(x: rest.left, y: rest.top),
+    );
   });
 
   group('the TV', () {
@@ -671,24 +746,22 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('the 竖屏 dot has no eyes to move and never blinks', (tester) async {
+    testWidgets('the 竖屏 dot\'s TV looks the way it is dragged, and goes when let go without a blink', (tester) async {
       final rig = Rig()..position = 50;
       await rig.mount(tester, style: SeekBarStyle.dot);
       final finger = await tester.startGesture(rig.rect(tester).center);
       await tester.pumpAndSettle();
-      expect(
-        rig.painter(tester),
-        paints..rrect(rrect: _capsule(218, BiliMetrics.barDragHeight), color: BiliColors.verticalTrack),
-      );
       for (var i = 0; i < 5; i++) {
         await finger.moveBy(const Offset(10, 0));
       }
-      await finger.up();
       final state = rig.state(tester);
+      expect(state.eyes, greaterThan(SeekBar.eyesAtRest + SeekBar.eyesStep));
+      await finger.up();
       for (var i = 0; i < 40; i++) {
         await tester.pump(const Duration(milliseconds: 16));
         expect(state.blink, isNull);
       }
+      expect(tester.hasRunningAnimations, isFalse);
       expect(rig.painter(tester), paintsExactlyCountTimes(#drawPath, 0));
       expect(rig.painter(tester), paints..circle(radius: BiliMetrics.verticalDot / 2, color: BiliColors.verticalThumb));
     });
@@ -730,6 +803,22 @@ void main() {
         expect(again.state(tester).blink, isNull);
       }
       expect(again.painter(tester), paints..circle(radius: BiliMetrics.thumbHandle / 2, color: BiliColors.thumbHandle));
+
+      // 竖屏's held TV: the handle grown as the TV would be.
+      await tester.pumpWidget(const SizedBox());
+      final vertical = Rig()..position = 50;
+      await vertical.mount(tester, style: SeekBarStyle.dot);
+      final held = await tester.startGesture(vertical.rect(tester).center);
+      await tester.pumpAndSettle();
+      expect(
+        vertical.painter(tester),
+        paints..circle(
+          radius: BiliMetrics.thumbHandle * BiliMetrics.verticalThumbHeld / BiliMetrics.thumbWidth / 2,
+          color: BiliColors.thumbHandle,
+        ),
+      );
+      await held.up();
+      await tester.pumpAndSettle();
     },
   );
 }
@@ -751,3 +840,9 @@ RRect _capsule(double width, double height) => RRect.fromLTRBR(
   (BiliMetrics.barTouchHeight + height) / 2,
   Radius.circular(height / 2),
 );
+
+/// 竖屏's held bar: [height] tall on the resting bar's bottom edge.
+RRect _risen(double width, double height) {
+  const bottom = (BiliMetrics.barTouchHeight + BiliMetrics.barHeight) / 2;
+  return RRect.fromLTRBR(0, bottom - height, width, bottom, Radius.circular(height / 2));
+}
