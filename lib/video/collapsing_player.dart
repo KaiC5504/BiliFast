@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
 import '../player_ui/portrait_controls.dart' show BackGlyph, ChromeTap, MoreDots, PlayPausePainter;
@@ -26,47 +27,92 @@ class PlayerReserve extends InheritedWidget {
   bool updateShouldNotify(PlayerReserve oldWidget) => oldWidget.height != height;
 }
 
-/// The small player's height as the shown tab scrolls (BiliNative `CollapsingPlayer` and `PlayerArea`, 11, 12).
-/// Paused, it gives up whatever the tab scrolls after the pause, down to the bar; playing or at the end it keeps its
-/// full height, growing back to it if it had shrunk. It notifies only when the height changes.
+/// [PlayerReserve] at [collapse]'s reserve, following it through a change of shape without rebuilding [child]: only
+/// the lists' gaps rebuild, in the frame the box changes and their offsets are kept.
+class CollapseReserve extends StatelessWidget {
+  const CollapseReserve({super.key, required this.collapse, required this.child});
+
+  final CollapsingPlayer collapse;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<double>(
+    valueListenable: collapse.reserveListenable,
+    builder: (context, reserve, child) => PlayerReserve(height: reserve, child: child!),
+    child: child,
+  );
+}
+
+/// The small player's height as the shown tab scrolls (BiliNative `CollapsingPlayer` and `PlayerArea`, 11, 12, 21).
+/// Its full height is 16:9, or an upright video's own shape (17) until the end screen takes 16:9 again (18). Playing,
+/// an upright video's box gives up its height above 16:9 one for one with the scroll and then stays 16:9 as the tab
+/// scrolls under it; paused, it gives up whatever the tab scrolls after the pause, down to the bar, and once it plays
+/// it grows back to its playing height. It notifies only when the height or the progress changes.
 class CollapsingPlayer extends ChangeNotifier {
   CollapsingPlayer({required this.tabs, required TickerProvider vsync})
-    : _grow = AnimationController(vsync: vsync, duration: CollapseTheme.resume) {
+    : _grow = AnimationController(vsync: vsync, duration: CollapseTheme.resume),
+      _reshape = AnimationController(vsync: vsync, duration: CollapseTheme.reshape) {
     tabs.motion.addListener(_scrolled);
     _grow.addListener(_update);
+    _reshape.addListener(_reshaped);
   }
 
   final PageTabsController tabs;
 
-  /// What is left of the shrink while the player grows back after the pause; 0 once it is full.
+  /// How much of the paused height is still in the player as it grows back after the pause: 1 as it starts playing,
+  /// 0 once it has its playing height.
   final AnimationController _grow;
+
+  /// [full] on its way from [_shapeFrom] to [shape].
+  final AnimationController _reshape;
+  double _shapeFrom = 0;
+  final _shape = ValueNotifier<double>(0);
 
   /// Each tab's offset when playback paused: the player shrinks only by what is scrolled after it, so a pause halfway
   /// down a tab doesn't snap it to the bar, and switching to a tab scrolled while playing doesn't either.
   final _from = <PageTab, double>{};
 
+  PlayerSession? _session;
+  double _width = 0;
+
+  /// 16:9 for the width, below which only the pause shrinks the box.
+  double _floor = 0;
   double _full = 0;
   double _height = 0;
+  double _progress = 0;
   bool _paused = false;
+  final _reserve = ValueNotifier<double>(0);
 
-  /// With Reduce Motion the player grows back at once.
+  /// With Reduce Motion the player grows back and changes shape at once.
   bool still = false;
 
-  /// The player's 16:9 height under the status bar. The page sets it as it lays out, so it notifies nobody.
+  /// The player's full height under the status bar, on its way to a new shape while it changes.
   double get full => _full;
-  set full(double value) {
-    if (value == _full) return;
-    _full = value;
-    _height = _compute();
+
+  /// The page's width as it lays out: the box takes its shape for it at once. It notifies nobody.
+  set width(double value) {
+    if (value == _width) return;
+    _width = value;
+    _floor = inlinePlayerHeight(value);
+    _reshape.stop();
+    _shape.value = _shapeFor();
+    _setFull(_shape.value);
+    final (height, progress) = _compute();
+    _height = height;
+    _progress = progress;
   }
 
-  /// The page's width as it lays out; [full] follows it and the session's video. It notifies nobody.
-  set width(double value) => full = inlinePlayerHeight(value);
+  /// The session whose video shape and end the box follows, changing shape over [CollapseTheme.reshape] once laid
+  /// out; null while the page has none.
+  set session(PlayerSession? value) {
+    if (identical(value, _session)) return;
+    _session?.removeListener(_retarget);
+    _session = value;
+    value?.addListener(_retarget);
+    _retarget();
+  }
 
-  /// The session whose video shape and end the box follows; null while the page has none.
-  set session(PlayerSession? value) {}
-
-  /// Loaded, paused and not at the end: only then does scrolling shrink the player.
+  /// Loaded, paused and not at the end: only then does scrolling shrink the player past 16:9.
   bool get paused => _paused;
   set paused(bool value) {
     if (value == _paused) return;
@@ -78,9 +124,8 @@ class CollapsingPlayer extends ChangeNotifier {
       _paused = true;
       _grow.value = 0;
     } else {
-      final left = progress;
       _paused = false;
-      _grow.value = still ? 0 : left;
+      _grow.value = still ? 0 : 1;
       if (!still) unawaited(_grow.animateTo(0, duration: CollapseTheme.resume, curve: Curves.easeOutCubic));
     }
     _update();
@@ -88,21 +133,83 @@ class CollapsingPlayer extends ChangeNotifier {
 
   double get height => _height;
 
-  /// 0 at full height, 1 once it is the bar.
-  double get progress => progressOf(full: _full, height: _height);
+  /// 0 at the height the shrink started from, 1 once it is the bar. Only the pause shrinks it: a playing upright
+  /// video's box going down to 16:9 stays at 0.
+  double get progress => _progress;
 
   /// What each tab's scroll view leaves free above its content, so it starts under the full-height player.
   double get reserve => math.max(0, _full - CollapseTheme.barHeight);
 
-  static double heightFor({required double full, required double offset, required double from}) {
+  /// [reserve] as it changes.
+  ValueListenable<double> get reserveListenable => _reserve;
+
+  /// The full height the box is taking: [full] once a change of shape is over, its end while it runs. What lays out
+  /// once at the box's full height (the danmaku) can follow this rather than every frame of the change.
+  ValueListenable<double> get shape => _shape;
+
+  /// Playing: what the tab has scrolled comes off [full] down to [floor], and the tab scrolls on under it (21).
+  static double playingHeight({required double full, required double floor, required double offset}) =>
+      (full - math.max(0.0, offset)).clamp(math.min(floor, full), full);
+
+  /// Paused: what the tab scrolls after the pause point [from] comes off [start], the height it had there ([full]
+  /// unless given), down to the bar.
+  static double heightFor({required double full, required double offset, required double from, double? start}) {
     if (full <= CollapseTheme.barHeight) return full;
-    return (full - (offset - from)).clamp(CollapseTheme.barHeight, full);
+    return ((start ?? full) - (offset - from)).clamp(CollapseTheme.barHeight, full);
   }
 
+  /// How far [height] has gone from [full], the height the shrink started at, to the bar.
   static double progressOf({required double full, required double height}) {
     final reserve = full - CollapseTheme.barHeight;
     if (reserve <= 0) return 0;
     return ((full - height) / reserve).clamp(0.0, 1.0);
+  }
+
+  double _shapeFor() {
+    final session = _session;
+    return inlinePlayerHeight(_width, video: session?.videoShape, ended: session?.ended ?? false);
+  }
+
+  void _retarget() {
+    final target = _shapeFor();
+    if (target == _shape.value) return;
+    _shape.value = target;
+    if (still) {
+      _reshape.stop();
+      _setFull(target);
+      _update();
+    } else {
+      _shapeFrom = _full;
+      unawaited(_reshape.forward(from: 0));
+    }
+  }
+
+  void _reshaped() {
+    _setFull(lerpDouble(_shapeFrom, _shape.value, CollapseTheme.reshapeCurve.transform(_reshape.value))!);
+    _update();
+  }
+
+  void _setFull(double value) {
+    if (value == _full) return;
+    _keepScrolled(value - _full);
+    _full = value;
+    _reserve.value = reserve;
+  }
+
+  /// A tab scrolled down keeps its content where it is on screen as the reserve above it changes, as far as its top
+  /// allows; a tab at its top rides the box's bottom edge.
+  void _keepScrolled(double change) {
+    for (final tab in PageTab.values) {
+      final offset = tabs.offsetOf(tab);
+      if (offset <= 0) continue;
+      final moved = math.max(0.0, offset + change) - offset;
+      for (final position in tabs.scrollOf(tab).positions) {
+        // A layout-time correction, which the new gap's layout in this frame takes up; a fling carries on from it
+        // rather than undoing it.
+        if (position.hasPixels) position.correctBy(moved);
+      }
+      _from[tab] = math.max(0, (_from[tab] ?? 0) + moved);
+    }
   }
 
   void _scrolled() {
@@ -113,26 +220,44 @@ class CollapsingPlayer extends ChangeNotifier {
     _update();
   }
 
-  double _compute() {
-    double following(PageTab tab) => heightFor(full: _full, offset: tabs.offsetOf(tab), from: _from[tab] ?? 0);
+  (double, double) _compute() {
+    final intro = _following(PageTab.intro);
+    final comments = _following(PageTab.comments);
     // Through a sideways swipe the height passes from one tab's to the other's with the finger.
-    final shown = lerpDouble(following(PageTab.intro), following(PageTab.comments), tabs.position.clamp(0.0, 1.0))!;
-    if (_paused) return shown;
-    // Growing back, it never falls behind a scroll back to the top, which would open a gap under the tab row.
-    return math.max(shown, _full - _grow.value * reserve);
+    final swipe = tabs.position.clamp(0.0, 1.0);
+    return (lerpDouble(intro.$1, comments.$1, swipe)!, lerpDouble(intro.$2, comments.$2, swipe)!);
+  }
+
+  /// [tab]'s height and progress.
+  (double, double) _following(PageTab tab) {
+    final offset = tabs.offsetOf(tab);
+    final from = _from[tab] ?? 0;
+    final start = playingHeight(full: _full, floor: _floor, offset: from);
+    final paused = heightFor(full: _full, offset: offset, from: from, start: start);
+    final shrink = progressOf(full: start, height: paused);
+    if (_paused) return (paused, shrink);
+    // Growing back from the paused height, never below it: a scroll back to the top raises it, and falling behind
+    // would open a gap under the tab row.
+    final left = _grow.value;
+    return (lerpDouble(playingHeight(full: _full, floor: _floor, offset: offset), paused, left)!, shrink * left);
   }
 
   void _update() {
-    final height = _compute();
-    if (height == _height) return;
+    final (height, progress) = _compute();
+    if (height == _height && progress == _progress) return;
     _height = height;
+    _progress = progress;
     notifyListeners();
   }
 
   @override
   void dispose() {
+    _session?.removeListener(_retarget);
     tabs.motion.removeListener(_scrolled);
     _grow.dispose();
+    _reshape.dispose();
+    _reserve.dispose();
+    _shape.dispose();
     super.dispose();
   }
 }

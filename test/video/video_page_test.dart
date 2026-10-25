@@ -2089,6 +2089,39 @@ void main() {
       await back(tester);
     });
 
+    testWidgets('a 3:4 video makes the small player 440 × 586.67 under the status bar (17); playing, a scroll takes it '
+        'to 16:9 (21), and the end screen takes 16:9 (18)', (tester) async {
+      const tall = 440 * 4 / 3;
+      await longPage(tester);
+      sessions[0]
+        ..videoShape = (width: 1080, height: 1440)
+        ..changed();
+      await tester.pump();
+      await tester.pump(CollapseTheme.reshape);
+      expect(area(tester).top, 62);
+      expect(area(tester).width, 440);
+      expect(area(tester).height, closeTo(586.67, 0.005));
+      expect(row(tester).top, closeTo(62 + tall, 0.01), reason: 'the tab row under it');
+
+      await collapse(tester);
+      expect(intro(tester).pixels, greaterThan(tall - full));
+      expect(area(tester).height, closeTo(full, 1e-9));
+      expect(row(tester).top, closeTo(62 + full, 0.01));
+      expect(find.text('继续播放'), findsNothing);
+
+      intro(tester).jumpTo(0);
+      await tester.pump();
+      expect(area(tester).height, closeTo(tall, 1e-9));
+      sessions[0]
+        ..ended = true
+        ..changed();
+      await tester.pump();
+      await tester.pump(CollapseTheme.reshape);
+      expect(area(tester).height, closeTo(full, 1e-9));
+      expect(find.byType(EndScreenPortrait), findsOneWidget);
+      await back(tester);
+    });
+
     testWidgets('paused halfway down the page, it shrinks only by what is scrolled after', (tester) async {
       await longPage(tester);
       intro(tester).jumpTo(400);
