@@ -13,6 +13,8 @@ APK, which KaiC downloaded for them (2026-10-21): `indicatorFrame1-4.webp` of it
 `lottie/player_seek_bar_tv_1.json` (the seek bar's TV, its eyes sliding from left to right across the animation) and
 `lottie/player_seek_bar_tv_2.json` (its blink when the finger lifts) are the same APK's
 `assets/player_seek_bar_tv_1.json` and `_2.json`, unchanged.
+`lottie/story_seek_bar_icon_1.json` and `_2.json` (竖屏's seek bar TV, its #333 body as on 118 and 19) are the same
+APK's `assets/story_seek_bar_icon_1.json` and `_2.json`, unchanged.
 
 `images/loading/cover_placeholder.png` (the faint 小电视 on a cover still loading) is the same APK's vector
 `bili_default_image_tv_2023` (the drawing the iPhone app shows; its `bili_default_image_tv` is an older one), and
