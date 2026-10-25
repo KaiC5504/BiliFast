@@ -85,6 +85,9 @@ abstract final class BiliColors {
   static const verticalTrack = Color(0x26FFFFFF);
   static const verticalPlayed = Color(0x99FFFFFF);
   static const verticalThumb = Color(0xFFFFFFFF);
+
+  /// 竖屏's played part, paused and held (118, 19 and 20), is Bilibili's #FB7299, not [pink].
+  static const verticalPink = Color(0xFFFB7299);
   static const chapterFill = Color(0x8C000000);
   static const badgeFill = Color(0x40000000);
   static const badgeBorder = Color(0x80FFFFFF);
@@ -309,12 +312,12 @@ abstract final class BiliMetrics {
   static const hiddenLine = 2.0;
 
   /// The small player's controls and end screen, and the bar's chapter title and 竖屏 dot, measured on the official
-  /// app's 03, 09, 15 and 26. While dragged, the bar thickens: the TV style's to 4 pt (102), 竖屏's a little, and its
-  /// dot grows.
+  /// app's 03, 09, 15 and 26. While dragged, the bar thickens: the TV style's to 4 pt (102), 竖屏's to 6 pt (19 and
+  /// 20), where the TV's box grows from [thumbWidth] to 22 pt (its screen 15 × 11.33 pt).
   static const verticalDot = 4.0;
-  static const verticalDotDragging = 10.0;
   static const tvBarDragHeight = 4.0;
-  static const barDragHeight = 3.0;
+  static const verticalBarDragHeight = 6.0;
+  static const verticalThumbHeld = 22.0;
   static const chapterTitleFont = 13.0;
   static const chapterTitleHeight = 24.0;
   static const chapterTitlePadding = 8.0;
@@ -2002,8 +2005,19 @@ abstract final class SeekPreviewTheme {
   static const timeGap = 15.0;
   static const timeFont = 15.0;
   static const time = Color(0xFFFFFFFF);
+
+  /// Reads #999999 over 19's black.
   static const duration = Color(0x99FFFFFF);
   static const fade = Duration(milliseconds: 200);
+
+  /// 竖屏's (19 and 20, 440 × 956): the frame 81 × 144 pt for an upright video and 144 × 81 for a wide one, border
+  /// included, centred with its bottom at 788 pt, and the time's digits at 802-814 pt under it. Both are placed from
+  /// 竖屏's bottom rows (33 pt above the screen's bottom there), so they keep their distance from its bar.
+  static const uprightLong = 144.0;
+  static const uprightShort = 81.0;
+  static const uprightTimeFont = 16.0;
+  static const uprightTimeGap = 12.57;
+  static const uprightTimeLift = 106.43;
 }
 
 /// The composer and its emote panel (14), measured at 3 px per pt.
