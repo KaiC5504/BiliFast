@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../support/look_alike.dart';
 import '../support/stand_in_fonts.dart';
 import '../video/mixed_lines.dart' show appTheme;
+import 'seek_preview_test.dart' show testSheets;
 import 'vertical_chrome_test.dart' show Rig;
 
 /// 竖屏 with the bar held, as KaiC's iPhone draws it, against 19 (a 3:4 video at 00:06 / 00:31) and 20 (a 16:9 video),
@@ -57,7 +58,6 @@ void main() {
           children: [
             const ColoredBox(color: BiliColors.videoBackground),
             VerticalChrome(ui: rig.ui),
-            Positioned.fill(child: SeekPreview(session: rig.session, shown: true, upright: true)),
           ],
         ),
       ),
@@ -69,6 +69,9 @@ void main() {
     await tester.pump();
     await finger.moveBy(const Offset(4, 0));
     await tester.pumpAndSettle();
+    final preview = find.descendant(of: find.byType(VerticalChrome), matching: find.byType(SeekPreview));
+    expect(tester.widget<SeekPreview>(preview).upright, isTrue);
+    expect(find.descendant(of: preview, matching: find.byKey(const ValueKey('seek-preview-frame'))), findsOneWidget);
 
     final render = tester.renderObject<RenderRepaintBoundary>(find.byKey(const ValueKey('screen')));
     final shot = await tester.runAsync(() async {
@@ -90,7 +93,7 @@ void main() {
     return shot!;
   }
 
-  testWidgets('19: the held bar 6 pt and pink under the TV, the 81 × 144 frame and the time where 19 has them', (
+  testSheets('19: the held bar 6 pt and pink under the TV, the 81 × 144 frame and the time where 19 has them', (
     tester,
   ) async {
     final shot = await hold(tester, upright: true, duration: 31);
@@ -122,7 +125,7 @@ void main() {
     expect(line.right, closeTo(812, 9));
   });
 
-  testWidgets('20: a wide video\'s frame is 144 × 81, its bottom where 19\'s is', (tester) async {
+  testSheets('20: a wide video\'s frame is 144 × 81, its bottom where 19\'s is', (tester) async {
     final shot = await hold(tester, upright: false, duration: 257);
     // 20: the border's outer edges at 444, 876, 2121 and 2364 px.
     final frame = shot.whiteBox(const Offset(660, 2250));

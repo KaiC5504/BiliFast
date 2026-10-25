@@ -313,7 +313,8 @@ abstract final class BiliMetrics {
 
   /// The small player's controls and end screen, and the bar's chapter title and 竖屏 dot, measured on the official
   /// app's 03, 09, 15 and 26. While dragged, the bar thickens: the TV style's to 4 pt (102), 竖屏's to 6 pt (19 and
-  /// 20), where the TV's box grows from [thumbWidth] to 22 pt (its screen 15 × 11.33 pt).
+  /// 20), where the TV's box grows to 22 pt (its screen 15 × 11.33 pt): from nothing while playing, from [thumbWidth]
+  /// while paused.
   static const verticalDot = 4.0;
   static const tvBarDragHeight = 4.0;
   static const verticalBarDragHeight = 6.0;

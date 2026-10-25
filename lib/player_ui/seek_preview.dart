@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:bili_core/api.dart' show BiliClient, VideoShot;
+import 'package:bili_core/devlog.dart' show LogCategory, Logger;
 import 'package:bili_core/logic.dart' show TimeFormat;
 import 'package:flutter/widgets.dart';
 
@@ -8,7 +10,8 @@ import '../shared/theme.dart';
 import '../video/player_session.dart';
 
 /// The frame and time over the middle of landscape while the bar is dragged (102), or above 竖屏's bar ([upright]).
-/// Before the frames arrive, or for a part without them, the time shows alone in its place.
+/// Before the frames arrive, for a part without them, or where a frame's sheet failed to load, the time shows alone in
+/// its place.
 class SeekPreview extends StatefulWidget {
   const SeekPreview({super.key, required this.session, required this.shown, this.upright = false});
 
@@ -25,6 +28,12 @@ class SeekPreview extends StatefulWidget {
 class _SeekPreviewState extends State<SeekPreview> {
   VideoShot? _warmed;
 
+  /// [_warmed]'s sheets that failed to load.
+  final _failed = <String>{};
+
+  /// Frames whose failure was logged: one set per part, so a part logs once whichever presentation's preview finds it.
+  static final _logged = Expando<bool>();
+
   /// Built only while shown or fading out, so it doesn't rebuild with every tick of the playhead behind the controls.
   late bool _built = widget.shown;
 
@@ -38,9 +47,32 @@ class _SeekPreviewState extends State<SeekPreview> {
   void _warm(VideoShot? shot) {
     if (shot == null || identical(shot, _warmed)) return;
     _warmed = shot;
+    _failed.clear();
     for (final sheet in shot.sheets) {
-      precacheImage(NetworkImage(sheet, headers: BiliClient.mediaHeaders), context, onError: (_, _) {});
+      precacheImage(
+        NetworkImage(sheet, headers: BiliClient.mediaHeaders),
+        context,
+        onError: (_, _) => _sheetFailed(shot, sheet),
+      );
     }
+  }
+
+  // The error's text carries the sheet's address, so only the part is logged.
+  void _sheetFailed(VideoShot shot, String sheet) {
+    if (!identical(shot, _warmed) || !_failed.add(sheet)) return;
+    if (_logged[shot] == null) {
+      _logged[shot] = true;
+      Logger.shared.warn(LogCategory.ui, 'seek sheet failed', {'cid': ?widget.session.part?.cid});
+    }
+    // The frame's errorBuilder reports while building.
+    scheduleMicrotask(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  ({String sheet, int column, int row})? _frameAt(VideoShot? shot, double position) {
+    final frame = shot?.frameAt(position);
+    return frame == null || _failed.contains(frame.sheet) ? null : frame;
   }
 
   @override
@@ -77,7 +109,7 @@ class _SeekPreviewState extends State<SeekPreview> {
 
   Widget _layout(BuildContext context, VideoShot? shot, double position, double duration) {
     final top = MediaQuery.sizeOf(context).height / 2 - SeekPreviewTheme.aboveMiddle;
-    final frame = shot?.frameAt(position);
+    final frame = _frameAt(shot, position);
     const border = SeekPreviewTheme.border * 2;
     final size = shot == null ? null : _frameSize(shot);
     return Stack(
@@ -104,7 +136,7 @@ class _SeekPreviewState extends State<SeekPreview> {
 
   /// 竖屏's: the frame and the time over its bottom rows, the time kept in its place with or without the frame.
   Widget _uprightLayout(BuildContext context, VideoShot? shot, double position, double duration) {
-    final frame = shot?.frameAt(position);
+    final frame = _frameAt(shot, position);
     const border = SeekPreviewTheme.border * 2;
     final outer = widget.session.isVertical
         ? const Size(SeekPreviewTheme.uprightShort, SeekPreviewTheme.uprightLong)
@@ -146,7 +178,15 @@ class _SeekPreviewState extends State<SeekPreview> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(SeekPreviewTheme.radius - SeekPreviewTheme.border),
-        child: _Cell(shot: shot, sheet: frame.sheet, column: frame.column, row: frame.row, box: box, cell: cell),
+        child: _Cell(
+          shot: shot,
+          sheet: frame.sheet,
+          column: frame.column,
+          row: frame.row,
+          box: box,
+          cell: cell,
+          onFailed: () => _sheetFailed(shot, frame.sheet),
+        ),
       ),
     );
   }
@@ -204,6 +244,7 @@ class _Cell extends StatelessWidget {
     required this.row,
     required this.box,
     required this.cell,
+    required this.onFailed,
   });
 
   final VideoShot shot;
@@ -212,6 +253,9 @@ class _Cell extends StatelessWidget {
   final int row;
   final Size box;
   final Size cell;
+
+  /// The sheet failed after all, such as on a reload once the image cache let it go.
+  final VoidCallback onFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +282,10 @@ class _Cell extends StatelessWidget {
             height: height,
             fit: BoxFit.fill,
             filterQuality: FilterQuality.medium,
-            errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+            errorBuilder: (context, error, stack) {
+              onFailed();
+              return const SizedBox.shrink();
+            },
           ),
         ),
       ),
