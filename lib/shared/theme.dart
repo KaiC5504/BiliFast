@@ -2175,6 +2175,14 @@ abstract final class CollapseTheme {
 
   /// 继续播放's scroll back to the top, and the player growing back to full once it plays.
   static const resume = Duration(milliseconds: 300);
+
+  /// An upright video's box is at most this many widths tall. A guess: 17's 3:4 is the only sample, so a 9:16 sits in
+  /// the 3:4 box with bars.
+  static const uprightLimit = 4 / 3;
+
+  /// The box taking a new shape: 18's shrink to 16:9 at the end and 重播's grow back (60 fps frames 89-98, 209-217).
+  static const reshape = Duration(milliseconds: 150);
+  static const reshapeCurve = Curves.easeInOut;
 }
 
 /// The composer's @ picker and attached pictures.
