@@ -220,6 +220,17 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   最近打开) while half its video shows when the scroll settles and 首页 is shown, uncovered and no small window is up;
   TV only while loading; 弹 and the speaker for the run; loops, the counts fading from the second lap; 👍 from
   `like_button.selected`, optimistic, the APK's Lottie. A tap hands the running playback to the video page with sound.
+- Upright videos and 竖屏, 1.0.0 (39), from KaiC's 16-21 (`local/differences/`): the small player's box takes an
+  upright video's shape (`lib/video/player_box.dart`: width × h / w up to 4:3 tall; 17's 3:4 is 440 × 586.67), shrinks
+  to 16:9 over 150 ms for the end screen and grows back on 重播 (18), and playing gives up its height above 16:9 with
+  the scroll (21; paused, down to the bar as before; `CollapsingPlayer` follows the session's `videoShape` and keeps
+  the shape through an in-page open). Its bottom row has only 竖屏, in 全屏's place (17). 竖屏: the paused ▶ and time
+  stay on the screen's 0.415 line whatever the video (16, 118); an upright video centres at 463 pt; the end starts
+  the video over from 0 whatever 自动连播 says (`PlayerSession.loopsAtEnd`; entering 竖屏 after the end replays); a
+  swipe right from the left edge does what ‹ does (KaiC); holding the bar fades everything but the bar, which grows to
+  6 pt in #FB7299 with the APK's story TV (`story_seek_bar_icon_1/2`), over the frame (81 × 144 upright, 144 × 81
+  wide, bottom at 788 pt) and the time (19, 20); the bar 0.5 pt higher; an upright video's last button is the APK's
+  `bili_story_ctrl_normal`.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -229,6 +240,13 @@ Each new screen waits for KaiC's official screenshots. On that build the phone r
 full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- (39) on the phone: the tall box against 17 and 21 (the scroll down to 16:9 and back), the end's shrink and 重播's grow
+  against 18, 竖屏's loop, the edge swipe, the held bar and preview against 19 and 20 (the ` / ` spacing: the stand-in
+  draws it 3.7 pt narrower than 19), the bar's rows. Guessed: the 4:3 cap (no 9:16 screenshot), the 463 pt centre for
+  every upright shape (one 3:4 sample), a shape arriving late animating, scrolling back up regrowing the box, and what
+  竖屏's screen-mode button does for an upright video (ours still turns to landscape; the APK's selector suggests a
+  清屏 / screen-mode toggle; leaving that landscape lands in the small player, not back in 竖屏, as before). Not built:
+  17's ♪ (听) and the 听/投屏 top icons; an edge swipe starting on 竖屏's ‹ (the ‹ takes the touch).
 - (38) on the phone: Violet's pull arming at 60 pt; the big card against 123-126 (size, danmaku, counts, the speaker
   and 弹, the loop, 👍), its tap carrying on with sound, pausing half off once the finger lets go, and whether 推荐's
   mix changed asking as the Android phone (KaiC's worry; a 开发者 switch back to the pad if so). Guessed: release 30 s

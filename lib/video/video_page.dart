@@ -739,7 +739,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (intro != _intro && mounted) setState(() => _intro = intro);
     _syncComments();
     if (session.video == null) return;
-    final vertical = session.isVertical;
+    final vertical = session.layoutVertical;
     final changed = vertical != _vertical;
     _vertical = vertical;
     if (!_owning) {
