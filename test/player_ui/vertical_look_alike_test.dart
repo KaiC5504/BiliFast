@@ -11,6 +11,7 @@ import 'package:bilifast/player_ui/seek_bar.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_session.dart' show Episode;
+import 'package:bilifast/video/video_player_area.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,8 +21,8 @@ import '../support/stand_in_fonts.dart';
 import '../video/mixed_lines.dart' show appTheme;
 import 'vertical_chrome_test.dart' show Rig;
 
-/// 竖屏 paused as KaiC's iPhone draws it, against 118 (00:05 / 01:02, 合集 · 第18集), at 3×. With BILIFAST_SHOTS naming a
-/// folder outside the repo, the shot is saved there for tools/screen_diff.py.
+/// 竖屏 paused as KaiC's iPhone draws it, against 118 (00:05 / 01:02, 合集 · 第18集) and 16 (a 3:4 video), at 3×. With
+/// BILIFAST_SHOTS naming a folder outside the repo, the shots are saved there for tools/screen_diff.py.
 void main() {
   // 118's video: 16:9 across the width, centred at the 竖屏 line.
   const videoTop = 956 * BiliMetrics.verticalVideoCentre - 440 / BiliMetrics.videoAspect / 2;
@@ -151,5 +152,89 @@ void main() {
     expect(lanes.toSet(), hasLength(3));
     expect(lanes.last - lanes.first, closeTo(2 * BiliMetrics.danmakuLaneVertical, 0.01));
     expect(lanes.first * 3, closeTo(331.5, 3), reason: '118: the first lane centred about 331.5 px down');
+  });
+
+  testWidgets('16: a 3:4 video paused sits on the uploader row, with the ▶ and the time where 118 has them', (
+    tester,
+  ) async {
+    final saved = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = saved);
+    await tester.runAsync(loadSystemFontStandIns);
+    await tester.runAsync(SeekBar.precache);
+    showAsPhone(tester);
+    BiliFonts.family = BiliFonts.system;
+
+    final rig = Rig()
+      ..session.title = '被低估的织光季斗篷｜染色真的超美❗'
+      ..session.duration.value = 31
+      ..session.isVertical = true
+      ..session.videoShape = (width: 1080, height: 1440)
+      ..session.detail = VideoDetail.fromJson({
+        'bvid': 'BV16',
+        'title': '被低估的织光季斗篷｜染色真的超美❗',
+        'owner': {'mid': 1, 'name': 'sky白城理纱', 'face': ''},
+        'stat': {'view': 100000, 'reply': 321, 'like': 3748, 'coin': 33, 'favorite': 1281, 'share': 493},
+      })
+      ..details = FakePageDetails(
+        actions: FakeVideoActions(likeCount: 3748, coinCount: 33, favCount: 1281, shareCount: 493),
+        uploader: const UploaderCard(
+          mid: 1,
+          name: 'sky白城理纱',
+          face: '',
+          fans: 7315,
+          videos: 10,
+          isVip: false,
+          following: false,
+        ),
+        online: '1',
+      );
+    addTearDown(() {
+      rig.chrome.dispose();
+      rig.panels.dispose();
+      rig.orientation.dispose();
+      rig.session.dispose();
+      rig.details?.dispose();
+    });
+    rig.session.clock.jump(1.2);
+    rig.session.readout.refresh();
+    rig.session.player.emit(const StatusChanged(PlayerStatus.paused));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme(),
+        builder: (context, child) => RepaintBoundary(key: const ValueKey('screen'), child: child!),
+        home: VideoPlayerArea(
+          presentation: Presentation.vertical,
+          onBack: () {},
+          ui: rig.ui,
+          // The native view letterboxes the picture into its band; a flat stand-in for the picture.
+          video: const Center(
+            child: AspectRatio(
+              aspectRatio: 3 / 4,
+              child: ColoredBox(key: ValueKey('picture'), color: Color(0xFF9C8F84)),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(VerticalChrome));
+    await tester.runAsync(() => precacheImage(const AssetImage(VerticalActionTheme.pausedPlayAsset), context));
+    await tester.pumpAndSettle();
+
+    final shots = Platform.environment['BILIFAST_SHOTS'];
+    if (shots != null) await saveShot(tester, find.byKey(const ValueKey('screen')), '$shots/vertical-16.png');
+
+    // 16: the picture spans 509-2269 px; the avatar's ring starts at 2265 px, just over its bottom.
+    final picture = tester.getRect(find.byKey(const ValueKey('picture')));
+    expect(picture.top * 3, closeTo(509, 1));
+    expect(picture.bottom * 3, closeTo(2269, 1));
+    expect(tester.getTopLeft(find.byKey(const ValueKey('vertical-avatar'))).dy * 3, closeTo(2265, 1.5));
+    // The ▶ and the time where 118 has them for its 16:9 video.
+    final glyph = tester.getRect(
+      find.descendant(of: find.byKey(const ValueKey('vertical-paused-play')), matching: find.byType(Image)),
+    );
+    expect(glyph.top * 3, closeTo(1192, 2));
+    expect(find.text('00:01 / 00:31'), findsOneWidget);
   });
 }

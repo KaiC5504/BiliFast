@@ -16,13 +16,14 @@ import 'panels/panel_controller.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
 import 'seek_bar.dart';
+import 'seek_preview.dart';
 
 /// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back, N人正在看 and ⋮ at
 /// the top, the action column down the right, the uploader with 粉丝 and 关注, the title and its plays over the bar,
 /// then the 发弹幕 field with the 弹 toggle, 详情页 and 横屏全屏. The search button and the search row have their room
 /// kept so nothing else moves when they come; so does whatever the page details haven't brought yet. As in the official
 /// app they stay up, hiding only for a panel or an action overlay; paused, the bar carries the TV and 118's ▶ and the
-/// time sit over the video.
+/// time sit over the video. While the bar is dragged everything but the bar fades for the seek preview (19, 20).
 class VerticalChrome extends StatelessWidget {
   const VerticalChrome({super.key, required this.ui});
 
@@ -46,6 +47,7 @@ class VerticalChrome extends StatelessWidget {
     final bottom = math.max(insets.bottom - BiliMetrics.verticalBottomDrop, 0.0);
     return ListenableBuilder(
       listenable: Listenable.merge([
+        ui.chrome,
         ui.panels,
         ui.session,
         ui.session.readout.status,
@@ -55,6 +57,8 @@ class VerticalChrome extends StatelessWidget {
       ]),
       builder: (context, _) {
         final shown = ui.panels.value == null && ui.overlay?.value == null;
+        final held = ui.chrome.barHeld;
+        final aside = shown && !held;
         final paused = ui.session.readout.status.value == PlayerStatus.paused && !ui.session.opening;
         return IgnorePointer(
           key: const ValueKey('vertical-chrome'),
@@ -64,12 +68,12 @@ class VerticalChrome extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                _PausedPlay(ui: ui, paused: paused, shown: shown),
+                _PausedPlay(ui: ui, paused: paused, shown: shown, held: held),
                 Positioned(
                   left: 0,
                   right: 0,
                   top: math.max(insets.top - BiliMetrics.verticalTopLift, 0),
-                  child: ChromeSlide(shown: shown, from: const Offset(0, -BiliMetrics.chromeSlide), child: _topRow()),
+                  child: _GiveWay(shown: aside, from: const Offset(0, -BiliMetrics.chromeSlide), child: _topRow()),
                 ),
                 Positioned(
                   left: 0,
@@ -78,7 +82,7 @@ class VerticalChrome extends StatelessWidget {
                   child: ChromeSlide(
                     shown: shown,
                     from: const Offset(0, BiliMetrics.chromeSlide / 2),
-                    child: _bottom(paused: paused),
+                    child: _bottom(paused: paused, held: held),
                   ),
                 ),
                 if (ui.details case final details?)
@@ -86,12 +90,13 @@ class VerticalChrome extends StatelessWidget {
                     right: VerticalActionTheme.columnTrailing,
                     bottom: bottom + VerticalActionTheme.columnLift,
                     width: VerticalActionTheme.columnWidth,
-                    child: ChromeSlide(
-                      shown: shown,
+                    child: _GiveWay(
+                      shown: aside,
                       from: const Offset(BiliMetrics.chromeSlide, 0),
                       child: _ActionColumn(details: details, ui: ui, touch: _touch),
                     ),
                   ),
+                Positioned.fill(child: SeekPreview(session: ui.session, shown: shown && held, upright: true)),
               ],
             ),
           ),
@@ -136,7 +141,8 @@ class VerticalChrome extends StatelessWidget {
     ],
   );
 
-  Widget _bottom({required bool paused}) {
+  /// [held] keeps only the bar.
+  Widget _bottom({required bool paused, required bool held}) {
     final session = ui.session;
     final detail = session.detail;
     final episode = _collectionEpisode();
@@ -144,46 +150,19 @@ class VerticalChrome extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          height: BiliMetrics.verticalAvatar,
-          child: detail == null ? null : _Uploader(detail: detail, details: ui.details, touch: _touch),
+        _GiveWay(
+          shown: !held,
+          child: SizedBox(
+            height: BiliMetrics.verticalAvatar,
+            child: detail == null ? null : _Uploader(detail: detail, details: ui.details, touch: _touch),
+          ),
         ),
         const SizedBox(height: BiliMetrics.verticalUploaderGap),
-        Padding(
-          padding: const EdgeInsets.only(left: BiliMetrics.verticalInfoInset, right: BiliMetrics.verticalColumnRoom),
-          child: Text.rich(
-            TextSpan(
-              children: [
-                if (episode != null) ..._collection(episode),
-                TextSpan(text: session.title),
-                if (detail != null) ...[
-                  const WidgetSpan(child: SizedBox(width: BiliMetrics.verticalViewsGap)),
-                  TextSpan(
-                    text: '${CountFormat.short(detail.stat.view)}播放',
-                    style: const TextStyle(fontSize: BiliMetrics.verticalViewsText),
-                  ),
-                  const WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    // Centred on the line, so the top padding drops it by half as much.
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        left: BiliMetrics.verticalChevronGap,
-                        top: BiliMetrics.verticalChevronTop,
-                      ),
-                      child: CustomPaint(
-                        size: Size(BiliMetrics.verticalChevronWidth, BiliMetrics.verticalChevronHeight),
-                        painter: _ChevronDownPainter(),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            key: const ValueKey('vertical-title'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: _titleStyle,
-            strutStyle: fullScreenStrut(_titleStyle),
+        _GiveWay(
+          shown: !held,
+          child: Padding(
+            padding: const EdgeInsets.only(left: BiliMetrics.verticalInfoInset, right: BiliMetrics.verticalColumnRoom),
+            child: _title(detail, episode),
           ),
         ),
         // The search suggestion row will sit between the title and the bar.
@@ -201,37 +180,79 @@ class VerticalChrome extends StatelessWidget {
                 ui: ui,
                 repaint: FullScreenSeekBar.repaintOf(ui),
                 style: paused ? SeekBarStyle.pausedDot : SeekBarStyle.dot,
+                preview: true,
               ),
             ),
           ),
         ),
-        SizedBox(
-          height: BiliMetrics.chromeButton,
-          child: Row(
-            children: [
-              const SizedBox(width: BiliMetrics.verticalInfoInset),
-              Expanded(child: _field()),
-              const SizedBox(width: BiliMetrics.verticalDetailGap),
-              ChromeTap(
-                key: const ValueKey('vertical-detail'),
-                label: '详情页',
-                onTap: _touch(ui.orientation.exitToInline),
-                child: const _DetailGlyph(),
-              ),
-              const SizedBox(width: BiliMetrics.verticalLandscapeGap),
-              ChromeTap(
-                key: const ValueKey('vertical-landscape'),
-                label: '横屏全屏',
-                onTap: _touch(ui.orientation.enterLandscape),
-                child: const CustomPaint(size: Size.square(BiliMetrics.fullScreenGlyph), painter: FullScreenPainter()),
-              ),
-              const SizedBox(width: BiliMetrics.landscapeEdge),
-            ],
+        _GiveWay(
+          shown: !held,
+          child: SizedBox(
+            height: BiliMetrics.chromeButton,
+            child: Row(
+              children: [
+                const SizedBox(width: BiliMetrics.verticalInfoInset),
+                Expanded(child: _field()),
+                const SizedBox(width: BiliMetrics.verticalDetailGap),
+                ChromeTap(
+                  key: const ValueKey('vertical-detail'),
+                  label: '详情页',
+                  onTap: _touch(ui.orientation.exitToInline),
+                  child: const _DetailGlyph(),
+                ),
+                const SizedBox(width: BiliMetrics.verticalLandscapeGap),
+                ChromeTap(
+                  key: const ValueKey('vertical-landscape'),
+                  label: '横屏全屏',
+                  onTap: _touch(ui.orientation.enterLandscape),
+                  child: const CustomPaint(
+                    size: Size.square(BiliMetrics.fullScreenGlyph),
+                    painter: FullScreenPainter(),
+                  ),
+                ),
+                const SizedBox(width: BiliMetrics.landscapeEdge),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
+
+  Widget _title(VideoDetail? detail, int? episode) => Text.rich(
+    TextSpan(
+      children: [
+        if (episode != null) ..._collection(episode),
+        TextSpan(text: ui.session.title),
+        if (detail != null) ...[
+          const WidgetSpan(child: SizedBox(width: BiliMetrics.verticalViewsGap)),
+          TextSpan(
+            text: '${CountFormat.short(detail.stat.view)}播放',
+            style: const TextStyle(fontSize: BiliMetrics.verticalViewsText),
+          ),
+          const WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            // Centred on the line, so the top padding drops it by half as much.
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: BiliMetrics.verticalChevronGap,
+                top: BiliMetrics.verticalChevronTop,
+              ),
+              child: CustomPaint(
+                size: Size(BiliMetrics.verticalChevronWidth, BiliMetrics.verticalChevronHeight),
+                painter: _ChevronDownPainter(),
+              ),
+            ),
+          ),
+        ],
+      ],
+    ),
+    key: const ValueKey('vertical-title'),
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+    style: _titleStyle,
+    strutStyle: fullScreenStrut(_titleStyle),
+  );
 
   /// The playing video's place in its 合集 (from 1), when it is in one; null for parts or a video on its own.
   int? _collectionEpisode() {
@@ -468,6 +489,21 @@ class _Uploader extends StatelessWidget {
       ),
       const SizedBox(width: BiliMetrics.verticalColumnRoom),
     ],
+  );
+}
+
+/// [ChromeSlide] that takes no touches while out of sight, for the parts that give way to the held bar.
+class _GiveWay extends StatelessWidget {
+  const _GiveWay({required this.shown, required this.child, this.from = Offset.zero});
+
+  final bool shown;
+  final Offset from;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    ignoring: !shown,
+    child: ChromeSlide(shown: shown, from: from, child: child),
   );
 }
 
@@ -892,14 +928,17 @@ Paint _stroke(double width) => Paint()
   ..strokeJoin = StrokeJoin.round
   ..color = BiliColors.onVideo;
 
-/// 118's ▶ over the paused video, hanging from its centre line, with the time under it among the controls. A tap on it
-/// plays, as one anywhere on the video does.
+/// 118's ▶ over the paused video with the time under it among the controls, at one place on the screen whatever the
+/// video's shape (16). A tap on it plays, as one anywhere on the video does.
 class _PausedPlay extends StatelessWidget {
-  const _PausedPlay({required this.ui, required this.paused, required this.shown});
+  const _PausedPlay({required this.ui, required this.paused, required this.shown, required this.held});
 
   final PlayerUi ui;
   final bool paused;
   final bool shown;
+
+  /// The bar is held: both give way to the seek preview (19).
+  final bool held;
 
   static TextStyle get _timeStyle => fullScreenText.merge(
     const TextStyle(
@@ -918,27 +957,29 @@ class _PausedPlay extends StatelessWidget {
     final session = ui.session;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final centre = session.isVertical ? 0.5 : BiliMetrics.verticalVideoCentre;
-        final top = constraints.maxHeight * centre;
+        final top = constraints.maxHeight * BiliMetrics.verticalVideoCentre;
         return Stack(
           children: [
             Positioned(
               top: top,
               left: (constraints.maxWidth - VerticalActionTheme.pausedPlayWidth) / 2,
-              child: Semantics(
-                key: const ValueKey('vertical-paused-play'),
-                button: true,
-                label: '播放',
-                onTap: session.togglePlay,
-                excludeSemantics: true,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
+              child: _GiveWay(
+                shown: !held,
+                child: Semantics(
+                  key: const ValueKey('vertical-paused-play'),
+                  button: true,
+                  label: '播放',
                   onTap: session.togglePlay,
-                  child: Image.asset(
-                    VerticalActionTheme.pausedPlayAsset,
-                    width: VerticalActionTheme.pausedPlayWidth,
-                    height: VerticalActionTheme.pausedPlayHeight,
-                    opacity: const AlwaysStoppedAnimation(VerticalActionTheme.pausedPlayOpacity),
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: session.togglePlay,
+                    child: Image.asset(
+                      VerticalActionTheme.pausedPlayAsset,
+                      width: VerticalActionTheme.pausedPlayWidth,
+                      height: VerticalActionTheme.pausedPlayHeight,
+                      opacity: const AlwaysStoppedAnimation(VerticalActionTheme.pausedPlayOpacity),
+                    ),
                   ),
                 ),
               ),
@@ -949,7 +990,7 @@ class _PausedPlay extends StatelessWidget {
               right: 0,
               child: IgnorePointer(
                 child: ChromeSlide(
-                  shown: shown,
+                  shown: shown && !held,
                   from: Offset.zero,
                   child: ListenableBuilder(
                     listenable: FullScreenSeekBar.repaintOf(ui),
