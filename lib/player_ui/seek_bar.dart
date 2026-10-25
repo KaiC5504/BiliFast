@@ -71,13 +71,16 @@ class SeekBar extends StatefulWidget {
   static const storyLookingAsset = 'assets/lottie/story_seek_bar_icon_1.json';
   static const storyBlinkingAsset = 'assets/lottie/story_seek_bar_icon_2.json';
 
-  /// Parses the Lotties once for every bar. Until they are in, or if they failed, the TV draws as a plain round handle.
+  /// Parses the Lotties once for every bar. Until they are in, or if they failed, the TV draws as a plain round handle;
+  /// 竖屏's draws the player's TV when only its own pair failed.
   static Future<void> precache() => _TvFaces.load();
 
   /// Drops the parsed Lotties, or their failure, so the next [precache] loads them again from [bundle].
   @visibleForTesting
   static void debugForgetFaces({AssetBundle? bundle}) {
-    _TvFaces.loaded = null;
+    _TvFaces.player = null;
+    _TvFaces.story = null;
+    _TvFaces.done = false;
     _TvFaces._loading = null;
     _TvFaces._bundle = bundle;
   }
@@ -212,7 +215,7 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
   }
 
   void _awaitFaces() {
-    if (_TvFaces.loaded != null) return;
+    if (_TvFaces.done) return;
     _TvFaces.load().then((_) {
       if (mounted) setState(() {});
     });
@@ -287,7 +290,7 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
     _glideFrom = null;
     // A touch before the eyes are back stops them, and the blink with them: the future never completes.
     _eyes.animateTo(SeekBar.eyesAtRest, duration: planned).then((_) {
-      final faces = _TvFaces.loaded;
+      final faces = _TvFaces.of(widget.style);
       if (!blink || !mounted || faces == null || !widget.style.face) return;
       final from = _glideFrom;
       if (from != null && WidgetsBinding.instance.currentFrameTimeStamp - from > planned + SeekBar._eyesLate) return;
@@ -395,7 +398,7 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
                       chapters: widget.chapters,
                       style: widget.style,
                       drag: _dragCurve,
-                      faces: _TvFaces.loaded,
+                      faces: _TvFaces.of(widget.style),
                       eyes: _eyes,
                       blink: _blink,
                       repaint: Listenable.merge([widget.repaint, _drag, _eyes, _blink]),
@@ -524,7 +527,7 @@ class _SeekBarPainter extends CustomPainter {
   final List<Chapter> chapters;
   final SeekBarStyle style;
   final Animation<double> drag;
-  final _TvFaces? faces;
+  final _TvFace? faces;
   final Animation<double> eyes;
   final Animation<double> blink;
 
@@ -590,7 +593,6 @@ class _SeekBarPainter extends CustomPainter {
         Rect.fromCenter(center: centre, width: face, height: face * BiliMetrics.thumbHeight / BiliMetrics.thumbWidth),
         progress: blinking ? blink.value : eyes.value,
         blinking: blinking,
-        story: !tv,
       );
     }
   }
@@ -605,47 +607,51 @@ class _SeekBarPainter extends CustomPainter {
       oldDelegate.faces != faces;
 }
 
-/// Both pairs of Lotties, parsed once for the whole app. Every bar paints through the same drawables, one at a time.
-final class _TvFaces {
-  _TvFaces(List<LottieComposition> faces)
-    // Frames in between, as the iPhone draws the eyes sliding, rather than the files' 30 fps steps.
-    : _looking = LottieDrawable(faces[0], frameRate: FrameRate.max),
-      _blinking = LottieDrawable(faces[1], frameRate: FrameRate.max),
-      _storyLooking = LottieDrawable(faces[2], frameRate: FrameRate.max),
-      _storyBlinking = LottieDrawable(faces[3], frameRate: FrameRate.max),
-      blinkDuration = faces[1].duration;
-
-  final LottieDrawable _looking;
-  final LottieDrawable _blinking;
-  final LottieDrawable _storyLooking;
-  final LottieDrawable _storyBlinking;
-  final Duration blinkDuration;
-
-  static _TvFaces? loaded;
+/// Both pairs of Lotties, parsed once for the whole app, each on its own so one failing leaves the other.
+abstract final class _TvFaces {
+  static _TvFace? player;
+  static _TvFace? story;
+  static bool done = false;
   static Future<void>? _loading;
   static AssetBundle? _bundle;
 
+  /// 竖屏's styles take the story TV, or the player's once the story pair has failed; null draws the round handle.
+  static _TvFace? of(SeekBarStyle style) => style == SeekBarStyle.tv ? player : story ?? (done ? player : null);
+
   // A failure is kept: the assets ship with the app, so a retry per bar would only report it again.
-  static Future<void> load() => _loading ??= () async {
+  static Future<void> load() => _loading ??= Future.wait([
+    _pair(SeekBar.lookingAsset, SeekBar.blinkingAsset).then((face) => player = face),
+    _pair(SeekBar.storyLookingAsset, SeekBar.storyBlinkingAsset).then((face) => story = face),
+  ]).then((_) => done = true);
+
+  static Future<_TvFace?> _pair(String looking, String blinking) async {
     try {
-      loaded = _TvFaces(
-        await Future.wait([
-          for (final asset in [
-            SeekBar.lookingAsset,
-            SeekBar.blinkingAsset,
-            SeekBar.storyLookingAsset,
-            SeekBar.storyBlinkingAsset,
-          ])
-            AssetLottie(asset, bundle: _bundle).load(),
-        ]),
-      );
+      final faces = await Future.wait([
+        AssetLottie(looking, bundle: _bundle).load(),
+        AssetLottie(blinking, bundle: _bundle).load(),
+      ]);
+      return _TvFace(faces[0], faces[1]);
     } catch (error, stack) {
       FlutterError.reportError(FlutterErrorDetails(exception: error, stack: stack, library: 'seek bar'));
+      return null;
     }
-  }();
+  }
+}
 
-  void draw(Canvas canvas, Rect rect, {required double progress, required bool blinking, required bool story}) {
-    final face = story ? (blinking ? _storyBlinking : _storyLooking) : (blinking ? _blinking : _looking);
+/// One TV's eyes and blink. Every bar with this TV paints through the same drawables, one at a time.
+final class _TvFace {
+  _TvFace(LottieComposition looking, LottieComposition blinking)
+    // Frames in between, as the iPhone draws the eyes sliding, rather than the files' 30 fps steps.
+    : _looking = LottieDrawable(looking, frameRate: FrameRate.max),
+      _blinking = LottieDrawable(blinking, frameRate: FrameRate.max),
+      blinkDuration = blinking.duration;
+
+  final LottieDrawable _looking;
+  final LottieDrawable _blinking;
+  final Duration blinkDuration;
+
+  void draw(Canvas canvas, Rect rect, {required double progress, required bool blinking}) {
+    final face = blinking ? _blinking : _looking;
     face.setProgress(progress);
     // The files are 18 pt; 竖屏's held TV draws them larger.
     face.draw(canvas, rect, fit: BoxFit.contain);

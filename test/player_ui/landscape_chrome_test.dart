@@ -35,6 +35,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
 import '../support/fake_video_actions.dart';
+import 'seek_preview_test.dart' show testSheets;
 
 class CountingChrome extends ChromeState {
   int shows = 0;
@@ -1401,7 +1402,7 @@ void main() {
       expect(rig.chrome.barHeld, isFalse);
     });
 
-    testWidgets("the frame for the dragged time, 170 × 95 with the measured border, from its sheet's cell", (
+    testSheets("the frame for the dragged time, 170 × 95 with the measured border, from its sheet's cell", (
       tester,
     ) async {
       final rig = Rig();

@@ -768,14 +768,14 @@ void main() {
   });
 
   testWidgets(
-    'Lotties that fail to load are reported once, and every bar draws a plain round handle in the TV\'s place',
+    'Lotties that fail to load are reported once a pair, and every bar draws a plain round handle in the TV\'s place',
     (tester) async {
       final bundle = _MissingBundle();
       SeekBar.debugForgetFaces(bundle: bundle);
       addTearDown(SeekBar.debugForgetFaces);
       final rig = Rig()..position = 50;
-      await rig.mount(tester);
-      expect(tester.takeException(), isNotNull);
+      final reports = await _reported(() => rig.mount(tester));
+      expect(reports.map((report) => report.library), ['seek bar', 'seek bar']);
       final loads = bundle.loads;
       final centre = rig.thumb(tester, 50) - rig.rect(tester).topLeft;
       expect(
@@ -821,6 +821,96 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+
+  testWidgets('a story pair that fails leaves landscape its own TV, and 竖屏 draws the player\'s', (tester) async {
+    SeekBar.debugForgetFaces(bundle: _PartlyMissingBundle('story_seek_bar_icon'));
+    addTearDown(SeekBar.debugForgetFaces);
+    final rig = Rig()..position = 50;
+    final reports = await _reported(() => rig.mount(tester));
+    expect(reports, hasLength(1));
+    expect('${reports.single.exception}', contains('story_seek_bar_icon'));
+    final box = Rect.fromCenter(
+      center: rig.thumb(tester, 50) - rig.rect(tester).topLeft,
+      width: BiliMetrics.thumbWidth,
+      height: BiliMetrics.thumbHeight,
+    );
+    expect(
+      rig.painter(tester),
+      paints
+        ..rrect(color: BiliColors.chromeTrack)
+        ..rrect(color: BiliColors.chromeBuffered)
+        ..rrect(color: BiliColors.pink)
+        ..save()
+        ..translate(x: box.left, y: box.top),
+    );
+    expect(rig.painter(tester), paintsExactlyCountTimes(#drawCircle, 0), reason: 'no handle');
+
+    await tester.pumpWidget(const SizedBox());
+    final vertical = Rig()..position = 50;
+    await vertical.mount(tester, style: SeekBarStyle.dot);
+    final held = await tester.startGesture(vertical.rect(tester).center);
+    await tester.pumpAndSettle();
+    const centre = 2 + 214 * 0.5;
+    final bar = _risen(218, BiliMetrics.verticalBarDragHeight);
+    final tv = Rect.fromCenter(
+      center: Offset(centre, bar.center.dy),
+      width: BiliMetrics.verticalThumbHeld,
+      height: BiliMetrics.verticalThumbHeld,
+    );
+    expect(
+      vertical.painter(tester),
+      paints
+        ..rrect(rrect: bar, color: BiliColors.verticalTrack)
+        ..rrect(color: BiliColors.verticalPink)
+        ..save()
+        ..translate(x: tv.left, y: tv.top),
+    );
+    expect(vertical.painter(tester), paintsExactlyCountTimes(#drawCircle, 0), reason: 'no handle');
+    await held.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a player pair that fails leaves 竖屏 its story TV, and landscape draws the handle', (tester) async {
+    SeekBar.debugForgetFaces(bundle: _PartlyMissingBundle('player_seek_bar_tv'));
+    addTearDown(SeekBar.debugForgetFaces);
+    final rig = Rig()..position = 50;
+    final reports = await _reported(() => rig.mount(tester));
+    expect(reports, hasLength(1));
+    expect('${reports.single.exception}', contains('player_seek_bar_tv'));
+    expect(rig.painter(tester), paints..circle(radius: BiliMetrics.thumbHandle / 2, color: BiliColors.thumbHandle));
+
+    await tester.pumpWidget(const SizedBox());
+    final paused = Rig()..position = 50;
+    await paused.mount(tester, style: SeekBarStyle.pausedDot);
+    const centre = 2 + 214 * 0.5;
+    final rest = Rect.fromCenter(
+      center: const Offset(centre, BiliMetrics.barTouchHeight / 2),
+      width: BiliMetrics.thumbWidth,
+      height: BiliMetrics.thumbWidth,
+    );
+    expect(
+      paused.painter(tester),
+      paints
+        ..rrect(color: BiliColors.verticalTrack)
+        ..rrect(color: BiliColors.verticalPink)
+        ..save()
+        ..translate(x: rest.left, y: rest.top),
+    );
+    expect(paused.painter(tester), paintsExactlyCountTimes(#drawCircle, 0), reason: 'no handle');
+  });
+}
+
+/// FlutterError's reports while [body] runs, kept from the test binding.
+Future<List<FlutterErrorDetails>> _reported(Future<void> Function() body) async {
+  final reports = <FlutterErrorDetails>[];
+  final previous = FlutterError.onError;
+  FlutterError.onError = reports.add;
+  try {
+    await body();
+  } finally {
+    FlutterError.onError = previous;
+  }
+  return reports;
 }
 
 final class _MissingBundle extends CachingAssetBundle {
@@ -831,6 +921,17 @@ final class _MissingBundle extends CachingAssetBundle {
     loads++;
     return Future.error(FlutterError('$key is missing'));
   }
+}
+
+/// The app's assets, less those whose key holds [missing].
+final class _PartlyMissingBundle extends CachingAssetBundle {
+  _PartlyMissingBundle(this.missing);
+
+  final String missing;
+
+  @override
+  Future<ByteData> load(String key) =>
+      key.contains(missing) ? Future.error(FlutterError('$key is missing')) : rootBundle.load(key);
 }
 
 RRect _capsule(double width, double height) => RRect.fromLTRBR(
