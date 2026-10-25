@@ -1437,7 +1437,7 @@ class FullScreenSeekBar extends StatelessWidget {
   final Listenable repaint;
   final SeekBarStyle style;
 
-  /// Holding it shows the seek preview (102), landscape's.
+  /// Holding it shows the seek preview (102; 竖屏's 19, 20).
   final bool preview;
 
   /// What the bar and the time redraw on.
