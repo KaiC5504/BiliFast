@@ -73,13 +73,14 @@ final class Rig {
   final panels = PanelController();
   final orientation = OrientationController();
   final device = RecordingDevice();
+  var backs = 0;
   late final ui = PlayerUi(
     session: session,
     chrome: chrome,
     panels: panels,
     orientation: orientation,
     device: device,
-    onBack: () {},
+    onBack: () => backs++,
   );
 
   List<String> get calls => session.calls;
@@ -139,6 +140,25 @@ Duration thumb(double distance) => Duration(milliseconds: (distance / 1.5).round
 
 /// Lets the single tap's window run out.
 const _tapSettles = Duration(milliseconds: 300);
+
+const _frame = Duration(milliseconds: 16);
+
+/// Moves [gesture] by [step] [count] times a frame apart, stamped from [from] on so the lift's speed can be read.
+Future<Duration> moveFrames(
+  WidgetTester tester,
+  TestGesture gesture,
+  Offset step,
+  int count, {
+  Duration from = Duration.zero,
+}) async {
+  var stamp = from;
+  for (var i = 0; i < count; i++) {
+    stamp += _frame;
+    await gesture.moveBy(step, timeStamp: stamp);
+    await tester.pump(_frame);
+  }
+  return stamp;
+}
 
 void main() {
   late Rig rig;
@@ -322,6 +342,166 @@ void main() {
       await tester.tapAt(const Offset(405, 305));
       await tester.pump(_tapSettles);
       expect(rig.calls, ['togglePlay']);
+    });
+  });
+
+  group("竖屏's swipe right from the left edge is its ‹", () {
+    testWidgets('flung right, or let go past half the width, it goes back with nothing else from that touch',
+        (tester) async {
+      rig.playing();
+      await rig.mountVertical(tester);
+      await tester.timedDragFrom(const Offset(5, 300), const Offset(150, 0), thumb(150));
+      expect(rig.backs, 1, reason: 'short, but faster than a width a second');
+      await tester.timedDragFrom(const Offset(10, 300), const Offset(450, 20), const Duration(seconds: 2));
+      expect(rig.backs, 2, reason: 'slow, but past half the width');
+      await tester.pump(_tapSettles);
+      expect(rig.calls, isEmpty, reason: 'no tap, seek or 2×');
+      expect(rig.device.sets, isEmpty);
+      expect(rig.chrome.hud.value, isNull);
+      expect(rig.chrome.visible, isTrue);
+    });
+
+    testWidgets('a short swipe at half a width a second does nothing', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.timedDragFrom(const Offset(5, 300), const Offset(150, 0), const Duration(milliseconds: 375));
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 0);
+      expect(rig.calls, isEmpty);
+    });
+
+    testWidgets('past half but flung back left, it stays, as a route does', (tester) async {
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(5, 300));
+      var stamp = await moveFrames(tester, gesture, const Offset(10, 0), 60);
+      stamp = await moveFrames(tester, gesture, const Offset(-20, 0), 6, from: stamp);
+      await gesture.up(timeStamp: stamp);
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 0, reason: 'let go 480 pt in, moving left at 1250 pt/s');
+      expect(rig.calls, isEmpty);
+    });
+
+    testWidgets('one that ends up mostly vertical does nothing, however fast', (tester) async {
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(5, 100));
+      var stamp = await moveFrames(tester, gesture, const Offset(20, 0), 1);
+      stamp = await moveFrames(tester, gesture, const Offset(15, 16), 30, from: stamp);
+      await gesture.up(timeStamp: stamp);
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 0);
+      expect(rig.calls, isEmpty);
+      expect(rig.device.sets, isEmpty, reason: 'nor a brightness drag');
+    });
+
+    testWidgets('up, down or left from the edge does nothing', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.timedDragFrom(const Offset(5, 150), const Offset(0, 300), thumb(300));
+      await tester.timedDragFrom(const Offset(5, 450), const Offset(0, -300), thumb(300));
+      await tester.timedDragFrom(const Offset(19, 300), const Offset(-15, 0), const Duration(milliseconds: 100));
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 0);
+      expect(rig.calls, isEmpty);
+      expect(rig.device.sets, isEmpty);
+      expect(rig.chrome.hud.value, isNull);
+    });
+
+    testWidgets('a hold on the edge plays no 2×, and the swipe after it still goes back', (tester) async {
+      rig.playing();
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(5, 300));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(rig.calls, isEmpty);
+      final stamp = await moveFrames(tester, gesture, const Offset(20, 0), 10, from: const Duration(milliseconds: 400));
+      await gesture.up(timeStamp: stamp);
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 1);
+      expect(rig.calls, isEmpty);
+      expect(rig.chrome.hud.value, isNull);
+    });
+
+    testWidgets('a tap on the edge does nothing', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.tapAt(const Offset(5, 300));
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 0);
+      expect(rig.calls, isEmpty);
+    });
+
+    testWidgets('a left padding wider than the strip widens it, and the seek stays out of it', (tester) async {
+      rig.orientation.enterVertical();
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(800, 600), padding: EdgeInsets.only(left: 44)),
+          child: Directionality(textDirection: TextDirection.ltr, child: rig.player()),
+        ),
+      );
+      await tester.timedDragFrom(const Offset(35, 300), const Offset(300, 0), thumb(300));
+      await tester.tapAt(const Offset(35, 300));
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 1);
+      expect(rig.calls, isEmpty);
+    });
+
+    testWidgets('starting 40 pt in, the drag seeks and nothing goes back', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.timedDragFrom(const Offset(40, 300), const Offset(300, 0), thumb(300));
+      expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.backs, 0);
+    });
+
+    testWidgets("landscape's left edge stays the system's: the same swipe does nothing", (tester) async {
+      await rig.mountFullScreen(tester);
+      await tester.timedDragFrom(const Offset(5, 300), const Offset(450, 0), thumb(450));
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 0);
+      expect(rig.calls, isEmpty);
+    });
+
+    testWidgets('a swipe let go after the page left 竖屏 does nothing', (tester) async {
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(5, 300));
+      var stamp = await moveFrames(tester, gesture, const Offset(20, 0), 5);
+      rig.orientation.exitToInline();
+      await tester.pump();
+      stamp = await moveFrames(tester, gesture, const Offset(20, 0), 5, from: stamp);
+      await gesture.up(timeStamp: stamp);
+      await tester.pump(_tapSettles);
+      expect(rig.backs, 0);
+      expect(rig.calls, isEmpty);
+    });
+
+    testWidgets("over a page whose PopScope holds, the swipe is the player's ‹ and the page stays", (tester) async {
+      rig.orientation.enterVertical();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    SwipeBackPageRoute<void>(
+                      builder: (_) => PopScope<Object?>(
+                        canPop: false,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [rig.player(), const Positioned(top: 0, right: 0, child: Text('简介'))],
+                        ),
+                      ),
+                    ),
+                  ),
+                  child: const Text('首页'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('首页'));
+      await tester.pumpAndSettle();
+      await tester.timedDragFrom(const Offset(5, 300), const Offset(300, 0), thumb(300));
+      await tester.pumpAndSettle();
+      expect(rig.backs, 1);
+      expect(find.text('简介'), findsOneWidget);
+      expect(rig.calls, isEmpty);
     });
   });
 
@@ -533,6 +713,7 @@ void main() {
       await rig.mountInline(tester);
       await tester.timedDragFrom(const Offset(5, 200), const Offset(300, 0), thumb(300));
       expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.backs, 0, reason: "竖屏's edge swipe only");
     });
   });
 
@@ -576,6 +757,7 @@ void main() {
       expect(find.text('简介'), findsNothing);
       expect(find.text('首页'), findsOneWidget);
       expect(rig.callsStarting('scrub'), isEmpty);
+      expect(rig.backs, 0, reason: "the route's own swipe, not the player's ‹");
     });
 
     testWidgets('a sideways drag in the middle of the player seeks and the page stays', (tester) async {
@@ -680,6 +862,7 @@ void main() {
         expect(rig.calls, isEmpty, reason: 'from $start');
         expect(rig.device.sets, isEmpty, reason: 'from $start');
         expect(rig.chrome.visible, isTrue, reason: 'from $start');
+        expect(rig.backs, 0, reason: 'from $start');
       }
 
       await tester.timedDragFrom(const Offset(30, 300), const Offset(300, 0), thumb(300));
