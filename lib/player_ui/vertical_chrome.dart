@@ -20,10 +20,12 @@ import 'seek_preview.dart';
 
 /// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back, N人正在看 and ⋮ at
 /// the top, the action column down the right, the uploader with 粉丝 and 关注, the title and its plays over the bar,
-/// then the 发弹幕 field with the 弹 toggle, 详情页 and 横屏全屏. The search button and the search row have their room
-/// kept so nothing else moves when they come; so does whatever the page details haven't brought yet. As in the official
-/// app they stay up, hiding only for a panel or an action overlay; paused, the bar carries the TV and 118's ▶ and the
-/// time sit over the video. While the bar is dragged everything but the bar fades for the seek preview (19, 20).
+/// then the 发弹幕 field with the 弹 toggle, 详情页 and 横屏全屏 (drawn as 16's phone and half screen for an upright
+/// video, still turning to landscape: what the official one does there isn't known). The search button and the search
+/// row have their room kept so nothing else moves when they come; so does whatever the page details haven't brought
+/// yet. As in the official app they stay up, hiding only for a panel or an action overlay; paused, the bar carries the
+/// TV and 118's ▶ and the time sit over the video. While the bar is dragged everything but the bar fades for the seek
+/// preview (19, 20).
 class VerticalChrome extends StatelessWidget {
   const VerticalChrome({super.key, required this.ui});
 
@@ -173,14 +175,17 @@ class VerticalChrome extends StatelessWidget {
           child: OverflowBox(
             alignment: Alignment.topCenter,
             maxHeight: BiliMetrics.barTouchHeight,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.verticalInfoInset),
-              child: FullScreenSeekBar(
-                key: const ValueKey('vertical-bar'),
-                ui: ui,
-                repaint: FullScreenSeekBar.repaintOf(ui),
-                style: paused ? SeekBarStyle.pausedDot : SeekBarStyle.dot,
-                preview: true,
+            child: Transform.translate(
+              offset: const Offset(0, -BiliMetrics.verticalBarLift),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.verticalInfoInset),
+                child: FullScreenSeekBar(
+                  key: const ValueKey('vertical-bar'),
+                  ui: ui,
+                  repaint: FullScreenSeekBar.repaintOf(ui),
+                  style: paused ? SeekBarStyle.pausedDot : SeekBarStyle.dot,
+                  preview: true,
+                ),
               ),
             ),
           ),
@@ -205,10 +210,17 @@ class VerticalChrome extends StatelessWidget {
                   key: const ValueKey('vertical-landscape'),
                   label: '横屏全屏',
                   onTap: _touch(ui.orientation.enterLandscape),
-                  child: const CustomPaint(
-                    size: Size.square(BiliMetrics.fullScreenGlyph),
-                    painter: FullScreenPainter(),
-                  ),
+                  child: session.isVertical
+                      ? Image.asset(
+                          VerticalActionTheme.screenModeAsset,
+                          key: const ValueKey('vertical-screen-mode'),
+                          width: VerticalActionTheme.screenModeGlyph,
+                          height: VerticalActionTheme.screenModeGlyph,
+                        )
+                      : const CustomPaint(
+                          size: Size.square(BiliMetrics.fullScreenGlyph),
+                          painter: FullScreenPainter(),
+                        ),
                 ),
                 const SizedBox(width: BiliMetrics.landscapeEdge),
               ],

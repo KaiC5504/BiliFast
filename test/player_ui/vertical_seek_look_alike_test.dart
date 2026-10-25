@@ -100,8 +100,8 @@ void main() {
 
     // 19: the track's rows 2598-2615 at 1000 px, #262626 over the black; the played part #FB7299 from 36 px.
     final track = shot.run(1000, 2560, 2660, (pixel) => pixel == const (38, 38, 38));
-    expect(track.first, closeTo(2598, 2));
-    expect(track.last, closeTo(2615, 2));
+    expect(track.first, closeTo(2598, 0.5));
+    expect(track.last, closeTo(2615, 0.5));
     expect(shot.pixel(60, 2606), (251, 114, 153));
     // 19: the TV's 15 pt screen, 45 px wide, in the story TV's #333 body.
     final thumb = shot.thumbScreen(2606);

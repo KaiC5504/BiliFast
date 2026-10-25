@@ -350,6 +350,10 @@ abstract final class BiliMetrics {
   static const badgeBorderWidth = 0.7;
   static const badgeOffsetX = 12.0;
   static const badgeOffsetY = -16.0;
+
+  /// An upright video's row ends at 竖屏, with no 全屏 (17): the pill then sits only this far right of the corners,
+  /// 6 pt clear of the player's edge.
+  static const badgeEdgeOffsetX = 6.0;
   static const endInset = 12.0;
   static const endCaptionFont = 12.0;
   static const endCaptionGap = 3.8;
@@ -512,6 +516,9 @@ abstract final class BiliMetrics {
   /// 09's bottom row reaches this far into the home indicator's inset.
   static const verticalBottomDrop = 1.0;
   static const verticalRowLift = 4.5;
+
+  /// 118 and 19 draw the bar this much above where the rows put it, at rest and held.
+  static const verticalBarLift = 0.5;
   static const verticalFieldHeight = 32.0;
   static const verticalToggleWidth = 50.0;
   static const verticalDividerWidth = 1.0;
@@ -1572,6 +1579,11 @@ abstract final class VerticalActionTheme {
   static const pausedTimeText = 16.0;
   static const pausedTimeTop = 272 / 3;
   static const pausedTimeShadowBlur = 3.0;
+
+  /// An upright video's last bottom button (16): the APK's `bili_story_ctrl_normal`, an upright phone beside half a
+  /// landscape screen, at its own 24 pt in place of 横屏全屏's corners.
+  static const screenModeAsset = 'assets/images/player/screen_mode_normal.png';
+  static const screenModeGlyph = 24.0;
 
   /// 118's 合集 line in place of the plain title: the layers glyph, 合集 · 第N集 in semibold, a 1 × 10 pt bar, then
   /// the title. The glyph's 12 pt box starts 2.3 into the title's inset; its three layers are 1.3 pt lines. The dot
