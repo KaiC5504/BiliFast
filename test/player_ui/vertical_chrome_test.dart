@@ -11,6 +11,7 @@ import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/seek_bar.dart';
+import 'package:bilifast/player_ui/seek_preview.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -179,6 +180,11 @@ final class DanmakuRig {
 }
 
 Offset centre(WidgetTester tester, String key) => tester.getCenter(find.byKey(ValueKey(key)));
+
+/// What the control keyed [key] draws at: every fade over it multiplied.
+double opacityOf(WidgetTester tester, String key) => tester
+    .widgetList<AnimatedOpacity>(find.ancestor(of: find.byKey(ValueKey(key)), matching: find.byType(AnimatedOpacity)))
+    .fold(1.0, (opacity, fade) => opacity * fade.opacity);
 
 void main() {
   testWidgets("under the system font the title and the uploader's name fall back to PingFang SC; MiSans "
@@ -367,7 +373,8 @@ void main() {
 
     await tester.dragFrom(centre(tester, 'vertical-bar'), const Offset(-80, 0));
     await tester.pumpAndSettle();
-    expect(rig.session.calls.first, startsWith('scrub'));
+    expect(rig.session.calls.first, 'wantSeekFrames', reason: 'the hold asks for the preview\'s frames');
+    expect(rig.session.calls[1], startsWith('scrub'));
     expect(rig.session.calls.last, startsWith('commitSeek'));
     expect(rig.chrome.shows, 1);
   });
@@ -380,10 +387,17 @@ void main() {
     await rig.mount(tester);
     final root = find.byKey(const ValueKey('vertical-chrome'));
     List<double> fades() => [
-      for (final fade in tester.widgetList<AnimatedOpacity>(
-        find.descendant(of: root, matching: find.byType(AnimatedOpacity)),
-      ))
-        fade.opacity,
+      for (final key in [
+        'vertical-back',
+        'vertical-more',
+        'vertical-title',
+        'vertical-bar',
+        'vertical-danmaku-field',
+        'vertical-danmaku',
+        'vertical-detail',
+        'vertical-landscape',
+      ])
+        opacityOf(tester, key),
     ];
 
     rig.chrome.hide();
@@ -821,10 +835,10 @@ void main() {
       expect(find.byKey(const ValueKey('vertical-paused-play')), findsOneWidget);
     });
 
-    testWidgets('the ▶ and the time show only while paused, the ▶ hanging from the video\'s centre line', (
+    testWidgets('the ▶ and the time show only while paused, the ▶ hanging from 竖屏\'s line whatever the video', (
       tester,
     ) async {
-      final rig = Rig();
+      final rig = Rig()..session.videoShape = (width: 1920, height: 1080);
       rig.session.duration.value = 62;
       rig.session.clock.jump(5.4);
       await rig.mount(tester);
@@ -843,15 +857,20 @@ void main() {
       expect(glyph.size, const Size(80, 77));
       expect(glyph.center.dx, 220);
       expect(glyph.top, closeTo(956 * BiliMetrics.verticalVideoCentre, 0.01));
+      final timeTop = tester.getTopLeft(time).dy;
+      expect(timeTop, closeTo(956 * BiliMetrics.verticalVideoCentre + VerticalActionTheme.pausedTimeTop, 0.01));
       final image = tester.widget<Image>(find.descendant(of: play, matching: find.byType(Image)));
       expect((image.image as AssetImage).assetName, VerticalActionTheme.pausedPlayAsset);
       expect(image.opacity!.value, VerticalActionTheme.pausedPlayOpacity);
 
+      // 16's 3:4 video: the official ▶ and time stay where 118's 16:9 one has them.
       rig.session
         ..isVertical = true
+        ..videoShape = (width: 1080, height: 1440)
         ..changed();
       await tester.pump();
-      expect(tester.getRect(find.descendant(of: play, matching: find.byType(Image))).top, 478, reason: 'its centre');
+      expect(tester.getRect(find.descendant(of: play, matching: find.byType(Image))), glyph);
+      expect(tester.getTopLeft(time).dy, timeTop);
 
       status(rig, PlayerStatus.ended);
       await tester.pump();
@@ -881,6 +900,81 @@ void main() {
       );
       expect(fade.opacity, 0);
       expect(find.byKey(const ValueKey('vertical-paused-play')), findsOneWidget);
+    });
+  });
+
+  group('holding the bar (19, 20)', () {
+    const aside = [
+      'vertical-back',
+      'vertical-more',
+      'vertical-online',
+      'vertical-like',
+      'vertical-share',
+      'vertical-uploader',
+      'vertical-follow',
+      'vertical-title',
+      'vertical-danmaku-field',
+      'vertical-danmaku',
+      'vertical-detail',
+      'vertical-landscape',
+      'vertical-paused-play',
+      'vertical-paused-time',
+    ];
+
+    SeekPreview preview(WidgetTester tester) => tester.widget<SeekPreview>(find.byType(SeekPreview));
+
+    testWidgets('every control but the bar fades and takes no touches for the upright seek preview; letting go '
+        'brings them back', (tester) async {
+      final rig = rig09();
+      rig.session.duration.value = 100;
+      await rig.mount(tester);
+      rig.session.player.emit(const StatusChanged(PlayerStatus.paused));
+      await tester.pumpAndSettle();
+      for (final key in [...aside, 'vertical-bar']) {
+        expect(opacityOf(tester, key), 1, reason: key);
+      }
+      expect(preview(tester).upright, isTrue);
+      expect(preview(tester).shown, isFalse);
+      expect(tester.getRect(find.byType(SeekPreview)), Offset.zero & const Size(440, 956));
+
+      final finger = await tester.startGesture(centre(tester, 'vertical-bar'));
+      await finger.moveBy(const Offset(-40, 0));
+      await tester.pump();
+      await finger.moveBy(const Offset(-40, 0));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(rig.chrome.barHeld, isTrue);
+      expect(rig.session.calls, contains('wantSeekFrames'));
+      for (final key in aside) {
+        expect(opacityOf(tester, key), 0, reason: key);
+      }
+      expect(opacityOf(tester, 'vertical-bar'), 1);
+      expect(preview(tester).shown, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('vertical-like')), warnIfMissed: false);
+      await tester.tap(find.byKey(const ValueKey('vertical-detail')), warnIfMissed: false);
+      expect(actionsOf(rig).calls, isEmpty);
+      expect(rig.orientation.presentation, Presentation.vertical);
+
+      await finger.up();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(rig.chrome.barHeld, isFalse);
+      expect(rig.session.calls.last, startsWith('commitSeek'));
+      for (final key in aside) {
+        expect(opacityOf(tester, key), 1, reason: key);
+      }
+      expect(preview(tester).shown, isFalse);
+    });
+
+    testWidgets('a panel keeps the preview down even if the bar is held', (tester) async {
+      final rig = Rig();
+      await rig.mount(tester);
+      rig.chrome.holdBar(true);
+      await tester.pump();
+      expect(preview(tester).shown, isTrue);
+      rig.panels.open(PlayerPanel.more);
+      await tester.pump();
+      expect(preview(tester).shown, isFalse);
+      rig.chrome.holdBar(false);
     });
   });
 

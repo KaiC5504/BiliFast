@@ -829,6 +829,9 @@ abstract final class BiliMetrics {
   /// 竖屏 full screen centres a landscape video at this fraction of the screen's height (screen 09).
   static const verticalVideoCentre = 0.415;
 
+  /// And an upright video here: 16's 3:4 one spans 169.67-756.33 pt, its bottom meeting the uploader row.
+  static const verticalUprightCentre = 463 / 956;
+
   /// The menus' frosted glass.
   static const glassBlur = 24.0;
   static const glassHairline = 0.5;
@@ -1555,8 +1558,9 @@ abstract final class VerticalActionTheme {
   /// The playing episode's title and bars in the light 选集 sheet: 19 draws them in 收藏's pink, not the app's.
   static const sheetPlaying = sheetPill;
 
-  /// Paused, 118's ▶ (the APK's `bili_player_play`, drawn at its file's 3× size) hangs from the video's centre line
-  /// at a quarter of its white, with the time [pausedTimeTop] below the picture's top in 16 pt white over a shade.
+  /// Paused, 118's ▶ (the APK's `bili_player_play`, drawn at its file's 3× size) hangs from
+  /// [BiliMetrics.verticalVideoCentre] whatever the video's shape (16), at a quarter of its white, with the time
+  /// [pausedTimeTop] below the picture's top in 16 pt white over a shade.
   static const pausedPlayAsset = 'assets/images/player/paused_play.png';
   static const pausedPlayWidth = 80.0;
   static const pausedPlayHeight = 77.0;

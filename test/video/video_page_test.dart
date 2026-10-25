@@ -800,7 +800,7 @@ void main() {
         ..isVertical = true
         ..changed();
       await tester.pump();
-      expect(tester.getRect(find.byKey(const ValueKey('fake-video'))), const Rect.fromLTWH(0, 0, 440, 956));
+      expect(tester.getRect(find.byKey(const ValueKey('fake-video'))).center.dy, closeTo(463, 0.01), reason: '16');
       expect(orientation.videoIsVertical, isTrue, reason: 'the page passes the video\'s shape on');
       await rotate(tester, Presentation.inline);
       await back(tester);
@@ -1689,7 +1689,7 @@ void main() {
       expect(tester.getRect(find.byKey(const ValueKey('fake-video'))).top, 0, reason: 'the video runs under it');
       // 62 for the island, less the top row's 8 pt lift, then its 44 pt row and the 1 pt 118 leaves under it.
       expect(top(), 99);
-      expect(bottom(), 956, reason: 'a vertical video fills the screen');
+      expect(bottom(), closeTo(956 * BiliMetrics.verticalUprightCentre * 2, 0.01), reason: "an upright video's band");
       sessions.single
         ..isVertical = false
         ..changed();

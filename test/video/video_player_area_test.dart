@@ -258,14 +258,46 @@ void main() {
     expect(find.byType(StatsOverlay), findsOneWidget);
   });
 
-  testWidgets('竖屏 sets a landscape video above the middle and lets a vertical one fill the screen', (tester) async {
+  testWidgets('竖屏 sets a landscape video above the middle and an upright one a little higher, as 16 does', (
+    tester,
+  ) async {
+    // The native view letterboxes the picture into the band it is given.
+    Rect picture(Size video) {
+      final band = videoRect(tester);
+      return Alignment.center.inscribe(applyBoxFit(BoxFit.contain, video, band.size).destination, band);
+    }
+
     await show(tester, Presentation.vertical);
     expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 956 * BiliMetrics.verticalVideoCentre * 2));
+    expect(picture(const Size(1920, 1080)).center.dy, closeTo(396.74, 0.01));
+
     session
       ..isVertical = true
       ..changed();
     await tester.pump();
-    expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 956));
+    expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 926));
+    // 16's 3:4 video spans 169.67-756.33 pt, its bottom on the uploader row's top.
+    final upright = picture(const Size(1080, 1440));
+    expect(upright.top, closeTo(169.67, 0.01));
+    expect(upright.bottom, closeTo(756.33, 0.01));
+    expect(upright.width, 440);
+  });
+
+  testWidgets('holding 竖屏\'s bar leaves the video where it is and the danmaku flying (19, 20)', (tester) async {
+    session
+      ..isVertical = true
+      ..changed();
+    await show(tester, Presentation.vertical);
+    final before = videoRect(tester);
+    final danmaku = tester.getRect(find.byType(DanmakuLayer));
+    ui.chrome.holdBar(true);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(videoRect(tester), before);
+    expect(tester.getRect(find.byType(DanmakuLayer)), danmaku);
+    expect(tester.widget<DanmakuLayer>(find.byType(DanmakuLayer)).enabled, isTrue);
+    final unseen = find.ancestor(of: find.byType(DanmakuLayer), matching: find.byType(Visibility)).first;
+    expect(tester.widget<Visibility>(unseen).visible, isTrue);
+    ui.chrome.holdBar(false);
   });
 
   testWidgets('turning between 竖屏 and landscape, the video goes from 竖屏\'s band to the whole box, and the danmaku '
@@ -304,7 +336,14 @@ void main() {
       ..changed();
     turn.value = 0;
     await show(tester, Presentation.vertical, verticalTurn: turn);
-    expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 956), reason: 'a vertical video has no band');
+    const upright = 956 * BiliMetrics.verticalUprightCentre * 2;
+    expect(videoRect(tester).height, closeTo(upright, 0.01), reason: 'an upright video from its own band');
+    turn.value = 0.5;
+    await tester.pump();
+    expect(videoRect(tester).height, closeTo((upright + 956) / 2, 0.01));
+    turn.value = 1;
+    await tester.pump();
+    expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 956));
   });
 
   testWidgets('the video keeps its element through every presentation, the end and a failure', (tester) async {
@@ -380,7 +419,8 @@ void main() {
       ..isVertical = true
       ..changed();
     await tester.pump();
-    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & const Size(440, 956));
+    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & const Size(440, 926));
+    expect(tester.getCenter(find.byType(PlayerLoading)).dy, 463, reason: "on an upright video's centre (16)");
 
     await show(tester, Presentation.inline, loading: true, failure: '播放失败');
     expect(find.byType(PlayerLoading), findsNothing, reason: 'the failure takes its place');

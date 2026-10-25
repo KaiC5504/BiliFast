@@ -18,6 +18,7 @@ import '../player_ui/portrait_controls.dart';
 import '../player_ui/stats_overlay.dart';
 import '../player_ui/vertical_chrome.dart';
 import '../shared/theme.dart';
+import 'player_session.dart';
 
 /// The player as the video page shows it, in every presentation (BiliNative `PlayerBox` and `ChromeLayer.swift`): the
 /// video with danmaku over it, the stats overlay, the gesture layer, the chrome for [presentation] or the end screen,
@@ -114,8 +115,7 @@ class VideoPlayerArea extends StatelessWidget {
     final ui = this.ui;
     final session = ui?.session;
     final ended = session?.ended ?? false;
-    // 竖屏 sets a landscape video above the middle of the screen (screen 09); a vertical one fills the height.
-    final band = session?.isVertical != true ? BiliMetrics.verticalVideoCentre * 2 : 1.0;
+    final band = _verticalBand(session);
     final turn = verticalTurn?.value;
     final heightFactor = switch (turn) {
       final t? => band + (1 - band) * t,
@@ -254,8 +254,12 @@ class VideoPlayerArea extends StatelessWidget {
     ];
   }
 
-  double _loadingBand(PlayerUi? ui) =>
-      presentation == Presentation.vertical && ui?.session.isVertical != true ? BiliMetrics.verticalVideoCentre * 2 : 1;
+  double _loadingBand(PlayerUi? ui) => presentation == Presentation.vertical ? _verticalBand(ui?.session) : 1;
+
+  /// 竖屏's video band from the screen's top, as a share of its height: the video letterboxes into it, centred on
+  /// 09's line when wide and 16's when upright.
+  static double _verticalBand(PlayerSession? session) =>
+      (session?.isVertical == true ? BiliMetrics.verticalUprightCentre : BiliMetrics.verticalVideoCentre) * 2;
 
   /// Not painted while [unseen], and deaf to touches, but laid out and animating, so it comes back as it was.
   static Widget _unseen(bool unseen, Widget child, {Key? key}) => Visibility(
@@ -316,7 +320,7 @@ class _DanmakuArea extends StatelessWidget {
         final top =
             math.max(inset - BiliMetrics.verticalTopLift, 0.0) + BiliMetrics.chromeButton + BiliMetrics.verticalDanmakuDrop;
         final band = constraints.maxHeight;
-        // The band centres the video, which a vertical one fills.
+        // The band centres the video; an upright one's danmaku keep to the whole band.
         final videoBottom = videoIsVertical ? band : band / 2 + constraints.maxWidth / BiliMetrics.videoAspect / 2;
         return Padding(
           padding: EdgeInsets.only(top: math.min(top, band), bottom: math.max(band - math.max(videoBottom, top), 0)),
