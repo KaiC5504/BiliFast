@@ -831,6 +831,40 @@ void main() {
     await other;
   });
 
+  test("layoutVertical keeps the last video's shape through an open of another, until the next one's is in", () async {
+    final session = makeSession();
+    await controller.openVideo(bv, cid: p1);
+    player.emit(const SizeChanged(width: 1080, height: 1920));
+    expect(session.layoutVertical, isTrue);
+
+    http.routes[Canned.signedViewPath] = (200, seasonView('BV1AA411a1aa', 1001));
+    final view = http.gates[Canned.signedViewPath] = Completer<void>();
+    final playUrl = http.gates[Canned.playUrlPath] = Completer<void>();
+    final other = controller.openVideo('BV1AA411a1aa');
+    expect(session.opening, isTrue);
+    expect(session.isVertical, isFalse, reason: 'nothing of the last video');
+    expect(session.layoutVertical, isTrue);
+    view.complete();
+    await settle();
+    expect(session.detail?.bvid, 'BV1AA411a1aa');
+    expect(session.layoutVertical, isTrue, reason: 'its detail has no shape');
+    playUrl.complete();
+    await other;
+    expect(session.layoutVertical, isFalse, reason: 'its stream is 3840×2160');
+
+    player.emit(const SizeChanged(width: 1080, height: 1920));
+    const wideShape = '"dimension":{"width":1920,"height":1080,"rotate":0},"pages"';
+    http.routes[Canned.signedViewPath] = (200, seasonView('BV1BB411b1bb', 1002).replaceFirst('"pages"', wideShape));
+    final wideStream = http.gates[Canned.playUrlPath] = Completer<void>();
+    final wide = controller.openVideo('BV1BB411b1bb');
+    expect(session.layoutVertical, isTrue);
+    await settle();
+    expect(session.opening, isTrue);
+    expect(session.layoutVertical, isFalse, reason: "the next one's detail says it is wide");
+    wideStream.complete();
+    await wide;
+  });
+
   String lastRate() => player.calls.lastWhere((call) => call.startsWith('rate'));
 
   test('holding 2× through an autoplay part change plays the next part at 2×, and at the chosen rate when let go',

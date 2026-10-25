@@ -21,7 +21,8 @@ class PlayerReserve extends InheritedWidget {
 
   final double height;
 
-  /// 0 outside a video page.
+  /// 0 outside a video page. Read it in a Builder of the gap's own: it changes every frame of a change of shape, and
+  /// whatever reads it rebuilds.
   static double of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<PlayerReserve>()?.height ?? 0;
 
   @override
@@ -29,7 +30,8 @@ class PlayerReserve extends InheritedWidget {
 }
 
 /// [PlayerReserve] at [collapse]'s reserve, following it through a change of shape without rebuilding [child]: only
-/// the lists' gaps rebuild, in the frame the box changes and their offsets are kept.
+/// the lists' gaps (each tab reads it in a Builder around its gap) rebuild, in the frame the box changes and their
+/// offsets are kept.
 class CollapseReserve extends StatelessWidget {
   const CollapseReserve({super.key, required this.collapse, required this.child});
 

@@ -422,6 +422,19 @@ void main() {
     expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & const Size(440, 926));
     expect(tester.getCenter(find.byType(PlayerLoading)).dy, 463, reason: "on an upright video's centre (16)");
 
+    session
+      ..isVertical = false
+      ..heldVertical = true
+      ..changed();
+    await tester.pump();
+    expect(tester.getCenter(find.byType(PlayerLoading)).dy, 463, reason: 'an in-page open keeps the last band');
+    expect(videoRect(tester).height, 926);
+    session
+      ..heldVertical = null
+      ..changed();
+    await tester.pump();
+    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & Size(440, band));
+
     await show(tester, Presentation.inline, loading: true, failure: '播放失败');
     expect(find.byType(PlayerLoading), findsNothing, reason: 'the failure takes its place');
   });

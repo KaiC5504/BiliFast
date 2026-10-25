@@ -36,6 +36,9 @@ class PlayerGestureLayer extends StatefulWidget {
   static const edgeBackShare = 0.5;
   static const edgeFlingWidths = 1.0;
 
+  /// How far in from the left the back swipes start: the swipe-back edge, or the safe area's left inset when wider.
+  static double backEdge(EdgeInsets padding) => math.max(BiliMetrics.swipeBackEdge, padding.left);
+
   @override
   State<PlayerGestureLayer> createState() => _PlayerGestureLayerState();
 }
@@ -144,7 +147,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   bool _inSystemEdge(Offset global) =>
       _ui.presentation.fullScreen && !(Offset.zero & _screen).deflate(GestureMath.edgeInset).contains(global);
 
-  double get _backEdge => math.max(BiliMetrics.swipeBackEdge, _padding.left);
+  double get _backEdge => PlayerGestureLayer.backEdge(_padding);
 
   bool _inBackSwipeEdge(Offset global) {
     if (_ui.presentation.fullScreen) return false;

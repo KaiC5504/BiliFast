@@ -99,6 +99,11 @@ abstract interface class PlayerSession implements Listenable {
 
   bool get isVertical;
 
+  /// [isVertical] for what lays out by it: an in-page open (选集, ⏭, 合集's next, a related video) clears the last
+  /// video's shape before the next one's is in, so until then this keeps the last one's, and the controls and 竖屏's
+  /// band don't flip to a wide video's and back.
+  bool get layoutVertical;
+
   /// The video's width and height, rotation applied: the stream's once known, before that the signed view's; null
   /// until either is in.
   ({int width, int height})? get videoShape;

@@ -108,7 +108,10 @@ class _CommentsTabState extends State<CommentsTab> {
                 primary: true,
                 slivers: [
                   SliverToBoxAdapter(
-                    child: SizedBox(key: const ValueKey('comments-reserve'), height: PlayerReserve.of(context)),
+                    child: Builder(
+                      builder: (context) =>
+                          SizedBox(key: const ValueKey('comments-reserve'), height: PlayerReserve.of(context)),
+                    ),
                   ),
                   if (closed != null)
                     SliverToBoxAdapter(child: _ClosedNotice(message: closed))
@@ -644,7 +647,9 @@ class CommentsSlot extends StatelessWidget {
       primary: true,
       physics: const NeverScrollableScrollPhysics(),
       slivers: [
-        SliverToBoxAdapter(child: SizedBox(height: PlayerReserve.of(context))),
+        SliverToBoxAdapter(
+          child: Builder(builder: (context) => SizedBox(height: PlayerReserve.of(context))),
+        ),
         SliverLayoutBuilder(
           builder: (context, constraints) => SliverToBoxAdapter(
             child: SizedBox(

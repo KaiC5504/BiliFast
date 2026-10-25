@@ -202,6 +202,29 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets("an in-page open keeps an upright video's row until the next video's shape is in", (tester) async {
+    final rig = Rig()..session.isVertical = true;
+    await rig.mount(tester);
+    Rect pill() => tester.getRect(find.ancestor(of: find.text('竖屏'), matching: find.byType(Container)).first);
+    final upright = pill();
+    expect(find.byKey(const ValueKey('portrait-fullscreen')), findsNothing);
+
+    rig.session
+      ..isVertical = false
+      ..heldVertical = true
+      ..changed();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('portrait-fullscreen')), findsNothing);
+    expect(pill(), upright, reason: 'the pill keeps its place by the corners');
+
+    rig.session
+      ..heldVertical = null
+      ..changed();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('portrait-fullscreen')), findsOneWidget, reason: 'the next one is wide');
+    expect(pill(), isNot(upright));
+  });
+
   testWidgets('竖屏 goes to 竖屏 whatever the video', (tester) async {
     final rig = Rig();
     await rig.mount(tester);

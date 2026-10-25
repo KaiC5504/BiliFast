@@ -138,7 +138,7 @@ class VideoPlayerArea extends StatelessWidget {
                     _DanmakuArea(
                       key: const ValueKey('video-danmaku-area'),
                       vertical: presentation == Presentation.vertical,
-                      videoIsVertical: session.isVertical,
+                      videoIsVertical: session.layoutVertical,
                       child: ClipRect(
                         // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still run
                         // the full height.
@@ -261,7 +261,7 @@ class VideoPlayerArea extends StatelessWidget {
   /// 竖屏's video band from the screen's top, as a share of its height: the video letterboxes into it, centred on
   /// 09's line when wide and 16's when upright.
   static double _verticalBand(PlayerSession? session) =>
-      (session?.isVertical == true ? BiliMetrics.verticalUprightCentre : BiliMetrics.verticalVideoCentre) * 2;
+      (session?.layoutVertical == true ? BiliMetrics.verticalUprightCentre : BiliMetrics.verticalVideoCentre) * 2;
 
   /// Not painted while [unseen], and deaf to touches, but laid out and animating, so it comes back as it was.
   static Widget _unseen(bool unseen, Widget child, {Key? key}) => Visibility(

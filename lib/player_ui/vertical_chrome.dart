@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:bili_core/api.dart' show UploaderCard, VideoDetail;
 import 'package:bili_core/logic.dart' show CountFormat, TimeFormat;
 import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/rendering.dart' show BoxHitTestResult, RenderProxyBox;
 import 'package:flutter/widgets.dart';
 
 import '../player/bili_player.dart' show PlayerStatus;
@@ -13,6 +14,7 @@ import '../video/actions/video_actions.dart';
 import '../video/page_details.dart';
 import 'landscape_chrome.dart';
 import 'panels/panel_controller.dart';
+import 'player_gestures.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
 import 'seek_bar.dart';
@@ -25,7 +27,8 @@ import 'seek_preview.dart';
 /// row have their room kept so nothing else moves when they come; so does whatever the page details haven't brought
 /// yet. As in the official app they stay up, hiding only for a panel or an action overlay; paused, the bar carries the
 /// TV and 118's ▶ and the time sit over the video. While the bar is dragged everything but the bar fades for the seek
-/// preview (19, 20).
+/// preview (19, 20). The rows under the top row start inside the left edge's strip and leave it to the edge swipe: a
+/// touch landing there goes back or does nothing, as anywhere on that edge.
 class VerticalChrome extends StatelessWidget {
   const VerticalChrome({super.key, required this.ui});
 
@@ -84,7 +87,7 @@ class VerticalChrome extends StatelessWidget {
                   child: ChromeSlide(
                     shown: shown,
                     from: const Offset(0, BiliMetrics.chromeSlide / 2),
-                    child: _bottom(paused: paused, held: held),
+                    child: _EdgeGap(child: _bottom(paused: paused, held: held)),
                   ),
                 ),
                 if (ui.details case final details?)
@@ -210,7 +213,7 @@ class VerticalChrome extends StatelessWidget {
                   key: const ValueKey('vertical-landscape'),
                   label: '横屏全屏',
                   onTap: _touch(ui.orientation.enterLandscape),
-                  child: session.isVertical
+                  child: session.layoutVertical
                       ? Image.asset(
                           VerticalActionTheme.screenModeAsset,
                           key: const ValueKey('vertical-screen-mode'),
@@ -502,6 +505,30 @@ class _Uploader extends StatelessWidget {
       const SizedBox(width: BiliMetrics.verticalColumnRoom),
     ],
   );
+}
+
+/// Takes no touch landing in [PlayerGestureLayer]'s back-swipe strip, so it reaches the edge swipe under the chrome.
+class _EdgeGap extends SingleChildRenderObjectWidget {
+  const _EdgeGap({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderEdgeGap(PlayerGestureLayer.backEdge(MediaQuery.paddingOf(context)));
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderEdgeGap renderObject) =>
+      renderObject.edge = PlayerGestureLayer.backEdge(MediaQuery.paddingOf(context));
+}
+
+class _RenderEdgeGap extends RenderProxyBox {
+  _RenderEdgeGap(this.edge);
+
+  /// From the screen's left, as the gesture layer measures it.
+  double edge;
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) =>
+      localToGlobal(position).dx >= edge && super.hitTest(result, position: position);
 }
 
 /// [ChromeSlide] that takes no touches while out of sight, for the parts that give way to the held bar.

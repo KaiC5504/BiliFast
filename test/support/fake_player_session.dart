@@ -47,6 +47,12 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   @override
   bool isVertical = false;
 
+  /// Set to hold a shape through an in-page open, as the page's session does; [isVertical] otherwise.
+  bool? heldVertical;
+
+  @override
+  bool get layoutVertical => heldVertical ?? isVertical;
+
   @override
   ({int width, int height})? videoShape;
 

@@ -156,7 +156,7 @@ class _PortraitControlsState extends State<PortraitControls> {
   }
 
   Widget _bottomRow() {
-    final upright = _session.isVertical;
+    final upright = _session.layoutVertical;
     return Row(
       children: [
         PlayPauseButton(key: const ValueKey('portrait-play'), session: _session, onTap: _tap(_session.togglePlay)),

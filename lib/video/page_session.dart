@@ -227,6 +227,12 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   }
 
   @override
+  bool get layoutVertical => opening && videoShape == null ? _shapeVertical : isVertical;
+
+  /// [isVertical] when a shape was last known.
+  bool _shapeVertical = false;
+
+  @override
   ({int width, int height})? get videoShape {
     if (_controller.videoSize case final size?) return size;
     final detail = this.detail;
@@ -353,6 +359,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   }
 
   void _controllerChanged() {
+    // Kept while covered too: the page can be shown again mid-open.
+    if (videoShape != null) _shapeVertical = isVertical;
     if (_disposed || !_active) return;
     _follow();
   }

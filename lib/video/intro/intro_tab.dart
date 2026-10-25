@@ -101,14 +101,15 @@ class IntroTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final detail = content.detail;
     final bottom = MediaQuery.paddingOf(context).bottom + PageTheme.introBottom;
-    final reserve = PlayerReserve.of(context);
     return ListenableBuilder(
       listenable: details,
       builder: (context, _) => CustomScrollView(
         key: const PageStorageKey('intro-scroll'),
         primary: true,
         slivers: [
-          SliverToBoxAdapter(child: SizedBox(height: reserve)),
+          SliverToBoxAdapter(
+            child: Builder(builder: (context) => SizedBox(height: PlayerReserve.of(context))),
+          ),
           if (detail != null) ...[
             SliverToBoxAdapter(
               child: _Arrival(

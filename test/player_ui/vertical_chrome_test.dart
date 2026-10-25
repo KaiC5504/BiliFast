@@ -9,6 +9,7 @@ import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/player/bili_player.dart' show PlayerStatus, StatusChanged;
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
+import 'package:bilifast/player_ui/player_gestures.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart' show FullScreenPainter;
 import 'package:bilifast/player_ui/seek_bar.dart';
@@ -70,7 +71,8 @@ final class Rig {
     overlay: overlay,
   );
 
-  Future<void> mount(WidgetTester tester, {bool still = false}) async {
+  /// [gestures] puts the player's gesture layer under the chrome, as the page does.
+  Future<void> mount(WidgetTester tester, {bool still = false, bool gestures = false}) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1
@@ -92,7 +94,9 @@ final class Rig {
             data: MediaQuery.of(context).copyWith(disableAnimations: still),
             child: ColoredBox(
               color: Colors.black,
-              child: VerticalChrome(ui: ui),
+              child: gestures
+                  ? Stack(fit: StackFit.expand, children: [PlayerGestureLayer(ui: ui), VerticalChrome(ui: ui)])
+                  : VerticalChrome(ui: ui),
             ),
           ),
         ),
@@ -282,6 +286,25 @@ void main() {
     expect(centre(tester, 'vertical-landscape'), const Offset(413, 901));
   });
 
+  testWidgets("16's button stays through an in-page open, until the next video's shape is in", (tester) async {
+    final rig = Rig()..session.isVertical = true;
+    await rig.mount(tester);
+    final glyph = find.byKey(const ValueKey('vertical-screen-mode'));
+    expect(glyph, findsOneWidget);
+
+    rig.session
+      ..isVertical = false
+      ..heldVertical = true
+      ..changed();
+    await tester.pump();
+    expect(glyph, findsOneWidget, reason: "the open cleared the last video's shape; the layout keeps it");
+    rig.session
+      ..heldVertical = null
+      ..changed();
+    await tester.pump();
+    expect(glyph, findsNothing, reason: 'the next one is wide');
+  });
+
   testWidgets('the uploader and the plays come with the detail, where 09 has them', (tester) async {
     final rig = Rig()..session.title = '【VIT赛后】我们接受了LOUD的回溯！！';
     await rig.mount(tester);
@@ -432,6 +455,62 @@ void main() {
     expect(rig.session.calls[1], startsWith('scrub'));
     expect(rig.session.calls.last, startsWith('commitSeek'));
     expect(rig.chrome.shows, 1);
+  });
+
+  group("the left edge's strip is the edge swipe's, under the top row", () {
+    const rows = ['vertical-avatar', 'vertical-title', 'vertical-bar', 'vertical-danmaku-field'];
+
+    Future<Rig> mounted(WidgetTester tester) async {
+      final rig = rig09()..danmaku = DanmakuRig();
+      rig.session.duration.value = 100;
+      await rig.mount(tester, gestures: true);
+      return rig;
+    }
+
+    testWidgets('a swipe from 16 pt in on the uploader, the title, the bar or 发弹幕 goes back and seeks nothing; ‹ '
+        'still taps', (tester) async {
+      final rig = await mounted(tester);
+      for (final key in rows) {
+        expect(tester.getTopLeft(find.byKey(ValueKey(key))).dx, lessThan(16), reason: '$key starts inside the strip');
+        await tester.timedDragFrom(
+          Offset(16, centre(tester, key).dy),
+          const Offset(300, 0),
+          const Duration(milliseconds: 200),
+        );
+        await tester.pumpAndSettle();
+      }
+      expect(rig.backs, rows.length);
+      expect(rig.session.calls, isEmpty, reason: 'no hold, scrub, seek or play');
+      expect(rig.chrome.barHeld, isFalse);
+      expect(rig.danmaku!.session.sendOpen.value, isFalse);
+
+      await tester.tap(find.byKey(const ValueKey('vertical-back')));
+      expect(rig.backs, rows.length + 1);
+    });
+
+    testWidgets('a tap there does nothing, as anywhere on the edge; past the strip the bar seeks and 发弹幕 opens', (
+      tester,
+    ) async {
+      final rig = await mounted(tester);
+      for (final key in rows) {
+        await tester.tapAt(Offset(16, centre(tester, key).dy));
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      expect(rig.session.calls, isEmpty);
+      expect(rig.danmaku!.session.sendOpen.value, isFalse);
+      expect(rig.backs, 0);
+
+      await tester.timedDragFrom(
+        Offset(30, centre(tester, 'vertical-bar').dy),
+        const Offset(100, 0),
+        const Duration(milliseconds: 300),
+      );
+      await tester.pumpAndSettle();
+      expect(rig.session.calls.last, startsWith('commitSeek'));
+      expect(rig.backs, 0);
+      await tester.tapAt(Offset(30, centre(tester, 'vertical-danmaku-field').dy));
+      expect(rig.danmaku!.session.sendOpen.value, isTrue);
+    });
   });
 
   testWidgets('the controls stay up whatever the chrome says; a panel or an action overlay fades them out and takes '

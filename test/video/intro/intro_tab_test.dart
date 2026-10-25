@@ -14,6 +14,7 @@ import 'package:bilifast/video/intro/title_block.dart';
 import 'package:bilifast/video/intro/uploader_row.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -96,6 +97,7 @@ void main() {
     IntroContent content, {
     bool still = false,
     double reserve = 0,
+    ValueListenable<double>? reserves,
     ScrollController? scroll,
   }) async {
     tester.view.physicalSize = const Size(440, 956);
@@ -121,7 +123,14 @@ void main() {
             disableAnimations: still,
           ),
           child: Scaffold(
-            body: PlayerReserve(height: reserve, child: tab),
+            // As the page's collapsing player moves it: without rebuilding the tab.
+            body: reserves == null
+                ? PlayerReserve(height: reserve, child: tab)
+                : ValueListenableBuilder<double>(
+                    valueListenable: reserves,
+                    builder: (context, height, child) => PlayerReserve(height: height, child: child!),
+                    child: tab,
+                  ),
           ),
         ),
       ),
@@ -172,6 +181,27 @@ void main() {
       same(actions),
       reason: '关注 is the actions\'',
     );
+  });
+
+  testWidgets("the reserve changing (each frame of the player's change of shape) rebuilds only its gap", (
+    tester,
+  ) async {
+    final reserves = ValueNotifier<double>(300);
+    addTearDown(reserves.dispose);
+    await host(
+      tester,
+      IntroContent(detail: detail(), related: [card('BV1x')]),
+      reserves: reserves,
+    );
+    final row = tester.widget(find.byType(UploaderRow));
+    final related = tester.widget(find.byType(RelatedSliver, skipOffstage: false));
+    final top = tester.getTopLeft(find.byType(UploaderRow)).dy;
+
+    reserves.value = 340;
+    await tester.pump();
+    expect(tester.getTopLeft(find.byType(UploaderRow)).dy, top + 40);
+    expect(tester.widget(find.byType(UploaderRow)), same(row));
+    expect(tester.widget(find.byType(RelatedSliver, skipOffstage: false)), same(related));
   });
 
   testWidgets('a video in parts: the part strip after the action row; a chip plays its part, the header opens 选集', (

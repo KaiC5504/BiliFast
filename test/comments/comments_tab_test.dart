@@ -8,6 +8,7 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -113,7 +114,8 @@ const homeIndicator = 34.0;
 
 late ScrollController primary;
 
-Future<void> host(WidgetTester tester, Widget child, {double reserve = 0}) async {
+/// [reserves], when given, moves the reserve as the page's collapsing player does, without rebuilding [child].
+Future<void> host(WidgetTester tester, Widget child, {double reserve = 0, ValueListenable<double>? reserves}) async {
   tester.view.physicalSize = phone;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -126,7 +128,13 @@ Future<void> host(WidgetTester tester, Widget child, {double reserve = 0}) async
         ),
         child: PrimaryScrollController(
           controller: primary,
-          child: PlayerReserve(height: reserve, child: child),
+          child: reserves == null
+              ? PlayerReserve(height: reserve, child: child)
+              : ValueListenableBuilder<double>(
+                  valueListenable: reserves,
+                  builder: (context, height, child) => PlayerReserve(height: height, child: child!),
+                  child: child,
+                ),
         ),
       ),
     ),
@@ -304,6 +312,25 @@ void main() {
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
       await settle(tester);
       expect(primary.offset, greaterThan(0));
+    });
+
+    testWidgets("the reserve changing (each frame of the player's change of shape) rebuilds only its gap", (
+      tester,
+    ) async {
+      final reserves = ValueNotifier<double>(300);
+      addTearDown(reserves.dispose);
+      final model = FakeComments(comments: [comment(1), comment(2)], isEndValue: true);
+      await host(tester, CommentsTab(model: model, callbacks: Replies().callbacks), reserves: reserves);
+      final header = tester.widget(find.byType(CommentSortHeader));
+      final row = tester.widget(rows.first);
+      final top = tester.getTopLeft(rows.first).dy;
+
+      reserves.value = 340;
+      await tester.pump();
+      expect(tester.getSize(find.byKey(const ValueKey('comments-reserve'))).height, 340);
+      expect(tester.getTopLeft(rows.first).dy, top + 40);
+      expect(tester.widget(find.byType(CommentSortHeader)), same(header));
+      expect(tester.widget(rows.first), same(row));
     });
 
     testWidgets('the pinned comment first, then the rows, each with the model and the callbacks', (tester) async {
