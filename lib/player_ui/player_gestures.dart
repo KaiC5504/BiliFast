@@ -16,7 +16,8 @@ import 'seek_bar.dart';
 /// The touch layer over the video, filling the player (port of BiliNative `PlayerGestureView.swift` and
 /// `ChromeState.swift`'s gestures): tap, double tap, hold for 2×, a sideways drag to seek, and in full screen
 /// up and down for brightness (left half) and volume (right half), with the screen edges left to the system. In 竖屏
-/// the controls stay up, as in the official app: a tap plays or pauses at once and a double tap is two taps.
+/// the controls stay up, as in the official app: a tap plays or pauses at once and a double tap is two taps, and a
+/// swipe right from the left edge is its ‹ (KaiC).
 class PlayerGestureLayer extends StatefulWidget {
   const PlayerGestureLayer({super.key, required this.ui});
 
@@ -29,6 +30,11 @@ class PlayerGestureLayer extends StatefulWidget {
 
   /// How long the level stays up after a hardware volume button.
   static const hardwareVolumeShown = Duration(seconds: 1);
+
+  /// 竖屏's edge swipe goes back once released past this share of the screen's width, or flung faster than
+  /// [edgeFlingWidths] screen widths a second (rightward goes back, leftward doesn't): CupertinoPageRoute's swipe back.
+  static const edgeBackShare = 0.5;
+  static const edgeFlingWidths = 1.0;
 
   @override
   State<PlayerGestureLayer> createState() => _PlayerGestureLayerState();
@@ -138,18 +144,36 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   bool _inSystemEdge(Offset global) =>
       _ui.presentation.fullScreen && !(Offset.zero & _screen).deflate(GestureMath.edgeInset).contains(global);
 
+  double get _backEdge => math.max(BiliMetrics.swipeBackEdge, _padding.left);
+
   bool _inBackSwipeEdge(Offset global) {
     if (_ui.presentation.fullScreen) return false;
     final route = _route;
     final edgeSwipes = (_ui.edgeTaken?.value ?? false) || (route is PageRoute<Object?> && route.popGestureEnabled);
-    return edgeSwipes && global.dx < math.max(BiliMetrics.swipeBackEdge, _padding.left);
+    return edgeSwipes && global.dx < _backEdge;
   }
 
-  bool _allowsTouch(PointerDownEvent event) => !_inSystemEdge(event.position);
+  /// In 竖屏 the left edge is the edge swipe's alone; the page's held PopScope keeps the route's own swipe off there.
+  bool _inVerticalBackEdge(Offset global) => _vertical && global.dx < _backEdge;
+
+  bool _allowsTouch(PointerDownEvent event) =>
+      !_inSystemEdge(event.position) && !_inVerticalBackEdge(event.position);
 
   bool _allowsDrag(PointerDownEvent event) => _allowsTouch(event) && !_inBackSwipeEdge(event.position);
 
+  bool _allowsEdgeSwipe(PointerDownEvent event) => _inVerticalBackEdge(event.position);
+
   bool get _vertical => _ui.presentation == Presentation.vertical;
+
+  void _edgeSwipeEnded(Offset delta, double velocity) {
+    final width = _screen.width;
+    if (!_vertical || !(width > 0) || delta.dx.abs() < delta.dy.abs()) return;
+    final speed = velocity / width;
+    final back = speed.abs() >= PlayerGestureLayer.edgeFlingWidths
+        ? speed > 0
+        : delta.dx / width > PlayerGestureLayer.edgeBackShare;
+    if (back) _ui.onBack();
+  }
 
   void _singleTap() {
     if (_vertical) {
@@ -385,6 +409,12 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
             ..onEnd = _dragEnd
             ..onCancel = _dragCancel,
         ),
+        _EdgeSwipeRecognizer: GestureRecognizerFactoryWithHandlers<_EdgeSwipeRecognizer>(
+          () => _EdgeSwipeRecognizer(debugOwner: this),
+          (recognizer) => recognizer
+            ..allow = _allowsEdgeSwipe
+            ..onEnd = _edgeSwipeEnded,
+        ),
       },
       child: const SizedBox.expand(),
     );
@@ -542,5 +572,96 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
     _axis = null;
     _won = false;
     _started = false;
+  }
+}
+
+/// 竖屏's swipe from the left edge: claimed once the finger has moved [GestureMath.axisLockDistance] rightward and
+/// sideways, turned down on any other way. Nothing follows the finger; [onEnd] judges the lift.
+class _EdgeSwipeRecognizer extends OneSequenceGestureRecognizer {
+  _EdgeSwipeRecognizer({super.debugOwner});
+
+  bool Function(PointerDownEvent event) allow = _anyTouch;
+
+  /// The travel since the finger landed, and the lift's sideways fling speed (0 when it wasn't a fling).
+  void Function(Offset delta, double velocity)? onEnd;
+
+  int? _pointer;
+  PointerDeviceKind _kind = PointerDeviceKind.touch;
+  Offset _down = Offset.zero;
+  VelocityTracker? _tracker;
+  bool _won = false;
+  bool _swiping = false;
+
+  @override
+  String get debugDescription => 'player edge swipe';
+
+  @override
+  bool isPointerAllowed(PointerDownEvent event) => _pointer == null && allow(event) && super.isPointerAllowed(event);
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    _pointer = event.pointer;
+    _kind = event.kind;
+    _down = event.localPosition;
+    _tracker = VelocityTracker.withKind(event.kind)..addPosition(event.timeStamp, event.localPosition);
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    final pointer = _pointer;
+    if (pointer == null || event.pointer != pointer) return;
+    switch (event) {
+      case PointerMoveEvent():
+        if (!event.synthesized) _tracker?.addPosition(event.timeStamp, event.localPosition);
+        if (_swiping) return;
+        final delta = event.localPosition - _down;
+        final axis = GestureMath.axis(dx: delta.dx, dy: delta.dy);
+        if (axis == null) return;
+        if (axis == GestureAxis.vertical || delta.dx < 0) {
+          if (!_won) resolve(GestureDisposition.rejected);
+          stopTrackingPointer(pointer);
+          return;
+        }
+        _swiping = true;
+        if (!_won) resolve(GestureDisposition.accepted);
+      case PointerUpEvent():
+        if (_swiping && _won) {
+          onEnd?.call(event.localPosition - _down, _flingVelocity());
+        } else if (!_won) {
+          resolve(GestureDisposition.rejected);
+        }
+        stopTrackingPointer(pointer);
+      case PointerCancelEvent():
+        if (!_won) resolve(GestureDisposition.rejected);
+        stopTrackingPointer(pointer);
+      default:
+        break;
+    }
+  }
+
+  /// As DragGestureRecognizer reports a fling: anything slower or shorter counts as no speed at all.
+  double _flingVelocity() {
+    final estimate = _tracker?.getVelocityEstimate();
+    if (estimate == null) return 0;
+    final speed = estimate.pixelsPerSecond.dx;
+    final fling = speed.abs() > kMinFlingVelocity && estimate.offset.dx.abs() > computeHitSlop(_kind, gestureSettings);
+    return fling ? speed : 0;
+  }
+
+  @override
+  void acceptGesture(int pointer) {
+    if (pointer == _pointer) _won = true;
+  }
+
+  @override
+  void rejectGesture(int pointer) => stopTrackingPointer(pointer);
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    _pointer = null;
+    _tracker = null;
+    _won = false;
+    _swiping = false;
   }
 }
