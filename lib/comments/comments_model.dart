@@ -186,6 +186,7 @@ class ThreadState {
 class CommentsModel extends ChangeNotifier {
   CommentsModel({
     required this.aid,
+    this.type = 1,
     required this._upMid,
     required this.api,
     required this.drafts,
@@ -203,7 +204,11 @@ class CommentsModel extends ChangeNotifier {
   /// pages can't keep the list asking.
   static const _emptyPagesAllowed = 3;
 
+  /// The comment area's oid: the video's aid, or a 动态's comment id.
   final int aid;
+
+  /// The comment area's kind: 1 for a video, a 动态's `comment_type` (11, 12, 17) for a post.
+  final int type;
 
   /// The uploader's mid, for the UP mark on their comments.
   int _upMid;
@@ -311,7 +316,7 @@ class CommentsModel extends ChangeNotifier {
     _error = null;
     _notify();
     try {
-      final page = await api.comments(aid: aid, sort: _sort, offset: offset);
+      final page = await api.comments(aid: aid, sort: _sort, offset: offset, type: type);
       if (started != _generation || _disposed) return;
       _loading = false;
       _answered = true;
@@ -418,7 +423,7 @@ class CommentsModel extends ChangeNotifier {
           ? target.copyWith(likes: target.likes + (target.action == 1 ? 0 : 1), action: 1)
           : target.copyWith(likes: max(0, target.likes - 1), action: 0),
     );
-    await _send(before, () => api.likeComment(aid: aid, rpid: comment.rpid, on: on));
+    await _send(before, () => api.likeComment(aid: aid, rpid: comment.rpid, on: on, type: type));
   }
 
   Future<void> toggleHate(Comment comment) async {
@@ -432,7 +437,7 @@ class CommentsModel extends ChangeNotifier {
         action: on ? 2 : 0,
       ),
     );
-    await _send(before, () => api.hateComment(aid: aid, rpid: comment.rpid, on: on));
+    await _send(before, () => api.hateComment(aid: aid, rpid: comment.rpid, on: on, type: type));
   }
 
   /// Shown already; taken back with the server's words if it fails.
@@ -453,7 +458,7 @@ class CommentsModel extends ChangeNotifier {
   Future<bool> delete(Comment comment) async {
     if (!requireLogin()) return false;
     try {
-      await api.deleteComment(aid: aid, rpid: comment.rpid);
+      await api.deleteComment(aid: aid, rpid: comment.rpid, type: type);
     } catch (error, stack) {
       fail(error, stack);
       return false;
@@ -593,7 +598,7 @@ class CommentsModel extends ChangeNotifier {
     _thread = state.copyWith(loading: true, error: () => null);
     _notify();
     try {
-      final page = await api.thread(aid: aid, root: state.root.rpid, page: state.page + 1, sort: state.sort);
+      final page = await api.thread(aid: aid, root: state.root.rpid, page: state.page + 1, sort: state.sort, type: type);
       final thread = _thread;
       if (started != _threadGeneration || thread == null || _disposed) return;
       final seen = {for (final reply in thread.replies) reply.rpid};

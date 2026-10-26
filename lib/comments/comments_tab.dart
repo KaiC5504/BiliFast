@@ -28,7 +28,7 @@ class CommentsTab extends StatefulWidget {
 }
 
 class _CommentsTabState extends State<CommentsTab> {
-  late NearEndPaging _paging = _pagingFor(widget.model);
+  late NearEndPaging _paging = commentsPaging(widget.model);
 
   /// The sort header stays once a list has shown, so another sort's first load keeps its toggle.
   bool _listShown = false;
@@ -36,7 +36,7 @@ class _CommentsTabState extends State<CommentsTab> {
   @override
   void initState() {
     super.initState();
-    _listShown = !_firstLoad(widget.model);
+    _listShown = !commentsFirstLoad(widget.model);
     widget.model.addListener(_changed);
   }
 
@@ -52,8 +52,8 @@ class _CommentsTabState extends State<CommentsTab> {
     if (identical(oldWidget.model, widget.model)) return;
     oldWidget.model.removeListener(_changed);
     _paging.dispose();
-    _paging = _pagingFor(widget.model);
-    _listShown = !_firstLoad(widget.model);
+    _paging = commentsPaging(widget.model);
+    _listShown = !commentsFirstLoad(widget.model);
     widget.model.addListener(_changed);
     _loadIfShown();
   }
@@ -71,32 +71,14 @@ class _CommentsTabState extends State<CommentsTab> {
     super.dispose();
   }
 
-  NearEndPaging _pagingFor(CommentsModel model) => NearEndPaging(
-    canAsk: () =>
-        model.hasLoaded && !model.loading && !model.isEnd && model.error == null && model.closedMessage == null,
-    ask: model.loadMore,
-  );
-
-  static bool _firstLoad(CommentsModel model) =>
-      model.comments.isEmpty &&
-      model.pinned == null &&
-      model.error == null &&
-      model.closedMessage == null &&
-      (model.loading || !model.hasLoaded);
-
   void _changed() {
     if (!mounted) return;
-    setState(() => _listShown |= !_firstLoad(widget.model));
+    setState(() => _listShown |= !commentsFirstLoad(widget.model));
   }
 
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
-    final callbacks = widget.callbacks;
-    final closed = model.closedMessage;
-    final pinned = model.pinned;
-    final comments = model.comments;
-    final firstLoad = _firstLoad(model);
     return ColoredBox(
       color: CommentListTheme.background,
       child: Column(
@@ -113,65 +95,89 @@ class _CommentsTabState extends State<CommentsTab> {
                           SizedBox(key: const ValueKey('comments-reserve'), height: PlayerReserve.of(context)),
                     ),
                   ),
-                  if (closed != null)
-                    SliverToBoxAdapter(child: _ClosedNotice(message: closed))
-                  else ...[
-                    if (!firstLoad || _listShown)
-                      SliverToBoxAdapter(
-                        child: CommentSortHeader(
-                          title: model.sort == CommentSort.hot ? '热门评论' : '最新评论',
-                          sort: model.sort,
-                          onChange: (sort) => unawaited(model.setSort(sort)),
-                        ),
-                      ),
-                    if (firstLoad)
-                      const SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(child: LoadingTvState(key: ValueKey('comments-first-load'))),
-                      )
-                    else ...[
-                      if (pinned != null)
-                        SliverToBoxAdapter(
-                          child: CommentRow(
-                            key: ValueKey('pinned-${pinned.rpid}'),
-                            comment: pinned,
-                            model: model,
-                            callbacks: callbacks,
-                          ),
-                        ),
-                      commentRows(
-                        comments,
-                        (comment) => CommentRow(
-                          key: ValueKey(comment.rpid),
-                          comment: comment,
-                          model: model,
-                          callbacks: callbacks,
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: CommentListFooter(
-                          loading: model.loading || !model.hasLoaded,
-                          error: model.error,
-                          isEnd: model.isEnd,
-                          isEmpty: comments.isEmpty && pinned == null,
-                          onRetry: () => unawaited(model.loadMore()),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ...commentListSlivers(model: model, callbacks: widget.callbacks, headerKept: _listShown),
                 ],
               ),
             ),
           ),
-          if (closed == null)
+          if (model.closedMessage == null)
             CommentWriteBar(
               prompt: model.rootPrompt,
-              onWrite: (emotes) => callbacks.reply(const ReplyToVideo(), emotes),
+              onWrite: (emotes) => widget.callbacks.reply(const ReplyToVideo(), emotes),
             ),
         ],
       ),
     );
   }
+}
+
+/// [model]'s list asks for its next page as the end of the scroll view [NearEndPaging.listen] wraps nears.
+NearEndPaging commentsPaging(CommentsModel model) => NearEndPaging(
+  canAsk: () => model.hasLoaded && !model.loading && !model.isEnd && model.error == null && model.closedMessage == null,
+  ask: model.loadMore,
+);
+
+/// Nothing to show yet: the first page (of a sort) is out or not yet asked for.
+bool commentsFirstLoad(CommentsModel model) =>
+    model.comments.isEmpty &&
+    model.pinned == null &&
+    model.error == null &&
+    model.closedMessage == null &&
+    (model.loading || !model.hasLoaded);
+
+/// 评论's list for whatever scroll view holds it (the video page's tab, a 动态's page): the section the uploader
+/// closed, or 热门评论 / 最新评论 with its sort, the loading TV centred in what is left of the view on the first load,
+/// the pinned comment, the rows and the footer. [headerKept] keeps the sort header through another sort's first load,
+/// once a list has shown.
+List<Widget> commentListSlivers({
+  required CommentsModel model,
+  required CommentCallbacks callbacks,
+  required bool headerKept,
+}) {
+  final closed = model.closedMessage;
+  if (closed != null) return [SliverToBoxAdapter(child: _ClosedNotice(message: closed))];
+  final pinned = model.pinned;
+  final comments = model.comments;
+  final firstLoad = commentsFirstLoad(model);
+  return [
+    if (!firstLoad || headerKept)
+      SliverToBoxAdapter(
+        child: CommentSortHeader(
+          title: model.sort == CommentSort.hot ? '热门评论' : '最新评论',
+          sort: model.sort,
+          onChange: (sort) => unawaited(model.setSort(sort)),
+        ),
+      ),
+    if (firstLoad)
+      const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(child: LoadingTvState(key: ValueKey('comments-first-load'))),
+      )
+    else ...[
+      if (pinned != null)
+        SliverToBoxAdapter(
+          child: CommentRow(
+            key: ValueKey('pinned-${pinned.rpid}'),
+            comment: pinned,
+            model: model,
+            callbacks: callbacks,
+          ),
+        ),
+      commentRows(
+        comments,
+        (comment) => CommentRow(key: ValueKey(comment.rpid), comment: comment, model: model, callbacks: callbacks),
+      ),
+      SliverToBoxAdapter(
+        child: CommentListFooter(
+          loading: model.loading || !model.hasLoaded,
+          error: model.error,
+          isEnd: model.isEnd,
+          isEmpty: comments.isEmpty && pinned == null,
+          onRetry: () => unawaited(model.loadMore()),
+        ),
+      ),
+    ],
+  ];
 }
 
 /// [comments] as rows keyed by rpid, so a row posted at the top moves the others down rather than rebuilding them in

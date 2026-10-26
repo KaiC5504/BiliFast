@@ -22,6 +22,14 @@ final class StatusBarPlacement {
     backdrop: BiliColors.pageGrey,
   );
 
+  /// 关注's header (127): the same `head_bg` down to its own row's bottom, shorter than 首页's top, so the picture
+  /// rises less and another band lies behind the status bar; over the page's white.
+  factory StatusBarPlacement.follow() => StatusBarPlacement(
+    box: Size(PhoneFrame.portrait.width, _statusBar + DynamicFeedTheme.barRow - DynamicFeedTheme.barRise),
+    alignment: Alignment.center,
+    backdrop: BiliColors.card,
+  );
+
   /// 我的's header: from the screen's top down to the list's top, [MeTheme.listCut] under a 大会员 card (109) or, without
   /// one, under where the card would start, cropped at the bottom.
   factory StatusBarPlacement.me({required bool card}) => StatusBarPlacement(
@@ -44,9 +52,9 @@ final class StatusBarPlacement {
   final Color backdrop;
 }
 
-/// [skin]'s headers measured behind the status bar: 首页's `head_bg`, and 我的's picture with the 大会员 card and
-/// without unless a video plays over it (that one goes by the skin's colour). A read or a decode step that fails
-/// throws, so a passing failure is never kept as the picture's.
+/// [skin]'s headers measured behind the status bar: `head_bg` as 首页 and 关注 cut it, and 我的's picture with the 大会员
+/// card and without unless a video plays over it (that one goes by the skin's colour). A read or a decode step that
+/// fails throws, so a passing failure is never kept as the picture's.
 Future<SkinStatusBar> measureSkinStatusBar(Skin skin) async {
   final home = skin.headBg;
   final me = skin.headMyselfVideo == null ? skin.headMyself : null;
@@ -54,6 +62,7 @@ Future<SkinStatusBar> measureSkinStatusBar(Skin skin) async {
     home: home == null
         ? null
         : await statusBarLuminance(home, StatusBarPlacement.home(tabPicture: skin.headTabBg != null)),
+    follow: home == null ? null : await statusBarLuminance(home, StatusBarPlacement.follow()),
     me: me == null ? null : await statusBarLuminance(me, StatusBarPlacement.me(card: true)),
     meNoCard: me == null ? null : await statusBarLuminance(me, StatusBarPlacement.me(card: false)),
   );

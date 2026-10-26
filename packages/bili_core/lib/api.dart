@@ -17,6 +17,7 @@ export 'src/api/comment_models.dart'
         MentionCandidate,
         UploadedPicture;
 export 'src/api/cookie_jar.dart';
+export 'src/api/dynamic_models.dart';
 export 'src/api/fav_models.dart';
 export 'src/api/feed_models.dart';
 export 'src/api/guarded_transport.dart';

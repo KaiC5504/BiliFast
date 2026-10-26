@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app/app_scope.dart';
+import '../dynamic/follow_tab/face_sheet.dart';
+import '../dynamic/follow_tab/follow_tab_page.dart';
 import '../me/me_page.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -10,8 +12,9 @@ import '../skin/skin_model.dart';
 import 'home_page.dart';
 import 'home_tab_bar.dart';
 
-/// The bottom bar's places: 首页 and 我的 kept alive side by side, the bar under both (01, 02). A bar dressed by the
-/// equipped 装扮 lies over the pages' bottom instead, so they show behind its picture (109, 110).
+/// The bottom bar's places: 首页, 关注 and 我的 kept alive side by side, the bar under them (01, 02, 127). A bar dressed
+/// by the equipped 装扮 lies over the pages' bottom instead, so they show behind its picture (109, 110). 关注's face
+/// sheet lies over everything, the bar included (139).
 class MainShell extends StatefulWidget {
   const MainShell({super.key, this.developerPage, this.initialLink, @visibleForTesting this.skin});
 
@@ -29,22 +32,32 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   final _reloads = _Reloads();
+  final _followReloads = _Reloads();
+  final _faceSheet = FaceSheetController();
   HomeTab _tab = HomeTab.home;
 
   @override
   void dispose() {
     _reloads.dispose();
+    _followReloads.dispose();
+    _faceSheet.dispose();
     super.dispose();
   }
 
-  /// 首页 again on 首页 refreshes 推荐; coming back from 我的 it only shows it, where it was.
+  /// 首页 again on 首页 refreshes 推荐, and 关注 again on 关注 its list, closing the face sheet first (a guess: no
+  /// recording); coming back from another place only shows it, where it was.
   void _tapped(HomeTab tab) {
     switch (tab) {
       case HomeTab.home when _tab == HomeTab.home:
         _reloads.request();
-      case HomeTab.home || HomeTab.mine:
-        if (tab != _tab) setState(() => _tab = tab);
-      case HomeTab.follow || HomeTab.post || HomeTab.messages:
+      case HomeTab.follow when _tab == HomeTab.follow:
+        _faceSheet.close();
+        _followReloads.request();
+      case HomeTab.home || HomeTab.follow || HomeTab.mine:
+        if (tab == _tab) return;
+        _faceSheet.close();
+        setState(() => _tab = tab);
+      case HomeTab.post || HomeTab.messages:
         showToast(context, '暂未开放');
     }
   }
@@ -57,6 +70,7 @@ class _MainShellState extends State<MainShell> {
 
   Widget _build(BuildContext context, Skin? skin) {
     final mine = _tab == HomeTab.mine;
+    final follow = _tab == HomeTab.follow;
     final media = MediaQuery.of(context);
     final dressed = HomeTabBar.dresses(skin);
     final bar = HomeTabBarTheme.height + media.padding.bottom;
@@ -80,17 +94,21 @@ class _MainShellState extends State<MainShell> {
             child: MediaQuery(
               data: pages,
               child: IndexedStack(
-                index: mine ? 1 : 0,
+                index: _tab == HomeTab.home ? 0 : (follow ? 1 : 2),
                 sizing: StackFit.expand,
                 children: [
                   _Place(
-                    shown: !mine,
+                    shown: _tab == HomeTab.home,
                     child: HomePage(
                       developerPage: widget.developerPage,
                       initialLink: widget.initialLink,
                       reloads: _reloads,
                       skin: skin,
                     ),
+                  ),
+                  _Place(
+                    shown: follow,
+                    child: FollowTabPage(active: follow, faceSheet: _faceSheet, reloads: _followReloads, skin: skin),
                   ),
                   _Place(
                     shown: mine,
@@ -109,6 +127,7 @@ class _MainShellState extends State<MainShell> {
             bottom: 0,
             child: HomeTabBar(selected: _tab, onTap: _tapped, skin: skin),
           ),
+          Positioned.fill(child: FaceSheetLayer(controller: _faceSheet)),
         ],
       ),
     );

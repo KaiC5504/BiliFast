@@ -13,6 +13,8 @@ import '../device/player_device.dart';
 import '../devtools/crash_log.dart';
 import '../devtools/log_files.dart';
 import '../devtools/log_forwarder.dart';
+import '../dynamic/dynamic_api.dart';
+import '../dynamic/dynamic_like_book.dart';
 import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
 import '../me/me_api.dart';
@@ -161,6 +163,7 @@ class AppServices {
     this._favouritesApi,
     this._watchLaterApi,
     this._meApi,
+    this._dynamicApi,
     MeProfileStore? meProfile,
     this._skinApi,
     this.skinFolder,
@@ -206,8 +209,13 @@ class AppServices {
   late Account _account;
 
   /// Every login fetches the account's 屏蔽词 at once (Swift's didLogin); the launch's check is left to the first
-  /// page, which refreshes them itself.
-  void _loggedIn() => unawaited(blockRules.refresh(force: true));
+  /// page, which refreshes them itself. A login can replace an account without a logout between (the gate after a
+  /// -101), so the old one's 👍 and 关注 go here too.
+  void _loggedIn() {
+    unawaited(blockRules.refresh(force: true));
+    _dynamicLikes?.clear();
+    follows.clear();
+  }
 
   /// A logout, or a login Bilibili no longer accepts, drops the old account's 屏蔽词.
   void _accountChanged() {
@@ -216,7 +224,11 @@ class AppServices {
     if (now is AccountUnknown) return;
     final was = _account;
     _account = now;
-    if (was is LoggedIn && (now is LoggedOut || now is LoginExpired)) unawaited(blockRules.refresh());
+    if (was is LoggedIn && (now is LoggedOut || now is LoginExpired)) {
+      unawaited(blockRules.refresh());
+      _dynamicLikes?.clear();
+      follows.clear();
+    }
   }
 
   void dispose() {
@@ -253,6 +265,16 @@ class AppServices {
   late final WatchLaterApi watchLaterApi = _watchLaterApi ?? ClientWatchLaterApi(environment.client);
 
   final MeApi? _meApi;
+
+  final DynamicApi? _dynamicApi;
+
+  /// 动态's calls, made on first use like [searchApi].
+  late final DynamicApi dynamicApi = _dynamicApi ?? ClientDynamicApi(environment.client);
+
+  DynamicLikeBook? _dynamicLikes;
+
+  /// 👍 on posts, in step everywhere a post shows; made on first use like [dynamicApi].
+  DynamicLikeBook get dynamicLikes => _dynamicLikes ??= DynamicLikeBook(api: dynamicApi);
 
   /// 我的's calls, made on first use like [searchApi].
   late final MeApi meApi = _meApi ?? ClientMeApi(environment.client);

@@ -7,6 +7,7 @@ import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
+import 'package:bilifast/dynamic/follow_tab/follow_tab_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
@@ -305,7 +306,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-tab-mine')));
     await settle(tester);
     expect(tester.widget<MePage>(find.byType(MePage)).active, isTrue);
-    for (final tab in [HomeTab.follow, HomeTab.post, HomeTab.messages]) {
+    await tester.tap(find.byKey(const ValueKey('home-tab-follow')));
+    await settle(tester);
+    expect(find.byType(FollowTabPage), findsOneWidget);
+    for (final tab in [HomeTab.post, HomeTab.messages]) {
       await tester.tap(find.byKey(ValueKey('home-tab-${tab.name}')));
       await tester.pump();
       expect(find.text('暂未开放'), findsOneWidget, reason: tab.label);

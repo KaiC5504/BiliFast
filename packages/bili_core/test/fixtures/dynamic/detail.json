@@ -1,0 +1,297 @@
+{
+ "code": 0,
+ "message": "0",
+ "ttl": 1,
+ "data": {
+  "item": {
+   "id_str": "1100000000000000301",
+   "type": "DYNAMIC_TYPE_FORWARD",
+   "basic": {
+    "rid_str": "1100000000000000301",
+    "comment_type": 17,
+    "comment_id_str": "1100000000000000301",
+    "like_icon": {
+     "id": "1700000000000",
+     "start_url": "",
+     "action_url": "",
+     "end_url": ""
+    },
+    "in_audit": false,
+    "is_only_fans": false,
+    "editable": false,
+    "open_app_extra": "",
+    "jump_url": "",
+    "aigc": false
+   },
+   "visible": true,
+   "modules": {
+    "module_tag": null,
+    "module_author": {
+     "type": "AUTHOR_TYPE_NORMAL",
+     "face": "https://i0.hdslb.com/bfs/face/fake-face-20000301.jpg",
+     "face_nft": false,
+     "name": "测试详情作者",
+     "label": "",
+     "mid": 20000301,
+     "jump_url": "//space.bilibili.com/20000301/dynamic",
+     "following": true,
+     "pub_ts": "1761400000",
+     "pub_time": "2026年10月26日 17:19",
+     "pub_action": "",
+     "pub_location_text": "IP属地：浙江",
+     "vip": {
+      "type": 2,
+      "status": 1,
+      "due_date": "1790000000000",
+      "vip_pay_type": 0,
+      "theme_type": 0,
+      "label": {
+       "path": "",
+       "text": "年度大会员",
+       "label_theme": "annual_vip",
+       "text_color": "#FFFFFF",
+       "bg_style": 1,
+       "bg_color": "#FB7299",
+       "border_color": "",
+       "use_img_label": true
+      },
+      "avatar_subscript": 1,
+      "nickname_color": "#FB7299",
+      "role": "3",
+      "avatar_subscript_url": ""
+     },
+     "official_verify": {
+      "type": -1,
+      "desc": ""
+     },
+     "decoration_card": null,
+     "is_top": false,
+     "icon_badge": null,
+     "views_text": "",
+     "official": null,
+     "more": null,
+     "decorate_card": null
+    },
+    "module_more": {
+     "rcmd_text": "",
+     "three_point_items": [
+      {
+       "label": "举报",
+       "type": "THREE_POINT_REPORT",
+       "params": {},
+       "modal": null,
+       "jump_url": ""
+      }
+     ]
+    },
+    "module_dispute": null,
+    "module_dynamic": {
+     "topic": null,
+     "desc": {
+      "text": "详情的完整文字",
+      "rich_text_nodes": [
+       {
+        "text": "详情的完整文字",
+        "orig_text": "详情的完整文字",
+        "type": "RICH_TEXT_NODE_TYPE_TEXT",
+        "jump_url": "",
+        "icon_url": "",
+        "icon_name": "",
+        "rid": "",
+        "emoji": null,
+        "goods": null,
+        "style": null,
+        "pics": [],
+        "video": null
+       }
+      ],
+      "paragraphs": [],
+      "has_more": false
+     },
+     "major": null,
+     "additional": null
+    },
+    "module_extend": null,
+    "module_stat": {
+     "forward": {
+      "status": false,
+      "count": 4,
+      "forbidden": false,
+      "disabled": false,
+      "silent": false,
+      "hidden": false
+     },
+     "comment": {
+      "status": false,
+      "count": 5,
+      "forbidden": false,
+      "disabled": false,
+      "silent": false,
+      "hidden": false
+     },
+     "like": {
+      "status": true,
+      "count": 6,
+      "forbidden": false,
+      "disabled": false,
+      "silent": false,
+      "hidden": false
+     },
+     "coin": null,
+     "favorite": {
+      "status": false,
+      "count": 414
+     }
+    },
+    "module_interaction": null,
+    "module_share_info": null,
+    "module_fold": null
+   },
+   "orig": {
+    "id_str": "1100000000000000311",
+    "type": "DYNAMIC_TYPE_DRAW",
+    "basic": {
+     "rid_str": "",
+     "comment_type": 0,
+     "comment_id_str": "",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000311.jpg",
+      "face_nft": false,
+      "name": "测试原图作者",
+      "label": "",
+      "mid": 20000311,
+      "jump_url": "//space.bilibili.com/20000311/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "",
+      "pub_action": "",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": null,
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_OPUS",
+       "none": null,
+       "blocked": null,
+       "archive": null,
+       "pgc": null,
+       "courses": null,
+       "draw": null,
+       "article": null,
+       "music": null,
+       "common": null,
+       "upower_common": null,
+       "live": null,
+       "live_rcmd": null,
+       "medialist": null,
+       "subscription": null,
+       "ugc_season": null,
+       "subscription_new": null,
+       "opus": {
+        "jump_url": "//www.bilibili.com/opus/1100000000000000000",
+        "title": "",
+        "summary": {
+         "text": "原图的字",
+         "rich_text_nodes": [
+          {
+           "text": "原图的字",
+           "orig_text": "原图的字",
+           "type": "RICH_TEXT_NODE_TYPE_TEXT",
+           "jump_url": "",
+           "icon_url": "",
+           "icon_name": "",
+           "rid": "",
+           "emoji": null,
+           "goods": null,
+           "style": null,
+           "pics": [],
+           "video": null
+          }
+         ],
+         "paragraphs": [],
+         "has_more": false
+        },
+        "style": 1,
+        "pics": [
+         {
+          "url": "https://i0.hdslb.com/bfs/new_dyn/fake-pic-311.jpg",
+          "width": 1080,
+          "height": 1350,
+          "size": 321.5,
+          "live_url": "",
+          "aigc": 0,
+          "warning": null
+         }
+        ],
+        "fold_action": [
+         "展开",
+         "收起"
+        ],
+        "paywall": null
+       }
+      },
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": null,
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   }
+  }
+ }
+}

@@ -24,9 +24,12 @@ import 'own_space_header.dart';
 /// The account's own space (108, 114-117): the tall themed banner, 编辑资料, the level's exp, and 主页 / 投稿 / 收藏 /
 /// 追番, collapsing to the bar with the tab row pinned (115).
 class OwnSpacePage extends StatefulWidget {
-  const OwnSpacePage({super.key, required this.uploader, this.skin});
+  const OwnSpacePage({super.key, required this.uploader, this.skin, this.initialTab});
 
   final UploaderRef uploader;
+
+  /// The tab to open on (关注's 我的追番 全部 › asks for 追番) when the space has it; otherwise its default.
+  final SpaceTabKind? initialTab;
 
   /// The equipped 装扮 the bar follows; the app's when null.
   final ValueListenable<Skin?>? skin;
@@ -97,7 +100,11 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
       if (!mounted) return;
       setState(() {
         _profile = profile;
-        _tab = profile.own != null && _tabsOf(profile).any((tab) => tab.kind == profile.defaultTab)
+        final tabs = _tabsOf(profile);
+        final asked = widget.initialTab;
+        _tab = asked != null && tabs.any((tab) => tab.kind == asked)
+            ? asked
+            : profile.own != null && tabs.any((tab) => tab.kind == profile.defaultTab)
             ? profile.defaultTab
             : SpaceTabKind.contribute;
       });

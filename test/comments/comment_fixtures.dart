@@ -54,7 +54,7 @@ class ScriptedApi extends FakePageApi {
   }
 
   @override
-  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset}) async {
+  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset, int type = 1}) async {
     calls.add('comments sort=${sort.name} offset=${offset ?? ''}');
     await _gate();
     if (failures['comments'] case final failure?) throw failure;
@@ -62,7 +62,13 @@ class ScriptedApi extends FakePageApi {
   }
 
   @override
-  Future<ThreadPage> thread({required int aid, required int root, required int page, required CommentSort sort}) async {
+  Future<ThreadPage> thread({
+    required int aid,
+    required int root,
+    required int page,
+    required CommentSort sort,
+    int type = 1,
+  }) async {
     final answer = threadPages;
     if (answer == null) return super.thread(aid: aid, root: root, page: page, sort: sort);
     calls.add('thread root=$root page=$page sort=${sort.name}');

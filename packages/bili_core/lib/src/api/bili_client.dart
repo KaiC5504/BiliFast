@@ -13,6 +13,7 @@ import 'bili_error.dart';
 import 'bili_hosts.dart';
 import 'comment_models.dart';
 import 'cookie_jar.dart';
+import 'dynamic_models.dart';
 import 'fav_models.dart';
 import 'feed_models.dart';
 import 'form_encoding.dart';
@@ -30,6 +31,7 @@ import 'watch_later_models.dart';
 import 'wbi.dart';
 
 part 'bili_client_actions.dart';
+part 'bili_client_dynamic.dart';
 part 'bili_client_app.dart';
 part 'bili_client_comments.dart';
 part 'bili_client_danmaku.dart';
@@ -324,6 +326,25 @@ final class BiliClient {
     return _decodeEnvelope(sent, path, decode);
   }
 
+  /// A write whose body is JSON, as the website's newer calls take it: the csrf token goes in the query instead.
+  Future<BiliEnvelope<T>> _postJsonEnvelope<T>(
+    String path, {
+    required Map<String, Object?> json,
+    String? referer,
+    required JsonDecode<T> decode,
+  }) async {
+    final sent = await _send(
+      method: 'POST',
+      path: path,
+      signed: false,
+      host: api,
+      json: json,
+      referer: referer,
+      accept: 'application/json',
+    );
+    return _decodeEnvelope(sent, path, decode);
+  }
+
   BiliEnvelope<T> _decodeEnvelope<T>(_Sent sent, String path, JsonDecode<T> decode) {
     try {
       final envelope = BiliEnvelope.parse(utf8.decode(sent.response.body), decode);
@@ -388,6 +409,7 @@ final class BiliClient {
     required bool signed,
     required String host,
     Map<String, String>? form,
+    Map<String, Object?>? json,
     _FilePart? file,
     String? referer,
     required String accept,
@@ -397,12 +419,23 @@ final class BiliClient {
     bool retried = false,
   }) async {
     Uint8List? body;
+    var sentQuery = query;
     final headers = {
       'User-Agent': userAgent,
       'Referer': referer ?? BiliClient.referer,
       'Accept': accept,
       ...extraHeaders,
     };
+    if (json != null) {
+      if (sendCookies) {
+        final token = csrf;
+        if (token == null) throw const BiliError.api(code: -101, message: '账号未登录');
+        sentQuery = {...query, 'csrf': token};
+        headers['Origin'] = _origin;
+      }
+      body = utf8.encode(jsonEncode(json));
+      headers['Content-Type'] = 'application/json; charset=UTF-8';
+    }
     if (form != null) {
       final fields = Map.of(form);
       if (sendCookies) {
@@ -423,9 +456,9 @@ final class BiliClient {
     final String queryString;
     if (signed) {
       final key = await _mixinKey();
-      queryString = WBI.signedQuery(query, mixinKey: key, wts: _unixSeconds);
+      queryString = WBI.signedQuery(sentQuery, mixinKey: key, wts: _unixSeconds);
     } else {
-      queryString = WBI.encodeQuery(query);
+      queryString = WBI.encodeQuery(sentQuery);
     }
     final Uri url;
     try {
@@ -437,7 +470,7 @@ final class BiliClient {
     if (BiliHosts.isBilibili(url.host)) {
       final cookie = cookies.headerValue;
       if (sendCookies && cookie != null) headers['Cookie'] = cookie;
-    } else if (form != null) {
+    } else if (form != null || json != null) {
       throw BiliError.invalidLink;
     }
     final watch = Stopwatch()..start();
@@ -460,6 +493,7 @@ final class BiliClient {
           signed: signed,
           host: host,
           form: form,
+          json: json,
           file: file,
           referer: referer,
           accept: accept,

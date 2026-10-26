@@ -7,6 +7,7 @@ import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
+import 'package:bilifast/dynamic/fake_dynamic_api.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
@@ -101,8 +102,32 @@ const _popcorn = SpaceProfile(
   defaultTab: SpaceTabKind.home,
 );
 
+/// 136: a space scrolled on 动态, with 追番 last in the row.
+const _onDynamics = SpaceProfile(
+  mid: 136,
+  name: 'Tester___',
+  face: '',
+  level: 6,
+  fans: 1200,
+  following: 300,
+  likes: 5000,
+  tagLines: [SpaceTagLine(text: 'IP属地：广东')],
+  tabs: [
+    SpaceTab(kind: SpaceTabKind.home, title: '主页'),
+    SpaceTab(kind: SpaceTabKind.dynamic, title: '动态'),
+    SpaceTab(kind: SpaceTabKind.contribute, title: '投稿'),
+    SpaceTab(kind: SpaceTabKind.bangumi, title: '追番'),
+  ],
+);
+
 /// The space for [profile] at 3× under the system font, as KaiC's iPhone draws it, inside a boundary keyed [_screen].
-Future<void> _show(WidgetTester tester, SpaceProfile profile, {bool following = false}) async {
+/// [dynamics] answers 动态.
+Future<void> _show(
+  WidgetTester tester,
+  SpaceProfile profile, {
+  bool following = false,
+  FakeDynamicApi? dynamics,
+}) async {
   final saved = BiliFonts.family;
   addTearDown(() => BiliFonts.family = saved);
   await tester.runAsync(loadSystemFontStandIns);
@@ -133,6 +158,7 @@ Future<void> _show(WidgetTester tester, SpaceProfile profile, {bool following = 
       ),
     ),
     spaceApi: FakeSpaceApi(profileFor: (_) => profile),
+    dynamicApi: dynamics ?? FakeDynamicApi(),
   );
   BiliFonts.family = BiliFonts.system;
   final navigator = GlobalKey<NavigatorState>();
@@ -233,6 +259,41 @@ void main() {
     final pill = _rect(tester, 'space-pill');
     expect(pill.center, offsetMoreOrLessEquals(const Offset(220, 69), epsilon: 0.5));
     expect(pill.height, 30);
+    expect(pill.width, closeTo(91.33, 1));
+  });
+
+  testWidgets('136: scrolled on 动态, the bar\'s pill over 主页 动态 投稿 追番 with 动态 pink', (tester) async {
+    await _show(
+      tester,
+      _onDynamics,
+      dynamics: FakeDynamicApi(
+        posts: [
+          for (var i = 0; i < 3; i++)
+            DynamicItem(
+              id: '${13600 + i}',
+              kind: DynamicKind.word,
+              author: const DynamicAuthor(mid: 136, name: 'Tester___', face: ''),
+            ),
+        ],
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('space-tab-dynamic')));
+    await tester.pumpAndSettle();
+    final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    await _shoot(tester, '136');
+    // 136's measures, in pt: the bar to 94, the row's hairlines at 94 and 134, the 14 × 2 bar under 动态 at 128,
+    // the labels centred 51.5, 163.5, 275.5 and 387.67, the pill 91.33 wide about 220.
+    expect(_rect(tester, 'space-bar').bottom, 94);
+    expect(_rect(tester, 'space-tabs').top, closeTo(94, 0.01));
+    expect(_rect(tester, 'space-tabs').bottom, closeTo(134, 0.6));
+    expect(_rect(tester, 'space-tab-indicator'), rectMoreOrLessEquals(const Rect.fromLTRB(157, 128, 171, 130), epsilon: 0.5));
+    for (final (kind, centre) in [('home', 51.5), ('dynamic', 163.5), ('contribute', 275.5), ('bangumi', 387.67)]) {
+      expect(_rect(tester, 'space-tab-$kind').center.dx, closeTo(centre, 1), reason: kind);
+    }
+    final pill = _rect(tester, 'space-pill');
+    expect(pill.center, offsetMoreOrLessEquals(const Offset(220, 69), epsilon: 0.5));
     expect(pill.width, closeTo(91.33, 1));
   });
 }

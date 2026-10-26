@@ -231,15 +231,44 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   6 pt in #FB7299 with the APK's story TV (`story_seek_bar_icon_1/2`), over the frame (81 × 144 upright, 144 × 81
   wide, bottom at 788 pt) and the time (19, 20); the bar 0.5 pt higher; an upright video's last button is the APK's
   `bili_story_ctrl_normal`.
+- 动态, 1.1.0 (1) (KaiC: a new version, 127-140): the bottom bar's 关注 (`lib/dynamic/`). The website's polymer calls
+  with the web login (`bili_client_dynamic.dart`; the official feed is gRPC): 全部 / 视频, 最常访问 (portal, then
+  uplist) with its pink dots, 更多 to 我的关注 (129, 130: search, 推荐排序 asking as 最常访问 (KaiC), 最近关注),
+  我的追番 · 追剧 on 视频 (全部 › opens the own space on 追番, `OwnSpacePage.initialTab`), the face sheet of one
+  person's posts (139). The card (`lib/dynamic/card/`): author row with the avatar frame, verify mark, pink 大会员 name
+  and fan-number card, text folded at four lines (… 全文; a video post's 展开 opens in place), pictures (2-4 two a row,
+  more three), a repost's grey block (its pictures one sideways strip, 136; + 关注), UP主的推荐, ↗ / 💬 / 👍 (counts, or
+  the word at 0), ⋮ (137: 分享, 取消关注, 举报). Video cards play muted where they settle (the 推荐 big card's
+  `FeedInlinePlayback`, now over any `InlineVideo`; one host per list, one video at a time, paused under the picture
+  viewer, sheets, overlays and pages) and a tap hands the playback to the video page with sound (KaiC); other posts open
+  the post page (131-134, 140: 正在努力加载... until the detail, the bar taking the poster once scrolled, IP属地, 评论 /
+  赞和转发 pinned, comments as on a video with the post's area (`CommentsModel.type`: 11, 12, 17), the bottom bar's
+  点我发评论, 💬, ⭐, 👍). An UP主空间's 动态 tab lists their posts (136), and a space whose default is 动态 opens on it.
+  👍 is optimistic and in step everywhere (`DynamicLikeBook`); `FollowBook` remembers each mid's 关注. Toasts (KaiC):
+  ✏️, 转发, 赞和转发, 举报, 生成长图, ⭐, 去看看, #topics#, 🎁, 追番 posters; ↗ and the post's ⋮ open iOS's share sheet
+  (KaiC: not 138's panel). Kinds no screenshot shows (直播, 番剧, articles' titles, votes, 预约) draw author, text and
+  counts; 直播 and 番剧 toast. Logs: `dynamic feed` (type, count, skipped kinds), `dynamic post`, `space dynamics page`.
+  The shapes came from one guarded `--real-account` read of 8 calls (KaiC's OK, 2026-10-26; a new QR login, the old
+  one had lapsed); fixtures are made up.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
 1. KaiC's phone check of (20), then the milestone's closing build and both checklists.
-2. Next slice: 动态 (KaiC's order after the own space and 装扮).
+2. 动态 shipped in 1.1.0 (1); next is KaiC's pick.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
-full; passing them is the cutover (spec, slice 9). Later: 动态, 离线缓存, 番剧, 直播.
+full; passing them is the cutover (spec, slice 9). Later: 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- 1.1.0 (1) on the phone: 关注 against 127, 128 and 135 (the decoration card's number, the footer, the folds), the face
+  sheet (139), 我的关注 (129, 130), a picture post and a repost's post page (131, 132, 134, 140), the space's 动态 (136,
+  its avatar frame and the repost strip), the video cards playing muted and the hand-over, 👍, ⋮'s 取消关注, comments on
+  a post (reply, like, delete). Guessed: the 关注 bar without a 装扮, 登录后查看关注动态 and 登录后查看我的关注 (logged
+  out), 关注 tapped again refreshing, no danmaku on 动态 videos, 🔇 shared with 推荐's big card, 展开 opening in place,
+  the dots in 我的关注 from 最常访问's call, the frame at 1.75× the face, the strip on the post page, 评论区暂不可用.
+  Known: the post text's 29.33 pt lines draw 29 (Flutter rounds; 7 pt by a long post's end); iOS squeezes a
+  line-initial 「 to half width, Flutter doesn't; a pill-shaped fan card's number sits differently (one sample). Not
+  built: 赞和转发's list, writing a 转发 or a post, the face's second (digital collectible) badge, 138's own share panel,
+  the 视频 tab's 番剧 posters opening.
 - (39) on the phone: the tall box against 17 and 21 (the scroll down to 16:9 and back), the end's shrink and 重播's grow
   against 18, 竖屏's loop, the edge swipe, the held bar and preview against 19 and 20 (the ` / ` spacing: the stand-in
   draws it 3.7 pt narrower than 19), the bar's rows. Guessed: the 4:3 cap (no 9:16 screenshot), the 463 pt centre for
@@ -344,7 +373,7 @@ Open items, each waiting on its slice:
 - UP主空间 on the phone: 关注 / 取消关注 on the real account (FollowBook keeping the page, sheet and space in step), the
   bolt on 硬核会员's level badge (`level_info.identity` 2) and 充电 only for uploaders who take it (`elec.show`), both
   unseen live; the -404 page's 用户不存在或已注销 and the collapsed bar's 已关注 pill are guesses (no screenshot).
-  Not built: 主页/动态/小店/收藏 (toast), the uploader's default tab, 你可能感兴趣 after 关注 (no known API), medals and
+  Not built: 主页/小店/收藏 (toast), the uploader's default tab other than 投稿 and 动态, 你可能感兴趣 after 关注 (no known API), medals and
   找我官方合作 after the name, 图文. Uploader names on 推荐 cards, 历史记录, 搜索's video rows and related rows don't
   open the space yet (no screenshot of what the official app does). 分享 on Windows opens an invisible share window
   that freezes the app (share_plus; the phone is fine): checks skip it.
@@ -380,6 +409,9 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     `OwnPager`, one per tab, kept by the page).
   - `lib/favourites/`: 我的收藏 (folders, a folder, 视频, the 创建 page `new_folder_page.dart` that 稍后再看 shares).
   - `lib/watch_later/`: 稍后再看 (the list, its sheets and 批量管理).
+  - `lib/dynamic/`: 动态: `DynamicApi` (`fake_dynamic_api.dart` for tests and `--fake-account`), `DynamicLikeBook`,
+    `card/` (the post card and its parts, the picture viewer route, ⋮'s sheet), `follow_tab/` (the bottom bar's 关注,
+    its model, header and the face sheet), `post/` (a post's page) and `following/` (我的关注).
   - `lib/account/app_auth*.dart`: the official login's token, its confirm, and the hand-off of Bilibili's confirm page
     to the official app (`app_auth_client.dart`).
   - `lib/player/`: the `BiliPlayer` interface and its iOS and Windows players. `lib/playback/`: the engine's setup,
@@ -460,7 +492,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   or script change.
 - Check once: `python scripts/testflight.py status` (1 call), about 11 minutes after an upload (7 after a dry run), as
   a background `sleep` then `status`. Never `gh run watch`, never poll: KaiC gets rate-limited.
-- Version 1.0.0, set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they agree). Build
+- Version 1.1.0 (from 1.1.0 (1), KaiC), set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they agree). Build
   numbers count from 1 within each version (App Store Connect's latest of that version plus one); the last shipped is
   in Status.
 - Secrets are in this repo's `testflight` environment (limited to `main`).
@@ -553,6 +585,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - The status bar over a dressed header goes by the picture behind the clock and the icons (`skin_status_bar.dart`):
   the geometric mean of L + 0.05 less 0.05, white icons under 0.1791 (white's and black's contrast equal), measured
   after the skin shows and kept per version in `.status.json`; 我的 has a height with its 会员 card and one without;
+  关注's 88 pt header has its own crop (`StatusBarPlacement.follow`);
   a video header goes by the skin's text colour. Pages without their own `AnnotatedRegion` get `DefaultStatusBar`'s
   dark (above the Navigator); a page drawn over a light one (设置 over 我的) sets its own.
 - Loading shows the official TV (`LoadingTv`, `LoadingTvState`, `loadingTvRefreshIndicator`; the player's

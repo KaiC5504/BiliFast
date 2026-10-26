@@ -5,6 +5,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../home/feed_model.dart' show requestFailureMessage;
 import '../../search/results/video_row.dart' show searchLogReason;
 import '../../shared/theme.dart';
 
@@ -28,6 +29,7 @@ abstract class OwnPager<T> extends ChangeNotifier {
   bool _loading = false;
   bool _loaded = false;
   bool _failed = false;
+  String? _failure;
   bool _started = false;
   bool _disposed = false;
   bool _authAsked = false;
@@ -42,6 +44,9 @@ abstract class OwnPager<T> extends ChangeNotifier {
   /// The first page has answered.
   bool get loaded => _loaded;
   bool get failed => _failed;
+
+  /// Why the last call failed, in the user's words (请求过于频繁，请稍后再试 for risk control); null unless [failed].
+  String? get failure => _failed ? _failure : null;
 
   /// The log's name for the list.
   String get name;
@@ -97,7 +102,7 @@ abstract class OwnPager<T> extends ChangeNotifier {
     final OwnPage<T> answer;
     try {
       answer = await fetchPage(page);
-    } on BiliNoAppTokenError {
+    } on BiliNoAppTokenError catch (error) {
       Logger.shared.info(LogCategory.ui, '$name without app token', {'page': page});
       // Once until a page answers or 点击重试, so a token that doesn't take can't bring the confirm back in a loop.
       final ask = _authAsked ? null : authorize;
@@ -109,6 +114,7 @@ abstract class OwnPager<T> extends ChangeNotifier {
         restart();
       } else {
         _failed = true;
+        _failure = requestFailureMessage(error);
         notifyListeners();
       }
       return;
@@ -116,6 +122,7 @@ abstract class OwnPager<T> extends ChangeNotifier {
       Logger.shared.warn(LogCategory.ui, '$name failed', {'page': page, 'error': searchLogReason(error)});
       if (!_answered(generation)) return;
       _failed = true;
+      _failure = requestFailureMessage(error);
       notifyListeners();
       return;
     }

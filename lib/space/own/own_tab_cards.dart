@@ -500,20 +500,28 @@ class OwnChevron extends StatelessWidget {
   );
 }
 
-/// Under a paged list: the next page's small spinner, or 加载失败，点击重试 after a failure.
+/// Under a paged list: the next page's small spinner, or 加载失败，点击重试 after a failure ([message] in place of 加载失败
+/// when given).
 class OwnPagingFooter extends StatelessWidget {
-  const OwnPagingFooter({super.key, required this.keyPrefix, required this.failed, required this.onRetry});
+  const OwnPagingFooter({
+    super.key,
+    required this.keyPrefix,
+    required this.failed,
+    required this.onRetry,
+    this.message,
+  });
 
   final String keyPrefix;
   final bool failed;
   final VoidCallback onRetry;
+  final String? message;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: OwnSpaceTabsTheme.footerPad),
     child: Center(
       child: failed
-          ? OwnRetryLine(key: ValueKey('$keyPrefix-retry'), onRetry: onRetry)
+          ? OwnRetryLine(key: ValueKey('$keyPrefix-retry'), onRetry: onRetry, message: message)
           : SizedBox(
               height: OwnSpaceTabsTheme.spinnerRadius * 2,
               child: CupertinoActivityIndicator(
@@ -525,22 +533,24 @@ class OwnPagingFooter extends StatelessWidget {
   );
 }
 
-/// 加载失败，点击重试, the whole line a tap.
+/// 加载失败，点击重试, the whole line a tap; [message] says why in place of 加载失败.
 class OwnRetryLine extends StatelessWidget {
-  const OwnRetryLine({super.key, required this.onRetry});
+  const OwnRetryLine({super.key, required this.onRetry, this.message});
 
   final VoidCallback onRetry;
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
     final style = ownStyle(OwnSpaceTabsTheme.footerText, OwnSpaceTabsTheme.footerInk);
+    final failure = '${message ?? '加载失败'}，';
     return FavTap(
-      label: '加载失败，点击重试',
+      label: '$failure点击重试',
       onTap: onRetry,
       child: Text.rich(
         TextSpan(
           children: [
-            TextSpan(text: '加载失败，', style: style),
+            TextSpan(text: failure, style: style),
             TextSpan(
               text: '点击重试',
               style: style.copyWith(color: OwnSpaceTabsTheme.footerRetryInk),
@@ -553,20 +563,21 @@ class OwnRetryLine extends StatelessWidget {
   }
 }
 
-/// A list's first load: the TV, or the retry line once it failed.
+/// A list's first load: the TV, or the retry line once it failed ([message] in place of 加载失败 when given).
 class OwnFirstLoad extends StatelessWidget {
-  const OwnFirstLoad({super.key, required this.keyPrefix, required this.failed, required this.onRetry});
+  const OwnFirstLoad({super.key, required this.keyPrefix, required this.failed, required this.onRetry, this.message});
 
   final String keyPrefix;
   final bool failed;
   final VoidCallback onRetry;
+  final String? message;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: OwnSpaceTabsTheme.stateTop, bottom: OwnSpaceTabsTheme.stateTop),
     child: Center(
       child: failed
-          ? OwnRetryLine(key: ValueKey('$keyPrefix-retry'), onRetry: onRetry)
+          ? OwnRetryLine(key: ValueKey('$keyPrefix-retry'), onRetry: onRetry, message: message)
           : LoadingTvState(key: ValueKey('$keyPrefix-loading')),
     ),
   );

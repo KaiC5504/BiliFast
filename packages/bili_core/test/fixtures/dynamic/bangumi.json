@@ -1,0 +1,65 @@
+{
+ "code": 0,
+ "message": "0",
+ "ttl": 1,
+ "data": {
+  "list": [
+   {
+    "season_id": 81001,
+    "media_id": 81002,
+    "season_type": 1,
+    "season_type_name": "番剧",
+    "title": "测试番剧一",
+    "cover": "https://i0.hdslb.com/bfs/bangumi/fake-81001.jpg",
+    "total_count": 12,
+    "is_finish": 1,
+    "is_started": 1,
+    "is_play": 1,
+    "badge": "",
+    "badge_type": 1,
+    "new_ep": {
+     "id": 810010,
+     "index_show": "全23话",
+     "cover": "",
+     "title": "12",
+     "long_title": "测试",
+     "pub_time": "2026-01-05 19:00:00",
+     "duration": 1420000
+    },
+    "progress": "看到第3话",
+    "both_follow": true
+   },
+   {
+    "season_id": 81002,
+    "media_id": 81003,
+    "season_type": 1,
+    "season_type_name": "番剧",
+    "title": "测试番剧二",
+    "cover": "https://i0.hdslb.com/bfs/bangumi/fake-81002.jpg",
+    "total_count": 12,
+    "is_finish": 1,
+    "is_started": 1,
+    "is_play": 1,
+    "badge": "",
+    "badge_type": 1,
+    "new_ep": {
+     "id": 810020,
+     "index_show": "更新至第5话",
+     "cover": "",
+     "title": "12",
+     "long_title": "测试",
+     "pub_time": "2026-01-05 19:00:00",
+     "duration": 1420000
+    },
+    "progress": "看到第3话",
+    "both_follow": true
+   },
+   {
+    "title": "没有编号"
+   }
+  ],
+  "pn": 1,
+  "ps": 15,
+  "total": 17
+ }
+}

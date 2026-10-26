@@ -1,0 +1,182 @@
+{
+ "code": 0,
+ "message": "0",
+ "ttl": 1,
+ "data": {
+  "update_num": "0",
+  "update_baseline": "",
+  "offset": "1100000000000000201",
+  "has_more": true,
+  "total": "1",
+  "items": [
+   {
+    "id_str": "1100000000000000201",
+    "type": "DYNAMIC_TYPE_AV",
+    "basic": {
+     "rid_str": "115000000000201",
+     "comment_type": 1,
+     "comment_id_str": "115000000000201",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": {
+      "text": "置顶"
+     },
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000201.jpg",
+      "face_nft": false,
+      "name": "测试空间主人",
+      "label": "",
+      "mid": 20000201,
+      "jump_url": "//space.bilibili.com/20000201/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "投稿了视频",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_ARCHIVE",
+       "none": null,
+       "blocked": null,
+       "archive": {
+        "type": 1,
+        "bvid": "BV1FakeSpc201",
+        "aid": "115000000000201",
+        "cover": "https://i0.hdslb.com/bfs/archive/fake-cover-115000000000201.jpg",
+        "jump_url": "//www.bilibili.com/video/BV1FakeSpc201/",
+        "stat": {
+         "danmaku": "348",
+         "play": "5.6万",
+         "vt": ""
+        },
+        "duration_text": "21:50",
+        "title": "置顶的测试视频",
+        "desc": "测试视频简介",
+        "badge": {
+         "icon_url": "",
+         "text": "投稿视频",
+         "bg_color": "#FB7299",
+         "color": "#FFFFFF"
+        },
+        "enable_vt": 0,
+        "disable_preview": 0,
+        "premiere_online": "",
+        "stat_hidden": 0
+       },
+       "pgc": null,
+       "courses": null,
+       "draw": null,
+       "article": null,
+       "music": null,
+       "common": null,
+       "upower_common": null,
+       "live": null,
+       "live_rcmd": null,
+       "medialist": null,
+       "subscription": null,
+       "ugc_season": null,
+       "subscription_new": null,
+       "opus": null
+      },
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 1,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 2,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 3,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   }
+  ]
+ }
+}

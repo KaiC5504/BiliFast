@@ -42,7 +42,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
   static const _statusName = '.status.json';
 
   /// Bumped when the measure changes, so kept results are measured again.
-  static const _statusMeasure = 2;
+  static const _statusMeasure = 3;
 
   Skin? _value;
   Future<void>? _started;
@@ -294,7 +294,12 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
         _ => null,
       };
       return skin.withStatusBar(
-        SkinStatusBar(home: luminance('home'), me: luminance('me'), meNoCard: luminance('meNoCard')),
+        SkinStatusBar(
+          home: luminance('home'),
+          follow: luminance('follow'),
+          me: luminance('me'),
+          meNoCard: luminance('meNoCard'),
+        ),
       );
     } on Exception catch (error) {
       _logger.warn(LogCategory.ui, 'kept skin status bar unreadable, measuring again', {'error': _describe(error)});
@@ -309,7 +314,13 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
       if (!await File('$version/$_manifestName').exists()) return;
       final temporary = File('$version/$_statusName.tmp');
       await temporary.writeAsString(
-        jsonEncode({'v': _statusMeasure, 'home': status.home, 'me': status.me, 'meNoCard': status.meNoCard}),
+        jsonEncode({
+          'v': _statusMeasure,
+          'home': status.home,
+          'follow': status.follow,
+          'me': status.me,
+          'meNoCard': status.meNoCard,
+        }),
         flush: true,
       );
       await _retried(() => temporary.rename('$version/$_statusName'));
@@ -530,6 +541,7 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
         shown.statusBar == null &&
         _cacheText(shown.equip) == _cacheText(skin.equip) &&
         (measured.lightStatusHome != shown.lightStatusHome ||
+            measured.lightStatusFollow != shown.lightStatusFollow ||
             measured.lightStatusMe(card: true) != shown.lightStatusMe(card: true) ||
             measured.lightStatusMe(card: false) != shown.lightStatusMe(card: false))) {
       _show(shown.withStatusBar(status));
@@ -552,6 +564,8 @@ class SkinModel extends ChangeNotifier implements ValueListenable<Skin?> {
     _logger.info(LogCategory.ui, 'skin status bar', {
       'home': measure(skin.headBg, status?.home),
       'homeLight': skin.lightStatusHome,
+      'follow': measure(skin.headBg, status?.follow),
+      'followLight': skin.lightStatusFollow,
       'me': video ? 'color' : measure(skin.headMyself, status?.me),
       'meLight': skin.lightStatusMe(card: true),
       'meNoCard': video ? 'color' : measure(skin.headMyself, status?.meNoCard),

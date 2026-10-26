@@ -45,3 +45,18 @@ ink is 16.72 pt, as 123's 👍, and tinted #61666D; `lottie/feed_like.json` is `
 thumb turning pink with its burst of small thumbs that 125 shows on a tap. The cover's ▶ is `images/player/paused_play.png`
 again, its body 46.67 pt wide at 77% of its white (122). 弹 is the player's own drawn glyph: the iPhone shows 弹 on the
 TV where the APK's `ic_danmaku_inline_switch_v2_on` draws lines.
+
+动态 (127-140) takes the same APK's dynamic art (`images/dynamic/`), each a vector drawn white at 3× by
+`tools/apk_asset.py extract … --width 72` for tinting: `dy_ic_arrow_share_line_24` (转发), `dy_ic_bubble_comment_line_24`
+(评论), `dy_ic_hand_thumbsup_line_24` and `_fill_24` (赞, liked), `dy_ic_star_favorite_line_24` (the post page's ⭐). Their
+drawn sizes and greys come from 131, 135 and 140.
+关注 takes `dy_ic_write` (`images/dynamic/follow_write.png`, a vector drawn white at 56 px, ink 18.67 pt, sized from
+127) and `dy_ic_indicator_triangle` (`follow_pointer.png`, the xxhdpi bitmap cut to its 37 × 21 px ink, drawn
+15.67 × 8 pt as 139 shows it).
+The card's other glyphs come from the APK's compose icon font
+(`assets/composeResources/srcs.common.iconfont.generated.resources/font/iconfont.ttf`), named by the `ref_*_500`
+drawables, each drawn white, cut to its ink and scaled to the ink width measured on 127, 131, 135 and 137:
+`more_vertical_fill` (eb0f, 10 px), `gift_lottery_line` (ead2, 47 px), `video_circle_line` (eb7f, 49 px),
+`lock_locked_line` (eaf9, 30 px), `arrow_share_line` (ea3f, 55 px), `person_unfollow_line` (eb30, 52 px),
+`warning_report_triangle_line` (eb89, 56 px). `ic_upper_tv_play` is the APK bitmap unchanged (70% white), drawn 42 pt
+wide at 80% opacity, as 128's TV mark.

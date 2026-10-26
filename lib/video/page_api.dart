@@ -38,10 +38,17 @@ abstract interface class PageApi {
 
   Future<void> addToWatchLater({required int aid});
 
-  /// 评论's pages: [offset] is the last page's `nextOffset`, null for the first.
-  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset});
+  /// 评论's pages: [offset] is the last page's `nextOffset`, null for the first. [aid] is the comment area's oid and
+  /// [type] its kind: 1 for a video, a 动态's own (11, 12, 17) for a post.
+  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset, int type = 1});
 
-  Future<ThreadPage> thread({required int aid, required int root, required int page, required CommentSort sort});
+  Future<ThreadPage> thread({
+    required int aid,
+    required int root,
+    required int page,
+    required CommentSort sort,
+    int type = 1,
+  });
 
   /// [root] and [parent] stay 0 for a comment on the video; [mentions] maps each @name in [message] to its mid.
   Future<Comment> postComment({
@@ -52,13 +59,14 @@ abstract interface class PageApi {
     bool syncToDynamic = false,
     Map<String, int> mentions = const {},
     List<UploadedPicture> pictures = const [],
+    int type = 1,
   });
 
-  Future<void> likeComment({required int aid, required int rpid, required bool on});
+  Future<void> likeComment({required int aid, required int rpid, required bool on, int type = 1});
 
-  Future<void> hateComment({required int aid, required int rpid, required bool on});
+  Future<void> hateComment({required int aid, required int rpid, required bool on, int type = 1});
 
-  Future<void> deleteComment({required int aid, required int rpid});
+  Future<void> deleteComment({required int aid, required int rpid, int type = 1});
 
   Future<List<EmotePackage>> emotePackages();
 
@@ -168,12 +176,17 @@ class ClientPageApi implements PageApi {
   Future<void> addToWatchLater({required int aid}) => _client.addToWatchLater(aid: aid);
 
   @override
-  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset}) =>
-      _client.comments(aid: aid, sort: sort, offset: offset);
+  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset, int type = 1}) =>
+      _client.comments(aid: aid, sort: sort, offset: offset, type: type);
 
   @override
-  Future<ThreadPage> thread({required int aid, required int root, required int page, required CommentSort sort}) =>
-      _client.thread(aid: aid, root: root, page: page, sort: sort);
+  Future<ThreadPage> thread({
+    required int aid,
+    required int root,
+    required int page,
+    required CommentSort sort,
+    int type = 1,
+  }) => _client.thread(aid: aid, root: root, page: page, sort: sort, type: type);
 
   @override
   Future<Comment> postComment({
@@ -184,8 +197,10 @@ class ClientPageApi implements PageApi {
     bool syncToDynamic = false,
     Map<String, int> mentions = const {},
     List<UploadedPicture> pictures = const [],
+    int type = 1,
   }) => _client.postComment(
     aid: aid,
+    type: type,
     message: message,
     root: root,
     parent: parent,
@@ -195,15 +210,16 @@ class ClientPageApi implements PageApi {
   );
 
   @override
-  Future<void> likeComment({required int aid, required int rpid, required bool on}) =>
-      _client.likeComment(aid: aid, rpid: rpid, on: on);
+  Future<void> likeComment({required int aid, required int rpid, required bool on, int type = 1}) =>
+      _client.likeComment(aid: aid, rpid: rpid, on: on, type: type);
 
   @override
-  Future<void> hateComment({required int aid, required int rpid, required bool on}) =>
-      _client.hateComment(aid: aid, rpid: rpid, on: on);
+  Future<void> hateComment({required int aid, required int rpid, required bool on, int type = 1}) =>
+      _client.hateComment(aid: aid, rpid: rpid, on: on, type: type);
 
   @override
-  Future<void> deleteComment({required int aid, required int rpid}) => _client.deleteComment(aid: aid, rpid: rpid);
+  Future<void> deleteComment({required int aid, required int rpid, int type = 1}) =>
+      _client.deleteComment(aid: aid, rpid: rpid, type: type);
 
   @override
   Future<List<EmotePackage>> emotePackages() => _client.emotePackages();

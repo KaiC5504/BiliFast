@@ -2,11 +2,11 @@ part of 'bili_client.dart';
 
 extension BiliClientComments on BiliClient {
   /// `offset` is the previous page's `nextOffset`; null or empty asks for the first page.
-  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset}) async {
+  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset, int type = 1}) async {
     final cursor = offset ?? '';
     final query = {
       'oid': '$aid',
-      'type': '1',
+      'type': '$type',
       'mode': '${sort.rawValue}',
       'pagination_str': jsonEncode({'offset': cursor}),
     };
@@ -25,10 +25,11 @@ extension BiliClientComments on BiliClient {
     required int root,
     required int page,
     CommentSort sort = CommentSort.time,
+    int type = 1,
   }) {
     final query = {
       'oid': '$aid',
-      'type': '1',
+      'type': '$type',
       'root': '$root',
       'pn': '$page',
       'ps': '20',
@@ -46,8 +47,9 @@ extension BiliClientComments on BiliClient {
     bool syncToDynamic = false,
     Map<String, int> mentions = const {},
     List<UploadedPicture> pictures = const [],
+    int type = 1,
   }) {
-    final form = {'oid': '$aid', 'type': '1', 'message': message};
+    final form = {'oid': '$aid', 'type': '$type', 'message': message};
     if (root != 0) form['root'] = '$root';
     if (parent != 0) form['parent'] = '$parent';
     if (syncToDynamic) form['sync_to_dynamic'] = '1';
@@ -56,19 +58,19 @@ extension BiliClientComments on BiliClient {
     return post(
       '/x/v2/reply/add',
       form: form,
-      referer: 'https://www.bilibili.com/video/av$aid',
+      referer: type == 1 ? 'https://www.bilibili.com/video/av$aid' : 'https://t.bilibili.com/',
       decode: decodePostedComment,
     );
   }
 
-  Future<void> likeComment({required int aid, required int rpid, required bool on}) =>
-      postVoid('/x/v2/reply/action', form: _reaction(aid, rpid, on));
+  Future<void> likeComment({required int aid, required int rpid, required bool on, int type = 1}) =>
+      postVoid('/x/v2/reply/action', form: _reaction(aid, rpid, on, type));
 
-  Future<void> hateComment({required int aid, required int rpid, required bool on}) =>
-      postVoid('/x/v2/reply/hate', form: _reaction(aid, rpid, on));
+  Future<void> hateComment({required int aid, required int rpid, required bool on, int type = 1}) =>
+      postVoid('/x/v2/reply/hate', form: _reaction(aid, rpid, on, type));
 
-  Future<void> deleteComment({required int aid, required int rpid}) =>
-      postVoid('/x/v2/reply/del', form: {'oid': '$aid', 'type': '1', 'rpid': '$rpid'});
+  Future<void> deleteComment({required int aid, required int rpid, int type = 1}) =>
+      postVoid('/x/v2/reply/del', form: {'oid': '$aid', 'type': '$type', 'rpid': '$rpid'});
 
   /// The people [mid] follows whose names match [query]; an empty query lists the most recently followed.
   Future<List<MentionCandidate>> followings({required int mid, String query = ''}) async {
@@ -114,9 +116,9 @@ extension BiliClientComments on BiliClient {
   Future<List<EmotePackage>> emotePackages() =>
       get('/x/emote/user/panel/web', query: {'business': 'reply'}, signed: false, decode: decodeEmotePanel);
 
-  Map<String, String> _reaction(int aid, int rpid, bool on) => {
+  Map<String, String> _reaction(int aid, int rpid, bool on, int type) => {
     'oid': '$aid',
-    'type': '1',
+    'type': '$type',
     'rpid': '$rpid',
     'action': on ? '1' : '0',
   };

@@ -259,7 +259,7 @@ class FakePageApi implements PageApi {
   int get commentTotal => [?pinnedComment, ...commentList].fold(0, (sum, comment) => sum + 1 + comment.replyCount);
 
   @override
-  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset}) =>
+  Future<CommentPage> comments({required int aid, required CommentSort sort, String? offset, int type = 1}) =>
       _answer('comments', 'comments sort=${sort.name} offset=${offset ?? ''}', () {
         if (_firstPage case final first?) {
           if (offset != null) return const CommentPage(comments: []);
@@ -284,7 +284,13 @@ class FakePageApi implements PageApi {
   }
 
   @override
-  Future<ThreadPage> thread({required int aid, required int root, required int page, required CommentSort sort}) =>
+  Future<ThreadPage> thread({
+    required int aid,
+    required int root,
+    required int page,
+    required CommentSort sort,
+    int type = 1,
+  }) =>
       _answer('thread', 'thread root=$root page=$page sort=${sort.name}', () {
         final rootComment = _find(root) ?? Comment(rpid: root, member: const CommentMember(mid: 0), message: '');
         final replies = threadReplies[root] ?? rootComment.previewReplies;
@@ -310,6 +316,7 @@ class FakePageApi implements PageApi {
     bool syncToDynamic = false,
     Map<String, int> mentions = const {},
     List<UploadedPicture> pictures = const [],
+    int type = 1,
   }) => _answer('postComment', 'postComment root=$root parent=$parent message=$message', () {
     posts.add((
       message: message,
@@ -344,7 +351,7 @@ class FakePageApi implements PageApi {
   });
 
   @override
-  Future<void> likeComment({required int aid, required int rpid, required bool on}) =>
+  Future<void> likeComment({required int aid, required int rpid, required bool on, int type = 1}) =>
       _answer('likeComment', 'likeComment rpid=$rpid on=$on', () {
         _change(rpid, (comment) {
           if (on == (comment.action == 1)) return comment;
@@ -353,7 +360,7 @@ class FakePageApi implements PageApi {
       });
 
   @override
-  Future<void> hateComment({required int aid, required int rpid, required bool on}) =>
+  Future<void> hateComment({required int aid, required int rpid, required bool on, int type = 1}) =>
       _answer('hateComment', 'hateComment rpid=$rpid on=$on', () {
         _change(rpid, (comment) {
           if (on == (comment.action == 2)) return comment;
@@ -364,7 +371,7 @@ class FakePageApi implements PageApi {
 
   /// A comment the fake doesn't hold is deleted all the same, as a widget test's own comments are.
   @override
-  Future<void> deleteComment({required int aid, required int rpid}) =>
+  Future<void> deleteComment({required int aid, required int rpid, int type = 1}) =>
       _answer('deleteComment', 'deleteComment rpid=$rpid', () {
         final root = _find(rpid)?.root ?? 0;
         Comment withoutReply(Comment comment) => comment.previewReplies.any((reply) => reply.rpid == rpid)

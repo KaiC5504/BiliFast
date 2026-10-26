@@ -1,0 +1,44 @@
+{
+ "code": 0,
+ "message": "0",
+ "ttl": 1,
+ "data": {
+  "my_info": {
+   "mid": "20000900",
+   "name": "测试我",
+   "face": "https://i0.hdslb.com/bfs/face/fake-me.jpg",
+   "following": "12",
+   "follower": "3",
+   "dyns": "4"
+  },
+  "live_users": {
+   "count": 0,
+   "group": "default",
+   "items": []
+  },
+  "up_list": {
+   "has_more": true,
+   "items": [
+    {
+     "face": "https://i0.hdslb.com/bfs/face/fake-up-20000901.jpg",
+     "has_update": true,
+     "is_reserve_recall": false,
+     "mid": 20000901,
+     "uname": "测试常看一"
+    },
+    {
+     "face": "https://i0.hdslb.com/bfs/face/fake-up-20000902.jpg",
+     "has_update": false,
+     "is_reserve_recall": false,
+     "mid": 20000902,
+     "uname": "测试常看二"
+    },
+    {
+     "mid": "不是数字",
+     "uname": "测试坏"
+    }
+   ],
+   "offset": "fake-offset-portal-0001"
+  }
+ }
+}

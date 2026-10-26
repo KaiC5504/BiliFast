@@ -1,0 +1,1575 @@
+{
+ "code": 0,
+ "message": "0",
+ "ttl": 1,
+ "data": {
+  "update_num": "0",
+  "update_baseline": "",
+  "offset": 1100000000000000199,
+  "has_more": false,
+  "items": [
+   {
+    "id_str": "1100000000000000101",
+    "type": "DYNAMIC_TYPE_WORD",
+    "basic": {
+     "rid_str": "1100000000000000101",
+     "comment_type": 17,
+     "comment_id_str": "1100000000000000101",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000101.jpg",
+      "face_nft": false,
+      "name": "测试文字",
+      "label": "",
+      "mid": 20000101,
+      "jump_url": "//space.bilibili.com/20000101/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "",
+      "pub_location_text": "IP属地：上海",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       },
+       {
+        "label": "删除",
+        "type": "THREE_POINT_DELETE",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": {
+       "text": "互动抽奖 来抽 测试投票测试番剧@没有编号失效链接测试旧编号很长的字",
+       "rich_text_nodes": [
+        {
+         "text": "互动抽奖",
+         "orig_text": "互动抽奖",
+         "type": "RICH_TEXT_NODE_TYPE_LOTTERY",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "700001",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        },
+        {
+         "text": " 来抽 ",
+         "orig_text": " 来抽 ",
+         "type": "RICH_TEXT_NODE_TYPE_TEXT",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        },
+        {
+         "text": "测试投票",
+         "orig_text": "测试投票",
+         "type": "RICH_TEXT_NODE_TYPE_VOTE",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "700002",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        },
+        {
+         "text": "测试番剧",
+         "orig_text": "测试番剧",
+         "type": "RICH_TEXT_NODE_TYPE_OGV_SEASON",
+         "jump_url": "https://www.bilibili.com/bangumi/play/ss1",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        },
+        {
+         "text": "@没有编号",
+         "orig_text": "@没有编号",
+         "type": "RICH_TEXT_NODE_TYPE_AT",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        },
+        {
+         "text": "失效链接",
+         "orig_text": "失效链接",
+         "type": "RICH_TEXT_NODE_TYPE_WEB",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        },
+        {
+         "text": "测试旧编号",
+         "orig_text": "测试旧编号",
+         "type": "RICH_TEXT_NODE_TYPE_BV",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "av170001",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        },
+        {
+         "text": "很长的字",
+         "orig_text": "很长的字",
+         "type": "RICH_TEXT_NODE_TYPE_TEXT",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        }
+       ],
+       "paragraphs": [],
+       "has_more": true
+      },
+      "major": null,
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 1,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 2,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   },
+   {
+    "id_str": "1100000000000000102",
+    "type": "DYNAMIC_TYPE_WORD",
+    "basic": {
+     "rid_str": "",
+     "comment_type": 0,
+     "comment_id_str": "",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000102.jpg",
+      "face_nft": false,
+      "name": "测试图文无图",
+      "label": "",
+      "mid": 20000102,
+      "jump_url": "//space.bilibili.com/20000102/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "取消关注",
+        "type": "THREE_POINT_FOLLOWING",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       },
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_OPUS",
+       "none": null,
+       "blocked": null,
+       "archive": null,
+       "pgc": null,
+       "courses": null,
+       "draw": null,
+       "article": null,
+       "music": null,
+       "common": null,
+       "upower_common": null,
+       "live": null,
+       "live_rcmd": null,
+       "medialist": null,
+       "subscription": null,
+       "ugc_season": null,
+       "subscription_new": null,
+       "opus": {
+        "jump_url": "//www.bilibili.com/opus/1100000000000000000",
+        "title": "",
+        "summary": {
+         "text": "只有字的图文",
+         "rich_text_nodes": [
+          {
+           "text": "只有字的图文",
+           "orig_text": "只有字的图文",
+           "type": "RICH_TEXT_NODE_TYPE_TEXT",
+           "jump_url": "",
+           "icon_url": "",
+           "icon_name": "",
+           "rid": "",
+           "emoji": null,
+           "goods": null,
+           "style": null,
+           "pics": [],
+           "video": null
+          }
+         ],
+         "paragraphs": [],
+         "has_more": false
+        },
+        "style": 1,
+        "pics": [],
+        "fold_action": [
+         "展开",
+         "收起"
+        ],
+        "paywall": null
+       }
+      },
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   },
+   {
+    "id_str": "1100000000000000103",
+    "type": "DYNAMIC_TYPE_LIVE_RCMD",
+    "basic": {
+     "rid_str": "",
+     "comment_type": 0,
+     "comment_id_str": "",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000103.jpg",
+      "face_nft": false,
+      "name": "测试主播",
+      "label": "",
+      "mid": 20000103,
+      "jump_url": "//space.bilibili.com/20000103/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "直播了",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "取消关注",
+        "type": "THREE_POINT_FOLLOWING",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       },
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_LIVE_RCMD",
+       "none": null,
+       "blocked": null,
+       "archive": null,
+       "pgc": null,
+       "courses": null,
+       "draw": null,
+       "article": null,
+       "music": null,
+       "common": null,
+       "upower_common": null,
+       "live": null,
+       "live_rcmd": {
+        "content": "{\"live_play_info\": {\"room_id\": 600001, \"title\": \"测试直播间\", \"cover\": \"https://i0.hdslb.com/bfs/live/fake-cover.jpg\", \"live_status\": 1}}",
+        "reserve_type": 0
+       },
+       "medialist": null,
+       "subscription": null,
+       "ugc_season": null,
+       "subscription_new": null,
+       "opus": null
+      },
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 3,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 12,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   },
+   {
+    "id_str": "1100000000000000104",
+    "type": "DYNAMIC_TYPE_PGC_UNION",
+    "basic": {
+     "rid_str": "",
+     "comment_type": 0,
+     "comment_id_str": "",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000104.jpg",
+      "face_nft": false,
+      "name": "测试番剧号",
+      "label": "",
+      "mid": 20000104,
+      "jump_url": "//space.bilibili.com/20000104/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "取消关注",
+        "type": "THREE_POINT_FOLLOWING",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       },
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_PGC",
+       "none": null,
+       "blocked": null,
+       "archive": null,
+       "pgc": {
+        "title": "测试番剧 第1话",
+        "cover": "https://i0.hdslb.com/bfs/bangumi/fake.jpg",
+        "epid": 800001,
+        "season_id": 800000
+       },
+       "courses": null,
+       "draw": null,
+       "article": null,
+       "music": null,
+       "common": null,
+       "upower_common": null,
+       "live": null,
+       "live_rcmd": null,
+       "medialist": null,
+       "subscription": null,
+       "ugc_season": null,
+       "subscription_new": null,
+       "opus": null
+      },
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   },
+   {
+    "id_str": "1100000000000000105",
+    "type": "DYNAMIC_TYPE_UGC_SEASON",
+    "basic": {
+     "rid_str": "115000000000105",
+     "comment_type": 1,
+     "comment_id_str": "115000000000105",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000105.jpg",
+      "face_nft": false,
+      "name": "测试合集",
+      "label": "",
+      "mid": 20000105,
+      "jump_url": "//space.bilibili.com/20000105/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "取消关注",
+        "type": "THREE_POINT_FOLLOWING",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       },
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_UGC_SEASON",
+       "none": null,
+       "blocked": null,
+       "archive": null,
+       "pgc": null,
+       "courses": null,
+       "draw": null,
+       "article": null,
+       "music": null,
+       "common": null,
+       "upower_common": null,
+       "live": null,
+       "live_rcmd": null,
+       "medialist": null,
+       "subscription": null,
+       "ugc_season": {
+        "aid": 170001,
+        "title": "测试合集更新",
+        "cover": "",
+        "duration_text": "3:07",
+        "stat": {
+         "play": 1024,
+         "danmaku": 8
+        }
+       },
+       "subscription_new": null,
+       "opus": null
+      },
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   },
+   {
+    "id_str": "1100000000000000106",
+    "type": "DYNAMIC_TYPE_COMMON_SQUARE",
+    "basic": {
+     "rid_str": "",
+     "comment_type": 0,
+     "comment_id_str": "",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000106.jpg",
+      "face_nft": false,
+      "name": "测试其他",
+      "label": "",
+      "mid": 20000106,
+      "jump_url": "//space.bilibili.com/20000106/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "取消关注",
+        "type": "THREE_POINT_FOLLOWING",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       },
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": {
+       "text": "只有纯文本",
+       "rich_text_nodes": [],
+       "paragraphs": [],
+       "has_more": false
+      },
+      "major": {
+       "type": "MAJOR_TYPE_COMMON",
+       "none": null,
+       "blocked": null,
+       "archive": null,
+       "pgc": null,
+       "courses": null,
+       "draw": null,
+       "article": null,
+       "music": null,
+       "common": {
+        "title": "测试卡片",
+        "cover": "https://i0.hdslb.com/bfs/fake/common.jpg"
+       },
+       "upower_common": null,
+       "live": null,
+       "live_rcmd": null,
+       "medialist": null,
+       "subscription": null,
+       "ugc_season": null,
+       "subscription_new": null,
+       "opus": null
+      },
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   },
+   {
+    "id_str": "1100000000000000107",
+    "type": "DYNAMIC_TYPE_FORWARD",
+    "basic": {
+     "rid_str": "",
+     "comment_type": 0,
+     "comment_id_str": "",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000107.jpg",
+      "face_nft": false,
+      "name": "测试转发已删",
+      "label": "",
+      "mid": 20000107,
+      "jump_url": "//space.bilibili.com/20000107/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "取消关注",
+        "type": "THREE_POINT_FOLLOWING",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       },
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": {
+       "text": "转发",
+       "rich_text_nodes": [
+        {
+         "text": "转发",
+         "orig_text": "转发",
+         "type": "RICH_TEXT_NODE_TYPE_TEXT",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        }
+       ],
+       "paragraphs": [],
+       "has_more": false
+      },
+      "major": null,
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": {
+     "type": "DYNAMIC_TYPE_NONE",
+     "basic": {
+      "rid_str": "",
+      "comment_type": 0,
+      "comment_id_str": ""
+     },
+     "visible": false,
+     "modules": {
+      "module_dynamic": {
+       "major": {
+        "type": "MAJOR_TYPE_NONE",
+        "none": {
+         "tips": "源动态已被作者删除"
+        },
+        "blocked": null,
+        "archive": null,
+        "pgc": null,
+        "courses": null,
+        "draw": null,
+        "article": null,
+        "music": null,
+        "common": null,
+        "upower_common": null,
+        "live": null,
+        "live_rcmd": null,
+        "medialist": null,
+        "subscription": null,
+        "ugc_season": null,
+        "subscription_new": null,
+        "opus": null
+       }
+      }
+     },
+     "orig": null
+    }
+   },
+   {
+    "id_str": "1100000000000000108",
+    "type": "DYNAMIC_TYPE_FORWARD",
+    "basic": {
+     "rid_str": "1100000000000000108",
+     "comment_type": 17,
+     "comment_id_str": "1100000000000000108",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000108.jpg",
+      "face_nft": false,
+      "name": "测试转发坏原文",
+      "label": "",
+      "mid": 20000108,
+      "jump_url": "//space.bilibili.com/20000108/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+       {
+        "label": "取消关注",
+        "type": "THREE_POINT_FOLLOWING",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       },
+       {
+        "label": "举报",
+        "type": "THREE_POINT_REPORT",
+        "params": {},
+        "modal": null,
+        "jump_url": ""
+       }
+      ]
+     },
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": {
+       "text": "坏的",
+       "rich_text_nodes": [
+        {
+         "text": "坏的",
+         "orig_text": "坏的",
+         "type": "RICH_TEXT_NODE_TYPE_TEXT",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        }
+       ],
+       "paragraphs": [],
+       "has_more": false
+      },
+      "major": null,
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "comment": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "like": {
+       "status": false,
+       "count": 0,
+       "forbidden": false,
+       "disabled": false,
+       "silent": false,
+       "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": {
+     "id_str": "1100000000000000118",
+     "type": "DYNAMIC_TYPE_AV",
+     "modules": {
+      "module_dynamic": {
+       "major": {
+        "type": "MAJOR_TYPE_ARCHIVE",
+        "none": null,
+        "blocked": null,
+        "archive": {
+         "title": "没有编号的原视频"
+        },
+        "pgc": null,
+        "courses": null,
+        "draw": null,
+        "article": null,
+        "music": null,
+        "common": null,
+        "upower_common": null,
+        "live": null,
+        "live_rcmd": null,
+        "medialist": null,
+        "subscription": null,
+        "ugc_season": null,
+        "subscription_new": null,
+        "opus": null
+       }
+      }
+     }
+    }
+   },
+   {
+    "id_str": "1100000000000000109",
+    "type": "DYNAMIC_TYPE_DRAW",
+    "basic": {
+     "rid_str": "300000109",
+     "comment_type": 11,
+     "comment_id_str": "300000109",
+     "like_icon": {
+      "id": "1700000000000",
+      "start_url": "",
+      "action_url": "",
+      "end_url": ""
+     },
+     "in_audit": false,
+     "is_only_fans": false,
+     "editable": false,
+     "open_app_extra": "",
+     "jump_url": "",
+     "aigc": false
+    },
+    "visible": true,
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "face": "https://i0.hdslb.com/bfs/face/fake-face-20000109.jpg",
+      "face_nft": false,
+      "name": "测试旧图",
+      "label": "",
+      "mid": 20000109,
+      "jump_url": "//space.bilibili.com/20000109/dynamic",
+      "following": true,
+      "pub_ts": "1761400000",
+      "pub_time": "3小时前",
+      "pub_action": "",
+      "pub_location_text": "",
+      "vip": {
+       "type": 2,
+       "status": 1,
+       "due_date": "1790000000000",
+       "vip_pay_type": 0,
+       "theme_type": 0,
+       "label": {
+        "path": "",
+        "text": "年度大会员",
+        "label_theme": "annual_vip",
+        "text_color": "#FFFFFF",
+        "bg_style": 1,
+        "bg_color": "#FB7299",
+        "border_color": "",
+        "use_img_label": true
+       },
+       "avatar_subscript": 1,
+       "nickname_color": "#FB7299",
+       "role": "3",
+       "avatar_subscript_url": ""
+      },
+      "official_verify": {
+       "type": -1,
+       "desc": ""
+      },
+      "decoration_card": null,
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": null
+     },
+     "module_more": null,
+     "module_dispute": null,
+     "module_dynamic": {
+      "topic": null,
+      "desc": {
+       "text": "旧格式的图",
+       "rich_text_nodes": [
+        {
+         "text": "旧格式的图",
+         "orig_text": "旧格式的图",
+         "type": "RICH_TEXT_NODE_TYPE_TEXT",
+         "jump_url": "",
+         "icon_url": "",
+         "icon_name": "",
+         "rid": "",
+         "emoji": null,
+         "goods": null,
+         "style": null,
+         "pics": [],
+         "video": null
+        }
+       ],
+       "paragraphs": [],
+       "has_more": false
+      },
+      "major": {
+       "type": "MAJOR_TYPE_DRAW",
+       "none": null,
+       "blocked": null,
+       "archive": null,
+       "pgc": null,
+       "courses": null,
+       "draw": {
+        "id": 300000109,
+        "items": [
+         {
+          "src": "https://i0.hdslb.com/bfs/album/fake-old-1.jpg",
+          "width": 800,
+          "height": 600
+         },
+         {
+          "src": "",
+          "width": 1,
+          "height": 1
+         }
+        ]
+       },
+       "article": null,
+       "music": null,
+       "common": null,
+       "upower_common": null,
+       "live": null,
+       "live_rcmd": null,
+       "medialist": null,
+       "subscription": null,
+       "ugc_season": null,
+       "subscription_new": null,
+       "opus": null
+      },
+      "additional": null
+     },
+     "module_extend": null,
+     "module_stat": {
+      "forward": {
+       "count": "--"
+      },
+      "comment": {
+       "count": -1
+      },
+      "like": {
+       "count": "12",
+       "status": 1
+      }
+     },
+     "module_interaction": null,
+     "module_share_info": null,
+     "module_fold": null
+    },
+    "orig": null
+   }
+  ]
+ }
+}

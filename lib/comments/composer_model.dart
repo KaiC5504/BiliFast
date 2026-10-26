@@ -176,6 +176,7 @@ class ComposerModel extends ChangeNotifier {
       }
       final posted = await comments.api.postComment(
         aid: comments.aid,
+        type: comments.type,
         message: message,
         root: root,
         parent: parent,

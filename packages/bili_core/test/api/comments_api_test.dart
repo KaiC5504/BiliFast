@@ -427,6 +427,34 @@ void main() {
     expect(http.requestsTo('/x/v2/reply/del').map(http.bodyText), ['csrf=T&oid=80433022&rpid=9001&type=1']);
   });
 
+  test('a picture post\'s area sends its type on every call, and posting names the 动态 site', () async {
+    const ok = '{"code":0,"message":"0","data":null}';
+    http.routes[signedPath] = (200, CommentFixtures.lastPage);
+    http.routes[threadPath] = (200, CommentFixtures.thread);
+    http.routes['POST $addPath'] =
+        (200, '{"code":0,"message":"0","data":{"success_action":0,"reply":${CommentFixtures.plain}}}');
+    http.routes['POST /x/v2/reply/action'] = (200, ok);
+    http.routes['POST /x/v2/reply/hate'] = (200, ok);
+    http.routes['POST /x/v2/reply/del'] = (200, ok);
+
+    await client.comments(aid: 300000002, sort: CommentSort.hot, type: 11);
+    await client.thread(aid: 300000002, root: 9003, page: 1, type: 11);
+    await client.postComment(aid: 300000002, message: '图文评论', type: 11);
+    await client.likeComment(aid: 300000002, rpid: 9003, on: true, type: 11);
+    await client.hateComment(aid: 300000002, rpid: 9003, on: true, type: 11);
+    await client.deleteComment(aid: 300000002, rpid: 9003, type: 11);
+
+    for (final path in [signedPath, threadPath]) {
+      final query = http.query(http.requestsTo(path).single);
+      expect((query['oid'], query['type']), ('300000002', '11'), reason: path);
+    }
+    for (final path in [addPath, '/x/v2/reply/action', '/x/v2/reply/hate', '/x/v2/reply/del']) {
+      final form = Uri.splitQueryString(http.bodyText(http.requestsTo(path).single));
+      expect((form['oid'], form['type']), ('300000002', '11'), reason: path);
+    }
+    expect(http.requestsTo(addPath).single.headers['Referer'], 'https://t.bilibili.com/');
+  });
+
   test('emote packages flag text packages', () async {
     http.routes['/x/emote/user/panel/web'] = (200, CommentFixtures.emotePanel);
     final packages = await client.emotePackages();

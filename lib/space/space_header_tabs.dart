@@ -4,8 +4,7 @@ import 'package:flutter/widgets.dart';
 import '../shared/theme.dart';
 import 'space_header.dart';
 
-/// The space's own tabs (63, 69, 72, 78) between hairlines, [selected] pink over its bar. Others' spaces open only 投稿,
-/// so it is always the one shown there.
+/// The space's own tabs (63, 69, 72, 78, 136) between hairlines, [selected] pink over its bar.
 class SpaceTabRow extends StatelessWidget {
   const SpaceTabRow({super.key, required this.tabs, required this.onTap, this.selected = SpaceTabKind.contribute});
 

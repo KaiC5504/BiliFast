@@ -213,8 +213,8 @@ void main() {
     }
   }
 
-  /// [show], with the page given [skin] to follow.
-  Future<void> showOwn(WidgetTester tester, {bool settle = true}) async {
+  /// [show], with the page given [skin] to follow and asked to open on [initialTab].
+  Future<void> showOwn(WidgetTester tester, {bool settle = true, SpaceTabKind? initialTab}) async {
     tester.view
       ..physicalSize = const Size(440, 956)
       ..devicePixelRatio = 1
@@ -255,6 +255,7 @@ void main() {
           builder: (_) => OwnSpacePage(
             uploader: const UploaderRef(mid: _mid, name: '测试账号', face: ''),
             skin: skin,
+            initialTab: initialTab,
           ),
         ),
       ),
@@ -480,6 +481,29 @@ void main() {
     await showOwn(tester);
     expect(key('space-tab-favourite'), findsNothing);
     expectSelected(tester, SpaceTabKind.contribute);
+  });
+
+  testWidgets('asked to open on 追番 (关注\'s 全部 ›), it does over a 主页 default and lists 追番\'s page 1', (tester) async {
+    api.answer = _profile(defaultTab: SpaceTabKind.home);
+    await showOwn(tester, initialTab: SpaceTabKind.bangumi);
+    expectSelected(tester, SpaceTabKind.bangumi);
+    expectSelected(tester, SpaceTabKind.home, isSelected: false);
+    expect(find.byType(OwnBangumiSliver, skipOffstage: false), findsOneWidget);
+    expect(find.byType(OwnHomeSliver, skipOffstage: false), findsNothing);
+    expect(api.calls, ['ownProfile mid=$_mid', 'bangumi mid=$_mid page=1']);
+    expect(find.text(OwnBangumiSliver.endMessage), findsOneWidget);
+  });
+
+  testWidgets('asked for 追番 without the app token, it opens on 投稿: anyone\'s space has no 追番', (tester) async {
+    api
+      ..answer = _profile(own: false, defaultTab: SpaceTabKind.home)
+      ..ownFailure = BiliError.noAppToken;
+    await showOwn(tester, initialTab: SpaceTabKind.bangumi);
+    expect(key('space-tab-bangumi'), findsNothing);
+    expectSelected(tester, SpaceTabKind.contribute);
+    expect(find.byType(OwnContributeSliver, skipOffstage: false), findsOneWidget);
+    expect(api.calls, ['ownProfile mid=$_mid', 'profile mid=$_mid']);
+    expect(auth.asks, 0);
   });
 
   testWidgets('tapping a tab switches the body below the header', (tester) async {

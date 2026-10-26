@@ -29,6 +29,23 @@ abstract final class FeedInlineChoices {
   }
 }
 
+/// What an inline player plays: a 推荐 big card's video, or a 动态 card's.
+@immutable
+final class InlineVideo {
+  const InlineVideo({required this.bvid, this.cid = 0, this.title = '', this.duration = 0});
+
+  InlineVideo.of(FeedCard card) : this(bvid: card.bvid, cid: card.cid, title: card.title, duration: card.duration);
+
+  final String bvid;
+
+  /// 0 when unknown: the player asks for the first part's.
+  final int cid;
+  final String title;
+
+  /// Seconds; 0 when unknown.
+  final int duration;
+}
+
 /// A big card as [FeedInlineHost] sees it.
 abstract interface class FeedInlineCard {
   /// Its video box on screen, in global coordinates; null before it is laid out.
@@ -150,7 +167,7 @@ class FeedInlineHost with WidgetsBindingObserver {
 class FeedInlinePlayback extends ChangeNotifier {
   FeedInlinePlayback({
     required this._services,
-    required this.card,
+    required this.video,
     required this._startAt,
     required this._released,
     Logger? logger,
@@ -161,7 +178,7 @@ class FeedInlinePlayback extends ChangeNotifier {
   }
 
   final AppServices _services;
-  final FeedCard card;
+  final InlineVideo video;
 
   /// Where a new player starts.
   final double Function() _startAt;
@@ -240,15 +257,15 @@ class FeedInlinePlayback extends ChangeNotifier {
   void _start() {
     final at = _startAt();
     // A video left at its end (the page played it out) starts over, as the official card did after back (124).
-    final start = card.duration > 0 && at > card.duration - 3 ? 0.0 : at;
+    final start = video.duration > 0 && at > video.duration - 3 ? 0.0 : at;
     final playback = _playback = PagePlayback(
       services: _services,
-      route: VideoRoute(bvid: card.bvid, cid: card.cid > 0 ? card.cid : null, start: start, title: card.title),
+      route: VideoRoute(bvid: video.bvid, cid: video.cid > 0 ? video.cid : null, start: start, title: video.title),
       createSession: pageSession,
       restorePage: (route) => VideoPage(route: route),
       inline: true,
     )..addListener(_playbackChanged);
-    _logger.info(LogCategory.player, 'inline start', {'bvid': card.bvid, 'start': start.round()});
+    _logger.info(LogCategory.player, 'inline start', {'bvid': video.bvid, 'start': start.round()});
     playback.start();
   }
 
@@ -315,7 +332,7 @@ class FeedInlinePlayback extends ChangeNotifier {
     final controller = _controller;
     // A failed one isn't worth taking: the page opens the video afresh.
     if (playback == null || controller == null || _session == null || failed) return null;
-    _logger.info(LogCategory.player, 'inline handed over', {'bvid': card.bvid});
+    _logger.info(LogCategory.player, 'inline handed over', {'bvid': video.bvid});
     _forget();
     controller.holdAutoplay(false, play: true);
     if (controller.phase == PlaybackPhase.playing) _quietly(controller.player.play, 'play');
@@ -333,7 +350,7 @@ class FeedInlinePlayback extends ChangeNotifier {
     _wanted = false;
     playback.close();
     if (at != null) _released(at);
-    _logger.info(LogCategory.player, 'inline released', {'bvid': card.bvid});
+    _logger.info(LogCategory.player, 'inline released', {'bvid': video.bvid});
     _changed();
   }
 

@@ -3327,6 +3327,7 @@ abstract final class SettingsTheme {
   /// The BTR 加速 switch, the light sheets' shape.
   static const switchRight = 16.0;
   static const switchOn = BiliColors.pink;
+  static const switchOnWeight = FontWeight.w500;
   static const switchOff = FavouriteTheme.switchOffLight;
   static const switchKnob = BiliColors.panelKnob;
   static const switchKnobShadow = FavouriteTheme.knobShadow;
@@ -5675,4 +5676,740 @@ abstract final class FeedBigCardTheme {
 
   /// Paused this long off screen (or under another page), its player is let go; the card starts again where it was.
   static const releaseAfter = Duration(seconds: 30);
+}
+
+/// A 动态 card's sizes and colours (127, 128, 135-137, 139), measured in px / 3 from the card's top, which meets the
+/// band above it.
+abstract final class DynamicCardTheme {
+  static const fill = BiliColors.card;
+  static const gutter = 12.0;
+
+  /// The 10 pt band under every card (127, 135, 139); a space's 动态 draws it in the lighter grey (136).
+  static const band = 10.0;
+  static const bandInk = BiliColors.pageGrey;
+  static const spaceBandInk = BiliColors.softGrey;
+
+  /// The face: 40 pt, 12 in and 12 down; its verification a 12 pt disc in a 2/3 pt white ring, flush with the face's
+  /// lower right (127, 128). 动态's organisation blue is lighter than the video page's.
+  static const face = 40.0;
+  static const faceTop = 12.0;
+  static const badge = 12.0;
+  static const badgeRing = 2 / 3;
+  static const badgePerson = Color(0xFFFFCC00);
+  static const badgeOrganisation = Color(0xFF40C5F1);
+  static const badgeBolt = Color(0xFFFFFFFF);
+
+  /// The name (15 pt, pink for 大会员) and under it `pubTime · pubAction` (12 pt grey), 60 in, their Chinese ink
+  /// centred 23.5 and 42.67 down. The dot is 2 pt, its ink 7 after the time's ink and 6.67 before the action's: 6.5
+  /// and 6.17 from the text boxes.
+  static const textLeft = 60.0;
+  static const nameText = 15.0;
+  static const nameWeight = FontWeight.w500;
+  static const nameLine = 21.0;
+  static const nameCentre = 23.5;
+  static const nameInk = BiliColors.text;
+  static const nameVipInk = BiliColors.pink;
+  static const timeText = 12.0;
+  static const timeLine = 17.0;
+  static const timeCentre = 42.67;
+  static const timeInk = BiliColors.secondaryText;
+  static const timeDot = 2.0;
+  static const timeDotBefore = 6.5;
+  static const timeDotAfter = 6.17;
+
+  /// The name and time stop this far before the fan card, or ⋮'s box when there is none.
+  static const nameClearance = 4.0;
+
+  /// With an avatar frame (136) the face is 26 pt about (40, 32), the frame 评论's 1.75 times it about the same middle;
+  /// the name and time start at 75.33, the time 1.5 lower; ⋮ rises 5.5 and the fan card 7, and all under the row
+  /// drops 6.5.
+  static const pendantFace = 26.0;
+  static const pendantScale = CommentRowTheme.pendantScale;
+  static const pendantCentreX = 40.0;
+  static const pendantCentreY = 32.0;
+  static const pendantTextLeft = 226 / 3;
+  static const pendantTimeDrop = 1.5;
+  static const pendantMoreRise = 5.5;
+  static const pendantDecorationRise = 7.0;
+  static const pendantDrop = 6.5;
+
+  /// The fan card (127, 139): the art fitted to 77.33 pt wide in a 35 tall box from 21 down, ending 42 from the card's
+  /// right; its number in the block letters of 评论's fan card, 5.67 tall, 18.33 down, ending 43 from the box's right
+  /// (355 on the phone) however many digits it has. A 1 is 4.33 from its stroke to the next digit's, other digits 6.
+  static const decorationRight = 42.0;
+  static const decorationTop = 21.0;
+  static const decorationWidth = 232 / 3;
+  static const decorationHeight = 35.0;
+  static const decorationNumberRight = 43.0;
+  static const decorationNumberTop = 55 / 3;
+  static const decorationGlyphWidth = 14 / 3;
+  static const decorationGlyphHeight = 17 / 3;
+  static const decorationGlyphWeight = 1.15;
+  static const decorationGlyphGap = 4 / 3;
+  static const decorationOneAdvance = 13 / 3;
+  static const decorationNumberInk = Color(0xFF83BF54);
+
+  /// ⋮: the official icon font's `more-vertical-fill`, 3.33 × 16.67 pt, grey, centred 23.83 from the card's right and
+  /// 38.17 down; its tap target 44 square.
+  static const moreWidth = 10 / 3;
+  static const moreHeight = 50 / 3;
+  static const moreRight = 23.83;
+  static const moreCentre = 38.17;
+  static const moreInk = BiliColors.secondaryText;
+  static const moreTarget = 44.0;
+
+  /// The text: 17 pt, its lines 24 apart (128, 136); a 图文 post's in the 关注 feed 26.78 apart (127, 135), set a little
+  /// lower under the face. Topics, links and @names in the link blue; at most four lines, then ... 全文 / 展开.
+  static const text = 17.0;
+  static const textLine = 24.0;
+  static const opusTextLine = 80.33 / 3;
+  static const textInk = BiliColors.text;
+  static const linkInk = BiliColors.link;
+  static const maxLines = 4;
+
+  /// Where the text's first line box starts, and the body with no text above it (139: the cover 60 down).
+  static const textTop = 57.67;
+  static const opusTextTop = 59.5;
+  static const bodyTop = 60.0;
+
+  /// From the text's last line box to the body under it: 128's cover starts 12.67 under the last line's ink, 127's
+  /// pictures and 135's picture 15.5 under it.
+  static const bodyGap = 9.33;
+  static const opusBodyGap = 10.5;
+
+  /// A post with nothing under its text: its footer this far under the last line box.
+  static const footerGap = 6.0;
+
+  /// Emotes in the text: 20 pt (136), a large one 28.
+  static const emote = 20.0;
+  static const emoteLarge = 28.0;
+
+  /// The lottery's gift and a video link's ▶ circle, the icon font's, in the link blue (135, 131).
+  static const giftWidth = 47 / 3;
+  static const giftHeight = 16.0;
+  static const giftBefore = 3.0;
+  static const giftAfter = 10 / 3;
+  static const videoLinkSide = 49 / 3;
+  static const videoLinkBefore = 5 / 3;
+  static const videoLinkAfter = 4.0;
+
+  /// The pictures: corners of 4 pt; two to four two a row and more three a row, in 119.17 pt cells 1.67 apart (127),
+  /// square, or about 3:4 (158.33 tall) for pictures taller than square; one alone at its shape across the width
+  /// (135), a tall one two cells wide and at most 3:4. The post page's grid (140) has square third-width cells 6 apart,
+  /// two a row for two to four pictures and three a row for more.
+  static const pictureRadius = 4.0;
+  static const pictureCell = 238.33 / 2;
+  static const pictureGap = 5 / 3;
+  static const pictureTallest = 475 / 357.5;
+  static const pictureWidest = 16 / 9;
+  static const detailPictureGap = 6.0;
+  static const pictureFill = BiliColors.pageGrey;
+
+  /// The video box (128, 139): 16:9 from 12 to 13 short of the right (415 pt on the phone), corners of 4 pt. On its
+  /// bottom left the duration in an 18 pt pill of half black 8 in and 6 up, then the plays and danmaku, 12 pt white
+  /// centred on the pill; 动态视频 in a #FB7299 pill 8 from the top right; the APK's `ic_upper_tv_play` 42 pt wide,
+  /// 11.83 from the right and 7.67 from the bottom.
+  static const videoAspect = 16 / 9;
+  static const videoTrail = 13.0;
+  static const videoRadius = 4.0;
+  static const statText = 12.0;
+  static const statInk = BiliColors.onCover;
+  static const durationLeft = 8.0;
+  static const durationBottom = 6.0;
+  static const durationHeight = 18.0;
+  static const durationPad = 4.5;
+  static const durationRadius = 2.0;
+  static const durationFill = Color(0x80000000);
+  static const statFirstGap = 26 / 3;
+  static const statGap = 34 / 3;
+
+  /// PingFang sets digits apart from the Chinese they meet ("37.1 万播放"); Flutter's layout sets them touching.
+  static const statHanGap = 2.0;
+  static const shadeHeight = 36.0;
+  static const shade = Color(0x4D000000);
+  static const badgeInset = 8.0;
+  static const badgeHeight = 16.0;
+  static const badgeText = 10.0;
+  static const badgePad = 4.0;
+  static const badgeRadius = 8 / 3;
+  static const badgeFill = Color(0xFFFB7299);
+  static const badgeInk = Color(0xFFFFFFFF);
+  static const tvWidth = 42.0;
+  static const tvRight = 11.83;
+  static const tvBottom = 7.67;
+
+  /// The TV's white is about 80% opaque on 128; the APK's art is 70%.
+  static const tvAlpha = 0.8;
+  static const tvArtAlpha = 0.7;
+
+  /// Playing inline (139): the speaker, the 推荐 card's 24 pt art, 7.33 from the right and 8.67 from the bottom; the
+  /// played part a 2 pt pink line along the cover's bottom.
+  static const speaker = 24.0;
+  static const speakerRight = 22 / 3;
+  static const speakerBottom = 26 / 3;
+  static const speakerTarget = 44.0;
+  static const progress = 2.0;
+  static const progressInk = BiliColors.pink;
+
+  /// The title under a 投稿视频's box (139): 15 pt, one line, its ink 8 under the cover and the footer 4 under it.
+  static const titleText = 15.0;
+  static const titleWeight = FontWeight.w500;
+  static const titleLine = 21.0;
+  static const titleTop = 13 / 3;
+  static const titleBottom = 1 / 3;
+  static const titleInk = BiliColors.text;
+
+  /// A repost's original (136): a grey block across the card, its @name 15 pt link blue on a line from 14 down, + 关注
+  /// 13 pt pink 12 from the right; the original's text 17 pt #61666D, its body under it, 10 under the block's bottom.
+  static const repostFill = BiliColors.pageGrey;
+  static const repostTop = 14.0;
+  static const repostNameText = 15.0;
+  static const repostNameLine = 21.0;
+  static const repostTextGap = 7.0;
+  static const repostTextInk = Color(0xFF61666D);
+  static const repostBottom = 10.0;
+  static const repostFollowText = 13.0;
+  static const repostFollowInk = BiliColors.pink;
+
+  /// + 关注's cross 7 pt square, its strokes 1 pt, 4.5 before 关注; the label sits 0.83 under the name's middle.
+  static const repostPlus = 7.0;
+  static const repostPlusStroke = 1.0;
+  static const repostPlusGap = 4.5;
+  static const repostFollowDrop = 5 / 6;
+  static const repostFollowPad = 8.0;
+
+  /// The block's top, under the repost's own text (136: 14 under its ink).
+  static const repostGap = 10.0;
+
+  /// The original's pictures (136): one row 202 pt tall scrolling sideways, each picture at its own shape with corners
+  /// of 6, 6 apart, from the block's inset and off its right edge, 22 under the text's last line box.
+  static const repostStrip = 202.0;
+  static const repostStripGap = 6.0;
+  static const repostStripRadius = 6.0;
+  static const repostStripTop = 22.0;
+
+  /// On the post page (132) the block's text and body sit 20 in and its @name 24, so the video box is 400 × 225; the
+  /// @name's line 1.33 higher than on the list, the box 44 under the block's top, its title's ink 9.33 under the box
+  /// and 15.33 over the block's end.
+  static const repostDetailInset = 20.0;
+  static const repostDetailNameInset = 24.0;
+  static const repostDetailTop = 38 / 3;
+  static const repostDetailBodyGap = 31 / 3;
+  static const repostDetailTitleTop = 6.0;
+  static const repostDetailBottom = 35 / 3;
+
+  /// UP主的推荐 (127, 135): the icon font's lock and the 12 pt grey head centred 18.83 under the pictures; 8.33 under
+  /// the head's ink the 80 pt #F6F7F8 box, corners of 5 pt: a 64 pt cover 8 in, the name 14 pt and the brief 12 pt
+  /// grey 8 after it, the 56 × 24 pink 去看看 (13 pt white) 8 from the right.
+  static const goodsHeadLine = 17.0;
+  static const goodsHeadText = 12.0;
+  static const goodsHeadInk = BiliColors.secondaryText;
+  static const goodsHeadTop = 11.0;
+  static const goodsLockLead = 1.0;
+  static const goodsLockWidth = 10.0;
+  static const goodsLockGap = 16 / 3;
+  static const goodsBoxGap = 14 / 3;
+  static const goodsBox = 80.0;
+  static const goodsFill = BiliColors.softGrey;
+  static const goodsRadius = 5.0;
+  static const goodsCover = 64.0;
+  static const goodsCoverRadius = 2.0;
+  static const goodsInset = 8.0;
+  static const goodsNameText = 14.0;
+  static const goodsNameInk = BiliColors.text;
+  static const goodsNameCentre = 30.33;
+  static const goodsNameLine = 20.0;
+  static const goodsBriefText = 12.0;
+  static const goodsBriefLine = 17.0;
+  static const goodsBriefInk = BiliColors.secondaryText;
+  static const goodsBriefCentre = 53.33;
+  static const goodsButtonWidth = 56.0;
+  static const goodsButtonHeight = 24.0;
+  static const goodsButtonRadius = 5.0;
+  static const goodsButtonText = 13.0;
+  static const goodsButtonFill = BiliColors.pink;
+  static const goodsButtonInk = Color(0xFFFFFFFF);
+
+  /// The footer: 48 tall, three equal columns between the gutters, each its icon and count centred 0.67 pt right of
+  /// the column's middle; the APK's icons drawn 16.67, 17.33 and 18 pt wide (135), #61666D, centred 23, 24 and 23
+  /// down; the count or word 13 pt, its ink 6 to 6.33 after the icon's (135, 136, 139), centred 24 down. Liked, the
+  /// filled thumb and its count pink.
+  static const footer = 48.0;
+  static const footerText = 13.0;
+  static const footerInk = Color(0xFF61666D);
+  static const footerLiked = BiliColors.pink;
+  static const footerGapToCount = 17 / 3;
+  static const footerShift = 2 / 3;
+  static const footerCentre = 24.0;
+  static const forwardWidth = 50 / 3;
+  static const commentWidth = 52 / 3;
+  static const likeWidth = 18.0;
+  static const forwardCentre = 23.0;
+  static const commentCentre = 24.0;
+  static const likeCentre = 23.0;
+
+  /// ⋮'s sheet (137): over the page dimmed by half, #F6F7F8 with square corners; rows 50 tall, a hairline (1/3 pt
+  /// #E3E5E7) from 20 in under each but the last; the icon font's icons in pink centred about 31 in, the words 14 pt
+  /// from 58; a 5 pt #F1F2F3 gap, then 取消 (15 pt) in its own 50 tall row over the home indicator's inset.
+  static const sheetDim = Color(0x80000000);
+  static const sheetFill = BiliColors.softGrey;
+  static const sheetRow = 50.0;
+  static const sheetHairline = 1 / 3;
+  static const sheetHairlineLeft = 20.0;
+  static const sheetHairlineInk = BiliColors.divider;
+  static const sheetIconInk = BiliColors.pink;
+  static const sheetText = 14.0;
+  static const sheetTextLeft = 58.0;
+  static const sheetInk = BiliColors.text;
+  static const sheetGap = 5.0;
+  static const sheetGapFill = BiliColors.pageGrey;
+  static const sheetCancelText = 15.0;
+  static const sheetCancelInk = Color(0xFF484C53);
+  static const sheetIn = Duration(milliseconds: 250);
+  static const sheetOut = Duration(milliseconds: 200);
+
+  /// The icons' ink widths and centres: 分享 55 px, 取消关注 52, 举报 56; centred 30.67, 32.17 and 30.83 in, and 1 above,
+  /// 0.33 below and 0.67 above the row's middle.
+  static const sheetShareWidth = 55 / 3;
+  static const sheetUnfollowWidth = 52 / 3;
+  static const sheetReportWidth = 56 / 3;
+  static const sheetShareCentre = 30.67;
+  static const sheetUnfollowCentre = 32.17;
+  static const sheetReportCentre = 30.83;
+  static const sheetShareRise = 1.0;
+  static const sheetUnfollowRise = -1 / 3;
+  static const sheetReportRise = 2 / 3;
+}
+
+/// The 关注 tab: header, 全部 / 视频, 最常访问, 我的追番 · 追剧 and the face sheet (127, 128, 139), measured in px / 3.
+abstract final class DynamicFeedTheme {
+  /// The header ends 88 pt down on the 62 pt status bar: its 44 pt row lies 18 pt up into the status bar, as the
+  /// official app lays it under a 44 pt one. 关注 is centred on the row (17 pt, ink 15.33 tall); the APK's `dy_ic_write`
+  /// (its ink 18.67 pt square) centred 22.17 pt in from the right. Over a 装扮 both take its colour, the pen at 88% (127
+  /// draws it #1F1F1E where the title is #000); without one (no screenshot) a white bar.
+  static const barRow = 44.0;
+  static const barRise = 18.0;
+  static const bar = BiliColors.card;
+  static const titleText = 17.0;
+  static const titleWeight = FontWeight.w500;
+  static const titleInk = BiliColors.text;
+  static const write = 56 / 3;
+  static const writeCentreRight = 22.17;
+  static const writeOpacity = 0.88;
+  static const writeTarget = 44.0;
+
+  /// The white top under the header, 186 pt to the first grey band. 全部 / 视频: two #F6F7F8 halves 26 pt tall, 8 pt
+  /// under the header, 12 pt in and 8 apart, 4 pt corners; the chosen one's word pink.
+  static const top = 186.0;
+  static const switchTop = 8.0;
+  static const switchHeight = 26.0;
+  static const switchGap = 8.0;
+  static const switchFill = BiliColors.softGrey;
+  static const switchRadius = 4.0;
+  static const switchText = 12.0;
+  static const switchOn = BiliColors.pink;
+  static const switchOnWeight = FontWeight.w500;
+  static const switchOff = Color(0xFF61666D);
+
+  /// Both sections' titles (最常访问, 我的追番 · 追剧): 14 pt semibold on 20 pt lines, 12 pt in. 最常访问 centred 60.17 pt
+  /// under the white top's start (148.17 on 127), 我的追番 · 追剧 22.5 under its section's.
+  static const gutter = 12.0;
+  static const sectionText = 14.0;
+  static const sectionLine = 20.0;
+  static const sectionWeight = FontWeight.w600;
+  static const sectionInk = BiliColors.text;
+  static const facesTitleCentre = 60.17;
+  static const bangumiTitleCentre = 22.5;
+
+  /// 更多 › after 最常访问 (only on 全部: 128 has none), 全部 › after 我的追番 · 追剧: the › 4.67 × 9.33 pt with its right
+  /// edge 17.67 pt in; 更多's ink ends 7 pt before it, 全部's 9.67.
+  static const moreText = 12.0;
+  static const moreInk = BiliColors.secondaryText;
+  static const allText = 13.0;
+  static const allInk = Color(0xFF61666D);
+  static const chevronWidth = 14 / 3;
+  static const chevronHeight = 28 / 3;
+  static const chevronStroke = 1.1;
+  static const chevronInk = BiliColors.secondaryText;
+  static const chevronRight = 17.67;
+  static const moreGap = 35 / 6;
+  static const allGap = 53 / 6;
+  static const moreTarget = 44.0;
+
+  /// The faces: 52 pt circles in a 1 px #F1F2F3 ring, 74 pt apart from a centre 45 pt in, their tops 82 pt under the
+  /// white top's start; names 11 pt #484C53 on 14 pt lines, centred under each and wrapping at 60 pt (a six-character
+  /// Chinese name breaks after its fifth), the first line's centre 13.17 pt under the face. The pink dot (8 pt in an 11.67 pt white ring) 18 pt right and
+  /// down of the face's centre.
+  static const facesTop = 82.0;
+  static const face = 52.0;
+  static const faceRing = 1 / 3;
+  static const faceRingInk = BiliColors.pageGrey;
+  static const facePitch = 74.0;
+  static const facesInset = 8.0;
+  static const nameWidth = 60.0;
+  static const nameText = 11.0;
+  static const nameLine = 14.0;
+  static const nameInk = Color(0xFF484C53);
+  static const nameCentre = 79 / 6;
+  static const dot = 8.0;
+  static const dotRing = 35 / 3;
+  static const dotInk = BiliColors.pink;
+  static const dotOffset = 18.0;
+
+  /// The row asks Bilibili for more faces once scrolled within this of its end.
+  static const facesAhead = 148.0;
+
+  /// The grey between the top's sections and above the first post; each card draws its own under itself.
+  static const band = 10.0;
+  static const bandFill = BiliColors.pageGrey;
+
+  /// 我的追番 · 追剧 (128): 152 pt from band to band; posters 113 × 70 pt, 6 apart, 4 pt corners, their tops 43 pt under
+  /// the section's start; 全N话 10 pt white, 6 pt in, its ink 7.33 pt over the poster's bottom on a shade; the title one
+  /// 20 pt line of 14 pt #18191C centred 14.5 pt under the poster.
+  static const bangumi = 152.0;
+  static const posterTop = 43.0;
+  static const posterWidth = 113.0;
+  static const posterHeight = 70.0;
+  static const posterGap = 6.0;
+  static const posterRadius = 4.0;
+  static const posterShadeTop = Color(0x00000000);
+  static const posterShade = Color(0x66000000);
+  static const posterShadeHeight = 28.0;
+  static const progressText = 10.0;
+  static const progressInk = BiliColors.onCover;
+  static const progressLeft = 6.0;
+  static const progressBottom = 5.0;
+  static const posterTitleText = 14.0;
+  static const posterTitleLine = 20.0;
+  static const posterTitleInk = BiliColors.text;
+  static const posterTitleCentre = 14.5;
+
+  /// The page's own states (no screenshot): logged out, empty, failed, and the footer under the posts.
+  static const stateText = 15.0;
+  static const stateInk = BiliColors.secondaryText;
+  static const stateGap = 16.0;
+  static const stateTop = 96.0;
+  static const loginText = 15.0;
+  static const loginHeight = 36.0;
+  static const loginPadX = 36.0;
+  static const retryText = 14.0;
+  static const retryHeight = 30.0;
+  static const retryPadX = 20.0;
+  static const buttonWeight = FontWeight.w500;
+  static const footerText = 12.0;
+  static const footerInk = Color(0xFFC9CCD0);
+  static const footerPad = 16.0;
+  static const spinnerRadius = 10.0;
+
+  /// 关注 tapped while shown: the list back to the top, then the refresh's TV held open there (首页's own pace).
+  static const reloadScroll = Duration(milliseconds: 300);
+  static const reloadHeader = Duration(milliseconds: 200);
+  static const reloadCollapse = Duration(milliseconds: 100);
+
+  /// The face sheet (139): the page behind frosted to #F2F2F2, the faces row moved up to 16.33 pt under the status bar,
+  /// the sheet from 127 pt under it with 8 pt corners, the APK's `dy_ic_indicator_triangle` drawn 15.67 × 8 pt with
+  /// its tip under the chosen face; the sheet's head 44 pt with `<name>的动态` 14 pt medium 12 pt in, a 13.33 pt ✕ in
+  /// #626262 centred 23 pt in from the right, and a 1 px #E3E5E7 rule.
+  static const sheetFrost = Color(0xF2F2F2F2);
+  static const sheetBlur = 20.0;
+  static const sheetFacesTop = 16.33;
+  static const sheetTop = 127.0;
+  static const sheetRadius = 8.0;
+  static const sheetFill = BiliColors.card;
+  static const pointerWidth = 47 / 3;
+  static const pointerHeight = 8.0;
+  static const sheetHead = 44.0;
+  static const sheetTitleText = 14.0;
+  static const sheetTitleWeight = FontWeight.w500;
+  static const sheetTitleInk = BiliColors.text;
+  static const closeSize = 40 / 3;
+  static const closeStroke = 1.4;
+  static const closeInk = Color(0xFF626262);
+  static const closeCentreRight = 23.0;
+  static const closeTarget = 44.0;
+  static const sheetRule = 1 / 3;
+  static const sheetRuleInk = BiliColors.divider;
+  static const sheetIn = Duration(milliseconds: 300);
+  static const sheetOut = Duration(milliseconds: 220);
+  static const sheetCurve = Curves.easeOutCubic;
+  static const pointerSlide = Duration(milliseconds: 200);
+}
+
+/// A post on its own page (131-134, 140), measured in px / 3 from the status bar's 62 pt down.
+abstract final class DynamicPostTheme {
+  static const page = BiliColors.card;
+
+  /// The bar: 48 under the status bar; ‹, ↗ and ⋮ in #61666D centred 24 down. Once the author block is under it, the
+  /// poster's 25 pt face and 13 pt name (in the text's black, never pink) come in with a 2/3 pt hairline just below the
+  /// bar's 48, over the tabs pinned there (134: 110-110.67).
+  static const barRow = 48.0;
+  static const barInk = Color(0xFF61666D);
+  static const barTarget = 44.0;
+  static const barFade = Duration(milliseconds: 150);
+  static const barRule = BiliColors.divider;
+  static const barHairline = 2 / 3;
+
+  /// ‹: its ink 19.33-28.67 × 18 pt with 1.5 pt round strokes.
+  static const backTipX = 20.08;
+  static const backWidth = 7.83;
+  static const backHalfHeight = 8.25;
+  static const backStroke = 1.5;
+
+  /// ↗ is the APK's 转发 arrow drawn 20 wide, centred 68 from the right edge and 1 pt above the row's middle.
+  static const shareWidth = 20.0;
+  static const shareCentreRight = 68.0;
+  static const shareRise = 1.0;
+
+  /// ⋮: 10/3 pt dots 20/3 apart, centred 24 from the right edge.
+  static const moreCentreRight = 24.0;
+  static const moreDot = 10 / 3;
+  static const morePitch = 20 / 3;
+
+  static const titleFace = 25.0;
+  static const titleFaceLeft = 43.0;
+  static const titleGap = 35 / 6;
+  static const titleText = 13.0;
+  static const titleInk = BiliColors.text;
+  static const titleRight = 96.0;
+
+  /// The author block, 11.67 under the bar: the 36 pt face 20 in, its verify badge's disc (10.67 across in a 1 pt white
+  /// ring) flush with the face's bottom right; the name 15 pt semibold 10 after it, pink for 大会员 (#FB7299, as
+  /// comments'), then the time and, for the posts that keep it there (132), IP属地 in 12 pt grey, 17.17 and 15.33
+  /// apart. The face centres on the lines beside it, or they on the face when they are shorter. Every height is in
+  /// whole pixels, so the hairlines below stay sharp.
+  static const gutter = 20.0;
+  static const authorTop = 35 / 3;
+  static const face = 36.0;
+  static const faceGap = 10.0;
+  static const badge = 38 / 3;
+  static const badgeRing = 1.0;
+  static const badgeOrganisation = Color(0xFF40C5F1);
+  static const badgePersonal = Color(0xFFFFCC00);
+  static const badgeBolt = Color(0xFFFFFFFF);
+  static const nameText = 15.0;
+  static const nameWeight = FontWeight.w600;
+  static const nameLine = 20.0;
+  static const name = BiliColors.text;
+  static const vipName = CommentRowTheme.vipName;
+  static const metaText = 12.0;
+  static const metaLine = 43 / 3;
+  static const metaGap = 1.0;
+  static const meta = BiliColors.secondaryText;
+
+  /// The text, 12 under the author block, 17 pt in #2F3238 (a shade lighter than the comments' black) on 29.33 pt lines
+  /// (131, 132, 140); the body (pictures, a video, a repost's grey block) 12 under it, and IP属地 12 under that for a
+  /// picture or text post (140). 12 more before the tabs.
+  static const textGap = 12.0;
+  static const text = 17.0;
+  static const textLine = 88 / 3;
+  static const textInk = Color(0xFF2F3238);
+  static const bodyGap = 12.0;
+  static const endGap = 12.0;
+
+  /// 评论 N / 赞和转发 N: 14 pt in a 40 pt row (its last 2/3 pt the hairline), the first 12 in, 20 between them; the
+  /// chosen one pink over a 4/3 pt pink line as wide as its words, standing on the hairline.
+  static const tabsHeight = 40.0;
+  static const tabText = 14.0;
+  static const tabFirst = 12.0;
+  static const tabSpacing = 20.0;
+  static const tabChosen = BiliColors.pink;
+  static const tabInk = BiliColors.secondaryText;
+  static const tabUnderline = 4 / 3;
+  static const tabHairline = 2 / 3;
+  static const tabRule = BiliColors.divider;
+
+  /// The bar at the bottom (131, 132, 140): two 1/3 pt rules (#E3E5E7 over #F1F2F3), then a 44 pt row over the home
+  /// indicator. 点我发评论 in a 32 pt grey pill 12 in, ending 37 short of the first count's centre; the counts' centres
+  /// 54 apart, the last 37 from the right edge, each icon's ink centred 15.5 down (as 131's lands: 💬 a third of a
+  /// point lower, ⭐ a third higher, 👍 0.83 higher) and its 11.5 pt count 33.2 down.
+  static const bottomRule = BiliColors.divider;
+  static const bottomRuleSoft = BiliColors.pageGrey;
+  static const bottomRuleEach = 1 / 3;
+  static const bottomRow = 44.0;
+  static const pillHeight = 32.0;
+  static const pillLeft = 12.0;
+  static const pillPadding = 11.0;
+  static const pillToAction = 37.0;
+  static const pillFill = BiliColors.pageGrey;
+  static const pillText = 13.0;
+  static const pillInk = BiliColors.secondaryText;
+  static const actionPitch = 54.0;
+  static const lastActionRight = 37.0;
+  static const commentIconCentre = 15.83;
+  static const starIconCentre = 15.17;
+  static const likeIconCentre = 14.67;
+  static const actionCountCentre = 33.2;
+  static const actionCountText = 11.5;
+  static const actionCountLine = 14.0;
+  static const actionInk = Color(0xFF61666D);
+  static const actionCountInk = BiliColors.secondaryText;
+  static const actionLiked = BiliColors.pink;
+
+  /// The APK's 评论, ⭐ and 赞 drawn as wide as 131's ink.
+  static const commentIcon = 56 / 3;
+  static const starIcon = 18.0;
+  static const likeIcon = 58 / 3;
+
+  /// How long 💬's scroll to 评论 takes, and the first load's failure: why, then 重试 as 搜索's.
+  static const toComments = Duration(milliseconds: 300);
+  static const stateText = SearchResultTheme.stateText;
+  static const stateInk = SearchResultTheme.stateInk;
+  static const stateGap = SearchResultTheme.stateGap;
+  static const retryHeight = SearchResultTheme.retryHeight;
+  static const retryPadX = SearchResultTheme.retryPadX;
+  static const retryRim = SearchResultTheme.retryRim;
+  static const retryText = SearchResultTheme.retryText;
+  static const retryInk = BiliColors.pink;
+  static const retryPressedScale = SearchResultTheme.followPressedScale;
+  static const retryPressMotion = SearchResultTheme.followPressMotion;
+}
+
+/// 我的关注 (129, 130). Measured in px / 3; the shots' colours are Display P3, so the pink reads #ED7098 and the badges'
+/// yellow #F7CE45 there.
+abstract final class FollowingListTheme {
+  /// The bar under the status bar, 54 tall: the skin's `colorSecondPage` with its text colour (KaiC's green, 129), else
+  /// white with the page's text (a guess). A 2/3 hairline ends it.
+  static const barRow = 54.0;
+
+  /// ‹ and the title centre this far under the status bar, above the row's middle.
+  static const rowCentre = 22.0;
+  static const bar = BiliColors.card;
+  static const barInk = BiliColors.text;
+  static const barLightInk = Color(0xFFFFFFFF);
+  static const barHairline = 2 / 3;
+  static const hairline = BiliColors.divider;
+
+  /// 我的关注: 20 pt semibold, its ink centred on the screen and the bar's row.
+  static const titleText = 20.0;
+  static const titleWeight = FontWeight.w600;
+  static const titleLine = 28.0;
+  static const titleDrop = 1 / 3;
+
+  /// ‹ in the round glass button: a 45.33 disc centred 42 in and on the row, the bar's colour lifted by white, a thin
+  /// darker rim, white light along its top and bottom edges and a soft shadow; ‹ 7 × 14 with 1.5 strokes, its tip 4
+  /// left of the disc's middle (ink 37.33-45.67 by 76.33-91.67).
+  static const backDisc = 136 / 3;
+  static const backCentreX = 42.0;
+  static const backTarget = 52.0;
+  static const backLift = Color(0x4DFFFFFF);
+  static const backRim = Color(0x40000000);
+  static const backRimWidth = 0.5;
+  static const backGloss = Color(0xCCFFFFFF);
+  static const backGlossWidth = 1.0;
+  static const backShadow = Color(0x0D000000);
+  static const backShadowBlur = 10.0;
+  static const backShadowDrop = 2.0;
+  static const backTip = -4.0;
+  static const backWidth = 7.0;
+  static const backHalfHeight = 7.0;
+  static const backStroke = 1.5;
+  static const backInk = Color(0xFF000000);
+
+  /// 搜索我的关注: a 30 tall #F1F2F3 stadium 6 under the bar, 12 in from each side, then 5.67 and a 1/3 hairline the
+  /// screen's width. The magnifier's ink is 12 square, centred 18 in and 1/3 above the field's middle (搜索's glyph,
+  /// whose box is a third wider than its ink, raised half a point); the words, 13 pt, start 6 after it.
+  static const searchTop = 6.0 - barHairline;
+  static const searchBottom = 17 / 3;
+  static const searchRule = 1 / 3;
+  static const field = BiliColors.pageGrey;
+  static const fieldHeight = 30.0;
+  static const fieldInset = 12.0;
+  static const fieldText = 13.0;
+  static const fieldLine = 18.0;
+  static const fieldInk = BiliColors.text;
+  static const placeholder = Color(0xFFAEB3B9);
+  static const caret = BiliColors.pink;
+  static const magnifier = 37 / 3;
+  static const magnifierLead = 35 / 3;
+  static const magnifierLift = 0.5;
+  static const magnifierInk = BiliColors.secondaryText;
+  static const magnifierGap = 6.0;
+
+  /// The grey ⓧ once there is text (搜索's; no screenshot shows it here).
+  static const clear = 40 / 3;
+  static const clearColor = Color(0xFFC9CCCF);
+  static const clearTarget = 36.0;
+
+  /// 排序方式 and the order: a 40 tall row, both 13 pt on its middle; 排序方式 #9499A0 12 in, the order #484C52 ending 8
+  /// before ▽ (9.33 × 5 of ink, 1.2 strokes, its right 13.33 from the edge, #61666D). △ while the menu is open.
+  static const sortRow = 40.0;
+  static const sortText = 13.0;
+  static const sortLine = 18.0;
+  static const sortDrop = -1 / 3;
+  static const sortLabel = BiliColors.secondaryText;
+  static const sortValue = Color(0xFF484C52);
+  static const sortGap = 8.0;
+  static const sortChevronWidth = 8.13;
+  static const sortChevronHeight = 3.6;
+  static const sortChevronStroke = 1.2;
+  static const sortChevronRight = 40 / 3;
+  static const sortChevron = Color(0xFF61666D);
+  static const sortTarget = 110.0;
+
+  /// The menu (130), from the sort row's bottom: a 2/3 hairline, then three 40 tall rows, 14 pt 12 in, the chosen pink
+  /// with ✓ (12.67 × 8.67 of ink, centred 23 from the right and 2/3 under the row's middle); the rest #484C52. A notch
+  /// 9 wide and 4.67 tall rises from the hairline 56 from the right, under the order's words, the hairline open
+  /// beneath it. Below the menu the page is dimmed by half; a tap there, or anywhere above the menu, closes it.
+  static const menuRow = 40.0;
+  static const menuText = 14.0;
+  static const menuLine = 20.0;
+  static const menuDrop = 1.0;
+  static const menuInk = Color(0xFF484C52);
+  static const menuChosen = BiliColors.pink;
+  static const menuFill = BiliColors.card;
+  static const checkWidth = 11.17;
+  static const checkHeight = 7.17;
+  static const checkStroke = 1.5;
+  static const checkRight = 23.0;
+  static const checkDrop = 2 / 3;
+  static const notchRight = 56.0;
+  static const notchWidth = 9.0;
+  static const notchHeight = 14 / 3;
+  static const notchRim = 0.5;
+  static const dim = BiliColors.sheetDim;
+  static const menuMotion = Duration(milliseconds: 150);
+
+  /// A row (129): 60 tall; the face 40 at 12 in on the row's middle, its verified bolt a 12 disc (1 ringed in white)
+  /// flush with the face's right and bottom; the name 14 pt from 64, pink for a 大会员; the pink dot for new posts 9
+  /// across, centred 17.5 from the right. A 1 pt hairline ends each row, 20 in from both sides.
+  static const row = 60.0;
+  static const face = 40.0;
+  static const faceInset = 12.0;
+  static const badge = 12.0;
+  static const badgeRing = 1.0;
+  static const badgePerson = IntroTheme.badgePerson;
+  static const badgeOrganisation = IntroTheme.badgeOrganisation;
+  static const nameLeft = 64.0;
+  static const nameText = 14.0;
+  static const nameLine = 20.0;
+  static const nameDrop = 2 / 3;
+  static const name = BiliColors.text;
+  static const vipName = BiliColors.pink;
+  static const nameGap = 12.0;
+  static const dot = 9.0;
+  static const dotRight = 17.5;
+  static const dotInk = BiliColors.pink;
+  static const rowRule = 1.0;
+  static const rowRuleInset = 20.0;
+  static const page = BiliColors.card;
+
+  /// Typing waits this long for a pause before 搜索我的关注 asks.
+  static const searchPause = Duration(milliseconds: 300);
+
+  /// The next page is asked for this close to the list's end.
+  static const loadAhead = 360.0;
+
+  /// The first load's failure: its words 14 pt grey over a pink-ringed 重试, as logged out over 登录 (a guess); the
+  /// list's footer 加载失败，点击重试 and the small spinner while a page loads (历史记录's).
+  static const stateText = 14.0;
+  static const stateInk = BiliColors.secondaryText;
+  static const stateGap = 16.0;
+  static const retryText = 14.0;
+  static const retryHeight = 32.0;
+  static const retryPadX = 20.0;
+  static const retryRim = 0.67;
+  static const footerText = 13.0;
+  static const footerInk = BiliColors.secondaryText;
+  static const footerPad = 16.0;
+  static const spinnerRadius = 9.0;
 }

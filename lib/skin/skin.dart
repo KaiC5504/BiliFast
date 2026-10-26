@@ -74,6 +74,12 @@ final class Skin {
     null => lightText,
   };
 
+  /// The same over 关注's dressed header, which cuts `head_bg` shorter than 首页 does.
+  bool get lightStatusFollow => switch (statusBar?.follow) {
+    final luminance? => SkinStatusBar.whiteOver(luminance),
+    null => lightText,
+  };
+
   /// White status bar icons over 我的's dressed header, as tall as [card] (the 大会员 card showing) makes it: by its
   /// picture, or for a header video by the header's text colour, light text meaning a dark header.
   bool lightStatusMe({required bool card}) {
@@ -119,9 +125,12 @@ final class Skin {
 /// plain mean L of 0.26 and this measure 0.16, and the official app draws white over it. Null where there is no
 /// picture or it didn't decode; a read that fails, or a decode past the picture's header, throws instead.
 final class SkinStatusBar {
-  const SkinStatusBar({this.home, this.me, this.meNoCard});
+  const SkinStatusBar({this.home, this.follow, this.me, this.meNoCard});
 
   final double? home;
+
+  /// `head_bg` again, as 关注's shorter header cuts it.
+  final double? follow;
 
   /// 我的's header with the 大会员 card and without: the box is shorter without, so a short wide picture is scaled
   /// less and cut less at the sides.

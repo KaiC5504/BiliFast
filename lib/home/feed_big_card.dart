@@ -177,7 +177,7 @@ class _FeedBigCardViewState extends State<FeedBigCardView> with TickerProviderSt
     final bvid = widget.card.bvid;
     return FeedInlinePlayback(
       services: _services!,
-      card: widget.card,
+      video: InlineVideo.of(widget.card),
       startAt: () => host.positions[bvid] ?? 0,
       released: (seconds) => host.positions[bvid] = seconds,
     )..addListener(_inlineChanged);

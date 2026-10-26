@@ -22,6 +22,7 @@ import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
 import 'devtools/log_files.dart';
 import 'devtools/log_forwarder.dart';
+import 'dynamic/fake_dynamic_api.dart';
 import 'favourites/fake_favourites_api.dart';
 import 'home/main_shell.dart';
 import 'home/recent_store.dart';
@@ -129,6 +130,7 @@ Future<void> main(List<String> args) async {
     favouritesApi: fakeAccount ? FakeFavouritesApi.demo() : null,
     watchLaterApi: fakeAccount ? FakeWatchLaterApi.demo() : null,
     meApi: fakeAccount ? FakeMeApi.demo() : null,
+    dynamicApi: fakeAccount ? FakeDynamicApi.demo() : null,
     meProfile: meProfile,
     skinApi: fakeAccount ? FakeSkinApi.demo() : null,
     // The demo skin keeps a folder of its own, so a later run never starts from it.

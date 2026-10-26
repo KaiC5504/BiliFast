@@ -1,0 +1,143 @@
+{
+ "code": 0,
+ "message": "0",
+ "ttl": 1,
+ "data": {
+  "list": [
+   {
+    "mid": 20001001,
+    "attribute": 2,
+    "mtime": 1700000000,
+    "tag": null,
+    "special": 0,
+    "contract_info": {},
+    "uname": "测试关注一",
+    "face": "https://i0.hdslb.com/bfs/face/fake-follow-20001001.jpg",
+    "sign": "测试签名",
+    "face_nft": 0,
+    "handle": "",
+    "official_verify": {
+     "type": 0,
+     "desc": "测试认证"
+    },
+    "vip": {
+     "vipType": 2,
+     "vipDueDate": 0,
+     "dueRemark": "",
+     "accessStatus": 0,
+     "vipStatus": 1,
+     "vipStatusWarn": "",
+     "themeType": 0,
+     "label": {
+      "path": "",
+      "text": "",
+      "label_theme": "",
+      "text_color": "",
+      "bg_style": 0,
+      "bg_color": "",
+      "border_color": ""
+     },
+     "avatar_subscript": 0,
+     "nickname_color": "",
+     "avatar_subscript_url": ""
+    },
+    "name_render": {},
+    "nft_icon": "",
+    "rec_reason": "",
+    "track_id": "",
+    "follow_time": ""
+   },
+   {
+    "mid": 20001002,
+    "attribute": 2,
+    "mtime": 1700000000,
+    "tag": null,
+    "special": 0,
+    "contract_info": {},
+    "uname": "测试关注二",
+    "face": "https://i0.hdslb.com/bfs/face/fake-follow-20001002.jpg",
+    "sign": "",
+    "face_nft": 0,
+    "handle": "",
+    "official_verify": {
+     "type": 1,
+     "desc": "测试认证"
+    },
+    "vip": {
+     "vipType": 1,
+     "vipDueDate": 0,
+     "dueRemark": "",
+     "accessStatus": 0,
+     "vipStatus": 0,
+     "vipStatusWarn": "",
+     "themeType": 0,
+     "label": {
+      "path": "",
+      "text": "",
+      "label_theme": "",
+      "text_color": "",
+      "bg_style": 0,
+      "bg_color": "",
+      "border_color": ""
+     },
+     "avatar_subscript": 0,
+     "nickname_color": "",
+     "avatar_subscript_url": ""
+    },
+    "name_render": {},
+    "nft_icon": "",
+    "rec_reason": "",
+    "track_id": "",
+    "follow_time": ""
+   },
+   {
+    "mid": 20001003,
+    "attribute": 2,
+    "mtime": 1700000000,
+    "tag": null,
+    "special": 0,
+    "contract_info": {},
+    "uname": "测试关注三",
+    "face": "https://i0.hdslb.com/bfs/face/fake-follow-20001003.jpg",
+    "sign": "测试签名",
+    "face_nft": 0,
+    "handle": "",
+    "official_verify": {
+     "type": -1,
+     "desc": ""
+    },
+    "vip": {
+     "vipType": 0,
+     "vipDueDate": 0,
+     "dueRemark": "",
+     "accessStatus": 0,
+     "vipStatus": 0,
+     "vipStatusWarn": "",
+     "themeType": 0,
+     "label": {
+      "path": "",
+      "text": "",
+      "label_theme": "",
+      "text_color": "",
+      "bg_style": 0,
+      "bg_color": "",
+      "border_color": ""
+     },
+     "avatar_subscript": 0,
+     "nickname_color": "",
+     "avatar_subscript_url": ""
+    },
+    "name_render": {},
+    "nft_icon": "",
+    "rec_reason": "",
+    "track_id": "",
+    "follow_time": ""
+   },
+   {
+    "uname": "测试没有编号"
+   }
+  ],
+  "re_version": 0,
+  "total": 45
+ }
+}

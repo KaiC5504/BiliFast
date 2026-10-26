@@ -9,9 +9,12 @@ import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/phone_frame.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
+import 'package:bilifast/dynamic/card/dynamic_card.dart';
+import 'package:bilifast/dynamic/fake_dynamic_api.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/shared/loading_tv.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/space/fake_space_api.dart';
 import 'package:bilifast/space/space_page.dart';
 import 'package:bilifast/space/uploader_tap.dart';
@@ -56,6 +59,22 @@ SpaceProfile _profile({
   defaultTab: defaultTab,
 );
 
+/// A post by the space's uploader, or by [mid].
+DynamicItem _post(int i, {int mid = _mid}) => DynamicItem(
+  id: '${9100 + i}',
+  kind: DynamicKind.word,
+  author: DynamicAuthor(mid: mid, name: '演示UP主', face: ''),
+);
+
+SpaceVideo _video(int i) => SpaceVideo(
+  aid: 500 + i,
+  bvid: 'BV1space${i.toString().padLeft(4, '0')}',
+  title: '视频$i',
+  cover: '',
+  duration: 60,
+  play: i,
+);
+
 UploaderCard _card({bool following = false}) =>
     UploaderCard(mid: _mid, name: '演示UP主', face: '', fans: 1, videos: 1, isVip: false, following: following);
 
@@ -77,9 +96,10 @@ final class _Gate implements LoginGate {
 }
 
 class _Harness {
-  _Harness(this.spaceApi, this.pageApi, this.gate, this.services, this.http);
+  _Harness(this.spaceApi, this.dynamicApi, this.pageApi, this.gate, this.services, this.http);
 
   final FakeSpaceApi spaceApi;
+  final FakeDynamicApi dynamicApi;
   final FakePageApi pageApi;
   final _Gate gate;
   final AppServices services;
@@ -101,10 +121,13 @@ void main() {
   }
 
   /// The space pushed over a home screen at the iPhone's size; [hold] keeps the profile's call waiting, [login] is
-  /// what the login gate does, and [framed] puts the app in the Windows phone frame.
+  /// what the login gate does, and [framed] puts the app in the Windows phone frame. [videos] are 投稿's, [dynamicApi]
+  /// answers 动态.
   Future<_Harness> show(
     WidgetTester tester, {
     SpaceProfile? profile,
+    List<SpaceVideo> videos = const [],
+    FakeDynamicApi? dynamicApi,
     bool loggedIn = true,
     bool following = false,
     bool hold = false,
@@ -131,7 +154,8 @@ void main() {
     }
     final playback = AppPlayback(() => Completer<PlaybackController>().future);
     addTearDown(playback.dispose);
-    final spaceApi = FakeSpaceApi(profileFor: (_) => profile ?? _profile());
+    final spaceApi = FakeSpaceApi(profileFor: (_) => profile ?? _profile(), videoList: videos);
+    final dynamics = dynamicApi ?? FakeDynamicApi();
     if (hold) spaceApi.holds['profile'] = Completer<void>();
     if (failure != null) spaceApi.failures['profile'] = failure;
     final pageApi = FakePageApi(uploader: _card(following: following));
@@ -142,6 +166,7 @@ void main() {
       recents: await RecentStore.load(null, logger: logger),
       pageApi: pageApi,
       spaceApi: spaceApi,
+      dynamicApi: dynamics,
       loginGate: gate,
     );
     await tester.pumpWidget(
@@ -164,7 +189,7 @@ void main() {
     } else {
       await tester.pumpAndSettle();
     }
-    return _Harness(spaceApi, pageApi, gate, services, http);
+    return _Harness(spaceApi, dynamics, pageApi, gate, services, http);
   }
 
   /// Presses the one control VoiceOver reads as [label], as VoiceOver and the Windows driver do; it fails when that
@@ -383,14 +408,12 @@ void main() {
     expect(tester.getRect(key('space-banner-default')), banner);
   });
 
-  testWidgets('tabs other than 投稿 toast and stay unselected', (tester) async {
+  testWidgets('主页 toasts and stays unselected; 投稿 is selected', (tester) async {
     await show(tester);
-    for (final kind in ['home', 'dynamic']) {
-      await tester.tap(key('space-tab-$kind'));
-      await tester.pump();
-      await expectToast(tester, '暂未开放');
-      expect(tester.getSemantics(key('space-tab-$kind')), isSemantics(hasSelectedState: true, isSelected: false));
-    }
+    await tester.tap(key('space-tab-home'));
+    await tester.pump();
+    await expectToast(tester, '暂未开放');
+    expect(tester.getSemantics(key('space-tab-home')), isSemantics(hasSelectedState: true, isSelected: false));
     expect(tester.getSemantics(key('space-tab-contribute')), isSemantics(hasSelectedState: true, isSelected: true));
     await tester.tap(key('space-tab-contribute'));
     await tester.pump();
@@ -470,12 +493,18 @@ void main() {
 
   testWidgets('every control answers an accessibility press', (tester) async {
     final harness = await show(tester);
-    for (final label in ['私信', '搜索', '更多', '详情', '充电', '小店，1件商品', '充电，5人充电', '某某大学', '主页', '动态']) {
+    for (final label in ['私信', '搜索', '更多', '详情', '充电', '小店，1件商品', '充电，5人充电', '某某大学', '主页']) {
       await press(tester, label);
       expect(find.descendant(of: key('toast'), matching: find.text('暂未开放')), findsOneWidget, reason: label);
       await expectToast(tester, '暂未开放');
     }
+    await press(tester, '动态');
+    await frames(tester);
+    expect(tester.getSemantics(key('space-tab-dynamic')), isSemantics(hasSelectedState: true, isSelected: true));
+    expect(harness.dynamicApi.calls, ['spacePosts $_mid offset=']);
     await press(tester, '投稿');
+    await frames(tester);
+    expect(tester.getSemantics(key('space-tab-contribute')), isSemantics(hasSelectedState: true, isSelected: true));
     expect(key('toast'), findsNothing);
 
     await press(tester, '关注');
@@ -605,6 +634,235 @@ void main() {
     await frames(tester);
     expect(harness.cardCalls, 1);
     expect(key('space-followed'), findsOneWidget);
+  });
+
+  void expectSelected(WidgetTester tester, String kind, {required bool selected}) => expect(
+    tester.getSemantics(key('space-tab-$kind')),
+    isSemantics(hasSelectedState: true, isSelected: selected),
+    reason: kind,
+  );
+
+  /// A post's card, found below the fold too.
+  Finder card(String id) => find.byKey(ValueKey('space-dynamic-$id'), skipOffstage: false);
+
+  /// Scrolls the shown tab to its end and lets the paging check run.
+  Future<void> toEnd(WidgetTester tester) async {
+    scroll(tester).jumpTo(scroll(tester).maxScrollExtent);
+    await frames(tester);
+  }
+
+  testWidgets('动态 selects, pink over its bar, and lists the space\'s posts as cards with grey between', (tester) async {
+    final harness = await show(
+      tester,
+      dynamicApi: FakeDynamicApi(posts: [_post(1), _post(2, mid: _mid + 1), _post(3)]),
+    );
+    expect(harness.dynamicApi.calls, isEmpty, reason: '动态 is asked when first shown');
+
+    await tester.tap(key('space-tab-dynamic'));
+    await frames(tester);
+    expect(key('toast'), findsNothing);
+    expectSelected(tester, 'dynamic', selected: true);
+    expectSelected(tester, 'contribute', selected: false);
+    expect(
+      tester.getRect(key('space-tab-indicator')).center.dx,
+      moreOrLessEquals(tester.getRect(key('space-tab-dynamic')).center.dx),
+    );
+    final label = tester.widget<Text>(find.descendant(of: key('space-tab-dynamic'), matching: find.text('动态')));
+    expect(label.style?.color, SpaceTheme.tabSelected);
+    expect(harness.dynamicApi.calls, ['spacePosts $_mid offset=']);
+    expect(
+      tester
+          .widgetList<DynamicCard>(find.byType(DynamicCard, skipOffstage: false))
+          .map((card) => (card.item.id, card.inline, card.space)),
+      [('9101', null, true), ('9103', null, true)],
+    );
+    expect(key('space-play-all'), findsNothing, reason: '投稿\'s strip stays in 投稿');
+    // Each card draws the 10 pt grey under itself (136), so they stack with no gap of the list's own.
+    expect(tester.getRect(card('9103')).top - tester.getRect(card('9101')).bottom, moreOrLessEquals(0));
+    final fill = tester.widget<DecoratedSliver>(find.byType(DecoratedSliver));
+    expect((fill.decoration as BoxDecoration).color, BiliColors.softGrey);
+    expect(key('space-dynamics-end'), findsOneWidget);
+  });
+
+  testWidgets('动态\'s first load shows the TV; a failure says why with 点击重试, which asks again', (tester) async {
+    final api = FakeDynamicApi(posts: [_post(1)]);
+    final hold = api.holds['spacePosts'] = Completer<void>();
+    await show(tester, dynamicApi: api);
+    await tester.tap(key('space-tab-dynamic'));
+    await frames(tester);
+    expect(key('space-dynamics-loading'), findsOneWidget);
+    expect(find.byType(LoadingTvState), findsOneWidget);
+    expect(find.byType(DynamicCard, skipOffstage: false), findsNothing);
+
+    // Risk control's answer, in its own words rather than 加载失败.
+    api.failures['spacePosts'] = const BiliError.api(code: -352, message: '风控校验失败');
+    api.holds.remove('spacePosts');
+    hold.complete();
+    await frames(tester);
+    expect(key('space-dynamics-loading'), findsNothing);
+    expect(key('space-dynamics-retry'), findsOneWidget);
+    expect(find.text('请求过于频繁，请稍后再试，点击重试', findRichText: true), findsOneWidget);
+    expect(find.textContaining('加载失败', findRichText: true), findsNothing);
+    await frames(tester);
+    expect(api.calls, ['spacePosts $_mid offset='], reason: 'a failure waits for the tap');
+
+    api.failures.remove('spacePosts');
+    await press(tester, '请求过于频繁，请稍后再试，点击重试');
+    await frames(tester);
+    expect(api.calls, ['spacePosts $_mid offset=', 'spacePosts $_mid offset=']);
+    expect(key('space-dynamics-retry'), findsNothing);
+    expect(find.byType(DynamicCard, skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('动态 pages near the end, one call at a time, until a page says there is no more', (tester) async {
+    final api = FakeDynamicApi(posts: [for (var i = 1; i <= 7; i++) _post(i)], pageSize: 3);
+    final first = api.holds['spacePosts'] = Completer<void>();
+    await show(tester, dynamicApi: api);
+    await tester.tap(key('space-tab-dynamic'));
+    await frames(tester);
+    expect(api.calls, ['spacePosts $_mid offset=']);
+
+    final second = Completer<void>();
+    first.complete();
+    api.holds['spacePosts'] = second;
+    await frames(tester);
+    await toEnd(tester);
+    expect(api.calls, ['spacePosts $_mid offset=', 'spacePosts $_mid offset=p1']);
+    expect(key('space-dynamics-more-spinner'), findsOneWidget);
+    await toEnd(tester);
+    expect(api.calls, hasLength(2), reason: 'one call at a time');
+
+    // That page fails: why, with 点击重试, under the cards, and scrolling asks nothing more.
+    api.failures['spacePosts'] = const BiliError.http(412);
+    api.holds.remove('spacePosts');
+    second.complete();
+    await frames(tester);
+    await toEnd(tester);
+    expect(key('space-dynamics-retry'), findsOneWidget);
+    expect(find.text('B 站暂时拒绝了请求（风控），稍后再试，点击重试', findRichText: true), findsOneWidget);
+    expect(key('space-dynamics-more-spinner'), findsNothing);
+    expect(api.calls, hasLength(2));
+
+    api.failures.remove('spacePosts');
+    await tester.tap(key('space-dynamics-retry'));
+    await frames(tester);
+    await toEnd(tester);
+    await toEnd(tester);
+    expect(api.calls, [
+      'spacePosts $_mid offset=',
+      'spacePosts $_mid offset=p1',
+      'spacePosts $_mid offset=p1',
+      'spacePosts $_mid offset=p2',
+    ]);
+    expect(card('9107'), findsOneWidget);
+    expect(find.descendant(of: key('space-dynamics-end'), matching: find.text('已经到底啦~')), findsOneWidget);
+    await toEnd(tester);
+    expect(api.calls, hasLength(4), reason: 'the end asks nothing more');
+  });
+
+  for (final (what, second) in [
+    ('an empty page', const <DynamicItem>[]),
+    ('a page of posts already listed', [_post(2), _post(1)]),
+  ]) {
+    testWidgets('$what ends the list, though the answer says there is more', (tester) async {
+      final api = FakeDynamicApi(
+        spacePages: {
+          _mid: [
+            DynamicPage(items: [_post(1), _post(2)], offset: 'p1', hasMore: true),
+            DynamicPage(items: second, offset: 'p2', hasMore: true),
+            DynamicPage(items: [_post(3)], offset: 'p3', hasMore: true),
+          ],
+        },
+      );
+      await show(tester, dynamicApi: api);
+      await tester.tap(key('space-tab-dynamic'));
+      await frames(tester);
+      await toEnd(tester);
+      await toEnd(tester);
+      await toEnd(tester);
+      expect(api.calls, ['spacePosts $_mid offset=', 'spacePosts $_mid offset=p1']);
+      expect(card('9101'), findsOneWidget);
+      expect(card('9102'), findsOneWidget);
+      expect(card('9103'), findsNothing);
+      expect(find.descendant(of: key('space-dynamics-end'), matching: find.text('已经到底啦~')), findsOneWidget);
+      expect(key('space-dynamics-more-spinner'), findsNothing);
+    });
+  }
+
+  testWidgets('投稿 and 动态 keep their lists, 投稿\'s sort and where each was, asking nothing again', (tester) async {
+    final harness = await show(
+      tester,
+      videos: [for (var i = 0; i < 30; i++) _video(i)],
+      dynamicApi: FakeDynamicApi(posts: [for (var i = 1; i <= 4; i++) _post(i)]),
+    );
+    List<String> videoCalls() => harness.spaceApi.calls.where((call) => call.startsWith('videos')).toList();
+    await tester.tap(key('space-sort'));
+    await frames(tester);
+    scroll(tester).jumpTo(900);
+    await tester.pumpAndSettle();
+    final asked = videoCalls();
+    expect(asked.last, startsWith('videos mid=$_mid order=click'));
+    final row = tester.getRect(key('space-row-BV1space0020'));
+    expect(barOpacity(tester), 1);
+
+    // The header scrolled away: 动态 opens at its top, under the pinned row.
+    await tester.tap(key('space-tab-dynamic'));
+    await frames(tester);
+    expect(tester.getRect(key('space-tabs')).top, moreOrLessEquals(62 + 32));
+    expect(tester.getRect(card('9101')).top, moreOrLessEquals(tester.getRect(key('space-tabs')).bottom));
+    expect(barOpacity(tester), 1);
+    expect(harness.dynamicApi.calls, ['spacePosts $_mid offset=']);
+
+    await tester.tap(key('space-tab-contribute'));
+    await frames(tester);
+    expect(scroll(tester).pixels, 900);
+    expect(tester.getRect(key('space-row-BV1space0020')), row);
+    // Scrolled above the screen, so off stage to the finder.
+    expect(tester.widget<Text>(find.byKey(const ValueKey('space-sort-label'), skipOffstage: false)).data, '最多播放');
+    expect(videoCalls(), asked, reason: 'kept, not asked again');
+
+    await tester.tap(key('space-tab-dynamic'));
+    await frames(tester);
+    expect(card('9101'), findsOneWidget);
+    expect(harness.dynamicApi.calls, ['spacePosts $_mid offset='], reason: 'kept, not asked again');
+
+    // A header shown in part shows as much in the other tab.
+    scroll(tester).jumpTo(100);
+    await tester.pumpAndSettle();
+    await tester.tap(key('space-tab-contribute'));
+    await frames(tester);
+    expect(scroll(tester).pixels, 100);
+    expect(barOpacity(tester), 0);
+    expect(videoCalls(), asked);
+  });
+
+  testWidgets('a space whose default tab is 动态 opens on it; 投稿 is asked when first shown', (tester) async {
+    final harness = await show(
+      tester,
+      profile: _profile(defaultTab: SpaceTabKind.dynamic),
+      dynamicApi: FakeDynamicApi(posts: [_post(1)]),
+    );
+    expectSelected(tester, 'dynamic', selected: true);
+    expectSelected(tester, 'contribute', selected: false);
+    expect(harness.dynamicApi.calls, ['spacePosts $_mid offset=']);
+    expect(harness.spaceApi.calls.where((call) => call.startsWith('videos')), isEmpty);
+
+    await tester.tap(key('space-tab-contribute'));
+    await frames(tester);
+    expectSelected(tester, 'contribute', selected: true);
+    expect(harness.spaceApi.calls.where((call) => call.startsWith('videos')), hasLength(1));
+  });
+
+  testWidgets('a default of 动态 that the row lacks opens 投稿', (tester) async {
+    final harness = await show(
+      tester,
+      profile: _profile(
+        tabs: const [SpaceTab(kind: SpaceTabKind.contribute, title: '投稿')],
+        defaultTab: SpaceTabKind.dynamic,
+      ),
+    );
+    expectSelected(tester, 'contribute', selected: true);
+    expect(harness.dynamicApi.calls, isEmpty);
   });
 
   testWidgets(
