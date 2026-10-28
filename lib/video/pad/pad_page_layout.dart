@@ -279,17 +279,17 @@ class PadPinnedStrip extends StatelessWidget {
   final Widget capsule;
   final VoidCallback? onFace;
 
-  /// The iPhone's cells at the strip's own pitch.
+  /// The iPhone's cells at the strip's own pitch, with the iPad page's counts (05).
   static const _stripActions = ActionRowMetrics(
     gutter: 0,
     topGap: ActionTheme.topGap,
     icon: ActionTheme.iconSize,
     countGap: ActionTheme.countGap,
     countLine: ActionTheme.countLine,
-    countFont: ActionTheme.countFont,
+    countFont: PadBodyTheme.actionCountText,
     bottom: IntroListTheme.actionsBottom,
     ring: ActionTheme.ring,
-    countColor: ActionTheme.count,
+    countColor: PadBodyTheme.actionCount,
     cell: PadPageTheme.stripActionPitch,
   );
 
