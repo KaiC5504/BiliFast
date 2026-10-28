@@ -69,13 +69,16 @@ alpha raised from the file's 80% to full, as 17 draws it solid white at 19.5 × 
 `biliplayer_ic_topbar_floatwindow` drawn in code (`FloatWindowPainter`): the extractor fills its stroked paths.
 17's 分享 is the action row's solid arrow (`ActionGlyph.share`), and 全屏 the small player's `FullScreenPainter`.
 
-The iPad's 首页 (ipad/01, 02) takes the same APK's tab bar and scan art, each a vector drawn white at 3× by
+The iPad's 首页 (ipad/01, 02) takes the same APK's tab bar art, each a vector drawn white at 3× by
 `tools/apk_asset.py extract … --width` for tinting, the width the ink measures on 01: `images/home/pad_tab_home.png`
 and `_selected` (`ic_vector_tab_bar_home_default` / `_selected`, 60 px), `pad_tab_partition.png`
 (`ic_vector_tab_bar_partition_default`, 63 px; its selected file is the same drawing), `pad_tab_moments.png`
 (`ic_vector_tab_bar_moments_default`, 63 px, likewise), `pad_tab_mine.png` and `_selected`
-(`ic_vector_tab_bar_mine_default` / `_selected`, 63 px), and `pad_scan.png` (`ic_scan_cast`, 54 px, the top's scan).
-The top's clock with its turning arrow and its three-dot bubble are drawn in code: the APK has neither.
+(`ic_vector_tab_bar_mine_default` / `_selected`, 63 px). The top's scan, its clock with the turning arrow and its
+three-dot bubble are drawn in code (`home_header.dart`'s `_PadGlyphPainter`): the APK has no clock or bubble, and its
+scans don't match 01 (`ic_scan_cast` draws ~2 pt strokes at 01's size where 01's are 1.5, its bar stopping inside the
+brackets where 01's runs 0.7 pt past them; `ic_mine_scan` and `ic_scan` likewise), so the scan is traced on 01:
+corners 15.6 pt apart (stroke centres), 2 pt round, the bar 17.8 pt long and square-ended.
 
 The iPad's full screen (ipad/08, 16) draws its art in code: ⏮ is the APK's vector `bili_player_ctrl_play_previous`
 (`_PreviousPainter`, its 3.5-20.5 ink stretched to 13.7 × 14.5 pt), 小窗 the page player's `FloatWindowPainter` at 24.4 ×

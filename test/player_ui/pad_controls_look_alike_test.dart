@@ -20,22 +20,22 @@ import 'pad_inline_controls_test.dart' show PadRig;
 /// tools/screen_diff.py; BILIFAST_PAD_BACKDROP may name a picture (06's bare frame, cut to the player) drawn under the
 /// controls, so the shot can be laid over the official one.
 const _chapters = [
-  Chapter(from: 0, to: 20, title: '引言'),
-  Chapter(from: 20, to: 92.5, title: '选择藏匿点'),
-  Chapter(from: 92.5, to: 205, title: '猎手出动'),
-  Chapter(from: 205, to: 224, title: '比赛结束'),
-  Chapter(from: 224, to: 254, title: 'kskbl'),
+  Chapter(from: 0, to: 20, title: '开场'),
+  Chapter(from: 20, to: 92.5, title: '寻找好位置'),
+  Chapter(from: 92.5, to: 205, title: '队长出发'),
+  Chapter(from: 205, to: 224, title: '游戏结束'),
+  Chapter(from: 224, to: 254, title: 'qwnrt'),
 ];
 
 const _next = VideoCard(
   aid: 1,
   bvid: 'BV1next',
   cid: 2,
-  title: '奶家人躲猫猫大赛-南瓜庄园篇【AI全民制作人】',
+  title: '小猫们跳房子大会-东边果园篇【AI全城创作者】',
   cover: '',
   duration: 255,
   ownerMid: 3,
-  ownerName: '奶史_',
+  ownerName: '木子_',
   views: 1703000,
   danmaku: 679,
   likes: 0,
@@ -97,7 +97,7 @@ void main() {
       });
       rig.session.player.emit(const StatusChanged(PlayerStatus.paused));
       await render(tester, landscape: landscape, name: name, child: PadInlineControls(ui: rig.ui));
-      expect(find.text('章节 · 引言'), findsOneWidget);
+      expect(find.text('章节 · 开场'), findsOneWidget);
       expect(find.text('00:00/04:14'), findsOneWidget);
     });
   }
@@ -114,7 +114,7 @@ void main() {
     });
     rig.chrome.hide();
     await render(tester, landscape: false, name: 'pad-06-hidden', child: PadInlineControls(ui: rig.ui));
-    expect(find.text('选择藏匿点'), findsOneWidget);
+    expect(find.text('寻找好位置'), findsOneWidget);
   });
 
   testWidgets('pad-17-end: 推荐视频, 重播 and 分享', (tester) async {

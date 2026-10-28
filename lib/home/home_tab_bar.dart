@@ -70,6 +70,7 @@ typedef _Shape = ({
   double labelTop,
   double labelText,
   double? slot,
+  double? artWidth,
   double hairline,
   Color label,
   Color selected,
@@ -105,6 +106,7 @@ class HomeTabBar extends StatelessWidget {
     labelTop: HomeTabBarTheme.labelTop,
     labelText: HomeTabBarTheme.labelText,
     slot: null,
+    artWidth: null,
     hairline: HomeTabBarTheme.hairlineWidth,
     label: HomeTabBarTheme.label,
     selected: HomeTabBarTheme.selected,
@@ -116,6 +118,7 @@ class HomeTabBar extends StatelessWidget {
     labelTop: PadHomeTheme.barLabelTop,
     labelText: PadHomeTheme.barLabelText,
     slot: PadHomeTheme.barSlot,
+    artWidth: PadHomeTheme.barArtWidth,
     hairline: PadHomeTheme.hairline,
     label: PadHomeTheme.barLabelInk,
     selected: PadHomeTheme.pink,
@@ -191,21 +194,28 @@ class HomeTabBar extends StatelessWidget {
     ),
   );
 
-  Widget _stock(BuildContext context, List<_Place> places, _Shape shape) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: HomeTabBarTheme.bar,
-      border: Border(
-        top: BorderSide(color: HomeTabBarTheme.hairline, width: shape.hairline),
-      ),
+  static BoxDecoration _stockFill(_Shape shape) => BoxDecoration(
+    color: HomeTabBarTheme.bar,
+    border: Border(
+      top: BorderSide(color: HomeTabBarTheme.hairline, width: shape.hairline),
     ),
-    child: _row(context, null, places, shape),
   );
+
+  Widget _stock(BuildContext context, List<_Place> places, _Shape shape) =>
+      DecoratedBox(decoration: _stockFill(shape), child: _row(context, null, places, shape));
 
   /// The picture's own shape sets how far it rises over the row; one too flat to reach the row's top is cropped at
   /// the sides to cover it. Above the row the bar takes taps only over the icons' tops: the rest of a rising picture
-  /// leaves them to the page under it.
+  /// leaves them to the page under it. The iPad draws it at [_Shape.artWidth], centred over the stock bar: the
+  /// picture is made for a phone's width, and at the iPad's whole width it rose over a third of the screen.
   Widget _dressed(BuildContext context, Skin skin, List<_Place> places, _Shape shape) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final artWidth = shape.artWidth;
+    final art = ConstrainedBox(
+      key: const ValueKey('home-tab-art'),
+      constraints: BoxConstraints(minHeight: shape.height + bottom),
+      child: SkinDecodeGate.image(skin.tailBg!, alignment: Alignment.bottomCenter),
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -232,15 +242,17 @@ class HomeTabBar extends StatelessWidget {
         Stack(
           clipBehavior: Clip.none,
           children: [
+            if (artWidth != null) Positioned.fill(child: DecoratedBox(decoration: _stockFill(shape))),
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              child: ConstrainedBox(
-                key: const ValueKey('home-tab-art'),
-                constraints: BoxConstraints(minHeight: shape.height + bottom),
-                child: SkinDecodeGate.image(skin.tailBg!, alignment: Alignment.bottomCenter),
-              ),
+              child: artWidth == null
+                  ? art
+                  : Align(
+                      alignment: Alignment.bottomCenter,
+                      child: SizedBox(width: artWidth, child: art),
+                    ),
             ),
             _row(context, skin, places, shape),
           ],

@@ -29,8 +29,10 @@ Future<Rig> pumpSheet(
   EdgeInsets viewInsets = EdgeInsets.zero,
   bool settle = true,
   bool resize = false,
+  Size? screen,
+  EdgeInsets padding = EdgeInsets.zero,
 }) async {
-  final size = dark ? landscape : portrait;
+  final size = screen ?? (dark ? landscape : portrait);
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -41,7 +43,7 @@ Future<Rig> pumpSheet(
   await tester.pumpWidget(
     MaterialApp(
       home: MediaQuery(
-        data: MediaQueryData(size: size, viewInsets: viewInsets),
+        data: MediaQueryData(size: size, viewInsets: viewInsets, padding: padding),
         child: Scaffold(
           resizeToAvoidBottomInset: resize,
           body: FavouriteSheet(folders: fake, dark: dark, onClose: () => fake.calls.add('close')),
@@ -85,6 +87,19 @@ void main() {
       expect(sheet.bottom, portrait.height);
       expect(sheet.top, closeTo(portrait.width / (16 / 9), 0.01));
     });
+
+    for (final (screen, player) in [(const Size(1194, 834), 756.5), (const Size(834, 1194), 834.0)]) {
+      testWidgets('on the iPad (${screen.width.round()} wide) its top meets the iPad\'s player, the folders under it',
+          (tester) async {
+        await pumpSheet(tester, screen: screen, padding: const EdgeInsets.only(top: 24, bottom: 20));
+        final sheet = tester.getRect(find.byKey(const ValueKey('favourite-sheet')));
+        expect(sheet.bottom, screen.height);
+        expect(sheet.top, closeTo(32 + player / (16 / 9), 0.01));
+        expect(sheet.height, greaterThan(300));
+        expect(tester.getRect(find.text('默认收藏夹')).bottom, lessThan(screen.height));
+        expect(find.text('二乃').hitTestable(), findsOneWidget);
+      });
+    }
 
     testWidgets('a tap ticks a folder, and its count follows the tick', (tester) async {
       final rig = await pumpSheet(tester);

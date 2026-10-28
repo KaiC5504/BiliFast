@@ -248,12 +248,12 @@ void main() {
     final timeline = DanmakuTimeline()
       ..add([
         for (final (index, text) in const [
-          '养好的话，这段子刚好20个字，可能用吧，养好号的话，这个字刚好20个字。',
-          '还打得开你康神主页吗',
-          '啊～是心肌梗塞的感觉。',
-          '这种一定要留言，而且一定要超过 15 个字，这是来自老一辈的忠告',
-          '看着更有意思的时候你们那边的人都是这样的吗',
-          '零秒猜到奶康藏在哪里',
+          '写好的话，这句话刚好20个字，应该能用，写好了的话，这个字刚好20个字。',
+          '还能打开你家的主页吗',
+          '啊～是春天来临的感觉。',
+          '这种一定要发言，而且一定要超过 15 个字，这是来自前辈们的建议',
+          '玩着更有趣味的时候我们这边的人也是这样的吗',
+          '一秒猜到小猫躲在哪里',
         ].indexed)
           item(text, 900 + index * 10, mode: 5),
       ]);
@@ -266,8 +266,8 @@ void main() {
             textDirection: TextDirection.ltr,
             fit: StackFit.expand,
             children: [
-              // 25's pillarboxed picture, about its grey, for the outline.
-              const Positioned(left: 304, width: 393, top: 0, bottom: 0, child: ColoredBox(color: Color(0xFF3E3E3E))),
+              // 25's pillarboxed 9:16 picture (px 725-1662), about its grey under the danmaku, for the outline.
+              const Positioned(left: 362.5, width: 469, top: 0, bottom: 0, child: ColoredBox(color: Color(0xFF5D5656))),
               DanmakuLayer(clock: clock, timeline: timeline, settings: store, presentation: Presentation.landscape),
             ],
           ),

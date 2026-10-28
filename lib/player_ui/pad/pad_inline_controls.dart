@@ -445,7 +445,7 @@ class _Shade extends StatelessWidget {
   );
 }
 
-/// 章节 · (chapter) ›, the iPhone's wording for the iPad's "Chapter · ...".
+/// 章节 · (chapter) ›, as the iPhone writes it (KaiC's iPad, set to English, shows "Chapter · …").
 class _ChapterLine extends StatelessWidget {
   const _ChapterLine({required this.title});
 

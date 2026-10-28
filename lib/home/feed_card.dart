@@ -462,7 +462,10 @@ class _PadTag extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: PadHomeTheme.tagHeight,
     padding: const EdgeInsets.symmetric(horizontal: PadHomeTheme.tagPad),
-    decoration: BoxDecoration(color: BiliColors.reasonTint, borderRadius: BorderRadius.circular(2)),
+    decoration: BoxDecoration(
+      color: BiliColors.reasonTint,
+      borderRadius: BorderRadius.circular(PadHomeTheme.tagRadius),
+    ),
     child: Center(
       widthFactor: 1,
       child: Text(text, maxLines: 1, style: _style, strutStyle: BiliFonts.strutOf(context, _style)),
@@ -539,7 +542,7 @@ class _PadCover extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: PadHomeTheme.durationGap),
                 _StatText(FeedCardView.duration(card.duration)),
               ],
             ),
@@ -805,12 +808,12 @@ class FeedCardSkeleton extends StatelessWidget {
                 Positioned(
                   left: PadHomeTheme.titleLeft,
                   right: PadHomeTheme.titleRight,
-                  top: PadHomeTheme.faceTop + 4,
+                  top: PadHomeTheme.faceTop + PadHomeTheme.skeletonTitleDrop,
                   child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _Bar(),
-                      SizedBox(height: 10),
+                      SizedBox(height: PadHomeTheme.skeletonLineGap),
                       FractionallySizedBox(widthFactor: 0.6, alignment: Alignment.centerLeft, child: _Bar()),
                     ],
                   ),

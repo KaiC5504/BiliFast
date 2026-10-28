@@ -183,6 +183,21 @@ void main() {
     expect(padPicture('follow'), file('tail_icon_selected_2.png'));
   });
 
+  for (final (picture, shape) in [('tail_bg.png', 249 / 1320), ('tail_bg_tall.png', 330 / 1320)]) {
+    testWidgets('on the iPad $picture rises as on the phone: the phone\'s width, centred over the stock bar', (
+      tester,
+    ) async {
+      await show(tester, _pictures.skin(tail: picture), pad: true);
+      final rect = tester.getRect(art());
+      expect(rect.width, moreOrLessEquals(PadHomeTheme.barArtWidth));
+      expect(rect.center.dx, moreOrLessEquals(417));
+      expect(rect.bottom, 1194);
+      expect(rect.height, moreOrLessEquals(PadHomeTheme.barArtWidth * shape));
+      expect(rect.height, lessThan(120), reason: 'about the phone\'s 83 and 110, not a third of the screen');
+      expect(hasHairline(tester), isTrue, reason: 'the stock bar shows beside the picture');
+    });
+  }
+
   testWidgets('without a pub button 发布 keeps the stock +', (tester) async {
     await show(tester, _pictures.skin(pub: false));
     final post = find.descendant(of: slot(HomeTab.post), matching: find.byType(HomeTabIcon));

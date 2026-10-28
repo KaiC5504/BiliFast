@@ -43,8 +43,8 @@ void showAsPad(WidgetTester tester, {bool landscape = false}) {
   });
 }
 
-/// Writes what the RepaintBoundary [boundary] finds as a PNG at [path] (3× for the iPhone, pass 2 for the iPad), for tools/screen_diff.py. Shots go to the
-/// scratchpad, never into the repo.
+/// Writes [boundary] as a PNG at [path] at [pixelRatio] (3 for the iPhone, 2 for the iPad) for tools/screen_diff.py.
+/// Shots go to the scratchpad, never into the repo.
 Future<void> saveShot(WidgetTester tester, Finder boundary, String path, {double pixelRatio = 3}) async {
   final render = tester.renderObject<RenderRepaintBoundary>(boundary);
   await tester.runAsync(() async {

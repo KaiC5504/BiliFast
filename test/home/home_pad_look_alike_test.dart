@@ -24,7 +24,7 @@ import '../video/mixed_lines.dart';
 import 'feed_fakes.dart';
 
 /// 02's search word, cut short upright and whole sideways.
-const _word = '塞尔达传说旷野之息pc';
+const _word = '星之海传说森林之歌pc';
 
 const _screen = ValueKey('screen');
 
@@ -32,21 +32,21 @@ const _screen = ValueKey('screen');
 Map<String, Object?> _row(String bvid, String title, {String? reason, int daysAgo = 1}) => {
   ...feedItem(bvid, title: title, reason: reason),
   'title': title,
-  'owner': {'mid': 7, 'name': '暴风城老鼠', 'face': 'https://i0.hdslb.com/bfs/face/$bvid.jpg'},
+  'owner': {'mid': 7, 'name': '山顶小松鼠', 'face': 'https://i0.hdslb.com/bfs/face/$bvid.jpg'},
   'pubdate': DateTime.now().subtract(Duration(days: daysAgo)).millisecondsSinceEpoch ~/ 1000,
 };
 
 FeedHttp _feed() => FeedHttp()
   ..pages[1] = [
-    _row('BV1aaa', '奶家人捉迷藏大赛：幽邃地窟篇【AI全民制作人】'),
-    _row('BV1bbb', '【模组开发】我的MC角色跑到桌面上了！！', reason: '2万点赞', daysAgo: 6),
-    _row('BV1ccc', 'NBA官方授权联动游戏【篮球少女：飞跃巅峰】，邂逅热血球场！'),
-    _row('BV1ddd', '发明人：怪猎模组作者 发明项目', daysAgo: 3),
-    _row('BV1eee', '狂烧百亿token，我在手机上复活了Amadeus......'),
-    _row('BV1fff', '【梦回2024】旧歌重听记录'),
-    _row('BV1ggg', '准备好踏上守护天城的冒险了吗？'),
-    _row('BV1hhh', '万圣节有8个物品兑换点，不要忘记领物品哦。'),
-    _row('BV1iii', '荷兰弟的蜘蛛侠能力到底有多强？太帅了'),
+    _row('BV1aaa', '小猫们找朋友大会：深林山洞篇【AI全城创作者】'),
+    _row('BV1bbb', '【插件制作】我的PC小人走到屏幕上了！！', reason: '2万点赞', daysAgo: 6),
+    _row('BV1ccc', 'ABC官方合作联名游戏【足球男孩：奔向远方】，遇见快乐赛场！'),
+    _row('BV1ddd', '设计者：小游戏作者甲 设计作品', daysAgo: 3),
+    _row('BV1eee', '狂写千行codes，我在电脑上做出了Capella......'),
+    _row('BV1fff', '【回看2023】老歌再听日记'),
+    _row('BV1ggg', '准备好走进探索森林的旅程了吗？'),
+    _row('BV1hhh', '中秋节有8个礼物领取点，不要忘记拿礼物哦。'),
+    _row('BV1iii', '小明哥的超级侠本领到底有多大？太酷了'),
   ];
 
 /// 首页 at the iPad's size under the system font, its feed answered by [http], inside a boundary keyed [_screen].
@@ -93,7 +93,6 @@ Future<void> _showHome(WidgetTester tester, FeedHttp http, {required bool landsc
         CoverPlaceholder.asset,
         'assets/images/card/stat_play.png',
         'assets/images/card/stat_danmaku.png',
-        'assets/images/home/pad_scan.png',
         for (final tab in PadTab.values) ...[tab.art(selected: false), tab.art(selected: true)],
       ])
         precacheImage(AssetImage(asset), context),

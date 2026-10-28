@@ -66,14 +66,14 @@ final class PadRig {
   }
 }
 
-/// 08's video: 奶家人捉迷藏大赛 at 00:00 of 04:14 with its five chapters (09's strip), 3959 likes, 4000+人正在看.
+/// 08's video: 小猫们找朋友大会 at 00:00 of 04:14 with its five chapters (09's strip), 3959 likes, 4000+人正在看.
 PadRig rig08({bool danmaku = true}) {
   final rig = PadRig(
     details: FakePageDetails(
       actions: FakeVideoActions(likeCount: 3959),
       uploader: const UploaderCard(
         mid: 1,
-        name: '暴风城老鼠',
+        name: '山顶小松鼠',
         face: '',
         fans: 30000,
         videos: 10,
@@ -85,18 +85,18 @@ PadRig rig08({bool danmaku = true}) {
     danmaku: danmaku ? DanmakuRig() : null,
   );
   rig.session
-    ..title = '奶家人捉迷藏大赛：幽邃地窟篇【AI全民制作人】'
+    ..title = '小猫们找朋友大会：深林山洞篇【AI全城创作者】'
     ..detail = VideoDetail.fromJson({
       'bvid': 'BV1',
-      'owner': {'mid': 1, 'name': '暴风城老鼠', 'face': ''},
+      'owner': {'mid': 1, 'name': '山顶小松鼠', 'face': ''},
     })
     ..quality = 112
     ..chapters = const [
-      Chapter(from: 0, to: 20.1, title: '引言'),
-      Chapter(from: 20.1, to: 92.3, title: '选择藏匿点'),
-      Chapter(from: 92.3, to: 204.9, title: '猎手出动'),
-      Chapter(from: 204.9, to: 224, title: '比赛结束'),
-      Chapter(from: 224, to: 254, title: 'kskbl'),
+      Chapter(from: 0, to: 20.1, title: '开场'),
+      Chapter(from: 20.1, to: 92.3, title: '寻找好位置'),
+      Chapter(from: 92.3, to: 204.9, title: '队长出发'),
+      Chapter(from: 204.9, to: 224, title: '游戏结束'),
+      Chapter(from: 224, to: 254, title: 'qwnrt'),
     ]
     ..duration.value = 254;
   return rig;
