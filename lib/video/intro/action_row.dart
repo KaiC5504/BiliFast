@@ -11,12 +11,72 @@ import '../../shared/theme.dart';
 import '../actions/video_actions.dart';
 import 'triple_ring.dart';
 
+/// The action row's sizes: the iPhone's cells share the width, the iPad's are [cell] wide from the gutter.
+@immutable
+final class ActionRowMetrics {
+  const ActionRowMetrics({
+    required this.gutter,
+    required this.topGap,
+    required this.icon,
+    required this.countGap,
+    required this.countLine,
+    required this.countFont,
+    required this.bottom,
+    required this.ring,
+    required this.countColor,
+    this.cell,
+  });
+
+  static const phone = ActionRowMetrics(
+    gutter: BiliMetrics.gutter,
+    topGap: ActionTheme.topGap,
+    icon: ActionTheme.iconSize,
+    countGap: ActionTheme.countGap,
+    countLine: ActionTheme.countLine,
+    countFont: ActionTheme.countFont,
+    bottom: IntroListTheme.actionsBottom,
+    ring: ActionTheme.ring,
+    countColor: ActionTheme.count,
+  );
+
+  /// ipad/03.
+  static const pad = ActionRowMetrics(
+    gutter: PadBodyTheme.gutter,
+    topGap: PadBodyTheme.actionTopGap,
+    icon: PadBodyTheme.actionIcon,
+    countGap: PadBodyTheme.actionCountGap,
+    countLine: PadBodyTheme.actionCountLine,
+    countFont: PadBodyTheme.actionCountText,
+    bottom: PadBodyTheme.actionsBottom,
+    ring: PadBodyTheme.actionRing,
+    countColor: PadBodyTheme.actionCount,
+    cell: PadBodyTheme.actionCell,
+  );
+
+  final double gutter;
+  final double topGap;
+  final double icon;
+  final double countGap;
+  final double countLine;
+  final double countFont;
+  final double bottom;
+  final double ring;
+  final Color countColor;
+
+  /// Null: the five cells share the row.
+  final double? cell;
+
+  /// 投币's coin sits this much lower than the other icons, in proportion to the icon.
+  double get coinDrop => IntroTheme.actionCoinDrop * icon / ActionTheme.iconSize;
+}
+
 /// 点赞 不喜欢 投币 收藏 分享 under the title (03). Holding 点赞 fills rings around 点赞, 投币 and 收藏 and does 三连.
-/// The row owns the gap above its icons and ends [IntroListTheme.actionsBottom] below its counts' line.
+/// The row owns the gap above its icons and ends [ActionRowMetrics.bottom] below its counts' line.
 class ActionRow extends StatefulWidget {
-  const ActionRow({super.key, required this.actions});
+  const ActionRow({super.key, required this.actions, this.metrics = ActionRowMetrics.phone});
 
   final VideoActions actions;
+  final ActionRowMetrics metrics;
 
   @override
   State<ActionRow> createState() => _ActionRowState();
@@ -84,23 +144,26 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = widget.metrics;
     return ListenableBuilder(
       listenable: _actions,
       builder: (context, _) {
         final actions = _actions;
-        Widget ring(Widget cell, {double drop = 0}) => _Ringed(progress: _ring, burst: _burst, drop: drop, child: cell);
+        Widget ring(Widget cell, {double drop = 0}) =>
+            _Ringed(progress: _ring, burst: _burst, metrics: metrics, drop: drop, child: cell);
+        Widget slot(Widget cell) => switch (metrics.cell) {
+          final width? => SizedBox(width: width, child: cell),
+          null => Expanded(child: cell),
+        };
         return Padding(
-          padding: const EdgeInsets.only(
-            left: BiliMetrics.gutter,
-            right: BiliMetrics.gutter,
-            bottom: IntroListTheme.actionsBottom,
-          ),
+          padding: EdgeInsets.only(left: metrics.gutter, right: metrics.gutter, bottom: metrics.bottom),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _ActionCell(
+              slot(
+                _ActionCell(
                   key: const ValueKey('action-like'),
+                  metrics: metrics,
                   glyph: ActionGlyph.like,
                   label: '点赞',
                   activeLabel: '取消点赞',
@@ -114,9 +177,10 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
                   decorate: ring,
                 ),
               ),
-              Expanded(
-                child: _ActionCell(
+              slot(
+                _ActionCell(
                   key: const ValueKey('action-dislike'),
+                  metrics: metrics,
                   glyph: ActionGlyph.dislike,
                   label: '不喜欢',
                   active: actions.disliked,
@@ -124,22 +188,24 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
                   onTap: () => unawaited(actions.toggleDislike()),
                 ),
               ),
-              Expanded(
-                child: _ActionCell(
+              slot(
+                _ActionCell(
                   key: const ValueKey('action-coin'),
+                  metrics: metrics,
                   glyph: ActionGlyph.coin,
                   label: '投币',
                   activeLabel: '已投币',
                   count: actions.coinCount,
                   active: actions.coins > 0,
                   onTap: () => actions.ask(ActionPrompt.coin),
-                  iconDrop: IntroTheme.actionCoinDrop,
-                  decorate: (cell) => ring(cell, drop: IntroTheme.actionCoinDrop),
+                  iconDrop: metrics.coinDrop,
+                  decorate: (cell) => ring(cell, drop: metrics.coinDrop),
                 ),
               ),
-              Expanded(
-                child: _ActionCell(
+              slot(
+                _ActionCell(
                   key: const ValueKey('action-favourite'),
+                  metrics: metrics,
                   glyph: ActionGlyph.favourite,
                   label: '收藏',
                   activeLabel: '已收藏',
@@ -149,9 +215,10 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
                   decorate: ring,
                 ),
               ),
-              Expanded(
-                child: _ActionCell(
+              slot(
+                _ActionCell(
                   key: const ValueKey('action-share'),
+                  metrics: metrics,
                   glyph: ActionGlyph.share,
                   label: '分享',
                   count: actions.shareCount,
@@ -169,24 +236,31 @@ class _ActionRowState extends State<ActionRow> with TickerProviderStateMixin {
 
 /// The 三连 ring centred on a cell's icon, [drop] lower where the icon is.
 class _Ringed extends StatelessWidget {
-  const _Ringed({required this.progress, required this.burst, required this.child, this.drop = 0});
+  const _Ringed({
+    required this.progress,
+    required this.burst,
+    required this.metrics,
+    required this.child,
+    this.drop = 0,
+  });
 
   final Animation<double> progress;
   final Animation<double> burst;
+  final ActionRowMetrics metrics;
   final double drop;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    const offset = (ActionTheme.iconSize - ActionTheme.ring) / 2;
+    final offset = (metrics.icon - metrics.ring) / 2;
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.topCenter,
       children: [
         child,
         Positioned(
-          top: ActionTheme.topGap + offset + drop,
-          child: TripleRing(progress: progress, burst: burst),
+          top: metrics.topGap + offset + drop,
+          child: TripleRing(progress: progress, burst: burst, size: metrics.ring),
         ),
       ],
     );
@@ -197,6 +271,7 @@ class _Ringed extends StatelessWidget {
 class _ActionCell extends StatefulWidget {
   const _ActionCell({
     super.key,
+    required this.metrics,
     required this.glyph,
     required this.label,
     required this.active,
@@ -212,6 +287,7 @@ class _ActionCell extends StatefulWidget {
     this.decorate,
   });
 
+  final ActionRowMetrics metrics;
   final ActionGlyph glyph;
   final String label;
 
@@ -296,13 +372,14 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
     final still = MediaQuery.disableAnimationsOf(context);
     final fade = still ? Duration.zero : const Duration(milliseconds: 180);
     final raw = widget.onDown != null;
+    final metrics = widget.metrics;
     final cell = TweenAnimationBuilder<double>(
       tween: Tween(end: widget.active ? 1 : 0),
       duration: fade,
       builder: (context, on, _) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: ActionTheme.topGap),
+          SizedBox(height: metrics.topGap),
           Transform.translate(
             offset: Offset(0, widget.iconDrop),
             child: ScaleTransition(
@@ -310,15 +387,15 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
               child: ActionIcon(
                 widget.glyph,
                 solid: true,
-                size: ActionTheme.iconSize,
+                size: metrics.icon,
                 stroke: ActionTheme.cutStroke,
                 color: Color.lerp(ActionTheme.icon, BiliColors.pink, on)!,
               ),
             ),
           ),
-          const SizedBox(height: ActionTheme.countGap),
+          SizedBox(height: metrics.countGap),
           SizedBox(
-            height: ActionTheme.countLine,
+            height: metrics.countLine,
             child: Center(
               child: Text(
                 _text,
@@ -327,11 +404,11 @@ class _ActionCellState extends State<_ActionCell> with SingleTickerProviderState
                 overflow: TextOverflow.visible,
                 style: TextStyle(
                   fontFamily: BiliFonts.family,
-                  fontSize: ActionTheme.countFont,
+                  fontSize: metrics.countFont,
                   height: 1,
-                  color: widget.tintsText ? Color.lerp(ActionTheme.count, BiliColors.pink, on) : ActionTheme.count,
+                  color: widget.tintsText ? Color.lerp(metrics.countColor, BiliColors.pink, on) : metrics.countColor,
                 ),
-                strutStyle: BiliFonts.strut(const TextStyle(fontSize: ActionTheme.countFont, height: 1)),
+                strutStyle: BiliFonts.strut(TextStyle(fontSize: metrics.countFont, height: 1)),
               ),
             ),
           ),
