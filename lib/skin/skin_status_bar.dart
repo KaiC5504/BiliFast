@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 
+import '../app/form_factor.dart';
 import '../app/phone_frame.dart';
 import '../shared/theme.dart';
 import 'skin.dart';
@@ -17,7 +18,7 @@ final class StatusBarPlacement {
   /// 首页's top: `head_bg` down to the top row's bottom, or to 01's hairline when the package has no tab picture,
   /// over the page's grey.
   factory StatusBarPlacement.home({required bool tabPicture}) => StatusBarPlacement(
-    box: Size(PhoneFrame.portrait.width, tabPicture ? _statusBar + BiliMetrics.topRowHeight : _homeHairline),
+    box: Size(_screenWidth, tabPicture ? _statusBar + BiliMetrics.topRowHeight : _homeHairline),
     alignment: Alignment.center,
     backdrop: BiliColors.pageGrey,
   );
@@ -25,7 +26,7 @@ final class StatusBarPlacement {
   /// 关注's header (127): the same `head_bg` down to its own row's bottom, shorter than 首页's top, so the picture
   /// rises less and another band lies behind the status bar; over the page's white.
   factory StatusBarPlacement.follow() => StatusBarPlacement(
-    box: Size(PhoneFrame.portrait.width, _statusBar + DynamicFeedTheme.barRow - DynamicFeedTheme.barRise),
+    box: Size(_screenWidth, _statusBar + DynamicFeedTheme.barRow - DynamicFeedTheme.barRise),
     alignment: Alignment.center,
     backdrop: BiliColors.card,
   );
@@ -34,18 +35,29 @@ final class StatusBarPlacement {
   /// one, under where the card would start, cropped at the bottom.
   factory StatusBarPlacement.me({required bool card}) => StatusBarPlacement(
     box: Size(
-      PhoneFrame.portrait.width,
+      _screenWidth,
       _statusBar + MeTheme.cardTop + (card ? MeTheme.cardHeight : 0) + MeTheme.listCut,
     ),
     alignment: Alignment.topCenter,
     backdrop: MeTheme.background,
   );
 
-  static final _statusBar = PhoneFrame.portraitPadding.top;
+  /// The iPhone's upright width whichever way it is held when the skin is measured; the iPad's as it is held then,
+  /// since it shows 首页 and 我的 either way.
+  static double get _screenWidth {
+    if (!FormFactor.device.isPad) return PhoneFrame.portrait.width;
+    final view = PaintingBinding.instance.platformDispatcher.implicitView;
+    final width = view == null ? 0.0 : view.physicalSize.width / view.devicePixelRatio;
+    return width > 0 ? width : PhoneFrame.padPortrait.width;
+  }
+
+  static double get _statusBar =>
+      FormFactor.device.isPad ? PhoneFrame.padPadding.top : PhoneFrame.portraitPadding.top;
   static const _homeHairline = 141 + 2 / 3;
 
-  /// Behind the clock and behind signal, Wi-Fi and battery, the status bar's height.
-  static final areas = [Rect.fromLTRB(24, 0, 140, _statusBar), Rect.fromLTRB(300, 0, 416, _statusBar)];
+  /// Behind the clock and behind the icons on the right, the status bar's height.
+  List<Rect> get areas =>
+      [Rect.fromLTRB(24, 0, 140, _statusBar), Rect.fromLTRB(box.width - 140, 0, box.width - 24, _statusBar)];
 
   final Size box;
   final Alignment alignment;
@@ -110,7 +122,7 @@ Future<double?> statusBarLuminance(File file, StatusBarPlacement placement) asyn
       final data = await _step('pixels', () => image.toByteData(format: ui.ImageByteFormat.rawStraightRgba));
       if (data == null) throw const StatusBarMeasureError('pixels');
       final drawn = placement.alignment.inscribe(source * scale, Offset.zero & placement.box);
-      return _logAverage(data, image.width, image.height, drawn, placement.backdrop);
+      return _logAverage(data, image.width, image.height, drawn, placement);
     } finally {
       image.dispose();
     }
@@ -131,12 +143,13 @@ Future<T> _step<T>(String step, Future<T> Function() run) async {
 
 double _coverScale(Size source, Size box) => math.max(box.width / source.width, box.height / source.height);
 
-double? _logAverage(ByteData data, int width, int height, Rect drawn, Color backdrop) {
+double? _logAverage(ByteData data, int width, int height, Rect drawn, StatusBarPlacement placement) {
   final pixels = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  final backdrop = placement.backdrop;
   final under = [backdrop.r * 255, backdrop.g * 255, backdrop.b * 255];
   var sum = 0.0;
   var count = 0;
-  for (final area in StatusBarPlacement.areas) {
+  for (final area in placement.areas) {
     final left = ((area.left - drawn.left) * width / drawn.width).floor().clamp(0, width);
     final right = ((area.right - drawn.left) * width / drawn.width).ceil().clamp(0, width);
     final top = ((area.top - drawn.top) * height / drawn.height).floor().clamp(0, height);
