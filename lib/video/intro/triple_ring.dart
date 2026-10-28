@@ -15,18 +15,19 @@ abstract final class TripleTiming {
 /// A pink ring that fills clockwise from the top around an action's icon while 点赞 is held, and a burst when 三连
 /// fires: the full ring flashes and spreads with eight dots.
 class TripleRing extends StatelessWidget {
-  const TripleRing({super.key, required this.progress, required this.burst});
+  const TripleRing({super.key, required this.progress, required this.burst, this.size = ActionTheme.ring});
 
   /// 0 to 1.
   final Animation<double> progress;
 
   /// 0 at rest, running to 1 once per burst.
   final Animation<double> burst;
+  final double size;
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
     child: SizedBox.square(
-      dimension: ActionTheme.ring,
+      dimension: size,
       child: CustomPaint(painter: _RingPainter(progress, burst)),
     ),
   );

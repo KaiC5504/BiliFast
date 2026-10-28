@@ -306,7 +306,7 @@ class _MetaLine extends StatelessWidget {
                     const SizedBox(width: IntroTheme.metaGroupGap),
                     const CustomPaint(
                       size: Size(IntroTheme.metaIconWidth, IntroTheme.onlineIconHeight),
-                      painter: _OnlinePainter(),
+                      painter: OnlinePainter(),
                     ),
                     const SizedBox(width: IntroTheme.metaIconGap),
                     Text('$count人正在看', style: text, strutStyle: strut),
@@ -388,8 +388,8 @@ class _NoticePainter extends CustomPainter {
 }
 
 /// 03's N人正在看 mark: a head and shoulders like an Ω, and the edge of a second one behind it on the right.
-class _OnlinePainter extends CustomPainter {
-  const _OnlinePainter();
+class OnlinePainter extends CustomPainter {
+  const OnlinePainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -420,7 +420,7 @@ class _OnlinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_OnlinePainter oldDelegate) => false;
+  bool shouldRepaint(OnlinePainter oldDelegate) => false;
 }
 
 class _Details extends StatelessWidget {

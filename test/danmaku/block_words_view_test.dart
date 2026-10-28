@@ -49,8 +49,10 @@ Future<Rig> pumpView(
   bool loggedIn = true,
   List<BlockRule> rules = _rules,
   ThemeData? theme,
+  Size screen = const Size(956, 440),
+  EdgeInsets padding = const EdgeInsets.only(left: 62, right: 62, bottom: 21),
 }) async {
-  tester.view.physicalSize = const Size(956, 440);
+  tester.view.physicalSize = screen;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final api = FakePageApi()..blockRules = [...rules];
@@ -92,7 +94,7 @@ Future<Rig> pumpView(
       theme: theme,
       home: Builder(
         builder: (context) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(padding: const EdgeInsets.only(left: 62, right: 62, bottom: 21)),
+          data: MediaQuery.of(context).copyWith(padding: padding),
           child: BlockWordsView(ui: ui, toast: toasts.add, back: () => backs.add(1), close: () {}),
         ),
       ),
@@ -147,6 +149,25 @@ void main() {
     expect(c.dx, 82);
     expect(c.dy, 94 + BlockWordsTheme.chipHeight + BlockWordsTheme.rowGap);
   });
+
+  for (final screen in [const Size(1194, 834), const Size(834, 1194)]) {
+    testWidgets('on the iPad (${screen.width.round()} wide) the columns split at its centre and the field runs to the '
+        'buttons, at the phone\'s heights', (tester) async {
+      await pumpView(tester, screen: screen, padding: const EdgeInsets.only(top: 24, bottom: 20));
+      expect(tester.takeException(), isNull);
+      final a = tester.getTopLeft(key('block-rule-1'));
+      final b = tester.getTopLeft(key('block-rule-2'));
+      expect(b.dx - a.dx, screen.width / 2);
+      expect(b.dy, a.dy);
+      final field = tester.getRect(key('block-words-field'));
+      final add = tester.getRect(key('block-words-add'));
+      final sync = tester.getRect(key('block-words-sync'));
+      expect(sync.right, lessThanOrEqualTo(screen.width));
+      expect(add.left, greaterThan(field.left));
+      expect(sync.height, add.height);
+      expect(add.width, closeTo(BlockWordsTheme.buttonWidth, 0.01), reason: 'the buttons keep their width; only the field grows');
+    });
+  }
 
   testWidgets('each tab shows its own rules, the selected one pink with an underline', (tester) async {
     await pumpView(tester);

@@ -4,8 +4,16 @@ import UIKit
 /// Dart's full-screen rotation and level controls and the drawn status bar's feed (lib/device/): Pigeon's
 /// DeviceHostApi and DeviceEventApi (DeviceApi.g.swift). The app delegate's supported orientations follow `mask`.
 enum DeviceChannel {
-  /// What the app delegate reports; portrait until Dart asks for full screen.
-  @MainActor static var mask: UIInterfaceOrientationMask = .portrait
+  /// What the app delegate reports; portrait until Dart asks for full screen. The iPad turns freely on every screen,
+  /// full screen included, so it is always all four there.
+  @MainActor static var mask: UIInterfaceOrientationMask {
+    get { isPad ? .all : phoneMask }
+    set { phoneMask = newValue }
+  }
+
+  @MainActor private static var phoneMask: UIInterfaceOrientationMask = .portrait
+
+  @MainActor static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   /// Set once at registration; the callbacks that arrive off the main actor reach Dart through it.
   @MainActor static var events: DeviceEventApi?
@@ -77,6 +85,8 @@ final class DeviceHostApiImpl: DeviceHostApi {
       case .landscapeLeft: wanted = .landscapeLeft
       case .landscapeRight: wanted = .landscapeRight
       }
+      // Dart's rules never ask on the iPad; should a request come all the same, nothing turns.
+      guard !DeviceChannel.isPad else { return }
       DeviceChannel.mask = wanted
       guard let scene = DeviceChannel.scene else {
         Task { @MainActor in

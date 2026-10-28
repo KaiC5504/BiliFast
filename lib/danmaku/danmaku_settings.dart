@@ -1,6 +1,7 @@
 import 'package:bili_core/danmaku.dart';
 import 'package:flutter/foundation.dart';
 
+import '../app/form_factor.dart';
 import '../device/orientation.dart';
 import 'danmaku_scene.dart';
 
@@ -43,13 +44,15 @@ final class DanmakuSettings {
 
   String get speedName => speedNames[speed.clamp(0, speedNames.length - 1)];
 
-  DanmakuOptions display({required Presentation presentation}) => DanmakuOptions(
-    area: area,
-    opacity: opacity,
-    scale: scale,
-    scrollDuration: scrollDuration,
-    presentation: presentation,
-  );
+  DanmakuOptions display({required Presentation presentation, FormFactor formFactor = FormFactor.phone}) =>
+      DanmakuOptions(
+        area: area,
+        opacity: opacity,
+        scale: scale,
+        scrollDuration: scrollDuration,
+        presentation: presentation,
+        formFactor: formFactor,
+      );
 
   DanmakuSettings copyWith({double? area, double? opacity, double? scale, int? speed, DanmakuFilterOptions? filter}) =>
       DanmakuSettings(

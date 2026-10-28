@@ -60,3 +60,11 @@ drawables, each drawn white, cut to its ink and scaled to the ink width measured
 `lock_locked_line` (eaf9, 30 px), `arrow_share_line` (ea3f, 55 px), `person_unfollow_line` (eb30, 52 px),
 `warning_report_triangle_line` (eb89, 56 px). `ic_upper_tv_play` is the APK bitmap unchanged (70% white), drawn 42 pt
 wide at 80% opacity, as 128's TV mark.
+
+The iPad page's player (ipad/03, 07, 17) takes the same APK's player art: `images/player/pad_cast_tv.png` (投屏) is
+the vector `biliplayer_ic_topbar_tv` and `pad_previous.png` (⏮) is `bili_mini_player_ctrl_play_prev`, each drawn
+white at 3× by `tools/apk_asset.py extract … --width` 72 and 35 (24 × 19.33 and 11.67 × 13.33 pt, as 03 measures);
+`pad_end_replay.png` (17's 重播, the thick ring with its solid head) is `ic_endpage_replay_small` (xxhdpi), its
+alpha raised from the file's 80% to full, as 17 draws it solid white at 19.5 × 21 pt. 小窗 is the APK's
+`biliplayer_ic_topbar_floatwindow` drawn in code (`FloatWindowPainter`): the extractor fills its stroked paths.
+17's 分享 is the action row's solid arrow (`ActionGlyph.share`), and 全屏 the small player's `FullScreenPainter`.

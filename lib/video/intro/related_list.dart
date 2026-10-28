@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart' show Icons, Material, MaterialType;
 import 'package:flutter/widgets.dart';
 
+import '../../app/form_factor.dart';
 import '../../player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
 import '../../shared/cover_preset.dart';
 import '../../shared/menu.dart';
@@ -15,17 +16,28 @@ import '../video_route.dart';
 
 /// The related videos under 简介 (03, 18), as a sliver: cover with duration, title, UP and counts, and ⋮ 稍后再看.
 /// The web list carries no recommendation reason (03's orange tags come from the app's own feed), so every row shows
-/// the UP badge, as 18 does.
+/// the UP badge, as 18 does. On the iPad the rows are larger and undivided (ipad/03, 06): upright the list opens
+/// with a hairline under 简介's head, sideways ([column]) it fills the right column at that column's gutter.
 class RelatedSliver extends StatefulWidget {
-  const RelatedSliver({super.key, required this.cards, required this.onOpen, required this.onWatchLater});
+  const RelatedSliver({
+    super.key,
+    required this.cards,
+    required this.onOpen,
+    required this.onWatchLater,
+    this.column = false,
+  });
 
   final List<VideoCard> cards;
   final ValueChanged<VideoCard> onOpen;
   final ValueChanged<VideoCard> onWatchLater;
 
-  /// Covers say 2:55, not 02:55.
-  static String duration(int seconds) {
+  /// The iPad's right column sideways.
+  final bool column;
+
+  /// The iPhone's covers say 2:55, not 02:55; the iPad's keep the zero.
+  static String duration(int seconds, {bool pad = false}) {
     final clock = TimeFormat.clock(seconds.toDouble());
+    if (pad) return clock;
     return clock.length == 5 && clock.startsWith('0') ? clock.substring(1) : clock;
   }
 
@@ -65,35 +77,189 @@ class _RelatedSliverState extends State<RelatedSliver> {
     final revealing = _revealing && !MediaQuery.disableAnimationsOf(context);
     final seen = <String>{};
     final heroes = [for (final card in cards) seen.add(card.bvid)];
-    return SliverPadding(
-      padding: const EdgeInsets.only(top: IntroListTheme.sectionTop),
-      sliver: SliverFixedExtentList.builder(
-        itemExtent: IntroListTheme.relatedRowHeight,
-        itemCount: cards.length,
-        itemBuilder: (context, index) {
-          final card = cards[index];
-          final row = _RelatedRow(
-            card: card,
-            first: index == 0,
-            hero: heroes[index],
-            onOpen: () => widget.onOpen(card),
-            onWatchLater: () => widget.onWatchLater(card),
-          );
-          return KeyedSubtree(
-            key: ValueKey((_generation, card.bvid)),
-            child: revealing && index < IntroListTheme.revealRows
-                ? _Reveal(delay: IntroListTheme.revealStagger * index, child: row)
-                : row,
-          );
-        },
-      ),
+    final pad = FormFactor.of(context).isPad;
+    final metrics = pad
+        ? _RowMetrics.pad(widget.column ? PadBodyTheme.relatedColumnGutter : PadBodyTheme.gutter)
+        : _RowMetrics.phone;
+    final list = SliverFixedExtentList.builder(
+      itemExtent: metrics.rowHeight,
+      itemCount: cards.length,
+      itemBuilder: (context, index) {
+        final card = cards[index];
+        final row = _RelatedRow(
+          card: card,
+          metrics: metrics,
+          first: index == 0,
+          hero: heroes[index],
+          onOpen: () => widget.onOpen(card),
+          onWatchLater: () => widget.onWatchLater(card),
+        );
+        return KeyedSubtree(
+          key: ValueKey((_generation, card.bvid)),
+          child: revealing && index < IntroListTheme.revealRows
+              ? _Reveal(delay: IntroListTheme.revealStagger * index, child: row)
+              : row,
+        );
+      },
+    );
+    if (!pad) {
+      return SliverPadding(
+        padding: const EdgeInsets.only(top: IntroListTheme.sectionTop),
+        sliver: list,
+      );
+    }
+    final top = SliverPadding(
+      padding: const EdgeInsets.only(top: PadBodyTheme.relatedListTop),
+      sliver: list,
+    );
+    if (widget.column) return top;
+    return SliverMainAxisGroup(
+      slivers: [
+        const SliverToBoxAdapter(
+          child: Padding(
+            key: ValueKey('related-hairline'),
+            padding: EdgeInsets.only(
+              top: PadBodyTheme.relatedHairlineGap,
+              left: PadBodyTheme.relatedHairlineInset,
+              right: PadBodyTheme.relatedHairlineInset,
+            ),
+            child: SizedBox(
+              height: PageTheme.hairline,
+              child: ColoredBox(color: BiliColors.divider),
+            ),
+          ),
+        ),
+        top,
+      ],
     );
   }
+}
+
+/// A related row's sizes, the iPhone's or the iPad's.
+@immutable
+final class _RowMetrics {
+  const _RowMetrics({
+    required this.pad,
+    required this.gutter,
+    required this.rowHeight,
+    required this.coverTop,
+    required this.coverWidth,
+    required this.coverHeight,
+    required this.textGap,
+    required this.titleLift,
+    required this.uploaderCentre,
+    required this.countsCentre,
+    required this.metaLead,
+    required this.metaGap,
+    required this.countSpacing,
+    required this.iconWidth,
+    required this.iconHeight,
+    required this.upFont,
+    required this.upRadius,
+    required this.moreCentreFromRight,
+    required this.moreDot,
+    required this.moreDotGap,
+    required this.durationInset,
+    required this.durationHeight,
+    required this.durationPad,
+    required this.durationRadius,
+    required this.durationFill,
+    required this.titleWeight,
+  });
+
+  static const phone = _RowMetrics(
+    pad: false,
+    gutter: BiliMetrics.gutter,
+    rowHeight: IntroListTheme.relatedRowHeight,
+    coverTop: IntroListTheme.relatedCoverTop,
+    coverWidth: IntroListTheme.relatedCoverWidth,
+    coverHeight: IntroListTheme.relatedCoverHeight,
+    textGap: IntroListTheme.relatedTextGap,
+    titleLift: IntroListTheme.relatedTitleLift,
+    uploaderCentre: IntroListTheme.relatedUploaderCentre,
+    countsCentre: IntroListTheme.relatedCountsCentre,
+    metaLead: IntroListTheme.relatedMetaLead,
+    metaGap: IntroListTheme.relatedMetaGap,
+    countSpacing: IntroListTheme.relatedCountSpacing,
+    iconWidth: BiliMetrics.endCountIconWidth,
+    iconHeight: BiliMetrics.endCountIconHeight,
+    upFont: BiliMetrics.endUpFont,
+    upRadius: BiliMetrics.endUpRadius,
+    moreCentreFromRight: IntroListTheme.moreCentreFromRight,
+    moreDot: IntroListTheme.moreDot,
+    moreDotGap: IntroListTheme.moreDotGap,
+    durationInset: IntroListTheme.durationInset,
+    durationHeight: IntroListTheme.durationHeight,
+    durationPad: IntroListTheme.durationPad,
+    durationRadius: IntroListTheme.durationRadius,
+    durationFill: IntroListTheme.durationFill,
+    titleWeight: null,
+  );
+
+  const _RowMetrics.pad(double gutter)
+    : this(
+        pad: true,
+        gutter: gutter,
+        rowHeight: PadBodyTheme.relatedRowHeight,
+        coverTop: PadBodyTheme.relatedCoverTop,
+        coverWidth: PadBodyTheme.relatedCoverWidth,
+        coverHeight: PadBodyTheme.relatedCoverHeight,
+        textGap: PadBodyTheme.relatedTextGap,
+        titleLift: PadBodyTheme.relatedTitleLift,
+        uploaderCentre: PadBodyTheme.relatedUploaderCentre,
+        countsCentre: PadBodyTheme.relatedCountsCentre,
+        metaLead: PadBodyTheme.relatedMetaLead,
+        metaGap: PadBodyTheme.relatedMetaGap,
+        countSpacing: PadBodyTheme.relatedCountSpacing,
+        iconWidth: PadBodyTheme.relatedIconWidth,
+        iconHeight: PadBodyTheme.relatedIconHeight,
+        upFont: PadBodyTheme.relatedUpFont,
+        upRadius: PadBodyTheme.relatedUpRadius,
+        moreCentreFromRight: gutter + PadBodyTheme.moreInset,
+        moreDot: PadBodyTheme.moreDot,
+        moreDotGap: PadBodyTheme.moreDotGap,
+        durationInset: PadBodyTheme.durationInset,
+        durationHeight: PadBodyTheme.durationHeight,
+        durationPad: PadBodyTheme.durationPad,
+        durationRadius: PadBodyTheme.durationRadius,
+        durationFill: PadBodyTheme.durationFill,
+        titleWeight: PadBodyTheme.relatedTitleWeight,
+      );
+
+  final bool pad;
+  final double gutter;
+  final double rowHeight;
+  final double coverTop;
+  final double coverWidth;
+  final double coverHeight;
+  final double textGap;
+  final double titleLift;
+  final double uploaderCentre;
+  final double countsCentre;
+  final double metaLead;
+  final double metaGap;
+  final double countSpacing;
+  final double iconWidth;
+  final double iconHeight;
+  final double upFont;
+  final double upRadius;
+  final double moreCentreFromRight;
+  final double moreDot;
+  final double moreDotGap;
+  final double durationInset;
+  final double durationHeight;
+  final double durationPad;
+  final double durationRadius;
+  final Color durationFill;
+  final FontWeight? titleWeight;
+
+  double get textLeft => gutter + coverWidth + textGap;
 }
 
 class _RelatedRow extends StatelessWidget {
   const _RelatedRow({
     required this.card,
+    required this.metrics,
     required this.first,
     required this.hero,
     required this.onOpen,
@@ -101,13 +267,11 @@ class _RelatedRow extends StatelessWidget {
   });
 
   final VideoCard card;
+  final _RowMetrics metrics;
   final bool first;
   final bool hero;
   final VoidCallback onOpen;
   final VoidCallback onWatchLater;
-
-  static const _textLeft = BiliMetrics.gutter + IntroListTheme.relatedCoverWidth + IntroListTheme.relatedTextGap;
-  static const _coverTop = IntroListTheme.relatedCoverTop;
 
   TextStyle get _meta => TextStyle(
     fontFamily: BiliFonts.family,
@@ -120,9 +284,11 @@ class _RelatedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final m = metrics;
+    final coverTop = m.coverTop;
     final cover = RemoteImage(
       card.cover,
-      size: const Size(IntroListTheme.relatedCoverWidth, IntroListTheme.relatedCoverHeight),
+      size: Size(m.coverWidth, m.coverHeight),
       cover: true,
       preset: CoverPreset.related,
     );
@@ -130,6 +296,7 @@ class _RelatedRow extends StatelessWidget {
       fontFamily: BiliFonts.family,
       fontSize: IntroListTheme.relatedTitleText,
       height: IntroListTheme.relatedTitleLine / IntroListTheme.relatedTitleText,
+      fontWeight: m.titleWeight,
       color: BiliColors.text,
     );
     return MediaQuery.withClampedTextScaling(
@@ -146,18 +313,19 @@ class _RelatedRow extends StatelessWidget {
                 onTap: onOpen,
                 child: Stack(
                   children: [
+                    if (!m.pad)
+                      Positioned(
+                        top: 0,
+                        left: first ? 0 : IntroListTheme.relatedDividerInset,
+                        right: 0,
+                        height: BiliMetrics.panelHairline,
+                        child: const ColoredBox(color: BiliColors.divider),
+                      ),
                     Positioned(
-                      top: 0,
-                      left: first ? 0 : IntroListTheme.relatedDividerInset,
-                      right: 0,
-                      height: BiliMetrics.panelHairline,
-                      child: const ColoredBox(color: BiliColors.divider),
-                    ),
-                    Positioned(
-                      left: BiliMetrics.gutter,
-                      top: _coverTop,
-                      width: IntroListTheme.relatedCoverWidth,
-                      height: IntroListTheme.relatedCoverHeight,
+                      left: m.gutter,
+                      top: coverTop,
+                      width: m.coverWidth,
+                      height: m.coverHeight,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(IntroListTheme.relatedCoverRadius),
                         child: Stack(
@@ -166,18 +334,18 @@ class _RelatedRow extends StatelessWidget {
                             if (hero) Hero(tag: VideoRoute.coverTag(card.bvid), child: cover) else cover,
                             if (card.duration > 0)
                               Positioned(
-                                right: IntroListTheme.durationInset,
-                                bottom: IntroListTheme.durationInset,
-                                height: IntroListTheme.durationHeight,
+                                right: m.durationInset,
+                                bottom: m.durationInset,
+                                height: m.durationHeight,
                                 child: Container(
                                   alignment: Alignment.center,
-                                  padding: const EdgeInsets.symmetric(horizontal: IntroListTheme.durationPad),
+                                  padding: EdgeInsets.symmetric(horizontal: m.durationPad),
                                   decoration: BoxDecoration(
-                                    color: IntroListTheme.durationFill,
-                                    borderRadius: BorderRadius.circular(IntroListTheme.durationRadius),
+                                    color: m.durationFill,
+                                    borderRadius: BorderRadius.circular(m.durationRadius),
                                   ),
                                   child: Text(
-                                    RelatedSliver.duration(card.duration),
+                                    RelatedSliver.duration(card.duration, pad: m.pad),
                                     style: TextStyle(
                                       fontFamily: BiliFonts.family,
                                       fontSize: IntroListTheme.durationText,
@@ -193,9 +361,9 @@ class _RelatedRow extends StatelessWidget {
                       ),
                     ),
                     Positioned(
-                      left: _textLeft,
-                      right: BiliMetrics.gutter,
-                      top: _coverTop - IntroListTheme.relatedTitleLift,
+                      left: m.textLeft,
+                      right: m.gutter,
+                      top: coverTop - m.titleLift,
                       child: Text(
                         card.title,
                         maxLines: 2,
@@ -205,12 +373,12 @@ class _RelatedRow extends StatelessWidget {
                       ),
                     ),
                     _line(
-                      IntroListTheme.relatedUploaderCentre,
-                      right: BiliMetrics.gutter,
+                      m.uploaderCentre,
+                      right: m.gutter,
                       Row(
                         children: [
-                          const _UpBadge(),
-                          const SizedBox(width: IntroListTheme.relatedMetaGap),
+                          _UpBadge(metrics: m),
+                          SizedBox(width: m.metaGap),
                           Flexible(
                             child: Text(
                               card.ownerName,
@@ -224,16 +392,16 @@ class _RelatedRow extends StatelessWidget {
                       ),
                     ),
                     _line(
-                      IntroListTheme.relatedCountsCentre,
-                      right: IntroListTheme.moreCentreFromRight + IntroListTheme.moreTarget / 2,
+                      m.countsCentre,
+                      right: m.moreCentreFromRight + IntroListTheme.moreTarget / 2,
                       Row(
                         children: [
-                          const _CountIcon(CountGlyph.views),
-                          const SizedBox(width: IntroListTheme.relatedMetaGap),
+                          _CountIcon(CountGlyph.views, metrics: m),
+                          SizedBox(width: m.metaGap),
                           Text(CountFormat.short(card.views), style: _count, strutStyle: BiliFonts.strut(_count)),
-                          const SizedBox(width: IntroListTheme.relatedCountSpacing),
-                          const _CountIcon(CountGlyph.danmaku),
-                          const SizedBox(width: IntroListTheme.relatedMetaGap),
+                          SizedBox(width: m.countSpacing),
+                          _CountIcon(CountGlyph.danmaku, metrics: m),
+                          SizedBox(width: m.metaGap),
                           Text(CountFormat.short(card.danmaku), style: _count, strutStyle: BiliFonts.strut(_count)),
                         ],
                       ),
@@ -244,11 +412,11 @@ class _RelatedRow extends StatelessWidget {
             ),
           ),
           Positioned(
-            right: IntroListTheme.moreCentreFromRight - IntroListTheme.moreTarget / 2,
-            top: _coverTop + IntroListTheme.relatedCountsCentre - IntroListTheme.moreTarget / 2,
+            right: m.moreCentreFromRight - IntroListTheme.moreTarget / 2,
+            top: coverTop + m.countsCentre - IntroListTheme.moreTarget / 2,
             width: IntroListTheme.moreTarget,
             height: IntroListTheme.moreTarget,
-            child: _More(onWatchLater: onWatchLater),
+            child: _More(onWatchLater: onWatchLater, dot: m.moreDot, dotGap: m.moreDotGap),
           ),
         ],
       ),
@@ -256,26 +424,28 @@ class _RelatedRow extends StatelessWidget {
   }
 
   /// A line of meta text centred [centre] below the cover's top.
-  static Widget _line(double centre, Widget child, {required double right}) => Positioned(
-    left: _textLeft + IntroListTheme.relatedMetaLead,
+  Widget _line(double centre, Widget child, {required double right}) => Positioned(
+    left: metrics.textLeft + metrics.metaLead,
     right: right,
-    top: _coverTop + centre - IntroListTheme.relatedMetaLine / 2,
+    top: metrics.coverTop + centre - IntroListTheme.relatedMetaLine / 2,
     height: IntroListTheme.relatedMetaLine,
     child: child,
   );
 }
 
 class _UpBadge extends StatelessWidget {
-  const _UpBadge();
+  const _UpBadge({required this.metrics});
+
+  final _RowMetrics metrics;
 
   @override
   Widget build(BuildContext context) => Container(
-    width: BiliMetrics.endUpWidth,
-    height: BiliMetrics.endUpHeight,
+    width: metrics.iconWidth,
+    height: metrics.iconHeight,
     alignment: Alignment.center,
     decoration: BoxDecoration(
       border: Border.all(color: BiliColors.secondaryText, width: BiliMetrics.endUpBorder),
-      borderRadius: BorderRadius.circular(BiliMetrics.endUpRadius),
+      borderRadius: BorderRadius.circular(metrics.upRadius),
     ),
     child: Text(
       'UP',
@@ -283,7 +453,7 @@ class _UpBadge extends StatelessWidget {
       style: TextStyle(
         fontFamily: BiliFonts.family,
         color: BiliColors.secondaryText,
-        fontSize: BiliMetrics.endUpFont,
+        fontSize: metrics.upFont,
         fontWeight: FontWeight.bold,
         height: 1,
       ),
@@ -292,21 +462,24 @@ class _UpBadge extends StatelessWidget {
 }
 
 class _CountIcon extends StatelessWidget {
-  const _CountIcon(this.glyph);
+  const _CountIcon(this.glyph, {required this.metrics});
 
   final CountGlyph glyph;
+  final _RowMetrics metrics;
 
   @override
   Widget build(BuildContext context) => CustomPaint(
-    size: const Size(BiliMetrics.endCountIconWidth, BiliMetrics.endCountIconHeight),
+    size: Size(metrics.iconWidth, metrics.iconHeight),
     painter: CountPainter(glyph, color: BiliColors.secondaryText),
   );
 }
 
 class _More extends StatelessWidget {
-  const _More({required this.onWatchLater});
+  const _More({required this.onWatchLater, required this.dot, required this.dotGap});
 
   final VoidCallback onWatchLater;
+  final double dot;
+  final double dotGap;
 
   void _open(BuildContext context) {
     final box = context.findRenderObject()! as RenderBox;
@@ -332,10 +505,10 @@ class _More extends StatelessWidget {
       key: const ValueKey('related-more'),
       behavior: HitTestBehavior.opaque,
       onTap: () => _open(context),
-      child: const Center(
+      child: Center(
         child: CustomPaint(
-          size: Size(IntroListTheme.moreDot, IntroListTheme.moreDot * 3 + IntroListTheme.moreDotGap * 2),
-          painter: _DotsPainter(),
+          size: Size(dot, dot * 3 + dotGap * 2),
+          painter: _DotsPainter(dot: dot, gap: dotGap),
         ),
       ),
     ),
@@ -343,23 +516,22 @@ class _More extends StatelessWidget {
 }
 
 class _DotsPainter extends CustomPainter {
-  const _DotsPainter();
+  const _DotsPainter({required this.dot, required this.gap});
+
+  final double dot;
+  final double gap;
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = BiliColors.secondaryText;
-    const radius = IntroListTheme.moreDot / 2;
+    final radius = dot / 2;
     for (var i = 0; i < 3; i++) {
-      canvas.drawCircle(
-        Offset(radius, radius + i * (IntroListTheme.moreDot + IntroListTheme.moreDotGap)),
-        radius,
-        paint,
-      );
+      canvas.drawCircle(Offset(radius, radius + i * (dot + gap)), radius, paint);
     }
   }
 
   @override
-  bool shouldRepaint(_DotsPainter oldDelegate) => false;
+  bool shouldRepaint(_DotsPainter oldDelegate) => oldDelegate.dot != dot || oldDelegate.gap != gap;
 }
 
 /// ⋮'s menu, as the feed card's: frosted glass growing out of the dots, below them or, near the bottom, above.

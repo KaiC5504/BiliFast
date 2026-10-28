@@ -18,6 +18,7 @@ import 'app/reduce_motion.dart';
 import 'app/route_observer.dart';
 import 'comments/emote_store.dart';
 import 'danmaku/danmaku_settings_store.dart';
+import 'device/launch_form_factor.dart';
 import 'device/orientation.dart';
 import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
@@ -51,7 +52,7 @@ Future<void> main(List<String> args) async {
     PhoneFrame.usePad();
     FormFactor.device = FormFactor.pad;
   } else if (Platform.isIOS) {
-    FormFactor.device = FormFactor.fromView(binding.platformDispatcher.views.first);
+    FormFactor.device = await launchFormFactor(binding);
   }
   CrashLog.install();
   await resolveSupportFolder();

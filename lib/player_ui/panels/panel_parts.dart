@@ -7,17 +7,33 @@ import 'panel_glyphs.dart';
 /// What the panel's frame tells its rows: whether it sits at the right of a landscape screen (false in the portrait
 /// sheet), and the open animation the rows reveal themselves along.
 class PanelScope extends InheritedWidget {
-  const PanelScope({super.key, required this.landscape, required this.reveal, required super.child});
+  const PanelScope({
+    super.key,
+    required this.landscape,
+    required this.reveal,
+    this.pad = false,
+    required super.child,
+  });
 
   final bool landscape;
   final Animation<double> reveal;
+
+  /// On the iPad, where full screen's 清晰度 and 倍速 draw their own rows (ipad/10, 11).
+  final bool pad;
 
   static PanelScope? maybeOf(BuildContext context) => context.dependOnInheritedWidgetOfExactType<PanelScope>();
 
   static bool landscapeOf(BuildContext context) => maybeOf(context)?.landscape ?? true;
 
+  /// Full screen on the iPad.
+  static bool padStripOf(BuildContext context) {
+    final scope = maybeOf(context);
+    return scope != null && scope.pad && scope.landscape;
+  }
+
   @override
-  bool updateShouldNotify(PanelScope oldWidget) => landscape != oldWidget.landscape || reveal != oldWidget.reveal;
+  bool updateShouldNotify(PanelScope oldWidget) =>
+      landscape != oldWidget.landscape || reveal != oldWidget.reveal || pad != oldWidget.pad;
 }
 
 /// Fades a row in a little after the one above it as the panel opens, sliding in from the side it came from.

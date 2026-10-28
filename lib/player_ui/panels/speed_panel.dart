@@ -28,20 +28,25 @@ class SpeedPanel extends StatelessWidget {
     close();
   }
 
-  Widget _label(double rate, String label) {
+  Widget _label(double rate, String label, {bool pad = false}) {
     final selected = session.rate == rate;
+    final style = pad
+        ? TextStyle(
+            fontSize: PadPanelTheme.speedText,
+            color: selected ? PadPanelTheme.speedSelected : BiliColors.panelText,
+          )
+        : TextStyle(color: selected ? BiliColors.pink : BiliColors.panelText);
     return Semantics(
       button: true,
       selected: selected,
-      child: Center(
-        child: Text(label, style: TextStyle(color: selected ? BiliColors.pink : BiliColors.panelText)),
-      ),
+      child: Center(child: Text(label, style: style)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (PanelScope.landscapeOf(context)) {
+      final pad = PanelScope.padStripOf(context);
       return Column(
         key: const ValueKey('speed-column'),
         mainAxisSize: MainAxisSize.min,
@@ -51,7 +56,10 @@ class SpeedPanel extends StatelessWidget {
               order: index,
               child: PanelPressable(
                 onTap: () => _choose(rate),
-                child: SizedBox(height: BiliMetrics.panelSpeedRow, child: _label(rate, label)),
+                child: SizedBox(
+                  height: pad ? PadPanelTheme.speedRow : BiliMetrics.panelSpeedRow,
+                  child: _label(rate, label, pad: pad),
+                ),
               ),
             ),
         ],

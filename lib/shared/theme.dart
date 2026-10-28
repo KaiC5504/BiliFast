@@ -6425,11 +6425,272 @@ abstract final class PadPageTheme {}
 
 /// The iPad's page body: 简介's sections and the related column (ipad/03, 04, 06). The Page body agent owns this
 /// class.
-abstract final class PadBodyTheme {}
+abstract final class PadBodyTheme {
+  /// Everything in 简介's head starts 20 in, the action cells too (03).
+  static const gutter = 20.0;
+
+  /// The avatar's top is 10 below the player sideways (03) and below the tab row upright (06).
+  static const uploaderTop = 10.0;
+  static const avatar = 40.0;
+  static const avatarGap = 10.0;
+  static const nameText = 14.0;
+  static const nameLine = 18.0;
+  static const fansText = 12.0;
+  static const fansLine = 15.0;
+
+  /// The name's and the counts' centres below the avatar's top.
+  static const nameCentre = 10.0;
+  static const fansCentre = 29.0;
+
+  /// + 关注 follows the wider of the name and the counts, 21.5 after it: a 72 × 26 card with 4 pt corners.
+  static const followGap = 21.5;
+  static const followWidth = 72.0;
+  static const followHeight = 26.0;
+  static const followRadius = 4.0;
+  static const followText = 13.0;
+  static const followPlus = 9.5;
+  static const followPlusStroke = 1.1;
+  static const followPlusGap = 5.0;
+
+  /// 点我发弹幕 and the 弹 toggle (03 sideways, 06 in the tab row upright): 158 × 32, 20 from the right edge, the
+  /// words 15 in, the toggle's white 39.5 wide with the glyph centred 18.5 from the capsule's end.
+  static const capsuleWidth = 158.0;
+  static const capsuleHeight = 32.0;
+  static const capsuleBorder = 0.5;
+  static const capsuleToggle = 39.5;
+  static const capsuleToggleOff = 44.0;
+  static const capsuleTextLead = 15.0;
+  static const capsuleText = 13.0;
+  static const capsuleMarkCentre = 18.5;
+
+  /// The words sit 1 lower than centred in the capsule.
+  static const capsuleTextDrop = 1.0;
+
+  /// The title's centre below the avatar's bottom: 32.5 sideways, 30.5 upright (03, 06).
+  static const titleGap = 32.5;
+  static const titleGapUpright = 30.5;
+  static const titleText = 18.0;
+  static const titleLine = 24.0;
+
+  /// The iPad's title is the name's grey in a medium weight, lighter than the iPhone's.
+  static const titleInk = IntroTheme.name;
+
+  /// The 活动 capsule sits 1 below the title's centre.
+  static const honorHeight = 20.0;
+  static const honorDrop = 1.0;
+  static const honorPadding = 8.0;
+  static const honorText = 12.0;
+  static const honorGap = 4.5;
+
+  /// The meta line: 30 under the title's centre, ▶ 1.5 in, 15 × 13 icons 4 before their counts, groups 15.5 apart,
+  /// then the BV id and 查看简介 with its 9 × 4.5 chevron 2.5 after it.
+  static const metaGap = 30.0;
+  static const metaLine = 16.0;
+  static const metaText = 12.0;
+  static const metaLead = 1.5;
+  static const metaIconWidth = 15.0;
+  static const metaIconHeight = 13.0;
+  static const metaIconGap = 4.0;
+  static const metaGroupGap = 15.5;
+  static const toggleChevronGap = 2.5;
+  static const toggleChevronWidth = 9.0;
+  static const toggleChevronHeight = 4.5;
+
+  /// 查看简介 opened (04): the description's 17 pt lines start 8.5 under the meta line, then the plain tags, 26 tall,
+  /// 6.5 under the description, 12 apart, their names 13.5 from each end.
+  static const descGap = 8.5;
+  static const descText = 13.0;
+  static const descLine = 17.0;
+  static const tagsGap = 6.5;
+  static const tagHeight = 26.0;
+  static const tagText = 12.0;
+  static const tagPadding = 13.5;
+  static const tagSpacing = 12.0;
+  static const tagInk = IntroTheme.name;
+
+  /// The actions (03): 70 pt cells from the gutter, a 30 pt icon centred 35.5 under the meta line's centre, its count
+  /// centred 26.75 below the icon's in the icons' grey, and the head ending 21.25 under the counts, where 热门评论's
+  /// hairline is.
+  static const actionCell = 70.0;
+  static const actionTopGap = 35.5 - metaLine / 2 - actionIcon / 2;
+  static const actionIcon = 30.0;
+  static const actionCountLine = 15.0;
+  static const actionCountGap = 26.75 - actionIcon / 2 - actionCountLine / 2;
+  static const actionCountText = 12.0;
+  static const actionCount = ActionTheme.icon;
+  static const actionsBottom = 21.25 - actionCountLine / 2;
+  static const actionRing = 40.0;
+
+  /// The sections that follow (合集, parts, topic chips) keep the iPhone's look at the iPad's gutter.
+  static const sectionInset = gutter - BiliMetrics.gutter;
+
+  /// A related row (03, 06): 97 apart, a 138 × 77 cover 10 below the row's top, the text 10.5 right of it. No
+  /// hairlines between rows; upright the list opens with one 10 under the head, 10 in from each side.
+  static const relatedRowHeight = 97.0;
+  static const relatedCoverTop = 10.0;
+  static const relatedCoverWidth = 138.0;
+  static const relatedCoverHeight = 77.0;
+  static const relatedTextGap = 10.5;
+  static const relatedTitleLift = 1.5;
+
+  /// The iPad's related titles are medium, where the iPhone's are regular.
+  static const relatedTitleWeight = FontWeight.w500;
+
+  /// The first cover sits where the ad's does, 16 under the column's top or the list's hairline.
+  static const relatedListTop = 6.0;
+  static const relatedHairlineGap = 10.0;
+  static const relatedHairlineInset = 10.0;
+
+  /// Sideways the column's rows sit 10 from its edges; upright the page's 20.
+  static const relatedColumnGutter = 10.0;
+  static const relatedUploaderCentre = 49.75;
+  static const relatedCountsCentre = 69.0;
+  static const relatedMetaLead = 0.5;
+  static const relatedMetaGap = 6.0;
+  static const relatedCountSpacing = 12.5;
+  static const relatedIconWidth = 14.0;
+  static const relatedIconHeight = 12.0;
+  static const relatedUpFont = 8.0;
+  static const relatedUpRadius = 3.0;
+
+  /// ⋮: three 3 pt dots 1.5 apart, centred 8 inside the gutter on the counts' line.
+  static const moreDot = 3.0;
+  static const moreDotGap = 1.5;
+  static const moreInset = 8.0;
+
+  /// The cover's duration tag (06), 5 in from the corner, a lighter shade than the iPhone's, reads 04:15 as the iPad
+  /// writes it.
+  static const durationInset = 5.0;
+  static const durationHeight = 14.0;
+  static const durationPad = 4.5;
+  static const durationRadius = 3.0;
+  static const durationFill = Color(0x80000000);
+}
 
 /// The iPad's controls over the page's player and its end screen (ipad/03, 07, 17). The Player controls agent owns
 /// this class.
-abstract final class PadInlineControlsTheme {}
+abstract final class PadInlineControlsTheme {
+  /// A control's centre from its edge of the player: back, ⋮ and 全屏 (03: 28.5-29 pt; 07 the same).
+  static const edgeCentre = 29.0;
+
+  /// The top row's centre from the player's top, and the bottom row's from its bottom.
+  static const topCentre = 29.0;
+  static const bottomCentre = 29.0;
+
+  /// From the player's right: the 投屏 TV and 倍速 share a column, the 小窗 icon is left of the TV.
+  static const castCentre = 87.0;
+  static const floatCentre = 144.25;
+
+  /// The glyphs' ink (03, 07), drawn from the APK's `biliplayer_ic_topbar_floatwindow` and `_tv`.
+  static const floatWidth = 24.5;
+  static const floatHeight = 19.5;
+  static const castWidth = 24.0;
+  static const castHeight = 19.33;
+  static const backWidth = 9.0;
+  static const backHeight = 18.0;
+  static const moreDot = 3.0;
+  static const moreDotGap = 4.5;
+
+  /// The float window's lines, 1 of its 22-unit viewport at the ink's scale.
+  static const floatStroke = 1.17;
+
+  /// ⏮ (the APK's `bili_mini_player_ctrl_play_prev`), its centre from the left, and half white with nothing before.
+  static const previousCentre = 29.0;
+  static const previousWidth = 11.67;
+  static const previousHeight = 13.33;
+  static const previousOffOpacity = 0.5;
+
+  static const playCentre = 86.5;
+  static const playWidth = 17.0;
+  static const playHeight = 20.0;
+
+  /// The bar's left end (the TV's left at 0:00: its centre at 116) and the gap before the time; the time ends 142
+  /// from the right, so the bar ends 232.5 from it with 03's time.
+  static const barLeft = 107.0;
+  static const timeGap = 17.0;
+  static const timeRight = 142.0;
+  static const timeFont = 12.5;
+
+  static const speedFont = 16.0;
+  static const speedWidth = 60.0;
+  static const fullScreenGlyph = 16.0;
+
+  /// 章节 · (chapter) ›: 14 pt from 21 pt in, its centre 65.75 above the player's bottom; the chevron 6.5 × 11, 11
+  /// after the text.
+  static const chapterLeft = 21.0;
+  static const chapterCentre = 65.75;
+  static const chapterFont = 14.0;
+  static const chapterHeight = 24.0;
+  static const chevronWidth = 6.5;
+  static const chevronHeight = 11.0;
+  static const chevronGap = 11.0;
+  static const chevronStroke = 1.5;
+  static const chapterShadow = 2.0;
+
+  /// The shades behind both rows (07 against 06, the same frame): near black at the edge, gone 96 pt in.
+  static const shadeHeight = 96.0;
+  static const shade = [
+    Color(0xFF000000),
+    Color(0xF5000000),
+    Color(0xC7000000),
+    Color(0x87000000),
+    Color(0x42000000),
+    Color(0x14000000),
+    Color(0x00000000),
+  ];
+  static const shadeStops = [0.0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1.0];
+
+  /// With the controls hidden, the chapters across the bottom (06): each title 9 pt, centred on its stretch, 10.67
+  /// above the bottom, between hairlines 20 pt tall, over a 22 pt shade.
+  static const stripFont = 9.0;
+  static const stripCentre = 10.67;
+  static const stripLine = 0.5;
+  static const stripLineHeight = 20.0;
+  static const stripLineInk = Color(0x4DFFFFFF);
+  static const stripShadeHeight = 22.0;
+  static const stripShade = Color(0x9E000000);
+  static const stripPad = 4.0;
+
+  /// The end screen (17) on a 756.5 × 425.5 player, its block placed from the player's middle.
+  static const endTopCentre = 42.0;
+  static const endEdgeCentre = 21.5;
+  static const endBackWidth = 9.5;
+  static const endCaptionLeft = 51.0;
+  static const endCaptionCentre = -34.25;
+  static const endCaptionFont = 13.5;
+  static const endCoverLeft = 50.0;
+  static const endCoverTop = -18.75;
+  static const endCoverWidth = 224.0;
+  static const endCoverHeight = 126.0;
+  static const endCoverRadius = 6.0;
+  static const endCoverShadeHeight = 40.0;
+  static const endCoverTextInset = 9.0;
+  static const endCoverTimeFont = 12.0;
+  static const endPlayWidth = 18.5;
+  static const endPlayHeight = 21.0;
+  static const endInfoGap = 11.0;
+  static const endInfoRight = 24.0;
+  static const endTitleCentre = 0.75;
+  static const endTitleFont = 16.0;
+  static const endUploaderCentre = 70.25;
+  static const endCountsCentre = 89.25;
+  static const endMetaFont = 12.5;
+  static const endCountFont = 12.0;
+  static const endMetaRow = 16.0;
+  static const endMetaGap = 6.0;
+  static const endMetaSpacing = 14.0;
+
+  /// 重播 and 分享 on one line, the share text's end 67.5 from the right.
+  static const endActionsCentre = -33.75;
+  static const endActionsRight = 67.5;
+  static const endActionFont = 14.0;
+  static const endReplayWidth = 19.5;
+  static const endReplayHeight = 21.0;
+  static const endReplayGap = 10.0;
+  static const endShareInk = 24.0;
+  static const endShareGap = 6.7;
+  static const endActionSpacing = 37.2;
+}
 
 /// The iPad's full screen: top and bottom bars, side buttons, the end screen, the hold, buffering and the seek
 /// preview (ipad/08, 14-16, 18, 19, 24). The Full screen agent owns this class. Measured at 2 px per pt on KaiC's
@@ -6681,8 +6942,67 @@ abstract final class PadFullScreenTheme {
   static const endTitleInk = Color(0xA6FFFFFF);
 }
 
-/// The iPad's player panels (ipad/10-13). The Panels agent owns this class.
-abstract final class PadPanelTheme {}
+/// The iPad's player panels (ipad/10-13), measured at 2× (pt = px / 2). In full screen every panel is a hard-edged
+/// strip at the right, the same width in points whichever way the iPad is held; the rows inside are the phone's.
+abstract final class PadPanelTheme {
+  /// 清晰度 and 倍速 (10, 11): a 242 pt strip; ⋮, 弹幕设置 and the panels opened from them (12, 13): 320.
+  static const narrowWidth = 242.0;
+  static const wideWidth = 320.0;
+
+  /// The video shows through 16% under 清晰度 and ⋮, 12% under 倍速 and 弹幕设置.
+  static const shade = Color(0xD6000000);
+  static const darkShade = Color(0xE0000000);
+
+  /// 弹幕设置's cards and the side panels' rows end this far before the screen's edge, as the phone's do before its
+  /// safe area; ⋮'s cards keep [moreInset] each side, so its four squares sit [moreActionGap] apart.
+  static const trailing = 16.0;
+  static const moreInset = 12.0;
+  static const moreActionGap = 32.0;
+
+  /// 12's first card is 80 pt down, 8 below where the phone's header puts it under the 24 pt status bar.
+  static const danmakuTop = 8.0;
+
+  /// 10's rows: 66 pt apart, their block centred [qualityLift] above the screen's middle, the text [qualityLead] in
+  /// from the strip and the 大会员 tag ending [qualityTrailing] before the screen's edge.
+  static const qualityRow = 66.0;
+  static const qualityLift = 12.0;
+  static const qualityLead = 43.5;
+  static const qualityTrailing = 36.0;
+  static const qualityText = 16.0;
+  static const qualitySubtitleText = 11.0;
+  static const qualityHeaderTop = 14.0;
+  static const qualityHeaderGap = 8.0;
+  static const qualitySelected = Color(0xFFFB7299);
+  static const badgeHeight = 15.0;
+  static const badgePad = 6.0;
+  static const badgeText = 10.0;
+  static const badgeFill = Color(0xFFFB7299);
+
+  /// 11's values: 58 pt apart, centred on the screen and in the strip.
+  static const speedRow = 58.0;
+  static const speedText = 16.0;
+  static const speedSelected = Color(0xFFFF6699);
+
+  /// On the page (no screenshot): the sheets keep the phone's heights in points (shares of its 956) and stay under
+  /// the player, at most [sheetMaxWidth] wide from the page's left edge, where the player starts in both layouts.
+  static const phoneHeight = 956.0;
+  static const sheetMaxWidth = 600.0;
+}
 
 /// The iPad's danmaku, on the page's player and in full screen (ipad/09, 25). The Danmaku agent owns this class.
-abstract final class PadDanmakuTheme {}
+abstract final class PadDanmakuTheme {
+  /// Full screen's text at an elem's fontSize of 25: 09's CJK advances are 43.4 px (9 of them over 391 px) and 25's
+  /// lanes 62.6 px apart, which the phone's 1.44 lane spacing and 1 pt outline give at 21.75 pt. Lanes run from the
+  /// screen's top edge, 25's six of them filling 25% of the whole 834 pt height, pillarbox included.
+  static const fontFullScreen = 21.75;
+
+  /// The landscape screen's width, against which the page's player scales [fontFullScreen]: no screenshot shows
+  /// danmaku on the page (03, 07), so they keep full screen's share of a 16:9 picture, as the phone's small player
+  /// does (12.5 against 22).
+  static const fullScreenWidth = 1194.0;
+
+  /// The style panel's height before a keyboard has been up to measure (the iPad Pro 11"'s, with its suggestions
+  /// row); the panel takes the real keyboard's height once it has risen.
+  static const landscapePanelHeight = 405.0;
+  static const portraitPanelHeight = 320.0;
+}

@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:bili_core/danmaku.dart';
 import 'package:flutter/foundation.dart';
 
+import '../app/form_factor.dart';
 import '../device/orientation.dart';
 import '../shared/theme.dart';
 import 'danmaku_sprites.dart';
@@ -18,6 +19,7 @@ final class DanmakuOptions {
     this.scale = 1,
     this.scrollDuration = 7,
     this.presentation = Presentation.inline,
+    this.formFactor = FormFactor.phone,
   });
 
   /// Share of the video's height the lanes may use.
@@ -31,6 +33,9 @@ final class DanmakuOptions {
   /// The player they fly over: the small player, landscape and 竖屏 each size them their own way.
   final Presentation presentation;
 
+  /// The iPad sizes them its own way (`PadDanmakuTheme`).
+  final FormFactor formFactor;
+
   bool get fullScreen => presentation.fullScreen;
 
   @override
@@ -40,10 +45,11 @@ final class DanmakuOptions {
       other.opacity == opacity &&
       other.scale == scale &&
       other.scrollDuration == scrollDuration &&
-      other.presentation == presentation;
+      other.presentation == presentation &&
+      other.formFactor == formFactor;
 
   @override
-  int get hashCode => Object.hash(area, opacity, scale, scrollDuration, presentation);
+  int get hashCode => Object.hash(area, opacity, scale, scrollDuration, presentation, formFactor);
 }
 
 /// A danmaku on screen and where it is (tests).
@@ -180,7 +186,7 @@ final class DanmakuScene extends ChangeNotifier {
   Set<DisplayDanmaku> _waiting = const {};
   double _shownUntil = 0;
 
-  (Size, Presentation, double, double)? _geometry;
+  (Size, Presentation, double, double, FormFactor)? _geometry;
   int _lanes = 0;
   double _laneHeight = 0;
   double _basePointSize = BiliMetrics.danmakuFont;
@@ -242,7 +248,7 @@ final class DanmakuScene extends ChangeNotifier {
     }
     var relay = jumped;
     var scaled = false;
-    final geometry = (size, options.presentation, options.area, options.scale);
+    final geometry = (size, options.presentation, options.area, options.scale, options.formFactor);
     if (geometry != _geometry) {
       final old = _geometry;
       scaled = !jumped && old != null && old.$1 == size && old.$2 == options.presentation && old.$3 == options.area;
@@ -308,16 +314,21 @@ final class DanmakuScene extends ChangeNotifier {
 
   void _configure(DanmakuOptions options) {
     final vertical = options.presentation == Presentation.vertical;
+    final pad = options.formFactor.isPad;
     _basePointSize =
         options.scale *
         switch (options.presentation) {
+          Presentation.inline when pad =>
+            PadDanmakuTheme.fontFullScreen * math.min(size.width / PadDanmakuTheme.fullScreenWidth, 1.0),
+          Presentation.landscape when pad => PadDanmakuTheme.fontFullScreen,
           Presentation.inline => BiliMetrics.danmakuFont,
           Presentation.landscape => BiliMetrics.danmakuFontFullScreen,
+          // The iPad has no 竖屏.
           Presentation.vertical => BiliMetrics.danmakuFontVertical,
         };
     // Tiny fonts: the outline and own box padding must still fit, or neighbouring lanes would touch. 竖屏's lanes are
-    // tighter than PingFang's line (118), so there only the glyphs' em must.
-    final fits = vertical
+    // tighter than PingFang's line (118), as the iPad's are (25), so there only the glyphs' em must.
+    final fits = vertical || pad
         ? _basePointSize + (BiliMetrics.danmakuOutline + BiliMetrics.danmakuOwnPadY) * 2
         : sprites.lineHeight(_basePointSize).ceilToDouble() + BiliMetrics.danmakuOwnPadY * 2;
     _laneHeight = math.max(

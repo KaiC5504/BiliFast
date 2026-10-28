@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
+import '../app/form_factor.dart';
 import 'device_controls.dart';
 import 'orientation_host.dart';
 
@@ -21,6 +22,10 @@ enum Presentation {
 /// every move applies at once.
 ///
 /// Pages stack: the latest [begin] wins, and a covered page's late [end] does nothing.
+///
+/// The iPad (read from [FormFactor.device] at each move) turns freely on every screen and is never asked to rotate:
+/// full screen is entered and left only by the controls, in whichever way the iPad is held, and has no 竖屏 (an
+/// upright video's full screen is [Presentation.landscape]). Its lock only shows as on.
 class OrientationController extends ChangeNotifier {
   OrientationController({DeviceControls? controls, OrientationHost? host, Logger? logger})
       : controls = controls ?? NoDeviceControls(),
@@ -43,7 +48,7 @@ class OrientationController extends ChangeNotifier {
   Presentation _presentation = Presentation.inline;
 
   /// The rotation lock: turning the phone does nothing while it is on; it ends with the page, or when another page
-  /// begins.
+  /// begins. The iPad's turns never change the presentation, so there it changes nothing.
   bool get locked => _locked;
   bool _locked = false;
 
@@ -79,7 +84,7 @@ class OrientationController extends ChangeNotifier {
   /// gets the system's turn rather than a still picture.
   Future<void> _syncTakeover() {
     final host = _host;
-    final armed = _takeoverChosen && _owner != null;
+    final armed = _takeoverChosen && _owner != null && !_pad;
     if (host == null || (armed == _sent && !_sentUnknown)) return Future.value();
     _turnTakeover = armed;
     _sent = armed;
@@ -136,7 +141,7 @@ class OrientationController extends ChangeNotifier {
     _videoIsVertical = videoIsVertical;
     if (!_observing) {
       _observing = true;
-      _host?.setOrientationEvents(true).catchError(_hostFailed);
+      if (!_pad) _host?.setOrientationEvents(true).catchError(_hostFailed);
     }
     notifyListeners();
   }
@@ -155,7 +160,7 @@ class OrientationController extends ChangeNotifier {
     if (_observing) {
       _observing = false;
       _lastDeviceOrientation = null;
-      _host?.setOrientationEvents(false).catchError(_hostFailed);
+      if (!_pad) _host?.setOrientationEvents(false).catchError(_hostFailed);
     }
     _locked = false;
     _videoIsVertical = false;
@@ -174,7 +179,7 @@ class OrientationController extends ChangeNotifier {
     _awaitingLandscape = !(_lastDeviceOrientation?.isLandscape ?? false);
     _move(Presentation.landscape);
     final host = _host;
-    if (host == null || !_awaitingLandscape) return;
+    if (host == null || !_awaitingLandscape || _pad) return;
     // The last event may be older than the phone's turn; ask, as Swift read UIDevice at once.
     final request = _requests;
     host.deviceOrientation().then((orientation) {
@@ -182,7 +187,7 @@ class OrientationController extends ChangeNotifier {
     }, onError: _hostFailed);
   }
 
-  void enterVertical() => _move(Presentation.vertical);
+  void enterVertical() => _move(_pad ? Presentation.landscape : Presentation.vertical);
 
   void exitToInline() => _move(Presentation.inline);
 
@@ -199,7 +204,7 @@ class OrientationController extends ChangeNotifier {
     if (!_observing) return;
     _lastDeviceOrientation = orientation;
     if (orientation.isLandscape) _awaitingLandscape = false;
-    if (_locked || _videoIsVertical) return;
+    if (_locked || _videoIsVertical || _pad) return;
     switch (_presentation) {
       case Presentation.inline when orientation.isLandscape:
         _move(Presentation.landscape);
@@ -257,7 +262,7 @@ class OrientationController extends ChangeNotifier {
   /// Requests go out in order, so the last one sent is always the latest presentation's.
   void _apply(int request) {
     final host = _host;
-    if (host == null) return;
+    if (host == null || _pad) return;
     final presentation = _presentation;
     final locked = _locked;
     _hostQueue = _hostQueue.then((_) async {
@@ -284,6 +289,8 @@ class OrientationController extends ChangeNotifier {
         };
     }
   }
+
+  static bool get _pad => FormFactor.device.isPad;
 
   void _hostFailed(Object error) => _logger.warn(LogCategory.ui, 'orientation host failed', {'error': '$error'});
 
