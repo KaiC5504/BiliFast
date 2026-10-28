@@ -40,6 +40,23 @@ class HomeTabIcon extends StatelessWidget {
   );
 }
 
+/// An iPad bar icon (ipad/01, 02): the APK's own tab bar art, tinted grey, or pink while [selected].
+class PadTabIcon extends StatelessWidget {
+  const PadTabIcon(this.tab, {super.key, this.selected = false});
+
+  final PadTab tab;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    tab.art(selected: selected),
+    width: tab.iconWidth,
+    color: selected ? PadHomeTheme.pink : PadHomeTheme.barIconInk,
+    colorBlendMode: BlendMode.srcIn,
+    excludeFromSemantics: true,
+  );
+}
+
 /// The line glyphs, laid out in a 22 pt square as measured on 01 and 02 and scaled to the square they get.
 class HomeTabGlyphPainter extends CustomPainter {
   HomeTabGlyphPainter(this.tab, {required this.selected, required this.color});

@@ -73,7 +73,7 @@ class _MainShellState extends State<MainShell> {
     final follow = _tab == HomeTab.follow;
     final media = MediaQuery.of(context);
     final dressed = HomeTabBar.dresses(skin);
-    final bar = HomeTabBarTheme.height + media.padding.bottom;
+    final bar = HomeTabBar.heightOf(context) + media.padding.bottom;
     // Under a dressed bar the pages run to the screen's bottom, inset by the stock bar, so lists end above its row
     // and scroll on behind its picture.
     final pages = dressed
@@ -125,7 +125,12 @@ class _MainShellState extends State<MainShell> {
             left: 0,
             right: 0,
             bottom: 0,
-            child: HomeTabBar(selected: _tab, onTap: _tapped, skin: skin),
+            child: HomeTabBar(
+              selected: _tab,
+              onTap: _tapped,
+              onPartition: () => showToast(context, '暂未开放'),
+              skin: skin,
+            ),
           ),
           Positioned.fill(child: FaceSheetLayer(controller: _faceSheet)),
         ],

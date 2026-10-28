@@ -34,6 +34,36 @@ const _officialFeedQuery = {
   'voice_balance': '0',
 };
 
+/// The query 推荐 asked before (38), PiliPlus's own: the iPad's, which shows no big inline card. The server sends that
+/// card only to the Android phone app.
+const _officialPadFeedQuery = {
+  'build': '8430300',
+  'c_locale': 'zh_CN',
+  'channel': 'master',
+  'column': '2',
+  'device': 'phone',
+  'device_name': 'android',
+  'device_type': '0',
+  'disable_rcmd': '0',
+  'flush': '8',
+  'fnval': '976',
+  'fnver': '0',
+  'force_host': '2',
+  'fourk': '1',
+  'guidance': '1',
+  'https_url_req': '1',
+  'mobi_app': 'android_i',
+  'network': 'wifi',
+  'platform': 'android',
+  'player_net': '1',
+  'qn': '32',
+  'recsys_mode': '0',
+  's_locale': 'zh_CN',
+  'splash_id': '',
+  'statistics': '{"appId":1,"platform":3,"version":"8.43.0","abtest":""}',
+  'voice_balance': '0',
+};
+
 /// The fixed fingerprints and trace id are PiliPlus's placeholders, the same for everyone.
 const _officialFeedHeaders = {
   'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',
@@ -89,14 +119,15 @@ extension BiliClientFeedOfficial on BiliClient {
       _logger.info(LogCategory.api, 'feed card types', {'cards': _feedCardTypes(json).join(' ')});
 
   /// [index] counts the pages of one scroll from 0, and 0 is a pull to refresh. Without the app token it throws
-  /// [BiliError.noAppToken] and sends nothing: the feed is generic without it.
-  Future<List<FeedCard>> officialFeed({required int index}) async {
+  /// [BiliError.noAppToken] and sends nothing: the feed is generic without it. [pad] asks as the iPad does; a big
+  /// card that comes anyway keeps the server's place.
+  Future<List<FeedCard>> officialFeed({required int index, bool pad = false}) async {
     const path = '/x/v2/feed/index';
     final token = _officialToken(true);
     final envelope = await _getEnvelope(
       path,
       query: _officialSigned({
-        ..._officialFeedQuery,
+        ...pad ? _officialPadFeedQuery : _officialFeedQuery,
         'idx': '$index',
         'pull': index == 0 ? 'true' : 'false',
       }, token),
@@ -106,7 +137,8 @@ extension BiliClientFeedOfficial on BiliClient {
       extraHeaders: _officialHeaders(_officialFeedHeaders),
       decode: (json) {
         _logFeedCardTypes(json);
-        return _bigFirst([for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card]);
+        final cards = [for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card];
+        return pad ? cards : _bigFirst(cards);
       },
     );
     final checked = _officialChecked(envelope, token);

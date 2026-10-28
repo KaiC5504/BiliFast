@@ -68,3 +68,11 @@ white at 3× by `tools/apk_asset.py extract … --width` 72 and 35 (24 × 19.33 
 alpha raised from the file's 80% to full, as 17 draws it solid white at 19.5 × 21 pt. 小窗 is the APK's
 `biliplayer_ic_topbar_floatwindow` drawn in code (`FloatWindowPainter`): the extractor fills its stroked paths.
 17's 分享 is the action row's solid arrow (`ActionGlyph.share`), and 全屏 the small player's `FullScreenPainter`.
+
+The iPad's 首页 (ipad/01, 02) takes the same APK's tab bar and scan art, each a vector drawn white at 3× by
+`tools/apk_asset.py extract … --width` for tinting, the width the ink measures on 01: `images/home/pad_tab_home.png`
+and `_selected` (`ic_vector_tab_bar_home_default` / `_selected`, 60 px), `pad_tab_partition.png`
+(`ic_vector_tab_bar_partition_default`, 63 px; its selected file is the same drawing), `pad_tab_moments.png`
+(`ic_vector_tab_bar_moments_default`, 63 px, likewise), `pad_tab_mine.png` and `_selected`
+(`ic_vector_tab_bar_mine_default` / `_selected`, 63 px), and `pad_scan.png` (`ic_scan_cast`, 54 px, the top's scan).
+The top's clock with its turning arrow and its three-dot bubble are drawn in code: the APK has neither.

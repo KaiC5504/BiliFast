@@ -217,6 +217,30 @@ void main() {
     expect(http.query(more)['pull'], 'false');
   });
 
+  test("the iPad's query is the one asked before (38), with no inline fields; a big card keeps its place", () async {
+    http.routes[feedPath] = (200, officialFeed);
+    final cards = await client.officialFeed(index: 0, pad: true);
+    final query = http.query(http.requestsTo(feedPath).single);
+    expect(query['mobi_app'], 'android_i');
+    expect(query['device_name'], 'android');
+    expect(query['idx'], '0');
+    expect(query['pull'], 'true');
+    expect(query['access_key'], 'ACCESS');
+    expect(query['sign'], isNotNull);
+    for (final key in ['autoplay_card', 'inline_sound', 'inline_danmu', 'auto_refresh_state']) {
+      expect(query.containsKey(key), isFalse, reason: key);
+    }
+    expect(cards.map((card) => card.aid), [90000001, 170001, 90000006, 90000007]);
+  });
+
+  test("a card's face comes from up_args where it is sent, '' otherwise; the official feed names no date", () async {
+    http.routes[feedPath] = (200, officialFeed);
+    final [big, first, ...] = await client.officialFeed(index: 0);
+    expect(big.ownerFace, 'https://i0.hdslb.com/bfs/face/official-face-0007.jpg');
+    expect(first.ownerFace, '');
+    expect(first.published, 0);
+  });
+
   test('a rejected token is reported and the feed throws its code', () async {
     http.routes[feedPath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
     final rejected = <String>[];

@@ -5,6 +5,7 @@ import 'package:bili_core/logic.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
+import '../app/form_factor.dart';
 import '../app/zoom_back_route.dart';
 import '../shared/cover_placeholder.dart';
 import '../shared/cover_preset.dart';
@@ -61,10 +62,29 @@ class FeedCardView extends StatefulWidget {
   /// The reasons sheet's pick.
   final ValueChanged<FeedReason>? onReason;
 
-  /// Gets [url] ready as a card with a [size] cover box asks for it (the same [CoverPreset.feed]), so the card draws
-  /// it the frame it comes.
+  /// Gets [url] ready as a card with a [size] cover box asks for it (the same preset), so the card draws it the frame
+  /// it comes.
   static Future<bool> precacheCover(BuildContext context, String? url, Size size) =>
-      RemoteImage.precache(context, url, size: size, cover: true, preset: CoverPreset.feed);
+      RemoteImage.precache(context, url, size: size, cover: true, preset: _preset(context));
+
+  /// The iPhone app's 4:3 preset; the iPad's 16:9 boxes take [CoverPreset.forBox]'s.
+  static CoverPreset? _preset(BuildContext context) => FormFactor.of(context).isPad ? null : CoverPreset.feed;
+
+  /// The iPad's line under the title: the uploader, and the date where the card has one.
+  static String padByline(FeedCard card, {required DateTime now}) {
+    if (card.published <= 0) return card.ownerName;
+    return '${card.ownerName} · ${padDate(card.published, now: now)}';
+  }
+
+  /// As comments read it, but two and three days back as N天前 (02's 3天前 beside 10月24日 five days back).
+  static String padDate(int unix, {required DateTime now}) {
+    final then = DateTime.fromMillisecondsSinceEpoch(unix * 1000);
+    final days = DateTime.utc(now.year, now.month, now.day).difference(DateTime.utc(then.year, then.month, then.day));
+    if (now.difference(then) >= const Duration(days: 1) && (days.inDays == 2 || days.inDays == 3)) {
+      return '${days.inDays}天前';
+    }
+    return TimeFormat.comment(unix, now: now);
+  }
 
   /// Covers say 0:18, not 00:18 (01).
   static String duration(int seconds) {
@@ -118,16 +138,29 @@ class _FeedCardViewState extends State<FeedCardView> {
     final dislike = widget.dislike;
     final data = widget.card.dislike;
     final offersReasons = data != null && (data.tiles.isNotEmpty || data.repeated != null);
+    final pad = FormFactor.of(context).isPad;
+    final disliked = dislike == null
+        ? null
+        : FeedDislikedCard(
+            key: const ValueKey('feed-card-disliked'),
+            card: widget.card,
+            onUndo: () => widget.onUndo?.call(),
+            onReasons: offersReasons ? () => unawaited(_reasons()) : null,
+          );
     return AnimatedSwitcher(
       duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : FeedDislikeTheme.fadeIn,
-      child: dislike == null
-          ? ZoomSourceBox(key: const ValueKey('feed-card-live'), builder: _card)
-          : FeedDislikedCard(
-              key: const ValueKey('feed-card-disliked'),
-              card: widget.card,
-              onUndo: () => widget.onUndo?.call(),
-              onReasons: offersReasons ? () => unawaited(_reasons()) : null,
-            ),
+      child: disliked == null
+          ? ZoomSourceBox(key: const ValueKey('feed-card-live'), builder: pad ? _padCard : _card)
+          // The phone's 4:3 card, shrunk into the iPad's slot until it has a shape of its own.
+          : pad
+          ? LayoutBuilder(
+              key: const ValueKey('feed-card-disliked-pad'),
+              builder: (context, box) => FittedBox(
+                alignment: Alignment.topCenter,
+                child: SizedBox(width: box.maxWidth, child: disliked),
+              ),
+            )
+          : disliked,
     );
   }
 
@@ -252,6 +285,269 @@ class _FeedCardViewState extends State<FeedCardView> {
       ),
     );
   }
+
+  /// [FeedCardView.padByline], the dot set a little wider than spaces make it (02).
+  static InlineSpan _padByline(FeedCard card) {
+    if (card.published <= 0) return TextSpan(text: card.ownerName);
+    const gap = WidgetSpan(child: SizedBox(width: PadHomeTheme.bylineDotGap));
+    return TextSpan(
+      children: [
+        TextSpan(text: card.ownerName),
+        gap,
+        const TextSpan(text: ' · '),
+        gap,
+        TextSpan(text: FeedCardView.padDate(card.published, now: DateTime.now())),
+      ],
+    );
+  }
+
+  /// The iPad's card (ipad/01, 02): a 16:9 cover with rounded corners on the page's white, then the uploader's face,
+  /// the title after its reason tag, the uploader and date, and ⋮.
+  Widget _padCard(BuildContext context, ZoomSource source) {
+    final card = widget.card;
+    const title = TextStyle(
+      fontSize: PadHomeTheme.titleText,
+      color: BiliColors.text,
+      height: PadHomeTheme.titleLine / PadHomeTheme.titleText,
+    );
+    const byline = TextStyle(fontSize: PadHomeTheme.subText, color: PadHomeTheme.subInk, height: 1.2);
+    final reason = card.reason;
+    return LayoutBuilder(
+      builder: (context, box) {
+        final cover = PadHomeTheme.coverHeight(box.maxWidth);
+        const more = PadHomeTheme.moreTarget;
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            Semantics(
+              button: true,
+              label: card.title,
+              onTap: () => widget.onOpen(source),
+              customSemanticsActions: {const CustomSemanticsAction(label: '稍后再看'): widget.onWatchLater},
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (_) => _press(true),
+                onTapUp: (_) => _press(false),
+                onTapCancel: () => _press(false),
+                onTap: () => widget.onOpen(source),
+                child: AnimatedScale(
+                  scale: _pressed ? BiliMetrics.pressedScale : 1,
+                  duration: const Duration(milliseconds: 120),
+                  curve: Curves.easeOut,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        height: cover,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(PadHomeTheme.coverRadius),
+                          child: _PadCover(card: card, size: Size(box.maxWidth, cover)),
+                        ),
+                      ),
+                      SizedBox(
+                        height: PadHomeTheme.footer,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: 0,
+                              top: PadHomeTheme.faceTop,
+                              width: PadHomeTheme.face,
+                              height: PadHomeTheme.face,
+                              child: ClipOval(
+                                key: const ValueKey('feed-card-face'),
+                                child: RemoteImage.avatar(card.ownerFace),
+                              ),
+                            ),
+                            Positioned(
+                              left: PadHomeTheme.titleLeft,
+                              right: PadHomeTheme.titleRight,
+                              top: PadHomeTheme.titleTop,
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    if (reason != null && reason.isNotEmpty) ...[
+                                      WidgetSpan(alignment: PlaceholderAlignment.middle, child: _PadTag(reason)),
+                                      const WidgetSpan(child: SizedBox(width: PadHomeTheme.tagGap)),
+                                    ],
+                                    TextSpan(text: card.title),
+                                  ],
+                                ),
+                                key: const ValueKey('feed-card-title'),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: title,
+                                strutStyle: BiliFonts.strutOf(context, title),
+                              ),
+                            ),
+                            Positioned(
+                              left: PadHomeTheme.titleLeft,
+                              right: PadHomeTheme.titleRight,
+                              top: PadHomeTheme.subTop,
+                              child: Text.rich(
+                                _padByline(card),
+                                key: const ValueKey('feed-card-byline'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: byline,
+                                strutStyle: BiliFonts.strutOf(context, byline),
+                              ),
+                            ),
+                            Positioned(
+                              right: PadHomeTheme.moreRight - more / 2,
+                              top: PadHomeTheme.moreCentre - more / 2,
+                              width: more,
+                              height: more,
+                              child: GestureDetector(
+                                key: const ValueKey('card-more'),
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => unawaited(_more()),
+                                child: const CustomPaint(painter: _PadMorePainter()),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: PadHomeTheme.moreRight - more / 2,
+              top: cover + PadHomeTheme.moreCentre - more / 2,
+              width: more,
+              height: more,
+              child: Semantics(
+                key: const ValueKey('card-more-semantics'),
+                container: true,
+                button: true,
+                label: '更多',
+                onTap: () => unawaited(_more()),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// ⋮ as the iPad draws it: three dots one above the other.
+class _PadMorePainter extends CustomPainter {
+  const _PadMorePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = PadHomeTheme.moreInk;
+    final centre = size.center(Offset.zero);
+    for (final step in const [-1, 0, 1]) {
+      canvas.drawCircle(centre + Offset(0, step * PadHomeTheme.morePitch), PadHomeTheme.moreDot / 2, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PadMorePainter oldDelegate) => false;
+}
+
+class _PadTag extends StatelessWidget {
+  const _PadTag(this.text);
+
+  final String text;
+
+  static const _style = TextStyle(fontSize: PadHomeTheme.tagText, color: BiliColors.reason, height: 1);
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: PadHomeTheme.tagHeight,
+    padding: const EdgeInsets.symmetric(horizontal: PadHomeTheme.tagPad),
+    decoration: BoxDecoration(color: BiliColors.reasonTint, borderRadius: BorderRadius.circular(2)),
+    child: Center(
+      widthFactor: 1,
+      child: Text(text, maxLines: 1, style: _style, strutStyle: BiliFonts.strutOf(context, _style)),
+    ),
+  );
+}
+
+/// The iPad's cover: the picture decoded at [size], the shade, and the counts and duration over it.
+class _PadCover extends StatelessWidget {
+  const _PadCover({required this.card, required this.size});
+
+  final FeedCard card;
+  final Size size;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      Hero(
+        tag: VideoRoute.coverTag(card.bvid),
+        child: RemoteImage(
+          card.cover,
+          cover: true,
+          size: size,
+          placeholder: const CoverPlaceholder(),
+          fadeIn: false,
+          overlay: const Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              height: PadHomeTheme.shade,
+              width: double.infinity,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [BiliColors.chromeShadeClear, BiliColors.coverShade],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        left: PadHomeTheme.statLead,
+        right: PadHomeTheme.statTrail,
+        bottom: 0,
+        height: PadHomeTheme.statCentre * 2,
+        child: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1,
+          child: DefaultTextStyle(
+            style: TextStyle(
+              fontFamily: BiliFonts.family,
+              fontFamilyFallback: BiliFonts.fallback,
+              fontSize: PadHomeTheme.statText,
+              color: BiliColors.onCover,
+            ),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.clip,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      const _StatIcon(_StatIcon.play, pad: true),
+                      const SizedBox(width: PadHomeTheme.statIconGap),
+                      Flexible(child: _StatText(card.viewsText ?? CountFormat.short(card.views))),
+                      const SizedBox(width: PadHomeTheme.statGap),
+                      const _StatIcon(_StatIcon.danmaku, pad: true),
+                      const SizedBox(width: PadHomeTheme.statIconGap),
+                      Flexible(child: _StatText(card.danmakuText ?? CountFormat.short(card.danmaku))),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                _StatText(FeedCardView.duration(card.duration)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class _Cover extends StatelessWidget {
@@ -339,18 +635,19 @@ class _Cover extends StatelessWidget {
 
 /// The official play or danmaku count icon, drawn white.
 class _StatIcon extends StatelessWidget {
-  const _StatIcon(this.asset);
+  const _StatIcon(this.asset, {this.pad = false});
 
   static const play = 'assets/images/card/stat_play.png';
   static const danmaku = 'assets/images/card/stat_danmaku.png';
 
   final String asset;
+  final bool pad;
 
   @override
   Widget build(BuildContext context) => Image.asset(
     asset,
-    width: BiliMetrics.cardStatIconWidth,
-    height: BiliMetrics.cardStatIconHeight,
+    width: pad ? PadHomeTheme.statIconWidth : BiliMetrics.cardStatIconWidth,
+    height: pad ? PadHomeTheme.statIconHeight : BiliMetrics.cardStatIconHeight,
     color: BiliColors.onCover,
     colorBlendMode: BlendMode.srcIn,
     excludeFromSemantics: true,
@@ -428,6 +725,7 @@ class FeedCardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (FormFactor.of(context).isPad) return _pad();
     final scaler = MediaQuery.textScalerOf(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(BiliMetrics.cardRadius),
@@ -476,6 +774,54 @@ class FeedCardSkeleton extends StatelessWidget {
       ),
     );
   }
+
+  /// The iPad's card shapes on the page's white: the cover, the face and two lines.
+  Widget _pad() => Shimmer(
+    child: LayoutBuilder(
+      builder: (context, box) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: PadHomeTheme.coverHeight(box.maxWidth),
+            decoration: BoxDecoration(
+              color: BiliColors.shimmerBase,
+              borderRadius: BorderRadius.circular(PadHomeTheme.coverRadius),
+            ),
+          ),
+          SizedBox(
+            height: PadHomeTheme.footer,
+            child: Stack(
+              children: [
+                const Positioned(
+                  left: 0,
+                  top: PadHomeTheme.faceTop,
+                  child: SizedBox.square(
+                    dimension: PadHomeTheme.face,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(color: BiliColors.shimmerBase, shape: BoxShape.circle),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: PadHomeTheme.titleLeft,
+                  right: PadHomeTheme.titleRight,
+                  top: PadHomeTheme.faceTop + 4,
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _Bar(),
+                      SizedBox(height: 10),
+                      FractionallySizedBox(widthFactor: 0.6, alignment: Alignment.centerLeft, child: _Bar()),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _Bar extends StatelessWidget {

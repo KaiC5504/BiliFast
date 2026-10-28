@@ -6416,7 +6416,106 @@ abstract final class FollowingListTheme {
 
 /// The iPad's 首页 (ipad/01, 02), measured at 2× (pt = px / 2). The Home agent owns this class.
 abstract final class PadHomeTheme {
+  /// 推荐's grid: 375 pt cards sideways and 255 upright, 22 pt from the edges and 12 apart; the first row starts as
+  /// far under the hairline as 01's banner does (the banner is left out).
   static const columns = 3;
+  static const page = BiliColors.card;
+  static const margin = 22.0;
+  static const gutter = 12.0;
+  static const rowGap = 12.0;
+  static const firstRow = 18.0;
+
+  /// Bilibili's own pink, as the iPad's selected tab, bar place and 推荐 draw it.
+  static const pink = Color(0xFFFB7299);
+
+  /// The top: one row from the status bar to the hairline, everything centred [rowCentre] under the status bar.
+  static const rowHeight = 45.5;
+  static const rowCentre = 21.0;
+  static const hairline = 0.5;
+  static const avatar = 40.0;
+  static const avatarLeft = 20.0;
+
+  /// The search entry: a grey stadium from 75 pt, as wide as its word up to [fieldTabGap] short of the tab row.
+  static const fieldLeft = 75.0;
+  static const fieldHeight = 30.0;
+  static const fieldFill = BiliColors.pageGrey;
+  static const fieldGlyph = 13.0;
+  static const fieldGlyphLead = 16.5;
+  static const fieldGlyphInk = Color(0xFF999999);
+  static const fieldTextStart = 35.5;
+  static const fieldTextEnd = 17.0;
+  static const fieldText = 13.0;
+  static const fieldInk = BiliColors.secondaryText;
+  static const fieldTabGap = 40.0;
+
+  /// 直播 推荐 热门 追番 影视, centred on the screen, 65 pt apart.
+  static const tabs = ['直播', '推荐', '热门', '追番', '影视'];
+  static const tabText = 16.0;
+  static const tabPitch = 65.0;
+  static const tabInk = Color(0xFF999999);
+  static const tabRise = 1.25;
+
+  /// Scan, 历史记录 and 消息, their centres this far from the right edge.
+  static const icon = 20.0;
+  static const iconInk = Color(0xFF757575);
+  static const scanRight = 142.0;
+  static const historyRight = 90.0;
+  static const messagesRight = 38.0;
+  static const iconLine = 1.5;
+  static const scan = 18.0;
+
+  /// The bottom bar: 50 pt from its hairline to the home indicator, four 118 pt places centred.
+  static const barHeight = 50.0;
+  static const barSlot = 118.0;
+  static const barIconCentre = 18.25;
+  static const barLabelTop = 31.5;
+  static const barLabelText = 11.0;
+  static const barIconInk = Color(0xFF747474);
+  static const barLabelInk = Color(0xFF929292);
+
+  /// A card: the cover's corners, its counts row, then the face, two title lines, the uploader and date, and ⋮.
+  static const coverRadius = 4.0;
+  static const footer = 87.0;
+  static const face = 40.0;
+  static const faceTop = 8.0;
+  static const titleLeft = 46.0;
+  static const titleRight = 39.0;
+  static const titleTop = 7.75;
+  static const titleText = 14.0;
+  static const titleLine = 19.5;
+  static const subTop = 51.0;
+  static const subText = 13.0;
+  static const subInk = BiliColors.secondaryText;
+  static const bylineDotGap = 2.0;
+  static const moreRight = 17.0;
+  static const moreCentre = 27.0;
+  static const moreDot = 3.0;
+  static const morePitch = 5.0;
+  static const moreInk = Color(0xFF757575);
+  static const moreTarget = 34.0;
+  static const tagHeight = 16.0;
+  static const tagText = 11.0;
+  static const tagPad = 4.0;
+  static const tagGap = 4.0;
+  static const statText = 11.0;
+  static const statIconWidth = 13.0;
+  static const statIconHeight = 11.0;
+  static const statLead = 10.5;
+  static const statIconGap = 6.0;
+  static const statGap = 15.0;
+  static const statTrail = 11.5;
+  static const statCentre = 17.5;
+  static const shade = 40.0;
+
+  /// The cover's height on a card [width] wide: 16:9 and a pt and a half (212 sideways, 145 upright).
+  static double coverHeight(double width) => (width * 9 / 16 + 1.5).roundToDouble();
+
+  static double cardHeight(double width) => coverHeight(width) + footer;
+
+  /// How wide each of the [columns] cards is in a grid [width] wide: whole points, the rest left at the right.
+  static double cardWidth(double width) => ((width - margin * 2 - gutter * (columns - 1)) / columns).floorToDouble();
+
+  static double rightMargin(double width) => width - margin - cardWidth(width) * columns - gutter * (columns - 1);
 }
 
 /// The iPad's video page frame: the two columns sideways (ipad/03, 05), one upright (06), the player's shrink to the
