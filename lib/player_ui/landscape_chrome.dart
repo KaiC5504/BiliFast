@@ -217,7 +217,7 @@ class LandscapeChrome extends StatelessWidget {
             onTap: _touch(() => unawaited(_capture(context))),
             child: const CustomPaint(
               size: Size(BiliMetrics.chromeCameraWidth, BiliMetrics.chromeCameraHeight),
-              painter: _CameraPainter(),
+              painter: CameraPainter(),
             ),
           ),
           const SizedBox(height: BiliMetrics.chromeSideGap),
@@ -232,7 +232,7 @@ class LandscapeChrome extends StatelessWidget {
             child: CustomPaint(
               key: ValueKey(locked),
               size: const Size(BiliMetrics.chromeLockWidth, BiliMetrics.chromeLockHeight),
-              painter: _LockPainter(locked: locked),
+              painter: LockPainter(locked: locked),
             ),
           ),
         ),
@@ -506,7 +506,7 @@ class _TextButton extends StatelessWidget {
                 Positioned(
                   top: BiliMetrics.chromeTagTop,
                   right: -BiliMetrics.chromeTagOverhang,
-                  child: _Tag(tag),
+                  child: QualityTag(tag),
                 ),
               ],
             ),
@@ -514,14 +514,14 @@ class _TextButton extends StatelessWidget {
   }
 }
 
-class _Tag extends StatelessWidget {
-  const _Tag(this.text);
+/// 1080P's 高码率 or 60帧, small and outlined.
+class QualityTag extends StatelessWidget {
+  const QualityTag(this.text, {super.key = const ValueKey('landscape-quality-tag')});
 
   final String text;
 
   @override
   Widget build(BuildContext context) => Container(
-    key: const ValueKey('landscape-quality-tag'),
     height: BiliMetrics.chromeTagHeight,
     padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.chromeTagPad),
     alignment: Alignment.center,
@@ -914,7 +914,7 @@ class _UploaderBlock extends StatelessWidget {
           height: LandscapeActionTheme.onlineHeight,
           child: Padding(
             padding: const EdgeInsets.only(left: BiliMetrics.chromeButton + LandscapeActionTheme.onlineInset),
-            child: details == null ? null : _Online(online: details.online),
+            child: details == null ? null : LandscapeOnline(online: details.online),
           ),
         ),
         SizedBox(
@@ -1101,12 +1101,20 @@ class _MusicPainter extends CustomPainter {
   bool shouldRepaint(_MusicPainter oldDelegate) => false;
 }
 
-class _Online extends StatelessWidget {
-  const _Online({required this.online});
+/// The viewers glyph and N人正在看 once the count is in.
+class LandscapeOnline extends StatelessWidget {
+  const LandscapeOnline({
+    super.key,
+    required this.online,
+    this.color = LandscapeActionTheme.online,
+    this.iconColor = LandscapeActionTheme.online,
+  });
 
   final ValueListenable<String?> online;
+  final Color color;
+  final Color iconColor;
 
-  static const _style = TextStyle(color: LandscapeActionTheme.online, fontSize: LandscapeActionTheme.onlineText);
+  TextStyle get _style => TextStyle(color: color, fontSize: LandscapeActionTheme.onlineText);
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
@@ -1121,12 +1129,9 @@ class _Online extends StatelessWidget {
               key: const ValueKey('landscape-online'),
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CustomPaint(
-                  size: Size(LandscapeActionTheme.onlineIconWidth, LandscapeActionTheme.onlineIconHeight),
-                  painter: _OnlinePainter(
-                    color: LandscapeActionTheme.online,
-                    stroke: LandscapeActionTheme.onlineIconStroke,
-                  ),
+                CustomPaint(
+                  size: const Size(LandscapeActionTheme.onlineIconWidth, LandscapeActionTheme.onlineIconHeight),
+                  painter: OnlinePainter(color: iconColor, stroke: LandscapeActionTheme.onlineIconStroke),
                 ),
                 const SizedBox(width: LandscapeActionTheme.onlineGap),
                 Text(
@@ -1205,7 +1210,7 @@ class LandscapeCornerOnline extends StatelessWidget {
       children: [
         const CustomPaint(
           size: Size(LandscapeActionTheme.cornerIconWidth, LandscapeActionTheme.cornerIconHeight),
-          painter: _OnlinePainter(color: LandscapeActionTheme.corner, stroke: LandscapeActionTheme.cornerIconStroke),
+          painter: OnlinePainter(color: LandscapeActionTheme.corner, stroke: LandscapeActionTheme.cornerIconStroke),
         ),
         const SizedBox(width: LandscapeActionTheme.cornerGap),
         Text('$count人正在看', maxLines: 1, softWrap: false, style: style, strutStyle: BiliFonts.strut(style)),
@@ -1310,8 +1315,8 @@ class FollowPlusPainter extends CustomPainter {
 
 /// 04's viewers glyph, traced on its 13 × 11 box: a head open at the bottom into two flared legs, and a second
 /// person's edge behind it to the right.
-class _OnlinePainter extends CustomPainter {
-  const _OnlinePainter({required this.color, required this.stroke});
+class OnlinePainter extends CustomPainter {
+  const OnlinePainter({required this.color, required this.stroke});
 
   final Color color;
   final double stroke;
@@ -1334,7 +1339,7 @@ class _OnlinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_OnlinePainter oldDelegate) => oldDelegate.color != color || oldDelegate.stroke != stroke;
+  bool shouldRepaint(OnlinePainter oldDelegate) => oldDelegate.color != color || oldDelegate.stroke != stroke;
 }
 
 /// 弹 on a little TV: a pink tick in its corner while danmaku show, a crossed-out circle while they are off (34, 35).
@@ -1431,6 +1436,7 @@ class FullScreenSeekBar extends StatelessWidget {
     required this.repaint,
     this.style = SeekBarStyle.tv,
     this.preview = false,
+    this.chapters = true,
   });
 
   final PlayerUi ui;
@@ -1439,6 +1445,10 @@ class FullScreenSeekBar extends StatelessWidget {
 
   /// Holding it shows the seek preview (102; 竖屏's 19, 20).
   final bool preview;
+
+  /// The bar's own chapter ticks and the title over the thumb; the iPad draws both itself, the title over its
+  /// preview's frame (recording 24).
+  final bool chapters;
 
   /// What the bar and the time redraw on.
   static Listenable repaintOf(PlayerUi ui) {
@@ -1454,7 +1464,7 @@ class FullScreenSeekBar extends StatelessWidget {
       duration: () => session.duration.value,
       buffered: () => session.readout.bufferedEnd(session.position),
       repaint: repaint,
-      chapters: session.chapters,
+      chapters: chapters ? session.chapters : const [],
       style: style,
       onScrub: session.scrub,
       onRest: session.hint,
@@ -1648,8 +1658,8 @@ class _NoEntryPainter extends CustomPainter {
 }
 
 /// 04's camera, traced on its 20 × 17 box: the body with its hump, the lens, and the flash mark at the top right.
-class _CameraPainter extends CustomPainter {
-  const _CameraPainter();
+class CameraPainter extends CustomPainter {
+  const CameraPainter();
 
   static const _grid = Size(BiliMetrics.chromeCameraWidth, BiliMetrics.chromeCameraHeight);
 
@@ -1683,13 +1693,13 @@ class _CameraPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CameraPainter oldDelegate) => false;
+  bool shouldRepaint(CameraPainter oldDelegate) => false;
 }
 
 /// 04's padlock, traced on its 21 × 20.5 box: open, the shackle lifted off to the right; locked, it closes over the
 /// body.
-class _LockPainter extends CustomPainter {
-  const _LockPainter({required this.locked});
+class LockPainter extends CustomPainter {
+  const LockPainter({required this.locked});
 
   final bool locked;
 
@@ -1717,5 +1727,5 @@ class _LockPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_LockPainter oldDelegate) => oldDelegate.locked != locked;
+  bool shouldRepaint(LockPainter oldDelegate) => oldDelegate.locked != locked;
 }

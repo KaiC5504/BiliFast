@@ -6432,8 +6432,254 @@ abstract final class PadBodyTheme {}
 abstract final class PadInlineControlsTheme {}
 
 /// The iPad's full screen: top and bottom bars, side buttons, the end screen, the hold, buffering and the seek
-/// preview (ipad/08, 14-16, 18, 19, 24). The Full screen agent owns this class.
-abstract final class PadFullScreenTheme {}
+/// preview (ipad/08, 14-16, 18, 19, 24). The Full screen agent owns this class. Measured at 2 px per pt on KaiC's
+/// iPad Pro 11" sideways (1194 × 834, the status bar's 24 pt above, the home indicator's 20 below); rows are placed
+/// from the safe area's edges, columns from the screen's.
+abstract final class PadFullScreenTheme {
+  /// The shades behind the bars, black at the safe area's edge and clear 100 pt into the top and 108 into the bottom
+  /// (18 against 19). 08's bands are the video's letterbox, black either way.
+  static const topShade = 100.0;
+  static const bottomShade = 108.0;
+  static const bottomShadeSolid = 6.0;
+
+  /// The top row: 44 pt tall, centred 28.8 pt under the status bar; ‹ centred 28.3 pt in, the title from 58.8.
+  static const topRowTop = 6.8;
+  static const backLeft = 6.3;
+  static const backWidth = 10.0;
+  static const backHeight = 17.3;
+  static const titleLeft = 58.8;
+  static const titleText = 18.0;
+  static const titleGap = 16.0;
+
+  /// The system font's ink sits 1.5 pt higher in its line than 08's title, 1.2 pt for the times' digits, 2 for the
+  /// chapter line and 1 for 关注.
+  static const titleDrop = 1.5;
+  static const timeDrop = 1.2;
+  static const chapterDrop = 2.0;
+  static const followDrop = 1.0;
+
+  /// 点赞 不喜欢 投币 收藏 充电 分享, 70 pt apart, then ⋮ centred 34 pt from the right edge.
+  static const actionSlot = 70.0;
+  static const actionsToMore = 13.0;
+  static const moreRight = 12.0;
+  static const actionIcon = 28.5;
+  static const actionStroke = 1.3;
+
+  /// 不喜欢's thumb hangs lower in its box than 08 draws it.
+  static const dislikeLift = 2.2;
+
+  /// The superscript like count: its left edge 7.8 pt right of the button's centre, on a baseline 12.4 pt into it.
+  static const countText = 10.0;
+  static const countLead = 7.8;
+  static const countBaseline = 12.4;
+
+  /// N人正在看 centred 83 pt down, its icon under the title's first character, in white where the phone's is 60%.
+  static const onlineCentre = 58.0;
+  static const onlineHeight = 16.0;
+  static const online = Color(0xFFFFFFFF);
+  static const onlineIcon = Color(0xEBFFFFFF);
+
+  /// The uploader's chip (18, 24): a 27% black capsule 31.5 pt tall from 16.2 pt in, centred 114 pt down, holding
+  /// the 28 pt avatar 1.5 pt in, the plus 11 pt after it, 关注 5.4 pt after that and 15.3 pt of the capsule after it.
+  /// No name (24's and 18's chips have none).
+  static const chipLeft = 16.2;
+  static const chipCentre = 90.0;
+  static const chipHeight = 31.5;
+  static const chipFill = Color(0x45000000);
+  static const chipInset = 1.5;
+  static const avatar = 28.0;
+  static const plusLead = 11.0;
+  static const plus = 10.3;
+  static const plusStroke = 1.0;
+  static const plusGap = 5.4;
+  static const followText = 13.5;
+  static const followTrailing = 15.3;
+
+  /// 截图 and the lock in 51.5 pt tiles of 30% black with 9 pt corners, 8.3 pt from the right edge, 16.5 pt apart,
+  /// the pair's middle 18.6 pt above the screen's.
+  static const tile = 51.5;
+  static const tileRadius = 9.0;
+  static const tileFill = Color(0x4D000000);
+  static const tileRight = 8.3;
+  static const tileGap = 16.5;
+  static const tilesLift = 18.6;
+  static const cameraWidth = 23.5;
+  static const cameraHeight = 18.0;
+  static const lockWidth = 21.5;
+  static const lockHeight = 23.3;
+
+  /// From the safe area's bottom: the bottom row's centre 36 pt up, the bar's 82, the chapter line's 113.4.
+  static const rowBottom = 14.0;
+  static const rowToBar = 12.0;
+  static const barToChapter = 7.4;
+  static const chapterBox = 24.0;
+
+  /// 章节 · title › from 23.6 pt in, 15 pt, the chevron 10 pt tall 8 pt after the title.
+  static const chapterLeft = 23.6;
+  static const chapterText = 15.0;
+  static const chapterChevronGap = 8.0;
+  static const chapterChevronWidth = 6.0;
+  static const chapterChevronHeight = 11.0;
+  static const chapterChevronStroke = 1.6;
+
+  /// The bar from 74.5 pt in to 74.5 pt from the right, the TV's travel 83.5 to 1110.5; the times 24 pt in from
+  /// either edge, 13 pt.
+  static const barInset = 74.5;
+  static const timeInset = 24.0;
+  static const timeText = 13.0;
+
+  /// The bottom row: ⏮ centred 29.1 pt in, ▶ 92, 弹 157.6, 弹幕设置 221.6; the field from 264 to 287.1 pt from the
+  /// right edge; 倍速, 1080P, 小窗 and 退出全屏 centred 240.7, 169.7, 97.5 and 34.2 pt from it.
+  static const prevLeft = 7.1;
+  static const prevToPlay = 18.9;
+  static const playToDanmaku = 21.6;
+  static const danmakuToSettings = 20.0;
+  static const settingsToField = 20.4;
+  static const fieldToSpeed = 23.4;
+  static const speedToQuality = 17.5;
+  static const qualityToPip = 19.7;
+  static const pipToExit = 19.3;
+  static const exitRight = 12.2;
+  static const textPad = 8.0;
+  static const labelText = 15.0;
+
+  /// ⏮ (the APK's `bili_player_ctrl_play_previous`) 13.7 × 14.5 pt, half white with nothing before it; ▶'s ink 23 ×
+  /// 26.4, its box larger by what the rounded corners take off.
+  static const prevWidth = 13.7;
+  static const prevHeight = 14.5;
+  static const prevOff = Color(0x80FFFFFF);
+  static const playWidth = 25.0;
+  static const playHeight = 29.5;
+  static const playCorner = 1.6;
+  static const playShift = 1.2;
+  static const pauseBar = 6.5;
+  static const pauseGap = 5.5;
+
+  /// 弹 and 弹幕设置, the phone's TVs drawn 24 × 23.
+  static const danmakuWidth = 24.0;
+  static const danmakuHeight = 23.0;
+
+  /// 发个友善的弹幕见证当下 in a 29.7 pt field of 30% white with 5 pt corners, 12 pt half-white text 12.4 pt in.
+  static const fieldHeight = 29.7;
+  static const fieldRadius = 5.0;
+  static const fieldFill = Color(0x4DFFFFFF);
+  static const fieldInk = Color(0x80FFFFFF);
+  static const fieldInset = 12.4;
+  static const fieldText = 12.0;
+
+  /// 高码率's tag: centred 14.9 pt above the row's centre, its right end 10.8 pt past 1080P's.
+  static const tagRise = 14.9;
+  static const tagOverhang = 10.8;
+
+  /// 小窗 (the APK's `biliplayer_ic_topbar_floatwindow`, 22 pt on a 22 grid) drawn 25.3 pt, 24.4 × 19.6 of ink;
+  /// 退出全屏's two brackets 21 pt, the elbows 8.5 pt in from their corners.
+  static const pipBox = 25.3;
+  static const exitBox = 21.0;
+  static const exitElbow = 8.5;
+  static const glyphStroke = 1.3;
+  static const offOpacity = 0.5;
+
+  /// 09's strip while the controls are hidden: 19 pt under the video, the played part a grey fading down, each
+  /// chapter's title centred in its stretch at 9 pt, 0.5 pt rules fading at both ends where one begins.
+  static const stripHeight = 19.0;
+  static const stripPlayed = Color(0x99B4B4B4);
+  static const stripText = 9.0;
+  static const stripInk = Color(0xFFFFFFFF);
+  static const stripRule = 0.5;
+  static const stripRuleInk = Color(0x80FFFFFF);
+
+  /// The hold's arrows (15), smaller than the phone's: 16.8 × 10.9 pt, 7.6 pt before the label.
+  static const hudArrowWidth = 9.6;
+  static const hudArrowHeight = 10.9;
+  static const hudArrowStep = 7.2;
+  static const hudGap = 7.6;
+
+  /// Recording 24: the frame 144 × 81 (16:9) with 3 pt corners, its bottom 20.2 pt above the bar's middle and its
+  /// middle 16 pt left of the TV's; the arrows and the time (13 pt, white) inside, centred 23.8 pt above its bottom;
+  /// the chapter's title in an 90% black box 31.5 pt tall with 3.5 pt corners, 4.7 pt above the frame.
+  static const previewWidth = 144.0;
+  static const previewHeight = 81.0;
+  static const previewRadius = 3.0;
+  static const previewAboveBar = 20.2;
+  static const previewShift = 16.0;
+  static const previewEdge = 8.0;
+  static const previewTimeText = 13.0;
+  static const previewTimeRise = 23.8;
+  static const previewArrowGap = 7.8;
+  static const previewTitleHeight = 31.5;
+  static const previewTitleRadius = 3.5;
+  static const previewTitlePad = 12.5;
+  static const previewTitleText = 12.0;
+  static const previewTitleGap = 4.7;
+  static const previewTitleFill = Color(0xE61B1B1B);
+
+  /// The end screen (16): ‹ in the band above the video, the 60 pt avatar ringed 1.5 pt white at 22.2, 82.2; the
+  /// name 16 pt from 98.2, its ink centred 92 down; + 关注 (59.5 wide, pink) and 为TA充电 (71.6 wide, outlined) 29.5
+  /// pt tall with 2.5 pt corners, 12.5 pt apart from 112.2 down. Text boxes are placed where the stand-in fonts' ink
+  /// lands on 16's, which sits about 2 pt above the box's middle.
+  static const endDim = Color(0xD9000000);
+  static const endBackTop = 20.0;
+  static const endHeadTop = 82.2;
+  static const endInset = 22.0;
+  static const endAvatar = 60.0;
+  static const endAvatarRing = 1.5;
+  static const endNameLeft = 98.2;
+  static const endNameText = 16.0;
+  static const endNameCentre = 11.6;
+  static const endPillTop = 30.0;
+  static const endPillHeight = 29.5;
+  static const endPillRadius = 2.5;
+  static const endFollowWidth = 59.5;
+  static const endChargeWidth = 71.6;
+  static const endPillGap = 12.5;
+  static const endPillText = 14.0;
+  static const endPillPlus = 9.0;
+  static const endPillPlusStroke = 1.2;
+  static const endPillPlusGap = 5.0;
+
+  /// 重播, a rule, 点赞 不喜欢 投币 收藏 分享 in 70 pt columns, 分享 centred 73 pt from the right edge: the icons
+  /// centred 13.8 pt and the 15 pt labels' ink 52.3 below the avatar's top; the rule 56 tall, 57 pt from 重播's
+  /// centre.
+  static const endActionSlot = 70.0;
+  static const endActionsRight = 38.0;
+  static const endActionIcon = 28.5;
+
+  /// The phone's replay ring, which scales by its height, drawn about as wide as 16's 21 pt.
+  static const endReplayWidth = 21.0;
+  static const endReplayHeight = 20.0;
+  static const endIconCentre = 13.8;
+  static const endLabelCentre = 54.1;
+  static const endLabelText = 15.0;
+  static const endReplayToRule = 57.0;
+  static const endRuleHeight = 56.0;
+  static const endRuleTop = 1.8;
+  static const endRule = Color(0x26FFFFFF);
+
+  /// 推荐视频 (14 pt from 30.7, centred 186.7 down), then four columns from 22 pt in, 12.5 apart, of 16:10 covers with 4
+  /// pt corners from 210 down, a row every 237 pt.
+  static const endHeaderLeft = 30.7;
+  static const endHeaderCentre = 105.8;
+  static const endHeaderText = 14.0;
+  static const endGridTop = 23.3;
+  static const endColumns = 4;
+  static const endCardGap = 12.5;
+  static const endRowGap = 22.4;
+  static const endCoverAspect = 1.6;
+  static const endCoverRadius = 4.0;
+
+  /// On the cover: the counts 10 pt with the icons 9.3 pt in, the duration 9.1 pt from the right, centred 10.8 pt above
+  /// its bottom. Under it the title, 14 pt in 16.8 pt lines, 65% white, 7.2 pt down.
+  static const endCoverInset = 9.3;
+  static const endCoverTrailing = 9.1;
+  static const endCountCentre = 10.8;
+  static const endCountText = 10.0;
+  static const endCountSpacing = 10.7;
+  static const endCountIconGap = 4.0;
+  static const endTitleTop = 7.2;
+  static const endTitleText = 14.0;
+  static const endTitleLeading = 1.2;
+  static const endTitleInk = Color(0xA6FFFFFF);
+}
 
 /// The iPad's player panels (ipad/10-13). The Panels agent owns this class.
 abstract final class PadPanelTheme {}
