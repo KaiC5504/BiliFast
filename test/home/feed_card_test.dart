@@ -28,6 +28,14 @@ Future<Uint8List> _coverPng() async {
   return bytes!.buffer.asUint8List();
 }
 
+/// A phone-shaped view: flutter_test's default 800 × 600 counts as an iPad ([FormFactor]), whose card is another.
+void _asPhone(WidgetTester tester, {double ratio = 3}) {
+  tester.view
+    ..devicePixelRatio = ratio
+    ..physicalSize = const Size(440, 956) * ratio;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   final card = FeedCard.fromJson(jsonDecode(jsonEncode(feedItem('BV1long', title: '很长很长的标题' * 6, reason: '关注的人赞过'))));
 
@@ -65,7 +73,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     int exact(double pixels) => (pixels - 0.01).ceil();
     for (final ratio in [2.0, 3.0]) {
-      tester.view.devicePixelRatio = ratio;
+      _asPhone(tester, ratio: ratio);
       for (final width in [160.0, 211.0, 300.0]) {
         await tester.pumpWidget(
           MaterialApp(
@@ -96,6 +104,7 @@ void main() {
   });
 
   testWidgets("the cover names 推荐's preset", (tester) async {
+    _asPhone(tester);
     await tester.pumpWidget(
       MaterialApp(
         home: Align(
@@ -115,6 +124,7 @@ void main() {
 
   testWidgets('precacheCover readies the very picture the card draws: the card shows it its first frame, from the one '
       'download', (tester) async {
+    _asPhone(tester);
     final picture = (await tester.runAsync(_coverPng))!;
     final folder = (await tester.runAsync(() => Directory.systemTemp.createTemp('feed_precache')))!;
     final downloads = <String>[];
@@ -181,17 +191,20 @@ void main() {
   });
 
   group('the counts over the cover', () {
-    Future<void> show(WidgetTester tester) => tester.pumpWidget(
-      MaterialApp(
-        home: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: 211,
-            child: FeedCardView(card: card, onOpen: (_) {}, onWatchLater: () {}),
+    Future<void> show(WidgetTester tester) {
+      _asPhone(tester);
+      return tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 211,
+              child: FeedCardView(card: card, onOpen: (_) {}, onWatchLater: () {}),
+            ),
           ),
         ),
-      ),
-    );
+      );
+    }
 
     Rect coverOf(WidgetTester tester) => tester.getRect(find.byType(AspectRatio).first);
 

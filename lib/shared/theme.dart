@@ -6416,7 +6416,106 @@ abstract final class FollowingListTheme {
 
 /// The iPad's 首页 (ipad/01, 02), measured at 2× (pt = px / 2). The Home agent owns this class.
 abstract final class PadHomeTheme {
+  /// 推荐's grid: 375 pt cards sideways and 255 upright, 22 pt from the edges and 12 apart; the first row starts as
+  /// far under the hairline as 01's banner does (the banner is left out).
   static const columns = 3;
+  static const page = BiliColors.card;
+  static const margin = 22.0;
+  static const gutter = 12.0;
+  static const rowGap = 12.0;
+  static const firstRow = 18.0;
+
+  /// Bilibili's own pink, as the iPad's selected tab, bar place and 推荐 draw it.
+  static const pink = Color(0xFFFB7299);
+
+  /// The top: one row from the status bar to the hairline, everything centred [rowCentre] under the status bar.
+  static const rowHeight = 45.5;
+  static const rowCentre = 21.0;
+  static const hairline = 0.5;
+  static const avatar = 40.0;
+  static const avatarLeft = 20.0;
+
+  /// The search entry: a grey stadium from 75 pt, as wide as its word up to [fieldTabGap] short of the tab row.
+  static const fieldLeft = 75.0;
+  static const fieldHeight = 30.0;
+  static const fieldFill = BiliColors.pageGrey;
+  static const fieldGlyph = 13.0;
+  static const fieldGlyphLead = 16.5;
+  static const fieldGlyphInk = Color(0xFF999999);
+  static const fieldTextStart = 35.5;
+  static const fieldTextEnd = 17.0;
+  static const fieldText = 13.0;
+  static const fieldInk = BiliColors.secondaryText;
+  static const fieldTabGap = 40.0;
+
+  /// 直播 推荐 热门 追番 影视, centred on the screen, 65 pt apart.
+  static const tabs = ['直播', '推荐', '热门', '追番', '影视'];
+  static const tabText = 16.0;
+  static const tabPitch = 65.0;
+  static const tabInk = Color(0xFF999999);
+  static const tabRise = 1.25;
+
+  /// Scan, 历史记录 and 消息, their centres this far from the right edge.
+  static const icon = 20.0;
+  static const iconInk = Color(0xFF757575);
+  static const scanRight = 142.0;
+  static const historyRight = 90.0;
+  static const messagesRight = 38.0;
+  static const iconLine = 1.5;
+  static const scan = 18.0;
+
+  /// The bottom bar: 50 pt from its hairline to the home indicator, four 118 pt places centred.
+  static const barHeight = 50.0;
+  static const barSlot = 118.0;
+  static const barIconCentre = 18.25;
+  static const barLabelTop = 31.5;
+  static const barLabelText = 11.0;
+  static const barIconInk = Color(0xFF747474);
+  static const barLabelInk = Color(0xFF929292);
+
+  /// A card: the cover's corners, its counts row, then the face, two title lines, the uploader and date, and ⋮.
+  static const coverRadius = 4.0;
+  static const footer = 87.0;
+  static const face = 40.0;
+  static const faceTop = 8.0;
+  static const titleLeft = 46.0;
+  static const titleRight = 39.0;
+  static const titleTop = 7.75;
+  static const titleText = 14.0;
+  static const titleLine = 19.5;
+  static const subTop = 51.0;
+  static const subText = 13.0;
+  static const subInk = BiliColors.secondaryText;
+  static const bylineDotGap = 2.0;
+  static const moreRight = 17.0;
+  static const moreCentre = 27.0;
+  static const moreDot = 3.0;
+  static const morePitch = 5.0;
+  static const moreInk = Color(0xFF757575);
+  static const moreTarget = 34.0;
+  static const tagHeight = 16.0;
+  static const tagText = 11.0;
+  static const tagPad = 4.0;
+  static const tagGap = 4.0;
+  static const statText = 11.0;
+  static const statIconWidth = 13.0;
+  static const statIconHeight = 11.0;
+  static const statLead = 10.5;
+  static const statIconGap = 6.0;
+  static const statGap = 15.0;
+  static const statTrail = 11.5;
+  static const statCentre = 17.5;
+  static const shade = 40.0;
+
+  /// The cover's height on a card [width] wide: 16:9 and a pt and a half (212 sideways, 145 upright).
+  static double coverHeight(double width) => (width * 9 / 16 + 1.5).roundToDouble();
+
+  static double cardHeight(double width) => coverHeight(width) + footer;
+
+  /// How wide each of the [columns] cards is in a grid [width] wide: whole points, the rest left at the right.
+  static double cardWidth(double width) => ((width - margin * 2 - gutter * (columns - 1)) / columns).floorToDouble();
+
+  static double rightMargin(double width) => width - margin - cardWidth(width) * columns - gutter * (columns - 1);
 }
 
 /// The iPad's video page frame: the two columns sideways (ipad/03, 05), one upright (06), the player's shrink to the
@@ -6648,7 +6747,128 @@ abstract final class PadBodyTheme {
 
 /// The iPad's controls over the page's player and its end screen (ipad/03, 07, 17). The Player controls agent owns
 /// this class.
-abstract final class PadInlineControlsTheme {}
+abstract final class PadInlineControlsTheme {
+  /// A control's centre from its edge of the player: back, ⋮ and 全屏 (03: 28.5-29 pt; 07 the same).
+  static const edgeCentre = 29.0;
+
+  /// The top row's centre from the player's top, and the bottom row's from its bottom.
+  static const topCentre = 29.0;
+  static const bottomCentre = 29.0;
+
+  /// From the player's right: the 投屏 TV and 倍速 share a column, the 小窗 icon is left of the TV.
+  static const castCentre = 87.0;
+  static const floatCentre = 144.25;
+
+  /// The glyphs' ink (03, 07), drawn from the APK's `biliplayer_ic_topbar_floatwindow` and `_tv`.
+  static const floatWidth = 24.5;
+  static const floatHeight = 19.5;
+  static const castWidth = 24.0;
+  static const castHeight = 19.33;
+  static const backWidth = 9.0;
+  static const backHeight = 18.0;
+  static const moreDot = 3.0;
+  static const moreDotGap = 4.5;
+
+  /// The float window's lines, 1 of its 22-unit viewport at the ink's scale.
+  static const floatStroke = 1.17;
+
+  /// ⏮ (the APK's `bili_mini_player_ctrl_play_prev`), its centre from the left, and half white with nothing before.
+  static const previousCentre = 29.0;
+  static const previousWidth = 11.67;
+  static const previousHeight = 13.33;
+  static const previousOffOpacity = 0.5;
+
+  static const playCentre = 86.5;
+  static const playWidth = 17.0;
+  static const playHeight = 20.0;
+
+  /// The bar's left end (the TV's left at 0:00: its centre at 116) and the gap before the time; the time ends 142
+  /// from the right, so the bar ends 232.5 from it with 03's time.
+  static const barLeft = 107.0;
+  static const timeGap = 17.0;
+  static const timeRight = 142.0;
+  static const timeFont = 12.5;
+
+  static const speedFont = 16.0;
+  static const speedWidth = 60.0;
+  static const fullScreenGlyph = 16.0;
+
+  /// 章节 · (chapter) ›: 14 pt from 21 pt in, its centre 65.75 above the player's bottom; the chevron 6.5 × 11, 11
+  /// after the text.
+  static const chapterLeft = 21.0;
+  static const chapterCentre = 65.75;
+  static const chapterFont = 14.0;
+  static const chapterHeight = 24.0;
+  static const chevronWidth = 6.5;
+  static const chevronHeight = 11.0;
+  static const chevronGap = 11.0;
+  static const chevronStroke = 1.5;
+  static const chapterShadow = 2.0;
+
+  /// The shades behind both rows (07 against 06, the same frame): near black at the edge, gone 96 pt in.
+  static const shadeHeight = 96.0;
+  static const shade = [
+    Color(0xFF000000),
+    Color(0xF5000000),
+    Color(0xC7000000),
+    Color(0x87000000),
+    Color(0x42000000),
+    Color(0x14000000),
+    Color(0x00000000),
+  ];
+  static const shadeStops = [0.0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1.0];
+
+  /// With the controls hidden, the chapters across the bottom (06): each title 9 pt, centred on its stretch, 10.67
+  /// above the bottom, between hairlines 20 pt tall, over a 22 pt shade.
+  static const stripFont = 9.0;
+  static const stripCentre = 10.67;
+  static const stripLine = 0.5;
+  static const stripLineHeight = 20.0;
+  static const stripLineInk = Color(0x4DFFFFFF);
+  static const stripShadeHeight = 22.0;
+  static const stripShade = Color(0x9E000000);
+  static const stripPad = 4.0;
+
+  /// The end screen (17) on a 756.5 × 425.5 player, its block placed from the player's middle.
+  static const endTopCentre = 42.0;
+  static const endEdgeCentre = 21.5;
+  static const endBackWidth = 9.5;
+  static const endCaptionLeft = 51.0;
+  static const endCaptionCentre = -34.25;
+  static const endCaptionFont = 13.5;
+  static const endCoverLeft = 50.0;
+  static const endCoverTop = -18.75;
+  static const endCoverWidth = 224.0;
+  static const endCoverHeight = 126.0;
+  static const endCoverRadius = 6.0;
+  static const endCoverShadeHeight = 40.0;
+  static const endCoverTextInset = 9.0;
+  static const endCoverTimeFont = 12.0;
+  static const endPlayWidth = 18.5;
+  static const endPlayHeight = 21.0;
+  static const endInfoGap = 11.0;
+  static const endInfoRight = 24.0;
+  static const endTitleCentre = 0.75;
+  static const endTitleFont = 16.0;
+  static const endUploaderCentre = 70.25;
+  static const endCountsCentre = 89.25;
+  static const endMetaFont = 12.5;
+  static const endCountFont = 12.0;
+  static const endMetaRow = 16.0;
+  static const endMetaGap = 6.0;
+  static const endMetaSpacing = 14.0;
+
+  /// 重播 and 分享 on one line, the share text's end 67.5 from the right.
+  static const endActionsCentre = -33.75;
+  static const endActionsRight = 67.5;
+  static const endActionFont = 14.0;
+  static const endReplayWidth = 19.5;
+  static const endReplayHeight = 21.0;
+  static const endReplayGap = 10.0;
+  static const endShareInk = 24.0;
+  static const endShareGap = 6.7;
+  static const endActionSpacing = 37.2;
+}
 
 /// The iPad's full screen: top and bottom bars, side buttons, the end screen, the hold, buffering and the seek
 /// preview (ipad/08, 14-16, 18, 19, 24). The Full screen agent owns this class.

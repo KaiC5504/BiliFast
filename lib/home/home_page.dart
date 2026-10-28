@@ -10,10 +10,12 @@ import 'package:flutter/services.dart';
 
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
+import '../app/form_factor.dart';
 import '../app/swipe_back_route.dart';
 import '../app/zoom_back_route.dart';
 import '../player_ui/player_loading.dart';
 import '../player_ui/seek_bar.dart';
+import '../history/watch_history_page.dart';
 import '../search/results/video_row.dart' show searchLogReason;
 import '../search/search_page.dart';
 import '../shared/loading_tv.dart';
@@ -248,6 +250,11 @@ class _HomePageState extends State<HomePage> {
     unawaited(_visit(Navigator.of(context).push(page)));
   }
 
+  void _openHistory() {
+    final page = SwipeBackPageRoute<void>(builder: (_) => const WatchHistoryPage());
+    unawaited(_visit(Navigator.of(context).push(page)));
+  }
+
   void _openSearch() => unawaited(_visit(openSearchPage(context, placeholder: _searchWord)));
 
   void _reload() => unawaited(_grid.currentState?.reload());
@@ -342,7 +349,7 @@ class _HomePageState extends State<HomePage> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: head != null && head.lightStatusHome ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: BiliColors.pageGrey,
+        backgroundColor: FormFactor.of(context).isPad ? PadHomeTheme.page : BiliColors.pageGrey,
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
@@ -357,6 +364,7 @@ class _HomePageState extends State<HomePage> {
                     feedOffset: _feedOffset,
                     onAvatar: _openAvatarPage,
                     onSearch: _openSearch,
+                    onHistory: _openHistory,
                   ),
                 ),
                 Expanded(
@@ -611,9 +619,19 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     if (feed.beforeShow == _beforeShow) feed.beforeShow = null;
   }
 
-  static double _columnWidth(double gridWidth) => (gridWidth - BiliMetrics.feedSpacing * 3) / 2;
+  /// Whether the last build laid the cards out as the iPad's three columns, where a big card is an ordinary one.
+  bool _pad = false;
+
+  double _columnWidth(double gridWidth) =>
+      _pad ? PadHomeTheme.cardWidth(gridWidth) : (gridWidth - BiliMetrics.feedSpacing * 3) / 2;
 
   static double _bigWidth(double gridWidth) => gridWidth - FeedBigCardTheme.spacing * 2;
+
+  bool _isBig(FeedCard card) => !_pad && card.big != null;
+
+  double _cardHeight(double width) => _pad ? PadHomeTheme.cardHeight(width) : FeedCardSize.height(width, _scaler);
+
+  double get _rowGap => _pad ? PadHomeTheme.rowGap : BiliMetrics.feedSpacing;
 
   /// The cards' area on screen, above a dressed bar's row, for the big cards' half-visible rule.
   Rect? _feedArea() {
@@ -624,7 +642,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   }
 
   /// Notes the cards going and starts the covers of the rows the top of the list shows, at the size their cards will
-  /// ask for: both columns of a row, a big card's across both.
+  /// ask for: every column of a row, a big card's across both.
   CoverPrefetch _beforeShow(List<FeedCard> fresh) {
     if (!mounted) return const CoverPrefetch.skipped(CoverSkip.unmounted);
     final feed = widget.feed;
@@ -633,23 +651,24 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     final viewport = _viewport;
     if (viewport == null) return const CoverPrefetch.skipped(CoverSkip.noLayout);
     const spacing = BiliMetrics.feedSpacing;
+    final columns = _pad ? PadHomeTheme.columns : 2;
     final width = _columnWidth(viewport.width);
     final bigWidth = _bigWidth(viewport.width);
-    final rowExtent = FeedCardSize.height(width, _scaler) + spacing;
-    final size = FeedCardSize.cover(width);
+    final rowExtent = _cardHeight(width) + _rowGap;
+    final size = _pad ? Size(width, PadHomeTheme.coverHeight(width)) : FeedCardSize.cover(width);
     final bottom = viewport.height - _inset;
     final asks = <Future<bool>>[];
-    var top = spacing;
+    var top = _pad ? PadHomeTheme.firstRow : spacing;
     var slot = 0;
     while (slot < fresh.length && top < bottom) {
       final card = fresh[slot++];
-      if (card.big != null) {
+      if (_isBig(card)) {
         asks.add(HomePage.precacheBigCover(context, card.cover, FeedBigCardSize.video(bigWidth)));
         top += FeedBigCardSize.height(bigWidth) + spacing;
         continue;
       }
       asks.add(HomePage.precacheCover(context, card.cover, size));
-      if (slot < fresh.length && fresh[slot].big == null) {
+      for (var column = 1; column < columns && slot < fresh.length && !_isBig(fresh[slot]); column++) {
         asks.add(HomePage.precacheCover(context, fresh[slot++].cover, size));
       }
       top += rowExtent;
@@ -769,7 +788,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
           final slot = from + index;
           final card = cards[slot];
           final enter = !still && _entered.add(card.bvid);
-          final gone = going != null && slot < going.length && going[slot].card.big == null ? going[slot] : null;
+          final gone = going != null && slot < going.length && !_isBig(going[slot].card) ? going[slot] : null;
           return _Entrance(
             key: ValueKey('feed-card-${card.bvid}'),
             delay: enter ? _nextStagger() : null,
@@ -851,7 +870,10 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   /// The cards as slivers: each batch (the one above 刚刚看到这里, the one under it) split where a big card is, the big
   /// card across both columns and the cards around it in the grid, the feed's spacing between them all.
   List<Widget> _cardSlivers(SliverGridDelegate grid, List<FeedCard> cards, int? divider, {required bool still}) {
-    const spacing = BiliMetrics.feedSpacing;
+    final side = _pad ? PadHomeTheme.margin : BiliMetrics.feedSpacing;
+    final right = _pad ? PadHomeTheme.rightMargin(_laidOutWidth ?? 0) : BiliMetrics.feedSpacing;
+    final top = _pad ? PadHomeTheme.firstRow : BiliMetrics.feedSpacing;
+    final gap = _rowGap;
     final topEnd = divider ?? cards.length;
     final slivers = <Widget>[];
     void batch(int from, int to, {required bool first, required bool last}) {
@@ -859,7 +881,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
       final pieces = <Widget>[];
       var start = from;
       for (var slot = from; slot <= to; slot++) {
-        if (slot < to && cards[slot].big == null) continue;
+        if (slot < to && !_isBig(cards[slot])) continue;
         if (slot > start) pieces.add(_cardGrid(grid, cards, start, slot, going: going, still: still));
         if (slot < to) pieces.add(_bigCard(cards, slot, going: going, still: still));
         start = slot + 1;
@@ -868,10 +890,10 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
         slivers.add(
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
-              spacing,
-              index > 0 || first ? spacing : 0,
-              spacing,
-              index == pieces.length - 1 && last ? spacing : 0,
+              side,
+              index > 0 ? gap : (first ? top : 0),
+              right,
+              index == pieces.length - 1 && last ? gap : 0,
             ),
             sliver: piece,
           ),
@@ -896,13 +918,14 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   @override
   Widget build(BuildContext context) {
     final feed = widget.feed;
-    final scaler = _scaler = MediaQuery.textScalerOf(context);
+    _scaler = MediaQuery.textScalerOf(context);
     final still = _still = MediaQuery.disableAnimationsOf(context);
     _ticking = TickerMode.valuesOf(context).enabled;
     // A route over 首页 (a page, a sheet, ⋮'s menu) or 我的 shown pauses the big card; the app leaving, its host.
     _inline.shown = _ticking && (ModalRoute.isCurrentOf(context) ?? true);
     // Under a dressed bar the feed runs to the screen's bottom; its end stays above the bar's row.
     final inset = _inset = MediaQuery.paddingOf(context).bottom;
+    final pad = _pad = FormFactor.of(context).isPad;
     _rebuilt = true;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -913,12 +936,12 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
         _rebuilt = false;
         _laidOutWidth = constraints.maxWidth;
         final width = _columnWidth(constraints.maxWidth);
-        final extent = FeedCardSize.height(width, scaler);
-        _rowExtent = extent + spacing;
+        final extent = _cardHeight(width);
+        _rowExtent = extent + _rowGap;
         final grid = SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: spacing,
-          crossAxisSpacing: spacing,
+          crossAxisCount: pad ? PadHomeTheme.columns : 2,
+          mainAxisSpacing: _rowGap,
+          crossAxisSpacing: pad ? PadHomeTheme.gutter : spacing,
           mainAxisExtent: extent,
         );
         final cards = feed.cards;
@@ -947,7 +970,14 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
                   physics: const NeverScrollableScrollPhysics(),
                   slivers: [
                     SliverPadding(
-                      padding: const EdgeInsets.all(spacing),
+                      padding: pad
+                          ? EdgeInsets.fromLTRB(
+                              PadHomeTheme.margin,
+                              PadHomeTheme.firstRow,
+                              PadHomeTheme.rightMargin(constraints.maxWidth),
+                              PadHomeTheme.rowGap,
+                            )
+                          : const EdgeInsets.all(spacing),
                       sliver: SliverGrid(
                         gridDelegate: grid,
                         delegate: SliverChildBuilderDelegate(

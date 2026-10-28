@@ -19,6 +19,8 @@ final class FeedCard {
     this.danmakuText,
     this.dislike,
     this.big,
+    this.ownerFace = '',
+    this.published = 0,
   });
 
   factory FeedCard.fromJson(Object? json) {
@@ -42,6 +44,8 @@ final class FeedCard {
       ownerMid: owner?.integer('mid') ?? 0,
       reason: reason == null || reason.isEmpty ? null : reason,
       isVertical: attempt(() => _isVertical(object.nested('dimension'))) ?? false,
+      ownerFace: owner?.string('face') ?? '',
+      published: object.integer('pubdate') ?? 0,
     );
   }
 
@@ -64,6 +68,11 @@ final class FeedCard {
     if (markedVertical || reason != null && reason.isEmpty) reason = null;
     final goto = object.text('card_goto') ?? object.text('goto') ?? 'av';
     final like = object.nested('like_button');
+    // Only the big card is known to name the face (`up_args`); the others are where Android's cards keep one.
+    final face =
+        object.nested('up_args')?.text('up_face') ??
+        object.nested('avatar')?.text('cover') ??
+        object.nested('mask')?.nested('avatar')?.text('cover');
     // 不感兴趣 names a card by its item's goto: `av` for the big card too, whose card_goto is `inline_av_v2`; only `av`
     // is known to be taken.
     final dislikeGoto = object.text('goto') ?? goto;
@@ -90,6 +99,7 @@ final class FeedCard {
               liked: like?.flag('selected') ?? false,
             )
           : null,
+      ownerFace: face ?? '',
     );
   }
 
@@ -137,6 +147,12 @@ final class FeedCard {
   /// Set on the official feed's big card (`large_cover_v9`), drawn full width and playing inline; null on the rest.
   final FeedBig? big;
 
+  /// The uploader's face, '' when the card names none; the iPad's cards show it.
+  final String ownerFace;
+
+  /// Unix seconds, 0 when unknown: the web feed's `pubdate` (the official feed sends none).
+  final int published;
+
   String get id => bvid;
 
   @override
@@ -157,7 +173,9 @@ final class FeedCard {
       other.viewsText == viewsText &&
       other.danmakuText == danmakuText &&
       other.dislike == dislike &&
-      other.big == big;
+      other.big == big &&
+      other.ownerFace == ownerFace &&
+      other.published == published;
 
   @override
   int get hashCode => Object.hash(
@@ -177,6 +195,8 @@ final class FeedCard {
     danmakuText,
     dislike,
     big,
+    ownerFace,
+    published,
   );
 }
 

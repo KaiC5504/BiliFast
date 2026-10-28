@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 
+import '../app/form_factor.dart';
 import '../shared/theme.dart';
 import '../skin/skin.dart';
 import 'tab_bar_icons.dart';
@@ -23,14 +24,69 @@ enum HomeTab {
   final int? skinIcon;
 }
 
+/// The iPad's four places (ipad/01, 02), in the 装扮's own order: 动态 is the phone's 关注 place, and 分区 has no place
+/// of its own yet.
+enum PadTab {
+  home(HomeTab.home, '首页', 0, 'home', 20),
+  partition(null, '分区', 1, 'partition', 21),
+  moments(HomeTab.follow, '动态', 2, 'moments', 21),
+  mine(HomeTab.mine, '我的', 4, 'mine', 21);
+
+  const PadTab(this.place, this.label, this.skinIcon, this._art, this.iconWidth);
+
+  final HomeTab? place;
+  final String label;
+  final int skinIcon;
+  final String _art;
+
+  /// The icon's ink width on 01; its height follows the picture.
+  final double iconWidth;
+
+  /// The APK's tab bar icon; 首页 and 我的 change face when selected.
+  String art({required bool selected}) {
+    final selectedArt = selected && (this == home || this == mine);
+    return 'assets/images/home/pad_tab_$_art${selectedArt ? '_selected' : ''}.png';
+  }
+
+  /// The key the phone's bar gives the same place, so a place is found the same way on both.
+  String get key => place?.name ?? name;
+}
+
+/// One place on the bar as drawn: its key, label, 装扮 icon and stock icon.
+typedef _Place = ({
+  String key,
+  String label,
+  int? skinIcon,
+  bool post,
+  bool selected,
+  Widget Function(bool selected) icon,
+  VoidCallback onTap,
+});
+
+/// What differs between the phone's bar and the iPad's.
+typedef _Shape = ({
+  double height,
+  double iconCentre,
+  double labelTop,
+  double labelText,
+  double? slot,
+  double hairline,
+  Color label,
+  Color selected,
+});
+
 /// The bottom bar under 首页 and 我的 (01, 02): 首页, 关注, the pink +, 消息 and 我的 over the home indicator, [selected]
-/// pink. A [skin] that [dresses] it draws its picture, icons and label colours instead (109, 110), once its still
-/// pictures have decoded; until then, or for good when one won't, the bar stays stock.
+/// pink; on the iPad 首页, 分区, 动态 and 我的, centred (ipad/01, 02). A [skin] that [dresses] it draws its picture,
+/// icons and label colours instead (109, 110), once its still pictures have decoded; until then, or for good when
+/// one won't, the bar stays stock.
 class HomeTabBar extends StatelessWidget {
-  const HomeTabBar({super.key, required this.selected, required this.onTap, this.skin});
+  const HomeTabBar({super.key, required this.selected, required this.onTap, this.onPartition, this.skin});
 
   final HomeTab selected;
   final ValueChanged<HomeTab> onTap;
+
+  /// The iPad's 分区.
+  final VoidCallback? onPartition;
 
   /// The equipped 装扮; null, or one [dresses] refuses, leaves it stock.
   final Skin? skin;
@@ -39,13 +95,65 @@ class HomeTabBar extends StatelessWidget {
   /// them the bar stays stock.
   static bool dresses(Skin? skin) => skin != null && skin.themesBar;
 
+  /// The bar's height over the home indicator, the hairline included.
+  static double heightOf(BuildContext context) =>
+      FormFactor.of(context).isPad ? PadHomeTheme.barHeight : HomeTabBarTheme.height;
+
+  static const _phone = (
+    height: HomeTabBarTheme.height,
+    iconCentre: HomeTabBarTheme.iconCentre,
+    labelTop: HomeTabBarTheme.labelTop,
+    labelText: HomeTabBarTheme.labelText,
+    slot: null,
+    hairline: HomeTabBarTheme.hairlineWidth,
+    label: HomeTabBarTheme.label,
+    selected: HomeTabBarTheme.selected,
+  );
+
+  static const _pad = (
+    height: PadHomeTheme.barHeight,
+    iconCentre: PadHomeTheme.barIconCentre,
+    labelTop: PadHomeTheme.barLabelTop,
+    labelText: PadHomeTheme.barLabelText,
+    slot: PadHomeTheme.barSlot,
+    hairline: PadHomeTheme.hairline,
+    label: PadHomeTheme.barLabelInk,
+    selected: PadHomeTheme.pink,
+  );
+
+  List<_Place> _places(bool pad) => pad
+      ? [
+          for (final tab in PadTab.values)
+            (
+              key: 'home-tab-${tab.key}',
+              label: tab.label,
+              skinIcon: tab.skinIcon,
+              post: false,
+              selected: tab.place == selected,
+              icon: (selected) => PadTabIcon(tab, selected: selected),
+              onTap: () => tab.place == null ? onPartition?.call() : onTap(tab.place!),
+            ),
+        ]
+      : [
+          for (final tab in HomeTab.values)
+            (
+              key: 'home-tab-${tab.name}',
+              label: tab.label,
+              skinIcon: tab.skinIcon,
+              post: tab == HomeTab.post,
+              selected: tab == selected,
+              icon: (selected) => HomeTabIcon(tab, selected: selected),
+              onTap: () => onTap(tab),
+            ),
+        ];
+
   /// The still pictures a dressed bar draws. Animated icons wait on their own decode, over a still fallback.
-  static List<File> _stills(Skin skin) => [
+  static List<File> _stills(Skin skin, List<_Place> places) => [
     skin.tailBg!,
     for (final icon in [
-      for (final tab in HomeTab.values)
-        if (tab.skinIcon case final index?) ...[skin.tailIcons[index], skin.tailIconsSelected[index]],
-      ?skin.pubButton,
+      for (final place in places)
+        if (place.skinIcon case final index?) ...[skin.tailIcons[index], skin.tailIconsSelected[index]],
+      if (places.any((place) => place.post)) ?skin.pubButton,
     ])
       if (!icon.animated) icon.file,
   ];
@@ -53,68 +161,73 @@ class HomeTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = dresses(this.skin) ? this.skin : null;
+    final pad = FormFactor.of(context).isPad;
+    final places = _places(pad);
+    final shape = pad ? _pad : _phone;
     return SkinDecodeGate(
-      pictures: skin == null ? const [] : _stills(skin),
-      builder: (context, decoded) => skin != null && decoded ? _dressed(context, skin) : _stock(context),
+      pictures: skin == null ? const [] : _stills(skin, places),
+      builder: (context, decoded) =>
+          skin != null && decoded ? _dressed(context, skin, places, shape) : _stock(context, places, shape),
     );
   }
 
-  Widget _row(BuildContext context, Skin? skin) => Padding(
+  /// The phone's places share the width; the iPad's keep their own width, centred.
+  static Widget _slots(_Shape shape, List<Widget> children) {
+    final slot = shape.slot;
+    if (slot == null) return Row(children: [for (final child in children) Expanded(child: child)]);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [for (final child in children) SizedBox(width: slot, child: child)],
+    );
+  }
+
+  Widget _row(BuildContext context, Skin? skin, List<_Place> places, _Shape shape) => Padding(
     padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
     child: SizedBox(
-      height: HomeTabBarTheme.height,
-      child: Row(
-        children: [
-          for (final tab in HomeTab.values)
-            Expanded(
-              child: _Slot(tab: tab, selected: tab == selected, skin: skin, onTap: () => onTap(tab)),
-            ),
-        ],
-      ),
+      height: shape.height,
+      child: _slots(shape, [
+        for (final place in places) _Slot(place: place, shape: shape, skin: skin),
+      ]),
     ),
   );
 
-  Widget _stock(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
+  Widget _stock(BuildContext context, List<_Place> places, _Shape shape) => DecoratedBox(
+    decoration: BoxDecoration(
       color: HomeTabBarTheme.bar,
       border: Border(
-        top: BorderSide(color: HomeTabBarTheme.hairline, width: HomeTabBarTheme.hairlineWidth),
+        top: BorderSide(color: HomeTabBarTheme.hairline, width: shape.hairline),
       ),
     ),
-    child: _row(context, null),
+    child: _row(context, null, places, shape),
   );
 
   /// The picture's own shape sets how far it rises over the row; one too flat to reach the row's top is cropped at
   /// the sides to cover it. Above the row the bar takes taps only over the icons' tops: the rest of a rising picture
   /// leaves them to the page under it.
-  Widget _dressed(BuildContext context, Skin skin) {
+  Widget _dressed(BuildContext context, Skin skin, List<_Place> places, _Shape shape) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           height: HomeTabBarTheme.skinIconOverhang,
-          child: Row(
-            children: [
-              for (final tab in HomeTab.values)
-                Expanded(
-                  child: tab.skinIcon == null
-                      ? const SizedBox.shrink()
-                      : Center(
-                          child: GestureDetector(
-                            key: ValueKey('home-tab-${tab.name}-rise'),
-                            behavior: HitTestBehavior.opaque,
-                            excludeFromSemantics: true,
-                            onTap: () => onTap(tab),
-                            child: const SizedBox(
-                              width: HomeTabBarTheme.skinIconWidth,
-                              height: HomeTabBarTheme.skinIconOverhang,
-                            ),
-                          ),
+          child: _slots(shape, [
+            for (final place in places)
+              place.skinIcon == null
+                  ? const SizedBox.shrink()
+                  : Center(
+                      child: GestureDetector(
+                        key: ValueKey('${place.key}-rise'),
+                        behavior: HitTestBehavior.opaque,
+                        excludeFromSemantics: true,
+                        onTap: place.onTap,
+                        child: const SizedBox(
+                          width: HomeTabBarTheme.skinIconWidth,
+                          height: HomeTabBarTheme.skinIconOverhang,
                         ),
-                ),
-            ],
-          ),
+                      ),
+                    ),
+          ]),
         ),
         Stack(
           clipBehavior: Clip.none,
@@ -125,11 +238,11 @@ class HomeTabBar extends StatelessWidget {
               bottom: 0,
               child: ConstrainedBox(
                 key: const ValueKey('home-tab-art'),
-                constraints: BoxConstraints(minHeight: HomeTabBarTheme.height + bottom),
+                constraints: BoxConstraints(minHeight: shape.height + bottom),
                 child: SkinDecodeGate.image(skin.tailBg!, alignment: Alignment.bottomCenter),
               ),
             ),
-            _row(context, skin),
+            _row(context, skin, places, shape),
           ],
         ),
       ],
@@ -139,30 +252,30 @@ class HomeTabBar extends StatelessWidget {
 
 /// A glyph over its label, or the + alone, centred in the bar. Dressed, the 装扮's picture rises over the bar's top.
 class _Slot extends StatelessWidget {
-  const _Slot({required this.tab, required this.selected, required this.onTap, this.skin});
+  const _Slot({required this.place, required this.shape, this.skin});
 
-  final HomeTab tab;
-  final bool selected;
-  final VoidCallback onTap;
+  final _Place place;
+  final _Shape shape;
   final Skin? skin;
 
   @override
   Widget build(BuildContext context) {
-    final post = tab == HomeTab.post;
-    final centre = post ? HomeTabBarTheme.postCentre : HomeTabBarTheme.iconCentre;
+    final post = place.post;
+    final selected = place.selected;
+    final centre = post ? HomeTabBarTheme.postCentre : shape.iconCentre;
     final skin = this.skin;
     final pub = skin?.pubButton;
     final labelColour = skin == null
-        ? (selected ? HomeTabBarTheme.selected : HomeTabBarTheme.label)
+        ? (selected ? shape.selected : shape.label)
         : (selected ? skin.tailColorSelected! : skin.tailColor!);
     return Semantics(
       button: true,
       selected: selected,
-      label: tab.label,
+      label: place.label,
       child: GestureDetector(
-        key: ValueKey('home-tab-${tab.name}'),
+        key: ValueKey(place.key),
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
+        onTap: place.onTap,
         child: ExcludeSemantics(
           child: Stack(
             clipBehavior: skin == null ? Clip.hardEdge : Clip.none,
@@ -173,7 +286,7 @@ class _Slot extends StatelessWidget {
                   left: 0,
                   right: 0,
                   height: centre * 2,
-                  child: Center(child: HomeTabIcon(tab, selected: selected)),
+                  child: Center(child: place.icon(selected)),
                 )
               else if (pub != null && post)
                 _box(
@@ -182,7 +295,7 @@ class _Slot extends StatelessWidget {
                   height: HomeTabBarTheme.skinPostSize,
                   child: SkinPicture(pub),
                 )
-              else if (tab.skinIcon case final index?)
+              else if (place.skinIcon case final index?)
                 _box(
                   centre: HomeTabBarTheme.skinIconCentre,
                   width: HomeTabBarTheme.skinIconWidth,
@@ -197,14 +310,14 @@ class _Slot extends StatelessWidget {
                 ),
               if (!post)
                 Positioned(
-                  top: HomeTabBarTheme.labelTop,
+                  top: shape.labelTop,
                   left: 0,
                   right: 0,
                   child: Text(
-                    tab.label,
+                    place.label,
                     textAlign: TextAlign.center,
                     maxLines: 1,
-                    style: TextStyle(fontSize: HomeTabBarTheme.labelText, color: labelColour),
+                    style: TextStyle(fontSize: shape.labelText, color: labelColour),
                   ),
                 ),
             ],
@@ -217,7 +330,7 @@ class _Slot extends StatelessWidget {
   /// A dressed picture's box, centred on the slot's column [centre] pt under the bar's top.
   Widget _box({required double centre, required double width, required double height, required Widget child}) =>
       Positioned(
-        key: ValueKey('home-tab-${tab.name}-skin'),
+        key: ValueKey('${place.key}-skin'),
         top: centre - height / 2,
         left: 0,
         right: 0,

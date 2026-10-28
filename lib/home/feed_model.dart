@@ -6,6 +6,7 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
+import '../app/form_factor.dart';
 import '../devtools/crash_log.dart';
 import '../playback/playback_controller.dart' show PlaybackFailure;
 import '../shared/cover_format.dart';
@@ -208,6 +209,7 @@ class FeedModel extends ChangeNotifier {
     required this._client,
     Logger? logger,
     bool Function()? officialWanted,
+    bool Function()? pad,
     DateTime Function()? now,
     PictureSession? Function()? pictures,
     String Function()? coverFormat,
@@ -215,6 +217,7 @@ class FeedModel extends ChangeNotifier {
     this._webPage,
   }) : _logger = logger ?? Logger.shared,
        _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
+       _pad = pad ?? (() => FormFactor.device.isPad),
        _now = now ?? DateTime.now,
        _pictures = pictures ?? (() => ImageDiskCache.session),
        _coverFormat = coverFormat ?? (() => CoverFormat.shared.name);
@@ -247,6 +250,9 @@ class FeedModel extends ChangeNotifier {
   final BiliClient _client;
   final Logger _logger;
   final bool Function() _officialWanted;
+
+  /// Whether the official feed is asked as the iPad, which is sent no big inline card.
+  final bool Function() _pad;
   final DateTime Function() _now;
   final PictureSession? Function() _pictures;
   final String Function() _coverFormat;
@@ -596,7 +602,7 @@ class FeedModel extends ChangeNotifier {
     if (early ? _officialPossible : wantsOfficial) {
       final index = refresh ? 0 : _nextOfficialIndex;
       try {
-        return (cards: await _client.officialFeed(index: index), source: FeedSource.official, index: index);
+        return (cards: await _client.officialFeed(index: index, pad: _pad()), source: FeedSource.official, index: index);
       } catch (error) {
         if (!_refused(error)) rethrow;
         _logger.warn(LogCategory.ui, 'official feed refused, web feed instead', feedLogFields(error));
