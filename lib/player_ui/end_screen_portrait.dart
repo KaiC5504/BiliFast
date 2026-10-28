@@ -25,6 +25,23 @@ Future<bool> shareThroughSystem(Uri link) async {
   return result.status == ShareResultStatus.success;
 }
 
+/// 分享 on an end screen over the page's player.
+Future<void> shareFromEndScreen(BuildContext context, PlayerUi ui, ShareLink share) async {
+  // Through the actions the page counts the share once the sheet completes it.
+  if (ui.details?.actions case final actions?) {
+    actions.ask(ActionPrompt.share);
+    return;
+  }
+  final link = ui.session.shareLink;
+  if (link == null) return;
+  try {
+    await share(link);
+  } catch (error) {
+    Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '$error'});
+    if (context.mounted) showToast(context, '分享失败');
+  }
+}
+
 /// The small player's end screen (BiliNative `EndScreens.swift`, laid out as the official app's 26): the last frame
 /// dimmed, back and ⋮, 推荐视频 with the first related video and 立即播放, then 重播 and 分享. It fills the player and
 /// its parts rise in one after another.
@@ -60,21 +77,7 @@ class _EndScreenPortraitState extends State<EndScreenPortrait> with SingleTicker
     action();
   };
 
-  Future<void> _share() async {
-    // Through the actions the page counts the share once the sheet completes it.
-    if (_ui.details?.actions case final actions?) {
-      actions.ask(ActionPrompt.share);
-      return;
-    }
-    final link = _session.shareLink;
-    if (link == null) return;
-    try {
-      await widget.share(link);
-    } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'share failed', {'error': '$error'});
-      if (mounted) showToast(context, '分享失败');
-    }
-  }
+  Future<void> _share() => shareFromEndScreen(context, _ui, widget.share);
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +92,7 @@ class _EndScreenPortraitState extends State<EndScreenPortrait> with SingleTicker
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Rise(
+                EndRise(
                   animation: _stage(0.1, 0.6),
                   child: Row(
                     children: [
@@ -111,12 +114,12 @@ class _EndScreenPortraitState extends State<EndScreenPortrait> with SingleTicker
                 ),
                 const Spacer(),
                 if (card != null)
-                  _Rise(
+                  EndRise(
                     animation: _stage(0.2, 0.8),
                     child: _Recommended(card: card, onPlay: _tap(() => _session.playRelated(card))),
                   ),
                 const Spacer(),
-                _Rise(
+                EndRise(
                   animation: _stage(0.35, 1),
                   child: Padding(
                     padding: const EdgeInsets.only(left: BiliMetrics.endActionsLeading),
@@ -149,8 +152,9 @@ class _EndScreenPortraitState extends State<EndScreenPortrait> with SingleTicker
   }
 }
 
-class _Rise extends StatelessWidget {
-  const _Rise({required this.animation, required this.child});
+/// Fades its child in as it rises [BiliMetrics.endRise] into place.
+class EndRise extends StatelessWidget {
+  const EndRise({super.key, required this.animation, required this.child});
 
   final Animation<double> animation;
   final Widget child;
@@ -235,7 +239,7 @@ class _Recommended extends StatelessWidget {
                         child: Row(
                           spacing: BiliMetrics.endMetaGap,
                           children: [
-                            const _UpBadge(),
+                            const EndUpBadge(),
                             Flexible(
                               child: Text(
                                 card.ownerName,
@@ -255,11 +259,11 @@ class _Recommended extends StatelessWidget {
                         height: BiliMetrics.endMetaRow,
                         child: Row(
                           children: [
-                            const _CountIcon(CountGlyph.views),
+                            const EndCountIcon(CountGlyph.views),
                             const SizedBox(width: BiliMetrics.endMetaGap),
                             Text(CountFormat.short(card.views), style: _count),
                             const SizedBox(width: BiliMetrics.endMetaSpacing),
-                            const _CountIcon(CountGlyph.danmaku),
+                            const EndCountIcon(CountGlyph.danmaku),
                             const SizedBox(width: BiliMetrics.endMetaGap),
                             Text(CountFormat.short(card.danmaku), style: _count),
                           ],
@@ -371,8 +375,8 @@ class _Cover extends StatelessWidget {
   }
 }
 
-class _UpBadge extends StatelessWidget {
-  const _UpBadge();
+class EndUpBadge extends StatelessWidget {
+  const EndUpBadge({super.key});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -399,8 +403,8 @@ class _UpBadge extends StatelessWidget {
 enum CountGlyph { views, danmaku }
 
 /// Bilibili's own count icons, the same box as the UP badge: a small play triangle, or two dot-and-dash rows.
-class _CountIcon extends StatelessWidget {
-  const _CountIcon(this.glyph);
+class EndCountIcon extends StatelessWidget {
+  const EndCountIcon(this.glyph, {super.key});
 
   final CountGlyph glyph;
 

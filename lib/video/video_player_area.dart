@@ -4,12 +4,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../app/form_factor.dart';
 import '../danmaku/danmaku_layer.dart';
 import '../device/orientation.dart';
 import '../playback/danmaku_feed.dart';
 import '../player_ui/end_screen_landscape.dart';
 import '../player_ui/end_screen_portrait.dart';
 import '../player_ui/landscape_chrome.dart';
+import '../player_ui/pad/pad_end_fullscreen.dart';
+import '../player_ui/pad/pad_end_inline.dart';
+import '../player_ui/pad/pad_fullscreen_chrome.dart';
+import '../player_ui/pad/pad_inline_controls.dart';
 import '../player_ui/player_gestures.dart';
 import '../player_ui/player_hud.dart';
 import '../player_ui/player_loading.dart';
@@ -102,16 +107,17 @@ class VideoPlayerArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = ui?.session;
+    final pad = FormFactor.of(context).isPad;
     return ColoredBox(
       color: BiliColors.videoBackground,
       child: ListenableBuilder(
         listenable: Listenable.merge([?session, ?danmaku, ?pin, ?turning, ?verticalTurn]),
-        builder: (context, _) => Stack(fit: StackFit.expand, children: _layers()),
+        builder: (context, _) => Stack(fit: StackFit.expand, children: _layers(pad: pad)),
       ),
     );
   }
 
-  List<Widget> _layers() {
+  List<Widget> _layers({required bool pad}) {
     final ui = this.ui;
     final session = ui?.session;
     final ended = session?.ended ?? false;
@@ -137,6 +143,7 @@ class VideoPlayerArea extends StatelessWidget {
                     turn != null,
                     _DanmakuArea(
                       key: const ValueKey('video-danmaku-area'),
+                      pad: pad,
                       vertical: presentation == Presentation.vertical,
                       videoIsVertical: session.layoutVertical,
                       child: ClipRect(
@@ -183,12 +190,12 @@ class VideoPlayerArea extends StatelessWidget {
       _Pinned(
         key: const ValueKey('video-pinned'),
         size: pin?.value,
-        child: Stack(fit: StackFit.expand, children: _controls()),
+        child: Stack(fit: StackFit.expand, children: _controls(pad: pad)),
       ),
     ];
   }
 
-  List<Widget> _controls() {
+  List<Widget> _controls({required bool pad}) {
     final ui = this.ui;
     final ended = ui?.session.ended ?? false;
     final failed = failure != null;
@@ -202,14 +209,17 @@ class VideoPlayerArea extends StatelessWidget {
             ignoring: endScreenAside,
             child: ExcludeSemantics(
               excluding: endScreenAside,
-              child: _unseen(aside, ChromeSlide(shown: !endScreenAside, from: Offset.zero, child: _endScreen(ui))),
+              child: _unseen(
+                aside,
+                ChromeSlide(shown: !endScreenAside, from: Offset.zero, child: pad ? _padEndScreen(ui) : _endScreen(ui)),
+              ),
             ),
           )
         else
           IgnorePointer(
             key: const ValueKey('video-chrome'),
             ignoring: shrunk,
-            child: Offstage(offstage: barred, child: _unseen(aside, _chrome(ui))),
+            child: Offstage(offstage: barred, child: _unseen(aside, pad ? _padChrome(ui) : _chrome(ui))),
           ),
         if (!ended) _unseen(aside, PlayerHud(ui: ui), key: const ValueKey('video-hud')),
       ],
@@ -279,6 +289,23 @@ class VideoPlayerArea extends StatelessWidget {
     Presentation.vertical => VerticalChrome(key: const ValueKey('chrome-vertical'), ui: ui),
   };
 
+  // The iPad has no 竖屏 (its full screen takes upright videos too), so only a stray one falls to full screen's.
+  Widget _padChrome(PlayerUi ui) => switch (presentation) {
+    Presentation.inline => PadInlineControls(key: const ValueKey('chrome-pad-inline'), ui: ui),
+    Presentation.landscape || Presentation.vertical => PadFullScreenChrome(
+      key: const ValueKey('chrome-pad-fullscreen'),
+      ui: ui,
+    ),
+  };
+
+  Widget _padEndScreen(PlayerUi ui) => switch (presentation) {
+    Presentation.inline => PadEndInline(key: const ValueKey('end-pad-inline'), ui: ui),
+    Presentation.landscape || Presentation.vertical => PadEndFullScreen(
+      key: const ValueKey('end-pad-fullscreen'),
+      ui: ui,
+    ),
+  };
+
   Widget _endScreen(PlayerUi ui) => switch (presentation) {
     Presentation.inline => EndScreenPortrait(key: const ValueKey('end-inline'), ui: ui),
     Presentation.landscape => EndScreenLandscape(key: const ValueKey('end-landscape'), ui: ui),
@@ -304,16 +331,26 @@ class VideoPlayerArea extends StatelessWidget {
 }
 
 /// Where the danmaku fly: below the status bar, and in 竖屏 from under the top row to the video's bottom, over the
-/// black above a landscape video as 118 shows, clear of the uploader and the title below it.
+/// black above a landscape video as 118 shows, clear of the uploader and the title below it. On the iPad they fly over
+/// the whole box: the page's player sits below the status bar, and full screen runs them from the screen's top edge
+/// (ipad/09, 25), where the status bar shows only with the controls. [padDanmakuInsets] is the iPad's.
 class _DanmakuArea extends StatelessWidget {
-  const _DanmakuArea({super.key, required this.vertical, required this.videoIsVertical, required this.child});
+  const _DanmakuArea({
+    super.key,
+    required this.pad,
+    required this.vertical,
+    required this.videoIsVertical,
+    required this.child,
+  });
 
+  final bool pad;
   final bool vertical;
   final bool videoIsVertical;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    if (pad) return Padding(padding: padDanmakuInsets, child: child);
     final inset = MediaQuery.paddingOf(context).top;
     // One shape in every presentation, so the danmaku keep their state through a turn.
     return LayoutBuilder(
@@ -332,6 +369,9 @@ class _DanmakuArea extends StatelessWidget {
     );
   }
 }
+
+/// The room the iPad's danmaku keep from the player's edges, in every presentation.
+const padDanmakuInsets = EdgeInsets.zero;
 
 class _Failure extends StatelessWidget {
   const _Failure({super.key, required this.message, required this.onRetry});
