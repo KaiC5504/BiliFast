@@ -46,12 +46,13 @@ class PadRig {
 enum Held { sideways, upright }
 
 /// The iPad's page under the panel layer, in full screen (held either way) or on the page with the player's bottom
-/// at [playerBottom].
+/// at [playerBottom] and the page's [padFrame].
 Future<PadRig> pumpPad(
   WidgetTester tester, {
   Held held = Held.sideways,
   bool fullScreen = true,
   double? playerBottom,
+  PadSheetFrame? padFrame,
   bool phone = false,
 }) async {
   final Size size;
@@ -114,7 +115,11 @@ Future<PadRig> pumpPad(
               child: ColoredBox(color: BiliColors.videoBackground),
             ),
             Positioned.fill(
-              child: PanelLayer(ui: ui, playerBottom: playerBottom),
+              child: PanelLayer(
+                ui: ui,
+                playerBottom: playerBottom,
+                padFrame: padFrame,
+              ),
             ),
           ],
         ),
@@ -495,19 +500,34 @@ void main() {
   );
 
   group('on the iPad page', () {
+    const band = PadPageTheme.statusBand;
+    PadSheetFrame frameOf(double column, double playerBottom) => PadSheetFrame(
+      player: Rect.fromLTRB(0, band, column, playerBottom),
+      column: column,
+    );
+    Finder dim() => find.byType(PadSheetDim);
+    bool dims(WidgetTester tester, Offset at) {
+      final clip = tester.widget<ClipPath>(
+        find.descendant(of: dim(), matching: find.byType(ClipPath)),
+      );
+      return clip.clipper!.getClip(tester.getSize(dim())).contains(at);
+    }
+
     testWidgets(
-      'sideways, the dark sheet keeps the phone height under the player, at most 600 wide',
+      'sideways, the dark sheet keeps the phone height under the player in its column; all but the player dims',
       (tester) async {
+        const column = 1194 - PadPageTheme.relatedWidth - PadPageTheme.rule;
         const playerBottom = 449.0;
         final rig = await pumpPad(
           tester,
           fullScreen: false,
           playerBottom: playerBottom,
+          padFrame: frameOf(column, playerBottom),
         );
         await openPanel(tester, rig, PlayerPanel.speed);
         final rect = tester.getRect(frame);
         expect(rect.left, 0);
-        expect(rect.width, PadPanelTheme.sheetMaxWidth);
+        expect(rect.width, column);
         expect(rect.bottom, rig.size.height);
         expect(
           rect.height,
@@ -515,6 +535,13 @@ void main() {
             BiliMetrics.panelSpeedSheetHeight * PadPanelTheme.phoneHeight,
             0.01,
           ),
+        );
+        expect(dims(tester, const Offset(column + 100, 200)), isTrue, reason: 'the related column beside the player');
+        expect(dims(tester, const Offset(400, band / 2)), isTrue, reason: 'the band');
+        expect(dims(tester, const Offset(400, 200)), isFalse, reason: 'the player');
+        expect(
+          tester.widget<ColoredBox>(find.descendant(of: dim(), matching: find.byType(ColoredBox))).color,
+          BiliColors.sheetDim,
         );
 
         await openPanel(tester, rig, PlayerPanel.quality);
@@ -526,7 +553,7 @@ void main() {
     );
 
     testWidgets(
-      'upright, the light sheets hang from the player and stay 600 wide',
+      "upright, the light sheets hang from the player the screen's width; a tap on the band closes them",
       (tester) async {
         const playerBottom = 493.0;
         final rig = await pumpPad(
@@ -534,23 +561,29 @@ void main() {
           held: Held.upright,
           fullScreen: false,
           playerBottom: playerBottom,
+          padFrame: frameOf(834, playerBottom),
         );
         await openPanel(tester, rig, PlayerPanel.danmakuSettings);
-        final rect = tester.getRect(frame);
         expect(
-          rect,
-          Rect.fromLTRB(
-            0,
-            playerBottom,
-            PadPanelTheme.sheetMaxWidth,
-            rig.size.height,
-          ),
+          tester.getRect(frame),
+          Rect.fromLTRB(0, playerBottom, 834, rig.size.height),
         );
-        await tester.tapAt(Offset(rig.size.width - 20, rig.size.height - 20));
+        expect(dims(tester, const Offset(400, band / 2)), isTrue);
+        expect(dims(tester, const Offset(400, 200)), isFalse);
+        await tester.tapAt(const Offset(400, band / 2));
         await tester.pumpAndSettle();
         expect(rig.panels.value, isNull);
       },
     );
+
+    testWidgets('in full screen the strips stay at the right with no page dim', (
+      tester,
+    ) async {
+      final rig = await pumpPad(tester);
+      await openPanel(tester, rig, PlayerPanel.more);
+      expect(tester.getRect(frame).right, rig.size.width);
+      expect(dim(), findsNothing);
+    });
   });
 
   group('look-alike', () {

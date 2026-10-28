@@ -69,44 +69,41 @@ class PadIntroHead extends StatelessWidget {
         if (detail == null) return const SizedBox.shrink();
         final actions = details.actions;
         final season = detail.season;
-        return MediaQuery.withClampedTextScaling(
-          maxScaleFactor: 1,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PadUploaderRow(
-                detail: detail,
-                card: details.uploader,
-                actions: actions,
-                trailing: sideways ? _DanmakuEntry(player: player, danmaku: danmaku) : null,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PadUploaderRow(
+              detail: detail,
+              card: details.uploader,
+              actions: actions,
+              trailing: sideways ? _DanmakuEntry(player: player, danmaku: danmaku) : null,
+            ),
+            PadTitleBlock(
+              detail: detail,
+              online: details.online,
+              tags: details.tags,
+              onSeek: onSeek,
+              onOpenVideo: onOpenVideo,
+              titleGap: sideways ? PadBodyTheme.titleGap : PadBodyTheme.titleGapUpright,
+            ),
+            if (actions != null) ActionRow(actions: actions, metrics: ActionRowMetrics.pad),
+            // No iPad screenshot has parts, a 合集 or topic chips: the iPhone's, at the iPad's gutter.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: PadBodyTheme.sectionInset),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (content.episodesAreParts && content.episodes.isNotEmpty)
+                    PartStrip(parts: content.episodes, onChoose: onPlayEpisode, onOpenList: onOpenEpisodes)
+                  else if (season != null)
+                    CollectionRow(title: season.title, episodes: content.episodes, onOpen: onOpenEpisodes),
+                  TagChips(tags: details.tags),
+                ],
               ),
-              PadTitleBlock(
-                detail: detail,
-                online: details.online,
-                tags: details.tags,
-                onSeek: onSeek,
-                onOpenVideo: onOpenVideo,
-                titleGap: sideways ? PadBodyTheme.titleGap : PadBodyTheme.titleGapUpright,
-              ),
-              if (actions != null) ActionRow(actions: actions, metrics: ActionRowMetrics.pad),
-              // No iPad screenshot has parts, a 合集 or topic chips: the iPhone's, at the iPad's gutter.
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: PadBodyTheme.sectionInset),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (content.episodesAreParts && content.episodes.isNotEmpty)
-                      PartStrip(parts: content.episodes, onChoose: onPlayEpisode, onOpenList: onOpenEpisodes)
-                    else if (season != null)
-                      CollectionRow(title: season.title, episodes: content.episodes, onOpen: onOpenEpisodes),
-                    TagChips(tags: details.tags),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
