@@ -521,8 +521,10 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - No Mac: iOS checks run in GitHub Actions and on his phone.
 - Layout comes only from the official app's screenshots (`local/official-app-reference/iphone/`, his iPhone 17 Pro Max,
   440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or
-  the Swift app. The iPad's layout comes only from `local/official-app-reference/ipad/` (the official iPad app on
-  KaiC's iPad), numbered from 01 on its own; never stretch an iPhone screen to fill an iPad one.
+  the Swift app. The iPad's layout comes only from `local/official-app-reference/ipad/` (the official HD app on
+  KaiC's iPad Pro 11" 3rd gen, 834×1194 pt at 2×, full screen only: no Split View or Stage Manager), numbered from 01
+  on its own; never stretch an iPhone screen to fill an iPad one. His iPad shows the HD app partly in English
+  (Follow, Danmu Settings, Buffering...); ours keeps the iPhone screenshots' Chinese wording everywhere (KaiC).
 - Art (icons, placeholders, loading pictures, Lottie) comes first from the official Android APK in `local/`
   (`iBiliPlayer-bili.apk`, 8.43.0) through `uv run tools/apk_asset.py` (`find`, `show`, `extract`; vectors drawn white
   at 3× for tinting; everything is already dumped by real name in `local/apk-assets/`, with `index.csv` to search and
