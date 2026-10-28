@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:bilifast/app/form_factor.dart';
 import 'package:bilifast/app/phone_frame.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,12 +25,30 @@ void showAsPhone(WidgetTester tester, {bool landscape = false}) {
   addTearDown(tester.view.reset);
 }
 
-/// Writes what the RepaintBoundary [boundary] finds as a 3× PNG at [path], for tools/screen_diff.py. Shots go to the
+/// Sizes the test's view as KaiC's iPad Pro 11" (834×1194 at 2×, or 1194×834 sideways) with its safe areas, for a
+/// look-alike check against `local/official-app-reference/ipad/`. Sets [FormFactor.device] to the iPad for the test.
+void showAsPad(WidgetTester tester, {bool landscape = false}) {
+  final size = landscape ? PhoneFrame.padLandscape : PhoneFrame.padPortrait;
+  const padding = PhoneFrame.padPadding;
+  final fake = FakeViewPadding(top: padding.top * 2, bottom: padding.bottom * 2);
+  tester.view
+    ..physicalSize = size * 2
+    ..devicePixelRatio = 2
+    ..padding = fake
+    ..viewPadding = fake;
+  FormFactor.device = FormFactor.pad;
+  addTearDown(() {
+    tester.view.reset();
+    FormFactor.device = FormFactor.phone;
+  });
+}
+
+/// Writes what the RepaintBoundary [boundary] finds as a PNG at [path] (3× for the iPhone, pass 2 for the iPad), for tools/screen_diff.py. Shots go to the
 /// scratchpad, never into the repo.
-Future<void> saveShot(WidgetTester tester, Finder boundary, String path) async {
+Future<void> saveShot(WidgetTester tester, Finder boundary, String path, {double pixelRatio = 3}) async {
   final render = tester.renderObject<RenderRepaintBoundary>(boundary);
   await tester.runAsync(() async {
-    final image = await render.toImage(pixelRatio: 3);
+    final image = await render.toImage(pixelRatio: pixelRatio);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     File(path)

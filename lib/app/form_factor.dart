@@ -1,0 +1,28 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/widgets.dart';
+
+/// The iPhone or the iPad. Every iPad layout reads this, never the screen's width alone, so the iPhone's screens stay
+/// exactly as they are whatever its size.
+enum FormFactor {
+  phone,
+  pad;
+
+  /// The iPhone 17 Pro Max's short side is 440 pt, the smallest iPad's 744.
+  static const padShortestSide = 600.0;
+
+  /// The device's, set once at launch, for code with no [BuildContext] (the orientation rules). Tests set it.
+  static FormFactor device = phone;
+
+  bool get isPad => this == pad;
+
+  /// The device's shape from the first view, before any widget is built. Windows passes `--pad` instead.
+  static FormFactor fromView(ui.FlutterView view) {
+    final size = view.physicalSize / view.devicePixelRatio;
+    return size.shortestSide >= padShortestSide ? pad : phone;
+  }
+
+  /// The screen's, read from [MediaQuery]: a look-alike test at the iPad's size gets the iPad layouts.
+  static FormFactor of(BuildContext context) =>
+      MediaQuery.sizeOf(context).shortestSide >= padShortestSide ? pad : phone;
+}

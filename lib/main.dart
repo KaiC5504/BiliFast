@@ -11,6 +11,7 @@ import 'account/app_auth.dart';
 import 'account/dpapi_keychain_store.dart';
 import 'account/keychain_store.dart';
 import 'app/app_environment.dart';
+import 'app/form_factor.dart';
 import 'app/app_scope.dart';
 import 'app/phone_frame.dart';
 import 'app/reduce_motion.dart';
@@ -45,7 +46,13 @@ import 'video/player_prefs.dart';
 import 'watch_later/fake_watch_later_api.dart';
 
 Future<void> main(List<String> args) async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  if (Platform.isWindows && args.contains('--pad')) {
+    PhoneFrame.usePad();
+    FormFactor.device = FormFactor.pad;
+  } else if (Platform.isIOS) {
+    FormFactor.device = FormFactor.fromView(binding.platformDispatcher.views.first);
+  }
   CrashLog.install();
   await resolveSupportFolder();
   final logs = devToolsEnabled ? await LogForwarder.load(supportFilePath('log_server.json')) : null;

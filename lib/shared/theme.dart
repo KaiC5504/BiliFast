@@ -6413,3 +6413,30 @@ abstract final class FollowingListTheme {
   static const footerPad = 16.0;
   static const spinnerRadius = 9.0;
 }
+
+/// The iPad's 首页 (ipad/01, 02), measured at 2× (pt = px / 2). The Home agent owns this class.
+abstract final class PadHomeTheme {
+  static const columns = 3;
+}
+
+/// The iPad's video page frame: the two columns sideways (ipad/03, 05), one upright (06), the player's shrink to the
+/// pink 立即播放 bar (05, 20). The Page shell agent owns this class.
+abstract final class PadPageTheme {}
+
+/// The iPad's page body: 简介's sections and the related column (ipad/03, 04, 06). The Page body agent owns this
+/// class.
+abstract final class PadBodyTheme {}
+
+/// The iPad's controls over the page's player and its end screen (ipad/03, 07, 17). The Player controls agent owns
+/// this class.
+abstract final class PadInlineControlsTheme {}
+
+/// The iPad's full screen: top and bottom bars, side buttons, the end screen, the hold, buffering and the seek
+/// preview (ipad/08, 14-16, 18, 19, 24). The Full screen agent owns this class.
+abstract final class PadFullScreenTheme {}
+
+/// The iPad's player panels (ipad/10-13). The Panels agent owns this class.
+abstract final class PadPanelTheme {}
+
+/// The iPad's danmaku, on the page's player and in full screen (ipad/09, 25). The Danmaku agent owns this class.
+abstract final class PadDanmakuTheme {}

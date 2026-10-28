@@ -19,6 +19,16 @@ abstract final class PhoneFrame {
   static const portraitPadding = EdgeInsets.only(top: 62, bottom: 34);
   static const landscapePadding = EdgeInsets.only(left: 62, right: 62, bottom: 21);
 
+  /// KaiC's iPad Pro 11" (3rd generation) with `--pad`: 834×1194 upright, 1194×834 sideways, the status bar and the
+  /// home indicator the same in both. The window opens sideways: upright is taller than the PC's screen.
+  static const padPortrait = Size(834, 1194);
+  static const padLandscape = Size(1194, 834);
+  static const padPadding = EdgeInsets.only(top: 24, bottom: 20);
+
+  /// Set by [usePad] before the first frame.
+  static bool get pad => _pad;
+  static bool _pad = false;
+
   static const _channel = MethodChannel('bilifast/window');
 
   static bool get enabled => !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
@@ -29,9 +39,18 @@ abstract final class PhoneFrame {
   static ValueListenable<Brightness?> get statusBarBrightness => _statusBarBrightness;
   static final _statusBarBrightness = ValueNotifier<Brightness?>(null);
 
-  /// Turns the window with landscape full screen and back.
-  static void follow(OrientationController orientation) {
+  /// Makes the window KaiC's iPad, sideways.
+  static void usePad() {
     if (!enabled) return;
+    _pad = true;
+    unawaited(_channel
+        .invokeMethod<void>('setClientSize', {'width': padLandscape.width, 'height': padLandscape.height})
+        .catchError((Object _) {}));
+  }
+
+  /// Turns the window with landscape full screen and back. The iPad doesn't turn for full screen.
+  static void follow(OrientationController orientation) {
+    if (!enabled || _pad) return;
     var landscapeNow = false;
     orientation.addListener(() {
       final wanted = orientation.presentation == Presentation.landscape;
@@ -49,15 +68,15 @@ abstract final class PhoneFrame {
     if (!enabled) return child;
     final media = MediaQuery.of(context);
     final landscape = media.size.width > media.size.height;
-    final padding = landscape ? landscapePadding : portraitPadding;
+    final padding = _pad ? padPadding : (landscape ? landscapePadding : portraitPadding);
     final framed = MediaQuery(data: media.copyWith(padding: padding, viewPadding: padding), child: child);
-    // The phone hides its status bar in landscape full screen.
-    if (landscape) return framed;
+    // The phone hides its status bar in landscape full screen; the iPad keeps it (08).
+    if (landscape && !_pad) return framed;
     return Stack(
       textDirection: TextDirection.ltr,
       children: [
         _StyleProbe(child: framed),
-        const Positioned(top: 0, left: 0, right: 0, height: 62, child: _StatusBar()),
+        Positioned(top: 0, left: 0, right: 0, height: padding.top, child: const _StatusBar()),
       ],
     );
   }
