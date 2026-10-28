@@ -2,6 +2,7 @@ import 'package:bili_core/logic.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
+import '../app/form_factor.dart';
 import '../shared/theme.dart';
 import 'chrome_state.dart';
 import 'player_ui.dart';
@@ -99,14 +100,24 @@ class _SpeedUpPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _Pill(
-      padding: EdgeInsets.only(left: BiliMetrics.hudSpeedPaddingLeft, right: BiliMetrics.hudSpeedPaddingRight),
+    // The iPad's pill (15) is the phone's with smaller arrows set a little further from the label.
+    final pad = FormFactor.of(context).isPad;
+    return _Pill(
+      padding: const EdgeInsets.only(left: BiliMetrics.hudSpeedPaddingLeft, right: BiliMetrics.hudSpeedPaddingRight),
       child: Row(
+        key: const ValueKey('hud-speed-pill'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          _SpeedArrows(),
-          SizedBox(width: BiliMetrics.hudGap),
-          _Label(Text('倍速中', style: _label, maxLines: 1)),
+          if (pad)
+            const SpeedArrows(
+              width: PadFullScreenTheme.hudArrowWidth,
+              height: PadFullScreenTheme.hudArrowHeight,
+              step: PadFullScreenTheme.hudArrowStep,
+            )
+          else
+            const SpeedArrows(),
+          SizedBox(width: pad ? PadFullScreenTheme.hudGap : BiliMetrics.hudGap),
+          const _Label(Text('倍速中', style: _label, maxLines: 1)),
         ],
       ),
     );
@@ -114,15 +125,29 @@ class _SpeedUpPill extends StatelessWidget {
 }
 
 /// The two overlapping arrows of 25. The back one slides out from behind the front one as the pill appears and
-/// rests where the official app draws it.
-class _SpeedArrows extends StatefulWidget {
-  const _SpeedArrows();
+/// rests where the official app draws it; with [slide] off they are drawn at rest.
+class SpeedArrows extends StatefulWidget {
+  const SpeedArrows({
+    super.key,
+    this.width = BiliMetrics.hudArrowWidth,
+    this.height = BiliMetrics.hudArrowHeight,
+    this.step = BiliMetrics.hudArrowStep,
+    this.slide = true,
+  });
+
+  /// One arrow's.
+  final double width;
+  final double height;
+
+  /// How far the back arrow rests right of the front one.
+  final double step;
+  final bool slide;
 
   @override
-  State<_SpeedArrows> createState() => _SpeedArrowsState();
+  State<SpeedArrows> createState() => _SpeedArrowsState();
 }
 
-class _SpeedArrowsState extends State<_SpeedArrows> with SingleTickerProviderStateMixin {
+class _SpeedArrowsState extends State<SpeedArrows> with SingleTickerProviderStateMixin {
   static const _slide = Duration(milliseconds: 420);
 
   late final AnimationController _controller = AnimationController(vsync: this, duration: _slide);
@@ -131,7 +156,7 @@ class _SpeedArrowsState extends State<_SpeedArrows> with SingleTickerProviderSta
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (!widget.slide || MediaQuery.disableAnimationsOf(context)) {
       _controller.value = 1;
     } else if (_controller.isDismissed) {
       _controller.forward();
@@ -147,30 +172,28 @@ class _SpeedArrowsState extends State<_SpeedArrows> with SingleTickerProviderSta
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      size: const Size(BiliMetrics.hudArrowStep + BiliMetrics.hudArrowWidth, BiliMetrics.hudArrowHeight),
-      painter: _ArrowsPainter(_spread),
+      size: Size(widget.step + widget.width, widget.height),
+      painter: _ArrowsPainter(_spread, width: widget.width, step: widget.step),
     );
   }
 }
 
 class _ArrowsPainter extends CustomPainter {
-  _ArrowsPainter(this.spread) : super(repaint: spread);
+  _ArrowsPainter(this.spread, {required this.width, required this.step}) : super(repaint: spread);
 
   final Animation<double> spread;
+  final double width;
+  final double step;
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawPath(
-      _arrow(BiliMetrics.hudArrowStep * spread.value, size.height),
-      Paint()..color = BiliColors.hudArrowBack,
-    );
+    canvas.drawPath(_arrow(step * spread.value, size.height), Paint()..color = BiliColors.hudArrowBack);
     canvas.drawPath(_arrow(0, size.height), Paint()..color = BiliColors.hudArrowFront);
   }
 
   /// A play triangle with its corners rounded.
-  static Path _arrow(double left, double height) {
-    const width = BiliMetrics.hudArrowWidth;
-    const r = BiliMetrics.hudArrowCorner;
+  Path _arrow(double left, double height) {
+    final r = BiliMetrics.hudArrowCorner * height / BiliMetrics.hudArrowHeight;
     final top = Offset(left, 0);
     final tip = Offset(left + width, height / 2);
     final bottom = Offset(left, height);
@@ -186,7 +209,8 @@ class _ArrowsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ArrowsPainter oldDelegate) => oldDelegate.spread != spread;
+  bool shouldRepaint(_ArrowsPainter oldDelegate) =>
+      oldDelegate.spread != spread || oldDelegate.width != width || oldDelegate.step != step;
 }
 
 class _SeekPill extends StatelessWidget {
