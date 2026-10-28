@@ -1,52 +1,72 @@
 import 'package:bilifast/app/form_factor.dart';
+import 'package:bilifast/device/ios/device_api.g.dart';
 import 'package:bilifast/device/launch_form_factor.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-void main() {
-  setUp(() => FormFactor.device = FormFactor.phone);
+/// DeviceChannel.swift's idiom, or its failure.
+final class _Host extends DeviceHostApi {
+  _Host(this.answer);
 
-  void sized(WidgetTester tester, {required Size view, required Size screen}) {
-    tester.view
-      ..devicePixelRatio = 2
-      ..physicalSize = view;
-    tester.view.display
-      ..devicePixelRatio = 2
-      ..size = screen;
-    addTearDown(tester.view.reset);
-    addTearDown(tester.view.display.reset);
+  final Object answer;
+  var asked = 0;
+
+  @override
+  Future<bool> isPad() async {
+    asked++;
+    if (answer is bool) return answer as bool;
+    throw answer;
   }
+}
 
-  testWidgets('a laid-out view decides', (tester) async {
-    sized(tester, view: const Size(1194, 834) * 2, screen: Size.zero);
-    expect(await launchFormFactor(tester.binding), FormFactor.pad);
-    sized(tester, view: const Size(440, 956) * 2, screen: const Size(834, 1194) * 2);
-    expect(await launchFormFactor(tester.binding), FormFactor.phone);
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('on iOS the idiom decides', () {
+    test('an iPad is the iPad whatever the view, an iPhone the phone', () async {
+      final pad = _Host(true);
+      final launched = await launchFormFactor(const [], platform: TargetPlatform.iOS, host: pad);
+      expect(launched.kind, FormFactor.pad);
+      expect(launched.logFields, {'kind': 'pad', 'via': 'native'});
+      expect(pad.asked, 1);
+
+      final phone = await launchFormFactor(const [], platform: TargetPlatform.iOS, host: _Host(false));
+      expect(phone.logFields, {'kind': 'phone', 'via': 'native'});
+    });
+
+    test('--pad means nothing on the phone', () async {
+      final launched = await launchFormFactor(const ['--pad'], platform: TargetPlatform.iOS, host: _Host(false));
+      expect(launched.kind, FormFactor.phone);
+    });
+
+    test('a host that fails leaves the phone and says why', () async {
+      final launched = await launchFormFactor(const [],
+          platform: TargetPlatform.iOS, host: _Host(PlatformException(code: 'channel-error')));
+      expect(launched.kind, FormFactor.phone);
+      expect(launched.logFields, {'kind': 'phone', 'via': 'default', 'error': 'PlatformException'});
+    });
+
+    test("over Pigeon's channel", () async {
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = 'dev.flutter.pigeon.bilifast.DeviceHostApi.isPad';
+      messenger.setMockMessageHandler(
+          channel, (_) async => DeviceHostApi.pigeonChannelCodec.encodeMessage(<Object?>[true]));
+      addTearDown(() => messenger.setMockMessageHandler(channel, null));
+      expect((await launchFormFactor(const [], platform: TargetPlatform.iOS)).kind, FormFactor.pad);
+    });
   });
 
-  testWidgets('a view with no size yet goes by the screen', (tester) async {
-    sized(tester, view: Size.zero, screen: const Size(834, 1194) * 2);
-    expect(await launchFormFactor(tester.binding), FormFactor.pad);
-    sized(tester, view: Size.zero, screen: const Size(956, 440) * 2);
-    expect(await launchFormFactor(tester.binding), FormFactor.phone);
+  test('Windows takes --pad, without it the phone', () async {
+    final flagged = await launchFormFactor(const ['--mute', '--pad'], platform: TargetPlatform.windows);
+    expect(flagged.logFields, {'kind': 'pad', 'via': 'flag'});
+    final plain = await launchFormFactor(const ['--mute'], platform: TargetPlatform.windows);
+    expect(plain.logFields, {'kind': 'phone', 'via': 'default'});
   });
 
-  testWidgets('with neither, the first metrics with a size decide', (tester) async {
-    sized(tester, view: Size.zero, screen: Size.zero);
-    FormFactor? found;
-    launchFormFactor(tester.binding).then((value) => found = value);
-    await tester.pump();
-    expect(found, isNull);
-    tester.view.physicalSize = const Size(834, 1194) * 2;
-    await tester.pump();
-    expect(found, FormFactor.pad);
-  });
-
-  testWidgets('with no size at all it stays the phone after the wait', (tester) async {
-    sized(tester, view: Size.zero, screen: Size.zero);
-    FormFactor? found;
-    launchFormFactor(tester.binding, wait: const Duration(milliseconds: 200)).then((value) => found = value);
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(found, FormFactor.phone);
+  test('other platforms are the phone and never ask a host', () async {
+    final host = _Host(true);
+    final launched = await launchFormFactor(const ['--pad'], platform: TargetPlatform.android, host: host);
+    expect(launched.kind, FormFactor.phone);
+    expect(host.asked, 0);
   });
 }

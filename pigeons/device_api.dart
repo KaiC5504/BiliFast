@@ -22,6 +22,9 @@ enum NativeNetwork { wifi, cellular, none }
 /// when to rotate live in Dart (lib/device/orientation.dart); the host only applies masks and reports.
 @HostApi()
 abstract class DeviceHostApi {
+  /// UIKit's idiom, the app's one answer to iPhone or iPad; asked once at launch.
+  bool isPad();
+
   /// Starts or stops device orientation events (UIDevice notifications) to [DeviceEventApi.onDeviceOrientation].
   void setOrientationEvents(bool enabled);
 

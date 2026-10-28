@@ -1,6 +1,11 @@
+import 'package:bili_core/devlog.dart';
 import 'package:bilifast/app/phone_frame.dart';
+import 'package:bilifast/device/orientation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../device/fake_orientation_host.dart';
 
 Future<void> _show(WidgetTester tester, Size size) async {
   tester.view
@@ -47,6 +52,33 @@ void main() {
     await _show(tester, PhoneFrame.landscape);
     expect(_padding(tester), PhoneFrame.landscapePadding);
     expect(find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter != null), findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+  testWidgets('a window that refuses its new size is logged, for the turn and for the iPad', (tester) async {
+    const window = MethodChannel('bilifast/window');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(window, (_) async => throw PlatformException(code: 'no-window'));
+    addTearDown(() => messenger.setMockMethodCallHandler(window, null));
+    final logs = MemorySink();
+    Logger.shared.add(logs);
+    addTearDown(() => Logger.shared.remove(logs));
+    List<String> failures() => [
+          for (final event in logs.events.where((event) => event.msg == 'window resize failed'))
+            '${event.f['error']?.toJson()}',
+        ];
+
+    final orientation = OrientationController(controls: RecordingDeviceControls());
+    addTearDown(orientation.dispose);
+    PhoneFrame.follow(orientation);
+    orientation.begin(Object(), videoIsVertical: false);
+    orientation.enterLandscape();
+    await tester.pump();
+    expect(failures(), ['PlatformException']);
+
+    addTearDown(() => PhoneFrame.debugPad = false);
+    PhoneFrame.usePad();
+    await tester.pump();
+    expect(failures(), ['PlatformException', 'PlatformException']);
   }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   test("the iPad's time and date as ipad/01 writes them", () {

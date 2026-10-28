@@ -18,6 +18,7 @@ import 'fake_orientation_host.dart';
 const _hostPrefix = 'dev.flutter.pigeon.bilifast.DeviceHostApi.';
 const _eventPrefix = 'dev.flutter.pigeon.bilifast.DeviceEventApi.';
 const _methods = [
+  'isPad',
   'setOrientationEvents',
   'deviceOrientation',
   'interfaceOrientation',
@@ -39,6 +40,7 @@ final class _NativeSide {
     'interfaceOrientation': NativeInterfaceOrientation.landscapeLeft,
     'brightness': 0.25,
     'volume': 0.75,
+    'isPad': false,
   };
   final errors = <String, PlatformException>{};
 
@@ -189,6 +191,23 @@ void main() {
       for (final subscription in subscriptions) {
         await subscription.cancel();
       }
+    });
+
+    test("the iPad's refusal reverts a move the phone's rules made", () async {
+      final logs = MemorySink();
+      final orientation =
+          OrientationController(controls: RecordingDeviceControls(), host: host, logger: Logger(session: 'test')..add(logs));
+      addTearDown(orientation.dispose);
+      orientation.begin(Object(), videoIsVertical: false);
+      orientation.enterLandscape();
+      await settle();
+      expect(orientation.presentation, Presentation.landscape);
+      final request = int.parse(native.calls.lastWhere((call) => call.startsWith('requestOrientations')).split(' ')[1]);
+
+      await native.send('onOrientationRefused', [request, 'pad']);
+      await settle();
+      expect(orientation.presentation, Presentation.inline);
+      expect(logs.events.singleWhere((event) => event.msg == 'orientation request refused').f['error']?.toJson(), 'pad');
     });
   });
 

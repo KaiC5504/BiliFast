@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -46,9 +47,7 @@ abstract final class PhoneFrame {
   static void usePad() {
     if (!enabled) return;
     _pad = true;
-    unawaited(_channel
-        .invokeMethod<void>('setClientSize', {'width': padLandscape.width, 'height': padLandscape.height})
-        .catchError((Object _) {}));
+    unawaited(_resize(padLandscape));
   }
 
   /// Turns the window with landscape full screen and back. The iPad doesn't turn for full screen.
@@ -59,11 +58,16 @@ abstract final class PhoneFrame {
       final wanted = orientation.presentation == Presentation.landscape;
       if (wanted == landscapeNow) return;
       landscapeNow = wanted;
-      final size = wanted ? landscape : portrait;
-      unawaited(_channel
-          .invokeMethod<void>('setClientSize', {'width': size.width, 'height': size.height})
-          .catchError((Object _) {}));
+      unawaited(_resize(wanted ? landscape : portrait));
     });
+  }
+
+  static Future<void> _resize(Size size) async {
+    try {
+      await _channel.invokeMethod<void>('setClientSize', {'width': size.width, 'height': size.height});
+    } on Object catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'window resize failed', {'error': '${error.runtimeType}'});
+    }
   }
 
   /// Gives the content the phone's safe areas, by the window's shape.

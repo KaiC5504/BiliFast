@@ -181,6 +181,8 @@ class DeviceApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 ///
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol DeviceHostApi {
+  /// UIKit's idiom, the app's one answer to iPhone or iPad; asked once at launch.
+  func isPad() throws -> Bool
   /// Starts or stops device orientation events (UIDevice notifications) to [DeviceEventApi.onDeviceOrientation].
   func setOrientationEvents(enabled: Bool) throws
   func deviceOrientation() throws -> NativeDeviceOrientation
@@ -214,6 +216,20 @@ class DeviceHostApiSetup {
   /// Sets up an instance of `DeviceHostApi` to handle messages through the `binaryMessenger`.
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: DeviceHostApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+    /// UIKit's idiom, the app's one answer to iPhone or iPad; asked once at launch.
+    let isPadChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.isPad\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      isPadChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.isPad()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      isPadChannel.setMessageHandler(nil)
+    }
     /// Starts or stops device orientation events (UIDevice notifications) to [DeviceEventApi.onDeviceOrientation].
     let setOrientationEventsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.setOrientationEvents\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

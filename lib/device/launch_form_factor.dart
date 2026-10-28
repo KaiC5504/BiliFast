@@ -1,50 +1,41 @@
-import 'dart:async';
-import 'dart:ui' as ui;
-
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
 
 import '../app/form_factor.dart';
+import 'ios/device_api.g.dart';
 
-/// The device's [FormFactor] at launch on iOS. The engine can start Dart before the view has been laid out, when its
-/// size is still zero, so the screen's size stands in; failing both, the first metrics with a size, up to [wait].
-Future<FormFactor> launchFormFactor(WidgetsBinding binding, {Duration wait = const Duration(seconds: 1)}) async {
-  final dispatcher = binding.platformDispatcher;
-  final view = dispatcher.implicitView ?? (dispatcher.views.isEmpty ? null : dispatcher.views.first);
-  if (view == null) return FormFactor.phone;
-  if (!view.physicalSize.isEmpty) return FormFactor.fromView(view);
-  final screen = _screen(view);
-  if (screen != null) return screen;
-  final sized = Completer<FormFactor>();
-  final observer = _SizeObserver(view, sized);
-  binding.addObserver(observer);
-  try {
-    return await sized.future.timeout(wait, onTimeout: () => FormFactor.phone);
-  } finally {
-    binding.removeObserver(observer);
-  }
+/// The device's [FormFactor] at launch and where it came from, for the log's `form factor` line.
+final class LaunchFormFactor {
+  const LaunchFormFactor(this.kind, this.via, {this.error});
+
+  final FormFactor kind;
+
+  /// `native` (UIKit's idiom), `flag` (Windows' `--pad`) or `default`.
+  final String via;
+
+  /// The host call's failure, when iOS couldn't answer.
+  final Object? error;
+
+  Map<String, Object> get logFields => {
+        'kind': kind.name,
+        'via': via,
+        if (error != null) 'error': '${error.runtimeType}',
+      };
 }
 
-FormFactor? _screen(ui.FlutterView view) {
-  final ui.Display display;
-  try {
-    display = view.display;
-  } on Object {
-    return null;
-  }
-  if (display.size.isEmpty || display.devicePixelRatio <= 0) return null;
-  final shortest = (display.size / display.devicePixelRatio).shortestSide;
-  return shortest >= FormFactor.padShortestSide ? FormFactor.pad : FormFactor.phone;
-}
-
-class _SizeObserver with WidgetsBindingObserver {
-  _SizeObserver(this.view, this.sized);
-
-  final ui.FlutterView view;
-  final Completer<FormFactor> sized;
-
-  @override
-  void didChangeMetrics() {
-    if (sized.isCompleted || view.physicalSize.isEmpty) return;
-    sized.complete(FormFactor.fromView(view));
+/// On iOS UIKit's idiom decides, the same answer DeviceChannel.swift's masks go by; a size can't, since the view may
+/// not be laid out yet when Dart starts. Windows takes `--pad`; everything else is the phone.
+Future<LaunchFormFactor> launchFormFactor(List<String> args, {TargetPlatform? platform, DeviceHostApi? host}) async {
+  switch (platform ?? defaultTargetPlatform) {
+    case TargetPlatform.iOS:
+      try {
+        final pad = await (host ?? DeviceHostApi()).isPad();
+        return LaunchFormFactor(pad ? FormFactor.pad : FormFactor.phone, 'native');
+      } on Object catch (error) {
+        return LaunchFormFactor(FormFactor.phone, 'default', error: error);
+      }
+    case TargetPlatform.windows when args.contains('--pad'):
+      return const LaunchFormFactor(FormFactor.pad, 'flag');
+    default:
+      return const LaunchFormFactor(FormFactor.phone, 'default');
   }
 }

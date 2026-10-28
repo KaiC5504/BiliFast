@@ -55,6 +55,10 @@ final class DeviceHostApiImpl: DeviceHostApi {
   private let orientation = MainActor.assumeIsolated { OrientationEvents() }
   private let status = MainActor.assumeIsolated { StatusEvents() }
 
+  func isPad() throws -> Bool {
+    MainActor.assumeIsolated { DeviceChannel.isPad }
+  }
+
   func setOrientationEvents(enabled: Bool) throws {
     let orientation = self.orientation
     MainActor.assumeIsolated { enabled ? orientation.start() : orientation.stop() }
@@ -85,8 +89,11 @@ final class DeviceHostApiImpl: DeviceHostApi {
       case .landscapeLeft: wanted = .landscapeLeft
       case .landscapeRight: wanted = .landscapeRight
       }
-      // Dart's rules never ask on the iPad; should a request come all the same, nothing turns.
-      guard !DeviceChannel.isPad else { return }
+      // Dart's rules never ask on the iPad; should a request come all the same, nothing turns and Dart reverts.
+      guard !DeviceChannel.isPad else {
+        Task { @MainActor in try? await DeviceChannel.events?.onOrientationRefused(request: request, error: "pad") }
+        return
+      }
       DeviceChannel.mask = wanted
       guard let scene = DeviceChannel.scene else {
         Task { @MainActor in

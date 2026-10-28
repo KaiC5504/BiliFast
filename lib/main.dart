@@ -47,14 +47,11 @@ import 'video/player_prefs.dart';
 import 'watch_later/fake_watch_later_api.dart';
 
 Future<void> main(List<String> args) async {
-  final binding = WidgetsFlutterBinding.ensureInitialized();
-  if (Platform.isWindows && args.contains('--pad')) {
-    PhoneFrame.usePad();
-    FormFactor.device = FormFactor.pad;
-  } else if (Platform.isIOS) {
-    FormFactor.device = await launchFormFactor(binding);
-  }
+  WidgetsFlutterBinding.ensureInitialized();
   CrashLog.install();
+  final formFactor = await launchFormFactor(args);
+  FormFactor.device = formFactor.kind;
+  if (formFactor.kind.isPad) PhoneFrame.usePad();
   await resolveSupportFolder();
   final logs = devToolsEnabled ? await LogForwarder.load(supportFilePath('log_server.json')) : null;
   final logFiles = LogFiles.platform();
@@ -63,6 +60,7 @@ Future<void> main(List<String> args) async {
     'os': Platform.operatingSystemVersion,
     'devTools': devToolsEnabled,
   });
+  Logger.shared.info(LogCategory.app, 'form factor', formFactor.logFields);
   if (Platform.isIOS) {
     Logger.shared.info(LogCategory.ui, 'system font fallback', {'pingFang': BiliFonts.settleSystemFallback()});
   }
