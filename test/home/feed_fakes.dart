@@ -100,6 +100,9 @@ final class FeedHttp implements HTTPTransport {
   int officialCode = 0;
   final officialAsked = <int>[];
 
+  /// The `mobi_app` each official page was asked as: the phone's `android`, the iPad's `android_i`.
+  final officialApps = <String?>[];
+
   /// What 不感兴趣 and its 撤销 answer, each request's query, and a gate holding their answers.
   int dislikeCode = 0;
   final dislikes = <Map<String, String>>[];
@@ -112,6 +115,7 @@ final class FeedHttp implements HTTPTransport {
       case officialFeedPath:
         final index = int.parse(request.url.queryParameters['idx']!);
         officialAsked.add(index);
+        officialApps.add(request.url.queryParameters['mobi_app']);
         await officialGates[index]?.future;
         return _json(request, {
           'code': officialCode,

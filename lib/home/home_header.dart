@@ -7,9 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../app/form_factor.dart';
 import '../search/search_glyphs.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../shared/toast.dart';
 import '../skin/skin.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
 
@@ -26,6 +28,7 @@ class HomeHeader extends StatefulWidget {
     required this.feedOffset,
     required this.onAvatar,
     required this.onSearch,
+    this.onHistory,
   });
 
   /// A skin with a `head_bg`, its pictures decoded, or null.
@@ -35,6 +38,9 @@ class HomeHeader extends StatefulWidget {
   final ValueListenable<double> feedOffset;
   final VoidCallback onAvatar;
   final VoidCallback onSearch;
+
+  /// The iPad's clock at the top's right end.
+  final VoidCallback? onHistory;
 
   @override
   State<HomeHeader> createState() => _HomeHeaderState();
@@ -112,6 +118,37 @@ class _HomeHeaderState extends State<HomeHeader>
     _still = MediaQuery.disableAnimationsOf(context);
     final head = widget.skin;
     final colour = head?.color;
+    // The iPad's one row holds the tabs too, so nothing folds away (no screenshot shows it scrolled).
+    if (FormFactor.of(context).isPad) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Head(
+            skin: head,
+            whole: true,
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox(
+                height: PadHomeTheme.rowHeight,
+                child: _PadRow(
+                  face: widget.face,
+                  searchWord: widget.searchWord,
+                  skin: head,
+                  onAvatar: widget.onAvatar,
+                  onSearch: widget.onSearch,
+                  onHistory: widget.onHistory,
+                ),
+              ),
+            ),
+          ),
+          Divider(
+            height: PadHomeTheme.hairline,
+            thickness: PadHomeTheme.hairline,
+            color: head != null ? HomeTabBarTheme.headDivider : BiliColors.divider,
+          ),
+        ],
+      );
+    }
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -371,17 +408,20 @@ class _AccountAvatar extends StatelessWidget {
 /// down to the top row's bottom and `head_tab_bg` behind the tab row, or `head_bg` behind all of it when the package
 /// has no tab picture. Both are cropped to their boxes about the centre.
 class _Head extends StatelessWidget {
-  const _Head({required this.skin, required this.child});
+  const _Head({required this.skin, required this.child, this.whole = false});
 
   /// A skin with a `head_bg`, its pictures decoded, or null.
   final Skin? skin;
   final Widget child;
 
+  /// `head_bg` behind all of it, as the iPad's one row has no tab strip of its own.
+  final bool whole;
+
   @override
   Widget build(BuildContext context) {
     final head = skin?.headBg;
     if (head == null) return ColoredBox(color: BiliColors.card, child: child);
-    final tab = skin?.headTabBg;
+    final tab = whole ? null : skin?.headTabBg;
     final rowBottom =
         MediaQuery.paddingOf(context).top + BiliMetrics.topRowHeight;
     return Stack(
@@ -601,4 +641,310 @@ class _RecommendTab extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// The iPad's top (ipad/01, 02): the avatar and the search entry at the left, 直播 推荐 热门 追番 影视 centred on the
+/// screen, scan, 历史记录 and 消息 at the right, all on one row. Only 推荐 is built; the other tabs answer nothing, as
+/// the phone has none.
+class _PadRow extends StatelessWidget {
+  const _PadRow({
+    required this.face,
+    required this.searchWord,
+    required this.skin,
+    required this.onAvatar,
+    required this.onSearch,
+    required this.onHistory,
+  });
+
+  final String? face;
+  final String? searchWord;
+  final Skin? skin;
+  final VoidCallback onAvatar;
+  final VoidCallback onSearch;
+  final VoidCallback? onHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    const centre = PadHomeTheme.rowCentre;
+    const tabsWidth = PadHomeTheme.tabPitch * 5;
+    final colour = skin?.color;
+    final ink = colour?.withValues(alpha: HomeHeaderTheme.skinSearchOpacity) ?? PadHomeTheme.iconInk;
+    final tabInk = colour?.withValues(alpha: HomeHeaderTheme.skinSearchOpacity) ?? PadHomeTheme.tabInk;
+    Widget icon(double right, String key, String label, Widget glyph, VoidCallback onTap) => Positioned(
+      right: right - PadHomeTheme.icon,
+      top: centre - PadHomeTheme.icon,
+      width: PadHomeTheme.icon * 2,
+      height: PadHomeTheme.icon * 2,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: GestureDetector(
+          key: ValueKey(key),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Center(child: SizedBox.square(dimension: PadHomeTheme.icon, child: glyph)),
+        ),
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, box) {
+        final tabsLeft = (box.maxWidth - tabsWidth) / 2;
+        return Stack(
+          children: [
+            Positioned(
+              left: PadHomeTheme.avatarLeft,
+              top: centre - PadHomeTheme.avatar / 2,
+              child: Semantics(
+                button: true,
+                label: '账号',
+                child: GestureDetector(
+                  key: const ValueKey('home-avatar'),
+                  onTap: onAvatar,
+                  child: _AccountAvatar(face: face, size: PadHomeTheme.avatar),
+                ),
+              ),
+            ),
+            Positioned(
+              left: PadHomeTheme.fieldLeft,
+              top: centre - PadHomeTheme.fieldHeight / 2,
+              height: PadHomeTheme.fieldHeight,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: math.max(0, tabsLeft - PadHomeTheme.fieldTabGap - PadHomeTheme.fieldLeft),
+                ),
+                child: _PadSearchField(word: searchWord, filled: skin != null, onTap: onSearch),
+              ),
+            ),
+            Positioned(
+              left: tabsLeft,
+              top: 0,
+              width: tabsWidth,
+              height: centre * 2,
+              child: Row(
+                children: [
+                  for (final tab in PadHomeTheme.tabs)
+                    SizedBox(
+                      width: PadHomeTheme.tabPitch,
+                      child: Center(
+                        child: Transform.translate(
+                          offset: const Offset(0, -PadHomeTheme.tabRise),
+                          child: _PadTab(tab, colour: tab == '推荐' ? colour ?? PadHomeTheme.pink : tabInk),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            icon(
+              PadHomeTheme.scanRight,
+              'home-scan',
+              '扫一扫',
+              Center(
+                child: Image.asset(
+                  'assets/images/home/pad_scan.png',
+                  width: PadHomeTheme.scan,
+                  color: ink,
+                  colorBlendMode: BlendMode.srcIn,
+                  excludeFromSemantics: true,
+                ),
+              ),
+              () => showToast(context, '暂未开放'),
+            ),
+            icon(
+              PadHomeTheme.historyRight,
+              'home-history',
+              '历史记录',
+              CustomPaint(painter: _PadGlyphPainter.history(ink)),
+              onHistory ?? () {},
+            ),
+            icon(
+              PadHomeTheme.messagesRight,
+              'home-messages',
+              '消息',
+              CustomPaint(painter: _PadGlyphPainter.messages(ink)),
+              () => showToast(context, '暂未开放'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PadTab extends StatelessWidget {
+  const _PadTab(this.text, {required this.colour});
+
+  final String text;
+  final Color colour;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = text == '推荐';
+    final style = TextStyle(
+      fontSize: PadHomeTheme.tabText,
+      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+      color: colour,
+    );
+    return Semantics(
+      header: selected,
+      selected: selected,
+      child: Text(
+        text,
+        key: selected ? const ValueKey('home-tab-recommend') : ValueKey('home-pad-tab-$text'),
+        maxLines: 1,
+        style: style,
+        strutStyle: BiliFonts.strutOf(context, style),
+      ),
+    );
+  }
+}
+
+/// The iPad's search entry: a grey stadium as wide as its word needs, up to what the row leaves it.
+class _PadSearchField extends StatefulWidget {
+  const _PadSearchField({required this.word, required this.filled, required this.onTap});
+
+  final String? word;
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  State<_PadSearchField> createState() => _PadSearchFieldState();
+}
+
+class _PadSearchFieldState extends State<_PadSearchField> {
+  bool _pressed = false;
+
+  void _press(bool pressed) {
+    if (_pressed != pressed) setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const word = TextStyle(fontSize: PadHomeTheme.fieldText, color: PadHomeTheme.fieldInk);
+    return Semantics(
+      button: true,
+      label: '搜索',
+      value: widget.word,
+      child: GestureDetector(
+        key: const ValueKey('home-search'),
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _press(true),
+        onTapUp: (_) => _press(false),
+        onTapCancel: () => _press(false),
+        onTap: widget.onTap,
+        child: ExcludeSemantics(
+          child: Container(
+            key: const ValueKey('home-search-field'),
+            height: PadHomeTheme.fieldHeight,
+            decoration: ShapeDecoration(
+              color: widget.filled ? HomeTabBarTheme.headField : PadHomeTheme.fieldFill,
+              shape: const StadiumBorder(),
+            ),
+            foregroundDecoration: ShapeDecoration(
+              color: _pressed ? BiliColors.pressedFill : null,
+              shape: const StadiumBorder(),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(width: PadHomeTheme.fieldGlyphLead),
+                const SearchGlyphIcon(
+                  SearchGlyph.magnifier,
+                  size: PadHomeTheme.fieldGlyph,
+                  color: PadHomeTheme.fieldGlyphInk,
+                ),
+                const SizedBox(
+                  width: PadHomeTheme.fieldTextStart - PadHomeTheme.fieldGlyphLead - PadHomeTheme.fieldGlyph,
+                ),
+                Flexible(
+                  child: Text(
+                    widget.word ?? '',
+                    key: const ValueKey('home-search-word'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: word,
+                    strutStyle: BiliFonts.strutOf(context, word),
+                  ),
+                ),
+                const SizedBox(width: PadHomeTheme.fieldTextEnd),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The iPad's clock with its turning arrow and its round bubble with three dots (ipad/01), drawn in a 20 pt square:
+/// the APK has neither.
+class _PadGlyphPainter extends CustomPainter {
+  _PadGlyphPainter.history(this.color) : messages = false;
+
+  _PadGlyphPainter.messages(this.color) : messages = true;
+
+  final Color color;
+  final bool messages;
+
+  static const _design = 20.0;
+  static const _degree = math.pi / 180;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas
+      ..save()
+      ..scale(size.width / _design);
+    final line = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = PadHomeTheme.iconLine
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    if (messages) {
+      _bubble(canvas, line);
+    } else {
+      _clock(canvas, line);
+    }
+    canvas.restore();
+  }
+
+  /// The ring opens between the arrow's tip at the upper right and its other end at the right.
+  void _clock(Canvas canvas, Paint line) {
+    const tip = Offset(17.9, 5.6);
+    canvas
+      ..drawArc(Rect.fromCircle(center: const Offset(10, 10), radius: 9.25), -4 * _degree, 324 * _degree, false, line)
+      ..drawPath(
+        Path()
+          ..moveTo(tip.dx, tip.dy - 3.6)
+          ..lineTo(tip.dx, tip.dy)
+          ..lineTo(tip.dx - 3.6, tip.dy),
+        line,
+      )
+      ..drawPath(
+        Path()
+          ..moveTo(9.25, 5.6)
+          ..lineTo(9.25, 10.9)
+          ..lineTo(14.25, 10.9),
+        line,
+      );
+  }
+
+  /// A round bubble whose tail flicks out at the lower left.
+  void _bubble(Canvas canvas, Paint line) {
+    const centre = Offset(9.9, 9.9);
+    const radius = 9.05;
+    final outline = Path()
+      ..addArc(Rect.fromCircle(center: centre, radius: radius), 147 * _degree, 327 * _degree)
+      ..lineTo(1.6, 17.7)
+      ..lineTo(5.3, 16.2)
+      ..lineTo(centre.dx + radius * math.cos(147 * _degree), centre.dy + radius * math.sin(147 * _degree));
+    canvas.drawPath(outline, line);
+    final dot = Paint()..color = color;
+    for (final x in const [6.1, 10.5, 14.9]) {
+      canvas.drawCircle(Offset(x, 9.5), 1.25, dot);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PadGlyphPainter oldDelegate) => oldDelegate.color != color || oldDelegate.messages != messages;
 }

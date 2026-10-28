@@ -66,7 +66,10 @@ void main() {
             ownerName: 'UP主甲',
             ownerMid: 501,
             reason: '2万点赞',
-            isVertical: false));
+            isVertical: false,
+            ownerFace: 'https://i0.hdslb.com/bfs/face/face-0501.jpg',
+            published: 1760000000));
+    expect(cards[1].ownerFace, '', reason: 'a row without a face');
     expect(cards[0].id, 'BV1AA411a1aA');
     expect(cards[1].reason, isNull);
     expect(cards[2].reason, isNull);

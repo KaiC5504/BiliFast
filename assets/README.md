@@ -60,3 +60,11 @@ drawables, each drawn white, cut to its ink and scaled to the ink width measured
 `lock_locked_line` (eaf9, 30 px), `arrow_share_line` (ea3f, 55 px), `person_unfollow_line` (eb30, 52 px),
 `warning_report_triangle_line` (eb89, 56 px). `ic_upper_tv_play` is the APK bitmap unchanged (70% white), drawn 42 pt
 wide at 80% opacity, as 128's TV mark.
+
+The iPad's 首页 (ipad/01, 02) takes the same APK's tab bar and scan art, each a vector drawn white at 3× by
+`tools/apk_asset.py extract … --width` for tinting, the width the ink measures on 01: `images/home/pad_tab_home.png`
+and `_selected` (`ic_vector_tab_bar_home_default` / `_selected`, 60 px), `pad_tab_partition.png`
+(`ic_vector_tab_bar_partition_default`, 63 px; its selected file is the same drawing), `pad_tab_moments.png`
+(`ic_vector_tab_bar_moments_default`, 63 px, likewise), `pad_tab_mine.png` and `_selected`
+(`ic_vector_tab_bar_mine_default` / `_selected`, 63 px), and `pad_scan.png` (`ic_scan_cast`, 54 px, the top's scan).
+The top's clock with its turning arrow and its three-dot bubble are drawn in code: the APK has neither.
