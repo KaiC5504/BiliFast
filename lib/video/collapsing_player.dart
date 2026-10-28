@@ -97,6 +97,33 @@ class CollapsingPlayer extends ChangeNotifier {
   /// With Reduce Motion the player grows back and changes shape at once.
   bool still = false;
 
+  /// How tall the bar it shrinks to is: the iPhone's, or the iPad's pink 立即播放 bar (05). Set as the page lays out,
+  /// like [width], it notifies nobody.
+  double get barHeight => _bar;
+  double _bar = CollapseTheme.barHeight;
+  set barHeight(double value) {
+    if (value == _bar) return;
+    _bar = value;
+    _reserve.value = reserve;
+    _recompute();
+  }
+
+  /// The one tab whose scrolling the height follows, whatever the pager shows: the iPad's sideways column scrolls
+  /// 简介's controller with no pager around it. Null follows the pager. Set as the page lays out; it notifies nobody.
+  PageTab? get only => _only;
+  PageTab? _only;
+  set only(PageTab? value) {
+    if (value == _only) return;
+    _only = value;
+    _recompute();
+  }
+
+  void _recompute() {
+    final (height, progress) = _compute();
+    _height = height;
+    _progress = progress;
+  }
+
   /// The player's full height under the status bar, on its way to a new shape while it changes.
   double get full => _full;
 
@@ -150,7 +177,7 @@ class CollapsingPlayer extends ChangeNotifier {
   double get progress => _progress;
 
   /// What each tab's scroll view leaves free above its content, so it starts under the full-height player.
-  double get reserve => math.max(0, _full - CollapseTheme.barHeight);
+  double get reserve => math.max(0, _full - _bar);
 
   /// [reserve] as it changes.
   ValueListenable<double> get reserveListenable => _reserve;
@@ -165,14 +192,20 @@ class CollapsingPlayer extends ChangeNotifier {
 
   /// Paused: what the tab scrolls after the pause point [from] comes off [start], the height it had there ([full]
   /// unless given), down to the bar.
-  static double heightFor({required double full, required double offset, required double from, double? start}) {
-    if (full <= CollapseTheme.barHeight) return full;
-    return ((start ?? full) - (offset - from)).clamp(CollapseTheme.barHeight, full);
+  static double heightFor({
+    required double full,
+    required double offset,
+    required double from,
+    double? start,
+    double bar = CollapseTheme.barHeight,
+  }) {
+    if (full <= bar) return full;
+    return ((start ?? full) - (offset - from)).clamp(bar, full);
   }
 
   /// How far [height] has gone from [full], the height the shrink started at, to the bar.
-  static double progressOf({required double full, required double height}) {
-    final reserve = full - CollapseTheme.barHeight;
+  static double progressOf({required double full, required double height, double bar = CollapseTheme.barHeight}) {
+    final reserve = full - bar;
     if (reserve <= 0) return 0;
     return ((full - height) / reserve).clamp(0.0, 1.0);
   }
@@ -258,6 +291,7 @@ class CollapsingPlayer extends ChangeNotifier {
   }
 
   (double, double) _compute() {
+    if (_only case final tab?) return _following(tab);
     final intro = _following(PageTab.intro);
     final comments = _following(PageTab.comments);
     // Through a sideways swipe the height passes from one tab's to the other's with the finger.
@@ -270,8 +304,8 @@ class CollapsingPlayer extends ChangeNotifier {
     final offset = tabs.offsetOf(tab);
     final from = _from[tab] ?? 0;
     final start = playingHeight(full: _full, floor: _floor, offset: from);
-    final paused = heightFor(full: _full, offset: offset, from: from, start: start);
-    final shrink = progressOf(full: start, height: paused);
+    final paused = heightFor(full: _full, offset: offset, from: from, start: start, bar: _bar);
+    final shrink = progressOf(full: start, height: paused, bar: _bar);
     if (_paused) return (paused, shrink);
     // Growing back from the paused height, never below it: a scroll back to the top raises it, and falling behind
     // would open a gap under the tab row.

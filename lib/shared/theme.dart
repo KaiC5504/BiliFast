@@ -6421,7 +6421,94 @@ abstract final class PadHomeTheme {
 
 /// The iPad's video page frame: the two columns sideways (ipad/03, 05), one upright (06), the player's shrink to the
 /// pink 立即播放 bar (05, 20). The Page shell agent owns this class.
-abstract final class PadPageTheme {}
+abstract final class PadPageTheme {
+  /// 03, 05 and 06 keep the page 32 pt below the screen's top, black above it, past the 24 pt status bar inset.
+  static const statusBand = 32.0;
+
+  /// The column's side margins (03, 06).
+  static const gutter = 20.0;
+
+  /// Sideways the related column is 437 pt with a 0.5 pt rule to its left and along its top (03); the player's column
+  /// takes the rest (756.5 on the 1194 pt screen).
+  static const relatedWidth = 437.0;
+  static const rule = 0.5;
+  static const ruleColour = BiliColors.divider;
+
+  /// The paused player shrinks to the pink 立即播放 bar (05): 60 pt, its row centred 33 below its top, ‹ 18 in, ⋮ 21
+  /// from the column's right, the APK's `ic_upper_tv_play` made opaque, 22 pt wide, 4.5 pt before 立即播放.
+  static const barHeight = 60.0;
+  static const barFill = BiliColors.pink;
+  static const barRowCentre = 33.0;
+  static const backLeft = 18.0;
+  static const moreRight = 21.0;
+  static const playGlyphWidth = 22.0;
+  static const playGlyphHeight = 22.0 * 133 / 144;
+  static const labelGap = 4.5;
+  static const labelText = 16.0;
+  static const label = BiliColors.onVideo;
+
+  /// Once the player is the bar and 简介's actions have scrolled under it, a 60 pt strip stays pinned below it (05):
+  /// the 40 pt face 20 in, the five actions at a 62 pt pitch from 79.75, 点我发弹幕 at the right; a rule under it.
+  static const stripHeight = 60.0;
+  static const stripFace = 40.0;
+  static const stripFaceLeft = 20.0;
+
+  /// The actions' icons start 10.5 below the strip's top.
+  static const stripIconTop = 10.5;
+  static const stripActionsLeft = 79.75;
+  static const stripActionPitch = 62.0;
+
+  /// The upright tab row (06): 60 pt, no underline and no rule, 简介 20 pt in and 评论 (N) 40 pt after it, both 16 pt.
+  static const tabRowHeight = 60.0;
+  static const tabText = 16.0;
+  static const tabFirstLabel = 20.0;
+  static const tabSpacing = 40.0;
+  static const tabInk = PageTheme.tabText;
+
+  /// 点我发弹幕 with the 弹 toggle (03, 05, 06): 159 × 32, the field 119 with its words 15.5 pt in, 20 pt from the right.
+  /// Sideways it sits on 简介's uploader row, centred 30.25 below the player.
+  static const capsuleWidth = 159.0;
+  static const capsuleHeight = 32.0;
+  static const capsuleFieldWidth = 119.0;
+  static const capsuleFieldPadding = 15.5;
+  static const capsuleFieldText = 14.0;
+  static const capsuleRight = 20.0;
+  static const capsuleMark = 26.0;
+  static const capsuleCentreSideways = 30.25;
+
+  /// The inline 热门评论 header sideways (03): a rule on top, 49.5 pt with its line centred 25.25 down; the title
+  /// semibold 16 pt 20 in, the 218 × 30 field 96.5 in (13 pt, 15.5 in, the face 20 pt 7 from its end), then at the
+  /// right ⇅ 按热度, a 12 pt rule and 查看 N 条评论 › 19.5 from the column's right, all 14 pt in 61666D.
+  static const headerHeight = 49.5;
+  static const headerCentre = 25.25;
+  static const headerTitleText = 16.0;
+  static const headerTitleWeight = FontWeight.w600;
+  static const headerTitle = BiliColors.text;
+  static const headerFieldLeft = 96.5;
+  static const headerFieldWidth = 218.0;
+  static const headerFieldHeight = 30.0;
+  static const headerFieldText = 13.0;
+  static const headerFieldPadding = 15.5;
+  static const headerFieldFill = BiliColors.softGrey;
+  static const headerFieldInk = BiliColors.secondaryText;
+  static const headerFace = 20.0;
+  static const headerFaceRight = 7.0;
+  static const headerText = 14.0;
+  static const headerInk = PageTheme.tabText;
+  static const headerSortGlyph = 12.0;
+  static const headerSortGap = 6.5;
+  static const headerRuleHeight = 12.0;
+  static const headerRuleGap = 10.0;
+  static const headerChevronGap = 5.5;
+  static const headerChevronWidth = 5.5;
+  static const headerChevronHeight = 9.5;
+  static const headerChevronStroke = 1.2;
+  static const headerRight = 19.5;
+
+  /// The player growing into full screen and back (22).
+  static const fullScreenGrow = Duration(milliseconds: 300);
+  static const fullScreenCurve = Curves.easeInOut;
+}
 
 /// The iPad's page body: 简介's sections and the related column (ipad/03, 04, 06). The Page body agent owns this
 /// class.

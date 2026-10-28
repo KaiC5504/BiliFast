@@ -39,9 +39,9 @@ class PageTabsController extends ChangeNotifier {
     return position.hasPixels ? position.pixels : 0;
   }
 
-  /// Back to the top of the shown tab; [animate] false jumps.
-  void scrollToTop({bool animate = true}) {
-    final scroll = scrollOf(_selected);
+  /// Back to the top of the shown tab, or of [tab]; [animate] false jumps.
+  void scrollToTop({bool animate = true, PageTab? tab}) {
+    final scroll = scrollOf(tab ?? _selected);
     if (!scroll.hasClients) return;
     if (animate) {
       unawaited(scroll.animateTo(0, duration: CollapseTheme.resume, curve: Curves.easeOutCubic));
@@ -544,4 +544,217 @@ class _TickClip extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(_TickClip oldClipper) => oldClipper.tick != tick;
+}
+
+/// The iPad's upright tab row (06): 简介 and 评论 (N) in pink or grey with no underline, and 点我发弹幕 at the right.
+class PadPageTabRow extends StatelessWidget {
+  const PadPageTabRow({
+    super.key,
+    required this.controller,
+    required this.replyCount,
+    required this.danmakuOn,
+    required this.onToggleDanmaku,
+    required this.onSendDanmaku,
+    this.danmakuInputOpen = false,
+    this.danmakuClosed = false,
+  });
+
+  final PageTabsController controller;
+  final int? replyCount;
+  final bool danmakuOn;
+  final VoidCallback? onToggleDanmaku;
+  final VoidCallback onSendDanmaku;
+  final bool danmakuInputOpen;
+  final bool danmakuClosed;
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.disableAnimationsOf(context);
+    final count = replyCount == null ? null : CountFormat.short(replyCount!);
+    return SizedBox(
+      height: PadPageTheme.tabRowHeight,
+      child: ColoredBox(
+        color: BiliColors.card,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([controller, controller.pager]),
+          builder: (context, _) {
+            final position = controller.position.clamp(0.0, 1.0);
+            return Row(
+              children: [
+                const SizedBox(width: PadPageTheme.tabFirstLabel - PadPageTheme.tabSpacing / 2),
+                _tab(PageTab.intro, '简介', 1 - position, still, const ValueKey('tab-intro')),
+                _tab(
+                  PageTab.comments,
+                  count == null ? '评论' : '评论 ($count)',
+                  position,
+                  still,
+                  const ValueKey('tab-comments'),
+                ),
+                const Spacer(),
+                PadDanmakuCapsule(
+                  on: danmakuOn,
+                  onToggle: onToggleDanmaku,
+                  onSend: danmakuClosed ? null : onSendDanmaku,
+                  text: danmakuClosed ? 'UP主已关闭弹幕' : (danmakuInputOpen ? '弹幕输入中' : '点我发弹幕'),
+                ),
+                const SizedBox(width: PadPageTheme.capsuleRight),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _tab(PageTab tab, String label, double emphasis, bool still, Key key) {
+    final color = Color.lerp(PadPageTheme.tabInk, BiliColors.pink, emphasis.clamp(0.0, 1.0))!;
+    void select() => controller.select(tab, animate: !still);
+    return Semantics(
+      key: key,
+      button: true,
+      selected: controller.selected == tab,
+      label: label,
+      onTap: select,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: select,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: PadPageTheme.tabSpacing / 2),
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                fontFamily: BiliFonts.family,
+                fontSize: PadPageTheme.tabText,
+                color: color,
+                height: 1.2,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The iPad's 点我发弹幕 field joined to the 弹 toggle (03, 05, 06), or the toggle alone while danmaku is off.
+class PadDanmakuCapsule extends StatelessWidget {
+  const PadDanmakuCapsule({
+    super.key,
+    required this.on,
+    required this.onToggle,
+    required this.onSend,
+    this.text = '点我发弹幕',
+  });
+
+  final bool on;
+  final VoidCallback? onToggle;
+
+  /// Null while the uploader has danmaku closed.
+  final VoidCallback? onSend;
+  final String text;
+
+  static const _fade = Duration(milliseconds: 250);
+  static const _curve = Curves.easeOutCubic;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = MediaQuery.disableAnimationsOf(context) ? Duration.zero : _fade;
+    final style = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: PadPageTheme.capsuleFieldText,
+      color: BiliColors.secondaryText,
+      letterSpacing: 0,
+    );
+    const toggle = PadPageTheme.capsuleWidth - PadPageTheme.capsuleFieldWidth;
+    return AnimatedContainer(
+      key: const ValueKey('danmaku-capsule'),
+      duration: duration,
+      curve: _curve,
+      width: on ? PadPageTheme.capsuleWidth : toggle,
+      height: PadPageTheme.capsuleHeight,
+      clipBehavior: Clip.antiAlias,
+      decoration: const ShapeDecoration(color: BiliColors.softGrey, shape: StadiumBorder()),
+      foregroundDecoration: const ShapeDecoration(
+        shape: StadiumBorder(side: BorderSide(color: BiliColors.divider, width: PageTheme.capsuleBorder)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: ClipRect(
+              child: OverflowBox(
+                minWidth: PadPageTheme.capsuleFieldWidth,
+                maxWidth: PadPageTheme.capsuleFieldWidth,
+                alignment: Alignment.centerRight,
+                child: AnimatedOpacity(
+                  opacity: on ? 1 : 0,
+                  duration: duration,
+                  child: ExcludeSemantics(
+                    excluding: !on,
+                    child: Semantics(
+                      key: const ValueKey('danmaku-send'),
+                      button: onSend != null,
+                      label: text,
+                      onTap: on ? onSend : null,
+                      excludeSemantics: true,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: on ? onSend : null,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: PadPageTheme.capsuleFieldPadding),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              text,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                              style: style,
+                              strutStyle: BiliFonts.strutOf(context, style),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedContainer(
+            duration: duration,
+            curve: _curve,
+            width: toggle,
+            color: on ? BiliColors.card : BiliColors.softGrey,
+            child: Semantics(
+              key: const ValueKey('danmaku-toggle'),
+              button: true,
+              toggled: on,
+              label: on ? '关闭弹幕' : '开启弹幕',
+              onTap: onToggle,
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onToggle,
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: duration,
+                    child: Transform.scale(
+                      key: ValueKey(on),
+                      scale: PadPageTheme.capsuleMark / PageTheme.danmakuMark,
+                      child: DanmakuMark(on: on),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

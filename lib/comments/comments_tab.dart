@@ -128,11 +128,12 @@ bool commentsFirstLoad(CommentsModel model) =>
 /// 评论's list for whatever scroll view holds it (the video page's tab, a 动态's page): the section the uploader
 /// closed, or 热门评论 / 最新评论 with its sort, the loading TV centred in what is left of the view on the first load,
 /// the pinned comment, the rows and the footer. [headerKept] keeps the sort header through another sort's first load,
-/// once a list has shown.
+/// once a list has shown. [header] draws the section's header in place of [CommentSortHeader].
 List<Widget> commentListSlivers({
   required CommentsModel model,
   required CommentCallbacks callbacks,
   required bool headerKept,
+  Widget Function(CommentsModel model)? header,
 }) {
   final closed = model.closedMessage;
   if (closed != null) return [SliverToBoxAdapter(child: _ClosedNotice(message: closed))];
@@ -142,11 +143,13 @@ List<Widget> commentListSlivers({
   return [
     if (!firstLoad || headerKept)
       SliverToBoxAdapter(
-        child: CommentSortHeader(
-          title: model.sort == CommentSort.hot ? '热门评论' : '最新评论',
-          sort: model.sort,
-          onChange: (sort) => unawaited(model.setSort(sort)),
-        ),
+        child:
+            header?.call(model) ??
+            CommentSortHeader(
+              title: model.sort == CommentSort.hot ? '热门评论' : '最新评论',
+              sort: model.sort,
+              onChange: (sort) => unawaited(model.setSort(sort)),
+            ),
       ),
     if (firstLoad)
       const SliverFillRemaining(
@@ -667,4 +670,334 @@ class CommentsSlot extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// 评论 as a section of a scroll view that holds more (the iPad's sideways column, 03): [PadCommentsHeader] over the
+/// list, its first page asked for at once, the next ones as the end of the enclosing scroll view nears.
+class PadCommentsSection extends StatefulWidget {
+  const PadCommentsSection({super.key, required this.model, required this.callbacks, required this.onSeeAll});
+
+  final CommentsModel model;
+  final CommentCallbacks callbacks;
+
+  /// 查看N条评论 ›.
+  final VoidCallback onSeeAll;
+
+  @override
+  State<PadCommentsSection> createState() => _PadCommentsSectionState();
+}
+
+class _PadCommentsSectionState extends State<PadCommentsSection> {
+  late NearEndPaging _paging = commentsPaging(widget.model);
+  bool _listShown = false;
+  ScrollPosition? _position;
+
+  @override
+  void initState() {
+    super.initState();
+    _listShown = !commentsFirstLoad(widget.model);
+    widget.model.addListener(_changed);
+    unawaited(widget.model.ensureLoaded());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final position = Scrollable.maybeOf(context)?.position;
+    if (identical(position, _position)) return;
+    _position?.removeListener(_scrolled);
+    _position = position?..addListener(_scrolled);
+  }
+
+  @override
+  void didUpdateWidget(PadCommentsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.model, widget.model)) return;
+    oldWidget.model.removeListener(_changed);
+    _paging.dispose();
+    _paging = commentsPaging(widget.model);
+    _listShown = !commentsFirstLoad(widget.model);
+    widget.model.addListener(_changed);
+    unawaited(widget.model.ensureLoaded());
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_scrolled);
+    widget.model.removeListener(_changed);
+    _paging.dispose();
+    super.dispose();
+  }
+
+  void _scrolled() {
+    if (_position case final position? when position.hasPixels) _paging._check(position);
+  }
+
+  void _changed() {
+    if (!mounted) return;
+    setState(() => _listShown |= !commentsFirstLoad(widget.model));
+    // A page that lands still short of the screen asks for the next once laid out.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrolled();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => SliverMainAxisGroup(
+    slivers: commentListSlivers(
+      model: widget.model,
+      callbacks: widget.callbacks,
+      headerKept: _listShown,
+      header: (model) => PadCommentsHeader(
+        title: model.sort == CommentSort.hot ? '热门评论' : '最新评论',
+        sort: model.sort,
+        prompt: model.rootPrompt,
+        total: model.total,
+        onChange: (sort) => unawaited(model.setSort(sort)),
+        onWrite: (emotes) => widget.callbacks.reply(const ReplyToVideo(), emotes),
+        onSeeAll: widget.onSeeAll,
+      ),
+    ),
+  );
+}
+
+/// The iPad's 热门评论 header (03): the title, the comment field with its face, and at the right ⇅ 按热度 | 查看N条评论 ›.
+class PadCommentsHeader extends StatelessWidget {
+  const PadCommentsHeader({
+    super.key,
+    required this.title,
+    required this.sort,
+    required this.prompt,
+    required this.total,
+    required this.onChange,
+    required this.onWrite,
+    required this.onSeeAll,
+  });
+
+  final String title;
+  final CommentSort sort;
+  final String? prompt;
+  final int total;
+  final ValueChanged<CommentSort> onChange;
+  final ValueChanged<bool> onWrite;
+  final VoidCallback onSeeAll;
+
+  TextStyle _style(double size, Color color) => TextStyle(
+    fontFamily: BiliFonts.family,
+    fontSize: size,
+    color: color,
+    height: 1.2,
+    letterSpacing: 0,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final label = sort == CommentSort.hot ? '按热度' : '按时间';
+    void toggle() => onChange(sort == CommentSort.hot ? CommentSort.time : CommentSort.hot);
+    final shown = prompt ?? CommentWriteBar.placeholder;
+    final fieldStyle = _style(PadPageTheme.headerFieldText, PadPageTheme.headerFieldInk);
+    final textStyle = _style(PadPageTheme.headerText, PadPageTheme.headerInk);
+    final titleStyle = _style(
+      PadPageTheme.headerTitleText,
+      PadPageTheme.headerTitle,
+    ).copyWith(fontWeight: PadPageTheme.headerTitleWeight);
+    return DecoratedBox(
+      key: const ValueKey('pad-comments-header'),
+      decoration: const BoxDecoration(
+        color: CommentListTheme.background,
+        border: Border(
+          top: BorderSide(color: PadPageTheme.ruleColour, width: PadPageTheme.rule),
+        ),
+      ),
+      child: SizedBox(
+        height: PadPageTheme.headerHeight,
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              top: PadPageTheme.headerCentre - PadPageTheme.headerFieldHeight / 2,
+              height: PadPageTheme.headerFieldHeight,
+              child: Row(
+                children: [
+                  const SizedBox(width: PadPageTheme.gutter),
+                  SizedBox(
+                    width: PadPageTheme.headerFieldLeft - PadPageTheme.gutter,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.clip,
+                      style: titleStyle,
+                      strutStyle: BiliFonts.strutOf(context, titleStyle),
+                    ),
+                  ),
+                  Semantics(
+                    key: const ValueKey('comment-field'),
+                    button: true,
+                    label: shown,
+                    onTap: () => onWrite(false),
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onWrite(false),
+                      child: Container(
+                        width: PadPageTheme.headerFieldWidth,
+                        height: PadPageTheme.headerFieldHeight,
+                        decoration: const ShapeDecoration(color: PadPageTheme.headerFieldFill, shape: StadiumBorder()),
+                        padding: const EdgeInsets.only(left: PadPageTheme.headerFieldPadding),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                shown,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.ellipsis,
+                                style: fieldStyle,
+                                strutStyle: BiliFonts.strutOf(context, fieldStyle),
+                              ),
+                            ),
+                            Semantics(
+                              key: const ValueKey('comment-emotes'),
+                              button: true,
+                              label: '表情',
+                              onTap: () => onWrite(true),
+                              excludeSemantics: true,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => onWrite(true),
+                                child: const Padding(
+                                  padding: EdgeInsets.only(
+                                    left: PadPageTheme.headerFaceRight,
+                                    right: PadPageTheme.headerFaceRight,
+                                  ),
+                                  child: CustomPaint(
+                                    size: Size.square(PadPageTheme.headerFace),
+                                    painter: _EmoteFacePainter(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Semantics(
+                    key: const ValueKey('comment-sort'),
+                    button: true,
+                    label: label,
+                    hint: '切换排序',
+                    onTap: toggle,
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: toggle,
+                      child: Row(
+                        children: [
+                          const CustomPaint(
+                            size: Size.square(PadPageTheme.headerSortGlyph),
+                            painter: _UpDownPainter(),
+                          ),
+                          const SizedBox(width: PadPageTheme.headerSortGap),
+                          Text(label, maxLines: 1, softWrap: false, style: textStyle),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: PadPageTheme.headerRuleGap),
+                  const SizedBox(
+                    width: PadPageTheme.rule,
+                    height: PadPageTheme.headerRuleHeight,
+                    child: ColoredBox(color: PadPageTheme.ruleColour),
+                  ),
+                  const SizedBox(width: PadPageTheme.headerRuleGap),
+                  Semantics(
+                    key: const ValueKey('comments-see-all'),
+                    button: true,
+                    label: '查看 $total 条评论',
+                    onTap: onSeeAll,
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onSeeAll,
+                      child: Row(
+                        children: [
+                          Text('查看 $total 条评论', maxLines: 1, softWrap: false, style: textStyle),
+                          const SizedBox(width: PadPageTheme.headerChevronGap),
+                          const CustomPaint(
+                            size: Size(PadPageTheme.headerChevronWidth, PadPageTheme.headerChevronHeight),
+                            painter: _ChevronPainter(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: PadPageTheme.headerRight),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 查看N条评论's thin ›.
+class _ChevronPainter extends CustomPainter {
+  const _ChevronPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = PadPageTheme.headerInk
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = PadPageTheme.headerChevronStroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(
+      Path()
+        ..moveTo(0, 0)
+        ..lineTo(size.width, size.height / 2)
+        ..lineTo(0, size.height),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ChevronPainter oldDelegate) => false;
+}
+
+/// ⇅: an arrow up on the left, an arrow down on the right, as 03 draws the sort.
+class _UpDownPainter extends CustomPainter {
+  const _UpDownPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = PadPageTheme.headerInk
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = CommentListTheme.sortIconBar
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final w = size.width;
+    final h = size.height;
+    final up = Path()
+      ..moveTo(w * 0.3, h)
+      ..lineTo(w * 0.3, 0)
+      ..lineTo(0, h * 0.3);
+    final down = Path()
+      ..moveTo(w * 0.7, 0)
+      ..lineTo(w * 0.7, h)
+      ..lineTo(w, h * 0.7);
+    canvas
+      ..drawPath(up, paint)
+      ..drawPath(down, paint);
+  }
+
+  @override
+  bool shouldRepaint(_UpDownPainter oldDelegate) => false;
 }

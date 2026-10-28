@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
+import '../app/form_factor.dart';
 import '../app/route_observer.dart';
 import '../comments/comment_callbacks.dart';
 import '../comments/comment_overlays.dart';
@@ -39,6 +40,8 @@ import 'collapsing_player.dart';
 import 'intro/intro_tab.dart';
 import 'page_details.dart';
 import 'page_details_model.dart';
+import 'pad/pad_body.dart';
+import 'pad/pad_page_layout.dart';
 import 'page_playback.dart';
 import 'page_session.dart';
 import 'page_tabs.dart';
@@ -211,6 +214,17 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   final _recorder = TurnRecorder();
 
+  /// The iPad's player growing from its place in the page to the whole screen (1) and back (22). The iPad never turns
+  /// for full screen, so none of the turn's machinery runs there.
+  late final _padFull = AnimationController(vsync: this, duration: PadPageTheme.fullScreenGrow);
+  bool _padFullTarget = false;
+
+  /// Whether the page lays out as the iPad's, from the last build.
+  bool _pad = false;
+
+  /// The sideways column's 简介 head, measured for the pinned strip.
+  final _padHeadKey = GlobalKey();
+
   /// Turns the host hasn't heard were drawn: its still picture covers the screen until it does.
   final _drawnOwed = <int>[];
 
@@ -295,6 +309,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// Landscape full screen is laid out once the screen is landscape, and stays until it is upright again; 竖屏 stays
   /// until the screen is landscape.
   Presentation _layoutFor(Size size) {
+    // The iPad lays out what was asked for at once, whatever the screen's shape: it has no 竖屏, and full screen covers
+    // it either way.
+    if (_pad) return _presentation == Presentation.landscape ? Presentation.landscape : Presentation.inline;
     final wide = size.width > size.height;
     final was = _laidOut.value;
     return switch (_presentation) {
@@ -355,11 +372,29 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _settleDrawing();
   }
 
+  /// The iPad's full screen: the player grows from its place to the whole screen, or back, from wherever it is.
+  void _followPadFull(bool full) {
+    if (full == _padFullTarget) return;
+    _padFullTarget = full;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _padFull.value = full ? 1 : 0;
+    } else if (full) {
+      unawaited(_padFull.forward());
+    } else {
+      unawaited(_padFull.reverse());
+    }
+  }
+
   /// The turned size is already in (or about to be). The turn being waited for is drawn from the first build at its
   /// new shape, whichever comes first; any other, one the page didn't ask for or a stale one the other way, is only
   /// reported drawn, at once.
   void _turnStarted(TurnStart start) {
     if (!mounted || !_owning || _left || _covered) return;
+    if (_pad) {
+      _drawnOwed.add(start.id);
+      _reportDrawn();
+      return;
+    }
     // Asked for with iOS's animations off, the screen turns inside the request, so its turn can come before the build
     // that follows the change of presentation: follow it here, at the shape last drawn, so this is the turn waited for.
     if (_drawnWide case final wide? when (_presentation == Presentation.landscape) != _turnedFull) {
@@ -962,7 +997,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   /// 继续播放: the shown tab back to its top, where the player has its full height again, and play.
   void _resume() {
-    _tabs.scrollToTop(animate: !MediaQuery.disableAnimationsOf(context));
+    _tabs.scrollToTop(animate: !MediaQuery.disableAnimationsOf(context), tab: _collapse.only);
     final session = _session;
     if (session == null || session.readout.status.value != PlayerStatus.paused) return;
     _playback?.willPlay();
@@ -1100,6 +1135,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// to end: a page pushed mid-turn would be laid out sideways. That holds for a turn back already under way, whose
   /// landscape layout stays until the screen is upright. 竖屏 is upright already.
   Future<void> _inlineFirst() async {
+    // The iPad doesn't turn: the page is back once the frame is.
+    if (_pad) {
+      if (_presentation.fullScreen) _orientation.exitToInline();
+      if (mounted) await SchedulerBinding.instance.endOfFrame;
+      return;
+    }
     if (_presentation.fullScreen) {
       _orientation.exitToInline();
     } else if (_laidOutUpright) {
@@ -1116,6 +1157,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   }
 
   bool get _laidOutUpright {
+    if (_pad) return !_laidOut.value.fullScreen;
     final size = MediaQuery.sizeOf(context);
     return size.width <= size.height && _laidOut.value != Presentation.landscape;
   }
@@ -1138,6 +1180,25 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _showComments() {
     _tabs.select(PageTab.comments, animate: false);
     _orientation.exitToInline();
+    // Sideways the iPad's comments are under 简介 in the player's column.
+    if (_pad) WidgetsBinding.instance.addPostFrameCallback((_) => _seeAllComments());
+  }
+
+  /// 查看N条评论 sideways: the column scrolled so 热门评论 sits under the bar and the strip, or under the player while it
+  /// plays, which then doesn't shrink.
+  void _seeAllComments() {
+    if (!mounted || _collapse.only == null) return;
+    final scroll = _tabs.scrollOf(PageTab.intro);
+    final head = _padHeadKey.currentContext?.findRenderObject();
+    if (!scroll.hasClients || head is! RenderBox || !head.hasSize) return;
+    final height = head.size.height;
+    final target = (_collapse.paused ? _collapse.reserve + height - PadPageTheme.stripHeight : height)
+        .clamp(0.0, scroll.position.maxScrollExtent);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      scroll.jumpTo(target);
+    } else {
+      unawaited(scroll.animateTo(target, duration: CollapseTheme.resume, curve: Curves.easeOutCubic));
+    }
   }
 
   void _openRelated(bili.VideoCard card) =>
@@ -1255,6 +1316,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..removeListener(_collapseChanged)
       ..dispose();
     _grow.dispose();
+    _padFull.dispose();
     unawaited(_turns?.cancel());
     _turnTimeout?.cancel();
     _flushDrawn();
@@ -1283,11 +1345,19 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final presentation = _presentation;
     final size = MediaQuery.sizeOf(context);
     final wide = size.width > size.height;
+    final pad = FormFactor.of(context).isPad;
+    _pad = pad;
     final layout = _layoutFor(size);
-    _followTurn(presentation, _drawnWide ?? wide);
-    if (_pendingTurn case final turn? when turn.wide == wide) _beginTurn(turn);
-    if (_drawnWide != null && _drawnWide != wide) _recorder.sized(size, layout: layout);
+    if (pad) {
+      _followPadFull(layout.fullScreen);
+    } else {
+      _followTurn(presentation, _drawnWide ?? wide);
+      if (_pendingTurn case final turn? when turn.wide == wide) _beginTurn(turn);
+      if (_drawnWide != null && _drawnWide != wide) _recorder.sized(size, layout: layout);
+    }
     _drawnWide = wide;
+    // The iPad's two columns: the player's column scrolls 简介's controller.
+    final sideways = pad && wide;
     _laidOut.value = layout;
     final fullScreen = layout.fullScreen;
     final controller = _controller;
@@ -1335,7 +1405,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           // 评论详情 and the uploader sheet cover the tabs: a tap then reaches nothing rather than the list under them,
           // which would grow a shrunk player and move the sheet with it.
           builder: (context, scaffold) => PrimaryScrollController(
-            controller: _threadOpen || _uploaderSheet.isOpen ? _noScroll : _tabs.scrollOf(_tabs.selected),
+            controller: _threadOpen || _uploaderSheet.isOpen
+                ? _noScroll
+                : _tabs.scrollOf(sideways ? PageTab.intro : _tabs.selected),
             child: scaffold!,
           ),
           child: Scaffold(
@@ -1346,12 +1418,19 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final media = MediaQuery.of(context);
-                  final top = media.padding.top;
+                  final top = pad ? padPageTop(media.padding.top) : media.padding.top;
+                  final columnWidth = sideways ? padPlayerColumnWidth(constraints.maxWidth) : constraints.maxWidth;
                   if (!fullScreen) {
-                    _collapse.width = constraints.maxWidth;
+                    _collapse
+                      ..width = columnWidth
+                      ..barHeight = pad ? PadPageTheme.barHeight : CollapseTheme.barHeight
+                      ..only = sideways ? PageTab.intro : null;
                     _uprightFrame = (size: constraints.biggest, top: top);
                   }
-                  final upright = _uprightFrame ?? (size: constraints.biggest, top: top);
+                  // The iPad lays out its page at the screen's own size, full screen or not: it never turns for it.
+                  final upright = pad
+                      ? (size: constraints.biggest, top: top)
+                      : _uprightFrame ?? (size: constraints.biggest, top: top);
                   // 评论详情 and the uploader sheet cover the tab row and the list, for VoiceOver too.
                   Widget belowPlayer(Widget child) => ExcludeSemantics(
                     excluding: _threadOpen || _uploaderSheet.isOpen,
@@ -1411,20 +1490,48 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   // Only the player's box follows the scrolling, the grow and the turn; everything else is built once
                   // per page build.
                   return ListenableBuilder(
-                    listenable: Listenable.merge([_collapse, _grow, _spin]),
+                    listenable: Listenable.merge([
+                      _collapse,
+                      _grow,
+                      _spin,
+                      _padFull,
+                      if (sideways) _tabs.scrollOf(PageTab.intro),
+                    ]),
                     builder: (context, _) {
+                      if (sideways) {
+                        return UploaderTap(
+                          open: _openUploader,
+                          child: _padColumns(
+                            context,
+                            constraints: constraints,
+                            top: top,
+                            columnWidth: columnWidth,
+                            fullScreen: fullScreen,
+                            area: area,
+                            ui: ui,
+                            controller: controller,
+                            actionOverlays: actionOverlays,
+                            layout: layout,
+                          ),
+                        );
+                      }
+                      final padT = pad ? PadPageTheme.fullScreenCurve.transform(_padFull.value) : 0.0;
+                      final padGrowing = pad && _padFull.isAnimating;
                       final height = fullScreen ? constraints.maxHeight : _collapse.height;
                       final box = fullScreen ? height : top + height;
                       final progress = fullScreen ? 0.0 : _collapse.progress;
-                      final turn = _turning(constraints.biggest, layout, upright.top);
+                      final turn = pad ? null : _turning(constraints.biggest, layout, upright.top);
                       final spinning = _spinning;
                       final waiting = _turnFrom != null || _pendingTurn != null;
-                      final hidden = fullScreen && turn?.body == null;
-                      final player = turn?.box ?? Rect.fromLTWH(0, 0, constraints.maxWidth, box);
+                      final hidden = fullScreen && turn?.body == null && !padGrowing;
+                      final screenRect = Offset.zero & constraints.biggest;
+                      final player = pad
+                          ? Rect.lerp(Rect.fromLTWH(0, 0, columnWidth, top + _collapse.height), screenRect, padT)!
+                          : turn?.box ?? Rect.fromLTWH(0, 0, constraints.maxWidth, box);
                       _pin.value = turn == null ? null : Size(constraints.maxWidth, height);
                       _verticalTurn.value = turn != null && _upright == Presentation.vertical ? turn.t : null;
                       // The chrome goes from the change of presentation, so the host's still picture has none either.
-                      _turningPlayer.value = turn != null || spinning || waiting;
+                      _turningPlayer.value = turn != null || spinning || waiting || padGrowing;
                       // The tab row and the list ride on the player's bottom edge, at their upright size.
                       final body = turn?.body ?? Offset.zero;
                       final window = turn?.window;
@@ -1435,7 +1542,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                         child: child,
                       );
                       final uprightBox = upright.top + _collapse.height;
-                      final tabsTop = upright.top + CollapseTheme.barHeight + PageTheme.tabRowHeight;
+                      final tabRowHeight = pad ? PadPageTheme.tabRowHeight : PageTheme.tabRowHeight;
+                      final tabsTop = upright.top + _collapse.barHeight + tabRowHeight;
                       final screen = Offset.zero & constraints.biggest;
                       // Turned, a backdrop the screen's size would bare its corners.
                       final reach = constraints.biggest.bottomRight(Offset.zero).distance;
@@ -1465,7 +1573,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             left: body.dx,
                             top: body.dy + uprightBox,
                             width: upright.size.width,
-                            height: PageTheme.tabRowHeight,
+                            height: tabRowHeight,
                             child: windowed(body.translate(0, uprightBox), hideable(hidden, tabRow)),
                           ),
                           Positioned(
@@ -1477,12 +1585,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             child: ColoredBox(
                               color: BiliColors.videoBackground,
                               child: Padding(
-                                padding: EdgeInsets.only(top: turn?.inset ?? (fullScreen ? 0 : top)),
-                                child: area,
+                                padding: EdgeInsets.only(
+                                  top: pad ? top * (1 - padT) : turn?.inset ?? (fullScreen ? 0 : top),
+                                ),
+                                child: pad ? _padArea(area, fullScreen: fullScreen, growing: padGrowing) : area,
                               ),
                             ),
                           ),
-                          if (progress > 0 && turn == null)
+                          if (progress > 0 && turn == null && !padGrowing)
                             Positioned(
                               key: const ValueKey('collapse-bar'),
                               left: 0,
@@ -1491,12 +1601,19 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                               height: height,
                               child: ExcludeSemantics(
                                 excluding: _panels.value != null,
-                                child: CollapsedPlayerBar(
-                                  progress: progress,
-                                  onResume: _resume,
-                                  onBack: _back,
-                                  onMore: () => _panels.open(PlayerPanel.more),
-                                ),
+                                child: pad
+                                    ? PadPlayerBar(
+                                        progress: progress,
+                                        onResume: _resume,
+                                        onBack: _back,
+                                        onMore: () => _panels.open(PlayerPanel.more),
+                                      )
+                                    : CollapsedPlayerBar(
+                                        progress: progress,
+                                        onResume: _resume,
+                                        onBack: _back,
+                                        onMore: () => _panels.open(PlayerPanel.more),
+                                      ),
                               ),
                             ),
                           Positioned(
@@ -1592,15 +1709,300 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final danmaku = _danmaku;
     return ListenableBuilder(
       listenable: Listenable.merge([session ?? _tabs, _listCount, ?danmaku, ?danmaku?.sendOpen]),
-      builder: (context, _) => PageTabRow(
-        controller: _tabs,
-        replyCount: _listCount.value ?? _intro.detail?.stat.reply,
-        danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
-        onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
-        onSendDanmaku: () => danmaku?.openSend(),
-        danmakuInputOpen: danmaku?.sendOpen.value ?? false,
-        danmakuClosed: danmaku?.closed ?? false,
+      builder: (context, _) => _pad
+          ? PadPageTabRow(
+              controller: _tabs,
+              replyCount: _listCount.value ?? _intro.detail?.stat.reply,
+              danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
+              onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
+              onSendDanmaku: () => danmaku?.openSend(),
+              danmakuInputOpen: danmaku?.sendOpen.value ?? false,
+              danmakuClosed: danmaku?.closed ?? false,
+            )
+          : PageTabRow(
+              controller: _tabs,
+              replyCount: _listCount.value ?? _intro.detail?.stat.reply,
+              danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
+              onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
+              onSendDanmaku: () => danmaku?.openSend(),
+              danmakuInputOpen: danmaku?.sendOpen.value ?? false,
+              danmakuClosed: danmaku?.closed ?? false,
+            ),
+    );
+  }
+
+  /// The iPad's 点我发弹幕 and 弹 toggle, on 简介's uploader row sideways and on the pinned strip.
+  Widget _padCapsule() {
+    final session = _session;
+    final danmaku = _danmaku;
+    return ListenableBuilder(
+      listenable: Listenable.merge([session ?? _tabs, ?danmaku, ?danmaku?.sendOpen]),
+      builder: (context, _) {
+        final closed = danmaku?.closed ?? false;
+        return PadDanmakuCapsule(
+          on: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
+          onToggle: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
+          onSend: closed ? null : () => danmaku?.openSend(),
+          text: closed ? 'UP主已关闭弹幕' : ((danmaku?.sendOpen.value ?? false) ? '弹幕输入中' : '点我发弹幕'),
+        );
+      },
+    );
+  }
+
+  /// The iPad's player box shrinks over the video rather than shrinking it: the video keeps its full height, its top
+  /// going under the status bar's band as the page scrolls (20).
+  Widget _padArea(Widget area, {required bool fullScreen, required bool growing}) {
+    final kept = !fullScreen && !growing;
+    return ClipRect(
+      child: OverflowBox(
+        alignment: Alignment.bottomCenter,
+        minHeight: kept ? _collapse.full : null,
+        maxHeight: kept ? _collapse.full : null,
+        child: area,
       ),
+    );
+  }
+
+  /// The iPad sideways (03, 05): the player and the column of 简介 and 热门评论 on the left, the related videos on the
+  /// right, both under the status bar's black band. Full screen grows the player over it all (22).
+  Widget _padColumns(
+    BuildContext context, {
+    required BoxConstraints constraints,
+    required double top,
+    required double columnWidth,
+    required bool fullScreen,
+    required Widget area,
+    required PlayerUi? ui,
+    required PlaybackController? controller,
+    required Widget? actionOverlays,
+    required Presentation layout,
+  }) {
+    final media = MediaQuery.of(context);
+    final screen = Offset.zero & constraints.biggest;
+    final t = PadPageTheme.fullScreenCurve.transform(_padFull.value);
+    final growing = _padFull.isAnimating;
+    _pin.value = null;
+    _verticalTurn.value = null;
+    _turningPlayer.value = growing;
+    final hidden = fullScreen && !growing;
+    final height = _collapse.height;
+    final progress = fullScreen ? 0.0 : _collapse.progress;
+    final box = fullScreen ? constraints.maxHeight : top + height;
+    final bar = _collapse.barHeight;
+    final player = Rect.lerp(Rect.fromLTWH(0, 0, columnWidth, top + height), screen, t)!;
+    final details = _details;
+    final detail = _intro.detail;
+    final session = _session;
+    // The strip and the 发条评论 bar come once the player is the bar and 简介's actions are under it.
+    var strip = false;
+    if (!fullScreen && progress >= 1 && detail != null && details != null) {
+      final head = _padHeadKey.currentContext?.findRenderObject();
+      if (head is RenderBox && head.hasSize) {
+        strip = _collapse.reserve - _tabs.offsetOf(PageTab.intro) + head.size.height <= PadPageTheme.stripHeight;
+      }
+    }
+    final comments = _comments;
+    final writeBar =
+        CommentListTheme.barHairline +
+        CommentListTheme.barTop +
+        CommentListTheme.fieldHeight +
+        CommentListTheme.barBottom +
+        media.padding.bottom;
+    Widget belowPlayer(Widget child) => ExcludeSemantics(
+      excluding: _threadOpen || _uploaderSheet.isOpen,
+      child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
+    );
+    Widget hideable(Widget child) => Offstage(offstage: hidden, child: TickerMode(enabled: !hidden, child: child));
+    final column = PadPlayerColumn(
+      controller: _tabs.scrollOf(PageTab.intro),
+      headKey: _padHeadKey,
+      head: session == null || details == null || detail == null
+          ? null
+          : PadIntroHead(
+              content: _intro,
+              details: details,
+              onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
+              onOpenVideo: (id) => unawaited(_openVideoId(id)),
+              onPlayEpisode: session.playEpisode,
+              onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
+            ),
+      capsule: _padCapsule(),
+      comments: comments == null
+          ? null
+          : PadCommentsSection(
+              key: ObjectKey(comments),
+              model: comments,
+              callbacks: _commentCallbacks,
+              onSeeAll: _seeAllComments,
+            ),
+      bottom: writeBar,
+    );
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          key: const ValueKey('pad-status-band'),
+          left: 0,
+          right: 0,
+          top: 0,
+          height: top,
+          child: const ColoredBox(color: BiliColors.videoBackground),
+        ),
+        Positioned(
+          key: const ValueKey('pad-related-column'),
+          left: columnWidth,
+          top: top,
+          right: 0,
+          bottom: 0,
+          child: hideable(
+            DecoratedBox(
+              decoration: const BoxDecoration(
+                color: BiliColors.card,
+                border: Border(
+                  left: BorderSide(color: PadPageTheme.ruleColour, width: PadPageTheme.rule),
+                  top: BorderSide(color: PadPageTheme.ruleColour, width: PadPageTheme.rule),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(left: PadPageTheme.rule, top: PadPageTheme.rule),
+                // Leaving, a related row's cover would otherwise fly back to a feed card showing the same video.
+                child: HeroMode(
+                  enabled: !_left || _replaced,
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeTop: true,
+                    child: PadRelatedColumn(
+                      cards: _intro.related,
+                      onOpen: _openRelated,
+                      onWatchLater: (card) => unawaited(_watchLater(card)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          key: const ValueKey('page-tabs-area'),
+          left: 0,
+          top: top + bar,
+          width: columnWidth,
+          bottom: 0,
+          child: hideable(belowPlayer(CollapseReserve(collapse: _collapse, child: column))),
+        ),
+        if (strip)
+          Positioned(
+            left: 0,
+            top: top + bar,
+            width: columnWidth,
+            height: PadPageTheme.stripHeight,
+            child: belowPlayer(
+              PadPinnedStrip(
+                detail: detail!,
+                details: details!,
+                capsule: _padCapsule(),
+                onFace: () => _openUploader(
+                  UploaderRef(mid: detail.owner.mid, name: detail.owner.name, face: detail.owner.face),
+                ),
+              ),
+            ),
+          ),
+        if (strip && comments != null && comments.closedMessage == null)
+          Positioned(
+            key: const ValueKey('pad-comment-bar'),
+            left: 0,
+            width: columnWidth,
+            bottom: 0,
+            child: belowPlayer(
+              CommentWriteBar(
+                prompt: comments.rootPrompt,
+                onWrite: (emotes) => _commentCallbacks.reply(const ReplyToVideo(), emotes),
+              ),
+            ),
+          ),
+        Positioned(
+          key: const ValueKey('page-player'),
+          left: player.left,
+          top: player.top,
+          width: player.width,
+          height: player.height,
+          child: ColoredBox(
+            color: BiliColors.videoBackground,
+            child: Padding(
+              padding: EdgeInsets.only(top: top * (1 - t)),
+              child: _padArea(area, fullScreen: fullScreen, growing: growing),
+            ),
+          ),
+        ),
+        if (progress > 0 && !growing)
+          Positioned(
+            key: const ValueKey('collapse-bar'),
+            left: 0,
+            top: top,
+            width: columnWidth,
+            height: height,
+            child: ExcludeSemantics(
+              excluding: _panels.value != null,
+              child: PadPlayerBar(
+                progress: progress,
+                onResume: _resume,
+                onBack: _back,
+                onMore: () => _panels.open(PlayerPanel.more),
+              ),
+            ),
+          ),
+        Positioned(
+          key: const ValueKey('comment-overlays'),
+          left: 0,
+          top: 0,
+          width: columnWidth,
+          height: constraints.maxHeight,
+          child: Offstage(
+            offstage: hidden,
+            child: TickerMode(
+              enabled: !hidden,
+              child: ExcludeFocus(
+                excluding: hidden,
+                child: CommentOverlays(
+                  model: _comments,
+                  controller: _commentOverlays,
+                  callbacks: _commentCallbacks,
+                  threadTop: top + height,
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          key: const ValueKey('uploader-sheet-layer'),
+          left: 0,
+          top: 0,
+          width: columnWidth,
+          height: constraints.maxHeight,
+          child: hideable(
+            UploaderSheetLayer(
+              controller: _uploaderSheet,
+              top: top + height,
+              playingBvid: (_attached ? controller?.video?.bvid : null) ?? _playback?.bvid,
+              followingOf: _followingOf,
+              requestLogin: _askLogin,
+              logins: _services!.environment.logins,
+              openPage: widget.openPage,
+            ),
+          ),
+        ),
+        if (ui != null)
+          Positioned.fill(
+            key: const ValueKey('video-panels'),
+            child: PanelLayer(ui: ui, playerBottom: fullScreen ? null : box),
+          ),
+        if (actionOverlays != null) Positioned.fill(key: const ValueKey('video-overlays'), child: actionOverlays),
+        if (ui != null && _danmaku != null)
+          Positioned.fill(
+            key: const ValueKey('danmaku-overlays'),
+            child: DanmakuOverlays(session: _danmaku!, presentation: layout, playerBottom: box, toast: _toast),
+          ),
+      ],
     );
   }
 
@@ -1615,6 +2017,17 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         controller: _tabs,
         intro: session == null || details == null
             ? const SizedBox.expand()
+            : _pad
+            ? PadIntroTab(
+                content: _intro,
+                details: details,
+                onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
+                onOpenVideo: (id) => unawaited(_openVideoId(id)),
+                onPlayEpisode: session.playEpisode,
+                onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
+                onOpenRelated: _openRelated,
+                onWatchLater: (card) => unawaited(_watchLater(card)),
+              )
             : IntroTab(
                 content: _intro,
                 details: details,
@@ -1678,7 +2091,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   /// The player box's final size: the cover is asked for once at it, however the box grows during the flight.
   static Size _coverSize(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
+    final screen = MediaQuery.sizeOf(context).width;
+    final width = padSideways(context) ? padPlayerColumnWidth(screen) : screen;
     return Size(width, width / BiliMetrics.videoAspect);
   }
 

@@ -1,6 +1,7 @@
 import 'package:bili_core/api.dart' show VideoDetail, VideoView;
 import 'package:flutter/widgets.dart';
 
+import '../app/form_factor.dart';
 import '../app/swipe_back_route.dart';
 import '../app/zoom_back_route.dart';
 import 'page_playback.dart';
@@ -45,10 +46,12 @@ final class VideoRoute {
 }
 
 /// Every way of opening a video page from elsewhere (feed cards, pasted links, 最近打开, a space) comes through here.
+/// The iPad's page slides in and swipes back as a plain page, from 推荐 too (21).
 Future<void> openVideoPage(BuildContext context, VideoRoute route) {
   if (route.cover case final cover? when cover.isNotEmpty) VideoPage.precacheCover(context, cover);
   Widget page(BuildContext _) => VideoPage(route: route);
-  return Navigator.of(context).push(switch (route.zoomSource) {
+  final zoom = FormFactor.of(context).isPad ? null : route.zoomSource;
+  return Navigator.of(context).push(switch (zoom) {
     final source? => ZoomBackPageRoute<void>(builder: page, source: source),
     null => SwipeBackPageRoute<void>(builder: page),
   });
