@@ -68,3 +68,9 @@ white at 3× by `tools/apk_asset.py extract … --width` 72 and 35 (24 × 19.33 
 alpha raised from the file's 80% to full, as 17 draws it solid white at 19.5 × 21 pt. 小窗 is the APK's
 `biliplayer_ic_topbar_floatwindow` drawn in code (`FloatWindowPainter`): the extractor fills its stroked paths.
 17's 分享 is the action row's solid arrow (`ActionGlyph.share`), and 全屏 the small player's `FullScreenPainter`.
+
+The iPad's full screen (ipad/08, 16) draws its art in code: ⏮ is the APK's vector `bili_player_ctrl_play_previous`
+(`_PreviousPainter`, its 3.5-20.5 ink stretched to 13.7 × 14.5 pt), 小窗 the page player's `FloatWindowPainter` at 24.4 ×
+19.6 pt, 退出全屏 two inward brackets traced on 08; 截图, the lock, 弹 and 弹幕设置 are the phone's landscape painters
+scaled, and 16's 重播 the phone's `ReplayPainter` (16's 分享 is WeChat's logo, the account's share target; ours keeps the
+arrow).

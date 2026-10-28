@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:bili_core/api.dart' show BiliClient, Chapter, VideoShot;
+import 'package:bili_core/api.dart' show BiliClient, VideoShot;
 import 'package:bili_core/devlog.dart' show LogCategory, Logger;
 import 'package:bili_core/logic.dart' show TimeFormat;
 import 'package:flutter/widgets.dart';
@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import '../shared/theme.dart';
 import '../video/player_session.dart';
 import 'player_hud.dart' show SpeedArrows;
+import 'seek_bar.dart' show SeekBar;
 
 /// The frame and time over the middle of landscape while the bar is dragged (102), above 竖屏's bar ([upright]), or
 /// over the iPad's thumb ([padBar]). Before the frames arrive, for a part without them, or where a frame's sheet failed
@@ -195,7 +196,7 @@ class _SeekPreviewState extends State<SeekPreview> {
         .clamp(edge + half, math.max(width - edge - half, edge + half))
         .toDouble();
     final bottom = bar.center.dy - PadFullScreenTheme.previewAboveBar;
-    final title = _chapterAt(widget.session.chapters, position);
+    final title = SeekBar.chapterTitle(widget.session.chapters, position);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -222,11 +223,14 @@ class _SeekPreviewState extends State<SeekPreview> {
           ),
         // Inside the frame, or where the frame would be.
         Positioned(
-          left: centre - half,
-          width: boxWidth,
+          left: 0,
+          right: 0,
           top: bottom - PadFullScreenTheme.previewTimeRise - PadFullScreenTheme.previewTimeText,
           height: PadFullScreenTheme.previewTimeText * 2,
-          child: Center(child: _padTime(position, duration)),
+          child: CustomSingleChildLayout(
+            delegate: _Centred(centre, edge: edge),
+            child: Center(widthFactor: 1, child: _padTime(position, duration)),
+          ),
         ),
         if (title != null)
           Positioned(
@@ -270,11 +274,6 @@ class _SeekPreviewState extends State<SeekPreview> {
       ),
     ],
   );
-
-  static String? _chapterAt(List<Chapter> chapters, double position) {
-    final title = chapters.where((chapter) => chapter.from <= position).lastOrNull?.title;
-    return title == null || title.isEmpty ? null : title;
-  }
 
   /// Recording 24's 144 × 81 for a wide video; a tall video's frames keep the height at their own shape.
   static Size _padFrameSize(VideoShot shot) {
@@ -370,18 +369,20 @@ class _PadChapterTitle extends StatelessWidget {
     );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: PadFullScreenTheme.previewTitlePad),
-      alignment: Alignment.center,
       decoration: BoxDecoration(
         color: PadFullScreenTheme.previewTitleFill,
         borderRadius: BorderRadius.circular(PadFullScreenTheme.previewTitleRadius),
       ),
-      child: Text(
-        title,
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.ellipsis,
-        style: style,
-        strutStyle: BiliFonts.strutOf(context, style),
+      child: Center(
+        widthFactor: 1,
+        child: Text(
+          title,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+          strutStyle: BiliFonts.strutOf(context, style),
+        ),
       ),
     );
   }

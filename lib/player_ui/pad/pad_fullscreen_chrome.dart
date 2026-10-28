@@ -15,8 +15,10 @@ import '../landscape_chrome.dart';
 import '../panels/panel_controller.dart';
 import '../player_ui.dart';
 import '../portrait_controls.dart';
+import '../seek_bar.dart';
 import '../seek_preview.dart';
 import '../uploader_source.dart';
+import 'pad_inline_controls.dart' show FloatWindowPainter, PadChapterStrip;
 
 /// The iPad's full-screen controls (ipad/08, 14, 18, recording 24), in either orientation, over the whole screen with
 /// iOS's own status bar above: ‹, the title with N人正在看 and the uploader's chip under it, 点赞 不喜欢 投币 收藏 充电
@@ -462,7 +464,10 @@ class PadFullScreenChrome extends StatelessWidget {
           onTap: session.pictureInPictureSupported ? _touch(() => unawaited(_pictureInPicture(context))) : null,
           keepUp: ui.chrome.show,
           offInk: false,
-          child: const CustomPaint(size: Size.square(PadFullScreenTheme.pipBox), painter: _PipPainter()),
+          child: const CustomPaint(
+            size: Size(PadFullScreenTheme.pipWidth, PadFullScreenTheme.pipHeight),
+            painter: FloatWindowPainter(),
+          ),
         ),
         const SizedBox(width: PadFullScreenTheme.pipToExit),
         ChromeTap(
@@ -957,7 +962,7 @@ class _ChapterLine extends StatelessWidget {
       child: ListenableBuilder(
         listenable: repaint,
         builder: (context, _) {
-          final title = chapterAt(session.chapters, session.position);
+          final title = SeekBar.chapterTitle(session.chapters, session.position);
           if (title == null) return const SizedBox.shrink();
           final line = Row(
             key: const ValueKey('pad-chapter'),
@@ -987,12 +992,6 @@ class _ChapterLine extends StatelessWidget {
   }
 }
 
-/// The title of the chapter holding [position], when it has one.
-String? chapterAt(List<Chapter> chapters, double position) {
-  final title = chapters.where((chapter) => chapter.from <= position).lastOrNull?.title;
-  return title == null || title.isEmpty ? null : title;
-}
-
 /// 09's strip under the video while the controls are hidden, for a video with chapters: the played part, then each
 /// chapter's title centred in its stretch with a rule where it begins. It takes no touches.
 class _ChapterStrip extends StatelessWidget {
@@ -1014,7 +1013,7 @@ class _ChapterStrip extends StatelessWidget {
     final video = math.min(screen.height, screen.width / aspect);
     final top = math.min(
       (screen.height + video) / 2,
-      screen.height - media.padding.bottom - PadFullScreenTheme.stripHeight,
+      screen.height - media.padding.bottom - PadFullScreenTheme.stripBox,
     );
     return IgnorePointer(
       child: ExcludeSemantics(
@@ -1028,7 +1027,7 @@ class _ChapterStrip extends StatelessWidget {
                 left: 0,
                 right: 0,
                 top: top,
-                height: PadFullScreenTheme.stripHeight,
+                height: PadFullScreenTheme.stripBox,
                 child: ListenableBuilder(
                   listenable: FullScreenSeekBar.repaintOf(ui),
                   builder: (context, _) => _stripBody(session),
@@ -1041,26 +1040,19 @@ class _ChapterStrip extends StatelessWidget {
     );
   }
 
+  /// The played part as 09 greys it, under the inline player's strip of titles and rules.
   Widget _stripBody(PlayerSession session) {
     final duration = session.duration.value;
-    double share(double seconds) => duration > 0 ? (seconds / duration).clamp(0.0, 1.0) : 0.0;
-    const style = TextStyle(
-      fontSize: PadFullScreenTheme.stripText,
-      color: PadFullScreenTheme.stripInk,
-      height: 1,
-      decoration: TextDecoration.none,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final chapters = session.chapters;
-        return Stack(
-          children: [
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: width * share(session.position),
+    final played = duration > 0 ? (session.position / duration).clamp(0.0, 1.0) : 0.0;
+    return Stack(
+      children: [
+        Positioned(
+          left: 0,
+          top: 0,
+          height: PadFullScreenTheme.stripHeight,
+          child: LayoutBuilder(
+            builder: (context, _) => SizedBox(
+              width: MediaQuery.sizeOf(context).width * played,
               child: const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -1071,50 +1063,10 @@ class _ChapterStrip extends StatelessWidget {
                 ),
               ),
             ),
-            for (final (index, chapter) in chapters.indexed) ...[
-              if (chapter.from > 0)
-                Positioned(
-                  left: width * share(chapter.from) - PadFullScreenTheme.stripRule / 2,
-                  top: 0,
-                  bottom: 0,
-                  width: PadFullScreenTheme.stripRule,
-                  child: const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          BiliColors.chromeShadeClear,
-                          PadFullScreenTheme.stripRuleInk,
-                          BiliColors.chromeShadeClear,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              Positioned(
-                left: width * share(chapter.from),
-                width: math.max(
-                  width * (share(index + 1 < chapters.length ? chapters[index + 1].from : duration) -
-                          share(chapter.from)),
-                  0,
-                ),
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: Text(
-                    chapter.title,
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis,
-                    style: fullScreenText.merge(style),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        );
-      },
+          ),
+        ),
+        Positioned.fill(child: PadChapterStrip(chapters: session.chapters, duration: session.duration)),
+      ],
     );
   }
 }
@@ -1212,39 +1164,6 @@ class _PreviousPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PreviousPainter oldDelegate) => false;
-}
-
-/// The APK's `biliplayer_ic_topbar_floatwindow` on its 22 grid: the screen open at its bottom right, an arrow into the
-/// corner and the small window there, solid.
-class _PipPainter extends CustomPainter {
-  const _PipPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 22;
-    Offset p(double x, double y) => Offset(x * s, y * s);
-    final screen = Path()
-      ..moveTo(p(9.596, 18).dx, p(9.596, 18).dy)
-      ..lineTo(p(4.5245, 18).dx, p(4.5245, 18).dy)
-      ..arcToPoint(p(1.5245, 15), radius: Radius.circular(3 * s))
-      ..lineTo(p(1.5245, 6.551).dx, p(1.5245, 6.551).dy)
-      ..arcToPoint(p(4.5245, 3.551), radius: Radius.circular(3 * s))
-      ..lineTo(p(17, 3.551).dx, p(17, 3.551).dy)
-      ..arcToPoint(p(20, 6.551), radius: Radius.circular(3 * s))
-      ..lineTo(p(20, 11.5666).dx, p(20, 11.5666).dy)
-      ..moveTo(p(5.5065, 7.5085).dx, p(5.5065, 7.5085).dy)
-      ..lineTo(p(9.9328, 11.9511).dx, p(9.9328, 11.9511).dy)
-      ..moveTo(p(10.5215, 7.5085).dx, p(10.5215, 7.5085).dy)
-      ..lineTo(p(10.5215, 12.515).dx, p(10.5215, 12.515).dy)
-      ..lineTo(p(5.5065, 12.515).dx, p(5.5065, 12.515).dy);
-    canvas
-      ..drawPath(screen, _stroke(s))
-      ..drawRRect(RRect.fromRectAndRadius(Rect.fromPoints(p(12, 14), p(22, 20)), Radius.circular(2 * s)), Paint()
-        ..color = BiliColors.onVideo);
-  }
-
-  @override
-  bool shouldRepaint(_PipPainter oldDelegate) => false;
 }
 
 /// 08's 退出全屏: a bracket at the top left with its elbow pointing in, and one at the bottom right.

@@ -6832,22 +6832,20 @@ abstract final class PadFullScreenTheme {
   static const tagRise = 14.9;
   static const tagOverhang = 10.8;
 
-  /// 小窗 (the APK's `biliplayer_ic_topbar_floatwindow`, 22 pt on a 22 grid) drawn 25.3 pt, 24.4 × 19.6 of ink;
-  /// 退出全屏's two brackets 21 pt, the elbows 8.5 pt in from their corners.
-  static const pipBox = 25.3;
+  /// 小窗's ink (the APK's `biliplayer_ic_topbar_floatwindow`, as the page's player draws it) 24.4 × 19.6; 退出全屏's
+  /// two brackets 21 pt, the elbows 8.5 pt in from their corners.
+  static const pipWidth = 24.4;
+  static const pipHeight = 19.6;
   static const exitBox = 21.0;
   static const exitElbow = 8.5;
   static const glyphStroke = 1.3;
   static const offOpacity = 0.5;
 
-  /// 09's strip while the controls are hidden: 19 pt under the video, the played part a grey fading down, each
-  /// chapter's title centred in its stretch at 9 pt, 0.5 pt rules fading at both ends where one begins.
+  /// 09's strip while the controls are hidden: 19 pt under the video, the played part a grey fading down, under the
+  /// inline player's titles (`PadChapterStrip`), whose box ends 22.3 pt down so they centre 11.6 pt under the video.
   static const stripHeight = 19.0;
+  static const stripBox = 22.3;
   static const stripPlayed = Color(0x99B4B4B4);
-  static const stripText = 9.0;
-  static const stripInk = Color(0xFFFFFFFF);
-  static const stripRule = 0.5;
-  static const stripRuleInk = Color(0x80FFFFFF);
 
   /// The hold's arrows (15), smaller than the phone's: 16.8 × 10.9 pt, 7.6 pt before the label.
   static const hudArrowWidth = 9.6;
