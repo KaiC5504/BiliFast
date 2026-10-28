@@ -6414,7 +6414,7 @@ abstract final class FollowingListTheme {
   static const spinnerRadius = 9.0;
 }
 
-/// The iPad's 首页 (ipad/01, 02), measured at 2× (pt = px / 2). The Home agent owns this class.
+/// The iPad's 首页 (ipad/01, 02), measured at 2× (pt = px / 2).
 abstract final class PadHomeTheme {
   /// 推荐's grid: 375 pt cards sideways and 255 upright, 22 pt from the edges and 12 apart; the first row starts as
   /// far under the hairline as 01's banner does (the banner is left out).
@@ -6519,7 +6519,7 @@ abstract final class PadHomeTheme {
 }
 
 /// The iPad's video page frame: the two columns sideways (ipad/03, 05), one upright (06), the player's shrink to the
-/// pink 立即播放 bar (05, 20). The Page shell agent owns this class.
+/// pink 立即播放 bar (05, 20).
 abstract final class PadPageTheme {
   /// 03, 05 and 06 keep the page 32 pt below the screen's top, black above it, past the 24 pt status bar inset.
   static const statusBand = 32.0;
@@ -6601,8 +6601,7 @@ abstract final class PadPageTheme {
   static const fullScreenCurve = Curves.easeInOut;
 }
 
-/// The iPad's page body: 简介's sections and the related column (ipad/03, 04, 06). The Page body agent owns this
-/// class.
+/// The iPad's page body: 简介's sections and the related column (ipad/03, 04, 06).
 abstract final class PadBodyTheme {
   /// Everything in 简介's head starts 20 in, the action cells too (03).
   static const gutter = 20.0;
@@ -6745,8 +6744,7 @@ abstract final class PadBodyTheme {
   static const durationFill = Color(0x80000000);
 }
 
-/// The iPad's controls over the page's player and its end screen (ipad/03, 07, 17). The Player controls agent owns
-/// this class.
+/// The iPad's controls over the page's player and its end screen (ipad/03, 07, 17).
 abstract final class PadInlineControlsTheme {
   /// A control's centre from its edge of the player: back, ⋮ and 全屏 (03: 28.5-29 pt; 07 the same).
   static const edgeCentre = 29.0;
@@ -6871,7 +6869,7 @@ abstract final class PadInlineControlsTheme {
 }
 
 /// The iPad's full screen: top and bottom bars, side buttons, the end screen, the hold, buffering and the seek
-/// preview (ipad/08, 14-16, 18, 19, 24). The Full screen agent owns this class. Measured at 2 px per pt on KaiC's
+/// preview (ipad/08, 14-16, 18, 19, 24). Measured at 2 px per pt on KaiC's
 /// iPad Pro 11" sideways (1194 × 834, the status bar's 24 pt above, the home indicator's 20 below); rows are placed
 /// from the safe area's edges, columns from the screen's.
 abstract final class PadFullScreenTheme {
@@ -7165,7 +7163,7 @@ abstract final class PadPanelTheme {
   static const sheetMaxWidth = 600.0;
 }
 
-/// The iPad's danmaku, on the page's player and in full screen (ipad/09, 25). The Danmaku agent owns this class.
+/// The iPad's danmaku, on the page's player and in full screen (ipad/09, 25).
 abstract final class PadDanmakuTheme {
   /// Full screen's text at an elem's fontSize of 25: 09's CJK advances are 43.4 px (9 of them over 391 px) and 25's
   /// lanes 62.6 px apart, which the phone's 1.44 lane spacing and 1 pt outline give at 21.75 pt. Lanes run from the
