@@ -104,11 +104,19 @@ final class Rig {
   );
 
   /// [panelText] is the default style the panel layer puts around its panels.
-  Future<void> mount(WidgetTester tester, {TextStyle? panelText}) async {
+  /// [screen], [side] and [bottom] default to the iPhone's landscape; [panelWidth] to its panel's share.
+  Future<void> mount(
+    WidgetTester tester, {
+    TextStyle? panelText,
+    Size screen = const Size(956, 440),
+    double side = 62,
+    double bottom = 21,
+    double? panelWidth,
+  }) async {
     tester.view
-      ..physicalSize = const Size(956, 440)
+      ..physicalSize = screen
       ..devicePixelRatio = 1
-      ..padding = const FakeViewPadding(left: 62, right: 62, bottom: 21);
+      ..padding = FakeViewPadding(left: side, right: side, bottom: bottom);
     addTearDown(tester.view.reset);
     addTearDown(() {
       session.dispose();
@@ -124,11 +132,11 @@ final class Rig {
           child: Align(
             alignment: Alignment.centerRight,
             child: SizedBox(
-              width: 956 * BiliMetrics.panelWidth,
+              width: panelWidth ?? screen.width * BiliMetrics.panelWidth,
               child: SingleChildScrollView(
-                padding: const EdgeInsets.only(
-                  right: 62 + BiliMetrics.panelTrailing,
-                  bottom: 21 + BiliMetrics.panelBottom,
+                padding: EdgeInsets.only(
+                  right: side + BiliMetrics.panelTrailing,
+                  bottom: bottom + BiliMetrics.panelBottom,
                 ),
                 child: DefaultTextStyle.merge(
                   style: panelText,
@@ -191,6 +199,24 @@ void main() {
     expect(one.height, DanmakuListTheme.rowMinHeight);
     expect(long.height, greaterThan(one.height + DanmakuListTheme.textLine));
   });
+
+  for (final (screen, panel) in [
+    (const Size(1194, 834), 290.0),
+    (const Size(1194, 834), 478.0),
+    (const Size(834, 1194), 334.0),
+  ]) {
+    testWidgets('on the iPad (${screen.width.round()} wide, a $panel pt panel) rows fill the panel at the phone\'s '
+        'heights, ⋮ at its right end', (tester) async {
+      await Rig().mount(tester, screen: screen, side: 0, bottom: 20, panelWidth: panel);
+      expect(tester.takeException(), isNull);
+      Rect row(String text) =>
+          tester.getRect(find.ancestor(of: find.text(text), matching: find.byType(AnimatedOpacity)));
+      expect(row('第一个').height, DanmakuListTheme.rowMinHeight);
+      expect(row('第一个').width, closeTo(panel - BiliMetrics.panelTrailing, 0.01));
+      expect(row(rows[2].content).height, greaterThanOrEqualTo(DanmakuListTheme.rowMinHeight));
+      expect(tester.getRect(inRow('第一个', 'danmaku-list-more')).right, lessThanOrEqualTo(screen.width));
+    });
+  }
 
   testWidgets('a long list asks for its counts in batches', (tester) async {
     final shown = [for (var i = 1; i <= 120; i++) DanmakuElem(id: i, content: '弹幕$i')];

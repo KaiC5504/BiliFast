@@ -6439,4 +6439,19 @@ abstract final class PadFullScreenTheme {}
 abstract final class PadPanelTheme {}
 
 /// The iPad's danmaku, on the page's player and in full screen (ipad/09, 25). The Danmaku agent owns this class.
-abstract final class PadDanmakuTheme {}
+abstract final class PadDanmakuTheme {
+  /// Full screen's text at an elem's fontSize of 25: 09's CJK advances are 43.4 px (9 of them over 391 px) and 25's
+  /// lanes 62.6 px apart, which the phone's 1.44 lane spacing and 1 pt outline give at 21.75 pt. Lanes run from the
+  /// screen's top edge, 25's six of them filling 25% of the whole 834 pt height, pillarbox included.
+  static const fontFullScreen = 21.75;
+
+  /// The landscape screen's width, against which the page's player scales [fontFullScreen]: no screenshot shows
+  /// danmaku on the page (03, 07), so they keep full screen's share of a 16:9 picture, as the phone's small player
+  /// does (12.5 against 22).
+  static const fullScreenWidth = 1194.0;
+
+  /// The style panel's height before a keyboard has been up to measure (the iPad Pro 11"'s, with its suggestions
+  /// row); the panel takes the real keyboard's height once it has risen.
+  static const landscapePanelHeight = 405.0;
+  static const portraitPanelHeight = 320.0;
+}
