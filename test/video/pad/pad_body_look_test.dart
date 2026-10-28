@@ -100,7 +100,7 @@ void main() {
     expect(tester.getTopLeft(find.byKey(const ValueKey('uploader-open'))), const Offset(20, _playerBottom + 10));
     expect(find.text('点我发弹幕'), findsOneWidget);
     expect(find.text('查看简介'), findsOneWidget);
-    expect(find.text('kskbl?'), findsNothing);
+    expect(find.text('qwnrt?'), findsNothing);
   });
 
   testWidgets('04: sideways, 查看简介 opened', (tester) async {
@@ -109,8 +109,8 @@ void main() {
     await tester.pumpAndSettle();
     final shots = Platform.environment['BILIFAST_SHOTS'];
     if (shots != null) await saveShot(tester, find.byKey(const ValueKey('screen')), '$shots/pad-04.png', pixelRatio: 2);
-    expect(find.text('kskbl?'), findsOneWidget);
-    expect(find.text('AI整活全宇宙'), findsOneWidget);
+    expect(find.text('qwnrt?'), findsOneWidget);
+    expect(find.text('AI游戏全世界'), findsOneWidget);
   });
 
   testWidgets('06: upright, opened, the related rows at the full width', (tester) async {

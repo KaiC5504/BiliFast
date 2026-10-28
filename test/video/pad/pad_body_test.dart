@@ -119,14 +119,14 @@ void main() {
   group('PadIntroHead', () {
     testWidgets('查看简介 opens the description and the plain tags in place, and closes them again (04)', (tester) async {
       await head(tester);
-      expect(find.text('kskbl?'), findsNothing);
+      expect(find.text('qwnrt?'), findsNothing);
       final actionsTop = tester.getTopLeft(find.byKey(const ValueKey('action-like'))).dy;
 
       await tester.tap(find.byKey(const ValueKey('pad-intro-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('kskbl?'), findsOneWidget);
-      expect(find.text('康康'), findsOneWidget);
-      expect(find.text('AI整活全宇宙'), findsOneWidget);
+      expect(find.text('qwnrt?'), findsOneWidget);
+      expect(find.text('乐乐'), findsOneWidget);
+      expect(find.text('AI游戏全世界'), findsOneWidget);
       expect(
         tester.getTopLeft(find.byKey(const ValueKey('action-like'))).dy,
         greaterThan(actionsTop + 50),
@@ -139,7 +139,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('pad-intro-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('kskbl?'), findsNothing);
+      expect(find.text('qwnrt?'), findsNothing);
       expect(tester.getTopLeft(find.byKey(const ValueKey('action-like'))).dy, actionsTop);
     });
 
@@ -147,15 +147,15 @@ void main() {
       await head(tester);
       await tester.tap(find.text(padDetail().title));
       await tester.pumpAndSettle();
-      expect(find.text('kskbl?'), findsOneWidget);
+      expect(find.text('qwnrt?'), findsOneWidget);
       await tester.tap(find.text(padDetail().title));
       await tester.pumpAndSettle();
-      expect(find.text('kskbl?'), findsNothing);
+      expect(find.text('qwnrt?'), findsNothing);
     });
 
     testWidgets('the meta line carries the BV id and N人正在看; the counts have one space', (tester) async {
       await head(tester);
-      expect(find.text('BV1a8xK6MEfM'), findsOneWidget);
+      expect(find.text('BV1Fk4x7NqTz'), findsOneWidget);
       expect(find.text('4000+人正在看'), findsOneWidget);
       expect(find.text('2.1万粉丝 519视频', findRichText: true), findsOneWidget);
     });

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:bilifast/player/bili_player.dart' show PlayerStatus, StatusChanged;
 import 'package:bilifast/player_ui/pad/pad_end_fullscreen.dart';
 import 'package:bilifast/player_ui/pad/pad_fullscreen_chrome.dart';
 import 'package:bilifast/player_ui/player_hud.dart';
@@ -112,7 +113,7 @@ void main() {
     await systemFont(tester);
     final rig = rig08();
     rig.session
-      ..title = '万圣节有8个物品兑换点，不要忘记领物品哦。'
+      ..title = '中秋节有8个礼物领取点，不要忘记拿礼物哦。'
       ..chapters = const []
       ..duration.value = 115;
     rig.session.clock.jump(61);
@@ -134,10 +135,12 @@ void main() {
       background: await background(tester, '19-fullscreen-buffering.png'),
       theme: appTheme(),
     );
+    rig.session.player.emit(const StatusChanged(PlayerStatus.buffering));
     rig.session.readout.refresh();
     await settle(tester);
     await shoot(tester, 'pad-18');
     expect(tester.takeException(), isNull);
+    expect(find.bySemanticsLabel('暂停'), findsOneWidget, reason: "18's ⏸: buffering still means to play");
   });
 
   testWidgets('15: the hold pill at the top centre over the hidden controls', (tester) async {
@@ -172,18 +175,18 @@ void main() {
       ..shareLink = Uri.parse('https://b23.tv/BV1')
       ..related = [
         for (final (title, views, danmaku, duration) in [
-          ('奶家人躲猫猫大赛-南瓜庄园篇【AI全民制作人】', 1703000, 679, 255),
-          ('从夯到区 锐评奶家人', 54000, 187, 206),
-          ('奶家人躲猫猫大赛-废弃医院篇【AI全民制作人】', 5585000, 1667, 270),
-          ('奶妹帮哥哥做早晨', 248000, 184, 64),
-          ('奶石', 119000, 67, 61),
-          ('奶家杯逃生者模式-农庄【AI全民制作人】', 373000, 346, 271),
-          ('茶花女【AI全民制作人】', 733000, 381, 147),
-          ('奶鸡回忆录【AI全民制作人】', 54000, 61, 90),
-          ('奶', 1000, 1, 60),
-          ('奶', 1000, 1, 60),
-          ('奶', 1000, 1, 60),
-          ('奶', 1000, 1, 60),
+          ('小猫们跳房子大会-东边果园篇【AI全城创作者】', 1703000, 679, 255),
+          ('从头到尾 细说小猫们', 54000, 187, 206),
+          ('小猫们跳房子大会-旧城车站篇【AI全城创作者】', 5585000, 1667, 270),
+          ('小妹帮爸爸做午饭', 248000, 184, 64),
+          ('石头', 119000, 67, 61),
+          ('小猫杯寻宝者模式-海岛【AI全城创作者】', 373000, 346, 271),
+          ('雪花鸟【AI全城创作者】', 733000, 381, 147),
+          ('小鸭日记本【AI全城创作者】', 54000, 61, 90),
+          ('猫', 1000, 1, 60),
+          ('猫', 1000, 1, 60),
+          ('猫', 1000, 1, 60),
+          ('猫', 1000, 1, 60),
         ])
           VideoCard(
             aid: views,
@@ -193,7 +196,7 @@ void main() {
             cover: '',
             duration: duration,
             ownerMid: 1,
-            ownerName: '暴风城老鼠',
+            ownerName: '山顶小松鼠',
             views: views,
             danmaku: danmaku,
             likes: 0,

@@ -28,7 +28,8 @@ Future<Uint8List> _coverPng() async {
   return bytes!.buffer.asUint8List();
 }
 
-/// A phone-shaped view: flutter_test's default 800 × 600 counts as an iPad ([FormFactor]), whose card is another.
+/// A phone-shaped view. Setting a pixel ratio alone keeps flutter_test's default physical size, which at a lower
+/// ratio reads as a screen past [FormFactor]'s 700 pt cut, an iPad, whose card is another.
 void _asPhone(WidgetTester tester, {double ratio = 3}) {
   tester.view
     ..devicePixelRatio = ratio

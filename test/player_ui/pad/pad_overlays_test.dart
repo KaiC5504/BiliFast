@@ -81,8 +81,8 @@ void main() {
     final session = FakePlayerSession()
       ..duration.value = 254
       ..chapters = const [
-        Chapter(from: 0, to: 20.1, title: '引言'),
-        Chapter(from: 20.1, to: 92.3, title: '选择藏匿点'),
+        Chapter(from: 0, to: 20.1, title: '开场'),
+        Chapter(from: 20.1, to: 92.3, title: '寻找好位置'),
       ]
       ..seekFrames.value = shot;
     session.scrubbing.value = at;
@@ -130,7 +130,7 @@ void main() {
     expect(find.byType(SpeedArrows), findsOneWidget);
 
     final title = tester.getRect(find.byKey(const ValueKey('seek-preview-chapter')));
-    expect(find.text('选择藏匿点'), findsOneWidget);
+    expect(find.text('寻找好位置'), findsOneWidget);
     expect(title.center.dx, closeTo(frame.center.dx, 0.5));
     expect(title.bottom, closeTo(frame.top - PadFullScreenTheme.previewTitleGap, 0.5));
   });

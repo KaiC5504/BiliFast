@@ -327,7 +327,8 @@ final class DanmakuScene extends ChangeNotifier {
           Presentation.vertical => BiliMetrics.danmakuFontVertical,
         };
     // Tiny fonts: the outline and own box padding must still fit, or neighbouring lanes would touch. 竖屏's lanes are
-    // tighter than PingFang's line (118), as the iPad's are (25), so there only the glyphs' em must.
+    // tighter than PingFang's line (118), as the iPad's are (25), so for those only the em plus outline and padding
+    // has to fit.
     final fits = vertical || pad
         ? _basePointSize + (BiliMetrics.danmakuOutline + BiliMetrics.danmakuOwnPadY) * 2
         : sprites.lineHeight(_basePointSize).ceilToDouble() + BiliMetrics.danmakuOwnPadY * 2;

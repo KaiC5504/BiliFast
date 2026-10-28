@@ -55,7 +55,7 @@ void main() {
   testWidgets('16: ‹, the uploader with + 关注 and 为TA充电, 重播 | 点赞 不喜欢 投币 收藏 分享, 推荐视频', (tester) async {
     await mount(tester);
     expect(tester.takeException(), isNull);
-    expect(find.text('暴风城老鼠'), findsOneWidget);
+    expect(find.text('山顶小松鼠'), findsOneWidget);
     expect(find.text('关注'), findsOneWidget);
     expect(find.text('为TA充电'), findsOneWidget);
     for (final title in ['重播', '点赞', '不喜欢', '投币', '收藏', '分享', '推荐视频']) {

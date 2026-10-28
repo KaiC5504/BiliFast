@@ -251,7 +251,7 @@ class FeedModel extends ChangeNotifier {
   final Logger _logger;
   final bool Function() _officialWanted;
 
-  /// Whether the official feed is asked as the iPad, which is sent no big inline card.
+  /// Whether the official feed is asked as the iPad (`mobi_app=android_i`), which is sent no big inline card.
   final bool Function() _pad;
   final DateTime Function() _now;
   final PictureSession? Function() _pictures;

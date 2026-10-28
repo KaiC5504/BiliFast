@@ -644,8 +644,7 @@ class _RecommendTab extends StatelessWidget {
 }
 
 /// The iPad's top (ipad/01, 02): the avatar and the search entry at the left, 直播 推荐 热门 追番 影视 centred on the
-/// screen, scan, 历史记录 and 消息 at the right, all on one row. Only 推荐 is built; the other tabs answer nothing, as
-/// the phone has none.
+/// screen, scan, 历史记录 and 消息 at the right, all on one row. Only 推荐 answers; the other tabs are drawn, not built.
 class _PadRow extends StatelessWidget {
   const _PadRow({
     required this.face,
@@ -739,29 +738,21 @@ class _PadRow extends StatelessWidget {
               PadHomeTheme.scanRight,
               'home-scan',
               '扫一扫',
-              Center(
-                child: Image.asset(
-                  'assets/images/home/pad_scan.png',
-                  width: PadHomeTheme.scan,
-                  color: ink,
-                  colorBlendMode: BlendMode.srcIn,
-                  excludeFromSemantics: true,
-                ),
-              ),
+              CustomPaint(painter: _PadGlyphPainter(_PadGlyph.scan, ink)),
               () => showToast(context, '暂未开放'),
             ),
             icon(
               PadHomeTheme.historyRight,
               'home-history',
               '历史记录',
-              CustomPaint(painter: _PadGlyphPainter.history(ink)),
+              CustomPaint(painter: _PadGlyphPainter(_PadGlyph.history, ink)),
               onHistory ?? () {},
             ),
             icon(
               PadHomeTheme.messagesRight,
               'home-messages',
               '消息',
-              CustomPaint(painter: _PadGlyphPainter.messages(ink)),
+              CustomPaint(painter: _PadGlyphPainter(_PadGlyph.messages, ink)),
               () => showToast(context, '暂未开放'),
             ),
           ],
@@ -876,15 +867,16 @@ class _PadSearchFieldState extends State<_PadSearchField> {
   }
 }
 
-/// The iPad's clock with its turning arrow and its round bubble with three dots (ipad/01), drawn in a 20 pt square:
-/// the APK has neither.
+enum _PadGlyph { scan, history, messages }
+
+/// The iPad's scan, its clock with the turning arrow and its round bubble with three dots (ipad/01), drawn in a 20 pt
+/// square: the APK has no clock or bubble, and its scans (`ic_scan_cast`, `ic_mine_scan`) draw heavier strokes and a
+/// bar that stops inside the brackets.
 class _PadGlyphPainter extends CustomPainter {
-  _PadGlyphPainter.history(this.color) : messages = false;
+  _PadGlyphPainter(this.glyph, this.color);
 
-  _PadGlyphPainter.messages(this.color) : messages = true;
-
+  final _PadGlyph glyph;
   final Color color;
-  final bool messages;
 
   static const _design = 20.0;
   static const _degree = math.pi / 180;
@@ -900,12 +892,44 @@ class _PadGlyphPainter extends CustomPainter {
       ..strokeWidth = PadHomeTheme.iconLine
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    if (messages) {
-      _bubble(canvas, line);
-    } else {
-      _clock(canvas, line);
+    switch (glyph) {
+      case _PadGlyph.scan:
+        _scan(canvas, line);
+      case _PadGlyph.history:
+        _clock(canvas, line);
+      case _PadGlyph.messages:
+        _bubble(canvas, line);
     }
     canvas.restore();
+  }
+
+  /// Four rounded corners 15.6 apart and a bar running 0.7 past them on either side, square-ended (01, measured).
+  void _scan(Canvas canvas, Paint line) {
+    const near = 2.2;
+    const far = 20 - near;
+    const radius = 2.0;
+    const armEnd = 3.025;
+    const legEnd = 4.0;
+    for (final (x, y) in const [(near, near), (far, near), (near, far), (far, far)]) {
+      final sx = x < 10 ? 1.0 : -1.0;
+      final sy = y < 10 ? 1.0 : -1.0;
+      canvas.drawPath(
+        Path()
+          ..moveTo(x, 10 - sy * legEnd)
+          ..lineTo(x, y + sy * radius)
+          ..arcToPoint(
+            Offset(x + sx * radius, y),
+            radius: const Radius.circular(radius),
+            clockwise: sx * sy > 0,
+          )
+          ..lineTo(10 - sx * armEnd, y),
+        line,
+      );
+    }
+    canvas.drawRect(
+      Rect.fromLTRB(1.085, 10 - PadHomeTheme.iconLine / 2, 18.915, 10 + PadHomeTheme.iconLine / 2),
+      Paint()..color = color,
+    );
   }
 
   /// The ring opens between the arrow's tip at the upper right and its other end at the right.
@@ -946,5 +970,5 @@ class _PadGlyphPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_PadGlyphPainter oldDelegate) => oldDelegate.color != color || oldDelegate.messages != messages;
+  bool shouldRepaint(_PadGlyphPainter oldDelegate) => oldDelegate.color != color || oldDelegate.glyph != glyph;
 }

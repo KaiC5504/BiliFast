@@ -17,11 +17,11 @@ const _card = VideoCard(
   aid: 1,
   bvid: 'BV1next',
   cid: 2,
-  title: '奶家人躲猫猫大赛-南瓜庄园篇【AI全民制作人】',
+  title: '小猫们跳房子大会-东边果园篇【AI全城创作者】',
   cover: '',
   duration: 255,
   ownerMid: 3,
-  ownerName: '奶史_',
+  ownerName: '木子_',
   views: 1703000,
   danmaku: 679,
   likes: 0,
@@ -92,7 +92,7 @@ void main() {
 
     expect(find.text('推荐视频'), findsOneWidget);
     expect(find.text(_card.title), findsOneWidget);
-    expect(find.text('奶史_'), findsOneWidget);
+    expect(find.text('木子_'), findsOneWidget);
     expect(find.text('170.3万'), findsOneWidget);
     expect(find.text('679'), findsOneWidget);
     expect(find.text('04:15'), findsOneWidget, reason: '17 writes the minutes with two digits');
@@ -181,9 +181,9 @@ void main() {
   testWidgets('the chapters stay under the dim, as 17 shows', (tester) async {
     final rig = EndRig()
       ..session.duration.value = 254
-      ..session.chapters = const [Chapter(from: 0, to: 100, title: '引言'), Chapter(from: 100, to: 254, title: '猎手出动')];
+      ..session.chapters = const [Chapter(from: 0, to: 100, title: '开场'), Chapter(from: 100, to: 254, title: '队长出发')];
     await rig.mount(tester);
     expect(find.byKey(const ValueKey('pad-chapter-strip')), findsOneWidget);
-    expect(find.text('猎手出动'), findsOneWidget);
+    expect(find.text('队长出发'), findsOneWidget);
   });
 }

@@ -9,11 +9,13 @@ import 'package:flutter/material.dart'
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter, TextInputAction;
 import 'package:flutter/widgets.dart';
 
+import '../../app/form_factor.dart';
 import '../../player_ui/panels/episodes_panel.dart' show EpisodesSheetHeader;
 import '../../player_ui/panels/panel_layer.dart' show panelBackdrop;
 import '../../player_ui/panels/panel_parts.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
+import '../pad/pad_page_layout.dart' show padPageTop, padPlayerColumnWidth, padSideways;
 import 'video_actions.dart';
 
 /// 收藏: the account's folders with ticks, 新建收藏夹 and 完成 (BiliNative `FavouriteSheet.swift`). A light sheet from
@@ -195,7 +197,11 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
     final insets = media.padding;
     // From the screen, not the box: a page that shrinks for the keyboard must not shrink the sheet with it.
     final screen = media.size;
-    final full = (screen.height - insets.top - screen.width / BiliMetrics.videoAspect).clamp(0.0, screen.height);
+    // The iPad's player is the left column's width sideways, under the 32 pt band, not the screen's width.
+    final pad = FormFactor.of(context).isPad;
+    final playerWidth = padSideways(context) ? padPlayerColumnWidth(screen.width) : screen.width;
+    final playerTop = pad ? padPageTop(insets.top) : insets.top;
+    final full = (screen.height - playerTop - playerWidth / BiliMetrics.videoAspect).clamp(0.0, screen.height);
     final height = math.max(0.0, math.min(full, size.height - keyboard - insets.top));
     final hidden = height + keyboard;
     final motion = Listenable.merge([widget.motion, _drag]);

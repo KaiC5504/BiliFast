@@ -17,9 +17,9 @@ import '../support/fake_player_session.dart';
 const _box = Size(756.5, 425.5);
 
 const _chapters = [
-  Chapter(from: 0, to: 30, title: '引言'),
-  Chapter(from: 30, to: 140, title: '选择藏匿点'),
-  Chapter(from: 140, to: 254, title: '猎手出动'),
+  Chapter(from: 0, to: 30, title: '开场'),
+  Chapter(from: 30, to: 140, title: '寻找好位置'),
+  Chapter(from: 140, to: 254, title: '队长出发'),
 ];
 
 final class PadRig {
@@ -232,13 +232,13 @@ void main() {
       ..session.duration.value = 254
       ..session.chapters = _chapters;
     await rig.mount(tester);
-    expect(find.text('章节 · 引言'), findsOneWidget);
+    expect(find.text('章节 · 开场'), findsOneWidget);
 
     const at = PositionChanged(seconds: 60, hostMs: 0, rate: 1);
     rig.session.clock.handle(at);
     rig.session.player.emit(at);
     await tester.pump();
-    expect(find.text('章节 · 选择藏匿点'), findsOneWidget);
+    expect(find.text('章节 · 寻找好位置'), findsOneWidget);
     final line = tester.getRect(find.byKey(const ValueKey('pad-inline-chapter')));
     expect(line.left, 21);
     expect(line.center.dy, closeTo(_box.height - 65.75, 0.5));
@@ -269,7 +269,7 @@ void main() {
     expect(rig.opacity(tester, 'pad-inline-controls'), 0);
     expect(rig.opacity(tester, 'pad-inline-hidden'), 1);
     final strip = find.byKey(const ValueKey('pad-chapter-strip'));
-    final second = tester.getRect(find.descendant(of: strip, matching: find.text('选择藏匿点')));
+    final second = tester.getRect(find.descendant(of: strip, matching: find.text('寻找好位置')));
     expect(second.center.dx, closeTo(834 * (30 + 140) / 2 / 254, 0.5));
     expect(second.center.dy, closeTo(834 * 9 / 16 - 10.67, 0.5));
 

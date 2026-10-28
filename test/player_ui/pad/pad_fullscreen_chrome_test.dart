@@ -187,14 +187,14 @@ void main() {
 
   testWidgets('the chapter line names the chapter playing; the times are either side of the bar', (tester) async {
     final rig = await mount(tester);
-    expect(find.text('章节 · 引言'), findsOneWidget);
+    expect(find.text('章节 · 开场'), findsOneWidget);
     expect(find.text('00:00'), findsOneWidget);
     expect(find.text('04:14'), findsOneWidget);
 
     rig.session.clock.jump(100);
     rig.session.readout.refresh();
     await tester.pump();
-    expect(find.text('章节 · 猎手出动'), findsOneWidget);
+    expect(find.text('章节 · 队长出发'), findsOneWidget);
     expect(find.text('01:40'), findsOneWidget);
 
     rig.session
@@ -223,7 +223,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(chrome().ignoring, isTrue);
     expect(stripOpacity(), 1);
-    expect(find.text('选择藏匿点'), findsOneWidget);
+    expect(find.text('寻找好位置'), findsOneWidget);
     // Under 16:9's video, 752.8 pt down.
     expect(tester.getTopLeft(find.byKey(const ValueKey('pad-strip'))).dy, closeTo(752.8, 0.5));
 
@@ -269,6 +269,12 @@ void main() {
     rig.session.player.emit(const StatusChanged(PlayerStatus.playing));
     await tester.pumpAndSettle();
     expect(find.bySemanticsLabel('暂停'), findsOneWidget);
+    rig.session.player.emit(const StatusChanged(PlayerStatus.buffering));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('暂停'), findsOneWidget, reason: '18 keeps ⏸ while it buffers');
+    rig.session.player.emit(const StatusChanged(PlayerStatus.paused));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('播放'), findsOneWidget);
   });
 
   testWidgets('upright (no screenshot): the same bars at 834 wide, nothing overflowing, the title giving way', (

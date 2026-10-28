@@ -6462,7 +6462,6 @@ abstract final class PadHomeTheme {
   static const historyRight = 90.0;
   static const messagesRight = 38.0;
   static const iconLine = 1.5;
-  static const scan = 18.0;
 
   /// The bottom bar: 50 pt from its hairline to the home indicator, four 118 pt places centred.
   static const barHeight = 50.0;
@@ -6472,6 +6471,10 @@ abstract final class PadHomeTheme {
   static const barLabelText = 11.0;
   static const barIconInk = Color(0xFF747474);
   static const barLabelInk = Color(0xFF929292);
+
+  /// A 装扮's bar picture is made for a phone: the iPad draws it at the phone's 440 pt width grown by the bars'
+  /// heights, centred, so it rises as far as on the phone (a guess: no screenshot of a dressed iPad bar).
+  static const barArtWidth = 440 * barHeight / HomeTabBarTheme.height;
 
   /// A card: the cover's corners, its counts row, then the face, two title lines, the uploader and date, and ⋮.
   static const coverRadius = 4.0;
@@ -6496,6 +6499,7 @@ abstract final class PadHomeTheme {
   static const tagHeight = 16.0;
   static const tagText = 11.0;
   static const tagPad = 4.0;
+  static const tagRadius = 2.0;
   static const tagGap = 4.0;
   static const statText = 11.0;
   static const statIconWidth = 13.0;
@@ -6505,7 +6509,13 @@ abstract final class PadHomeTheme {
   static const statGap = 15.0;
   static const statTrail = 11.5;
   static const statCentre = 17.5;
+  static const durationGap = 4.0;
   static const shade = 40.0;
+
+  /// The loading card's two grey title bars: the first [skeletonTitleDrop] under the face's top, [skeletonLineGap]
+  /// between them.
+  static const skeletonTitleDrop = 4.0;
+  static const skeletonLineGap = 10.0;
 
   /// The cover's height on a card [width] wide: 16:9 and a pt and a half (212 sideways, 145 upright).
   static double coverHeight(double width) => (width * 9 / 16 + 1.5).roundToDouble();
