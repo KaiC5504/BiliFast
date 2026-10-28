@@ -250,15 +250,42 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   counts; 直播 and 番剧 toast. Logs: `dynamic feed` (type, count, skipped kinds), `dynamic post`, `space dynamics page`.
   The shapes came from one guarded `--real-account` read of 8 calls (KaiC's OK, 2026-10-26; a new QR login, the old
   one had lapsed); fixtures are made up.
+- The iPad, 1.2.0 (1) (KaiC: basic watching on his iPad Pro 11", `local/official-app-reference/ipad/` 01-25): the app is
+  universal (`TARGETED_DEVICE_FAMILY` 1,2, full screen only). `FormFactor` (`lib/app/form_factor.dart`) is the one
+  switch: `FormFactor.device` from UIKit's idiom at launch (`DeviceHostApi.isPad`, logged `form factor` {kind, via}),
+  `FormFactor.of(context)` from the screen (cut at 700 pt); every iPad layout is its own branch or `pad/` file, the
+  iPhone unchanged. On the iPad: all four orientations, no rotation request ever, full screen only by the button and
+  back in either orientation, no 竖屏 (an upright video plays full screen pillarboxed, 25), no drawn turn. 首页 (01,
+  02): 3 columns, the one-row header (only 推荐 answers; scan and 消息 toast), the bar 首页 分区 动态 我的 (分区
+  toasts), the feed asked as the iPad (`mobi_app=android_i`: no big card; 01's banner left out). The video page
+  (`lib/video/pad/`): sideways the player, `PadIntroHead` and 热门评论 in the left column with the related column on
+  the right (03, 04), upright one column with 简介 / 评论 (06); paused, the column shrinks the player to the pink
+  立即播放 bar with the pinned strip and the iPad's comment bar with ↑ (05, 20); turning reflows keeping the
+  session, the scroll places and the bar (23); comments load when the page opens on the iPad. The page player's
+  controls and end screen (03, 07, 17; 章节 line, chapter strip), full screen's bars, side buttons, end screen, hold,
+  buffering and seek preview (08, 14-16, 18, 19, 24), the panels as fixed-width strips (10-13, the iPhone's rows),
+  danmaku at 21.75 pt in 31.3 pt lanes over the whole screen (09, 25). Windows: `--pad` (1194×834, the iPad's 24 pt
+  status bar); tests: `showAsPad` (834×1194 at 2×).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
 1. KaiC's phone check of (20), then the milestone's closing build and both checklists.
-2. 动态 shipped in 1.1.0 (1); next is KaiC's pick.
+2. 动态 shipped in 1.1.0 (1), the iPad's basic watching in 1.2.0 (1); next is KaiC's pick.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 离线缓存, 番剧, 直播.
 
 Open items, each waiting on its slice:
+- 1.2.0 (1) on the iPad: 首页 against 01/02, the page both ways against 03-07 (the 32 pt band, the 437 pt related
+  column), the pink bar and turning with it, full screen both ways (08-19, 24), danmaku (09, 25), the launch log's
+  `form factor` reading via native on both devices, and the iPhone untouched. Guessed (no screenshot): full screen
+  held upright, the upright 评论 tab and shrink, the page's sheets and send bar at the left column's width with the
+  related column dimmed, an upright video's page box at 16:9, the dressed bar at the phone's width, 评论详情. Kept the
+  iPhone's contents (KaiC can ask otherwise): 清晰度's header and 自动 first (10), 倍速's 3.0X (11), 更多's rows (13),
+  the share arrow where 16 and 17 show WeChat's. Known: the pinned strip's icons sit about 1 pt low; in full screen
+  the send bar lets the bottom row's tops peek out; Apple deprecates `UIRequiresFullScreen` from iPadOS 26 (a
+  window narrower than 700 pt would draw the iPhone layouts). Not built: 投屏, the chapter list, the iPad's own
+  panel contents, the other screens' iPad layouts (搜索, 我的, 动态, spaces, 设置 draw the iPhone's at the iPad's
+  width).
 - 1.1.0 (1) on the phone: 关注 against 127, 128 and 135 (the decoration card's number, the footer, the folds), the face
   sheet (139), 我的关注 (129, 130), a picture post and a repost's post page (131, 132, 134, 140), the space's 动态 (136,
   its avatar frame and the repost strip), the video cards playing muted and the hand-over, 👍, ⋮'s 取消关注, comments on
@@ -389,7 +416,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/app/`: routes (the plain swipe back, and `zoom_back_route.dart` for 推荐 cards), `AppScope` (the services every page reaches: `AppPlayback`, which hands each page a player, `PageApi`, the
     `PipKeeper` and the navigator key), the
     page-route observer (a page counts as covered only when a page route is pushed over it), Reduce Motion, and
-    `phone_frame.dart` (Windows only: the window as KaiC's iPhone).
+    `phone_frame.dart` (Windows only: the window as KaiC's iPhone, or his iPad with `--pad`), and `form_factor.dart`
+    (`FormFactor`: the iPhone or the iPad).
   - `lib/account/`: keychain and cookie persistence, the login page and `LoginGate`, the web view's cookies.
   - `lib/home/`: `main_shell.dart` (the bottom bar's places), home, the feed, the bottom bar (`home_tab_bar.dart`,
     its glyphs in `tab_bar_icons.dart`), the avatar page (49), the shared shortcut glyphs and 最近打开.
@@ -420,13 +448,15 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - `lib/danmaku/`: the danmaku layer, scene and painter; `DanmakuSession` (one per page, on `PlayerUi`), the
     settings and block-rule stores, 添加屏蔽词, 当前弹幕列表, and `send/` (the send bar and style panel) with
     `danmaku_overlays.dart`, the send layer in the page's Stack. The 弹幕设置 panel is in `lib/player_ui/panels/`.
-  - `lib/player_ui/`: the player's controls for each presentation, gestures, the HUD, the end screens, `panels/`.
+  - `lib/player_ui/`: the player's controls for each presentation, gestures, the HUD, the end screens, `panels/`;
+    `pad/`: the iPad's page controls, full screen and their end screens.
   - `lib/device/`: rotation (`orientation.dart`, the rules) and brightness/volume, over `DeviceChannel.swift`.
   - `lib/video/`: the video page, its playback (`page_playback.dart`: the controller, session and watch reporter, which
     outlive the page for the small window), `pip_keeper.dart`, its player session (`page_session.dart`,
     `player_prefs.dart`), the tab row
     (`page_tabs.dart`), the page body's model (`page_details_model.dart` over `page_api.dart`; `fake_page_api.dart`
     for tests and `--fake-account`), the watch-progress reporter and `collapsing_player.dart`.
+    - `lib/video/pad/`: the iPad's page frame (`pad_page_layout.dart`) and body (`pad_body.dart`).
     - `lib/video/intro/`: 简介's pieces. `lib/video/actions/`: the actions model, the coin dialog, the favourites
       sheet, the unfollow confirm and their overlays.
   - `lib/comments/`: 评论, 评论详情, the composer with its emote panel, @ picker and pictures, and
@@ -492,7 +522,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   or script change.
 - Check once: `python scripts/testflight.py status` (1 call), about 11 minutes after an upload (7 after a dry run), as
   a background `sleep` then `status`. Never `gh run watch`, never poll: KaiC gets rate-limited.
-- Version 1.1.0 (from 1.1.0 (1), KaiC), set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they agree). Build
+- Version 1.2.0 (from 1.2.0 (1), KaiC: the iPad), set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they agree). Build
   numbers count from 1 within each version (App Store Connect's latest of that version plus one); the last shipped is
   in Status.
 - Secrets are in this repo's `testflight` environment (limited to `main`).
