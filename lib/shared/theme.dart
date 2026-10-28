@@ -6606,6 +6606,29 @@ abstract final class PadPageTheme {
   static const headerChevronStroke = 1.2;
   static const headerRight = 19.5;
 
+  /// The 发条评论 bar under the sideways column (05): a 0.5 pt rule, then the 32 pt field 6.5 under it and 6.5 above
+  /// the screen's bottom, over the home indicator; the field 20 in and 47.75 short of the column's right, its 12 pt
+  /// prompt 20 in, the 20 pt face centred 15.75 from its end; ↑ (back to the top) centred 23.5 from the column's right,
+  /// 18 × 20 with 1.25 pt strokes.
+  static const commentRule = Color(0xFFC9CCD0);
+  static const commentGap = 6.5;
+  static const commentFieldHeight = 32.0;
+  static const commentFieldLeft = 20.0;
+  static const commentFieldRight = 47.75;
+  static const commentFieldFill = BiliColors.softGrey;
+  static const commentPromptLeft = 20.0;
+  static const commentPromptText = 12.0;
+  static const commentInk = BiliColors.secondaryText;
+  static const commentFaceRight = 15.75;
+  static const commentTopRight = 23.5;
+  static const commentTopWidth = 18.0;
+  static const commentTopHeight = 20.0;
+  static const commentTopStroke = 1.25;
+
+  /// A guess: no screenshot shows an upright video on the page; KaiC's iPad shows it pillarboxed in full screen (25),
+  /// so the box stays 16:9.
+  static const uprightLimit = 1 / BiliMetrics.videoAspect;
+
   /// The player growing into full screen and back (22).
   static const fullScreenGrow = Duration(milliseconds: 300);
   static const fullScreenCurve = Curves.easeInOut;

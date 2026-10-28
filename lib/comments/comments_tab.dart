@@ -643,6 +643,161 @@ class _EmoteFacePainter extends CustomPainter {
   bool shouldRepaint(_EmoteFacePainter oldDelegate) => false;
 }
 
+/// The iPad's 发条评论 bar under the sideways column (05): the field with the face inside its end, and ↑, which takes
+/// the column back to its top.
+class PadCommentWriteBar extends StatelessWidget {
+  const PadCommentWriteBar({super.key, required this.onWrite, required this.onTop, this.prompt});
+
+  final ValueChanged<bool> onWrite;
+  final VoidCallback onTop;
+  final String? prompt;
+
+  static const height = CommentListTheme.barHairline + PadPageTheme.commentGap * 2 + PadPageTheme.commentFieldHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = prompt ?? CommentWriteBar.placeholder;
+    final promptStyle = TextStyle(
+      fontFamily: BiliFonts.family,
+      fontSize: PadPageTheme.commentPromptText,
+      color: PadPageTheme.commentInk,
+      letterSpacing: 0,
+    );
+    return DecoratedBox(
+      key: const ValueKey('comment-bar'),
+      decoration: const BoxDecoration(
+        color: CommentListTheme.background,
+        border: Border(
+          top: BorderSide(color: PadPageTheme.commentRule, width: CommentListTheme.barHairline),
+        ),
+      ),
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          children: [
+            Positioned(
+              left: PadPageTheme.commentFieldLeft,
+              right: PadPageTheme.commentFieldRight,
+              top: CommentListTheme.barHairline + PadPageTheme.commentGap,
+              height: PadPageTheme.commentFieldHeight,
+              child: DecoratedBox(
+                key: const ValueKey('comment-field-box'),
+                decoration: const ShapeDecoration(color: PadPageTheme.commentFieldFill, shape: StadiumBorder()),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Semantics(
+                        key: const ValueKey('comment-field'),
+                        button: true,
+                        label: shown,
+                        onTap: () => onWrite(false),
+                        excludeSemantics: true,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => onWrite(false),
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: PadPageTheme.commentPromptLeft),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                shown,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.ellipsis,
+                                style: promptStyle,
+                                strutStyle: BiliFonts.strutOf(context, promptStyle),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Semantics(
+                      key: const ValueKey('comment-emotes'),
+                      button: true,
+                      label: '表情',
+                      onTap: () => onWrite(true),
+                      excludeSemantics: true,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onWrite(true),
+                        child: const SizedBox(
+                          width: PadPageTheme.commentFaceRight * 2,
+                          child: Center(
+                            child: CustomPaint(size: Size.square(CommentListTheme.face), painter: _EmoteFacePainter()),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              right: PadPageTheme.commentTopRight - CommentListTheme.faceBox / 2,
+              width: CommentListTheme.faceBox,
+              top: CommentListTheme.barHairline + PadPageTheme.commentGap,
+              height: PadPageTheme.commentFieldHeight,
+              child: Semantics(
+                key: const ValueKey('comment-top'),
+                button: true,
+                label: '回到顶部',
+                onTap: onTop,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onTop,
+                  child: const Center(
+                    child: CustomPaint(
+                      size: Size(PadPageTheme.commentTopWidth, PadPageTheme.commentTopHeight),
+                      painter: _BackToTopPainter(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 05's ↑: a bar over an arrow whose shaft is a hollow box, traced at 2 px per pt in the 18 × 20 glyph.
+class _BackToTopPainter extends CustomPainter {
+  const _BackToTopPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final x = size.width / PadPageTheme.commentTopWidth;
+    final y = size.height / PadPageTheme.commentTopHeight;
+    final paint = Paint()
+      ..color = PadPageTheme.commentInk
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = PadPageTheme.commentTopStroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas
+      ..drawLine(Offset(0.6 * x, 0.6 * y), Offset(17.4 * x, 0.6 * y), paint)
+      ..drawPath(
+        Path()
+          ..moveTo(4.75 * x, 19 * y)
+          ..lineTo(4.75 * x, 13.25 * y)
+          ..lineTo(1.2 * x, 13.25 * y)
+          ..lineTo(9 * x, 3.8 * y)
+          ..lineTo(16.8 * x, 13.25 * y)
+          ..lineTo(13.25 * x, 13.25 * y)
+          ..lineTo(13.25 * x, 19 * y)
+          ..close(),
+        paint,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_BackToTopPainter oldDelegate) => false;
+}
+
 /// 评论 before the video's aid is known: the loading TV under the reserve, centred in a box as tall as the list, as 64
 /// has it before its write bar comes (lower than [CommentsTab]'s first load). It doesn't scroll: the box runs past the
 /// screen's bottom, and a drag would carry the collapsing player with it.
@@ -680,7 +835,7 @@ class PadCommentsSection extends StatefulWidget {
   final CommentsModel model;
   final CommentCallbacks callbacks;
 
-  /// 查看N条评论 ›.
+  /// Called by 查看N条评论 ›.
   final VoidCallback onSeeAll;
 
   @override

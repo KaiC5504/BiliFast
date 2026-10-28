@@ -7,11 +7,14 @@ import 'package:bili_core/shared.dart' show ManualClock;
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/form_factor.dart';
 import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/comments/comment_overlays.dart';
+import 'package:bilifast/comments/comment_row.dart';
 import 'package:bilifast/comments/comments_tab.dart';
+import 'package:bilifast/danmaku/danmaku_overlays.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/device/player_device.dart';
@@ -21,6 +24,8 @@ import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/space/uploader_sheet.dart';
+import 'package:bilifast/video/actions/action_overlays.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/intro/intro_tab.dart';
 import 'package:bilifast/video/intro/related_list.dart';
@@ -60,6 +65,7 @@ void main() {
   late OrientationController orientation;
   late List<FakePlayerSession> sessions;
   late List<PlaybackController> controllers;
+  var withActions = false;
 
   setUp(() {
     sessions = [];
@@ -85,7 +91,7 @@ void main() {
     required void Function(String message) toast,
     required VoidCallback requestLogin,
     required Listenable logins,
-  }) => FakePageDetails();
+  }) => FakePageDetails(actions: withActions ? FakeVideoActions() : null);
 
   /// [systemFont] renders under the stand-ins for the iPad's system font, set once the app's font store has loaded.
   Future<void> host(WidgetTester tester, {bool landscape = true, bool phone = false, bool systemFont = false}) async {
@@ -93,6 +99,7 @@ void main() {
       showAsPhone(tester);
     } else {
       showAsPad(tester, landscape: landscape);
+      expect(FormFactor.device, FormFactor.pad, reason: 'the orientation rules are the iPad\'s');
     }
     final logger = Logger(session: 'test');
     final http = Canned.http()..routes['/x/click-interface/web/heartbeat'] = (200, '{"code":0,"message":"0"}');
@@ -396,6 +403,24 @@ void main() {
       });
     }
 
+    testWidgets('under the iPad\'s rules 竖屏 is full screen, and turning the iPad never changes it', (tester) async {
+      await host(tester, landscape: false);
+      await opened(tester);
+      orientation.enterVertical();
+      await tester.pump();
+      await tester.pump(PadPageTheme.fullScreenGrow);
+      expect(orientation.presentation, Presentation.landscape);
+      expect(area(tester), Offset.zero & tall);
+      await turn(tester, wide);
+      expect(orientation.presentation, Presentation.landscape);
+      expect(area(tester), Offset.zero & wide);
+      orientation.exitToInline();
+      await tester.pump();
+      await tester.pump(PadPageTheme.fullScreenGrow + const Duration(milliseconds: 50));
+      expect(area(tester), const Rect.fromLTWH(0, band, column, column / BiliMetrics.videoAspect));
+      await back(tester);
+    });
+
     testWidgets('turning while in full screen keeps the whole screen', (tester) async {
       await host(tester);
       await opened(tester);
@@ -408,6 +433,240 @@ void main() {
       await tester.pump();
       await tester.pump(PadPageTheme.fullScreenGrow + const Duration(milliseconds: 50));
       expect(find.byType(PadPageTabRow), findsOneWidget);
+      await back(tester);
+    });
+  });
+
+  group('turning keeps the page where it was (23)', () {
+    ScrollPosition tabScroll(WidgetTester tester, Type tab) => tester
+        .state<ScrollableState>(find.descendant(of: find.byType(tab), matching: find.byType(Scrollable)).first)
+        .position;
+    Rect collapseBar(WidgetTester tester) => tester.getRect(find.byKey(const ValueKey('collapse-bar')));
+    const sidewaysReserve = column / BiliMetrics.videoAspect - PadPageTheme.barHeight;
+    const uprightReserve = 834 / BiliMetrics.videoAspect - PadPageTheme.barHeight;
+
+    testWidgets('upright 评论 keeps its place through a turn sideways and back', (tester) async {
+      await host(tester, landscape: false);
+      await opened(tester);
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 20);
+      tabScroll(tester, CommentsTab).jumpTo(600);
+      await frames(tester, 2);
+      await turn(tester, wide);
+      await turn(tester, tall);
+      await frames(tester, 4);
+      expect(tabScroll(tester, CommentsTab).pixels, 600);
+      expect(find.byType(CommentsTab).hitTestable(), findsOneWidget, reason: 'still on 评论');
+      await back(tester);
+    });
+
+    testWidgets('the sideways column keeps its place through a turn upright and back, upright 简介 its own', (tester) async {
+      await host(tester);
+      await opened(tester);
+      columnScroll(tester).jumpTo(300);
+      await frames(tester, 2);
+      await turn(tester, tall);
+      expect(
+        tabScroll(tester, IntroTab).pixels,
+        closeTo(300 * uprightReserve / sidewaysReserve, 0.01),
+        reason: 'inside the reserve, in proportion',
+      );
+      await turn(tester, wide);
+      expect(columnScroll(tester).pixels, closeTo(300, 0.01));
+
+      columnScroll(tester).jumpTo(sidewaysReserve + 100);
+      await frames(tester, 2);
+      await turn(tester, tall);
+      expect(tabScroll(tester, IntroTab).pixels, closeTo(uprightReserve + 100, 0.01), reason: 'past it, one for one');
+      tabScroll(tester, IntroTab).jumpTo(250);
+      await frames(tester, 2);
+      await turn(tester, wide);
+      await turn(tester, tall);
+      expect(tabScroll(tester, IntroTab).pixels, closeTo(250, 0.01));
+      await back(tester);
+    });
+
+    testWidgets('paused sideways as the bar with the strip, two turns keep the bar, the strip and the scroll',
+        (tester) async {
+      await host(tester);
+      await opened(tester);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 2);
+      await tester.timedDragFrom(const Offset(300, 700), const Offset(0, -600), const Duration(milliseconds: 300));
+      await frames(tester, 60);
+      final scrolled = columnScroll(tester).pixels;
+      expect(find.byKey(const ValueKey('pad-pinned-strip')), findsOneWidget);
+      await turn(tester, tall);
+      expect(collapseBar(tester), const Rect.fromLTWH(0, band, 834, PadPageTheme.barHeight));
+      await turn(tester, wide);
+      await frames(tester, 2);
+      expect(columnScroll(tester).pixels, closeTo(scrolled, 0.01));
+      expect(collapseBar(tester), const Rect.fromLTWH(0, band, column, PadPageTheme.barHeight));
+      expect(
+        tester.getRect(find.byKey(const ValueKey('page-player'))).height,
+        band + PadPageTheme.barHeight,
+        reason: 'still the bar while paused',
+      );
+      expect(find.byKey(const ValueKey('pad-pinned-strip')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pad-comment-bar')), findsOneWidget);
+      await back(tester);
+    });
+
+    testWidgets('paused upright on 简介 as the bar, sideways shows the bar over a column scrolled to match',
+        (tester) async {
+      await host(tester, landscape: false);
+      await opened(tester);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 2);
+      tabScroll(tester, IntroTab).jumpTo(1200);
+      await frames(tester, 4);
+      expect(collapseBar(tester).height, PadPageTheme.barHeight);
+      await turn(tester, wide);
+      await frames(tester, 2);
+      expect(columnScroll(tester).pixels, closeTo(1200 - uprightReserve + sidewaysReserve, 0.01));
+      expect(collapseBar(tester), const Rect.fromLTWH(0, band, column, PadPageTheme.barHeight));
+      expect(find.byKey(const ValueKey('pad-pinned-strip')), findsOneWidget, reason: 'the head is under the bar');
+      expect(find.byKey(const ValueKey('pad-comment-bar')), findsOneWidget);
+      await back(tester);
+    });
+
+    testWidgets('paused upright on 评论 as the bar: sideways follows 简介, and back upright 评论 is the bar again',
+        (tester) async {
+      await host(tester, landscape: false);
+      await opened(tester);
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 20);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 2);
+      tabScroll(tester, CommentsTab).jumpTo(600);
+      await frames(tester, 4);
+      expect(collapseBar(tester).height, PadPageTheme.barHeight);
+      await turn(tester, wide);
+      await frames(tester, 2);
+      expect(columnScroll(tester).pixels, 0);
+      expect(find.byKey(const ValueKey('collapse-bar')), findsNothing, reason: '简介 is at its top');
+      await turn(tester, tall);
+      await frames(tester, 4);
+      expect(tabScroll(tester, CommentsTab).pixels, 600);
+      expect(collapseBar(tester), const Rect.fromLTWH(0, band, 834, PadPageTheme.barHeight));
+      await back(tester);
+    });
+
+    testWidgets('a turn remounts none of the page\'s layers', (tester) async {
+      await host(tester);
+      await opened(tester);
+      final layers = [CommentOverlays, PanelLayer, ActionOverlays, UploaderSheetLayer, DanmakuOverlays];
+      final before = [for (final type in layers) tester.element(find.byType(type))];
+      for (final size in [tall, wide]) {
+        await turn(tester, size);
+        for (final (i, type) in layers.indexed) {
+          expect(identical(tester.element(find.byType(type)), before[i]), isTrue, reason: '$type at $size');
+        }
+      }
+      await back(tester);
+    });
+  });
+
+  group('the sideways column\'s scrolling', () {
+    testWidgets('rebuilds neither the head nor the comments frame by frame, playing or paused', (tester) async {
+      await host(tester);
+      await opened(tester);
+      var heads = 0;
+      var rows = 0;
+      var pages = 0;
+      // A list row built for the first time as it scrolls in isn't a rebuild.
+      final seen = <Element>{};
+      final saved = debugOnRebuildDirtyWidget;
+      debugOnRebuildDirtyWidget = (element, _) {
+        if (element.widget is VideoPage) pages++;
+        if (element.widget is! PadIntroHead && element.widget is! CommentRow) return;
+        if (!seen.add(element)) {
+          if (element.widget is PadIntroHead) heads++;
+          if (element.widget is CommentRow) rows++;
+        }
+      };
+      addTearDown(() => debugOnRebuildDirtyWidget = saved);
+      await tester.timedDragFrom(const Offset(300, 700), const Offset(0, -300), const Duration(milliseconds: 300));
+      await frames(tester);
+      expect((heads, rows, pages), (0, 0, 0), reason: 'playing');
+      columnScroll(tester).jumpTo(0);
+      await frames(tester, 2);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 2);
+      heads = 0;
+      rows = 0;
+      pages = 0;
+      await tester.timedDragFrom(const Offset(300, 700), const Offset(0, -600), const Duration(milliseconds: 400));
+      await frames(tester);
+      expect(find.byKey(const ValueKey('pad-pinned-strip')), findsOneWidget);
+      // The page itself rebuilds where the shrink starts and where it becomes the bar, not on every frame.
+      expect(pages, lessThanOrEqualTo(2));
+      expect(heads, lessThanOrEqualTo(pages));
+      expect(rows, lessThanOrEqualTo(pages * 10));
+      debugOnRebuildDirtyWidget = saved;
+      await back(tester);
+    });
+  });
+
+  group('an upright video (a guess: no iPad screenshot)', () {
+    for (final (name, size, width) in [('sideways', wide, column), ('upright', tall, 834.0)]) {
+      testWidgets('$name: the box stays 16:9', (tester) async {
+        await host(tester, landscape: size == wide);
+        await opened(tester);
+        sessions.single
+          ..videoShape = (width: 1080, height: 1920)
+          ..changed();
+        await frames(tester, 10);
+        expect(area(tester), Rect.fromLTWH(0, band, width, width / BiliMetrics.videoAspect));
+        await tester.timedDragFrom(const Offset(300, 700), const Offset(0, -300), const Duration(milliseconds: 300));
+        await frames(tester);
+        expect(area(tester).top, band, reason: 'playing, the video follows the box: nothing cut at the top');
+        expect(area(tester).height, width / BiliMetrics.videoAspect);
+        await back(tester);
+      });
+    }
+  });
+
+  group('05\'s strip and 发条评论 bar', () {
+    Future<void> collapsed(WidgetTester tester) async {
+      withActions = true;
+      addTearDown(() => withActions = false);
+      await host(tester, systemFont: true);
+      await opened(tester);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 2);
+      await tester.timedDragFrom(const Offset(300, 700), const Offset(0, -600), const Duration(milliseconds: 300));
+      await frames(tester);
+    }
+
+    testWidgets('the strip\'s actions at a 62 pt pitch from 79.75', (tester) async {
+      await collapsed(tester);
+      final strip = find.byKey(const ValueKey('pad-pinned-strip'));
+      final keys = ['action-like', 'action-dislike', 'action-coin', 'action-favourite', 'action-share'];
+      for (final (i, key) in keys.indexed) {
+        final cell = find.descendant(of: strip, matching: find.byKey(ValueKey(key)));
+        expect(tester.getCenter(cell).dx, closeTo(79.75 + 31 + 62 * i, 0.01), reason: key);
+      }
+      await back(tester);
+    });
+
+    testWidgets('the bar: the rule at 788.5, the 32 pt field, the face inside it and ↑ back to the top', (tester) async {
+      await collapsed(tester);
+      final bar = find.byKey(const ValueKey('pad-comment-bar'));
+      expect(tester.getRect(bar), const Rect.fromLTWH(0, 788.5, column, 45.5));
+      final field = find.descendant(of: bar, matching: find.byKey(const ValueKey('comment-field-box')));
+      expect(tester.getRect(field), const Rect.fromLTRB(20, 795.5, column - 47.75, 827.5));
+      final face = find.descendant(of: bar, matching: find.byKey(const ValueKey('comment-emotes')));
+      expect(tester.getCenter(face), const Offset(column - 47.75 - 15.75, 811.5));
+      final top = find.descendant(of: bar, matching: find.byKey(const ValueKey('comment-top')));
+      expect(tester.getCenter(top), const Offset(column - 23.5, 811.5));
+      final prompt = find.descendant(of: bar, matching: find.byType(Text));
+      expect(tester.widget<Text>(prompt).style!.fontSize, PadPageTheme.commentPromptText);
+      expect(tester.getTopLeft(prompt).dx, 40);
+      expect(find.byType(CommentWriteBar), findsNothing, reason: 'not the iPhone\'s bar');
+      await tester.tap(top);
+      await frames(tester, 20);
+      expect(columnScroll(tester).pixels, 0);
       await back(tester);
     });
   });

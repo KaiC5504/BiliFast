@@ -629,6 +629,54 @@ void main() {
       expect(collapse.progress, 0);
     });
 
+    testWidgets('the shrink starts from the height it had at the pause, which the iPad\'s video keeps', (tester) async {
+      session.videoShape = upright;
+      collapse
+        ..session = session
+        ..width = 440;
+      await host(tester);
+      expect(collapse.shrinkStart, closeTo(tall, 1e-9));
+      scroll(PageTab.intro).jumpTo(100);
+      collapse.paused = true;
+      scroll(PageTab.intro).jumpTo(200);
+      expect(collapse.shrinkStart, closeTo(tall - 100, 1e-9));
+      expect(collapse.height, closeTo(tall - 200, 1e-9));
+    });
+
+    testWidgets('the iPad\'s limit keeps an upright video\'s box at 16:9', (tester) async {
+      session.videoShape = (width: 1080, height: 1920);
+      collapse
+        ..session = session
+        ..uprightLimit = PadPageTheme.uprightLimit
+        ..width = 834;
+      expect(collapse.full, closeTo(834 / BiliMetrics.videoAspect, 1e-9));
+    });
+
+    testWidgets('an iPad turn carries 简介\'s offset and pause point (in proportion in the reserve, one for one past '
+        'it) and keeps 评论\'s', (tester) async {
+      collapse.width = 440;
+      await host(tester);
+      scroll(PageTab.intro).jumpTo(reserve / 2);
+      collapse.paused = true;
+      await showComments(tester);
+      scroll(PageTab.comments).jumpTo(600);
+      await showIntro(tester);
+      const wider = 880.0;
+      const widerReserve = wider / BiliMetrics.videoAspect - bar;
+      collapse.turn(wider, sideways: true);
+      expect(collapse.reserve, closeTo(widerReserve, 1e-9));
+      expect(collapse.only, PageTab.intro);
+      expect(tabs.offsetOf(PageTab.comments), 600, reason: 'held until its list is built again');
+      await tester.pumpWidget(const SizedBox());
+      expect(tabs.offsetOf(PageTab.intro), closeTo(widerReserve / 2, 1e-9), reason: 'carried for the next list');
+      expect(collapse.height, closeTo(wider / BiliMetrics.videoAspect, 1e-9), reason: 'paused where it was');
+      collapse.turn(440, sideways: false);
+      expect(tabs.offsetOf(PageTab.intro), closeTo(reserve / 2, 1e-9));
+      tabs.carry(PageTab.intro, reserve + 50);
+      collapse.turn(wider, sideways: true);
+      expect(tabs.offsetOf(PageTab.intro), closeTo(widerReserve + 50, 1e-9));
+    });
+
     testWidgets('once it plays it grows back to its playing height: 16:9 down the page', (tester) async {
       session.videoShape = upright;
       collapse
