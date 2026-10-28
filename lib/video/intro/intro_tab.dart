@@ -2,8 +2,10 @@ import 'package:bili_core/api.dart' show VideoCard, VideoDetail;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../app/form_factor.dart';
 import '../../shared/theme.dart';
 import '../collapsing_player.dart';
+import '../pad/pad_body.dart';
 import '../page_details.dart';
 import '../player_session.dart';
 import 'action_row.dart';
@@ -70,7 +72,7 @@ final class IntroContent {
 /// topic and BGM chips, and the related videos. Each section keeps its own gap above and its own gutters. Nothing
 /// shows, and nothing spins, until the video's detail arrives; then the column fades up into place. A detail that
 /// never came leaves 加载失败，点击重试 in the middle instead. Its list scrolls with the page's primary scroll
-/// controller and starts [PlayerReserve] below its top.
+/// controller and starts [PlayerReserve] below its top. On the iPad its sections are [PadIntroHead]'s.
 class IntroTab extends StatelessWidget {
   const IntroTab({
     super.key,
@@ -114,7 +116,16 @@ class IntroTab extends StatelessWidget {
             SliverToBoxAdapter(
               child: _Arrival(
                 key: ValueKey(detail.bvid),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _sections(detail)),
+                child: FormFactor.of(context).isPad
+                    ? PadIntroHead(
+                        content: content,
+                        details: details,
+                        onSeek: onSeek,
+                        onOpenVideo: onOpenVideo,
+                        onPlayEpisode: onPlayEpisode,
+                        onOpenEpisodes: onOpenEpisodes,
+                      )
+                    : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _sections(detail)),
               ),
             ),
             RelatedSliver(cards: content.related, onOpen: onOpenRelated, onWatchLater: onWatchLater),
