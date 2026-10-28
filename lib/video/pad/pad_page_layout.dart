@@ -6,6 +6,8 @@ library;
 import 'dart:math' as math;
 
 import 'package:bili_core/api.dart' show VideoDetail;
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/widgets.dart';
 
 import '../../app/form_factor.dart';
@@ -16,7 +18,8 @@ import '../collapsing_player.dart';
 import '../intro/action_row.dart';
 import '../page_details.dart';
 
-/// The iPad's page laid out in two columns: the screen is wide. Sideways on the iPhone is always full screen.
+/// The iPad's page laid out in two columns: the screen is wide. The iPhone is never sideways outside full screen, so it
+/// is false there.
 bool padSideways(BuildContext context) {
   if (!FormFactor.of(context).isPad) return false;
   final size = MediaQuery.sizeOf(context);
@@ -189,12 +192,13 @@ class _Corner extends StatelessWidget {
 
 /// The player's column sideways (03, 05): the player's reserve, [head] (简介 without the related videos, 点我发弹幕 on
 /// its uploader row), then [comments], all in one scroll view on [controller], which the shrinking player follows.
-/// [headKey] measures the head for the pinned strip.
+/// [headKey] finds the head and [headHeight] is told its height, for the pinned strip.
 class PadPlayerColumn extends StatelessWidget {
   const PadPlayerColumn({
     super.key,
     required this.controller,
     required this.headKey,
+    required this.headHeight,
     required this.head,
     required this.comments,
     required this.bottom,
@@ -202,6 +206,7 @@ class PadPlayerColumn extends StatelessWidget {
 
   final ScrollController controller;
   final GlobalKey headKey;
+  final ValueNotifier<double?> headHeight;
   final Widget? head;
   final Widget? comments;
 
@@ -220,12 +225,48 @@ class PadPlayerColumn extends StatelessWidget {
             builder: (context) => SizedBox(key: const ValueKey('pad-reserve'), height: PlayerReserve.of(context)),
           ),
         ),
-        if (head case final head?) SliverToBoxAdapter(child: KeyedSubtree(key: headKey, child: head)),
+        if (head case final head?)
+          SliverToBoxAdapter(
+            child: _HeightReport(
+              key: headKey,
+              height: headHeight,
+              child: head,
+            ),
+          ),
         ?comments,
         SliverToBoxAdapter(child: SizedBox(height: bottom)),
       ],
     ),
   );
+}
+
+/// Tells [height] its child's height after a frame that laid it out at a new one.
+class _HeightReport extends SingleChildRenderObjectWidget {
+  const _HeightReport({super.key, required this.height, super.child});
+
+  final ValueNotifier<double?> height;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderHeightReport(height);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderHeightReport renderObject) => renderObject.height = height;
+}
+
+class _RenderHeightReport extends RenderProxyBox {
+  _RenderHeightReport(this.height);
+
+  ValueNotifier<double?> height;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (size.height == height.value) return;
+    // Layout can't notify the builders that read it.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (attached && hasSize) height.value = size.height;
+    });
+  }
 }
 
 /// Pinned under the bar once 简介's actions have scrolled under it (05): the uploader's face, the actions, and
@@ -237,6 +278,20 @@ class PadPinnedStrip extends StatelessWidget {
   final PageDetails details;
   final Widget capsule;
   final VoidCallback? onFace;
+
+  /// The iPhone's cells at the strip's own pitch.
+  static const _stripActions = ActionRowMetrics(
+    gutter: 0,
+    topGap: ActionTheme.topGap,
+    icon: ActionTheme.iconSize,
+    countGap: ActionTheme.countGap,
+    countLine: ActionTheme.countLine,
+    countFont: ActionTheme.countFont,
+    bottom: IntroListTheme.actionsBottom,
+    ring: ActionTheme.ring,
+    countColor: ActionTheme.count,
+    cell: PadPageTheme.stripActionPitch,
+  );
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -280,7 +335,7 @@ class PadPinnedStrip extends StatelessWidget {
                   maxHeight: ActionTheme.rowHeight + IntroListTheme.actionsBottom,
                   child: Transform.translate(
                     offset: const Offset(0, PadPageTheme.stripIconTop - ActionTheme.topGap),
-                    child: ActionRow(actions: actions),
+                    child: ActionRow(actions: actions, metrics: _stripActions),
                   ),
                 ),
               ),

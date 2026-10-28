@@ -15,9 +15,13 @@ import 'page_details.dart';
 /// follow the finger; the page reads each tab's offset to shrink the paused player.
 class PageTabsController extends ChangeNotifier {
   final PageController pager = PageController();
-  final _introScroll = ScrollController();
-  final _commentsScroll = ScrollController();
+  late final _introScroll = _TabScrollController(this, PageTab.intro);
+  late final _commentsScroll = _TabScrollController(this, PageTab.comments);
   PageTab _selected = PageTab.intro;
+
+  /// Where each tab's next list starts, for a list rebuilt in another layout (the iPad turning); until it is built, the
+  /// tab's offset.
+  final _carried = <PageTab, double>{};
 
   static const _slide = Duration(milliseconds: 300);
 
@@ -34,11 +38,14 @@ class PageTabsController extends ChangeNotifier {
   /// How far [tab]'s list has scrolled; 0 before it is laid out.
   double offsetOf(PageTab tab) {
     final positions = scrollOf(tab).positions;
-    if (positions.isEmpty) return 0;
+    if (positions.isEmpty) return _carried[tab] ?? 0;
     // A list replaced for another video attaches its position before the old one detaches.
     final position = positions.last;
     return position.hasPixels ? position.pixels : 0;
   }
+
+  /// The next list [tab]'s controller attaches starts at [offset]: the iPad's layouts each build their own.
+  void carry(PageTab tab, double offset) => _carried[tab] = offset;
 
   /// Back to the top of the shown tab, or of [tab]; [animate] false jumps.
   void scrollToTop({bool animate = true, PageTab? tab}) {
@@ -81,6 +88,24 @@ class PageTabsController extends ChangeNotifier {
     _commentsScroll.dispose();
     super.dispose();
   }
+}
+
+class _TabScrollController extends ScrollController {
+  _TabScrollController(this._tabs, this._tab);
+
+  final PageTabsController _tabs;
+  final PageTab _tab;
+
+  @override
+  ScrollPosition createScrollPosition(ScrollPhysics physics, ScrollContext context, ScrollPosition? oldPosition) =>
+      ScrollPositionWithSingleContext(
+        physics: physics,
+        context: context,
+        initialPixels: _tabs._carried.remove(_tab) ?? initialScrollOffset,
+        keepScrollOffset: keepScrollOffset,
+        oldPosition: oldPosition,
+        debugLabel: debugLabel,
+      );
 }
 
 /// 简介 and 评论 side by side in a pager; a sideways swipe switches, and each keeps its scroll position. Each tab's

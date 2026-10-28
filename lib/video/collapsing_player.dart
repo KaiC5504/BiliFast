@@ -118,6 +118,16 @@ class CollapsingPlayer extends ChangeNotifier {
     _recompute();
   }
 
+  /// An upright video's box is at most this tall for its width: the iPhone's 4:3 (17), the iPad's 16:9. Set as the
+  /// page lays out, before [width]; it notifies nobody.
+  double get uprightLimit => _limit;
+  double _limit = CollapseTheme.uprightLimit;
+  set uprightLimit(double value) {
+    if (value == _limit) return;
+    _limit = value;
+    if (_width > 0) _relayout(_width, keepScrolled: true);
+  }
+
   void _recompute() {
     final (height, progress) = _compute();
     _height = height;
@@ -130,15 +140,45 @@ class CollapsingPlayer extends ChangeNotifier {
   /// The page's width as it lays out: the box takes its shape for it at once. It notifies nobody.
   set width(double value) {
     if (value == _width) return;
-    _width = value;
-    _floor = inlinePlayerHeight(value);
+    _relayout(value, keepScrolled: true);
+  }
+
+  void _relayout(double width, {required bool keepScrolled}) {
+    _width = width;
+    _floor = inlinePlayerHeight(width);
     _reshape.stop();
     _shape.value = _shapeFor();
     _shapeFrom = _shape.value;
-    _setFull(_shape.value);
-    final (height, progress) = _compute();
-    _height = height;
-    _progress = progress;
+    if (keepScrolled) {
+      _setFull(_shape.value);
+    } else {
+      _full = _shape.value;
+      _reserve.value = reserve;
+    }
+    _recompute();
+  }
+
+  /// The iPad turned between its one column and two, its lists about to be rebuilt for a column [width] wide:
+  /// 简介's offset and pause point go with it (inside the reserve in proportion, past it one for one, so the head keeps
+  /// its place under the bar), and 评论 keeps its own, which the sideways column has no list for. Sideways the height
+  /// follows 简介 alone. It notifies nobody.
+  void turn(double width, {required bool sideways}) {
+    final was = reserve;
+    final intro = tabs.offsetOf(PageTab.intro);
+    final comments = tabs.offsetOf(PageTab.comments);
+    _relayout(width, keepScrolled: false);
+    final now = reserve;
+    double carried(double offset) {
+      if (offset > was) return offset - was + now;
+      return was > 0 ? offset * now / was : offset;
+    }
+
+    tabs
+      ..carry(PageTab.intro, carried(intro))
+      ..carry(PageTab.comments, comments);
+    if (_from[PageTab.intro] case final from?) _from[PageTab.intro] = carried(from);
+    _only = sideways ? PageTab.intro : null;
+    _recompute();
   }
 
   /// The session whose video shape and end the box follows, changing shape over [CollapseTheme.reshape] once laid
@@ -171,6 +211,13 @@ class CollapsingPlayer extends ChangeNotifier {
   }
 
   double get height => _height;
+
+  /// The height the pause's shrink started from, which the iPad's video keeps as its box shrinks over it (20).
+  double get shrinkStart {
+    double of(PageTab tab) => playingHeight(full: _full, floor: _floor, offset: _from[tab] ?? 0);
+    if (_only case final tab?) return of(tab);
+    return lerpDouble(of(PageTab.intro), of(PageTab.comments), tabs.position.clamp(0.0, 1.0))!;
+  }
 
   /// 0 at the height the shrink started from, 1 once it is the bar. Only the pause shrinks it: a playing upright
   /// video's box going down to 16:9 stays at 0.
@@ -218,7 +265,7 @@ class CollapsingPlayer extends ChangeNotifier {
       _shapeVideo = session?.videoShape;
       _shapeEnded = session?.ended ?? false;
     }
-    return inlinePlayerHeight(_width, video: _shapeVideo, ended: _shapeEnded);
+    return inlinePlayerHeight(_width, video: _shapeVideo, ended: _shapeEnded, limit: _limit);
   }
 
   /// Retargets once per frame, at its start: a related video from the end screen lifts the end before its open
@@ -271,6 +318,7 @@ class CollapsingPlayer extends ChangeNotifier {
   /// allows; a tab at its top rides the box's bottom edge.
   void _keepScrolled(double change) {
     for (final tab in PageTab.values) {
+      if (_only != null && _only != tab) continue;
       final offset = tabs.offsetOf(tab);
       if (offset <= 0) continue;
       final moved = math.max(0.0, offset + change) - offset;
@@ -284,6 +332,8 @@ class CollapsingPlayer extends ChangeNotifier {
 
   void _scrolled() {
     for (final tab in PageTab.values) {
+      // A tab with no list in this layout keeps its pause point for when it has one again.
+      if (_only != null && _only != tab) continue;
       final offset = tabs.offsetOf(tab);
       if (offset < (_from[tab] ?? 0)) _from[tab] = math.max(0, offset);
     }
