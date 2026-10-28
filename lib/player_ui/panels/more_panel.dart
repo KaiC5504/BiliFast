@@ -129,7 +129,7 @@ class _MorePanelState extends State<MorePanel> {
             child: Padding(
               padding: const EdgeInsets.only(left: BiliMetrics.panelActionLead),
               child: Row(
-                spacing: BiliMetrics.panelActionGap,
+                spacing: PanelScope.padStripOf(context) ? PadPanelTheme.moreActionGap : BiliMetrics.panelActionGap,
                 children: [
                   // 听视频.
                   const SizedBox(width: BiliMetrics.panelActionSize),

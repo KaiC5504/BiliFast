@@ -6435,8 +6435,52 @@ abstract final class PadInlineControlsTheme {}
 /// preview (ipad/08, 14-16, 18, 19, 24). The Full screen agent owns this class.
 abstract final class PadFullScreenTheme {}
 
-/// The iPad's player panels (ipad/10-13). The Panels agent owns this class.
-abstract final class PadPanelTheme {}
+/// The iPad's player panels (ipad/10-13), measured at 2× (pt = px / 2). In full screen every panel is a hard-edged
+/// strip at the right, the same width in points whichever way the iPad is held; the rows inside are the phone's.
+abstract final class PadPanelTheme {
+  /// 清晰度 and 倍速 (10, 11): a 242 pt strip; ⋮, 弹幕设置 and the panels opened from them (12, 13): 320.
+  static const narrowWidth = 242.0;
+  static const wideWidth = 320.0;
+
+  /// The video shows through 16% under 清晰度 and ⋮, 12% under 倍速 and 弹幕设置.
+  static const shade = Color(0xD6000000);
+  static const darkShade = Color(0xE0000000);
+
+  /// 弹幕设置's cards and the side panels' rows end this far before the screen's edge, as the phone's do before its
+  /// safe area; ⋮'s cards keep [moreInset] each side, so its four squares sit [moreActionGap] apart.
+  static const trailing = 16.0;
+  static const moreInset = 12.0;
+  static const moreActionGap = 32.0;
+
+  /// 12's first card is 80 pt down, 8 below where the phone's header puts it under the 24 pt status bar.
+  static const danmakuTop = 8.0;
+
+  /// 10's rows: 66 pt apart, their block centred [qualityLift] above the screen's middle, the text [qualityLead] in
+  /// from the strip and the 大会员 tag ending [qualityTrailing] before the screen's edge.
+  static const qualityRow = 66.0;
+  static const qualityLift = 12.0;
+  static const qualityLead = 43.5;
+  static const qualityTrailing = 36.0;
+  static const qualityText = 16.0;
+  static const qualitySubtitleText = 11.0;
+  static const qualityHeaderTop = 14.0;
+  static const qualityHeaderGap = 8.0;
+  static const qualitySelected = Color(0xFFFB7299);
+  static const badgeHeight = 15.0;
+  static const badgePad = 6.0;
+  static const badgeText = 10.0;
+  static const badgeFill = Color(0xFFFB7299);
+
+  /// 11's values: 58 pt apart, centred on the screen and in the strip.
+  static const speedRow = 58.0;
+  static const speedText = 16.0;
+  static const speedSelected = Color(0xFFFF6699);
+
+  /// On the page (no screenshot): the sheets keep the phone's heights in points (shares of its 956) and stay under
+  /// the player, at most [sheetMaxWidth] wide from the page's left edge, where the player starts in both layouts.
+  static const phoneHeight = 956.0;
+  static const sheetMaxWidth = 600.0;
+}
 
 /// The iPad's danmaku, on the page's player and in full screen (ipad/09, 25). The Danmaku agent owns this class.
 abstract final class PadDanmakuTheme {}
