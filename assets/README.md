@@ -69,6 +69,14 @@ alpha raised from the file's 80% to full, as 17 draws it solid white at 19.5 × 
 `biliplayer_ic_topbar_floatwindow` drawn in code (`FloatWindowPainter`): the extractor fills its stroked paths.
 17's 分享 is the action row's solid arrow (`ActionGlyph.share`), and 全屏 the small player's `FullScreenPainter`.
 
+The iPad's 首页 (ipad/01, 02) takes the same APK's tab bar and scan art, each a vector drawn white at 3× by
+`tools/apk_asset.py extract … --width` for tinting, the width the ink measures on 01: `images/home/pad_tab_home.png`
+and `_selected` (`ic_vector_tab_bar_home_default` / `_selected`, 60 px), `pad_tab_partition.png`
+(`ic_vector_tab_bar_partition_default`, 63 px; its selected file is the same drawing), `pad_tab_moments.png`
+(`ic_vector_tab_bar_moments_default`, 63 px, likewise), `pad_tab_mine.png` and `_selected`
+(`ic_vector_tab_bar_mine_default` / `_selected`, 63 px), and `pad_scan.png` (`ic_scan_cast`, 54 px, the top's scan).
+The top's clock with its turning arrow and its three-dot bubble are drawn in code: the APK has neither.
+
 The iPad's full screen (ipad/08, 16) draws its art in code: ⏮ is the APK's vector `bili_player_ctrl_play_previous`
 (`_PreviousPainter`, its 3.5-20.5 ink stretched to 13.7 × 14.5 pt), 小窗 the page player's `FloatWindowPainter` at 24.4 ×
 19.6 pt, 退出全屏 two inward brackets traced on 08; 截图, the lock, 弹 and 弹幕设置 are the phone's landscape painters

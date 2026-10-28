@@ -1003,6 +1003,23 @@ void main() {
       );
     }
 
+    test('the phone asks as the Android phone app, the iPad as the iPad app', () async {
+      http.officialPages[0] = [officialItem('BV1')];
+      final phone = official();
+      await phone.refresh();
+      final pad = FeedModel(
+        client: client,
+        logger: Logger(session: 'test'),
+        officialWanted: () => true,
+        pad: () => true,
+        minimumRefresh: Duration.zero,
+      );
+      await pad.refresh();
+      expect(http.officialApps, ['android', 'android_i']);
+      phone.dispose();
+      pad.dispose();
+    });
+
     test('without the app token it is never asked, whatever 开发者 says', () async {
       http.officialPages[0] = [officialItem('BV1')];
       http.pages[1] = [feedItem('BVweb')];

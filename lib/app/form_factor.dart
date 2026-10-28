@@ -8,8 +8,9 @@ enum FormFactor {
   phone,
   pad;
 
-  /// The iPhone 17 Pro Max's short side is 440 pt, the smallest iPad's 744.
-  static const padShortestSide = 600.0;
+  /// The iPhone 17 Pro Max's short side is 440 pt, the smallest iPad's 744; flutter_test's default 800×600 view
+  /// stays a phone.
+  static const padShortestSide = 700.0;
 
   /// The device's, set once at launch, for code with no [BuildContext] (the orientation rules). Tests set it.
   static FormFactor device = phone;

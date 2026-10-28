@@ -8,6 +8,7 @@ import 'package:bilifast/skin/svga_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/look_alike.dart';
 import '../video/mixed_lines.dart';
 import 'skin_fixtures.dart';
 
@@ -29,13 +30,17 @@ void main() {
 
   /// The bar at the bottom of a 440×956 page over a 34 pt home indicator, the page's taps counted; [load] decodes the
   /// skin's pictures first.
-  Future<void> show(WidgetTester tester, Skin? skin, {bool still = false, bool load = true}) async {
-    tester.view
-      ..physicalSize = const Size(440, 956)
-      ..devicePixelRatio = 1
-      ..padding = const FakeViewPadding(bottom: 34)
-      ..viewPadding = const FakeViewPadding(bottom: 34);
-    addTearDown(tester.view.reset);
+  Future<void> show(WidgetTester tester, Skin? skin, {bool still = false, bool load = true, bool pad = false}) async {
+    if (pad) {
+      showAsPad(tester);
+    } else {
+      tester.view
+        ..physicalSize = const Size(440, 956)
+        ..devicePixelRatio = 1
+        ..padding = const FakeViewPadding(bottom: 34)
+        ..viewPadding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.reset);
+    }
     await tester.pumpWidget(const SizedBox.shrink());
     if (skin != null && load) await SkinPictures.load(tester, skin);
     await tester.pumpWidget(
@@ -152,6 +157,30 @@ void main() {
     expect(pictureIn(tester, HomeTab.home), file('tail_icon_0.png'));
     expect(pictureIn(tester, HomeTab.mine), file('tail_icon_selected_4.png'));
     expect(pictureIn(tester, HomeTab.follow), file('tail_icon_1.png'));
+  });
+
+  testWidgets("on the iPad: 首页 main, 分区 channel, 动态 dynamic, 我的 myself, in 118 pt places centred", (tester) async {
+    await show(tester, _pictures.skin(), pad: true);
+    expect(find.byType(PadTabIcon), findsNothing);
+    String padPicture(String key) {
+      final box = find.byKey(ValueKey('home-tab-$key-skin'));
+      return (tester.widget<Image>(find.descendant(of: box, matching: find.byType(Image)).first).image as FileImage)
+          .file
+          .path;
+    }
+
+    expect(padPicture('home'), file('tail_icon_selected_0.png'));
+    expect(padPicture('partition'), file('tail_icon_1.png'));
+    expect(padPicture('follow'), file('tail_icon_2.png'));
+    expect(padPicture('mine'), file('tail_icon_4.png'));
+    expect(find.byKey(const ValueKey('home-tab-post-skin')), findsNothing);
+    for (final (i, tab) in PadTab.values.indexed) {
+      expect(tester.getRect(find.byKey(ValueKey('home-tab-${tab.key}-skin'))).center.dx, 417 - 177 + 118.0 * i);
+    }
+    await tester.tap(find.byKey(const ValueKey('home-tab-follow')));
+    await tester.pump();
+    expect(taps, [HomeTab.follow]);
+    expect(padPicture('follow'), file('tail_icon_selected_2.png'));
   });
 
   testWidgets('without a pub button 发布 keeps the stock +', (tester) async {
