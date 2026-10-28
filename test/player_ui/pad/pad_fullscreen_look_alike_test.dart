@@ -99,6 +99,15 @@ void main() {
     expect(centreOf(tester, 'pad-uploader').dy, closeTo(114, 1));
   });
 
+  testWidgets('upright, which no screenshot shows: the same bars at 834 wide', (tester) async {
+    await systemFont(tester);
+    final rig = rig08();
+    await rig.mount(tester, PadFullScreenChrome(ui: rig.ui), landscape: false, theme: appTheme());
+    await settle(tester);
+    await shoot(tester, 'pad-upright');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('18 against 19: the controls over a buffering wait', (tester) async {
     await systemFont(tester);
     final rig = rig08();
