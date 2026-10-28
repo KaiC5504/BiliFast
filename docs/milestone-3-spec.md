@@ -35,7 +35,7 @@ slice 9), and the Swift app retires.
 ## 3. Rules that carry over
 
 Everything under "Rules that bite" in `CLAUDE.md`, in particular:
-- Layout only from KaiC's official screenshots (`local/official-app-reference/`). A screen or state not in them is
+- Layout only from KaiC's official screenshots (`local/official-app-reference/iphone/`). A screen or state not in them is
   asked for, never filled from PiliPlus or the Swift app.
 - PiliPlus (`D:\Repos\Apps\PiliPlus`, GPL) for APIs and behaviour only; write our own code.
 - KaiC's account: few live calls, no loops, tests never touch the network. Each new endpoint is tried live once, by
@@ -146,7 +146,7 @@ network:
 ## 6. Screenshots KaiC takes
 
 - Slice 10's pairs, as in its table.
-- New screens, official app only, into `local/official-app-reference/` numbered from 52 with the screen in the name:
+- New screens, official app only, into `local/official-app-reference/iphone/` numbered from 52 with the screen in the name:
   - 搜索: empty page; typing with suggestions; 综合 results top; scrolled; 筛选 open; 用户 tab.
   - UP主空间: top; 投稿; scrolled with the header collapsed; sort menu; a followed space.
   - 我的收藏: folder list; inside a folder; a row's ⋮.

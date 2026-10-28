@@ -477,7 +477,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
   - ghosthand can't scroll or drag, and the 956 pt window is taller than this PC's screen (the bottom ~10 pt of a
     capture is stale). Scrolls, drags and swipes are covered by widget tests at ~1500 px/s instead.
 - Look-alike checks render our screens in widget tests at 440×956 (or 956×440), 3×, against KaiC's official
-  screenshots in `local/official-app-reference/` (gitignored: look only, never copy or commit), and measure the pair
+  screenshots in `local/official-app-reference/iphone/` (gitignored: look only, never copy or commit), and measure the pair
   with `tools/screen_diff.py`. They render the system font, as the phone does: `BiliFonts.family = BiliFonts.system` with
   `test/support/stand_in_fonts.dart` loaded; `test/support/look_alike.dart` sizes the view as the phone and saves the
   3× PNG.
@@ -519,9 +519,10 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   Bilibili's side first and keeps the login if Bilibili doesn't confirm. No app token on the PC. Logged in, a
   Windows check opens at most 3 videos and reads only.
 - No Mac: iOS checks run in GitHub Actions and on his phone.
-- Layout comes only from the official app's screenshots (`local/official-app-reference/`, his iPhone 17 Pro Max,
+- Layout comes only from the official app's screenshots (`local/official-app-reference/iphone/`, his iPhone 17 Pro Max,
   440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or
-  the Swift app.
+  the Swift app. The iPad's layout comes only from `local/official-app-reference/ipad/` (the official iPad app on
+  KaiC's iPad), numbered from 01 on its own; never stretch an iPhone screen to fill an iPad one.
 - Art (icons, placeholders, loading pictures, Lottie) comes first from the official Android APK in `local/`
   (`iBiliPlayer-bili.apk`, 8.43.0) through `uv run tools/apk_asset.py` (`find`, `show`, `extract`; vectors drawn white
   at 3× for tinting; everything is already dumped by real name in `local/apk-assets/`, with `index.csv` to search and

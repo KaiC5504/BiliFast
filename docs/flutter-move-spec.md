@@ -30,7 +30,7 @@ BiliFast (KaiC's iOS Bilibili client, Swift/SwiftUI in `D:\Repos\Apps\BiliNative
 - **Everything milestone 1 and milestone 2 did in Swift keeps working:** BTR multi-node playback, picture quality, PiP,
   the official-style player and video page, danmaku, comments, actions, history.
 - **The UI looks like the official Bilibili app.** KaiC: "if Flutter can make it look exactly like Official app why
-  not." The layout comes only from his screenshots in `local/official-app-reference/` (gitignored; look only). When
+  not." The layout comes only from his screenshots in `local/official-app-reference/iphone/` (gitignored; look only). When
   a screen or state isn't in them, ask KaiC to screenshot it from the official app. PiliPlus gives functions (APIs,
   behaviour) and assets, never layout.
 - **One codebase can also become an Android app** later.

@@ -14,7 +14,7 @@ shared pieces, merges and ships. Building a slice alone in the main session is t
 Read the spec's section 0 and the slice's entry, `docs/reference/app-inventory.md` for the Swift paths (open the
 Swift only where the plan needs a detail), PiliPlus through `docs/reference/piliplus-map.md` where the spec says it
 helps (GPL: read only), the slice's items in `D:\Repos\Apps\BiliNative\docs\m2-phone-checklist.md`, and for
-anything on screen the official app's screenshots in `local/official-app-reference/` (iPhone 17 Pro Max at 3×: 440×956
+anything on screen the official app's screenshots in `local/official-app-reference/iphone/` (iPhone 17 Pro Max at 3×: 440×956
 pt portrait, 956×440 landscape). KaiC wants the layout identical to them, and they are the only source of layout:
 PiliPlus gives APIs, behaviour and assets, never layout. `local/` is
 gitignored: never copy, commit or embed them. For every icon or picture the slice draws, look in the official APK
