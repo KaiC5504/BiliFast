@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import '../app/form_factor.dart';
 import '../device/orientation.dart';
+import '../player_ui/panels/panel_layer.dart' show PadSheetDim, PadSheetFrame;
 import '../shared/theme.dart';
 import 'danmaku_session.dart';
 import 'send/danmaku_send_bar.dart';
@@ -12,8 +13,9 @@ import 'send/danmaku_send_model.dart';
 import 'send/danmaku_style_panel.dart';
 
 /// The send bar riding on the keyboard, with the style panel in the keyboard's place after A (22, 23, 36-39), as a
-/// layer in the page's Stack. On the small player the page under the player dims (39) and a tap there closes; in
-/// landscape and 竖屏 a tap anywhere above the bar does. Lets touches through while the bar is down.
+/// layer in the page's Stack. On the small player the page under the player dims (39) and a tap there closes (on the
+/// iPad's page everything but the player); in landscape and 竖屏 a tap anywhere above the bar does. Lets touches
+/// through while the bar is down.
 class DanmakuOverlays extends StatefulWidget {
   const DanmakuOverlays({
     super.key,
@@ -21,6 +23,7 @@ class DanmakuOverlays extends StatefulWidget {
     required this.presentation,
     required this.playerBottom,
     required this.toast,
+    this.padFrame,
   });
 
   final DanmakuSession session;
@@ -29,6 +32,9 @@ class DanmakuOverlays extends StatefulWidget {
   /// Where the small player ends on the page; the dim starts there.
   final double playerBottom;
   final ValueChanged<String> toast;
+
+  /// The iPad page's, outside full screen: the bar takes its column, and all but its player dims and closes.
+  final PadSheetFrame? padFrame;
 
   /// Forgets the keyboard heights the style panel takes; for tests.
   @visibleForTesting
@@ -200,6 +206,7 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
     }
     final dark = _landscape;
     final inline = widget.presentation == Presentation.inline;
+    final padFrame = inline && FormFactor.of(context).isPad ? widget.padFrame : null;
     final below = _styleShown
         ? SizedBox(
             height: panel,
@@ -216,30 +223,29 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
             height: math.max(inset, media.viewPadding.bottom),
             child: ColoredBox(color: dark ? DanmakuSendTheme.darkArea : DanmakuSendTheme.lightBar),
           );
+    final dim = Semantics(
+      button: true,
+      label: '关闭',
+      onTap: _close,
+      excludeSemantics: true,
+      child: GestureDetector(
+        key: const ValueKey('danmaku-send-dim'),
+        behavior: HitTestBehavior.opaque,
+        onTap: _close,
+        child: inline ? const ColoredBox(color: DanmakuSendTheme.dim) : const SizedBox.expand(),
+      ),
+    );
     return BlockSemantics(
       child: Stack(
         children: [
+          if (padFrame != null)
+            Positioned.fill(child: PadSheetDim(player: padFrame.player, child: dim))
+          else
+            Positioned(left: 0, right: 0, top: inline ? widget.playerBottom : 0, bottom: 0, child: dim),
           Positioned(
             left: 0,
-            right: 0,
-            top: inline ? widget.playerBottom : 0,
-            bottom: 0,
-            child: Semantics(
-              button: true,
-              label: '关闭',
-              onTap: _close,
-              excludeSemantics: true,
-              child: GestureDetector(
-                key: const ValueKey('danmaku-send-dim'),
-                behavior: HitTestBehavior.opaque,
-                onTap: _close,
-                child: inline ? const ColoredBox(color: DanmakuSendTheme.dim) : const SizedBox.expand(),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
+            right: padFrame == null ? 0 : null,
+            width: padFrame?.column,
             bottom: 0,
             child: Column(
               mainAxisSize: MainAxisSize.min,

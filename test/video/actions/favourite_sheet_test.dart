@@ -1,6 +1,7 @@
 import 'dart:ui' show CheckedState;
 
 import 'package:bili_core/api.dart' show FavFolder;
+import 'package:bilifast/player_ui/panels/panel_layer.dart' show PadSheetDim, PadSheetFrame;
 import 'package:bilifast/video/actions/favourite_sheet.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -31,6 +32,7 @@ Future<Rig> pumpSheet(
   bool resize = false,
   Size? screen,
   EdgeInsets padding = EdgeInsets.zero,
+  PadSheetFrame? padFrame,
 }) async {
   final size = screen ?? (dark ? landscape : portrait);
   tester.view.physicalSize = size;
@@ -46,7 +48,12 @@ Future<Rig> pumpSheet(
         data: MediaQueryData(size: size, viewInsets: viewInsets, padding: padding),
         child: Scaffold(
           resizeToAvoidBottomInset: resize,
-          body: FavouriteSheet(folders: fake, dark: dark, onClose: () => fake.calls.add('close')),
+          body: FavouriteSheet(
+            folders: fake,
+            dark: dark,
+            onClose: () => fake.calls.add('close'),
+            padFrame: padFrame,
+          ),
         ),
       ),
     ),
@@ -88,16 +95,28 @@ void main() {
       expect(sheet.top, closeTo(portrait.width / (16 / 9), 0.01));
     });
 
-    for (final (screen, player) in [(const Size(1194, 834), 756.5), (const Size(834, 1194), 834.0)]) {
-      testWidgets('on the iPad (${screen.width.round()} wide) its top meets the iPad\'s player, the folders under it',
-          (tester) async {
-        await pumpSheet(tester, screen: screen, padding: const EdgeInsets.only(top: 24, bottom: 20));
+    for (final (screen, column) in [(const Size(1194, 834), 756.5), (const Size(834, 1194), 834.0)]) {
+      testWidgets('on the iPad (${screen.width.round()} wide) it takes the player\'s column from its bottom down, the '
+          'folders under it; all but the player dims and closes', (tester) async {
+        final player = Rect.fromLTWH(0, 32, column, column / (16 / 9));
+        final rig = await pumpSheet(
+          tester,
+          screen: screen,
+          padding: const EdgeInsets.only(top: 24, bottom: 20),
+          padFrame: PadSheetFrame(player: player, column: column),
+        );
         final sheet = tester.getRect(find.byKey(const ValueKey('favourite-sheet')));
-        expect(sheet.bottom, screen.height);
-        expect(sheet.top, closeTo(32 + player / (16 / 9), 0.01));
+        expect(sheet, Rect.fromLTRB(0, player.bottom, column, screen.height));
         expect(sheet.height, greaterThan(300));
         expect(tester.getRect(find.text('默认收藏夹')).bottom, lessThan(screen.height));
         expect(find.text('二乃').hitTestable(), findsOneWidget);
+        expect(tester.widget<PadSheetDim>(find.byType(PadSheetDim)).player, player);
+        await tester.tapAt(player.center);
+        await tester.pumpAndSettle();
+        expect(rig.calls, isEmpty, reason: 'the player stays undimmed and live');
+        await tester.tapAt(Offset(screen.width - 10, 10));
+        await tester.pumpAndSettle();
+        expect(rig.calls, ['close']);
       });
     }
 

@@ -1188,8 +1188,6 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _showComments() {
     _tabs.select(PageTab.comments, animate: false);
     _orientation.exitToInline();
-    // Sideways the iPad's comments are under 简介 in the player's column.
-    if (_pad) WidgetsBinding.instance.addPostFrameCallback((_) => _seeAllComments());
   }
 
   /// 查看N条评论 sideways: the column scrolled so 热门评论 sits under the bar and the strip, or under the player while it
@@ -1495,7 +1493,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       ),
                     ),
                   );
-                  final actionOverlays = switch ((ui, _details)) {
+                  Widget? actionOverlaysFor(PadSheetFrame? padFrame) => switch ((ui, _details)) {
                     (final ui?, final details?) => ListenableBuilder(
                       listenable: details,
                       builder: (context, _) => ActionOverlays(
@@ -1503,10 +1501,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                         controller: _overlays,
                         landscape: layout == Presentation.landscape,
                         shareLink: ui.session.shareLink,
+                        padFrame: padFrame,
                       ),
                     ),
                     _ => null,
                   };
+                  final actionOverlays = pad ? null : actionOverlaysFor(null);
                   // Built once per page build, so scrolling and the shrink rebuild none of it.
                   final padBody = pad
                       ? _padBody(
@@ -1535,7 +1535,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             area: area,
                             ui: ui,
                             controller: controller,
-                            actionOverlays: actionOverlays,
+                            actionOverlays: actionOverlaysFor,
                             layout: layout,
                             body: padBody,
                           ),
@@ -1916,7 +1916,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     required Widget area,
     required PlayerUi? ui,
     required PlaybackController? controller,
-    required Widget? actionOverlays,
+    required Widget? Function(PadSheetFrame? padFrame) actionOverlays,
     required Presentation layout,
     required _PadBody body,
   }) {
@@ -1933,6 +1933,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final tabRow = body.tabRow;
     final tabsTop = top + _collapse.barHeight + (tabRow == null ? 0 : PadPageTheme.tabRowHeight);
     final player = Rect.lerp(Rect.fromLTWH(0, 0, columnWidth, top + height), screen, t)!;
+    final padFrame = fullScreen
+        ? null
+        : PadSheetFrame(
+            player: Rect.fromLTRB(player.left, player.top + top * (1 - t), player.right, player.bottom),
+            column: columnWidth,
+          );
+    final overlays = actionOverlays(padFrame);
     Widget hideable(Widget child) => Offstage(offstage: hidden, child: TickerMode(enabled: !hidden, child: child));
     return Stack(
       clipBehavior: Clip.none,
@@ -2055,13 +2062,19 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         if (ui != null)
           Positioned.fill(
             key: const ValueKey('video-panels'),
-            child: PanelLayer(ui: ui, playerBottom: fullScreen ? null : box),
+            child: PanelLayer(ui: ui, playerBottom: fullScreen ? null : box, padFrame: padFrame),
           ),
-        if (actionOverlays != null) Positioned.fill(key: const ValueKey('video-overlays'), child: actionOverlays),
+        if (overlays != null) Positioned.fill(key: const ValueKey('video-overlays'), child: overlays),
         if (ui != null && _danmaku != null)
           Positioned.fill(
             key: const ValueKey('danmaku-overlays'),
-            child: DanmakuOverlays(session: _danmaku!, presentation: layout, playerBottom: box, toast: _toast),
+            child: DanmakuOverlays(
+              session: _danmaku!,
+              presentation: layout,
+              playerBottom: box,
+              toast: _toast,
+              padFrame: padFrame,
+            ),
           ),
       ],
     );

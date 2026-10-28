@@ -4,6 +4,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSystem;
+import '../../player_ui/panels/panel_layer.dart' show PadSheetFrame;
 import '../../shared/toast.dart';
 import 'coin_dialog.dart';
 import 'favourite_sheet.dart';
@@ -27,6 +28,7 @@ class ActionOverlays extends StatefulWidget {
     required this.landscape,
     required this.shareLink,
     this.share = shareThroughSystem,
+    this.padFrame,
   });
 
   /// Null until the video's detail arrives.
@@ -35,6 +37,9 @@ class ActionOverlays extends StatefulWidget {
   final bool landscape;
   final Uri? shareLink;
   final ShareLink share;
+
+  /// The iPad page's, outside full screen, for the 收藏 sheet.
+  final PadSheetFrame? padFrame;
 
   @override
   State<ActionOverlays> createState() => _ActionOverlaysState();
@@ -226,6 +231,7 @@ class _ActionOverlaysState extends State<ActionOverlays> with SingleTickerProvid
         folders: _folders!,
         dark: widget.landscape,
         motion: _curve,
+        padFrame: widget.padFrame,
         onClose: () => _closeIf(ActionPrompt.favourites),
       ),
       ActionPrompt.unfollow => UnfollowConfirm(

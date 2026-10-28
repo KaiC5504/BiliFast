@@ -143,6 +143,14 @@ void main() {
       expect(tester.getTopLeft(find.byKey(const ValueKey('action-like'))).dy, actionsTop);
     });
 
+    testWidgets('puts in no text scaling of its own: the app\'s root turns it off for every screen', (tester) async {
+      await head(tester);
+      expect(
+        find.descendant(of: find.byType(PadIntroHead), matching: find.byType(MediaQuery)),
+        findsNothing,
+      );
+    });
+
     testWidgets('the title opens and closes the description too', (tester) async {
       await head(tester);
       await tester.tap(find.text(padDetail().title));

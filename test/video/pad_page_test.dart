@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:bili_core/api.dart' show Comment, CommentMember, TextRun, VideoCard, VideoDetail, VideoOwner, VideoStat;
 import 'package:bili_core/devlog.dart';
@@ -14,6 +15,7 @@ import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/comments/comment_overlays.dart';
 import 'package:bilifast/comments/comment_row.dart';
 import 'package:bilifast/comments/comments_tab.dart';
+import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/danmaku/danmaku_overlays.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
@@ -21,11 +23,13 @@ import 'package:bilifast/device/player_device.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
+import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/space/uploader_sheet.dart';
 import 'package:bilifast/video/actions/action_overlays.dart';
+import 'package:bilifast/video/actions/video_actions.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/intro/intro_tab.dart';
 import 'package:bilifast/video/intro/related_list.dart';
@@ -421,6 +425,34 @@ void main() {
       await back(tester);
     });
 
+    testWidgets('评论 from full screen goes back to the page with the column where it was', (tester) async {
+      await host(tester);
+      await opened(tester);
+      orientation.enterLandscape();
+      await tester.pump();
+      await tester.pump(PadPageTheme.fullScreenGrow);
+      ui(tester).onComments!();
+      await tester.pump();
+      await tester.pump(PadPageTheme.fullScreenGrow + const Duration(milliseconds: 50));
+      expect(orientation.presentation, Presentation.inline);
+      expect(columnScroll(tester).pixels, 0);
+      await back(tester);
+    });
+
+    testWidgets('the danmaku layer lays out for the iPad, as the chrome does', (tester) async {
+      await host(tester);
+      await opened(tester);
+      expect(tester.widget<DanmakuLayer>(find.byKey(const ValueKey('video-danmaku'))).formFactor, FormFactor.pad);
+      orientation.enterLandscape();
+      await tester.pump();
+      await tester.pump(PadPageTheme.fullScreenGrow);
+      expect(tester.widget<DanmakuLayer>(find.byKey(const ValueKey('video-danmaku'))).formFactor, FormFactor.pad);
+      orientation.exitToInline();
+      await tester.pump();
+      await tester.pump(PadPageTheme.fullScreenGrow + const Duration(milliseconds: 50));
+      await back(tester);
+    });
+
     testWidgets('turning while in full screen keeps the whole screen', (tester) async {
       await host(tester);
       await opened(tester);
@@ -627,6 +659,126 @@ void main() {
     }
   });
 
+  group('the page\'s sheets and the send bar (a guess: no iPad screenshot has one open)', () {
+    Finder dimIn(Type layer) => find.descendant(of: find.byType(layer), matching: find.byType(PadSheetDim));
+    Finder relatedCard(String bvid) =>
+        find.byWidgetPredicate((widget) => switch (widget.key) {
+          ValueKey<(int, String)>(value: (_, final b)) => b == bvid,
+          _ => false,
+        });
+    final otherPage = find.byWidgetPredicate((widget) => widget is VideoPage && widget.route.bvid != bv);
+    ActionOverlayController actionOverlays(WidgetTester tester) =>
+        tester.widget<ActionOverlays>(find.byType(ActionOverlays)).controller;
+
+    Future<void> openWithActions(WidgetTester tester, Size size) async {
+      withActions = true;
+      addTearDown(() => withActions = false);
+      await host(tester, landscape: size == wide);
+      await opened(tester);
+    }
+
+    /// Taps [at], beside the player, and checks it closed what [isOpen] reads and opened no video.
+    Future<void> tapClosesOnly(WidgetTester tester, Offset at, bool Function() isOpen, String reason) async {
+      expect(isOpen(), isTrue, reason: reason);
+      await tester.tapAt(at);
+      await frames(tester, 10);
+      expect(isOpen(), isFalse, reason: reason);
+      expect(otherPage, findsNothing, reason: '$reason: no video opened');
+    }
+
+    for (final (name, size, width) in [('sideways', wide, column), ('upright', tall, 834.0)]) {
+      // Sideways a related card where it sits beside the player; upright the band over the player.
+      Offset outside(WidgetTester tester) {
+        if (size != wide) return const Offset(400, band / 2);
+        final card = tester.getRect(relatedCard('BV1r0'));
+        return Offset(card.center.dx, (card.top + math.min(card.bottom, area(tester).bottom)) / 2);
+      }
+
+      testWidgets('$name: the send bar is the column\'s width, all but the player dims, and a tap there closes it',
+          (tester) async {
+        await openWithActions(tester, size);
+        if (size == wide) {
+          expect(tester.getRect(relatedCard('BV1r0')).top, lessThan(area(tester).bottom), reason: 'beside the player');
+        }
+        final danmaku = ui(tester).danmaku!..openSend();
+        await frames(tester, 4);
+        final bar = tester.getRect(find.byKey(const ValueKey('danmaku-send-bar')));
+        expect((bar.left, bar.width), (0.0, width));
+        expect(tester.widget<PadSheetDim>(dimIn(DanmakuOverlays)).player, area(tester));
+        expect(tester.getRect(dimIn(DanmakuOverlays)), Offset.zero & size);
+        await tester.tapAt(area(tester).center);
+        await frames(tester, 4);
+        expect(danmaku.sendOpen.value, isTrue, reason: 'the player itself takes its own taps');
+        await tapClosesOnly(tester, outside(tester), () => danmaku.sendOpen.value, 'send bar');
+        await back(tester);
+      });
+
+      for (final panel in [PlayerPanel.more, PlayerPanel.speed, PlayerPanel.danmakuSettings, PlayerPanel.episodes]) {
+        testWidgets('$name: ${panel.name} is the column\'s width under the player, all but the player dims, and a tap '
+            'there closes it', (tester) async {
+          await openWithActions(tester, size);
+          final panels = ui(tester).panels..open(panel);
+          await frames(tester, 10);
+          final sheet = tester.getRect(find.byKey(const ValueKey('panel-frame')));
+          expect((sheet.left, sheet.width, sheet.bottom), (0.0, width, size.height));
+          expect(sheet.top, greaterThanOrEqualTo(area(tester).bottom - 0.01));
+          expect(tester.widget<PadSheetDim>(dimIn(PanelLayer)).player, area(tester));
+          expect(tester.getRect(dimIn(PanelLayer)), Offset.zero & size);
+          await tapClosesOnly(tester, outside(tester), () => panels.value != null, panel.name);
+          await back(tester);
+        });
+      }
+
+      testWidgets('$name: 收藏 is the column\'s width from the player down, all but the player dims, and a tap there '
+          'closes it', (tester) async {
+        await openWithActions(tester, size);
+        final controller = actionOverlays(tester)..value = ActionPrompt.favourites;
+        await frames(tester, 10);
+        final sheet = tester.getRect(find.byKey(const ValueKey('favourite-sheet')));
+        expect(sheet, Rect.fromLTRB(0, area(tester).bottom, width, size.height));
+        expect(tester.widget<PadSheetDim>(dimIn(ActionOverlays)).player, area(tester));
+        expect(tester.getRect(dimIn(ActionOverlays)), Offset.zero & size);
+        await tapClosesOnly(tester, outside(tester), () => controller.value != null, '收藏');
+        await back(tester);
+      });
+    }
+
+    testWidgets('with nothing up, the related card beside the player opens its video', (tester) async {
+      await host(tester);
+      await opened(tester);
+      await tester.tap(relatedCard('BV1r0'));
+      await frames(tester, 20);
+      expect(otherPage, findsOneWidget, reason: 'so the taps above reached the dim, not the card');
+    });
+
+    testWidgets('the iPhone\'s sheets and send bar keep the full width and dim nothing above the player', (tester) async {
+      withActions = true;
+      addTearDown(() => withActions = false);
+      await host(tester, phone: true);
+      await opened(tester);
+      final player = area(tester);
+      ui(tester).danmaku!.openSend();
+      await frames(tester, 4);
+      expect(find.byType(PadSheetDim), findsNothing);
+      expect(tester.getRect(find.byKey(const ValueKey('danmaku-send-dim'))), Rect.fromLTRB(0, player.bottom, 440, 956));
+      expect(tester.getRect(find.byKey(const ValueKey('danmaku-send-bar'))).width, 440);
+      ui(tester).danmaku!.closeSend();
+      await frames(tester, 4);
+      final panels = ui(tester).panels..open(PlayerPanel.danmakuSettings);
+      await frames(tester, 10);
+      expect(find.byType(PadSheetDim), findsNothing);
+      expect(tester.getRect(find.byKey(const ValueKey('panel-sheet-dim'))), Rect.fromLTRB(0, player.bottom, 440, 956));
+      expect(tester.getRect(find.byKey(const ValueKey('panel-frame'))).width, 440);
+      panels.close();
+      await frames(tester, 10);
+      actionOverlays(tester).value = ActionPrompt.favourites;
+      await frames(tester, 10);
+      expect(find.byType(PadSheetDim), findsNothing);
+      expect(tester.getRect(find.byKey(const ValueKey('favourite-sheet'))).width, 440);
+      await back(tester);
+    });
+  });
+
   group('05\'s strip and 发条评论 bar', () {
     Future<void> collapsed(WidgetTester tester) async {
       withActions = true;
@@ -739,6 +891,7 @@ void main() {
       expect(find.byType(PadPageTabRow), findsNothing);
       expect(find.byType(PadIntroHead), findsNothing);
       expect(area(tester).top, 62);
+      expect(tester.widget<DanmakuLayer>(find.byKey(const ValueKey('video-danmaku'))).formFactor, FormFactor.phone);
       await back(tester);
     });
   });

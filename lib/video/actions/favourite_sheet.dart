@@ -11,11 +11,10 @@ import 'package:flutter/widgets.dart';
 
 import '../../app/form_factor.dart';
 import '../../player_ui/panels/episodes_panel.dart' show EpisodesSheetHeader;
-import '../../player_ui/panels/panel_layer.dart' show panelBackdrop;
+import '../../player_ui/panels/panel_layer.dart' show PadSheetDim, PadSheetFrame, panelBackdrop;
 import '../../player_ui/panels/panel_parts.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
-import '../pad/pad_page_layout.dart' show padPageTop, padPlayerColumnWidth, padSideways;
 import 'video_actions.dart';
 
 /// 收藏: the account's folders with ticks, 新建收藏夹 and 完成 (BiliNative `FavouriteSheet.swift`). A light sheet from
@@ -28,6 +27,7 @@ class FavouriteSheet extends StatefulWidget {
     required this.dark,
     required this.onClose,
     this.motion = kAlwaysCompleteAnimation,
+    this.padFrame,
   });
 
   final FavouriteFolders folders;
@@ -36,6 +36,9 @@ class FavouriteSheet extends StatefulWidget {
 
   /// How far in it is: [ActionOverlays] runs it forward to show and back to hide.
   final Animation<double> motion;
+
+  /// The iPad page's, outside full screen: the sheet takes its column under its player, and all but the player dims.
+  final PadSheetFrame? padFrame;
 
   @override
   State<FavouriteSheet> createState() => _FavouriteSheetState();
@@ -197,30 +200,28 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
     final insets = media.padding;
     // From the screen, not the box: a page that shrinks for the keyboard must not shrink the sheet with it.
     final screen = media.size;
-    // The iPad's player is the left column's width sideways, under the 32 pt band, not the screen's width.
-    final pad = FormFactor.of(context).isPad;
-    final playerWidth = padSideways(context) ? padPlayerColumnWidth(screen.width) : screen.width;
-    final playerTop = pad ? padPageTop(insets.top) : insets.top;
-    final full = (screen.height - playerTop - playerWidth / BiliMetrics.videoAspect).clamp(0.0, screen.height);
+    final pad = FormFactor.of(context).isPad ? widget.padFrame : null;
+    final playerBottom = pad?.player.bottom ?? insets.top + screen.width / BiliMetrics.videoAspect;
+    final full = (screen.height - playerBottom).clamp(0.0, screen.height);
     final height = math.max(0.0, math.min(full, size.height - keyboard - insets.top));
     final hidden = height + keyboard;
     final motion = Listenable.merge([widget.motion, _drag]);
+    final dim = AnimatedBuilder(
+      animation: motion,
+      builder: (context, child) => Opacity(
+        opacity: (widget.motion.value * (1 - (hidden == 0 ? 0 : _drag.value / hidden))).clamp(0.0, 1.0),
+        child: child,
+      ),
+      child: _outside(child: const ColoredBox(color: FavouriteTheme.dim)),
+    );
     return Stack(
       children: [
-        Positioned.fill(
-          child: AnimatedBuilder(
-            animation: motion,
-            builder: (context, child) => Opacity(
-              opacity: (widget.motion.value * (1 - (hidden == 0 ? 0 : _drag.value / hidden))).clamp(0.0, 1.0),
-              child: child,
-            ),
-            child: _outside(child: const ColoredBox(color: FavouriteTheme.dim)),
-          ),
-        ),
+        Positioned.fill(child: pad == null ? dim : PadSheetDim(player: pad.player, child: dim)),
         Positioned(
           key: const ValueKey('favourite-sheet'),
           left: 0,
-          right: 0,
+          right: pad == null ? 0 : null,
+          width: pad?.column,
           bottom: keyboard,
           height: height,
           child: AnimatedBuilder(

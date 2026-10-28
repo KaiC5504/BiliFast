@@ -165,6 +165,7 @@ class VideoPlayerArea extends StatelessWidget {
                               wake: session.readout.any,
                               settings: ui?.danmaku?.settings,
                               presentation: presentation,
+                              formFactor: pad ? FormFactor.pad : FormFactor.phone,
                             ),
                           ),
                         ),

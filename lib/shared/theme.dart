@@ -7191,9 +7191,8 @@ abstract final class PadPanelTheme {
   static const speedSelected = Color(0xFFFF6699);
 
   /// On the page (no screenshot): the sheets keep the phone's heights in points (shares of its 956) and stay under
-  /// the player, at most [sheetMaxWidth] wide from the page's left edge, where the player starts in both layouts.
+  /// the player, in its column.
   static const phoneHeight = 956.0;
-  static const sheetMaxWidth = 600.0;
 }
 
 /// The iPad's danmaku, on the page's player and in full screen (ipad/09, 25).
