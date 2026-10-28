@@ -18,15 +18,13 @@ import 'package:bilifast/device/player_device.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
-import 'package:bilifast/player/playback_clock.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/shared/theme.dart';
-import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:bilifast/video/intro/intro_tab.dart';
 import 'package:bilifast/video/intro/related_list.dart';
 import 'package:bilifast/video/pad/pad_body.dart';
-import 'package:bilifast/video/pad/pad_page_layout.dart';
 import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_session.dart';
 import 'package:bilifast/video/page_tabs.dart';
@@ -201,22 +199,22 @@ void main() {
       expect(area(tester), const Rect.fromLTWH(0, band, column, column / BiliMetrics.videoAspect));
       expect(tester.getRect(find.byKey(const ValueKey('pad-related-column'))), const Rect.fromLTRB(column, band, 1194, 834));
       expect(find.byType(PadRelatedColumn), findsOneWidget);
-      expect(find.byType(PadIntroHead, skipOffstage: false), findsOneWidget, reason: 'the stub draws nothing yet');
+      expect(find.byType(PadIntroHead), findsOneWidget);
       expect(find.byType(PadCommentsHeader), findsOneWidget, reason: '热门评论 inline under 简介');
+      expect(
+        tester.getTopLeft(find.byType(PadCommentsHeader)).dy,
+        tester.getBottomLeft(find.byType(PadIntroHead)).dy,
+        reason: 'right under the head',
+      );
       expect(tester.getRect(find.byType(PadCommentsHeader)).width, column);
       expect(find.text('热门评论'), findsOneWidget);
       expect(find.text('查看 30 条评论'), findsOneWidget);
       expect(find.byType(PageTabRow), findsNothing);
       expect(find.byType(PadPageTabRow), findsNothing, reason: 'no tabs sideways');
       expect(
-        tester.getRect(find.byKey(const ValueKey('danmaku-capsule'))),
-        Rect.fromLTWH(
-          column - PadPageTheme.capsuleRight - PadPageTheme.capsuleWidth,
-          band + column / BiliMetrics.videoAspect + PadPageTheme.capsuleCentreSideways - PadPageTheme.capsuleHeight / 2,
-          PadPageTheme.capsuleWidth,
-          PadPageTheme.capsuleHeight,
-        ),
-        reason: '点我发弹幕 on the uploader row',
+        find.descendant(of: find.byType(PadIntroHead), matching: find.byType(PadDanmakuCapsule)),
+        findsOneWidget,
+        reason: '点我发弹幕 on the uploader row, drawn by the head',
       );
       await back(tester);
     });
@@ -321,12 +319,12 @@ void main() {
       expect(area(tester), const Rect.fromLTWH(0, band, 834, full));
       expect(tester.getRect(find.byType(PadPageTabRow)), const Rect.fromLTWH(0, band + full, 834, PadPageTheme.tabRowHeight));
       expect(find.byType(PageTabRow), findsNothing);
-      expect(find.byType(PadIntroTab), findsOneWidget);
-      expect(find.byType(PadIntroHead, skipOffstage: false), findsOneWidget, reason: 'the stub draws nothing yet');
+      expect(find.byType(IntroTab), findsOneWidget);
+      expect(find.byType(PadIntroHead), findsOneWidget);
       expect(find.byType(RelatedSliver), findsOneWidget);
       expect(find.byType(PadRelatedColumn), findsNothing);
       expect(
-        tester.getRect(find.byKey(const ValueKey('danmaku-capsule'))).right,
+        tester.getRect(find.descendant(of: find.byType(PadPageTabRow), matching: find.byType(PadDanmakuCapsule))).right,
         834 - PadPageTheme.capsuleRight,
       );
       await tester.tap(find.byKey(const ValueKey('tab-comments')));
@@ -480,7 +478,7 @@ void main() {
       await opened(tester);
       expect(find.byType(PageTabRow), findsOneWidget);
       expect(find.byType(PadPageTabRow), findsNothing);
-      expect(find.byType(PadIntroTab), findsNothing);
+      expect(find.byType(PadIntroHead), findsNothing);
       expect(area(tester).top, 62);
       await back(tester);
     });

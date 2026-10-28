@@ -5,7 +5,7 @@ library;
 
 import 'dart:math' as math;
 
-import 'package:bili_core/api.dart' show VideoCard, VideoDetail;
+import 'package:bili_core/api.dart' show VideoDetail;
 import 'package:flutter/widgets.dart';
 
 import '../../app/form_factor.dart';
@@ -14,11 +14,7 @@ import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
 import '../collapsing_player.dart';
 import '../intro/action_row.dart';
-import '../intro/intro_tab.dart';
-import '../intro/related_list.dart';
 import '../page_details.dart';
-import '../player_session.dart';
-import 'pad_body.dart';
 
 /// The iPad's page laid out in two columns: the screen is wide. Sideways on the iPhone is always full screen.
 bool padSideways(BuildContext context) {
@@ -191,72 +187,15 @@ class _Corner extends StatelessWidget {
   );
 }
 
-/// 简介 upright (06): [PadIntroHead] over the related videos, below the player's reserve, scrolling with the page's
-/// primary scroll controller as the phone's 简介 does.
-class PadIntroTab extends StatelessWidget {
-  const PadIntroTab({
-    super.key,
-    required this.content,
-    required this.details,
-    required this.onSeek,
-    required this.onOpenVideo,
-    required this.onPlayEpisode,
-    required this.onOpenEpisodes,
-    required this.onOpenRelated,
-    required this.onWatchLater,
-  });
-
-  final IntroContent content;
-  final PageDetails details;
-  final ValueChanged<double> onSeek;
-  final ValueChanged<String> onOpenVideo;
-  final ValueChanged<Episode> onPlayEpisode;
-  final VoidCallback onOpenEpisodes;
-  final ValueChanged<VideoCard> onOpenRelated;
-  final ValueChanged<VideoCard> onWatchLater;
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom + PageTheme.introBottom;
-    return ListenableBuilder(
-      listenable: details,
-      builder: (context, _) => CustomScrollView(
-        key: const PageStorageKey('pad-intro-scroll'),
-        primary: true,
-        slivers: [
-          SliverToBoxAdapter(
-            child: Builder(builder: (context) => SizedBox(height: PlayerReserve.of(context))),
-          ),
-          if (content.detail != null) ...[
-            SliverToBoxAdapter(
-              child: PadIntroHead(
-                content: content,
-                details: details,
-                onSeek: onSeek,
-                onOpenVideo: onOpenVideo,
-                onPlayEpisode: onPlayEpisode,
-                onOpenEpisodes: onOpenEpisodes,
-              ),
-            ),
-            RelatedSliver(cards: content.related, onOpen: onOpenRelated, onWatchLater: onWatchLater),
-          ],
-          SliverToBoxAdapter(child: SizedBox(height: bottom)),
-        ],
-      ),
-    );
-  }
-}
-
-/// The player's column sideways (03, 05): the player's reserve, [head] (简介 without the related videos) with
-/// [capsule] on its uploader row, then [comments], all in one scroll view on [controller], which the shrinking player
-/// follows. [headKey] measures the head for the pinned strip.
+/// The player's column sideways (03, 05): the player's reserve, [head] (简介 without the related videos, 点我发弹幕 on
+/// its uploader row), then [comments], all in one scroll view on [controller], which the shrinking player follows.
+/// [headKey] measures the head for the pinned strip.
 class PadPlayerColumn extends StatelessWidget {
   const PadPlayerColumn({
     super.key,
     required this.controller,
     required this.headKey,
     required this.head,
-    required this.capsule,
     required this.comments,
     required this.bottom,
   });
@@ -264,7 +203,6 @@ class PadPlayerColumn extends StatelessWidget {
   final ScrollController controller;
   final GlobalKey headKey;
   final Widget? head;
-  final Widget capsule;
   final Widget? comments;
 
   /// Below the last row: room for the 发条评论 bar and the home indicator.
@@ -282,24 +220,7 @@ class PadPlayerColumn extends StatelessWidget {
             builder: (context) => SizedBox(key: const ValueKey('pad-reserve'), height: PlayerReserve.of(context)),
           ),
         ),
-        if (head case final head?)
-          SliverToBoxAdapter(
-            child: Stack(
-              key: headKey,
-              children: [
-                // Never shorter than the uploader row the capsule sits on.
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: PadPageTheme.capsuleCentreSideways * 2),
-                  child: head,
-                ),
-                Positioned(
-                  right: PadPageTheme.capsuleRight,
-                  top: PadPageTheme.capsuleCentreSideways - PadPageTheme.capsuleHeight / 2,
-                  child: capsule,
-                ),
-              ],
-            ),
-          ),
+        if (head case final head?) SliverToBoxAdapter(child: KeyedSubtree(key: headKey, child: head)),
         ?comments,
         SliverToBoxAdapter(child: SizedBox(height: bottom)),
       ],
@@ -366,8 +287,9 @@ class PadPinnedStrip extends StatelessWidget {
             ),
           Positioned(
             right: PadPageTheme.capsuleRight,
-            top: (PadPageTheme.stripHeight - PadPageTheme.capsuleHeight) / 2,
-            child: capsule,
+            top: 0,
+            bottom: 0,
+            child: Center(child: capsule),
           ),
         ],
       ),

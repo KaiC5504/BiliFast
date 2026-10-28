@@ -6458,23 +6458,15 @@ abstract final class PadPageTheme {
   static const stripActionsLeft = 79.75;
   static const stripActionPitch = 62.0;
 
-  /// The upright tab row (06): 60 pt, no underline and no rule, 简介 20 pt in and 评论 (N) 40 pt after it, both 16 pt.
+  /// The upright tab row (06): 60 pt, no underline and no rule, 简介 20 pt in and 评论 (N) 38 pt after it, both 16 pt.
   static const tabRowHeight = 60.0;
   static const tabText = 16.0;
   static const tabFirstLabel = 20.0;
-  static const tabSpacing = 40.0;
+  static const tabSpacing = 38.0;
   static const tabInk = PageTheme.tabText;
 
-  /// 点我发弹幕 with the 弹 toggle (03, 05, 06): 159 × 32, the field 119 with its words 15.5 pt in, 20 pt from the right.
-  /// Sideways it sits on 简介's uploader row, centred 30.25 below the player.
-  static const capsuleWidth = 159.0;
-  static const capsuleHeight = 32.0;
-  static const capsuleFieldWidth = 119.0;
-  static const capsuleFieldPadding = 15.5;
-  static const capsuleFieldText = 14.0;
+  /// 点我发弹幕 (the body's [PadDanmakuCapsule]) sits 20 pt from the right on the tab row and the strip (05, 06).
   static const capsuleRight = 20.0;
-  static const capsuleMark = 26.0;
-  static const capsuleCentreSideways = 30.25;
 
   /// The inline 热门评论 header sideways (03): a rule on top, 49.5 pt with its line centred 25.25 down; the title
   /// semibold 16 pt 20 in, the 218 × 30 field 96.5 in (13 pt, 15.5 in, the face 20 pt 7 from its end), then at the

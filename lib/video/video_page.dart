@@ -1731,7 +1731,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     );
   }
 
-  /// The iPad's 点我发弹幕 and 弹 toggle, on 简介's uploader row sideways and on the pinned strip.
+  /// The iPad's 点我发弹幕 and 弹 toggle on the pinned strip.
   Widget _padCapsule() {
     final session = _session;
     final danmaku = _danmaku;
@@ -1744,6 +1744,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           onToggle: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
           onSend: closed ? null : () => danmaku?.openSend(),
           text: closed ? 'UP主已关闭弹幕' : ((danmaku?.sendOpen.value ?? false) ? '弹幕输入中' : '点我发弹幕'),
+          duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 250),
         );
       },
     );
@@ -1825,8 +1826,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
               onOpenVideo: (id) => unawaited(_openVideoId(id)),
               onPlayEpisode: session.playEpisode,
               onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
+              player: session,
+              danmaku: _danmaku,
             ),
-      capsule: _padCapsule(),
       comments: comments == null
           ? null
           : PadCommentsSection(
@@ -2017,17 +2019,6 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         controller: _tabs,
         intro: session == null || details == null
             ? const SizedBox.expand()
-            : _pad
-            ? PadIntroTab(
-                content: _intro,
-                details: details,
-                onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
-                onOpenVideo: (id) => unawaited(_openVideoId(id)),
-                onPlayEpisode: session.playEpisode,
-                onOpenEpisodes: () => _panels.open(PlayerPanel.episodes),
-                onOpenRelated: _openRelated,
-                onWatchLater: (card) => unawaited(_watchLater(card)),
-              )
             : IntroTab(
                 content: _intro,
                 details: details,

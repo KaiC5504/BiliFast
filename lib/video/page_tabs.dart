@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../shared/custom_icons.dart';
 import '../shared/theme.dart';
+import 'pad/pad_body.dart' show PadDanmakuCapsule;
 import 'page_details.dart';
 
 /// Which tab the page shows, the pager both tabs live in, and each tab's own scroll controller, which [PageTabs]
@@ -567,6 +568,8 @@ class PadPageTabRow extends StatelessWidget {
   final bool danmakuInputOpen;
   final bool danmakuClosed;
 
+  static const _fade = Duration(milliseconds: 250);
+
   @override
   Widget build(BuildContext context) {
     final still = MediaQuery.disableAnimationsOf(context);
@@ -596,6 +599,7 @@ class PadPageTabRow extends StatelessWidget {
                   onToggle: onToggleDanmaku,
                   onSend: danmakuClosed ? null : onSendDanmaku,
                   text: danmakuClosed ? 'UP主已关闭弹幕' : (danmakuInputOpen ? '弹幕输入中' : '点我发弹幕'),
+                  duration: still ? Duration.zero : _fade,
                 ),
                 const SizedBox(width: PadPageTheme.capsuleRight),
               ],
@@ -636,124 +640,6 @@ class PadPageTabRow extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// The iPad's 点我发弹幕 field joined to the 弹 toggle (03, 05, 06), or the toggle alone while danmaku is off.
-class PadDanmakuCapsule extends StatelessWidget {
-  const PadDanmakuCapsule({
-    super.key,
-    required this.on,
-    required this.onToggle,
-    required this.onSend,
-    this.text = '点我发弹幕',
-  });
-
-  final bool on;
-  final VoidCallback? onToggle;
-
-  /// Null while the uploader has danmaku closed.
-  final VoidCallback? onSend;
-  final String text;
-
-  static const _fade = Duration(milliseconds: 250);
-  static const _curve = Curves.easeOutCubic;
-
-  @override
-  Widget build(BuildContext context) {
-    final duration = MediaQuery.disableAnimationsOf(context) ? Duration.zero : _fade;
-    final style = TextStyle(
-      fontFamily: BiliFonts.family,
-      fontSize: PadPageTheme.capsuleFieldText,
-      color: BiliColors.secondaryText,
-      letterSpacing: 0,
-    );
-    const toggle = PadPageTheme.capsuleWidth - PadPageTheme.capsuleFieldWidth;
-    return AnimatedContainer(
-      key: const ValueKey('danmaku-capsule'),
-      duration: duration,
-      curve: _curve,
-      width: on ? PadPageTheme.capsuleWidth : toggle,
-      height: PadPageTheme.capsuleHeight,
-      clipBehavior: Clip.antiAlias,
-      decoration: const ShapeDecoration(color: BiliColors.softGrey, shape: StadiumBorder()),
-      foregroundDecoration: const ShapeDecoration(
-        shape: StadiumBorder(side: BorderSide(color: BiliColors.divider, width: PageTheme.capsuleBorder)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: ClipRect(
-              child: OverflowBox(
-                minWidth: PadPageTheme.capsuleFieldWidth,
-                maxWidth: PadPageTheme.capsuleFieldWidth,
-                alignment: Alignment.centerRight,
-                child: AnimatedOpacity(
-                  opacity: on ? 1 : 0,
-                  duration: duration,
-                  child: ExcludeSemantics(
-                    excluding: !on,
-                    child: Semantics(
-                      key: const ValueKey('danmaku-send'),
-                      button: onSend != null,
-                      label: text,
-                      onTap: on ? onSend : null,
-                      excludeSemantics: true,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: on ? onSend : null,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: PadPageTheme.capsuleFieldPadding),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              text,
-                              maxLines: 1,
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                              style: style,
-                              strutStyle: BiliFonts.strutOf(context, style),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          AnimatedContainer(
-            duration: duration,
-            curve: _curve,
-            width: toggle,
-            color: on ? BiliColors.card : BiliColors.softGrey,
-            child: Semantics(
-              key: const ValueKey('danmaku-toggle'),
-              button: true,
-              toggled: on,
-              label: on ? '关闭弹幕' : '开启弹幕',
-              onTap: onToggle,
-              excludeSemantics: true,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onToggle,
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: duration,
-                    child: Transform.scale(
-                      key: ValueKey(on),
-                      scale: PadPageTheme.capsuleMark / PageTheme.danmakuMark,
-                      child: DanmakuMark(on: on),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
