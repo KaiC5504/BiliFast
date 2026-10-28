@@ -700,7 +700,7 @@ class _HonorTag extends StatelessWidget {
   );
 }
 
-/// ▶ 59.7万  ☰ 77  2026年10月27日 15:40  Ω 4000+人正在看  BV1a8xK6MEfM  查看简介 ∨. A line too long for the width
+/// ▶ 59.7万  ☰ 77  2026年10月27日 15:40  Ω 4000+人正在看  BV1Fk4x7NqTz  查看简介 ∨. A line too long for the width
 /// shrinks a little rather than cut.
 class _MetaLine extends StatelessWidget {
   const _MetaLine({required this.detail, required this.online, required this.expanded, required this.onToggle});
