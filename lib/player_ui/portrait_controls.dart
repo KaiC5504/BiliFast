@@ -367,14 +367,22 @@ class _BackPainter extends CustomPainter {
 }
 
 class MoreDots extends StatelessWidget {
-  const MoreDots({super.key, this.color = BiliColors.onVideo, this.shadow = true});
+  const MoreDots({
+    super.key,
+    this.color = BiliColors.onVideo,
+    this.shadow = true,
+    this.dot = BiliMetrics.moreDot,
+    this.gap = BiliMetrics.moreDotGap,
+  });
 
   final Color color;
   final bool shadow;
+  final double dot;
+  final double gap;
 
   @override
   Widget build(BuildContext context) {
-    final dot = DecoratedBox(
+    final circle = DecoratedBox(
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
@@ -382,12 +390,12 @@ class MoreDots extends StatelessWidget {
             ? const [BoxShadow(color: BiliColors.chromeShade, blurRadius: BiliMetrics.videoBackShadow / 2)]
             : null,
       ),
-      child: const SizedBox.square(dimension: BiliMetrics.moreDot),
+      child: SizedBox.square(dimension: dot),
     );
     return Column(
       mainAxisSize: MainAxisSize.min,
-      spacing: BiliMetrics.moreDotGap,
-      children: [dot, dot, dot],
+      spacing: gap,
+      children: [circle, circle, circle],
     );
   }
 }

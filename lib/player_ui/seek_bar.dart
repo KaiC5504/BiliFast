@@ -135,7 +135,6 @@ class SeekBar extends StatefulWidget {
   State<SeekBar> createState() => SeekBarState();
 
   /// The chapter holding [position], when it has a title.
-  @visibleForTesting
   static String? chapterTitle(List<Chapter> chapters, double position) {
     final title = chapters.lastWhere((chapter) => chapter.from <= position, orElse: _none).title;
     return title.isEmpty ? null : title;
