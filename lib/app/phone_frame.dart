@@ -29,6 +29,9 @@ abstract final class PhoneFrame {
   static bool get pad => _pad;
   static bool _pad = false;
 
+  @visibleForTesting
+  static set debugPad(bool value) => _pad = value;
+
   static const _channel = MethodChannel('bilifast/window');
 
   static bool get enabled => !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
@@ -116,7 +119,8 @@ class _RenderStyleProbe extends RenderProxyBox {
 
   void _find() {
     if (!hasSize) return;
-    final at = Offset(size.width / 2, PhoneFrame.portraitPadding.top / 2);
+    final bar = PhoneFrame.pad ? PhoneFrame.padPadding : PhoneFrame.portraitPadding;
+    final at = Offset(size.width / 2, bar.top / 2);
     final brightness = layer?.find<SystemUiOverlayStyle>(at)?.statusBarBrightness;
     // As on the phone, a page that asks nothing leaves the bar as it was.
     if (brightness == null || brightness == PhoneFrame._statusBarBrightness.value) return;
@@ -126,8 +130,9 @@ class _RenderStyleProbe extends RenderProxyBox {
 }
 
 /// The iPhone's clock, signal, Wi-Fi and battery where 01 shows them, so the band above the content reads as the
-/// phone's status bar rather than a gap. White or black as the page asks ([PhoneFrame.statusBarBrightness]); until
-/// one has, a difference with white, which shows on light and black pages.
+/// phone's status bar rather than a gap; with `--pad` the iPad's time, date, Wi-Fi and battery (ipad/01, 08). White or
+/// black as the page asks ([PhoneFrame.statusBarBrightness]); until one has, a difference with white, which shows on
+/// light and black pages.
 class _StatusBar extends StatefulWidget {
   const _StatusBar();
 
@@ -157,17 +162,18 @@ class _StatusBarState extends State<_StatusBar> {
     return IgnorePointer(
       child: ValueListenableBuilder(
         valueListenable: PhoneFrame.statusBarBrightness,
-        builder: (context, brightness, _) => CustomPaint(
-          painter: _StatusPainter(
-            time,
-            BiliFonts.family,
-            switch (brightness) {
-              Brightness.dark => BiliColors.onVideo,
-              Brightness.light => BiliColors.videoBackground,
-              null => null,
-            },
-          ),
-        ),
+        builder: (context, brightness, _) {
+          final ink = switch (brightness) {
+            Brightness.dark => BiliColors.onVideo,
+            Brightness.light => BiliColors.videoBackground,
+            null => null,
+          };
+          return CustomPaint(
+            painter: PhoneFrame.pad
+                ? PadStatusPainter(padStatusTime(now), padStatusDate(now), BiliFonts.family, ink)
+                : _StatusPainter(time, BiliFonts.family, ink),
+          );
+        },
       ),
     );
   }
@@ -221,4 +227,102 @@ class _StatusPainter extends CustomPainter {
   @override
   bool shouldRepaint(_StatusPainter oldDelegate) =>
       oldDelegate.time != time || oldDelegate.family != family || oldDelegate.ink != ink;
+}
+
+/// The iPad's clock as ipad/01 writes it: twelve hours, then AM or PM.
+@visibleForTesting
+String padStatusTime(DateTime now) {
+  final hour = now.hour % 12 == 0 ? 12 : now.hour % 12;
+  return '$hour:${now.minute.toString().padLeft(2, '0')} ${now.hour < 12 ? 'AM' : 'PM'}';
+}
+
+/// The date beside it, as KaiC's iPad writes it (Thu 29 Oct).
+@visibleForTesting
+String padStatusDate(DateTime now) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${days[now.weekday - 1]} ${now.day} ${months[now.month - 1]}';
+}
+
+/// The iPad's 24 pt status bar, measured off ipad/01 and 08 (pt = px / 2): the time's ink from x 17, AM 3.5 pt and
+/// the date 12.5 pt after it, Wi-Fi from 103 pt before the right edge, 100% ending 48 pt before it, the battery's
+/// outline from 42.5 to 18; text on the 20.5 pt baseline. The same upright and sideways (02).
+@visibleForTesting
+class PadStatusPainter extends CustomPainter {
+  PadStatusPainter(this.time, this.date, this.family, this.ink);
+
+  final String time;
+  final String date;
+  final String? family;
+
+  /// Null draws a difference with white.
+  final Color? ink;
+
+  static const _baseline = 20.5;
+  static const _meridiemGap = 2.5;
+  static const _dateGap = 11.5;
+
+  Paint _paint({double alpha = 1}) {
+    final paint = Paint()..color = (ink ?? BiliColors.onVideo).withValues(alpha: alpha);
+    if (ink == null) paint.blendMode = BlendMode.difference;
+    return paint;
+  }
+
+  TextPainter _text(String text, Paint fill) => TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(fontFamily: family, fontSize: 13.5, fontWeight: FontWeight.w500, foreground: fill),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+  void _onBaseline(Canvas canvas, TextPainter text, double left) =>
+      text.paint(canvas, Offset(left, _baseline - text.computeDistanceToActualBaseline(TextBaseline.alphabetic)));
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = _paint();
+    // AM and PM sit closer than a space would put them.
+    final split = time.lastIndexOf(' ');
+    final clock = _text(split < 0 ? time : time.substring(0, split), fill);
+    _onBaseline(canvas, clock, 16.5);
+    var end = 16.5 + clock.width;
+    if (split >= 0) {
+      final meridiem = _text(time.substring(split + 1), fill);
+      _onBaseline(canvas, meridiem, end + _meridiemGap);
+      end += _meridiemGap + meridiem.width;
+    }
+    _onBaseline(canvas, _text(date, fill), end + _dateGap);
+
+    final right = size.width;
+    final percent = _text('100%', fill);
+    _onBaseline(canvas, percent, right - 48 - percent.width);
+
+    final wifi = Offset(right - 96.25, 20);
+    canvas.drawCircle(wifi.translate(0, -1.2), 1.4, fill);
+    final arc = _paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.9
+      ..strokeCap = StrokeCap.round;
+    for (final radius in [4.9, 8.0]) {
+      canvas.drawArc(Rect.fromCircle(center: wifi, radius: radius), -2.32, 1.64, false, arc);
+    }
+
+    canvas.drawRRect(
+      RRect.fromLTRBR(right - 42, 10, right - 18.5, 21.5, const Radius.circular(3.5)),
+      _paint(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    canvas.drawRRect(RRect.fromLTRBR(right - 40.5, 11.5, right - 20, 20, const Radius.circular(2.5)), fill);
+    canvas.drawRRect(
+      RRect.fromLTRBAndCorners(right - 16.5, 13.5, right - 15.25, 17.5,
+          topRight: const Radius.circular(1), bottomRight: const Radius.circular(1)),
+      _paint(alpha: 0.5),
+    );
+  }
+
+  @override
+  bool shouldRepaint(PadStatusPainter oldDelegate) =>
+      oldDelegate.time != time || oldDelegate.date != date || oldDelegate.family != family || oldDelegate.ink != ink;
 }

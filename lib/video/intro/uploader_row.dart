@@ -219,7 +219,7 @@ class _NameAndCounts extends StatelessWidget {
             duration: animate ? const Duration(milliseconds: 220) : Duration.zero,
             curve: Curves.easeOut,
             child: Text.rich(
-              _apartFromHan(counts, BiliFonts.nudged ? 0 : IntroTheme.fansHanGap),
+              apartFromHan(counts, BiliFonts.nudged ? 0 : IntroTheme.fansHanGap),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: countsStyle,
@@ -328,11 +328,13 @@ class _FollowListener extends StatelessWidget {
   }
 }
 
-/// 03's pink "+ 关注", or the grey 已关注; the change cross-fades.
+/// 03's pink "+ 关注", or the grey 已关注; the change cross-fades. The iPad's ([pad]) is a larger card with small
+/// corners (ipad/03).
 class FollowPill extends StatefulWidget {
-  const FollowPill({super.key, required this.following, required this.onTap});
+  const FollowPill({super.key, required this.following, required this.onTap, this.pad = false});
 
   final bool following;
+  final bool pad;
 
   /// Null before the actions exist: the pill shows, but a tap does nothing.
   final VoidCallback? onTap;
@@ -354,9 +356,17 @@ class _FollowPillState extends State<FollowPill> {
     final animate = !MediaQuery.disableAnimationsOf(context);
     final duration = animate ? const Duration(milliseconds: 220) : Duration.zero;
     final ink = following ? IntroTheme.followedText : BiliColors.onPink;
+    final pad = widget.pad;
+    final height = pad ? PadBodyTheme.followHeight : IntroTheme.followHeight;
+    final plus = pad ? PadBodyTheme.followPlus : IntroTheme.followPlus;
     final label = Text(
       following ? '已关注' : '关注',
-      style: TextStyle(fontFamily: BiliFonts.family, fontSize: IntroTheme.followText, height: 1, color: ink),
+      style: TextStyle(
+        fontFamily: BiliFonts.family,
+        fontSize: pad ? PadBodyTheme.followText : IntroTheme.followText,
+        height: 1,
+        color: ink,
+      ),
     );
     return Semantics(
       button: true,
@@ -376,11 +386,11 @@ class _FollowPillState extends State<FollowPill> {
           child: AnimatedContainer(
             duration: duration,
             curve: Curves.easeOut,
-            width: IntroTheme.followWidth,
-            height: IntroTheme.followHeight,
+            width: pad ? PadBodyTheme.followWidth : IntroTheme.followWidth,
+            height: height,
             decoration: BoxDecoration(
               color: following ? IntroTheme.followedFill : BiliColors.pink,
-              borderRadius: BorderRadius.circular(IntroTheme.followHeight / 2),
+              borderRadius: BorderRadius.circular(pad ? PadBodyTheme.followRadius : height / 2),
             ),
             alignment: Alignment.center,
             child: AnimatedSwitcher(
@@ -394,9 +404,15 @@ class _FollowPillState extends State<FollowPill> {
                   : Row(
                       key: const ValueKey('follow'),
                       mainAxisSize: MainAxisSize.min,
-                      spacing: IntroTheme.followPlusGap,
+                      spacing: pad ? PadBodyTheme.followPlusGap : IntroTheme.followPlusGap,
                       children: [
-                        CustomPaint(size: const Size.square(IntroTheme.followPlus), painter: _PlusPainter(ink)),
+                        CustomPaint(
+                          size: Size.square(plus),
+                          painter: _PlusPainter(
+                            ink,
+                            stroke: pad ? PadBodyTheme.followPlusStroke : IntroTheme.followPlusStroke,
+                          ),
+                        ),
                         label,
                       ],
                     ),
@@ -409,15 +425,16 @@ class _FollowPillState extends State<FollowPill> {
 }
 
 class _PlusPainter extends CustomPainter {
-  const _PlusPainter(this.color);
+  const _PlusPainter(this.color, {required this.stroke});
 
   final Color color;
+  final double stroke;
 
   @override
   void paint(Canvas canvas, Size size) {
     final line = Paint()
       ..color = color
-      ..strokeWidth = IntroTheme.followPlusStroke;
+      ..strokeWidth = stroke;
     final centre = size.center(Offset.zero);
     canvas
       ..drawLine(Offset(0, centre.dy), Offset(size.width, centre.dy), line)
@@ -425,7 +442,7 @@ class _PlusPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_PlusPainter oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(_PlusPainter oldDelegate) => oldDelegate.color != color || oldDelegate.stroke != stroke;
 }
 
 /// A card can come back with an empty name or face; the view's owner then stands in.
@@ -433,7 +450,7 @@ String _or(String? fromCard, String fromView) => fromCard == null || fromCard.is
 
 /// PingFang on iOS sets digits and Latin letters a little apart from the Chinese they meet ("9815 粉丝"); Flutter's
 /// layout sets them touching, so each meeting gets [gap] more.
-TextSpan _apartFromHan(String text, double gap) {
+TextSpan apartFromHan(String text, double gap) {
   if (gap == 0) return TextSpan(text: text);
   bool han(int unit) => (unit >= 0x4E00 && unit <= 0x9FFF) || (unit >= 0x3400 && unit <= 0x4DBF);
   bool latin(int unit) =>

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../app/form_factor.dart';
 import '../device/orientation.dart';
 import '../shared/theme.dart';
 import 'danmaku_session.dart';
@@ -83,6 +84,13 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
 
   bool get _landscape => widget.presentation == Presentation.landscape;
 
+  /// Which keyboard is up: the iPad's page has a landscape one too.
+  bool get _keyboardWide {
+    if (!FormFactor.of(context).isPad) return _landscape;
+    final size = MediaQuery.sizeOf(context);
+    return size.width > size.height;
+  }
+
   void _changed() {
     if (mounted) setState(() {});
   }
@@ -124,7 +132,7 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
   void _trackKeyboard(double inset, double panel) {
     if (inset > 0 && _focus.hasFocus) {
       // Kept while it rises or rests; a keyboard on its way down has no height worth keeping.
-      if (!_styleShown && inset >= _lastInset) _keyboard[_landscape] = inset;
+      if (!_styleShown && inset >= _lastInset) _keyboard[_keyboardWide] = inset;
       if (_styleShown && inset >= panel - 0.5) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _leaveStyle());
       }
@@ -133,8 +141,13 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
   }
 
   double get _panelHeight =>
-      _keyboard[_landscape] ??
-      (_landscape ? DanmakuSendTheme.landscapePanelHeight : DanmakuSendTheme.portraitPanelHeight);
+      _keyboard[_keyboardWide] ??
+      switch ((FormFactor.of(context).isPad, _keyboardWide)) {
+        (true, true) => PadDanmakuTheme.landscapePanelHeight,
+        (true, false) => PadDanmakuTheme.portraitPanelHeight,
+        (false, true) => DanmakuSendTheme.landscapePanelHeight,
+        (false, false) => DanmakuSendTheme.portraitPanelHeight,
+      };
 
   void _toggleStyle() {
     widget.session.sender.sawStyleHint();
@@ -143,7 +156,7 @@ class _DanmakuOverlaysState extends State<DanmakuOverlays> {
       return;
     }
     final inset = MediaQuery.viewInsetsOf(context).bottom;
-    if (inset > 0) _keyboard[_landscape] = inset;
+    if (inset > 0) _keyboard[_keyboardWide] = inset;
     setState(() => _styleShown = true);
     _focus.unfocus();
   }

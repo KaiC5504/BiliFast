@@ -129,7 +129,9 @@ class _BlockWordsViewState extends State<BlockWordsView> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
-              const listTop = BlockWordsTheme.tabsTop + BlockWordsTheme.tabsHeight;
+              // The phone's landscape has no top inset; the iPad's status bar can stay up over full screen (08).
+              final top = insets.top;
+              final listTop = top + BlockWordsTheme.tabsTop + BlockWordsTheme.tabsHeight;
               return Stack(
                 children: [
                   Positioned(
@@ -153,7 +155,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
                   ),
                   Positioned(
                     left: insets.left + BlockWordsTheme.closeCentreX - BlockWordsTheme.closeHitBox / 2,
-                    top: BlockWordsTheme.rowTop + (BlockWordsTheme.rowHeight - BlockWordsTheme.closeHitBox) / 2,
+                    top: top + BlockWordsTheme.rowTop + (BlockWordsTheme.rowHeight - BlockWordsTheme.closeHitBox) / 2,
                     width: BlockWordsTheme.closeHitBox,
                     height: BlockWordsTheme.closeHitBox,
                     child: Semantics(
@@ -170,7 +172,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
                   Positioned(
                     left: insets.left + BlockWordsTheme.fieldLeft,
                     right: insets.right,
-                    top: BlockWordsTheme.rowTop,
+                    top: top + BlockWordsTheme.rowTop,
                     height: BlockWordsTheme.rowHeight,
                     child: Row(
                       children: [
@@ -202,7 +204,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
                   ),
                   Positioned(
                     left: insets.left + BlockWordsTheme.tabsLeft,
-                    top: BlockWordsTheme.tabsTop,
+                    top: top + BlockWordsTheme.tabsTop,
                     height: BlockWordsTheme.tabsHeight,
                     child: Row(
                       children: [

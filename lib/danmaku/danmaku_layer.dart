@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../app/form_factor.dart';
 import '../device/orientation.dart';
 import '../player/playback_clock.dart';
 import 'danmaku_pace.dart';
@@ -25,6 +26,7 @@ class DanmakuLayer extends StatefulWidget {
     this.settings,
     this.presentation = Presentation.inline,
     this.sprites,
+    this.formFactor,
   });
 
   final PlaybackClock clock;
@@ -39,6 +41,9 @@ class DanmakuLayer extends StatefulWidget {
 
   /// Lays out the text; a test passes its own to count layouts.
   final DanmakuSprites? sprites;
+
+  /// [FormFactor.device] unless given.
+  final FormFactor? formFactor;
 
   @override
   State<DanmakuLayer> createState() => DanmakuLayerState();
@@ -62,7 +67,22 @@ class DanmakuLayerState extends State<DanmakuLayer> with SingleTickerProviderSta
 
   bool get _active => widget.enabled && widget.timeline != null;
 
-  DanmakuOptions _resolve() => widget.settings?.value.display(presentation: widget.presentation) ?? widget.options;
+  DanmakuOptions _resolve() {
+    final formFactor = widget.formFactor ?? FormFactor.device;
+    if (widget.settings case final settings?) {
+      return settings.value.display(presentation: widget.presentation, formFactor: formFactor);
+    }
+    final options = widget.options;
+    if (options.formFactor == formFactor) return options;
+    return DanmakuOptions(
+      area: options.area,
+      opacity: options.opacity,
+      scale: options.scale,
+      scrollDuration: options.scrollDuration,
+      presentation: options.presentation,
+      formFactor: formFactor,
+    );
+  }
 
   @override
   void initState() {

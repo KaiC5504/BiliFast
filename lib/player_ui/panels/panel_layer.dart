@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../../app/form_factor.dart';
 import '../../device/orientation.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
@@ -29,6 +30,11 @@ final class PanelFrame {
     this.full = false,
     this.solid = false,
     this.sheetColor = BiliColors.card,
+    this.points,
+    this.shade,
+    this.lead,
+    this.trailing,
+    this.top = 0,
   });
 
   final double width;
@@ -47,7 +53,20 @@ final class PanelFrame {
   /// The light sheet's ground.
   final Color sheetColor;
 
-  static PanelFrame of(PlayerPanel panel) => switch (panel) {
+  /// The iPad's strips: a width in points instead of [width]'s share, and a hard edge in this shade.
+  final double? points;
+  final Color? shade;
+
+  /// Where the content starts in from the strip's left and ends before the safe area; null keeps the phone's.
+  final double? lead;
+  final double? trailing;
+
+  /// Added under the safe area at the strip's top.
+  final double top;
+
+  static PanelFrame of(PlayerPanel panel, {bool pad = false}) => pad ? _pad(panel) : _phone(panel);
+
+  static PanelFrame _phone(PlayerPanel panel) => switch (panel) {
     PlayerPanel.quality || PlayerPanel.codec => const PanelFrame(
       width: BiliMetrics.panelQualityWidth,
       sheetHeight: BiliMetrics.panelSheetHeight,
@@ -78,6 +97,59 @@ final class PanelFrame {
     PlayerPanel.danmakuList => const PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
   };
 
+  /// Full screen on the iPad (ipad/10-13): every strip hard-edged and as wide in points sideways as upright. 选集 and
+  /// 当前弹幕列表 have no screenshot and take 弹幕设置's.
+  static PanelFrame _pad(PlayerPanel panel) {
+    final phone = _phone(panel);
+    return switch (panel) {
+      PlayerPanel.quality || PlayerPanel.codec => PanelFrame(
+        width: phone.width,
+        sheetHeight: phone.sheetHeight,
+        points: PadPanelTheme.narrowWidth,
+        shade: PadPanelTheme.shade,
+        lead: 0,
+        trailing: 0,
+      ),
+      PlayerPanel.speed => PanelFrame(
+        width: phone.width,
+        sheetHeight: phone.sheetHeight,
+        column: true,
+        points: PadPanelTheme.narrowWidth,
+        shade: PadPanelTheme.darkShade,
+        lead: 0,
+        trailing: 0,
+      ),
+      PlayerPanel.more => PanelFrame(
+        width: phone.width,
+        sheetHeight: phone.sheetHeight,
+        points: PadPanelTheme.wideWidth,
+        shade: PadPanelTheme.shade,
+        lead: PadPanelTheme.moreInset,
+        trailing: PadPanelTheme.moreInset,
+      ),
+      PlayerPanel.danmakuSettings => PanelFrame(
+        width: phone.width,
+        sheetHeight: phone.sheetHeight,
+        light: true,
+        solid: true,
+        sheetColor: phone.sheetColor,
+        points: PadPanelTheme.wideWidth,
+        shade: PadPanelTheme.darkShade,
+        trailing: PadPanelTheme.trailing,
+        top: PadPanelTheme.danmakuTop,
+      ),
+      PlayerPanel.episodes || PlayerPanel.danmakuList => PanelFrame(
+        width: phone.width,
+        sheetHeight: phone.sheetHeight,
+        light: phone.light,
+        points: PadPanelTheme.wideWidth,
+        shade: PadPanelTheme.darkShade,
+        trailing: PadPanelTheme.trailing,
+      ),
+      PlayerPanel.blockWords => phone,
+    };
+  }
+
   @override
   bool operator ==(Object other) =>
       other is PanelFrame &&
@@ -87,10 +159,16 @@ final class PanelFrame {
       other.light == light &&
       other.full == full &&
       other.solid == solid &&
-      other.sheetColor == sheetColor;
+      other.sheetColor == sheetColor &&
+      other.points == points &&
+      other.shade == shade &&
+      other.lead == lead &&
+      other.trailing == trailing &&
+      other.top == top;
 
   @override
-  int get hashCode => Object.hash(width, sheetHeight, column, light, full, solid, sheetColor);
+  int get hashCode =>
+      Object.hash(width, sheetHeight, column, light, full, solid, sheetColor, points, shade, lead, trailing, top);
 }
 
 /// The open panel, if any (BiliNative `PanelLayer.swift` and `SidePanel.swift`): from the right in landscape, a
@@ -133,6 +211,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   /// A confirm the open panel asked for, over everything; it goes with the panel.
   final _confirm = ValueNotifier<PanelConfirm?>(null);
+
+  /// Whether the last build was the iPad's full screen, for comparing frames outside a build.
+  bool _padStrip = false;
 
   @override
   void initState() {
@@ -203,7 +284,8 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
       return;
     }
     final previous = _shown;
-    final slideIn = previous == null || PanelFrame.of(previous) != PanelFrame.of(next);
+    final slideIn =
+        previous == null || PanelFrame.of(previous, pad: _padStrip) != PanelFrame.of(next, pad: _padStrip);
     setState(() => _shown = next);
     if (slideIn) {
       _dragBack.stop();
@@ -231,7 +313,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     final shown = _shown;
     if (shown == null) return const SizedBox.shrink();
     final landscape = widget.ui.presentation == Presentation.landscape;
-    final frame = PanelFrame.of(shown);
+    final pad = FormFactor.of(context).isPad;
+    _padStrip = pad && landscape;
+    final frame = PanelFrame.of(shown, pad: _padStrip);
     final light = frame.light && !landscape;
     return IgnorePointer(
       ignoring: widget.ui.panels.value == null,
@@ -246,6 +330,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
         child: PanelScope(
           landscape: landscape,
           reveal: _motion,
+          pad: pad,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final size = constraints.biggest;
@@ -267,9 +352,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                   if (frame.full)
                     _full(content)
                   else if (!landscape && light)
-                    ..._lightSheet(size, insets, frame, content)
+                    ..._lightSheet(size, insets, frame, content, pad: pad)
                   else if (!landscape)
-                    _sheet(size, insets, frame, content)
+                    _sheet(size, insets, frame, content, pad: pad)
                   else if (frame.column)
                     _column(size, insets, frame, content)
                   else
@@ -371,8 +456,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
       GestureDetector(key: const ValueKey('panel-frame'), behavior: HitTestBehavior.opaque, onTap: () {}, child: child);
 
   Widget _side(Size size, EdgeInsets insets, PanelFrame frame, Widget content) {
-    final width = size.width * frame.width;
-    final reach = frame.solid ? 0.0 : size.width * BiliMetrics.panelFadeFraction;
+    final width = frame.points ?? size.width * frame.width;
+    final hard = frame.solid || frame.shade != null;
+    final reach = hard ? 0.0 : size.width * BiliMetrics.panelFadeFraction;
     return Positioned(
       top: 0,
       bottom: 0,
@@ -386,8 +472,8 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
           children: [
             Positioned.fill(
               child: IgnorePointer(
-                child: frame.solid
-                    ? const ColoredBox(color: DanmakuPanelTheme.shade)
+                child: hard
+                    ? ColoredBox(color: frame.shade ?? DanmakuPanelTheme.shade)
                     : DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: panelBackdrop(reach: reach, length: width + reach),
@@ -403,9 +489,10 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               child: _body(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.only(
-                    top: insets.top,
+                    top: insets.top + frame.top,
                     bottom: frame.solid ? 0 : insets.bottom + BiliMetrics.panelBottom,
-                    right: insets.right + BiliMetrics.panelTrailing,
+                    left: frame.lead ?? 0,
+                    right: insets.right + (frame.trailing ?? BiliMetrics.panelTrailing),
                   ),
                   child: content,
                 ),
@@ -427,7 +514,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     top: 0,
     bottom: 0,
     right: 0,
-    width: size.width * frame.width,
+    width: frame.points ?? size.width * frame.width,
     child: AnimatedBuilder(
       animation: _slide,
       builder: (context, child) => Opacity(
@@ -436,15 +523,15 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
       ),
       child: Stack(
         children: [
-          const Positioned.fill(
-            child: IgnorePointer(child: ColoredBox(color: BiliColors.panelShade)),
+          Positioned.fill(
+            child: IgnorePointer(child: ColoredBox(color: frame.shade ?? BiliColors.panelShade)),
           ),
           Positioned.fill(
             child: _body(
               child: SingleChildScrollView(
                 padding: EdgeInsets.only(
-                  left: BiliMetrics.panelSpeedLead,
-                  right: insets.right + BiliMetrics.panelTrailing,
+                  left: frame.lead ?? BiliMetrics.panelSpeedLead,
+                  right: insets.right + (frame.trailing ?? BiliMetrics.panelTrailing),
                 ),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: size.height),
@@ -460,17 +547,29 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   double _sheetOffset(double hidden) => (1 - _slide.value) * hidden + _drag.value;
 
-  Widget _slidingSheet({required double height, required double hidden, required Widget child}) => Positioned(
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: height,
-    child: AnimatedBuilder(
-      animation: Listenable.merge([_slide, _drag]),
-      builder: (context, child) => Transform.translate(offset: Offset(0, _sheetOffset(hidden)), child: child),
-      child: child,
-    ),
-  );
+  /// Across the screen, or [width] from its left edge.
+  Widget _slidingSheet({required double height, required double hidden, required Widget child, double? width}) {
+    return Positioned(
+      left: 0,
+      right: width == null ? 0 : null,
+      width: width,
+      bottom: 0,
+      height: height,
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_slide, _drag]),
+        builder: (context, child) => Transform.translate(offset: Offset(0, _sheetOffset(hidden)), child: child),
+        child: child,
+      ),
+    );
+  }
+
+  /// The iPad's page has no screenshot of an open sheet: it keeps the phone's height in points, never reaching over
+  /// the player, and [PadPanelTheme.sheetMaxWidth] at most, so the phone's rows don't stretch across the screen.
+  double _padSheetHeight(Size size, EdgeInsets insets, double share) =>
+      math.max(0.0, math.min(share * PadPanelTheme.phoneHeight, size.height - (widget.playerBottom ?? insets.top)));
+
+  double? _padSheetWidth(Size size, {required bool pad}) =>
+      pad ? math.min(size.width, PadPanelTheme.sheetMaxWidth) : null;
 
   Widget _grabber({required Widget child}) => GestureDetector(
     key: const ValueKey('panel-grabber'),
@@ -489,12 +588,13 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     child: child,
   );
 
-  Widget _sheet(Size size, EdgeInsets insets, PanelFrame frame, Widget content) {
-    final height = size.height * frame.sheetHeight;
+  Widget _sheet(Size size, EdgeInsets insets, PanelFrame frame, Widget content, {required bool pad}) {
+    final height = pad ? _padSheetHeight(size, insets, frame.sheetHeight) : size.height * frame.sheetHeight;
     const reach = BiliMetrics.panelFadeHeight;
     return _slidingSheet(
       height: height + reach,
       hidden: height + reach + insets.bottom,
+      width: _padSheetWidth(size, pad: pad),
       child: Stack(
         children: [
           Positioned.fill(
@@ -550,9 +650,15 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   /// The official 合集 list (19): white, rounded at the top, from the player's bottom down; [EpisodesPanel] fills it
   /// below the grabber. The page under it dims, the player above it doesn't.
-  List<Widget> _lightSheet(Size size, EdgeInsets insets, PanelFrame frame, Widget content) {
+  List<Widget> _lightSheet(Size size, EdgeInsets insets, PanelFrame frame, Widget content, {required bool pad}) {
+    final width = _padSheetWidth(size, pad: pad);
     final height = widget.ui.presentation == Presentation.inline
-        ? math.max(0.0, size.height - (widget.playerBottom ?? insets.top + size.width / BiliMetrics.videoAspect))
+        ? math.max(
+            0.0,
+            size.height - (widget.playerBottom ?? insets.top + (width ?? size.width) / BiliMetrics.videoAspect),
+          )
+        : pad
+        ? _padSheetHeight(size, insets, frame.sheetHeight)
         : size.height * frame.sheetHeight;
     final hidden = height + insets.bottom;
     return [
@@ -574,6 +680,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
       _slidingSheet(
         height: height,
         hidden: hidden,
+        width: width,
         child: _body(
           child: DecoratedBox(
             decoration: BoxDecoration(

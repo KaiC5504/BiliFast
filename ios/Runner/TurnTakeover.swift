@@ -36,8 +36,9 @@ enum TurnTakeover {
     case request(Int)
   }
 
+  /// Never on the iPad: it turns as the system turns it, and full screen doesn't turn at all.
   static func configure(enabled: Bool) {
-    self.enabled = enabled
+    self.enabled = enabled && !DeviceChannel.isPad
   }
 
   /// Before DeviceChannel asks the scene to turn. Animations are off from here until the turn that follows completes
