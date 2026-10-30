@@ -295,6 +295,16 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   all in) to deliver ranges iOS finished while the app was suspended. Logs: `offline handed off` gains ms and late
   (true: the last ones were queued from the background), `offline taken back` gains started and partialMb (what iOS
   had fetched of unfinished ranges).
+- 1.3.0 (3), KaiC (several devices, some videos cached): a cached video's page reports its watch progress as a video
+  page does (`WatchReporter`, logged in only). A heartbeat that gets no answer waits in `HistoryOutbox`
+  (`history_outbox.json`: the latest per video, as Bilibili keeps one place per video; 30 days), sent one at a time
+  at login, on coming back and on network changes, cleared on logout; before sending one older than 5 minutes a
+  flush reads 历史记录's first page once and drops reports of videos the account has watched since (another
+  device). A cached part opened online starts where the account last stopped in it (player/v2's `last_play_time`,
+  1 s at most, same part only), unless this phone's own report of it is still waiting. Bilibili dates a sent report
+  when it arrives. Logs: `history outbox` (counts: queued, sent, dropped, stale, failed, held), `offline resume`
+  (cid, local, server, used, source). Known limit: a login of another account straight after an expired one (no
+  logout between) would send the first account's waiting reports.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
