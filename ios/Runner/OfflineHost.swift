@@ -1,10 +1,13 @@
+import BackgroundTasks
 import Flutter
 import UIKit
 
-/// 离线缓存's host (lib/offline/ios/offline_api.g.dart): Pigeon's OfflineHostApi (OfflineApi.g.swift) and the
-/// background URLSession that keeps a download going after the app leaves the foreground.
+/// 离线缓存's host (lib/offline/ios/offline_api.g.dart): Pigeon's OfflineHostApi (OfflineApi.g.swift), the continued
+/// processing task that keeps the app running after it leaves, and the background URLSessions that keep a download
+/// going once it is suspended.
 enum OfflineHost {
-  /// Set once at registration; the session's callbacks reach Dart through it while Flutter runs.
+  /// Set once at registration; the sessions' and the continued task's callbacks reach Dart through it while Flutter
+  /// runs.
   @MainActor static var events: OfflineEventApi?
 
   static func register(with messenger: FlutterBinaryMessenger) {
@@ -16,8 +19,6 @@ enum OfflineHost {
 
 /// Pigeon calls in on the main thread.
 final class OfflineHostApiImpl: OfflineHostApi {
-  private let grace = MainActor.assumeIsolated { OfflineGrace() }
-
   func freeBytes() throws -> Int64? {
     let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
     let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
@@ -36,17 +37,15 @@ final class OfflineHostApiImpl: OfflineHostApi {
   }
 
   func beginGrace() throws {
-    let grace = self.grace
-    MainActor.assumeIsolated { grace.begin() }
+    MainActor.assumeIsolated { OfflineGrace.shared.begin() }
   }
 
   func endGrace() throws {
-    let grace = self.grace
-    MainActor.assumeIsolated { grace.end() }
+    MainActor.assumeIsolated { OfflineGrace.shared.end() }
   }
 
   func handOff(ranges: [NativeBackgroundRange], connections: Int64) throws {
-    OfflineTransfers.shared.handOff(ranges)
+    OfflineTransfers.shared.handOff(ranges, connections: Int(connections))
   }
 
   func takeBack() async throws -> [NativeBackgroundRangeResult] {
@@ -54,23 +53,147 @@ final class OfflineHostApiImpl: OfflineHostApi {
   }
 
   func beginContinued(title: String, subtitle: String) throws -> String? {
-    "not built"
+    MainActor.assumeIsolated { ContinuedDownloads.shared.begin(title: title, subtitle: subtitle) }
   }
 
-  func updateContinued(done: Int64, total: Int64, subtitle: String) throws {}
+  func updateContinued(done: Int64, total: Int64, subtitle: String) throws {
+    MainActor.assumeIsolated { ContinuedDownloads.shared.update(done: done, total: total, subtitle: subtitle) }
+  }
 
-  func endContinued(success: Bool) throws {}
+  func endContinued(success: Bool) throws {
+    MainActor.assumeIsolated { ContinuedDownloads.shared.end(success: success) }
+  }
+}
+
+/// iOS 26's continued processing: asked for as the user starts downloads, the task keeps the app running after it
+/// leaves, the engine downloading at full speed, under a Live Activity with the progress where the user can cancel it.
+/// One at a time.
+@MainActor final class ContinuedDownloads {
+  static let shared = ContinuedDownloads()
+  static let identifier = "com.kaichuan.bilifast.offline.continued"
+
+  /// A request whose launch hasn't come by then no longer holds back a new one.
+  private static let pendingLimit: TimeInterval = 10
+
+  /// Registering an identifier twice raises, so the first answer is kept for the process.
+  private var registered: Bool?
+  private var task: BGContinuedProcessingTask?
+  private var pendingSince: Date?
+  /// Dart ended a request before it started: its launch, if it still comes, completes at once.
+  private var withdrawn = false
+  private var subtitle = ""
+
+  private init() {}
+
+  /// Nil when iOS took the request (or one is already running or on its way), else why not.
+  func begin(title: String, subtitle: String) -> String? {
+    if let task {
+      task.updateTitle(title, subtitle: subtitle)
+      self.subtitle = subtitle
+      return nil
+    }
+    if let pendingSince, Date().timeIntervalSince(pendingSince) < Self.pendingLimit { return nil }
+    guard register() else { return "not registered" }
+    let request = BGContinuedProcessingTaskRequest(identifier: Self.identifier, title: title, subtitle: subtitle)
+    request.strategy = .fail
+    do {
+      try BGTaskScheduler.shared.submit(request)
+    } catch {
+      let failure = error as NSError
+      return "\(failure.domain) \(failure.code)"
+    }
+    // The launch handler runs on the main queue, so it comes only after this returns.
+    pendingSince = Date()
+    withdrawn = false
+    self.subtitle = subtitle
+    return nil
+  }
+
+  func update(done: Int64, total: Int64, subtitle: String) {
+    guard let task else { return }
+    let total = max(total, 1)
+    task.progress.totalUnitCount = total
+    task.progress.completedUnitCount = min(max(done, 0), total)
+    if subtitle != self.subtitle {
+      self.subtitle = subtitle
+      task.updateTitle(task.title, subtitle: subtitle)
+    }
+  }
+
+  func end(success: Bool) {
+    if let task {
+      self.task = nil
+      task.setTaskCompleted(success: success)
+    } else if pendingSince != nil {
+      BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.identifier)
+      pendingSince = nil
+      withdrawn = true
+    }
+  }
+
+  /// Continued processing handlers may be registered when the user asks for the work, not only at launch.
+  private func register() -> Bool {
+    if let registered { return registered }
+    let done = BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.identifier, using: .main) { task in
+      MainActor.assumeIsolated { ContinuedDownloads.shared.launched(task) }
+    }
+    registered = done
+    return done
+  }
+
+  private func launched(_ given: BGTask) {
+    pendingSince = nil
+    guard let continued = given as? BGContinuedProcessingTask else {
+      given.setTaskCompleted(success: false)
+      return
+    }
+    if withdrawn || task != nil {
+      withdrawn = false
+      continued.setTaskCompleted(success: true)
+      return
+    }
+    task = continued
+    // Apple DTS: a bar whose progress never moved shows as indeterminate until the first update.
+    continued.progress.totalUnitCount = 101
+    continued.progress.completedUnitCount = 0
+    continued.progress.completedUnitCount = 1
+    let id = ObjectIdentifier(continued)
+    // iOS may call it off the main thread.
+    continued.expirationHandler = { @Sendable in
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated { ContinuedDownloads.shared.expired(id) }
+      }
+    }
+    Task { @MainActor in try? await OfflineHost.events?.onContinuedStarted() }
+  }
+
+  /// The time was up or the user cancelled it in the Live Activity; iOS doesn't say which.
+  private func expired(_ id: ObjectIdentifier) {
+    guard let task, ObjectIdentifier(task) == id else { return }
+    // Without the task an app already away would be suspended before Dart hands its downloads to the sessions.
+    if UIApplication.shared.applicationState != .active {
+      OfflineGrace.shared.begin()
+    }
+    let locked = !UIApplication.shared.isProtectedDataAvailable
+    self.task = nil
+    Task { @MainActor in try? await OfflineHost.events?.onContinuedEnded(locked: locked) }
+    task.setTaskCompleted(success: false)
+  }
 }
 
 /// The time iOS gives after the app leaves the foreground (beginBackgroundTask). Dart hears onGraceEnding a few
 /// seconds before it runs out, so the engine can stop and flush, and then ends it; the expiration handler is the
 /// backstop, ending it at once so iOS never kills the app for overrunning.
 @MainActor final class OfflineGrace {
+  static let shared = OfflineGrace()
+
   private static let warning: TimeInterval = 8
 
   private var task: UIBackgroundTaskIdentifier = .invalid
   private var watch: Timer?
   private var warned = false
+
+  private init() {}
 
   func begin() {
     guard task == .invalid else { return }
@@ -107,13 +230,34 @@ final class OfflineHostApiImpl: OfflineHostApi {
   }
 }
 
-/// The background session lives as long as the app: iOS hands its events to a session of the same identifier, which
-/// must exist by the time `handleEventsForBackgroundURLSession` arrives. Each range is one download task; a finished
-/// one is written into its part file here, so it lands even while Flutter isn't running, and its result is kept on
-/// disk until Dart takes it back.
+/// The background sessions live as long as the app: iOS hands a session's events to a session of the same identifier,
+/// which must exist by the time `handleEventsForBackgroundURLSession` arrives. Each range is one download task; a
+/// finished one is written into its part file here, so it lands even while Flutter isn't running, and its result is
+/// kept on disk until Dart takes it back.
 final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
   static let shared = OfflineTransfers()
-  static let identifier = "com.kaichuan.bilifast.offline"
+
+  /// A session's connections per host are fixed by its configuration, so each count Dart tries has its own. 3 keeps
+  /// the identifier older builds handed off on, so their transfers reattach.
+  private static let sessions = [
+    (identifier: "com.kaichuan.bilifast.offline", connections: 3),
+    (identifier: "com.kaichuan.bilifast.offline.c2", connections: 2),
+    (identifier: "com.kaichuan.bilifast.offline.c6", connections: 6),
+  ]
+  static let identifiers = sessions.map { $0.identifier }
+
+  private static func identifier(connections: Int) -> String {
+    sessions.first { $0.connections == connections }?.identifier ?? identifiers[0]
+  }
+
+  private static func connections(of identifier: String) -> Int {
+    sessions.first { $0.identifier == identifier }?.connections ?? 3
+  }
+
+  /// Task identifiers are unique only within their session.
+  private static func key(_ session: URLSession, _ task: URLSessionTask) -> String {
+    "\(session.configuration.identifier ?? "")#\(task.taskIdentifier)"
+  }
 
   /// Results kept for Dart at most; older ones drop off first.
   private static let maxResults = 4000
@@ -129,57 +273,63 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   /// The part files, the `.bg-ranges` files and the results, one write at a time.
   private let queue = DispatchQueue(label: "com.kaichuan.bilifast.offline.transfers")
   private let lock = NSLock()
-  private var made: URLSession?
+  private var made: [String: URLSession] = [:]
 
   /// On `queue`: the results not yet taken back (nil until read from disk), the tasks recorded in this run of the
-  /// app, and whether Dart took the session back since the last hand-off (every later callback is then ignored).
+  /// app (by `key`), and whether Dart took the sessions back since the last hand-off (every later callback is then
+  /// ignored).
   private var results: [RecordedResult]?
-  private var recorded = Set<Int>()
+  private var recorded = Set<String>()
   private var closed = false
   private var persistFailureLogged = false
 
-  /// On the main thread. iOS may report the session's events done before it hands over the completion.
-  private var completion: (() -> Void)?
-  private var eventsFinished = false
+  /// On the main thread, by session identifier. iOS may report a session's events done before it hands over the
+  /// completion.
+  private var completions: [String: () -> Void] = [:]
+  private var eventsFinished = Set<String>()
 
-  private var session: URLSession {
+  private func session(_ identifier: String) -> URLSession {
     lock.lock()
     defer { lock.unlock() }
-    if let made { return made }
-    let configuration = URLSessionConfiguration.background(withIdentifier: Self.identifier)
+    if let existing = made[identifier] { return existing }
+    let configuration = URLSessionConfiguration.background(withIdentifier: identifier)
     configuration.isDiscretionary = false
     configuration.sessionSendsLaunchEvents = true
     // Left to itself iOS ran ~30 ranges at once (1.3.0 (2)'s log), each crawling: in two minutes 62 MB finished and
     // 434 MB were thrown away unfinished on the return. A few at a time finish one after another.
-    configuration.httpMaximumConnectionsPerHost = 3
+    configuration.httpMaximumConnectionsPerHost = Self.connections(of: identifier)
     let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-    made = session
+    made[identifier] = session
     return session
   }
 
-  /// Called from didFinishLaunching, so a relaunch in the background reattaches to its transfers.
-  func resume() {
-    _ = session
+  private var allSessions: [URLSession] {
+    Self.identifiers.map { session($0) }
   }
 
-  /// iOS woke or relaunched the app for the session's events; [completion] runs once they are all handled.
+  /// Called from didFinishLaunching, so a relaunch in the background reattaches to whichever has transfers.
+  func resume() {
+    _ = allSessions
+  }
+
+  /// iOS woke or relaunched the app for a session's events; [completion] runs once they are all handled.
   func handleEvents(identifier: String, completion: @escaping () -> Void) {
     resume()
-    if eventsFinished {
-      eventsFinished = false
+    if eventsFinished.remove(identifier) != nil {
       completion()
     } else {
       // A second wake before the first one's events finished: the first is owed its call.
-      self.completion?()
-      self.completion = completion
+      completions[identifier]?()
+      completions[identifier] = completion
     }
   }
 
-  func handOff(_ ranges: [NativeBackgroundRange]) {
-    let session = self.session
+  func handOff(_ ranges: [NativeBackgroundRange], connections: Int) {
+    let identifier = Self.identifier(connections: connections)
+    let session = self.session(identifier)
     queue.sync { closed = false }
     // A finish that came with no wake to answer belongs to transfers before these.
-    DispatchQueue.main.async { self.eventsFinished = false }
+    DispatchQueue.main.async { _ = self.eventsFinished.remove(identifier) }
     for range in ranges {
       guard let url = URL(string: range.url), let description = TransferRange(range).encoded() else { continue }
       var request = URLRequest(url: url)
@@ -197,37 +347,37 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   /// Cancels every task still going (each reported as cancelled, status 0, with the bytes it had) and returns every
   /// result since the last call, those from while the app was closed included.
   func takeBack() async -> [NativeBackgroundRangeResult] {
-    let session = self.session
-    var tasks = await Self.allTasks(session)
-    var seen = Dictionary(tasks.map { ($0.taskIdentifier, $0) }, uniquingKeysWith: { _, last in last })
-    if tasks.contains(where: Self.isGoing) {
+    let sessions = allSessions
+    var tasks = await Self.allTasks(sessions)
+    var seen = tasks
+    if tasks.values.contains(where: Self.isGoing) {
       // A range iOS finished while the app was suspended reaches the delegate only once the app is back, and until
-      // then its task still reads as running: cancelled, its bytes would be thrown away. So the session gets a moment
+      // then its task still reads as running: cancelled, its bytes would be thrown away. So the sessions get a moment
       // to deliver, then a few seconds more for any task whose bytes are all in.
       try? await Task.sleep(nanoseconds: Self.settle)
-      tasks = await Self.allTasks(session)
+      tasks = await Self.allTasks(sessions)
       let deadline = Date().addingTimeInterval(Self.finishingWait)
-      while Date() < deadline, tasks.contains(where: Self.isFinishing) {
+      while Date() < deadline, tasks.values.contains(where: Self.isFinishing) {
         try? await Task.sleep(nanoseconds: 100_000_000)
-        tasks = await Self.allTasks(session)
+        tasks = await Self.allTasks(sessions)
       }
-      for task in tasks {
-        seen[task.taskIdentifier] = task
-      }
+      seen.merge(tasks) { _, last in last }
     }
-    for task in tasks where Self.isGoing(task) {
+    for task in tasks.values where Self.isGoing(task) {
       task.cancel()
     }
     // A range finishing as it is cancelled is still written: callbacks already queued for the delegate run before the
-    // session closes. Any later one is dropped unwritten, and its range reported cancelled.
-    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-      session.delegateQueue.addOperation { continuation.resume() }
+    // sessions close. Any later one is dropped unwritten, and its range reported cancelled.
+    for session in sessions {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        session.delegateQueue.addOperation { continuation.resume() }
+      }
     }
     return queue.sync {
       closed = true
       // Canceling and completed tasks whose callbacks come after the barrier are reported too.
-      for task in seen.values where !recorded.contains(task.taskIdentifier) {
-        recorded.insert(task.taskIdentifier)
+      for (key, task) in seen where !recorded.contains(key) {
+        recorded.insert(key)
         if let range = TransferRange.decode(task.taskDescription) {
           record(range, done: false, status: 0, received: task.countOfBytesReceived)
         }
@@ -251,17 +401,25 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
       && task.countOfBytesReceived >= task.countOfBytesExpectedToReceive
   }
 
-  private static func allTasks(_ session: URLSession) async -> [URLSessionTask] {
-    await withCheckedContinuation { (continuation: CheckedContinuation<[URLSessionTask], Never>) in
-      session.getAllTasks { continuation.resume(returning: $0) }
+  /// Every session's tasks, by `key`.
+  private static func allTasks(_ sessions: [URLSession]) async -> [String: URLSessionTask] {
+    var all: [String: URLSessionTask] = [:]
+    for session in sessions {
+      let tasks = await withCheckedContinuation { (continuation: CheckedContinuation<[URLSessionTask], Never>) in
+        session.getAllTasks { continuation.resume(returning: $0) }
+      }
+      for task in tasks {
+        all[key(session, task)] = task
+      }
     }
+    return all
   }
 
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
     guard let range = TransferRange.decode(downloadTask.taskDescription) else { return }
     let response = downloadTask.response as? HTTPURLResponse
     let status = response?.statusCode ?? -1
-    let id = downloadTask.taskIdentifier
+    let id = Self.key(session, downloadTask)
     // Synchronously: iOS removes the file at `location` once this returns.
     queue.sync {
       guard !closed, !recorded.contains(id) else { return }
@@ -290,7 +448,7 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
 
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
     guard let error, let range = TransferRange.decode(task.taskDescription) else { return }
-    let id = task.taskIdentifier
+    let id = Self.key(session, task)
     let cancelled = (error as? URLError)?.code == .cancelled
     queue.sync {
       guard !closed, !recorded.contains(id) else { return }
@@ -300,12 +458,12 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   }
 
   func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+    guard let identifier = session.configuration.identifier else { return }
     DispatchQueue.main.async {
-      guard let completion = self.completion else {
-        self.eventsFinished = true
+      guard let completion = self.completions.removeValue(forKey: identifier) else {
+        self.eventsFinished.insert(identifier)
         return
       }
-      self.completion = nil
       completion()
     }
   }
