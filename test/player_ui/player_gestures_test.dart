@@ -10,6 +10,7 @@ import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_gestures.dart';
 import 'package:bilifast/player_ui/player_hud.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/video/collapsing_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,9 @@ final class RecordingDevice implements DeviceControls {
   double volumeLevel = 0.5;
   final sets = <String>[];
   final hardware = StreamController<double>.broadcast(sync: true);
+
+  /// The hidden volume view put up ('enter') and taken down ('leave').
+  final views = <String>[];
 
   /// Thrown by the reads, or by the sets once recorded, while set.
   Object? readError;
@@ -57,10 +61,10 @@ final class RecordingDevice implements DeviceControls {
   Stream<double> get hardwareVolume => hardware.stream;
 
   @override
-  Future<void> enterFullScreen() async {}
+  Future<void> enterFullScreen() async => views.add('enter');
 
   @override
-  Future<void> leaveFullScreen() async {}
+  Future<void> leaveFullScreen() async => views.add('leave');
 }
 
 final class Rig {
@@ -328,6 +332,17 @@ void main() {
       await tester.pump(_tapSettles);
       expect(rig.calls, ['speedUp true', 'speedUp false'], reason: 'the hold was not also a tap');
       expect(rig.chrome.visible, isTrue);
+    });
+
+    testWidgets('up and down still set brightness and volume, with no volume view of its own', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.timedDragFrom(const Offset(200, 300), const Offset(0, -150), thumb(150));
+      await tester.timedDragFrom(const Offset(600, 300), const Offset(0, 150), thumb(150));
+      expect(rig.device.sets.first, startsWith('brightness'));
+      expect(rig.device.sets.last, 'volume ${0.5 - 150 / 600}');
+      expect(rig.device.views, isEmpty);
+      expect(rig.chrome.hud.value, isNull);
+      await tester.pump(_tapSettles);
     });
 
     testWidgets('landscape keeps its gestures: a tap toggles the controls, a double tap plays', (tester) async {
@@ -682,31 +697,120 @@ void main() {
   });
 
   group('inline', () {
-    testWidgets('a vertical drag is left to the scroller under the player, with no levels', (tester) async {
-      final scroll = ScrollController();
-      addTearDown(scroll.dispose);
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: ListView(
-            controller: scroll,
-            children: [rig.player(height: 450), const SizedBox(height: 1200)],
-          ),
-        ),
-      );
-      // Mostly down, with a small sideways wobble.
-      await tester.timedDragFrom(const Offset(600, 300), const Offset(30, -300), thumb(300));
-      await tester.pumpAndSettle();
-      expect(scroll.offset, greaterThan(200));
+    /// Six moves of [dy] a frame apart, the finger held down after them.
+    Future<TestGesture> dragUp(WidgetTester tester, Offset from, {double dy = -25}) async {
+      final gesture = await tester.startGesture(from);
+      for (var i = 0; i < 6; i++) {
+        await gesture.moveBy(Offset(0, dy), timeStamp: Duration(milliseconds: 16 * (i + 1)));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      return gesture;
+    }
+
+    testWidgets('up on the left half raises the brightness, with its level in the HUD until the finger lifts', (
+      tester,
+    ) async {
+      await rig.mountInline(tester);
+      final gesture = await dragUp(tester, const Offset(200, 300));
+      // 150 pt of the 450 pt box.
+      expect(rig.device.sets.last, 'brightness ${0.5 + 150 / 450}');
+      expect(rig.chrome.hud.value, LevelHud(LevelKind.brightness, 0.5 + 150 / 450));
+      expect(find.byKey(const ValueKey('hud-level-brightness')), findsOneWidget);
+      expect(rig.device.sets.where((set) => set.startsWith('volume')), isEmpty);
+      expect(rig.device.views, isEmpty, reason: 'brightness needs no volume view');
+      await gesture.up();
+      expect(rig.chrome.hud.value, isNull);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byKey(const ValueKey('hud-level-brightness')), findsNothing);
       expect(rig.calls, isEmpty);
-      expect(rig.device.sets, isEmpty);
+      expect(rig.chrome.visible, isTrue, reason: 'no tap');
+    });
+
+    testWidgets('down on the right half lowers the volume, holding the volume view for the drag alone', (
+      tester,
+    ) async {
+      await rig.mountInline(tester);
+      final gesture = await dragUp(tester, const Offset(600, 200), dy: 25);
+      expect(rig.device.sets.last, 'volume ${0.5 - 150 / 450}');
+      expect(rig.chrome.hud.value, LevelHud(LevelKind.volume, 0.5 - 150 / 450));
+      expect(rig.device.views, ['enter']);
+      await gesture.up();
+      expect(rig.chrome.hud.value, isNull);
+      expect(rig.device.views, ['enter', 'leave']);
+      expect(rig.device.sets.where((set) => set.startsWith('brightness')), isEmpty);
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('a volume drag cancelled or cut short by the layer going away gives the view back', (tester) async {
+      await rig.mountInline(tester);
+      final gesture = await dragUp(tester, const Offset(600, 300));
+      await gesture.cancel();
+      expect(rig.device.views, ['enter', 'leave']);
       expect(rig.chrome.hud.value, isNull);
 
-      scroll.jumpTo(0);
-      await tester.pump();
+      final again = await dragUp(tester, const Offset(600, 300));
+      await tester.pumpWidget(const SizedBox());
+      expect(rig.device.views, ['enter', 'leave', 'enter', 'leave']);
+      expect(rig.chrome.hud.value, isNull);
+      await again.up();
+    });
+
+    testWidgets('turned to full screen mid-drag, the view stays up for full screen', (tester) async {
+      await rig.mountInline(tester);
+      final gesture = await dragUp(tester, const Offset(600, 300));
+      rig.orientation.enterLandscape();
+      await gesture.up();
+      expect(rig.device.views, ['enter']);
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('the hardware volume buttons show the level for a second', (tester) async {
+      await rig.mountInline(tester);
+      rig.device.hardware.add(0.3);
+      expect(rig.chrome.hud.value, const LevelHud(LevelKind.volume, 0.3));
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(rig.chrome.hud.value, isNull);
+    });
+
+    testWidgets('a horizontal drag still seeks', (tester) async {
+      await rig.mountInline(tester);
       await tester.timedDragFrom(const Offset(200, 300), const Offset(300, 0), thumb(300));
-      expect(scroll.offset, 0);
       expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.device.sets, isEmpty);
+      expect(rig.device.views, isEmpty);
+    });
+
+    testWidgets("under the paused player's shrinking bar, a vertical drag reaches nothing", (tester) async {
+      for (final progress in [0.4, 1.0]) {
+        var resumes = 0;
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                height: 450,
+                // As the page lays them: the bar over the player once it starts to shrink.
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    rig.player(),
+                    CollapsedPlayerBar(progress: progress, onResume: () => resumes++, onBack: () {}, onMore: () {}),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.timedDragFrom(const Offset(200, 300), const Offset(0, -150), thumb(150));
+        await tester.timedDragFrom(const Offset(600, 300), const Offset(0, 150), thumb(150));
+        await tester.pump(_tapSettles);
+        expect(rig.device.sets, isEmpty, reason: 'at $progress');
+        expect(rig.device.views, isEmpty, reason: 'at $progress');
+        expect(rig.chrome.hud.value, isNull, reason: 'at $progress');
+        expect(resumes, 0, reason: 'a drag is no tap');
+      }
     });
 
     testWidgets('without a back swipe to leave room for, a drag from the left edge seeks', (tester) async {
@@ -758,6 +862,21 @@ void main() {
       expect(find.text('首页'), findsOneWidget);
       expect(rig.callsStarting('scrub'), isEmpty);
       expect(rig.backs, 0, reason: "the route's own swipe, not the player's ‹");
+    });
+
+    testWidgets('a vertical drag from the back swipe strip sets no level', (tester) async {
+      await pushVideoPage(tester);
+      await tester.timedDragFrom(const Offset(5, 300), const Offset(0, -150), thumb(150));
+      await tester.timedDragFrom(const Offset(5, 100), const Offset(0, 150), thumb(150));
+      await tester.pumpAndSettle();
+      expect(find.text('简介'), findsOneWidget);
+      expect(rig.device.sets, isEmpty);
+      expect(rig.chrome.hud.value, isNull);
+
+      await tester.timedDragFrom(const Offset(30, 300), const Offset(0, -150), thumb(150));
+      expect(rig.device.sets, isNotEmpty, reason: 'just past the strip, the left half is brightness');
+      expect(rig.device.sets.every((set) => set.startsWith('brightness')), isTrue);
+      await tester.pumpAndSettle();
     });
 
     testWidgets('a sideways drag in the middle of the player seeks and the page stays', (tester) async {
@@ -881,10 +1000,12 @@ void main() {
       expect(rig.chrome.hud.value, isNull);
     });
 
-    testWidgets('inline, the hardware volume buttons show nothing', (tester) async {
-      await rig.mountInline(tester);
-      rig.device.hardware.add(0.3);
-      expect(rig.chrome.hud.value, isNull);
+    testWidgets('the volume drag leaves the volume view to the orientation', (tester) async {
+      await rig.mountFullScreen(tester);
+      await tester.timedDragFrom(const Offset(600, 200), const Offset(0, 300), thumb(300));
+      expect(rig.device.sets.last, 'volume 0.0');
+      expect(rig.device.views, isEmpty);
+      await tester.pump(_tapSettles);
     });
   });
 }

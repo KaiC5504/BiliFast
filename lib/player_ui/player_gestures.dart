@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../device/device_controls.dart';
 import '../device/orientation.dart';
 import '../shared/theme.dart';
 import 'chrome_state.dart';
@@ -14,8 +15,9 @@ import 'player_ui.dart';
 import 'seek_bar.dart';
 
 /// The touch layer over the video, filling the player (port of BiliNative `PlayerGestureView.swift` and
-/// `ChromeState.swift`'s gestures): tap, double tap, hold for 2×, a sideways drag to seek, and in full screen
-/// up and down for brightness (left half) and volume (right half), with the screen edges left to the system. In 竖屏
+/// `ChromeState.swift`'s gestures): tap, double tap, hold for 2×, a sideways drag to seek, and up and down for
+/// brightness (left half) and volume (right half), the small player's too; full screen leaves the screen edges to
+/// the system. In 竖屏
 /// the controls stay up, as in the official app: a tap plays or pauses at once and a double tap is two taps, and a
 /// swipe right from the left edge is its ‹.
 class PlayerGestureLayer extends StatefulWidget {
@@ -66,6 +68,9 @@ class _Level {
 
   /// The device refused a read or a set: the rest of the drag does nothing.
   bool failed = false;
+
+  /// The drag put up the hidden volume view, which only full screen keeps up.
+  bool heldVolumeView = false;
 }
 
 class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
@@ -134,8 +139,9 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
       ui.session.speedUp(false);
       _clearHud<SpeedUpHud>(ui.chrome);
     }
-    if (_level != null) {
+    if (_level case final level?) {
       _level = null;
+      _releaseVolumeView(level, ui.device);
       _clearHud<LevelHud>(ui.chrome);
     }
   }
@@ -260,6 +266,12 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     final level = _level = _Level(kind, height: size.height);
     _hardwareTimer?.cancel();
     final device = _ui.device;
+    // The system volume can only be set through the hidden volume view, which is up only in full screen; held for
+    // the drag, it also keeps the system's own HUD off the player's.
+    if (kind == LevelKind.volume && !_ui.orientation.presentation.fullScreen) {
+      level.heldVolumeView = true;
+      unawaited(device.enterFullScreen().catchError((Object error) => _levelFailed(level, error)));
+    }
     unawaited(
       (kind == LevelKind.brightness ? device.brightness() : device.volume()).then(
         (value) {
@@ -353,13 +365,26 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   }
 
   void _endLevel() {
-    if (_level == null) return;
+    final level = _level;
+    if (level == null) return;
     _level = null;
+    _releaseVolumeView(level, _ui.device);
     _clearHud<LevelHud>(_ui.chrome);
   }
 
+  /// Unless full screen has since taken the volume view up for itself.
+  void _releaseVolumeView(_Level level, DeviceControls device) {
+    if (!level.heldVolumeView || _ui.orientation.presentation.fullScreen) return;
+    level.heldVolumeView = false;
+    unawaited(
+      device.leaveFullScreen().catchError((Object error) {
+        Logger.shared.warn(LogCategory.ui, 'volume view release failed', {'error': '$error'});
+      }),
+    );
+  }
+
   void _hardwareVolumeChanged(double value) {
-    if (!_ui.presentation.fullScreen || _level != null) return;
+    if (_level != null) return;
     final chrome = _ui.chrome;
     chrome.showHud(LevelHud(LevelKind.volume, value));
     _hardwareTimer?.cancel();
@@ -406,7 +431,6 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
           () => _DragRecognizer(debugOwner: this),
           (recognizer) => recognizer
             ..allow = _allowsDrag
-            ..levels = (() => _ui.presentation.fullScreen)
             ..onStart = _dragStart
             ..onUpdate = _dragUpdate
             ..onEnd = _dragEnd
@@ -425,8 +449,6 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 }
 
 bool _anyTouch(PointerDownEvent event) => true;
-
-bool _never() => false;
 
 class _TapRecognizer extends TapGestureRecognizer {
   _TapRecognizer({super.debugOwner});
@@ -472,13 +494,11 @@ class _HoldRecognizer extends LongPressGestureRecognizer {
 }
 
 /// One finger's drag, claimed once it has moved [GestureMath.axisLockDistance] and its axis is known, well inside
-/// the 18 px slop of Flutter's own drags and taps. A vertical drag is turned down unless [levels] allows it, so a
-/// scroller under the player gets it.
+/// the 18 px slop of Flutter's own drags and taps.
 class _DragRecognizer extends OneSequenceGestureRecognizer {
   _DragRecognizer({super.debugOwner});
 
   bool Function(PointerDownEvent event) allow = _anyTouch;
-  bool Function() levels = _never;
   void Function(GestureAxis axis, Offset localDown)? onStart;
 
   /// The travel since the finger landed, and where it is.
@@ -523,11 +543,6 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
         final delta = _local - _down;
         final axis = GestureMath.axis(dx: delta.dx, dy: delta.dy);
         if (axis == null) return;
-        if (axis == GestureAxis.vertical && !levels()) {
-          if (!_won) resolve(GestureDisposition.rejected);
-          stopTrackingPointer(pointer);
-          return;
-        }
         _axis = axis;
         if (_won) {
           _start();
