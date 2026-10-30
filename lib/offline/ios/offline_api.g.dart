@@ -416,14 +416,15 @@ class OfflineHostApi {
     ;
   }
 
-  Future<void> handOff(List<NativeBackgroundRange> ranges) async {
+  /// On the background session that runs [connections] at a time per host (2, 3 or 6; each its own identifier).
+  Future<void> handOff(List<NativeBackgroundRange> ranges, int connections) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.OfflineHostApi.handOff$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[ranges]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[ranges, connections]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -452,6 +453,65 @@ class OfflineHostApi {
     ;
     return (pigeonVar_replyValue! as List<Object?>).cast<NativeBackgroundRangeResult>();
   }
+
+  /// Submits a BGContinuedProcessingTaskRequest (`com.kaichuan.bilifast.offline.continued`, strategy fail): null when
+  /// iOS took it ([OfflineEventApi.onContinuedStarted] follows once it runs), else why not.
+  Future<String?> beginContinued(String title, String subtitle) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.OfflineHostApi.beginContinued$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[title, subtitle]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+    return pigeonVar_replyValue as String?;
+  }
+
+  /// The task's progress in bytes, and its Live Activity's subtitle.
+  Future<void> updateContinued(int done, int total, String subtitle) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.OfflineHostApi.updateContinued$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[done, total, subtitle]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// setTaskCompleted, or the request withdrawn when it hasn't started.
+  Future<void> endContinued(bool success) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.OfflineHostApi.endContinued$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[success]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 abstract class OfflineEventApi {
@@ -460,6 +520,12 @@ abstract class OfflineEventApi {
   void onGraceEnding();
 
   void onRangeFinished(NativeBackgroundRangeResult result);
+
+  void onContinuedStarted();
+
+  /// The task's expiration handler ran: its time was up or the user cancelled it (iOS doesn't say which). [locked]:
+  /// protected data was unavailable.
+  void onContinuedEnded(bool locked);
 
   static void setUp(OfflineEventApi? api, {
     BinaryMessenger? binaryMessenger, 
@@ -498,6 +564,46 @@ abstract class OfflineEventApi {
           final NativeBackgroundRangeResult arg_result = args[0]! as NativeBackgroundRangeResult;
           try {
             api.onRangeFinished(arg_result);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.OfflineEventApi.onContinuedStarted$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          try {
+            api.onContinuedStarted();
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.OfflineEventApi.onContinuedEnded$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final bool arg_locked = args[0]! as bool;
+          try {
+            api.onContinuedEnded(arg_locked);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

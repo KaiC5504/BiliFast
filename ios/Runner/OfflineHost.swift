@@ -45,13 +45,21 @@ final class OfflineHostApiImpl: OfflineHostApi {
     MainActor.assumeIsolated { grace.end() }
   }
 
-  func handOff(ranges: [NativeBackgroundRange]) throws {
+  func handOff(ranges: [NativeBackgroundRange], connections: Int64) throws {
     OfflineTransfers.shared.handOff(ranges)
   }
 
   func takeBack() async throws -> [NativeBackgroundRangeResult] {
     await OfflineTransfers.shared.takeBack()
   }
+
+  func beginContinued(title: String, subtitle: String) throws -> String? {
+    "not built"
+  }
+
+  func updateContinued(done: Int64, total: Int64, subtitle: String) throws {}
+
+  func endContinued(success: Bool) throws {}
 }
 
 /// The time iOS gives after the app leaves the foreground (beginBackgroundTask). Dart hears onGraceEnding a few

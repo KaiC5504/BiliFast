@@ -29,6 +29,9 @@ final class OfflineFiles {
   final String root;
 
   String get library => _join(root, 'library.json');
+
+  /// The trips away and how each background method did (`BackgroundTrials`).
+  String get trials => _join(root, 'trials.json');
   String part(int cid) => _join(root, '$cid');
   String entry(int cid) => _join(part(cid), entryName);
   String deleting(int cid) => _join(part(cid), deletingName);

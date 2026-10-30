@@ -34,7 +34,8 @@ class IosOfflineHost implements OfflineHost {
   set onGraceEnding(VoidCallback? callback) => _events.graceEnding = callback;
 
   @override
-  Future<void> handOff(List<BackgroundRange> ranges) => _api.handOff([
+  Future<void> handOff(List<BackgroundRange> ranges, {int connections = OfflineHost.defaultConnections}) =>
+      _api.handOff([
     for (final range in ranges)
       NativeBackgroundRange(
         id: range.id,
@@ -47,24 +48,52 @@ class IosOfflineHost implements OfflineHost {
         end: range.end,
         total: range.total,
       ),
-  ]);
+  ], connections);
 
   @override
   Future<List<BackgroundRangeResult>> takeBack() async => [for (final result in await _api.takeBack()) _result(result)];
 
   @override
   set onRangeFinished(void Function(BackgroundRangeResult result)? callback) => _events.rangeFinished = callback;
+
+  @override
+  bool get continuedProcessing => true;
+
+  @override
+  Future<String?> beginContinued({required String title, required String subtitle}) =>
+      _api.beginContinued(title, subtitle);
+
+  @override
+  Future<void> updateContinued({required int done, required int total, required String subtitle}) =>
+      _api.updateContinued(done, total, subtitle);
+
+  @override
+  Future<void> endContinued({required bool success}) => _api.endContinued(success);
+
+  @override
+  set onContinuedStarted(VoidCallback? callback) => _events.continuedStarted = callback;
+
+  @override
+  set onContinuedEnded(void Function(bool locked)? callback) => _events.continuedEnded = callback;
 }
 
 final class _Events implements OfflineEventApi {
   VoidCallback? graceEnding;
   void Function(BackgroundRangeResult result)? rangeFinished;
+  VoidCallback? continuedStarted;
+  void Function(bool locked)? continuedEnded;
 
   @override
   void onGraceEnding() => graceEnding?.call();
 
   @override
   void onRangeFinished(NativeBackgroundRangeResult result) => rangeFinished?.call(_result(result));
+
+  @override
+  void onContinuedStarted() => continuedStarted?.call();
+
+  @override
+  void onContinuedEnded(bool locked) => continuedEnded?.call(locked);
 }
 
 BackgroundRangeResult _result(NativeBackgroundRangeResult result) => BackgroundRangeResult(

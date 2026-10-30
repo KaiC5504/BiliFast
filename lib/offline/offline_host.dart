@@ -88,14 +88,39 @@ abstract class OfflineHost {
   Future<void> endGrace();
   set onGraceEnding(VoidCallback? callback);
 
-  /// Queues [ranges] on the background session; they go on while the app is suspended or closed.
-  Future<void> handOff(List<BackgroundRange> ranges);
+  /// Queues [ranges] on the background session that runs [connections] at a time per host (one of
+  /// [handOffConnections]); they go on while the app is suspended or closed.
+  Future<void> handOff(List<BackgroundRange> ranges, {int connections = defaultConnections});
 
   /// Cancels every range still queued and reports each one handed off since the last call.
   Future<List<BackgroundRangeResult>> takeBack();
 
   /// A range finished while the app was running.
   set onRangeFinished(void Function(BackgroundRangeResult result)? callback);
+
+  /// iOS 26's continued processing (BGContinuedProcessingTask): asked for as the user starts downloads, it keeps the
+  /// app running after it leaves, under a Live Activity showing the progress, until the work ends, iOS expires it or
+  /// the user cancels it there. One at a time.
+  bool get continuedProcessing;
+
+  /// Submits the request; null when iOS took it ([onContinuedStarted] follows once it runs), else why not.
+  Future<String?> beginContinued({required String title, required String subtitle});
+
+  /// The Live Activity's progress, in bytes, and its subtitle.
+  Future<void> updateContinued({required int done, required int total, required String subtitle});
+
+  /// Ends the task, or withdraws a request not yet started; [success] false shows it as failed.
+  Future<void> endContinued({required bool success});
+
+  set onContinuedStarted(VoidCallback? callback);
+
+  /// iOS expired the task: its time was up or the user cancelled it (iOS doesn't say which). [locked]: protected data
+  /// was unavailable, so the device was locked.
+  set onContinuedEnded(void Function(bool locked)? callback);
+
+  /// The background sessions' connections per host, each its own session (`OfflineHost.swift`).
+  static const handOffConnections = [2, 3, 6];
+  static const defaultConnections = 3;
 }
 
 /// No background transfers and no grace: the engine downloads only while the app runs.
@@ -126,11 +151,29 @@ class NoOfflineHost implements OfflineHost {
   set onGraceEnding(VoidCallback? callback) {}
 
   @override
-  Future<void> handOff(List<BackgroundRange> ranges) async {}
+  Future<void> handOff(List<BackgroundRange> ranges, {int connections = OfflineHost.defaultConnections}) async {}
 
   @override
   Future<List<BackgroundRangeResult>> takeBack() async => const [];
 
   @override
   set onRangeFinished(void Function(BackgroundRangeResult result)? callback) {}
+
+  @override
+  bool get continuedProcessing => false;
+
+  @override
+  Future<String?> beginContinued({required String title, required String subtitle}) async => 'unavailable';
+
+  @override
+  Future<void> updateContinued({required int done, required int total, required String subtitle}) async {}
+
+  @override
+  Future<void> endContinued({required bool success}) async {}
+
+  @override
+  set onContinuedStarted(VoidCallback? callback) {}
+
+  @override
+  set onContinuedEnded(void Function(bool locked)? callback) {}
 }

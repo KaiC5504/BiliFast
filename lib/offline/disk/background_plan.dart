@@ -11,12 +11,12 @@ import '../offline_host.dart';
 const backgroundRangeBytes = 16 << 20;
 const backgroundRangeMaxBytes = 128 << 20;
 
-/// The size of a track's next piece once [queued] bytes of it are queued: 16, 16, 32, 64, then 128 MiB along one
-/// long gap. Grown by bytes rather than by count, so the engine's small holes before the tail leave its first pieces
-/// small.
-int backgroundPieceBytes(int queued) {
+/// The size of a track's next piece once [queued] bytes of it are queued: 16, 16, 32, 64, then [max] (128 MiB by
+/// default) along one long gap. Grown by bytes rather than by count, so the engine's small holes before the tail leave
+/// its first pieces small.
+int backgroundPieceBytes(int queued, {int max = backgroundRangeMaxBytes}) {
   var size = backgroundRangeBytes;
-  while (size < backgroundRangeMaxBytes && size * 2 <= queued) {
+  while (size < max && size * 2 <= queued) {
     size *= 2;
   }
   return size;
@@ -24,13 +24,13 @@ int backgroundPieceBytes(int queued) {
 
 /// [gaps] cut into pieces, in order, growing as [backgroundPieceBytes] says; each is cut on a multiple of its size, so
 /// they sit on the engine's 2 MiB piece grid.
-List<ByteRange> backgroundPieces(List<ByteRange> gaps) {
+List<ByteRange> backgroundPieces(List<ByteRange> gaps, {int max = backgroundRangeMaxBytes}) {
   final pieces = <ByteRange>[];
   var queued = 0;
   for (final gap in gaps) {
     var start = gap.start;
     while (start <= gap.end) {
-      final size = backgroundPieceBytes(queued);
+      final size = backgroundPieceBytes(queued, max: max);
       final boundary = (start ~/ size + 1) * size - 1;
       final end = boundary < gap.end ? boundary : gap.end;
       pieces.add(ByteRange(start, end));
@@ -58,9 +58,10 @@ List<BackgroundRange> backgroundRanges({
   required TrackChoice choice,
   required String videoPath,
   required String audioPath,
+  int maxPieceBytes = backgroundRangeMaxBytes,
 }) {
   List<BackgroundRange> track(bool video, List<ByteRange> missing, int total, DashStream stream, String path) => [
-    for (final piece in backgroundPieces(missing))
+    for (final piece in backgroundPieces(missing, max: maxPieceBytes))
       BackgroundRange(
         id: id,
         video: video,

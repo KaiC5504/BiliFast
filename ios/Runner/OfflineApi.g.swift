@@ -387,8 +387,16 @@ protocol OfflineHostApi {
   /// beginBackgroundTask; [OfflineEventApi.onGraceEnding] comes from its expiration handler.
   func beginGrace() throws
   func endGrace() throws
-  func handOff(ranges: [NativeBackgroundRange]) throws
+  /// On the background session that runs [connections] at a time per host (2, 3 or 6; each its own identifier).
+  func handOff(ranges: [NativeBackgroundRange], connections: Int64) throws
   func takeBack() async throws -> [NativeBackgroundRangeResult]
+  /// Submits a BGContinuedProcessingTaskRequest (`com.kaichuan.bilifast.offline.continued`, strategy fail): null when
+  /// iOS took it ([OfflineEventApi.onContinuedStarted] follows once it runs), else why not.
+  func beginContinued(title: String, subtitle: String) throws -> String?
+  /// The task's progress in bytes, and its Live Activity's subtitle.
+  func updateContinued(done: Int64, total: Int64, subtitle: String) throws
+  /// setTaskCompleted, or the request withdrawn when it hasn't started.
+  func endContinued(success: Bool) throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -467,13 +475,15 @@ class OfflineHostApiSetup {
     } else {
       endGraceChannel.setMessageHandler(nil)
     }
+    /// On the background session that runs [connections] at a time per host (2, 3 or 6; each its own identifier).
     let handOffChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.OfflineHostApi.handOff\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       handOffChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let rangesArg = args[0] as! [NativeBackgroundRange]
+        let connectionsArg = args[1] as! Int64
         do {
-          try api.handOff(ranges: rangesArg)
+          try api.handOff(ranges: rangesArg, connections: connectionsArg)
           reply(wrapResult(nil))
         } catch {
           reply(wrapError(error))
@@ -497,6 +507,58 @@ class OfflineHostApiSetup {
     } else {
       takeBackChannel.setMessageHandler(nil)
     }
+    /// Submits a BGContinuedProcessingTaskRequest (`com.kaichuan.bilifast.offline.continued`, strategy fail): null when
+    /// iOS took it ([OfflineEventApi.onContinuedStarted] follows once it runs), else why not.
+    let beginContinuedChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.OfflineHostApi.beginContinued\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      beginContinuedChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let titleArg = args[0] as! String
+        let subtitleArg = args[1] as! String
+        do {
+          let result = try api.beginContinued(title: titleArg, subtitle: subtitleArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      beginContinuedChannel.setMessageHandler(nil)
+    }
+    /// The task's progress in bytes, and its Live Activity's subtitle.
+    let updateContinuedChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.OfflineHostApi.updateContinued\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      updateContinuedChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let doneArg = args[0] as! Int64
+        let totalArg = args[1] as! Int64
+        let subtitleArg = args[2] as! String
+        do {
+          try api.updateContinued(done: doneArg, total: totalArg, subtitle: subtitleArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      updateContinuedChannel.setMessageHandler(nil)
+    }
+    /// setTaskCompleted, or the request withdrawn when it hasn't started.
+    let endContinuedChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.OfflineHostApi.endContinued\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      endContinuedChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let successArg = args[0] as! Bool
+        do {
+          try api.endContinued(success: successArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      endContinuedChannel.setMessageHandler(nil)
+    }
   }
 }
 
@@ -504,6 +566,10 @@ class OfflineHostApiSetup {
 protocol OfflineEventApiProtocol {
   @MainActor func onGraceEnding() async throws
   @MainActor func onRangeFinished(result resultArg: NativeBackgroundRangeResult) async throws
+  @MainActor func onContinuedStarted() async throws
+  /// The task's expiration handler ran: its time was up or the user cancelled it (iOS doesn't say which). [locked]:
+  /// protected data was unavailable.
+  @MainActor func onContinuedEnded(locked lockedArg: Bool) async throws
 }
 class OfflineEventApi: OfflineEventApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -540,6 +606,48 @@ class OfflineEventApi: OfflineEventApiProtocol {
       let channelName: String = "dev.flutter.pigeon.bilifast.OfflineEventApi.onRangeFinished\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([resultArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: OfflineApiError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  @MainActor func onContinuedStarted() async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.bilifast.OfflineEventApi.onContinuedStarted\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage(nil) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: OfflineApiError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// The task's expiration handler ran: its time was up or the user cancelled it (iOS doesn't say which). [locked]:
+  /// protected data was unavailable.
+  @MainActor func onContinuedEnded(locked lockedArg: Bool) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.bilifast.OfflineEventApi.onContinuedEnded\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([lockedArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

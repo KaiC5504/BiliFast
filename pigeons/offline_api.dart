@@ -76,10 +76,21 @@ abstract class OfflineHostApi {
 
   void endGrace();
 
-  void handOff(List<NativeBackgroundRange> ranges);
+  /// On the background session that runs [connections] at a time per host (2, 3 or 6; each its own identifier).
+  void handOff(List<NativeBackgroundRange> ranges, int connections);
 
   @async
   List<NativeBackgroundRangeResult> takeBack();
+
+  /// Submits a BGContinuedProcessingTaskRequest (`com.kaichuan.bilifast.offline.continued`, strategy fail): null when
+  /// iOS took it ([OfflineEventApi.onContinuedStarted] follows once it runs), else why not.
+  String? beginContinued(String title, String subtitle);
+
+  /// The task's progress in bytes, and its Live Activity's subtitle.
+  void updateContinued(int done, int total, String subtitle);
+
+  /// setTaskCompleted, or the request withdrawn when it hasn't started.
+  void endContinued(bool success);
 }
 
 @FlutterApi()
@@ -87,4 +98,10 @@ abstract class OfflineEventApi {
   void onGraceEnding();
 
   void onRangeFinished(NativeBackgroundRangeResult result);
+
+  void onContinuedStarted();
+
+  /// The task's expiration handler ran: its time was up or the user cancelled it (iOS doesn't say which). [locked]:
+  /// protected data was unavailable.
+  void onContinuedEnded(bool locked);
 }

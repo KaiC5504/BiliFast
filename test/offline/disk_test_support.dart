@@ -54,9 +54,13 @@ final class FakeOfflineHost implements OfflineHost {
   @override
   set onGraceEnding(VoidCallback? callback) => graceEnding = callback;
 
+  /// The connections asked for with each hand-off.
+  final handOffConnections = <int>[];
+
   @override
-  Future<void> handOff(List<BackgroundRange> ranges) async {
+  Future<void> handOff(List<BackgroundRange> ranges, {int connections = OfflineHost.defaultConnections}) async {
     calls.add('handOff');
+    handOffConnections.add(connections);
     if (handOffError case final error?) throw error;
     handedOff.add(ranges);
   }
@@ -75,6 +79,34 @@ final class FakeOfflineHost implements OfflineHost {
 
   @override
   set onRangeFinished(void Function(BackgroundRangeResult result)? callback) => rangeFinished = callback;
+
+  @override
+  bool continuedProcessing = false;
+
+  /// What [beginContinued] answers: null takes the request.
+  String? continuedRefusal;
+  VoidCallback? continuedStarted;
+  void Function(bool locked)? continuedEnded;
+  final continuedUpdates = <({int done, int total, String subtitle})>[];
+
+  @override
+  Future<String?> beginContinued({required String title, required String subtitle}) async {
+    calls.add('beginContinued');
+    return continuedRefusal;
+  }
+
+  @override
+  Future<void> updateContinued({required int done, required int total, required String subtitle}) async =>
+      continuedUpdates.add((done: done, total: total, subtitle: subtitle));
+
+  @override
+  Future<void> endContinued({required bool success}) async => calls.add('endContinued $success');
+
+  @override
+  set onContinuedStarted(VoidCallback? callback) => continuedStarted = callback;
+
+  @override
+  set onContinuedEnded(void Function(bool locked)? callback) => continuedEnded = callback;
 }
 
 const toBackground = [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused];
