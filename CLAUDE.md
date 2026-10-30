@@ -552,8 +552,10 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - `python scripts/gate.py` on the committed tree (it records the commit), push, then `python scripts/testflight.py
   start` (6 GitHub calls). `start` refuses a commit the gate didn't pass. Run `start --dry-run` only after a workflow
   or script change.
-- Check once: `python scripts/testflight.py status` (1 call), about 11 minutes after an upload (7 after a dry run), as
-  a background `sleep` then `status`. Never `gh run watch`, never poll: KaiC gets rate-limited.
+- Check the run directly when its state matters, no fixed wait (KaiC, 2026-10-30: "get the latest information"):
+  `python scripts/testflight.py status` (1 call) or `gh run view <id>`; when KaiC says it failed, or `status` shows a
+  failure, read `gh run view <id> --log-failed` at once. A failure in the first minutes (signing, toolchain) shows
+  without waiting for the build. Still never `gh run watch` or a polling loop: KaiC gets rate-limited.
 - Version 1.3.0 (from 1.3.0 (1), KaiC: 离线缓存), set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they agree). Build
   numbers count from 1 within each version (App Store Connect's latest of that version plus one); the last shipped is
   in Status.
