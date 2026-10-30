@@ -43,13 +43,17 @@ void main() {
   });
 
   /// The full-screen player of the official app's 25: 956 × 440.
-  Future<void> mount(WidgetTester tester, {VoidCallback? onTapUnder}) => tester.pumpWidget(
+  Future<void> mount(
+    WidgetTester tester, {
+    VoidCallback? onTapUnder,
+    Size size = const Size(956, 440),
+  }) => tester.pumpWidget(
     Directionality(
       textDirection: TextDirection.ltr,
       child: Center(
         child: SizedBox(
-          width: 956,
-          height: 440,
+          width: size.width,
+          height: size.height,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -130,6 +134,39 @@ void main() {
     expect(find.byIcon(Icons.volume_up_rounded), findsOneWidget);
     expect(tester.getSemantics(find.bySemanticsLabel('音量')).value, '70%');
     semantics.dispose();
+  });
+
+  group('the level in the small player', () {
+    Future<Rect> levelPill(WidgetTester tester, Size size) async {
+      await mount(tester, size: size);
+      chrome.showHud(const LevelHud(LevelKind.volume, 0.5));
+      await tester.pump();
+      await tester.pump(_settled);
+      return tester.getRect(pill(find.byIcon(Icons.volume_up_rounded)));
+    }
+
+    testWidgets("is full screen's pill at 0.8× in the phone's 440 × 247.5 box, centred", (tester) async {
+      final rect = await levelPill(tester, const Size(440, 247.5));
+      expect(rect.height, moreOrLessEquals(BiliMetrics.hudHeight * 0.8));
+      expect(rect.center.dx, moreOrLessEquals(player(tester).center.dx));
+      expect(rect.center.dy, moreOrLessEquals(player(tester).center.dy));
+    });
+
+    testWidgets("is full size in an upright video's taller box", (tester) async {
+      final rect = await levelPill(tester, const Size(440, 586.67));
+      expect(rect.height, moreOrLessEquals(BiliMetrics.hudHeight));
+    });
+
+    testWidgets('leaves full screen and the seek pill as they were', (tester) async {
+      orientation.enterLandscape();
+      expect((await levelPill(tester, const Size(956, 247.5))).height, moreOrLessEquals(BiliMetrics.hudHeight));
+
+      orientation.exitToInline();
+      chrome.showHud(const SeekHud(target: 10, duration: 60));
+      await tester.pump();
+      await tester.pump(_settled);
+      expect(tester.getRect(pill(find.text('00:10/01:00'))).height, moreOrLessEquals(BiliMetrics.hudHeight));
+    });
   });
 
   testWidgets('fades in and out rather than popping', (tester) async {

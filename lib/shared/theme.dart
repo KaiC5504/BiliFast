@@ -290,6 +290,10 @@ abstract final class BiliMetrics {
   static const hudBarHeight = 3.0;
   static const hudSeekGap = 4.0;
 
+  /// The small player draws the level pill at its box's height over this, up to full size: 0.8× in the iPhone's
+  /// 247.5 pt box, clear of its top and bottom rows; full size in the iPad's and an upright video's taller boxes.
+  static const hudInlineLevelFullHeight = 440 / videoAspect / 0.8;
+
   /// Flutter's Cupertino back swipe starts within this many points of the left edge (its private
   /// `_kBackGestureWidth`), or the left safe-area inset when that is wider.
   static const swipeBackEdge = 20.0;
