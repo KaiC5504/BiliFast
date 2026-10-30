@@ -135,6 +135,18 @@ typedef BackgroundChoice = ({BackgroundArm arm, String why});
 class BackgroundTrials {
   BackgroundTrials({math.Random? random}) : _random = random ?? math.Random();
 
+  /// Trips kept, the newest; many windows' worth for every arm.
+  static const keep = 200;
+
+  /// An arm's mean is over its last few scored trips, so it follows a change of network or of iOS.
+  static const window = 5;
+
+  /// How often a choice tries an arm other than the best, so one unlucky trip doesn't bury an arm for good.
+  static const exploreChance = 0.15;
+
+  /// Every arm, in the order ties go.
+  static const arms = [BackgroundArm.continuedArm, ...BackgroundArm.handOffArms];
+
   final math.Random _random;
   final _trips = <BackgroundTrip>[];
 
@@ -146,6 +158,7 @@ class BackgroundTrials {
     for (final trip in json['trips'] as List) {
       if (BackgroundTrip.fromJson(trip) case final read?) _trips.add(read);
     }
+    _trim();
   }
 
   Map<String, Object?> toJson() => {
@@ -154,24 +167,66 @@ class BackgroundTrials {
 
   /// [continued]: iOS's continued processing is running, so the engine can go on.
   BackgroundChoice choose({required bool continued}) {
-    return (arm: continued ? BackgroundArm.continuedArm : BackgroundArm.fallback, why: 'best');
+    final candidates = continued ? arms : BackgroundArm.handOffArms;
+    for (final arm in candidates) {
+      if (_scored(arm).isEmpty) return (arm: arm, why: 'untried');
+    }
+    final best = _bestOf(candidates)!;
+    if (_random.nextDouble() < exploreChance) {
+      final others = [
+        for (final arm in candidates)
+          if (arm != best) arm,
+      ];
+      return (arm: others[_random.nextInt(others.length)], why: 'explore');
+    }
+    return (arm: best, why: 'best');
   }
 
   /// The hand-off with the best numbers, else [BackgroundArm.fallback]: for when continued processing ends mid-trip.
-  BackgroundArm bestHandOff() => BackgroundArm.fallback;
+  BackgroundArm bestHandOff() => _bestOf(BackgroundArm.handOffArms) ?? BackgroundArm.fallback;
 
-  void record(BackgroundTrip trip) => _trips.add(trip);
+  void record(BackgroundTrip trip) {
+    _trips.add(trip);
+    _trim();
+  }
 
   /// Scored trips and their mean MB/s over the last few, per arm, for the log.
-  ({int scored, double? mbps}) stats(BackgroundArm arm) => (scored: 0, mbps: null);
+  ({int scored, double? mbps}) stats(BackgroundArm arm) {
+    final scored = _scored(arm);
+    if (scored.isEmpty) return (scored: 0, mbps: null);
+    final recent = scored.sublist(math.max(0, scored.length - window));
+    return (scored: scored.length, mbps: recent.fold(0.0, (sum, trip) => sum + trip.mbps) / recent.length);
+  }
 
   /// The arm with the best mean so far; null before any has numbers.
-  BackgroundArm? get best => null;
+  BackgroundArm? get best => _bestOf(arms);
 
   /// `{arm name: "scored/mean MB/s"}` for every arm, and `best`, for the log.
-  Map<String, Object> summary() => {};
+  Map<String, Object> summary() {
+    String text(({int scored, double? mbps}) numbers) => '${numbers.scored}/${numbers.mbps?.toStringAsFixed(1) ?? '-'}';
+    return {for (final arm in arms) arm.name: text(stats(arm)), 'best': best?.name ?? 'none'};
+  }
 
-  // Used by the real choice.
-  // ignore: unused_element
-  double _draw() => _random.nextDouble();
+  List<BackgroundTrip> _scored(BackgroundArm arm) => [
+    for (final trip in _trips)
+      if (trip.arm == arm && trip.scored) trip,
+  ];
+
+  /// The highest mean of [candidates], the earlier on a tie; null when none has numbers.
+  BackgroundArm? _bestOf(List<BackgroundArm> candidates) {
+    BackgroundArm? best;
+    double? top;
+    for (final arm in candidates) {
+      final mbps = stats(arm).mbps;
+      if (mbps != null && (top == null || mbps > top)) {
+        best = arm;
+        top = mbps;
+      }
+    }
+    return best;
+  }
+
+  void _trim() {
+    if (_trips.length > keep) _trips.removeRange(0, _trips.length - keep);
+  }
 }
