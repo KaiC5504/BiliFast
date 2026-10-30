@@ -17,6 +17,7 @@ import '../shared/image_disk_cache.dart';
 import '../shared/remote_image.dart' show coverImageUrl, suffixedImageUrl;
 import '../video/player_prefs.dart';
 import 'disk/background_plan.dart';
+import 'disk/background_trials.dart';
 import 'disk/offline_entry.dart';
 import 'disk/offline_files.dart';
 import 'offline_host.dart';
@@ -72,7 +73,8 @@ abstract class OfflineLibrary extends ChangeNotifier {
 }
 
 /// The library as the app runs it: files in the support folder's `offline` ([OfflineFiles]), downloads through the
-/// engine while the app is open and through iOS's background transfers once it isn't.
+/// engine while the app is open and, once it isn't, through the engine kept running by iOS's continued processing or
+/// through iOS's background transfers, whichever [trials] picks for the trip.
 ///
 /// A part's signed addresses live only in memory. Waiting parts start oldest first, up to [concurrency] at a time;
 /// each asks playurl for the best streams the account gets, saves its cover, face and danmaku, then hands its two
@@ -84,19 +86,26 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     required this.engine,
     required this.host,
     this.codecMemory,
+    BackgroundTrials? trials,
     Logger? logger,
     Future<Uint8List> Function(Uri url)? pictures,
     VideoCodec Function()? preferredCodec,
     DateTime Function()? now,
     this.danmakuGap = const Duration(milliseconds: 500),
     this.retryGaps = const [Duration(seconds: 2), Duration(seconds: 6)],
-  }) : logger = logger ?? Logger.shared,
+    this.continuedStartWait = const Duration(seconds: 5),
+    this.continuedUpdateGap = const Duration(seconds: 2),
+    this.awayProgressGap = const Duration(seconds: 30),
+  }) : trials = trials ?? BackgroundTrials(),
+       logger = logger ?? Logger.shared,
        files = OfflineFiles(folder),
        _pictures = pictures ?? _download,
        _preferredCodec = preferredCodec ?? _playerCodec,
        _now = now ?? DateTime.now {
     host.onGraceEnding = _graceEnding;
     host.onRangeFinished = _rangeFinished;
+    host.onContinuedStarted = _continuedStarted;
+    host.onContinuedEnded = _continuedEnded;
   }
 
   /// Absolute, looked up this launch; everything kept inside it is named relative to it.
@@ -107,6 +116,9 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   final Future<PlaybackEngine> Function() engine;
   final OfflineHost host;
   final CodecMemory? codecMemory;
+
+  /// How each way of downloading away did on this device (`trials.json`); it picks the way for the next trip.
+  final BackgroundTrials trials;
   final Logger logger;
   final OfflineFiles files;
 
@@ -115,6 +127,15 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
 
   /// The waits before asking playurl again after a network failure; risk control is never asked again.
   final List<Duration> retryGaps;
+
+  /// How long iOS has to start the continued processing it took, before the request is withdrawn.
+  final Duration continuedStartWait;
+
+  /// Between two looks at the progress the continued processing's Live Activity shows.
+  final Duration continuedUpdateGap;
+
+  /// Between two `offline away progress` lines while the engine downloads away.
+  final Duration awayProgressGap;
 
   final Future<Uint8List> Function(Uri url) _pictures;
   final VideoCodec Function() _preferredCodec;
@@ -172,6 +193,29 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   bool _handedOff = false;
   Future<void> _lifecycle = Future.value();
 
+  _Continued _continued = _Continued.idle;
+
+  /// Bumped by every request and every end, so what comes back for an older one is left alone.
+  int _continuedRound = 0;
+  String _continuedWhy = '';
+  Stopwatch? _continuedAsked;
+  DateTime? _continuedSince;
+  Timer? _continuedWait;
+  Timer? _continuedTicker;
+  bool _continuedEnding = false;
+  bool _continuedUpdateFailed = false;
+
+  /// The running task's parts: each one waiting or downloading at any time while it runs.
+  final _continuedParts = <int>{};
+  ({int done, String subtitle})? _continuedSent;
+
+  /// The stay away under way, opened by the leave and closed by the return.
+  _Trip? _trip;
+
+  /// Away on a continued trip: the engine goes on as in the foreground.
+  bool _awayContinued = false;
+  Future<void> _trialWrites = Future.value();
+
   PlaybackEngine? _engine;
   Future<PlaybackEngine>? _leasing;
   StreamSubscription<DownloadEvent>? _events;
@@ -203,7 +247,16 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   @override
   bool get unseen => _unseen;
 
-  bool get _mayDownload => !_backgrounded || _graceRunning;
+  bool get _mayDownload => !_backgrounded || _graceRunning || _awayContinued;
+
+  /// Something is left to download: a part downloading, or one waiting that nothing holds back.
+  bool get _hasWork => _parts.values.any((part) {
+    final state = part.item.state;
+    return state == OfflineState.downloading || (state == OfflineState.waiting && !_held);
+  });
+
+  static bool _isQueued(_Part part) =>
+      part.item.state == OfflineState.waiting || part.item.state == OfflineState.downloading;
 
   @override
   Future<void> start() async {
@@ -221,7 +274,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     } catch (error) {
       logger.warn(LogCategory.app, 'offline backup exclusion failed', {'error': _reason(error)});
     }
-    final loading = _loadLibrary().then((_) => _loadParts());
+    final loading = _loadTrials().then((_) => _loadLibrary()).then((_) => _loadParts());
     _loading = loading;
     await loading;
     _sorted = null;
@@ -251,6 +304,29 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     // Opened while iOS was asked: the resume went by unheard.
     if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) return false;
     return background;
+  }
+
+  Future<void> _loadTrials() async {
+    try {
+      trials.load(jsonDecode(await File(files.trials).readAsString()));
+    } on PathNotFoundException {
+      // No trip away yet.
+    } catch (error) {
+      logger.warn(LogCategory.app, 'offline trials unreadable', {'error': _reason(error)});
+    }
+  }
+
+  void _saveTrials() {
+    final json = trials.toJson();
+    final next = _trialWrites.then((_) async {
+      try {
+        await writeJsonAtomically(files.trials, json);
+      } catch (error) {
+        logger.warn(LogCategory.app, 'offline trials not saved', {'error': _reason(error)});
+      }
+    });
+    _trialWrites = next;
+    _track(next);
   }
 
   Future<void> _loadLibrary() async {
@@ -383,6 +459,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     _notifyNow();
     _track(_savePicturesOf(added));
     _pump();
+    if (_continued == _Continued.running) _continuedParts.addAll(added.map((part) => part.cid));
+    _askContinued('enqueue');
   }
 
   Future<void> _savePicturesOf(List<_Part> parts) async {
@@ -400,6 +478,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     _setItem(part, part.item.copyWith(state: OfflineState.paused, bps: 0, clearFailure: true));
     logger.info(LogCategory.app, 'offline paused', {'cid': cid});
     _pump();
+    _maybeEndContinued();
   }
 
   @override
@@ -415,6 +494,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     _setItem(part, part.item.copyWith(state: OfflineState.waiting, bps: 0, clearFailure: true));
     logger.info(LogCategory.app, 'offline resumed', {'cid': cid});
     _pump();
+    _askContinued('resume');
   }
 
   @override
@@ -430,6 +510,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     if (paused == 0) return;
     logger.info(LogCategory.app, 'offline paused all', {'parts': paused});
     _notifyNow();
+    _maybeEndContinued();
   }
 
   @override
@@ -446,6 +527,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     if (started > 0) logger.info(LogCategory.app, 'offline started all', {'parts': started});
     _notifyNow();
     _pump();
+    if (started > 0) _askContinued('startAll');
   }
 
   @override
@@ -483,6 +565,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     if (removed.isEmpty) return;
     _sorted = null;
     _notifyNow();
+    _maybeEndContinued();
     try {
       for (final part in removed) {
         await _deleteFiles(part);
@@ -716,6 +799,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     if (failure == OfflineFailure.network || failure == OfflineFailure.disk) _held = true;
     _pump();
     _maybeEndGrace();
+    _maybeEndContinued();
   }
 
   static OfflineFailure _failureOf(Object error) => switch (error) {
@@ -906,7 +990,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     bool live() => _isLive(part, epoch);
     if (!live()) return;
     // The return starts it again: meanwhile a restart could meet transfers still writing into its files.
-    if (_handedOff || (_backgrounded && !_graceRunning)) return;
+    if (_handedOff || !_mayDownload) return;
     if (_held) {
       // Held for a refusal or a failure: nothing asks Bilibili until a tap, 全部开始 or the return.
       if (expired) _fail(part, epoch, OfflineFailure.network, StateError('held'));
@@ -1226,6 +1310,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     unawaited(refreshFreeSpace());
     _pump();
     _maybeEndGrace();
+    _maybeEndContinued();
   }
 
   void _downloadFailed(_Part part, DownloadFailed event) {
@@ -1302,8 +1387,9 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     return next;
   }
 
-  /// Leaving the foreground with parts downloading: iOS's background transfers take over what the engine still
-  /// lacks, or, without them, the engine goes on in the time iOS gives until it says the time is up.
+  /// Leaving the foreground with parts downloading opens a trip on the way [trials] picks: the engine goes on under
+  /// iOS's continued processing, or iOS's background transfers take over what the engine still lacks. Without
+  /// either, the engine goes on in the time iOS gives until it says the time is up.
   Future<void> _leave() async {
     _flushPositions();
     if (!_backgrounded) return;
@@ -1312,17 +1398,48 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         if (part.item.state == OfflineState.downloading) part,
     ];
     if (active.isEmpty) return;
-    try {
-      await host.beginGrace();
-      _graceOpen = true;
-      _graceRunning = _backgrounded;
-    } catch (error) {
-      logger.warn(LogCategory.app, 'offline grace refused', {'error': _reason(error)});
-    }
     if (!host.backgroundTransfers) {
+      await _beginGrace();
       logger.info(LogCategory.app, 'offline grace', {'parts': active.length});
       return;
     }
+    final open = _trip;
+    if (open != null) {
+      // Gone again before the return came round: the trip goes on as it was.
+      if (_awayContinued) return;
+      await _handOff(active, open.handOff ?? trials.bestHandOff(), fallback: false);
+      return;
+    }
+    final choice = trials.choose(continued: _continued == _Continued.running);
+    final arm = choice.arm.continued && _continued != _Continued.running ? trials.bestHandOff() : choice.arm;
+    final trip = _trip = _Trip(
+      arm: arm,
+      why: choice.why,
+      at: _now(),
+      bytesAtLeave: {for (final part in _parts.values) part.cid: part.item.bytes},
+    );
+    final queued = _parts.values.where(_isQueued).toList();
+    final left = queued.fold(0, (sum, part) => sum + math.max(0, part.item.totalBytes - part.item.bytes));
+    logger.info(LogCategory.app, 'offline away', {
+      'arm': arm.name,
+      'why': choice.why,
+      'continued': _continued.name,
+      'parts': queued.length,
+      'leftMb': _mb(left),
+    });
+    if (arm.continued) {
+      _awayContinued = true;
+      trip.progress = Timer.periodic(awayProgressGap, (_) => _logAwayProgress(trip));
+      return;
+    }
+    trip.handOff = arm;
+    await _dropContinued();
+    await _handOff(active, arm, fallback: false);
+  }
+
+  /// Stops the engine and hands what it still lacks to iOS's background session, with [arm]'s connections and pieces.
+  Future<void> _handOff(List<_Part> active, BackgroundArm arm, {required bool fallback}) async {
+    await _beginGrace();
     final leaving = Stopwatch()..start();
     // Parts not in the engine (the return's take-back was still waiting, or a run was still asking for its streams)
     // start now, in the grace, so their gaps are known and handed off too.
@@ -1372,6 +1489,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
           choice: choice,
           videoPath: files.video(part.cid),
           audioPath: files.audio(part.cid),
+          maxPieceBytes: arm.maxPieceBytes,
         ),
       );
       handed.add(part);
@@ -1379,7 +1497,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     final ranges = roundRobin(perPart);
     if (ranges.isNotEmpty) {
       try {
-        await host.handOff(ranges);
+        await host.handOff(ranges, connections: arm.connections);
         final ms = leaving.elapsedMilliseconds;
         // True means the last transfers were queued from the background, where iOS may hold them back.
         final queuedLate = await host.inBackground().catchError((Object _) => false);
@@ -1387,6 +1505,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         for (final part in handed) {
           part.bytesBeforeHandOff = part.item.bytes;
           part.handedOffDone = 0;
+          // The engine's share of the trip ends here; the transfers' comes back with the take-back.
+          _trip?.bytesAtHandOff[part.cid] = part.item.bytes;
           _setItem(part, part.item.copyWith(bps: 0), save: false);
         }
         logger.info(LogCategory.app, 'offline handed off', {
@@ -1395,6 +1515,9 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
           'mb': (ranges.fold(0, (sum, range) => sum + range.end - range.start + 1) / (1 << 20)).round(),
           'ms': ms,
           'late': queuedLate,
+          'arm': arm.name,
+          'connections': arm.connections,
+          'fallback': fallback,
         });
       } catch (error) {
         logger.warn(LogCategory.app, 'offline hand-off failed', {'error': _reason(error)});
@@ -1427,6 +1550,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     unawaited(
       _queue(() async {
         if (!_backgrounded) return;
+        // Continued processing, not the grace, keeps the app running: the engine goes on.
+        if (_awayContinued) return _endGrace();
         final engine = _engine;
         var stopped = 0;
         for (final part in _parts.values) {
@@ -1441,6 +1566,16 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         await _endGrace();
       }),
     );
+  }
+
+  Future<void> _beginGrace() async {
+    try {
+      await host.beginGrace();
+      _graceOpen = true;
+      _graceRunning = _backgrounded;
+    } catch (error) {
+      logger.warn(LogCategory.app, 'offline grace refused', {'error': _reason(error)});
+    }
   }
 
   void _maybeEndGrace() {
@@ -1490,6 +1625,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         'launch': launch,
       });
     }
+    _closeTrip(results);
     _handedOff = false;
     _held = false;
     for (final part in _parts.values) {
@@ -1498,6 +1634,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     }
     _pump();
     unawaited(refreshFreeSpace());
+    _askContinued(launch ? 'launch' : 'return');
   }
 
   /// A background transfer finished while the app was alive in the background: the part's bytes move on.
@@ -1512,8 +1649,284 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     _setItem(part, part.item.copyWith(bytes: total > 0 ? math.min(bytes, total) : bytes), save: false);
   }
 
+  /// What the engine moved the parts on by since [trip]'s leave: a handed-off part counts up to its hand-off, since
+  /// the transfers then move its bytes on, and a part new since the leave counts all of its bytes.
+  int _engineGain(_Trip trip) {
+    var gained = 0;
+    for (final part in _parts.values) {
+      final now = trip.bytesAtHandOff[part.cid] ?? part.item.bytes;
+      final before = trip.bytesAtLeave[part.cid];
+      gained += before == null ? now : math.max(0, now - before);
+    }
+    return gained;
+  }
+
+  double _secondsSince(DateTime at) => _now().difference(at).inMilliseconds / 1000;
+
+  static double _oneDecimal(double value) => (value * 10).round() / 10;
+
+  static int _mb(int bytes) => (bytes / (1 << 20)).round();
+
+  /// Whether iOS slows the engine down once the app is away.
+  void _logAwayProgress(_Trip trip) {
+    if (!identical(_trip, trip) || !_awayContinued) return;
+    final secs = _secondsSince(trip.at);
+    final gained = _engineGain(trip);
+    logger.info(LogCategory.app, 'offline away progress', {
+      'secs': secs.round(),
+      'mb': _mb(gained),
+      'mbps': _oneDecimal(secs <= 0 ? 0 : gained / (1 << 20) / secs),
+    });
+  }
+
+  /// Continued processing ended while the engine went on away: the rest goes to the background session, with the
+  /// hand-off that has done best here.
+  Future<void> _fallBack(_Trip trip) async {
+    if (!_backgrounded || !identical(_trip, trip)) return;
+    final active = [
+      for (final part in _parts.values)
+        if (part.item.state == OfflineState.downloading) part,
+    ];
+    if (active.isEmpty) return;
+    final arm = trip.handOff = trials.bestHandOff();
+    await _handOff(active, arm, fallback: true);
+  }
+
+  /// The return ends the trip: what it got done is recorded for [trials] and kept in `trials.json`.
+  void _closeTrip(List<BackgroundRangeResult> results) {
+    final trip = _trip;
+    _trip = null;
+    _awayContinued = false;
+    if (trip == null) return;
+    trip.progress?.cancel();
+    final engine = _engineGain(trip);
+    final handed = results.where((result) => result.done).fold(0, (sum, result) => sum + result.end - result.start + 1);
+    final wasted = results.where((result) => !result.done).fold(0, (sum, result) => sum + result.received);
+    // A queue held by a failure counts as nothing left: either way the trip's rate says little about the arm.
+    final allDone = !_hasWork || (results.isNotEmpty && results.every((result) => result.done));
+    final record = BackgroundTrip(
+      arm: trip.arm,
+      at: trip.at,
+      seconds: _secondsSince(trip.at),
+      gainedBytes: engine + handed,
+      wastedBytes: wasted,
+      allDone: allDone,
+      continuedEndedAfter: trip.continuedEndedAfter,
+    );
+    trials.record(record);
+    _saveTrials();
+    final ended = trip.continuedEndedAfter;
+    logger.info(LogCategory.app, 'offline trip', {
+      'arm': trip.arm.name,
+      'why': trip.why,
+      'secs': _oneDecimal(record.seconds),
+      'gainedMb': _mb(record.gainedBytes),
+      'engineMb': _mb(engine),
+      'mbps': _oneDecimal(record.mbps),
+      'wastedMb': _mb(wasted),
+      'allDone': allDone,
+      'scored': record.scored,
+      if (ended != null) 'continuedEndedAfter': _oneDecimal(ended),
+      if (trip.arm.continued && trip.handOff != null) 'fallbackArm': trip.handOff!.name,
+    });
+    logger.info(LogCategory.app, 'offline trials', trials.summary());
+  }
+
+  /// Asks iOS to keep the app running while the downloads go on, as the user starts them: iOS wants a person's action
+  /// behind every request, so this is one ask per such moment, never a retry.
+  void _askContinued(String why) {
+    if (!host.continuedProcessing || !_started || _disposed || _backgrounded) return;
+    if (_continued != _Continued.idle || !_hasWork) return;
+    _continued = _Continued.asking;
+    final round = ++_continuedRound;
+    _continuedWhy = why;
+    _track(_beginContinued(round, why));
+  }
+
+  Future<void> _beginContinued(int round, String why) async {
+    final asked = _continuedAsked = Stopwatch()..start();
+    logger.info(LogCategory.app, 'offline continued', {'event': 'asked', 'why': why});
+    final String? refusal;
+    try {
+      refusal = await host.beginContinued(title: _continuedTitle, subtitle: _continuedSubtitle(_parts.values));
+    } catch (error) {
+      if (round == _continuedRound && _continued == _Continued.asking) _resetContinued();
+      logger.warn(LogCategory.app, 'offline continued', {'event': 'failed', 'why': why, 'reason': _reason(error)});
+      return;
+    }
+    if (round != _continuedRound || _continued != _Continued.asking) return;
+    if (refusal != null) {
+      _resetContinued();
+      logger.info(LogCategory.app, 'offline continued', {'event': 'refused', 'why': why, 'reason': refusal});
+      return;
+    }
+    _continuedWait = Timer(continuedStartWait, () {
+      _continuedWait = null;
+      if (round != _continuedRound || _continued != _Continued.asking) return;
+      _resetContinued();
+      logger.warn(LogCategory.app, 'offline continued', {
+        'event': 'not started',
+        'why': why,
+        'ms': asked.elapsedMilliseconds,
+      });
+      // Withdrawn, so a start iOS makes later doesn't leave a task running that nothing follows.
+      _track(_endContinuedQuietly(success: false));
+    });
+  }
+
+  static const _continuedTitle = '离线缓存';
+
+  /// The one video left, or how many are.
+  static String _continuedSubtitle(Iterable<_Part> parts) {
+    final left = parts.where(_isQueued).toList();
+    return left.length == 1 ? left.single.item.request.title : '还剩 ${left.length} 个视频';
+  }
+
+  void _continuedStarted() {
+    if (_disposed || _continued == _Continued.running) return;
+    _continuedWait?.cancel();
+    _continuedWait = null;
+    final ms = _continuedAsked?.elapsedMilliseconds;
+    final wanted = _continued == _Continued.asking && !_backgrounded && _hasWork;
+    logger.info(LogCategory.app, 'offline continued', {
+      'event': 'started',
+      'why': _continuedWhy,
+      'ms': ?ms,
+      if (!wanted) 'kept': false,
+    });
+    if (!wanted) {
+      // Withdrawn meanwhile, or nothing is left for it: ended at once rather than left showing.
+      _resetContinued();
+      _track(_endContinuedQuietly(success: true));
+      return;
+    }
+    _continued = _Continued.running;
+    _continuedSince = _now();
+    _continuedUpdateFailed = false;
+    _continuedParts.addAll(_parts.values.where(_isQueued).map((part) => part.cid));
+    _continuedTicker = Timer.periodic(continuedUpdateGap, (_) => _continuedTick());
+    _continuedTick();
+  }
+
+  /// Sends the Live Activity the task's progress when it moved, and ends the task once nothing is left.
+  void _continuedTick() {
+    if (_continued != _Continued.running) return;
+    _continuedParts.removeWhere((cid) => !_parts.containsKey(cid));
+    _continuedParts.addAll(_parts.values.where(_isQueued).map((part) => part.cid));
+    if (_maybeEndContinued()) return;
+    final parts = [for (final cid in _continuedParts) ?_parts[cid]];
+    var done = 0;
+    var total = 0;
+    for (final part in parts) {
+      done += part.item.bytes;
+      total += math.max(part.item.totalBytes, part.item.bytes);
+    }
+    final subtitle = _continuedSubtitle(parts);
+    final sent = _continuedSent;
+    if (sent != null && sent.done == done && sent.subtitle == subtitle) return;
+    _continuedSent = (done: done, subtitle: subtitle);
+    _track(_updateContinued(done, total, subtitle));
+  }
+
+  Future<void> _updateContinued(int done, int total, String subtitle) async {
+    try {
+      await host.updateContinued(done: done, total: total, subtitle: subtitle);
+    } catch (error) {
+      // Every couple of seconds while it fails, so only the first is logged.
+      if (_continuedUpdateFailed) return;
+      _continuedUpdateFailed = true;
+      logger.warn(LogCategory.app, 'offline continued', {'event': 'failed', 'why': 'update', 'reason': _reason(error)});
+    }
+  }
+
+  /// Ends the running task once no part is left to download; true when it is ending.
+  bool _maybeEndContinued() {
+    if (_continued != _Continued.running) return false;
+    if (_continuedEnding) return true;
+    if (_hasWork) return false;
+    _continuedEnding = true;
+    _track(_completeContinued(_continuedRound));
+    return true;
+  }
+
+  Future<void> _completeContinued(int round) async {
+    final parts = [for (final cid in _continuedParts) ?_parts[cid]];
+    // iOS may suspend the app as soon as the task ends, so what the parts were writing lands first.
+    await Future.wait([for (final part in parts) part.writes, _libraryWrites]);
+    if (round != _continuedRound || _continued != _Continued.running) return;
+    if (_hasWork) {
+      _continuedEnding = false;
+      return;
+    }
+    final success = !parts.any(
+      (part) => identical(_parts[part.cid], part) && part.item.state == OfflineState.failed,
+    );
+    final secs = _continuedSeconds();
+    _resetContinued();
+    await _endContinuedQuietly(success: success);
+    logger.info(LogCategory.app, 'offline continued', {'event': 'completed', 'success': success, 'secs': secs});
+  }
+
+  /// A hand-off trip runs on the background session alone, so a running task ends first. A request still waiting is
+  /// left: a start that comes while away is ended then, and one that comes after a quick return is kept.
+  Future<void> _dropContinued() async {
+    if (_continued != _Continued.running) return;
+    final secs = _continuedSeconds();
+    _resetContinued();
+    await _endContinuedQuietly(success: true);
+    logger.info(LogCategory.app, 'offline continued', {
+      'event': 'completed',
+      'why': 'hand-off',
+      'success': true,
+      'secs': secs,
+    });
+  }
+
+  /// iOS expired the task, its time up or the user's cancel. Away on a continued trip, the rest is handed off.
+  void _continuedEnded(bool locked) {
+    if (_disposed || _continued == _Continued.idle) return;
+    final secs = _continuedSeconds();
+    final away = _backgrounded;
+    _resetContinued();
+    logger.info(LogCategory.app, 'offline continued', {'event': 'ended', 'locked': locked, 'secs': secs, 'away': away});
+    final trip = _trip;
+    if (!away || !_awayContinued || trip == null || !trip.arm.continued) return;
+    trip.continuedEndedAfter = _secondsSince(trip.at);
+    trip.progress?.cancel();
+    trip.progress = null;
+    _awayContinued = false;
+    unawaited(_queue(() => _fallBack(trip)));
+  }
+
+  Future<void> _endContinuedQuietly({required bool success}) async {
+    try {
+      await host.endContinued(success: success);
+    } catch (error) {
+      logger.warn(LogCategory.app, 'offline continued', {'event': 'failed', 'why': 'end', 'reason': _reason(error)});
+    }
+  }
+
+  double _continuedSeconds() {
+    final since = _continuedSince;
+    return since == null ? 0 : _oneDecimal(_secondsSince(since));
+  }
+
+  void _resetContinued() {
+    _continued = _Continued.idle;
+    _continuedRound += 1;
+    _continuedEnding = false;
+    _continuedWait?.cancel();
+    _continuedWait = null;
+    _continuedTicker?.cancel();
+    _continuedTicker = null;
+    _continuedParts.clear();
+    _continuedSent = null;
+    _continuedSince = null;
+  }
+
   void _setItem(_Part part, OfflineItem item, {bool save = true, bool notify = true}) {
     part.entry = part.entry.copyWith(item: item);
+    if (_continued == _Continued.running && _isQueued(part)) _continuedParts.add(part.cid);
     _sorted = null;
     if (save) unawaited(_save(part));
     if (notify) _notifyNow();
@@ -1563,6 +1976,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     logger.warn(LogCategory.app, 'offline failed', {'cid': part.cid, 'failure': 'disk', 'error': _reason(error)});
     _held = true;
     _maybeEndGrace();
+    _maybeEndContinued();
   }
 
   Future<void> _saveLibrary() {
@@ -1645,8 +2059,13 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       part.positionSave?.cancel();
     }
     unawaited(_events?.cancel());
+    _continuedWait?.cancel();
+    _continuedTicker?.cancel();
+    _trip?.progress?.cancel();
     host.onGraceEnding = null;
     host.onRangeFinished = null;
+    host.onContinuedStarted = null;
+    host.onContinuedEnded = null;
     super.dispose();
   }
 
@@ -1671,6 +2090,29 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
 /// What [DiskOfflineLibrary._askStreams] found: the streams to download, which tracks differ from the ones begun, the
 /// quality's name and the video's length in seconds.
 typedef _Streams = ({TrackChoice choice, Set<TrackKind> changed, String qualityName, int duration});
+
+/// iOS's continued processing: none, asked for and not yet started, or running.
+enum _Continued { idle, asking, running }
+
+/// A stay away from the app with downloads going, from the leave to the return.
+final class _Trip {
+  _Trip({required this.arm, required this.why, required this.at, required this.bytesAtLeave});
+
+  final BackgroundArm arm;
+  final String why;
+  final DateTime at;
+
+  /// Every part's bytes at the leave.
+  final Map<int, int> bytesAtLeave;
+
+  /// A handed-off part's bytes at its hand-off.
+  final bytesAtHandOff = <int, int>{};
+
+  /// The hand-off in use: the arm's, or the fallback's once continued processing ended away.
+  BackgroundArm? handOff;
+  double? continuedEndedAfter;
+  Timer? progress;
+}
 
 final class _Part {
   _Part(this.entry, {this.extraBytes = 0});

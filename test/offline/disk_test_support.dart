@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
+import 'package:bilifast/offline/disk/background_trials.dart';
 import 'package:bilifast/offline/offline_host.dart';
 import 'package:bilifast/offline/offline_library.dart';
 import 'package:bilifast/offline/offline_models.dart';
@@ -85,13 +86,22 @@ final class FakeOfflineHost implements OfflineHost {
 
   /// What [beginContinued] answers: null takes the request.
   String? continuedRefusal;
+
+  /// Thrown by [beginContinued] while set.
+  Object? continuedError;
   VoidCallback? continuedStarted;
   void Function(bool locked)? continuedEnded;
+  final continuedBegun = <({String title, String subtitle})>[];
   final continuedUpdates = <({int done, int total, String subtitle})>[];
+
+  /// Runs as [endContinued] is called, for what a test checks at that moment.
+  VoidCallback? endingContinued;
 
   @override
   Future<String?> beginContinued({required String title, required String subtitle}) async {
     calls.add('beginContinued');
+    continuedBegun.add((title: title, subtitle: subtitle));
+    if (continuedError case final error?) throw error;
     return continuedRefusal;
   }
 
@@ -100,13 +110,42 @@ final class FakeOfflineHost implements OfflineHost {
       continuedUpdates.add((done: done, total: total, subtitle: subtitle));
 
   @override
-  Future<void> endContinued({required bool success}) async => calls.add('endContinued $success');
+  Future<void> endContinued({required bool success}) async {
+    calls.add('endContinued $success');
+    endingContinued?.call();
+  }
 
   @override
   set onContinuedStarted(VoidCallback? callback) => continuedStarted = callback;
 
   @override
   set onContinuedEnded(void Function(bool locked)? callback) => continuedEnded = callback;
+}
+
+/// Trials whose choice a test sets: the continued arm whenever continued processing runs (or [whileContinued]), else
+/// [handOff], which is also the fallback. Every choice's `continued` and every trip recorded are kept.
+final class PinnedTrials extends BackgroundTrials {
+  PinnedTrials({this.handOff = BackgroundArm.fallback, this.whileContinued});
+
+  BackgroundArm handOff;
+  BackgroundArm? whileContinued;
+  final asked = <bool>[];
+  final recorded = <BackgroundTrip>[];
+
+  @override
+  BackgroundChoice choose({required bool continued}) {
+    asked.add(continued);
+    return (arm: continued ? whileContinued ?? BackgroundArm.continuedArm : handOff, why: 'pinned');
+  }
+
+  @override
+  BackgroundArm bestHandOff() => handOff;
+
+  @override
+  void record(BackgroundTrip trip) {
+    recorded.add(trip);
+    super.record(trip);
+  }
 }
 
 const toBackground = [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused];
@@ -119,18 +158,22 @@ void lifecycle(List<AppLifecycleState> states) {
   }
 }
 
-OfflineRequest offlineRequest({int cid = 137649199, String bvid = 'BV1GJ411x7h7', int duration = 712}) =>
-    OfflineRequest(
-      bvid: bvid,
-      aid: 80433022,
-      cid: cid,
-      title: '测试视频',
-      duration: duration,
-      cover: 'http://i0.hdslb.com/bfs/archive/cover$cid.jpg',
-      ownerMid: 1,
-      ownerName: 'UP主',
-      ownerFace: 'https://i1.hdslb.com/bfs/face/face.jpg',
-    );
+OfflineRequest offlineRequest({
+  int cid = 137649199,
+  String bvid = 'BV1GJ411x7h7',
+  int duration = 712,
+  String title = '测试视频',
+}) => OfflineRequest(
+  bvid: bvid,
+  aid: 80433022,
+  cid: cid,
+  title: title,
+  duration: duration,
+  cover: 'http://i0.hdslb.com/bfs/archive/cover$cid.jpg',
+  ownerMid: 1,
+  ownerName: 'UP主',
+  ownerFace: 'https://i1.hdslb.com/bfs/face/face.jpg',
+);
 
 /// One library on a temporary folder, with the canned API, a fake engine and host, and the pictures answered from
 /// memory. [reopen] makes another on the same folder, as a relaunch would.
@@ -150,6 +193,12 @@ final class Rig {
   final pictureUrls = <Uri>[];
   final libraries = <DiskOfflineLibrary>[];
 
+  /// Each library's trials; pinned, so no test leans on how the real choice explores.
+  BackgroundTrials Function() trials = PinnedTrials.new;
+  Duration continuedStartWait = const Duration(seconds: 5);
+  Duration continuedUpdateGap = const Duration(seconds: 2);
+  Duration awayProgressGap = const Duration(seconds: 30);
+
   /// The signed URLs are good for two more hours.
   DateTime now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 7200) * 1000);
 
@@ -168,6 +217,7 @@ final class Rig {
       engine: () async => engine,
       host: host,
       codecMemory: memory,
+      trials: trials(),
       logger: logger,
       pictures: (url) async {
         pictureUrls.add(url);
@@ -176,6 +226,9 @@ final class Rig {
       now: () => now,
       danmakuGap: danmakuGap,
       retryGaps: const [Duration.zero],
+      continuedStartWait: continuedStartWait,
+      continuedUpdateGap: continuedUpdateGap,
+      awayProgressGap: awayProgressGap,
     );
     libraries.add(library);
     return library;
