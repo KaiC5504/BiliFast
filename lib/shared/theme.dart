@@ -7347,9 +7347,273 @@ abstract final class DownloadSheetTheme {
   static const pickerBottom = 12.0;
 }
 
-/// 离线缓存, 正在缓存, a 合集's page and their search and edit modes (143, 145-151, 155-157).
+/// 离线缓存, 正在缓存, a 合集's page and their search and edit modes (143, 145-151, 155-157), measured at 3 px per pt.
 abstract final class OfflineListTheme {
-  static const double placeholder = 0;
+  static const page = BiliColors.card;
+  static const ink = BiliColors.text;
+  static const grey = Color(0xFF61666D);
+  static const meta = BiliColors.secondaryText;
+
+  /// The bar, 44 under the status bar: the 装扮's second-page colour and text colour (KaiC's green, 143), else white
+  /// with the page's text (a guess, as 我的关注's). No hairline ends it.
+  static const barRow = 44.0;
+  static const bar = BiliColors.card;
+  static const barInk = BiliColors.text;
+  static const barLightInk = Color(0xFFFFFFFF);
+
+  /// The title, 17 pt semibold, centred on the screen and the row.
+  static const titleText = 17.0;
+  static const titleWeight = FontWeight.w600;
+  static const titleLine = 24.0;
+  static const titleDrop = 0.0;
+
+  /// ‹: 1.5 strokes, its tip 20.08 in and its ends 27.92 in, 8.25 above and below the row's middle.
+  static const backTarget = 44.0;
+  static const backTipX = 20.08;
+  static const backEndX = 27.92;
+  static const backHalfHeight = 8.25;
+  static const backStroke = 1.5;
+
+  /// 🔍 and ☰, 36 apart, the last centred 24 from the edge (🔍 takes ☰'s place while nothing is finished, 143).
+  static const iconTarget = 36.0;
+  static const iconLastCentre = 24.0;
+
+  /// 🔍: an 18 square, its ring 16.67 across with 1.67 strokes, the handle to the corner; centred 0.67 above the row's
+  /// middle.
+  static const searchBox = 18.0;
+  static const searchRingCentre = 25 / 3;
+  static const searchRingRadius = 7.5;
+  static const searchStroke = 5 / 3;
+  static const searchHandleEnd = 17.17;
+  static const searchLift = 2 / 3;
+
+  /// ☰ (edit): three 1.5 bars 11.67 long, 6.17 apart; ✓, ○, ✓ before them. 18.67 × 16.33 of ink, centred 0.17 above
+  /// the row's middle.
+  static const editWidth = 56 / 3;
+  static const editHeight = 49 / 3;
+  static const editStroke = 1.5;
+  static const editPitch = 37 / 6;
+  static const editBarLeft = 7.75;
+  static const editBarRight = 17.92;
+  static const editMarkCentre = 2.83;
+  static const editRingRadius = 1.85;
+  static const editRingStroke = 1.3;
+  static const editLift = 1 / 6;
+
+  /// 完成 (149) and the search's 取消 (151), 14 pt in the bar's ink, ending 16.67 and 12.33 from the edge.
+  static const actionText = 14.0;
+  static const doneRight = 50 / 3;
+  static const cancelRight = 37 / 3;
+
+  /// 搜索已下载的内容 (151): a 28 tall #F1F2F3 stadium from 12 in to 52 from the edge on the row's middle; the grey
+  /// magnifier (搜索's) 12 square of ink, 18 in and 0.67 low; the words 14 pt from 30.33 in; 搜索's ⓧ once there is
+  /// text (no screenshot).
+  static const fieldLeft = 12.0;
+  static const fieldRight = 52.0;
+  static const fieldHeight = 28.0;
+  static const field = BiliColors.pageGrey;
+  static const fieldText = 14.0;
+  static const fieldLine = 20.0;
+  static const fieldInk = BiliColors.text;
+  static const fieldHint = BiliColors.sheetHint;
+  static const caret = BiliColors.pink;
+  static const fieldGlyph = 37 / 3;
+  static const fieldGlyphCentre = 18.0;
+  static const fieldGlyphDrop = 2 / 3;
+  static const clearGlyph = 40 / 3;
+  static const clearInk = Color(0xFFC9CCCF);
+  static const clearTarget = 36.0;
+  static const fieldTextLeft = 91 / 3;
+
+  /// 正在缓存 and 已缓存视频: a 43 tall block, 16 pt semibold 12 in, its middle 25.33 down.
+  static const headerHeight = 43.0;
+  static const headerCentre = 76 / 3;
+  static const headerText = 16.0;
+  static const headerWeight = FontWeight.w600;
+  static const headerLeft = 12.0;
+
+  /// A row: 102 tall, the 139 × 78 cover 12 in and 12 down with 6 corners; the words from 159 to 12 from the edge.
+  static const row = 102.0;
+  static const coverLeft = 12.0;
+  static const coverTop = 12.0;
+  static const coverWidth = 139.0;
+  static const coverHeight = 78.0;
+  static const coverRadius = 6.0;
+  static const coverPlaceholder = BiliColors.pageGrey;
+  static const textLeft = 159.0;
+  static const textRight = 12.0;
+
+  /// The title, 14 pt in up to two lines 21.33 apart, the first's middle 8.25 under the cover's top; under it the part
+  /// or episode, 12 pt #61666D, its middle 28.33 down.
+  static const rowTitleText = 14.0;
+  static const rowTitleLine = 64 / 3;
+  static const rowTitleCentre = 8.25;
+  static const subText = 12.0;
+  static const subLine = 16.0;
+  static const subCentre = 85 / 3;
+
+  /// The state, 12 pt #61666D, its middle 62.83 down; then a 2 tall line from the words' left to 12 from the edge at
+  /// the cover's bottom: pink while downloading, #9499A0 otherwise, on #E3E5E7.
+  static const stateText = 12.0;
+  static const stateLine = 16.0;
+  static const stateCentre = 377 / 6;
+  static const progressHeight = 2.0;
+  static const progressTrack = BiliColors.divider;
+  static const progressActive = BiliColors.pink;
+  static const progressIdle = BiliColors.secondaryText;
+
+  /// UP and the name, then the size, 12 pt #9499A0, their middles 55.67 and 70.83 down; 大会员专享 · size in pink.
+  /// UP is 历史记录's glyph in a 13.67 box 1 in, the name 3.33 after it.
+  static const metaText = 12.0;
+  static const metaLine = 16.0;
+  static const upCentre = 167 / 3;
+  static const sizeCentre = 425 / 6;
+  static const metaInset = 1.0;
+  static const upBox = 41 / 3;
+  static const upGap = 10 / 3;
+  static const upLift = 0.5;
+  static const vip = BiliColors.pink;
+
+  /// Between rows a 2/3 hairline from the cover's left to the screen's edge, halfway between the covers.
+  static const divider = Color(0xFFEAEBED);
+  static const dividerHeight = 2 / 3;
+
+  /// On the cover: the length (or watched / length) 10 pt white in a 15.67 tall pill of black at 0.4, 4 in from the
+  /// right and 4.33 up, 3.67 each side of the words; a watched line 2 tall at the bottom, pink on black at 0.6.
+  static const pillText = 10.0;
+  static const pillHeight = 47 / 3;
+  static const pillPadX = 11 / 3;
+  static const pillRight = 4.0;
+  static const pillBottom = 13 / 3;
+  static const pillRadius = 4.0;
+  static const pillFill = Color(0x66000000);
+  static const pillInk = BiliColors.onCover;
+  static const watchedHeight = 2.0;
+  static const watchedTrack = Color(0x99000000);
+  static const watched = BiliColors.pink;
+
+  /// A 合集's cover (155): the pill holds the stack, 10 × 9.17 of ink, and the count 5.67 after it.
+  static const stackWidth = 10.0;
+  static const stackHeight = 55 / 6;
+  static const stackGap = 17 / 3;
+
+  /// 正在缓存's stacked cover (143, 145): a #C9CCD0 card 7 above it, 6 in each side; the cover shaded by half and
+  /// N个内容 12 pt white on its middle.
+  static const stackCard = Color(0xFFC9CCD0);
+  static const stackCardRise = 7.0;
+  static const stackCardInset = 6.0;
+  static const queueShade = BiliColors.coverShade;
+  static const queueCountText = 12.0;
+
+  /// 已使用 / 剩余, 12 pt, its middle 19.67 above the home indicator's inset on 离线缓存 and 正在缓存, 22.67 on a
+  /// 合集's page (156).
+  static const footerText = 12.0;
+  static const footerLine = 16.0;
+  static const footerHeight = 40.0;
+  static const footerCentre = 59 / 3;
+  static const folderFooterCentre = 68 / 3;
+
+  /// 正在缓存's strip (146): 56 tall. The pill 12 in and 12 down, 32 tall, #F6F7F8: ❚❚ or ▶ (#61666D) 14 in, 8 wide,
+  /// then 14 pt words 6.33 after it and 11.33 before the end. 同时缓存数量：N 14 pt #9499A0, then ⌄ 8.67 × 4.67 with
+  /// 1.2 strokes, 9.17 after the words and 13.67 from the edge.
+  static const stripHeight = 56.0;
+  static const pillTop = 12.0;
+  static const pillLeft = 12.0;
+  static const allHeight = 32.0;
+  static const allFill = BiliColors.softGrey;
+  static const allPadLeft = 14.0;
+  static const allPadRight = 34 / 3;
+  static const allGlyphWidth = 8.0;
+  static const allGlyphGap = 19 / 3;
+  static const allText = 14.0;
+  static const allGlyph = Color(0xFF61666D);
+  static const pauseBar = 3.0;
+  static const pauseHeight = 28 / 3;
+  static const playHeight = 9.2;
+  static const playRound = 1.2;
+  static const countText = 14.0;
+  static const countInk = BiliColors.secondaryText;
+  static const chevronWidth = 26 / 3;
+  static const chevronHeight = 14 / 3;
+  static const chevronStroke = 1.2;
+  static const chevronGap = 9.17;
+  static const chevronRight = 41 / 3;
+
+  /// Edit mode (149): the strip goes, rows slide 32 right for a 19.33 circle centred 24 in on the cover's middle, a
+  /// 1 pt #61666D ring or pink with a white ✓. At the bottom, 全选 (its circle the same, 14 pt #484C52 from 44) and
+  /// 删除 (14 pt #61666D, at half until something is chosen, ending 13 from the edge), their middle 26.08 above the
+  /// home indicator's inset.
+  static const editShift = 32.0;
+  static const editMotion = Duration(milliseconds: 220);
+  static const circle = 58 / 3;
+  static const circleCentreX = 24.0;
+  static const circleStroke = 1.0;
+  static const circleRing = Color(0xFF61666D);
+  static const circleChosen = BiliColors.pink;
+  static const checkInk = BiliColors.onPink;
+  static const checkStroke = 1.4;
+  static const editBarHeight = 158 / 3;
+  static const editBarCentre = 313 / 12;
+  static const editText = 14.0;
+  static const selectAllLeft = 44.0;
+  static const selectAllInk = Color(0xFF484C52);
+  static const deleteInk = Color(0xFF61666D);
+  static const deleteOffOpacity = 0.5;
+  static const deleteRight = 13.0;
+
+  /// 确定要删除吗? (150): 280 wide with 8 corners, centred between the status bar and the home indicator's inset, over
+  /// black at 0.6; the question 20 pt semibold, 3 above the middle of a 66.33 block, a 2/3 #E3E5E7 rule, 取消 and pink
+  /// 确认 20 pt in a 44.33 row, each 4 further out than its half's middle.
+  static const confirmWidth = 280.0;
+  static const confirmRadius = 8.0;
+  static const confirmDim = Color(0x99000000);
+  static const confirmTitleText = 20.0;
+  static const confirmTitleWeight = FontWeight.w600;
+  static const confirmTitleHeight = 199 / 3;
+  static const confirmTitleLift = 3.0;
+  static const confirmRule = 2 / 3;
+  static const confirmRuleInk = BiliColors.divider;
+  static const confirmButtonHeight = 133 / 3;
+  static const confirmButtonText = 20.0;
+  static const confirmButtonSpread = 8.0;
+  static const confirmCancel = BiliColors.text;
+  static const confirmAction = BiliColors.pink;
+  static const confirmPressed = BiliColors.pressedFill;
+  static const confirmMotion = Duration(milliseconds: 200);
+
+  /// 同时缓存数量's sheet (147): #F6F7F8 with 12 corners over black at 0.32; a 30 × 3 #C9CCD0 handle 8 down; a white
+  /// card 16 in at 19 down with 8 corners, three 52 rows split by 0.5 #E3E5E7 rules 16 in; 14 pt words 16 in, the
+  /// chosen pink; (大会员专享) 10 pt white in a 13 tall pink stadium 8.67 after the words, 4.33 each side; 20 under
+  /// the card.
+  static const sheet = BiliColors.softGrey;
+  static const sheetRadius = 12.0;
+  static const sheetDim = Color(0x52000000);
+  static const sheetMotion = Duration(milliseconds: 250);
+  static const handleWidth = 30.0;
+  static const handleHeight = 3.0;
+  static const handleTop = 8.0;
+  static const handle = Color(0xFFC9CCD0);
+  static const cardTop = 19.0;
+  static const cardInset = 16.0;
+  static const cardRadius = 8.0;
+  static const cardBottom = 20.0;
+  static const optionRow = 52.0;
+  static const optionText = 14.0;
+  static const optionInk = BiliColors.text;
+  static const optionChosen = BiliColors.pink;
+  static const optionInset = 16.0;
+  static const optionRule = 0.5;
+  static const optionRuleInk = BiliColors.divider;
+  static const badgeGap = 26 / 3;
+  static const badgeHeight = 13.0;
+  static const badgeText = 10.0;
+  static const badgePadX = 13 / 3;
+  static const badgeFill = BiliColors.pink;
+  static const badgeInk = BiliColors.onPink;
+
+  /// No screenshot: an empty page or search says so in 14 pt #9499A0, 120 under the bar.
+  static const emptyText = 14.0;
+  static const emptyTop = 120.0;
 }
 
 /// A cached video's page under the player (158-161), measured at 3 px per pt.

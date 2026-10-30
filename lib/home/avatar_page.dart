@@ -14,6 +14,7 @@ import '../app/swipe_back_route.dart';
 import '../favourites/favourites_page.dart';
 import '../history/history_model.dart';
 import '../history/watch_history_page.dart';
+import '../offline/pages/offline_list_page.dart';
 import '../player_ui/portrait_controls.dart';
 import '../settings/settings_page.dart';
 import '../shared/menu.dart';
@@ -41,7 +42,6 @@ class AvatarPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    void soon() => showToast(context, '即将推出');
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
@@ -54,7 +54,12 @@ class AvatarPage extends StatelessWidget {
               height: AvatarPageTheme.shortcutsHeight,
               child: Row(
                 children: [
-                  _Shortcut(key: const ValueKey('avatar-offline'), label: '离线缓存', glyph: ShortcutGlyph.offline, onTap: soon),
+                  _Shortcut(
+                    key: const ValueKey('avatar-offline'),
+                    label: '离线缓存',
+                    glyph: ShortcutGlyph.offline,
+                    onTap: () => unawaited(openOfflineList(context)),
+                  ),
                   _Shortcut(
                     key: const ValueKey('avatar-history'),
                     label: '历史记录',
