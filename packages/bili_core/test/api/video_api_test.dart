@@ -186,6 +186,7 @@ void main() {
     fakeHTTP.routes[playerPath] = (200, Fixtures.playerV2);
     final info = await client.playerInfo(bvid: 'BV1GJ411x7h7', cid: 137649199);
     expect(info.lastPlayCid, 137649200);
+    expect(info.lastPlayTimeMs, 65000);
     expect(info.chapters, const [
       Chapter(from: 0, to: 60, title: '开场'),
       Chapter(from: 60, to: 150, title: '正片'),
@@ -198,6 +199,14 @@ void main() {
     fakeHTTP.routes[playerPath] = (200, Fixtures.playerV2Highlights);
     final highlights = await client.playerInfo(bvid: 'BV1GJ411x7h7', cid: 137649199);
     expect(highlights.chapters, isEmpty);
+  });
+
+  test('player info reads where the account stopped, 0 when it is missing', () {
+    expect(decode(Fixtures.playerV2, PlayerInfo.fromJson).lastPlayTimeMs, 65000);
+    expect(decode(Fixtures.playerV2Highlights, PlayerInfo.fromJson).lastPlayTimeMs, 0);
+    final missing = Fixtures.playerV2.replaceFirst('"last_play_time":65000,', '');
+    expect(decode(missing, PlayerInfo.fromJson), isNot(decode(Fixtures.playerV2, PlayerInfo.fromJson)));
+    expect(decode(missing, PlayerInfo.fromJson).lastPlayTimeMs, 0);
   });
 
   test('related drops redirected items', () async {

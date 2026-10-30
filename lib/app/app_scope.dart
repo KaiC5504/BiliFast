@@ -32,6 +32,7 @@ import '../skin/skin_api.dart';
 import '../skin/skin_model.dart';
 import '../space/follow_book.dart';
 import '../space/space_api.dart';
+import '../video/history_outbox.dart';
 import '../video/page_api.dart';
 import '../video/pip_keeper.dart';
 import '../watch_later/watch_later_api.dart';
@@ -150,8 +151,8 @@ class AppPlayback with WidgetsBindingObserver {
 
 /// What every page reaches: the account and API client, the official API's token, the players, 最近打开, the phone's
 /// rotation and levels, the font, the page body's, 搜索's, UP主空间's, 我的收藏's, 稍后再看's and 我的's calls, 我的's last
-/// account, 关注 changes, 搜索历史, the login page, the log kept on the phone, and the log forwarder in dev builds (null
-/// otherwise).
+/// account, 关注 changes, 搜索历史, the login page, the watch reports waiting for the network, the log kept on the phone,
+/// and the log forwarder in dev builds (null otherwise).
 class AppServices {
   AppServices({
     required this.environment,
@@ -179,9 +180,12 @@ class AppServices {
     LoginGate? loginGate,
     PipKeeper? pipKeeper,
     OfflineLibrary? offline,
+    HistoryOutbox? historyOutbox,
+    NetworkMonitor? network,
     this.logFiles = const NoLogFiles(),
     this.logs,
   }) : appAuth = appAuth ?? NoAppAuth(),
+       historyOutbox = historyOutbox ?? HistoryOutbox.memory(),
        navigator = navigator ?? GlobalKey<NavigatorState>(),
        device = device ?? PlayerDevice.inWindow(),
        pipKeeper = pipKeeper ?? PipKeeper(),
@@ -199,7 +203,10 @@ class AppServices {
     environment.logins.addListener(_loggedIn);
     _authorized = this.appAuth.authorized;
     this.appAuth.addListener(_authChanged);
+    _historyFlusher = HistoryOutboxFlusher(outbox: this.historyOutbox, environment: environment, network: network);
   }
+
+  late final HistoryOutboxFlusher _historyFlusher;
 
   late bool _authorized;
 
@@ -240,6 +247,7 @@ class AppServices {
     appAuth.dispose();
     environment.removeListener(_accountChanged);
     environment.logins.removeListener(_loggedIn);
+    _historyFlusher.dispose();
   }
 
   final AppEnvironment environment;
@@ -328,6 +336,9 @@ class AppServices {
 
   /// 离线缓存: the parts cached on the phone and their downloads.
   final OfflineLibrary offline;
+
+  /// Watch reports that got no answer, sent again when the network may be back (`history_outbox.json`).
+  final HistoryOutbox historyOutbox;
 
   final LogFiles logFiles;
   final LogForwarder? logs;

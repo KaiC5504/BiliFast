@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:bili_core/api.dart' show VideoPage, VideoView;
+import 'package:bili_core/api.dart' show PlayerInfo, VideoPage, VideoView;
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart' show ResumePoint;
 import 'package:flutter/foundation.dart';
 
@@ -67,6 +68,56 @@ double offlineStart(OfflineItem? item) {
   );
 }
 
+/// Where a cached part starts for an account that may have watched it elsewhere since (KaiC watches on several
+/// devices): Bilibili's last place in this part ([ask], `/x/player/wbi/v2`), by [offlineStart]'s rule, when it answers
+/// within [wait] with a place in this part. Otherwise, or while a report of this part from this phone is still [unsent]
+/// (newer than anything Bilibili has), [offlineStart]'s. Logs `offline resume` in whole seconds.
+Future<double> offlineResume(
+  OfflineItem item, {
+  required Future<PlayerInfo> Function() ask,
+  required bool unsent,
+  Duration wait = const Duration(seconds: 1),
+  Logger? logger,
+}) async {
+  final local = offlineStart(item);
+  double used = local;
+  int? server;
+  String source;
+  if (unsent) {
+    source = 'unsent';
+  } else {
+    try {
+      final info = await ask().timeout(wait);
+      server = info.lastPlayTimeMs ~/ 1000;
+      if (info.lastPlayCid != item.cid) {
+        source = 'other part';
+      } else if (info.lastPlayTimeMs <= 0) {
+        source = 'unwatched';
+      } else {
+        source = 'server';
+        used = ResumePoint.start(
+          lastPlayTimeMs: info.lastPlayTimeMs,
+          lastPlayCid: info.lastPlayCid,
+          cid: item.cid,
+          duration: item.request.duration.toDouble(),
+        );
+      }
+    } on TimeoutException {
+      source = 'timeout';
+    } catch (_) {
+      source = 'failed';
+    }
+  }
+  (logger ?? Logger.shared).info(LogCategory.player, 'offline resume', {
+    'cid': item.cid,
+    'local': local.round(),
+    'server': ?server,
+    'used': used.round(),
+    'source': source,
+  });
+  return used;
+}
+
 /// The finished parts, newest first as 离线缓存 lists them: an offline page's 选集, ⏭ and 自动连播. It notifies only
 /// when the list itself changes, not for every download's progress.
 class OfflinePlaylist extends ChangeNotifier implements SessionPlaylist {
@@ -108,7 +159,7 @@ class OfflinePlaylist extends ChangeNotifier implements SessionPlaylist {
 
 /// Keeps where a cached part stopped in the library, for its next open and 离线缓存's progress (145): every [step]
 /// seconds played, on a pause, after a seek, at the end (its whole length) and when the page leaves. It belongs to the
-/// open made just before it, as WatchReporter does, and tells nobody else: an offline page reports no history.
+/// open made just before it, as WatchReporter does, and tells nobody else: the page's WatchReporter tells Bilibili.
 class OfflineProgress {
   OfflineProgress({required PlaybackController controller, required this._library})
     : _controller = controller,

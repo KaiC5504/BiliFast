@@ -1,11 +1,12 @@
 import 'dart:async';
 
-import 'package:bili_core/api.dart' show VideoDetail, VideoView;
+import 'package:bili_core/api.dart' show BiliClientVideo, VideoDetail, VideoView;
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/widgets.dart';
 
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
+import '../offline/offline_models.dart';
 import '../offline/page/offline_playback.dart';
 import '../playback/playback_controller.dart';
 import 'page_session.dart';
@@ -45,8 +46,8 @@ PlayerSession pageSession({
 /// outlives its page while the small window plays it ([PipKeeper]), and the page the restore button pushes takes it
 /// over. What needs a page (the login) goes through the page attached, and does nothing without one. An [inline] one
 /// (推荐's big card) plays muted with its session's rules, watch reports and auto picture in picture off, until a page
-/// attaches and takes it over as it stands. An [offline] one plays 离线缓存 parts from the phone: no watch reports,
-/// no 最近打开, its position kept in the library instead.
+/// attaches and takes it over as it stands. An [offline] one plays 离线缓存 parts from the phone: no 最近打开, its
+/// position kept in the library as well as reported, and Bilibili asked for nothing else but where the part was left.
 class PagePlayback extends ChangeNotifier implements KeptPlayback {
   PagePlayback({
     required this._services,
@@ -225,15 +226,21 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
       onProgress: (bvid, cid, seconds) {
         if (!_inline) services.recents.recordProgress(bvid: bvid, cid: cid, seconds: seconds);
       },
+      outbox: services.historyOutbox,
     );
   }
 
-  /// The library's part [_cid] from the phone, from the route's start or where the library saw it stop.
+  /// The library's part [_cid] from the phone, from the route's start, else where the account or the library saw it
+  /// stop ([offlineResume]).
   void _openOffline(PlaybackController controller) {
-    final library = _services.offline;
+    final services = _services;
+    final library = services.offline;
+    final environment = services.environment;
     final cid = _cid;
+    final item = cid == null ? null : library.item(cid);
     _progress?.leave();
-    final start = _startAt ?? offlineStart(cid == null ? null : library.item(cid));
+    unawaited(_reporter?.leave());
+    final FutureOr<double> start = _startAt ?? (item == null ? 0 : _offlineStart(item));
     unawaited(
       controller.openLocal(() async {
         if (cid == null) return null;
@@ -242,6 +249,24 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
       }, start: start),
     );
     _progress = OfflineProgress(controller: controller, library: library);
+    _reporter = WatchReporter(
+      controller: controller,
+      client: environment.client,
+      loggedIn: () => WatchReporter.canReport(environment),
+      outbox: services.historyOutbox,
+    );
+  }
+
+  /// Where the account left [item] when it may be asked, else where the library saw it stop.
+  FutureOr<double> _offlineStart(OfflineItem item) {
+    final services = _services;
+    final environment = services.environment;
+    if (!WatchReporter.canReport(environment)) return offlineStart(item);
+    return offlineResume(
+      item,
+      ask: () => environment.client.playerInfo(bvid: item.request.bvid, cid: item.cid),
+      unsent: services.historyOutbox.holds(item.request.bvid, item.cid),
+    );
   }
 
   /// Another part or video, from 选集, 自动连播 or the end screen: opened on the same controller, with or without a
