@@ -71,6 +71,8 @@ const _supportFiles = [
   'node_memory.json',
   'log_server.json',
   'app_device.json',
+  'me.json',
+  'history_outbox.json',
 ];
 
 /// Asks iOS where the app's Application Support folder is, once per launch, before any store loads. A TestFlight

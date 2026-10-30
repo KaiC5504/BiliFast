@@ -513,7 +513,7 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     loading TV every list and page uses (`lib/player_ui/player_loading.dart` is the player's).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
     `font.json`, `emotes_recent.json`, `search_history.json`, `node_memory.json`, `danmaku_settings.json`,
-    `codec_memory.json`, `log_server.json`, `me.json`); the log and the pictures (`images`) are in the caches folder.
+    `codec_memory.json`, `log_server.json`, `me.json`, `history_outbox.json`); the log and the pictures (`images`) are in the caches folder.
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`: `shared`, `devlog`,
   `danmaku`, `api`, `logic`, `dash_hls`, `local_http`, `engine`, and `bin/ripper_bench.dart`.
 - `ios/Runner/`: native Swift (player registry and host view, keychain, the login web view's cookies, device
