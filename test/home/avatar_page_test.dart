@@ -12,6 +12,7 @@ import 'package:bilifast/favourites/favourites_page.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/offline/pages/offline_list_page.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
@@ -299,12 +300,13 @@ void main() {
     expect(find.byKey(const ValueKey('settings-font')), findsOneWidget);
   });
 
-  testWidgets('历史记录, 我的收藏 and 稍后再看 open their pages; 离线缓存 says 即将推出', (tester) async {
+  testWidgets('离线缓存 and 历史记录 open their pages', (tester) async {
     await show(tester);
     await tester.tap(find.byKey(const ValueKey('avatar-offline')));
-    await tester.pump();
-    expect(find.text('即将推出'), findsOneWidget);
-    await settle(tester, 60);
+    await settle(tester, 20);
+    expect(find.byType(OfflineListPage), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await settle(tester, 20);
     expect(find.byType(WatchHistoryPage), findsNothing);
     await tester.tap(find.byKey(const ValueKey('avatar-history')));
     await settle(tester, 20);

@@ -8,6 +8,7 @@ import 'package:bilifast/home/shortcut_glyphs.dart';
 import 'package:bilifast/me/me_header.dart';
 import 'package:bilifast/me/me_model.dart';
 import 'package:bilifast/me/me_page.dart';
+import 'package:bilifast/offline/pages/offline_list_page.dart';
 import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
@@ -140,7 +141,6 @@ void main() {
     'me-dynamics',
     'me-following',
     'me-followers',
-    'me-offline',
     'me-support',
     'me-listen',
   ]) {
@@ -154,6 +154,7 @@ void main() {
   }
 
   for (final (key, page) in [
+    ('me-offline', OfflineListPage),
     ('me-history', WatchHistoryPage),
     ('me-favourites', FavouritesPage),
     ('me-later', WatchLaterPage),

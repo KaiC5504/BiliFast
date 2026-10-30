@@ -14,6 +14,7 @@ import '../app/swipe_back_route.dart';
 import '../favourites/favourites_page.dart';
 import '../history/watch_history_page.dart';
 import '../home/shortcut_glyphs.dart';
+import '../offline/pages/offline_list_page.dart';
 import '../settings/settings_page.dart';
 import '../shared/release_refresh.dart';
 import '../shared/theme.dart';
@@ -463,7 +464,12 @@ class _List extends StatelessWidget {
           height: MeTheme.shortcutHeight - MeTheme.listCut,
           child: Row(
             children: [
-              _Shortcut(key: const ValueKey('me-offline'), label: '离线缓存', glyph: ShortcutGlyph.offline, onTap: onSoon),
+              _Shortcut(
+                key: const ValueKey('me-offline'),
+                label: '离线缓存',
+                glyph: ShortcutGlyph.offline,
+                onTap: () => unawaited(openOfflineList(context)),
+              ),
               _Shortcut(
                 key: const ValueKey('me-history'),
                 label: '历史记录',
