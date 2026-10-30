@@ -171,11 +171,63 @@ final class FakeEngine implements PlaybackEngine {
   @override
   Stream<EngineSnapshot> get stats => statsController.stream;
 
+  final localPrepared = <LocalPlaybackRequest>[];
+
+  @override
+  Future<PreparedSource> prepareLocal(LocalPlaybackRequest request) async {
+    localPrepared.add(request);
+    if (closed) throw const RipperError(RipperErrorKind.closed);
+    if (prepareErrors.isNotEmpty) throw prepareErrors.removeAt(0);
+    final token = 'local${++_next}';
+    return PreparedSource(
+      token: token,
+      master: masterOf(token),
+      video: Uri.parse('http://127.0.0.1:5555/$token/v.mp4'),
+      audio: Uri.parse('http://127.0.0.1:5555/$token/a.mp4'),
+      mode: PlaybackMode.local,
+      rewroteHEV1: rewroteHEV1,
+      sourceEntry: sourceEntry,
+      mediaHeaders: const {},
+    );
+  }
+
+  final downloadsStarted = <DownloadRequest>[];
+  final downloadsStopped = <String>[];
+  final downloadUrlReplacements = <({String id, TrackKind track, String primary, List<String> backups})>[];
+
+  /// What [stopDownload] answers for an id; empty gaps otherwise.
+  final gaps = <String, DownloadGaps>{};
+  final downloadController = StreamController<DownloadEvent>.broadcast(sync: true);
+
+  @override
+  Future<void> startDownload(DownloadRequest request) async {
+    if (closed) throw const RipperError(RipperErrorKind.closed);
+    downloadsStarted.add(request);
+  }
+
+  @override
+  Future<DownloadGaps> stopDownload(String id) async {
+    downloadsStopped.add(id);
+    return gaps[id] ?? DownloadGaps(id: id, video: const [], audio: const [], videoTotal: 0, audioTotal: 0);
+  }
+
+  @override
+  Future<void> replaceDownloadUrls(
+    String id,
+    TrackKind track, {
+    required String primary,
+    required List<String> backups,
+  }) async => downloadUrlReplacements.add((id: id, track: track, primary: primary, backups: backups));
+
+  @override
+  Stream<DownloadEvent> get downloads => downloadController.stream;
+
   @override
   Future<void> dispose() async {
     disposed = true;
     await statsController.close();
     await fatalController.close();
+    await downloadController.close();
   }
 }
 

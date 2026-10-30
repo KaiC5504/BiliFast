@@ -1,13 +1,17 @@
 import '../api/track_selector.dart';
 import 'engine_isolate.dart';
 import 'node_catalog.dart';
+import 'offline_types.dart';
 import 'transport.dart';
 
 enum TrackKind { video, audio }
 
 enum PlaybackMode {
   btr('BTR'),
-  direct('直连');
+  direct('直连'),
+
+  /// A finished 离线缓存 part, read from the phone ([PlaybackEngine.prepareLocal]).
+  local('本地');
 
   const PlaybackMode(this.label);
 
@@ -240,6 +244,26 @@ abstract interface class PlaybackEngine {
 
   /// About once a second while a BTR playback is registered.
   Stream<EngineSnapshot> get stats;
+
+  /// Registers a finished offline part's files with the local server. Throws [PlaybackError].
+  Future<PreparedSource> prepareLocal(LocalPlaybackRequest request);
+
+  /// Starts or resumes an offline download; its progress comes on [downloads].
+  Future<void> startDownload(DownloadRequest request);
+
+  /// Stops a download and reports what it still lacks, for a background transfer to fetch.
+  Future<DownloadGaps> stopDownload(String id);
+
+  /// Fresh signed addresses for a running download, after [DownloadFailure.expired] or before the deadline.
+  Future<void> replaceDownloadUrls(
+    String id,
+    TrackKind track, {
+    required String primary,
+    required List<String> backups,
+  });
+
+  /// Every download's events. Ends when the engine does.
+  Stream<DownloadEvent> get downloads;
 
   Future<void> dispose();
 }

@@ -13,7 +13,21 @@ import UIKit
     } catch {
       print("audio session category failed: \(error)")
     }
+    OfflineTransfers.shared.resume()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// 离线缓存's background transfers finished or need the app while it was suspended or closed.
+  override func application(
+    _ application: UIApplication,
+    handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @escaping () -> Void
+  ) {
+    guard identifier == OfflineTransfers.identifier else {
+      super.application(application, handleEventsForBackgroundURLSession: identifier, completionHandler: completionHandler)
+      return
+    }
+    OfflineTransfers.shared.handleEvents(identifier: identifier, completion: completionHandler)
   }
 
   /// Full screen is the same page rotated, so the app turns only when Dart's DeviceChannel allows it. An override:
@@ -52,6 +66,9 @@ import UIKit
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PictureDecoder") {
       PictureDecoder.register(with: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "OfflineHost") {
+      OfflineHost.register(with: registrar.messenger())
     }
   }
 }

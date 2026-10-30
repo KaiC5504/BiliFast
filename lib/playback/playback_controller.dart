@@ -337,6 +337,9 @@ class PlaybackController extends ChangeNotifier {
   VideoPage? get page => _page;
   List<QualityOption> get qualities => _qualities;
 
+  /// The current part's playurl answer: its streams, for 缓存's size estimates.
+  Dash? get dash => _dash;
+
   /// The ceiling asked for; [playing] is the stream actually chosen.
   int get selectedQuality => _selectedQuality;
   VideoCodec get codec => _codec;

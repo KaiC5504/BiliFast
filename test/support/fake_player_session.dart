@@ -1,5 +1,5 @@
 import 'package:bili_core/api.dart'
-    show Chapter, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
+    show Chapter, Dash, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
 import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
@@ -234,6 +234,9 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
 
   @override
   List<QualityOption> qualities = const [];
+
+  @override
+  Dash? dash;
 
   @override
   int quality = 80;

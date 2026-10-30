@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../app/form_factor.dart';
 import '../../device/orientation.dart';
+import '../../offline/download_sheet.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../player_ui.dart';
@@ -95,6 +96,11 @@ final class PanelFrame {
     ),
     PlayerPanel.blockWords => const PanelFrame(width: 1, sheetHeight: 1, full: true),
     PlayerPanel.danmakuList => const PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
+    PlayerPanel.download => const PanelFrame(
+      width: BiliMetrics.panelWidth,
+      sheetHeight: BiliMetrics.panelSheetHeight,
+      light: true,
+    ),
   };
 
   /// Full screen on the iPad (ipad/10-13): every strip hard-edged and as wide in points sideways as upright. 选集 and
@@ -138,7 +144,7 @@ final class PanelFrame {
         trailing: PadPanelTheme.trailing,
         top: PadPanelTheme.danmakuTop,
       ),
-      PlayerPanel.episodes || PlayerPanel.danmakuList => PanelFrame(
+      PlayerPanel.episodes || PlayerPanel.danmakuList || PlayerPanel.download => PanelFrame(
         width: phone.width,
         sheetHeight: phone.sheetHeight,
         light: phone.light,
@@ -491,6 +497,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               back: () => widget.ui.panels.open(PlayerPanel.danmakuSettings),
               close: _close,
             ),
+            PlayerPanel.download => DownloadSheet(ui: widget.ui, toast: _toast, close: _close),
           },
         ),
       ),

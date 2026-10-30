@@ -30,6 +30,10 @@ import 'home/main_shell.dart';
 import 'home/recent_store.dart';
 import 'me/fake_me_api.dart';
 import 'me/me_profile_store.dart';
+import 'offline/fake_offline_library.dart';
+import 'offline/ios/ios_offline_host.dart';
+import 'offline/offline_host.dart';
+import 'offline/offline_library.dart';
 import 'playback/codec_memory.dart';
 import 'playback/playback_setup.dart';
 import 'playback/shared_engine.dart';
@@ -124,6 +128,18 @@ Future<void> main(List<String> args) async {
     // Without the cache, pictures come from the network every time.
     CrashLog.report(error, stack, source: 'image cache');
   }
+  final offlineFolder = supportFilePath('offline');
+  final OfflineLibrary offline = fakeAccount
+      ? FakeOfflineLibrary.demo()
+      : offlineFolder == null
+          ? FakeOfflineLibrary()
+          : DiskOfflineLibrary(
+              folder: offlineFolder,
+              client: () => environment.client,
+              engine: engine.lease,
+              host: Platform.isIOS ? IosOfflineHost() : const NoOfflineHost(),
+              codecMemory: codecMemory,
+            );
   final services = AppServices(
     environment: environment,
     playback: playback,
@@ -146,11 +162,13 @@ Future<void> main(List<String> args) async {
     searchHistory: searchHistory,
     danmakuSettings: danmakuSettings,
     imageCache: imageCache,
+    offline: offline,
     logFiles: logFiles,
     logs: logs,
   );
   // Only the cache read is awaited, so the first frame has the theme; the check runs on.
   await services.skin.start();
+  unawaited(offline.start());
   runApp(BiliFastApp(services: services, initialLink: _argument(args, '--play=')));
 }
 

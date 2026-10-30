@@ -15,6 +15,9 @@ enum PlayerPanel {
 
   /// 当前弹幕列表 (31); landscape only.
   danmakuList,
+
+  /// 缓存 (141, 144, 153, 154): the light sheet under the player that queues parts for 离线缓存; portrait only.
+  download,
 }
 
 /// The open panel, or null. Opening one replaces the last.

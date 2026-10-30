@@ -5,6 +5,7 @@ export 'src/engine/io_transport.dart';
 export 'src/engine/log_forwarding.dart';
 export 'src/engine/node_catalog.dart';
 export 'src/engine/node_memory.dart';
+export 'src/engine/offline_types.dart';
 export 'src/engine/playback_builder.dart';
 export 'src/engine/playback_engine.dart';
 export 'src/engine/ripper_config.dart';

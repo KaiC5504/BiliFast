@@ -647,6 +647,9 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   List<QualityOption> get qualities => _controller.qualities;
 
   @override
+  Dash? get dash => _controller.dash;
+
+  @override
   int get quality => _controller.selectedQuality;
 
   @override

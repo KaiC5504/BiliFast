@@ -145,6 +145,34 @@ final class EngineLease implements PlaybackEngine {
   }
 
   @override
+  Future<PreparedSource> prepareLocal(LocalPlaybackRequest request) async {
+    final source = await _call(() => engine.prepareLocal(request));
+    if (_released) {
+      unawaited(engine.release(source.token).catchError((Object _) {}));
+    } else {
+      _tokens.add(source.token);
+    }
+    return source;
+  }
+
+  @override
+  Future<void> startDownload(DownloadRequest request) => _call(() => engine.startDownload(request));
+
+  @override
+  Future<DownloadGaps> stopDownload(String id) => _call(() => engine.stopDownload(id));
+
+  @override
+  Future<void> replaceDownloadUrls(
+    String id,
+    TrackKind track, {
+    required String primary,
+    required List<String> backups,
+  }) => _call(() => engine.replaceDownloadUrls(id, track, primary: primary, backups: backups));
+
+  @override
+  Stream<DownloadEvent> get downloads => engine.downloads;
+
+  @override
   Future<void> release(String token) {
     if (_released) return Future.value();
     _tokens.remove(token);

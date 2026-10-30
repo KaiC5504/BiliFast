@@ -295,6 +295,41 @@ final class DashStream {
   final ByteRange initialization;
   final ByteRange indexRange;
 
+  /// The playurl answer's own shape, which [DashStream.fromJson] reads back: a 离线缓存 part keeps its streams
+  /// this way, with [withoutAddresses]'s blank addresses.
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'baseUrl': baseURL,
+    'backupUrl': backupURLs,
+    'bandwidth': bandwidth,
+    'mimeType': mimeType,
+    'codecs': codecs,
+    'codecid': codecid,
+    'width': width,
+    'height': height,
+    'frameRate': ?frameRate,
+    'SegmentBase': {
+      'Initialization': '${initialization.start}-${initialization.end}',
+      'indexRange': '${indexRange.start}-${indexRange.end}',
+    },
+  };
+
+  /// The stream with its signed addresses blanked, for keeping on the phone.
+  DashStream withoutAddresses() => DashStream(
+    id: id,
+    baseURL: '',
+    backupURLs: const [],
+    bandwidth: bandwidth,
+    mimeType: mimeType,
+    codecs: codecs,
+    codecid: codecid,
+    width: width,
+    height: height,
+    frameRate: frameRate,
+    initialization: initialization,
+    indexRange: indexRange,
+  );
+
   @override
   bool operator ==(Object other) =>
       other is DashStream &&

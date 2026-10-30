@@ -19,6 +19,8 @@ import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
 import '../me/me_api.dart';
 import '../me/me_profile_store.dart';
+import '../offline/fake_offline_library.dart';
+import '../offline/offline_library.dart';
 import '../playback/codec_memory.dart';
 import '../playback/playback_controller.dart';
 import '../playback/shared_engine.dart';
@@ -176,12 +178,14 @@ class AppServices {
     BlockRuleStore? blockRules,
     LoginGate? loginGate,
     PipKeeper? pipKeeper,
+    OfflineLibrary? offline,
     this.logFiles = const NoLogFiles(),
     this.logs,
   }) : appAuth = appAuth ?? NoAppAuth(),
        navigator = navigator ?? GlobalKey<NavigatorState>(),
        device = device ?? PlayerDevice.inWindow(),
        pipKeeper = pipKeeper ?? PipKeeper(),
+       offline = offline ?? FakeOfflineLibrary(),
        loginGate = loginGate ?? LoginPageGate(environment),
        fonts = fonts ?? FontStore.memory(),
        pageApi = pageApi ?? ClientPageApi(environment.client),
@@ -321,6 +325,9 @@ class AppServices {
 
   /// The closed page the small window is playing, if any.
   final PipKeeper pipKeeper;
+
+  /// 离线缓存: the parts cached on the phone and their downloads.
+  final OfflineLibrary offline;
 
   final LogFiles logFiles;
   final LogForwarder? logs;

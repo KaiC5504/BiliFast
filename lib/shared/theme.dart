@@ -7212,3 +7212,18 @@ abstract final class PadDanmakuTheme {
   static const landscapePanelHeight = 405.0;
   static const portraitPanelHeight = 320.0;
 }
+
+/// 缓存's sheet (141-144, 153, 154) and the portrait ⋮ sheet it opens from (42, 43, differences/22).
+abstract final class DownloadSheetTheme {
+  static const double placeholder = 0;
+}
+
+/// 离线缓存, 正在缓存, a 合集's page and their search and edit modes (143, 145-151, 155-157).
+abstract final class OfflineListTheme {
+  static const double placeholder = 0;
+}
+
+/// A cached video's page under the player (158-161).
+abstract final class OfflinePageTheme {
+  static const double placeholder = 0;
+}

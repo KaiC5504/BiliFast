@@ -8,10 +8,13 @@ import '../local_http/playback_router.dart';
 import '../shared/clock.dart';
 import 'auto_concurrency.dart';
 import 'cancel.dart';
+import 'local_source.dart';
 import 'log_forwarding.dart';
 import 'node_catalog.dart';
 import 'node_memory.dart';
 import 'node_memory_store.dart';
+import 'offline_download.dart';
+import 'offline_types.dart';
 import 'playback_builder.dart';
 import 'playback_engine.dart';
 import 'ripper_config.dart';
@@ -84,9 +87,13 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
   bool _closed = false;
   final _stats = StreamController<EngineSnapshot>.broadcast();
   final _fatals = StreamController<FatalReport>.broadcast();
+  final _downloads = StreamController<DownloadEvent>.broadcast();
 
   @override
   Stream<EngineSnapshot> get stats => _stats.stream;
+
+  @override
+  Stream<DownloadEvent> get downloads => _downloads.stream;
 
   @override
   Stream<FatalReport> get fatals => _fatals.stream;
@@ -133,6 +140,25 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
 
   @override
   Future<bool> ensureServing() async => await _call(_EnsureServing.new) as bool;
+
+  @override
+  Future<PreparedSource> prepareLocal(LocalPlaybackRequest request) async =>
+      await _call((id) => _PrepareLocal(id, request)) as PreparedSource;
+
+  @override
+  Future<void> startDownload(DownloadRequest request) => _call((id) => _StartDownload(id, request));
+
+  @override
+  Future<DownloadGaps> stopDownload(String id) async =>
+      await _call((callId) => _StopDownload(callId, id)) as DownloadGaps;
+
+  @override
+  Future<void> replaceDownloadUrls(
+    String id,
+    TrackKind track, {
+    required String primary,
+    required List<String> backups,
+  }) => _call((callId) => _ReplaceDownloadUrls(callId, id, track, primary, backups));
 
   /// For tests and the developer menu: stops the local server's listener, as iOS does to a suspended app,
   /// so [ensureServing] has something to repair.
@@ -185,6 +211,8 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
         if (!_stats.isClosed) _stats.add(snapshot);
       case final FatalReport report:
         if (!_fatals.isClosed) _fatals.add(report);
+      case final DownloadEvent event:
+        if (!_downloads.isClosed) _downloads.add(event);
       case _Logs(:final events):
         ForwardingLogSink.replay(events);
       case [final error, final stack]:
@@ -208,6 +236,7 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
     _isolate = null;
     if (!_stats.isClosed) _stats.close();
     if (!_fatals.isClosed) _fatals.close();
+    if (!_downloads.isClosed) _downloads.close();
   }
 }
 
@@ -250,6 +279,33 @@ final class _NetworkChanged extends _Command {
   const _NetworkChanged(super.id, this.interfaceChanged);
 
   final bool interfaceChanged;
+}
+
+final class _PrepareLocal extends _Command {
+  const _PrepareLocal(super.id, this.request);
+
+  final LocalPlaybackRequest request;
+}
+
+final class _StartDownload extends _Command {
+  const _StartDownload(super.id, this.request);
+
+  final DownloadRequest request;
+}
+
+final class _StopDownload extends _Command {
+  const _StopDownload(super.id, this.download);
+
+  final String download;
+}
+
+final class _ReplaceDownloadUrls extends _Command {
+  const _ReplaceDownloadUrls(super.id, this.download, this.track, this.primary, this.backups);
+
+  final String download;
+  final TrackKind track;
+  final String primary;
+  final List<String> backups;
 }
 
 final class _EnsureServing extends _Command {
@@ -408,6 +464,7 @@ final class _EngineHost {
   final _auto = AutoConcurrency();
   final _sessions = <String, RipperSession>{};
   final _directTokens = <String>{};
+  final _localTokens = <String>{};
   final _lastDelivered = <String, int>{};
   String? _newest;
   Timer? _statsTimer;
@@ -421,6 +478,15 @@ final class _EngineHost {
   late final NodeMemory? _memory = _store?.load();
   var _ticks = 0;
   late NodeMode _nodeMode = _options.nodeMode;
+  late final _offline = OfflineDownloads(
+    transport: _transport,
+    auto: _auto,
+    mode: () => _nodeMode,
+    config: _options.config,
+    policy: _options.policy,
+    memory: _memory,
+    emit: _boot.events.send,
+  );
 
   EngineOptions get _options => _boot.options;
 
@@ -550,6 +616,15 @@ final class _EngineHost {
         for (final session in _sessions.values) {
           session.networkChanged(interfaceChanged: interfaceChanged);
         }
+        _offline.networkChanged(interfaceChanged: interfaceChanged);
+      case _PrepareLocal(:final request):
+        return _prepareLocal(request);
+      case _StartDownload(:final request):
+        await _offline.start(request);
+      case _StopDownload(:final download):
+        return _offline.stop(download);
+      case _ReplaceDownloadUrls(:final download, :final track, :final primary, :final backups):
+        _offline.replaceUrls(download, track, primary: primary, backups: backups);
       case _EnsureServing():
         return _ensureServing();
       case _StopServer():
@@ -647,9 +722,27 @@ final class _EngineHost {
     );
   }
 
+  Future<PreparedSource> _prepareLocal(LocalPlaybackRequest request) async {
+    final prepared = await LocalSource.prepare(request);
+    if (_disposed) throw const RipperError(RipperErrorKind.closed);
+    final token = _router.register(LocalSource.assets(prepared, request));
+    _localTokens.add(token);
+    return PreparedSource(
+      token: token,
+      master: _server.url(token, 'master.m3u8'),
+      video: _server.url(token, 'v.mp4'),
+      audio: _server.url(token, 'a.mp4'),
+      mode: PlaybackMode.local,
+      rewroteHEV1: prepared.rewroteHEV1,
+      sourceEntry: prepared.sourceEntry,
+      mediaHeaders: const {},
+    );
+  }
+
   void _release(String token) {
     _router.unregister(token);
     _directTokens.remove(token);
+    _localTokens.remove(token);
     _lastDelivered.remove(token);
     if (_sessions.remove(token) case final session?) {
       session.close();
@@ -709,15 +802,17 @@ final class _EngineHost {
     _disposed = true;
     _stopStats();
     _root.cancel();
-    for (final token in [..._sessions.keys, ..._directTokens]) {
+    for (final token in [..._sessions.keys, ..._directTokens, ..._localTokens]) {
       _router.unregister(token);
     }
+    await _offline.dispose();
     for (final session in _sessions.values) {
       session.close();
     }
     if (_sessions.isNotEmpty) _saveMemory();
     _sessions.clear();
     _directTokens.clear();
+    _localTokens.clear();
     await _server.close();
     closeTransports();
     Logger.shared.info(LogCategory.engine, 'engine stopped');

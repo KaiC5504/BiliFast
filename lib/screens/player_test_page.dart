@@ -475,7 +475,8 @@ class _PlayerTestPageState extends State<PlayerTestPage> with WidgetsBindingObse
             key: const ValueKey('mode'),
             showSelectedIcon: false,
             segments: [
-              for (final mode in PlaybackMode.values) ButtonSegment(value: mode, label: Text(mode.label)),
+              for (final mode in PlaybackMode.values.where((mode) => mode != PlaybackMode.local))
+                ButtonSegment(value: mode, label: Text(mode.label)),
             ],
             selected: {controller.mode},
             onSelectionChanged: (selected) => unawaited(controller.setMode(selected.first)),

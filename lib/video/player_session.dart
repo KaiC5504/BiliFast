@@ -1,5 +1,5 @@
 import 'package:bili_core/api.dart'
-    show Chapter, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
+    show Chapter, Dash, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
 import 'package:flutter/foundation.dart';
 
 import '../playback/overlay_stats.dart';
@@ -209,6 +209,9 @@ abstract interface class PlayerSession implements Listenable {
   Future<String?> setBtr(bool on);
 
   List<QualityOption> get qualities;
+
+  /// The playing part's streams; null until its playurl answer arrives. 缓存 estimates sizes from their bitrates.
+  Dash? get dash;
 
   /// The quality asked for.
   int get quality;
