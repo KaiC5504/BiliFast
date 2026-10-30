@@ -258,12 +258,14 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
                   glyphWidth: DownloadSheetTheme.tileGlyphWide + 0.33,
                   onTap: rows.watchLater,
                 ),
-                _Tile(
-                  key: const ValueKey('more-download'),
-                  asset: SheetArt.download,
-                  title: '缓存',
-                  onTap: () => _ui.panels.open(PlayerPanel.download),
-                ),
+                // A cached video's own page plays the phone's copy: nothing to cache.
+                if (!session.offline)
+                  _Tile(
+                    key: const ValueKey('more-download'),
+                    asset: SheetArt.download,
+                    title: '缓存',
+                    onTap: () => _ui.panels.open(PlayerPanel.download),
+                  ),
                 _Tile(
                   key: const ValueKey('more-mini-player'),
                   asset: SheetArt.miniPlayer,

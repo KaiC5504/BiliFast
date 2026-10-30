@@ -129,6 +129,17 @@ void main() {
       expect(rig.panels.value, PlayerPanel.danmakuSettings);
     });
 
+    testWidgets("a cached video's own page has no 缓存 square; the rest keep their order", (tester) async {
+      final rig = await pumpSheetRig(tester, session: singleVideo()..offline = true);
+      await openSheet(tester, rig, PlayerPanel.more);
+      expect(find.byKey(const ValueKey('more-download')), findsNothing);
+      expect(find.text('缓存'), findsNothing);
+      final lefts = [
+        for (final title in ['不感兴趣', '稍后再看', '小窗播放', '投屏', '分享']) tester.getCenter(find.text(title)).dx,
+      ];
+      expect(lefts, [...lefts]..sort());
+    });
+
     testWidgets('稍后再看 and 小窗播放 do what the panel does and close', (tester) async {
       final rig = await pumpSheetRig(tester, session: singleVideo());
       await openSheet(tester, rig, PlayerPanel.more);
