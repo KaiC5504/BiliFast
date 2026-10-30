@@ -321,7 +321,7 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   (connections per host, each its own background session: `.offline`, `.offline.c2`, `.offline.c6`; MiB pieces).
   Each arm is tried first (at most 3 long attempts), then the best mean MB/s of its last 5 scored trips, 15% explore
   (5% once all have 5). Scored: 20 s or more, downloads not run out, not spoiled (nothing handed off, take-back
-  failed, a continued trip the app died in). A hand-off trial ends a running task only at hidden/paused, so a glance
+  failed, any trip the app died in: timed to the next launch, and a swipe cancels the transfers too). A hand-off trial ends a running task only at hidden/paused, so a glance
   at Control Center keeps it. Logs: `offline continued` (asked, refused with the error's domain and code, not started,
   started, completed, ended with locked), `offline away` (arm, why), `offline away progress` (every 30 s on a
   continued trip), `offline trip` (secs, gainedMb, mbps, wastedMb, allDone, scored, spoiled, handed, relaunched),
