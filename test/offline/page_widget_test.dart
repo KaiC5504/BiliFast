@@ -137,10 +137,18 @@ void main() {
     await frames(tester, 20);
   }
 
-  /// What the page asked of the network after it opened, the account's own 屏蔽词 aside.
+  const history = {'/x/player/wbi/v2', '/x/click-interface/web/heartbeat'};
+
+  /// What the page asked of the network after it opened, the account's own 屏蔽词 and the watch history aside.
   List<String> pageCalls() => [
     for (final path in http.paths.skip(asked))
-      if (path != '/x/dm/filter/user') path,
+      if (path != '/x/dm/filter/user' && !history.contains(path)) path,
+  ];
+
+  /// The watch history's calls after the page opened: where the account stopped, and the reports.
+  List<String> historyCalls() => [
+    for (final path in http.paths.skip(asked))
+      if (history.contains(path)) path,
   ];
 
   PlayerUi ui(WidgetTester tester) => tester.widget<PanelLayer>(find.byType(PanelLayer).last).ui;
@@ -150,9 +158,8 @@ void main() {
     await frames(tester, 10);
   }
 
-  testWidgets('the page plays the part from its saved place, lists every finished part and asks Bilibili nothing', (
-    tester,
-  ) async {
+  testWidgets('the page plays the part from its saved place, lists every finished part and asks Bilibili for nothing '
+      'but the watch history', (tester) async {
     await host(tester);
     final player = await open(tester, 7003);
     final controller = controllers.single;
@@ -176,9 +183,11 @@ void main() {
     expect(ui(tester).session.episodes.map((episode) => episode.cid), [7003, 7002, 7001]);
 
     await frames(tester, 40);
-    expect(pageCalls(), isEmpty, reason: 'no view, playurl, heartbeat, related, 看点, comments or details');
+    expect(pageCalls(), isEmpty, reason: 'no view, playurl, related, 看点, comments or details');
+    expect(historyCalls(), ['/x/player/wbi/v2', '/x/click-interface/web/heartbeat']);
     await back(tester);
     expect(pageCalls(), isEmpty);
+    expect(historyCalls().last, '/x/click-interface/web/heartbeat', reason: 'leaving reports where it stopped');
     expect(services.recents.items, isEmpty, reason: 'no 最近打开');
   });
 

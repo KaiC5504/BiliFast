@@ -380,7 +380,7 @@ final class Chapter {
 }
 
 final class PlayerInfo {
-  const PlayerInfo({required this.lastPlayCid, required this.chapters});
+  const PlayerInfo({required this.lastPlayCid, this.lastPlayTimeMs = 0, required this.chapters});
 
   factory PlayerInfo.fromJson(Object? json) {
     final object = JsonObject.from(json);
@@ -397,6 +397,7 @@ final class PlayerInfo {
     });
     return PlayerInfo(
       lastPlayCid: object.integer('last_play_cid') ?? 0,
+      lastPlayTimeMs: object.integer('last_play_time') ?? 0,
       // type 1 is the uploader's highlight marks, not a chapter list.
       chapters: points.firstOrNull?.type == 2
           ? [
@@ -408,14 +409,20 @@ final class PlayerInfo {
   }
 
   final int lastPlayCid;
+
+  /// Where the account last stopped in [lastPlayCid], in milliseconds; 0 when it never played the video.
+  final int lastPlayTimeMs;
   final List<Chapter> chapters;
 
   @override
   bool operator ==(Object other) =>
-      other is PlayerInfo && other.lastPlayCid == lastPlayCid && listEquals(other.chapters, chapters);
+      other is PlayerInfo &&
+      other.lastPlayCid == lastPlayCid &&
+      other.lastPlayTimeMs == lastPlayTimeMs &&
+      listEquals(other.chapters, chapters);
 
   @override
-  int get hashCode => Object.hash(lastPlayCid, Object.hashAll(chapters));
+  int get hashCode => Object.hash(lastPlayCid, lastPlayTimeMs, Object.hashAll(chapters));
 }
 
 final class VideoCard {

@@ -523,10 +523,11 @@ class PlaybackController extends ChangeNotifier {
     }, start: start);
   }
 
-  /// A 离线缓存 part from the phone, from [start] seconds: [find] hands over its files, or null when they are gone.
+  /// A 离线缓存 part from the phone, from [start] seconds: [find] hands over its files, or null when they are gone. A
+  /// [start] still to come (the account's history, asked alongside [find]) is waited for before the load.
   /// Nothing here asks Bilibili: no view, no playurl, no URL refresh, no direct fallback. The quality, codec and mode
   /// can't change, and a codec the player refuses fails the playback, as the files hold no other.
-  Future<void> openLocal(Future<LocalVideo?> Function() find, {double start = 0}) async {
+  Future<void> openLocal(Future<LocalVideo?> Function() find, {FutureOr<double> start = 0}) async {
     _opens += 1;
     _clearVideo();
     final current = _advance();
@@ -543,6 +544,8 @@ class PlaybackController extends ChangeNotifier {
       final local = await find();
       if (current != _epoch) return;
       if (local == null) throw PlaybackFailure.localMissing;
+      final from = start is Future<double> ? await start : start;
+      if (current != _epoch) return;
       _local = local;
       _video = local.view;
       _page = local.page;
@@ -554,7 +557,7 @@ class PlaybackController extends ChangeNotifier {
         folder: local.danmakuFolder,
         segments: local.danmakuSegments,
       );
-      if (start > 0) danmaku.seeked((start * 1000).round());
+      if (from > 0) danmaku.seeked((from * 1000).round());
       _logger.info(LogCategory.player, 'open local', {
         'cid': local.page.cid,
         'quality': video.id,
@@ -562,7 +565,7 @@ class PlaybackController extends ChangeNotifier {
         'danmaku': local.danmakuFolder == null ? 0 : local.danmakuSegments,
       });
       _resetStart(autoplay: _playWhenLoaded);
-      await _beginLocal(start);
+      await _beginLocal(from);
     } catch (error, stack) {
       if (current == _epoch) _fail(error, stack);
     }

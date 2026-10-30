@@ -7,19 +7,21 @@ import 'package:bili_core/logic.dart';
 import '../app/app_environment.dart';
 import '../playback/playback_controller.dart';
 import '../player/bili_player.dart';
+import 'history_outbox.dart';
 
 /// Tells Bilibili how far the video page got, so it shows in the official app's 历史记录 and the next open resumes
 /// there (VideoPageModel.swift's heartbeats): once playback starts, while playing whenever the position is 15 s on from
 /// the last report, on pause, after a seek, at the end (-1) and when the playback closes, while [canReport] allows.
 /// It belongs to the open made just before it: once a newer open (another part, 自动连播) moves the controller on, it
 /// hears nothing more, and leaving reports its own video at the last position it saw. The speed test plays without
-/// one, so it reports nothing.
+/// one, so it reports nothing. With an [outbox], a report that gets no answer waits there for the network.
 class WatchReporter {
   WatchReporter({
     required PlaybackController controller,
     required this._client,
     required this._loggedIn,
     this.onProgress,
+    this._outbox,
     Logger? logger,
   }) : _controller = controller,
        _open = controller.opens,
@@ -40,6 +42,7 @@ class WatchReporter {
   final PlaybackController _controller;
   final BiliClient _client;
   final bool Function() _loggedIn;
+  final HistoryOutbox? _outbox;
 
   /// Every position reported, logged in or not, in seconds; a finished video reports its whole length.
   final void Function(String bvid, int cid, int seconds)? onProgress;
@@ -133,9 +136,11 @@ class WatchReporter {
     final duration = _controller.page?.duration ?? 0;
     onProgress?.call(item.bvid, item.cid, played == HeartbeatSchedule.finished ? duration : played);
     if (!_loggedIn()) return;
+    Future<void> beat() => _client.heartbeat(bvid: item.bvid, cid: item.cid, playedTime: played);
+    final outbox = _outbox;
     _sending = _sending.then((_) async {
       try {
-        await _client.heartbeat(bvid: item.bvid, cid: item.cid, playedTime: played);
+        await (outbox == null ? beat() : outbox.send(item.bvid, item.cid, played, beat));
       } catch (error) {
         // The Windows guard refuses every beat and logs the first itself.
         if (error is BiliAPIError && error.code == GuardedTransport.readOnlyCode) return;

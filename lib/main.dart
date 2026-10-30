@@ -47,6 +47,7 @@ import 'space/fake_space_api.dart';
 import 'shared/image_disk_cache.dart';
 import 'shared/theme.dart';
 import 'video/fake_page_api.dart';
+import 'video/history_outbox.dart';
 import 'video/player_prefs.dart';
 import 'watch_later/fake_watch_later_api.dart';
 
@@ -75,6 +76,7 @@ Future<void> main(List<String> args) async {
   final DanmakuSettingsStore danmakuSettings;
   final CodecMemory codecMemory;
   final MeProfileStore meProfile;
+  final HistoryOutbox historyOutbox;
   try {
     environment = await (Platform.isWindows
         ? loadWindowsEnvironment(
@@ -88,6 +90,7 @@ Future<void> main(List<String> args) async {
     RecentEmotes.shared = await RecentEmotes.load(supportFilePath('emotes_recent.json'));
     codecMemory = await CodecMemory.load(codecMemoryPath());
     meProfile = await MeProfileStore.load(supportFilePath('me.json'));
+    historyOutbox = await HistoryOutbox.load(supportFilePath('history_outbox.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
     CrashLog.report(error, stack, source: 'launch');
@@ -163,6 +166,7 @@ Future<void> main(List<String> args) async {
     danmakuSettings: danmakuSettings,
     imageCache: imageCache,
     offline: offline,
+    historyOutbox: historyOutbox,
     logFiles: logFiles,
     logs: logs,
   );
