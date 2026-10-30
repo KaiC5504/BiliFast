@@ -1657,10 +1657,16 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   }
 
   void _maybeEndGrace() {
-    if (!_backgrounded || !_graceOpen) return;
-    final busy = _parts.values.any((part) => part.running || part.preparing != null || part.refresh != null);
-    if (!busy) unawaited(_queue(_endGrace));
+    if (!_backgrounded || !_graceOpen || _partsBusy) return;
+    // Steps queued before the end may start parts in the grace, so it looks again when its turn comes.
+    unawaited(
+      _queue(() async {
+        if (_backgrounded && !_partsBusy) await _endGrace();
+      }),
+    );
   }
+
+  bool get _partsBusy => _parts.values.any((part) => part.running || part.preparing != null || part.refresh != null);
 
   Future<void> _endGrace() async {
     if (!_graceOpen) return;
@@ -1678,6 +1684,9 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   Future<void> _comeBack({bool launch = false}) async {
     if (_backgrounded) return;
     _stampReturn();
+    // A leave during the take-back clears the stamp, but this return still closes the trip.
+    final endedAt = _trip?.endedAt;
+    final bytesAtEnd = _trip?.bytesAtEnd;
     await _endGrace();
     var results = const <BackgroundRangeResult>[];
     var takeBackFailed = false;
@@ -1706,6 +1715,9 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         'launch': launch,
       });
     }
+    _trip
+      ?..endedAt ??= endedAt
+      ..bytesAtEnd ??= bytesAtEnd;
     _closeTrip(results, takeBackFailed: takeBackFailed);
     _handedOff = false;
     _held = false;
@@ -1816,9 +1828,10 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     final allDone =
         !_hasWork || (results.isNotEmpty && results.every((result) => result.done || result.status == _shortAnswer));
     final handOff = !trip.arm.continued || trip.handOff != null;
-    // The engine of a continued trip iOS ended the app on stopped at some unknown point away.
+    // A trip the app died on is timed to the next launch, which may be hours later, and swiping the app away also
+    // cancels the background session's transfers.
     final spoiled =
-        (trip.relaunched && trip.arm.continued) ||
+        trip.relaunched ||
         (handOff && takeBackFailed) ||
         (!trip.arm.continued && trip.handed == 0);
     final record = BackgroundTrip(

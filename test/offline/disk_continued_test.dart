@@ -607,6 +607,30 @@ void main() {
       expect((library.trials as PinnedTrials).recorded.single.seconds, 60);
     });
 
+    test('a leave during the take-back keeps the return\'s time on the trip it closes', () async {
+      rig.host.continuedProcessing = false;
+      final library = await rig.started();
+      await library.enqueue([offlineRequest()]);
+      await library.settled();
+      rig.engine.gaps['$cid'] = gaps(cid);
+      final left = rig.now;
+      lifecycle(toBackground);
+      await library.settled();
+
+      final held = rig.host.takeBackHeld = Completer<void>();
+      rig.now = left.add(const Duration(seconds: 60));
+      lifecycle(toForeground);
+      await pumpEventQueue();
+      expect(rig.host.calls.last, 'takeBack');
+      rig.now = left.add(const Duration(seconds: 63));
+      lifecycle([AppLifecycleState.inactive]);
+      rig.now = left.add(const Duration(seconds: 64));
+      held.complete();
+      await library.settled();
+
+      expect((library.trials as PinnedTrials).recorded.first.seconds, 60);
+    });
+
     test('a short answer\'s bytes count as gained, never wasted, and its range as finished', () async {
       rig.host.continuedProcessing = false;
       final library = await rig.started();
@@ -788,7 +812,7 @@ void main() {
   });
 
   group('relaunch', () {
-    test('a hand-off trip iOS ended the app on is closed at the next launch, scored from the transfers', () async {
+    test('a hand-off trip iOS ended the app on is closed at the next launch from the transfers, unscored', () async {
       rig.host.continuedProcessing = false;
       final library = await rig.started();
       await library.enqueue([offlineRequest()]);
@@ -833,8 +857,8 @@ void main() {
       expect(trip.at, left);
       expect(trip.seconds, 100);
       expect(trip.gainedBytes, 20 * mib);
-      expect(trip.spoiled, isFalse);
-      expect(trip.scored, isTrue);
+      expect(trip.spoiled, isTrue);
+      expect(trip.scored, isFalse);
       final line = logged('offline trip').single;
       expect(line.f['relaunched']?.toJson(), isTrue);
       expect(line.f['handed']?.toJson(), saved['handed']);
