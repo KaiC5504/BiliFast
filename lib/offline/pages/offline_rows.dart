@@ -362,7 +362,6 @@ List<Widget> _queueWords(OfflineItem item) {
   ];
 }
 
-/// The 12 pt meta lines' style.
 TextStyle _meta(Color color) => offlineStyle(_T.metaText, color, line: _T.metaLine);
 
 Widget _sizeLine(int bytes, {bool vip = false, Key? key}) => _at(

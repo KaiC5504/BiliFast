@@ -25,6 +25,7 @@ import '../home/feed_model.dart' show requestFailureMessage;
 import '../offline/offline_models.dart';
 import '../offline/page/offline_page_body.dart';
 import '../offline/page/offline_row_sheet.dart';
+import '../offline/pages/offline_selector.dart';
 import '../playback/playback_controller.dart';
 import '../player/bili_player.dart' show PlayerStatus;
 import '../player_ui/chrome_state.dart';
@@ -1234,16 +1235,19 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   Widget _offlineHeader() {
     final session = _session;
     final danmaku = _danmaku;
-    final library = _services!.offline;
-    return ListenableBuilder(
-      listenable: Listenable.merge([session ?? _tabs, library, ?danmaku, ?danmaku?.sendOpen]),
-      builder: (context, _) => OfflinePageHeader(
-        count: offlinePageItems(library).length,
-        danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
-        onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
-        onSendDanmaku: () => danmaku?.openSend(),
-        danmakuInputOpen: danmaku?.sendOpen.value ?? false,
-        danmakuClosed: danmaku?.closed ?? false,
+    return LibrarySelector<int>(
+      library: _services!.offline,
+      select: (library) => offlinePageItems(library).length,
+      builder: (context, count) => ListenableBuilder(
+        listenable: Listenable.merge([session ?? _tabs, ?danmaku, ?danmaku?.sendOpen]),
+        builder: (context, _) => OfflinePageHeader(
+          count: count,
+          danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
+          onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
+          onSendDanmaku: () => danmaku?.openSend(),
+          danmakuInputOpen: danmaku?.sendOpen.value ?? false,
+          danmakuClosed: danmaku?.closed ?? false,
+        ),
       ),
     );
   }

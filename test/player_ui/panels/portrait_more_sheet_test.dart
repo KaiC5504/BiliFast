@@ -86,6 +86,26 @@ void main() {
       expect(rig.session.calls, ['setRate 0.5']);
     });
 
+    for (final (rate, label) in const [(0.5, '0.5'), (0.75, '0.75')]) {
+      testWidgets('倍速 at $label opens with it in view and no value cut at an edge', (tester) async {
+        // Under the system font, whose labels are as narrow as the phone's.
+        final rig = await pumpSheetRig(tester, look: true, session: singleVideo()..rate = rate);
+        await openSheet(tester, rig, PlayerPanel.more);
+        final strip = tester.getRect(find.byKey(const ValueKey('more-speeds')));
+        final clear = strip.left + DownloadSheetTheme.speedFade;
+        final chosen = tester.getRect(find.text(label));
+        expect(chosen.left, greaterThanOrEqualTo(clear));
+        expect(chosen.right, lessThanOrEqualTo(strip.right));
+        final labels = find.descendant(of: find.byKey(const ValueKey('more-speeds')), matching: find.byType(Text));
+        for (final element in labels.evaluate()) {
+          final rect = tester.getRect(find.byWidget(element.widget));
+          for (final edge in [clear, strip.right]) {
+            expect(rect.left < edge && edge < rect.right, isFalse, reason: '${(element.widget as Text).data} cut');
+          }
+        }
+      });
+    }
+
     testWidgets('定时关闭 › opens its choices; a preset sets it and comes back showing the time left', (tester) async {
       final rig = await pumpSheetRig(tester, session: singleVideo());
       await openSheet(tester, rig, PlayerPanel.more);

@@ -177,6 +177,7 @@ void main() {
     final app = await services(offline);
     BiliFonts.family = BiliFonts.system;
     await tester.runAsync(loadSystemFontStandIns);
+    await tester.runAsync(loadIconFonts);
     showAsPhone(tester);
     await tester.pumpWidget(
       MaterialApp(

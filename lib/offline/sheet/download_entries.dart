@@ -107,10 +107,15 @@ SeasonSection? _section(VideoDetail? detail, String bvid) {
 }
 
 /// 画质's choices best first, and the one 缓存 opens on: the best the account can have (KaiC: the highest offered;
-/// a 大会员 quality only with 大会员, since the library would fall back below it anyway).
+/// a 大会员 quality only with 大会员, since the library would fall back below it anyway). The streams decide once
+/// they are known: the list names qualities the account doesn't get (logged out it lists 1080P while the streams stop
+/// at 480P), and a default without a stream would show no size.
 ({List<QualityOption> options, int? best}) downloadQualities(PlayerSession session) {
   final options = [...session.qualities]..sort((a, b) => b.id.compareTo(a.id));
-  final best =
-      options.where((option) => session.isVip || !QualityRules.needsVip(option.id)).firstOrNull ?? options.firstOrNull;
-  return (options: options, best: best?.id);
+  final streams = session.dash?.video.map((stream) => stream.id).toSet();
+  final offered = streams == null || streams.isEmpty
+      ? [for (final option in options) option.id]
+      : (streams.toList()..sort((a, b) => b.compareTo(a)));
+  final best = offered.where((id) => session.isVip || !QualityRules.needsVip(id)).firstOrNull ?? offered.firstOrNull;
+  return (options: options, best: best);
 }

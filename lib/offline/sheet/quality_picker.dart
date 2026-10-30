@@ -87,15 +87,21 @@ class _QualityPickerState extends State<QualityPicker> with SingleTickerProvider
               ),
         child: Row(
           children: [
-            Flexible(
-              child: Text(name, maxLines: 1, style: style, strutStyle: BiliFonts.strutOf(context, style)),
+            // The name's Flexible would share the free space with a Spacer and leave each size mid-row.
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(name, maxLines: 1, style: style, strutStyle: BiliFonts.strutOf(context, style)),
+                  ),
+                  if (QualityRules.needsVip(option.id)) ...[
+                    const SizedBox(width: BiliMetrics.panelBadgeGap),
+                    const _VipTag(),
+                  ],
+                ],
+              ),
             ),
-            if (QualityRules.needsVip(option.id)) ...[
-              const SizedBox(width: BiliMetrics.panelBadgeGap),
-              const _VipTag(),
-            ],
-            const Spacer(),
-            if (size != null) Text('约 ${formatBytes(size)}', style: _size),
+            if (size != null) Text('约 ${formatBytes(size)}', key: const ValueKey('download-quality-size'), style: _size),
           ],
         ),
       ),

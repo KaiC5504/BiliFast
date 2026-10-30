@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bilifast/app/form_factor.dart';
 import 'package:bilifast/app/phone_frame.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Sizes the test's view as KaiC's iPhone (440×956 at 3×, or 956×440 turned) with its safe areas, for a look-alike
@@ -41,6 +43,26 @@ void showAsPad(WidgetTester tester, {bool landscape = false}) {
     tester.view.reset();
     FormFactor.device = FormFactor.phone;
   });
+}
+
+var _iconFontsLoaded = false;
+
+/// Loads the icon fonts the app bundles (`custom_icon` and Material's), which flutter_test leaves out, so a look-alike
+/// shot draws their glyphs instead of boxes. Run it inside `tester.runAsync`.
+Future<void> loadIconFonts() async {
+  if (_iconFontsLoaded) return;
+  const families = {'custom_icon', 'MaterialIcons'};
+  final manifest = jsonDecode(await rootBundle.loadString('FontManifest.json')) as List<Object?>;
+  for (final entry in manifest.cast<Map<String, Object?>>()) {
+    final family = entry['family'] as String?;
+    if (family == null || !families.contains(family)) continue;
+    final loader = FontLoader(family);
+    for (final font in (entry['fonts'] as List<Object?>).cast<Map<String, Object?>>()) {
+      loader.addFont(rootBundle.load(font['asset']! as String));
+    }
+    await loader.load();
+  }
+  _iconFontsLoaded = true;
 }
 
 /// Writes [boundary] as a PNG at [path] at [pixelRatio] (3 for the iPhone, 2 for the iPad) for tools/screen_diff.py.

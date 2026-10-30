@@ -17,9 +17,8 @@ import 'seek_bar.dart';
 /// The touch layer over the video, filling the player (port of BiliNative `PlayerGestureView.swift` and
 /// `ChromeState.swift`'s gestures): tap, double tap, hold for 2×, a sideways drag to seek, and up and down for
 /// brightness (left half) and volume (right half), the small player's too; full screen leaves the screen edges to
-/// the system. In 竖屏
-/// the controls stay up, as in the official app: a tap plays or pauses at once and a double tap is two taps, and a
-/// swipe right from the left edge is its ‹.
+/// the system. In 竖屏 the controls stay up, as in the official app: a tap plays or pauses at once and a double tap is
+/// two taps, and a swipe right from the left edge is its ‹.
 class PlayerGestureLayer extends StatefulWidget {
   const PlayerGestureLayer({super.key, required this.ui});
 

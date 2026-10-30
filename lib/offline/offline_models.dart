@@ -47,8 +47,6 @@ final class OfflineRequest {
   final String bvid;
   final int aid;
   final int cid;
-
-  /// The video's title.
   final String title;
 
   /// Seconds.

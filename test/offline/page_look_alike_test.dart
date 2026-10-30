@@ -68,6 +68,7 @@ void main() {
     PlayerPrefs.shared = PlayerPrefs.memory();
     addTearDown(() => PlayerPrefs.shared = savedPrefs);
     await tester.runAsync(loadSystemFontStandIns);
+    await tester.runAsync(loadIconFonts);
     await tester.runAsync(SeekBar.precache);
     showAsPhone(tester);
     BiliFonts.family = BiliFonts.system;
@@ -151,10 +152,10 @@ void main() {
   testWidgets('158: the band, the row and the footer where the official page has them', (tester) async {
     await render(tester, sheet: false);
     expect(find.text('（1个视频）'), findsOneWidget);
-    // The player ends at 309.67; the band's capsule spans 317.67-345.67 from x 290 to 428.
+    // The player ends at 309.67; the band's capsule spans 316.67-346.67, border to border, ending at x 428.
     final capsule = rectOf(tester, 'danmaku-capsule');
-    expect(capsule.top, closeTo(317.67, 0.5));
-    expect(capsule.bottom, closeTo(345.67, 0.5));
+    expect(capsule.top, closeTo(316.67, 0.01));
+    expect(capsule.bottom, closeTo(346.67, 0.01));
     expect(capsule.right, closeTo(428, 0.5));
     // The cover: 12-147 across, 363.67-439.67 down.
     final cover = tester.getRect(

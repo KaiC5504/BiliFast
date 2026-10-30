@@ -7329,13 +7329,16 @@ abstract final class DownloadSheetTheme {
   static const footerCentre = 40.5;
   static const footerBottom = 28.5;
 
-  /// The bar (141): 缓存全部 | 查看缓存 on a line 28 below its hairline, the space line 63.5 below it.
+  /// The bar (141): 缓存全部 | 查看缓存 on a line 28 below its hairline, the space line 62.5 below it; its numbers
+  /// are medium and a little larger than the words (their caps 7.67 tall on 141 and 154).
   static const barHeight = 70.0;
   static const barButtonCentre = 28.0;
   static const barButtonText = 16.0;
   static const barDivider = 22.0;
-  static const barSpaceCentre = 63.5;
+  static const barSpaceCentre = 62.5;
   static const barSpaceText = 10.0;
+  static const barSpaceValueText = 10.5;
+  static const barSpaceValueWeight = FontWeight.w500;
   static const dot = Color(0xFFF85A54);
   static const dotSize = 6.0;
   static const dotRing = 1.0;
@@ -7618,11 +7621,13 @@ abstract final class OfflineListTheme {
 
 /// A cached video's page under the player (158-161), measured at 3 px per pt.
 abstract final class OfflinePageTheme {
-  /// 离线缓存 (N个视频) and 点我发弹幕 in a 42 pt band under the player with no hairline, the capsule (28 tall, border
-  /// to border) centred 22 below the player.
+  /// 离线缓存 (N个视频) and 点我发弹幕 in a 42 pt band under the player with no hairline, the capsule 30 tall, border
+  /// to border, its border one crisp pixel. Its top is 316.67 on 158, 7 under the phone's player, which ends on the
+  /// pixel at 309.67; ours ends at 309.5, so the extra sixth keeps the border on a pixel.
   static const headerHeight = 42.0;
-  static const capsuleCentre = 22.0;
-  static const capsuleHeight = 28.0;
+  static const capsuleCentre = 22 + 1 / 6;
+  static const capsuleHeight = 30.0;
+  static const capsuleBorder = 1 / 3;
   static const gutter = 12.0;
 
   /// 离线缓存 in black, bold, its ink centred 21.2 below the player; (N个视频) in the page's grey after it.
@@ -7645,24 +7650,25 @@ abstract final class OfflinePageTheme {
   static const hairline = 1 / 3;
   static const divider = BiliColors.divider;
 
-  /// The title: two lines 20 apart, its ink from 2 below the cover's top; the box ends 18.67 from the right edge, where
-  /// 160's lines wrap.
-  static const rowTitleText = 15.0;
+  /// The title: 14 pt (158's pink and 160's black alike step 14 a glyph) in two lines 20 apart, its ink from 2 below the
+  /// cover's top; the box ends at the gutter, which holds 160's 19 glyphs a line and not a 20th.
+  static const rowTitleText = 14.0;
   static const rowTitleLine = 20.0;
-  static const rowTitleTop = -2 / 3;
-  static const titleRight = 56 / 3;
+  static const rowTitleTop = -4 / 3;
+  static const titleRight = gutter;
   static const rowTitle = BiliColors.text;
   static const playing = BiliColors.pink;
 
-  /// The playing bars before the title (158, 160): three 2.33 wide, 4.67 apart, standing on a line 10 under the
-  /// title's ink top (2.67 above the baseline), 4.5 before the text; they rise and fall while the video plays.
-  static const barsLead = 2 / 3;
-  static const barsLift = 8 / 3;
-  static const barWidth = 7 / 3;
+  /// The playing bars before the title (158, 160): three round-ended 2 wide, 4.67 apart, the first centred 1.83 into
+  /// the text box, standing on a line 1.33 above the baseline, 4 before the first glyph; they rise and fall while the
+  /// video plays.
+  static const barsLead = 5 / 6;
+  static const barsLift = 4 / 3;
+  static const barWidth = 2.0;
   static const barPitch = 14 / 3;
   static const barsWidth = barWidth + 2 * barPitch;
   static const barsHeight = 25 / 3;
-  static const barsGap = 4.5;
+  static const barsGap = 29 / 6;
   static const barMin = 3.0;
   static const barsInk = Color(0xFFFB7299);
   static const barsCycle = Duration(milliseconds: 900);

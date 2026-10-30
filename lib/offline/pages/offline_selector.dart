@@ -3,7 +3,8 @@ import 'package:flutter/widgets.dart';
 import '../offline_library.dart';
 
 /// Builds from what [select] reads off [library], and again only when a change makes it answer something new (by ==):
-/// the library calls its listeners about once a second per download, and a row whose part didn't move stays as it is.
+/// the library calls its listeners about once a second in all while anything downloads, and a row whose part didn't
+/// move stays as it is.
 class LibrarySelector<T> extends StatefulWidget {
   const LibrarySelector({super.key, required this.library, required this.select, required this.builder, this.equals});
 
