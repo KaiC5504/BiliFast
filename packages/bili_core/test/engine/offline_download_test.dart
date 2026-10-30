@@ -404,6 +404,18 @@ void main() {
     expect(await File(request.audio.path).readAsBytes(), files.content('a.m4s'));
   });
 
+  test('a stop forgets addresses parked for the next start', () async {
+    final files = _Files({'v.m4s': (size: 256 * _kib, key: 0x71), 'a.m4s': (size: 64 * _kib, key: 0x72)});
+    final run = _Run(await _temp(), files);
+    run.downloads
+      ..replaceUrls('6', TrackKind.video, primary: _url('v.m4s', sig: 'parked'), backups: const [])
+      ..replaceUrls('6', TrackKind.audio, primary: _url('a.m4s', sig: 'parked'), backups: const []);
+    await run.downloads.stop('6');
+    await run.downloads.start(run.request('6'));
+    await run.finished('6');
+    expect(files.requests.any((request) => request.query.contains('sig=parked')), isFalse);
+  });
+
   test('finishing renames each part and drops its ranges; a finished start finishes at once', () async {
     final files = _Files({'v.m4s': (size: 1024 * _kib + 5, key: 0x71), 'a.m4s': (size: 128 * _kib, key: 0x72)});
     final run = _Run(await _temp(), files);

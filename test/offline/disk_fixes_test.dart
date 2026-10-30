@@ -70,7 +70,7 @@ void main() {
         await library.settled();
       }
       expect(library.item(cid)!.state, OfflineState.failed);
-      expect(library.item(cid)!.failure, OfflineFailure.network);
+      expect(library.item(cid)!.failure, OfflineFailure.unknown, reason: 'one video refused holds no queue');
       expect(rig.http.to(Canned.playUrlPath), hasLength(3), reason: 'the first ask, then one per allowed strike');
     });
 

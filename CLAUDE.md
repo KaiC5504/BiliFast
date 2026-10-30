@@ -266,15 +266,42 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   buffering and seek preview (08, 14-16, 18, 19, 24), the panels as fixed-width strips (10-13, the iPhone's rows),
   danmaku at 21.75 pt in 31.3 pt lanes over the whole screen (09, 25). Windows: `--pad` (1194×834, the iPad's 24 pt
   status bar); tests: `showAsPad` (834×1194 at 2×).
+- 离线缓存, 1.3.0 (1) (KaiC: kept on the phone for good, playable after Bilibili removes the video, danmaku kept;
+  141-161, `differences/22`). The portrait ⋮ (small player 42, 竖屏 43) is the official white sheet: its squares with
+  分享 (iOS's sheet) in place of the app-icon row, rows shared with landscape's ⋮ (`MoreRows`). ⋮ → 缓存 (141-144,
+  153, 154): 画质 defaults to the best stream the account gets (dash, not the quality list), each part's and each
+  quality's size estimated from the bitrates (`约 78.4MB`, KaiC; `offline_size.dart`), title rows, a 合集's cover
+  cards, the marks (ring, progress arc, ✓), 缓存全部, 查看缓存 with its dot, 已使用 / 剩余. 离线缓存 (我的's and the
+  avatar page's shortcut; 143, 145-151, 155-157): 正在缓存 stacked, 已缓存视频 grouped by 合集 or multi-part video,
+  正在缓存's page (全部暂停/开始, 同时缓存数量 1-3, edit, 确定要删除吗?), a group's page, search. A cached video opens
+  its own page (158-161: `VideoPage` with `VideoRoute.offline`): the player on the phone's files (`PlaybackMode.local`,
+  the engine's `prepareLocal` and `LocalSource`), the saved danmaku, the cached videos as its playlist, ⋮'s 查看详情页;
+  no playurl, heartbeats or history. Downloads (`DiskOfflineLibrary`, `lib/offline/`): playurl at 127 for the best
+  streams the phone decodes, the cover, face and every danmaku segment saved, both tracks through the engine
+  (`OfflineDownloads`: 2 MiB pieces across the nodes, 6 connections of their own, `.part` + `.ranges`, resumable).
+  Leaving the app hands what is left to iOS's background URLSession (`OfflineHost.swift`, ≤16 MiB ranges, each
+  written into `.part` and listed in `.bg-ranges`, which the engine folds in on return); without it, iOS's ~30 s grace,
+  then resume on return. Also KaiC's: the small player's (and the iPad page player's) vertical drags set brightness
+  (left) and volume (right) with full screen's level pill scaled into the box. Logs: `download started/finished/
+  failed`, `offline handed off`, `offline taken back`, `local source`, `offline folder removed`; never a URL.
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
 1. KaiC's phone check of (20), then the milestone's closing build and both checklists.
-2. 动态 shipped in 1.1.0 (1), the iPad's basic watching in 1.2.0 (1); next is KaiC's pick.
+2. 动态 shipped in 1.1.0 (1), the iPad's basic watching in 1.2.0 (1), 离线缓存 in 1.3.0 (1); next is KaiC's pick.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
-full; passing them is the cutover (spec, slice 9). Later: 离线缓存, 番剧, 直播.
+full; passing them is the cutover (spec, slice 9). Later: 番剧, 直播.
 
 Open items, each waiting on its slice:
+- 1.3.0 (1) on the phone: a download at 4K / 杜比 / HDR and its playback from the phone (AVPlayer on local files),
+  airplane mode, leaving the app mid-download (the log's `offline handed off` / `taken back` counts; whether iOS ran
+  the transfers while the app was away), swiping the app away (cancels them; resumes on the next open), a TestFlight
+  update keeping the files, the cover's progress line, the small player's level drags (the first volume step after the
+  view goes up). Guessed: the paused and failed marks, 定时关闭 and 画面尺寸's light pages in the white ⋮, failure lines,
+  search results, edit on 离线缓存, the inline level pill's 0.8×, 竖屏 kept for an upright cached video. Not built:
+  cellular rules, danmaku refreshed after the download, 自动上滑 / 单双击手势 / 后台听视频 / 字幕 (toast), waiting parts
+  handed to iOS (only running ones are), our HUD for the hardware buttons inline (iOS's own shows; KaiC's call). The
+  normal page's 点我发弹幕 capsule border is 0.7 pt where 10 shows a crisp 1/3 (the offline band's is fixed).
 - 1.2.0 (1) on the iPad: 首页 against 01/02, the page both ways against 03-07 (the 32 pt band, the 437 pt related
   column), the pink bar and turning with it, full screen both ways (08-19, 24), danmaku (09, 25), the launch log's
   `form factor` reading via native on both devices, and the iPhone untouched. Guessed (no screenshot): full screen
@@ -437,6 +464,11 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     `OwnPager`, one per tab, kept by the page).
   - `lib/favourites/`: 我的收藏 (folders, a folder, 视频, the 创建 page `new_folder_page.dart` that 稍后再看 shares).
   - `lib/watch_later/`: 稍后再看 (the list, its sheets and 批量管理).
+  - `lib/offline/`: 离线缓存: `OfflineLibrary` (`offline_library.dart`: `DiskOfflineLibrary`, the support folder's
+    `offline/<cid>/` with `entry.json`, `v.m4s`, `a.m4s`, `cover.jpg`, `face.jpg`, `dm/<n>.so`; `disk/` its pieces;
+    `fake_offline_library.dart` for tests and `--fake-account`), `OfflineHost` (`ios/` over `OfflineHost.swift`), the
+    缓存 sheet (`download_sheet.dart`, `sheet/`), the pages (`pages/`), a cached video's page (`page/`,
+    `offline_route.dart`) and `offline_size.dart`.
   - `lib/dynamic/`: 动态: `DynamicApi` (`fake_dynamic_api.dart` for tests and `--fake-account`), `DynamicLikeBook`,
     `card/` (the post card and its parts, the picture viewer route, ⋮'s sheet), `follow_tab/` (the bottom bar's 关注,
     its model, header and the face sheet), `post/` (a post's page) and `following/` (我的关注).
@@ -522,7 +554,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   or script change.
 - Check once: `python scripts/testflight.py status` (1 call), about 11 minutes after an upload (7 after a dry run), as
   a background `sleep` then `status`. Never `gh run watch`, never poll: KaiC gets rate-limited.
-- Version 1.2.0 (from 1.2.0 (1), KaiC: the iPad), set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they agree). Build
+- Version 1.3.0 (from 1.3.0 (1), KaiC: 离线缓存), set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they agree). Build
   numbers count from 1 within each version (App Store Connect's latest of that version plus one); the last shipped is
   in Status.
 - Secrets are in this repo's `testflight` environment (limited to `main`).
@@ -642,6 +674,10 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - A control wrapped in `Semantics(excludeSemantics: true)` needs its own `onTap:` on the Semantics (`ChromeTap`'s
   pattern): excluding drops the GestureDetector's tap action, and VoiceOver and ghosthand then press nothing (slice
   12's space shipped that way to its first Windows check).
+- 离线缓存's files are KaiC's for good (KaiC: they outlive the video on Bilibili): only his delete removes a part, or
+  launch removing a folder with no readable `entry.json`. Nothing kept names a signed address (streams are
+  `withoutAddresses()`; addresses live in memory), and paths are kept relative, since every TestFlight update moves
+  the container. A download's failures back off and stop (`maxStrikes`); risk control holds the queue, never retried.
 - Panels, sheets, dialogs and the comment layers are in-page overlays in the page's Stack, not routes; back closes
   them first.
 - A logged-out action goes through `AppScope`'s `loginGate` (on the video page, its `_requestLogin`, which turns the

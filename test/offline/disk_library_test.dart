@@ -252,8 +252,8 @@ void main() {
     await library.settled();
 
     expect(rig.http.to(Canned.playUrlPath), hasLength(2));
-    expect(rig.engine.downloadUrlReplacements.map((replaced) => replaced.track), [TrackKind.video, TrackKind.audio]);
-    expect(rig.engine.downloadUrlReplacements.map((replaced) => replaced.primary), everyElement(contains('fresh')));
+    // The refused download ended; its next start carries the fresh addresses instead of parking them in the engine.
+    expect(rig.engine.downloadUrlReplacements, isEmpty);
     expect(rig.engine.downloadsStarted, hasLength(2));
     expect(rig.engine.downloadsStarted.last.video.primary, contains('fresh'));
     expect(library.item(cid)!.state, OfflineState.downloading);
@@ -289,6 +289,13 @@ void main() {
     expect(library.item(2)!.failure, OfflineFailure.unavailable);
     expect(rig.engine.downloadsStarted, isEmpty);
     expect(rig.entry(1)['failure'], 'unavailable');
+
+    // 视频已失效 offers no retry: a tap asks Bilibili nothing.
+    final asked = rig.http.to(Canned.playUrlPath).length;
+    library.resume(1);
+    await library.settled();
+    expect(library.item(1)!.failure, OfflineFailure.unavailable);
+    expect(rig.http.to(Canned.playUrlPath), hasLength(asked));
   });
 
   test('a network failure fails the part and holds the queue until 全部开始', () async {

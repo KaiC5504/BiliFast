@@ -155,6 +155,8 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
       eventsFinished = false
       completion()
     } else {
+      // A second wake before the first one's events finished: the first is owed its call.
+      self.completion?()
       self.completion = completion
     }
   }
@@ -162,6 +164,8 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   func handOff(_ ranges: [NativeBackgroundRange]) {
     let session = self.session
     queue.sync { closed = false }
+    // A finish that came with no wake to answer belongs to transfers before these.
+    DispatchQueue.main.async { self.eventsFinished = false }
     for range in ranges {
       guard let url = URL(string: range.url), let description = TransferRange(range).encoded() else { continue }
       var request = URLRequest(url: url)
@@ -194,7 +198,8 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
     }
     return queue.sync {
       closed = true
-      for task in going where !recorded.contains(task.taskIdentifier) {
+      // Canceling and completed tasks whose callbacks come after the barrier are reported too.
+      for task in tasks where !recorded.contains(task.taskIdentifier) {
         recorded.insert(task.taskIdentifier)
         if let range = TransferRange.decode(task.taskDescription) {
           record(range, done: false, status: 0)
@@ -269,6 +274,12 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
       }
       guard manager.fileExists(atPath: part.path) else {
         NSLog("%@", "offline background write: part missing")
+        return false
+      }
+      if let data = try? Data(contentsOf: range.backgroundRangesURL),
+         let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+         let saved = (json["total"] as? NSNumber)?.int64Value, saved > 0, saved != total {
+        NSLog("%@", "offline background write: listed ranges are for another size")
         return false
       }
       let input = try FileHandle(forReadingFrom: location)

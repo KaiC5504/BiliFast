@@ -166,6 +166,8 @@ final class OfflineDownloads {
   ///
   /// A track whose total isn't known yet reports no gaps and a total of 0, as does one whose total changed.
   Future<DownloadGaps> stop(String id) async {
+    // Addresses parked for a next start belong to the run being stopped; a later start brings its own.
+    _replaced.remove(id);
     final download = _downloads[id];
     if (download == null) return DownloadGaps(id: id, video: const [], audio: const [], videoTotal: 0, audioTotal: 0);
     download.stopping = true;

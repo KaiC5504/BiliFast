@@ -408,6 +408,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     if (part == null) return;
     final state = part.item.state;
     if (state != OfflineState.paused && state != OfflineState.failed) return;
+    // 视频已失效 offers no retry; asking playurl again would only hear the same.
+    if (part.item.failure == OfflineFailure.unavailable) return;
     _held = false;
     part.strikes = 0;
     _setItem(part, part.item.copyWith(state: OfflineState.waiting, bps: 0, clearFailure: true));
@@ -938,18 +940,22 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       if (streams.changed.isEmpty && restart.isEmpty) {
         part.choice = choice;
         part.duration = streams.duration;
-        await engine.replaceDownloadUrls(
-          id,
-          TrackKind.video,
-          primary: choice.video.baseURL,
-          backups: choice.video.backupURLs,
-        );
-        await engine.replaceDownloadUrls(
-          id,
-          TrackKind.audio,
-          primary: choice.audio.baseURL,
-          backups: choice.audio.backupURLs,
-        );
+        // A refused download has already ended, and its start below carries these addresses: replacing them first would
+        // only park them in the engine for whatever start of this id comes next.
+        if (!expired) {
+          await engine.replaceDownloadUrls(
+            id,
+            TrackKind.video,
+            primary: choice.video.baseURL,
+            backups: choice.video.backupURLs,
+          );
+          await engine.replaceDownloadUrls(
+            id,
+            TrackKind.audio,
+            primary: choice.audio.baseURL,
+            backups: choice.audio.backupURLs,
+          );
+        }
         logger.info(LogCategory.app, 'offline urls refreshed', {'cid': part.cid, 'expired': expired});
         if (!live()) return;
         if (expired) {
@@ -1212,8 +1218,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       case DownloadFailure.expired || DownloadFailure.sizeChanged:
         part.strikes += 1;
         if (part.strikes > maxStrikes) {
-          final failure = event.failure == DownloadFailure.expired ? OfflineFailure.network : OfflineFailure.unknown;
-          _fail(part, epoch, failure, StateError(event.failure.name));
+          // One video's refused streams say nothing about the others, so this doesn't hold the queue as network does.
+          _fail(part, epoch, OfflineFailure.unknown, StateError(event.failure.name));
           return;
         }
         final track = event.track;
