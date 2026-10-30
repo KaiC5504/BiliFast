@@ -90,6 +90,8 @@ final class OfflineHostApiImpl: OfflineHostApi {
     if let task {
       task.updateTitle(title, subtitle: subtitle)
       self.subtitle = subtitle
+      // Dart asks only when it believes none runs (its wait for a late launch ran out), so it hears of this one again.
+      Task { @MainActor in try? await OfflineHost.events?.onContinuedStarted() }
       return nil
     }
     if let pendingSince, Date().timeIntervalSince(pendingSince) < Self.pendingLimit { return nil }
