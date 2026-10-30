@@ -274,6 +274,8 @@ struct NativeBackgroundRangeResult: Hashable, CustomStringConvertible {
   var end: Int64
   var done: Bool
   var status: Int64
+  /// Bytes fetched of a range not finished.
+  var received: Int64
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -284,6 +286,7 @@ struct NativeBackgroundRangeResult: Hashable, CustomStringConvertible {
     let end = pigeonVar_list[3] as! Int64
     let done = pigeonVar_list[4] as! Bool
     let status = pigeonVar_list[5] as! Int64
+    let received = pigeonVar_list[6] as! Int64
 
     return NativeBackgroundRangeResult(
       id: id,
@@ -291,7 +294,8 @@ struct NativeBackgroundRangeResult: Hashable, CustomStringConvertible {
       start: start,
       end: end,
       done: done,
-      status: status
+      status: status,
+      received: received
     )
   }
   func toList() -> [Any?] {
@@ -302,13 +306,14 @@ struct NativeBackgroundRangeResult: Hashable, CustomStringConvertible {
       end,
       done,
       status,
+      received,
     ]
   }
   static func == (lhs: NativeBackgroundRangeResult, rhs: NativeBackgroundRangeResult) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return OfflineApiPigeonInternal.deepEquals(lhs.id, rhs.id) && OfflineApiPigeonInternal.deepEquals(lhs.video, rhs.video) && OfflineApiPigeonInternal.deepEquals(lhs.start, rhs.start) && OfflineApiPigeonInternal.deepEquals(lhs.end, rhs.end) && OfflineApiPigeonInternal.deepEquals(lhs.done, rhs.done) && OfflineApiPigeonInternal.deepEquals(lhs.status, rhs.status)
+    return OfflineApiPigeonInternal.deepEquals(lhs.id, rhs.id) && OfflineApiPigeonInternal.deepEquals(lhs.video, rhs.video) && OfflineApiPigeonInternal.deepEquals(lhs.start, rhs.start) && OfflineApiPigeonInternal.deepEquals(lhs.end, rhs.end) && OfflineApiPigeonInternal.deepEquals(lhs.done, rhs.done) && OfflineApiPigeonInternal.deepEquals(lhs.status, rhs.status) && OfflineApiPigeonInternal.deepEquals(lhs.received, rhs.received)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -319,10 +324,11 @@ struct NativeBackgroundRangeResult: Hashable, CustomStringConvertible {
     OfflineApiPigeonInternal.deepHash(value: end, hasher: &hasher)
     OfflineApiPigeonInternal.deepHash(value: done, hasher: &hasher)
     OfflineApiPigeonInternal.deepHash(value: status, hasher: &hasher)
+    OfflineApiPigeonInternal.deepHash(value: received, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeBackgroundRangeResult(id: \(String(describing: id)), video: \(String(describing: video)), start: \(String(describing: start)), end: \(String(describing: end)), done: \(String(describing: done)), status: \(String(describing: status)))"
+    return "NativeBackgroundRangeResult(id: \(String(describing: id)), video: \(String(describing: video)), start: \(String(describing: start)), end: \(String(describing: end)), done: \(String(describing: done)), status: \(String(describing: status)), received: \(String(describing: received)))"
   }
 }
 

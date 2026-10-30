@@ -74,4 +74,5 @@ BackgroundRangeResult _result(NativeBackgroundRangeResult result) => BackgroundR
   end: result.end,
   done: result.done,
   status: result.status,
+  received: result.received,
 );

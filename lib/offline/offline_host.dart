@@ -47,6 +47,7 @@ final class BackgroundRangeResult {
     required this.end,
     required this.done,
     required this.status,
+    this.received = 0,
   });
 
   final String id;
@@ -56,6 +57,9 @@ final class BackgroundRangeResult {
 
   /// Written to its part file and listed in its `.bg-ranges`.
   final bool done;
+
+  /// Bytes iOS had fetched of a range it didn't finish (lost with it).
+  final int received;
 
   /// The HTTP status; 0 for a range cancelled or still waiting, -1 for a transport error, -2 when its part file
   /// couldn't be written (or was gone), -3 when the answer wasn't the range asked for (its Content-Range or total).

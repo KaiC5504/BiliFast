@@ -45,6 +45,7 @@ class NativeBackgroundRangeResult {
     required this.end,
     required this.done,
     required this.status,
+    required this.received,
   });
 
   String id;
@@ -53,6 +54,9 @@ class NativeBackgroundRangeResult {
   int end;
   bool done;
   int status;
+
+  /// Bytes fetched of a range not finished.
+  int received;
 }
 
 /// 离线缓存's host (OfflineHost.swift): free space, backups, background time and the background URLSession

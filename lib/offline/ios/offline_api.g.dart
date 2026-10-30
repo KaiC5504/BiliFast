@@ -202,6 +202,7 @@ class NativeBackgroundRangeResult {
     required this.end,
     required this.done,
     required this.status,
+    required this.received,
   });
 
   String id;
@@ -216,6 +217,9 @@ class NativeBackgroundRangeResult {
 
   int status;
 
+  /// Bytes fetched of a range not finished.
+  int received;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
@@ -224,6 +228,7 @@ class NativeBackgroundRangeResult {
       end,
       done,
       status,
+      received,
     ];
   }
 
@@ -239,6 +244,7 @@ class NativeBackgroundRangeResult {
       end: result[3]! as int,
       done: result[4]! as bool,
       status: result[5]! as int,
+      received: result[6]! as int,
     );
   }
 
@@ -251,7 +257,7 @@ class NativeBackgroundRangeResult {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(id, other.id) && _deepEquals(video, other.video) && _deepEquals(start, other.start) && _deepEquals(end, other.end) && _deepEquals(done, other.done) && _deepEquals(status, other.status);
+    return _deepEquals(id, other.id) && _deepEquals(video, other.video) && _deepEquals(start, other.start) && _deepEquals(end, other.end) && _deepEquals(done, other.done) && _deepEquals(status, other.status) && _deepEquals(received, other.received);
   }
 
   @override
@@ -260,7 +266,7 @@ class NativeBackgroundRangeResult {
 
   @override
   String toString() {
-    return 'NativeBackgroundRangeResult(id: $id, video: $video, start: $start, end: $end, done: $done, status: $status)';
+    return 'NativeBackgroundRangeResult(id: $id, video: $video, start: $start, end: $end, done: $done, status: $status, received: $received)';
   }
 }
 

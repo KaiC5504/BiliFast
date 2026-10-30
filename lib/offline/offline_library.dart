@@ -1250,10 +1250,13 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
+      // iOS treats a transfer started from the background as discretionary (it waits for power and Wi-Fi, often for
+      // hours), so the hand-off starts as the app begins to leave, while it is still in the foreground. Control
+      // Center and the app switcher pass through here too; their return takes the transfers back.
+      case AppLifecycleState.inactive when host.backgroundTransfers:
+        _beginLeaving();
       case AppLifecycleState.hidden || AppLifecycleState.paused:
-        if (_backgrounded || !_started) return;
-        _backgrounded = true;
-        unawaited(_queue(_leave));
+        _beginLeaving();
       case AppLifecycleState.resumed:
         if (!_backgrounded) return;
         _backgrounded = false;
@@ -1262,6 +1265,12 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       case AppLifecycleState.inactive || AppLifecycleState.detached:
         break;
     }
+  }
+
+  void _beginLeaving() {
+    if (_backgrounded || !_started) return;
+    _backgrounded = true;
+    unawaited(_queue(_leave));
   }
 
   Future<void> _queue(Future<void> Function() step) {
@@ -1294,10 +1303,10 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       logger.info(LogCategory.app, 'offline grace', {'parts': active.length});
       return;
     }
+    final leaving = Stopwatch()..start();
     final engine = _engine;
     final stopped = <_Part, DownloadGaps>{};
-    for (final part in active) {
-      if (!part.running || engine == null) continue;
+    Future<void> stop(_Part part, PlaybackEngine engine) async {
       part.running = false;
       part.refresh?.cancel();
       part.refresh = null;
@@ -1307,7 +1316,14 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         logger.warn(LogCategory.app, 'offline stop failed', {'cid': part.cid, 'error': _reason(error)});
       }
     }
-    final ranges = <BackgroundRange>[];
+
+    if (engine != null) {
+      await Future.wait([
+        for (final part in active)
+          if (part.running) stop(part, engine),
+      ]);
+    }
+    final perPart = <List<BackgroundRange>>[];
     final handed = <_Part>{};
     for (final MapEntry(key: part, value: gaps) in stopped.entries) {
       final known = [if (gaps.videoTotal > 0) ...gaps.video, if (gaps.audioTotal > 0) ...gaps.audio];
@@ -1323,7 +1339,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
           continue;
         }
       }
-      ranges.addAll(
+      perPart.add(
         backgroundRanges(
           id: '${part.cid}',
           gaps: gaps,
@@ -1334,9 +1350,13 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       );
       handed.add(part);
     }
+    final ranges = roundRobin(perPart);
     if (ranges.isNotEmpty) {
       try {
         await host.handOff(ranges);
+        final ms = leaving.elapsedMilliseconds;
+        // True means the last transfers were queued from the background, where iOS may hold them back.
+        final queuedLate = await host.inBackground().catchError((Object _) => false);
         _handedOff = true;
         for (final part in handed) {
           part.bytesBeforeHandOff = part.item.bytes;
@@ -1347,6 +1367,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
           'parts': handed.length,
           'ranges': ranges.length,
           'mb': (ranges.fold(0, (sum, range) => sum + range.end - range.start + 1) / (1 << 20)).round(),
+          'ms': ms,
+          'late': queuedLate,
         });
       } catch (error) {
         logger.warn(LogCategory.app, 'offline hand-off failed', {'error': _reason(error)});
@@ -1420,12 +1442,16 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     if (results.isNotEmpty || _handedOff) {
       final done = results.where((result) => result.done).toList();
       final failed = results.where((result) => !result.done && result.status != 0).toList();
+      // What iOS had fetched of the ranges it didn't finish: whether it ran them at all while the app was away.
+      final partial = results.where((result) => !result.done && result.received > 0).toList();
       logger.info(LogCategory.app, 'offline taken back', {
         'ranges': results.length,
         'done': done.length,
         'failed': failed.length,
         'cancelled': results.length - done.length - failed.length,
         'mb': (done.fold(0, (sum, result) => sum + result.end - result.start + 1) / (1 << 20)).round(),
+        'started': partial.length,
+        'partialMb': (partial.fold(0, (sum, result) => sum + result.received) / (1 << 20)).round(),
         'statuses': {for (final result in failed) result.status}.join(','),
         'launch': launch,
       });

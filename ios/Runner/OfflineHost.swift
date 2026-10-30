@@ -180,15 +180,28 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
     }
   }
 
-  /// Cancels every task still going (each reported as cancelled, status 0) and returns every result since the last
-  /// call, those from while the app was closed included.
+  /// Cancels every task still going (each reported as cancelled, status 0, with the bytes it had) and returns every
+  /// result since the last call, those from while the app was closed included.
   func takeBack() async -> [NativeBackgroundRangeResult] {
     let session = self.session
-    let tasks = await withCheckedContinuation { (continuation: CheckedContinuation<[URLSessionTask], Never>) in
-      session.getAllTasks { continuation.resume(returning: $0) }
+    var tasks = await Self.allTasks(session)
+    var seen = Dictionary(tasks.map { ($0.taskIdentifier, $0) }, uniquingKeysWith: { _, last in last })
+    if tasks.contains(where: Self.isGoing) {
+      // A range iOS finished while the app was suspended reaches the delegate only once the app is back, and until
+      // then its task still reads as running: cancelled, its bytes would be thrown away. So the session gets a moment
+      // to deliver, then a few seconds more for any task whose bytes are all in.
+      try? await Task.sleep(nanoseconds: Self.settle)
+      tasks = await Self.allTasks(session)
+      let deadline = Date().addingTimeInterval(Self.finishingWait)
+      while Date() < deadline, tasks.contains(where: Self.isFinishing) {
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        tasks = await Self.allTasks(session)
+      }
+      for task in tasks {
+        seen[task.taskIdentifier] = task
+      }
     }
-    let going = tasks.filter { $0.state == .running || $0.state == .suspended }
-    for task in going {
+    for task in tasks where Self.isGoing(task) {
       task.cancel()
     }
     // A range finishing as it is cancelled is still written: callbacks already queued for the delegate run before the
@@ -199,16 +212,34 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
     return queue.sync {
       closed = true
       // Canceling and completed tasks whose callbacks come after the barrier are reported too.
-      for task in tasks where !recorded.contains(task.taskIdentifier) {
+      for task in seen.values where !recorded.contains(task.taskIdentifier) {
         recorded.insert(task.taskIdentifier)
         if let range = TransferRange.decode(task.taskDescription) {
-          record(range, done: false, status: 0)
+          record(range, done: false, status: 0, received: task.countOfBytesReceived)
         }
       }
       let taken = loadResults()
       results = []
       persistResults()
       return taken.map(\.native)
+    }
+  }
+
+  private static let settle: UInt64 = 1_000_000_000
+  private static let finishingWait: TimeInterval = 3
+
+  private static func isGoing(_ task: URLSessionTask) -> Bool {
+    task.state == .running || task.state == .suspended
+  }
+
+  private static func isFinishing(_ task: URLSessionTask) -> Bool {
+    task.state == .running && task.countOfBytesExpectedToReceive > 0
+      && task.countOfBytesReceived >= task.countOfBytesExpectedToReceive
+  }
+
+  private static func allTasks(_ session: URLSession) async -> [URLSessionTask] {
+    await withCheckedContinuation { (continuation: CheckedContinuation<[URLSessionTask], Never>) in
+      session.getAllTasks { continuation.resume(returning: $0) }
     }
   }
 
@@ -245,7 +276,7 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
     queue.sync {
       guard !closed, !recorded.contains(id) else { return }
       recorded.insert(id)
-      send(record(range, done: false, status: cancelled ? 0 : -1))
+      send(record(range, done: false, status: cancelled ? 0 : -1, received: task.countOfBytesReceived))
     }
   }
 
@@ -331,14 +362,15 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   }
 
   @discardableResult
-  private func record(_ range: TransferRange, done: Bool, status: Int) -> RecordedResult {
+  private func record(_ range: TransferRange, done: Bool, status: Int, received: Int64 = 0) -> RecordedResult {
     let result = RecordedResult(
       id: range.id,
       video: range.video,
       start: range.start,
       end: range.end,
       done: done,
-      status: Int64(status)
+      status: Int64(status),
+      received: done ? 0 : received
     )
     var all = loadResults()
     all.append(result)
@@ -440,8 +472,19 @@ private struct RecordedResult: Codable {
   let done: Bool
   let status: Int64
 
+  /// Nil in a result kept by an older build.
+  let received: Int64?
+
   var native: NativeBackgroundRangeResult {
-    NativeBackgroundRangeResult(id: id, video: video, start: start, end: end, done: done, status: status)
+    NativeBackgroundRangeResult(
+      id: id,
+      video: video,
+      start: start,
+      end: end,
+      done: done,
+      status: status,
+      received: received ?? 0
+    )
   }
 }
 

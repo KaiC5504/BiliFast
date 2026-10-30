@@ -49,6 +49,70 @@ void main() {
     ], reason: 'cut on the grid, not from where the gap starts');
   });
 
+  test('pieces grow from 16 MiB to 256 MiB, cut on their own grid', () {
+    expect(backgroundPieces([ByteRange(0, 1024 * mib - 1)]).map((piece) => (piece.start ~/ mib, piece.length ~/ mib)), [
+      (0, 16),
+      (16, 16),
+      (32, 32),
+      (64, 64),
+      (128, 128),
+      (256, 256),
+      (512, 256),
+      (768, 256),
+    ]);
+    expect(
+      backgroundPieces([ByteRange(5 * mib, 70 * mib - 1)]).map((piece) => (piece.start ~/ mib, piece.end ~/ mib + 1)),
+      [(5, 16), (16, 32), (32, 64), (64, 70)],
+    );
+  });
+
+  test("every track's first pieces are queued before anyone's later ones", () {
+    expect(
+      roundRobin([
+        [1, 2, 3],
+        [4],
+        [5, 6],
+      ]),
+      [1, 4, 5, 2, 6, 3],
+    );
+  });
+
+  test('the hand-off starts as the app goes inactive, and logs its time and whether it ended in the background', () async {
+    final library = await rig.started();
+    await library.enqueue([offlineRequest()]);
+    await library.settled();
+    rig.engine.gaps['$cid'] = gaps();
+
+    lifecycle([AppLifecycleState.inactive]);
+    await library.settled();
+
+    expect(rig.host.handedOff, hasLength(1));
+    final handed = rig.logs.events.where((event) => event.msg == 'offline handed off').single;
+    expect(handed.f['ms']?.toJson(), isA<int>());
+    expect(handed.f['late']?.toJson(), isFalse);
+
+    // Control Center or the app switcher, then straight back: the transfers are taken back and the engine resumes.
+    rig.host.results = [
+      const BackgroundRangeResult(
+        id: '$cid',
+        video: true,
+        start: 0,
+        end: 16 * mib - 1,
+        done: false,
+        status: 0,
+        received: 3 * mib,
+      ),
+    ];
+    lifecycle([AppLifecycleState.resumed]);
+    await library.settled();
+
+    expect(rig.host.calls.last, 'takeBack');
+    expect(rig.engine.downloadsStarted, hasLength(2));
+    final takenBack = rig.logs.events.where((event) => event.msg == 'offline taken back').single;
+    expect(takenBack.f['started']?.toJson(), 1);
+    expect(takenBack.f['partialMb']?.toJson(), 3);
+  });
+
   test('a track whose total is not known yet stays out of the hand-off, and its part waits for the return', () async {
     final library = await rig.started();
     await library.enqueue([offlineRequest()]);
@@ -89,17 +153,17 @@ void main() {
     final ranges = rig.host.handedOff.single;
     expect(ranges.map((range) => (range.video, range.start, range.end)), [
       (true, 0, 16 * mib - 1),
+      (false, 100, 199),
       (true, 16 * mib, 32 * mib - 1),
       (true, 32 * mib, 40 * mib - 1),
-      (false, 100, 199),
     ]);
     expect(ranges.first.id, '$cid');
     expect(ranges.first.url, contains('120-hevc'));
-    expect(ranges.last.url, contains('30280'));
+    expect(ranges[1].url, contains('30280'));
     expect(ranges.first.headers, BiliClient.mediaHeaders);
     expect(ranges.first.partPath, '${rig.file(cid, 'v.m4s')}.part');
     expect(ranges.first.backgroundRangesPath, '${rig.file(cid, 'v.m4s')}.bg-ranges');
-    expect(ranges.last.partPath, '${rig.file(cid, 'a.m4s')}.part');
+    expect(ranges[1].partPath, '${rig.file(cid, 'a.m4s')}.part');
     expect(rig.engine.downloadsStarted, hasLength(1), reason: 'nothing runs in the engine meanwhile');
     expect(library.item(cid)!.state, OfflineState.downloading);
 

@@ -1,21 +1,31 @@
+import 'dart:math' as math;
+
 import 'package:bili_core/api.dart' show BiliClient, DashStream, TrackChoice;
 import 'package:bili_core/engine.dart' show DownloadGaps, DownloadRanges;
 import 'package:bili_core/shared.dart' show ByteRange;
 
 import '../offline_host.dart';
 
-/// The largest range one background transfer fetches: a transfer cancelled on the app's return loses at most this
-/// much, and iOS spreads the rest over its own connections.
+/// The first background transfers of a track are small: they start while the app is still leaving, so iOS runs them
+/// at once, and one cancelled on an early return loses little. Each later one doubles, up to [backgroundRangeMaxBytes],
+/// so a track of gigabytes is a few dozen tasks (each costs iOS ~8 ms to queue; 848 took 7 s, by then in the
+/// background, where iOS defers new transfers).
 const backgroundRangeBytes = 16 << 20;
+const backgroundRangeMaxBytes = 256 << 20;
 
-/// [gaps] cut into pieces of at most [maxBytes], in order, cut on multiples of [maxBytes] so they sit on the
-/// engine's 2 MiB piece grid.
-List<ByteRange> backgroundPieces(List<ByteRange> gaps, {int maxBytes = backgroundRangeBytes}) {
+/// The size of a track's [index]th piece: 16, 16, 32, 64, 128, then 256 MiB.
+int backgroundPieceBytes(int index) =>
+    index <= 1 ? backgroundRangeBytes : math.min(backgroundRangeBytes << (index - 1), backgroundRangeMaxBytes);
+
+/// [gaps] cut into pieces, in order, growing as [backgroundPieceBytes] says; each is cut on a multiple of its size, so
+/// they sit on the engine's 2 MiB piece grid.
+List<ByteRange> backgroundPieces(List<ByteRange> gaps) {
   final pieces = <ByteRange>[];
   for (final gap in gaps) {
     var start = gap.start;
     while (start <= gap.end) {
-      final boundary = (start ~/ maxBytes + 1) * maxBytes - 1;
+      final size = backgroundPieceBytes(pieces.length);
+      final boundary = (start ~/ size + 1) * size - 1;
       final end = boundary < gap.end ? boundary : gap.end;
       pieces.add(ByteRange(start, end));
       start = end + 1;
@@ -23,6 +33,14 @@ List<ByteRange> backgroundPieces(List<ByteRange> gaps, {int maxBytes = backgroun
   }
   return pieces;
 }
+
+/// The first of each list, then the second of each, and so on: every track's small first pieces are queued before
+/// anyone's large ones.
+List<T> roundRobin<T>(List<List<T>> lists) => [
+  for (var i = 0; lists.any((list) => i < list.length); i++)
+    for (final list in lists)
+      if (i < list.length) list[i],
+];
 
 /// The background transfers that fill [gaps]: each track's missing bytes from its primary address, written into its
 /// part file at [videoPath] / [audioPath] (absolute, as the engine names them). A track whose total is 0 isn't known
@@ -49,8 +67,8 @@ List<BackgroundRange> backgroundRanges({
       ),
   ];
 
-  return [
-    if (gaps.videoTotal > 0) ...track(true, gaps.video, gaps.videoTotal, choice.video, videoPath),
-    if (gaps.audioTotal > 0) ...track(false, gaps.audio, gaps.audioTotal, choice.audio, audioPath),
-  ];
+  return roundRobin([
+    if (gaps.videoTotal > 0) track(true, gaps.video, gaps.videoTotal, choice.video, videoPath),
+    if (gaps.audioTotal > 0) track(false, gaps.audio, gaps.audioTotal, choice.audio, audioPath),
+  ]);
 }
