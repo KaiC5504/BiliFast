@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
@@ -62,8 +64,20 @@ void main() {
     ]);
     expect(
       backgroundPieces([ByteRange(5 * mib, 70 * mib - 1)]).map((piece) => (piece.start ~/ mib, piece.end ~/ mib + 1)),
-      [(5, 16), (16, 32), (32, 64), (64, 70)],
+      [(5, 16), (16, 32), (32, 48), (48, 64), (64, 70)],
     );
+  });
+
+  test('small holes before the tail leave its first pieces small', () {
+    final holes = [for (var i = 0; i < 6; i++) ByteRange(i * 4 * mib, i * 4 * mib + 2 * mib - 1)];
+    final pieces = backgroundPieces([...holes, ByteRange(64 * mib, 200 * mib - 1)]);
+    expect(pieces.skip(6).map((piece) => (piece.start ~/ mib, piece.length ~/ mib)), [
+      (64, 16),
+      (80, 16),
+      (96, 32),
+      (128, 64),
+      (192, 8),
+    ]);
   });
 
   test("every track's first pieces are queued before anyone's later ones", () {
@@ -111,6 +125,27 @@ void main() {
     final takenBack = rig.logs.events.where((event) => event.msg == 'offline taken back').single;
     expect(takenBack.f['started']?.toJson(), 1);
     expect(takenBack.f['partialMb']?.toJson(), 3);
+  });
+
+  test('leaving again while the return is still taking back hands the part off again', () async {
+    final library = await rig.started();
+    await library.enqueue([offlineRequest()]);
+    await library.settled();
+    rig.engine.gaps['$cid'] = gaps();
+    lifecycle(toBackground);
+    await library.settled();
+    expect(rig.host.handedOff, hasLength(1));
+
+    final held = rig.host.takeBackHeld = Completer<void>();
+    lifecycle(toForeground);
+    await pumpEventQueue();
+    expect(rig.host.calls.last, 'takeBack');
+    lifecycle(toBackground);
+    held.complete();
+    await library.settled();
+
+    expect(rig.host.handedOff, hasLength(2));
+    expect(rig.engine.downloadsStopped, ['$cid', '$cid']);
   });
 
   test('a track whose total is not known yet stays out of the hand-off, and its part waits for the return', () async {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -60,9 +61,13 @@ final class FakeOfflineHost implements OfflineHost {
     handedOff.add(ranges);
   }
 
+  /// Holds takeBack until completed, as the real one waits for the session to deliver.
+  Completer<void>? takeBackHeld;
+
   @override
   Future<List<BackgroundRangeResult>> takeBack() async {
     calls.add('takeBack');
+    await takeBackHeld?.future;
     final taken = results;
     results = [];
     return taken;

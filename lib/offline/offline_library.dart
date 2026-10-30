@@ -628,7 +628,9 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     part.preparing = epoch;
     try {
       await _savePictures(part);
-      if (!live()) return;
+      // Until the return's take-back is over, the transfers may still write: new streams would clear their
+      // `.bg-ranges`, and a late range of the old stream would land over the new one's bytes.
+      if (!live() || _handedOff) return;
       var choice = part.choice;
       if (choice == null || _nearDeadline(choice, urlMargin)) {
         final streams = await _askStreams(part, epoch);
@@ -639,7 +641,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       }
       await part.stopping;
       // Left the foreground meanwhile: the return starts it.
-      if (!live() || !_mayDownload) return;
+      if (!live() || !_mayDownload || _handedOff) return;
       final engine = await _engineLease();
       if (!live()) return;
       await _startEngine(part, epoch, engine, choice);
@@ -1042,8 +1044,26 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   /// A long video's danmaku is dozens of paced calls (67 for 6.5 hours, ~50 s), so it is saved while the media
   /// downloads rather than before; one save per part at a time.
   void _saveDanmakuAlongside(_Part part) {
-    if (part.danmaku != null || part.entry.danmakuComplete) return;
-    final save = _saveDanmaku(part, () => identical(_parts[part.cid], part)).whenComplete(() => part.danmaku = null);
+    if (part.entry.danmakuComplete) return;
+    if (part.danmaku != null) {
+      // The finish's one more go, for when the save under way stops short.
+      part.danmakuOwed = true;
+      return;
+    }
+    bool live() {
+      final state = part.item.state;
+      return !_disposed &&
+          !_held &&
+          identical(_parts[part.cid], part) &&
+          (state == OfflineState.downloading || state == OfflineState.done);
+    }
+
+    final save = _saveDanmaku(part, live).whenComplete(() {
+      part.danmaku = null;
+      if (!part.danmakuOwed) return;
+      part.danmakuOwed = false;
+      if (part.item.state == OfflineState.done) _saveDanmakuAlongside(part);
+    });
     part.danmaku = save;
     _track(save);
   }
@@ -1304,6 +1324,12 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       return;
     }
     final leaving = Stopwatch()..start();
+    // Parts not in the engine (the return's take-back was still waiting, or a run was still asking for its streams)
+    // start now, in the grace, so their gaps are known and handed off too.
+    await Future.wait([
+      for (final part in active)
+        if (!part.running) _starting(part),
+    ]);
     final engine = _engine;
     final stopped = <_Part, DownloadGaps>{};
     Future<void> stop(_Part part, PlaybackEngine engine) async {
@@ -1385,6 +1411,14 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       if (_isLive(part, part.epoch) && _mayDownload) _launch(part);
     }
     _maybeEndGrace();
+  }
+
+  /// A run begun before the grace may still stop short of the engine, so it gets one more go.
+  Future<void> _starting(_Part part) async {
+    for (var tries = 0; tries < 2 && !part.running && _isLive(part, part.epoch) && _mayDownload; tries++) {
+      _launch(part);
+      await part.run;
+    }
   }
 
   /// iOS's time is nearly up: the engine stops (its writes flushed) and the time is given back.
@@ -1669,6 +1703,7 @@ final class _Part {
   Future<void> writes = Future.value();
   Future<void>? pictures;
   Future<void>? danmaku;
+  bool danmakuOwed = false;
   Timer? refresh;
   Timer? positionSave;
   DateTime? savedAt;

@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:bili_core/api.dart' show BiliClient, DashStream, TrackChoice;
 import 'package:bili_core/engine.dart' show DownloadGaps, DownloadRanges;
 import 'package:bili_core/shared.dart' show ByteRange;
@@ -13,21 +11,30 @@ import '../offline_host.dart';
 const backgroundRangeBytes = 16 << 20;
 const backgroundRangeMaxBytes = 256 << 20;
 
-/// The size of a track's [index]th piece: 16, 16, 32, 64, 128, then 256 MiB.
-int backgroundPieceBytes(int index) =>
-    index <= 1 ? backgroundRangeBytes : math.min(backgroundRangeBytes << (index - 1), backgroundRangeMaxBytes);
+/// The size of a track's next piece once [queued] bytes of it are queued: 16, 16, 32, 64, 128, then 256 MiB along one
+/// long gap. Grown by bytes rather than by count, so the engine's small holes before the tail leave its first pieces
+/// small.
+int backgroundPieceBytes(int queued) {
+  var size = backgroundRangeBytes;
+  while (size < backgroundRangeMaxBytes && size * 2 <= queued) {
+    size *= 2;
+  }
+  return size;
+}
 
 /// [gaps] cut into pieces, in order, growing as [backgroundPieceBytes] says; each is cut on a multiple of its size, so
 /// they sit on the engine's 2 MiB piece grid.
 List<ByteRange> backgroundPieces(List<ByteRange> gaps) {
   final pieces = <ByteRange>[];
+  var queued = 0;
   for (final gap in gaps) {
     var start = gap.start;
     while (start <= gap.end) {
-      final size = backgroundPieceBytes(pieces.length);
+      final size = backgroundPieceBytes(queued);
       final boundary = (start ~/ size + 1) * size - 1;
       final end = boundary < gap.end ? boundary : gap.end;
       pieces.add(ByteRange(start, end));
+      queued += end - start + 1;
       start = end + 1;
     }
   }

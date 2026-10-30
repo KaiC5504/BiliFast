@@ -284,6 +284,17 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   then resume on return. Also KaiC's: the small player's (and the iPad page player's) vertical drags set brightness
   (left) and volume (right) with full screen's level pill scaled into the box. Logs: `download started/finished/
   failed`, `offline handed off`, `offline taken back`, `local source`, `offline folder removed`; never a URL.
+- 1.3.0 (2), from KaiC's iPad log (1.3.0 works there unchanged): a 6.5-hour video's 67 danmaku segments (paced 0.5 s)
+  held its download ~50 s at 0, so 同时缓存数量 3 looked stuck; danmaku now saves alongside the media (stopped by pause,
+  risk control, delete; the finish's retry kept). Leaving for 3 minutes, iOS ran none of 848 ranges: they were queued
+  7 s after the app was already in the background, where iOS treats new transfers as discretionary. The hand-off now
+  starts at `inactive` on iOS (Control Center and the app switcher take it back on return), the engine's stops run
+  together, pieces grow with the bytes queued (16, 16, 32, 64, 128, then 256 MiB) and every track's first ones are
+  queued first; a leave during the return's take-back starts the parts in the grace and hands them off again; no run
+  starts while a take-back is still out. Take-back gives the session 1 s (and up to 3 s more for tasks whose bytes are
+  all in) to deliver ranges iOS finished while the app was suspended. Logs: `offline handed off` gains ms and late
+  (true: the last ones were queued from the background), `offline taken back` gains started and partialMb (what iOS
+  had fetched of unfinished ranges).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
