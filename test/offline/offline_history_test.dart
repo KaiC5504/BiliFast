@@ -292,6 +292,26 @@ void main() {
       await back(tester);
     });
 
+    testWidgets('opened again while its last report is still on its way, the part starts from the phone\'s place', (
+      tester,
+    ) async {
+      await host(tester);
+      push(offlineRoute(library.item(7003)!));
+      final first = await play(tester);
+      expect(first.loaded?.startSeconds, 120);
+      final gate = http.gates[heartbeatPath] = Completer<void>();
+      await back(tester);
+      expect(outbox.holds('BV1fake00003', 7003), isTrue, reason: 'the leave\'s report is out');
+      http.routes[playerInfoPath] = (200, _playerInfo(cid: 7003, ms: 200000));
+      push(offlineRoute(library.item(7003)!));
+      final again = await play(tester);
+      expect(http.to(playerInfoPath), hasLength(1), reason: 'Bilibili\'s place is older than the report on its way');
+      expect(again.loaded?.startSeconds, library.item(7003)!.position);
+      expect(again.loaded?.startSeconds, isNot(200));
+      gate.complete();
+      await back(tester);
+    });
+
     testWidgets('a start the route asks for wins, and Bilibili isn\'t asked', (tester) async {
       await host(tester);
       push(const VideoRoute(bvid: 'BV1fake00003', cid: 7003, start: 50, offline: true));

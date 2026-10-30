@@ -149,6 +149,26 @@ void main() {
     expect(outbox.reports, hasLength(1));
   });
 
+  test('a report older than 5 minutes asks the account\'s history first, once', () async {
+    var clock = DateTime(2026, 10, 31, 9);
+    outbox = HistoryOutbox.memory(
+      logger: Logger(session: 'test'),
+      now: () => clock,
+    );
+    await waiting();
+    clock = clock.add(const Duration(minutes: 6));
+    http.routes['/x/web-interface/history/cursor'] = (200, '{"code":0,"message":"0","data":{"list":[]}}');
+    final env = await environment();
+    await env.refreshAccount();
+    flusher(env);
+    await pumpEventQueue();
+    expect(http.paths.where((path) => path == '/x/web-interface/history/cursor' || path == heartbeatPath), [
+      '/x/web-interface/history/cursor',
+      heartbeatPath,
+    ]);
+    expect(outbox.reports, isEmpty);
+  });
+
   test('logging out drops what waits: whoever logs in next may be another account', () async {
     final env = await environment();
     await env.refreshAccount();

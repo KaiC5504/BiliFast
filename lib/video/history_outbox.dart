@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -14,7 +15,11 @@ import 'watch_reporter.dart';
 /// `BiliClient.heartbeat`'s shape.
 typedef SendHeartbeat = Future<void> Function({required String bvid, required int cid, required int playedTime});
 
-/// The last watch report of one part that got no answer: the seconds played, or -1 for finished.
+/// The account's latest 历史记录 page (`BiliClient.history`).
+typedef ReadRecentHistory = Future<HistoryPage> Function();
+
+/// The last watch report of one video that got no answer, in the part it was made in: the seconds played, or -1 for
+/// finished.
 @immutable
 final class PendingReport {
   const PendingReport({required this.bvid, required this.cid, required this.played, required this.at});
@@ -43,12 +48,13 @@ final class PendingReport {
   int get hashCode => Object.hash(bvid, cid, played, at);
 }
 
-enum _Flushed { sent, gone, dropped, failed }
+enum _Flushed { sent, gone, dropped, noAnswer, kept }
 
 /// Watch reports that got no answer (offline, timed out), kept until Bilibili takes them, so a part watched with no
-/// network still reaches the account's history (KaiC watches on several devices). One per part, the latest; a later
-/// report of the part that goes through makes it moot. Kept 30 days, in a JSON file in the support folder. Every
-/// heartbeat goes through [send], one at a time with [flush]'s, so Bilibili never hears an older place last.
+/// network still reaches the account's history (KaiC watches on several devices). One per video, the latest, as
+/// Bilibili keeps one place per video whatever the part; a later report of the video that goes through makes it moot.
+/// Kept 30 days, in a JSON file in the support folder. Every heartbeat goes through [send], one at a time with
+/// [flush]'s, so Bilibili never hears an older place last.
 class HistoryOutbox {
   HistoryOutbox._(this._path, this._held, this._logger, this._now);
 
@@ -57,11 +63,15 @@ class HistoryOutbox {
 
   static const keptFor = Duration(days: 30);
 
+  /// A flush holding a report older than this asks the account's history first: another device may have watched the
+  /// video since.
+  static const checkAfter = Duration(minutes: 5);
+
   /// [path] null keeps the reports in memory only. An unreadable file starts empty; entries that don't decode are
   /// dropped one by one, and so are those past [keptFor].
   static Future<HistoryOutbox> load(String? path, {Logger? logger, DateTime Function() now = DateTime.now}) async {
     final log = logger ?? Logger.shared;
-    final held = <(String, int), PendingReport>{};
+    final held = <String, PendingReport>{};
     if (path != null) {
       final file = File(path);
       try {
@@ -72,7 +82,8 @@ class HistoryOutbox {
           for (final entry in json) {
             try {
               final report = PendingReport.fromJson(entry as Map<String, Object?>);
-              held[(report.bvid, report.cid)] = report;
+              final kept = held[report.bvid];
+              if (kept == null || kept.at.isBefore(report.at)) held[report.bvid] = report;
             } on TypeError {
               skipped++;
             }
@@ -92,93 +103,171 @@ class HistoryOutbox {
   }
 
   final String? _path;
-  final Map<(String, int), PendingReport> _held;
+
+  /// By bvid.
+  final Map<String, PendingReport> _held;
   final Logger _logger;
   final DateTime Function() _now;
+
+  /// Reports [send] has taken and not yet settled, by part.
+  final Map<(String, int), int> _inFlight = {};
+
+  /// Bumped by [clear], so a report out at a logout that then gets no answer isn't kept for the next account.
+  int _generation = 0;
 
   /// The end of the last task queued, while any is queued or running.
   Future<void>? _lane;
   Future<void>? _flushing;
+
+  /// A flush was asked for while one ran.
+  bool _again = false;
   Future<void> _writing = Future.value();
 
   /// What is waiting, oldest first.
   List<PendingReport> get reports => [..._held.values]..sort((a, b) => a.at.compareTo(b.at));
 
-  /// An unsent report of the part is waiting: what this phone saw of it is newer than anything Bilibili has.
+  /// A report of the part is waiting or on its way: what this phone saw of it is newer than anything Bilibili has.
   bool holds(String bvid, int cid) {
-    final report = _held[(bvid, cid)];
-    return report != null && !_expired(report);
+    if ((_inFlight[(bvid, cid)] ?? 0) > 0) return true;
+    final report = _held[bvid];
+    return report != null && report.cid == cid && !_expired(report);
   }
 
   /// No answer at all; Bilibili's own refusals and the Windows guard's are answers.
   static bool isNetworkFailure(Object error) => error is BiliNetworkError;
 
   /// Sends one report through [beat] after every one before it, a flush's included. A report that goes through
-  /// clears the part's waiting one; one that gets no answer takes its place. Errors reach the caller.
-  Future<void> send(String bvid, int cid, int played, Future<void> Function() beat) => _inLane(() async {
-    try {
-      await beat();
-    } catch (error) {
-      if (isNetworkFailure(error)) _keep(PendingReport(bvid: bvid, cid: cid, played: played, at: _now()));
-      rethrow;
-    }
-    if (_held.remove((bvid, cid)) != null) _save();
-  });
+  /// clears the video's waiting one, older whatever its part; one that gets no answer takes its place. Errors reach
+  /// the caller.
+  Future<void> send(String bvid, int cid, int played, Future<void> Function() beat) {
+    final part = (bvid, cid);
+    _inFlight[part] = (_inFlight[part] ?? 0) + 1;
+    final generation = _generation;
+    return _inLane(() async {
+      try {
+        await beat();
+      } catch (error) {
+        if (isNetworkFailure(error) && generation == _generation) {
+          _keep(PendingReport(bvid: bvid, cid: cid, played: played, at: _now()));
+        }
+        rethrow;
+      }
+      if (_held.remove(bvid) != null) _save();
+    }).whenComplete(() {
+      final left = (_inFlight[part] ?? 1) - 1;
+      if (left > 0) {
+        _inFlight[part] = left;
+      } else {
+        _inFlight.remove(part);
+      }
+    });
+  }
 
   /// Sends what is waiting, oldest first and one at a time, through [heartbeat]; stops at the first that gets no
-  /// answer. A report Bilibili refuses outright (a video gone) is dropped, as sending it again gets the same answer;
-  /// a login refused or risk control keeps it for a later flush. A flush already running answers for both.
-  Future<void> flush(SendHeartbeat heartbeat) {
+  /// answer. Holding a report older than [checkAfter], it first reads [recent] once and drops each report whose video
+  /// the account has watched since (another device). A report Bilibili refuses outright (a video gone) is dropped, as
+  /// sending it again gets the same answer; a login refused or risk control keeps it for a later flush. A flush asked
+  /// for while one runs gets one more pass if that one ended with no answer (the network may be back).
+  Future<void> flush(SendHeartbeat heartbeat, {required ReadRecentHistory recent}) {
     final running = _flushing;
-    if (running != null) return running;
+    if (running != null) {
+      _again = true;
+      return running;
+    }
     late final Future<void> flushing;
-    flushing = _flush(heartbeat).whenComplete(() {
+    flushing = _run(heartbeat, recent).whenComplete(() {
       if (identical(_flushing, flushing)) _flushing = null;
     });
     return _flushing = flushing;
   }
 
-  Future<void> _flush(SendHeartbeat heartbeat) async {
+  Future<void> _run(SendHeartbeat heartbeat, ReadRecentHistory recent) async {
+    _again = false;
+    while (await _pass(heartbeat, recent) && _again) {
+      _again = false;
+    }
+  }
+
+  /// Whether it ended with no answer.
+  Future<bool> _pass(SendHeartbeat heartbeat, ReadRecentHistory recent) async {
     var dropped = _dropExpired();
+    var stale = 0;
     var sent = 0;
     var failed = 0;
-    for (final report in reports) {
-      final outcome = await _inLane(() async {
-        // A page's own report may have settled it while this one waited its turn.
-        final waiting = _held[(report.bvid, report.cid)];
-        if (waiting == null) return _Flushed.gone;
-        try {
-          await heartbeat(bvid: waiting.bvid, cid: waiting.cid, playedTime: waiting.played);
-        } catch (error) {
-          if (!_refusedForGood(error)) return _Flushed.failed;
-          _held.remove((waiting.bvid, waiting.cid));
-          _save();
-          return _Flushed.dropped;
-        }
-        _held.remove((waiting.bvid, waiting.cid));
-        _save();
-        return _Flushed.sent;
-      });
-      switch (outcome) {
-        case _Flushed.sent:
-          sent++;
-        case _Flushed.dropped:
-          dropped++;
-        case _Flushed.failed:
-          failed++;
-        case _Flushed.gone:
-          break;
+    var noAnswer = false;
+    if (reports.any((report) => _now().difference(report.at) > checkAfter)) {
+      try {
+        stale = _dropWatchedSince((await recent()).items);
+      } catch (error) {
+        failed++;
+        noAnswer = isNetworkFailure(error);
       }
-      if (outcome == _Flushed.failed) break;
     }
-    if (sent + dropped + failed > 0) {
+    if (failed == 0) {
+      for (final report in reports) {
+        final outcome = await _inLane(() async {
+          // A page's own report may have settled it, or a newer one taken its place, while this one waited its turn.
+          final waiting = _held[report.bvid];
+          if (waiting == null) return _Flushed.gone;
+          try {
+            await heartbeat(bvid: waiting.bvid, cid: waiting.cid, playedTime: waiting.played);
+          } catch (error) {
+            if (isNetworkFailure(error)) return _Flushed.noAnswer;
+            if (!_refusedForGood(error)) return _Flushed.kept;
+            _remove(waiting);
+            return _Flushed.dropped;
+          }
+          _remove(waiting);
+          return _Flushed.sent;
+        });
+        switch (outcome) {
+          case _Flushed.sent:
+            sent++;
+          case _Flushed.dropped:
+            dropped++;
+          case _Flushed.noAnswer || _Flushed.kept:
+            failed++;
+          case _Flushed.gone:
+            break;
+        }
+        if (outcome == _Flushed.noAnswer || outcome == _Flushed.kept) {
+          noAnswer = outcome == _Flushed.noAnswer;
+          break;
+        }
+      }
+    }
+    if (sent + dropped + stale + failed > 0) {
       _logger.info(LogCategory.api, 'history outbox', {
         'sent': sent,
         'dropped': dropped,
+        'stale': stale,
         'failed': failed,
         'held': _held.length,
       });
     }
+    return noAnswer;
+  }
+
+  void _remove(PendingReport report) {
+    if (!identical(_held[report.bvid], report)) return;
+    _held.remove(report.bvid);
+    _save();
+  }
+
+  /// Drops the reports whose video [items] shows watched at or after the report was made.
+  int _dropWatchedSince(List<HistoryItem> items) {
+    final watched = <String, int>{};
+    for (final item in items) {
+      watched[item.bvid] = max(watched[item.bvid] ?? 0, item.viewAt);
+    }
+    final moved = [
+      for (final report in _held.values)
+        if ((watched[report.bvid] ?? 0) * 1000 >= report.at.millisecondsSinceEpoch) report.bvid,
+    ];
+    if (moved.isEmpty) return 0;
+    moved.forEach(_held.remove);
+    _save();
+    return moved.length;
   }
 
   static bool _refusedForGood(Object error) => switch (error) {
@@ -188,8 +277,9 @@ class HistoryOutbox {
     _ => false,
   };
 
-  /// 退出登录: what is waiting was the old account's.
+  /// 退出登录: what is waiting was the old account's, and so is any report still out.
   void clear() {
+    _generation++;
     if (_held.isEmpty) return;
     final dropped = _held.length;
     _held.clear();
@@ -205,9 +295,8 @@ class HistoryOutbox {
   }
 
   void _keep(PendingReport report) {
-    final key = (report.bvid, report.cid);
-    final added = !_held.containsKey(key);
-    _held[key] = report;
+    final added = !_held.containsKey(report.bvid);
+    _held[report.bvid] = report;
     _save();
     if (added) _logger.info(LogCategory.api, 'history outbox', {'queued': 1, 'held': _held.length});
   }
@@ -216,8 +305,8 @@ class HistoryOutbox {
 
   int _dropExpired() {
     final expired = [
-      for (final MapEntry(:key, :value) in _held.entries)
-        if (_expired(value)) key,
+      for (final report in _held.values)
+        if (_expired(report)) report.bvid,
     ];
     if (expired.isEmpty) return 0;
     expired.forEach(_held.remove);
@@ -286,7 +375,8 @@ class HistoryOutboxFlusher with WidgetsBindingObserver {
   /// Sends what is waiting, if the account may report.
   void flush() {
     if (outbox.reports.isEmpty || !WatchReporter.canReport(_environment)) return;
-    unawaited(outbox.flush(_environment.client.heartbeat));
+    final client = _environment.client;
+    unawaited(outbox.flush(client.heartbeat, recent: client.history));
   }
 
   void _accountChanged() {

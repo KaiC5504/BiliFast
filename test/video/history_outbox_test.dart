@@ -86,6 +86,48 @@ void main() {
     expect(waiting(), isEmpty);
   });
 
+  test('one report waits per video: a newer part\'s takes the older part\'s place', () async {
+    offline();
+    await report('BV1a', 1, 10);
+    now = now.add(const Duration(seconds: 15));
+    await report('BV1a', 2, 3);
+    expect(waiting(), [('BV1a', 2, 3)]);
+    expect(outbox.holds('BV1a', 2), isTrue);
+    expect(outbox.holds('BV1a', 1), isFalse);
+  });
+
+  test('a report on its way counts as held until it settles', () async {
+    final gate = Completer<void>();
+    final sending = outbox.send('BV1a', 1, 10, () => gate.future);
+    expect(outbox.holds('BV1a', 1), isTrue, reason: 'taken, not yet answered');
+    expect(outbox.holds('BV1a', 2), isFalse);
+    gate.complete();
+    await sending;
+    expect(outbox.holds('BV1a', 1), isFalse);
+
+    offline();
+    final out = report('BV1b', 2, 20);
+    expect(outbox.holds('BV1b', 2), isTrue);
+    await out;
+    expect(outbox.holds('BV1b', 2), isTrue, reason: 'no answer: it waits');
+  });
+
+  test('a report out at a logout that then gets no answer is not kept for the next account', () async {
+    final gate = Completer<void>();
+    final out = outbox.send('BV1a', 1, 10, () async {
+      await gate.future;
+      throw const BiliNetworkError('SocketException');
+    });
+    outbox.clear();
+    gate.complete();
+    await expectLater(out, throwsA(isA<BiliNetworkError>()));
+    expect(waiting(), isEmpty);
+
+    offline();
+    await report('BV1b', 2, 20);
+    expect(waiting(), [('BV1b', 2, 20)], reason: 'reports after the logout are kept as ever');
+  });
+
   test('the Windows guard\'s refusal is never queued', () async {
     final guarded = BiliClient(
       transport: GuardedTransport(http, logger: logger),
@@ -102,6 +144,9 @@ void main() {
     late List<(String, int, int)> sent;
     late Map<String, Object> failures;
     Completer<void>? gate;
+    late int reads;
+    late List<HistoryItem> watched;
+    Object? readFailure;
 
     Future<void> heartbeat({required String bvid, required int cid, required int playedTime}) async {
       sent.add((bvid, cid, playedTime));
@@ -110,10 +155,36 @@ void main() {
       if (failure != null) throw failure;
     }
 
+    Future<HistoryPage> recent() async {
+      reads++;
+      final failure = readFailure;
+      if (failure != null) throw failure;
+      return HistoryPage(items: watched, next: null);
+    }
+
+    Future<void> flush() => outbox.flush(heartbeat, recent: recent);
+
+    HistoryItem seen(String bvid, DateTime at) => HistoryItem(
+      aid: 1,
+      bvid: bvid,
+      cid: 1,
+      title: '',
+      cover: '',
+      ownerName: '',
+      progress: 0,
+      duration: 0,
+      viewAt: at.millisecondsSinceEpoch ~/ 1000,
+      device: 0,
+      part: null,
+    );
+
     setUp(() {
       sent = [];
       failures = {};
       gate = null;
+      reads = 0;
+      watched = [];
+      readFailure = null;
     });
 
     Future<void> queue(List<(String, int, int)> reports) async {
@@ -133,46 +204,130 @@ void main() {
       online();
       failures['BV1c'] = const BiliNetworkError('SocketException');
       gate = Completer();
-      final flushing = outbox.flush(heartbeat);
+      final flushing = flush();
       await pumpEventQueue();
       expect(sent, [('BV1b', 2, 20)], reason: 'one at a time');
-      expect(identical(outbox.flush(heartbeat), flushing), isTrue, reason: 'a flush already running answers');
       gate!.complete();
       await flushing;
       expect(sent, [('BV1b', 2, 20), ('BV1c', 3, 30)], reason: 'BV1a waits behind the failure');
       expect(waiting(), [('BV1c', 3, 30), ('BV1a', 1, 15)]);
-      expect(outboxLines().last, {'sent': 1, 'dropped': 0, 'failed': 1, 'held': 2});
+      expect(outboxLines().last, {'sent': 1, 'dropped': 0, 'stale': 0, 'failed': 1, 'held': 2});
+      expect(reads, 0, reason: 'nothing older than 5 minutes');
 
       failures.clear();
-      await outbox.flush(heartbeat);
+      await flush();
       expect(sent.skip(2), [('BV1c', 3, 30), ('BV1a', 1, 15)]);
       expect(waiting(), isEmpty);
-      expect(outboxLines().last, {'sent': 2, 'dropped': 0, 'failed': 0, 'held': 0});
+      expect(outboxLines().last, {'sent': 2, 'dropped': 0, 'stale': 0, 'failed': 0, 'held': 0});
+    });
+
+    test('a flush asked for while one runs gets one more pass if that one got no answer', () async {
+      await queue([('BV1a', 1, 10)]);
+      final firstTry = Completer<void>();
+      // The first try is still failing on the old network when the new one comes up and asks for a flush.
+      Future<void> flaky({required String bvid, required int cid, required int playedTime}) async {
+        sent.add((bvid, cid, playedTime));
+        if (sent.length > 1) return;
+        await firstTry.future;
+        throw const BiliNetworkError('SocketException');
+      }
+
+      final flushing = outbox.flush(flaky, recent: recent);
+      await pumpEventQueue();
+      expect(identical(flush(), flushing), isTrue, reason: 'the running flush answers');
+      firstTry.complete();
+      await flushing;
+      expect(sent, [('BV1a', 1, 10), ('BV1a', 1, 10)]);
+      expect(waiting(), isEmpty);
+
+      await queue([('BV1b', 2, 20)]);
+      gate = Completer();
+      final next = flush();
+      await pumpEventQueue();
+      expect(identical(flush(), next), isTrue);
+      gate!.complete();
+      await next;
+      expect(sent.skip(2), [('BV1b', 2, 20)], reason: 'it went through: no second pass');
+    });
+
+    test('older than 5 minutes, the account\'s history is read once and videos watched since are dropped', () async {
+      final made = now;
+      await queue([('BV1a', 1, 10), ('BV1b', 2, 20), ('BV1c', 3, 30)]);
+      now = made.add(const Duration(hours: 2));
+      watched = [
+        // Watched on another device after this phone's report.
+        seen('BV1a', made.add(const Duration(minutes: 30))),
+        // The account's place before the report was made: this phone's is newer.
+        seen('BV1c', made.add(const Duration(seconds: 1))),
+        seen('BV1z', made.add(const Duration(hours: 1))),
+      ];
+      await flush();
+      expect(reads, 1);
+      expect(sent, [('BV1b', 2, 20), ('BV1c', 3, 30)]);
+      expect(waiting(), isEmpty);
+      expect(outboxLines().last, {'sent': 2, 'dropped': 0, 'stale': 1, 'failed': 0, 'held': 0});
+    });
+
+    test('a report watched at the very second it was made counts as moved on', () async {
+      final made = DateTime.fromMillisecondsSinceEpoch(1761800000000);
+      now = made;
+      await queue([('BV1a', 1, 10)]);
+      now = made.add(const Duration(minutes: 6));
+      watched = [seen('BV1a', made)];
+      await flush();
+      expect(sent, isEmpty);
+      expect(waiting(), isEmpty);
+    });
+
+    test('a history read with no answer stops the flush as no answer; refused, everything is kept', () async {
+      await queue([('BV1a', 1, 10)]);
+      now = now.add(const Duration(minutes: 10));
+      readFailure = const BiliNetworkError('SocketException');
+      gate = Completer();
+      // The read fails at once; a second ask while the first ran gets one more pass, which reads again.
+      final flushing = flush();
+      expect(identical(flush(), flushing), isTrue);
+      gate!.complete();
+      await flushing;
+      expect(reads, 2);
+      expect(sent, isEmpty);
+      expect(waiting(), [('BV1a', 1, 10)]);
+      expect(outboxLines().last, {'sent': 0, 'dropped': 0, 'stale': 0, 'failed': 1, 'held': 1});
+
+      for (final refusal in [const BiliAPIError(code: -101, message: '账号未登录'), const BiliHTTPError(412)]) {
+        readFailure = refusal;
+        final refused = flush();
+        expect(identical(flush(), refused), isTrue);
+        await refused;
+        expect(sent, isEmpty);
+        expect(waiting(), [('BV1a', 1, 10)]);
+      }
+      expect(reads, 4, reason: 'a refusal is no reason for another pass');
     });
 
     test('drops a report Bilibili refuses outright; a refused login or risk control keeps it', () async {
       await queue([('BV1a', 1, 10), ('BV1b', 2, 20), ('BV1c', 3, 30)]);
       failures['BV1a'] = const BiliAPIError(code: -404, message: '啥都木有');
       failures['BV1b'] = const BiliAPIError(code: -101, message: '账号未登录');
-      await outbox.flush(heartbeat);
+      await flush();
       expect(sent.map((each) => each.$1), ['BV1a', 'BV1b']);
       expect(waiting(), [('BV1b', 2, 20), ('BV1c', 3, 30)]);
-      expect(outboxLines().last, {'sent': 0, 'dropped': 1, 'failed': 1, 'held': 2});
+      expect(outboxLines().last, {'sent': 0, 'dropped': 1, 'stale': 0, 'failed': 1, 'held': 2});
 
       failures
         ..clear()
         ..['BV1b'] = const BiliHTTPError(412);
-      await outbox.flush(heartbeat);
+      await flush();
       expect(waiting(), hasLength(2));
       failures['BV1b'] = const BiliAPIError(code: GuardedTransport.readOnlyCode, message: 'PC 只读，未发送');
-      await outbox.flush(heartbeat);
+      await flush();
       expect(waiting(), hasLength(2));
     });
 
     test('a page\'s report and a flush never cross: the newer place lands last', () async {
       await queue([('BV1a', 1, 10), ('BV1b', 2, 20)]);
       gate = Completer();
-      final flushing = outbox.flush(heartbeat);
+      final flushing = flush();
       await pumpEventQueue();
       expect(sent, [('BV1a', 1, 10)]);
       // The page reports BV1a again (and BV1b) while the flush's report of it is still out.
@@ -192,11 +347,27 @@ void main() {
       expect(waiting(), isEmpty);
     });
 
-    test('nothing waiting sends and logs nothing', () async {
-      await outbox.flush(heartbeat);
+    test('nothing waiting sends, reads and logs nothing', () async {
+      await flush();
       expect(sent, isEmpty);
+      expect(reads, 0);
       expect(outboxLines(), isEmpty);
     });
+
+    test(
+      'after a failed flush, a newer part of the video that goes through makes the older part\'s report moot',
+      () async {
+        await queue([('BV1a', 1, 10)]);
+        failures['BV1a'] = const BiliNetworkError('SocketException');
+        await flush();
+        expect(waiting(), [('BV1a', 1, 10)]);
+        failures.clear();
+        await outbox.send('BV1a', 2, 5, () => heartbeat(bvid: 'BV1a', cid: 2, playedTime: 5));
+        expect(waiting(), isEmpty, reason: 'Bilibili keeps one place per video');
+        await flush();
+        expect(sent, [('BV1a', 1, 10), ('BV1a', 2, 5)], reason: 'part 1 never goes out after part 2');
+      },
+    );
   });
 
   group('30 days', () {
@@ -208,10 +379,11 @@ void main() {
       now = now.add(const Duration(minutes: 1));
       expect(outbox.holds('BV1a', 1), isFalse);
       online();
-      await outbox.flush(client.heartbeat);
+      await outbox.flush(client.heartbeat, recent: client.history);
       expect(http.to(heartbeatPath), hasLength(1), reason: 'only the first report\'s try');
+      expect(http.to('/x/web-interface/history/cursor'), isEmpty, reason: 'nothing left to check');
       expect(waiting(), isEmpty);
-      expect(outboxLines().last, {'sent': 0, 'dropped': 1, 'failed': 0, 'held': 0});
+      expect(outboxLines().last, {'sent': 0, 'dropped': 1, 'stale': 0, 'failed': 0, 'held': 0});
     });
   });
 
@@ -223,6 +395,22 @@ void main() {
       folder = Directory.systemTemp.createTempSync('history-outbox');
       addTearDown(() => folder.deleteSync(recursive: true));
       path = '${folder.path}${Platform.pathSeparator}history_outbox.json';
+    });
+
+    test('a file holding two parts of one video keeps the newer', () async {
+      File(path).writeAsStringSync(
+        jsonEncode([
+          {'bvid': 'BV1a', 'cid': 2, 'played': 5, 'at': now.millisecondsSinceEpoch},
+          {
+            'bvid': 'BV1a',
+            'cid': 1,
+            'played': 10,
+            'at': now.subtract(const Duration(minutes: 1)).millisecondsSinceEpoch,
+          },
+        ]),
+      );
+      final loaded = await HistoryOutbox.load(path, logger: logger, now: () => now);
+      expect([for (final each in loaded.reports) (each.cid, each.played)], [(2, 5)]);
     });
 
     test('what waits is kept across launches, older than 30 days dropped at load', () async {

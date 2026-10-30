@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -82,6 +83,19 @@ void main() {
     expect(sent(), ['0', '16', '-1', '30']);
     expect(waiting(), isEmpty);
     await reporter.leave();
+  });
+
+  test('a report is the outbox\'s from the moment it is made: leaving, the part reads as held at once', () async {
+    final reporter = make();
+    final gate = http.gates[heartbeatPath] = Completer<void>();
+    player.emit(const StatusChanged(PlayerStatus.playing));
+    position(16);
+    final leaving = reporter.leave();
+    expect(outbox.holds(bv, cid), isTrue, reason: 'a page opening this part next must not take an older place');
+    gate.complete();
+    await leaving;
+    expect(outbox.holds(bv, cid), isFalse);
+    expect(sent(), ['0', '16', '16']);
   });
 
   test('an answer is not the network: a refused report never waits', () async {

@@ -137,15 +137,24 @@ class WatchReporter {
     onProgress?.call(item.bvid, item.cid, played == HeartbeatSchedule.finished ? duration : played);
     if (!_loggedIn()) return;
     Future<void> beat() => _client.heartbeat(bvid: item.bvid, cid: item.cid, playedTime: played);
-    final outbox = _outbox;
+    // Handed to the outbox at once, whose lane keeps the order: a page opening this part next must know a report of
+    // it is on its way.
+    final queued = _outbox
+        ?.send(item.bvid, item.cid, played, beat)
+        .then<Object?>((_) => null, onError: (Object error) => error);
     _sending = _sending.then((_) async {
-      try {
-        await (outbox == null ? beat() : outbox.send(item.bvid, item.cid, played, beat));
-      } catch (error) {
-        // The Windows guard refuses every beat and logs the first itself.
-        if (error is BiliAPIError && error.code == GuardedTransport.readOnlyCode) return;
-        _logger.warn(LogCategory.api, 'heartbeat failed', {'played': played, 'error': '$error'});
+      Object? failure = await queued;
+      if (queued == null) {
+        try {
+          await beat();
+        } catch (error) {
+          failure = error;
+        }
       }
+      if (failure == null) return;
+      // The Windows guard refuses every beat and logs the first itself.
+      if (failure is BiliAPIError && failure.code == GuardedTransport.readOnlyCode) return;
+      _logger.warn(LogCategory.api, 'heartbeat failed', {'played': played, 'error': '$failure'});
     });
   }
 }
