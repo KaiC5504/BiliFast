@@ -301,7 +301,7 @@ class PageTabRow extends StatelessWidget {
                   top: 0,
                   bottom: 0,
                   child: Center(
-                    child: _DanmakuCapsule(
+                    child: DanmakuCapsule(
                       on: danmakuOn,
                       onToggle: onToggleDanmaku,
                       onSend: danmakuClosed ? null : onSendDanmaku,
@@ -399,14 +399,17 @@ class PageTabRow extends StatelessWidget {
   }
 }
 
-/// The toggle alone in a small grey capsule, or grown leftwards into 点我发弹幕 with the toggle on white.
-class _DanmakuCapsule extends StatelessWidget {
-  const _DanmakuCapsule({
+/// The toggle alone in a small grey capsule, or grown leftwards into 点我发弹幕 with the toggle on white. The offline
+/// page's (158) is [height] 28.
+class DanmakuCapsule extends StatelessWidget {
+  const DanmakuCapsule({
+    super.key,
     required this.on,
     required this.onToggle,
     required this.onSend,
     required this.text,
     required this.duration,
+    this.height = PageTheme.capsuleHeight,
   });
 
   final bool on;
@@ -416,6 +419,7 @@ class _DanmakuCapsule extends StatelessWidget {
   final VoidCallback? onSend;
   final String text;
   final Duration duration;
+  final double height;
 
   static const _curve = Curves.easeOutCubic;
 
@@ -434,7 +438,7 @@ class _DanmakuCapsule extends StatelessWidget {
       duration: duration,
       curve: _curve,
       width: on ? PageTheme.danmakuFieldWidth + PageTheme.danmakuToggleOn : PageTheme.danmakuToggleOff,
-      height: PageTheme.capsuleHeight,
+      height: height,
       clipBehavior: Clip.antiAlias,
       decoration: const ShapeDecoration(color: BiliColors.softGrey, shape: StadiumBorder()),
       foregroundDecoration: const ShapeDecoration(

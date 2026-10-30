@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
+import '../offline/page/offline_playback.dart';
 import '../playback/playback_controller.dart';
 import 'page_session.dart';
 import 'pip_keeper.dart';
@@ -44,7 +45,8 @@ PlayerSession pageSession({
 /// outlives its page while the small window plays it ([PipKeeper]), and the page the restore button pushes takes it
 /// over. What needs a page (the login) goes through the page attached, and does nothing without one. An [inline] one
 /// (推荐's big card) plays muted with its session's rules, watch reports and auto picture in picture off, until a page
-/// attaches and takes it over as it stands.
+/// attaches and takes it over as it stands. An [offline] one plays 离线缓存 parts from the phone: no watch reports,
+/// no 最近打开, its position kept in the library instead.
 class PagePlayback extends ChangeNotifier implements KeptPlayback {
   PagePlayback({
     required this._services,
@@ -57,7 +59,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
        _startAt = route.start,
        _view = route.view,
        _detail = route.detail,
-       _title = route.title;
+       _title = route.title,
+       offline = route.offline;
 
   final AppServices _services;
   final PageSessionFactory _createSession;
@@ -76,9 +79,12 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   VideoDetail? _detail;
   final String? _title;
 
+  final bool offline;
+
   PlaybackController? _controller;
   PlayerSession? _session;
   WatchReporter? _reporter;
+  OfflineProgress? _progress;
   StreamSubscription<void>? _restores;
   bool _starting = false;
   String? _startError;
@@ -112,6 +118,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   @override
   String get bvid => _bvid;
 
+  /// The part asked for last: the route's, then each one opened on the page.
+  int? get cid => _cid;
+
   bool get closed => _closed;
 
   /// Still the card's, before any page took it.
@@ -122,8 +131,15 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
 
   /// A page brought back after this playback was released (a restore that lost to ✕ or to the wait) starts over
   /// where it stopped.
-  VideoRoute get restartRoute =>
-      VideoRoute(bvid: _bvid, cid: _cid, start: _closedAt, title: _title, view: _view, detail: _detail);
+  VideoRoute get restartRoute => VideoRoute(
+    bvid: _bvid,
+    cid: _cid,
+    start: _closedAt,
+    title: _title,
+    view: _view,
+    detail: _detail,
+    offline: offline,
+  );
 
   /// Gets a controller of its own and opens the video on it; again after a failed start.
   void start() {
@@ -165,7 +181,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
       controller: controller,
       services: _services,
       open: openOnPage,
-      onSeeked: (seconds) => _reporter?.seeked(seconds),
+      onSeeked: (seconds) {
+        _reporter?.seeked(seconds);
+        _progress?.seeked(seconds);
+      },
       requestLogin: () => _requestLogin?.call(),
       willPlay: willPlay,
     );
@@ -192,6 +211,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   void _open() {
     final controller = _controller!;
     final services = _services;
+    if (offline) {
+      _openOffline(controller);
+      return;
+    }
     unawaited(_reporter?.leave());
     unawaited(controller.openVideo(_bvid, cid: _cid, start: _startAt, view: _view, detail: _detail));
     _reporter = WatchReporter(
@@ -203,6 +226,22 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
         if (!_inline) services.recents.recordProgress(bvid: bvid, cid: cid, seconds: seconds);
       },
     );
+  }
+
+  /// The library's part [_cid] from the phone, from the route's start or where the library saw it stop.
+  void _openOffline(PlaybackController controller) {
+    final library = _services.offline;
+    final cid = _cid;
+    _progress?.leave();
+    final start = _startAt ?? offlineStart(cid == null ? null : library.item(cid));
+    unawaited(
+      controller.openLocal(() async {
+        if (cid == null) return null;
+        final files = await library.playback(cid);
+        return files == null ? null : localVideoOf(files);
+      }, start: start),
+    );
+    _progress = OfflineProgress(controller: controller, library: library);
   }
 
   /// Another part or video, from 选集, 自动连播 or the end screen: opened on the same controller, with or without a
@@ -360,7 +399,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   bool pushPage() {
     final navigator = _services.navigator.currentState;
     if (navigator == null || _closed) return false;
-    final route = VideoRoute(bvid: _bvid, cid: _cid, title: _title, playback: this);
+    final route = VideoRoute(bvid: _bvid, cid: _cid, title: _title, playback: this, offline: offline);
     unawaited(navigator.push(RestoredPageRoute<void>(builder: (_) => restorePage(route))));
     return true;
   }
@@ -379,6 +418,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     session?.readout.status.removeListener(_stillCovered);
     session?.active = false;
     unawaited(_reporter?.leave());
+    _progress?.leave();
     unawaited(_restores?.cancel());
     if (controller != null) {
       _closedAt = controller.currentSeconds;

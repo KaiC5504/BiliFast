@@ -66,6 +66,9 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   List<VideoCard> related = const [];
 
   @override
+  bool offline = false;
+
+  @override
   List<Episode> episodes = const [];
 
   @override

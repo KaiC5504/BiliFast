@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show IOException, ProcessInfo;
+import 'dart:io' show FileSystemException, IOException, ProcessInfo;
 import 'dart:math';
 
 import 'package:bili_core/api.dart';
@@ -30,7 +30,13 @@ enum PlaybackFailure implements Exception {
   network('网络连接中断，请检查网络后重试'),
 
   /// 番剧 and other PGC pages: the view redirects, and their playurl is another API.
-  unsupported('暂不支持播放此类视频');
+  unsupported('暂不支持播放此类视频'),
+
+  /// A cached part this phone's player can't decode: its files hold one codec, so there is nothing to fall back to.
+  localUnplayable('本机无法播放这个缓存视频的编码'),
+
+  /// A cached part whose files are gone or can't be read.
+  localMissing('缓存文件已损坏或丢失，请删除后重新缓存');
 
   const PlaybackFailure(this.userMessage);
 
@@ -114,6 +120,27 @@ Future<(VideoView, int?)> resolveVideoLink(BiliClient client, VideoLink link,
 VideoView _viewOf(VideoDetail detail) =>
     VideoView(bvid: detail.bvid, aid: detail.aid, title: detail.title, owner: detail.owner.name, pages: detail.pages);
 
+/// A finished 离线缓存 part as the controller plays it: what the page shows of it, its two files, and its saved
+/// danmaku (none when [danmakuFolder] is null).
+@immutable
+final class LocalVideo {
+  const LocalVideo({
+    required this.view,
+    required this.page,
+    required this.files,
+    this.qualityName = '',
+    this.danmakuFolder,
+    this.danmakuSegments = 0,
+  });
+
+  final VideoView view;
+  final VideoPage page;
+  final LocalPlaybackRequest files;
+  final String qualityName;
+  final String? danmakuFolder;
+  final int danmakuSegments;
+}
+
 enum ItemFailure { format, network, unknown }
 
 /// When only AVPlayer's error log saw the failure (an expired URL's 403), the code is the HTTP status and the
@@ -139,7 +166,8 @@ enum ItemFailureReaction {
 
 /// Plays one video at a time on one player (port of PlaybackController.swift, the parts slice 1 needs):
 /// link → view → playurl → track choice → engine.prepare → player.load, with BTR and 直连, codec fallback,
-/// signed URL refresh, the local server check, stall and seek timing, and the stats overlay.
+/// signed URL refresh, the local server check, stall and seek timing, and the stats overlay. [openLocal] plays a
+/// 离线缓存 part from the phone instead: engine.prepareLocal → player.load, with no call to Bilibili at all.
 class PlaybackController extends ChangeNotifier {
   PlaybackController({
     required BiliClient client,
@@ -242,6 +270,9 @@ class PlaybackController extends ChangeNotifier {
 
   /// The last playurl answer's streams, so another codec can be chosen without asking again.
   Dash? _dash;
+
+  /// The cached part playing from the phone; null for everything Bilibili serves.
+  LocalVideo? _local;
   PreparedSource? _source;
   String? _token;
   Timer? _refreshTimer;
@@ -331,8 +362,11 @@ class PlaybackController extends ChangeNotifier {
 
   /// BTR failed in this playback and it went on direct.
   bool get fellBack => _fellBack;
-  PlaybackMode get activeMode => _fellBack ? PlaybackMode.direct : _mode;
-  String get modeLabel => _fellBack ? '直连（回退）' : _mode.label;
+  PlaybackMode get activeMode => _local != null ? PlaybackMode.local : (_fellBack ? PlaybackMode.direct : _mode);
+  String get modeLabel => _local != null ? PlaybackMode.local.label : (_fellBack ? '直连（回退）' : _mode.label);
+
+  /// Playing a 离线缓存 part from the phone ([openLocal]).
+  bool get isLocal => _local != null;
   VideoView? get video => _video;
   VideoPage? get page => _page;
   List<QualityOption> get qualities => _qualities;
@@ -340,8 +374,9 @@ class PlaybackController extends ChangeNotifier {
   /// The current part's playurl answer: its streams, for 缓存's size estimates.
   Dash? get dash => _dash;
 
-  /// The ceiling asked for; [playing] is the stream actually chosen.
-  int get selectedQuality => _selectedQuality;
+  /// The ceiling asked for; [playing] is the stream actually chosen. A cached part has only the quality it was cached
+  /// at.
+  int get selectedQuality => _local?.files.video.id ?? _selectedQuality;
   VideoCodec get codec => _codec;
   PlayingStream? get playing => _playing;
   bool get pictureInPicture => _pictureInPicture;
@@ -488,6 +523,74 @@ class PlaybackController extends ChangeNotifier {
     }, start: start);
   }
 
+  /// A 离线缓存 part from the phone, from [start] seconds: [find] hands over its files, or null when they are gone.
+  /// Nothing here asks Bilibili: no view, no playurl, no URL refresh, no direct fallback. The quality, codec and mode
+  /// can't change, and a codec the player refuses fails the playback, as the files hold no other.
+  Future<void> openLocal(Future<LocalVideo?> Function() find, {double start = 0}) async {
+    _opens += 1;
+    _clearVideo();
+    final current = _advance();
+    _phase = PlaybackPhase.loading;
+    _playWhenLoaded = true;
+    _error = null;
+    _playerFailure = null;
+    _notify();
+    try {
+      if (_engineClosed) {
+        await _replaceEngine();
+        if (current != _epoch) return;
+      }
+      final local = await find();
+      if (current != _epoch) return;
+      if (local == null) throw PlaybackFailure.localMissing;
+      _local = local;
+      _video = local.view;
+      _page = local.page;
+      final video = local.files.video;
+      _qualities = [QualityOption(id: video.id, name: local.qualityName)];
+      danmaku.loadLocal(
+        cid: local.page.cid,
+        durationMs: local.page.duration * 1000,
+        folder: local.danmakuFolder,
+        segments: local.danmakuSegments,
+      );
+      if (start > 0) danmaku.seeked((start * 1000).round());
+      _logger.info(LogCategory.player, 'open local', {
+        'cid': local.page.cid,
+        'quality': video.id,
+        'codecs': video.codecs,
+        'danmaku': local.danmakuFolder == null ? 0 : local.danmakuSegments,
+      });
+      _resetStart(autoplay: _playWhenLoaded);
+      await _beginLocal(start);
+    } catch (error, stack) {
+      if (current == _epoch) _fail(error, stack);
+    }
+  }
+
+  Future<void> _beginLocal(double time) async {
+    final local = _local!;
+    final current = _advance();
+    _phase = PlaybackPhase.loading;
+    _heldPosition = time;
+    _playing = null;
+    _notify();
+    try {
+      final choice = TrackChoice(video: local.files.video, audio: local.files.audio);
+      _choice = choice;
+      final playing = PlayingStream(choice.video);
+      _playing = playing;
+      if (choice.video.width > 0 && choice.video.height > 0) {
+        _videoSize = (width: choice.video.width, height: choice.video.height);
+      }
+      stats.value = stats.value.copyWith(stream: playing.line(qualityName: qualityName(choice.video.id)));
+      _notify();
+      await _prepareAndLoad(choice, time, current);
+    } catch (error, stack) {
+      await _handle(error, stack, time, current);
+    }
+  }
+
   /// Its playback closed: playback stops and nothing of it stays.
   void close() {
     _clearVideo();
@@ -501,6 +604,7 @@ class PlaybackController extends ChangeNotifier {
   /// The player UI reads the clock and the duration as soon as the next video is set, before its load resets them.
   void _clearVideo({bool keepSize = false}) {
     _stopPlayback();
+    _local = null;
     _video = null;
     _page = null;
     _detail = null;
@@ -816,6 +920,8 @@ class PlaybackController extends ChangeNotifier {
   }
 
   Future<void> _begin(double time) async {
+    // Every way back to a playurl call passes here; a cached part has none to make.
+    if (_local != null) return _beginLocal(time);
     final current = _advance();
     _cancelRefresh();
     _phase = PlaybackPhase.loading;
@@ -1025,9 +1131,12 @@ class PlaybackController extends ChangeNotifier {
     await _ensureServing();
     _ensureCurrent(current);
     final PreparedSource source;
+    final local = _local;
     try {
-      source = await _engine.prepare(PlaybackRequest(
-          choice: choice, mode: requested, mediaHeaders: BiliClient.mediaHeaders, startSeconds: time));
+      source = local != null
+          ? await _engine.prepareLocal(local.files)
+          : await _engine.prepare(PlaybackRequest(
+              choice: choice, mode: requested, mediaHeaders: BiliClient.mediaHeaders, startSeconds: time));
     } catch (error) {
       if (_isClosed(error)) throw _engineGone();
       final codec = error is PlaybackError && error.kind == PlaybackErrorKind.codecUnplayable;
@@ -1182,9 +1291,9 @@ class PlaybackController extends ChangeNotifier {
     }
   }
 
-  /// A user's pause survives a mode, quality or codec change.
+  /// A user's pause survives a mode, quality or codec change. A cached part has one stream in one mode.
   Future<void> _restart({required bool sameChoice}) async {
-    if (_page == null) return;
+    if (_page == null || _local != null) return;
     if (sameChoice && _choice != null && _token != null) {
       await _reload(_epoch);
       return;
@@ -1197,6 +1306,11 @@ class PlaybackController extends ChangeNotifier {
 
   Future<void> _handle(Object error, StackTrace stack, double time, int current) async {
     if (current != _epoch || error is _Stale) return;
+    if (_local != null) {
+      _logger.warn(LogCategory.player, 'local prepare failed', {'error': '$error'});
+      _fail(_localFailure(error), stack);
+      return;
+    }
     if (error is _Reroute) {
       await _chooseAgain(time);
       return;
@@ -1234,6 +1348,10 @@ class PlaybackController extends ChangeNotifier {
       'code': event.code ?? 0,
     });
     final time = currentSeconds;
+    if (_local != null) {
+      await _localItemFailed(failure, current);
+      return;
+    }
     final kind = TrackSelector.codecKind(choice.video);
     final source = _source;
     final unpatched = source != null && source.mode == PlaybackMode.direct && source.sourceEntry == 'hev1';
@@ -1262,6 +1380,29 @@ class PlaybackController extends ChangeNotifier {
         }
     }
   }
+
+  /// The files hold one codec, so a refusal ends it; anything else is the local server's, which is prepared again
+  /// once a minute at most.
+  Future<void> _localItemFailed(ItemFailure failure, int current) async {
+    if (failure == ItemFailure.format) {
+      _fail(PlaybackFailure.localUnplayable, StackTrace.current);
+      return;
+    }
+    if (!_claimNetworkRestart()) {
+      _fail(PlaybackFailure.unplayable, StackTrace.current);
+      return;
+    }
+    _logger.warn(LogCategory.player, 'local item failed, preparing again', {'at': currentSeconds});
+    await _reload(current);
+  }
+
+  /// What a cached part's failure tells the user: its codec, its files, or the local server.
+  static Object _localFailure(Object error) => switch (error) {
+        PlaybackError(kind: PlaybackErrorKind.codecUnplayable) => PlaybackFailure.localUnplayable,
+        PlaybackError(kind: PlaybackErrorKind.serverDown) => error,
+        PlaybackError() || FileSystemException() => PlaybackFailure.localMissing,
+        _ => error,
+      };
 
   Future<void> _fallBackToDirect(String reason, int current) async {
     final choice = _choice;
