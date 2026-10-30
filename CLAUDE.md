@@ -309,7 +309,23 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   runs it at once, and the update from (2) kept every download (resumed at 4.0, 5.4, 4.0 GB). But iOS ran ~30 ranges
   at once, each crawling: on a 2-minute trip 62 MB finished and 434 MB were thrown away unfinished. The background
   session now takes 3 connections per host (`httpMaximumConnectionsPerHost`), pieces stop growing at 128 MiB, and a
-  206 shorter than asked (2 of 43 came back -3) is written and listed as far as it goes (status -4).
+  206 shorter than asked (2 of 43 came back -3) is written and listed as far as it goes (status -4, its `received`
+  the bytes written). KaiC: no more one guess per build, the app finds the fastest way itself. iOS 26's continued
+  processing (`BGContinuedProcessingTask`, `ContinuedDownloads` in `OfflineHost.swift`, identifier
+  `com.kaichuan.bilifast.offline.continued` in Info.plist): asked for at 缓存, resume, 全部开始 and each return or
+  launch with downloads left (strategy fail); while it runs the app stays alive when it leaves and the engine keeps
+  downloading, under iOS's Live Activity (离线缓存, the one video's title or 还剩 N 个视频, progress in bytes every 2 s;
+  the iPad shows it in the foreground too). It ends when nothing is left; iOS ending it (time up or the user's ✕,
+  indistinguishable) while away falls back to a hand-off. Every trip away is a trial (`BackgroundTrials`,
+  `trials.json`, the open one in `trip.json` so a relaunch closes it): `continued` or a hand-off at 3×128, 2×64 or 6×32
+  (connections per host, each its own background session: `.offline`, `.offline.c2`, `.offline.c6`; MiB pieces).
+  Each arm is tried first (at most 3 long attempts), then the best mean MB/s of its last 5 scored trips, 15% explore
+  (5% once all have 5). Scored: 20 s or more, downloads not run out, not spoiled (nothing handed off, take-back
+  failed, a continued trip the app died in). A hand-off trial ends a running task only at hidden/paused, so a glance
+  at Control Center keeps it. Logs: `offline continued` (asked, refused with the error's domain and code, not started,
+  started, completed, ended with locked), `offline away` (arm, why), `offline away progress` (every 30 s on a
+  continued trip), `offline trip` (secs, gainedMb, mbps, wastedMb, allDone, scored, spoiled, handed, relaunched),
+  `offline trials` (each arm's scored/mean, best), `offline handed off` (arm, connections, fallback).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
@@ -528,7 +544,8 @@ Update this section when a slice ships: one short entry, and any rule it adds go
     loading TV every list and page uses (`lib/player_ui/player_loading.dart` is the player's).
   - Settings and stores are JSON files in the app's support folder (`player_prefs.json`, `recents.json`,
     `font.json`, `emotes_recent.json`, `search_history.json`, `node_memory.json`, `danmaku_settings.json`,
-    `codec_memory.json`, `log_server.json`, `me.json`, `history_outbox.json`); the log and the pictures (`images`) are in the caches folder.
+    `codec_memory.json`, `log_server.json`, `me.json`, `history_outbox.json`; 离线缓存's `library.json`, `trials.json` and
+    `trip.json` in `offline/`); the log and the pictures (`images`) are in the caches folder.
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`: `shared`, `devlog`,
   `danmaku`, `api`, `logic`, `dash_hls`, `local_http`, `engine`, and `bin/ripper_bench.dart`.
 - `ios/Runner/`: native Swift (player registry and host view, keychain, the login web view's cookies, device
@@ -702,6 +719,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - A control wrapped in `Semantics(excludeSemantics: true)` needs its own `onTap:` on the Semantics (`ChromeTap`'s
   pattern): excluding drops the GestureDetector's tap action, and VoiceOver and ghosthand then press nothing (slice
   12's space shipped that way to its first Windows check).
+- 离线缓存 in the background is chosen on the device from its own trials (`BackgroundTrials`), not by a build per
+  guess: a new way to try is a new arm, and the phone log's `offline trip` / `offline trials` lines say which wins.
+  Continued processing is asked for only around a user's action or a return with downloads left, never in a loop.
 - 离线缓存's files are KaiC's for good (KaiC: they outlive the video on Bilibili): only his delete removes a part, or
   launch removing a folder with no readable `entry.json`. Nothing kept names a signed address (streams are
   `withoutAddresses()`; addresses live in memory), and paths are kept relative, since every TestFlight update moves
