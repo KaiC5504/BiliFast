@@ -410,6 +410,7 @@ class DanmakuCapsule extends StatelessWidget {
     required this.text,
     required this.duration,
     this.height = PageTheme.capsuleHeight,
+    this.border = PageTheme.capsuleBorder,
   });
 
   final bool on;
@@ -420,6 +421,7 @@ class DanmakuCapsule extends StatelessWidget {
   final String text;
   final Duration duration;
   final double height;
+  final double border;
 
   static const _curve = Curves.easeOutCubic;
 
@@ -441,9 +443,9 @@ class DanmakuCapsule extends StatelessWidget {
       height: height,
       clipBehavior: Clip.antiAlias,
       decoration: const ShapeDecoration(color: BiliColors.softGrey, shape: StadiumBorder()),
-      foregroundDecoration: const ShapeDecoration(
+      foregroundDecoration: ShapeDecoration(
         shape: StadiumBorder(
-          side: BorderSide(color: BiliColors.divider, width: PageTheme.capsuleBorder),
+          side: BorderSide(color: BiliColors.divider, width: border),
         ),
       ),
       child: Row(

@@ -14,6 +14,7 @@ import '../../shared/theme.dart';
 import '../../video/page_tabs.dart' show DanmakuCapsule;
 import '../offline_library.dart';
 import '../offline_models.dart';
+import '../pages/offline_selector.dart';
 
 /// The finished parts the page lists, newest first as 离线缓存 does.
 List<OfflineItem> offlinePageItems(OfflineLibrary library) => [
@@ -21,7 +22,7 @@ List<OfflineItem> offlinePageItems(OfflineLibrary library) => [
     if (item.isDone) item,
 ];
 
-/// 78.4M, 9.6M, 1.2G: the page writes a part's size in MiB with one decimal and no B (158, 160).
+/// 78.4M, 9.6M, 1.2G: one decimal and no B (158, 160).
 String offlinePageSize(int bytes) {
   const mib = 1024 * 1024;
   if (bytes >= 1024 * mib) return '${(bytes / (1024 * mib)).toStringAsFixed(1)}G';
@@ -100,6 +101,7 @@ class OfflinePageHeader extends StatelessWidget {
                 text: danmakuClosed ? 'UP主已关闭弹幕' : (danmakuInputOpen ? '弹幕输入中' : '点我发弹幕'),
                 duration: still ? Duration.zero : const Duration(milliseconds: 250),
                 height: OfflinePageTheme.capsuleHeight,
+                border: OfflinePageTheme.capsuleBorder,
               ),
             ),
           ],
@@ -135,10 +137,11 @@ class OfflinePageList extends StatelessWidget {
   final ScrollController? controller;
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: library,
-    builder: (context, _) {
-      final items = offlinePageItems(library);
+  Widget build(BuildContext context) => LibrarySelector<List<OfflineItem>>(
+    library: library,
+    select: offlinePageItems,
+    equals: listEquals,
+    builder: (context, items) {
       final bottom = MediaQuery.paddingOf(context).bottom;
       return ColoredBox(
         color: BiliColors.card,
@@ -509,8 +512,11 @@ class _BarsPainter extends CustomPainter {
       } else {
         height = OfflinePageTheme.barRest[i];
       }
-      canvas.drawRect(
-        Rect.fromLTWH(i * OfflinePageTheme.barPitch, size.height - height, OfflinePageTheme.barWidth, height),
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(i * OfflinePageTheme.barPitch, size.height - height, OfflinePageTheme.barWidth, height),
+          const Radius.circular(OfflinePageTheme.barWidth / 2),
+        ),
         paint,
       );
     }

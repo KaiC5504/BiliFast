@@ -1,3 +1,4 @@
+import 'package:bili_core/api.dart' show Dash;
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/offline/fake_offline_library.dart';
 import 'package:bilifast/offline/offline_models.dart';
@@ -56,6 +57,39 @@ void main() {
       final rig = await pumpSheetRig(tester, session: singleVideo(vip: false));
       await openSheet(tester, rig, PlayerPanel.download);
       expect(find.text('1080P 高清'), findsOneWidget);
+    });
+
+    testWidgets('opens on the best stream the account gets, picked again when the streams arrive', (tester) async {
+      // Logged out: the list names 1080P, the streams stop at 480P.
+      final session = singleVideo(vip: false)..dash = null;
+      final rig = await pumpSheetRig(tester, session: session);
+      await openSheet(tester, rig, PlayerPanel.download);
+      expect(find.text('1080P 高清'), findsOneWidget, reason: 'the list decides while the streams are unknown');
+
+      final low = Dash(duration: 383, video: [dash.video[4]], audio: dash.audio);
+      session
+        ..dash = low
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('480P 标清'), findsOneWidget);
+      final size = estimateBytes(low, quality: 32, seconds: 383)!;
+      expect(find.text('约 ${formatBytes(size)}'), findsOneWidget);
+    });
+
+    testWidgets("the streams arriving keep the user's pick", (tester) async {
+      final session = singleVideo()..dash = null;
+      final rig = await pumpSheetRig(tester, session: session);
+      await openSheet(tester, rig, PlayerPanel.download);
+      await tester.tap(find.byKey(const ValueKey('download-quality')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('download-quality-64')));
+      await tester.pumpAndSettle();
+
+      session
+        ..dash = dash
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('720P 准高清'), findsOneWidget);
     });
 
     testWidgets('the row shows its size at the chosen quality; 画质 lists every size and a pick changes both', (

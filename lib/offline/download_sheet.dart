@@ -40,6 +40,40 @@ class _DownloadSheetState extends State<DownloadSheet> {
 
   OfflineLibrary? get _library => context.getInheritedWidgetOfExactType<AppScope>()?.services.offline;
 
+  /// What the default quality was picked from; the session notifies far more often than these change.
+  late Object? _streams = widget.ui.session.dash;
+  late Object _offered = widget.ui.session.qualities;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.ui.session.addListener(_sessionChanged);
+  }
+
+  @override
+  void didUpdateWidget(DownloadSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.ui.session != widget.ui.session) {
+      oldWidget.ui.session.removeListener(_sessionChanged);
+      widget.ui.session.addListener(_sessionChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.ui.session.removeListener(_sessionChanged);
+    super.dispose();
+  }
+
+  void _sessionChanged() {
+    final session = widget.ui.session;
+    if (identical(session.dash, _streams) && identical(session.qualities, _offered)) return;
+    setState(() {
+      _streams = session.dash;
+      _offered = session.qualities;
+    });
+  }
+
   void _revealCurrent() {
     if (_revealed) return;
     _revealed = true;
@@ -109,7 +143,8 @@ class _DownloadSheetState extends State<DownloadSheet> {
   Widget build(BuildContext context) {
     final library = _library;
     if (library == null) return const SizedBox.shrink();
-    // Landscape's side panel scrolls its content; 缓存 is portrait only and closes there (PanelLayer).
+    // Landscape's side panel lays its content out with unbounded height, where this Column can't size: draw nothing
+    // there. 缓存 is portrait only, and PanelLayer closes it on the turn.
     return LayoutBuilder(
       builder: (context, constraints) => !constraints.hasBoundedHeight
           ? const SizedBox.shrink()
@@ -282,7 +317,11 @@ class _Bar extends StatelessWidget {
 
   static const _button = TextStyle(fontSize: DownloadSheetTheme.barButtonText, color: BiliColors.text);
   static const _label = TextStyle(fontSize: DownloadSheetTheme.barSpaceText, color: BiliColors.secondaryText);
-  static const _value = TextStyle(fontSize: DownloadSheetTheme.barSpaceText, color: BiliColors.text);
+  static const _value = TextStyle(
+    fontSize: DownloadSheetTheme.barSpaceValueText,
+    fontWeight: DownloadSheetTheme.barSpaceValueWeight,
+    color: BiliColors.text,
+  );
 
   Widget _half(BuildContext context, String key, String title, VoidCallback onTap, {bool dot = false}) => Expanded(
     child: SheetTap(

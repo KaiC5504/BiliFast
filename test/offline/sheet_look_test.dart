@@ -17,6 +17,7 @@ void main() {
   final shots = Platform.environment['BILIFAST_SHOTS'];
 
   Future<void> shoot(WidgetTester tester, String name) async {
+    await tester.runAsync(loadIconFonts);
     await tester.runAsync(() async {
       final context = tester.element(find.byKey(SheetRig.shot));
       for (final asset in const [
@@ -83,6 +84,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('download-quality')));
     await tester.pumpAndSettle();
     await shoot(tester, '142-ours');
+    final sizes = find.byKey(const ValueKey('download-quality-size'));
+    expect(sizes, findsWidgets);
+    final card = tester.getRect(find.byKey(const ValueKey('download-quality-sheet')));
+    for (final element in sizes.evaluate()) {
+      expect(tester.getRect(find.byWidget(element.widget)).right, closeTo(card.right - 32, 0.01));
+    }
   });
 
   testWidgets('153: 缓存 for a video cached', (tester) async {

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart' show QualityNames, TimeFormat;
 import 'package:flutter/material.dart' show Icons;
@@ -644,18 +646,78 @@ class _Cells<T> extends StatelessWidget {
 }
 
 /// 倍速's values in a strip that scrolls sideways, opening at its fast end with 0.5 out of sight and 0.75 fading under
-/// the label (42, 43).
-class _SpeedStrip extends StatelessWidget {
+/// the label (42, 43). A slower speed chosen would be off screen there, so the strip then opens with it in view and
+/// no value cut at either edge.
+class _SpeedStrip extends StatefulWidget {
   const _SpeedStrip({required this.rate, required this.onSelect});
 
   final double rate;
   final ValueChanged<double> onSelect;
 
   @override
+  State<_SpeedStrip> createState() => _SpeedStripState();
+}
+
+class _SpeedStripState extends State<_SpeedStrip> {
+  ScrollController? _scroll;
+
+  @override
+  void dispose() {
+    _scroll?.dispose();
+    super.dispose();
+  }
+
+  /// The offset from the fast end the strip opens at in a viewport [width] wide.
+  double _opening(BuildContext context, List<(double, String)> speeds, double width) {
+    const cell = DownloadSheetTheme.speedCell;
+    final chosen = speeds.indexWhere((speed) => speed.$1 == widget.rate);
+    if (chosen < 0) return 0;
+    final scaler = MediaQuery.textScalerOf(context);
+    final labels = [
+      for (final (index, (value, label)) in speeds.indexed) _span(label, value == widget.rate, index, scaler),
+    ];
+    final clear = width - DownloadSheetTheme.speedFade;
+    bool shows(double offset, (double, double) label) => label.$1 >= offset && label.$2 <= offset + clear;
+    if (shows(0, labels[chosen])) return 0;
+    bool cuts(double edge, (double, double) label) => label.$1 < edge && edge < label.$2;
+    final extent = math.max(0.0, speeds.length * cell - width);
+    final centred = ((chosen + 0.5) * cell - width / 2).clamp(0.0, extent);
+    // Fewest values cut, then nearest to the chosen one centred.
+    var best = centred;
+    var bestScore = (cut: double.infinity, off: double.infinity);
+    for (var offset = 0.0; offset <= extent; offset += 0.5) {
+      if (!shows(offset, labels[chosen])) continue;
+      final cut = labels.where((label) => cuts(offset, label) || cuts(offset + clear, label)).length.toDouble();
+      final off = (offset - centred).abs();
+      if (cut < bestScore.cut || (cut == bestScore.cut && off < bestScore.off)) {
+        best = offset;
+        bestScore = (cut: cut, off: off);
+      }
+    }
+    return best;
+  }
+
+  /// Where the [index]th cell's label runs, measured from the fast end.
+  (double, double) _span(String label, bool chosen, int index, TextScaler scaler) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: _cellStyle(chosen)),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    )..layout();
+    final centre = (index + 0.5) * DownloadSheetTheme.speedCell;
+    final half = painter.width / 2;
+    painter.dispose();
+    return (centre - half, centre + half);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final speeds = PortraitMoreSheet.speeds.reversed.toList();
     return LayoutBuilder(
       builder: (context, constraints) {
+        final scroll = _scroll ??= ScrollController(
+          initialScrollOffset: _opening(context, speeds, constraints.maxWidth),
+        );
         final fade = constraints.maxWidth <= 0 ? 0.0 : DownloadSheetTheme.speedFade / constraints.maxWidth;
         return ShaderMask(
           blendMode: BlendMode.dstIn,
@@ -665,6 +727,7 @@ class _SpeedStrip extends StatelessWidget {
           ).createShader(bounds),
           child: ListView(
             key: const ValueKey('more-speeds'),
+            controller: scroll,
             primary: false,
             reverse: true,
             scrollDirection: Axis.horizontal,
@@ -672,8 +735,8 @@ class _SpeedStrip extends StatelessWidget {
               for (final (index, (value, label)) in speeds.indexed)
                 SheetTap(
                   label: '$label倍速',
-                  selected: value == rate,
-                  onTap: () => onSelect(value),
+                  selected: value == widget.rate,
+                  onTap: () => widget.onSelect(value),
                   child: SizedBox(
                     width: DownloadSheetTheme.speedCell,
                     child: Stack(
@@ -683,7 +746,7 @@ class _SpeedStrip extends StatelessWidget {
                         Center(
                           child: AnimatedDefaultTextStyle(
                             duration: const Duration(milliseconds: 160),
-                            style: _cellStyle(value == rate),
+                            style: _cellStyle(value == widget.rate),
                             child: Text(label, maxLines: 1),
                           ),
                         ),

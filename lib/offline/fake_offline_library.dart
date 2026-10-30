@@ -79,7 +79,6 @@ class FakeOfflineLibrary extends OfflineLibrary {
   final DateTime Function() _now;
   final _items = <int, OfflineItem>{};
 
-  /// What [freeBytes] answers.
   int? free;
   int _concurrency = 1;
   bool _unseen = false;

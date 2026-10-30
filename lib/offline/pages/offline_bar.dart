@@ -31,7 +31,7 @@ final class OfflineBarLook {
   final bool lightStatus;
 }
 
-/// ‹, the title and the actions on the right: 🔍 and ☰, or 完成 in edit mode, where ‹ goes (149).
+/// ‹, the title and the actions on the right: 🔍 and ☰; in edit mode ‹ goes and only 完成 is on the right (149).
 class OfflineBar extends StatelessWidget {
   const OfflineBar({
     super.key,

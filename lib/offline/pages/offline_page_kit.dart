@@ -20,7 +20,8 @@ typedef OfflineOpener = void Function(BuildContext context, OfflineItem item);
 void openItemPage(BuildContext context, OfflineItem item) => unawaited(openOfflinePage(context, item));
 
 /// Whether 2个 and 3个 can be picked (147): a 大会员, or an account not yet checked (the phone may be offline, which is
-/// when this list matters most; the library holds the downloads to what Bilibili serves).
+/// when this list matters most). Only this picker checks: the library runs whatever count it was given, up to 3, so
+/// one kept from a 大会员 login stays after the account changes.
 bool offlineVip(AppEnvironment environment) => switch (environment.account) {
   LoggedIn(:final vip) => vip,
   AccountUnknown() => true,
@@ -122,7 +123,6 @@ mixin OfflineEditing<W extends StatefulWidget> on State<W> {
     });
   }
 
-  /// A row's tap in edit mode.
   void toggle(String key, List<int> cids) => selection.toggle(key, cids);
 
   Widget editBar() => ListenableBuilder(
