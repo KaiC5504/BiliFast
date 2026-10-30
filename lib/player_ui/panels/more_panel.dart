@@ -12,7 +12,82 @@ import 'panel_parts.dart';
 
 enum _Page { root, timer, fit }
 
-enum _Sleep { off, minutes15, minutes30, minutes60, custom }
+enum SleepChoice { off, minutes15, minutes30, minutes60, custom }
+
+/// What ⋮'s rows do, the same in landscape's panel and the portrait sheet: the calls on the session, the toasts and
+/// when ⋮ closes.
+class MoreRows {
+  const MoreRows({required this.session, required this.toast, required this.close});
+
+  final PlayerSession session;
+  final ValueChanged<String> toast;
+
+  /// Closes ⋮ if it is still the open panel.
+  final VoidCallback close;
+
+  static SleepChoice sleepChoice(Duration? timer) => switch (timer?.inMinutes) {
+    null => SleepChoice.off,
+    15 => SleepChoice.minutes15,
+    30 => SleepChoice.minutes30,
+    60 => SleepChoice.minutes60,
+    _ => SleepChoice.custom,
+  };
+
+  /// 定时关闭's choices; 自定义 reads as the minutes set once it is.
+  static List<(SleepChoice, String)> sleepItems(Duration? timer) {
+    final custom = sleepChoice(timer) == SleepChoice.custom ? timer?.inMinutes : null;
+    return [
+      (SleepChoice.off, '不开启'),
+      (SleepChoice.minutes15, '15:00'),
+      (SleepChoice.minutes30, '30:00'),
+      (SleepChoice.minutes60, '60:00'),
+      (SleepChoice.custom, custom == null ? '自定义' : '$custom分钟'),
+    ];
+  }
+
+  /// Sets a preset; false for 自定义, whose wheel the caller opens.
+  bool chooseSleep(SleepChoice choice) {
+    switch (choice) {
+      case SleepChoice.off:
+        session.setSleepTimer(null);
+      case SleepChoice.minutes15:
+        session.setSleepTimer(const Duration(minutes: 15));
+      case SleepChoice.minutes30:
+        session.setSleepTimer(const Duration(minutes: 30));
+      case SleepChoice.minutes60:
+        session.setSleepTimer(const Duration(minutes: 60));
+      case SleepChoice.custom:
+        return false;
+    }
+    return true;
+  }
+
+  /// Where the 自定义 wheel opens: the minutes set, else [fallback].
+  int customMinutes(int fallback) => (session.sleepTimer?.inMinutes ?? fallback).clamp(1, MorePanel.maxCustomMinutes);
+
+  void setCustomSleep(int minutes) => session.setSleepTimer(Duration(minutes: minutes));
+
+  Future<void> watchLater() async {
+    final result = await session.watchLater();
+    if (result.message.isNotEmpty) toast(result.message);
+    if (result.ok) close();
+  }
+
+  void pictureInPicture() {
+    toastFailure(session.startPictureInPicture(), toast);
+    close();
+  }
+
+  void report(Future<String?> result) => toastFailure(result, toast);
+
+  void setMirrored(bool on) => report(session.setMirrored(on));
+
+  void setFit(FitMode fit) => report(session.setFit(fit));
+
+  void setBtr(bool on) => report(session.setBtr(on));
+
+  void setRate(double rate) => report(session.setRate(rate));
+}
 
 /// ⋮ (20, 21): the official panel's rows that make sense here, each where 20 and 21 have it with the others' places
 /// left empty, plus a 测试 card for BTR and the stats overlay in dev builds (port of BiliNative `MorePanel.swift`).
@@ -50,44 +125,15 @@ class _MorePanelState extends State<MorePanel> {
 
   PlayerSession get _session => widget.session;
 
-  static _Sleep _sleepChoice(Duration? timer) => switch (timer?.inMinutes) {
-    null => _Sleep.off,
-    15 => _Sleep.minutes15,
-    30 => _Sleep.minutes30,
-    60 => _Sleep.minutes60,
-    _ => _Sleep.custom,
-  };
+  MoreRows get _rows => MoreRows(session: widget.session, toast: widget.toast, close: widget.close);
 
-  void _chooseSleep(_Sleep choice) {
-    switch (choice) {
-      case _Sleep.off:
-        _session.setSleepTimer(null);
-      case _Sleep.minutes15:
-        _session.setSleepTimer(const Duration(minutes: 15));
-      case _Sleep.minutes30:
-        _session.setSleepTimer(const Duration(minutes: 30));
-      case _Sleep.minutes60:
-        _session.setSleepTimer(const Duration(minutes: 60));
-      case _Sleep.custom:
-        setState(() {
-          _customMinutes = (_session.sleepTimer?.inMinutes ?? _customMinutes).clamp(1, MorePanel.maxCustomMinutes);
-          _page = _Page.timer;
-        });
-    }
+  void _chooseSleep(SleepChoice choice) {
+    if (_rows.chooseSleep(choice)) return;
+    setState(() {
+      _customMinutes = _rows.customMinutes(_customMinutes);
+      _page = _Page.timer;
+    });
   }
-
-  Future<void> _watchLater() async {
-    final result = await _session.watchLater();
-    if (result.message.isNotEmpty) widget.toast(result.message);
-    if (result.ok) widget.close();
-  }
-
-  void _pictureInPicture() {
-    toastFailure(_session.startPictureInPicture(), widget.toast);
-    widget.close();
-  }
-
-  void _report(Future<String?> result) => toastFailure(result, widget.toast);
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
@@ -111,14 +157,7 @@ class _MorePanelState extends State<MorePanel> {
 
   Widget _root() {
     final timer = _session.sleepTimer;
-    final customMinutes = _sleepChoice(timer) == _Sleep.custom ? timer?.inMinutes : null;
-    final sleepItems = <(_Sleep, String)>[
-      (_Sleep.off, '不开启'),
-      (_Sleep.minutes15, '15:00'),
-      (_Sleep.minutes30, '30:00'),
-      (_Sleep.minutes60, '60:00'),
-      (_Sleep.custom, customMinutes == null ? '自定义' : '$customMinutes分钟'),
-    ];
+    final rows = _rows;
     return Padding(
       padding: const EdgeInsets.only(top: BiliMetrics.panelTop),
       child: Column(
@@ -133,11 +172,11 @@ class _MorePanelState extends State<MorePanel> {
                 children: [
                   // 听视频.
                   const SizedBox(width: BiliMetrics.panelActionSize),
-                  _ActionButton(glyph: PanelGlyphKind.watchLater, title: '稍后再看', onTap: _watchLater),
+                  _ActionButton(glyph: PanelGlyphKind.watchLater, title: '稍后再看', onTap: rows.watchLater),
                   _ActionButton(
                     glyph: PanelGlyphKind.pictureInPicture,
                     title: '小窗播放',
-                    onTap: _session.pictureInPictureSupported ? _pictureInPicture : null,
+                    onTap: _session.pictureInPictureSupported ? rows.pictureInPicture : null,
                   ),
                   // 投屏.
                   const SizedBox(width: BiliMetrics.panelActionSize),
@@ -170,7 +209,11 @@ class _MorePanelState extends State<MorePanel> {
               children: [
                 SizedBox(
                   height: BiliMetrics.panelRowHeight,
-                  child: PanelSegments(items: sleepItems, selected: _sleepChoice(timer), onSelect: _chooseSleep),
+                  child: PanelSegments(
+                    items: MoreRows.sleepItems(timer),
+                    selected: MoreRows.sleepChoice(timer),
+                    onSelect: _chooseSleep,
+                  ),
                 ),
               ],
             ),
@@ -231,7 +274,7 @@ class _MorePanelState extends State<MorePanel> {
                   icon: const PanelGlyph(PanelGlyphKind.mirror),
                   title: '镜像翻转',
                   value: _session.mirrored,
-                  onChanged: (on) => _report(_session.setMirrored(on)),
+                  onChanged: rows.setMirrored,
                 ),
                 // 后台听视频.
                 const PanelBlankRow(),
@@ -267,7 +310,7 @@ class _MorePanelState extends State<MorePanel> {
                     icon: const Icon(Icons.bolt, size: BiliMetrics.panelRowIcon, color: BiliColors.panelText),
                     title: 'BTR 加速',
                     value: _session.btr,
-                    onChanged: (on) => _report(_session.setBtr(on)),
+                    onChanged: rows.setBtr,
                   ),
                   PanelToggleRow(
                     icon: const Icon(Icons.bar_chart, size: BiliMetrics.panelRowIcon, color: BiliColors.panelText),
@@ -290,13 +333,13 @@ class _MorePanelState extends State<MorePanel> {
     header: PanelHeader(title: '自定义定时关闭', back: () => setState(() => _page = _Page.root)),
     spacing: BiliMetrics.gutter,
     children: [
-      _SleepWheel(initialMinutes: _customMinutes, onChanged: (minutes) => _customMinutes = minutes),
+      SleepWheel(initialMinutes: _customMinutes, onChanged: (minutes) => _customMinutes = minutes),
       Semantics(
         button: true,
         child: PanelPressable(
           radius: BiliMetrics.panelButtonHeight / 2,
           onTap: () {
-            _session.setSleepTimer(Duration(minutes: _customMinutes));
+            _rows.setCustomSleep(_customMinutes);
             setState(() => _page = _Page.root);
           },
           child: Container(
@@ -323,7 +366,7 @@ class _MorePanelState extends State<MorePanel> {
             title: mode.label,
             selected: _session.fit == mode,
             onTap: () {
-              _report(_session.setFit(mode));
+              _rows.setFit(mode);
               setState(() => _page = _Page.root);
             },
           ),
@@ -332,18 +375,19 @@ class _MorePanelState extends State<MorePanel> {
   );
 }
 
-/// The 自定义 wheel, which owns its scroll controller for as long as the page shows.
-class _SleepWheel extends StatefulWidget {
-  const _SleepWheel({required this.initialMinutes, required this.onChanged});
+/// The 自定义 wheel, which owns its scroll controller for as long as the page shows; [light] for the portrait sheet.
+class SleepWheel extends StatefulWidget {
+  const SleepWheel({super.key, required this.initialMinutes, required this.onChanged, this.light = false});
 
   final int initialMinutes;
   final ValueChanged<int> onChanged;
+  final bool light;
 
   @override
-  State<_SleepWheel> createState() => _SleepWheelState();
+  State<SleepWheel> createState() => _SleepWheelState();
 }
 
-class _SleepWheelState extends State<_SleepWheel> {
+class _SleepWheelState extends State<SleepWheel> {
   late final _controller = FixedExtentScrollController(initialItem: widget.initialMinutes - 1);
 
   @override
@@ -352,11 +396,11 @@ class _SleepWheelState extends State<_SleepWheel> {
     super.dispose();
   }
 
-  static TextStyle get _style => TextStyle(
+  TextStyle get _style => TextStyle(
     fontFamily: BiliFonts.family,
     fontFamilyFallback: BiliFonts.fallback,
     fontSize: BiliMetrics.bodyText,
-    color: BiliColors.panelText,
+    color: widget.light ? BiliColors.text : BiliColors.panelText,
   );
 
   @override
@@ -364,7 +408,7 @@ class _SleepWheelState extends State<_SleepWheel> {
     height: BiliMetrics.panelWheelHeight,
     child: CupertinoTheme(
       data: CupertinoThemeData(
-        brightness: Brightness.dark,
+        brightness: widget.light ? Brightness.light : Brightness.dark,
         textTheme: CupertinoTextThemeData(pickerTextStyle: _style),
       ),
       child: CupertinoPicker(

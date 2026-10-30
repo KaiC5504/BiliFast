@@ -12,6 +12,7 @@ import 'episodes_panel.dart';
 import 'more_panel.dart';
 import 'panel_controller.dart';
 import 'panel_parts.dart';
+import 'portrait_more_sheet.dart';
 import '../../danmaku/block_words_view.dart';
 import '../../danmaku/danmaku_list_view.dart';
 import 'danmaku_settings_panel.dart';
@@ -77,9 +78,12 @@ final class PanelFrame {
       sheetHeight: BiliMetrics.panelSpeedSheetHeight,
       column: true,
     ),
-    PlayerPanel.more => const PanelFrame(
+    // Portrait's ⋮ is the light sheet of 42 and 43, and 缓存 takes its place in the same frame.
+    PlayerPanel.more || PlayerPanel.download => const PanelFrame(
       width: BiliMetrics.panelMoreWidth,
-      sheetHeight: BiliMetrics.panelMoreSheetHeight,
+      sheetHeight: DownloadSheetTheme.verticalHeight,
+      light: true,
+      sheetColor: DownloadSheetTheme.sheet,
     ),
     PlayerPanel.episodes => const PanelFrame(
       width: BiliMetrics.panelWidth,
@@ -96,11 +100,6 @@ final class PanelFrame {
     ),
     PlayerPanel.blockWords => const PanelFrame(width: 1, sheetHeight: 1, full: true),
     PlayerPanel.danmakuList => const PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
-    PlayerPanel.download => const PanelFrame(
-      width: BiliMetrics.panelWidth,
-      sheetHeight: BiliMetrics.panelSheetHeight,
-      light: true,
-    ),
   };
 
   /// Full screen on the iPad (ipad/10-13): every strip hard-edged and as wide in points sideways as upright. 选集 and
@@ -264,6 +263,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
   /// A confirm the open panel asked for, over everything; it goes with the panel.
   final _confirm = ValueNotifier<PanelConfirm?>(null);
 
+  /// A layer the open panel put over the whole page (缓存's 画质 picker); it goes with the panel.
+  final _cover = ValueNotifier<Widget?>(null);
+
   /// Whether the last build was the iPad's full screen, for comparing frames outside a build.
   bool _padStrip = false;
 
@@ -307,6 +309,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     _dragBack.dispose();
     _drag.dispose();
     _confirm.dispose();
+    _cover.dispose();
     super.dispose();
   }
 
@@ -315,17 +318,21 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
   }
 
   /// 添加屏蔽词 and 当前弹幕列表 are laid out for landscape only; turned upright they give way to 弹幕设置's sheet.
+  /// 缓存 is portrait only, as landscape's ⋮ (20, 21) has no way to it.
   void _presentationChanged() {
     final panels = widget.ui.panels;
-    if (widget.ui.presentation != Presentation.landscape &&
-        (panels.value == PlayerPanel.blockWords || panels.value == PlayerPanel.danmakuList)) {
+    final landscape = widget.ui.presentation == Presentation.landscape;
+    if (!landscape && (panels.value == PlayerPanel.blockWords || panels.value == PlayerPanel.danmakuList)) {
       panels.open(PlayerPanel.danmakuSettings);
+    } else if (landscape && panels.value == PlayerPanel.download) {
+      panels.close();
     }
     _rebuild();
   }
 
   void _panelChanged() {
     _confirm.value = null;
+    _cover.value = null;
     final next = widget.ui.panels.value;
     if (next == null) {
       if (_shown == null) return;
@@ -413,6 +420,12 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                     _side(size, insets, frame, content),
                   Positioned.fill(
                     child: ValueListenableBuilder(
+                      valueListenable: _cover,
+                      builder: (context, cover, _) => cover ?? const SizedBox.shrink(),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: ValueListenableBuilder(
                       valueListenable: _confirm,
                       builder: (context, request, _) => AnimatedSwitcher(
                         duration: MediaQuery.disableAnimationsOf(context)
@@ -463,6 +476,11 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               close: _close,
             ),
             PlayerPanel.speed => SpeedPanel(session: session, toast: _toast, close: _close),
+            PlayerPanel.more when light => PortraitMoreSheet(
+              ui: widget.ui,
+              toast: _toast,
+              close: () => _closeIf(PlayerPanel.more),
+            ),
             PlayerPanel.more => MorePanel(
               session: session,
               toast: _toast,
@@ -497,7 +515,12 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               back: () => widget.ui.panels.open(PlayerPanel.danmakuSettings),
               close: _close,
             ),
-            PlayerPanel.download => DownloadSheet(ui: widget.ui, toast: _toast, close: _close),
+            PlayerPanel.download => DownloadSheet(
+              ui: widget.ui,
+              toast: _toast,
+              close: _close,
+              cover: (layer) => _cover.value = layer,
+            ),
           },
         ),
       ),

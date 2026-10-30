@@ -27,7 +27,15 @@ enum PanelGlyphKind {
   views(Size(BiliMetrics.sheetCountGlyphWidth, BiliMetrics.sheetCountGlyphHeight)),
   danmaku(Size(BiliMetrics.sheetCountGlyphWidth, BiliMetrics.sheetCountGlyphHeight)),
   order(Size(BiliMetrics.sheetOrderGlyphWidth, BiliMetrics.sheetOrderGlyphHeight)),
-  playing(Size(BiliMetrics.sheetPlayingGlyphWidth, BiliMetrics.sheetPlayingGlyphHeight));
+  playing(Size(BiliMetrics.sheetPlayingGlyphWidth, BiliMetrics.sheetPlayingGlyphHeight)),
+
+  /// The portrait ⋮ sheet's own rows (42, 43); the APK's icons for them aren't the iPhone's.
+  speed(Size(DownloadSheetTheme.speedGlyphWidth, DownloadSheetTheme.speedGlyphHeight)),
+  timer(Size(DownloadSheetTheme.timerGlyphWidth, DownloadSheetTheme.timerGlyphHeight)),
+  listen(Size(DownloadSheetTheme.listenGlyphWidth, DownloadSheetTheme.listenGlyphHeight)),
+  subtitle(Size(DownloadSheetTheme.subtitleGlyphWidth, DownloadSheetTheme.subtitleGlyphHeight)),
+  quality(Size.square(DownloadSheetTheme.qualityGlyph)),
+  gesture(Size.square(DownloadSheetTheme.gestureGlyph));
 
   const PanelGlyphKind(this.size);
 
@@ -109,7 +117,134 @@ class _GlyphPainter extends CustomPainter {
             paint,
           );
         }
+      case PanelGlyphKind.speed:
+        _speed(canvas);
+      case PanelGlyphKind.timer:
+        _timer(canvas);
+      case PanelGlyphKind.listen:
+        _listen(canvas);
+      case PanelGlyphKind.subtitle:
+        _subtitle(canvas, size);
+      case PanelGlyphKind.quality:
+        _quality(canvas, size);
+      case PanelGlyphKind.gesture:
+        _gesture(canvas);
     }
+  }
+
+  /// Two outlined play triangles, the second's back at the first's tip.
+  void _speed(Canvas canvas) {
+    final paint = _line(DownloadSheetTheme.glyphStroke);
+    for (final left in const [0.6, 8.3]) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(left, 0.7)
+          ..lineTo(left + 7.4, 5.5)
+          ..lineTo(left, 10.3)
+          ..close(),
+        paint,
+      );
+    }
+  }
+
+  /// A power sign whose ring gives way at the bottom right to a small clock.
+  void _timer(Canvas canvas) {
+    final paint = _line(DownloadSheetTheme.glyphStroke);
+    double rad(double degrees) => degrees * math.pi / 180;
+    final ring = Rect.fromCircle(center: const Offset(7.7, 9.0), radius: 6.9);
+    canvas.drawArc(ring, rad(-68), rad(60), false, paint);
+    canvas.drawArc(ring, rad(94), rad(153), false, paint);
+    canvas.drawLine(const Offset(7.6, 0.75), const Offset(7.6, 7.4), paint);
+    canvas.drawCircle(const Offset(12.7, 13.5), 3.55, paint);
+    canvas.drawLine(const Offset(12.55, 11.9), const Offset(13.5, 14.0), paint);
+  }
+
+  /// Headphones over a pulse.
+  void _listen(Canvas canvas) {
+    final paint = _line(DownloadSheetTheme.glyphStroke);
+    const left = 0.75, right = 15.25, centre = 8.0, cupTop = 8.2, bottom = 14.3, inner = 3.9, r = 1.6;
+    canvas.drawPath(
+      Path()
+        ..moveTo(left, bottom - r)
+        ..lineTo(left, centre)
+        ..arcToPoint(const Offset(right, centre), radius: const Radius.circular((right - left) / 2))
+        ..lineTo(right, bottom - r),
+      paint,
+    );
+    for (final (outer, inside) in const [(left, inner), (right, right - (inner - left))]) {
+      final sign = inside > outer ? 1.0 : -1.0;
+      canvas.drawPath(
+        Path()
+          ..moveTo(outer, cupTop)
+          ..lineTo(inside, cupTop)
+          ..lineTo(inside, bottom - r)
+          ..arcToPoint(Offset(inside - sign * r, bottom), radius: const Radius.circular(r), clockwise: sign > 0)
+          ..lineTo(outer + sign * r, bottom)
+          ..arcToPoint(Offset(outer, bottom - r), radius: const Radius.circular(r), clockwise: sign > 0),
+        paint,
+      );
+    }
+    canvas.drawPath(
+      Path()
+        ..moveTo(4.4, 8.0)
+        ..lineTo(5.6, 8.0)
+        ..lineTo(6.8, 5.7)
+        ..lineTo(8.8, 10.0)
+        ..lineTo(9.8, 8.0)
+        ..lineTo(11.4, 8.0),
+      paint,
+    );
+  }
+
+  /// A rounded screen with a thick bar near its bottom.
+  void _subtitle(Canvas canvas, Size size) {
+    const half = DownloadSheetTheme.glyphStroke / 2;
+    canvas.drawRRect(
+      RRect.fromLTRBR(half, half, size.width - half, size.height - half, const Radius.circular(3)),
+      _line(DownloadSheetTheme.glyphStroke),
+    );
+    canvas.drawLine(const Offset(3.6, 10), Offset(size.width - 3.6, 10), _line(1.9));
+  }
+
+  /// A circle split down the middle, its right half hatched.
+  void _quality(Canvas canvas, Size size) {
+    final paint = _line(DownloadSheetTheme.glyphStroke);
+    final centre = size.center(Offset.zero);
+    final r = size.width / 2 - DownloadSheetTheme.glyphStroke / 2;
+    canvas.drawCircle(centre, r, paint);
+    canvas.drawLine(Offset(centre.dx, centre.dy - r), Offset(centre.dx, centre.dy + r), paint);
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: centre, radius: r)));
+    canvas.clipRect(Rect.fromLTRB(centre.dx, 0, size.width, size.height));
+    final hatch = _line(1.0)..strokeCap = StrokeCap.butt;
+    for (var at = -1.0; at < 5; at++) {
+      final y = 3.4 * at + 2;
+      canvas.drawLine(Offset(centre.dx, y + 8), Offset(size.width, y), hatch);
+    }
+    canvas.restore();
+  }
+
+  /// A hand tapping with its forefinger, a ring over the fingertip.
+  void _gesture(Canvas canvas) {
+    final paint = _line(DownloadSheetTheme.glyphStroke);
+    double rad(double degrees) => degrees * math.pi / 180;
+    canvas.drawArc(Rect.fromCircle(center: const Offset(4.4, 4.6), radius: 3.6), rad(155), rad(175), false, paint);
+    canvas.drawPath(
+      Path()
+        ..moveTo(7.6, 13.0)
+        ..lineTo(3.2, 5.6)
+        ..arcToPoint(const Offset(5.6, 4.4), radius: const Radius.circular(1.4))
+        ..lineTo(8.2, 8.7)
+        ..lineTo(8.6, 6.5)
+        ..lineTo(14.0, 6.2)
+        ..quadraticBezierTo(16.0, 6.2, 16.8, 9.6)
+        ..quadraticBezierTo(17.7, 13.4, 15.8, 15.6)
+        ..quadraticBezierTo(14.4, 17.4, 11.0, 16.6)
+        ..lineTo(4.0, 15.0)
+        ..arcToPoint(const Offset(4.4, 12.9), radius: const Radius.circular(1.1))
+        ..close(),
+      paint,
+    );
   }
 
   /// A circle open between three and half past four, its arrowhead at three pointing on round, around a play

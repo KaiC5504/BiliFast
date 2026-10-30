@@ -7215,7 +7215,129 @@ abstract final class PadDanmakuTheme {
 
 /// 缓存's sheet (141-144, 153, 154) and the portrait ⋮ sheet it opens from (42, 43, differences/22).
 abstract final class DownloadSheetTheme {
-  static const double placeholder = 0;
+  /// Both sheets are light grey with white cards; in 竖屏 they stand 573.67 pt tall (43), in the small player they run
+  /// from the player's bottom.
+  static const sheet = BiliColors.softGrey;
+  static const card = BiliColors.card;
+  static const verticalHeight = 573.67 / 956;
+  static const cardRadius = 8.0;
+  static const cardInset = 16.0;
+  static const hairline = BiliColors.divider;
+  static const grey = Color(0xFF61666D);
+
+  /// ⋮ (42, 43): the squares 35 below the sheet's top (where 42's share icons start; KaiC took that row out), then
+  /// the card of rows 51 below them.
+  static const tilesTop = 24.0;
+  static const tileSize = 48.0;
+  static const tileLead = 18.0;
+  static const tileGap = 16.0;
+  static const tileRadius = 8.0;
+  static const tileLabelCentre = 14.67;
+  static const tileLabelText = 11.0;
+  static const tilesBottom = 51.0;
+  static const cardGap = 12.0;
+  static const bottom = 12.0;
+
+  /// The icon fonts' glyphs at the ink width 42 measures on each square, drawn in [ink].
+  static const tileGlyphWidth = 20.0;
+  static const tileGlyphWide = 21.0;
+  static const ink = BiliColors.text;
+
+  static const rowHeight = 52.0;
+  static const rowText = 14.0;
+  static const detailText = 12.0;
+  static const segmentText = 12.0;
+  static const segmentDivider = 12.0;
+
+  /// 循环播放's three cells and 倍速's strip, right-aligned at the row's trailing edge; the strip starts 88 into the
+  /// card and fades its first 12 pt, so 0.75 shows only as .75 under 42's 倍速.
+  static const loopCell = 88.33;
+  static const speedCell = 54.67;
+  static const speedStart = 88.0;
+  static const speedFade = 12.0;
+
+  /// The switch, off: a light grey track and a white knob with a faint shadow.
+  static const trackOff = Color(0xFFE6E6E8);
+  static const knobShadow = Color(0x29000000);
+  static const knobShadowBlur = 2.0;
+
+  /// The pages ⋮ opens inside the sheet (定时关闭 ›, 画面尺寸 ›; no screenshot).
+  static const pageHeader = 44.0;
+  static const pageTitleText = 16.0;
+  static const pageBackGlyph = 16.0;
+
+  /// The row icons drawn from 42 and 43 (their ink boxes).
+  static const speedGlyphWidth = 16.33;
+  static const speedGlyphHeight = 11.0;
+  static const timerGlyphWidth = 16.67;
+  static const timerGlyphHeight = 17.67;
+  static const listenGlyphWidth = 16.0;
+  static const listenGlyphHeight = 15.0;
+  static const subtitleGlyphWidth = 16.67;
+  static const subtitleGlyphHeight = 14.33;
+  static const gestureGlyph = 18.33;
+  static const qualityGlyph = 16.67;
+  static const glyphStroke = 1.2;
+
+  /// 缓存 (141): 画质 and the quality's name on a line 30.2 below the grabber, the list from 52 below it.
+  static const headerCentre = 30.2;
+  static const listTop = 52.0;
+  static const headerText = 14.0;
+  static const headerGap = 12.0;
+  static const headerChevronGap = 4.0;
+  static const headerChevronWidth = 9.33;
+  static const headerChevronHeight = 5.0;
+
+  static const rowGap = 12.0;
+
+  /// A video or a part (141, 153): its title on one line in a card 52 tall, the mark in the card's corner.
+  static const titleRowHeight = 52.0;
+  static const titleRowLead = 14.0;
+  static const titleRowTrailing = 5.67;
+  static const titleText = 14.0;
+  static const titleLine = 20.0;
+  static const playingGap = 6.67;
+  static const playing = BiliColors.pink;
+  static const playingBars = Color(0xFFFB7299);
+
+  /// A 合集's video (144, 154): the cover 134.67 × 76 with 12 round it, the title two 20 pt lines beside it.
+  static const coverRowPad = 12.0;
+  static const coverWidth = 134.67;
+  static const coverHeight = 76.0;
+  static const coverGap = 8.67;
+
+  /// The state's 13 pt circle: an empty ring, the pink progress over it, or 153's green ✓.
+  static const mark = 13.0;
+  static const markStroke = 2.5;
+  static const markInset = 4.0;
+  static const markTrack = BiliColors.divider;
+  static const markDone = Color(0xFF2AC864);
+  static const markFailed = BiliColors.failure;
+
+  /// KaiC's sizes: 约 78.4MB left of the mark, on its line.
+  static const sizeText = 10.0;
+  static const sizeGap = 6.0;
+
+  /// 内容到底啦 (154), centred 40.5 under the last card, 28.5 over the bar.
+  static const footerCentre = 40.5;
+  static const footerBottom = 28.5;
+
+  /// The bar (141): 缓存全部 | 查看缓存 on a line 28 below its hairline, the space line 63.5 below it.
+  static const barHeight = 70.0;
+  static const barButtonCentre = 28.0;
+  static const barButtonText = 16.0;
+  static const barDivider = 22.0;
+  static const barSpaceCentre = 63.5;
+  static const barSpaceText = 10.0;
+  static const dot = Color(0xFFF85A54);
+  static const dotSize = 6.0;
+  static const dotRing = 1.0;
+  static const dotLift = 1.0;
+
+  /// 画质's own sheet (142): its card 19 below its top, rows of 52 with the text 16 in.
+  static const pickerCardTop = 19.0;
+  static const pickerRowLead = 16.0;
+  static const pickerBottom = 12.0;
 }
 
 /// 离线缓存, 正在缓存, a 合集's page and their search and edit modes (143, 145-151, 155-157).
