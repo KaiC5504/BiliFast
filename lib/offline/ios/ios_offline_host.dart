@@ -19,6 +19,9 @@ class IosOfflineHost implements OfflineHost {
   Future<int?> freeBytes() => _api.freeBytes();
 
   @override
+  Future<bool> inBackground() => _api.inBackground();
+
+  @override
   Future<void> excludeFromBackup(String path) => _api.excludeFromBackup(path);
 
   @override
@@ -42,6 +45,7 @@ class IosOfflineHost implements OfflineHost {
         backgroundRangesPath: range.backgroundRangesPath,
         start: range.start,
         end: range.end,
+        total: range.total,
       ),
   ]);
 

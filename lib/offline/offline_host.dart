@@ -12,6 +12,7 @@ final class BackgroundRange {
     required this.backgroundRangesPath,
     required this.start,
     required this.end,
+    required this.total,
   });
 
   /// The part's id (its cid as text).
@@ -31,6 +32,9 @@ final class BackgroundRange {
   /// Inclusive.
   final int start;
   final int end;
+
+  /// The track's size: an answer for another size (the part restarted meanwhile) is refused, never written.
+  final int total;
 }
 
 /// What became of a range handed off.
@@ -53,7 +57,8 @@ final class BackgroundRangeResult {
   /// Written to its part file and listed in its `.bg-ranges`.
   final bool done;
 
-  /// The HTTP status; -1 for a transport error, 0 for a range cancelled or still waiting.
+  /// The HTTP status; 0 for a range cancelled or still waiting, -1 for a transport error, -2 when its part file
+  /// couldn't be written (or was gone), -3 when the answer wasn't the range asked for (its Content-Range or total).
   final int status;
 }
 
@@ -65,6 +70,10 @@ abstract class OfflineHost {
 
   /// Bytes free for important use; null when unknown.
   Future<int?> freeBytes();
+
+  /// iOS runs the app in the background (launched for the background session); asked when Flutter has no lifecycle
+  /// state yet.
+  Future<bool> inBackground();
 
   /// Keeps [path] (a folder) out of iCloud and computer backups.
   Future<void> excludeFromBackup(String path);
@@ -95,6 +104,9 @@ class NoOfflineHost implements OfflineHost {
 
   @override
   Future<int?> freeBytes() async => free;
+
+  @override
+  Future<bool> inBackground() async => false;
 
   @override
   Future<void> excludeFromBackup(String path) async {}

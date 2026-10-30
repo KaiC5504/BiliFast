@@ -24,6 +24,10 @@ final class OfflineHostApiImpl: OfflineHostApi {
     return values?.volumeAvailableCapacityForImportantUsage
   }
 
+  func inBackground() throws -> Bool {
+    MainActor.assumeIsolated { UIApplication.shared.applicationState == .background }
+  }
+
   func excludeFromBackup(path: String) throws {
     var url = URL(fileURLWithPath: path, isDirectory: true)
     var values = URLResourceValues()
@@ -106,19 +110,26 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   /// Results kept for Dart at most; older ones drop off first.
   private static let maxResults = 4000
 
+  /// A result's status besides the HTTP one: the part file couldn't be written (or was gone), or the answer wasn't
+  /// the range asked for (its Content-Range or the track's total).
+  private static let writeFailed = -2
+  private static let wrongAnswer = -3
+
   /// The part files, the `.bg-ranges` files and the results, one write at a time.
   private let queue = DispatchQueue(label: "com.kaichuan.bilifast.offline.transfers")
   private let lock = NSLock()
   private var made: URLSession?
 
-  /// On `queue`: the results not yet taken back (nil until read from disk), and the tasks recorded or taken back in
-  /// this run of the app, whose later callbacks are ignored.
+  /// On `queue`: the results not yet taken back (nil until read from disk), the tasks recorded in this run of the
+  /// app, and whether Dart took the session back since the last hand-off (every later callback is then ignored).
   private var results: [RecordedResult]?
   private var recorded = Set<Int>()
-  private var takenBack = Set<Int>()
+  private var closed = false
+  private var persistFailureLogged = false
 
-  /// On the main thread.
+  /// On the main thread. iOS may report the session's events done before it hands over the completion.
   private var completion: (() -> Void)?
+  private var eventsFinished = false
 
   private var session: URLSession {
     lock.lock()
@@ -139,12 +150,18 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
 
   /// iOS woke or relaunched the app for the session's events; [completion] runs once they are all handled.
   func handleEvents(identifier: String, completion: @escaping () -> Void) {
-    self.completion = completion
     resume()
+    if eventsFinished {
+      eventsFinished = false
+      completion()
+    } else {
+      self.completion = completion
+    }
   }
 
   func handOff(_ ranges: [NativeBackgroundRange]) {
     let session = self.session
+    queue.sync { closed = false }
     for range in ranges {
       guard let url = URL(string: range.url), let description = TransferRange(range).encoded() else { continue }
       var request = URLRequest(url: url)
@@ -167,22 +184,22 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
       session.getAllTasks { continuation.resume(returning: $0) }
     }
     let going = tasks.filter { $0.state == .running || $0.state == .suspended }
-    queue.sync {
-      for task in going where !recorded.contains(task.taskIdentifier) {
-        takenBack.insert(task.taskIdentifier)
-        if let range = TransferRange.decode(task.taskDescription) {
-          record(range, done: false, status: 0)
-        }
-      }
-    }
     for task in going {
       task.cancel()
     }
-    // Callbacks already queued for the delegate are handled before the results are read.
+    // A range finishing as it is cancelled is still written: callbacks already queued for the delegate run before the
+    // session closes. Any later one is dropped unwritten, and its range reported cancelled.
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
       session.delegateQueue.addOperation { continuation.resume() }
     }
     return queue.sync {
+      closed = true
+      for task in going where !recorded.contains(task.taskIdentifier) {
+        recorded.insert(task.taskIdentifier)
+        if let range = TransferRange.decode(task.taskDescription) {
+          record(range, done: false, status: 0)
+        }
+      }
       let taken = loadResults()
       results = []
       persistResults()
@@ -197,14 +214,22 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
     let id = downloadTask.taskIdentifier
     // Synchronously: iOS removes the file at `location` once this returns.
     queue.sync {
-      guard !takenBack.contains(id) else { return }
+      guard !closed, !recorded.contains(id) else { return }
       recorded.insert(id)
       var done = false
-      if status == 206, let content = ContentRange(response?.value(forHTTPHeaderField: "Content-Range")),
-         content.start == range.start, content.end == range.end {
-        done = write(location, into: range, total: content.total)
+      var outcome = status
+      if status == 206 {
+        // A part restarted at another size meanwhile must never take the old one's bytes.
+        if let content = ContentRange(response?.value(forHTTPHeaderField: "Content-Range")),
+           content.start == range.start, content.end == range.end,
+           let total = range.total, content.total == total {
+          done = write(location, into: range, total: total)
+          if !done { outcome = Self.writeFailed }
+        } else {
+          outcome = Self.wrongAnswer
+        }
       }
-      send(record(range, done: done, status: status))
+      send(record(range, done: done, status: outcome))
     }
   }
 
@@ -213,7 +238,7 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
     let id = task.taskIdentifier
     let cancelled = (error as? URLError)?.code == .cancelled
     queue.sync {
-      guard !takenBack.contains(id), !recorded.contains(id) else { return }
+      guard !closed, !recorded.contains(id) else { return }
       recorded.insert(id)
       send(record(range, done: false, status: cancelled ? 0 : -1))
     }
@@ -221,24 +246,30 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
 
   func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
     DispatchQueue.main.async {
-      let completion = self.completion
+      guard let completion = self.completion else {
+        self.eventsFinished = true
+        return
+      }
       self.completion = nil
-      completion?()
+      completion()
     }
   }
 
-  /// The range's bytes into its part file at their offset (the file made if it isn't there, never its folder: a part
-  /// deleted meanwhile stays deleted), then the range listed in its `.bg-ranges`.
+  /// The range's bytes into its part file at their offset, then the range listed in its `.bg-ranges`. A missing part
+  /// is never made: the part was finished, restarted or deleted meanwhile, and a new file would read as zeros where
+  /// the engine's own ranges vouch for bytes.
   private func write(_ location: URL, into range: TransferRange, total: Int64) -> Bool {
     let manager = FileManager.default
     let part = range.partURL
     do {
       let size = (try manager.attributesOfItem(atPath: location.path)[.size] as? NSNumber)?.int64Value ?? -1
-      guard size == range.end - range.start + 1 else { return false }
-      if !manager.fileExists(atPath: part.path) {
-        // Finished by the engine meanwhile: nothing to add, and no stray part file beside it.
-        guard !manager.fileExists(atPath: part.deletingPathExtension().path),
-              manager.createFile(atPath: part.path, contents: nil) else { return false }
+      guard size == range.end - range.start + 1 else {
+        NSLog("%@", "offline background write: \(size) bytes for a range of \(range.end - range.start + 1)")
+        return false
+      }
+      guard manager.fileExists(atPath: part.path) else {
+        NSLog("%@", "offline background write: part missing")
+        return false
       }
       let input = try FileHandle(forReadingFrom: location)
       defer { try? input.close() }
@@ -252,6 +283,8 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
       try addDone(range, total: total)
       return true
     } catch {
+      let failure = error as NSError
+      NSLog("%@", "offline background write failed: \(failure.domain) \(failure.code)")
       return false
     }
   }
@@ -333,6 +366,10 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
       try JSONEncoder().encode(results ?? []).write(to: resultsURL, options: .atomic)
     } catch {
       // Only the report is lost; what was written is in the part files and their `.bg-ranges`.
+      guard !persistFailureLogged else { return }
+      persistFailureLogged = true
+      let failure = error as NSError
+      NSLog("%@", "offline transfer results not saved: \(failure.domain) \(failure.code)")
     }
   }
 }
@@ -347,6 +384,9 @@ private struct TransferRange: Codable {
   let start: Int64
   let end: Int64
 
+  /// The track's size; nil in a task handed off by an older build, whose answers are then refused.
+  let total: Int64?
+
   init(_ range: NativeBackgroundRange) {
     id = range.id
     video = range.video
@@ -354,6 +394,7 @@ private struct TransferRange: Codable {
     backgroundRangesPath = Self.fromHome(range.backgroundRangesPath)
     start = range.start
     end = range.end
+    total = range.total
   }
 
   var partURL: URL { URL(fileURLWithPath: Self.inHome(partPath)) }

@@ -1307,7 +1307,7 @@ class PlaybackController extends ChangeNotifier {
   Future<void> _handle(Object error, StackTrace stack, double time, int current) async {
     if (current != _epoch || error is _Stale) return;
     if (_local != null) {
-      _logger.warn(LogCategory.player, 'local prepare failed', {'error': '$error'});
+      _logger.warn(LogCategory.player, 'local prepare failed', {'error': _logged(error)});
       _fail(_localFailure(error), stack);
       return;
     }
@@ -1737,7 +1737,14 @@ class PlaybackController extends ChangeNotifier {
     _choice = null;
     _dash = null;
     _playing = null;
-    _failWith(error, '$error');
+    _failWith(error, _logged(error));
+  }
+
+  /// A file error's own text carries its path, which names the app's container: the OS's words only.
+  static String _logged(Object error) {
+    if (error is! FileSystemException) return '$error';
+    final os = error.osError?.message ?? '';
+    return os.isEmpty ? error.message : os;
   }
 
   void _failWith(Object error, String detail) {

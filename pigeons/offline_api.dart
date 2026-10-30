@@ -21,6 +21,7 @@ class NativeBackgroundRange {
     required this.backgroundRangesPath,
     required this.start,
     required this.end,
+    required this.total,
   });
 
   String id;
@@ -31,6 +32,9 @@ class NativeBackgroundRange {
   String backgroundRangesPath;
   int start;
   int end;
+
+  /// The track's size; an answer whose Content-Range names another is refused.
+  int total;
 }
 
 class NativeBackgroundRangeResult {
@@ -57,6 +61,9 @@ class NativeBackgroundRangeResult {
 abstract class OfflineHostApi {
   /// volumeAvailableCapacityForImportantUsage of the app's container; null when iOS doesn't say.
   int? freeBytes();
+
+  /// UIApplication's applicationState is background: iOS launched the app for the background session.
+  bool inBackground();
 
   void excludeFromBackup(String path);
 

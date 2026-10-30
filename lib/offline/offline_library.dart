@@ -145,6 +145,9 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   static const _unavailableCodes = {-404, -403, 62002, 62004, 62012};
 
   final _parts = <int, _Part>{};
+
+  /// Parts being deleted, until their folders are gone; an enqueue of the same cid waits for it.
+  final _deleting = <int, Future<void>>{};
   List<OfflineItem>? _sorted;
   int _concurrency = 1;
   bool _unseen = false;
@@ -225,12 +228,29 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     _notifyNow();
     _track(refreshFreeSpace());
     // A launch iOS made in the background leaves the background session's transfers going until the app is opened.
-    final state = WidgetsBinding.instance.lifecycleState;
-    if (host.backgroundTransfers && state != null && state != AppLifecycleState.resumed) {
+    if (host.backgroundTransfers && await _launchedInBackground()) {
       _backgrounded = true;
+      logger.info(LogCategory.app, 'offline launched in background');
       return;
     }
     await _queue(() => _comeBack(launch: true));
+  }
+
+  /// [start] runs before runApp, when Flutter may have no lifecycle state yet: iOS itself is asked then. A null state
+  /// taken as the foreground would cancel the transfers iOS launched the app for.
+  Future<bool> _launchedInBackground() async {
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (state != null) return state != AppLifecycleState.resumed;
+    final bool background;
+    try {
+      background = await host.inBackground();
+    } catch (error) {
+      logger.warn(LogCategory.app, 'offline app state unknown', {'error': _reason(error)});
+      return false;
+    }
+    // Opened while iOS was asked: the resume went by unheard.
+    if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) return false;
+    return background;
   }
 
   Future<void> _loadLibrary() async {
@@ -267,13 +287,29 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       }
       final cid = int.tryParse(name);
       if (cid == null) continue;
+      if (await File(files.deleting(cid)).exists()) {
+        await _removeAtLaunch(cid, 'deleted');
+        continue;
+      }
       OfflineEntry? entry;
+      var gone = false;
       try {
         entry = OfflineEntry.fromJson(jsonDecode(await File(files.entry(cid)).readAsString()), files);
+        gone = entry == null || entry.cid != cid;
+      } on PathNotFoundException {
+        gone = true;
+      } on FormatException {
+        gone = true;
       } catch (error) {
         logger.warn(LogCategory.app, 'offline entry unreadable', {'cid': cid, 'error': _reason(error)});
       }
-      if (entry == null || entry.cid != cid) {
+      if (gone) {
+        // Nothing can show or resume it, so its files would only take the phone's space.
+        await _removeAtLaunch(cid, 'unreadable');
+        unreadable += 1;
+        continue;
+      }
+      if (entry == null) {
         unreadable += 1;
         continue;
       }
@@ -302,9 +338,23 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _removeAtLaunch(int cid, String reason) async {
+    final bytes = await folderBytes(files.part(cid));
+    logger.warn(LogCategory.app, 'offline folder removed', {'cid': cid, 'reason': reason, 'bytes': bytes});
+    await _remove(Directory(files.part(cid)));
+  }
+
   @override
   Future<void> enqueue(List<OfflineRequest> parts, {int? quality}) async {
     await _loading;
+    // A part being deleted lets go of its folder first, so the new one isn't removed with it.
+    for (;;) {
+      final deleting = [
+        for (final request in parts) ?_deleting[request.cid],
+      ];
+      if (deleting.isEmpty) break;
+      await Future.wait(deleting);
+    }
     if (_disposed) return;
     final added = <_Part>[];
     for (final request in parts) {
@@ -419,35 +469,70 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   Future<void> delete(Iterable<int> cids) async {
     await _loading;
     final removed = <_Part>[];
+    final done = Completer<void>();
     for (final cid in cids.toSet()) {
       final part = _parts.remove(cid);
       if (part == null) continue;
       _halt(part);
       part.positionSave?.cancel();
       removed.add(part);
+      _deleting[cid] = done.future;
     }
     if (removed.isEmpty) return;
     _sorted = null;
     _notifyNow();
-    for (final part in removed) {
-      // A run on its way stops at its next step; whatever it set going is stopped and written before the files go.
-      await part.run;
-      await part.stopping;
-      await part.writes;
-      final directory = Directory(files.part(part.cid));
-      try {
-        if (!await directory.exists()) continue;
-        // Renamed first, so a removal cut short leaves nothing that reads as a part at launch.
-        final stamp = _now().millisecondsSinceEpoch;
-        final doomed = await directory.rename('${directory.path}${OfflineFiles.deletedSuffix}-$stamp');
-        await _remove(doomed);
-      } catch (error) {
-        logger.warn(LogCategory.app, 'offline delete failed', {'cid': part.cid, 'error': _reason(error)});
+    try {
+      for (final part in removed) {
+        await _deleteFiles(part);
       }
+    } finally {
+      for (final part in removed) {
+        if (identical(_deleting[part.cid], done.future)) _deleting.remove(part.cid);
+      }
+      done.complete();
     }
     logger.info(LogCategory.app, 'offline deleted', {'parts': removed.length});
     unawaited(refreshFreeSpace());
     _pump();
+  }
+
+  Future<void> _deleteFiles(_Part part) async {
+    // A run on its way stops at its next step; whatever it set going is stopped and written before the files go.
+    await part.run;
+    await part.renewal;
+    await part.stopping;
+    await part.writes;
+    final directory = Directory(files.part(part.cid));
+    if (!await directory.exists()) return;
+    // The mark lets the next launch finish a removal that fails or is cut short here.
+    var marked = false;
+    try {
+      await File(files.deleting(part.cid)).writeAsBytes(const [], flush: true);
+      marked = true;
+    } catch (error) {
+      logger.warn(LogCategory.app, 'offline delete mark failed', {'cid': part.cid, 'error': _reason(error)});
+    }
+    try {
+      // Renamed first, so a removal cut short leaves nothing that reads as a part at launch.
+      final stamp = _now().millisecondsSinceEpoch;
+      final doomed = await directory.rename('${directory.path}${OfflineFiles.deletedSuffix}-$stamp');
+      await _remove(doomed);
+    } catch (error) {
+      logger.warn(LogCategory.app, 'offline delete failed', {
+        'cid': part.cid,
+        'error': _reason(error),
+        'atLaunch': marked,
+      });
+      // Unmarked, it would come back at the next launch as if never deleted; it stays in the list instead.
+      if (!marked && !_parts.containsKey(part.cid) && !_disposed) {
+        final state = part.item.isDone ? OfflineState.done : OfflineState.paused;
+        part.entry = part.entry.copyWith(item: part.item.copyWith(state: state, bps: 0));
+        _parts[part.cid] = part;
+        _sorted = null;
+        unawaited(_save(part));
+        _notifyNow();
+      }
+    }
   }
 
   Future<void> _remove(Directory directory) async {
@@ -556,11 +641,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       if (!live() || !_mayDownload) return;
       final engine = await _engineLease();
       if (!live()) return;
-      await engine.startDownload(_request(part, choice));
-      if (!live()) {
-        part.stopping = _stopQuietly(engine, part.cid);
-        return;
-      }
+      await _startEngine(part, epoch, engine, choice);
+      if (!live()) return;
       part.running = true;
       _scheduleRefresh(part);
       logger.info(LogCategory.app, 'offline download started', {
@@ -575,6 +657,16 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     } finally {
       if (part.preparing == epoch) part.preparing = null;
     }
+  }
+
+  /// Starts the engine's download for the run of [epoch]. Should the run be over by the time the engine answers, the
+  /// download is stopped, unless a newer run asked for it meanwhile: the engine took that ask as already running.
+  Future<void> _startEngine(_Part part, int epoch, PlaybackEngine engine, TrackChoice choice) async {
+    part.engineEpoch = epoch;
+    part.progressBase = null;
+    await engine.startDownload(_request(part, choice));
+    if (_isLive(part, epoch) || part.engineEpoch != epoch) return;
+    part.stopping = _stopQuietly(engine, part.cid);
   }
 
   bool _isLive(_Part part, int epoch) =>
@@ -658,7 +750,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       _fail(part, epoch, OfflineFailure.unavailable, BiliError.notDash);
       return null;
     }
-    final kept = _keptStreams(part.entry, dash);
+    final kept = _keptStreams(part.entry, dash, refused: (codecMemory ?? CodecMemory(logger: logger)).failedKinds);
     final choice = kept ?? _pick(dash, part.entry.ceiling);
     if (choice == null) {
       logger.warn(LogCategory.app, 'offline no track', {'cid': part.cid, ...PlaybackController.playURLSummary(info)});
@@ -710,11 +802,14 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     }
   }
 
-  /// The streams the part began with, when the fresh answer still offers them.
-  static TrackChoice? _keptStreams(OfflineEntry entry, Dash dash) {
+  /// The streams the part began with, when the fresh answer still offers them and the phone still plays the codec.
+  static TrackChoice? _keptStreams(OfflineEntry entry, Dash dash, {required Set<String> refused}) {
     final video = entry.video;
     final audio = entry.audio;
     if (video == null || audio == null) return null;
+    // As PlaybackController.choose: once a codec is refused, unknown ones are too.
+    final kind = TrackSelector.codecKind(video);
+    if (refused.contains(kind) || (refused.isNotEmpty && kind == 'other')) return null;
     final freshVideo = dash.video.where((stream) => _sameStream(stream, video)).firstOrNull;
     final freshAudio = dash.audio.where((stream) => _sameStream(stream, audio)).firstOrNull;
     return freshVideo == null || freshAudio == null ? null : TrackChoice(video: freshVideo, audio: freshAudio);
@@ -788,25 +883,47 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     final epoch = part.epoch;
     part.refresh = Timer(wait, () {
       part.refresh = null;
-      if (part.epoch == epoch && part.running) _track(_renew(part, epoch));
+      if (part.epoch == epoch && part.running) _startRenew(part, epoch);
     });
   }
+
+  void _startRenew(_Part part, int epoch, {bool expired = false, Set<TrackKind> restart = const {}}) {
+    final renewal = _renew(part, epoch, expired: expired, restart: restart);
+    part.renewal = renewal;
+    _track(renewal);
+  }
+
+  static bool _isRiskControl(Object error) => error is BiliAPIError && (error.code == -352 || error.code == -412);
 
   /// Fresh addresses for a part: swapped into its running download when the streams are the same, else the changed
   /// tracks start over. After [DownloadFailure.expired] the download is started again too ([expired]), and
   /// [restart] names a track that starts over whatever the answer ([DownloadFailure.sizeChanged]).
   Future<void> _renew(_Part part, int epoch, {bool expired = false, Set<TrackKind> restart = const {}}) async {
     bool live() => _isLive(part, epoch);
+    if (!live()) return;
+    // The return starts it again: meanwhile a restart could meet transfers still writing into its files.
+    if (_handedOff || (_backgrounded && !_graceRunning)) return;
+    if (_held) {
+      // Held for a refusal or a failure: nothing asks Bilibili until a tap, 全部开始 or the return.
+      if (expired) _fail(part, epoch, OfflineFailure.network, StateError('held'));
+      return;
+    }
     final _Streams? streams;
     try {
       streams = await _askStreams(part, epoch);
     } catch (error) {
+      if (_isRiskControl(error)) {
+        logger.warn(LogCategory.app, 'offline url refresh refused', {'cid': part.cid, 'error': _reason(error)});
+        _held = true;
+        if (expired) _runFailed(part, epoch, error);
+        return;
+      }
       if (!expired && live()) {
         // The running download's addresses still work until the deadline; the engine says when they don't.
         logger.warn(LogCategory.app, 'offline url refresh failed', {'cid': part.cid, 'error': _reason(error)});
         part.refresh = Timer(const Duration(minutes: 1), () {
           part.refresh = null;
-          if (part.epoch == epoch && part.running) _track(_renew(part, epoch));
+          if (part.epoch == epoch && part.running) _startRenew(part, epoch);
         });
         return;
       }
@@ -837,7 +954,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         if (!live()) return;
         if (expired) {
           // A download stopped by the refusal starts again; one the engine kept waiting is left as it is.
-          await engine.startDownload(_request(part, choice));
+          await _startEngine(part, epoch, engine, choice);
           if (!live()) return;
         }
       } else {
@@ -846,11 +963,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         if (!live()) return;
         await _useStreams(part, streams, restart: restart);
         if (!live()) return;
-        await engine.startDownload(_request(part, choice));
-        if (!live()) {
-          part.stopping = _stopQuietly(engine, part.cid);
-          return;
-        }
+        await _startEngine(part, epoch, engine, choice);
+        if (!live()) return;
         logger.info(LogCategory.app, 'offline restarted', {
           'cid': part.cid,
           'tracks': {...streams.changed, ...restart}.map((kind) => kind.name).join(','),
@@ -1032,8 +1146,14 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   }
 
   void _progress(_Part part, DownloadProgress event) {
-    part.strikes = 0;
-    _engineLosses = 0;
+    // The engine reports once as it starts, before any byte: only bytes beyond that one are progress.
+    final base = part.progressBase;
+    if (base == null) {
+      part.progressBase = event.bytes;
+    } else if (event.bytes > base) {
+      part.strikes = 0;
+      _engineLosses = 0;
+    }
     final known = event.videoTotal > 0 && event.audioTotal > 0;
     part.entry = part.entry.copyWith(
       item: part.item.copyWith(bytes: event.bytes, totalBytes: known ? event.total : null, bps: event.bps),
@@ -1085,6 +1205,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       'failure': event.failure.name,
       'track': event.track?.name ?? '',
       'detail': event.detail,
+      'osError': ?event.osError,
       'strikes': part.strikes,
     });
     switch (event.failure) {
@@ -1096,20 +1217,20 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
           return;
         }
         final track = event.track;
-        _track(
-          _renew(
-            part,
-            epoch,
-            expired: true,
-            restart: event.failure == DownloadFailure.sizeChanged
-                ? (track == null ? {...TrackKind.values} : {track})
-                : const {},
-          ),
-        );
+        final restart = event.failure == DownloadFailure.sizeChanged
+            ? (track == null ? {...TrackKind.values} : {track})
+            : const <TrackKind>{};
+        final pause = retryGaps.isEmpty ? Duration.zero : retryGaps[math.min(part.strikes, retryGaps.length) - 1];
+        part.refresh = Timer(pause, () {
+          part.refresh = null;
+          if (_isLive(part, epoch)) _startRenew(part, epoch, expired: true, restart: restart);
+        });
       case DownloadFailure.network:
         _fail(part, epoch, OfflineFailure.network, StateError('network'));
       case DownloadFailure.disk:
         _fail(part, epoch, OfflineFailure.disk, StateError('disk'));
+      case DownloadFailure.file:
+        _fail(part, epoch, OfflineFailure.unknown, StateError('file ${event.osError ?? ''}'.trim()));
     }
   }
 
@@ -1255,7 +1376,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
 
   void _maybeEndGrace() {
     if (!_backgrounded || !_graceOpen) return;
-    final busy = _parts.values.any((part) => part.running || part.preparing != null);
+    final busy = _parts.values.any((part) => part.running || part.preparing != null || part.refresh != null);
     if (!busy) unawaited(_queue(_endGrace));
   }
 
@@ -1353,10 +1474,22 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         await write();
       } catch (error) {
         logger.warn(LogCategory.app, 'offline write failed', {'cid': part.cid, 'error': _reason(error)});
+        if (error case FileSystemException(:final osError?) when _isDiskFull(osError)) _diskFull(part, error);
       }
     });
     part.writes = next;
     return next;
+  }
+
+  /// A part not yet finished stops as [OfflineFailure.disk], and the queue waits, as when the engine meets it.
+  void _diskFull(_Part part, Object error) {
+    final state = part.item.state;
+    if (state != OfflineState.waiting && state != OfflineState.downloading) return;
+    _halt(part);
+    _setItem(part, part.item.copyWith(state: OfflineState.failed, failure: OfflineFailure.disk, bps: 0));
+    logger.warn(LogCategory.app, 'offline failed', {'cid': part.cid, 'failure': 'disk', 'error': _reason(error)});
+    _held = true;
+    _maybeEndGrace();
   }
 
   Future<void> _saveLibrary() {
@@ -1399,6 +1532,17 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         })
         .whenComplete(() => _tasks.remove(tracked));
     _tasks.add(tracked);
+  }
+
+  /// Runs [cid]'s address refresh now instead of near the deadline; for tests.
+  @visibleForTesting
+  Future<void> refreshUrls(int cid) async {
+    final part = _parts[cid];
+    if (part == null || !part.running) return;
+    part.refresh?.cancel();
+    part.refresh = null;
+    _startRenew(part, part.epoch);
+    await part.renewal;
   }
 
   /// Waits until nothing the library started is still running; for tests.
@@ -1474,7 +1618,14 @@ final class _Part {
 
   /// The engine holds its download.
   bool running = false;
+
+  /// The epoch of the run that last asked the engine to start.
+  int? engineEpoch;
+
+  /// The bytes the engine reported as its download started; null until it does.
+  int? progressBase;
   Future<void>? run;
+  Future<void>? renewal;
   Future<void> stopping = Future.value();
   Future<void> writes = Future.value();
   Future<void>? pictures;
@@ -1482,7 +1633,7 @@ final class _Part {
   Timer? positionSave;
   DateTime? savedAt;
 
-  /// Fresh addresses or restarted tracks since the last progress.
+  /// Fresh addresses or restarted tracks since the last bytes fetched.
   int strikes = 0;
 
   /// Its cover, face, danmaku and entry.

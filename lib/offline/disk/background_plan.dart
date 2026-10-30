@@ -34,7 +34,7 @@ List<BackgroundRange> backgroundRanges({
   required String videoPath,
   required String audioPath,
 }) {
-  List<BackgroundRange> track(bool video, List<ByteRange> missing, DashStream stream, String path) => [
+  List<BackgroundRange> track(bool video, List<ByteRange> missing, int total, DashStream stream, String path) => [
     for (final piece in backgroundPieces(missing))
       BackgroundRange(
         id: id,
@@ -45,11 +45,12 @@ List<BackgroundRange> backgroundRanges({
         backgroundRangesPath: DownloadRanges.backgroundRangesPath(path),
         start: piece.start,
         end: piece.end,
+        total: total,
       ),
   ];
 
   return [
-    if (gaps.videoTotal > 0) ...track(true, gaps.video, choice.video, videoPath),
-    if (gaps.audioTotal > 0) ...track(false, gaps.audio, choice.audio, audioPath),
+    if (gaps.videoTotal > 0) ...track(true, gaps.video, gaps.videoTotal, choice.video, videoPath),
+    if (gaps.audioTotal > 0) ...track(false, gaps.audio, gaps.audioTotal, choice.audio, audioPath),
   ];
 }

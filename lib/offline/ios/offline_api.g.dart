@@ -118,6 +118,7 @@ class NativeBackgroundRange {
     required this.backgroundRangesPath,
     required this.start,
     required this.end,
+    required this.total,
   });
 
   String id;
@@ -136,6 +137,9 @@ class NativeBackgroundRange {
 
   int end;
 
+  /// The track's size; an answer whose Content-Range names another is refused.
+  int total;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
@@ -146,6 +150,7 @@ class NativeBackgroundRange {
       backgroundRangesPath,
       start,
       end,
+      total,
     ];
   }
 
@@ -163,6 +168,7 @@ class NativeBackgroundRange {
       backgroundRangesPath: result[5]! as String,
       start: result[6]! as int,
       end: result[7]! as int,
+      total: result[8]! as int,
     );
   }
 
@@ -175,7 +181,7 @@ class NativeBackgroundRange {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(id, other.id) && _deepEquals(video, other.video) && _deepEquals(url, other.url) && _deepEquals(headers, other.headers) && _deepEquals(partPath, other.partPath) && _deepEquals(backgroundRangesPath, other.backgroundRangesPath) && _deepEquals(start, other.start) && _deepEquals(end, other.end);
+    return _deepEquals(id, other.id) && _deepEquals(video, other.video) && _deepEquals(url, other.url) && _deepEquals(headers, other.headers) && _deepEquals(partPath, other.partPath) && _deepEquals(backgroundRangesPath, other.backgroundRangesPath) && _deepEquals(start, other.start) && _deepEquals(end, other.end) && _deepEquals(total, other.total);
   }
 
   @override
@@ -184,7 +190,7 @@ class NativeBackgroundRange {
 
   @override
   String toString() {
-    return 'NativeBackgroundRange(id: $id, video: $video, url: $url, headers: $headers, partPath: $partPath, backgroundRangesPath: $backgroundRangesPath, start: $start, end: $end)';
+    return 'NativeBackgroundRange(id: $id, video: $video, url: $url, headers: $headers, partPath: $partPath, backgroundRangesPath: $backgroundRangesPath, start: $start, end: $end, total: $total)';
   }
 }
 
@@ -327,6 +333,26 @@ class OfflineHostApi {
     )
     ;
     return pigeonVar_replyValue as int?;
+  }
+
+  /// UIApplication's applicationState is background: iOS launched the app for the background session.
+  Future<bool> inBackground() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.OfflineHostApi.inBackground$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
   }
 
   Future<void> excludeFromBackup(String path) async {

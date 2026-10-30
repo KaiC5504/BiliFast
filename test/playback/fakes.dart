@@ -199,15 +199,29 @@ final class FakeEngine implements PlaybackEngine {
   final gaps = <String, DownloadGaps>{};
   final downloadController = StreamController<DownloadEvent>.broadcast(sync: true);
 
+  /// Holds startDownload (after it registered the id) until the test completes it.
+  Completer<void>? startGate;
+
+  /// Holds stopDownload (after it let go of the id) until the test completes it.
+  Completer<void>? stopGate;
+
+  /// The ids the engine holds a download for, as OfflineDownloads would.
+  final running = <String>{};
+
   @override
   Future<void> startDownload(DownloadRequest request) async {
     if (closed) throw const RipperError(RipperErrorKind.closed);
     downloadsStarted.add(request);
+    // As OfflineDownloads.start: one already running is left as it is.
+    if (!running.add(request.id)) return;
+    await startGate?.future;
   }
 
   @override
   Future<DownloadGaps> stopDownload(String id) async {
+    running.remove(id);
     downloadsStopped.add(id);
+    await stopGate?.future;
     return gaps[id] ?? DownloadGaps(id: id, video: const [], audio: const [], videoTotal: 0, audioTotal: 0);
   }
 

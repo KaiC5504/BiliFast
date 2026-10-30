@@ -1,8 +1,8 @@
 import 'package:bili_core/api.dart' show Dash, DashStream, TrackSelector, VideoCodec;
 
 /// About how many bytes a part of [seconds] takes at [quality], from the bitrates in [dash] (the stream the download
-/// would pick: [codecOrder] first, else any codec of that quality; the best audio). Null when [dash] has no stream
-/// of that quality or no bitrate.
+/// would pick: [codecOrder] first, else any codec of that quality; the best audio). Null when [seconds] isn't above 0,
+/// or [dash] has no stream of that quality or no bitrate.
 int? estimateBytes(Dash dash, {required int quality, required int seconds, List<VideoCodec> codecOrder = const []}) {
   if (seconds <= 0) return null;
   final video = _video(dash, quality, codecOrder);

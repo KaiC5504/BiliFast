@@ -31,6 +31,16 @@ final class FakeOfflineHost implements OfflineHost {
   @override
   Future<int?> freeBytes() async => free;
 
+  /// What [inBackground] answers, and how often it was asked.
+  bool background = false;
+  int backgroundAsks = 0;
+
+  @override
+  Future<bool> inBackground() async {
+    backgroundAsks += 1;
+    return background;
+  }
+
   @override
   Future<void> excludeFromBackup(String path) async => excluded = path;
 

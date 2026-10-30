@@ -16,8 +16,12 @@ final class OfflineFiles {
   static const faceName = 'face.jpg';
   static const danmakuName = 'dm';
 
-  /// What a deleted part's folder is renamed to before it is removed, so a removal cut short is finished at launch.
+  /// Appended, with `-<ms>`, to a deleted part's folder before it is removed, so a removal cut short is finished at
+  /// launch.
   static const deletedSuffix = '.deleted';
+
+  /// Written into a part's folder before it is deleted: a folder that still has it at launch is removed.
+  static const deletingName = '.deleting';
 
   static final _separator = Platform.pathSeparator;
 
@@ -27,6 +31,7 @@ final class OfflineFiles {
   String get library => _join(root, 'library.json');
   String part(int cid) => _join(root, '$cid');
   String entry(int cid) => _join(part(cid), entryName);
+  String deleting(int cid) => _join(part(cid), deletingName);
   String video(int cid) => _join(part(cid), videoName);
   String audio(int cid) => _join(part(cid), audioName);
   String track(int cid, TrackKind kind) => kind == TrackKind.video ? video(cid) : audio(cid);

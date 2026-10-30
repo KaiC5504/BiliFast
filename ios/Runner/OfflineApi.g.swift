@@ -200,6 +200,8 @@ struct NativeBackgroundRange: Hashable, CustomStringConvertible {
   var backgroundRangesPath: String
   var start: Int64
   var end: Int64
+  /// The track's size; an answer whose Content-Range names another is refused.
+  var total: Int64
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -212,6 +214,7 @@ struct NativeBackgroundRange: Hashable, CustomStringConvertible {
     let backgroundRangesPath = pigeonVar_list[5] as! String
     let start = pigeonVar_list[6] as! Int64
     let end = pigeonVar_list[7] as! Int64
+    let total = pigeonVar_list[8] as! Int64
 
     return NativeBackgroundRange(
       id: id,
@@ -221,7 +224,8 @@ struct NativeBackgroundRange: Hashable, CustomStringConvertible {
       partPath: partPath,
       backgroundRangesPath: backgroundRangesPath,
       start: start,
-      end: end
+      end: end,
+      total: total
     )
   }
   func toList() -> [Any?] {
@@ -234,13 +238,14 @@ struct NativeBackgroundRange: Hashable, CustomStringConvertible {
       backgroundRangesPath,
       start,
       end,
+      total,
     ]
   }
   static func == (lhs: NativeBackgroundRange, rhs: NativeBackgroundRange) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return OfflineApiPigeonInternal.deepEquals(lhs.id, rhs.id) && OfflineApiPigeonInternal.deepEquals(lhs.video, rhs.video) && OfflineApiPigeonInternal.deepEquals(lhs.url, rhs.url) && OfflineApiPigeonInternal.deepEquals(lhs.headers, rhs.headers) && OfflineApiPigeonInternal.deepEquals(lhs.partPath, rhs.partPath) && OfflineApiPigeonInternal.deepEquals(lhs.backgroundRangesPath, rhs.backgroundRangesPath) && OfflineApiPigeonInternal.deepEquals(lhs.start, rhs.start) && OfflineApiPigeonInternal.deepEquals(lhs.end, rhs.end)
+    return OfflineApiPigeonInternal.deepEquals(lhs.id, rhs.id) && OfflineApiPigeonInternal.deepEquals(lhs.video, rhs.video) && OfflineApiPigeonInternal.deepEquals(lhs.url, rhs.url) && OfflineApiPigeonInternal.deepEquals(lhs.headers, rhs.headers) && OfflineApiPigeonInternal.deepEquals(lhs.partPath, rhs.partPath) && OfflineApiPigeonInternal.deepEquals(lhs.backgroundRangesPath, rhs.backgroundRangesPath) && OfflineApiPigeonInternal.deepEquals(lhs.start, rhs.start) && OfflineApiPigeonInternal.deepEquals(lhs.end, rhs.end) && OfflineApiPigeonInternal.deepEquals(lhs.total, rhs.total)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -253,10 +258,11 @@ struct NativeBackgroundRange: Hashable, CustomStringConvertible {
     OfflineApiPigeonInternal.deepHash(value: backgroundRangesPath, hasher: &hasher)
     OfflineApiPigeonInternal.deepHash(value: start, hasher: &hasher)
     OfflineApiPigeonInternal.deepHash(value: end, hasher: &hasher)
+    OfflineApiPigeonInternal.deepHash(value: total, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeBackgroundRange(id: \(String(describing: id)), video: \(String(describing: video)), url: \(String(describing: url)), headers: \(String(describing: headers)), partPath: \(String(describing: partPath)), backgroundRangesPath: \(String(describing: backgroundRangesPath)), start: \(String(describing: start)), end: \(String(describing: end)))"
+    return "NativeBackgroundRange(id: \(String(describing: id)), video: \(String(describing: video)), url: \(String(describing: url)), headers: \(String(describing: headers)), partPath: \(String(describing: partPath)), backgroundRangesPath: \(String(describing: backgroundRangesPath)), start: \(String(describing: start)), end: \(String(describing: end)), total: \(String(describing: total)))"
   }
 }
 
@@ -369,6 +375,8 @@ class OfflineApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 protocol OfflineHostApi {
   /// volumeAvailableCapacityForImportantUsage of the app's container; null when iOS doesn't say.
   func freeBytes() throws -> Int64?
+  /// UIApplication's applicationState is background: iOS launched the app for the background session.
+  func inBackground() throws -> Bool
   func excludeFromBackup(path: String) throws
   /// beginBackgroundTask; [OfflineEventApi.onGraceEnding] comes from its expiration handler.
   func beginGrace() throws
@@ -396,6 +404,20 @@ class OfflineHostApiSetup {
       }
     } else {
       freeBytesChannel.setMessageHandler(nil)
+    }
+    /// UIApplication's applicationState is background: iOS launched the app for the background session.
+    let inBackgroundChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.OfflineHostApi.inBackground\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      inBackgroundChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.inBackground()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      inBackgroundChannel.setMessageHandler(nil)
     }
     let excludeFromBackupChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.OfflineHostApi.excludeFromBackup\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

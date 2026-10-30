@@ -148,7 +148,11 @@ final class EngineLease implements PlaybackEngine {
   Future<PreparedSource> prepareLocal(LocalPlaybackRequest request) async {
     final source = await _call(() => engine.prepareLocal(request));
     if (_released) {
-      unawaited(engine.release(source.token).catchError((Object _) {}));
+      unawaited(
+        engine.release(source.token).catchError((Object error) {
+          _shared._logger.debug(LogCategory.engine, 'release failed', {'error': '${error.runtimeType}'});
+        }),
+      );
     } else {
       _tokens.add(source.token);
     }
