@@ -98,16 +98,17 @@ final class OfflineHostApiImpl: OfflineHostApi {
     guard register() else { return "not registered" }
     let request = BGContinuedProcessingTaskRequest(identifier: Self.identifier, title: title, subtitle: subtitle)
     request.strategy = .fail
-    do {
-      try BGTaskScheduler.shared.submit(request)
-    } catch {
-      let failure = error as NSError
-      return "\(failure.domain) \(failure.code)"
-    }
-    // The launch handler runs on the main queue, so it comes only after this returns.
+    // Set before submitting, in case iOS ever runs the launch handler before submit returns.
     pendingSince = Date()
     withdrawn = false
     self.subtitle = subtitle
+    do {
+      try BGTaskScheduler.shared.submit(request)
+    } catch {
+      pendingSince = nil
+      let failure = error as NSError
+      return "\(failure.domain) \(failure.code)"
+    }
     return nil
   }
 
@@ -428,6 +429,7 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
       recorded.insert(id)
       var done = false
       var outcome = status
+      var kept: Int64 = 0
       if status == 206 {
         // A part restarted at another size meanwhile must never take the old one's bytes.
         if let content = ContentRange(response?.value(forHTTPHeaderField: "Content-Range")),
@@ -439,12 +441,13 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
             outcome = Self.writeFailed
           } else if !done {
             outcome = Self.shortAnswer
+            kept = content.end - range.start + 1
           }
         } else {
           outcome = Self.wrongAnswer
         }
       }
-      send(record(range, done: done, status: outcome))
+      send(record(range, done: done, status: outcome, received: kept))
     }
   }
 

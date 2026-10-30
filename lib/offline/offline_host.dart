@@ -58,12 +58,13 @@ final class BackgroundRangeResult {
   /// Written to its part file and listed in its `.bg-ranges`.
   final bool done;
 
-  /// Bytes iOS had fetched of a range it didn't finish (lost with it).
+  /// Bytes iOS had fetched of a range it didn't finish: lost with it, except for status -4, where they are the ones
+  /// written.
   final int received;
 
   /// The HTTP status; 0 for a range cancelled or still waiting, -1 for a transport error, -2 when its part file
   /// couldn't be written (or was gone), -3 when the answer wasn't the range asked for (its Content-Range or total), -4
-  /// when it was shorter (what came is written and listed; the engine fetches the rest).
+  /// when it was shorter (what came, [received] bytes, is written and listed; the engine fetches the rest).
   final int status;
 }
 
