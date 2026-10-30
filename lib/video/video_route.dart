@@ -14,7 +14,9 @@ import 'video_page.dart';
 /// plays. [view] is the video a pasted link already resolved, so the page doesn't ask Bilibili for it again, and
 /// [detail] the signed view that resolved it, when that one answered (its 合集 and counts). [zoomSource] (推荐 cards
 /// only) is the card the swipe back, 〈 and system back fly the page into. [playback] is a closed page's, brought back
-/// by the small window's restore button: the page takes it over instead of opening the video.
+/// by the small window's restore button: the page takes it over instead of opening the video. An [offline] route plays
+/// the 离线缓存 part [cid] from the phone, never asking Bilibili for it (`openOfflinePage`); without a [start] it
+/// resumes where the library saw it stop.
 @immutable
 final class VideoRoute {
   const VideoRoute({
@@ -27,6 +29,7 @@ final class VideoRoute {
     this.detail,
     this.zoomSource,
     this.playback,
+    this.offline = false,
   });
 
   final String bvid;
@@ -38,6 +41,7 @@ final class VideoRoute {
   final VideoDetail? detail;
   final ZoomSource? zoomSource;
   final PagePlayback? playback;
+  final bool offline;
 
   /// The feed card's cover and the page's player box share it, so the cover flies into the player.
   static String coverTag(String bvid) => 'cover-$bvid';

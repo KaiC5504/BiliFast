@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show File;
 import 'dart:isolate';
 
 import 'package:bili_core/api.dart';
@@ -27,6 +28,9 @@ class DanmakuFeed extends ChangeNotifier {
   int _cid = 0;
   int _durationMs = 0;
   int? _positionMs;
+
+  /// Where a 离线缓存 part's segments are; null while they come from Bilibili.
+  _LocalSegments? _local;
 
   /// Bumped by every load, so a segment for the previous video is dropped.
   int _loads = 0;
@@ -72,8 +76,16 @@ class DanmakuFeed extends ChangeNotifier {
   DanmakuFilterOptions get options => _options;
 
   /// Starts over for a new video; a cid of 0 means none.
-  void load({required int cid, required int durationMs}) {
+  void load({required int cid, required int durationMs}) => _start(cid: cid, durationMs: durationMs, local: null);
+
+  /// Starts over for a 离线缓存 part: its segments come from `[folder]/1.so` … `[segments].so` (each the `seg.so`
+  /// answer as Bilibili sent it) and never from the network. Without a folder it shows only what is sent from the page.
+  void loadLocal({required int cid, required int durationMs, required String? folder, required int segments}) =>
+      _start(cid: cid, durationMs: durationMs, local: (folder: folder, segments: folder == null ? 0 : segments));
+
+  void _start({required int cid, required int durationMs, required _LocalSegments? local}) {
     _loads += 1;
+    _local = local;
     _cid = cid;
     _durationMs = durationMs;
     _positionMs = null;
@@ -103,7 +115,7 @@ class DanmakuFeed extends ChangeNotifier {
   /// Called as the playhead moves.
   void update({required int positionMs, required bool playing}) {
     _positionMs = positionMs;
-    if (_cid == 0 || _closed) return;
+    if (_cid == 0 || _closed || _local?.segments == 0) return;
     final segment = DanmakuSegments.indexForMs(positionMs);
     if (segment != _lastSegment) {
       _lastSegment = segment;
@@ -215,7 +227,8 @@ class DanmakuFeed extends ChangeNotifier {
 
   Future<void> _run(int index, int load, int cid) async {
     try {
-      final data = await _client.danmakuSegmentData(cid: cid, index: index);
+      final local = _local;
+      final data = local == null ? await _client.danmakuSegmentData(cid: cid, index: index) : await _read(local, index);
       if (load != _loads || _disposed) return;
       final version = _filterVersion;
       final filter = _filter;
@@ -228,6 +241,15 @@ class DanmakuFeed extends ChangeNotifier {
       _logger.warn(LogCategory.api, 'danmaku segment failed', {'index': index, 'error': '$error'});
       _failed.add(index);
     }
+  }
+
+  /// A segment past the last one saved, or whose file is gone, holds nothing; an empty answer decodes as no danmaku.
+  static Future<Uint8List> _read(_LocalSegments local, int index) async {
+    final folder = local.folder;
+    if (folder == null || index > local.segments) return Uint8List(0);
+    final file = File('$folder/$index.so');
+    if (!await file.exists()) return Uint8List(0);
+    return file.readAsBytes();
   }
 
   _Filter get _filter => (options: _options, rules: _rules, ownHash: _ownHash);
@@ -380,6 +402,8 @@ class DanmakuFeed extends ChangeNotifier {
 }
 
 typedef _Filter = ({DanmakuFilterOptions options, List<BlockRule> rules, String? ownHash});
+
+typedef _LocalSegments = ({String? folder, int segments});
 
 typedef _Segment = ({bool closed, int count, List<DisplayDanmaku> items});
 
