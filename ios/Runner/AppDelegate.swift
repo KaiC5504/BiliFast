@@ -23,7 +23,7 @@ import UIKit
     handleEventsForBackgroundURLSession identifier: String,
     completionHandler: @escaping () -> Void
   ) {
-    guard identifier == OfflineTransfers.identifier else {
+    guard OfflineTransfers.identifiers.contains(identifier) else {
       super.application(application, handleEventsForBackgroundURLSession: identifier, completionHandler: completionHandler)
       return
     }
