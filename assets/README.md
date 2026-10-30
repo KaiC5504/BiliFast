@@ -85,3 +85,11 @@ The iPad's full screen (ipad/08, 16) draws its art in code: ⏮ is the APK's vec
 19.6 pt, 退出全屏 two inward brackets traced on 08; 截图, the lock, 弹 and 弹幕设置 are the phone's landscape painters
 scaled, and 16's 重播 the phone's `ReplayPainter` (16's 分享 is WeChat's logo, the account's share target; ours keeps the
 arrow).
+
+The 缓存 and portrait ⋮ sheets (42, 141-154) take glyphs from the APK's compose icon font (`iconfont.ttf`, by the
+`ref_*_500` names), each drawn white, cut to its ink and scaled to the ink width 42 measures:
+`images/offline/sheet_dislike.png` (`dislike_line`, 60 px), `sheet_watch_later.png` (`arrow_play_next_line`, 64 px),
+`sheet_download.png` (`folder_download_line`, 60 px), `sheet_mini_player.png` (`miniplayer_line`, 63 px),
+`sheet_cast.png` (`tv_airplay_line`, 60 px), `sheet_share.png` (`arrow_share_line`, 60 px) and `sheet_done.png`
+(`checkmark_circle_fill`, 39 px, tinted #2AC864 as 153). The rows' 倍速, 定时关闭, 后台听视频, 字幕, 清晰度 and 单双击手势
+icons are drawn in code (`PanelGlyphKind`), traced on 42 and 43: the APK's icons for them aren't the iPhone's.

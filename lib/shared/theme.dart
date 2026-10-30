@@ -632,7 +632,6 @@ abstract final class BiliMetrics {
   static const panelSpeedWidth = 270 / 956;
   static const panelSheetHeight = 0.62;
   static const panelSpeedSheetHeight = 0.32;
-  static const panelMoreSheetHeight = 0.8;
 
   /// Where the dark layer starts to fade in before the cards: a share of the screen width in landscape, points above
   /// the portrait sheet.
