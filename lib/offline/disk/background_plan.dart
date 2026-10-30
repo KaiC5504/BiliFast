@@ -9,9 +9,9 @@ import '../offline_host.dart';
 /// so a track of gigabytes is a few dozen tasks (each costs iOS ~8 ms to queue; 848 took 7 s, by then in the
 /// background, where iOS defers new transfers).
 const backgroundRangeBytes = 16 << 20;
-const backgroundRangeMaxBytes = 256 << 20;
+const backgroundRangeMaxBytes = 128 << 20;
 
-/// The size of a track's next piece once [queued] bytes of it are queued: 16, 16, 32, 64, 128, then 256 MiB along one
+/// The size of a track's next piece once [queued] bytes of it are queued: 16, 16, 32, 64, then 128 MiB along one
 /// long gap. Grown by bytes rather than by count, so the engine's small holes before the tail leave its first pieces
 /// small.
 int backgroundPieceBytes(int queued) {

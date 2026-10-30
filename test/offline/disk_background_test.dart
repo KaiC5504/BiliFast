@@ -51,16 +51,15 @@ void main() {
     ], reason: 'cut on the grid, not from where the gap starts');
   });
 
-  test('pieces grow from 16 MiB to 256 MiB, cut on their own grid', () {
-    expect(backgroundPieces([ByteRange(0, 1024 * mib - 1)]).map((piece) => (piece.start ~/ mib, piece.length ~/ mib)), [
+  test('pieces grow from 16 MiB to 128 MiB, cut on their own grid', () {
+    expect(backgroundPieces([ByteRange(0, 512 * mib - 1)]).map((piece) => (piece.start ~/ mib, piece.length ~/ mib)), [
       (0, 16),
       (16, 16),
       (32, 32),
       (64, 64),
       (128, 128),
-      (256, 256),
-      (512, 256),
-      (768, 256),
+      (256, 128),
+      (384, 128),
     ]);
     expect(
       backgroundPieces([ByteRange(5 * mib, 70 * mib - 1)]).map((piece) => (piece.start ~/ mib, piece.end ~/ mib + 1)),

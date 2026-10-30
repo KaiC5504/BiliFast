@@ -305,6 +305,11 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   when it arrives. Logs: `history outbox` (counts: queued, sent, dropped, stale, failed, held), `offline resume`
   (cid, local, server, used, source). Known limit: a login of another account straight after an expired one (no
   logout between) would send the first account's waiting reports.
+- 1.3.0 (4), from KaiC's iPad log on (3): the hand-off now lands in the foreground (ms 184-201, late false) and iOS
+  runs it at once, and the update from (2) kept every download (resumed at 4.0, 5.4, 4.0 GB). But iOS ran ~30 ranges
+  at once, each crawling: on a 2-minute trip 62 MB finished and 434 MB were thrown away unfinished. The background
+  session now takes 3 connections per host (`httpMaximumConnectionsPerHost`), pieces stop growing at 128 MiB, and a
+  206 shorter than asked (2 of 43 came back -3) is written and listed as far as it goes (status -4).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):

@@ -115,6 +115,9 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   private static let writeFailed = -2
   private static let wrongAnswer = -3
 
+  /// A shorter answer than asked (the CDN capping a range): what came is written, the rest left to the engine.
+  private static let shortAnswer = -4
+
   /// The part files, the `.bg-ranges` files and the results, one write at a time.
   private let queue = DispatchQueue(label: "com.kaichuan.bilifast.offline.transfers")
   private let lock = NSLock()
@@ -138,6 +141,9 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
     let configuration = URLSessionConfiguration.background(withIdentifier: Self.identifier)
     configuration.isDiscretionary = false
     configuration.sessionSendsLaunchEvents = true
+    // Left to itself iOS ran ~30 ranges at once (1.3.0 (2)'s log), each crawling: in two minutes 62 MB finished and
+    // 434 MB were thrown away unfinished on the return. A few at a time finish one after another.
+    configuration.httpMaximumConnectionsPerHost = 3
     let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     made = session
     return session
@@ -257,10 +263,15 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
       if status == 206 {
         // A part restarted at another size meanwhile must never take the old one's bytes.
         if let content = ContentRange(response?.value(forHTTPHeaderField: "Content-Range")),
-           content.start == range.start, content.end == range.end,
+           content.start == range.start, content.end <= range.end,
            let total = range.total, content.total == total {
-          done = write(location, into: range, total: total)
-          if !done { outcome = Self.writeFailed }
+          let written = write(location, into: range, end: content.end, total: total)
+          done = written && content.end == range.end
+          if !written {
+            outcome = Self.writeFailed
+          } else if !done {
+            outcome = Self.shortAnswer
+          }
         } else {
           outcome = Self.wrongAnswer
         }
@@ -294,13 +305,13 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   /// The range's bytes into its part file at their offset, then the range listed in its `.bg-ranges`. A missing part
   /// is never made: the part was finished, restarted or deleted meanwhile, and a new file would read as zeros where
   /// the engine's own ranges vouch for bytes.
-  private func write(_ location: URL, into range: TransferRange, total: Int64) -> Bool {
+  private func write(_ location: URL, into range: TransferRange, end: Int64, total: Int64) -> Bool {
     let manager = FileManager.default
     let part = range.partURL
     do {
       let size = (try manager.attributesOfItem(atPath: location.path)[.size] as? NSNumber)?.int64Value ?? -1
-      guard size == range.end - range.start + 1 else {
-        NSLog("%@", "offline background write: \(size) bytes for a range of \(range.end - range.start + 1)")
+      guard size == end - range.start + 1 else {
+        NSLog("%@", "offline background write: \(size) bytes for a range of \(end - range.start + 1)")
         return false
       }
       guard manager.fileExists(atPath: part.path) else {
@@ -322,7 +333,7 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
         try output.write(contentsOf: chunk)
       }
       try output.synchronize()
-      try addDone(range, total: total)
+      try addDone(range.start, end, of: range, total: total)
       return true
     } catch {
       let failure = error as NSError
@@ -332,9 +343,9 @@ final class OfflineTransfers: NSObject, URLSessionDownloadDelegate, @unchecked S
   }
 
   /// `{"total": N, "done": [[start, end], ...]}`, sorted and merged as the engine keeps its `.ranges`.
-  private func addDone(_ range: TransferRange, total: Int64) throws {
+  private func addDone(_ start: Int64, _ end: Int64, of range: TransferRange, total: Int64) throws {
     let url = range.backgroundRangesURL
-    var done: [[Int64]] = [[range.start, range.end]]
+    var done: [[Int64]] = [[start, end]]
     var known = total
     if let data = try? Data(contentsOf: url),
        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {

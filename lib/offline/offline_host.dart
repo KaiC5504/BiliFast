@@ -62,7 +62,8 @@ final class BackgroundRangeResult {
   final int received;
 
   /// The HTTP status; 0 for a range cancelled or still waiting, -1 for a transport error, -2 when its part file
-  /// couldn't be written (or was gone), -3 when the answer wasn't the range asked for (its Content-Range or total).
+  /// couldn't be written (or was gone), -3 when the answer wasn't the range asked for (its Content-Range or total), -4
+  /// when it was shorter (what came is written and listed; the engine fetches the rest).
   final int status;
 }
 
