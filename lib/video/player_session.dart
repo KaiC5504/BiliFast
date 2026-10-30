@@ -119,6 +119,10 @@ abstract interface class PlayerSession implements Listenable {
   /// For the end screens; empty until loaded.
   List<VideoCard> get related;
 
+  /// A 离线缓存 part playing from the phone on its own page (158): the small player's row has no 竖屏, ⋮ has no 缓存,
+  /// and [episodes] are the other cached videos.
+  bool get offline;
+
   /// The parts when there are several, otherwise the 合集 section holding this video; empty without either.
   List<Episode> get episodes;
 

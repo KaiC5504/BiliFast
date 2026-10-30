@@ -157,6 +157,8 @@ class _PortraitControlsState extends State<PortraitControls> {
 
   Widget _bottomRow() {
     final upright = _session.layoutVertical;
+    // An offline page's wide video has no 竖屏 (158); an upright one keeps it, its only way to full screen.
+    final vertical = upright || !_session.offline;
     return Row(
       children: [
         PlayPauseButton(key: const ValueKey('portrait-play'), session: _session, onTap: _tap(_session.togglePlay)),
@@ -191,15 +193,16 @@ class _PortraitControlsState extends State<PortraitControls> {
             ),
           ),
         ),
-        ChromeTap(
-          key: const ValueKey('portrait-vertical'),
-          label: '竖屏',
-          onTap: _tap(_ui.orientation.enterVertical),
-          child: _VerticalGlyph(badgeX: upright ? BiliMetrics.badgeEdgeOffsetX : BiliMetrics.badgeOffsetX),
-        ),
+        if (vertical)
+          ChromeTap(
+            key: const ValueKey('portrait-vertical'),
+            label: '竖屏',
+            onTap: _tap(_ui.orientation.enterVertical),
+            child: _VerticalGlyph(badgeX: upright ? BiliMetrics.badgeEdgeOffsetX : BiliMetrics.badgeOffsetX),
+          ),
         if (!upright)
           Padding(
-            padding: const EdgeInsets.only(left: BiliMetrics.fullScreenGap),
+            padding: EdgeInsets.only(left: vertical ? BiliMetrics.fullScreenGap : 0),
             child: ChromeTap(
               key: const ValueKey('portrait-fullscreen'),
               label: '全屏',

@@ -290,6 +290,10 @@ abstract final class BiliMetrics {
   static const hudBarHeight = 3.0;
   static const hudSeekGap = 4.0;
 
+  /// The small player draws the level pill at its box's height over this, up to full size: 0.8× in the iPhone's
+  /// 247.5 pt box, clear of its top and bottom rows; full size in the iPad's and an upright video's taller boxes.
+  static const hudInlineLevelFullHeight = 440 / videoAspect / 0.8;
+
   /// Flutter's Cupertino back swipe starts within this many points of the left edge (its private
   /// `_kBackGestureWidth`), or the left safe-area inset when that is wider.
   static const swipeBackEdge = 20.0;
@@ -5964,6 +5968,10 @@ abstract final class DynamicCardTheme {
   static const sheetGap = 5.0;
   static const sheetGapFill = BiliColors.pageGrey;
   static const sheetCancelText = 15.0;
+
+  /// Centred in their rows, the labels' ink sits this much higher on 159.
+  static const sheetLabelLift = 4 / 3;
+  static const sheetCancelLift = 1.0;
   static const sheetCancelInk = Color(0xFF484C53);
   static const sheetIn = Duration(milliseconds: 250);
   static const sheetOut = Duration(milliseconds: 200);
@@ -7345,7 +7353,111 @@ abstract final class OfflineListTheme {
   static const double placeholder = 0;
 }
 
-/// A cached video's page under the player (158-161).
+/// A cached video's page under the player (158-161), measured at 3 px per pt.
 abstract final class OfflinePageTheme {
-  static const double placeholder = 0;
+  /// 离线缓存 (N个视频) and 点我发弹幕 in a 42 pt band under the player with no hairline, the capsule (28 tall, border
+  /// to border) centred 22 below the player.
+  static const headerHeight = 42.0;
+  static const capsuleCentre = 22.0;
+  static const capsuleHeight = 28.0;
+  static const gutter = 12.0;
+
+  /// 离线缓存 in black, bold, its ink centred 21.2 below the player; (N个视频) in the page's grey after it.
+  static const titleText = 16.0;
+  static const titleWeight = FontWeight.w600;
+  static const titleInk = Color(0xFF000000);
+  static const titleCentre = 21.17;
+  static const countText = 12.0;
+  static const countInk = BiliColors.secondaryText;
+  static const countGap = 4.0;
+
+  /// A row is 100: the 135 × 76 cover 12 down at the gutter, the text 8.5 right of it, a hairline between rows from
+  /// the gutter to the right edge (none after the last).
+  static const rowHeight = 100.0;
+  static const rowPadTop = 12.0;
+  static const coverWidth = 135.0;
+  static const coverHeight = 76.0;
+  static const coverRadius = 6.0;
+  static const textGap = 8.5;
+  static const hairline = 1 / 3;
+  static const divider = BiliColors.divider;
+
+  /// The title: two lines 20 apart, its ink from 2 below the cover's top; the box ends 18.67 from the right edge, where
+  /// 160's lines wrap.
+  static const rowTitleText = 15.0;
+  static const rowTitleLine = 20.0;
+  static const rowTitleTop = -2 / 3;
+  static const titleRight = 56 / 3;
+  static const rowTitle = BiliColors.text;
+  static const playing = BiliColors.pink;
+
+  /// The playing bars before the title (158, 160): three 2.33 wide, 4.67 apart, standing on a line 10 under the
+  /// title's ink top (2.67 above the baseline), 4.5 before the text; they rise and fall while the video plays.
+  static const barsLead = 2 / 3;
+  static const barsLift = 8 / 3;
+  static const barWidth = 7 / 3;
+  static const barPitch = 14 / 3;
+  static const barsWidth = barWidth + 2 * barPitch;
+  static const barsHeight = 25 / 3;
+  static const barsGap = 4.5;
+  static const barMin = 3.0;
+  static const barsInk = Color(0xFFFB7299);
+  static const barsCycle = Duration(milliseconds: 900);
+
+  /// Heights at rest, as 160 caught them.
+  static const barRest = <double>[6, 6, 25 / 3];
+
+  /// The UP line and the size line, their ink centred 53 and 70 below the cover's top: UP and the name in the page's
+  /// grey, the size grey or, for a 大会员 quality, 大会员专享 · size in pink.
+  static const metaText = 12.0;
+  static const metaLine = 16.0;
+  static const upCentre = 53.0;
+  static const sizeCentre = 70.0;
+  static const meta = BiliColors.secondaryText;
+  static const vip = BiliColors.pink;
+  static const upBox = 41 / 3;
+  static const upGap = 3.3;
+
+  /// ⋮: 2 pt dots 4.33 apart, centred 20 from the right on the size line.
+  static const moreCentreRight = 20.0;
+  static const moreTarget = 44.0;
+
+  /// The duration on the cover: a 15.33 tall pill of half black, 4 in from the cover's lower right.
+  static const pillText = 10.5;
+  static const pillHeight = 46 / 3;
+  static const pillPadX = 2.0;
+  static const pillRight = 4.0;
+  static const pillBottom = 4.0;
+  static const pillRadius = 2.0;
+  static const pillFill = BiliColors.coverShade;
+  static const pillInk = BiliColors.onCover;
+
+  /// 仅展示本App中可查看的稿件, its ink centred 29 below the last row.
+  static const footerText = 12.0;
+  static const footerCentre = 29.0;
+  static const footerInk = Color(0xFFC9CCD0);
+  static const footerBottom = 24.0;
+
+  /// A row's ⋮ sheet (159): the page dimmed by half, a white 查看详情页 row 50 tall with the pink ▷ ring 22 in, a 5 pt
+  /// grey band, 取消 55 tall, and the home indicator's inset in the band's grey.
+  static const sheetDim = Color(0x80000000);
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
+  static const sheetFill = BiliColors.card;
+  static const sheetBand = BiliColors.pageGrey;
+  static const sheetRowHeight = 50.0;
+  static const sheetBandHeight = 5.0;
+  static const sheetCancelHeight = 55.0;
+  static const sheetIconLeft = 22.0;
+  static const sheetIcon = 21.0;
+  static const sheetIconStroke = 1.5;
+  static const sheetIconInk = BiliColors.pink;
+  static const sheetLabelLeft = 60.0;
+  static const sheetLabelText = 14.0;
+  static const sheetCancelText = 15.0;
+
+  /// Centred in their rows, the labels' ink sits this much higher on 159.
+  static const sheetLabelLift = 4 / 3;
+  static const sheetCancelLift = 1.0;
+  static const sheetInk = BiliColors.text;
 }

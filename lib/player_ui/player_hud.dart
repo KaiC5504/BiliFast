@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 import '../app/form_factor.dart';
+import '../device/orientation.dart';
 import '../shared/theme.dart';
 import 'chrome_state.dart';
 import 'player_ui.dart';
@@ -18,6 +19,12 @@ class PlayerHud extends StatelessWidget {
   static const _vanish = Duration(milliseconds: 160);
   static const _speedKey = ValueKey('hud-speed');
   static final _pop = Tween<double>(begin: 0.82, end: 1);
+
+  /// Full screen's pill as it is; the small player's sized to its box (no screenshot of an inline level).
+  double _levelScale(double height) {
+    if (ui.presentation != Presentation.inline || !height.isFinite) return 1;
+    return (height / BiliMetrics.hudInlineLevelFullHeight).clamp(0.0, 1.0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,9 +58,14 @@ class PlayerHud extends StatelessWidget {
               key: const ValueKey('hud-seek'),
               child: _SeekPill(target: target, duration: duration),
             ),
-            LevelHud(:final kind, :final value) => Center(
+            LevelHud(:final kind, :final value) => LayoutBuilder(
               key: ValueKey('hud-level-${kind.name}'),
-              child: _LevelPill(kind: kind, value: value),
+              builder: (context, box) => Center(
+                child: Transform.scale(
+                  scale: _levelScale(box.maxHeight),
+                  child: _LevelPill(kind: kind, value: value),
+                ),
+              ),
             ),
           },
         ),

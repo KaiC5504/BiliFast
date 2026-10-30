@@ -54,6 +54,7 @@ PlayerSession createPageSession({
   void Function(double seconds)? onSeeked,
   VoidCallback? willPlay,
   PlayerPrefs? prefs,
+  SessionPlaylist? playlist,
 }) {
   final environment = services.environment;
   return PagePlayerSession(
@@ -70,12 +71,24 @@ PlayerSession createPageSession({
     onSeeked: onSeeked,
     willPlay: willPlay,
     prefs: prefs,
+    playlist: playlist,
   );
+}
+
+/// What an offline page plays in turn (离线缓存): its cached videos in place of the parts and the 合集, for 选集, ⏭ and
+/// 自动连播. It notifies when the list changes; the session it is handed to disposes it.
+abstract interface class SessionPlaylist implements Listenable {
+  /// In order; [Episode.current] is left false, the session sets it.
+  List<Episode> get episodes;
+
+  void dispose();
 }
 
 /// The player half of BiliNative's VideoPageModel: seeks, speed, the end rules (单集循环, 自动连播, 列表循环), 定时关闭,
 /// 看点 and related videos, and the panels' switches, over the page's [PlaybackController]. [willPlay] runs before every
-/// play it starts (play, 重播, a timestamp), so another page's small window closes first.
+/// play it starts (play, 重播, a timestamp), so another page's small window closes first. With a [playlist] it is an
+/// offline page's: the cached videos stand in for the parts and the 合集, and it fetches nothing (no related videos,
+/// 看点 or seek frames) and changes no quality, codec or mode.
 class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver implements PlayerSession {
   PagePlayerSession({
     required PlaybackController controller,
@@ -88,6 +101,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     this._onSeeked,
     this._willPlay,
     PlayerPrefs? prefs,
+    SessionPlaylist? playlist,
     MonotonicClock? clock,
     PeriodicTimer? periodic,
     StartTimer? startTimer,
@@ -95,6 +109,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   })  : _controller = controller,
         _accountChanges = accountChanges,
         _prefs = prefs ?? PlayerPrefs.shared,
+        _playlist = playlist,
         _monotonic = clock ?? MonotonicClock.system,
         _periodic = periodic ?? _systemPeriodic,
         _startTimer = startTimer ?? Timer.new,
@@ -105,6 +120,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     WidgetsBinding.instance.addObserver(this);
     controller.addListener(_controllerChanged);
     accountChanges?.addListener(notifyListeners);
+    playlist?.addListener(notifyListeners);
     _endings = controller.endings.listen((_) => unawaited(_handleEnd()));
     _applyPrefs();
     _controllerChanged();
@@ -130,6 +146,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   final void Function(double seconds)? _onSeeked;
   final VoidCallback? _willPlay;
   final PlayerPrefs _prefs;
+  final SessionPlaylist? _playlist;
   final MonotonicClock _monotonic;
   final PeriodicTimer _periodic;
   final StartTimer _startTimer;
@@ -181,6 +198,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     if (controller.rate != 1) _quietly(() => controller.setRate(1), 'rate');
     if (controller.mirrored) _quietly(() => controller.setMirrored(false), 'mirror');
     if (controller.fit != _prefs.fit) _quietly(() => controller.setFit(_prefs.fit), 'fit');
+    if (offline) return;
     final mode = _prefs.btr ? PlaybackMode.btr : PlaybackMode.direct;
     if (controller.mode != mode) _quietly(() => controller.setMode(mode), 'mode');
     final quality = _prefs.quality;
@@ -262,14 +280,24 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   List<VideoCard> get related => _related;
 
   @override
-  bool get episodesAreParts => _inParts;
+  bool get offline => _playlist != null;
 
-  /// Titles as EpisodesPanel.swift shows them: `P2 名字` for parts, the episode's own title for 合集.
+  @override
+  bool get episodesAreParts => !offline && _inParts;
+
+  /// Titles as EpisodesPanel.swift shows them: `P2 名字` for parts, the episode's own title for 合集. An offline page's
+  /// are its cached videos.
   @override
   List<Episode> get episodes {
+    final cid = part?.cid;
+    if (_playlist case final playlist?) {
+      return [
+        for (final episode in playlist.episodes)
+          episode.cid == cid ? _withCurrent(episode, current: true) : episode,
+      ];
+    }
     final video = this.video;
     if (video == null) return const [];
-    final cid = part?.cid;
     if (_inParts) {
       return [for (final page in video.pages) _partEpisode(video, page, current: page.cid == cid)];
     }
@@ -304,6 +332,18 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   /// The API models read a missing duration or date as 0.
   static int? _known(int value) => value > 0 ? value : null;
 
+  static Episode _withCurrent(Episode episode, {required bool current}) => Episode(
+        bvid: episode.bvid,
+        cid: episode.cid,
+        title: episode.title,
+        current: current,
+        cover: episode.cover,
+        duration: episode.duration,
+        pubdate: episode.pubdate,
+        views: episode.views,
+        danmaku: episode.danmaku,
+      );
+
   /// The 合集 section holding [video], else the first.
   SeasonSection? _section(VideoView video) {
     final sections = _controller.season?.sections ?? const <SeasonSection>[];
@@ -311,15 +351,20 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
         sections.firstOrNull;
   }
 
-  List<logic.PlayItem> get _partItems => [
-        for (final page in video?.pages ?? const <VideoPage>[]) logic.PlayItem(bvid: video!.bvid, cid: page.cid),
-      ];
+  List<logic.PlayItem> get _partItems => offline
+      ? const []
+      : [for (final page in video?.pages ?? const <VideoPage>[]) logic.PlayItem(bvid: video!.bvid, cid: page.cid)];
 
-  /// Every section's episodes in order, as Swift's `episodeItems`.
-  List<logic.PlayItem> get _episodeItems => [
-        for (final section in _controller.season?.sections ?? const <SeasonSection>[])
-          for (final episode in section.episodes) logic.PlayItem(bvid: episode.bvid, cid: episode.cid),
-      ];
+  /// Every section's episodes in order, as Swift's `episodeItems`; an offline page's cached videos.
+  List<logic.PlayItem> get _episodeItems => switch (_playlist) {
+        final playlist? => [
+            for (final episode in playlist.episodes) logic.PlayItem(bvid: episode.bvid, cid: episode.cid),
+          ],
+        null => [
+            for (final section in _controller.season?.sections ?? const <SeasonSection>[])
+              for (final episode in section.episodes) logic.PlayItem(bvid: episode.bvid, cid: episode.cid),
+          ],
+      };
 
   @override
   Episode? get next {
@@ -337,6 +382,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   }
 
   Episode _episodeFor(logic.PlayItem item) {
+    if (_playlist case final playlist?) {
+      return playlist.episodes.where((episode) => episode.cid == item.cid).firstOrNull ??
+          Episode(bvid: item.bvid, cid: item.cid, title: '', current: false);
+    }
     final video = this.video;
     if (video != null && item.bvid == video.bvid) {
       final page = video.pages.where((page) => page.cid == item.cid).firstOrNull;
@@ -377,6 +426,15 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       _quietly(() => player.setRate(speedUpRate), 'speed up');
     }
     _phaseSeen = phase;
+    if (offline) {
+      final item = video == null || page == null ? null : logic.PlayItem(bvid: video.bvid, cid: page.cid);
+      if (item != null && item != _current) {
+        _current = item;
+        _ended = false;
+      }
+      notifyListeners();
+      return;
+    }
     if (video != null && video.bvid != _relatedFor) {
       _relatedFor = video.bvid;
       _related = const [];
@@ -412,10 +470,11 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   final _seekFrames = ValueNotifier<VideoShot?>(null);
   logic.PlayItem? _seekFramesFor;
 
+  /// An offline page shows the time alone: the frames are Bilibili's.
   @override
   void wantSeekFrames() {
     final item = _current;
-    if (item == null || item == _seekFramesFor) return;
+    if (offline || item == null || item == _seekFramesFor) return;
     _seekFramesFor = item;
     _seekFrames.value = null;
     unawaited(_loadSeekFrames(item));
@@ -636,8 +695,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   @override
   bool get btr => _controller.mode == PlaybackMode.btr;
 
+  /// An offline page's quality, codec and mode are its files': picking one changes nothing, the saved choice included.
   @override
   Future<String?> setBtr(bool on) {
+    if (offline) return Future.value();
     _prefs.btr = on;
     final mode = on ? PlaybackMode.btr : PlaybackMode.direct;
     return _attempt(() => _controller.setMode(mode), 'btr switch', '切换 BTR 加速失败');
@@ -663,6 +724,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   @override
   Future<String?> setQuality(int qn) {
+    if (offline) return Future.value();
     _prefs.quality = qn;
     return _attempt(() => _controller.setQuality(qn), 'quality', '切换清晰度失败');
   }
@@ -672,6 +734,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   @override
   Future<String?> setCodec(VideoCodec codec) {
+    if (offline) return Future.value();
     _prefs.codec = codec;
     return _attempt(() => _controller.setCodec(codec), 'codec', '切换编码失败');
   }
@@ -888,6 +951,9 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_controllerChanged);
     _accountChanges?.removeListener(notifyListeners);
+    _playlist
+      ?..removeListener(notifyListeners)
+      ..dispose();
     unawaited(_endings.cancel());
     _sleepTicker?.cancel();
     _stopBackgroundChecks();

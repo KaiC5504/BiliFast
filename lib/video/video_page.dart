@@ -20,7 +20,11 @@ import '../comments/comments_model.dart';
 import '../comments/comments_tab.dart';
 import '../device/orientation.dart';
 import '../device/orientation_host.dart' show TurnStart;
+import '../device/status_bar.dart' show StatusNetwork;
 import '../home/feed_model.dart' show requestFailureMessage;
+import '../offline/offline_models.dart';
+import '../offline/page/offline_page_body.dart';
+import '../offline/page/offline_row_sheet.dart';
 import '../playback/playback_controller.dart';
 import '../player/bili_player.dart' show PlayerStatus;
 import '../player_ui/chrome_state.dart';
@@ -96,7 +100,9 @@ typedef VideoPageOpener = Future<void> Function(BuildContext context, VideoRoute
 /// It plays the route's video on a controller of its own ([PagePlayback]), reports watch progress while logged in, and
 /// hands the playback to the [PipKeeper] when popped or replaced, which frees it unless the small window plays it. A
 /// video opened from the page replaces it ([replaceVideoPage]). Covered by another page (a video from a space opened on
-/// it) it pauses, and shown again it resumes where it was, without a reload.
+/// it) it pauses, and shown again it resumes where it was, without a reload. An offline route's page (158) plays a
+/// 离线缓存 part from the phone with the cached videos under the player in place of the tabs, and has no details or
+/// comments.
 class VideoPage extends StatefulWidget {
   const VideoPage({
     super.key,
@@ -305,6 +311,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// Counts the logins made from this page, for what holds the account's state to ask again.
   final _logins = ValueNotifier<int>(0);
   Timer? _turnWait;
+
+  /// The offline page's row whose ⋮ sheet is up (159).
+  final _offlineSheet = ValueNotifier<OfflineItem?>(null);
+
+  /// The offline page watches the phone's network, for 查看详情页 offline (161).
+  bool _watchingNetwork = false;
+
+  bool get _offline => widget.route.offline;
 
   OrientationController get _orientation => _services!.device.orientation;
 
@@ -570,6 +584,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..addListener(_panelChanged)
       ..addListener(_standAside);
     _commentOverlays.addListener(_panelChanged);
+    _offlineSheet.addListener(_panelChanged);
     _uploaderSheet.addListener(_sheetChanged);
     _collapse.addListener(_collapseChanged);
     _spin.addStatusListener(_spinStatus);
@@ -582,6 +597,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _services = AppScope.of(context);
       _orientation.addListener(_presentationChanged);
       _turns = _orientation.turns.listen(_turnStarted);
+      if (_offline) {
+        _watchingNetwork = true;
+        _services!.device.status.watch(true);
+      }
       _takePlayback();
     }
     // Only another page covers this one. A popup on top (the ⋮ menu, a dialog) makes the route not current as well,
@@ -690,15 +709,18 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     session.loopsAtEnd = _presentation == Presentation.vertical;
     _collapse.session = session;
     controller.addListener(_follow);
-    final details = widget.createDetails(
-      session: session,
-      services: services,
-      toast: _toast,
-      requestLogin: _askLogin,
-      logins: _logins,
-    );
+    // An offline page asks Bilibili for nothing about its video: no actions, counts or uploader card.
+    final details = _offline
+        ? null
+        : widget.createDetails(
+            session: session,
+            services: services,
+            toast: _toast,
+            requestLogin: _askLogin,
+            logins: _logins,
+          );
     _details = details;
-    if (_covered) details.active = false;
+    if (_covered) details?.active = false;
     final environment = services.environment;
     final danmaku = DanmakuSession(
       feed: controller.danmaku,
@@ -731,7 +753,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       device: services.device.controls,
       onBack: _back,
       details: details,
-      onComments: _showComments,
+      onComments: _offline ? null : _showComments,
       overlay: _overlays,
       edgeTaken: _threadEdge,
       danmaku: danmaku,
@@ -793,7 +815,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// iPhone nothing loads until 评论 first shows; the iPad loads at once, so a turn finds the sideways column as long as
   /// the place it carries.
   void _syncComments() {
-    if (_left || !mounted) return;
+    if (_left || !mounted || _offline) return;
     final detail = _intro.detail;
     final view = _attached ? _controller?.video : null;
     final aid = detail?.aid ?? (view?.bvid == _playback?.bvid ? view?.aid : null);
@@ -922,7 +944,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (_presentation.fullScreen && _commentOverlays.value is ComposeOverlay && !_drafts.anyPosting) {
       _commentOverlays.close();
     }
-    if (_presentation.fullScreen) _uploaderSheet.close();
+    if (_presentation.fullScreen) {
+      _uploaderSheet.close();
+      _offlineSheet.value = null;
+    }
     _session?.loopsAtEnd = _presentation == Presentation.vertical;
     setState(() {});
     _applySystemUi();
@@ -1025,6 +1050,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// Back closes the comments' overlays and thread first on the small player, then an action overlay, then a panel,
   /// then the uploader sheet's confirm and the sheet.
   void _back() {
+    if (_closeOfflineSheet()) return;
     if (_closeDanmakuSend()) return;
     if (!_presentation.fullScreen && _closeComments()) return;
     if (_overlays.value != null) {
@@ -1176,6 +1202,61 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return done.future;
   }
 
+  /// On back, the offline row's sheet closes before anything else: it covers the whole page.
+  bool _closeOfflineSheet() {
+    if (_offlineSheet.value == null) return false;
+    _offlineSheet.value = null;
+    return true;
+  }
+
+  /// A cached row's tap: that part on this page, from where it stopped. The one playing goes on, unless it failed.
+  void _playOffline(OfflineItem item) {
+    final playback = _playback;
+    if (playback == null || _left) return;
+    if (item.cid == playback.cid) {
+      if (_controller?.phase == PlaybackPhase.failed) playback.retry();
+      return;
+    }
+    playback.openOnPage(item.request.bvid, cid: item.cid);
+  }
+
+  /// 查看详情页: the video's own page, which needs the network (161).
+  void _offlineDetails(OfflineItem item) {
+    _offlineSheet.value = null;
+    if (_services!.device.status.status.value.network == StatusNetwork.none) {
+      _toast('似乎已断开与互联网的连接');
+      return;
+    }
+    unawaited(openVideoPage(context, VideoRoute(bvid: item.request.bvid, cid: item.cid, title: item.request.title)));
+  }
+
+  /// The offline page's band under the player, in the tab row's place.
+  Widget _offlineHeader() {
+    final session = _session;
+    final danmaku = _danmaku;
+    final library = _services!.offline;
+    return ListenableBuilder(
+      listenable: Listenable.merge([session ?? _tabs, library, ?danmaku, ?danmaku?.sendOpen]),
+      builder: (context, _) => OfflinePageHeader(
+        count: offlinePageItems(library).length,
+        danmakuOn: session?.danmakuOn ?? PlayerPrefs.shared.danmakuOn,
+        onToggleDanmaku: session == null ? null : () => session.setDanmakuOn(!session.danmakuOn),
+        onSendDanmaku: () => danmaku?.openSend(),
+        danmakuInputOpen: danmaku?.sendOpen.value ?? false,
+        danmakuClosed: danmaku?.closed ?? false,
+      ),
+    );
+  }
+
+  /// The cached videos, in the tabs' place.
+  Widget _offlineList() => OfflinePageList(
+    library: _services!.offline,
+    playing: _playback?.cid,
+    status: _session?.readout.status,
+    onPlay: _playOffline,
+    onMore: (item) => _offlineSheet.value = item,
+  );
+
   /// On back, the send bar closes before anything under it.
   bool _closeDanmakuSend() {
     final danmaku = _danmaku;
@@ -1281,6 +1362,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         ..detach(this);
       _services!.pipKeeper.pageRemoved(playback);
     }
+    if (_watchingNetwork) {
+      _watchingNetwork = false;
+      _services?.device.status.watch(false);
+    }
     if (_services != null) {
       _applySystemUi();
       // A newer page's begin makes this a no-op. Disposal runs while the tree is locked, and end() notifies the
@@ -1306,6 +1391,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..removeListener(_panelChanged)
       ..removeListener(_standAside);
     _commentOverlays
+      ..removeListener(_panelChanged)
+      ..dispose();
+    _offlineSheet
       ..removeListener(_panelChanged)
       ..dispose();
     _uploaderSheet
@@ -1363,8 +1451,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       if (_drawnWide != null && _drawnWide != wide) _recorder.sized(size, layout: layout);
     }
     _drawnWide = wide;
-    // The iPad's two columns: the player's column scrolls 简介's controller.
-    final sideways = pad && wide;
+    // The iPad's two columns: the player's column scrolls 简介's controller. The offline page keeps one column.
+    final sideways = pad && wide && !_offline;
     _laidOut.value = layout;
     final fullScreen = layout.fullScreen;
     final controller = _controller;
@@ -1385,10 +1473,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           _overlays.value == null &&
           _commentOverlays.value == null &&
           !_threadOpen &&
-          !_uploaderSheet.isOpen,
+          !_uploaderSheet.isOpen &&
+          _offlineSheet.value == null,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           setState(_leave);
+        } else if (_closeOfflineSheet()) {
+          return;
         } else if (_closeDanmakuSend()) {
           return;
         } else if (!presentation.fullScreen && _closeComments()) {
@@ -1458,8 +1549,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   Widget hideable(bool hidden, Widget child) =>
                       Offstage(offstage: hidden, child: TickerMode(enabled: !hidden, child: child));
                   // Laid out as if the player were already the bar; each tab leaves the rest of the full height free.
-                  final pager = belowPlayer(CollapseReserve(collapse: _collapse, child: _pager(context)));
-                  final tabRow = belowPlayer(_tabRow(context));
+                  // The offline list scrolls on its own, under the band, and never shrinks the player.
+                  final pager = belowPlayer(
+                    _offline ? _offlineList() : CollapseReserve(collapse: _collapse, child: _pager(context)),
+                  );
+                  final tabRow = belowPlayer(_offline ? _offlineHeader() : _tabRow(context));
                   // Full screen runs under the notch and the home indicator, so its chrome keeps clear of them itself;
                   // the small player sits below the status bar with no insets of its own.
                   final area = MediaQuery(
@@ -1563,8 +1657,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                         child: child,
                       );
                       final uprightBox = upright.top + _collapse.height;
-                      const tabRowHeight = PageTheme.tabRowHeight;
-                      final tabsTop = upright.top + _collapse.barHeight + tabRowHeight;
+                      final tabRowHeight = _offline ? OfflinePageTheme.headerHeight : PageTheme.tabRowHeight;
+                      final tabsTop = _offline
+                          ? uprightBox + tabRowHeight
+                          : upright.top + _collapse.barHeight + tabRowHeight;
                       final screen = Offset.zero & constraints.biggest;
                       // Turned, a backdrop the screen's size would bare its corners.
                       final reach = constraints.biggest.bottomRight(Offset.zero).distance;
@@ -1691,6 +1787,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                                 presentation: layout,
                                 playerBottom: box,
                                 toast: _toast,
+                              ),
+                            ),
+                          if (_offline)
+                            Positioned.fill(
+                              key: const ValueKey('offline-sheet-layer'),
+                              child: hideable(
+                                hidden,
+                                OfflineRowSheet(item: _offlineSheet, onDetails: _offlineDetails),
                               ),
                             ),
                         ],
@@ -1931,7 +2035,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final progress = fullScreen ? 0.0 : _collapse.progress;
     final box = fullScreen ? constraints.maxHeight : top + height;
     final tabRow = body.tabRow;
-    final tabsTop = top + _collapse.barHeight + (tabRow == null ? 0 : PadPageTheme.tabRowHeight);
+    final rowHeight = _offline ? OfflinePageTheme.headerHeight : PadPageTheme.tabRowHeight;
+    final tabsTop = _offline
+        ? top + height + rowHeight
+        : top + _collapse.barHeight + (tabRow == null ? 0 : PadPageTheme.tabRowHeight);
     final player = Rect.lerp(Rect.fromLTWH(0, 0, columnWidth, top + height), screen, t)!;
     final padFrame = fullScreen
         ? null
@@ -1976,7 +2083,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
             left: 0,
             top: top + height,
             width: columnWidth,
-            height: PadPageTheme.tabRowHeight,
+            height: rowHeight,
             child: hideable(tabRow),
           ),
         if (body.strip case final strip?)
@@ -2075,6 +2182,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
               toast: _toast,
               padFrame: padFrame,
             ),
+          ),
+        if (_offline)
+          Positioned.fill(
+            key: const ValueKey('offline-sheet-layer'),
+            child: hideable(OfflineRowSheet(item: _offlineSheet, onDetails: _offlineDetails)),
           ),
       ],
     );
