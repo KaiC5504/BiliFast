@@ -120,7 +120,7 @@ final class _Run {
       progressInterval: const Duration(milliseconds: 20),
       flushInterval: const Duration(milliseconds: 50),
       networkTimeout: networkTimeout ?? const Duration(seconds: 20),
-      logger: Logger(session: 'test'),
+      logger: Logger(session: 'test')..add(logs),
     );
     addTearDown(downloads.dispose);
   }
@@ -129,6 +129,9 @@ final class _Run {
   final _Files transport;
   late final OfflineDownloads downloads;
   final events = <DownloadEvent>[];
+  final logs = MemorySink();
+
+  Iterable<LogEvent> logged(String msg) => logs.events.where((event) => event.msg == msg);
 
   String path(String name) => '${dir.path}${Platform.pathSeparator}$name';
 
@@ -328,6 +331,30 @@ void main() {
     expect(run.downloads.running, isEmpty);
   });
 
+  test(
+    'a discarded part whose files cannot be removed still ends: the failure is sent and stop and start answer',
+    () async {
+      final files = _Files({'v.m4s': (size: 2 * 1024 * _kib, key: 0x55), 'a.m4s': (size: 200 * _kib, key: 0x56)});
+      files.lieFrom['v.m4s'] = 1024 * _kib;
+      final run = _Run(await _temp(), files);
+      final request = run.request('15');
+      // Windows refuses to delete a file another handle holds open.
+      final held = await File('${DownloadRanges.rangesPath(request.video.path)}.tmp').open(mode: FileMode.write);
+      addTearDown(held.close);
+      await run.downloads.start(request);
+      final failed = await run.failed('15');
+      expect(failed.failure, DownloadFailure.sizeChanged, reason: 'the first failure is the one reported');
+      expect(run.logged('download end failed').single.f['track']?.toJson(), 'video');
+      expect(run.downloads.running, isEmpty);
+      await run.downloads.stop('15').timeout(const Duration(seconds: 5));
+      files.lieFrom.clear();
+      run.events.clear();
+      await run.downloads.start(request).timeout(const Duration(seconds: 5));
+      await run.downloads.stop('15').timeout(const Duration(seconds: 5));
+    },
+    skip: Platform.isWindows ? false : 'only Windows refuses to delete an open file',
+  );
+
   test('a total that differs from the request fails at the first piece', () async {
     final files = _Files({'v.m4s': (size: 1024 * _kib, key: 0x53), 'a.m4s': (size: 200 * _kib, key: 0x54)});
     final run = _Run(await _temp(), files);
@@ -453,7 +480,72 @@ void main() {
     );
     await run.downloads.start(request);
     final failed = await run.failed('8');
-    expect(failed.failure, DownloadFailure.disk);
+    expect(failed.failure, DownloadFailure.file, reason: 'only a full phone is a disk failure');
+    expect(failed.osError, isNotNull);
     expect(run.downloads.running, isEmpty);
+  });
+
+  test('only the full-disk codes count as a full phone', () {
+    for (final code in [28, 112, 39]) {
+      expect(isDiskFullCode(code), isTrue, reason: '$code');
+    }
+    for (final code in [2, 5, 13, 17, 20, 21, 32]) {
+      expect(isDiskFullCode(code), isFalse, reason: '$code');
+    }
+  });
+
+  group('ranges that vouch for bytes the part lacks', () {
+    const videoSize = 1024 * _kib;
+    const audioSize = 128 * _kib;
+
+    test('a missing part drops every claim and fetches it all again', () async {
+      final files = _Files({'v.m4s': (size: videoSize, key: 0x13), 'a.m4s': (size: audioSize, key: 0x14)});
+      final run = _Run(await _temp(), files);
+      final request = run.request('11');
+      await RangesRecord(videoSize, [ByteRange(0, _piece - 1)]).write(DownloadRanges.rangesPath(request.video.path));
+      await run.downloads.start(request);
+      await run.finished('11');
+      expect(await File(request.video.path).readAsBytes(), files.content('v.m4s'));
+      final trimmed = run.logged('download ranges trimmed').single;
+      expect(trimmed.f['track']?.toJson(), 'video');
+      expect(trimmed.f['part']?.toJson(), 0);
+      expect(trimmed.f['claimed']?.toJson(), _piece);
+    });
+
+    test('a part shorter than its ranges keeps only what it holds', () async {
+      final files = _Files({'v.m4s': (size: videoSize, key: 0x15), 'a.m4s': (size: audioSize, key: 0x16)});
+      final run = _Run(await _temp(), files);
+      final request = run.request('12');
+      final video = request.video.path;
+      await _writeAt(DownloadRanges.partPath(video), files.content('v.m4s'), [ByteRange(0, _piece ~/ 2 - 1)]);
+      await RangesRecord(videoSize, [ByteRange(0, _piece - 1)]).write(DownloadRanges.rangesPath(video));
+      files.open = false;
+      await run.downloads.start(request);
+      expect(run.last<DownloadProgress>('12')!.videoBytes, _piece ~/ 2);
+      expect((await RangesRecord.read(DownloadRanges.rangesPath(video)))?.done, [ByteRange(0, _piece ~/ 2 - 1)]);
+      files.open = true;
+      await run.finished('12');
+      expect(await File(video).readAsBytes(), files.content('v.m4s'));
+      expect(files.requested('v.m4s').any((range) => range.start == _piece ~/ 2), isTrue);
+    });
+  });
+
+  test('an unreadable ranges file is logged and its part fetched again', () async {
+    const videoSize = 512 * _kib;
+    final files = _Files({'v.m4s': (size: videoSize, key: 0x19), 'a.m4s': (size: 64 * _kib, key: 0x1a)});
+    final run = _Run(await _temp(), files);
+    final request = run.request('14');
+    await _writeAt(DownloadRanges.partPath(request.video.path), files.content('v.m4s'), [ByteRange(0, _piece - 1)]);
+    await File(DownloadRanges.rangesPath(request.video.path)).writeAsString('{"total": 524288, "done": [[0');
+    await File(DownloadRanges.backgroundRangesPath(request.audio.path)).writeAsString('not json');
+    await run.downloads.start(request);
+    await run.finished('14');
+    expect(await File(request.video.path).readAsBytes(), files.content('v.m4s'));
+    final unreadable = run.logged('download ranges unreadable').toList();
+    expect(unreadable.map((event) => (event.f['track']?.toJson(), event.f['file']?.toJson())), [
+      ('video', 'ranges'),
+      ('audio', 'bg-ranges'),
+    ]);
+    expect(unreadable.first.f['bytes']?.toJson(), 29);
   });
 }

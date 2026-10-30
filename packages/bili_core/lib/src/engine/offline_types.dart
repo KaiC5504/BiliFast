@@ -51,7 +51,8 @@ final class DownloadGaps {
 }
 
 enum DownloadFailure {
-  /// The CDN refused the signed address (403 or 404): the app asks Bilibili for fresh ones.
+  /// The CDN refused the signed address (403 or 404), or the policy takes none of the addresses (no nodes, an
+  /// invalid URL): the app asks Bilibili for fresh ones.
   expired,
 
   /// A response's total differs from the one the download started with: that track starts over.
@@ -60,8 +61,11 @@ enum DownloadFailure {
   /// Every node failed for longer than the engine waits.
   network,
 
-  /// The file could not be written (the phone is full).
+  /// The phone is full: ENOSPC, or ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL on Windows.
   disk,
+
+  /// A file could not be read or written for any other reason ([DownloadFailed.osError] says which).
+  file,
 }
 
 sealed class DownloadEvent {
@@ -101,10 +105,13 @@ final class DownloadFinished extends DownloadEvent {
 
 /// The download stopped; what it had is kept for the next start.
 final class DownloadFailed extends DownloadEvent {
-  const DownloadFailed(super.id, {required this.failure, this.track, this.detail = ''});
+  const DownloadFailed(super.id, {required this.failure, this.track, this.detail = '', this.osError});
 
   final DownloadFailure failure;
   final TrackKind? track;
+
+  /// The OS's error code behind a [DownloadFailure.disk] or [DownloadFailure.file], when it gave one.
+  final int? osError;
 
   /// For the log; never a URL.
   final String detail;

@@ -136,7 +136,7 @@ final class OfflineDownloads {
         folded += await _prepare(track);
       }
     } catch (error) {
-      _fail(download, DownloadFailure.disk, detail: _describe(error));
+      _failFile(download, null, error);
       await _end(download);
       return;
     }
@@ -161,8 +161,8 @@ final class OfflineDownloads {
     unawaited(_run(download));
   }
 
-  /// Stops [id] at once, flushes what it wrote and reports what is missing. An unknown id reports the gaps on disk
-  /// for nothing: both lists empty, totals 0.
+  /// Stops [id] at once, flushes what it wrote and reports what is missing. An unknown id answers at once, without
+  /// reading the disk: both lists empty, totals 0.
   ///
   /// A track whose total isn't known yet reports no gaps and a total of 0, as does one whose total changed.
   Future<DownloadGaps> stop(String id) async {
@@ -286,7 +286,7 @@ final class OfflineDownloads {
     var total = requested;
     var done = <ByteRange>[];
     var rewrite = false;
-    final record = await RangesRecord.read(track.ranges);
+    final record = await _readRecord(track, track.ranges);
     if (record != null) {
       if (total > 0 && record.total > 0 && record.total != total) {
         _logger.warn(LogCategory.engine, 'download ranges dropped', {'track': track.kind.name, 'total': record.total});
@@ -298,7 +298,7 @@ final class OfflineDownloads {
     }
     var folded = 0;
     final hadBackground = await File(track.background).exists();
-    final background = hadBackground ? await RangesRecord.read(track.background) : null;
+    final background = hadBackground ? await _readRecord(track, track.background) : null;
     if (hadBackground) rewrite = true;
     if (background != null) {
       if (total > 0 && background.total > 0 && background.total != total) {
@@ -314,6 +314,19 @@ final class OfflineDownloads {
       }
     }
     if (total > 0) done = clipRanges(done, total);
+    // A record can outlive the bytes it vouches for (the part removed, or cut short before a flush): what lies past
+    // the part's end is fetched again, or the finished file would hold zeros there.
+    final held = await part.exists() ? await part.length() : 0;
+    if (done.isNotEmpty && done.last.end >= held) {
+      _logger.warn(LogCategory.engine, 'download ranges trimmed', {
+        'track': track.kind.name,
+        'part': held,
+        'claimed': done.last.end + 1,
+      });
+      done = clipRanges(done, held);
+      folded = min(folded, coveredBytes(done));
+      rewrite = true;
+    }
     track
       ..total = total
       ..done = done
@@ -331,6 +344,27 @@ final class OfflineDownloads {
     // Append mode never truncates: what the ranges vouch for stays, and any other byte is written over.
     track.file = await part.open(mode: FileMode.append);
     return folded;
+  }
+
+  /// Null when the file is missing or unreadable; an unreadable one is logged, as its bytes are fetched again.
+  Future<RangesRecord?> _readRecord(_Track track, String path) async {
+    final file = File(path);
+    if (!await file.exists()) return null;
+    final record = await RangesRecord.read(path);
+    if (record == null) {
+      var length = -1;
+      try {
+        length = await file.length();
+      } on FileSystemException {
+        // Gone since: the length stays unknown.
+      }
+      _logger.warn(LogCategory.engine, 'download ranges unreadable', {
+        'track': track.kind.name,
+        'file': path == track.background ? 'bg-ranges' : 'ranges',
+        'bytes': length,
+      });
+    }
+    return record;
   }
 
   Future<void> _run(_Download download) async {
@@ -351,7 +385,11 @@ final class OfflineDownloads {
       if (!download.ending) await _fetch(download);
     } catch (error) {
       _logger.error(LogCategory.engine, 'download error', {'id': download.id, 'error': _describe(error)});
-      _fail(download, DownloadFailure.network, detail: _describe(error));
+      if (error is FileSystemException) {
+        _failFile(download, null, error);
+      } else {
+        _fail(download, DownloadFailure.network, detail: _describe(error));
+      }
     }
     await _end(download);
   }
@@ -479,7 +517,7 @@ final class OfflineDownloads {
         track.record(piece);
       });
     } catch (error) {
-      _fail(download, DownloadFailure.disk, track: track.kind, detail: _describe(error));
+      _failFile(download, track, error);
       return;
     }
     download
@@ -490,8 +528,11 @@ final class OfflineDownloads {
 
   /// Whether the failed request is worth asking again; when not, the download fails with the reason.
   bool _retries(_Download download, _Track track, Object error) {
+    if (error is FileSystemException) {
+      _failFile(download, track, error);
+      return false;
+    }
     final failure = switch (error) {
-      FileSystemException() => DownloadFailure.disk,
       RipperError(kind: RipperErrorKind.badResponse, status: 403 || 404) => DownloadFailure.expired,
       // Not one address the policy takes: fresh ones from Bilibili may be.
       RipperError(kind: RipperErrorKind.noNodes || RipperErrorKind.invalidURL) => DownloadFailure.expired,
@@ -507,11 +548,24 @@ final class OfflineDownloads {
   }
 
   /// The first failure is the one reported; one met while stopping is the stop's doing.
-  void _fail(_Download download, DownloadFailure failure, {TrackKind? track, String detail = ''}) {
+  void _fail(_Download download, DownloadFailure failure, {TrackKind? track, String detail = '', int? osError}) {
     if (download.failure == null && !download.stopping) {
-      download.failure = (failure: failure, track: track, detail: detail);
+      download.failure = (failure: failure, track: track, detail: detail, osError: osError);
     }
     download.cancel.cancel();
+  }
+
+  /// Only a full phone is [DownloadFailure.disk]: the app holds its whole queue for that, and for nothing else.
+  void _failFile(_Download download, _Track? track, Object error) {
+    final code = error is FileSystemException ? error.osError?.errorCode : null;
+    final full = code != null && isDiskFullCode(code);
+    _fail(
+      download,
+      full ? DownloadFailure.disk : DownloadFailure.file,
+      track: track?.kind,
+      detail: _describe(error),
+      osError: code,
+    );
   }
 
   Future<void> _finishTrack(_Download download, _Track track) async {
@@ -536,37 +590,27 @@ final class OfflineDownloads {
       track
         ..finished = false
         ..discard = true;
-      _fail(download, DownloadFailure.disk, track: track.kind, detail: 'part shorter than its ranges');
+      _fail(download, DownloadFailure.file, track: track.kind, detail: 'part shorter than its ranges');
     } catch (error) {
       track.finished = false;
-      _fail(download, DownloadFailure.disk, track: track.kind, detail: _describe(error));
+      _failFile(download, track, error);
     }
   }
 
   Future<void> _end(_Download download) async {
     download.cancel.cancel();
+    // Whatever the files do, the download lets go and says how it ended: stop, a later start and dispose wait on it.
     for (final track in download.tracks.values) {
-      if (track.discard) {
-        await track.io(() => _close(track));
-        await _delete([track.part, track.ranges, '${track.ranges}.tmp', track.background]);
-        track
-          ..total = 0
-          ..done = const []
-          ..have = 0;
-        continue;
-      }
-      if (track.finished) continue;
       try {
-        await _flush(track);
+        await _endTrack(download, track);
       } catch (error) {
-        _logger.error(LogCategory.engine, 'download flush failed', {
+        _logger.error(LogCategory.engine, 'download end failed', {
           'id': download.id,
           'track': track.kind.name,
           'error': _describe(error),
         });
-        _fail(download, DownloadFailure.disk, track: track.kind, detail: _describe(error));
+        _failFile(download, track, error);
       }
-      await track.io(() => _close(track));
     }
     if (identical(_downloads[download.id], download)) _downloads.remove(download.id);
     if (_downloads.isEmpty) {
@@ -575,7 +619,7 @@ final class OfflineDownloads {
     }
     // Every start ends in an event unless it was stopped, so the app never waits on a download that went quiet.
     if (download.failure == null && !download.finished && !download.stopping) {
-      download.failure = (failure: DownloadFailure.network, track: null, detail: 'ended early');
+      download.failure = (failure: DownloadFailure.network, track: null, detail: 'ended early', osError: null);
     }
     final seconds = (_clock.nowMs() - download.startedAt) / 1000;
     final failure = download.failure;
@@ -585,10 +629,19 @@ final class OfflineDownloads {
         'failure': failure.failure.name,
         'track': failure.track?.name ?? '',
         'detail': failure.detail,
+        'osError': ?failure.osError,
         'have': download.have,
         'seconds': seconds,
       });
-      emit(DownloadFailed(download.id, failure: failure.failure, track: failure.track, detail: failure.detail));
+      emit(
+        DownloadFailed(
+          download.id,
+          failure: failure.failure,
+          track: failure.track,
+          detail: failure.detail,
+          osError: failure.osError,
+        ),
+      );
     } else if (download.finished) {
       _logger.info(LogCategory.engine, 'download finished', {
         'id': download.id,
@@ -607,6 +660,30 @@ final class OfflineDownloads {
       });
     }
     download.ended.complete();
+  }
+
+  Future<void> _endTrack(_Download download, _Track track) async {
+    if (track.discard) {
+      track
+        ..total = 0
+        ..done = const []
+        ..have = 0;
+      await track.io(() => _close(track));
+      await _delete([track.part, track.ranges, '${track.ranges}.tmp', track.background]);
+      return;
+    }
+    if (track.finished) return;
+    try {
+      await _flush(track);
+    } catch (error) {
+      _logger.error(LogCategory.engine, 'download flush failed', {
+        'id': download.id,
+        'track': track.kind.name,
+        'error': _describe(error),
+      });
+      _failFile(download, track, error);
+    }
+    await track.io(() => _close(track));
   }
 
   /// The part's bytes reach the disk before the record that vouches for them.
@@ -644,7 +721,7 @@ final class OfflineDownloads {
       try {
         await _flush(track);
       } catch (error) {
-        _fail(download, DownloadFailure.disk, track: track.kind, detail: _describe(error));
+        _failFile(download, track, error);
         return;
       }
     }
@@ -692,6 +769,9 @@ final class OfflineDownloads {
     _ => '${error.runtimeType}',
   };
 }
+
+/// ENOSPC on iOS, ERROR_DISK_FULL and ERROR_HANDLE_DISK_FULL on Windows.
+bool isDiskFullCode(int code) => const {28, 112, 39}.contains(code);
 
 /// The ranges of `[total]` bytes not in [done] (sorted, merged, inclusive).
 List<ByteRange> missingRanges(List<ByteRange> done, int total) {
@@ -769,7 +849,7 @@ final class _Download {
   int pieceIndex = 0;
   bool running = false;
   bool stopping = false;
-  ({DownloadFailure failure, TrackKind? track, String detail})? failure;
+  ({DownloadFailure failure, TrackKind? track, String detail, int? osError})? failure;
 
   bool get ending => cancel.isCancelled;
   _Track get video => tracks[TrackKind.video]!;
