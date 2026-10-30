@@ -6,6 +6,7 @@ import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/offline/fake_offline_library.dart';
 import 'package:bilifast/offline/offline_models.dart';
+import 'package:bilifast/offline/offline_size.dart';
 import 'package:bilifast/offline/pages/downloading_page.dart';
 import 'package:bilifast/offline/pages/offline_group_page.dart';
 import 'package:bilifast/offline/pages/offline_list_page.dart';
@@ -163,9 +164,9 @@ void main() {
     });
 
     test('sizes, clocks and states read as the shots do', () {
-      expect(offlineSize(82208358), '78.4MB');
-      expect(offlineSize((74.4 * 1024 * 1024 * 1024).round()), '74.4GB');
-      expect(offlineSize(512 * 1024), '512KB');
+      expect(formatBytes(82208358), '78.4MB');
+      expect(formatBytes((74.4 * 1024 * 1024 * 1024).round()), '74.4GB');
+      expect(formatBytes(512 * 1024), '512KB');
       expect(offlineClock(383), '06:23');
       expect(offlineClock(3723), '1:02:03');
       expect(

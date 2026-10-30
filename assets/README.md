@@ -93,3 +93,5 @@ The 缓存 and portrait ⋮ sheets (42, 141-154) take glyphs from the APK's comp
 `sheet_cast.png` (`tv_airplay_line`, 60 px), `sheet_share.png` (`arrow_share_line`, 60 px) and `sheet_done.png`
 (`checkmark_circle_fill`, 39 px, tinted #2AC864 as 153). The rows' 倍速, 定时关闭, 后台听视频, 字幕, 清晰度 and 单双击手势
 icons are drawn in code (`PanelGlyphKind`), traced on 42 and 43: the APK's icons for them aren't the iPhone's.
+离线缓存's bar 🔍 and ☰ (a checklist), ❚❚ / ▶, ⌄ and the 合集 stack are drawn in code (`offline_glyphs.dart`): the APK's
+`ic_download_search` and `ic_download_edit` differ from 143 and 145, and it has no stack glyph.

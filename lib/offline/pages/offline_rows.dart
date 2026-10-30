@@ -10,6 +10,7 @@ import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
 import '../offline_library.dart';
 import '../offline_models.dart';
+import '../offline_size.dart';
 import 'offline_glyphs.dart';
 import 'offline_selector.dart';
 import 'offline_shelf.dart';
@@ -367,7 +368,7 @@ TextStyle _meta(Color color) => offlineStyle(_T.metaText, color, line: _T.metaLi
 Widget _sizeLine(int bytes, {bool vip = false, Key? key}) => _at(
   _T.sizeCentre,
   _T.metaLine,
-  offlineLine(vip ? '大会员专享 · ${offlineSize(bytes)}' : offlineSize(bytes), _meta(vip ? _T.vip : _T.meta), key: key),
+  offlineLine(vip ? '大会员专享 · ${formatBytes(bytes)}' : formatBytes(bytes), _meta(vip ? _T.vip : _T.meta), key: key),
 );
 
 /// A finished part (145, 156): the cover with its time and watched line, the title, UP and the name, the size.
@@ -405,7 +406,7 @@ class DoneRow extends StatelessWidget {
         rowKey: '$cid',
         editing: editing,
         chosen: chosen,
-        label: '$title，$name，${offlineSize(item.bytes)}',
+        label: '$title，$name，${formatBytes(item.bytes)}',
         onTap: () => onTap(item),
         divider: divider,
         cover: OfflineCover(
@@ -469,7 +470,7 @@ class GroupRow extends StatelessWidget {
         rowKey: entry.key,
         editing: editing,
         chosen: chosen,
-        label: '${entry.title}，${entry.cids.length}个视频，${offlineSize(bytes)}',
+        label: '${entry.title}，${entry.cids.length}个视频，${formatBytes(bytes)}',
         onTap: onTap,
         divider: divider,
         cover: OfflineCover(

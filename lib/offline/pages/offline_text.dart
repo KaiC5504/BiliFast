@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../shared/theme.dart';
 import '../offline_models.dart';
+import '../offline_size.dart';
 
 /// The style every word on these pages draws with: the app's font, and with [line] an even line box, so a line can be
 /// placed by its middle.
@@ -30,17 +31,6 @@ Widget offlineLine(String text, TextStyle style, {Key? key, TextAlign align = Te
       textAlign: align,
     );
 
-/// 78.4MB, 1.2GB, 512KB, in steps of 1024 as 156's sizes are.
-String offlineSize(int bytes) {
-  const kb = 1024;
-  const mb = kb * 1024;
-  const gb = mb * 1024;
-  if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(1)}GB';
-  if (bytes >= mb) return '${(bytes / mb).toStringAsFixed(1)}MB';
-  if (bytes >= kb) return '${(bytes / kb).round()}KB';
-  return '${bytes < 0 ? 0 : bytes}B';
-}
-
 /// 06:23, or 1:02:03 past an hour.
 String offlineClock(num seconds) {
   final total = seconds.isFinite && seconds > 0 ? seconds.floor() : 0;
@@ -60,7 +50,7 @@ String coverTime(OfflineItem item) {
 /// The row's state line (143, 146, 148); a failure says why, and whether a tap tries again.
 String stateLabel(OfflineItem item) => switch (item.state) {
   OfflineState.downloading =>
-    item.totalBytes > 0 ? '缓存中: ${offlineSize(item.bytes)}/${offlineSize(item.totalBytes)}' : '缓存中',
+    item.totalBytes > 0 ? '缓存中: ${formatBytes(item.bytes)}/${formatBytes(item.totalBytes)}' : '缓存中',
   OfflineState.waiting => '等待缓存',
   OfflineState.paused => '已暂停',
   OfflineState.done => '已缓存',
@@ -72,4 +62,4 @@ String stateLabel(OfflineItem item) => switch (item.state) {
 };
 
 /// 已使用59.7MB / 剩余74.4GB; 剩余- while the phone's free space is unknown.
-String spaceLabel(int used, int? free) => '已使用${offlineSize(used)} / 剩余${free == null ? '-' : offlineSize(free)}';
+String spaceLabel(int used, int? free) => '已使用${formatBytes(used)} / 剩余${free == null ? '-' : formatBytes(free)}';
