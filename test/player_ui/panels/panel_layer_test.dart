@@ -270,7 +270,6 @@ void main() {
       PlayerPanel.quality: BiliMetrics.panelSheetHeight,
       PlayerPanel.codec: BiliMetrics.panelSheetHeight,
       PlayerPanel.speed: BiliMetrics.panelSpeedSheetHeight,
-      PlayerPanel.more: BiliMetrics.panelMoreSheetHeight,
     };
     for (final MapEntry(key: panel, value: fraction) in sheetHeights.entries) {
       testWidgets('${panel.name} is a sheet ${fraction * 100}% of the height in portrait', (tester) async {
@@ -322,7 +321,7 @@ void main() {
 
     testWidgets('the dark sheets have no dim of their own', (tester) async {
       final rig = await pumpLayer(tester, Shape.portrait);
-      await open(tester, rig, PlayerPanel.more);
+      await open(tester, rig, PlayerPanel.quality);
       expect(find.byKey(const ValueKey('panel-sheet-dim')), findsNothing);
     });
 

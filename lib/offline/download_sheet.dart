@@ -109,7 +109,12 @@ class _DownloadSheetState extends State<DownloadSheet> {
   Widget build(BuildContext context) {
     final library = _library;
     if (library == null) return const SizedBox.shrink();
-    return ListenableBuilder(listenable: library, builder: (context, _) => _sheet(context, library));
+    // Landscape's side panel scrolls its content; 缓存 is portrait only and closes there (PanelLayer).
+    return LayoutBuilder(
+      builder: (context, constraints) => !constraints.hasBoundedHeight
+          ? const SizedBox.shrink()
+          : ListenableBuilder(listenable: library, builder: (context, _) => _sheet(context, library)),
+    );
   }
 
   Widget _sheet(BuildContext context, OfflineLibrary library) {
@@ -332,7 +337,9 @@ class _Bar extends StatelessWidget {
       height: DownloadSheetTheme.barHeight + bottom,
       decoration: const BoxDecoration(
         color: DownloadSheetTheme.card,
-        border: Border(top: BorderSide(color: DownloadSheetTheme.hairline, width: BiliMetrics.panelHairline)),
+        border: Border(
+          top: BorderSide(color: DownloadSheetTheme.hairline, width: BiliMetrics.panelHairline),
+        ),
       ),
       child: Stack(
         children: [

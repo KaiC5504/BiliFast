@@ -200,11 +200,7 @@ class _QualityPickerState extends State<QualityPicker> with SingleTickerProvider
 class _VipTag extends StatelessWidget {
   const _VipTag();
 
-  static const _style = TextStyle(
-    fontSize: BiliMetrics.panelSubtitleText,
-    height: 1,
-    color: BiliColors.onPink,
-  );
+  static const _style = TextStyle(fontSize: BiliMetrics.panelSubtitleText, height: 1, color: BiliColors.onPink);
 
   @override
   Widget build(BuildContext context) => Container(

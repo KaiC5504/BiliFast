@@ -110,7 +110,7 @@ SeasonSection? _section(VideoDetail? detail, String bvid) {
 /// a 大会员 quality only with 大会员, since the library would fall back below it anyway).
 ({List<QualityOption> options, int? best}) downloadQualities(PlayerSession session) {
   final options = [...session.qualities]..sort((a, b) => b.id.compareTo(a.id));
-  final best = options.where((option) => session.isVip || !QualityRules.needsVip(option.id)).firstOrNull ??
-      options.firstOrNull;
+  final best =
+      options.where((option) => session.isVip || !QualityRules.needsVip(option.id)).firstOrNull ?? options.firstOrNull;
   return (options: options, best: best?.id);
 }

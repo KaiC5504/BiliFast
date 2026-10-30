@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:bili_core/api.dart'
-    show Dash, DashStream, QualityOption, VideoDetail, VideoPage, VideoView;
+import 'package:bili_core/api.dart' show Dash, DashStream, QualityOption, VideoDetail, VideoPage, VideoView;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart' show ByteRange;
 import 'package:bilifast/account/keychain_store.dart';
@@ -129,7 +128,9 @@ Future<SheetRig> pumpSheetRig(
               bottom: vertical ? 0 : null,
               child: const ColoredBox(color: BiliColors.videoBackground),
             ),
-            Positioned.fill(child: PanelLayer(ui: ui, playerBottom: vertical ? null : SheetRig.playerBottom)),
+            Positioned.fill(
+              child: PanelLayer(ui: ui, playerBottom: vertical ? null : SheetRig.playerBottom),
+            ),
           ],
         ),
       ),

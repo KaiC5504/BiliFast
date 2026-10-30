@@ -196,7 +196,11 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
         if (_ui.danmaku != null)
           _SheetRow(
             key: const ValueKey('more-danmaku-settings'),
-            icon: const Icon(CustomIcons.danmakuSettings, size: BiliMetrics.panelRowIcon, color: DownloadSheetTheme.ink),
+            icon: const Icon(
+              CustomIcons.danmakuSettings,
+              size: BiliMetrics.panelRowIcon,
+              color: DownloadSheetTheme.ink,
+            ),
             title: '弹幕设置',
             onTap: () => _ui.panels.open(PlayerPanel.danmakuSettings),
             trailing: const _Disclosure(),
@@ -464,10 +468,17 @@ class _SheetRow extends StatelessWidget {
               padding: const EdgeInsets.only(left: BiliMetrics.panelRowLead, right: BiliMetrics.panelRowTrailing),
               child: Row(
                 children: [
-                  SizedBox(width: BiliMetrics.panelRowIcon, child: Center(child: icon)),
-                  const SizedBox(width: BiliMetrics.panelLabelInset - BiliMetrics.panelRowLead - BiliMetrics.panelRowIcon),
+                  SizedBox(
+                    width: BiliMetrics.panelRowIcon,
+                    child: Center(child: icon),
+                  ),
+                  const SizedBox(
+                    width: BiliMetrics.panelLabelInset - BiliMetrics.panelRowLead - BiliMetrics.panelRowIcon,
+                  ),
                   Text(title, maxLines: 1, style: _style, strutStyle: BiliFonts.strutOf(context, _style)),
-                  Expanded(child: Align(alignment: Alignment.centerRight, child: trailing)),
+                  Expanded(
+                    child: Align(alignment: Alignment.centerRight, child: trailing),
+                  ),
                 ],
               ),
             ),
@@ -502,7 +513,11 @@ class _ToggleRow extends StatelessWidget {
     label: title,
     toggled: value,
     onTap: () => onChanged(!value),
-    child: _SheetRow(icon: icon, title: title, trailing: _Switch(on: value)),
+    child: _SheetRow(
+      icon: icon,
+      title: title,
+      trailing: _Switch(on: value),
+    ),
   );
 }
 
@@ -704,7 +719,9 @@ class _SheetPage extends StatelessWidget {
           height: DownloadSheetTheme.pageHeader,
           child: Stack(
             children: [
-              Center(child: Text(title, style: _title, strutStyle: BiliFonts.strutOf(context, _title))),
+              Center(
+                child: Text(title, style: _title, strutStyle: BiliFonts.strutOf(context, _title)),
+              ),
               Positioned(
                 left: DownloadSheetTheme.cardInset - (BiliMetrics.panelHitBox - DownloadSheetTheme.pageBackGlyph) / 2,
                 top: 0,

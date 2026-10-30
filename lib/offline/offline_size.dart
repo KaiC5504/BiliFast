@@ -12,7 +12,10 @@ int? estimateBytes(Dash dash, {required int quality, required int seconds, List<
 }
 
 DashStream? _video(Dash dash, int quality, List<VideoCodec> codecOrder) {
-  final offered = [for (final stream in dash.video) if (stream.id == quality) stream];
+  final offered = [
+    for (final stream in dash.video)
+      if (stream.id == quality) stream,
+  ];
   for (final codec in codecOrder) {
     for (final stream in offered) {
       if (stream.codecid == codec.codecid) return stream;
