@@ -637,7 +637,6 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         choice = streams.choice;
         if (!live()) return;
       }
-      await _saveDanmaku(part, live);
       await part.stopping;
       // Left the foreground meanwhile: the return starts it.
       if (!live() || !_mayDownload) return;
@@ -654,6 +653,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
         'audio': choice.audio.id,
         'resumed': part.item.bytes > 0,
       });
+      _saveDanmakuAlongside(part);
     } catch (error) {
       _runFailed(part, epoch, error);
     } finally {
@@ -1039,6 +1039,15 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     }
   }
 
+  /// A long video's danmaku is dozens of paced calls (67 for 6.5 hours, ~50 s), so it is saved while the media
+  /// downloads rather than before; one save per part at a time.
+  void _saveDanmakuAlongside(_Part part) {
+    if (part.danmaku != null || part.entry.danmakuComplete) return;
+    final save = _saveDanmaku(part, () => identical(_parts[part.cid], part)).whenComplete(() => part.danmaku = null);
+    part.danmaku = save;
+    _track(save);
+  }
+
   /// Every 6-minute segment not yet saved, one call at a time; a failed call leaves the rest for the next run.
   Future<void> _saveDanmaku(_Part part, bool Function() live) async {
     final cid = part.cid;
@@ -1192,10 +1201,8 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
       'mb': (total / (1 << 20)).round(),
       'danmaku': part.entry.danmakuComplete,
     });
-    if (!part.entry.danmakuComplete) {
-      // One more go at what failed before the media, while the part's folder is still being looked after.
-      _track(_saveDanmaku(part, () => identical(_parts[part.cid], part)));
-    }
+    // One more go at what failed alongside the media.
+    _saveDanmakuAlongside(part);
     unawaited(refreshFreeSpace());
     _pump();
     _maybeEndGrace();
@@ -1635,6 +1642,7 @@ final class _Part {
   Future<void> stopping = Future.value();
   Future<void> writes = Future.value();
   Future<void>? pictures;
+  Future<void>? danmaku;
   Timer? refresh;
   Timer? positionSave;
   DateTime? savedAt;

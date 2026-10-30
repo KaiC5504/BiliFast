@@ -75,6 +75,18 @@ void main() {
     expect(rig.logText, isNot(contains('upsig')));
   });
 
+  test('the media starts before a long danmaku save ends', () async {
+    rig = Rig(danmakuGap: const Duration(minutes: 1));
+    final library = await rig.started();
+    await library.enqueue([offlineRequest()]);
+    for (var i = 0; i < 100 && rig.engine.downloadsStarted.isEmpty; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    expect(rig.engine.downloadsStarted.single.id, '$cid');
+    expect(rig.http.to(Canned.segmentPath), hasLength(1), reason: 'the second segment waits out its gap');
+  });
+
   test('the highest quality offered is taken, in a codec the phone plays, and a ceiling is respected', () async {
     final memory = CodecMemory()..markFailed('hevc');
     rig = Rig(memory: memory);

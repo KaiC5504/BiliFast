@@ -98,12 +98,13 @@ OfflineRequest offlineRequest({int cid = 137649199, String bvid = 'BV1GJ411x7h7'
 /// One library on a temporary folder, with the canned API, a fake engine and host, and the pictures answered from
 /// memory. [reopen] makes another on the same folder, as a relaunch would.
 final class Rig {
-  Rig({FakeOfflineHost? host, CodecMemory? memory})
+  Rig({FakeOfflineHost? host, CodecMemory? memory, this.danmakuGap = Duration.zero})
     : host = host ?? FakeOfflineHost(),
       memory = memory ?? CodecMemory(),
       folder = Directory.systemTemp.createTempSync('offline_test').path;
 
   final String folder;
+  final Duration danmakuGap;
   final FakeOfflineHost host;
   final CodecMemory memory;
   final http = Canned.http();
@@ -136,7 +137,7 @@ final class Rig {
         return Uint8List.fromList(utf8.encode('picture'));
       },
       now: () => now,
-      danmakuGap: Duration.zero,
+      danmakuGap: danmakuGap,
       retryGaps: const [Duration.zero],
     );
     libraries.add(library);
