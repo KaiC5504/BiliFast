@@ -69,10 +69,14 @@ final class FakeOfflineHost implements OfflineHost {
   /// Holds takeBack until completed, as the real one waits for the session to deliver.
   Completer<void>? takeBackHeld;
 
+  /// Thrown by [takeBack] while set.
+  Object? takeBackError;
+
   @override
   Future<List<BackgroundRangeResult>> takeBack() async {
     calls.add('takeBack');
     await takeBackHeld?.future;
+    if (takeBackError case final error?) throw error;
     final taken = results;
     results = [];
     return taken;

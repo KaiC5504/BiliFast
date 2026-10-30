@@ -66,6 +66,7 @@ final class BackgroundTrip {
     required this.wastedBytes,
     required this.allDone,
     this.continuedEndedAfter,
+    this.spoiled = false,
   });
 
   final BackgroundArm arm;
@@ -88,10 +89,14 @@ final class BackgroundTrip {
   /// Seconds into the trip at which iOS ended the continued processing; null when it didn't.
   final double? continuedEndedAfter;
 
+  /// The app's side went wrong (nothing was handed off, the take-back failed, iOS ended the app while away), so the
+  /// trip says nothing about its arm.
+  final bool spoiled;
+
   static const minSeconds = 20.0;
 
-  /// Counted in the arm's numbers: long enough, and not cut short by the downloads running out.
-  bool get scored => seconds >= minSeconds && !allDone;
+  /// Counted in the arm's numbers: long enough, not cut short by the downloads running out, and not spoiled.
+  bool get scored => seconds >= minSeconds && !allDone && !spoiled;
 
   double get mbps => seconds <= 0 ? 0 : gainedBytes / (1 << 20) / seconds;
 
@@ -103,6 +108,7 @@ final class BackgroundTrip {
     'wasted': wastedBytes,
     'allDone': allDone,
     'continuedEndedAfter': ?continuedEndedAfter,
+    'spoiled': spoiled,
   };
 
   /// Null for anything unreadable.
@@ -123,11 +129,13 @@ final class BackgroundTrip {
       wastedBytes: wasted,
       allDone: json['allDone'] == true,
       continuedEndedAfter: ended is num ? ended.toDouble() : null,
+      spoiled: json['spoiled'] == true,
     );
   }
 }
 
-/// The arm for the next trip, and why: `untried`, `best` or `explore`.
+/// The arm for the next trip, and why: `untried`, `best`, `explore`, or `fallback` when every arm was tried and none
+/// has numbers.
 typedef BackgroundChoice = ({BackgroundArm arm, String why});
 
 /// Picks how downloads go on while the app is away from how each way did on this device's earlier trips, so the
@@ -141,8 +149,17 @@ class BackgroundTrials {
   /// An arm's mean is over its last few scored trips, so it follows a change of network or of iOS.
   static const window = 5;
 
-  /// How often a choice tries an arm other than the best, so one unlucky trip doesn't bury an arm for good.
+  /// How often a choice tries an arm other than the best while some arm has fewer than [window] scored trips, so one
+  /// unlucky trip doesn't bury an arm for good …
   static const exploreChance = 0.15;
+
+  /// … and once every arm has a full window, so a change of network or of iOS still reaches the others.
+  static const settledExploreChance = 0.05;
+
+  /// Trips of at least [BackgroundTrip.minSeconds] after which an arm none of whose trips scored is no longer forced:
+  /// one whose trips never score (the downloads always run out, or the app's side always fails) would be taken on
+  /// every leave.
+  static const maxAttempts = 3;
 
   /// Every arm, in the order ties go.
   static const arms = [BackgroundArm.continuedArm, ...BackgroundArm.handOffArms];
@@ -152,13 +169,15 @@ class BackgroundTrials {
 
   List<BackgroundTrip> get trips => List.unmodifiable(_trips);
 
-  void load(Object? json) {
+  /// False when [json] isn't the file's shape; nothing is read then.
+  bool load(Object? json) {
     _trips.clear();
-    if (json is! Map || json['trips'] is! List) return;
+    if (json is! Map || json['trips'] is! List) return false;
     for (final trip in json['trips'] as List) {
       if (BackgroundTrip.fromJson(trip) case final read?) _trips.add(read);
     }
     _trim();
+    return true;
   }
 
   Map<String, Object?> toJson() => {
@@ -169,17 +188,18 @@ class BackgroundTrials {
   BackgroundChoice choose({required bool continued}) {
     final candidates = continued ? arms : BackgroundArm.handOffArms;
     for (final arm in candidates) {
-      if (_scored(arm).isEmpty) return (arm: arm, why: 'untried');
+      if (_untried(arm)) return (arm: arm, why: 'untried');
     }
-    final best = _bestOf(candidates)!;
-    if (_random.nextDouble() < exploreChance) {
+    final best = _bestOf(candidates);
+    final settled = candidates.every((arm) => _scored(arm).length >= window);
+    if (_random.nextDouble() < (settled ? settledExploreChance : exploreChance)) {
       final others = [
         for (final arm in candidates)
-          if (arm != best) arm,
+          if (arm != (best ?? candidates.first)) arm,
       ];
       return (arm: others[_random.nextInt(others.length)], why: 'explore');
     }
-    return (arm: best, why: 'best');
+    return best == null ? (arm: candidates.first, why: 'fallback') : (arm: best, why: 'best');
   }
 
   /// The hand-off with the best numbers, else [BackgroundArm.fallback]: for when continued processing ends mid-trip.
@@ -207,6 +227,16 @@ class BackgroundTrials {
     return {for (final arm in arms) arm.name: text(stats(arm)), 'best': best?.name ?? 'none'};
   }
 
+  bool _untried(BackgroundArm arm) {
+    var attempts = 0;
+    for (final trip in _trips) {
+      if (trip.arm != arm) continue;
+      if (trip.scored) return false;
+      if (trip.seconds >= BackgroundTrip.minSeconds) attempts += 1;
+    }
+    return attempts < maxAttempts;
+  }
+
   List<BackgroundTrip> _scored(BackgroundArm arm) => [
     for (final trip in _trips)
       if (trip.arm == arm && trip.scored) trip,
@@ -226,7 +256,21 @@ class BackgroundTrials {
     return best;
   }
 
+  /// Unscored trips go first, the oldest first, so a rarely chosen arm keeps its numbers longest.
   void _trim() {
-    if (_trips.length > keep) _trips.removeRange(0, _trips.length - keep);
+    var excess = _trips.length - keep;
+    if (excess <= 0) return;
+    final kept = <BackgroundTrip>[];
+    for (final trip in _trips) {
+      if (excess > 0 && !trip.scored) {
+        excess -= 1;
+        continue;
+      }
+      kept.add(trip);
+    }
+    if (excess > 0) kept.removeRange(0, excess);
+    _trips
+      ..clear()
+      ..addAll(kept);
   }
 }

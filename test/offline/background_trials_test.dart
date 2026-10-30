@@ -41,6 +41,7 @@ BackgroundTrip trip(
   int minute = 0,
   int wasted = 0,
   double? endedAfter,
+  bool spoiled = false,
 }) => BackgroundTrip(
   arm: arm,
   at: DateTime(2026, 10, 31, 12).add(Duration(minutes: minute)),
@@ -49,6 +50,7 @@ BackgroundTrip trip(
   wastedBytes: wasted,
   allDone: allDone,
   continuedEndedAfter: endedAfter,
+  spoiled: spoiled,
 );
 
 /// Never explores: every draw lands past [BackgroundTrials.exploreChance].
@@ -90,6 +92,10 @@ void main() {
       expect(trip(h128, seconds: 20).scored, isTrue);
       expect(trip(h128, seconds: 600).scored, isTrue);
       expect(trip(h128, seconds: 600, allDone: true).scored, isFalse);
+    });
+
+    test('a spoiled trip never counts, however long', () {
+      expect(trip(h128, seconds: 600, spoiled: true).scored, isFalse);
     });
 
     test('its rate is MiB a second away', () {
@@ -216,6 +222,61 @@ void main() {
       expect(handOffs.intBounds, [2]);
     });
 
+    test('an arm whose long trips never score is forced at most three times', () {
+      final trials = noExplore()
+        ..record(trip(h128, allDone: true))
+        ..record(trip(h128, seconds: 10))
+        ..record(trip(h128, seconds: 19))
+        ..record(trip(h128, spoiled: true));
+      expect(trials.choose(continued: false), (arm: h128, why: 'untried'), reason: 'short trips are no attempt');
+
+      trials.record(trip(h128, seconds: 20, spoiled: true));
+      expect(trials.choose(continued: false), (arm: h64, why: 'untried'));
+      expect(BackgroundTrials.maxAttempts, 3);
+    });
+
+    test('every candidate attempted and none scored: the first, as before any trial', () {
+      final trials = noExplore();
+      for (final arm in BackgroundTrials.arms) {
+        for (var i = 0; i < BackgroundTrials.maxAttempts; i++) {
+          trials.record(trip(arm, allDone: true));
+        }
+      }
+      expect(trials.choose(continued: false), (arm: h128, why: 'fallback'));
+      expect(trials.choose(continued: true), (arm: continued, why: 'fallback'));
+
+      final random = ScriptedRandom(doubles: [0.1], ints: [1]);
+      final exploring = BackgroundTrials(random: random)..load(trials.toJson());
+      expect(exploring.choose(continued: false), (arm: h32, why: 'explore'), reason: 'among all but the first');
+      expect(random.intBounds, [2]);
+    });
+
+    test('once every candidate has a full window, explores at the settled chance', () {
+      List<BackgroundTrip> full() => [
+        for (var i = 0; i < BackgroundTrials.window; i++) ...[
+          trip(h128, mbps: 1, minute: i),
+          trip(h64, mbps: 2, minute: i),
+          trip(h32, mbps: 3, minute: i),
+        ],
+      ];
+
+      final random = ScriptedRandom(doubles: [0.06, 0.049], ints: [0]);
+      final settled = BackgroundTrials(random: random);
+      full().forEach(settled.record);
+      expect(settled.choose(continued: false), (arm: h32, why: 'best'), reason: '0.06 is past the settled chance');
+      expect(settled.choose(continued: false), (arm: h128, why: 'explore'));
+      expect(BackgroundTrials.settledExploreChance, 0.05);
+
+      final unsettled = BackgroundTrials(
+        random: ScriptedRandom(doubles: [0.06], ints: [0]),
+      );
+      [...full(), trip(continued, mbps: 1)].forEach(unsettled.record);
+      expect(unsettled.choose(continued: true), (
+        arm: continued,
+        why: 'explore',
+      ), reason: 'continued has one scored trip, so the full chance holds');
+    });
+
     test('no explore while any candidate is untried', () {
       final random = ScriptedRandom();
       final trials = BackgroundTrials(random: random)..record(trip(h128));
@@ -297,6 +358,26 @@ void main() {
       expect(trials.trips.last.at, trip(h128, minute: BackgroundTrials.keep + 4).at);
     });
 
+    test('over the cap, the oldest unscored trips go first, then the oldest scored', () {
+      final trials = noExplore()..record(trip(h32, minute: 0));
+      for (var i = 1; i < BackgroundTrials.keep; i++) {
+        trials.record(trip(h128, minute: i, allDone: true));
+      }
+      trials.record(trip(h64, minute: 500));
+      expect(trials.trips, hasLength(BackgroundTrials.keep));
+      expect(trials.trips.first.arm, h32, reason: 'the oldest, but scored');
+      expect(trials.trips[1].at, trip(h128, minute: 2).at);
+      expect(trials.stats(h32).scored, 1);
+
+      // 198 unscored left to drop, then one scored.
+      for (var i = 0; i < 199; i++) {
+        trials.record(trip(h64, minute: 1000 + i));
+      }
+      expect(trials.trips.every((trip) => trip.scored), isTrue);
+      expect(trials.trips.first.at, trip(h64, minute: 500).at, reason: 'then the oldest scored');
+      expect(trials.stats(h32).scored, 0);
+    });
+
     test('a loaded file over the cap keeps its newest 200', () {
       final trials = noExplore()
         ..load({
@@ -312,12 +393,13 @@ void main() {
       final trials = noExplore()
         ..record(trip(continued, mbps: 3.25, seconds: 95.5, wasted: 7, endedAfter: 31.5))
         ..record(trip(h64, mbps: 1, seconds: 12, minute: 2))
-        ..record(trip(h32, allDone: true, minute: 3));
+        ..record(trip(h32, allDone: true, minute: 3))
+        ..record(trip(h128, spoiled: true, minute: 4));
 
       final read = noExplore()..load(jsonDecode(jsonEncode(trials.toJson())));
 
       expect(read.toJson(), trials.toJson());
-      expect(read.trips.map((trip) => trip.arm), [continued, h64, h32]);
+      expect(read.trips.map((trip) => trip.arm), [continued, h64, h32, h128]);
       final first = read.trips.first;
       expect(first.at, trials.trips.first.at);
       expect(first.seconds, 95.5);
@@ -326,6 +408,8 @@ void main() {
       expect(first.continuedEndedAfter, 31.5);
       expect(read.trips[1].continuedEndedAfter, isNull);
       expect(read.trips[2].allDone, isTrue);
+      expect(read.trips[2].spoiled, isFalse);
+      expect(read.trips[3].spoiled, isTrue);
       expect(read.stats(continued), trials.stats(continued));
     });
 
@@ -341,11 +425,11 @@ void main() {
         {'other': <Object?>[]},
       ]) {
         trials.record(trip(h128));
-        trials.load(junk);
+        expect(trials.load(junk), isFalse, reason: '$junk');
         expect(trials.trips, isEmpty, reason: '$junk');
       }
 
-      trials.load({
+      final read = trials.load({
         'trips': [
           null,
           7,
@@ -359,14 +443,17 @@ void main() {
           {...good, 'gained': 1.5},
           {...good, 'wasted': null},
           {...good}..remove('gained'),
-          {...good, 'continuedEndedAfter': 'soon', 'allDone': 'yes'},
+          {...good, 'continuedEndedAfter': 'soon', 'allDone': 'yes', 'spoiled': 'yes'},
           good,
         ],
       });
 
+      expect(read, isTrue);
       expect(trials.trips, hasLength(2));
       expect(trials.trips.first.continuedEndedAfter, isNull, reason: 'a wrong optional field reads as absent');
       expect(trials.trips.first.allDone, isFalse);
+      expect(trials.trips.first.spoiled, isFalse);
+      expect(BackgroundTrip.fromJson({...good}..remove('spoiled'))!.spoiled, isFalse, reason: 'files before it');
       expect(trials.trips.last.toJson(), good);
     });
   });
