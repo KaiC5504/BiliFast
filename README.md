@@ -3,22 +3,21 @@
   <h1>BiliFast</h1>
   <p><b>The official Bilibili look, on a faster engine.</b><br/>官方的样子，更快的引擎。</p>
 
-  ![iOS](https://img.shields.io/badge/iOS-iPhone-black?logo=apple)
+  ![iOS](https://img.shields.io/badge/iOS-iPhone%20%7C%20iPad-black?logo=apple)
   ![Flutter](https://img.shields.io/badge/Flutter-3.47.7-02569B?logo=flutter)
   ![Dart](https://img.shields.io/badge/Dart-engine-0175C2?logo=dart)
   ![Shipped via](https://img.shields.io/badge/ships%20via-TestFlight-0D96F6)
 </div>
 
-<!--
-Screenshots: our own app on the phone, saved to docs/screenshots/ (never the official app's).
+<!-- Screenshots: our own app (the Windows build, logged out), never the official app's. -->
 <div align="center">
-  <img src="docs/screenshots/home.png" width="24%" alt="首页" />
-  <img src="docs/screenshots/video.png" width="24%" alt="Video page" />
-  <img src="docs/screenshots/landscape.png" width="48%" alt="Full screen" />
+  <img src="docs/screenshots/home.png" width="32%" alt="首页" />
+  <img src="docs/screenshots/video.png" width="32%" alt="Video page" />
+  <br/>
+  <img src="docs/screenshots/landscape.png" width="65%" alt="Full screen" />
 </div>
--->
 
-A third-party Bilibili client for iPhone, written in Flutter. It does two things on purpose:
+A third-party Bilibili client for iPhone and iPad, written in Flutter. It does two things on purpose:
 
 - **It looks like the official app.** Every screen is measured, point by point, against screenshots and recordings
   of the official iPhone app. Its icons, loading TV, placeholders and seek-bar TV come from the official app itself.
