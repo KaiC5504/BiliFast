@@ -26,6 +26,7 @@ abstract interface class SpeedTestTarget {
   int? get playingQuality;
   String get playingCodec;
   int get selectedQuality;
+  VideoCodec get codec;
 
   /// A playurl answer is in hand: [replay] asks Bilibili nothing.
   bool get canReplay;
@@ -38,6 +39,7 @@ abstract interface class SpeedTestTarget {
 
   Future<void> useEngine(Future<PlaybackEngine> Function() start);
   Future<void> setQuality(int quality);
+  Future<void> setCodec(VideoCodec codec);
   Future<void> setMode(PlaybackMode mode);
   Future<void> open(String link);
   Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality, PlaybackMode? mode});
@@ -81,6 +83,12 @@ final class ControllerTarget implements SpeedTestTarget {
 
   @override
   int get selectedQuality => controller.selectedQuality;
+
+  @override
+  VideoCodec get codec => controller.codec;
+
+  @override
+  Future<void> setCodec(VideoCodec codec) => controller.setCodec(codec);
 
   @override
   bool get canReplay => controller.canReplay;
@@ -200,6 +208,7 @@ class SpeedTestRunner extends ChangeNotifier {
   bool _wasMuted = false;
   int _originalQuality = 0;
   PlaybackMode _originalMode = PlaybackMode.btr;
+  VideoCodec? _originalCodec;
 
   /// A variant engine has been asked for since the run began, so the app's must come back.
   bool _needsPutBack = false;
@@ -257,6 +266,7 @@ class SpeedTestRunner extends ChangeNotifier {
     _passCount = passes.length;
     _logger.info(LogCategory.app, 'speedtest start', {
       'plan': plan.id,
+      'codec': plan.codec?.name ?? 'app',
       'source': choice.source.name,
       'planNote': choice.note,
       'passes': passes.length,
@@ -287,6 +297,7 @@ class SpeedTestRunner extends ChangeNotifier {
     final sampler = Timer.periodic(const Duration(seconds: 1), (_) => _current?.noteRss(_rss()));
     _originalQuality = target.selectedQuality;
     _originalMode = target.mode;
+    _originalCodec = target.codec;
     _wasMuted = target.muted;
     var finished = 0;
     _soundAndScreenRestored = false;
@@ -300,6 +311,10 @@ class SpeedTestRunner extends ChangeNotifier {
       // Stopped meanwhile, the screen would stay on: its restore has already been sent.
       _checkCancelled();
       await _quietly(() => target.setKeepAwake(true));
+      if (plan.codec case final codec? when codec != target.codec) {
+        _needsPutBack = true;
+        await target.setCodec(codec);
+      }
       for (final pass in passes) {
         _checkCancelled();
         _pass = pass;
@@ -640,6 +655,7 @@ class SpeedTestRunner extends ChangeNotifier {
     final engine = _quietly(() => target.useEngine(hooks.appEngine));
     await _quietly(() => target.setQuality(_originalQuality));
     if (target.mode != _originalMode) await _quietly(() => target.setMode(_originalMode));
+    if (_originalCodec case final codec? when codec != target.codec) await _quietly(() => target.setCodec(codec));
     await engine;
   }
 

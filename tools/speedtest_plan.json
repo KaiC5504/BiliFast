@@ -2,6 +2,7 @@
   "id": "builtin-4",
   "videos": [],
   "qualities": [127],
+  "codec": "avc",
   "variants": [
     {"name": "A", "config": {}, "connectionsPerHost": 8},
     {"name": "Z", "mode": "direct"}

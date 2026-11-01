@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:bili_core/api.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/devtools/log_server_discovery.dart';
 import 'package:bilifast/playback/playback_controller.dart';
@@ -77,6 +78,8 @@ final class FakeTarget implements SpeedTestTarget {
   @override
   int selectedQuality = 120;
   @override
+  VideoCodec codec = VideoCodec.hevc;
+  @override
   PlaybackMode mode = PlaybackMode.btr;
   @override
   bool fellBack = false;
@@ -119,6 +122,12 @@ final class FakeTarget implements SpeedTestTarget {
     fellBack = false;
     playingQuality = null;
     phase = PlaybackPhase.idle;
+  }
+
+  @override
+  Future<void> setCodec(VideoCodec codec) async {
+    _note('codec ${codec.name}');
+    this.codec = codec;
   }
 
   @override

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bili_core/api.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/devtools/log_server_discovery.dart';
 import 'package:bilifast/playback/playback_setup.dart';
@@ -150,6 +151,7 @@ void main() {
     expect(plan.variant('A')!.config.toJson(), appRipperConfig.toJson());
     expect(plan.id, 'builtin-4');
     expect(plan.qualities, [127]);
+    expect(plan.codec, VideoCodec.avc, reason: 'one stream both modes play, as M1 asked');
     expect((plan.order, plan.rotate), ('AZ', true));
     expect(plan.variants.map((variant) => (variant.name, variant.mode)), [
       ('A', PlaybackMode.btr),
@@ -157,6 +159,15 @@ void main() {
     ]);
     final passes = plan.passes(['BV1', 'BV2']);
     expect(passes.where((pass) => pass.cold).map((pass) => pass.variant.name), ['A', 'Z']);
+  });
+
+  test('a plan\'s codec is the app\'s unless it names avc, hevc or av1', () {
+    SpeedTestPlan parse(Map<String, Object?> changes) =>
+        SpeedTestPlan.parse(jsonEncode({...smallPlan, ...changes}), check: acceptAll);
+    expect(parse({}).codec, isNull);
+    expect(parse({'codec': 'av1'}).codec, VideoCodec.av1);
+    expect(() => parse({'codec': 'h264'}),
+        throwsA(isA<SpeedTestPlanError>().having((error) => error.message, 'message', contains('codec'))));
   });
 
   test('a variant\'s mode is btr unless it says direct, and nothing else is taken', () {

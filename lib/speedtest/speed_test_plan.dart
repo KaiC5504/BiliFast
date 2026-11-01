@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bili_core/api.dart';
 import 'package:bili_core/engine.dart';
 
 import '../devtools/log_server_discovery.dart';
@@ -78,6 +79,7 @@ final class SpeedTestPlan {
     required this.variants,
     required this.order,
     this.rotate = false,
+    this.codec,
     required this.seeks,
     required this.hints,
     required this.backJumps,
@@ -95,6 +97,10 @@ final class SpeedTestPlan {
   /// Each video starts [order] one letter further along, at every quality alike, so the cold first pass falls on every
   /// variant in turn rather than always on the first.
   final bool rotate;
+
+  /// The 编码 every pass asks for, put back after the run; null keeps the app's. 直连 passes over streams labelled
+  /// hev1 that the player can't take straight, so BTR against 直连 pins one both play: H.264, as M1 did.
+  final VideoCodec? codec;
   final int seeks;
   final int hints;
   final int backJumps;
@@ -104,7 +110,7 @@ final class SpeedTestPlan {
 
   /// The plan used when the PC has none; `tools/speedtest_plan.json` holds the same.
   static const builtinJson = '''
-{"id": "builtin-4", "videos": [], "qualities": [127],
+{"id": "builtin-4", "videos": [], "qualities": [127], "codec": "avc",
  "variants": [{"name": "A", "config": {}, "connectionsPerHost": 8},
               {"name": "Z", "mode": "direct"}],
  "order": "AZ", "rotate": true, "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
@@ -117,6 +123,7 @@ final class SpeedTestPlan {
     'variants',
     'order',
     'rotate',
+    'codec',
     'seeks',
     'hints',
     'backJumps',
@@ -192,6 +199,9 @@ final class SpeedTestPlan {
 
     final rotate = json['rotate'] ?? false;
     if (rotate is! bool) throw const SpeedTestPlanError('rotate 必须是 true 或 false');
+    final codecName = json['codec'];
+    final codec = codecName == null ? null : VideoCodec.values.where((codec) => codec.name == codecName).firstOrNull;
+    if (codecName != null && codec == null) throw const SpeedTestPlanError('codec 必须是 avc、hevc 或 av1');
     final fastRate = _number(json, 'fastRate', fallback: 2);
     if (fastRate <= 0) throw const SpeedTestPlanError('fastRate 必须大于 0');
     return SpeedTestPlan(
@@ -201,6 +211,7 @@ final class SpeedTestPlan {
       variants: variants,
       order: order,
       rotate: rotate,
+      codec: codec,
       seeks: _count(json, 'seeks', fallback: 8),
       hints: _count(json, 'hints', fallback: 2),
       backJumps: _count(json, 'backJumps', fallback: 2),

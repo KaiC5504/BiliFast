@@ -1,3 +1,4 @@
+import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/playback/playback_controller.dart';
@@ -138,6 +139,19 @@ void main() {
       ]);
       expect(target.mode, PlaybackMode.btr);
       expect(events('speedtest pass').map((event) => field(event, 'mode')), ['btr', 'direct', 'direct', 'btr']);
+    });
+  });
+
+  test('a plan\'s codec is asked for before the first open, and the app\'s is put back', () {
+    onFakeClock((async) {
+      hooks.plan = planWith({'codec': 'avc', 'fastSeconds': 0});
+      final runner = make();
+      runner.start(links: [video]);
+      async.elapse(const Duration(minutes: 5));
+      expect(target.calls.where((call) => call.startsWith('codec') || call.startsWith('open')),
+          ['codec avc', 'open $video', 'codec hevc']);
+      expect(target.codec, VideoCodec.hevc);
+      expect(field(events('speedtest start').single, 'codec'), 'avc');
     });
   });
 
