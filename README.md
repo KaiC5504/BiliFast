@@ -22,8 +22,6 @@ BiliFast 是一个从零开始写的第三方 B 站客户端，用 Flutter 开�
 - **界面和官方一样**：每个页面都对照官方 iPhone App 的截图和录屏做过像素级比对，图标、加载动画、占位图这些素材也直接取自官方 App，用起来没有适应成本。
 - **播放更快**：内置 [Bilibili 线程撕裂者](https://github.com/MrTangLuyao/Bilibili-thread-ripper)（BTR）下载引擎的 Dart 移植版，视频分段同时从多个 CDN 节点拉取，播放用系统自带的 AVPlayer。
 
-我自己日常在用。前身是 Swift 写的 [BiliNative](https://github.com/KaiC5504/BiliNative)，现在由这个项目接替。
-
 ## 📦 安装
 
 需要 iOS / iPadOS 26 及以上。
