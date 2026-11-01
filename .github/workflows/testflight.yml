@@ -393,9 +393,9 @@ jobs:
           fi
           notes="$RUNNER_TEMP/notes.md"
           cat > "$notes" <<EOF
-          Unsigned IPA for sideloading with AltStore, SideStore, Sideloadly or TrollStore, which sign it with your own Apple ID (a free one needs re-signing every 7 days). The same app as TestFlight build $BUILD_NAME ($BUILD_NUMBER).
+          未签名的 IPA，需要用 AltStore、SideStore、Sideloadly 或 TrollStore 自签安装。免费 Apple ID 签名 7 天后过期，到期重签即可。
 
-          未签名的 IPA，用 AltStore、SideStore、Sideloadly 或 TrollStore 以你自己的 Apple ID 签名安装（免费账号每 7 天要重签一次）。和 TestFlight 的 $BUILD_NAME ($BUILD_NUMBER) 是同一个版本。
+          和 TestFlight 的 $BUILD_NAME ($BUILD_NUMBER) 是同一个版本。
           EOF
           gh release create "v$BUILD_NAME-$BUILD_NUMBER" "$1" \
             --repo "$GITHUB_REPOSITORY" \
