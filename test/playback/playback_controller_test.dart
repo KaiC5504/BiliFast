@@ -1026,6 +1026,21 @@ void main() {
       controller.dispose();
     });
 
+    test('replay in another mode prepares once, in that mode, without setMode\'s reload', () async {
+      final controller = make();
+      await controller.open(bv);
+      expect(engine.prepared.single.mode, PlaybackMode.btr);
+
+      await controller.replay(mode: PlaybackMode.direct);
+      expect(controller.mode, PlaybackMode.direct);
+      expect(engine.prepared.map((request) => (request.mode, request.startSeconds)), [
+        (PlaybackMode.btr, 0),
+        (PlaybackMode.direct, 0),
+      ]);
+      expect(logs.events.lastWhere((event) => event.msg == 'replay').f['mode'], const LogString('直连'));
+      controller.dispose();
+    });
+
     test('replay without an engine keeps it, and does nothing with no video open', () async {
       final controller = make();
       await controller.replay();

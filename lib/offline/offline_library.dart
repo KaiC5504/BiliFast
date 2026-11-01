@@ -151,6 +151,13 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
 
   /// Background transfers may wait a while for iOS, so they go out only with addresses good for this long.
   static const handOffMargin = Duration(minutes: 30);
+
+  /// Addresses last about two hours, and a long trip outlives them (403s from about 1 h 36 min into a 2 h 16 min trip
+  /// on 2026-10-31), so the hand-off asks again unless they were fetched in the last 20 minutes or so.
+  static const handOffRefresh = Duration(minutes: 100);
+
+  /// How long the hand-off waits on that answer before going on with the addresses it has.
+  static const handOffAskLimit = Duration(seconds: 4);
   static const progressInterval = Duration(seconds: 1);
   static const progressSaveInterval = Duration(seconds: 30);
   static const positionSaveDelay = Duration(seconds: 2);
@@ -1542,22 +1549,26 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
           if (part.running) stop(part, engine),
       ]);
     }
+    final known = {
+      for (final MapEntry(key: part, value: gaps) in stopped.entries)
+        if (part.choice != null && ((gaps.videoTotal > 0 && gaps.video.isNotEmpty) ||
+            (gaps.audioTotal > 0 && gaps.audio.isNotEmpty)))
+          part: gaps,
+    };
+    final asked = {
+      for (final part in known.keys)
+        if (_nearDeadline(part.choice!, handOffRefresh)) part: _handOffAddresses(part),
+    };
+    final answers = Map.fromIterables(asked.keys, await Future.wait(asked.values));
     final perPart = <List<BackgroundRange>>[];
     final handed = <_Part>{};
-    for (final MapEntry(key: part, value: gaps) in stopped.entries) {
-      final known = [if (gaps.videoTotal > 0) ...gaps.video, if (gaps.audioTotal > 0) ...gaps.audio];
-      var choice = part.choice;
-      if (known.isEmpty || choice == null) continue;
-      if (_nearDeadline(choice, handOffMargin)) {
-        try {
-          final streams = await _askStreams(part, part.epoch);
-          if (streams == null || streams.changed.isNotEmpty) continue;
-          part.choice = choice = streams.choice;
-        } catch (error) {
-          logger.warn(LogCategory.app, 'offline hand-off urls failed', {'cid': part.cid, 'error': _reason(error)});
-          continue;
-        }
-      }
+    var refreshed = 0;
+    for (final MapEntry(key: part, value: gaps) in known.entries) {
+      final answer = answers[part];
+      if (answer == _HandOffAnswer.gone) continue;
+      if (answer == _HandOffAnswer.fresh) refreshed++;
+      final choice = part.choice!;
+      if (answer != _HandOffAnswer.fresh && _nearDeadline(choice, handOffMargin)) continue;
       perPart.add(
         backgroundRanges(
           id: '${part.cid}',
@@ -1595,6 +1606,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
           'arm': arm.name,
           'connections': arm.connections,
           'fallback': fallback,
+          'refreshed': refreshed,
         });
       } catch (error) {
         logger.warn(LogCategory.app, 'offline hand-off failed', {'error': _reason(error)});
@@ -1612,6 +1624,20 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
     }
     if (_trip case final trip?) _saveTrip(trip);
     _maybeEndGrace();
+  }
+
+  /// Asks playurl again for [part]'s hand-off and keeps the answer's addresses. A failure or a slow answer leaves the
+  /// part on the addresses it has; a part that failed for it, or whose streams changed, isn't handed off.
+  Future<_HandOffAnswer> _handOffAddresses(_Part part) async {
+    try {
+      final streams = await _askStreams(part, part.epoch).timeout(handOffAskLimit);
+      if (streams == null || streams.changed.isNotEmpty) return _HandOffAnswer.gone;
+      part.choice = streams.choice;
+      return _HandOffAnswer.fresh;
+    } catch (error) {
+      logger.warn(LogCategory.app, 'offline hand-off urls failed', {'cid': part.cid, 'error': _reason(error)});
+      return _HandOffAnswer.kept;
+    }
   }
 
   /// A run begun before the grace may still stop short of the engine, so it gets one more go.
@@ -2240,6 +2266,9 @@ typedef _Streams = ({TrackChoice choice, Set<TrackKind> changed, String qualityN
 
 /// iOS's continued processing: none, asked for and not yet started, or running.
 enum _Continued { idle, asking, running }
+
+/// A hand-off's playurl: new addresses, the old ones kept, or the part not to be handed off.
+enum _HandOffAnswer { fresh, kept, gone }
 
 /// A stay away from the app with downloads going, from the leave to the return.
 final class _Trip {

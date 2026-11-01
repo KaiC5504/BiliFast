@@ -277,7 +277,7 @@ void main() {
     expect(header(tester), open);
   });
 
-  testWidgets("首页's tap scrolls 推荐 to the top, which opens it, and refreshes", (tester) async {
+  testWidgets("首页's tap opens it at once, alongside the scroll to the top, and refreshes", (tester) async {
     await show(tester);
     final open = header(tester);
     await scrollTo(tester, 1200);
@@ -286,6 +286,13 @@ void main() {
     http.gates[1] = Completer<void>();
 
     await tester.tap(find.byKey(const ValueKey('home-tab-home')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(header(tester).bottom, moreOrLessEquals(open.bottom - _fold * 0.5),
+        reason: 'half open half way, as the official app (differences/23), not after the scroll');
+    expect(feedScroll(tester).pixels, greaterThan(HomeHeaderTheme.trigger), reason: 'the scroll is still on its way');
+    await tester.pump(const Duration(milliseconds: 75));
+    expect(header(tester).bottom, greaterThan(open.bottom - _fold * 0.5), reason: 'it keeps opening; no fold back');
     await settle(tester, 20);
     expect(feedScroll(tester).pixels, 0);
     expect(header(tester), open);

@@ -110,6 +110,37 @@ void main() {
     });
   });
 
+  test('a direct variant replays its passes in 直连, each video still opens in BTR, and the mode is put back', () {
+    onFakeClock((async) {
+      hooks.plan = planWith({
+        'variants': [
+          {'name': 'A'},
+          {'name': 'Z', 'mode': 'direct'},
+        ],
+        'order': 'AZ',
+        'rotate': true,
+        'fastSeconds': 0,
+      });
+      final runner = make();
+      runner.start(links: [video, 'BV1xx411c7mD']);
+      async.elapse(const Duration(minutes: 10));
+
+      expect(runner.results.map((pass) => (pass.variant, pass.counts)),
+          [('A', true), ('Z', true), ('Z', true), ('A', true)]);
+      expect(target.calls.where((call) => call.startsWith('replay') || call.startsWith('mode') || call.startsWith('open')), [
+        'open $video',
+        'replay 120',
+        'replay 120 direct',
+        'mode btr',
+        'open BV1xx411c7mD',
+        'replay 120 direct',
+        'replay 120',
+      ]);
+      expect(target.mode, PlaybackMode.btr);
+      expect(events('speedtest pass').map((event) => field(event, 'mode')), ['btr', 'direct', 'direct', 'btr']);
+    });
+  });
+
   test('tap and hint seeks land fresh: inside the video, 30 s from every spot the pass played', () {
     onFakeClock((async) {
       hooks.plan = planWith({'seeks': 6, 'hints': 2, 'backJumps': 2, 'fastSeconds': 0});

@@ -238,6 +238,65 @@ void main() {
     expect(rig.host.handedOff.single.map((range) => range.url), everyElement(contains('fresh')));
   });
 
+  test('addresses more than about 20 minutes old are asked again, so a long trip outlives them less', () async {
+    final library = await rig.started();
+    await library.enqueue([offlineRequest()]);
+    await library.settled();
+    rig.engine.gaps['$cid'] = gaps();
+    rig.http.routes[Canned.playUrlPath] = (200, Canned.playUrl(tag: 'fresh'));
+    rig.now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 96 * 60) * 1000);
+
+    lifecycle(toBackground);
+    await library.settled();
+
+    expect(rig.http.to(Canned.playUrlPath), hasLength(2));
+    expect(rig.host.handedOff.single.map((range) => range.url), everyElement(contains('fresh')));
+    final handed = rig.logs.events.where((event) => event.msg == 'offline handed off').single;
+    expect(handed.f['refreshed']?.toJson(), 1);
+  });
+
+  test('addresses fetched moments ago go out as they are', () async {
+    final library = await rig.started();
+    await library.enqueue([offlineRequest()]);
+    await library.settled();
+    rig.engine.gaps['$cid'] = gaps();
+    rig.now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 110 * 60) * 1000);
+
+    lifecycle(toBackground);
+    await library.settled();
+
+    expect(rig.http.to(Canned.playUrlPath), hasLength(1));
+    expect(rig.host.handedOff.single, isNotEmpty);
+    final handed = rig.logs.events.where((event) => event.msg == 'offline handed off').single;
+    expect(handed.f['refreshed']?.toJson(), 0);
+  });
+
+  test('a failed ask keeps addresses still good for the hand-off, and drops ones that are not', () async {
+    final library = await rig.started();
+    await library.enqueue([offlineRequest()]);
+    await library.settled();
+    rig.engine.gaps['$cid'] = gaps();
+    rig.http.routes[Canned.playUrlPath] = (500, '');
+    rig.now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 60 * 60) * 1000);
+
+    lifecycle(toBackground);
+    await library.settled();
+
+    expect(rig.host.handedOff.single, isNotEmpty, reason: 'an hour left is enough');
+    expect(rig.logs.events.where((event) => event.msg == 'offline hand-off urls failed'), hasLength(1));
+
+    lifecycle(toForeground);
+    await library.settled();
+    rig.host.handedOff.clear();
+    rig.now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 20 * 60) * 1000);
+
+    lifecycle(toBackground);
+    await library.settled();
+
+    expect(rig.host.handedOff, isEmpty, reason: '20 minutes left is not');
+    expect(rig.engine.downloadsStarted.length, greaterThan(2), reason: 'it goes on in the engine for the grace');
+  });
+
   test('a part whose sizes are not known yet goes on in the engine for the grace', () async {
     final library = await rig.started();
     await library.enqueue([offlineRequest()]);

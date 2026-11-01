@@ -1,12 +1,12 @@
 {
-  "id": "builtin-3",
+  "id": "builtin-4",
   "videos": [],
   "qualities": [127],
   "variants": [
     {"name": "A", "config": {}, "connectionsPerHost": 8},
-    {"name": "D", "config": {"hurryPieceBytes": 196608}, "connectionsPerHost": 8}
+    {"name": "Z", "mode": "direct"}
   ],
-  "order": "AD",
+  "order": "AZ",
   "rotate": true,
   "seeks": 8,
   "hints": 2,

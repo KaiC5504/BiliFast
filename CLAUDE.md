@@ -32,7 +32,8 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 - Slice 2, the engine: level with Swift on `bin/ripper_bench.dart`, then faster. Each speed-up is a `RipperConfig`
   switch whose default is Swift's (the 185 ported tests stay unchanged); the app's choice (engine B, from two phone
   speed tests) is set in `lib/playback/playback_setup.dart`. The 速度测试 card (dev builds) stays as a check after big
-  engine changes: plan builtin-3, read with `tools/phone_report.py --latest`. KaiC's call: no more tuning rounds.
+  engine changes, read with `tools/phone_report.py --latest`; its built-in plan is `builtin-4` (since 1.3.0 (6)): the
+  app's BTR against 直连 (a variant's `"mode": "direct"`). KaiC's call: no more tuning rounds.
 - Slice 3, home and the page shell, 1.0.0 (4): 推荐, the link field and paste control, the avatar menu, 最近打开, the
   shared player, resume and heartbeats.
 - Slice 4, player interaction, 1.0.0 (5): rotation, brightness and volume (native, rules in Dart), gestures and the
@@ -329,11 +330,19 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 - 1.3.0 (5), `92c3084`: `main` after (4) (the trial fixes of `60f6fb4`), and the first build whose unsigned IPA went
   out as the GitHub release `v1.3.0-5`. Since then only the README and the release notes' wording changed, so it is
   the closing build (`docs/closing-checklist.md`).
+- 1.3.0 (6), from the closing round. 速度测试's built-in plan is `builtin-4`: the app's BTR (A) against 直连 (Z), each
+  pass replayed cold in its variant's mode (`PlaybackController.replay(mode:)`, without setMode's reload), logged
+  `speedtest pass` with mode. The hand-off asks playurl again unless its addresses have 100 min or more left (they last
+  ~2 h; the iPad's 2 h 16 min trip lost 84 of 231 ranges to 403s), all parts at once, 4 s at most each, keeping the
+  old ones if still good for 30 min; `offline handed off` gains refreshed. 首页's tap opens the folded header at the
+  tap, alongside the scroll to the top (`differences/23`: the official app starts both in the tap's frame; ours waited
+  for the scroll's last 6 pt, ~250 ms).
 
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
-1. The closing check on 1.3.0 (5): `docs/closing-checklist.md` (M1 and M2 refreshed for the Flutter app under their
-   old numbers, then every phone check owed since (17)).
+1. The closing check (`docs/closing-checklist.md`): M2 and every phone check owed since (17) passed by KaiC's daily
+   use (2026-11-01: no bugs seen, so no step-by-step run). Left: M1 as one 速度测试 run of `builtin-4` (BTR against
+   直连) on 1.3.0 (6), its table into the README; then the cutover (BiliNative's `CLAUDE.md`, the Swift app retired).
 2. 动态 shipped in 1.1.0 (1), the iPad's basic watching in 1.2.0 (1), 离线缓存 in 1.3.0 (1); next is KaiC's pick.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 番剧, 直播.
@@ -341,8 +350,9 @@ full; passing them is the cutover (spec, slice 9). Later: 番剧, 直播.
 Open items, each waiting on its slice:
 - Long hand-off trips outlive the stream addresses: they are signed for ~2 h (7200 s from the playurl call, read
   from the log's `deadline`), and the iPad's 2 h 16 min `handoff-3x128` trip on 2026-10-31 came back with 84 of 231
-  ranges failed (403, -3) after 16.5 GB fetched; the hand-off queues every range on the addresses fetched when the
-  download (re)started. The continued trip before it ran 2.5 MB/s over 23 min, scored.
+  ranges failed (403, -3) after 16.5 GB fetched. (6) hands off fresh addresses, so a trip gets the whole ~2 h; past
+  that the ranges iOS starts still fail (nothing renews them while the app is away). The continued trip before it ran
+  2.5 MB/s over 23 min, scored.
 - 1.3.0 (1) on the phone: a download at 4K / 杜比 / HDR and its playback from the phone (AVPlayer on local files),
   airplane mode, leaving the app mid-download (the log's `offline handed off` / `taken back` counts; whether iOS ran
   the transfers while the app was away), swiping the app away (cancels them; resumes on the next open), a TestFlight

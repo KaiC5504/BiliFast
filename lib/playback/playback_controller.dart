@@ -685,8 +685,9 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// The same video again from 0 s, cold: the playing source is released first so it stops downloading, then the
-  /// engine is replaced if [engine] is given, and the streams are chosen again from the playurl answer in hand.
-  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality}) async {
+  /// engine is replaced if [engine] is given, and the streams are chosen again from the playurl answer in hand. A
+  /// [mode] is taken as [setMode] would, without its reload.
+  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality, PlaybackMode? mode}) async {
     if (_page == null) return;
     _heldPosition = 0;
     final current = _advance();
@@ -707,7 +708,15 @@ class PlaybackController extends ChangeNotifier {
       if (current != _epoch) return;
     }
     if (quality != null) _selectedQuality = quality;
-    _logger.info(LogCategory.player, 'replay', {'quality': _selectedQuality, 'engineReplaced': engine != null});
+    if (mode != null && (mode != _mode || _fellBack)) {
+      _mode = mode;
+      _fellBack = false;
+      _unknownRetried.clear();
+      _lastNetworkRestart = null;
+      _updateModeStats();
+    }
+    _logger.info(LogCategory.player, 'replay',
+        {'quality': _selectedQuality, 'engineReplaced': engine != null, 'mode': _mode.label});
     danmaku.seeked(0);
     _resetStart(autoplay: true);
     await _chooseAgain(0);

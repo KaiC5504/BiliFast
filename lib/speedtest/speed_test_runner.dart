@@ -40,7 +40,7 @@ abstract interface class SpeedTestTarget {
   Future<void> setQuality(int quality);
   Future<void> setMode(PlaybackMode mode);
   Future<void> open(String link);
-  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality});
+  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality, PlaybackMode? mode});
 
   /// A tap on the seek bar: the player seeks to a keyframe and the controller times it.
   Future<void> seek(double seconds);
@@ -113,8 +113,8 @@ final class ControllerTarget implements SpeedTestTarget {
   Future<void> open(String link) => controller.open(link);
 
   @override
-  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality}) =>
-      controller.replay(engine: engine, quality: quality);
+  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality, PlaybackMode? mode}) =>
+      controller.replay(engine: engine, quality: quality, mode: mode);
 
   /// In the order PlayerStage commits a seek.
   @override
@@ -321,6 +321,7 @@ class SpeedTestRunner extends ChangeNotifier {
           'seed': result.seed,
           'cold': pass.cold,
           'connectionsPerHost': pass.variant.connectionsPerHost,
+          'mode': pass.variant.mode.name,
           'overrides': jsonEncode(pass.variant.overrides),
         });
         if (pass.videoIndex != openVideo && pass.videoIndex != brokenVideo) {
@@ -384,7 +385,8 @@ class SpeedTestRunner extends ChangeNotifier {
   }
 
   /// Opens the pass's video in BTR mode: the run's one call for its playurl. What plays is only a warm-up; every pass,
-  /// the first too, replays from 0 on a fresh engine, so no pass's first frame carries the playurl round trip.
+  /// the first too, replays from 0 on a fresh engine in its variant's mode, so no pass's first frame carries the
+  /// playurl round trip.
   Future<_Opened> _openVideo(SpeedTestPass pass) async {
     _setStep('正在打开视频');
     try {
@@ -412,7 +414,8 @@ class SpeedTestRunner extends ChangeNotifier {
     try {
       _setStep('从头播放');
       first = _MarkWait(this, firstFrameTimeout);
-      await target.replay(engine: () => hooks.startEngine(pass.variant), quality: pass.quality);
+      await target.replay(
+          engine: () => hooks.startEngine(pass.variant), quality: pass.quality, mode: pass.variant.mode);
       _checkCancelled();
       final played = target.playingQuality;
       result.bvid = target.bvid ?? result.bvid;

@@ -556,6 +556,10 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   /// Whether 首页's refresh shows the pull-to-refresh TV at the top.
   bool _reloadHeader = false;
 
+  /// 首页's tap is taking 推荐 back to the top: the header opens at the tap, alongside the scroll, as the official
+  /// app's does (`differences/23`: both start in the tap's frame; ours used to wait for the scroll's last 6 pt).
+  bool _toTop = false;
+
   late final AnimationController _handOff = AnimationController(vsync: this, duration: HomeTabBarTheme.handOff)
     ..addStatusListener(_handOffStatus);
   late final CurvedAnimation _incoming = CurvedAnimation(parent: _handOff, curve: HomeTabBarTheme.handOffCurve);
@@ -730,7 +734,15 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     if (MediaQuery.disableAnimationsOf(context)) {
       _scroll.jumpTo(0);
     } else {
-      await _scroll.animateTo(0, duration: HomeTabBarTheme.reloadScroll, curve: Curves.easeOut);
+      _toTop = true;
+      widget.scrollOffset.value = 0;
+      try {
+        await _scroll.animateTo(0, duration: HomeTabBarTheme.reloadScroll, curve: Curves.easeOut);
+      } finally {
+        _toTop = false;
+      }
+      // A finger can stop the scroll short of the top.
+      if (mounted && _scroll.hasClients) widget.scrollOffset.value = math.max(0, _scroll.position.pixels);
     }
     if (!mounted || !identical(widget.refreshing(), refresh)) return;
     setState(() => _reloadHeader = true);
@@ -742,9 +754,11 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     if (notification.depth == 0) {
       // Only what the list really scrolls: a bounce past either end (a short list, the error page) folds nothing.
       final metrics = notification.metrics;
-      widget.scrollOffset.value = metrics.hasContentDimensions
-          ? metrics.pixels.clamp(metrics.minScrollExtent, metrics.maxScrollExtent)
-          : metrics.pixels;
+      if (!_toTop) {
+        widget.scrollOffset.value = metrics.hasContentDimensions
+            ? metrics.pixels.clamp(metrics.minScrollExtent, metrics.maxScrollExtent)
+            : metrics.pixels;
+      }
       _loadMoreNearEnd(notification.metrics);
       // Only once the scroll has come to rest: a big card dragged half off plays on until the finger lets go.
       if (notification is ScrollEndNotification) _inline.settleSoon();

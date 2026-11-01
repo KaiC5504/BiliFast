@@ -28,6 +28,7 @@ final class SpeedTestVariant {
     required this.overrides,
     required this.config,
     required this.connectionsPerHost,
+    this.mode = PlaybackMode.btr,
   });
 
   /// One letter, as `order` names it.
@@ -37,6 +38,10 @@ final class SpeedTestVariant {
   final Map<String, Object?> overrides;
   final RipperConfig config;
   final int connectionsPerHost;
+
+  /// `direct` plays the CDN's addresses straight, for a BTR-against-直连 comparison; [config] and [connectionsPerHost]
+  /// then change nothing.
+  final PlaybackMode mode;
 }
 
 final class SpeedTestPass {
@@ -99,10 +104,10 @@ final class SpeedTestPlan {
 
   /// The plan used when the PC has none; `tools/speedtest_plan.json` holds the same.
   static const builtinJson = '''
-{"id": "builtin-3", "videos": [], "qualities": [127],
+{"id": "builtin-4", "videos": [], "qualities": [127],
  "variants": [{"name": "A", "config": {}, "connectionsPerHost": 8},
-              {"name": "D", "config": {"hurryPieceBytes": 196608}, "connectionsPerHost": 8}],
- "order": "AD", "rotate": true, "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
+              {"name": "Z", "mode": "direct"}],
+ "order": "AZ", "rotate": true, "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
 ''';
 
   static const _keys = {
@@ -119,7 +124,7 @@ final class SpeedTestPlan {
     'fastSeconds',
     'fastRate',
   };
-  static const _variantKeys = {'name', 'config', 'connectionsPerHost'};
+  static const _variantKeys = {'name', 'config', 'connectionsPerHost', 'mode'};
 
   SpeedTestVariant? variant(String name) => variants.where((variant) => variant.name == name).firstOrNull;
 
@@ -216,12 +221,21 @@ final class SpeedTestPlan {
     if (overrides is! Map<String, Object?>) throw SpeedTestPlanError('方案 $name 的 config 必须是对象');
     final perHost = raw['connectionsPerHost'] ?? 8;
     if (perHost is! int || perHost <= 0) throw SpeedTestPlanError('方案 $name 的 connectionsPerHost 必须是正整数');
+    final mode = switch (raw['mode'] ?? 'btr') {
+      'btr' => PlaybackMode.btr,
+      'direct' => PlaybackMode.direct,
+      _ => throw SpeedTestPlanError('方案 $name 的 mode 必须是 btr 或 direct'),
+    };
     final checked = check(overrides);
     if (checked.rejected.isNotEmpty) {
       throw SpeedTestPlanError('方案 $name 的 config 有引擎不认识或类型不对的项：${checked.rejected.join(', ')}');
     }
     return SpeedTestVariant(
-        name: name, overrides: Map.unmodifiable(overrides), config: checked.config, connectionsPerHost: perHost);
+        name: name,
+        overrides: Map.unmodifiable(overrides),
+        config: checked.config,
+        connectionsPerHost: perHost,
+        mode: mode);
   }
 
   static String _string(Map<String, Object?> json, String key) {

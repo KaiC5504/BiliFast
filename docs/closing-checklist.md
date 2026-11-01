@@ -1,5 +1,11 @@
 # The closing checklist
 
+**Result (KaiC, 2026-11-01): passed by daily use.** KaiC uses the app every day and sees no bugs, so M2 and C1-C9
+are marked passed as a whole rather than step by step. M1's hand-timed table is replaced by the 速度测试 card's
+built-in plan (`builtin-4`: the app's BTR against 直连, rotated, every number in the log), run once on the next build,
+read with `tools/phone_report.py --latest`; its table goes into the README. The steps below stay as the reference for
+what the app does.
+
 Milestone 3's closing check and the cutover from the Swift app. It carries BiliNative's
 `docs/m1-phone-checklist.md` (steps M1-1 to M1-11, M1-A1 to M1-A7) and `m2-phone-checklist.md` (M2-1 to M2-77) under
 their old numbers, rewritten where the Flutter app now does it differently. Then every phone check owed since 1.0.0

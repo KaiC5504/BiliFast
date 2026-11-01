@@ -152,8 +152,9 @@ final class FakeTarget implements SpeedTestTarget {
   }
 
   @override
-  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality}) async {
-    _note('replay $quality');
+  Future<void> replay({Future<PlaybackEngine> Function()? engine, int? quality, PlaybackMode? mode}) async {
+    _note(mode == null || mode == PlaybackMode.btr ? 'replay $quality' : 'replay $quality ${mode.name}');
+    if (mode != null) this.mode = mode;
     _firstFrame?.cancel();
     if (bvid == null) return;
     if (engine != null) await engine();
