@@ -332,7 +332,8 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
   the closing build (`docs/closing-checklist.md`).
 - 1.3.0 (6), from the closing round. 速度测试's built-in plan is `builtin-4`: the app's BTR (A) against 直连 (Z), each
   pass replayed cold in its variant's mode (`PlaybackController.replay(mode:)`, without setMode's reload), logged
-  `speedtest pass` with mode. The hand-off asks playurl again unless its addresses have 100 min or more left (they last
+  `speedtest pass` with mode, all on H.264 (a plan's `codec`, put back after the run: 直连 passes over hev1-labelled
+  streams, so on the Windows check it played AV1 where BTR played HEVC). The hand-off asks playurl again unless its addresses have 100 min or more left (they last
   ~2 h; the iPad's 2 h 16 min trip lost 84 of 231 ranges to 403s), all parts at once, 4 s at most each, keeping the
   old ones if still good for 30 min; `offline handed off` gains refreshed. 首页's tap opens the folded header at the
   tap, alongside the scroll to the top (`differences/23`: the official app starts both in the tap's frame; ours waited
