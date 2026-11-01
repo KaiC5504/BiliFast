@@ -9,7 +9,8 @@ start builds origin/main's head. It refuses unless the local gate passed on that
 its secrets in place. There is no separate compile check: the signed build compiles iOS itself, so a
 dry run is the iOS check. --dry-run signs and checks the IPA without
 uploading. --create-signing registers the bundle id and creates the profile or renews an expired
-certificate. --again rebuilds a commit that already shipped.
+certificate. --again rebuilds a commit that already shipped. An upload also publishes an unsigned IPA
+for sideloading as the GitHub release v<version>-<build>; a dry run builds it without publishing.
 
 There is no watch command: polling GitHub tripped its rate limit on 2026-10-17. Start, then run
 `status` once, about 10 minutes later for a dry run and 20 for an upload. An upload is green once

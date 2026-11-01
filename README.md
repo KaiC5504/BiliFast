@@ -29,6 +29,13 @@ A third-party Bilibili client for iPhone and iPad, written in Flutter. It does t
 A personal project, not affiliated with Bilibili. It replaces its Swift predecessor,
 [BiliNative](https://github.com/KaiC5504/BiliNative).
 
+## Install
+
+- **TestFlight:** ask in an issue to join the beta.
+- **IPA:** every build's unsigned IPA is on the [Releases](https://github.com/KaiC5504/BiliFast/releases) page.
+  Sideload it with AltStore, SideStore, Sideloadly or TrollStore, which sign it with your own Apple ID (a free one
+  needs re-signing every 7 days).
+
 ## How playback works
 
 ```
@@ -80,9 +87,12 @@ picture-in-picture, HDR and Dolby Vision behave as they do in Apple's apps.
 - [x] Every picture kept on the phone (up to 500 MB) and shown again without reloading
 - [x] Covers from the CDN the official app uses, over one kept-open connection, at the exact size they're drawn
 
+### More
+- [x] 动态, with the bottom bar's 关注
+- [x] 离线缓存, kept on the phone for good, downloading in the background
+- [x] The iPad, with its own layouts for 首页 and the video page
+
 ### Planned
-- [ ] 动态
-- [ ] 离线缓存
 - [ ] 番剧
 - [ ] 直播
 - [ ] 人像防挡

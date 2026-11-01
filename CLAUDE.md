@@ -602,6 +602,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Version 1.3.0 (from 1.3.0 (1), KaiC: 离线缓存), set in both `pubspec.yaml` and the workflow's `BUILD_NAME` (`test_ci` checks they agree). Build
   numbers count from 1 within each version (App Store Connect's latest of that version plus one); the last shipped is
   in Status.
+- Every upload also publishes an unsigned IPA for sideloading as the GitHub release `v<version>-<build>` (the
+  workflow's `sideload` and `release` jobs: no environment, no secrets, so no profile or legal name in it).
 - Secrets are in this repo's `testflight` environment (limited to `main`).
 - Commit, push and Actions runs (signed builds included) are authorised on `main`.
 

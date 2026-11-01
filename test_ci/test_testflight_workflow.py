@@ -49,9 +49,13 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual((True, False), (upload["required"], upload["default"]))
 
     def test_token_is_read_only(self):
+        # Only the release job may write, to publish the unsigned IPA.
         self.assertEqual({"contents": "read"}, self.doc["permissions"])
         for name, job in self.jobs.items():
-            self.assertNotIn("permissions", job, name)
+            if name == "release":
+                self.assertEqual({"contents": "write"}, job["permissions"])
+            else:
+                self.assertNotIn("permissions", job, name)
 
     def test_actions_are_pinned_to_commits(self):
         for job, step in self.steps():
@@ -61,9 +65,11 @@ class WorkflowTest(unittest.TestCase):
     def test_no_shared_caches(self):
         # Enforced by the cache service for every step, not just flutter-action's.
         self.assertEqual("none", self.doc.get("cache-mode"))
-        flutter = next(s for _, s in self.steps("build") if "flutter-action" in s.get("uses", ""))
-        self.assertIs(False, flutter["with"]["cache"])
-        self.assertEqual("${{ env.FLUTTER_VERSION }}", flutter["with"]["flutter-version"])
+        flutters = [s for _, s in self.steps() if "flutter-action" in s.get("uses", "")]
+        self.assertEqual(2, len(flutters))
+        for flutter in flutters:
+            self.assertIs(False, flutter["with"]["cache"])
+            self.assertEqual("${{ env.FLUTTER_VERSION }}", flutter["with"]["flutter-version"])
         self.assertNotIn("actions/cache", self.text)
 
     def test_cli_tools_come_from_the_hash_lock(self):
@@ -99,7 +105,10 @@ class WorkflowTest(unittest.TestCase):
 
     def test_builds_only_main(self):
         self.assertEqual("github.ref == 'refs/heads/main'", self.jobs["build"]["if"])
-        self.assertEqual(["build"], list(self.jobs))
+        self.assertEqual(["build", "sideload", "release"], list(self.jobs))
+        # Both wait on the build, so they skip whenever it does.
+        self.assertEqual("build", self.jobs["sideload"]["needs"])
+        self.assertEqual(["build", "sideload"], self.jobs["release"]["needs"])
 
     def test_first_step_pins_the_checked_commit(self):
         first = self.jobs["build"]["steps"][0]
@@ -116,11 +125,33 @@ class WorkflowTest(unittest.TestCase):
         for step in checkouts:
             self.assertIs(False, step.get("with", {}).get("persist-credentials"))
 
-    def test_only_the_manifest_is_uploaded(self):
-        uploads = [s for _, s in self.steps() if "upload-artifact" in s.get("uses", "")]
-        self.assertEqual(1, len(uploads))
-        self.assertEqual("${{ runner.temp }}/testflight-build.json", uploads[0]["with"]["path"])
-        self.assertIs(True, uploads[0]["with"]["overwrite"])
+    def test_only_the_manifest_and_the_unsigned_ipa_are_uploaded(self):
+        uploads = {job: s for job, s in self.steps() if "upload-artifact" in s.get("uses", "")}
+        self.assertEqual({"build", "sideload"}, set(uploads))
+        self.assertEqual("${{ runner.temp }}/testflight-build.json", uploads["build"]["with"]["path"])
+        self.assertEqual("${{ runner.temp }}/BiliFast-*.ipa", uploads["sideload"]["with"]["path"])
+        for upload in uploads.values():
+            self.assertIs(True, upload["with"]["overwrite"])
+
+    def test_the_unsigned_ipa_never_meets_a_secret(self):
+        # The signed IPA's profile and certificate carry KaiC's legal name; the public one is built apart.
+        for name in ("sideload", "release"):
+            job = self.jobs[name]
+            self.assertNotIn("environment", job, name)
+            self.assertNotRegex(yaml.safe_dump(job), SECRET_REF, name)
+            self.assertNotRegex(yaml.safe_dump(job), r"app-store-connect|keychain|export_options", name)
+        build = live(self.step("sideload", "Build the unsigned IPA")["run"])
+        self.assertIn("flutter build ios --release --no-codesign", build)
+        self.assertIn("embedded.mobileprovision", build)
+        self.assertNotIn("checkout", yaml.safe_dump(self.jobs["release"]))
+
+    def test_releases_only_follow_an_upload(self):
+        self.assertEqual("inputs.upload", self.jobs["release"]["if"])
+        self.assertNotIn("if", self.jobs["sideload"])
+        publish = live(self.step("release", "Publish")["run"])
+        self.assertIn('gh release create "v$BUILD_NAME-$BUILD_NUMBER"', publish)
+        self.assertIn('--target "$GITHUB_SHA"', publish)
+        self.assertEqual("${{ github.token }}", self.step("release", "Publish")["env"]["GH_TOKEN"])
 
     def test_no_shell_tracing_or_verbose_flutter(self):
         for job, step in self.steps():
