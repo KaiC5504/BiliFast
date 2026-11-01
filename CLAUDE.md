@@ -1,504 +1,110 @@
 # BiliFast (Flutter)
 
-KaiC's Bilibili client for iPhone, being moved from Swift (`D:\Repos\Apps\BiliNative`, public repo
-`KaiC5504/BiliNative`) to Flutter. This repo is the Flutter app: public `KaiC5504/BiliFast`, branch `main`. It ships as
-the same BiliFast app (bundle id `com.kaichuan.bilifast`, App Store Connect Apple ID `6823476667`), so its TestFlight
-builds replace the Swift ones on the phone and read the Swift app's keychain login.
+KaiC's Bilibili client for iPhone and iPad, in Flutter: public `KaiC5504/BiliFast`, branch `main`. It ships as the
+BiliFast app (bundle id `com.kaichuan.bilifast`, App Store Connect Apple ID `6823476667`). It replaced the Swift app
+(`D:\Repos\Apps\BiliNative`, retired 2026-11-02; its GitHub repo is deleted, the folder is the only copy) under the same record and reads the keychain
+login the Swift app left.
 
 ## Read before working
 
-1. `docs/flutter-move-spec.md`: decisions and why, architecture, rules, the slices, and the lessons that must survive.
-   Start with its section 0.
-2. `docs/milestone-3-spec.md`: the current milestone (find and follow), its slices, APIs and screenshots.
-3. `docs/reference/`:
-   - `bilicore-inventory.md` and `app-inventory.md`: what the Swift app has, with paths. The port's checklist.
+1. `docs/flutter-move-spec.md`: decisions and why, architecture, rules, and the lessons that must survive. Start with
+   its section 0.
+2. `docs/milestone-3-spec.md`: milestone 3's decisions (搜索, UP主空间, 我的收藏, 稍后再看, the official login) and the
+   system-font method; finished.
+3. `docs/closing-checklist.md`: what the app does, step by step (the Swift app's M1 and M2 checklists carried over,
+   then every feature since); passed by KaiC's daily use on 2026-11-01.
+4. `docs/reference/`:
+   - `bilicore-inventory.md` and `app-inventory.md`: what the Swift app had, with paths.
    - `piliplus-map.md`: where PiliPlus keeps what; GPL, so read only.
    - `testflight-flutter.md`: how this repo ships to TestFlight.
    - `turn-log.md`: the drawn turn's log lines on both sides, which `tools/phone_report.py --turns` times; `tools/turn_video.py` grades a recording.
-4. `D:\Repos\Apps\BiliNative\CLAUDE.md` only for the Swift app's behaviour. Where it and this file differ, this file
-   wins (no Mac, no Swift workflows, the UI follows the official screenshots).
+5. `D:\Repos\Apps\BiliNative\CLAUDE.md` only for how the Swift app behaved. This file wins wherever they differ.
 
 Every slice runs through `.claude/skills/running-a-slice`: a one-screen plan, KaiC's go, then parallel agents straight
 through to TestFlight. Finish with what was built, how it works, numbered phone steps and the build number.
 
 ## Status
 
-Shipped and passed on KaiC's phone, newest last. Detail is in git history.
+Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (6)**. The detail of each is in git
+history, and the rules they added are under "Rules that bite".
 
-- Slice 0, foundations: `packages/bili_core` (BiliShared, DevLog, Danmaku, BiliAPI, AppLogic ported tests-first), the
-  keychain channel, the local gate and the TestFlight workflow.
-- Slice 1, the player core: AVPlayer in a native view fed by the Dart engine's local HLS, PiP, a first danmaku layer,
-  the keychain login reused. 4K, 8K, 真彩 HDR and 杜比视界 play as in the Swift app.
-- Slice 2, the engine: level with Swift on `bin/ripper_bench.dart`, then faster. Each speed-up is a `RipperConfig`
-  switch whose default is Swift's (the 185 ported tests stay unchanged); the app's choice (engine B, from two phone
-  speed tests) is set in `lib/playback/playback_setup.dart`. The 速度测试 card (dev builds) stays as a check after big
-  engine changes, read with `tools/phone_report.py --latest`; its built-in plan is `builtin-4` (since 1.3.0 (6)): the
-  app's BTR against 直连 (a variant's `"mode": "direct"`). KaiC's call: no more tuning rounds.
-- Slice 3, home and the page shell, 1.0.0 (4): 推荐, the link field and paste control, the avatar menu, 最近打开, the
-  shared player, resume and heartbeats.
-- Slice 4, player interaction, 1.0.0 (5): rotation, brightness and volume (native, rules in Dart), gestures and the
-  HUD, the controls for each presentation, the panels, the page's player session. Then 设置 → 字体.
-- Slice 6, the page body, 1.0.0 (6) and (7): 简介, the actions (optimistic, rolled back per field), the coin dialog,
-  favourites, 合集 and parts, related videos, full screen's actions and end screens.
-- Slice 7, comments, 1.0.0 (8): 评论 and 评论详情, rich text, the picture viewer, the composer (emotes, @, pictures,
-  drafts), the paused player shrinking to the 67 pt 继续播放 bar.
-- Slice 5, danmaku, 1.0.0 (9): 弹幕设置 (landscape strip, portrait light sheet; every change live mid-flight), 屏蔽词
-  synced with the account, 当前弹幕列表 with 👍 and 屏蔽弹幕, sending with styles from every entry point, own danmaku
-  boxed, the small player's danmaku at the official 12.5 pt. The app icon became the pink sprinting TV.
-- Slice 8, the rest of the app, 1.0.0 (10): the login page (Bilibili's own, in a web view) and 退出登录, every
-  logged-out action opening it (turning upright first), the avatar page (49) in place of the menu, 历史记录 (45-48),
-  the full 设置 (50-51: account, 字体, 加速 with the CDN node, 数据, 开发者, 版本, 退出登录), 开发者's log export and
-  test crash, the phone's 20 MB log, codec memory kept across launches.
-- Fixes from KaiC's clips (`local/differences/`), 1.0.0 (11): the turn to landscape keeps the upright page until the
-  screen is landscape, then grows the player; the zoom swipe back into the 推荐 card it came from; 最近在看的视频 from
-  the account's history; 简介 for b23.tv and av links (the detail fetched alongside playback, retried).
-- Slice 9, page lifecycle, 1.0.0 (12): a player per page on one shared engine; a covered page pauses and resumes
-  without a reload; PipKeeper (a closed page lives on in the small window, restore pushes it back, ✕ or another
-  video releases it); network changes reset the engine's node health; the drawn turn (开发者 → 旋转动画 自绘 / 系统).
-- The system font, 1.0.0 (15) (KaiC's call: its own build to check): slice 10's font fixes and comment fix, the drawn
-  turn, and the text fixes the stand-in fonts found: the system font named (`BiliFonts.system`), PingFang's strut on
-  text mixing Latin and Chinese (`BiliFonts.strut`; text fields drew a mixed line 23 pt where Chinese takes 22).
-  Milestone 3 is paused (KaiC, 2026-10-20); its spec keeps the sweep's decisions. On the phone every system-font digit
-  and space came out wide and low: see (16).
-- The system font's fallback, 1.0.0 (16): slice 10 had given the system font a fallback list (Apple Color Emoji, then
-  PingFang SC), and iOS has no family named `CupertinoSystemText`, so Apple Color Emoji, the first family that
-  matched, drew every run's digits and spaces at emoji width. The phone's system path now names no fallback, as (14)
-  did: SF is iOS's default and PingFang SC its own fallback for Chinese.
-- Slice 11, 搜索, and the bottom bar, 1.0.0 (17) (KaiC: its own build): 首页's field opens 搜索 (52-61; the paste
-  button is gone, a link pasted or typed in 搜索 opens its video), 热搜, 搜索历史 kept on the phone, 搜索发现,
-  suggestions, 综合 with 筛选 and 用户 (rows open the space in the browser until slice 12), the ⋮ sheet's 稍后再看;
-  01's bottom bar, where only 首页 works (one tap scrolls 推荐 up and refreshes it). Also carries the katakana fix.
-- The loading TV, 1.0.0 (18): the official app's 小电视 (its four refresh faces and the player's pink Lottie, from the
-  8.43.0 APK) in place of the spinning circle: 推荐's pull and 首页-tap refresh, the avatar page's and 历史记录's
-  pulls (14), the first loads of 搜索, 历史记录 and 评论 over 正在努力加载... (64, 67; 搜索 hides its tab row until a new
-  keyword answers), and the player's 正在缓冲... with the engine's speed for loads, reloads and waits past 750 ms (65,
-  66). Loading more keeps the small system spinner, as the official app does. 首页's tab row ends at 01's hairline
-  (it was 9.33 pt low since slice 3).
-- Slice 12, UP主空间, 1.0.0 (19) (KaiC: its own build): the uploader row's and staff's face and name (one target) open
-  the uploader sheet under the playing video (62, 68, 76): counts, 关注, the uploader's videos, 进入空间. The space (63,
-  69-75, 77-79): banner, counts, 关注 with 充电 / 已关注 / ▽ and the 取消关注 sheet, the collapsing white bar with the
-  tab row pinned, always on 投稿 (chips for 视频 and 合集/系列, the 最新发布 ↔ 最多播放 toggle, 播放全部, rows with ⋮'s
-  稍后再看 and 分享). Comments' face and name, reply previews' names, @mentions (comments and 简介), space links and
-  搜索's 用户 rows open the space. The space's calls are the official app's (`app.bilibili.com`, `AppSigner.android`);
-  关注 stays on the web calls, kept in step everywhere by `FollowBook`.
-- Slice 13, 我的收藏, 稍后再看 and the official login, 1.0.0 (20): the app token (`AppAuth`), confirmed once with the
-  web login (see (21)), kept with its expiry, renewed once within 30 days of the end, asked
-  again when rejected; PiliPlus's split by host. Official with the token: 推荐 (personalised, videos only; the web
-  feed without the token), its ⋮ sheet with 不感兴趣 and its reasons (90-92), 点赞, 投币 and 不喜欢 (now live, 88,
-  89). 我的收藏 (80-84, 99-101): folders as cards or a list, a folder, 视频, 取消收藏, 创建 with a picked cover.
-  稍后再看 (85, 86, 93-98): 全部 / 未看完, the sort, 播放全部, 删除, 一键清除, 批量管理 with 复制到 / 移动到. Settings
-  files now live in the folder iOS names (path_provider): until (19) none survived a relaunch on the phone. Shipped
-  without the Windows press-through (the PC was locked; KaiC's call), on widget tests' accessibility presses.
-- The official login's confirm, 1.0.0 (21): on (20) the confirm call with the web login got -101 (it takes only the
-  official app's own token, PiliPlus issue 2933), and its page in a web view said 请在哔哩哔哩客户端内打开. 授权 now
-  opens that page in the official app (`bilibili://browser?url=`); the user taps 确认 there and comes back, and the
-  return polls for the token (at most 5 polls). Without the official app it toasts 请先安装哔哩哔哩客户端. Passed on
-  KaiC's phone.
-- 我的收藏's 视频, 1.0.0 (22): on (21) `/x/v3/fav/tab` answered code 0, but no tab named 视频 was found. The finder
-  now looks at any depth and takes the id as a number or a string; a miss logs the tabs' names and ids (`fav tabs
-  without 视频`).
-- 1.0.0 (23), three fixes. The seek bar (KaiC's recording `102-player-seek-drag.mov`): a touch takes hold of the
-  current position instead of jumping to the finger; a drag moves it by the distance dragged (the bar's travel is the
-  whole video), and a tap on the bar seeks nowhere, in every presentation. 我的收藏's 视频: (22)'s log showed
-  `/x/v3/fav/tab?tab_id=0` holds only the top tabs (收藏=1, 追更=2), so 视频 is looked for among 收藏's sub tabs
-  (`tab_id=1`, two calls at most). The comment picture viewer (105): a vertical swipe carries the picture with the
-  finger, shrinking to 60% while the black fades to the comments; past 100 pt or a flick it flies off and closes,
-  otherwise it settles back. Long pictures (scrolling) and zoomed ones keep their drags. Not built: the viewer's
-  查看原图, ⋮ sheet (分享, 保存图片) and comment bar (103, 104).
-- The seek preview, 1.0.0 (24) (102): holding landscape's bar fades every control but the bar and shows the frame
-  (170 × 95 pt, 1 pt white border, 6 pt corners, 184 pt from the top) with the time 15 pt under it. Frames are
-  `/x/player/videoshot` (`index=1`), fetched once per part on the first hold, every sheet cached as it arrives; the
-  time shows alone until then. The small player and 竖屏 keep their bars as they were (no screenshot of theirs).
-- 我的, 1.0.0 (25) (87, 02, 106, 107): the bottom bar switches 首页 and 我的 (`MainShell`, both kept alive, the
-  hidden one's tickers and Heroes off; 首页 tapped on 首页 still refreshes 推荐). 我的: the top icons, ✏️ and the
-  counts toast; the header (frame, 大 badge, LV, the vip pill, B币 and 硬币 from nav), the counts from
-  `/x/web-interface/nav/stat`, the 会员 card (opens big.bilibili.com in the official app, the browser without it),
-  the shortcuts, and 更多服务 (设置 works; 联系客服 and 听视频 toast); header, counts and card fixed, the rest
-  scrolling 8 pt under the card. Not built (KaiC): 我的服务, 发布你的第一个视频. Logged out (no screenshot): the grey
-  head, 点击登录, counts -, no card. Every pull now refreshes on release (`ReleaseRefreshControl`). Also carries the
-  unshipped 我的收藏 视频 fix (its tab id from 收藏's `uri`) and the PC login (`--real-account`).
-- The own space and 装扮, 1.0.0 (26) (108-117): the account's own mid opens its own space (`lib/space/own/`, asked with
-  the app token; without one only 投稿 and 收藏, and 收藏's list asks for 授权): the 空间头图 banner with its NO. label
-  and 👕, frame and 大, 编辑资料, the 勋章 pills, LV with the exp bar; 主页 (收藏, 追番, 最近投币/点赞, 拥有的个性装扮,
-  the eye-slash on hidden sections), 投稿 (108's empty page), 收藏 (116), 追番 (117), each tab's pages kept across
-  switches; scrolled, the bar in the skin's `color_second_page`. 装扮 (`lib/skin/`): the equipped skin from the
-  official `/x/resource/show/skin`, its package from the CDN, md5-checked, unpacked and kept across launches, asked
-  at launch, login, 授权 and 我的's pull; 我的's header art (109; an mp4 header plays muted in a native view with no
-  audio track), 首页's top (110) and the bottom bar (art, the icons by position, a selected `.svga` icon played by
-  our own SVGA player, `lib/skin/svga/`). Not built (KaiC): 我的游戏. Toasts: 编辑资料, 勋章, 详情, 👕, search, ⋮,
-  追番 posters, 装扮 cards, 投币/点赞's 更多, 我要投稿, 去创作中心领奖.
-- 1.0.0 (27): on (26) the skin dressed 首页, 我的 and the bar (KaiC's package: png/jpg only, no svga), but 最近投币 (13)
-  and 最近点赞 (600) decoded no item; their previews now take the id from `param`/`aid`, the BV from the aid and the
-  length text as the duration, and `own space sections` logs why a section's first item was dropped.
-- Pictures and 推荐's refresh, 1.0.0 (28) (KaiC: covers and 我的's face went blank, then reloaded, on coming back; the
-  clip `14-official-home-tab-reload.mp4`): every picture RemoteImage, DecorImage, comment pictures and the viewer show
-  is kept on the phone (`ImageDiskCache`, the caches folder's `images`, 500 MB, least recently read out first, 30 s
-  download limit), and a picture once shown stays up while the same address reloads. 推荐's refresh (首页's tap, a
-  pull, account changes) waits for the first screen's covers, at most 800 ms after the answer, then the TV's room
-  closes in 100 ms as the old cards fade off the new in place (180 ms, no rise); a late cover shows the iPhone's
-  placeholder (#DEDFE1 with the faint 小电视, no shade) and pops in. The card took the official stat icons, 9.67 pt
-  counts and 248 pt row pitch (01). 设置's 清除图片缓存 shows the size. Logs: `image cache` at launch, `images cleared`
-  on iOS's low-memory warning, `feed covers` per refresh (ready, failed, of, waitedMs, timedOut).
-- 1.0.0 (29), from KaiC's (28) log and use: `images cleared` fired four times in three minutes (leaving the app does
-  it), and the cover wait made a refresh ~1.8 s against the official ~1.0 s. 推荐's swap no longer waits for covers:
-  they are asked for the moment the answer lands and pop in over the placeholder (`feed covers` at the swap: ready,
-  failed, of, early, heldMs), at the box's own size (1×; the CDN's pre-made 672×378 was 1.26× soft). A pull held past
-  the trigger fetches page 1 at once, shown on release (the rule below). 我的 keeps the last profile and counts on the
-  phone (`me.json`, the account's only, deleted on logout) and draws them at once, then loads quietly; hidden, it
-  loads ~3 s after launch with the account check's nav, so only `/nav/stat` goes out and the face and frame are in
-  before it opens. Launch asks nav once (`BiliClient.nav` shares one out). Avatar frames stay up through a reload, as
-  faces do. The official app's own requests go around a Wi-Fi proxy (its `libignet` speaks HTTP/3 over QUIC with its
-  own DNS), so its iPhone cover sizes are unknown; its Android rule is `@{w}w_{h}h_1e_1c.webp` from a size table.
-- 1.0.0 (30), from KaiC's (29) log and use. Covers sooner: (29) logged `feed covers` ready 0 of 6 at every swap;
-  each cover opened its own connection (dart:io, closed after 15 s idle) and paid the CDN's ~0.4-0.5 s handshake. On
-  iOS every picture now goes through one URLSession (`PictureSession`: ephemeral, HTTP/2, kept open), every i0-i2
-  picture is asked from `i0.hdslb.com`, and a refresh starting (首页's tap, a pull armed) sends one HEAD for a picture
-  already shown while the feed call is out; `feed covers done` logs ready, thirdMs, lastMs and warm/warmed. Status bar
-  icons over a dressed header follow its picture (`lib/skin/skin_status_bar.dart`; the rule below): KaiC's skin drew
-  them black over a dark header. Full screen's brightness is kept after leaving it (the save and restore are gone).
-  The seek bar's TV is the official Lottie (`player_seek_bar_tv_1/2.json`): the eyes step 0.05 per drag update toward
-  the drag's way, glide back on release, then it blinks; it no longer grows while held, the bar thickens to 4 pt
-  (102).
-- 1.0.0 (31), covers from (30)'s log: with the connection kept open, covers still took 0.6-1.1 s because our box
-  size is made on demand (the CDN's `X-Cache-Status` said MISS on 8 of 10); the full-size picture is stored as is
-  (`@.avif` ready on 10/10, `@.webp` 8/10; ~0.38-0.41 s against ~0.55 s, the worst ~0.87-1.28 s against ~1.54 s, PC
-  timings). Every video cover asks the full size (`RemoteImage(cover: true)`, `CoverFormat`): AVIF on the iPhone,
-  decoded by Apple's ImageIO straight to the box's size (`PictureDecoder.swift` over Pigeon's `PictureHostApi`;
-  Flutter's engine can't read AVIF), webp on the PC and as the fallback (a failed AVIF fetches its webp; three in a
-  row turn AVIF off for the session). Decodes are keyed by their box, so memory stays as it was. Logs: `cover format`,
-  `avif decode failed`, `avif refused`, `avif off`, and `feed covers done` gains format and decodeMsMax.
-- 1.0.0 (32), covers from (31)'s log and a capture of the official app (WireGuard through mitmproxy, picture hosts
-  only): (31)'s full-size AVIF was slower on KaiC's own feed (thirdMs 785-1523, lastMs 1359-1957). The official app
-  asks every picture from i1 (`@630w_473h_85q_!pegasus-ios-v2.avif` for 推荐's 633×475 px box), and i1 is another
-  CDN, about twice as fast here as i0, where (30) had sent everything. Pictures now come from i1, and video covers at
-  their box's exact size as quality 90 JPEG (measured: the default webp soft, JPEG 90 as sharp as the original scaled,
-  ~20 ms slower on a first ask; the official AVIF address never came from cache for us). AVIF, ImageIO
-  (`PictureDecoder.swift`, the Pigeon picture API) and `CoverFormat` are gone; `feed covers done` drops format and
-  decodeMsMax.
-- 1.0.0 (33), from the second capture (KaiC's call: the CDN having covers ready matters most): covers ask the official
-  app's own preset addresses (`lib/shared/cover_preset.dart`): 推荐 `feed` (630×473 pegasus, answers 719×540), 搜索
-  `search`, related `related` (360×202), UP主空间 `space` (384×216 webp), 历史记录 and 稍后再看 `history` (450×251), the
-  player box `player` (1260×709); unnamed sites by box size. AVIF through ImageIO again ((31)'s decoder restored), a
-  failed AVIF falls back to (32)'s JPEG for that address, three in a row turn AVIF off. Logs: `cover downloads` per
-  preset every 10 network downloads (first byte median and max, kb, ImageIO's decodeMsMax), `cover format`, the
-  `avif …` lines, and `feed covers done` gains format.
-- 1.0.0 (34), from (33)'s log and KaiC's asks: a refresh replacing 推荐's cards (首页's tap, a pull's release) keeps
-  the TV up at least 1.5 s from its start (`FeedModel.minimumRefresh`, KaiC's pace; the covers are asked at the
-  answer, so they are mostly in by the swap); the first load isn't held. The launch's first load warms the picture
-  connection (a HEAD to the host itself when no picture is known; (33)'s launch covers waited ~1 s on it). 搜索's
-  covers ask the exact JPEG (`CoverPreset.exact`: the official search preset isn't made for the web search's results).
-  A video opened from a video page (related, 简介/comment video ids, the uploader sheet) replaces that page
-  (`replaceVideoPage`): back goes to where the first video was opened, never stacking (KaiC).
-- 1.0.0 (35), from KaiC's use: danmaku during the 2× hold stepped a little forward and back, then sped up. Position
-  readings (~10 Hz, stamped on arrival in Dart) carry tens of ms of jitter, twice that in media time at 2×, past the
-  clock's 40 ms smoothing window, so each one snapped it; the window now scales with the rate. Danmaku draws at
-  `DanmakuPace`'s time: it eases between rates over 0.2 s (the official app speeds up and slows down smoothly), closes
-  gaps gently, never steps back and leads a stalled playhead by 0.2 s at most; a seek, a pause or a gap past 0.5 s is
-  taken at once. 1080P 60帧 and 1080P 高码率 (and 720P 60帧) read `1080P` under an outlined tag, as in KaiC's
-  landscape screenshots (`QualityNames.tag`). 清晰度 closed (a pick, a tap outside, back) leaves the controls hidden.
-- 1.0.0 (36), KaiC: every player panel (清晰度, 倍速, 弹幕设置 and its lists, 更多, 选集) closed by a pick, a tap
-  outside or back goes back to the bare video in landscape and the small player (`_panelChanged`); moving between
-  panels keeps them up. Action overlays (投币, 收藏, 取消关注, 分享) still give the controls back as they were, and the
-  send bar leaves them to auto-hide, until KaiC checks the official app. 竖屏 (118): the controls never hide (only
-  under a panel or overlay), one tap plays or pauses at once, the bar carries the TV only while paused, paused shows
-  the APK's `bili_player_play` (25%) and the time on the video's centre line (not while another part opens), danmaku
-  15 pt in 23 pt lanes from under the top row, and 合集 · 第N集 before the title. The skin's 加载动画 (119):
-  `load_equip` (one animated picture, Android saves it as is) downloaded from the CDN, kept in `skins/loading`, logged
-  as `skin loading` (format, frames, size; never the URL), drawn in place of the refresh TV with 推荐's room grown to
-  85.33 pt while worn; first loads keep the TV.
-- 1.0.0 (37), from KaiC's 15, 121 and 122: the 加载动画 draws in the TV's own 60 pt box at the bottom of its 85.33 pt
-  room (Violet's 300 px file drew 57 × 73 pt in (36)'s 85.33 pt box, the official 42 × 52). 首页's header folds its
-  44 pt top row away once 推荐 is scrolled 6 pt (300 ms ease-in-out; the row fades with the fold, the art rides up,
-  the header ends at 98 pt) and a magnifier slides in at the tab row's end to open 搜索; it opens again under 6 pt
-  (`lib/home/home_header.dart`). 推荐 keeps its refreshes as batches: each refresh's page on top, then 刚刚看到这里，
-  点击刷新 (the APK's `ic_promo_index_refresh`; its tap is 首页's), then the cards before it; one divider, repeats and
-  不感兴趣 cards dropped from the old ones, account and token restarts replace everything, 200 cards kept at most.
-- 1.0.0 (38), from KaiC's use and recordings 123-126: a worn 加载动画 arms 推荐's pull at 60 pt, when its whole box shows
-  (the TV keeps 100). 推荐's official feed asks as the Android phone app (`mobi_app=android`) with the APK's inline
-  fields, which brings one big card per page (`inline_av_v2` / `large_cover_v9`, moved to its page's front as the
-  iPhone shows it; `feed card types` logs every page's types). The big card (`lib/home/feed_big_card.dart`) spans the
-  feed, plays muted at once (`lib/home/feed_inline_player.dart`, an inline `PagePlayback`: no heartbeats, PiP or
-  最近打开) while half its video shows when the scroll settles and 首页 is shown, uncovered and no small window is up;
-  TV only while loading; 弹 and the speaker for the run; loops, the counts fading from the second lap; 👍 from
-  `like_button.selected`, optimistic, the APK's Lottie. A tap hands the running playback to the video page with sound.
-- Upright videos and 竖屏, 1.0.0 (39), from KaiC's 16-21 (`local/differences/`): the small player's box takes an
-  upright video's shape (`lib/video/player_box.dart`: width × h / w up to 4:3 tall; 17's 3:4 is 440 × 586.67), shrinks
-  to 16:9 over 150 ms for the end screen and grows back on 重播 (18), and playing gives up its height above 16:9 with
-  the scroll (21; paused, down to the bar as before; `CollapsingPlayer` follows the session's `videoShape` and keeps
-  the shape through an in-page open). Its bottom row has only 竖屏, in 全屏's place (17). 竖屏: the paused ▶ and time
-  stay on the screen's 0.415 line whatever the video (16, 118); an upright video centres at 463 pt; the end starts
-  the video over from 0 whatever 自动连播 says (`PlayerSession.loopsAtEnd`; entering 竖屏 after the end replays); a
-  swipe right from the left edge does what ‹ does (KaiC); holding the bar fades everything but the bar, which grows to
-  6 pt in #FB7299 with the APK's story TV (`story_seek_bar_icon_1/2`), over the frame (81 × 144 upright, 144 × 81
-  wide, bottom at 788 pt) and the time (19, 20); the bar 0.5 pt higher; an upright video's last button is the APK's
-  `bili_story_ctrl_normal`.
-- 动态, 1.1.0 (1) (KaiC: a new version, 127-140): the bottom bar's 关注 (`lib/dynamic/`). The website's polymer calls
-  with the web login (`bili_client_dynamic.dart`; the official feed is gRPC): 全部 / 视频, 最常访问 (portal, then
-  uplist) with its pink dots, 更多 to 我的关注 (129, 130: search, 推荐排序 asking as 最常访问 (KaiC), 最近关注),
-  我的追番 · 追剧 on 视频 (全部 › opens the own space on 追番, `OwnSpacePage.initialTab`), the face sheet of one
-  person's posts (139). The card (`lib/dynamic/card/`): author row with the avatar frame, verify mark, pink 大会员 name
-  and fan-number card, text folded at four lines (… 全文; a video post's 展开 opens in place), pictures (2-4 two a row,
-  more three), a repost's grey block (its pictures one sideways strip, 136; + 关注), UP主的推荐, ↗ / 💬 / 👍 (counts, or
-  the word at 0), ⋮ (137: 分享, 取消关注, 举报). Video cards play muted where they settle (the 推荐 big card's
-  `FeedInlinePlayback`, now over any `InlineVideo`; one host per list, one video at a time, paused under the picture
-  viewer, sheets, overlays and pages) and a tap hands the playback to the video page with sound (KaiC); other posts open
-  the post page (131-134, 140: 正在努力加载... until the detail, the bar taking the poster once scrolled, IP属地, 评论 /
-  赞和转发 pinned, comments as on a video with the post's area (`CommentsModel.type`: 11, 12, 17), the bottom bar's
-  点我发评论, 💬, ⭐, 👍). An UP主空间's 动态 tab lists their posts (136), and a space whose default is 动态 opens on it.
-  👍 is optimistic and in step everywhere (`DynamicLikeBook`); `FollowBook` remembers each mid's 关注. Toasts (KaiC):
-  ✏️, 转发, 赞和转发, 举报, 生成长图, ⭐, 去看看, #topics#, 🎁, 追番 posters; ↗ and the post's ⋮ open iOS's share sheet
-  (KaiC: not 138's panel). Kinds no screenshot shows (直播, 番剧, articles' titles, votes, 预约) draw author, text and
-  counts; 直播 and 番剧 toast. Logs: `dynamic feed` (type, count, skipped kinds), `dynamic post`, `space dynamics page`.
-  The shapes came from one guarded `--real-account` read of 8 calls (KaiC's OK, 2026-10-26; a new QR login, the old
-  one had lapsed); fixtures are made up.
-- The iPad, 1.2.0 (1) (KaiC: basic watching on his iPad Pro 11", `local/official-app-reference/ipad/` 01-25): the app is
-  universal (`TARGETED_DEVICE_FAMILY` 1,2, full screen only). `FormFactor` (`lib/app/form_factor.dart`) is the one
-  switch: `FormFactor.device` from UIKit's idiom at launch (`DeviceHostApi.isPad`, logged `form factor` {kind, via}),
-  `FormFactor.of(context)` from the screen (cut at 700 pt); every iPad layout is its own branch or `pad/` file, the
-  iPhone unchanged. On the iPad: all four orientations, no rotation request ever, full screen only by the button and
-  back in either orientation, no 竖屏 (an upright video plays full screen pillarboxed, 25), no drawn turn. 首页 (01,
-  02): 3 columns, the one-row header (only 推荐 answers; scan and 消息 toast), the bar 首页 分区 动态 我的 (分区
-  toasts), the feed asked as the iPad (`mobi_app=android_i`: no big card; 01's banner left out). The video page
-  (`lib/video/pad/`): sideways the player, `PadIntroHead` and 热门评论 in the left column with the related column on
-  the right (03, 04), upright one column with 简介 / 评论 (06); paused, the column shrinks the player to the pink
-  立即播放 bar with the pinned strip and the iPad's comment bar with ↑ (05, 20); turning reflows keeping the
-  session, the scroll places and the bar (23); comments load when the page opens on the iPad. The page player's
-  controls and end screen (03, 07, 17; 章节 line, chapter strip), full screen's bars, side buttons, end screen, hold,
-  buffering and seek preview (08, 14-16, 18, 19, 24), the panels as fixed-width strips (10-13, the iPhone's rows),
-  danmaku at 21.75 pt in 31.3 pt lanes over the whole screen (09, 25). Windows: `--pad` (1194×834, the iPad's 24 pt
-  status bar); tests: `showAsPad` (834×1194 at 2×).
-- 离线缓存, 1.3.0 (1) (KaiC: kept on the phone for good, playable after Bilibili removes the video, danmaku kept;
-  141-161, `differences/22`). The portrait ⋮ (small player 42, 竖屏 43) is the official white sheet: its squares with
-  分享 (iOS's sheet) in place of the app-icon row, rows shared with landscape's ⋮ (`MoreRows`). ⋮ → 缓存 (141-144,
-  153, 154): 画质 defaults to the best stream the account gets (dash, not the quality list), each part's and each
-  quality's size estimated from the bitrates (`约 78.4MB`, KaiC; `offline_size.dart`), title rows, a 合集's cover
-  cards, the marks (ring, progress arc, ✓), 缓存全部, 查看缓存 with its dot, 已使用 / 剩余. 离线缓存 (我的's and the
-  avatar page's shortcut; 143, 145-151, 155-157): 正在缓存 stacked, 已缓存视频 grouped by 合集 or multi-part video,
-  正在缓存's page (全部暂停/开始, 同时缓存数量 1-3, edit, 确定要删除吗?), a group's page, search. A cached video opens
-  its own page (158-161: `VideoPage` with `VideoRoute.offline`): the player on the phone's files (`PlaybackMode.local`,
-  the engine's `prepareLocal` and `LocalSource`), the saved danmaku, the cached videos as its playlist, ⋮'s 查看详情页;
-  no playurl, heartbeats or history. Downloads (`DiskOfflineLibrary`, `lib/offline/`): playurl at 127 for the best
-  streams the phone decodes, the cover, face and every danmaku segment saved, both tracks through the engine
-  (`OfflineDownloads`: 2 MiB pieces across the nodes, 6 connections of their own, `.part` + `.ranges`, resumable).
-  Leaving the app hands what is left to iOS's background URLSession (`OfflineHost.swift`, ≤16 MiB ranges, each
-  written into `.part` and listed in `.bg-ranges`, which the engine folds in on return); without it, iOS's ~30 s grace,
-  then resume on return. Also KaiC's: the small player's (and the iPad page player's) vertical drags set brightness
-  (left) and volume (right) with full screen's level pill scaled into the box. Logs: `download started/finished/
-  failed`, `offline handed off`, `offline taken back`, `local source`, `offline folder removed`; never a URL.
-- 1.3.0 (2), from KaiC's iPad log (1.3.0 works there unchanged): a 6.5-hour video's 67 danmaku segments (paced 0.5 s)
-  held its download ~50 s at 0, so 同时缓存数量 3 looked stuck; danmaku now saves alongside the media (stopped by pause,
-  risk control, delete; the finish's retry kept). Leaving for 3 minutes, iOS ran none of 848 ranges: they were queued
-  7 s after the app was already in the background, where iOS treats new transfers as discretionary. The hand-off now
-  starts at `inactive` on iOS (Control Center and the app switcher take it back on return), the engine's stops run
-  together, pieces grow with the bytes queued (16, 16, 32, 64, 128, then 256 MiB) and every track's first ones are
-  queued first; a leave during the return's take-back starts the parts in the grace and hands them off again; no run
-  starts while a take-back is still out. Take-back gives the session 1 s (and up to 3 s more for tasks whose bytes are
-  all in) to deliver ranges iOS finished while the app was suspended. Logs: `offline handed off` gains ms and late
-  (true: the last ones were queued from the background), `offline taken back` gains started and partialMb (what iOS
-  had fetched of unfinished ranges).
-- 1.3.0 (3), KaiC (several devices, some videos cached): a cached video's page reports its watch progress as a video
-  page does (`WatchReporter`, logged in only). A heartbeat that gets no answer waits in `HistoryOutbox`
-  (`history_outbox.json`: the latest per video, as Bilibili keeps one place per video; 30 days), sent one at a time
-  at login, on coming back and on network changes, cleared on logout; before sending one older than 5 minutes a
-  flush reads 历史记录's first page once and drops reports of videos the account has watched since (another
-  device). A cached part opened online starts where the account last stopped in it (player/v2's `last_play_time`,
-  1 s at most, same part only), unless this phone's own report of it is still waiting. Bilibili dates a sent report
-  when it arrives. Logs: `history outbox` (counts: queued, sent, dropped, stale, failed, held), `offline resume`
-  (cid, local, server, used, source). Known limit: a login of another account straight after an expired one (no
-  logout between) would send the first account's waiting reports.
-- 1.3.0 (4), from KaiC's iPad log on (3): the hand-off now lands in the foreground (ms 184-201, late false) and iOS
-  runs it at once, and the update from (2) kept every download (resumed at 4.0, 5.4, 4.0 GB). But iOS ran ~30 ranges
-  at once, each crawling: on a 2-minute trip 62 MB finished and 434 MB were thrown away unfinished. The background
-  session now takes 3 connections per host (`httpMaximumConnectionsPerHost`), pieces stop growing at 128 MiB, and a
-  206 shorter than asked (2 of 43 came back -3) is written and listed as far as it goes (status -4, its `received`
-  the bytes written). KaiC: no more one guess per build, the app finds the fastest way itself. iOS 26's continued
-  processing (`BGContinuedProcessingTask`, `ContinuedDownloads` in `OfflineHost.swift`, identifier
-  `com.kaichuan.bilifast.offline.continued` in Info.plist): asked for at 缓存, resume, 全部开始 and each return or
-  launch with downloads left (strategy fail); while it runs the app stays alive when it leaves and the engine keeps
-  downloading, under iOS's Live Activity (离线缓存, the one video's title or 还剩 N 个视频, progress in bytes every 2 s;
-  the iPad shows it in the foreground too). It ends when nothing is left; iOS ending it (time up or the user's ✕,
-  indistinguishable) while away falls back to a hand-off. Every trip away is a trial (`BackgroundTrials`,
-  `trials.json`, the open one in `trip.json` so a relaunch closes it): `continued` or a hand-off at 3×128, 2×64 or 6×32
-  (connections per host, each its own background session: `.offline`, `.offline.c2`, `.offline.c6`; MiB pieces).
-  Each arm is tried first (at most 3 long attempts), then the best mean MB/s of its last 5 scored trips, 15% explore
-  (5% once all have 5). Scored: 20 s or more, downloads not run out, not spoiled (nothing handed off, take-back
-  failed, any trip the app died in: timed to the next launch, and a swipe cancels the transfers too). A hand-off trial ends a running task only at hidden/paused, so a glance
-  at Control Center keeps it. Logs: `offline continued` (asked, refused with the error's domain and code, not started,
-  started, completed, ended with locked), `offline away` (arm, why), `offline away progress` (every 30 s on a
-  continued trip), `offline trip` (secs, gainedMb, mbps, wastedMb, allDone, scored, spoiled, handed, relaunched),
-  `offline trials` (each arm's scored/mean, best), `offline handed off` (arm, connections, fallback).
-- 1.3.0 (5), `92c3084`: `main` after (4) (the trial fixes of `60f6fb4`), and the first build whose unsigned IPA went
-  out as the GitHub release `v1.3.0-5`. Since then only the README and the release notes' wording changed, so it is
-  the closing build (`docs/closing-checklist.md`).
-- 1.3.0 (6), from the closing round. 速度测试's built-in plan is `builtin-4`: the app's BTR (A) against 直连 (Z), each
-  pass replayed cold in its variant's mode (`PlaybackController.replay(mode:)`, without setMode's reload), logged
-  `speedtest pass` with mode, all on H.264 (a plan's `codec`, put back after the run: 直连 passes over hev1-labelled
-  streams, so on the Windows check it played AV1 where BTR played HEVC). The hand-off asks playurl again unless its addresses have 100 min or more left (they last
-  ~2 h; the iPad's 2 h 16 min trip lost 84 of 231 ranges to 403s), all parts at once, 4 s at most each, keeping the
-  old ones if still good for 30 min; `offline handed off` gains refreshed. 首页's tap opens the folded header at the
-  tap, alongside the scroll to the top (`differences/23`: the official app starts both in the tap's frame; ours waited
-  for the scroll's last 6 pt, ~250 ms).
+- The move from Swift (slices 0-9, 1.0.0 (4)-(12)): `packages/bili_core` ported tests-first; AVPlayer in a native view
+  fed by the Dart engine's local HLS (4K, 8K, 真彩 HDR, 杜比视界, PiP); the engine past Swift's speed (each speed-up a
+  `RipperConfig` switch, the app's choice in `lib/playback/playback_setup.dart`; KaiC: no more tuning rounds); 推荐,
+  the avatar page, 最近打开; player gestures, HUD, panels and rotation; the page body (简介, actions, coins,
+  favourites, 合集, related); comments and the composer; danmaku (settings, 屏蔽词, 当前弹幕列表, sending); login,
+  历史记录, 设置; a player per page on one shared engine with `PipKeeper`; the drawn turn (开发者 → 旋转动画).
+- The system font, 1.0.0 (15)-(17): SF with PingFang SC, its fallback settled at launch (the font rule below).
+- Milestone 3, find and follow, 1.0.0 (17)-(22): 搜索 and the bottom bar (17), the loading TV from the APK (18),
+  UP主空间 on the official app's calls (19), 我的收藏, 稍后再看 and the official login's app token, confirmed in the
+  official app (20)-(22).
+- 1.0.0 (23)-(39), from KaiC's use and clips: the seek bar's hold and the seek preview; the comment picture viewer's
+  swipe; 我的 and the bottom bar's 首页 / 我的; the own space and 装扮 (skins, our SVGA player, the status bar over
+  a dressed header); pictures kept on the phone and asked as the official app's CDN presets (AVIF through ImageIO);
+  推荐's refresh (held 1.5 s, batches under 刚刚看到这里), the folding header and the big inline-playing card; a
+  video opened from a video page replacing it; danmaku pacing at 2×; panels closing to the bare video; 竖屏; upright
+  videos' tall player box.
+- 动态, 1.1.0 (1): the bottom bar's 关注 on the website's polymer calls, post cards, the post page, 我的关注, the
+  space's 动态 tab, video cards playing muted.
+- The iPad, 1.2.0 (1): universal app, `FormFactor` the one switch; 首页, the video page and full screen in their
+  own iPad layouts, the other screens the iPhone's at the iPad's width.
+- 离线缓存, 1.3.0 (1)-(4): downloads through the engine, kept for good with their danmaku; a cached video's own page
+  on `PlaybackMode.local`; watch progress queued in `HistoryOutbox`; background downloading chosen on the device by
+  `BackgroundTrials` (iOS 26's continued processing or a background URLSession hand-off).
+- The closing build, 1.3.0 (5)-(6): 速度测试's built-in plan `builtin-4` (BTR against 直连, a plan's `codec`); the
+  hand-off asks fresh stream addresses unless they have 100 min left; 首页's tap opens the folded header at once.
+  Milestone 3's closing check passed by KaiC's daily use (2026-11-01); M1 became the README's 实测 chart
+  (`docs/speed/seek.svg`: six videos where both modes passed cleanly, 72 jumps each; passes spoiled by a trip out of
+  the app, or by a video the CDN hadn't fetched yet, left out). The Swift app retired (2026-11-02).
 
-Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
-the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
-1. The closing check (`docs/closing-checklist.md`): M2 and every phone check owed since (17) passed by KaiC's daily
-   use (2026-11-01: no bugs seen, so no step-by-step run). M1 is the README's 实测 chart (`docs/speed/seek.svg`): the
-   six videos where both BTR and 直连 passed cleanly over three phone runs of 1.3.0 (6), 72 jumps each; passes spoiled
-   by a trip away, or by a CDN that hadn't fetched the video yet (both modes failing it), are left out. Left: the
-   cutover (BiliNative's `CLAUDE.md`, the Swift app retired).
-2. 动态 shipped in 1.1.0 (1), the iPad's basic watching in 1.2.0 (1), 离线缓存 in 1.3.0 (1); next is KaiC's pick.
-Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
-full; passing them is the cutover (spec, slice 9). Later: 番剧, 直播.
+Update this section when a build ships: one short entry, and any rule it adds goes under "Rules that bite".
 
-Open items, each waiting on its slice:
-- Long hand-off trips outlive the stream addresses: they are signed for ~2 h (7200 s from the playurl call, read
-  from the log's `deadline`), and the iPad's 2 h 16 min `handoff-3x128` trip on 2026-10-31 came back with 84 of 231
-  ranges failed (403, -3) after 16.5 GB fetched. (6) hands off fresh addresses, so a trip gets the whole ~2 h; past
-  that the ranges iOS starts still fail (nothing renews them while the app is away). The continued trip before it ran
-  2.5 MB/s over 23 min, scored.
-- 1.3.0 (1) on the phone: a download at 4K / 杜比 / HDR and its playback from the phone (AVPlayer on local files),
-  airplane mode, leaving the app mid-download (the log's `offline handed off` / `taken back` counts; whether iOS ran
-  the transfers while the app was away), swiping the app away (cancels them; resumes on the next open), a TestFlight
-  update keeping the files, the cover's progress line, the small player's level drags (the first volume step after the
-  view goes up). Guessed: the paused and failed marks, 定时关闭 and 画面尺寸's light pages in the white ⋮, failure lines,
-  search results, edit on 离线缓存, the inline level pill's 0.8×, 竖屏 kept for an upright cached video. Not built:
-  cellular rules, danmaku refreshed after the download, 自动上滑 / 单双击手势 / 后台听视频 / 字幕 (toast), waiting parts
-  handed to iOS (only running ones are), our HUD for the hardware buttons inline (iOS's own shows; KaiC's call). The
-  normal page's 点我发弹幕 capsule border is 0.7 pt where 10 shows a crisp 1/3 (the offline band's is fixed).
-- 1.2.0 (1) on the iPad: 首页 against 01/02, the page both ways against 03-07 (the 32 pt band, the 437 pt related
-  column), the pink bar and turning with it, full screen both ways (08-19, 24), danmaku (09, 25), the launch log's
-  `form factor` reading via native on both devices, and the iPhone untouched. Guessed (no screenshot): full screen
-  held upright, the upright 评论 tab and shrink, the page's sheets and send bar at the left column's width with the
-  related column dimmed, an upright video's page box at 16:9, the dressed bar at the phone's width, 评论详情. Kept the
-  iPhone's contents (KaiC can ask otherwise): 清晰度's header and 自动 first (10), 倍速's 3.0X (11), 更多's rows (13),
-  the share arrow where 16 and 17 show WeChat's. Known: the pinned strip's icons sit about 1 pt low; in full screen
-  the send bar lets the bottom row's tops peek out; Apple deprecates `UIRequiresFullScreen` from iPadOS 26 (a
-  window narrower than 700 pt would draw the iPhone layouts). Not built: 投屏, the chapter list, the iPad's own
-  panel contents, the other screens' iPad layouts (搜索, 我的, 动态, spaces, 设置 draw the iPhone's at the iPad's
-  width).
-- 1.1.0 (1) on the phone: 关注 against 127, 128 and 135 (the decoration card's number, the footer, the folds), the face
-  sheet (139), 我的关注 (129, 130), a picture post and a repost's post page (131, 132, 134, 140), the space's 动态 (136,
-  its avatar frame and the repost strip), the video cards playing muted and the hand-over, 👍, ⋮'s 取消关注, comments on
-  a post (reply, like, delete). Guessed: the 关注 bar without a 装扮, 登录后查看关注动态 and 登录后查看我的关注 (logged
-  out), 关注 tapped again refreshing, no danmaku on 动态 videos, 🔇 shared with 推荐's big card, 展开 opening in place,
-  the dots in 我的关注 from 最常访问's call, the frame at 1.75× the face, the strip on the post page, 评论区暂不可用.
-  Known: the post text's 29.33 pt lines draw 29 (Flutter rounds; 7 pt by a long post's end); iOS squeezes a
-  line-initial 「 to half width, Flutter doesn't; a pill-shaped fan card's number sits differently (one sample). Not
-  built: 赞和转发's list, writing a 转发 or a post, the face's second (digital collectible) badge, 138's own share panel,
-  the 视频 tab's 番剧 posters opening.
-- (39) on the phone: the tall box against 17 and 21 (the scroll down to 16:9 and back), the end's shrink and 重播's grow
-  against 18, 竖屏's loop, the edge swipe, the held bar and preview against 19 and 20 (the ` / ` spacing: the stand-in
-  draws it 3.7 pt narrower than 19), the bar's rows. Guessed: the 4:3 cap (no 9:16 screenshot), the 463 pt centre for
-  every upright shape (one 3:4 sample), a shape arriving late animating, scrolling back up regrowing the box, and what
-  竖屏's screen-mode button does for an upright video (ours still turns to landscape; the APK's selector suggests a
-  清屏 / screen-mode toggle; leaving that landscape lands in the small player, not back in 竖屏, as before). Not built:
-  17's ♪ (听) and the 听/投屏 top icons; an edge swipe starting on 竖屏's ‹ (the ‹ takes the touch).
-- (38) on the phone: Violet's pull arming at 60 pt; the big card against 123-126 (size, danmaku, counts, the speaker
-  and 弹, the loop, 👍), its tap carrying on with sound, pausing half off once the finger lets go, and whether 推荐's
-  mix changed asking as the Android phone (KaiC's worry; a 开发者 switch back to the pad if so). Guessed: release 30 s
-  after a pause, starting at 0, the paused card's last frame, heartbeats ~15 s after the take-over, the page's quality
-  inline (4K by default), 不感兴趣 sending `goto=av`.
-- (37) on the phone: the 加载动画's size against 15 and 119; the fold against 121 (and scrolling back up, which no
-  recording shows: ours opens only near the top); batches against 122. Guessed: the divider's tap acting as 首页's,
-  one divider, repeats and 不感兴趣 cards dropped, the 200-card cap, the magnifier's grey on the stock header (its
-  stroke 2.1 pt against 1.83). Not built: the official feed's big inline-playing card, shown muted and playing at once
-  unless loading (KaiC). The PC's token showed (2026-10-24) the server sends it (`inline_av_v2` / `large_cover_v9`, one
-  per page, last in Android's order) only to the Android phone app (`mobi_app=android`), never to the pad app our feed
-  asks as; the APK's inline fields (`autoplay_card`, `inline_sound`, `inline_danmu`) don't decide it. Asked as the
-  iPhone app (its key, the same token: accepted, code 0) it sent none either, so the iPhone app's own feed likely
-  comes another way (gRPC); (38) asks as the Android phone. The tab row's
-  other tabs. Known: folded over a 装扮 header, the status bar keeps the style measured for
-  the open header (the picture's 0-62 pt band, not 44-106); a refresh whose page is short enough to show the divider
-  shows its old top cards twice for the 180 ms hand-off.
-- (35) on the phone: the 2× hold and its release with danmaku on, against the official app (no forward-back steps,
-  the speed easing up and down); the 60帧 and 高码率 tags beside the official ones. (36): every panel closing to the
-  bare video; whether the official app also hides the controls after 投币, 收藏 and the danmaku send bar; 竖屏 against
-  118 (tap, ▶ and time, TV thumb, danmaku size); the log's `skin loading` (format, frames, width, height) and the
-  加载动画's size and place against 119. Guessed: the ▶'s place for a vertical video, the 加载动画 box (the file's
-  margins are unknown), what the pull shows before the trigger (the first frame, held). Other lists' pulls draw the
-  加载动画 in the 60 pt room (no screenshot). Seen once on Windows, not again: the app's window closed by itself after
-  竖屏 → landscape (no crash log; the same steps then ran 45 s fine).
-- (34) on the phone: the TV up ~1.5 s on 首页's tap and a pull, the new cards landing with their covers in (`feed
-  covers` at the swap: ready near 6 of 6); the launch's `feed covers done` warmed other than none and well under
-  (33)'s 1113 / 1545 ms; `cover downloads` preset exact for 搜索; a related video, a 简介 video id and an uploader
-  sheet video each replace the page, back lands where the first video was opened, and a small window playing from
-  the replaced page is let go when the new one starts.
-- (33) on the phone (KaiC's log, 2026-10-23): `cover format` avif, 160 推荐 covers as AVIF, no decode failure, ImageIO
-  ≤35 ms. `feed covers done` thirdMs 258-335 and lastMs 338-529 ms over five refreshes (better than (32)), but 1113 /
-  1545 at launch: the picture connection was cold (warm false; the warm-up only runs on 首页's tap and an armed pull).
-  `cover downloads` first byte on the phone: history 151-178, feed 205-265, related 233-433, search 312-537 ms (the
-  search preset isn't made for our web search's results), space too few to log. (34) warms at launch and puts 搜索
-  back to the exact JPEG. KaiC's word on how the covers look still to come.
-- (32) on the phone (KaiC's log, 2026-10-23): `feed covers done` thirdMs 360-388 ms and lastMs 467-570 ms over five
-  refreshes (582 / 633 at launch), 6 of 6 ready each time, no `image failed`: about twice (30)'s and (31)'s. The second
-  capture (both apps side by side, same network): the official app's every picture is a named preset (推荐
-  `@630w_473h_85q_!pegasus-ios-v2.avif`, which answers 719×540; lists `@360w_202h_1e_1c_85q.avif` and
-  `@450w_251h_…`; 搜索 `@540w_305h_1s_85q_!search-normal-fill.avif`; one list `@384w_216h_1e_1c_85q.webp`), first
-  byte ~150-175 ms because millions ask the same addresses, against ~290-330 ms for our exact sizes (made for us
-  alone; 86 KB a 推荐 cover against 27). Headers make no difference (UA, Accept, none of its ids). Our JPEG 90 is the
-  sharpest (gradient 11.7, the original scaled 11.2, the official AVIF 9.6, webp 9.6-9.8). Speed for sharpness is
-  KaiC's call; matching the official presets would need ImageIO back for AVIF.
-- (30) on the phone, passed (KaiC, 2026-10-23: status bar, brightness, seek TV); still to read:
-  `feed covers done` with warm/warmed and thirdMs/lastMs against (29)'s; `skin status bar` for
-  幸运塔罗星 (home, me, meNoCard and their picks: white expected); the brightness after full screen and after leaving
-  the app; the seek TV's eyes and blink against the official app (102 shows the iPhone's eyes pausing and topping out
-  near 0.85, which the Android rule doesn't; ours follows Android). Seen on the PC: 04's played part starts square and a
-  duller pink (ours round); landscape's drawn clock writes 03:29 where portrait writes 3:29.
-- Pictures and 推荐 on the phone (28): `images cleared` in the log confirms iOS's memory warning as the blanking's
-  trigger; `feed covers` shows how often 800 ms is too short. Not built: the pull's TV closing as fast as 首页's (no
-  official pull recording), the official UP badge icon (01's is 14 × 12 pt, ours a drawn box), and cards with a reason
-  tag (2万点赞) hiding the uploader's name as 01 does; the seek preview's sheets stay off the disk cache.
-- The own space and 装扮 on the phone (26): the skin is the Android package (the calls sign as the Android app), so
-  the log's `skin` line (files, extensions, sizes, colours, whether the bar is themed or its gaps) settles the formats,
-  the icon order (首页=main, 关注=channel, 消息=shop, 我的=myself, as the official app drops the middle one) and whether
-  the selected icons are `.svga`; `own space sections` tells if `fans_dress` or `collection_top_simple` came. Guesses:
-  the 装扮 cards' height and gradient (115 cuts them), 👕 and the banner shade without a label. Not built: skins that
-  only tint the stock icons (`tail_icon_mode` color), 我的游戏, the own space's verification line. 投稿 with videos
-  reloads when its tab comes back (`SpaceVideosSliver` keeps its own state). On the phone: music from another app keeps
-  playing over a skin's header video.
-- The drawn turn, shipped in 1.0.0 (15): (14)'s recording
-  (`local/differences/10-ours-rotate-testing-v5.MP4`, measured with `tools/turn_video.py`) matched the official turn
-  with 请求前关, the picture cut and the turn started at once. (15) keeps only that as 开发者 → 旋转动画 自绘, beside
-  系统; the test build's choices, 轮换测试 and the per-frame log lines are gone. On the phone: the turn both ways
-  against the official app.
-- Japanese names under the system font, `5f116e1`, shipped in 1.0.0 (17): on (16) a
-  reply whose name is katakana (シロハ_, 单可ト) drew its whole line in a Japanese font; the launch check now names SF,
-  then PingFang SC (the font rule below). On the phone: those replies draw like the others, and the log's
-  `system font fallback` reads pingFang true (false means iOS didn't match `.AppleSystemUIFont`; the app then stays
-  as (16)).
-- Slice 10's leftovers, set aside by KaiC (2026-10-21; `docs/milestone-3-spec.md`, slice 10 and section 8): the
-  stand-in sweep's findings (re-measure, then one fix round by screen group), the landscape title marquee with 章节,
-  竖屏's 联合创作 and 合集 prefix, 弹幕设置's 查看更多 variant for the small player (waiting on KaiC's screenshot), and
-  12's first comment drawing about 3% wide on (16), cause unknown.
-- The official login on the phone: the confirm in the official app worked on (21) (token for 180 days, the official
-  推荐 answered). Still to check: 推荐's mix against the official 首页, 不感兴趣's reason ids (inferred), 我的收藏's
-  视频 (the official app's `/x/v3/fav/tab/fav` with cookies, untried), the cover upload, and the launch log's
-  `support folder` line (on (20) the danmaku settings came back after a relaunch: loaded, changed true).
-  Not built: 追更, the folder search, 批量 in folders, folder rows' progress line (the web list has none), 卡片/列表
-  remembered across launches. The Windows press-through of slice 13 is still owed.
-- Logging out and back in hasn't been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
+## Next
+
+KaiC's pick. Candidates: 番剧, 直播, 人像防挡 (the mask file from `/x/v2/dm/web/view`; its switch is drawn off and
+toasts), the iPad's other screens. Each new screen waits for KaiC's official screenshots. For checks, see "Daily use"
+in Rules that bite.
+
+## Backlog
+
+Not built, by area. Most wait for a screenshot of the official app; KaiC decides what comes in.
+- Player: 17's ♪ (听) and the 听/投屏 top icons; what 竖屏's screen-mode button does for an upright video (ours turns to
+  landscape); an edge swipe starting on 竖屏's ‹; the landscape title marquee with 章节; 竖屏's 联合创作 and 合集
+  prefix; 弹幕设置's 查看更多 for the small player; the picture viewer's 查看原图, ⋮ sheet and comment bar (103, 104);
+  竖屏 search, 充电鸣谢, a 16:10 video's box height. Left out by KaiC: 举报 on danmaku, 互动弹幕列表.
+- 首页: the tab row's other tabs; the official UP badge icon; reason-tag cards (2万点赞) hiding the uploader; uploader
+  names on 推荐 cards, 历史记录, 搜索 and related rows opening the space.
+- 搜索: 番剧/直播/影视/图文, keyword chips, comment snippets, 相关搜索, 筛选's 音画质量/范围/date range, 大会员 names,
+  用户's sort menus.
+- Spaces and 我的: 主页/小店/收藏 tabs (toast), default tabs other than 投稿 and 动态, 你可能感兴趣 after 关注, medals and
+  找我官方合作, 图文, the own space's verification line, skins that only tint the stock icons (`tail_icon_mode`
+  color), 我的游戏, 我的服务, 发布你的第一个视频.
+- 我的收藏 and 稍后再看: 追更, folder search, 批量 in folders, folder rows' progress line, 卡片/列表 remembered.
+- 动态: 赞和转发's list, writing a 转发 or a post, the face's digital-collectible badge, 138's own share panel, the 视频
+  tab's 番剧 posters opening.
+- 离线缓存: cellular rules, danmaku refreshed after the download, 自动上滑 / 单双击手势 / 后台听视频 / 字幕 (toast),
+  waiting parts handed to iOS (only running ones are), our HUD for the hardware buttons inline.
+- iPad: 投屏, the chapter list, its own panel contents, its own layouts for 搜索, 我的, 动态, spaces and 设置.
+- Slice 10's leftovers (KaiC set them aside, 2026-10-21; `docs/milestone-3-spec.md`): the stand-in sweep's findings.
+
+## Known limits
+
+- Long background trips outlive the stream addresses: they are signed for ~2 h, so ranges iOS starts after that fail
+  (403); nothing can renew them while the app is away.
+- 速度测试 doesn't log the app leaving the screen: a pass run while it is away, or on a video the CDN hasn't fetched
+  yet, times out on the first frame like a real failure. Read the log's timing before trusting a failed pass.
+- Flutter rounds a line to whole points (comments 24 pt against 24.33; 动态's post text 29 against 29.33), and doesn't
+  squeeze a line-initial 「 as iOS does.
+- Folded over a 装扮 header, the status bar keeps the style measured for the open header; a 推荐 refresh whose page is
+  short enough to show the divider shows its old top cards twice for 180 ms.
+- The normal page's 点我发弹幕 capsule border is 0.7 pt where the official one is a crisp 1/3.
+- `HistoryOutbox`: logging into another account straight after an expired one (no logout between) would send the
+  first account's waiting reports.
+- Apple deprecates `UIRequiresFullScreen` from iPadOS 26: a window narrower than 700 pt would draw the iPhone layouts.
+- Logging out and back in has never been tried on the phone (KaiC keeps his one login); Windows and widget tests cover
   the logged-out paths.
-- Follow-up slice: 人像防挡 (the mask file from `/x/v2/dm/web/view`); its switch is drawn off and toasts until then.
-- 搜索 on the phone: the keyboard's 搜索 key (ghosthand's Enter doesn't reach the Windows app), results with the
-  real login (no -412), the … under PingFang (the stand-in draws it mid-height), and the zoom back into a 推荐 card
-  half under the bottom bar. Left out of 搜索 for now: 番剧/直播/影视/图文, the keyword chips, comment snippets,
-  相关搜索, 筛选's 音画质量/范围/date range, 大会员 names, 用户's sort menus (no screenshot of them open).
-- The loading TV on the phone: no recording shows a pull in progress (ours holds the first face until the pull would
-  refresh), 历史记录's first load or a speed past 1024 KB/s (ours writes MB/s); 评论 before the aid is known was only
-  seen under an ad card. A pause before the first frame may leave 正在缓冲... up (older than (18), unconfirmed). The
-  @ list, emote panel and 收藏 sheet keep their spinners (no recording).
-- UP主空间 on the phone: 关注 / 取消关注 on the real account (FollowBook keeping the page, sheet and space in step), the
-  bolt on 硬核会员's level badge (`level_info.identity` 2) and 充电 only for uploaders who take it (`elec.show`), both
-  unseen live; the -404 page's 用户不存在或已注销 and the collapsed bar's 已关注 pill are guesses (no screenshot).
-  Not built: 主页/小店/收藏 (toast), the uploader's default tab other than 投稿 and 动态, 你可能感兴趣 after 关注 (no known API), medals and
-  找我官方合作 after the name, 图文. Uploader names on 推荐 cards, 历史记录, 搜索's video rows and related rows don't
-  open the space yet (no screenshot of what the official app does). 分享 on Windows opens an invisible share window
-  that freezes the app (share_plus; the phone is fine): checks skip it.
-- Left out by KaiC: 举报 on danmaku, 互动弹幕列表.
-- Later: 竖屏 search, 充电鸣谢, the player box following a 16:10 video's height.
-- Known limit: Flutter rounds a line to whole points, so comment lines are 24 pt where the official app's are 24.33.
-
-Update this section when a slice ships: one short entry, and any rule it adds goes under "Rules that bite".
+- Windows only: 分享 opens an invisible share window that freezes the app (share_plus; checks skip it), and
+  ghosthand's Enter doesn't reach 搜索's keyboard key.
 
 ## Layout
 
@@ -704,7 +310,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   its TV at least `FeedModel.minimumRefresh` (1.5 s, KaiC), a held pull's counted from its arming.
 - A video opened from a video page replaces it (`replaceVideoPage`, KaiC: never stack); the replaced page leaves on its
   route's `popped` future exactly as a popped one (release or PipKeeper, last heartbeat, orientation). Pages opened
-  from lists (首页, 搜索, 历史记录, a space) push. The M2 checklist's item 38 (a related video on top) is out of date.
+  from lists (首页, 搜索, 历史记录, a space) push.
 - Pictures: every address passes `secureImageUrl` (https, and i0/i2.hdslb.com asked from i1, so one connection serves
   them all and a precache and its draw share one address). i1 is another CDN (Wangsu; i0 and i2 are Baidu's), the one
   the official app asks, about twice as fast here. Video covers (`RemoteImage(cover: true)`) ask the official iPhone
@@ -777,4 +383,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   groups throw (the rule is skipped), and `\p{Han}` or `\A` mean something else.
 - ghosthand first for screen and browser work; always `--mute`. Flutter windows often have a thin accessibility tree;
   use `screenshot`.
-- The BiliNative repo: only docs change there now (and Swift fixes if something blocks daily use).
+- BiliNative is retired (2026-11-02): read the local folder for how the Swift app behaved and change nothing there.
+  Never build or ship it again: it shares the bundle id, so a Swift build would replace this app on the phone.
+- Daily use: KaiC uses the app every day and passes broad sign-offs that way. Ask him only for checks daily use can't
+  reach (a new feature's states, a measurement, a log to read), as numbered phone steps.
