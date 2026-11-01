@@ -18,7 +18,9 @@ this milestone (KaiC, 2026-10-21; slice 10 below, section 8), so the milestone i
 **Done** = slices 11-13 pass their phone steps on one TestFlight build at the end of the milestone, which also carries
 the katakana fix (`5f116e1`) unless it ships before. On that build the phone runs both checklists (BiliNative
 `docs/m1-phone-checklist.md` and `m2-phone-checklist.md`) in full; passing them is the cutover (flutter-move-spec,
-slice 9), and the Swift app retires.
+slice 9), and the Swift app retires. Both are carried into `docs/closing-checklist.md` under their old numbers,
+rewritten where the Flutter app now works differently, with the phone checks owed since (17) after them; that file is
+what the phone runs (on 1.3.0 (5)).
 
 ## 2. Decisions (KaiC's calls)
 
