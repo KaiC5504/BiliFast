@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 688" width="860" height="688" role="img" aria-labelledby="title desc">
-  <title id="title">拖进度条：BiliFast 对比直连播放</title>
-  <desc id="desc">拖进度条 70 多次。BiliFast 一般 3 秒接上，没有一次卡住；直连播放一般要 15 秒以上，四分之三卡住。</desc>
+  <title id="title">拖进度条：BiliFast 对比直连</title>
+  <desc id="desc">拖进度条 70 多次。BiliFast 一般 3 秒接上，没有一次卡住；直连一般要 15 秒以上，四分之三卡住。</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif; }
     .ink { fill: #18191C; }
@@ -54,7 +54,7 @@
     <rect x="170" y="222" width="12" height="12" rx="3" class="btr"/>
     <text x="188" y="233" class="ink">BiliFast</text>
     <rect x="270" y="222" width="12" height="12" rx="3" class="direct"/>
-    <text x="288" y="233" class="ink">直连播放</text>
+    <text x="288" y="233" class="ink">直连</text>
   </g>
 
   <g stroke-width="1">

@@ -127,7 +127,7 @@ BiliFast 的下载引擎是从 BTR 移植过来的，在此基础上又做了提
 ## 🚀 实测
 
 <p align="center">
-  <img src="docs/speed/seek.svg" width="100%" alt="拖进度条：BiliFast 一般 3 秒接上，直连播放一般要 15 秒以上" />
+  <img src="docs/speed/seek.svg" width="100%" alt="拖进度条：BiliFast 一般 3 秒接上，直连一般要 15 秒以上" />
 </p>
 
 ## 🛠️ 开发
