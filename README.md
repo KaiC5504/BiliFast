@@ -8,7 +8,7 @@
   [![引擎](https://img.shields.io/badge/%E5%BC%95%E6%93%8E-BTR-fb7299?style=flat-square)](https://github.com/MrTangLuyao/Bilibili-thread-ripper)
   [![安装](https://img.shields.io/badge/%E5%AE%89%E8%A3%85-TestFlight%20%7C%20IPA-0D96F6?style=flat-square)](#-安装)
 
-  [**安装**](#-安装) · [功能](#-功能) · [常见问题](#-常见问题) · [播放原理](#-播放原理) · [Releases](https://github.com/KaiC5504/BiliFast/releases)
+  [**安装**](#-安装) · [功能](#-功能) · [常见问题](#-常见问题) · [播放原理](#-播放原理) · [实测](#-实测) · [Releases](https://github.com/KaiC5504/BiliFast/releases)
 
   <!-- 截图都是我们自己的 App（Windows 版，未登录），不放官方 App 的截图。 -->
   <img src="docs/screenshots/home.png" width="32%" alt="首页" />
@@ -123,6 +123,12 @@ BiliFast 的下载引擎是从 BTR 移植过来的，在此基础上又做了提
 ```
 
 引擎运行在独立的 isolate 里，所有视频页共用一个。对播放器来说，它拿到的只是一个普通的 HLS 流，所以画中画、HDR、杜比视界都和系统自带 App 表现一致。
+
+## 🚀 实测
+
+<p align="center">
+  <img src="docs/speed/seek.svg" width="100%" alt="拖进度条：BiliFast 一般 3 秒接上，直连播放一般要 15 秒以上" />
+</p>
 
 ## 🛠️ 开发
 

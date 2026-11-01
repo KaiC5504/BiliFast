@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 688" width="860" height="688" role="img" aria-labelledby="title desc">
+  <title id="title">拖进度条：BiliFast 对比直连播放</title>
+  <desc id="desc">拖进度条 70 多次。BiliFast 一般 3 秒接上，没有一次卡住；直连播放一般要 15 秒以上，四分之三卡住。</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif; }
+    .ink { fill: #18191C; }
+    .sub { fill: #61666D; }
+    .faint { fill: #9499A0; }
+    .card { fill: #F6F7F8; }
+    .grid { stroke: #E3E5E7; }
+    .limit { stroke: #9499A0; }
+    .btr { fill: #FB7299; }
+    .direct { fill: #C9CCD0; }
+    .on-direct { fill: #18191C; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #E3E5E7; }
+      .sub { fill: #9499A0; }
+      .faint { fill: #6D7178; }
+      .card { fill: #1E2024; }
+      .grid { stroke: #2F3238; }
+      .limit { stroke: #6D7178; }
+      .direct { fill: #4A4D54; }
+      .on-direct { fill: #E3E5E7; }
+    }
+  </style>
+
+  <text x="20" y="40" class="ink" font-size="22" font-weight="700">速度对比</text>
+  <text x="20" y="66" class="sub" font-size="13.5">iPhone 17 Pro Max · 4K / HDR 视频 · 拖进度条 70+ 次</text>
+
+  <g>
+    <rect x="20" y="88" width="264" height="104" rx="12" class="card"/>
+    <text x="38" y="116" class="sub" font-size="13">一般要等</text>
+    <text x="38" y="158" class="btr" font-size="32" font-weight="700">3.0<tspan font-size="18"> 秒</tspan></text>
+    <text x="38" y="180" class="faint" font-size="12">BiliFast</text>
+    <text x="160" y="158" class="ink" font-size="32" font-weight="700">15<tspan font-size="18"> 秒+</tspan></text>
+    <text x="160" y="180" class="faint" font-size="12">直连</text>
+
+    <rect x="298" y="88" width="264" height="104" rx="12" class="card"/>
+    <text x="316" y="116" class="sub" font-size="13">卡住 15 秒以上</text>
+    <text x="316" y="158" class="btr" font-size="32" font-weight="700">0<tspan font-size="18">%</tspan></text>
+    <text x="316" y="180" class="faint" font-size="12">BiliFast</text>
+    <text x="438" y="158" class="ink" font-size="32" font-weight="700">76<tspan font-size="18">%</tspan></text>
+    <text x="438" y="180" class="faint" font-size="12">直连</text>
+
+    <rect x="576" y="88" width="264" height="104" rx="12" class="card"/>
+    <text x="594" y="116" class="sub" font-size="13">10 秒内接上</text>
+    <text x="594" y="158" class="btr" font-size="32" font-weight="700">100<tspan font-size="18">%</tspan></text>
+    <text x="594" y="180" class="faint" font-size="12">BiliFast</text>
+    <text x="716" y="158" class="ink" font-size="32" font-weight="700">8<tspan font-size="18">%</tspan></text>
+    <text x="716" y="180" class="faint" font-size="12">直连</text>
+  </g>
+
+  <g font-size="13">
+    <rect x="170" y="222" width="12" height="12" rx="3" class="btr"/>
+    <text x="188" y="233" class="ink">BiliFast</text>
+    <rect x="270" y="222" width="12" height="12" rx="3" class="direct"/>
+    <text x="288" y="233" class="ink">直连播放</text>
+  </g>
+
+  <g stroke-width="1">
+    <line x1="170" y1="252" x2="170" y2="640" class="grid"/>
+    <line x1="386.7" y1="252" x2="386.7" y2="640" class="grid" stroke-dasharray="3 4"/>
+    <line x1="603.3" y1="252" x2="603.3" y2="640" class="grid" stroke-dasharray="3 4"/>
+    <line x1="820" y1="252" x2="820" y2="640" class="limit" stroke-dasharray="4 3"/>
+  </g>
+  <g font-size="12" class="faint" text-anchor="middle">
+    <text x="170" y="660">0</text>
+    <text x="386.7" y="660">5 秒</text>
+    <text x="603.3" y="660">10 秒</text>
+    <text x="820" y="660">15 秒</text>
+  </g>
+
+  <g>
+    <text x="150" y="276" class="ink" font-size="14" font-weight="600" text-anchor="end">视频 1</text>
+    <text x="150" y="294" class="faint" font-size="12" text-anchor="end">4K · H.264</text>
+    <rect x="170" y="262" width="101.0" height="18" rx="4" class="btr"/>
+    <text x="279.0" y="275.5" class="ink" font-size="12.5" font-weight="600">2.3 秒</text>
+    <rect x="170" y="286" width="612.3" height="18" rx="4" class="direct"/>
+    <text x="774.3" y="299.5" class="on-direct" font-size="12.5" font-weight="600" text-anchor="end">14.1 秒</text>
+    <text x="150" y="340" class="ink" font-size="14" font-weight="600" text-anchor="end">视频 2</text>
+    <text x="150" y="358" class="faint" font-size="12" text-anchor="end">HDR · HEVC</text>
+    <rect x="170" y="326" width="67.2" height="18" rx="4" class="btr"/>
+    <text x="245.2" y="339.5" class="ink" font-size="12.5" font-weight="600">1.5 秒</text>
+    <rect x="170" y="350" width="650.0" height="18" rx="4" class="direct"/>
+    <text x="812.0" y="363.5" class="on-direct" font-size="12.5" font-weight="600" text-anchor="end">15 秒+</text>
+    <text x="150" y="404" class="ink" font-size="14" font-weight="600" text-anchor="end">视频 3</text>
+    <text x="150" y="422" class="faint" font-size="12" text-anchor="end">4K · H.264</text>
+    <rect x="170" y="390" width="126.1" height="18" rx="4" class="btr"/>
+    <text x="304.1" y="403.5" class="ink" font-size="12.5" font-weight="600">2.9 秒</text>
+    <rect x="170" y="414" width="650.0" height="18" rx="4" class="direct"/>
+    <text x="812.0" y="427.5" class="on-direct" font-size="12.5" font-weight="600" text-anchor="end">15 秒+</text>
+    <text x="150" y="468" class="ink" font-size="14" font-weight="600" text-anchor="end">视频 4</text>
+    <text x="150" y="486" class="faint" font-size="12" text-anchor="end">4K · H.264</text>
+    <rect x="170" y="454" width="105.3" height="18" rx="4" class="btr"/>
+    <text x="283.3" y="467.5" class="ink" font-size="12.5" font-weight="600">2.4 秒</text>
+    <rect x="170" y="478" width="650.0" height="18" rx="4" class="direct"/>
+    <text x="812.0" y="491.5" class="on-direct" font-size="12.5" font-weight="600" text-anchor="end">15 秒+</text>
+    <text x="150" y="532" class="ink" font-size="14" font-weight="600" text-anchor="end">视频 5</text>
+    <text x="150" y="550" class="faint" font-size="12" text-anchor="end">4K · H.264</text>
+    <rect x="170" y="518" width="149.5" height="18" rx="4" class="btr"/>
+    <text x="327.5" y="531.5" class="ink" font-size="12.5" font-weight="600">3.5 秒</text>
+    <rect x="170" y="542" width="650.0" height="18" rx="4" class="direct"/>
+    <text x="812.0" y="555.5" class="on-direct" font-size="12.5" font-weight="600" text-anchor="end">15 秒+</text>
+    <text x="150" y="596" class="ink" font-size="14" font-weight="600" text-anchor="end">视频 6</text>
+    <text x="150" y="614" class="faint" font-size="12" text-anchor="end">4K · H.264</text>
+    <rect x="170" y="582" width="135.6" height="18" rx="4" class="btr"/>
+    <text x="313.6" y="595.5" class="ink" font-size="12.5" font-weight="600">3.1 秒</text>
+    <rect x="170" y="606" width="650.0" height="18" rx="4" class="direct"/>
+    <text x="812.0" y="619.5" class="on-direct" font-size="12.5" font-weight="600" text-anchor="end">15 秒+</text>
+  </g>
+</svg>

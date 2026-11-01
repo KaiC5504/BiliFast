@@ -342,8 +342,10 @@ Shipped and passed on KaiC's phone, newest last. Detail is in git history.
 Next: milestone 3, "find and follow" (KaiC's call, 2026-10-20), the rest shipped as one build at its end (slice 10,
 the system-font check, shipped in (15) and (16); its leftovers are set aside, below):
 1. The closing check (`docs/closing-checklist.md`): M2 and every phone check owed since (17) passed by KaiC's daily
-   use (2026-11-01: no bugs seen, so no step-by-step run). Left: M1 as one 速度测试 run of `builtin-4` (BTR against
-   直连) on 1.3.0 (6), its table into the README; then the cutover (BiliNative's `CLAUDE.md`, the Swift app retired).
+   use (2026-11-01: no bugs seen, so no step-by-step run). M1 is the README's 实测 chart (`docs/speed/seek.svg`): the
+   six videos where both BTR and 直连 passed cleanly over three phone runs of 1.3.0 (6), 72 jumps each; passes spoiled
+   by a trip away, or by a CDN that hadn't fetched the video yet (both modes failing it), are left out. Left: the
+   cutover (BiliNative's `CLAUDE.md`, the Swift app retired).
 2. 动态 shipped in 1.1.0 (1), the iPad's basic watching in 1.2.0 (1), 离线缓存 in 1.3.0 (1); next is KaiC's pick.
 Each new screen waits for KaiC's official screenshots. On that build the phone runs both checklists (M1 and M2) in
 full; passing them is the cutover (spec, slice 9). Later: 番剧, 直播.
