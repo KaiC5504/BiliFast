@@ -6343,7 +6343,7 @@ abstract final class DynamicPostTheme {
 }
 
 /// 我的好友 (163-168). Measured in px / 3; the shots' colours are Display P3, so the pink reads #EA7A99 there. The bar is
-/// 我的关注's ([FollowingListTheme]: the skin's second-page colour and the round ‹; KaiC left out the official ✕).
+/// 我的关注's ([FollowingListTheme]: the skin's second-page colour and the round ‹).
 abstract final class FriendsTheme {
   static const page = BiliColors.card;
 
@@ -6428,6 +6428,10 @@ abstract final class FriendsTheme {
   static const badgeRing = 1.5;
   static const badgePerson = FollowingListTheme.badgePerson;
   static const badgeOrganisation = FollowingListTheme.badgeOrganisation;
+
+  /// A 数字藏品 face (163's 哔哩哔哩数字周边, 装扮小姐姐): the APK's `ic_tag_nft` drawn as the bolt's disc and ring,
+  /// level with it and centred 16 left of it (37 from the screen's left; 163 measures 36.83), the bolt's ring over its edge.
+  static const collectibleRight = 16.0;
   static const textLeft = 72.0;
   static const nameText = 14.0;
   static const nameLine = 20.0;

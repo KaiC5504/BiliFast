@@ -57,7 +57,11 @@ void main() {
     await pumpFriendsApp(
       tester,
       services,
-      FriendsPage(initialTab: tab, api: FakeFriendsApi(following: _people), skin: skinOf(violetSkin)),
+      FriendsPage(
+        initialTab: tab,
+        api: FakeFriendsApi(following: _people, collectibleFaces: const {6, 7, 8}),
+        skin: skinOf(violetSkin),
+      ),
       sized: false,
     );
     await settle(tester);
@@ -82,6 +86,10 @@ void main() {
     expect(tester.getRect(byKey('friends-row-2')).top, closeTo(310, 0.01));
     _near(tester.getRect(byKey('friends-pill-1')), const Rect.fromLTRB(356, 253.67, 428, 277.67));
     _near(tester.getRect(byKey('friends-verified-2')), const Rect.fromLTRB(44.5, 357.5, 61.5, 374.5));
+    // 163's 数字藏品 faces: the ◇ level with the bolt, centred 16 left of it.
+    _near(tester.getRect(byKey('friends-collectible-6')), const Rect.fromLTRB(28.5, 669.5, 45.5, 686.5));
+    _near(tester.getRect(byKey('friends-verified-6')), const Rect.fromLTRB(44.5, 669.5, 61.5, 686.5));
+    expect(byKey('friends-collectible-5'), findsNothing);
   });
 
   testWidgets('165: 粉丝 with nobody', (tester) async {

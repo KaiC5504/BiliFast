@@ -6,7 +6,7 @@ import 'friends_api.dart';
 
 /// Made-up answers for tests and `--fake-account` on the PC: no call leaves the machine. [following] is the account's
 /// followings in 最近关注's order (最近访问 answers them reversed), [fanList] its fans; 关注 changes which of them the
-/// lists say are followed. [calls] lists what was asked, in order (never a search's text); [failures] makes a call
+/// lists say are followed; faces in [collectibleFaces] are 数字藏品. [calls] lists what was asked, in order (never a search's text); [failures] makes a call
 /// throw, [holds] keeps it waiting.
 class FakeFriendsApi implements FriendsApi {
   FakeFriendsApi({
@@ -14,13 +14,14 @@ class FakeFriendsApi implements FriendsApi {
     this.fanList = const [],
     List<RelationTag>? groups,
     Map<int, Set<int>>? memberships,
+    this.collectibleFaces = const {},
     this.pageSize = 20,
   }) : groups = groups ?? defaultGroups,
        memberships = memberships ?? {},
        _followed = {for (final user in following) user.mid};
 
-  /// The `--fake-account` demo: a page and a half of followings, some 大会员 and some verified, two following back; one
-  /// fan not followed back. Faces are empty so nothing is fetched.
+  /// The `--fake-account` demo: a page and a half of followings, some 大会员 and some verified, two with 数字藏品 faces,
+  /// two following back; one fan not followed back. Faces are empty so nothing is fetched.
   factory FakeFriendsApi.demo() => FakeFriendsApi(
     following: [
       for (var i = 0; i < 28; i++)
@@ -41,6 +42,7 @@ class FakeFriendsApi implements FriendsApi {
     memberships: {
       800: {RelationTag.special},
     },
+    collectibleFaces: const {805, 806},
   );
 
   static const defaultGroups = [
@@ -52,6 +54,7 @@ class FakeFriendsApi implements FriendsApi {
   final List<FollowingUser> fanList;
   final List<RelationTag> groups;
   final Map<int, Set<int>> memberships;
+  final Set<int> collectibleFaces;
   final int pageSize;
   final Set<int> _followed;
 
@@ -90,6 +93,7 @@ class FakeFriendsApi implements FriendsApi {
     user: user,
     attribute: _isFan(user.mid) ? RelationUser.mutualValue : RelationUser.followed,
     special: memberships[user.mid]?.contains(RelationTag.special) ?? false,
+    collectibleFace: collectibleFaces.contains(user.mid),
   );
 
   List<RelationUser> get _followedUsers => [
@@ -117,7 +121,11 @@ class FakeFriendsApi implements FriendsApi {
     'fans page=$page',
     () => _page([
       for (final fan in fanList)
-        RelationUser(user: fan, attribute: _followed.contains(fan.mid) ? RelationUser.mutualValue : RelationUser.none),
+        RelationUser(
+          user: fan,
+          attribute: _followed.contains(fan.mid) ? RelationUser.mutualValue : RelationUser.none,
+          collectibleFace: collectibleFaces.contains(fan.mid),
+        ),
     ], page),
   );
 

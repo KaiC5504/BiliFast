@@ -255,7 +255,7 @@ class _ActionRow extends StatelessWidget {
 
 /// 设置分组 (167) for one person: the account's 分组 with a circle each, ticked for those the person is in;
 /// ＋新建分组 ([onNewGroup]), and 保存至默认分组 or 保存. [onSaved] closes the sheet; it is told whether anything was
-/// sent. A failed save says why ([onFailed]) and stays up.
+/// sent. A failed save says why ([onFailed]) and stays up; a -101 to either call goes to [onLogin].
 class GroupSheet extends StatefulWidget {
   const GroupSheet({
     super.key,
@@ -265,6 +265,7 @@ class GroupSheet extends StatefulWidget {
     required this.onNewGroup,
     required this.onSaved,
     required this.onFailed,
+    required this.onLogin,
   });
 
   final FriendsApi api;
@@ -277,6 +278,7 @@ class GroupSheet extends StatefulWidget {
   final VoidCallback onNewGroup;
   final ValueChanged<bool> onSaved;
   final ValueChanged<String> onFailed;
+  final VoidCallback onLogin;
 
   @override
   State<GroupSheet> createState() => _GroupSheetState();
@@ -284,10 +286,12 @@ class GroupSheet extends StatefulWidget {
 
 class _GroupSheetState extends State<GroupSheet> {
   late final GroupSheetModel _model = GroupSheetModel(api: widget.api, mid: widget.mid, groups: widget.groups);
+  bool _handedOver = false;
 
   @override
   void initState() {
     super.initState();
+    _model.addListener(_loginLost);
     unawaited(_model.load());
   }
 
@@ -297,10 +301,16 @@ class _GroupSheetState extends State<GroupSheet> {
     super.dispose();
   }
 
+  void _loginLost() {
+    if (!_model.needsLogin || _handedOver) return;
+    _handedOver = true;
+    widget.onLogin();
+  }
+
   Future<void> _save() async {
     final sent = _model.changed;
     final failure = await _model.save();
-    if (!mounted) return;
+    if (!mounted || _model.needsLogin) return;
     if (failure != null) {
       widget.onFailed(failure);
     } else {

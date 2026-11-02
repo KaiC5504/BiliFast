@@ -95,3 +95,10 @@ The 缓存 and portrait ⋮ sheets (42, 141-154) take glyphs from the APK's comp
 icons are drawn in code (`PanelGlyphKind`), traced on 42 and 43: the APK's icons for them aren't the iPhone's.
 离线缓存's bar 🔍 and ☰ (a checklist), ❚❚ / ▶, ⌄ and the 合集 stack are drawn in code (`offline_glyphs.dart`): the APK's
 `ic_download_search` and `ic_download_edit` differ from 143 and 145, and it has no stack glyph.
+
+我的好友 (163-168) takes the same APK's art: `images/friends/page_status_empty.png` (165's empty picture) is
+`ic_page_status_empty`, the xxhdpi bitmap unchanged, drawn 140 pt square; `attention_group.png` (设置分组's head, 167)
+is `ic_attention_group` unchanged (66 px), drawn 20.53 pt so its ink is 167's 18.67; `list_sort_line.png` (the order's
+glyph, 163) is the compose icon font's `list_sort_line` (eaf1), drawn white, cut to its 38 × 28 px ink and tinted, drawn
+12.67 × 9.33 pt; `face_collectible.png` (the ◇ on a 数字藏品 face, 163) is `ic_tag_nft` unchanged (54 px), drawn 14 pt
+in the verify bolt's white ring, 16 pt left of it.

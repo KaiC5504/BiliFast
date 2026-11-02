@@ -73,6 +73,9 @@ final class RelationLane {
 ///
 /// A row reads followed as [isFollowing] says: a change still out, else [FollowBook]'s (so a space's 关注 shows here
 /// too), else the list's answer. Nothing is asked until [mid] answers; [start] runs again once the account is known.
+///
+/// A list answered -101 ([needsLogin]) asks for the login once and then asks Bilibili nothing more: retrying an
+/// expired login only gets -101 again. [loggedIn] starts over.
 class FriendsModel extends ChangeNotifier {
   FriendsModel({
     required this._api,
@@ -100,6 +103,7 @@ class FriendsModel extends ChangeNotifier {
   RelationLane _fans = const RelationLane();
   bool _started = false;
   bool _fansWanted = false;
+  bool _needsLogin = false;
   bool _disposed = false;
 
   /// Bumped when a list must start again (the order changed, the account left), so an answer for the old one is
@@ -121,6 +125,9 @@ class FriendsModel extends ChangeNotifier {
   RelationLane get following => _following;
   RelationLane get results => _results;
   RelationLane get fans => _fans;
+
+  /// A list answered that the login has expired.
+  bool get needsLogin => _needsLogin;
 
   /// A search is showing: the field had text and its pause has passed.
   bool get searching => _query.isNotEmpty;
@@ -157,6 +164,7 @@ class FriendsModel extends ChangeNotifier {
   void signOut() {
     if (_disposed || !_started) return;
     _started = false;
+    _needsLogin = false;
     _followingRound++;
     _fansRound++;
     _following = const RelationLane();
@@ -167,6 +175,13 @@ class FriendsModel extends ChangeNotifier {
     _pending.clear();
     _groups = null;
     _notify();
+  }
+
+  /// A login came back: lists a -101 stopped begin again.
+  void loggedIn() {
+    if (_disposed) return;
+    if (_needsLogin) signOut();
+    start();
   }
 
   /// 最近关注 ⇄ 最近访问, reloading the list from its first page.
@@ -181,7 +196,7 @@ class FriendsModel extends ChangeNotifier {
 
   Future<void> _loadFollowing() async {
     final mid = this.mid();
-    if (mid == null || _following.loading) return;
+    if (mid == null || _needsLogin || _following.loading) return;
     final round = _followingRound;
     final order = _order;
     final page = _following.page + 1;
@@ -198,14 +213,14 @@ class FriendsModel extends ChangeNotifier {
         'page': page,
         'error': searchLogReason(error),
       });
-      _following = _following.copyWith(loading: false, error: requestFailureMessage(error));
+      _following = _following.copyWith(loading: false, error: _failure(error));
     }
     _notify();
   }
 
   Future<void> _loadFans() async {
     final mid = this.mid();
-    if (mid == null || _fans.loading) return;
+    if (mid == null || _needsLogin || _fans.loading) return;
     final round = _fansRound;
     final page = _fans.page + 1;
     _fans = _fans.copyWith(loading: true);
@@ -217,7 +232,7 @@ class FriendsModel extends ChangeNotifier {
     } catch (error) {
       if (_disposed || round != _fansRound) return;
       _logger.warn(LogCategory.ui, 'friends fans failed', {'page': page, 'error': searchLogReason(error)});
-      _fans = _fans.copyWith(loading: false, error: requestFailureMessage(error));
+      _fans = _fans.copyWith(loading: false, error: _failure(error));
     }
     _notify();
   }
@@ -251,7 +266,7 @@ class FriendsModel extends ChangeNotifier {
 
   void _askSearch() {
     _pauseTimer = null;
-    if (_disposed || _typed.isEmpty || !_started) return;
+    if (_disposed || _typed.isEmpty || !_started || _needsLogin) return;
     if (_searchOut) {
       _searchAgain = true;
       return;
@@ -264,7 +279,7 @@ class FriendsModel extends ChangeNotifier {
 
   Future<void> _search() async {
     final mid = this.mid();
-    if (mid == null || _searchOut) return;
+    if (mid == null || _needsLogin || _searchOut) return;
     final query = _query;
     final page = _results.page + 1;
     _searchOut = true;
@@ -281,7 +296,7 @@ class FriendsModel extends ChangeNotifier {
     } catch (error) {
       if (current()) {
         _logger.warn(LogCategory.ui, 'friends search failed', {'page': page, 'error': searchLogReason(error)});
-        _results = _results.copyWith(loading: false, error: requestFailureMessage(error));
+        _results = _results.copyWith(loading: false, error: _failure(error));
         _notify();
       }
     } finally {
@@ -293,9 +308,19 @@ class FriendsModel extends ChangeNotifier {
     }
   }
 
+  /// What a lane shows for a failed call; null for -101, which hands over to the login instead.
+  String? _failure(Object error) {
+    if (error is! BiliError || !error.needsLogin) return requestFailureMessage(error);
+    if (!_needsLogin) {
+      _needsLogin = true;
+      _requestLogin();
+    }
+    return null;
+  }
+
   /// [tab]'s next page, once its last answered; nothing while one is out, after a failure or at the end.
   void loadMore(FriendsTab tab) {
-    if (_disposed || !lane(tab).canLoadMore) return;
+    if (_disposed || _needsLogin || !lane(tab).canLoadMore) return;
     switch (tab) {
       case FriendsTab.fans:
         unawaited(_loadFans());
@@ -309,7 +334,7 @@ class FriendsModel extends ChangeNotifier {
   /// Asks again for what failed in [tab]: its first page or its next.
   void retry(FriendsTab tab) {
     final shown = lane(tab);
-    if (_disposed || mid() == null || shown.error == null || shown.loading) return;
+    if (_disposed || _needsLogin || mid() == null || shown.error == null || shown.loading) return;
     switch (tab) {
       case FriendsTab.fans:
         _fans = _fans.copyWith();

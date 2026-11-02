@@ -5,9 +5,11 @@ import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/friends/fake_friends_api.dart';
 import 'package:bilifast/friends/friends_page.dart';
 import 'package:bilifast/friends/friends_route.dart';
+import 'package:bilifast/friends/friends_rows.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/space/space_page.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,6 +25,17 @@ double _underlineX(WidgetTester tester) => tester.getCenter(byKey('friends-under
 String _pill(WidgetTester tester, int mid) => tester
     .widget<Text>(find.descendant(of: byKey('friends-pill-$mid'), matching: byKey('friends-pill-label')))
     .data!;
+
+/// Presses, as VoiceOver would, the button labelled [label] at or under [scope]: its own node, not a row's that hides it.
+void _press(WidgetTester tester, Finder scope, String label) {
+  final button = find.descendant(of: scope, matching: find.bySemanticsLabel(label), matchRoot: true);
+  expect(button, findsOneWidget, reason: '$label is its own node');
+  final node = tester.getSemantics(button);
+  final data = node.getSemanticsData();
+  expect(data.flagsCollection.isButton, isTrue, reason: '$label is a button');
+  expect(data.hasAction(SemanticsAction.tap), isTrue, reason: '$label takes a tap');
+  node.owner!.performAction(node.id, SemanticsAction.tap);
+}
 
 void main() {
   testWidgets('openFriends pushes the plain swipe-back route on the asked tab, and ‹ goes back', (tester) async {
@@ -390,6 +403,122 @@ void main() {
     await settle(tester);
     expect(byKey('friends-groups'), findsNothing);
     expect(find.byType(FriendsPage), findsOneWidget);
+  });
+
+  testWidgets('accessibility presses the row and its pill apart, and every control of both sheets', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final api = FakeFriendsApi(following: friends(3), fanList: [friend(1), friend(9)]);
+    await openFriendsPage(tester, api);
+
+    _press(tester, byKey('friends-pill-1'), '已互粉');
+    await settle(tester);
+    expect(byKey('friends-sheet'), findsOneWidget);
+    _press(tester, byKey('friends-sheet'), '取消');
+    await settle(tester);
+    expect(byKey('friends-sheet'), findsNothing);
+
+    _press(tester, byKey('friends-pill-1'), '已互粉');
+    await settle(tester);
+    _press(tester, byKey('friends-sheet'), '设置分组');
+    await settle(tester);
+    expect(byKey('friends-groups'), findsOneWidget);
+    _press(tester, byKey('friends-groups'), '新建分组');
+    await tester.pump();
+    expect(find.text('暂未开放'), findsOneWidget);
+    await settle(tester, 60);
+    _press(tester, byKey('friends-groups'), '特别关注');
+    await tester.pump();
+    expect(byKey('friends-group--10-ticked'), findsOneWidget);
+    _press(tester, byKey('friends-groups'), '保存');
+    await settle(tester);
+    expect(api.saved.single.tags, {RelationTag.special});
+    expect(byKey('friends-groups'), findsNothing);
+    await settle(tester, 60);
+
+    _press(tester, byKey('friends-pill-2'), '已关注');
+    await settle(tester);
+    _press(tester, byKey('friends-sheet'), '取消关注');
+    await settle(tester);
+    expect(api.follows, [(mid: 2, on: false)]);
+    await settle(tester, 60);
+    _press(tester, byKey('friends-pill-2'), '关注');
+    await settle(tester);
+    expect(api.follows.last, (mid: 2, on: true));
+    await settle(tester, 60);
+
+    await tester.tap(byKey('friends-tab-fans'));
+    await settle(tester);
+    _press(tester, byKey('friends-pill-9'), '回关');
+    await settle(tester);
+    expect(api.follows.last, (mid: 9, on: true));
+    await settle(tester, 60);
+    _press(tester, byKey('friends-pill-1'), '已互粉');
+    await settle(tester);
+    expect(byKey('friends-sheet'), findsOneWidget);
+    _press(tester, byKey('friends-sheet'), '取消');
+    await settle(tester);
+
+    _press(tester, find.ancestor(of: byKey('friends-row-9'), matching: find.byType(FriendsRow)), '好友9');
+    await settle(tester);
+    expect(find.byType(SpacePage), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('a 数字藏品 face gets the ◇ beside its bolt; others none', (tester) async {
+    final api = FakeFriendsApi(
+      following: [friend(1, verify: DynamicVerify.organisation), friend(2, verify: DynamicVerify.personal)],
+      collectibleFaces: const {1},
+    );
+    await openFriendsPage(tester, api);
+    expect(byKey('friends-collectible-1'), findsOneWidget);
+    expect(byKey('friends-collectible-2'), findsNothing);
+    final collectible = tester.getCenter(byKey('friends-collectible-1'));
+    final bolt = tester.getCenter(byKey('friends-verified-1'));
+    expect(collectible.dy, closeTo(bolt.dy, 0.01));
+    expect(collectible.dx, closeTo(bolt.dx - FriendsTheme.collectibleRight, 0.01));
+    final picture = find.descendant(of: byKey('friends-collectible-1'), matching: find.byType(Image));
+    expect(tester.getSize(picture), const Size.square(FriendsTheme.badge));
+  });
+
+  testWidgets('an expired login under the list asks for the login once, with 登录 in place of 重试', (tester) async {
+    final gate = FakeLoginGate();
+    final api = FakeFriendsApi(following: friends(3))
+      ..failures['followings'] = const BiliError.api(code: -101, message: '账号未登录');
+    await openFriendsPage(tester, api, loginGate: gate);
+    expect(gate.requests, 1);
+    expect(byKey('friends-logged-out'), findsOneWidget);
+    expect(byKey('friends-retry-following'), findsNothing);
+    expect(find.text('需要登录'), findsNothing);
+    expect(api.calls, ['followings recent page=1']);
+
+    api.failures.remove('followings');
+    gate.answer = true;
+    await tester.tap(byKey('friends-login'));
+    await settle(tester);
+    expect(gate.requests, 2);
+    expect(byKey('friends-row-3'), findsOneWidget);
+    expect(api.calls, ['followings recent page=1', 'followings recent page=1']);
+  });
+
+  testWidgets('设置分组 saved on an expired login closes and asks for the login, no 需要登录 toast', (tester) async {
+    final gate = FakeLoginGate();
+    final api = FakeFriendsApi(following: friends(3))
+      ..failures['setTags'] = const BiliError.api(code: -101, message: '账号未登录');
+    await openFriendsPage(tester, api, loginGate: gate);
+    await tester.tap(byKey('friends-pill-1'));
+    await settle(tester);
+    await tester.tap(byKey('friends-sheet-groups'));
+    await settle(tester);
+    await tester.tap(byKey('friends-group--10'));
+    await tester.pump();
+    await tester.tap(byKey('friends-groups-save'));
+    await tester.pump();
+    expect(gate.requests, 1);
+    expect(find.text('需要登录'), findsNothing);
+    expect(find.text('设置成功'), findsNothing);
+    await settle(tester);
+    expect(byKey('friends-groups'), findsNothing);
+    expect(byKey('friends-row-1'), findsOneWidget, reason: 'the list stays');
   });
 
   testWidgets('logged out: 登录 in place of the lists, through the login gate', (tester) async {

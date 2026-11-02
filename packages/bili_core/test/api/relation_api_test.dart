@@ -200,5 +200,52 @@ void main() {
       expect(one(128).following, isFalse);
       expect(one(128).mutual, isFalse);
     });
+
+    List<Object?> people(int count, {int from = 1}) => [
+      for (var i = from; i < from + count; i++) {'mid': i, 'attribute': 2},
+    ];
+
+    test('with no total, or a total of 0, a full page has more and a short one ends', () {
+      for (final data in [
+        {'list': people(20)},
+        {'list': people(20), 'total': 0},
+      ]) {
+        expect(RelationDecode.page(data, page: 1, pageSize: 20).hasMore, isTrue);
+      }
+      for (final data in [
+        {'list': people(19)},
+        {'list': people(19), 'total': 0},
+      ]) {
+        expect(RelationDecode.page(data, page: 2, pageSize: 20).hasMore, isFalse);
+      }
+    });
+
+    test('by the total, the page before the last has more', () {
+      final before = RelationDecode.page({'list': people(20, from: 21), 'total': 45}, page: 2, pageSize: 20);
+      expect(before.hasMore, isTrue);
+      final last = RelationDecode.page({'list': people(5, from: 41), 'total': 45}, page: 3, pageSize: 20);
+      expect(last.hasMore, isFalse);
+    });
+
+    test('a mid sent as a padded string decodes', () {
+      final page = RelationDecode.page({
+        'list': [
+          {'mid': ' 42 ', 'attribute': 2},
+        ],
+      }, page: 1, pageSize: 20);
+      expect(page.users.single.mid, 42);
+    });
+
+    test('face_nft 1 marks a collectible face; 0 or missing does not', () {
+      final page = RelationDecode.page({
+        'list': [
+          {'mid': 1, 'face_nft': 1, 'face_nft_type': 1},
+          {'mid': 2, 'face_nft': 0},
+          {'mid': 3},
+          {'mid': 4, 'face_nft': '1'},
+        ],
+      }, page: 1, pageSize: 20);
+      expect(page.users.map((user) => user.collectibleFace), [true, false, false, true]);
+    });
   });
 }
