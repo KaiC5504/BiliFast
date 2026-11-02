@@ -142,6 +142,65 @@ void main() {
     });
   });
 
+  test('a variant\'s nodes go to each engine it starts, before anything plays on it; the rest keep 设置\'s', () {
+    onFakeClock((async) {
+      hooks.plan = planWith({
+        'variants': [
+          {'name': 'H', 'nodes': 'overseas'},
+          {'name': 'G', 'nodes': 'mainland'},
+          {'name': 'A'},
+          {'name': 'Z', 'mode': 'direct'},
+        ],
+        'order': 'HGAZ',
+        'fastSeconds': 0,
+      });
+      final runner = make();
+      runner.start(links: [video]);
+      async.elapse(const Duration(minutes: 10));
+
+      expect(runner.results.map((pass) => (pass.variant, pass.counts)),
+          [('H', true), ('G', true), ('A', true), ('Z', true)]);
+      expect(hooks.engines, ['H', 'H', 'G', 'A', 'Z', 'app'], reason: 'the warm-up open, then one engine a pass');
+      expect(hooks.started.map((engine) => engine.nodeModes), [
+        [NodeMode.overseas],
+        [NodeMode.overseas],
+        [NodeMode.mainland],
+        <NodeMode>[],
+        <NodeMode>[],
+        <NodeMode>[],
+      ]);
+      final passes = events('speedtest pass');
+      expect(passes.map((event) => field(event, 'nodes')), ['overseas', 'mainland', 'app', 'app']);
+      expect(passes.map((event) => field(event, 'label')), ['BTR·海外', 'BTR·国内', 'BTR', '直连']);
+    });
+  });
+
+  test('three variants each get their rows and a difference from the first', () {
+    onFakeClock((async) {
+      hooks.plan = SpeedTestPlan.parse(SpeedTestPlan.builtinJson, check: acceptAll);
+      final runner = make();
+      runner.start(links: [video, 'BV1xx411c7mD', 'BV1yy411c7mE']);
+      async.elapse(const Duration(minutes: 30));
+
+      expect(runner.results.map((pass) => '${pass.variant}${pass.cold ? '*' : ''}').join(' '), 'H* G Z G* Z H Z* H G');
+      final groups = GroupSummary.of(runner.results);
+      expect(groups.map((group) => (group.variant, group.cold, group.passes)), [
+        ('H', true, 1),
+        ('H', false, 2),
+        ('G', true, 1),
+        ('G', false, 2),
+        ('Z', true, 1),
+        ('Z', false, 2),
+      ]);
+      expect(GroupDelta.of(groups).map((delta) => '${delta.other.variant}−${delta.base.variant} ${delta.base.cold}'), [
+        'G−H true',
+        'G−H false',
+        'Z−H true',
+        'Z−H false',
+      ]);
+    });
+  });
+
   test('a plan\'s codec is asked for before the first open, and the app\'s is put back', () {
     onFakeClock((async) {
       hooks.plan = planWith({'codec': 'avc', 'fastSeconds': 0});
