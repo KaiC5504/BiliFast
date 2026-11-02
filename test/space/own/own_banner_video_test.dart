@@ -234,7 +234,7 @@ void main() {
       expect(tester.getRect(find.byType(SkinVideo)), const Rect.fromLTWH(0, 0, 440, 295));
     });
 
-    testWidgets('silent without a muted notifier; with one it keeps its sound and follows the notifier', (
+    testWidgets('silent without a muted notifier; with one its sound joins at the first unmute and stays', (
       tester,
     ) async {
       await show(tester, -1);
@@ -245,10 +245,15 @@ void main() {
       addTearDown(muted.dispose);
       await show(tester, -1, muted: muted);
       video = tester.widget<SkinVideo>(find.byType(SkinVideo));
-      expect((video.sound, video.muted), (true, true));
+      expect((video.sound, video.muted), (false, true), reason: 'a muted sound track could still stop other music');
       muted.value = false;
       await tester.pump();
-      expect(tester.widget<SkinVideo>(find.byType(SkinVideo)).muted, isFalse);
+      video = tester.widget<SkinVideo>(find.byType(SkinVideo));
+      expect((video.sound, video.muted), (true, false));
+      muted.value = true;
+      await tester.pump();
+      video = tester.widget<SkinVideo>(find.byType(SkinVideo));
+      expect((video.sound, video.muted), (true, true));
     });
 
     group('on the phone', () {
@@ -298,9 +303,14 @@ void main() {
 
         muted.value = false;
         await tester.pump();
-        expect(sent[id]!.map((call) => (call.method, call.arguments)), [('play', null), ('setMuted', false)]);
+        final heard = sent.keys.singleWhere((key) => key != id);
+        await fromNative(tester, heard, const MethodCall('ready'));
+        expect(playing.value, _video);
+        muted.value = true;
+        await tester.pump();
+        expect(sent[heard]!.map((call) => call.method), contains('setMuted'));
 
-        await fromNative(tester, id, const MethodCall('failed', 'AVFoundationErrorDomain -11819'));
+        await fromNative(tester, heard, const MethodCall('failed', 'AVFoundationErrorDomain -11819'));
         expect(playing.value, isNull);
       }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
     });

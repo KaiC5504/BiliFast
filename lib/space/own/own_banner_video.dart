@@ -133,6 +133,10 @@ class OwnBannerVideo extends StatefulWidget {
 class _OwnBannerVideoState extends State<OwnBannerVideo> {
   File? _file;
 
+  /// The sound track joins only once the disc is first pressed: a muted player holding one can still take the audio
+  /// session at play() and stop another app's music. The view made then plays from the start.
+  bool _heard = false;
+
   @override
   void initState() {
     super.initState();
@@ -144,6 +148,7 @@ class _OwnBannerVideoState extends State<OwnBannerVideo> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
       _file = null;
+      _heard = false;
       _fetch();
     }
   }
@@ -189,7 +194,7 @@ class _OwnBannerVideoState extends State<OwnBannerVideo> {
       file: file,
       loop: true,
       placeholder: const SizedBox.expand(),
-      sound: widget.muted != null,
+      sound: widget.muted != null && _heard,
       muted: muted,
       onShown: (shown) {
         final playing = widget.playing;
@@ -205,7 +210,10 @@ class _OwnBannerVideoState extends State<OwnBannerVideo> {
     if (muted == null) return video();
     return ValueListenableBuilder<bool>(
       valueListenable: muted,
-      builder: (context, value, _) => video(muted: value),
+      builder: (context, value, _) {
+        if (!value) _heard = true;
+        return video(muted: value);
+      },
     );
   }
 

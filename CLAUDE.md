@@ -56,6 +56,11 @@ history, and the rules they added are under "Rules that bite".
   Milestone 3's closing check passed by KaiC's daily use (2026-11-01); M1 became the README's 实测 chart
   (`docs/speed/seek.svg`: six videos where both modes passed cleanly, 72 jumps each; passes spoiled by a trip out of
   the app, or by a video the CDN hadn't fetched yet, left out). The Swift app retired (2026-11-02).
+- 我的好友 and 开发者, 1.3.0 (7): 我的's whole header box opens the space, 动态 too, 关注 and 粉丝 open 我的好友 (163-168:
+  the two tabs, search, 最近关注 ⇄ 最近访问 by a tap, 已关注's sheet with 取消关注 and 设置分组's 特别关注; back only, KaiC);
+  the own space's 空间头图 on its `location` crop, asked whole, playing its mp4 with the sound disc (SkinVideo's `sound`),
+  the ◇ title icon, block-letter CD numbers in the answer's colours, 大 from `vipStatus`; 开发者 rebuilt in 设置's look
+  (网络: 节点测速 and 速度测试's `builtin-5`, BTR·海外 / BTR·国内 / 直连; 状态; 调试; 日志), 推荐's 官方/网页 pref gone.
 
 Update this section when a build ships: one short entry, and any rule it adds goes under "Rules that bite".
 
@@ -132,6 +137,7 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
     and 投稿's list (`space_videos.dart`). `own/`: the account's own space (the page, header, bar, the tab bodies and
     `OwnPager`, one per tab, kept by the page).
   - `lib/favourites/`: 我的收藏 (folders, a folder, 视频, the 创建 page `new_folder_page.dart` that 稍后再看 shares).
+  - `lib/friends/`: 我的好友 (`openFriends`; `FriendsApi` with `fake_friends_api.dart` for tests and `--fake-account`).
   - `lib/watch_later/`: 稍后再看 (the list, its sheets and 批量管理).
   - `lib/offline/`: 离线缓存: `OfflineLibrary` (`offline_library.dart`: `DiskOfflineLibrary`, the support folder's
     `offline/<cid>/` with `entry.json`, `v.m4s`, `a.m4s`, `cover.jpg`, `face.jpg`, `dm/<n>.so`; `disk/` its pieces;
@@ -163,7 +169,8 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
   - `lib/comments/`: 评论, 评论详情, the composer with its emote panel, @ picker and pictures, and
     `comment_overlays.dart`, the in-page layers the page's Stack holds.
   - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
-  - `lib/devtools/`: crash log, the phone's log files, log forwarding and discovery of the PC's log server.
+  - `lib/devtools/`: 开发者 (`developer_page.dart` and its sections, `node_probe_section.dart`: 节点测速), the crash log,
+    the phone's log files, log forwarding and discovery of the PC's log server.
   - `lib/speedtest/`: the speed test (dev builds only).
   - `lib/shared/remote_image.dart` and `image_disk_cache.dart`: every network picture, kept on the phone; on iOS
     downloaded through `PictureSession` (one URLSession).
