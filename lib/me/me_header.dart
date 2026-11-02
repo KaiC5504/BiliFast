@@ -61,9 +61,20 @@ class MeTap extends StatelessWidget {
 
 /// What the header's controls do; the page fills them in.
 class MeActions {
-  const MeActions({required this.openSpace, required this.login, required this.soon, required this.openVipCentre});
+  const MeActions({
+    required this.openSpace,
+    required this.openFollowing,
+    required this.openFans,
+    required this.login,
+    required this.soon,
+    required this.openVipCentre,
+  });
 
   final VoidCallback openSpace;
+
+  /// 我的好友 on its 关注 tab, and on its 粉丝 tab.
+  final VoidCallback openFollowing;
+  final VoidCallback openFans;
   final VoidCallback login;
 
   /// The toast for everything not built yet.
@@ -119,25 +130,45 @@ class MeHeader extends StatelessWidget {
     final counts = view is MeShown ? view.counts : null;
     final card = hasCard(view);
     final ink = this.ink;
+    // Logged out, what the account would open asks for the login; with no profile yet it opens nothing.
+    VoidCallback? opens(VoidCallback open) => switch (view) {
+      MeShown() => open,
+      MeLoggedOut() => actions.login,
+      _ => null,
+    };
     return SizedBox(
       height: extent(view, reserveCard: reserveCard),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // 162: the band from the avatar's top to its bottom, across the width, is one press; what lies on it lets
+          // taps through to it, all but ✏️.
+          Positioned(
+            left: 0,
+            right: 0,
+            top: MeTheme.avatarTop,
+            height: MeTheme.avatar,
+            child: MeTap(
+              key: const ValueKey('me-profile'),
+              label: switch (view) {
+                MeShown() => '空间',
+                MeLoggedOut() => '点击登录',
+                _ => '头像',
+              },
+              onTap: opens(actions.openSpace),
+              feedback: MeTapFeedback.highlight,
+              child: const SizedBox.expand(),
+            ),
+          ),
           Positioned(
             left: MeTheme.avatarLeft,
             top: MeTheme.avatarTop,
             width: MeTheme.avatar,
             height: MeTheme.avatar,
-            child: MeTap(
-              key: const ValueKey('me-avatar'),
-              label: view is MeLoggedOut ? '点击登录' : '头像',
-              onTap: switch (view) {
-                MeShown() => actions.openSpace,
-                MeLoggedOut() => actions.login,
-                _ => null,
-              },
-              child: _Avatar(profile: profile),
+            child: IgnorePointer(
+              child: ExcludeSemantics(
+                child: _Avatar(key: const ValueKey('me-avatar'), profile: profile),
+              ),
             ),
           ),
           if (view is MeLoggedOut)
@@ -145,17 +176,17 @@ class MeHeader extends StatelessWidget {
               left: textLeft,
               top: MeTheme.avatarTop,
               height: MeTheme.avatar,
-              child: MeTap(
-                key: const ValueKey('me-login'),
-                label: '点击登录',
-                onTap: actions.login,
-                child: Center(
-                  child: Text(
-                    '点击登录',
-                    style: TextStyle(
-                      fontFamily: BiliFonts.family,
-                      fontSize: MeTheme.loggedOutText,
-                      color: ink ?? MeTheme.name,
+              child: IgnorePointer(
+                child: ExcludeSemantics(
+                  child: Center(
+                    key: const ValueKey('me-login'),
+                    child: Text(
+                      '点击登录',
+                      style: TextStyle(
+                        fontFamily: BiliFonts.family,
+                        fontSize: MeTheme.loggedOutText,
+                        color: ink ?? MeTheme.name,
+                      ),
                     ),
                   ),
                 ),
@@ -172,40 +203,42 @@ class MeHeader extends StatelessWidget {
                 left: textLeft,
                 top: MeTheme.vipLabelTop,
                 height: MeTheme.vipLabelHeight,
-                child: _VipLabel(profile.vipLabel),
+                child: IgnorePointer(child: _VipLabel(profile.vipLabel)),
               ),
             _CentredRow(
               left: textLeft,
               centre: MeTheme.coinsCentre,
-              child: _Coins(profile: profile, ink: ink),
+              child: IgnorePointer(
+                child: _Coins(profile: profile, ink: ink),
+              ),
             ),
             Positioned(
               right: 0,
               top: MeTheme.spaceCentre - MeTheme.countTap / 2,
               height: MeTheme.countTap,
-              child: MeTap(
-                key: const ValueKey('me-space'),
-                label: '空间',
-                onTap: actions.openSpace,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: BiliMetrics.gutter, right: MeTheme.spaceRight),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '空间',
-                        style: TextStyle(
-                          fontFamily: BiliFonts.family,
-                          fontSize: MeTheme.spaceText,
-                          color: ink ?? MeTheme.space,
+              child: IgnorePointer(
+                child: ExcludeSemantics(
+                  child: Padding(
+                    key: const ValueKey('me-space'),
+                    padding: const EdgeInsets.only(left: BiliMetrics.gutter, right: MeTheme.spaceRight),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '空间',
+                          style: TextStyle(
+                            fontFamily: BiliFonts.family,
+                            fontSize: MeTheme.spaceText,
+                            color: ink ?? MeTheme.space,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: MeTheme.spaceChevronGap),
-                      CustomPaint(
-                        size: const Size(MeTheme.chevronWidth, MeTheme.chevronHeight),
-                        painter: MeChevronPainter(color: ink ?? MeTheme.space, stroke: MeTheme.chevronStroke),
-                      ),
-                    ],
+                        const SizedBox(width: MeTheme.spaceChevronGap),
+                        CustomPaint(
+                          size: const Size(MeTheme.chevronWidth, MeTheme.chevronHeight),
+                          painter: MeChevronPainter(color: ink ?? MeTheme.space, stroke: MeTheme.chevronStroke),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -216,7 +249,13 @@ class MeHeader extends StatelessWidget {
             right: 0,
             top: MeTheme.countRuleTop - (MeTheme.countTap - MeTheme.countRuleHeight) / 2,
             height: MeTheme.countTap,
-            child: _Counts(counts: counts, onTap: actions.soon, ink: ink),
+            child: _Counts(
+              counts: counts,
+              onDynamics: opens(actions.openSpace),
+              onFollowing: opens(actions.openFollowing),
+              onFans: opens(actions.openFans),
+              ink: ink,
+            ),
           ),
           if (card || reserveCard)
             Positioned(
@@ -255,7 +294,7 @@ class _CentredRow extends StatelessWidget {
 
 /// The face, its frame when it wears one and the 大 on its corner; Bilibili's grey head until a profile shows.
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.profile});
+  const _Avatar({super.key, required this.profile});
 
   final MeProfile? profile;
 
@@ -320,15 +359,17 @@ class _NameRow extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          profile.name,
-          key: const ValueKey('me-name'),
-          maxLines: 1,
-          style: TextStyle(
-            fontFamily: BiliFonts.family,
-            fontSize: MeTheme.nameText,
-            fontWeight: MeTheme.nameWeight,
-            color: ink ?? (profile.vip ? MeTheme.vipName : MeTheme.name),
+        IgnorePointer(
+          child: Text(
+            profile.name,
+            key: const ValueKey('me-name'),
+            maxLines: 1,
+            style: TextStyle(
+              fontFamily: BiliFonts.family,
+              fontSize: MeTheme.nameText,
+              fontWeight: MeTheme.nameWeight,
+              color: ink ?? (profile.vip ? MeTheme.vipName : MeTheme.name),
+            ),
           ),
         ),
         MeTap(
@@ -343,7 +384,7 @@ class _NameRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: MeTheme.levelGap - (MeTheme.pencilBox - MeTheme.pencilInk) / 2),
-        MeLevelBadge(level: profile.level),
+        IgnorePointer(child: MeLevelBadge(level: profile.level)),
       ],
     );
   }
@@ -396,10 +437,18 @@ class _Coins extends StatelessWidget {
 
 /// 动态, 关注 and 粉丝, each a third of the width; - until the counts answer.
 class _Counts extends StatelessWidget {
-  const _Counts({required this.counts, required this.onTap, required this.ink});
+  const _Counts({
+    required this.counts,
+    required this.onDynamics,
+    required this.onFollowing,
+    required this.onFans,
+    required this.ink,
+  });
 
   final MeCounts? counts;
-  final VoidCallback onTap;
+  final VoidCallback? onDynamics;
+  final VoidCallback? onFollowing;
+  final VoidCallback? onFans;
   final Color? ink;
 
   @override
@@ -408,14 +457,14 @@ class _Counts extends StatelessWidget {
     final ink = this.ink;
     String value(int Function(MeCounts counts) of) => counts == null ? '-' : CountFormat.short(of(counts));
     final columns = [
-      ('me-dynamics', '动态', value((c) => c.dynamics)),
-      ('me-following', '关注', value((c) => c.following)),
-      ('me-followers', '粉丝', value((c) => c.followers)),
+      ('me-dynamics', '动态', value((c) => c.dynamics), onDynamics),
+      ('me-following', '关注', value((c) => c.following), onFollowing),
+      ('me-followers', '粉丝', value((c) => c.followers), onFans),
     ];
     const lift = (MeTheme.countTap - MeTheme.countRuleHeight) / 2;
     return Row(
       children: [
-        for (final (index, (key, label, number)) in columns.indexed)
+        for (final (index, (key, label, number, onTap)) in columns.indexed)
           Expanded(
             child: Stack(
               children: [

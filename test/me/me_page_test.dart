@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/favourites/favourites_page.dart';
+import 'package:bilifast/friends/friends_route.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/shortcut_glyphs.dart';
+import 'package:bilifast/me/me_glyphs.dart';
 import 'package:bilifast/me/me_header.dart';
 import 'package:bilifast/me/me_model.dart';
 import 'package:bilifast/me/me_page.dart';
@@ -101,49 +103,85 @@ void main() {
     expect(find.text('120'), findsOneWidget);
   });
 
-  testWidgets('with no mid, the avatar and 空间 › open nothing', (tester) async {
+  testWidgets('with no mid, the header\'s band and 动态 open nothing', (tester) async {
     const noMid = MeProfile(name: '无号', face: '', level: 1, coins: 0, bcoin: 0);
     await showMe(tester, view: const MeShown(noMid, kaiCounts));
-    await tester.tap(_key('me-avatar'));
+    await tester.tap(_key('me-profile'));
     await _settle(tester);
-    await tester.tap(_key('me-space'));
+    await tester.tap(_key('me-dynamics'));
     await _settle(tester);
     expect(find.byType(SpacePage), findsNothing);
   });
 
-  testWidgets('the avatar and 空间 › open the account\'s own space; the name opens nothing', (tester) async {
+  testWidgets("162: anywhere on the band from the avatar's top to its bottom opens the account's own space", (
+    tester,
+  ) async {
     await showMe(tester);
-    await tester.tap(_key('me-name'));
-    await _settle(tester);
-    expect(find.byType(SpacePage), findsNothing);
+    final band = tester.getRect(_key('me-profile'));
+    expect(band, const Rect.fromLTRB(0, 126, 440, 190), reason: 'the full width');
+    final avatar = tester.getRect(_key('me-avatar'));
+    expect((avatar.top, avatar.bottom), (band.top, band.bottom));
+
+    final places = {
+      'the avatar': tester.getCenter(_key('me-avatar')),
+      'the name': tester.getCenter(_key('me-name')),
+      'the LV badge': tester.getCenter(find.byType(MeLevelBadge)),
+      'the pill': tester.getCenter(_key('me-vip-label')),
+      'B币': tester.getCenter(_key('me-bcoin')),
+      '硬币': tester.getCenter(_key('me-coins')),
+      '空间 ›': tester.getCenter(_key('me-space')),
+      'the left edge': band.topLeft + const Offset(2, 2),
+      'the room under 空间': band.bottomRight - const Offset(100, 2),
+    };
+    for (final MapEntry(key: place, value: at) in places.entries) {
+      await tester.tapAt(at);
+      await _settle(tester);
+      expect(find.byType(SpacePage), findsOneWidget, reason: place);
+      final space = tester.widget<SpacePage>(find.byType(SpacePage));
+      expect((space.uploader.mid, space.uploader.name), (2233, 'KaiC5504'), reason: place);
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await _settle(tester);
+    }
+
+    for (final outside in [band.topCenter - const Offset(0, 3), band.bottomCenter + const Offset(0, 3)]) {
+      await tester.tapAt(outside);
+      await _settle(tester);
+      expect(find.byType(SpacePage), findsNothing, reason: '$outside');
+    }
     expect(find.text('即将推出'), findsNothing);
+  });
 
-    await tester.tap(_key('me-avatar'));
-    await _settle(tester);
-    final space = tester.widget<SpacePage>(find.byType(SpacePage));
-    expect(space.uploader.mid, 2233);
-    expect(space.uploader.name, 'KaiC5504');
-    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+  testWidgets('✏️ on the band keeps its own tap: 即将推出, and no space', (tester) async {
+    await showMe(tester);
+    await tester.tap(_key('me-edit'));
+    await tester.pump();
+    expect(find.text('即将推出'), findsOneWidget);
     await _settle(tester);
     expect(find.byType(SpacePage), findsNothing);
+    await _toastGone(tester);
+  });
 
-    await tester.tap(_key('me-space'));
+  testWidgets("动态 opens the account's own space", (tester) async {
+    final harness = await showMe(tester);
+    await tester.tap(_key('me-dynamics'));
     await _settle(tester);
     expect(tester.widget<SpacePage>(find.byType(SpacePage)).uploader.mid, 2233);
+    expect(harness.friends, isEmpty);
   });
 
-  for (final key in [
-    'me-cast',
-    'me-scan',
-    'me-outfit',
-    'me-night',
-    'me-edit',
-    'me-dynamics',
-    'me-following',
-    'me-followers',
-    'me-support',
-    'me-listen',
-  ]) {
+  testWidgets('关注 and 粉丝 open 我的好友 on their own tabs', (tester) async {
+    final harness = await showMe(tester);
+    await tester.tap(_key('me-following'));
+    await tester.pump();
+    expect(harness.friends, [FriendsTab.following]);
+    await tester.tap(_key('me-followers'));
+    await tester.pump();
+    expect(harness.friends, [FriendsTab.following, FriendsTab.fans]);
+    expect(find.byType(SpacePage), findsNothing);
+    expect(find.text('即将推出'), findsNothing);
+  });
+
+  for (final key in ['me-cast', 'me-scan', 'me-outfit', 'me-night', 'me-edit', 'me-support', 'me-listen']) {
     testWidgets('$key says 即将推出', (tester) async {
       await showMe(tester);
       await tester.tap(_key(key));
@@ -229,26 +267,46 @@ void main() {
     expect(find.text('离线缓存'), findsOneWidget);
     expect(find.text('更多服务'), findsOneWidget);
 
-    await tester.tap(_key('me-avatar'));
+    await tester.tapAt(tester.getCenter(_key('me-avatar')));
     await tester.pump();
     expect(gate.requests, 1);
-    await tester.tap(_key('me-login'));
+    await tester.tapAt(tester.getCenter(_key('me-login')));
     await tester.pump();
     expect(gate.requests, 2);
   });
 
+  testWidgets('logged out, 动态, 关注 and 粉丝 ask for the login, never 我的好友 or a toast', (tester) async {
+    final gate = FakeLoginGate();
+    final harness = await showMe(tester, view: const MeLoggedOut(), loginGate: gate);
+    for (final (index, key) in ['me-dynamics', 'me-following', 'me-followers'].indexed) {
+      await tester.tap(_key(key));
+      await tester.pump();
+      expect(gate.requests, index + 1, reason: key);
+    }
+    await _settle(tester);
+    expect(harness.friends, isEmpty);
+    expect(find.byType(SpacePage), findsNothing);
+    expect(find.text('即将推出'), findsNothing);
+  });
+
   for (final (name, view) in [('loading', const MeLoading()), ('failed', const MeFailed('网络不太好'))]) {
     testWidgets('$name: the header\'s layout with no name, counts as -, and nothing spinning over it', (tester) async {
-      await showMe(tester, view: view);
+      final gate = FakeLoginGate();
+      final harness = await showMe(tester, view: view, loginGate: gate);
       expect(_key('me-avatar-blank'), findsOneWidget);
       expect(_key('me-name'), findsNothing);
       expect(find.text('点击登录'), findsNothing);
       expect(find.text('-'), findsNWidgets(3));
       expect(find.byType(CupertinoActivityIndicator), findsNothing);
       expect(find.byType(LoadingTv), findsNothing);
-      await tester.tap(_key('me-avatar'));
-      await _settle(tester);
+      for (final key in ['me-profile', 'me-dynamics', 'me-following', 'me-followers']) {
+        await tester.tap(_key(key));
+        await _settle(tester);
+      }
       expect(find.byType(SpacePage), findsNothing);
+      expect(harness.friends, isEmpty, reason: 'no profile yet: the counts open nothing');
+      expect(gate.requests, 0);
+      await _toastGone(tester);
     });
   }
 
@@ -342,9 +400,11 @@ void main() {
     expect(_cardOpacity(tester), 1);
   });
 
-  testWidgets('rows and the 会员 card darken under a finger; glyphs, 空间, counts and shortcuts fade', (tester) async {
+  testWidgets('rows, the header\'s band and the 会员 card darken under a finger; glyphs, counts and shortcuts fade', (
+    tester,
+  ) async {
     await showMe(tester);
-    for (final key in ['me-settings', 'me-vip-card']) {
+    for (final key in ['me-settings', 'me-profile', 'me-vip-card']) {
       final finger = await tester.startGesture(tester.getTopLeft(_key(key)) + const Offset(30, 20));
       // In the list a tap down waits out the scroll's 100 ms.
       await tester.pump(const Duration(milliseconds: 150));
@@ -355,7 +415,7 @@ void main() {
       await finger.cancel();
       await tester.pump();
     }
-    for (final key in ['me-cast', 'me-edit', 'me-space', 'me-following', 'me-offline', 'me-vip-centre', 'me-avatar']) {
+    for (final key in ['me-cast', 'me-edit', 'me-following', 'me-offline', 'me-vip-centre']) {
       final finger = await tester.startGesture(tester.getCenter(_key(key)));
       await tester.pump(const Duration(milliseconds: 150));
       await tester.pump(const Duration(milliseconds: 200));
@@ -472,9 +532,8 @@ void main() {
       'me-scan',
       'me-outfit',
       'me-night',
-      'me-avatar',
+      'me-profile',
       'me-edit',
-      'me-space',
       'me-dynamics',
       'me-following',
       'me-followers',
@@ -508,13 +567,39 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('logged out, the avatar and 点击登录 answer accessibility presses too', (tester) async {
+  testWidgets('the band, ✏️, 动态, 关注 and 粉丝 answer accessibility presses with their own actions', (tester) async {
+    final handle = tester.ensureSemantics();
+    final harness = await showMe(tester);
+    tester.semantics.tap(find.semantics.byLabel('关注 13'));
+    tester.semantics.tap(find.semantics.byLabel('粉丝 0'));
+    await tester.pump();
+    expect(harness.friends, [FriendsTab.following, FriendsTab.fans]);
+
+    tester.semantics.tap(find.semantics.byLabel('编辑资料'));
+    await tester.pump();
+    expect(find.text('即将推出'), findsOneWidget);
+    await _toastGone(tester);
+    expect(find.byType(SpacePage), findsNothing);
+
+    for (final label in ['空间', '动态 0']) {
+      tester.semantics.tap(find.semantics.byLabel(label));
+      await _settle(tester);
+      expect(tester.widget<SpacePage>(find.byType(SpacePage)).uploader.mid, 2233, reason: label);
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await _settle(tester);
+    }
+    handle.dispose();
+  });
+
+  testWidgets('logged out, the band and the counts answer accessibility presses with the login', (tester) async {
     final handle = tester.ensureSemantics();
     final gate = FakeLoginGate();
     await showMe(tester, view: const MeLoggedOut(), loginGate: gate);
-    tester.semantics.tap(find.semantics.byLabel('点击登录').first);
-    await tester.pump();
-    expect(gate.requests, 1);
+    for (final label in ['点击登录', '动态 -', '关注 -', '粉丝 -']) {
+      tester.semantics.tap(find.semantics.byLabel(label));
+      await tester.pump();
+    }
+    expect(gate.requests, 4);
     handle.dispose();
   });
 
