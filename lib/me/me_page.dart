@@ -245,7 +245,11 @@ class _MePageState extends State<MePage> with RouteAware {
     }
   }
 
-  void _openFriends(FriendsTab tab) => unawaited(_visit(widget.openFriends(context, tab: tab)));
+  /// A follow changed in 我的好友 shows in the counts on the way back; a failed reload keeps them and says nothing.
+  Future<void> _openFriends(FriendsTab tab) async {
+    await _visit(widget.openFriends(context, tab: tab));
+    if (mounted) await _me.refresh();
+  }
 
   void _login() => unawaited(AppScope.of(context).loginGate.request(context));
 
@@ -283,8 +287,8 @@ class _MePageState extends State<MePage> with RouteAware {
     final top = MediaQuery.paddingOf(context).top;
     final actions = MeActions(
       openSpace: _openSpace,
-      openFollowing: () => _openFriends(FriendsTab.following),
-      openFans: () => _openFriends(FriendsTab.fans),
+      openFollowing: () => unawaited(_openFriends(FriendsTab.following)),
+      openFans: () => unawaited(_openFriends(FriendsTab.fans)),
       login: _login,
       soon: _soon,
       openVipCentre: () => unawaited(_openVipCentre()),
