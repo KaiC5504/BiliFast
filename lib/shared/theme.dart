@@ -5212,15 +5212,11 @@ abstract final class WatchLaterTheme {
   static const editActionOff = Color(0xFFC9CCD0);
 }
 
-/// The app token's confirm and 开发者's 官方接口 card.
+/// The app token's confirm.
 abstract final class AppAuthTheme {
   /// The confirm is 设置's alert (51), coming and going as it does there.
   static const promptIn = SettingsTheme.confirmIn;
   static const promptOut = SettingsTheme.confirmOut;
-
-  /// 开发者's state line: 已授权 · 剩 N 天, or 未授权.
-  static const status = BiliColors.secondaryText;
-  static const statusText = BiliMetrics.smallText;
 }
 
 /// The account's own space (108, 115): the tall banner, 编辑资料, the name line's pills, the level's exp bar and the

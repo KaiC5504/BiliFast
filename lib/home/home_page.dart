@@ -25,7 +25,6 @@ import '../shared/toast.dart';
 import '../skin/skin.dart';
 import '../video/link_opener.dart';
 import '../video/page_playback.dart';
-import '../video/player_prefs.dart';
 import '../video/video_route.dart';
 import 'avatar_page.dart';
 import 'feed_big_card.dart';
@@ -195,7 +194,7 @@ class _HomePageState extends State<HomePage> {
     final gained = authorized && !_authorized;
     final lost = !authorized && _authorized;
     _authorized = authorized;
-    if (gained && PlayerPrefs.shared.officialFeed && _feed?.source != FeedSource.official) {
+    if (gained && _feed?.source != FeedSource.official) {
       unawaited(_refreshFeed(restart: true));
     } else if (lost && _feed?.source == FeedSource.official) {
       // 退出登录 drops the token just before the account hears of it, and the account's refresh is the one wanted:

@@ -12,7 +12,6 @@ import '../playback/playback_controller.dart' show PlaybackFailure;
 import '../shared/cover_format.dart';
 import '../shared/image_disk_cache.dart';
 import '../shared/remote_image.dart' show secureImageUrl;
-import '../video/player_prefs.dart';
 
 /// The words for a failed request: the BiliError's or PlaybackFailure's message (a 番剧 link), a network message
 /// when the connection failed or timed out, otherwise [fallback].
@@ -216,7 +215,7 @@ class FeedModel extends ChangeNotifier {
     this._minimumRefresh = FeedModel.minimumRefresh,
     this._webPage,
   }) : _logger = logger ?? Logger.shared,
-       _officialWanted = officialWanted ?? (() => PlayerPrefs.shared.officialFeed),
+       _officialWanted = officialWanted ?? (() => true),
        _pad = pad ?? (() => FormFactor.device.isPad),
        _now = now ?? DateTime.now,
        _pictures = pictures ?? (() => ImageDiskCache.session),
