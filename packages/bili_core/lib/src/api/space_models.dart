@@ -287,13 +287,17 @@ final class SpaceGarbCard {
 
 /// The label on the own space's banner, "幸运塔罗星 金牛座" over "NO.000067" (108).
 final class SpaceBannerLabel {
-  const SpaceBannerLabel({required this.title, this.subtitle = '', this.subtitleColor, this.icon});
+  const SpaceBannerLabel({required this.title, this.subtitle = '', this.subtitleColors = const [], this.icon});
 
   final String title;
   final String subtitle;
 
-  /// 0xAARRGGBB, from the answer's colour; null draws white.
-  final int? subtitleColor;
+  /// The answer's colours in order, 0xAARRGGBB: two or more shade the number left to right (24's CD.013149), one is
+  /// flat, none (or any that won't read) draws white.
+  final List<int> subtitleColors;
+
+  /// The last of [subtitleColors], for type that is drawn in one colour; null for white.
+  int? get subtitleColor => subtitleColors.isEmpty ? null : subtitleColors.last;
 
   /// The collectible's picture before the title (`title_icon`, a ◇ in a rounded square on 24); null for none.
   final String? icon;
@@ -338,7 +342,8 @@ final class OwnSpace {
   /// Where [banner] is cut when it fills the box: an Alignment's y, -1 its top and 1 its bottom, 0 its middle.
   final double bannerAlignY;
 
-  /// An animated 空间头图's video (`animation_video_urls`' first address), played over [banner]; null for a still one.
+  /// An animated 空间头图's video (the first usable address in `animation_video_urls`), played over [banner]; null for
+  /// a still one.
   final String? bannerVideo;
 
   /// `is_silence`: the video has no sound to offer, so no sound button.
@@ -431,11 +436,12 @@ double? _alignY(JsonObject? picture) {
 SpaceBannerLabel? _bannerLabel(JsonObject? title) {
   final text = _filled(title?.text('title'));
   if (title == null || text == null) return null;
-  final colours = title.nested('sub_title_color_format')?.lenientList('colors', (json) => json) ?? const [];
+  final given = title.nested('sub_title_color_format')?.lenientList('colors', (json) => json) ?? const [];
+  final colours = [for (final colour in given) argbColour(colour)];
   return SpaceBannerLabel(
     title: text,
     subtitle: title.text('sub_title') ?? '',
-    subtitleColor: colours.isEmpty ? null : argbColour(colours.last),
+    subtitleColors: colours.contains(null) ? const [] : List.unmodifiable(colours.cast<int>()),
     icon: _picture(title.text('title_icon')),
   );
 }

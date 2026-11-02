@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../app/app_scope.dart';
+import '../../app/route_observer.dart';
 import '../../friends/friends_route.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
@@ -40,7 +41,7 @@ class OwnSpacePage extends StatefulWidget {
   State<OwnSpacePage> createState() => _OwnSpacePageState();
 }
 
-class _OwnSpacePageState extends State<OwnSpacePage> {
+class _OwnSpacePageState extends State<OwnSpacePage> with RouteAware {
   static const _soon = '暂未开放';
   static const _kinds = {SpaceTabKind.home, SpaceTabKind.contribute, SpaceTabKind.favourite, SpaceTabKind.bangumi};
 
@@ -68,6 +69,10 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
 
   /// An animated 空间头图 opens muted, as the official one does.
   final _bannerMuted = ValueNotifier(true);
+
+  /// The 空间头图 video drawing on the phone, which shows its sound button.
+  final _bannerPlaying = ValueNotifier<String?>(null);
+  PageRoute<dynamic>? _route;
   ImageStream? _bannerStream;
   ImageStreamListener? _bannerListener;
 
@@ -80,15 +85,29 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (ModalRoute.of(context) case final PageRoute<dynamic> route when route != _route) {
+      pageRoutes.unsubscribe(this);
+      _route = route;
+      pageRoutes.subscribe(this, route);
+    }
     if (_started) return;
     _started = true;
     unawaited(_load());
   }
 
+  // The banner pauses only once a covering page has finished sliding in, and sounds on while this one slides out.
+  @override
+  void didPushNext() => _bannerMuted.value = true;
+
+  @override
+  void didPop() => _bannerMuted.value = true;
+
   @override
   void dispose() {
+    pageRoutes.unsubscribe(this);
     _stopBannerMeasure();
     _bannerMuted.dispose();
+    _bannerPlaying.dispose();
     _folders?.dispose();
     _bangumi?.dispose();
     _scroll.dispose();
@@ -170,19 +189,30 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
     if (url == null || url.isEmpty) return;
     final width = MediaQuery.sizeOf(context).width;
     final alignY = profile.own?.bannerAlignY ?? 0;
-    final listener = ImageStreamListener(
+    final stream = OwnSpaceBanner.imageOf(context, url).resolve(createLocalImageConfiguration(context));
+    late final ImageStreamListener listener;
+    // A cached picture answers inside addListener, so each answer takes the listener off its own stream.
+    void stop() {
+      stream.removeListener(listener);
+      if (identical(_bannerStream, stream)) {
+        _bannerStream = null;
+        _bannerListener = null;
+      }
+    }
+
+    listener = ImageStreamListener(
       (info, _) {
-        _stopBannerMeasure();
+        stop();
         unawaited(_measured(info, width, alignY));
       },
       onError: (error, _) {
-        _stopBannerMeasure();
+        stop();
         Logger.shared.warn(LogCategory.ui, 'own space banner not measured', {'error': '${error.runtimeType}'});
       },
     );
+    _bannerStream = stream;
     _bannerListener = listener;
-    _bannerStream = OwnSpaceBanner.imageOf(context, url).resolve(createLocalImageConfiguration(context))
-      ..addListener(listener);
+    stream.addListener(listener);
   }
 
   Future<void> _measured(ImageInfo info, double width, double alignY) async {
@@ -299,6 +329,7 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
               onSoon: _soonToast,
               onFriends: _openFriends,
               bannerMuted: _bannerMuted,
+              bannerPlaying: _bannerPlaying,
             ),
           ),
         ),

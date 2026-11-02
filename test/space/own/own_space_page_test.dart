@@ -7,6 +7,7 @@ import 'package:bilifast/account/app_auth.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/favourites/fake_favourites_api.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
@@ -19,6 +20,7 @@ import 'package:bilifast/space/own/own_contribute_tab.dart';
 import 'package:bilifast/space/own/own_favourites_tab.dart';
 import 'package:bilifast/space/own/own_home_tab.dart';
 import 'package:bilifast/space/own/own_space_banner.dart';
+import 'package:bilifast/space/own/own_space_header.dart';
 import 'package:bilifast/space/own/own_space_page.dart';
 import 'package:bilifast/space/space_api.dart';
 import 'package:bilifast/space/space_page.dart';
@@ -247,6 +249,7 @@ void main() {
         key: const ValueKey('screen'),
         child: MaterialApp(
           navigatorKey: navigator,
+          navigatorObservers: [pageRoutes],
           builder: (context, child) => AppScope(services: services, child: child!),
           home: const Text('home'),
         ),
@@ -862,4 +865,103 @@ void main() {
       }
     }
   });
+
+  testWidgets('a cached banner\'s measure lets go of the picture after its first frame and when the page goes', (
+    tester,
+  ) async {
+    const url = 'https://i1.hdslb.com/bfs/garb/made-up/cached.png';
+    PaintingBinding.instance.imageCache
+      ..clear()
+      ..clearLiveImages();
+    addTearDown(
+      () => PaintingBinding.instance.imageCache
+        ..clear()
+        ..clearLiveImages(),
+    );
+    final image = (await tester.runAsync(() {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawRect(const Rect.fromLTWH(0, 0, 100, 300), Paint()..color = const Color(0xFF000000));
+      return recorder.endRecording().toImage(100, 300);
+    }))!;
+    final completer = _CountingCompleter(ImageInfo(image: image));
+    PaintingBinding.instance.imageCache.putIfAbsent(
+      NetworkImage(OwnSpaceBanner.address(url, 440), headers: BiliClient.mediaHeaders),
+      () => completer,
+    );
+    api.answer = SpaceProfile(
+      mid: _mid,
+      name: '测试账号',
+      face: '',
+      tabs: _tabs,
+      own: const OwnSpace(banner: url),
+    );
+    await showOwn(tester);
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    expect(statusStyle(tester), SystemUiOverlayStyle.light, reason: 'measured: the black picture takes white ink');
+    // The measure listens first: it starts as the answer lands, the picture's own once the header is built.
+    expect(completer.added, isNotEmpty);
+    expect(completer.live, isNot(contains(completer.added.first)), reason: 'let go of inside its first answer');
+
+    Navigator.of(tester.element(find.byType(OwnSpacePage))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(OwnSpacePage), findsNothing);
+    expect(completer.live, isEmpty);
+  });
+
+  testWidgets('an animated banner is muted when a page covers the space and when the space goes', (tester) async {
+    api.answer = SpaceProfile(
+      mid: _mid,
+      name: '测试账号',
+      face: '',
+      tabs: _tabs,
+      own: const OwnSpace(
+        banner: 'https://i0.hdslb.com/bfs/garb/banner.png',
+        bannerVideo: 'https://i0.hdslb.com/bfs/garb/banner.mp4',
+      ),
+    );
+    await showOwn(tester);
+    final muted = tester.widget<OwnSpaceHeader>(find.byType(OwnSpaceHeader)).bannerMuted!;
+    expect(muted.value, isTrue, reason: 'it opens muted');
+    final navigator = Navigator.of(tester.element(find.byType(OwnSpacePage)));
+
+    muted.value = false;
+    unawaited(navigator.push(MaterialPageRoute<void>(builder: (_) => const Text('covering'))));
+    await tester.pump();
+    expect(muted.value, isTrue, reason: 'from the start of the cover, not once it has slid in');
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(muted.value, isTrue, reason: 'shown again, it stays muted until tapped');
+
+    muted.value = false;
+    navigator.pop();
+    expect(muted.value, isTrue, reason: 'sliding out it is already quiet');
+    await tester.pumpAndSettle();
+    expect(find.byType(OwnSpacePage), findsNothing);
+  });
+}
+
+/// A picture already in the cache, answering each listener as it is added; keeps who listened and who still does.
+final class _CountingCompleter extends ImageStreamCompleter {
+  _CountingCompleter(ImageInfo info) {
+    setImage(info);
+  }
+
+  final added = <ImageStreamListener>[];
+  final live = <ImageStreamListener>[];
+
+  @override
+  void addListener(ImageStreamListener listener) {
+    added.add(listener);
+    live.add(listener);
+    super.addListener(listener);
+  }
+
+  @override
+  void removeListener(ImageStreamListener listener) {
+    live.remove(listener);
+    super.removeListener(listener);
+  }
 }

@@ -102,3 +102,7 @@ is `ic_attention_group` unchanged (66 px), drawn 20.53 pt so its ink is 167's 18
 glyph, 163) is the compose icon font's `list_sort_line` (eaf1), drawn white, cut to its 38 × 28 px ink and tinted, drawn
 12.67 × 9.33 pt; `face_collectible.png` (the ◇ on a 数字藏品 face, 163) is `ic_tag_nft` unchanged (54 px), drawn 14 pt
 in the verify bolt's white ring, 16 pt left of it.
+
+The own space's 空间头图 sound disc (24, 169) is the same APK's, unchanged: `images/space/banner_sound.webp` (sound on)
+and `banner_sound_off.webp` (muted, as it opens), both 72 px, from its compose resources
+(`srcs.app.digital.collection.generated.resources/drawable-xxhdpi`), drawn 26 pt (`OwnSpaceTheme.soundSize`).

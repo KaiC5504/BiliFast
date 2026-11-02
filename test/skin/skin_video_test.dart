@@ -20,9 +20,18 @@ Widget host(SkinVideo child, {bool ticking = true}) => Directionality(
   ),
 );
 
-SkinVideo skinVideo({File? file, bool loop = true}) => SkinVideo(
+SkinVideo skinVideo({
+  File? file,
+  bool loop = true,
+  bool sound = false,
+  bool muted = true,
+  ValueChanged<bool>? onShown,
+}) => SkinVideo(
   file: file ?? video,
   loop: loop,
+  sound: sound,
+  muted: muted,
+  onShown: onShown,
   placeholder: const ColoredBox(key: placeholderKey, color: Color(0xFF123456)),
 );
 
@@ -209,5 +218,86 @@ void main() {
       await tester.pump();
       expect(placeholderShown(tester), isFalse);
     }, variant: ios);
+
+    Map<Object?, Object?> paramsOf(MethodCall create) {
+      final arguments = create.arguments as Map<Object?, Object?>;
+      return const StandardMessageCodec().decodeMessage(ByteData.sublistView(arguments['params']! as Uint8List))
+          as Map<Object?, Object?>;
+    }
+
+    testWidgets('with sound the view is told to keep it and whether it starts muted', (tester) async {
+      await pump(tester, host(skinVideo(sound: true)));
+      expect(paramsOf(views.firstWhere((call) => call.method == 'create')), {
+        'path': video.path,
+        'loop': true,
+        'sound': true,
+        'muted': true,
+      });
+
+      await pump(tester, host(skinVideo(file: File('/support/space_banner/b.mp4'), sound: true, muted: false)));
+      expect(paramsOf(views.lastWhere((call) => call.method == 'create')), {
+        'path': '/support/space_banner/b.mp4',
+        'loop': true,
+        'sound': true,
+        'muted': false,
+      });
+    }, variant: ios);
+
+    testWidgets('muting and unmuting goes to the view as setMuted, without a new view', (tester) async {
+      await pump(tester, host(skinVideo(sound: true)));
+      final id = viewIds().single;
+      await pump(tester, host(skinVideo(sound: true, muted: false)));
+      await pump(tester, host(skinVideo(sound: true, muted: false)));
+      await pump(tester, host(skinVideo(sound: true)));
+      expect(viewIds(), [id]);
+      expect(sent[id]!.map((call) => (call.method, call.arguments)), [
+        ('play', null),
+        ('setMuted', false),
+        ('setMuted', true),
+      ]);
+    }, variant: ios);
+
+    testWidgets('without sound nothing about muting reaches the view', (tester) async {
+      await pump(tester, host(skinVideo()));
+      await pump(tester, host(skinVideo(muted: false)));
+      expect(sent[viewIds().single]!.map((call) => call.method), ['play']);
+    }, variant: ios);
+
+    testWidgets('turning sound on or off is a new view', (tester) async {
+      await pump(tester, host(skinVideo()));
+      await pump(tester, host(skinVideo(sound: true)));
+      expect(viewIds(), hasLength(2));
+      expect(paramsOf(views.lastWhere((call) => call.method == 'create'))['sound'], isTrue);
+    }, variant: ios);
+
+    testWidgets('unmuted before the view is made, the view hears it once made', (tester) async {
+      await tester.pumpWidget(host(skinVideo(sound: true)));
+      await tester.pumpWidget(host(skinVideo(sound: true, muted: false)));
+      await tester.pump();
+      final id = viewIds().single;
+      final muting = sent[id]!.where((call) => call.method == 'setMuted').map((call) => call.arguments);
+      expect(muting.isEmpty ? paramsOf(views.single)['muted'] : muting.last, isFalse);
+    }, variant: ios);
+
+    testWidgets('says when its first frame shows and when it fails', (tester) async {
+      final shown = <bool>[];
+      await pump(tester, host(skinVideo(sound: true, onShown: shown.add)));
+      final id = viewIds().single;
+      await fromNative(tester, id, const MethodCall('ready'));
+      await fromNative(tester, id, const MethodCall('ready'));
+      expect(shown, [true]);
+      await fromNative(tester, id, const MethodCall('failed', 'AVFoundationErrorDomain -11819'));
+      await tester.pump();
+      expect(shown, [true, false]);
+    }, variant: ios);
+  });
+
+  testWidgets('off iOS sound and muting are nothing: the placeholder alone, never shown', (tester) async {
+    final shown = <bool>[];
+    await tester.pumpWidget(host(skinVideo(sound: true, muted: false, onShown: shown.add)));
+    await tester.pumpWidget(host(skinVideo(sound: true, onShown: shown.add)));
+    expect(find.byType(UiKitView), findsNothing);
+    expect(find.byKey(placeholderKey), findsOneWidget);
+    expect(shown, isEmpty);
   });
 }
