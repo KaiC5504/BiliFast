@@ -102,11 +102,12 @@ class _Item extends StatelessWidget {
   );
 }
 
-TextStyle _subStyle({Color color = DevToolsTheme.sub}) => TextStyle(
+/// Tabular figures only for the numbers: they widen a host's hyphens too (cn-hk-eq-01-13).
+TextStyle _subStyle({Color color = DevToolsTheme.sub, bool figures = false}) => TextStyle(
   fontFamily: BiliFonts.family,
   fontSize: DevToolsTheme.subText,
   color: color,
-  fontFeatures: const [FontFeature.tabularFigures()],
+  fontFeatures: figures ? const [FontFeature.tabularFigures()] : null,
 );
 
 /// A host, its state's dot (the stats overlay's colours), its last speed and first byte, and 封禁 or 暂避 when so.
@@ -151,7 +152,7 @@ class _NodeLine extends StatelessWidget {
           ),
         ),
         const SizedBox(width: DevToolsTheme.subColumnGap),
-        Text(figures, style: _subStyle()),
+        Text(figures, style: _subStyle(figures: true)),
         if (mark != null) ...[
           const SizedBox(width: DevToolsTheme.subColumnGap),
           Text(mark, style: _subStyle(color: _color(seen.state))),
@@ -177,7 +178,7 @@ class _ArmLine extends StatelessWidget {
         Expanded(
           child: Text(armLabel(arm), style: _subStyle(color: DevToolsTheme.subValue)),
         ),
-        Text(scored == 0 ? '暂无结果' : '$scored 次 · ${mbps!.toStringAsFixed(1)} MB/s', style: _subStyle()),
+        Text(scored == 0 ? '暂无结果' : '$scored 次 · ${mbps!.toStringAsFixed(1)} MB/s', style: _subStyle(figures: true)),
       ],
     );
   }

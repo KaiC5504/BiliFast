@@ -118,10 +118,30 @@ NodeProbeFailure classifyNodeProbeError(Object error) => switch (error) {
 
 enum NodeProbePhase { idle, loading, probing, done, stopped, failed }
 
-/// One run at a time: the stream, then every node in turn, until done or stopped.
+/// How a run ended, without its signed addresses.
+typedef _LastRun = ({
+  NodeProbePhase phase,
+  NodeProbeSource? source,
+  List<NodeProbeTarget> targets,
+  List<NodeProbeResult> results,
+  String? error,
+});
+
+/// One run at a time: the stream, then every node in turn, until done or stopped. A new model shows the last run
+/// the app's services saw, so leaving 开发者 and coming back keeps it.
 class NodeProbeModel extends ChangeNotifier {
   NodeProbeModel({required this._services, this._backend = const NodeProbeBackend(), Logger? logger})
-    : _logger = logger ?? Logger.shared;
+    : _logger = logger ?? Logger.shared {
+    if (_lastRuns[_services] case final last?) {
+      _phase = last.phase;
+      _source = last.source;
+      _targets = last.targets;
+      _results.addAll(last.results);
+      _error = last.error;
+    }
+  }
+
+  static final _lastRuns = Expando<_LastRun>('node probe runs');
 
   final AppServices _services;
   final NodeProbeBackend _backend;
@@ -191,8 +211,30 @@ class NodeProbeModel extends ChangeNotifier {
       probe?.transport.close();
       cancel.dispose();
       if (identical(_cancel, cancel)) _cancel = null;
+      _keep();
       _notify();
     }
+  }
+
+  void _keep() {
+    final source = _source;
+    _lastRuns[_services] = (
+      phase: _phase,
+      source: source == null
+          ? null
+          : NodeProbeSource(
+              bvid: source.bvid,
+              title: source.title,
+              fromRecents: source.fromRecents,
+              quality: source.quality,
+              codec: source.codec,
+              primary: '',
+              backups: const [],
+            ),
+      targets: [for (final target in _targets) NodeProbeTarget(group: target.group, node: target.node, url: '')],
+      results: List.of(_results),
+      error: _error,
+    );
   }
 
   void stop() => _cancel?.cancel();

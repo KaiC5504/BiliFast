@@ -204,16 +204,19 @@ class _Stage extends StatelessWidget {
 }
 
 /// A row per variant, quality and cold or warm, then each later variant's difference from the first, lower being
-/// better in every column. It shrinks to the card's width rather than overflow it.
+/// better in every column. The number columns are fixed and the label column takes the rest of the card, so nothing
+/// moves as rows come in; labels or numbers too wide for that shrink the whole table rather than overflow it.
 class _ResultsTable extends StatelessWidget {
   const _ResultsTable({required this.groups, required this.label});
 
   final List<GroupSummary> groups;
 
-  /// A variant's letter as the plan names it (BTR·海外, 直连).
+  /// A variant's label (BTR·海外, 直连), or its letter for plain BTR.
   final String Function(String variant) label;
 
   static const _columns = ['', '首帧', '跳转', 'P90', '最慢', '回跳', '卡顿', '内存'];
+  static const _time = MaxColumnWidth(FixedColumnWidth(DevToolsTheme.tableTimeColumn), IntrinsicColumnWidth());
+  static const _count = MaxColumnWidth(FixedColumnWidth(DevToolsTheme.tableCountColumn), IntrinsicColumnWidth());
 
   static TextStyle _style(Color color) => TextStyle(
     fontFamily: BiliFonts.family,
@@ -223,53 +226,57 @@ class _ResultsTable extends StatelessWidget {
   );
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: FittedBox(
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
-      child: Table(
-        key: const ValueKey('speedtest-results'),
-        defaultColumnWidth: const IntrinsicColumnWidth(),
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          _row([for (final column in _columns) (column, DevToolsTheme.tableHeader)]),
-          for (final group in groups)
-            _row([
-              (
-                '${label(group.variant)} ${_quality(group.quality)} ${group.cold ? '冷' : '热'} ×${group.passes}',
-                DevToolsTheme.tableInk,
-              ),
-              for (final ms in [
-                group.firstFrameMs,
-                group.seekMedianMs,
-                group.seekP90Ms,
-                group.seekMaxMs,
-                group.backMedianMs,
-              ])
-                (_seconds(ms), DevToolsTheme.tableInk),
-              ('${group.stalls}', DevToolsTheme.tableInk),
-              ('${group.rssMaxMB}', DevToolsTheme.tableInk),
-            ]),
-          for (final delta in GroupDelta.of(groups))
-            _row([
-              (
-                '${label(delta.other.variant)}−${label(delta.base.variant)} ${_quality(delta.base.quality)} '
-                    '${delta.base.cold ? '冷' : '热'}',
-                DevToolsTheme.tableInk,
-              ),
-              for (final ms in [
-                delta.firstFrameMs,
-                delta.seekMedianMs,
-                delta.seekP90Ms,
-                delta.seekMaxMs,
-                delta.backMedianMs,
-              ])
-                (_signed(ms), _better(ms)),
-              (_signedCount(delta.stalls), _better(delta.stalls.toDouble())),
-              (_signedCount(delta.rssMaxMB), _better(delta.rssMaxMB.toDouble())),
-            ]),
-        ],
+      // Under the FittedBox the table's width is unbounded, so it grows its flex column to this minimum.
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minWidth: constraints.maxWidth),
+        child: Table(
+          key: const ValueKey('speedtest-results'),
+          columnWidths: const {0: MaxColumnWidth(FlexColumnWidth(), IntrinsicColumnWidth()), 6: _count, 7: _count},
+          defaultColumnWidth: _time,
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: [
+            _row([for (final column in _columns) (column, DevToolsTheme.tableHeader)]),
+            for (final group in groups)
+              _row([
+                (
+                  '${label(group.variant)} ${_quality(group.quality)} ${group.cold ? '冷' : '热'} ×${group.passes}',
+                  DevToolsTheme.tableInk,
+                ),
+                for (final ms in [
+                  group.firstFrameMs,
+                  group.seekMedianMs,
+                  group.seekP90Ms,
+                  group.seekMaxMs,
+                  group.backMedianMs,
+                ])
+                  (_seconds(ms), DevToolsTheme.tableInk),
+                ('${group.stalls}', DevToolsTheme.tableInk),
+                ('${group.rssMaxMB}', DevToolsTheme.tableInk),
+              ]),
+            for (final delta in GroupDelta.of(groups))
+              _row([
+                (
+                  '${label(delta.other.variant)}−${label(delta.base.variant)} ${_quality(delta.base.quality)} '
+                      '${delta.base.cold ? '冷' : '热'}',
+                  DevToolsTheme.tableInk,
+                ),
+                for (final ms in [
+                  delta.firstFrameMs,
+                  delta.seekMedianMs,
+                  delta.seekP90Ms,
+                  delta.seekMaxMs,
+                  delta.backMedianMs,
+                ])
+                  (_signed(ms), _better(ms)),
+                (_signedCount(delta.stalls), _better(delta.stalls.toDouble())),
+                (_signedCount(delta.rssMaxMB), _better(delta.rssMaxMB.toDouble())),
+              ]),
+          ],
+        ),
       ),
     ),
   );

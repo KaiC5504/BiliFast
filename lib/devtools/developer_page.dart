@@ -10,6 +10,7 @@ import '../account/app_auth.dart';
 import '../app/app_scope.dart';
 import '../app/form_factor.dart';
 import '../app/swipe_back_route.dart';
+import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_controller.dart';
 import '../playback/playback_setup.dart';
 import '../playback/shared_engine.dart';
@@ -31,7 +32,7 @@ import 'node_probe_section.dart';
 
 export 'developer_speed_test.dart' show StageBuilder;
 
-/// The speed test's player, with its stats on, as the old 开发者 page drew it.
+/// The speed test's player, with its stats on.
 Widget playerStage(BuildContext context, PlaybackController controller) => PlayerStage(
   player: controller.player,
   clock: controller.clock,
@@ -204,7 +205,7 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
       if (mounted) {
         setState(() {
           _playerStarting = false;
-          _playerError = '$error';
+          _playerError = requestFailureMessage(error, fallback: '${error.runtimeType}');
         });
       }
       return null;
@@ -238,7 +239,7 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
     );
   }
 
-  /// From the next turn on; the controller logs a host that fails.
+  /// From the next turn on.
   void _setTurnTakeover(bool drawn) {
     setState(() => _prefs.turnTakeover = drawn);
     unawaited(AppScope.of(context).device.orientation.setTurnTakeover(drawn));
@@ -265,7 +266,7 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
     try {
       await widget.shareFile(path, origin);
     } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'log share failed', {'error': '$error'});
+      Logger.shared.warn(LogCategory.ui, 'log share failed', {'error': '${error.runtimeType}'});
       if (mounted) showToast(context, '无法打开分享');
     }
   }

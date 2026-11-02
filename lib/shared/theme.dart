@@ -3105,6 +3105,11 @@ abstract final class DevToolsTheme {
   static const tableHeader = BiliColors.secondaryText;
   static const tableInk = BiliColors.text;
   static const tableCellGap = 10.0;
+
+  /// Each number column with its gap before it: a time's room for +0.00 and 15.00, a count's for +120, so the label
+  /// column takes the rest of the card.
+  static const tableTimeColumn = 46.0;
+  static const tableCountColumn = 40.0;
   static const tableRowGap = 5.0;
   static const tableGap = 10.0;
 }

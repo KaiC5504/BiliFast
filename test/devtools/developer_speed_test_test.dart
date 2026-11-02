@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show SocketException;
 
 import 'package:bilifast/devtools/developer_page.dart';
 import 'package:bilifast/playback/playback_controller.dart';
@@ -193,13 +194,21 @@ void main() {
     expect(world.players.single.calls, isNot(contains('muted true')));
   });
 
-  testWidgets('a player that fails to start says so, and the next 开始 tries again', (tester) async {
-    final world = DeveloperWorld()..startError = StateError('no player');
+  testWidgets('a player that fails to start says so by the error\'s kind, never its text, and 开始 tries again', (
+    tester,
+  ) async {
+    final world = DeveloperWorld()..startError = StateError('https://upos-sz-mirrorcos.bilivideo.com/v.m4s?upsig=secret');
     await world.show(tester, logs: quietLogs(), hooks: hooksFor({...quick, 'order': 'A'}));
     await startTest(tester);
-    expect(find.text('播放器启动失败：Bad state: no player'), findsOneWidget);
+    expect(find.text('播放器启动失败：StateError'), findsOneWidget);
+    expect(find.textContaining('upsig'), findsNothing);
     expect(stage, findsNothing);
     expect(world.playback.live, 0);
+
+    world.startError = const SocketException('Connection refused (https://upos-sz-mirrorcos.bilivideo.com/?upsig=1)');
+    await startTest(tester);
+    expect(find.text('播放器启动失败：网络连接失败，请检查网络后重试'), findsOneWidget);
+    expect(find.textContaining('upsig'), findsNothing);
 
     await startTest(tester);
     expect(find.byKey(const ValueKey('speedtest-error')), findsNothing);

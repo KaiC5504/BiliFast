@@ -252,6 +252,40 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('the last run is still there when the card comes back, for the same services only', (tester) async {
+      await show(tester, nodes: {for (final name in script.keys) name: script[name]!.hang ? const _Node(mbps: 0.2) : script[name]!});
+      await tester.tap(find.byKey(const ValueKey('node-probe-start')));
+      await tester.pump();
+      await tester.pump();
+      expect(_text(tester, 'node-probe-status'), '测完 12 个节点');
+      final backend = NodeProbeBackend(load: (_) async => _source, probe: () => NodeProbe(transport: transport));
+
+      await tester.pumpWidget(const SizedBox());
+      await pumpCard(tester, backend);
+      expect(_text(tester, 'node-probe-status'), '测完 12 个节点');
+      expect(_text(tester, 'node-probe-video'), '最近打开：最近看的视频 · 4K · AVC');
+      expect(_text(tester, 'node-probe-fastest'), '最快：aliov（海外）12.0 MB/s');
+      expect(_row(tester, 'upos-sz-mirrorcos.bilivideo.com'), ['cos', '120 ms', '2.00']);
+      expect(find.byKey(const ValueKey('node-probe-suggestion')), findsOneWidget);
+      expect(find.byKey(const ValueKey('node-probe-start')), findsOneWidget);
+
+      final other = await SettingsWorld.create();
+      addTearDown(other.dispose);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppScope(
+            services: other.services,
+            child: NodeProbeScope(
+              backend: backend,
+              child: const Scaffold(body: SingleChildScrollView(child: NodeProbeSection())),
+            ),
+          ),
+        ),
+      );
+      expect(_text(tester, 'node-probe-status'), '同一段视频（前 4 MB）依次向每个节点要一遍');
+    });
+
     testWidgets('停止 while the address is still loading stops before any node is asked', (tester) async {
       loadGate = Completer<void>();
       addTearDown(() => loadGate = null);

@@ -171,6 +171,21 @@ void main() {
       await settleToast(tester);
     });
 
+    testWidgets('a share sheet that fails to open says so, and logs only the error\'s type', (tester) async {
+      final sink = MemorySink();
+      Logger.shared.add(sink);
+      addTearDown(() => Logger.shared.remove(sink));
+      final world = DeveloperWorld();
+      world.logFiles.path = '/caches/BiliFast-logs.jsonl';
+      await world.show(tester, shareFile: (path, origin) async => throw StateError('$path?upsig=secret'));
+      await press(tester, key('log-export'));
+      await tester.pump();
+      expect(find.text('无法打开分享'), findsOneWidget);
+      final failed = sink.events.singleWhere((event) => event.msg == 'log share failed');
+      expect(failed.f['error'], const LogString('StateError'));
+      await settleToast(tester);
+    });
+
     testWidgets('is one export at a time', (tester) async {
       final release = Completer<String?>();
       final world = DeveloperWorld();
