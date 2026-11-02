@@ -108,7 +108,7 @@ class DeveloperSpeedTest extends StatelessWidget {
     if (groups.isEmpty) return const [];
     return [
       const SizedBox(height: DevToolsTheme.tableGap - DevToolsTheme.noteLineGap),
-      _ResultsTable(groups: groups),
+      _ResultsTable(groups: groups, label: (name) => _label(runner.plan?.plan.variant(name), name)),
       const SizedBox(height: DevToolsTheme.tableGap - DevToolsTheme.noteLineGap),
       _note(
         '单位为秒；跳转为中位数，超时按 15 秒计；卡顿为各次合计；内存为峰值 MB。'
@@ -117,12 +117,18 @@ class DeveloperSpeedTest extends StatelessWidget {
     ];
   }
 
+  /// A PC plan's plain BTR variants all read BTR, so those keep their letters.
+  static String _label(SpeedTestVariant? variant, String name) {
+    final label = variant?.label;
+    return label == null || label == 'BTR' ? name : label;
+  }
+
   static String _status(SpeedTestRunner runner) {
     final plan = runner.plan;
     final pass = runner.pass;
     return [
       if (plan != null) '计划 ${plan.plan.id}（${plan.source == PlanSource.pc ? '电脑' : '内置，${plan.note}'}）',
-      if (pass != null) ...['第 ${pass.index}/${runner.passCount} 次', pass.variant.name, _quality(pass.quality)],
+      if (pass != null) ...['第 ${pass.index}/${runner.passCount} 次', _label(pass.variant, pass.variant.name), _quality(pass.quality)],
       if (runner.step.isNotEmpty) runner.step,
     ].join(' · ');
   }
@@ -200,9 +206,12 @@ class _Stage extends StatelessWidget {
 /// A row per variant, quality and cold or warm, then each later variant's difference from the first, lower being
 /// better in every column. It shrinks to the card's width rather than overflow it.
 class _ResultsTable extends StatelessWidget {
-  const _ResultsTable({required this.groups});
+  const _ResultsTable({required this.groups, required this.label});
 
   final List<GroupSummary> groups;
+
+  /// A variant's letter as the plan names it (BTR·海外, 直连).
+  final String Function(String variant) label;
 
   static const _columns = ['', '首帧', '跳转', 'P90', '最慢', '回跳', '卡顿', '内存'];
 
@@ -228,7 +237,7 @@ class _ResultsTable extends StatelessWidget {
           for (final group in groups)
             _row([
               (
-                '${group.variant} ${_quality(group.quality)} ${group.cold ? '冷' : '热'} ×${group.passes}',
+                '${label(group.variant)} ${_quality(group.quality)} ${group.cold ? '冷' : '热'} ×${group.passes}',
                 DevToolsTheme.tableInk,
               ),
               for (final ms in [
@@ -245,7 +254,7 @@ class _ResultsTable extends StatelessWidget {
           for (final delta in GroupDelta.of(groups))
             _row([
               (
-                '${delta.other.variant}−${delta.base.variant} ${_quality(delta.base.quality)} '
+                '${label(delta.other.variant)}−${label(delta.base.variant)} ${_quality(delta.base.quality)} '
                     '${delta.base.cold ? '冷' : '热'}',
                 DevToolsTheme.tableInk,
               ),
