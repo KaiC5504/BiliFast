@@ -3,23 +3,40 @@ import 'package:bili_core/logic.dart' show CountFormat;
 import 'package:flutter/widgets.dart';
 
 import '../../comments/comment_badges.dart' show DecorImage;
+import '../../friends/friends_route.dart' show FriendsTab;
 import '../../me/me_glyphs.dart' show MeVipDisc;
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
 import '../space_header.dart' show spaceEmptyBio, spaceLine, spaceStyle;
 import '../space_header_glyphs.dart';
+import 'own_banner_video.dart';
+import 'own_space_banner.dart';
 import 'own_space_glyphs.dart';
 
 /// The account's own space above the tab row (108): the tall banner with the 空间头图's label and 👕, the face in its
 /// frame, the counts and 编辑资料, the name with the 大会员 label and the 勋章 pills, the level with its exp, the bio
 /// and the tag row. [stretch] is how far a pull past the top has stretched the banner.
 class OwnSpaceHeader extends StatelessWidget {
-  const OwnSpaceHeader({super.key, required this.profile, required this.onSoon, this.stretch = 0});
+  const OwnSpaceHeader({
+    super.key,
+    required this.profile,
+    required this.onSoon,
+    required this.onFriends,
+    this.bannerMuted,
+    this.stretch = 0,
+  });
 
   final SpaceProfile profile;
 
   /// What isn't built yet: 编辑资料, the pills, 详情, 👕 and link tags.
   final VoidCallback onSoon;
+
+  /// 粉丝 and 关注's counts.
+  final ValueChanged<FriendsTab> onFriends;
+
+  /// An animated 空间头图's sound button, muted while true; the page keeps it across the header's rebuilds. No button
+  /// without it.
+  final ValueNotifier<bool>? bannerMuted;
   final double stretch;
 
   static double heightOf(SpaceProfile profile) {
@@ -29,63 +46,92 @@ class OwnSpaceHeader extends StatelessWidget {
         OwnSpaceTheme.levelBlock +
         SpaceTheme.bioBox +
         SpaceTheme.bottomGap;
-    if (profile.tagLines.isNotEmpty) height += SpaceTheme.tagGap + SpaceTheme.tagBox;
+    if (_tagsOf(profile).isNotEmpty) height += SpaceTheme.tagGap + SpaceTheme.tagBox;
     return height;
   }
 
   /// How far down the name's line centres, which the bar waits for.
   static const nameCentre = OwnSpaceTheme.topBlock + SpaceTheme.nameBox / 2;
 
+  /// The official app leaves 添加学校信息 off the own space (24).
+  static List<SpaceTagLine> _tagsOf(SpaceProfile profile) => [
+    for (final tag in profile.tagLines)
+      if (!tag.schoolPrompt) tag,
+  ];
+
   @override
-  Widget build(BuildContext context) => ColoredBox(
-    key: const ValueKey('own-space-header'),
-    color: SpaceTheme.page,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: OwnSpaceTheme.topBlock + stretch,
-          child: _Top(profile: profile, stretch: stretch, onSoon: onSoon),
-        ),
-        SizedBox(
-          height: SpaceTheme.nameBox,
-          child: _NameRow(profile: profile, onSoon: onSoon),
-        ),
-        SizedBox(
-          height: OwnSpaceTheme.levelBlock,
-          child: _LevelRow(profile: profile),
-        ),
-        SizedBox(
-          height: SpaceTheme.bioBox,
-          child: _BioLine(sign: profile.sign, onDetail: onSoon),
-        ),
-        if (profile.tagLines.isNotEmpty) ...[
-          const SizedBox(height: SpaceTheme.tagGap),
+  Widget build(BuildContext context) {
+    final tags = _tagsOf(profile);
+    return ColoredBox(
+      key: const ValueKey('own-space-header'),
+      color: SpaceTheme.page,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           SizedBox(
-            height: SpaceTheme.tagBox,
-            child: _TagRow(tags: profile.tagLines, onLink: onSoon),
+            height: OwnSpaceTheme.topBlock + stretch,
+            child: _Top(
+              profile: profile,
+              stretch: stretch,
+              onSoon: onSoon,
+              onFriends: onFriends,
+              bannerMuted: bannerMuted,
+            ),
           ),
+          SizedBox(
+            height: SpaceTheme.nameBox,
+            child: _NameRow(profile: profile, onSoon: onSoon),
+          ),
+          SizedBox(
+            height: OwnSpaceTheme.levelBlock,
+            child: _LevelRow(profile: profile),
+          ),
+          SizedBox(
+            height: SpaceTheme.bioBox,
+            child: _BioLine(sign: profile.sign, onDetail: onSoon),
+          ),
+          if (tags.isNotEmpty) ...[
+            const SizedBox(height: SpaceTheme.tagGap),
+            SizedBox(
+              height: SpaceTheme.tagBox,
+              child: _TagRow(tags: tags, onLink: onSoon),
+            ),
+          ],
+          const SizedBox(height: SpaceTheme.bottomGap),
         ],
-        const SizedBox(height: SpaceTheme.bottomGap),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _Top extends StatelessWidget {
-  const _Top({required this.profile, required this.stretch, required this.onSoon});
+  const _Top({
+    required this.profile,
+    required this.stretch,
+    required this.onSoon,
+    required this.onFriends,
+    required this.bannerMuted,
+  });
 
   final SpaceProfile profile;
   final double stretch;
   final VoidCallback onSoon;
+  final ValueChanged<FriendsTab> onFriends;
+  final ValueNotifier<bool>? bannerMuted;
 
   @override
   Widget build(BuildContext context) {
-    final banner = profile.own?.banner ?? profile.banner;
-    final label = profile.own?.bannerLabel;
+    final own = profile.own;
+    final banner = own?.banner ?? profile.banner;
+    final video = own?.bannerVideo;
+    final muted = bannerMuted;
+    final label = own?.bannerLabel;
     const half = SpaceTheme.face / 2;
     const statsTop = SpaceTheme.countCentre - SpaceTheme.countLine / 2 + OwnSpaceTheme.drop;
     final foot = OwnSpaceTheme.bannerHeight + stretch;
+    final Widget still = banner == null || banner.isEmpty
+        ? const ColoredBox(key: ValueKey('own-space-banner-default'), color: SpaceTheme.bannerDefault)
+        : OwnSpaceBanner(key: const ValueKey('own-space-banner'), url: banner, alignY: own?.bannerAlignY ?? 0);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -95,17 +141,19 @@ class _Top extends StatelessWidget {
           top: 0,
           height: foot,
           child: ExcludeSemantics(
-            child: banner == null || banner.isEmpty
-                ? const ColoredBox(key: ValueKey('own-space-banner-default'), color: SpaceTheme.bannerDefault)
-                : RemoteImage(
-                    banner,
-                    key: const ValueKey('own-space-banner'),
-                    // A pull stretches the box every frame; the download keeps the resting size.
-                    size: Size(MediaQuery.sizeOf(context).width, OwnSpaceTheme.bannerHeight),
-                    placeholder: const ColoredBox(color: SpaceTheme.bannerDefault),
-                  ),
+            child: video == null
+                ? still
+                : OwnBannerVideo(url: video, size: own?.bannerSize, alignY: own?.bannerAlignY ?? 0, still: still),
           ),
         ),
+        if (video != null && !(own?.bannerSilent ?? true) && muted != null)
+          Positioned(
+            left: OwnSpaceTheme.soundCentre - OwnSpaceTheme.soundTarget / 2,
+            top: foot - OwnSpaceTheme.soundRise - OwnSpaceTheme.soundTarget / 2,
+            width: OwnSpaceTheme.soundTarget,
+            height: OwnSpaceTheme.soundTarget,
+            child: _SoundButton(muted: muted),
+          ),
         Positioned(
           left: OwnSpaceTheme.labelShadeLeft,
           right: 0,
@@ -149,7 +197,7 @@ class _Top extends StatelessWidget {
           left: SpaceTheme.statsLeft,
           right: SpaceTheme.statsRight,
           top: statsTop + stretch,
-          child: _Stats(profile: profile),
+          child: _Stats(profile: profile, onFriends: onFriends),
         ),
         Positioned(
           left: SpaceTheme.followLeft,
@@ -162,22 +210,39 @@ class _Top extends StatelessWidget {
     );
   }
 
-  /// The title over the subtitle, right-aligned before a thin rule.
+  /// The title, after the collectible's picture when it has one, over the subtitle, right-aligned before a thin rule.
   List<Widget> _label(SpaceBannerLabel label, double foot) {
     final subtitleColor = label.subtitleColor;
     final subtitleInk = subtitleColor == null ? OwnSpaceTheme.labelInk : Color(subtitleColor);
     final subtitle = label.subtitle;
+    final icon = label.icon;
     return [
+      // As tall as the picture, the title's line centred in it.
       Positioned(
         left: SpaceTheme.gutter,
         right: OwnSpaceTheme.labelTitleRight,
-        top: foot - OwnSpaceTheme.labelTitleRise - OwnSpaceTheme.labelTitleLine / 2,
-        height: OwnSpaceTheme.labelTitleLine,
-        child: spaceLine(
-          label.title,
-          spaceStyle(OwnSpaceTheme.labelTitleText, OwnSpaceTheme.labelInk, line: OwnSpaceTheme.labelTitleLine),
-          key: const ValueKey('own-space-label-title'),
-          align: TextAlign.right,
+        top: foot - OwnSpaceTheme.labelTitleRise - OwnSpaceTheme.labelBadge / 2,
+        height: OwnSpaceTheme.labelBadge,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (icon != null && icon.isNotEmpty) ...[
+              SizedBox.square(
+                key: const ValueKey('own-space-label-icon'),
+                dimension: OwnSpaceTheme.labelBadge,
+                child: ExcludeSemantics(child: DecorImage(icon)),
+              ),
+              const SizedBox(width: OwnSpaceTheme.labelBadgeGap),
+            ],
+            Flexible(
+              child: spaceLine(
+                label.title,
+                spaceStyle(OwnSpaceTheme.labelTitleText, OwnSpaceTheme.labelInk, line: OwnSpaceTheme.labelTitleLine),
+                key: const ValueKey('own-space-label-title'),
+                align: TextAlign.right,
+              ),
+            ),
+          ],
         ),
       ),
       if (subtitle.isNotEmpty)
@@ -211,6 +276,45 @@ class _Top extends StatelessWidget {
       ),
     ];
   }
+}
+
+/// The APK's 空间头图 sound disc (`banner_sound_off` while muted, as it opens on 24 and 169, else `banner_sound`).
+class _SoundButton extends StatelessWidget {
+  const _SoundButton({required this.muted});
+
+  final ValueNotifier<bool> muted;
+
+  static const _off = 'assets/images/space/banner_sound_off.webp';
+  static const _on = 'assets/images/space/banner_sound.webp';
+
+  void _toggle() => muted.value = !muted.value;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: muted,
+    builder: (context, quiet, _) => Semantics(
+      button: true,
+      label: '声音',
+      toggled: !quiet,
+      onTap: _toggle,
+      excludeSemantics: true,
+      child: GestureDetector(
+        key: const ValueKey('own-space-sound'),
+        behavior: HitTestBehavior.opaque,
+        onTap: _toggle,
+        child: Center(
+          child: Image.asset(
+            quiet ? _off : _on,
+            key: ValueKey(quiet ? 'own-space-sound-off' : 'own-space-sound-on'),
+            width: OwnSpaceTheme.soundSize,
+            height: OwnSpaceTheme.soundSize,
+            gaplessPlayback: true,
+            excludeFromSemantics: true,
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// The face: others' 80 pt picture in its white ring, or under a frame a smaller face with the frame around it; the
@@ -279,9 +383,10 @@ class _Face extends StatelessWidget {
 }
 
 class _Stats extends StatelessWidget {
-  const _Stats({required this.profile});
+  const _Stats({required this.profile, required this.onFriends});
 
   final SpaceProfile profile;
+  final ValueChanged<FriendsTab> onFriends;
 
   @override
   Widget build(BuildContext context) {
@@ -298,11 +403,21 @@ class _Stats extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: _Count(key: const ValueKey('own-space-fans'), count: profile.fans, label: '粉丝'),
+          child: _Count(
+            key: const ValueKey('own-space-fans'),
+            count: profile.fans,
+            label: '粉丝',
+            onTap: () => onFriends(FriendsTab.fans),
+          ),
         ),
         rule,
         Expanded(
-          child: _Count(key: const ValueKey('own-space-following'), count: profile.following, label: '关注'),
+          child: _Count(
+            key: const ValueKey('own-space-following'),
+            count: profile.following,
+            label: '关注',
+            onTap: () => onFriends(FriendsTab.following),
+          ),
         ),
         rule,
         Expanded(
@@ -313,44 +428,44 @@ class _Stats extends StatelessWidget {
   }
 }
 
+/// A count over its label; [onTap] makes the pair a button.
 class _Count extends StatelessWidget {
-  const _Count({super.key, required this.count, required this.label});
+  const _Count({super.key, required this.count, required this.label, this.onTap});
 
   final int count;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     const gap =
         (SpaceTheme.labelCentre - SpaceTheme.labelLine / 2) - (SpaceTheme.countCentre + SpaceTheme.countLine / 2);
     final value = CountFormat.short(count);
+    final pair = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: SpaceTheme.countLine,
+          child: Center(
+            child: spaceLine(value, spaceStyle(SpaceTheme.countText, SpaceTheme.countInk, line: SpaceTheme.countLine)),
+          ),
+        ),
+        const SizedBox(height: gap),
+        SizedBox(
+          height: SpaceTheme.labelLine,
+          child: Center(
+            child: spaceLine(label, spaceStyle(SpaceTheme.labelText, SpaceTheme.labelInk, line: SpaceTheme.labelLine)),
+          ),
+        ),
+      ],
+    );
+    final tap = onTap;
     return Semantics(
+      button: tap != null,
       label: '$value$label',
+      onTap: tap,
       excludeSemantics: true,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: SpaceTheme.countLine,
-            child: Center(
-              child: spaceLine(
-                value,
-                spaceStyle(SpaceTheme.countText, SpaceTheme.countInk, line: SpaceTheme.countLine),
-              ),
-            ),
-          ),
-          const SizedBox(height: gap),
-          SizedBox(
-            height: SpaceTheme.labelLine,
-            child: Center(
-              child: spaceLine(
-                label,
-                spaceStyle(SpaceTheme.labelText, SpaceTheme.labelInk, line: SpaceTheme.labelLine),
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: tap == null ? pair : GestureDetector(behavior: HitTestBehavior.opaque, onTap: tap, child: pair),
     );
   }
 }

@@ -34,7 +34,7 @@ void main() {
           alignment: Alignment.topLeft,
           child: SizedBox(
             width: 440,
-            child: OwnSpaceHeader(profile: _profile, onSoon: () {}),
+            child: OwnSpaceHeader(profile: _profile, onSoon: () {}, onFriends: (_) {}),
           ),
         ),
       ),

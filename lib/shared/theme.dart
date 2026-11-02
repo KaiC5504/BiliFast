@@ -5271,12 +5271,17 @@ abstract final class OwnSpaceTheme {
   static const labelSubtitleLine = 17.0;
   static const labelSubtitleRise = 35 / 3;
 
-  /// The number's block letters (评论's fan card's): 10 tall, 7.83 wide with 2.1 strokes, 2.5 apart. A subtitle they
-  /// can't spell is set in 14 pt bold.
+  /// A collectible's picture before the title (24): 14 square, 3 before the title's box, on its line.
+  static const labelBadge = 14.0;
+  static const labelBadgeGap = 3.0;
+
+  /// The number's block letters (评论's fan card's): 10 tall, 7.83 wide with 2.1 strokes, 2.5 apart; D's right
+  /// corners cut 1.67 (24's CD.013149). A subtitle they can't spell is set in 14 pt bold.
   static const labelNumberHeight = 10.0;
   static const labelNumberWidth = 23.5 / 3;
   static const labelNumberWeight = 2.1;
   static const labelNumberGap = 2.5;
+  static const labelNumberChamfer = 5 / 3;
   static const labelInk = Color(0xFFFFFFFF);
   static const labelRuleLeft = 399.0;
   static const labelRule = 1.0;
@@ -5290,6 +5295,13 @@ abstract final class OwnSpaceTheme {
   static const skinStroke = 4 / 3;
   static const skinInk = Color(0xFFFFFFFF);
   static const skinTarget = 44.0;
+
+  /// An animated 空间头图's sound button (24, 169): the APK's 24 pt disc drawn 26 across, its middle 417 across and 63
+  /// above the banner's foot.
+  static const soundSize = 26.0;
+  static const soundCentre = 417.0;
+  static const soundRise = 63.0;
+  static const soundTarget = 44.0;
 
   /// The face's middle, where others' spaces have it. Under a frame it is a 62 pt circle with no ring and the frame
   /// 评论's 1.75 times it; the 大 is a 20 pt disc in a 2 pt white ring, its middle 25.33 right of the face's and 26.67
@@ -5309,11 +5321,12 @@ abstract final class OwnSpaceTheme {
   static const editInk = BiliColors.pink;
   static const editFill = SpaceTheme.page;
 
-  /// After the name: the 大会员 label's picture 14.67 tall, 6.67 on; then "+ 成就勋章" and "+ 粉丝勋章", 16 tall
-  /// stadiums of 1 pt grey dashes (3 on, 3 off), 6.67 after the label and 6.33 apart, the + (8.67 square) 6.67 in and
-  /// the 10 pt words 4.33 after it.
-  static const vipLabelGap = 20 / 3;
-  static const vipLabelHeight = 44 / 3;
+  /// After the name: the 大会员 label's picture, 5.33 on; then "+ 成就勋章" and "+ 粉丝勋章", 16 tall stadiums of 1 pt
+  /// grey dashes (3 on, 3 off), 6.67 after the label and 6.33 apart, the + (8.67 square) 6.67 in and the 10 pt words
+  /// 4.33 after it. The picture's pill fills three quarters of its height, clear above and below, so it is drawn
+  /// 19.56 tall for 24's pill of 14.67 × 67.33.
+  static const vipLabelGap = 16 / 3;
+  static const vipLabelHeight = 44 / 3 * 4 / 3;
   static const vipLabelMaxWidth = 120.0;
   static const pillGap = 20 / 3;
   static const pillSpacing = 19 / 3;
