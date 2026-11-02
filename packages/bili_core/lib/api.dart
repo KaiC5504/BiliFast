@@ -27,6 +27,7 @@ export 'src/api/link_parser.dart';
 export 'src/api/login_models.dart';
 export 'src/api/me_models.dart';
 export 'src/api/models.dart';
+export 'src/api/relation_models.dart';
 export 'src/api/rich_text.dart';
 export 'src/api/search_models.dart';
 export 'src/api/skin_models.dart';

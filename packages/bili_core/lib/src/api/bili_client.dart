@@ -23,6 +23,7 @@ import 'link_parser.dart';
 import 'login_models.dart';
 import 'me_models.dart';
 import 'models.dart';
+import 'relation_models.dart';
 import 'search_models.dart';
 import 'skin_models.dart';
 import 'space_models.dart';

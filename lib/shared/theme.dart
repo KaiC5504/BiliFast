@@ -6271,9 +6271,204 @@ abstract final class DynamicPostTheme {
   static const retryPressMotion = SearchResultTheme.followPressMotion;
 }
 
-/// 我的好友 (163-168).
+/// 我的好友 (163-168). Measured in px / 3; the shots' colours are Display P3, so the pink reads #EA7A99 there. The bar is
+/// 我的关注's ([FollowingListTheme]: the skin's second-page colour and the round ‹; KaiC left out the official ✕).
 abstract final class FriendsTheme {
   static const page = BiliColors.card;
+
+  /// 我的好友: 16 pt regular, its ink centred on the screen and on the bar's row.
+  static const titleText = 16.0;
+  static const titleLine = 22.0;
+
+  /// 关注 and 粉丝: 14 pt, centred 78 either side of the screen's middle and 22.17 under the bar, in a 39.33 row closed
+  /// by a 1/3 #E7E7E7 rule; the chosen pink over a 28 × 2 pink bar whose bottom is 1/3 under the rule's, the other
+  /// #505050.
+  static const tabRow = 118 / 3;
+  static const tabRule = 1 / 3;
+  static const tabRuleInk = Color(0xFFE7E7E7);
+  static const tabWidth = 156.0;
+  static const tabText = 14.0;
+  static const tabLine = 20.0;
+  static const tabLabelCentre = 133 / 6;
+  static const tabInk = Color(0xFF505050);
+  static const tabChosen = BiliColors.pink;
+  static const underlineWidth = 28.0;
+  static const underlineHeight = 2.0;
+  static const underlineBottom = 40.0;
+  static const tabMotion = Duration(milliseconds: 300);
+
+  /// 搜索我的关注 (163, 168): 7.33 under the rule, a 30 tall #F4F4F4 stadium 12 in from each side, or ending 64.33 from
+  /// the right while 取消 (16 pt pink, centred in that space) shows. The magnifier's ink 12.67 across, centred 15 into
+  /// the field, #999999; the words 13 pt from 30 in, the placeholder #C0C0C0; the ⓧ 12.33 across, centred 14.17 from the
+  /// field's end.
+  static const fieldTop = 22 / 3;
+  static const fieldHeight = 30.0;
+  static const fieldInset = 12.0;
+  static const field = Color(0xFFF4F4F4);
+  static const fieldEndSearching = 193 / 3;
+  static const magnifier = 38 / 3;
+  static const magnifierCentre = 15.0;
+  static const magnifierInk = Color(0xFF999999);
+  static const fieldTextLeft = 30.0;
+  static const fieldText = 13.0;
+  static const fieldLine = 18.0;
+  static const fieldInk = BiliColors.text;
+  static const placeholder = Color(0xFFC0C0C0);
+  static const caret = BiliColors.pink;
+  static const clear = 37 / 3;
+  static const clearCentre = 85 / 6;
+  static const clearInk = Color(0xFF999999);
+  static const cancelText = 16.0;
+  static const cancelLine = 22.0;
+  static const cancelInk = BiliColors.pink;
+
+  /// 我的关注 14人 and the order (163, 164): a 39 tall row under the field. 我的关注 14 pt 12 in, its ink centred 26.17
+  /// down, then 14人 13 pt grey on its baseline; at the right 最近关注 or 最近访问 14 pt #61666D ending 12 in, centred
+  /// 25 down, after the APK's sort glyph (12.67 × 9.33) 6 before it.
+  static const countRow = 39.0;
+  static const countCentre = 157 / 6;
+  static const countText = 14.0;
+  static const countLine = 20.0;
+  static const countInk = BiliColors.text;
+  static const countNumberText = 13.0;
+  static const countNumberInk = BiliColors.secondaryText;
+  static const countGap = 4.0;
+  static const sortCentre = 25.0;
+  static const sortText = 14.0;
+  static const sortLine = 20.0;
+  static const sortInk = Color(0xFF61666D);
+  static const sortGlyphWidth = 38 / 3;
+  static const sortGlyphHeight = 28 / 3;
+  static const sortGap = 6.0;
+  static const sortTarget = 120.0;
+
+  /// A search's rows start 7 under the field (168).
+  static const resultsTop = 7.0;
+
+  /// A row (163): 78 tall. The face 48 at 12 in on the row's middle, its bolt a 14 disc ringed 1.5 in white, flush
+  /// with the face's right and bottom. The name 14 pt from 72, its ink centred 29.67 down, pink for a 大会员; the sign
+  /// 12 pt grey centred 49.67 down; both stop 16 short of the pill (163's ellipses end by 334.67). The pill 72 × 24,
+  /// 12 from the right and 21.67 down: #E7E7E7, ≡ (10.67 × 9.33 of ink, 10 in) and 13 pt #999999 words from 25.67
+  /// in. A 1/3 divider from 72 to the right edge, 1/3 above the row's bottom.
+  static const row = 78.0;
+  static const face = 48.0;
+  static const faceInset = 12.0;
+  static const badge = 14.0;
+  static const badgeRing = 1.5;
+  static const badgePerson = FollowingListTheme.badgePerson;
+  static const badgeOrganisation = FollowingListTheme.badgeOrganisation;
+  static const textLeft = 72.0;
+  static const nameText = 14.0;
+  static const nameLine = 20.0;
+  static const nameCentre = 89 / 3;
+  static const name = BiliColors.text;
+  static const vipName = BiliColors.pink;
+  static const signText = 12.0;
+  static const signLine = 17.0;
+  static const signCentre = 149 / 3;
+  static const sign = BiliColors.secondaryText;
+  static const textGap = 16.0;
+  static const pillWidth = 72.0;
+  static const pillHeight = 24.0;
+  static const pillRight = 12.0;
+  static const pillTop = 65 / 3;
+  static const pillFill = Color(0xFFE7E7E7);
+  static const pillInk = Color(0xFF999999);
+  static const pillText = 13.0;
+  static const pillLine = 18.0;
+  static const pillGlyphLeft = 10.0;
+  static const pillGlyphWidth = 32 / 3;
+  static const pillGlyphHeight = 28 / 3;
+  static const pillGlyphStroke = 1.0;
+  static const pillTextLeft = 77 / 3;
+
+  /// 关注 again after 取消关注, and 回关 for a fan not followed back: no screenshot, so the same pill pink with white
+  /// words.
+  static const pillActionFill = BiliColors.pink;
+  static const pillActionInk = BiliColors.onPink;
+  static const rowRule = 1 / 3;
+  static const rowRuleInk = BiliColors.divider;
+
+  /// An empty list (165): the APK's `ic_page_status_empty` at its own 3× size, 140 square, its top 130.33 under the tab
+  /// rule, then 这里还什么都没有呢～ 16 pt grey centred 28.17 under it.
+  static const emptyTop = 391 / 3;
+  static const emptyPicture = 140.0;
+  static const emptyText = 16.0;
+  static const emptyLine = 22.0;
+  static const emptyTextCentre = 169 / 6;
+  static const emptyInk = BiliColors.secondaryText;
+
+  /// The sheets dim everything under the bar by 30% (166, 167: white reads 178); the bar stays as it is.
+  static const sheetDim = Color(0x4D000000);
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
+  static const sheetFill = BiliColors.card;
+
+  /// 已关注's sheet (166): a 1/3 #EBEDF0 top, then 设置分组 and 取消关注 49.67 tall with the same rule between, their
+  /// pink glyphs centred 21 in (drawn: the APK's differ) and the words 14 pt #323233 from 40, both 26.5 down; an 8
+  /// #F8F8F8 gap, the rule, and 取消 16 pt centred in the last 49.33 at the screen's bottom.
+  static const actionRow = 149 / 3;
+  static const actionCentre = 26.5;
+  static const actionRule = 1 / 3;
+  static const actionRuleInk = Color(0xFFEBEDF0);
+  static const actionGlyphCentre = 21.0;
+  static const actionTextLeft = 40.0;
+  static const actionText = 14.0;
+  static const actionLine = 20.0;
+  static const actionInk = Color(0xFF323233);
+  static const actionGlyphInk = BiliColors.pink;
+  static const actionGlyphStroke = 0.9;
+  static const groupGlyphWidth = 18.0;
+  static const groupGlyphHeight = 49 / 3;
+  static const unfollowGlyphWidth = 20.0;
+  static const unfollowGlyphHeight = 19.0;
+  static const actionGap = 8.0;
+  static const actionGapFill = Color(0xFFF8F8F8);
+  static const cancelRow = 148 / 3;
+  static const cancelRowText = 16.0;
+  static const cancelRowLine = 22.0;
+
+  /// 设置分组 (167): 347 tall at the screen's bottom. Its head centred 33 down: the APK's `ic_attention_group` (its ink
+  /// 18.67 wide, so the 66 px file is drawn 20.53 square), centred 22 in and 31.67 down; 设置分组 15 pt #212121 from 38;
+  /// ＋新建分组 13 pt #999999 ending 12 in, its ＋ 11.33 across, 2.67 before the words. Each 分组 a 52 tall row from 53:
+  /// the name 14 pt #212121 12 in centred 15.67 down, its tip 10 pt #999999 centred 37 down, and a 22 circle ringed
+  /// #E7E7E7, 12 from the right on the row's middle (ticked: no screenshot, filled pink with a white ✓). 保存至默认分组
+  /// (保存 once any is ticked) 12 pt pink, centred 35.33 above the screen's bottom.
+  static const groupSheet = 347.0;
+  static const groupHeadCentre = 33.0;
+  static const groupIcon = 20.53;
+  static const groupIconCentreX = 22.0;
+  static const groupIconCentreY = 95 / 3;
+  static const groupTitleLeft = 38.0;
+  static const groupTitleText = 15.0;
+  static const groupTitleLine = 21.0;
+  static const groupInk = Color(0xFF212121);
+  static const newGroupText = 13.0;
+  static const newGroupLine = 18.0;
+  static const newGroupInk = Color(0xFF999999);
+  static const plus = 34 / 3;
+  static const plusStroke = 1.0;
+  static const plusGap = 8 / 3;
+  static const groupsTop = 53.0;
+  static const groupRow = 52.0;
+  static const groupNameCentre = 47 / 3;
+  static const groupNameText = 14.0;
+  static const groupNameLine = 20.0;
+  static const groupTipCentre = 37.0;
+  static const groupTipText = 10.0;
+  static const groupTipLine = 14.0;
+  static const groupTipInk = Color(0xFF999999);
+  static const tick = 22.0;
+  static const tickRing = Color(0xFFE7E7E7);
+  static const tickRingWidth = 1.0;
+  static const tickFill = BiliColors.pink;
+  static const tickInk = BiliColors.onPink;
+  static const tickStroke = 1.5;
+  static const saveCentre = 106 / 3;
+  static const saveText = 12.0;
+  static const saveLine = 17.0;
+  static const saveInk = BiliColors.pink;
+  static const saveTarget = 44.0;
 }
 
 /// 我的关注 (129, 130). Measured in px / 3; the shots' colours are Display P3, so the pink reads #ED7098 and the badges'
