@@ -53,6 +53,8 @@ flutter:
     - assets/images/home/
     - assets/images/dynamic/
     - assets/images/offline/
+    - assets/images/friends/
+    - assets/images/space/
     - assets/lottie/
   fonts:
     - family: MiSans
