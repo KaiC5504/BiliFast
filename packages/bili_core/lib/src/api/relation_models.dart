@@ -6,7 +6,12 @@ import 'json.dart';
 
 /// A row of 我的好友 (163, 165): the person as 我的关注 draws them, and how the account stands with them.
 final class RelationUser {
-  const RelationUser({required this.user, this.attribute = RelationUser.followed, this.special = false});
+  const RelationUser({
+    required this.user,
+    this.attribute = RelationUser.followed,
+    this.special = false,
+    this.collectibleFace = false,
+  });
 
   /// `attribute`'s values: neither way, 悄悄关注, 关注, 互粉 (128, 拉黑, reads as none).
   static const none = 0;
@@ -19,6 +24,9 @@ final class RelationUser {
 
   /// In 特别关注 (`special`).
   final bool special;
+
+  /// The face is a 数字藏品 (`face_nft`), which 163 marks with a ◇ beside the verify bolt.
+  final bool collectibleFace;
 
   int get mid => user.mid;
 
@@ -102,6 +110,7 @@ RelationUser _user(Object? json) {
     ),
     attribute: _int(user.map['attribute']) ?? RelationUser.none,
     special: _int(user.map['special']) == 1,
+    collectibleFace: _int(user.map['face_nft']) == 1,
   );
 }
 

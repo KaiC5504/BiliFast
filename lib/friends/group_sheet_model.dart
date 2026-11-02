@@ -29,6 +29,7 @@ class GroupSheetModel extends ChangeNotifier {
   Set<int> _chosen = {};
   String? _error;
   bool _saving = false;
+  bool _needsLogin = false;
   bool _disposed = false;
 
   /// Null until both answers are in.
@@ -36,6 +37,9 @@ class GroupSheetModel extends ChangeNotifier {
   Set<int> get chosen => _chosen;
   String? get error => _error;
   bool get saving => _saving;
+
+  /// Bilibili answered -101 to the load or the save: the sheet hands over to the login.
+  bool get needsLogin => _needsLogin;
 
   /// Nothing ticked: the save puts the person back in 默认分组 (保存至默认分组).
   bool get toDefault => _chosen.isEmpty;
@@ -61,7 +65,11 @@ class GroupSheetModel extends ChangeNotifier {
     } catch (error) {
       if (_disposed) return;
       _logger.warn(LogCategory.api, 'friends groups failed', {'error': searchLogReason(error)});
-      _error = requestFailureMessage(error);
+      if (error is BiliError && error.needsLogin) {
+        _needsLogin = true;
+      } else {
+        _error = requestFailureMessage(error);
+      }
     }
     _notify();
   }
@@ -72,7 +80,8 @@ class GroupSheetModel extends ChangeNotifier {
     _notify();
   }
 
-  /// Sends the ticks, and only when [changed]. Null when saved (or nothing to save), else what to tell the user.
+  /// Sends the ticks, and only when [changed]. Null when saved, nothing to save or [needsLogin], else what to tell the
+  /// user.
   Future<String?> save() async {
     if (_disposed || _saving || !changed) return null;
     _saving = true;
@@ -83,6 +92,10 @@ class GroupSheetModel extends ChangeNotifier {
       return null;
     } catch (error) {
       _logger.warn(LogCategory.api, 'friends groups save failed', {'error': searchLogReason(error)});
+      if (error is BiliError && error.needsLogin) {
+        _needsLogin = true;
+        return null;
+      }
       return ActionsModel.failureMessage(error);
     } finally {
       _saving = false;

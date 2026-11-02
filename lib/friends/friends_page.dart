@@ -130,12 +130,13 @@ class _FriendsPageState extends State<FriendsPage> {
 
   Future<void> _login() async {
     final loggedIn = await AppScope.of(context).loginGate.request(context);
-    if (loggedIn && mounted) _model.start();
+    if (loggedIn && mounted) _model.loggedIn();
   }
 
-  /// In place of the tabs' content: logged out, a 登录 through the login gate; an account check that failed, its 重试.
+  /// In place of the tabs' content: logged out or a login expired under a list, a 登录 through the login gate; an
+  /// account check that failed, its 重试.
   Widget? _accountState() {
-    if (_loggedOut) {
+    if (_loggedOut || _model.needsLogin) {
       return FriendsMessage(
         key: const ValueKey('friends-logged-out'),
         message: '登录后查看我的好友',
@@ -336,6 +337,10 @@ class _FriendsPageState extends State<FriendsPage> {
                               if (sent) _toast('设置成功');
                             },
                             onFailed: _toast,
+                            onLogin: () {
+                              close();
+                              unawaited(_login());
+                            },
                           ),
                         ),
                       ],

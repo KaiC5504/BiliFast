@@ -108,7 +108,8 @@ class FriendsLane extends StatelessWidget {
   }
 }
 
-/// A person (163): face, name, sign and the pill.
+/// A person (163): face, name, sign and the pill. The row and the pill are separate buttons to accessibility, so
+/// VoiceOver reaches the pill's ≡ 已关注 / 回关 as well as the space.
 class FriendsRow extends StatelessWidget {
   const FriendsRow({
     super.key,
@@ -137,9 +138,8 @@ class FriendsRow extends StatelessWidget {
     );
     final sign = followingStyle(FriendsTheme.signText, FriendsTheme.sign, line: FriendsTheme.signLine);
     const textRight = FriendsTheme.pillRight + FriendsTheme.pillWidth + FriendsTheme.textGap;
-    // Without a sign the name sits on the row's middle.
     final nameCentre = person.sign.isEmpty ? FriendsTheme.row / 2 : FriendsTheme.nameCentre;
-    return Semantics(
+    final body = Semantics(
       button: true,
       label: person.name,
       onTap: onTap,
@@ -157,7 +157,7 @@ class FriendsRow extends StatelessWidget {
                 top: (FriendsTheme.row - FriendsTheme.face) / 2,
                 width: FriendsTheme.face,
                 height: FriendsTheme.face,
-                child: _Face(user: person),
+                child: _Face(user: person, collectible: user.collectibleFace),
               ),
               Positioned(
                 left: FriendsTheme.textLeft,
@@ -180,17 +180,6 @@ class FriendsRow extends StatelessWidget {
                     child: friendsLine(person.sign, sign, key: ValueKey('friends-sign-${user.mid}')),
                   ),
                 ),
-              Positioned(
-                right: FriendsTheme.pillRight,
-                top: FriendsTheme.pillTop,
-                width: FriendsTheme.pillWidth,
-                height: FriendsTheme.pillHeight,
-                child: RelationPill(
-                  key: ValueKey('friends-pill-${user.mid}'),
-                  kind: pill,
-                  onTap: busy ? null : onPill,
-                ),
-              ),
               const Positioned(
                 left: FriendsTheme.textLeft,
                 right: 0,
@@ -201,6 +190,25 @@ class FriendsRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+    return SizedBox(
+      height: FriendsTheme.row,
+      child: Stack(
+        children: [
+          Positioned.fill(child: body),
+          Positioned(
+            right: FriendsTheme.pillRight,
+            top: FriendsTheme.pillTop,
+            width: FriendsTheme.pillWidth,
+            height: FriendsTheme.pillHeight,
+            child: RelationPill(
+              key: ValueKey('friends-pill-${user.mid}'),
+              kind: pill,
+              onTap: busy ? null : onPill,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -224,6 +232,7 @@ class RelationPill extends StatelessWidget {
     final words = friendsLine(kind.label, style, key: const ValueKey('friends-pill-label'));
     return Semantics(
       button: true,
+      enabled: onTap != null,
       label: kind.label,
       onTap: onTap,
       excludeSemantics: true,
@@ -262,9 +271,12 @@ class RelationPill extends StatelessWidget {
 }
 
 class _Face extends StatelessWidget {
-  const _Face({required this.user});
+  const _Face({required this.user, required this.collectible});
 
   final FollowingUser user;
+
+  /// A 数字藏品 face: the APK's ◇ disc left of the bolt's place.
+  final bool collectible;
 
   @override
   Widget build(BuildContext context) {
@@ -277,6 +289,19 @@ class _Face extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Positioned.fill(child: ClipOval(child: RemoteImage.avatar(user.face))),
+        if (collectible)
+          Positioned(
+            right: FriendsTheme.collectibleRight - FriendsTheme.badgeRing,
+            bottom: -FriendsTheme.badgeRing,
+            child: Container(
+              key: ValueKey('friends-collectible-${user.mid}'),
+              width: FriendsTheme.badge + FriendsTheme.badgeRing * 2,
+              height: FriendsTheme.badge + FriendsTheme.badgeRing * 2,
+              padding: const EdgeInsets.all(FriendsTheme.badgeRing),
+              decoration: const BoxDecoration(color: FriendsTheme.page, shape: BoxShape.circle),
+              child: Image.asset('assets/images/friends/face_collectible.png'),
+            ),
+          ),
         if (badge != null)
           Positioned(
             right: -FriendsTheme.badgeRing,
