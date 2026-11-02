@@ -6271,6 +6271,11 @@ abstract final class DynamicPostTheme {
   static const retryPressMotion = SearchResultTheme.followPressMotion;
 }
 
+/// 我的好友 (163-168).
+abstract final class FriendsTheme {
+  static const page = BiliColors.card;
+}
+
 /// 我的关注 (129, 130). Measured in px / 3; the shots' colours are Display P3, so the pink reads #ED7098 and the badges'
 /// yellow #F7CE45 there.
 abstract final class FollowingListTheme {

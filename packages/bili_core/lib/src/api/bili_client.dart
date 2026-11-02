@@ -42,6 +42,7 @@ part 'bili_client_feed.dart';
 part 'bili_client_feed_official.dart';
 part 'bili_client_official.dart';
 part 'bili_client_actions_official.dart';
+part 'bili_client_relation.dart';
 part 'bili_client_search.dart';
 part 'bili_client_skin.dart';
 part 'bili_client_space.dart';
