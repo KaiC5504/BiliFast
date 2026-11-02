@@ -3073,6 +3073,32 @@ abstract final class DevToolsTheme {
   static const footnoteGap = BiliMetrics.rowGap;
 }
 
+/// 开发者's 节点测速: a 设置 section, its row, then the table and its notes inset as the row's title.
+abstract final class NodeProbeTheme {
+  static const inset = SettingsTheme.rowInset;
+  static const action = BiliColors.pink;
+  static const stop = BiliColors.secondaryText;
+
+  static const top = 10.0;
+  static const bottom = 12.0;
+  static const lineGap = 4.0;
+  static const groupGap = 10.0;
+  static const columnGap = 12.0;
+  static const rowGap = 3.0;
+
+  static const noteText = 13.0;
+  static const tableText = 13.0;
+  static const groupText = 14.0;
+  static const groupWeight = FontWeight.w600;
+  static const text = BiliColors.text;
+  static const secondary = BiliColors.secondaryText;
+
+  /// A node that didn't answer, and its row's numbers.
+  static const failed = BiliColors.secondaryText;
+  static const fastest = BiliColors.faster;
+  static const error = BiliColors.failure;
+}
+
 /// 历史记录 (28).
 abstract final class HistoryTheme {
   /// The title bar under the status bar, measured on 45 at 3 px per pt: ‹ is #484C52, 7 × 15 with 1.5 strokes, its

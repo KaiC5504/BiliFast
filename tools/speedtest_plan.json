@@ -1,13 +1,14 @@
 {
-  "id": "builtin-4",
+  "id": "builtin-5",
   "videos": [],
   "qualities": [127],
   "codec": "avc",
   "variants": [
-    {"name": "A", "config": {}, "connectionsPerHost": 8},
+    {"name": "H", "config": {}, "connectionsPerHost": 8, "nodes": "overseas"},
+    {"name": "G", "config": {}, "connectionsPerHost": 8, "nodes": "mainland"},
     {"name": "Z", "mode": "direct"}
   ],
-  "order": "AZ",
+  "order": "HGZ",
   "rotate": true,
   "seeks": 8,
   "hints": 2,

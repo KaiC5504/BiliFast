@@ -230,6 +230,9 @@ final class FakeHooks {
   final PlanSource source;
   Object? planError;
   final engines = <String>[];
+
+  /// Each engine handed out, beside [engines]' name for it.
+  final started = <FakeEngine>[];
   LogServerEndpoint? askedServer;
 
   SpeedTestHooks get hooks => SpeedTestHooks(
@@ -239,13 +242,14 @@ final class FakeHooks {
           if (error != null) throw error;
           return PlanChoice(plan: plan, source: source, note: '没有连接电脑');
         },
-        startEngine: (variant) async {
-          engines.add(variant.name);
-          return FakeEngine();
-        },
-        appEngine: () async {
-          engines.add('app');
-          return FakeEngine();
-        },
+        startEngine: (variant) async => _start(variant.name),
+        appEngine: () async => _start('app'),
       );
+
+  FakeEngine _start(String name) {
+    engines.add(name);
+    final engine = FakeEngine();
+    started.add(engine);
+    return engine;
+  }
 }

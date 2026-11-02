@@ -7,6 +7,7 @@ import 'package:bili_core/engine.dart';
 
 import '../devtools/log_server_discovery.dart';
 import '../playback/playback_setup.dart';
+import '../video/player_prefs.dart';
 
 /// Checks a variant's engine overrides; [RipperConfig.withOverrides] on the app's config in the app.
 typedef ConfigCheck = ({RipperConfig config, List<String> rejected}) Function(Map<String, Object?> overrides);
@@ -30,6 +31,7 @@ final class SpeedTestVariant {
     required this.config,
     required this.connectionsPerHost,
     this.mode = PlaybackMode.btr,
+    this.nodes,
   });
 
   /// One letter, as `order` names it.
@@ -43,6 +45,17 @@ final class SpeedTestVariant {
   /// `direct` plays the CDN's addresses straight, for a BTR-against-直连 comparison; [config] and [connectionsPerHost]
   /// then change nothing.
   final PlaybackMode mode;
+
+  /// The node set this variant's BTR asks, whatever 设置's CDN 节点 says; null keeps 设置's.
+  final NodeChoice? nodes;
+
+  /// What the variant is, for the page beside its letter.
+  String get label => switch ((mode, nodes)) {
+        (PlaybackMode.direct, _) => '直连',
+        (_, NodeChoice.overseas) => 'BTR·海外',
+        (_, NodeChoice.mainland) => 'BTR·国内',
+        _ => 'BTR',
+      };
 }
 
 final class SpeedTestPass {
@@ -108,12 +121,14 @@ final class SpeedTestPlan {
   final double fastSeconds;
   final double fastRate;
 
-  /// The plan used when the PC has none; `tools/speedtest_plan.json` holds the same.
+  /// The plan used when the PC has none; `tools/speedtest_plan.json` holds the same. BTR on the overseas nodes (H, 海外),
+  /// on the mainland ones (G, 国内) and 直连 (Z), rotated so each takes the cold first pass in turn.
   static const builtinJson = '''
-{"id": "builtin-4", "videos": [], "qualities": [127], "codec": "avc",
- "variants": [{"name": "A", "config": {}, "connectionsPerHost": 8},
+{"id": "builtin-5", "videos": [], "qualities": [127], "codec": "avc",
+ "variants": [{"name": "H", "config": {}, "connectionsPerHost": 8, "nodes": "overseas"},
+              {"name": "G", "config": {}, "connectionsPerHost": 8, "nodes": "mainland"},
               {"name": "Z", "mode": "direct"}],
- "order": "AZ", "rotate": true, "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
+ "order": "HGZ", "rotate": true, "seeks": 8, "hints": 2, "backJumps": 2, "dwellSeconds": 3, "fastSeconds": 20, "fastRate": 2}
 ''';
 
   static const _keys = {
@@ -131,7 +146,7 @@ final class SpeedTestPlan {
     'fastSeconds',
     'fastRate',
   };
-  static const _variantKeys = {'name', 'config', 'connectionsPerHost', 'mode'};
+  static const _variantKeys = {'name', 'config', 'connectionsPerHost', 'mode', 'nodes'};
 
   SpeedTestVariant? variant(String name) => variants.where((variant) => variant.name == name).firstOrNull;
 
@@ -237,6 +252,10 @@ final class SpeedTestPlan {
       'direct' => PlaybackMode.direct,
       _ => throw SpeedTestPlanError('方案 $name 的 mode 必须是 btr 或 direct'),
     };
+    final nodesName = raw['nodes'];
+    final nodes = nodesName == null ? null : NodeChoice.values.where((choice) => choice.name == nodesName).firstOrNull;
+    if (nodesName != null && nodes == null) throw SpeedTestPlanError('方案 $name 的 nodes 必须是 mainland 或 overseas');
+    if (nodes != null && mode == PlaybackMode.direct) throw SpeedTestPlanError('方案 $name 是直连，不能指定 nodes');
     final checked = check(overrides);
     if (checked.rejected.isNotEmpty) {
       throw SpeedTestPlanError('方案 $name 的 config 有引擎不认识或类型不对的项：${checked.rejected.join(', ')}');
@@ -246,7 +265,8 @@ final class SpeedTestPlan {
         overrides: Map.unmodifiable(overrides),
         config: checked.config,
         connectionsPerHost: perHost,
-        mode: mode);
+        mode: mode,
+        nodes: nodes);
   }
 
   static String _string(Map<String, Object?> json, String key) {

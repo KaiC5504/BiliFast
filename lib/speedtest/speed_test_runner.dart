@@ -153,6 +153,8 @@ final class SpeedTestHooks {
   const SpeedTestHooks({required this.choosePlan, required this.startEngine, required this.appEngine});
 
   final Future<PlanChoice> Function(LogServerEndpoint? server) choosePlan;
+
+  /// An engine of the variant's own, never a lease of the app's: the runner sets a variant's node set on it.
   final Future<PlaybackEngine> Function(SpeedTestVariant variant) startEngine;
 
   /// Put back when the test ends.
@@ -255,7 +257,7 @@ class SpeedTestRunner extends ChangeNotifier {
             ? plan.videos
             : [?current];
     if (videos.isEmpty) {
-      _finishEarly('没有要测的视频：填链接，或先播放一个');
+      _finishEarly('没有要测的视频：填链接，或在电脑上放计划');
       return;
     }
     if (_cancelled) {
@@ -337,6 +339,8 @@ class SpeedTestRunner extends ChangeNotifier {
           'cold': pass.cold,
           'connectionsPerHost': pass.variant.connectionsPerHost,
           'mode': pass.variant.mode.name,
+          'nodes': pass.variant.nodes?.name ?? 'app',
+          'label': pass.variant.label,
           'overrides': jsonEncode(pass.variant.overrides),
         });
         if (pass.videoIndex != openVideo && pass.videoIndex != brokenVideo) {
@@ -405,7 +409,7 @@ class SpeedTestRunner extends ChangeNotifier {
   Future<_Opened> _openVideo(SpeedTestPass pass) async {
     _setStep('正在打开视频');
     try {
-      await target.useEngine(() => hooks.startEngine(pass.variant));
+      await target.useEngine(() => _startEngine(pass.variant));
     } catch (error) {
       _logger.warn(LogCategory.app, 'speedtest engine failed', {'error': '$error'});
       return _Opened.engineFailed;
@@ -421,6 +425,13 @@ class SpeedTestRunner extends ChangeNotifier {
     return target.bvid != null && target.canReplay ? _Opened.ok : _Opened.broken;
   }
 
+  /// Set before the pass prepares anything on it: an engine takes its node set for the sessions prepared after.
+  Future<PlaybackEngine> _startEngine(SpeedTestVariant variant) async {
+    final engine = await hooks.startEngine(variant);
+    if (variant.nodes case final nodes?) engine.setNodeMode(nodes.mode);
+    return engine;
+  }
+
   Future<void> _runPass(SpeedTestPlan plan, SpeedTestPass pass, PassResult result,
       {required Set<String> done}) async {
     final random = Random(result.seed);
@@ -430,7 +441,7 @@ class SpeedTestRunner extends ChangeNotifier {
       _setStep('从头播放');
       first = _MarkWait(this, firstFrameTimeout);
       await target.replay(
-          engine: () => hooks.startEngine(pass.variant), quality: pass.quality, mode: pass.variant.mode);
+          engine: () => _startEngine(pass.variant), quality: pass.quality, mode: pass.variant.mode);
       _checkCancelled();
       final played = target.playingQuality;
       result.bvid = target.bvid ?? result.bvid;

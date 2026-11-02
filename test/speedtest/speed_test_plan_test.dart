@@ -7,6 +7,7 @@ import 'package:bili_core/engine.dart';
 import 'package:bilifast/devtools/log_server_discovery.dart';
 import 'package:bilifast/playback/playback_setup.dart';
 import 'package:bilifast/speedtest/speed_test_plan.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_target.dart';
@@ -144,21 +145,43 @@ void main() {
     expect(config.primeStart, isTrue, reason: 'the rest is the app\'s config');
   });
 
-  test('the built-in plan is the one in tools/speedtest_plan.json: the app\'s BTR against 直连 in AZ, rotated, at 8K', () {
+  test('the built-in plan is the one in tools/speedtest_plan.json: BTR on each node set against 直连, rotated, at 8K', () {
     final file = File('tools/speedtest_plan.json').readAsStringSync();
     expect(jsonDecode(file), jsonDecode(SpeedTestPlan.builtinJson));
     final plan = SpeedTestPlan.parse(SpeedTestPlan.builtinJson);
-    expect(plan.variant('A')!.config.toJson(), appRipperConfig.toJson());
-    expect(plan.id, 'builtin-4');
+    expect(plan.variant('H')!.config.toJson(), appRipperConfig.toJson());
+    expect(plan.variant('G')!.config.toJson(), appRipperConfig.toJson());
+    expect(plan.id, 'builtin-5');
     expect(plan.qualities, [127]);
     expect(plan.codec, VideoCodec.avc, reason: 'one stream both modes play, as M1 asked');
-    expect((plan.order, plan.rotate), ('AZ', true));
-    expect(plan.variants.map((variant) => (variant.name, variant.mode)), [
-      ('A', PlaybackMode.btr),
-      ('Z', PlaybackMode.direct),
+    expect((plan.order, plan.rotate), ('HGZ', true));
+    expect(plan.variants.map((variant) => (variant.name, variant.mode, variant.nodes, variant.label)), [
+      ('H', PlaybackMode.btr, NodeChoice.overseas, 'BTR·海外'),
+      ('G', PlaybackMode.btr, NodeChoice.mainland, 'BTR·国内'),
+      ('Z', PlaybackMode.direct, null, '直连'),
     ]);
-    final passes = plan.passes(['BV1', 'BV2']);
-    expect(passes.where((pass) => pass.cold).map((pass) => pass.variant.name), ['A', 'Z']);
+    final passes = plan.passes(['BV1', 'BV2', 'BV3']);
+    expect(passes.map((pass) => '${pass.variant.name}${pass.cold ? '*' : ''}').join(' '), 'H* G Z G* Z H Z* H G',
+        reason: 'over three videos each variant takes the cold first pass, and each place after it, once');
+  });
+
+  test('a variant\'s nodes pin its BTR to one node set; anything else, or nodes on 直连, refuses the plan', () {
+    Map<String, Object?> withNodes(Object? nodes, {String? mode}) => {
+          ...smallPlan,
+          'variants': [
+            {'name': 'A', 'nodes': ?nodes, 'mode': ?mode},
+          ],
+          'order': 'A',
+        };
+    SpeedTestVariant only(Map<String, Object?> json) =>
+        SpeedTestPlan.parse(jsonEncode(json), check: acceptAll).variants.single;
+    expect((only(withNodes(null)).nodes, only(withNodes(null)).label), (null, 'BTR'));
+    expect(only(withNodes('overseas')).nodes, NodeChoice.overseas);
+    expect(only(withNodes('mainland')).nodes, NodeChoice.mainland);
+    expect(only(withNodes(null, mode: 'direct')).label, '直连');
+    refuses(withNodes('hk'), '方案 A 的 nodes 必须是 mainland 或 overseas');
+    refuses(withNodes(1), '方案 A 的 nodes 必须是 mainland 或 overseas');
+    refuses(withNodes('overseas', mode: 'direct'), '方案 A 是直连，不能指定 nodes');
   });
 
   test('a plan\'s codec is the app\'s unless it names avc, hevc or av1', () {
@@ -204,7 +227,7 @@ void main() {
 
     test('the built-in plan without a PC, on a 404, another status, an error or no answer in time', () async {
       final none = await choose(answering(200, ''), at: null);
-      expect((none.source, none.note, none.plan.id), (PlanSource.builtin, '没有连接电脑', 'builtin-4'));
+      expect((none.source, none.note, none.plan.id), (PlanSource.builtin, '没有连接电脑', 'builtin-5'));
       expect((await choose(answering(404, 'not found'))).note, '电脑上没有计划');
       expect((await choose(answering(500, ''))).note, '电脑回答 500');
       final unreachable = await choose((url) async => throw const SocketException('refused'));
