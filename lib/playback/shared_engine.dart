@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 
+/// A node as this run's playbacks last reported it: its state (healthy, untested, blocked or banned; null when no
+/// report gave one), and its last measured first byte and speed, 0 until measured.
+typedef SeenNode = ({String? state, double firstByteMs, double bps});
+
 /// The one engine isolate and local server every page's controller plays through, as the Swift app's AVPlayers
 /// shared one engine. Each controller holds an [EngineLease] on it. Once the isolate is gone, the next [lease] starts
 /// one replacement, which every controller's own recovery (a lease asked for again) then moves onto. 设置's CDN 节点
@@ -21,6 +25,28 @@ final class SharedEngine {
 
   /// The engine running now; null before the first start finished and once it is gone.
   PlaybackEngine? get running => _engine;
+
+  final _seen = <String, SeenNode>{};
+
+  /// Every node the playbacks on this run's shared engines have reported in their stats, by node; for 开发者's 状态.
+  Map<String, SeenNode> get seenNodes => Map.unmodifiable(_seen);
+
+  /// A new session's report reads 0 for a node it hasn't measured yet, so earlier measurements are kept until a new
+  /// one comes.
+  void _noteStats(EngineSnapshot snapshot) {
+    final timings = {for (final timing in snapshot.nodes) timing.node: timing.firstByteMs};
+    for (final node in {...timings.keys, for (final status in snapshot.nodeStates) status.node}) {
+      final status = NodeStatus.best(node, snapshot.nodeStates);
+      final known = _seen[node];
+      final firstByte = timings[node] ?? 0;
+      final bps = status?.bps ?? 0;
+      _seen[node] = (
+        state: status?.state ?? known?.state,
+        firstByteMs: firstByte.isFinite && firstByte > 0 ? firstByte : known?.firstByteMs ?? 0,
+        bps: bps > 0 ? bps : known?.bps ?? 0,
+      );
+    }
+  }
 
   /// The running engine, started first when there is none. Callers while a start is out share it.
   Future<PlaybackEngine> current() {
@@ -41,6 +67,7 @@ final class SharedEngine {
       if (_nodeMode case final mode?) engine.setNodeMode(mode);
       // An engine's fatal reports end when it does, a crashed isolate's included.
       engine.fatals.listen(null, onDone: () => _gone(engine), onError: (Object _) {});
+      engine.stats.listen(_noteStats, onError: (Object _) {});
       if (_lost) {
         _lost = false;
         _logger.info(LogCategory.engine, 'shared engine replaced');

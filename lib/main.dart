@@ -22,6 +22,7 @@ import 'device/launch_form_factor.dart';
 import 'device/orientation.dart';
 import 'device/player_device.dart';
 import 'devtools/crash_log.dart';
+import 'devtools/developer_page.dart';
 import 'devtools/log_files.dart';
 import 'devtools/log_forwarder.dart';
 import 'dynamic/fake_dynamic_api.dart';
@@ -37,7 +38,6 @@ import 'offline/offline_library.dart';
 import 'playback/codec_memory.dart';
 import 'playback/playback_setup.dart';
 import 'playback/shared_engine.dart';
-import 'screens/player_test_page.dart';
 import 'search/fake_search_api.dart';
 import 'skin/fake_skin_api.dart';
 import 'search/search_history_store.dart';
@@ -303,8 +303,7 @@ class BiliFastApp extends StatelessWidget {
           initialLink: initialLink,
           developerPage: services.logs == null
               ? null
-              : (context) => PlayerTestPage(
-                    environment: services.environment,
+              : (context) => DeveloperPage(
                     startPlayback: services.playback.create,
                     releasePlayback: services.playback.release,
                     logs: services.logs,

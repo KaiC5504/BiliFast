@@ -162,7 +162,7 @@ void main() {
     expect(find.text('点击登录'), findsOneWidget);
     expect(me.calls, isEmpty);
 
-    await tester.tap(find.byKey(const ValueKey('me-login')));
+    await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('me-login'))));
     await settle(tester, 40);
     expect(gate.requests, 1);
     expect(environment.account, isA<LoggedIn>());
@@ -204,7 +204,7 @@ void main() {
     await settle(tester, 40);
     await openMine(tester);
     await settle(tester, 20);
-    await tester.tap(find.byKey(const ValueKey('me-avatar')));
+    await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('me-avatar'))));
     await settle(tester, 20);
     expect(tester.widget<OwnSpacePage>(find.byType(OwnSpacePage)).uploader.mid, 1);
     expect(find.byType(SpacePage), findsNothing);
