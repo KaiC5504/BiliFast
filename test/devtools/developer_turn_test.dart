@@ -1,31 +1,19 @@
 import 'dart:io';
 
 import 'package:bili_core/devlog.dart';
-import 'package:bili_core/shared.dart';
-import 'package:bilifast/account/keychain_store.dart';
-import 'package:bilifast/app/app_environment.dart';
-import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/form_factor.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/device/orientation_host.dart';
 import 'package:bilifast/device/player_device.dart';
-import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/devtools/developer_rows.dart';
 import 'package:bilifast/main.dart' show applyTurnTakeover;
-import 'package:bilifast/playback/playback_controller.dart';
-import 'package:bilifast/screens/player_test_page.dart';
-import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 
-import '../app/fake_keychain.dart';
 import '../device/fake_orientation_host.dart' show FakeOrientationHost, settle;
-import '../playback/fakes.dart' hide settle;
-import '../support/fake_player.dart';
-
-Widget stageStandIn(BuildContext context, PlaybackController controller,
-        {required bool showStats, required bool danmakuEnabled}) =>
-    const SizedBox(key: ValueKey('stage'));
+import 'developer_world.dart';
 
 /// 开发者's 旋转动画: turns drawn by Flutter (自绘) or by iOS (系统), kept in player_prefs.json and applied at launch.
 void main() {
@@ -102,116 +90,95 @@ void main() {
     setUp(() => prefs = PlayerPrefs.memory(logger: logger));
 
     Future<void> show(WidgetTester tester, {OrientationHost? host}) async {
-      tester.view.physicalSize = const Size(440, 1600);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final environment = await AppEnvironment.load(
-          keychain: FakeKeychain(const StoredCookies(Canned.cookies)), http: Canned.http(), logger: logger);
-      final playback = AppPlayback(() async => PlaybackController(
-            client: environment.client,
-            engine: FakeEngine(),
-            player: FakePlayer(),
-            clock: ManualClock().clock,
-            startTimer: FakeTimers().start,
-            logger: logger,
-          ));
-      addTearDown(playback.dispose);
       orientation = OrientationController(host: host, logger: logger);
       addTearDown(orientation.dispose);
-      final services = AppServices(
-        environment: environment,
-        playback: playback,
-        recents: await RecentStore.load(null, logger: logger),
+      await DeveloperWorld(
         device: PlayerDevice(orientation: orientation, controls: orientation.controls),
-      );
-      await tester.pumpWidget(MaterialApp(
-        builder: (context, child) => AppScope(services: services, child: child!),
-        home: PlayerTestPage(
-          environment: environment,
-          startPlayback: playback.create,
-          releasePlayback: playback.release,
-          stageBuilder: stageStandIn,
-          prefs: prefs,
-        ),
-      ));
-      await tester.pump();
+      ).show(tester, prefs: prefs);
     }
 
-    final row = find.byKey(const ValueKey('turn-takeover'));
-    Finder segment(String label) => find.descendant(of: row, matching: find.text(label));
-    Set<bool> selected(WidgetTester tester) => tester.widget<SegmentedButton<bool>>(row).selected;
+    final row = find.byKey(const ValueKey('dev-turn'));
+    Finder value(String text) => find.descendant(of: row, matching: find.text(text));
 
-    testWidgets('on the phone, 系统 and 自绘 save the choice and reach the host at once while a page owns the '
-        'orientation', (tester) async {
+    testWidgets('on the iPhone it opens a page of the two, whose 系统 and 自绘 save the choice and reach the host at once '
+        'while a page owns the orientation', (tester) async {
       await show(tester, host: host);
       applyTurnTakeover(orientation, prefs);
       orientation.begin(Object(), videoIsVertical: false);
       await tester.pump();
       expect(host.takeovers, [true]);
-      expect(find.text('旋转动画'), findsOneWidget);
-      expect(selected(tester), {true});
+      expect(value('自绘'), findsOneWidget);
 
-      await tester.tap(segment('系统'));
+      await press(tester, row);
+      await tester.pumpAndSettle();
+      expect(find.byType(DeveloperChoicePage<bool>), findsOneWidget);
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('choice-自绘')), matching: find.byIcon(Icons.check)),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('choice-系统')));
       await tester.pump();
-      expect(selected(tester), {false});
       expect(prefs.turnTakeover, isFalse);
       expect(host.takeovers, [true, false]);
       expect(orientation.turnTakeover, isFalse);
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('choice-系统')), matching: find.byIcon(Icons.check)),
+        findsOneWidget,
+      );
 
       // As ghosthand presses it on the PC.
       final semantics = tester.ensureSemantics();
       tester.semantics.tap(find.semantics.byLabel('自绘'));
       await tester.pump();
-      expect(selected(tester), {true});
       expect(prefs.turnTakeover, isTrue);
       expect(host.takeovers, [true, false, true]);
       expect(orientation.turnTakeover, isTrue);
+
+      tester.semantics.tap(find.semantics.byLabel('返回'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DeveloperChoicePage<bool>), findsNothing);
+      expect(value('自绘'), findsOneWidget);
       semantics.dispose();
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('shows the saved choice', (tester) async {
       prefs.turnTakeover = false;
       await show(tester, host: host);
-      expect(selected(tester), {false});
+      expect(value('系统'), findsOneWidget);
       expect(host.takeovers, isEmpty, reason: 'opening the page applies nothing; launch did');
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
-    testWidgets('on Windows, with no turns to take over, it is shown off-limits: 仅 iPhone', (tester) async {
-      await show(tester);
-      expect(find.text('旋转动画（仅 iPhone）'), findsOneWidget);
-      expect(tester.widget<SegmentedButton<bool>>(row).onSelectionChanged, isNull);
-      expect(selected(tester), {true});
+    for (final (where, platform, pad) in [
+      ('on Windows', TargetPlatform.windows, false),
+      ('on the iPad', TargetPlatform.iOS, true),
+    ]) {
+      for (final drawn in [true, false]) {
+        final chosen = drawn ? '自绘' : '系统';
+        testWidgets('$where, with no turns of its own to draw, it shows the stored $chosen with nothing to press', (
+          tester,
+        ) async {
+          if (pad) {
+            FormFactor.device = FormFactor.pad;
+            addTearDown(() => FormFactor.device = FormFactor.phone);
+          }
+          prefs.turnTakeover = drawn;
+          await show(tester);
+          expect(value('$chosen（仅 iPhone）'), findsOneWidget);
 
-      await tester.tap(segment('系统'), warnIfMissed: false);
-      await tester.pump();
-      expect(selected(tester), {true});
-      expect(prefs.turnTakeover, isTrue);
-      expect(orientation.turnTakeover, isFalse);
-    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+          await tester.tap(row, warnIfMissed: false);
+          await tester.pumpAndSettle();
+          expect(find.byType(DeveloperChoicePage<bool>), findsNothing);
+          expect(prefs.turnTakeover, drawn);
+          expect(orientation.turnTakeover, isFalse);
 
-    /// The fill of a segment's button.
-    Color? fill(WidgetTester tester, String label) =>
-        tester.widget<Material>(find.ancestor(of: segment(label), matching: find.byType(Material)).first).color;
-
-    for (final drawn in [true, false]) {
-      final chosen = drawn ? '自绘' : '系统';
-      final other = drawn ? '系统' : '自绘';
-      testWidgets('on Windows the stored $chosen still shows chosen, and reads as it with nothing to press',
-          (tester) async {
-        prefs.turnTakeover = drawn;
-        await show(tester);
-        expect(fill(tester, chosen), BiliColors.divider);
-        expect(fill(tester, other), isNot(BiliColors.divider));
-
-        final semantics = tester.ensureSemantics();
-        expect(find.semantics.byLabel(chosen), findsOneWidget);
-        expect(find.semantics.byLabel(other), findsNothing);
-        final node = tester.getSemantics(row);
-        expect(node.label, chosen);
-        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
-        expect(node.getSemanticsData().flagsCollection.isButton, isFalse);
-        semantics.dispose();
-      }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+          final semantics = tester.ensureSemantics();
+          final node = tester.getSemantics(row);
+          expect(node.label, contains('旋转动画'));
+          expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
+          semantics.dispose();
+        }, variant: TargetPlatformVariant.only(platform));
+      }
     }
   });
 }

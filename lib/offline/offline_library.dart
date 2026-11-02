@@ -70,6 +70,9 @@ abstract class OfflineLibrary extends ChangeNotifier {
 
   /// Asks the phone for its free space again.
   Future<void> refreshFreeSpace();
+
+  /// How each way of downloading away has done on this device; null where nothing downloads away.
+  BackgroundTrials? get trials => null;
 }
 
 /// The library as the app runs it: files in the support folder's `offline` ([OfflineFiles]), downloads through the
@@ -118,6 +121,7 @@ class DiskOfflineLibrary extends OfflineLibrary with WidgetsBindingObserver {
   final CodecMemory? codecMemory;
 
   /// How each way of downloading away did on this device (`trials.json`); it picks the way for the next trip.
+  @override
   final BackgroundTrials trials;
   final Logger logger;
   final OfflineFiles files;

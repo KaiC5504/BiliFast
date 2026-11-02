@@ -3065,12 +3065,48 @@ abstract final class DanmakuListTheme {
   );
 }
 
-/// 开发者's log tools, in the dev page's own style (no official screen shows it).
+/// 开发者 (dev builds), in 设置's look: no official screen shows it, so what 设置 lacks is set here.
 abstract final class DevToolsTheme {
   static const crashInk = BiliColors.failure;
 
-  /// Between the log card and the note under it.
-  static const footnoteGap = BiliMetrics.rowGap;
+  /// Rows that act at once (开始速度测试, 授权), and 连接: the pink of 设置's alert action.
+  static const actionInk = BiliColors.pink;
+
+  /// Each group's grey title, sunk into 设置's own gap above its first section so it sits nearer that section than
+  /// the one before.
+  static const headerText = 13.0;
+  static const header = BiliColors.secondaryText;
+  static const headerTop = 22.0;
+  static const headerSink = 6.0;
+  static const pageBottom = 32.0;
+
+  /// 状态's lines under a row (节点's hosts, 后台下载's ways), level with the row's title.
+  static const subText = 13.0;
+  static const sub = BiliColors.secondaryText;
+  static const subValue = BiliColors.text;
+  static const subLineGap = 6.0;
+  static const subBottom = 12.0;
+  static const subColumnGap = 8.0;
+  static const dot = 6.0;
+  static const dotGap = 6.0;
+
+  /// What is typed into a row: 设置's title size, the hint in its value grey.
+  static const fieldText = SettingsTheme.rowTitleText;
+  static const fieldHint = SettingsTheme.value;
+  static const fieldVertical = 12.0;
+  static const fieldButtonPadding = 10.0;
+
+  /// The speed test's status lines, results table and the note under it.
+  static const noteText = 12.0;
+  static const note = BiliColors.secondaryText;
+  static const noteLineGap = 3.0;
+  static const blockVertical = 12.0;
+  static const tableText = 12.0;
+  static const tableHeader = BiliColors.secondaryText;
+  static const tableInk = BiliColors.text;
+  static const tableCellGap = 10.0;
+  static const tableRowGap = 5.0;
+  static const tableGap = 10.0;
 }
 
 /// 历史记录 (28).
