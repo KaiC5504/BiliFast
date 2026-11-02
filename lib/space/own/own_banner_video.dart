@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:bili_core/api.dart' show BiliClient;
 import 'package:bili_core/devlog.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -10,13 +9,23 @@ import 'package:flutter/widgets.dart';
 
 import '../../shared/image_disk_cache.dart';
 import '../../shared/remote_image.dart' show secureImageUrl;
+import '../../skin/skin_package.dart' show SkinPackageError, downloadSkinPackage, isSkinPackageUrl;
 import '../../skin/skin_video.dart';
 
 /// The 空间头图's video as a file, which SkinVideo plays: kept in the caches beside the pictures, named by its
-/// address's hash, downloaded once; storing one deletes the others, so only the equipped one stays.
+/// address's hash, downloaded once. Storing the one asked last deletes the others; one asked before it that finishes
+/// later is kept until then, so a new 空间头图 is never deleted by the old one's download.
+///
+/// The address comes from an answer, so it is fetched as a 装扮 package is: only from Bilibili's CDN hosts, each
+/// redirect held to the same rule, and dropped past [maxBytes]. [client] is for tests.
 final class OwnBannerVideos {
-  OwnBannerVideos({required this.folder, Future<Uint8List> Function(Uri url)? fetch})
-    : _fetch = fetch ?? ((url) => ImageDiskCache.download(url, BiliClient.mediaHeaders, timeout: _timeout));
+  OwnBannerVideos({required this.folder, Future<Uint8List> Function(Uri url)? fetch, HttpClient Function()? client})
+    : _fetch =
+          fetch ??
+          ((url) => downloadSkinPackage(url, client: client ?? HttpClient.new, timeout: _timeout, cap: maxBytes));
+
+  /// The official 空间头图 videos are a few MB.
+  static const maxBytes = 30 * 1024 * 1024;
 
   /// The app's: a `space_banner` folder beside [ImageDiskCache.shared]'s, on the phone only (elsewhere SkinVideo
   /// draws its placeholder, so nothing is fetched); null without either.
@@ -34,14 +43,18 @@ final class OwnBannerVideos {
   final String folder;
   final Future<Uint8List> Function(Uri url) _fetch;
   final _loads = <String, Future<File?>>{};
+  String? _latest;
 
   File fileOf(String url) => File('$folder${Platform.pathSeparator}${sha1.convert(utf8.encode(url))}.mp4');
 
   /// [url]'s file, downloaded the first time; null when it can't be had. The address is never logged.
-  Future<File?> file(String url) => _loads[url] ??= _load(url).whenComplete(() {
-    // A block body: returning the removed future would have this one wait on itself.
-    _loads.remove(url);
-  });
+  Future<File?> file(String url) {
+    _latest = url;
+    return _loads[url] ??= _load(url).whenComplete(() {
+      // A block body: returning the removed future would have this one wait on itself.
+      _loads.remove(url);
+    });
+  }
 
   Future<File?> _load(String url) async {
     final file = fileOf(url);
@@ -49,13 +62,14 @@ final class OwnBannerVideos {
       if (await file.exists() && await file.length() > 0) return file;
       final address = Uri.tryParse(secureImageUrl(url));
       if (address == null) return null;
+      if (!isSkinPackageUrl(address)) throw SkinPackageError.hostNotAllowed(address, what: 'banner video');
       final bytes = await _fetch(address);
       if (bytes.isEmpty) return null;
       await Directory(folder).create(recursive: true);
       final part = File('${file.path}.part');
       await part.writeAsBytes(bytes, flush: true);
       await part.rename(file.path);
-      await _keepOnly(file);
+      if (_latest == url) await _keepOnly(file);
       return file;
     } on Object catch (error) {
       Logger.shared.warn(LogCategory.ui, 'own space banner video failed', {'error': _reason(error)});
@@ -63,21 +77,28 @@ final class OwnBannerVideos {
     }
   }
 
+  /// Another address still downloading keeps its file and its `.part`: the page may have moved on to it.
   Future<void> _keepOnly(File kept) async {
+    final loading = {for (final url in _loads.keys) fileOf(url).path};
     await for (final entry in Directory(folder).list(followLinks: false)) {
-      if (entry is File && entry.path != kept.path) await entry.delete();
+      if (entry is! File || entry.path == kept.path) continue;
+      final path = entry.path.endsWith('.part') ? entry.path.substring(0, entry.path.length - 5) : entry.path;
+      if (loading.contains(path)) continue;
+      await entry.delete();
     }
   }
 
   static String _reason(Object error) => switch (error) {
+    final SkinPackageError failure => failure.reason,
     final NetworkImageLoadException failure => 'status ${failure.statusCode}',
     final PictureDownloadException failure => failure.reason,
     _ => '${error.runtimeType}',
   };
 }
 
-/// The animated 空间头图: its video, looped and without sound, cover-fit about [alignY] as the still under it is, so
-/// the still shows until the video draws and wherever it can't (the PC, a failed download).
+/// The animated 空间头图: its video, looped, cover-fit about [alignY] as the still under it is, so the still shows
+/// until the video draws and wherever it can't (the PC, a failed download). With [muted] its sound is kept, heard
+/// while the notifier is false; without, it plays silent.
 class OwnBannerVideo extends StatefulWidget {
   const OwnBannerVideo({
     super.key,
@@ -86,6 +107,8 @@ class OwnBannerVideo extends StatefulWidget {
     required this.alignY,
     required this.still,
     this.videos,
+    this.muted,
+    this.playing,
   });
 
   final String url;
@@ -97,6 +120,11 @@ class OwnBannerVideo extends StatefulWidget {
 
   /// Where the file comes from; [OwnBannerVideos.shared] when null.
   final OwnBannerVideos? videos;
+
+  final ValueListenable<bool>? muted;
+
+  /// Set to [url] once the video draws, and back to null if it fails; the sound button shows only then.
+  final ValueNotifier<String?>? playing;
 
   @override
   State<OwnBannerVideo> createState() => _OwnBannerVideoState();
@@ -145,22 +173,39 @@ class _OwnBannerVideoState extends State<OwnBannerVideo> {
               final video = _drawn(box);
               return ClipRect(
                 child: Stack(
-                  children: [
-                    Positioned.fromRect(
-                      rect: video,
-                      child: SkinVideo(
-                        key: const ValueKey('own-space-banner-video'),
-                        file: file,
-                        loop: true,
-                        placeholder: const SizedBox.expand(),
-                      ),
-                    ),
-                  ],
+                  children: [Positioned.fromRect(rect: video, child: _video(file))],
                 ),
               );
             },
           ),
       ],
+    );
+  }
+
+  Widget _video(File file) {
+    final url = widget.url;
+    SkinVideo video({bool muted = true}) => SkinVideo(
+      key: const ValueKey('own-space-banner-video'),
+      file: file,
+      loop: true,
+      placeholder: const SizedBox.expand(),
+      sound: widget.muted != null,
+      muted: muted,
+      onShown: (shown) {
+        final playing = widget.playing;
+        if (playing == null) return;
+        if (shown && widget.url == url) {
+          playing.value = url;
+        } else if (!shown && playing.value == url) {
+          playing.value = null;
+        }
+      },
+    );
+    final muted = widget.muted;
+    if (muted == null) return video();
+    return ValueListenableBuilder<bool>(
+      valueListenable: muted,
+      builder: (context, value, _) => video(muted: value),
     );
   }
 

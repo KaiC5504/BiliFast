@@ -23,6 +23,7 @@ class OwnSpaceHeader extends StatelessWidget {
     required this.onSoon,
     required this.onFriends,
     this.bannerMuted,
+    this.bannerPlaying,
     this.stretch = 0,
   });
 
@@ -34,9 +35,12 @@ class OwnSpaceHeader extends StatelessWidget {
   /// 粉丝 and 关注's counts.
   final ValueChanged<FriendsTab> onFriends;
 
-  /// An animated 空间头图's sound button, muted while true; the page keeps it across the header's rebuilds. No button
-  /// without it.
+  /// Whether an animated 空间头图 with sound plays it muted, which its sound button flips; the page keeps it across the
+  /// header's rebuilds. Without it the video plays silent and has no button.
   final ValueNotifier<bool>? bannerMuted;
+
+  /// The 空间头图 video drawing, which the button waits for: none on the PC or after a failed download.
+  final ValueNotifier<String?>? bannerPlaying;
   final double stretch;
 
   static double heightOf(SpaceProfile profile) {
@@ -76,6 +80,7 @@ class OwnSpaceHeader extends StatelessWidget {
               onSoon: onSoon,
               onFriends: onFriends,
               bannerMuted: bannerMuted,
+              bannerPlaying: bannerPlaying,
             ),
           ),
           SizedBox(
@@ -111,6 +116,7 @@ class _Top extends StatelessWidget {
     required this.onSoon,
     required this.onFriends,
     required this.bannerMuted,
+    required this.bannerPlaying,
   });
 
   final SpaceProfile profile;
@@ -118,13 +124,16 @@ class _Top extends StatelessWidget {
   final VoidCallback onSoon;
   final ValueChanged<FriendsTab> onFriends;
   final ValueNotifier<bool>? bannerMuted;
+  final ValueNotifier<String?>? bannerPlaying;
 
   @override
   Widget build(BuildContext context) {
     final own = profile.own;
     final banner = own?.banner ?? profile.banner;
     final video = own?.bannerVideo;
-    final muted = bannerMuted;
+    final sounding = video != null && !(own?.bannerSilent ?? true);
+    final muted = sounding ? bannerMuted : null;
+    final playing = bannerPlaying;
     final label = own?.bannerLabel;
     const half = SpaceTheme.face / 2;
     const statsTop = SpaceTheme.countCentre - SpaceTheme.countLine / 2 + OwnSpaceTheme.drop;
@@ -143,16 +152,26 @@ class _Top extends StatelessWidget {
           child: ExcludeSemantics(
             child: video == null
                 ? still
-                : OwnBannerVideo(url: video, size: own?.bannerSize, alignY: own?.bannerAlignY ?? 0, still: still),
+                : OwnBannerVideo(
+                    url: video,
+                    size: own?.bannerSize,
+                    alignY: own?.bannerAlignY ?? 0,
+                    still: still,
+                    muted: muted,
+                    playing: playing,
+                  ),
           ),
         ),
-        if (video != null && !(own?.bannerSilent ?? true) && muted != null)
+        if (muted != null && playing != null)
           Positioned(
             left: OwnSpaceTheme.soundCentre - OwnSpaceTheme.soundTarget / 2,
             top: foot - OwnSpaceTheme.soundRise - OwnSpaceTheme.soundTarget / 2,
             width: OwnSpaceTheme.soundTarget,
             height: OwnSpaceTheme.soundTarget,
-            child: _SoundButton(muted: muted),
+            child: ValueListenableBuilder<String?>(
+              valueListenable: playing,
+              builder: (context, shown, _) => shown == video ? _SoundButton(muted: muted) : const SizedBox.shrink(),
+            ),
           ),
         Positioned(
           left: OwnSpaceTheme.labelShadeLeft,
@@ -217,7 +236,6 @@ class _Top extends StatelessWidget {
     final subtitle = label.subtitle;
     final icon = label.icon;
     return [
-      // As tall as the picture, the title's line centred in it.
       Positioned(
         left: SpaceTheme.gutter,
         right: OwnSpaceTheme.labelTitleRight,
@@ -254,7 +272,12 @@ class _Top extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerRight,
             child: OwnLabelNumber.draws(subtitle)
-                ? OwnLabelNumber(key: const ValueKey('own-space-label-subtitle'), text: subtitle, color: subtitleInk)
+                ? OwnLabelNumber(
+                    key: const ValueKey('own-space-label-subtitle'),
+                    text: subtitle,
+                    color: subtitleInk,
+                    shading: [for (final colour in label.subtitleColors) Color(colour)],
+                  )
                 : spaceLine(
                     subtitle,
                     spaceStyle(

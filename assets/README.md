@@ -95,3 +95,7 @@ The 缓存 and portrait ⋮ sheets (42, 141-154) take glyphs from the APK's comp
 icons are drawn in code (`PanelGlyphKind`), traced on 42 and 43: the APK's icons for them aren't the iPhone's.
 离线缓存's bar 🔍 and ☰ (a checklist), ❚❚ / ▶, ⌄ and the 合集 stack are drawn in code (`offline_glyphs.dart`): the APK's
 `ic_download_search` and `ic_download_edit` differ from 143 and 145, and it has no stack glyph.
+
+The own space's 空间头图 sound disc (24, 169) is the same APK's, unchanged: `images/space/banner_sound.webp` (sound on)
+and `banner_sound_off.webp` (muted, as it opens), both 72 px, from its compose resources
+(`srcs.app.digital.collection.generated.resources/drawable-xxhdpi`), drawn 26 pt (`OwnSpaceTheme.soundSize`).

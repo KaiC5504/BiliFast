@@ -1,5 +1,6 @@
 import 'dart:ui' show PathMetric;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/widgets.dart';
 
 import '../../comments/comment_badges.dart' show SegmentGlyph;
@@ -62,10 +63,14 @@ class _SkinPainter extends CustomPainter {
 /// The banner label's number ("NO.000067", 108; "CD.013149", 24) in the block letters of 评论's fan card, ending at
 /// the box's right.
 class OwnLabelNumber extends StatelessWidget {
-  const OwnLabelNumber({super.key, required this.text, required this.color});
+  const OwnLabelNumber({super.key, required this.text, required this.color, this.shading = const []});
 
   final String text;
   final Color color;
+
+  /// Two or more colours shade the letters left to right across the number's width, as 24's CD.013149 goes from
+  /// #EBF3F7 to #CEE2EC; fewer leave it flat [color].
+  final List<Color> shading;
 
   /// Whether every character of [text] has a block letter; anything else is set as type.
   static bool draws(String text) =>
@@ -95,20 +100,22 @@ class OwnLabelNumber extends StatelessWidget {
     label: text,
     child: CustomPaint(
       size: Size(widthOf(text), OwnSpaceTheme.labelNumberHeight),
-      painter: _NumberPainter(text, color),
+      painter: _NumberPainter(text, color, shading),
     ),
   );
 }
 
 class _NumberPainter extends CustomPainter {
-  const _NumberPainter(this.text, this.color);
+  const _NumberPainter(this.text, this.color, this.shading);
 
   final String text;
   final Color color;
+  final List<Color> shading;
 
   @override
   void paint(Canvas canvas, Size size) {
     final ink = Paint()..color = color;
+    if (shading.length >= 2) ink.shader = LinearGradient(colors: shading).createShader(Offset.zero & size);
     var left = 0.0;
     for (final character in text.split('')) {
       final width = OwnLabelNumber._glyphWidth(character);
@@ -123,7 +130,8 @@ class _NumberPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_NumberPainter oldDelegate) => oldDelegate.text != text || oldDelegate.color != color;
+  bool shouldRepaint(_NumberPainter oldDelegate) =>
+      oldDelegate.text != text || oldDelegate.color != color || !listEquals(oldDelegate.shading, shading);
 }
 
 /// The capitals [SegmentGlyph] lacks, in its style: bars on the seven-segment grid, slanted strokes as wide across as

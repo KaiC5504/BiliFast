@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:bili_core/api.dart';
@@ -41,6 +42,7 @@ void main() {
     SpaceProfile profile, {
     List<FriendsTab>? friends,
     ValueNotifier<bool>? muted,
+    ValueNotifier<String?>? playing,
   }) async {
     tester.view
       ..physicalSize = const Size(440, 956)
@@ -60,6 +62,7 @@ void main() {
                 onSoon: () {},
                 onFriends: (tab) => friends?.add(tab),
                 bannerMuted: muted,
+                bannerPlaying: playing,
               ),
             ),
           ),
@@ -77,10 +80,22 @@ void main() {
       bannerAlignY: -1,
     );
 
+    /// The video drawing, as OwnBannerVideo says once its first frame shows on the phone.
+    ValueNotifier<String?> drawing() {
+      final playing = ValueNotifier<String?>(video);
+      addTearDown(playing.dispose);
+      return playing;
+    }
+
     testWidgets('opens muted; its button turns the sound on and off', (tester) async {
       final muted = ValueNotifier(true);
       addTearDown(muted.dispose);
-      await show(tester, _profile(own: animated), muted: muted);
+      await show(
+        tester,
+        _profile(own: animated),
+        muted: muted,
+        playing: drawing(),
+      );
       expect(key('own-space-sound-off'), findsOneWidget);
       final button = tester.getRect(key('own-space-sound-off'));
       expect(button.size, const Size.square(OwnSpaceTheme.soundSize));
@@ -99,29 +114,67 @@ void main() {
       final semantics = tester.ensureSemantics();
       final muted = ValueNotifier(true);
       addTearDown(muted.dispose);
-      await show(tester, _profile(own: animated), muted: muted);
+      await show(
+        tester,
+        _profile(own: animated),
+        muted: muted,
+        playing: drawing(),
+      );
       tester.semantics.tap(find.semantics.byLabel('声音'));
       await tester.pump();
       expect(muted.value, isFalse);
       semantics.dispose();
     });
 
-    testWidgets('a silent one has no button, nor a still one', (tester) async {
+    testWidgets('a silent one has no button and plays without sound, nor has a still one', (tester) async {
       final muted = ValueNotifier(true);
       addTearDown(muted.dispose);
+      final playing = drawing();
       await show(
         tester,
         _profile(
           own: const OwnSpace(banner: _banner, bannerVideo: video, bannerSilent: true),
         ),
         muted: muted,
+        playing: playing,
       );
       expect(key('own-space-sound'), findsNothing);
+      expect(tester.widget<OwnBannerVideo>(find.byType(OwnBannerVideo)).muted, isNull);
       await show(
         tester,
         _profile(own: const OwnSpace(banner: _banner)),
         muted: muted,
+        playing: playing,
       );
+      expect(key('own-space-sound'), findsNothing);
+    });
+
+    testWidgets('the video gets the sound and its muting, and the button waits until the video draws', (tester) async {
+      final muted = ValueNotifier(true);
+      addTearDown(muted.dispose);
+      final playing = ValueNotifier<String?>(null);
+      addTearDown(playing.dispose);
+      await show(
+        tester,
+        _profile(own: animated),
+        muted: muted,
+        playing: playing,
+      );
+      final banner = tester.widget<OwnBannerVideo>(find.byType(OwnBannerVideo));
+      expect(banner.muted, same(muted));
+      expect(banner.playing, same(playing));
+      expect(key('own-space-sound'), findsNothing, reason: 'the PC, a download not done or failed: no video');
+
+      playing.value = video;
+      await tester.pump();
+      expect(key('own-space-sound-off'), findsOneWidget);
+
+      playing.value = 'https://i0.hdslb.com/bfs/garb/made-up/old.mp4';
+      await tester.pump();
+      expect(key('own-space-sound'), findsNothing, reason: 'another 空间头图\'s video drew');
+
+      playing.value = null;
+      await tester.pump();
       expect(key('own-space-sound'), findsNothing);
     });
 
@@ -234,6 +287,80 @@ void main() {
       );
       expect(find.byType(OwnLabelNumber), findsOneWidget);
       expect(find.text('CD.013149'), findsNothing);
+    });
+
+    testWidgets('CD.013149 is shaded left to right through the answer\'s colours; one colour is flat', (tester) async {
+      await show(
+        tester,
+        _profile(
+          own: const OwnSpace(
+            bannerLabel: SpaceBannerLabel(
+              title: '测试收藏集',
+              subtitle: 'CD.013149',
+              subtitleColors: [0xFFEBF3F7, 0xFFCEE2EC],
+            ),
+          ),
+        ),
+      );
+      final number = tester.widget<OwnLabelNumber>(find.byType(OwnLabelNumber));
+      expect(number.shading, const [Color(0xFFEBF3F7), Color(0xFFCEE2EC)]);
+      expect(number.color, const Color(0xFFCEE2EC));
+
+      await show(
+        tester,
+        _profile(
+          own: const OwnSpace(
+            bannerLabel: SpaceBannerLabel(title: '测试收藏集', subtitle: 'CD.013149', subtitleColors: [0xFFF5D4A6]),
+          ),
+        ),
+      );
+      expect(tester.widget<OwnLabelNumber>(find.byType(OwnLabelNumber)).color, const Color(0xFFF5D4A6));
+    });
+
+    /// [number]'s pixels at [scale], read from the painted letters.
+    Future<(ByteData, int)> pixelsOf(WidgetTester tester, OwnLabelNumber number, double scale) async {
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: RepaintBoundary(key: const ValueKey('number'), child: number),
+          ),
+        ),
+      );
+      final boundary = tester.renderObject<RenderRepaintBoundary>(key('number'));
+      return (await tester.runAsync(() async {
+        final image = await boundary.toImage(pixelRatio: scale);
+        final bytes = (await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba))!;
+        final width = image.width;
+        image.dispose();
+        return (bytes, width);
+      }))!;
+    }
+
+    testWidgets('the shading runs across the whole number, the left letter in the first colour', (tester) async {
+      const scale = 6.0;
+      const from = Color(0xFFFF0000);
+      const to = Color(0xFF0000FF);
+      const text = 'L.1';
+      final (pixels, width) = await pixelsOf(
+        tester,
+        const OwnLabelNumber(text: text, color: to, shading: [from, to]),
+        scale,
+      );
+      // The bottom bar of L at its left end, and the 1's stem at the number's right.
+      const h = OwnSpaceTheme.labelNumberHeight;
+      const stroke = OwnSpaceTheme.labelNumberWeight;
+      (int, int) redBlue(double x, double y) {
+        final at = (((y * scale).round()) * width + (x * scale).round()) * 4;
+        return (pixels.getUint8(at), pixels.getUint8(at + 2));
+      }
+
+      final left = redBlue(stroke / 2, h - stroke / 2);
+      final right = redBlue(OwnLabelNumber.widthOf(text) - stroke / 2, h / 2);
+      expect(left.$1, greaterThan(200), reason: 'red at the left');
+      expect(left.$2, lessThan(55));
+      expect(right.$2, greaterThan(200), reason: 'blue at the right');
+      expect(right.$1, lessThan(55));
     });
 
     test('every capital and digit has a block letter; lower case and other marks are set as type', () {

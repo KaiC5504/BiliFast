@@ -4,10 +4,11 @@ import UIKit
 
 /// The 我的 header's `head_myself_mp4_bg` for Dart's SkinVideo: a muted video from a file in the support folder,
 /// looping or played once (`path`, `loop`). Only the first video track is played, so it never activates the audio
-/// session.
+/// session; with `sound` (the own space's 空间头图) the first audio track is kept too, heard only while not `muted`.
 ///
-/// Each view has its own `bilifast/skin_video/<id>` channel: Dart sends `play` and `pause` (a new view waits paused),
-/// the view sends `ready` once its first frame shows and `failed` with "domain code" when the file won't load or play.
+/// Each view has its own `bilifast/skin_video/<id>` channel: Dart sends `play` and `pause` (a new view waits paused)
+/// and `setMuted` with a bool, the view sends `ready` once its first frame shows and `failed` with "domain code" when
+/// the file won't load or play.
 enum SkinVideoView {
   static let viewType = "bilifast/skin_video"
 
@@ -30,9 +31,11 @@ final class SkinVideoFactory: NSObject, FlutterPlatformViewFactory {
     let params = args as? [String: Any]
     let path = params?["path"] as? String ?? ""
     let loop = (params?["loop"] as? NSNumber)?.boolValue ?? false
+    let sound = (params?["sound"] as? NSNumber)?.boolValue ?? false
+    let muted = (params?["muted"] as? NSNumber)?.boolValue ?? true
     let channel = FlutterMethodChannel(name: "\(SkinVideoView.viewType)/\(viewId)", binaryMessenger: messenger)
     let host: SkinVideoHostView = MainActor.assumeIsolated {
-      SkinVideoHostView(frame: frame, path: path, loop: loop, channel: channel)
+      SkinVideoHostView(frame: frame, path: path, loop: loop, sound: sound, muted: muted, channel: channel)
     }
     return SkinVideoPlatformView(host: host)
   }
@@ -69,6 +72,8 @@ final class SkinVideoHostView: UIView {
   private let playerLayer = AVPlayerLayer()
   private let channel: FlutterMethodChannel
   private let loop: Bool
+  private let sound: Bool
+  private var muted: Bool
   private var player: AVQueuePlayer?
   private var looper: AVPlayerLooper?
   private var onceItem: AVPlayerItem?
@@ -76,6 +81,8 @@ final class SkinVideoHostView: UIView {
   private var displaySize = CGSize.zero
   private var loadTask: Task<Void, Never>?
   private var observations: [NSKeyValueObservation] = []
+  /// Each played item's tracks, which load after the item is made; by the item.
+  private var trackObservations: [ObjectIdentifier: NSKeyValueObservation] = [:]
   private var tokens: [NSObjectProtocol] = []
   /// What Dart last asked for; going to the background pauses without changing it.
   private var wantsPlay = false
@@ -88,9 +95,13 @@ final class SkinVideoHostView: UIView {
     wantsPlay && !finished && !failed && UIApplication.shared.applicationState != .background
   }
 
-  init(frame: CGRect, path: String, loop: Bool, channel: FlutterMethodChannel) {
+  private var audible: Bool { sound && !muted }
+
+  init(frame: CGRect, path: String, loop: Bool, sound: Bool, muted: Bool, channel: FlutterMethodChannel) {
     self.channel = channel
     self.loop = loop
+    self.sound = sound
+    self.muted = muted
     super.init(frame: frame)
     backgroundColor = .clear
     isOpaque = false
@@ -99,13 +110,21 @@ final class SkinVideoHostView: UIView {
     playerLayer.videoGravity = .resizeAspectFill
     layer.addSublayer(playerLayer)
     channel.setMethodCallHandler { [weak self] call, result in
-      let method = call.method
-      guard method == "play" || method == "pause" else {
+      switch call.method {
+      case "play", "pause":
+        let play = call.method == "play"
+        MainActor.assumeIsolated { self?.setWantsPlay(play) }
+        result(nil)
+      case "setMuted":
+        guard let muted = (call.arguments as? NSNumber)?.boolValue else {
+          result(FlutterError(code: "bad_args", message: "setMuted takes a bool", details: nil))
+          return
+        }
+        MainActor.assumeIsolated { self?.setMuted(muted) }
+        result(nil)
+      default:
         result(FlutterMethodNotImplemented)
-        return
       }
-      MainActor.assumeIsolated { self?.setWantsPlay(method == "play") }
-      result(nil)
     }
     let center = NotificationCenter.default
     center.addObserver(self, selector: #selector(didEnterBackground),
@@ -144,6 +163,8 @@ final class SkinVideoHostView: UIView {
     loadTask = nil
     observations.forEach { $0.invalidate() }
     observations = []
+    trackObservations.values.forEach { $0.invalidate() }
+    trackObservations = [:]
     tokens.forEach { NotificationCenter.default.removeObserver($0) }
     tokens = []
     looper?.disableLooping()
@@ -156,9 +177,10 @@ final class SkinVideoHostView: UIView {
   }
 
   private func loadVideo(_ url: URL) {
+    let sound = self.sound
     loadTask = Task { [weak self] in
       do {
-        let video = try await SkinVideoHostView.videoOnlyItem(url)
+        let video = try await SkinVideoHostView.playerItem(url, sound: sound)
         guard let self, !Task.isCancelled, !self.tornDown else { return }
         self.start(video.item, size: video.size)
       } catch {
@@ -168,9 +190,9 @@ final class SkinVideoHostView: UIView {
     }
   }
 
-  /// The file's first video track alone in a composition: with no audio track at all, the player has nothing to play
-  /// through the app's AVAudioSession, which the video player owns.
-  private static func videoOnlyItem(_ url: URL) async throws -> (item: AVPlayerItem, size: CGSize) {
+  /// The file's first video track in a composition, and with `sound` its first audio track: with no audio track at
+  /// all, the player has nothing to play through the app's AVAudioSession, which the video player owns.
+  private static func playerItem(_ url: URL, sound: Bool) async throws -> (item: AVPlayerItem, size: CGSize) {
     // Without an extension AVFoundation can't tell what the file is.
     let options: [String: Any]? = url.pathExtension.isEmpty ? [AVURLAssetOverrideMIMETypeKey: "video/mp4"] : nil
     let asset = AVURLAsset(url: url, options: options)
@@ -181,16 +203,22 @@ final class SkinVideoHostView: UIView {
     let transform = try await track.load(.preferredTransform)
     let naturalSize = try await track.load(.naturalSize)
     let shown = CGRect(origin: .zero, size: naturalSize).applying(transform).size
+    var audio: (track: AVAssetTrack, range: CMTimeRange)?
+    if sound, let audioTrack = try await asset.loadTracks(withMediaType: .audio).first {
+      let audioRange = try await audioTrack.load(.timeRange)
+      audio = (track: audioTrack, range: audioRange)
+    }
     // A track holds its asset weakly.
     let composition = try withExtendedLifetime(asset) {
-      try videoComposition(of: track, range: range, transform: transform)
+      try videoComposition(of: track, range: range, transform: transform, audio: audio)
     }
     return (item: AVPlayerItem(asset: composition), size: shown)
   }
 
   /// Synchronous on purpose: inside an async function, insertTimeRange could resolve to an async overload.
   private static func videoComposition(
-    of track: AVAssetTrack, range: CMTimeRange, transform: CGAffineTransform
+    of track: AVAssetTrack, range: CMTimeRange, transform: CGAffineTransform,
+    audio: (track: AVAssetTrack, range: CMTimeRange)?
   ) throws -> AVMutableComposition {
     let composition = AVMutableComposition()
     guard let copy = composition.addMutableTrack(withMediaType: .video,
@@ -199,6 +227,20 @@ final class SkinVideoHostView: UIView {
     }
     try copy.insertTimeRange(range, of: track, at: .zero)
     copy.preferredTransform = transform
+    if let audio, let audioCopy = composition.addMutableTrack(withMediaType: .audio,
+                                                             preferredTrackID: kCMPersistentTrackID_Invalid) {
+      // Within the picture's time, so a loop never runs on for the sound's tail.
+      let start = CMTimeMaximum(audio.range.start, range.start)
+      let end = CMTimeMinimum(audio.range.end, range.end)
+      do {
+        guard CMTimeCompare(end, start) > 0 else { throw NSError(domain: "SkinVideo.noAudioOverlap", code: 0) }
+        try audioCopy.insertTimeRange(CMTimeRange(start: start, end: end), of: audio.track,
+                                      at: CMTimeSubtract(start, range.start))
+      } catch {
+        // The picture plays on without its sound rather than not at all.
+        composition.removeTrack(audioCopy)
+      }
+    }
     return composition
   }
 
@@ -206,7 +248,7 @@ final class SkinVideoHostView: UIView {
     displaySize = size
     setNeedsLayout()
     let player = AVQueuePlayer()
-    player.isMuted = true
+    player.isMuted = !audible
     player.allowsExternalPlayback = false
     player.preventsDisplaySleepDuringVideoPlayback = false
     let center = NotificationCenter.default
@@ -250,6 +292,19 @@ final class SkinVideoHostView: UIView {
     })
     self.player = player
     playerLayer.player = player
+    if sound {
+      // Set up before playing, so each replica's sound track is switched off as it loads, not once it is heard.
+      observations.append(player.observe(\.currentItem, options: [.new]) { @Sendable [weak self] _, _ in
+        if Thread.isMainThread {
+          MainActor.assumeIsolated { self?.applyAudible() }
+        } else {
+          DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.applyAudible() }
+          }
+        }
+      })
+      applyAudible()
+    }
     observations.append(
       playerLayer.observe(\.isReadyForDisplay, options: [.initial, .new]) { @Sendable [weak self] _, change in
         guard change.newValue == true else { return }
@@ -276,6 +331,61 @@ final class SkinVideoHostView: UIView {
     failed = true
     player?.pause()
     channel.invokeMethod("failed", arguments: reason)
+  }
+
+  private func setMuted(_ muted: Bool) {
+    guard muted != self.muted else { return }
+    self.muted = muted
+    applyAudible()
+  }
+
+  /// Muted, the items' sound tracks are switched off as well as the player muted, so a muted banner never takes the
+  /// audio session from another app's music. Heard, it plays through the `.playback` category AppDelegate sets for the
+  /// video player, which the ringer switch doesn't silence. Muting again leaves the session as it is: a video page or
+  /// the small window may be playing through it.
+  private func applyAudible() {
+    guard sound, !tornDown, let player else { return }
+    let audible = self.audible
+    if audible { Self.preparePlaybackSession() }
+    var items = looper?.loopingPlayerItems ?? []
+    if let onceItem { items.append(onceItem) }
+    if let current = player.currentItem, !items.contains(where: { $0 === current }) { items.append(current) }
+    for item in items {
+      watchTracks(of: item)
+      Self.setAudioTracks(of: item, enabled: audible)
+    }
+    player.isMuted = !audible
+  }
+
+  private func watchTracks(of item: AVPlayerItem) {
+    let id = ObjectIdentifier(item)
+    guard trackObservations[id] == nil else { return }
+    trackObservations[id] = item.observe(\.tracks, options: [.new]) { @Sendable [weak self] _, _ in
+      if Thread.isMainThread {
+        MainActor.assumeIsolated { self?.applyAudible() }
+      } else {
+        DispatchQueue.main.async { [weak self] in
+          MainActor.assumeIsolated { self?.applyAudible() }
+        }
+      }
+    }
+  }
+
+  private static func setAudioTracks(of item: AVPlayerItem, enabled: Bool) {
+    for track in item.tracks where track.assetTrack?.mediaType == .audio && track.isEnabled != enabled {
+      track.isEnabled = enabled
+    }
+  }
+
+  /// AppDelegate's category, set again only if something has changed it.
+  private static func preparePlaybackSession() {
+    let session = AVAudioSession.sharedInstance()
+    guard session.category != .playback else { return }
+    do {
+      try session.setCategory(.playback, mode: .moviePlayback)
+    } catch {
+      print("skin video audio session category failed: \(error)")
+    }
   }
 
   private func setWantsPlay(_ play: Bool) {

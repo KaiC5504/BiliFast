@@ -195,6 +195,19 @@ void main() {
         })!.subtitleColor,
         isNull,
       );
+      expect(
+        labelWith({
+          'colors': ['#EBF3F7', '#CEE2EC'],
+        })!.subtitleColors,
+        [0xFFEBF3F7, 0xFFCEE2EC],
+        reason: 'every colour kept in order, for the shading',
+      );
+      expect(
+        labelWith({
+          'colors': ['#F5D4A6', 'gold'],
+        })!.subtitleColors,
+        isEmpty,
+      );
       expect(labelWith({'colors': <Object?>[]})!.subtitleColor, isNull);
       expect(labelWith({'colors': 'none'})!.subtitleColor, isNull);
       expect(labelWith(null)!.subtitleColor, isNull);
