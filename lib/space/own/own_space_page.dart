@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../app/app_scope.dart';
+import '../../friends/friends_route.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../../skin/skin.dart';
@@ -18,6 +19,7 @@ import 'own_bangumi_tab.dart';
 import 'own_contribute_tab.dart';
 import 'own_favourites_tab.dart';
 import 'own_home_tab.dart';
+import 'own_space_banner.dart';
 import 'own_space_bar.dart';
 import 'own_space_header.dart';
 
@@ -61,6 +63,14 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
   double _barAt = OwnSpaceHeader.nameCentre;
   double _pinnedAt = 0;
 
+  /// White status bar ink over the banner, once its picture is measured; light until then.
+  bool? _bannerLight;
+
+  /// An animated 空间头图 opens muted, as the official one does.
+  final _bannerMuted = ValueNotifier(true);
+  ImageStream? _bannerStream;
+  ImageStreamListener? _bannerListener;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +87,8 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
 
   @override
   void dispose() {
+    _stopBannerMeasure();
+    _bannerMuted.dispose();
     _folders?.dispose();
     _bangumi?.dispose();
     _scroll.dispose();
@@ -108,6 +120,7 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
             ? profile.defaultTab
             : SpaceTabKind.contribute;
       });
+      _measureBanner(profile);
     } catch (error) {
       Logger.shared.warn(LogCategory.api, 'own space failed', {'error': spaceFailureReason(error)});
       if (mounted) setState(() => _failure = spaceFailureOf(error));
@@ -128,6 +141,7 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
       'garbs': state(own.garbs),
       'garbTotal': own.garbTotal,
       'banner': own.banner != null,
+      'bannerVideo': own.bannerVideo != null,
       'bannerLabel': own.bannerLabel != null,
     });
   }
@@ -147,6 +161,55 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
     if (!mounted) return false;
     return AppScope.of(context).appAuth.request(context);
   }
+
+  /// The status bar over the banner goes by the picture behind it, cut as the banner cuts it: Violet's light face on
+  /// 24 takes dark ink. Measured once, from the first frame the banner's own download decodes.
+  void _measureBanner(SpaceProfile profile) {
+    _stopBannerMeasure();
+    final url = profile.own?.banner ?? profile.banner;
+    if (url == null || url.isEmpty) return;
+    final width = MediaQuery.sizeOf(context).width;
+    final alignY = profile.own?.bannerAlignY ?? 0;
+    final listener = ImageStreamListener(
+      (info, _) {
+        _stopBannerMeasure();
+        unawaited(_measured(info, width, alignY));
+      },
+      onError: (error, _) {
+        _stopBannerMeasure();
+        Logger.shared.warn(LogCategory.ui, 'own space banner not measured', {'error': '${error.runtimeType}'});
+      },
+    );
+    _bannerListener = listener;
+    _bannerStream = OwnSpaceBanner.imageOf(context, url).resolve(createLocalImageConfiguration(context))
+      ..addListener(listener);
+  }
+
+  Future<void> _measured(ImageInfo info, double width, double alignY) async {
+    double? luminance;
+    try {
+      luminance = await ownBannerLuminance(info.image, width: width, alignY: alignY);
+    } on Exception catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'own space banner not measured', {'error': '${error.runtimeType}'});
+    } finally {
+      info.dispose();
+    }
+    if (luminance == null || !mounted) return;
+    final light = SkinStatusBar.whiteOver(luminance);
+    Logger.shared.info(LogCategory.ui, 'own space status bar', {
+      'luminance': (luminance * 1000).round() / 1000,
+      'light': light,
+    });
+    setState(() => _bannerLight = light);
+  }
+
+  void _stopBannerMeasure() {
+    if (_bannerListener case final listener?) _bannerStream?.removeListener(listener);
+    _bannerStream = null;
+    _bannerListener = null;
+  }
+
+  void _openFriends(FriendsTab tab) => unawaited(openFriends(context, tab: tab));
 
   /// The bar comes in once the name's line has passed under the status bar, as on others' spaces.
   void _scrolled() {
@@ -179,8 +242,9 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
     final profile = _profile;
     final banner = profile?.own?.banner ?? profile?.banner;
     final collapsed = profile == null || _collapsed;
-    // Light over a picture banner; over the default banner dark, and on the bar whatever its colour wants.
-    final lightStatus = collapsed ? look.lightStatus : banner != null && banner.isNotEmpty;
+    // Over a picture banner what it measured (light until then); over the default banner dark, and on the bar
+    // whatever its colour wants.
+    final lightStatus = collapsed ? look.lightStatus : banner != null && banner.isNotEmpty && (_bannerLight ?? true);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: lightStatus ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       // Pushed on a plain route with no Material above it, text would otherwise take the app's fallback style.
@@ -229,7 +293,13 @@ class _OwnSpacePageState extends State<OwnSpacePage> {
           delegate: SpaceHeaderDelegate(
             min: barHeight,
             max: headerHeight,
-            builder: (stretch) => OwnSpaceHeader(profile: profile, stretch: stretch, onSoon: _soonToast),
+            builder: (stretch) => OwnSpaceHeader(
+              profile: profile,
+              stretch: stretch,
+              onSoon: _soonToast,
+              onFriends: _openFriends,
+              bannerMuted: _bannerMuted,
+            ),
           ),
         ),
         SliverPersistentHeader(

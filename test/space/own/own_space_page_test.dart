@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -17,12 +18,14 @@ import 'package:bilifast/space/own/own_bangumi_tab.dart';
 import 'package:bilifast/space/own/own_contribute_tab.dart';
 import 'package:bilifast/space/own/own_favourites_tab.dart';
 import 'package:bilifast/space/own/own_home_tab.dart';
+import 'package:bilifast/space/own/own_space_banner.dart';
 import 'package:bilifast/space/own/own_space_page.dart';
 import 'package:bilifast/space/space_api.dart';
 import 'package:bilifast/space/space_page.dart';
 import 'package:bilifast/space/space_route.dart';
 import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:flutter/foundation.dart' show SynchronousFuture;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
@@ -397,6 +400,7 @@ void main() {
         'garbs': 'count 2 items 2',
         'garbTotal': 7779,
         'banner': false,
+        'bannerVideo': false,
         'bannerLabel': true,
       },
     ]);
@@ -712,6 +716,46 @@ void main() {
     scroll(tester).jumpTo(scroll(tester).maxScrollExtent);
     await tester.pumpAndSettle();
     expect(statusStyle(tester), SystemUiOverlayStyle.dark);
+  });
+
+  testWidgets('over a picture banner the status bar goes by the band the banner shows', (tester) async {
+    const url = 'https://i1.hdslb.com/bfs/garb/made-up/white-top.png';
+    // 100 × 300, white down to 100: cover-fit across 440 only a crop at its top puts white behind the status bar.
+    Future<ui.Image> whiteTop() {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder)
+        ..drawRect(const Rect.fromLTWH(0, 0, 100, 300), Paint()..color = const Color(0xFF000000))
+        ..drawRect(const Rect.fromLTWH(0, 0, 100, 100), Paint()..color = const Color(0xFFFFFFFF));
+      return recorder.endRecording().toImage(100, 300);
+    }
+
+    for (final (alignY, style) in [(-1.0, SystemUiOverlayStyle.dark), (1.0, SystemUiOverlayStyle.light)]) {
+      await tester.pumpWidget(const SizedBox.shrink());
+      PaintingBinding.instance.imageCache
+        ..clear()
+        ..clearLiveImages();
+      final image = (await tester.runAsync(whiteTop))!;
+      PaintingBinding.instance.imageCache.putIfAbsent(
+        NetworkImage(OwnSpaceBanner.address(url, 440), headers: BiliClient.mediaHeaders),
+        () => OneFrameImageStreamCompleter(SynchronousFuture(ImageInfo(image: image))),
+      );
+      api.answer = SpaceProfile(
+        mid: _mid,
+        name: '测试账号',
+        face: '',
+        tabs: _tabs,
+        own: OwnSpace(banner: url, bannerAlignY: alignY),
+      );
+      await showOwn(tester);
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump();
+      }
+      expect(statusStyle(tester), style, reason: 'cut at $alignY');
+    }
+    PaintingBinding.instance.imageCache
+      ..clear()
+      ..clearLiveImages();
   });
 
   testWidgets('编辑资料, both pills, 详情, link tags, 👕, search and ⋮ toast 暂未开放', (tester) async {

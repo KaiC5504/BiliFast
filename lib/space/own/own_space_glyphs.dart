@@ -59,7 +59,8 @@ class _SkinPainter extends CustomPainter {
   bool shouldRepaint(_SkinPainter oldDelegate) => oldDelegate.color != color;
 }
 
-/// The banner label's number ("NO.000067", 108) in the block letters of 评论's fan card, ending at the box's right.
+/// The banner label's number ("NO.000067", 108; "CD.013149", 24) in the block letters of 评论's fan card, ending at
+/// the box's right.
 class OwnLabelNumber extends StatelessWidget {
   const OwnLabelNumber({super.key, required this.text, required this.color});
 
@@ -67,19 +68,24 @@ class OwnLabelNumber extends StatelessWidget {
   final Color color;
 
   /// Whether every character of [text] has a block letter; anything else is set as type.
-  static bool draws(String text) => text.isNotEmpty && text.split('').every(_blocks.contains);
+  static bool draws(String text) =>
+      text.isNotEmpty && text.split('').every((character) => _segments.contains(character) || _Capitals.has(character));
 
-  static const _blocks = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'N', 'O', 'C', 'L', '.'};
+  /// What [SegmentGlyph] spells; [_Capitals] has the other capitals.
+  static const _segments = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'N', 'O', 'C', 'L', 'V', '.'};
+
+  static double _glyphWidth(String character) => _Capitals.has(character)
+      ? _Capitals.width(character)
+      : SegmentGlyph.glyphWidth(
+          character,
+          width: OwnSpaceTheme.labelNumberWidth,
+          weight: OwnSpaceTheme.labelNumberWeight,
+        );
 
   static double widthOf(String text) {
     var width = 0.0;
     for (final character in text.split('')) {
-      width += SegmentGlyph.advance(
-        character,
-        width: OwnSpaceTheme.labelNumberWidth,
-        weight: OwnSpaceTheme.labelNumberWeight,
-        gap: OwnSpaceTheme.labelNumberGap,
-      );
+      width += _glyphWidth(character) + OwnSpaceTheme.labelNumberGap;
     }
     return text.isEmpty ? 0 : width - OwnSpaceTheme.labelNumberGap;
   }
@@ -105,24 +111,131 @@ class _NumberPainter extends CustomPainter {
     final ink = Paint()..color = color;
     var left = 0.0;
     for (final character in text.split('')) {
-      final width = SegmentGlyph.glyphWidth(
-        character,
-        width: OwnSpaceTheme.labelNumberWidth,
-        weight: OwnSpaceTheme.labelNumberWeight,
-      );
-      SegmentGlyph.draw(
-        canvas,
-        character,
-        Rect.fromLTWH(left, 0, width, size.height),
-        OwnSpaceTheme.labelNumberWeight,
-        ink,
-      );
+      final width = OwnLabelNumber._glyphWidth(character);
+      final box = Rect.fromLTWH(left, 0, width, size.height);
+      if (_Capitals.has(character)) {
+        _Capitals.draw(canvas, character, box, ink);
+      } else {
+        SegmentGlyph.draw(canvas, character, box, OwnSpaceTheme.labelNumberWeight, ink);
+      }
       left += width + OwnSpaceTheme.labelNumberGap;
     }
   }
 
   @override
   bool shouldRepaint(_NumberPainter oldDelegate) => oldDelegate.text != text || oldDelegate.color != color;
+}
+
+/// The capitals [SegmentGlyph] lacks, in its style: bars on the seven-segment grid, slanted strokes as wide across as
+/// its N's, and D (and B) with their right corners cut as 24's CD.013149 draws them. A collection's number is a
+/// prefix of capitals, a dot and digits.
+abstract final class _Capitals {
+  static const _letters = 'ABDEFGHIJKMPQRSTUWXYZ';
+
+  /// A slanted stroke's breadth across, against a straight one's, as SegmentGlyph's.
+  static const _slant = 1.4;
+
+  static bool has(String character) => character.length == 1 && _letters.contains(character);
+
+  static double width(String character) =>
+      character == 'I' ? OwnSpaceTheme.labelNumberWeight : OwnSpaceTheme.labelNumberWidth;
+
+  static void draw(Canvas canvas, String character, Rect box, Paint ink) {
+    const w = OwnSpaceTheme.labelNumberWeight;
+    final half = box.height / 2;
+    final mid = box.top + half;
+    final across = w * _slant;
+    final stem = box.center.dx - w / 2;
+    void bar(Rect rect) => canvas.drawRect(rect, ink);
+    void band(Offset from, Offset to) =>
+        canvas.drawPath(Path()..addPolygon([from, from.translate(across, 0), to.translate(across, 0), to], true), ink);
+    final a = Rect.fromLTWH(box.left, box.top, box.width, w);
+    final d = Rect.fromLTWH(box.left, box.bottom - w, box.width, w);
+    final g = Rect.fromLTWH(box.left, mid - w / 2, box.width, w);
+    final f = Rect.fromLTWH(box.left, box.top, w, half + w / 2);
+    final e = Rect.fromLTWH(box.left, mid - w / 2, w, half + w / 2);
+    final b = Rect.fromLTWH(box.right - w, box.top, w, half + w / 2);
+    final c = Rect.fromLTWH(box.right - w, mid - w / 2, w, half + w / 2);
+    final stemDown = Rect.fromLTRB(stem, mid - w / 2, stem + w, box.bottom);
+    switch (character) {
+      case 'A':
+        [a, b, c, e, f, g].forEach(bar);
+      case 'B':
+        _cut(canvas, box, ink, holes: 2);
+      case 'D':
+        _cut(canvas, box, ink, holes: 1);
+      case 'E':
+        [a, d, e, f, g].forEach(bar);
+      case 'F':
+        [a, e, f, g].forEach(bar);
+      case 'G':
+        [a, c, d, e, f, Rect.fromLTRB(box.center.dx, mid - w / 2, box.right, mid + w / 2)].forEach(bar);
+      case 'H':
+        [b, c, e, f, g].forEach(bar);
+      case 'I':
+        bar(box);
+      case 'J':
+        [b, c, d, Rect.fromLTRB(box.left, box.bottom - box.height * 0.35, box.left + w, box.bottom)].forEach(bar);
+      case 'K':
+        [e, f].forEach(bar);
+        band(Offset(box.left + w * 0.6, mid - w / 2), Offset(box.right - across, box.top));
+        band(Offset(box.left + w * 0.6, mid - w / 2), Offset(box.right - across, box.bottom));
+      case 'M':
+        [b, c, e, f].forEach(bar);
+        band(box.topLeft, Offset(box.center.dx - across / 2, mid));
+        band(Offset(box.right - across, box.top), Offset(box.center.dx - across / 2, mid));
+      case 'P':
+        [a, b, e, f, g].forEach(bar);
+      case 'Q':
+        [a, b, c, d, e, f].forEach(bar);
+        band(Offset(box.center.dx - across / 2, mid), Offset(box.right - across, box.bottom));
+      case 'R':
+        [a, b, e, f, g].forEach(bar);
+        band(Offset(box.center.dx - across / 2, mid), Offset(box.right - across, box.bottom));
+      case 'S':
+        [a, c, d, f, g].forEach(bar);
+      case 'T':
+        [a, Rect.fromLTRB(stem, box.top, stem + w, box.bottom)].forEach(bar);
+      case 'U':
+        [b, c, d, e, f].forEach(bar);
+      case 'W':
+        [b, c, d, e, f, stemDown].forEach(bar);
+      case 'X':
+        band(box.topLeft, Offset(box.right - across, box.bottom));
+        band(Offset(box.right - across, box.top), box.bottomLeft);
+      case 'Y':
+        [b, f, g, stemDown].forEach(bar);
+      case 'Z':
+        [a, d].forEach(bar);
+        band(Offset(box.right - across, box.top + w), Offset(box.left, box.bottom - w));
+    }
+  }
+
+  /// D's and B's outline: a block with its right corners cut, less one hollow (D) or two over a middle bar (B).
+  static void _cut(Canvas canvas, Rect box, Paint ink, {required int holes}) {
+    const w = OwnSpaceTheme.labelNumberWeight;
+    const cut = OwnSpaceTheme.labelNumberChamfer;
+    final shape = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addPolygon([
+        box.topLeft,
+        Offset(box.right - cut, box.top),
+        Offset(box.right, box.top + cut),
+        Offset(box.right, box.bottom - cut),
+        Offset(box.right - cut, box.bottom),
+        box.bottomLeft,
+      ], true);
+    final inside = box.deflate(w);
+    if (holes == 1) {
+      shape.addRect(inside);
+    } else {
+      final middle = box.center.dy;
+      shape
+        ..addRect(Rect.fromLTRB(inside.left, inside.top, inside.right, middle - w / 2))
+        ..addRect(Rect.fromLTRB(inside.left, middle + w / 2, inside.right, inside.bottom));
+    }
+    canvas.drawPath(shape, ink);
+  }
 }
 
 /// The 勋章 pills' rim: a stadium of dashes drawn inside its box.

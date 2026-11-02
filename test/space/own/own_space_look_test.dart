@@ -15,6 +15,7 @@ import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
+import 'package:bilifast/space/own/own_space_banner.dart';
 import 'package:bilifast/space/own/own_space_page.dart';
 import 'package:bilifast/space/space_api.dart';
 import 'package:bilifast/space/uploader_tap.dart';
@@ -30,11 +31,16 @@ import '../../support/stand_in_fonts.dart';
 import '../../video/mixed_lines.dart' show appTheme;
 
 const _screen = ValueKey('screen');
-const _banner = 'https://i0.hdslb.com/bfs/garb/look-banner.png';
+const _banner = 'https://i1.hdslb.com/bfs/garb/look-banner.png';
 const _vipLabel = 'https://i1.hdslb.com/bfs/vip/look-label.png';
+const _collectible = 'https://i1.hdslb.com/bfs/garb/look-collectible.png';
 
 /// KaiC's own space as 108, 114 and 115 show it: a 年度大会员 at LV5 with 14805/28800, the 空间头图's label, four tabs.
-SpaceProfile _kaic({SpaceTabKind defaultTab = SpaceTabKind.contribute}) => SpaceProfile(
+/// [label] is 24's collectible's instead.
+SpaceProfile _kaic({
+  SpaceTabKind defaultTab = SpaceTabKind.contribute,
+  SpaceBannerLabel label = const SpaceBannerLabel(title: '幸运塔罗星 金牛座', subtitle: 'NO.000067'),
+}) => SpaceProfile(
   mid: 1,
   name: 'KaiC5504',
   face: '',
@@ -52,13 +58,13 @@ SpaceProfile _kaic({SpaceTabKind defaultTab = SpaceTabKind.contribute}) => Space
     SpaceTab(kind: SpaceTabKind.bangumi, title: '追番'),
   ],
   defaultTab: defaultTab,
-  own: const OwnSpace(
+  own: OwnSpace(
     exp: 14805,
     nextExp: 28800,
     pendant: 'https://i0.hdslb.com/bfs/garb/look-pendant.png',
     vipBadge: true,
     banner: _banner,
-    bannerLabel: SpaceBannerLabel(title: '幸运塔罗星 金牛座', subtitle: 'NO.000067'),
+    bannerLabel: label,
   ),
 );
 
@@ -99,7 +105,8 @@ final _skin = Skin(
 );
 
 /// Drawn stand-ins (never the official art) put in the image cache under the addresses the page asks for: a dark
-/// banner, so the label's white reads as on 108, and a 年度大会员 pill the size of 108's.
+/// banner, so the label's white reads as on 108, a 年度大会员 pill the size of 108's with the label picture's clear
+/// band above and below it, and a collectible's rounded square.
 Future<void> _cacheStandIns(WidgetTester tester) async {
   Future<ui.Image> draw(int width, int height, void Function(Canvas canvas, Size size) paint) {
     final recorder = ui.PictureRecorder();
@@ -118,9 +125,11 @@ Future<void> _cacheStandIns(WidgetTester tester) async {
       900,
       (canvas, size) => canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF2A2322)),
     );
-    final label = await draw(204, 44, (canvas, size) {
+    // At 3× of 24's 3× pixels: the pill 202 × 44 px there, three quarters of the picture's height.
+    final label = await draw(606, 176, (canvas, size) {
+      final pill = Rect.fromLTWH(0, 22, size.width, 132);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(size.height / 2)),
+        RRect.fromRectAndRadius(pill, Radius.circular(pill.height / 2)),
         Paint()..color = const Color(0xFFFF568D),
       );
       final text = TextPainter(
@@ -128,17 +137,24 @@ Future<void> _cacheStandIns(WidgetTester tester) async {
           text: '年度大会员',
           style: TextStyle(
             fontFamily: 'PingFang SC',
-            fontSize: 33,
+            fontSize: 99,
             fontWeight: FontWeight.w600,
             color: Color(0xFFFFFFFF),
           ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      text.paint(canvas, Offset((size.width - text.width) / 2, (size.height - text.height) / 2));
+      text.paint(canvas, Offset((size.width - text.width) / 2, pill.center.dy - text.height / 2));
     });
-    cache(sizedImageUrl(_banner, width: 1320, height: 900), banner);
+    final icon = await draw(42, 42, (canvas, size) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(10)),
+        Paint()..color = const Color(0xFFB8D4F2),
+      );
+    });
+    cache(OwnSpaceBanner.address(_banner, 1320), banner);
     cache(_vipLabel, label);
+    cache(_collectible, icon);
   });
 }
 
@@ -228,11 +244,12 @@ void main() {
     final medal = _rect(tester, 'own-space-medal');
     expect(medal.height, 16);
     expect(medal.center.dy, closeTo(400.33, 0.5));
-    // The stand-in's Latin draws KaiC5504 2 pt wider than SF, so the line is placed by its gaps: the label 6.67
-    // after the name, the pills 6.67 after the label and 6.33 apart.
+    // The stand-in's Latin draws KaiC5504 2 pt wider than SF, so the line is placed by its gaps: the label 5.33
+    // after the name, the pills 6.67 after the label and 6.33 apart. The label's picture is 19.56 tall for 24's
+    // 14.67 pill.
     final label = _rect(tester, 'own-space-vip-label');
-    expect(label.width, closeTo(68 + OwnSpaceTheme.vipLabelGap, 0.1));
-    expect(label.height, closeTo(14.67, 0.01));
+    expect(label.width, closeTo(67.33 + OwnSpaceTheme.vipLabelGap, 0.1));
+    expect(label.height, closeTo(19.56, 0.01));
     expect(medal.left - label.right, closeTo(6.67, 0.01));
     expect(medal.width, closeTo(65.33, 1.5));
     expect(_rect(tester, 'own-space-fan-medal').left - medal.right, closeTo(6.33, 0.01));
@@ -255,6 +272,25 @@ void main() {
     expect(_rect(tester, 'own-space-label-subtitle').center.dy, closeTo(284, 0.5));
     expect(_rect(tester, 'own-space-label-subtitle').right, closeTo(389.33, 1));
     expect(_rect(tester, 'own-space-skin').center, offsetMoreOrLessEquals(const Offset(418, 275.33), epsilon: 0.5));
+  });
+
+  testWidgets('24: a collectible\'s label, its picture before the title and CD.013149 in block letters', (
+    tester,
+  ) async {
+    await _show(
+      tester,
+      _kaic(
+        label: const SpaceBannerLabel(title: '紫罗兰永恒花园收藏集', subtitle: 'CD.013149', icon: _collectible),
+      ),
+    );
+    await _shoot(tester, '24');
+    // 24's measures, in pt: the picture 263.67-277.67 across, its middle 267.67 down; the number ending 389.33.
+    final icon = _rect(tester, 'own-space-label-icon');
+    expect(icon.right, closeTo(277.67, 0.5));
+    expect(icon.width, 14);
+    expect(icon.center.dy, closeTo(267.67, 0.5));
+    expect(_rect(tester, 'own-space-label-subtitle').right, closeTo(389.33, 1));
+    expect(find.text('CD.013149'), findsNothing);
   });
 
   testWidgets('114: opened on 主页, the tab row\'s 主页 pink over its bar', (tester) async {
