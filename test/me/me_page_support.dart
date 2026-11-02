@@ -10,6 +10,7 @@ import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
+import 'package:bilifast/friends/friends_route.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_model.dart';
@@ -149,6 +150,7 @@ class MeHarness {
     required this.skin,
     required this.services,
     required this.opened,
+    required this.friends,
     required this.active,
   });
 
@@ -161,6 +163,9 @@ class MeHarness {
 
   /// The links the page asked to open outside the app, in order, whether or not they opened.
   final List<Uri> opened;
+
+  /// The tabs 我的好友 was asked to open on, in order.
+  final List<FriendsTab> friends;
 }
 
 /// 我的 above a 83 pt stand-in for the bottom bar, as MainShell lays it out (the page's bottom padding taken off), on
@@ -218,6 +223,8 @@ Future<MeHarness> showMe(
     return open == null ? openSucceeds : open(link);
   }
 
+  final friends = <FriendsTab>[];
+
   await tester.pumpWidget(
     MaterialApp(
       theme: theme,
@@ -243,6 +250,7 @@ Future<MeHarness> showMe(
                     skin: skins,
                     openLink: record,
                     canOpenLink: (_) async => officialAppThere,
+                    openFriends: (_, {required tab}) async => friends.add(tab),
                   ),
                 ),
               ),
@@ -254,5 +262,5 @@ Future<MeHarness> showMe(
     ),
   );
   await tester.pump();
-  return MeHarness(model: model, skin: skins, services: services, opened: opened, active: shownTab);
+  return MeHarness(model: model, skin: skins, services: services, opened: opened, friends: friends, active: shownTab);
 }

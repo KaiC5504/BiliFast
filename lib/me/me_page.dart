@@ -12,6 +12,7 @@ import '../app/app_scope.dart';
 import '../app/route_observer.dart';
 import '../app/swipe_back_route.dart';
 import '../favourites/favourites_page.dart';
+import '../friends/friends_route.dart';
 import '../history/watch_history_page.dart';
 import '../home/shortcut_glyphs.dart';
 import '../offline/pages/offline_list_page.dart';
@@ -32,6 +33,8 @@ import 'official_link.dart';
 
 Future<bool> _openOutside(Uri link) => launchUrl(link, mode: LaunchMode.externalApplication);
 
+Future<void> _friendsRoute(BuildContext context, {required FriendsTab tab}) => openFriends(context, tab: tab);
+
 /// 我的, the bottom bar's Me page (02, 87, 106, 107), apart from the avatar's page (49).
 class MePage extends StatefulWidget {
   const MePage({
@@ -42,6 +45,7 @@ class MePage extends StatefulWidget {
     this.skin,
     @visibleForTesting this.openLink = _openOutside,
     @visibleForTesting this.canOpenLink = canLaunchUrl,
+    @visibleForTesting this.openFriends = _friendsRoute,
   });
 
   /// Whether 我的 is the bar's current tab; turning true is a showing ([MeModel.shown]). Built hidden, the page asks
@@ -63,6 +67,9 @@ class MePage extends StatefulWidget {
 
   /// Whether a link's app is there; asked before the official app's link except on iOS.
   final Future<bool> Function(Uri link) canOpenLink;
+
+  /// Opens 我的好友 on [tab], from the 关注 and 粉丝 counts.
+  final Future<void> Function(BuildContext context, {required FriendsTab tab}) openFriends;
 
   static final vipCentre = Uri.parse('https://big.bilibili.com/mobile/home');
 
@@ -238,6 +245,8 @@ class _MePageState extends State<MePage> with RouteAware {
     }
   }
 
+  void _openFriends(FriendsTab tab) => unawaited(_visit(widget.openFriends(context, tab: tab)));
+
   void _login() => unawaited(AppScope.of(context).loginGate.request(context));
 
   Future<void> _openVipCentre() async {
@@ -274,6 +283,8 @@ class _MePageState extends State<MePage> with RouteAware {
     final top = MediaQuery.paddingOf(context).top;
     final actions = MeActions(
       openSpace: _openSpace,
+      openFollowing: () => _openFriends(FriendsTab.following),
+      openFans: () => _openFriends(FriendsTab.fans),
       login: _login,
       soon: _soon,
       openVipCentre: () => unawaited(_openVipCentre()),
