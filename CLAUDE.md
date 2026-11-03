@@ -25,7 +25,7 @@ through to TestFlight. Finish with what was built, how it works, numbered phone 
 
 ## Status
 
-Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (6)**. The detail of each is in git
+Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (8)**. The detail of each is in git
 history, and the rules they added are under "Rules that bite".
 
 - The move from Swift (slices 0-9, 1.0.0 (4)-(12)): `packages/bili_core` ported tests-first; AVPlayer in a native view
@@ -61,6 +61,11 @@ history, and the rules they added are under "Rules that bite".
   the own space's 空间头图 on its `location` crop, asked whole, playing its mp4 with the sound disc (SkinVideo's `sound`),
   the ◇ title icon, block-letter CD numbers in the answer's colours, 大 from `vipStatus`; 开发者 rebuilt in 设置's look
   (网络: 节点测速 and 速度测试's `builtin-5`, BTR·海外 / BTR·国内 / 直连; 状态; 调试; 日志), 推荐's 官方/网页 pref gone.
+- 自签安装, 1.3.0 (8): external TestFlight was refused (5.2.3, 2026-11-04), so others install the unsigned IPA. A sideloaded
+  install (it carries `embedded.mobileprovision`; TestFlight's don't) gets 设置's 签名 section (到期, 到期提醒, 检查更新,
+  添加更新源 for SideStore / AltStore Classic / Feather), one launch alert (expiry, else a new release, else the reminder
+  question), a day-before notification, and a GitHub check once per launch; every release carries an AltStore-format
+  `source.json`. On a re-signed bundle id 离线缓存 skips continued processing for the URLSession hand-off.
 
 Update this section when a build ships: one short entry, and any rule it adds goes under "Rules that bite".
 
@@ -171,6 +176,8 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
   - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
   - `lib/devtools/`: 开发者 (`developer_page.dart` and its sections, `node_probe_section.dart`: 节点测速), the crash log,
     the phone's log files, log forwarding and discovery of the PC's log server.
+  - `lib/sideload/`: a sideloaded install's help (`SideloadModel`: the profile's expiry, the GitHub release check, the
+    reminder over DeviceHostApi, `sideload.json`; 设置's section and the launch alert; `--fake-sideload` on the PC).
   - `lib/speedtest/`: the speed test (dev builds only).
   - `lib/shared/remote_image.dart` and `image_disk_cache.dart`: every network picture, kept on the phone; on iOS
     downloaded through `PictureSession` (one URLSession).
@@ -237,7 +244,11 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   numbers count from 1 within each version (App Store Connect's latest of that version plus one); the last shipped is
   in Status.
 - Every upload also publishes an unsigned IPA for sideloading as the GitHub release `v<version>-<build>` (the
-  workflow's `sideload` and `release` jobs: no environment, no secrets, so no profile or legal name in it).
+  workflow's `sideload` and `release` jobs: no environment, no secrets, so no profile or legal name in it), with
+  `source.json` beside it: the app and README point at `releases/latest/download/source.json`, so keep that asset name.
+- No Apple review for BiliFast (KaiC, 2026-11-04): Beta App Review refused external TestFlight under 5.2.3, and a
+  build made only for review would hide functionality (2.3.1). TestFlight stays internal (KaiC's own team); everyone
+  else installs the IPA (`local/sideload-notes.md`).
 - Secrets are in this repo's `testflight` environment (limited to `main`).
 - Commit, push and Actions runs (signed builds included) are authorised on `main`.
 
