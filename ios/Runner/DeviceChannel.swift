@@ -146,6 +146,13 @@ final class DeviceHostApiImpl: DeviceHostApi {
     let status = self.status
     MainActor.assumeIsolated { enabled ? status.start() : status.stop() }
   }
+
+  // Stubs until the sideload slice's Swift agent fills them (UNUserNotificationCenter).
+  func requestReminderPermission() async throws -> Bool { false }
+
+  func scheduleReminder(epochMs: Int64, title: String, body: String) async throws {}
+
+  func cancelReminder() throws {}
 }
 
 /// UIDevice's orientation notifications, on only while a page with a player is open.

@@ -46,6 +46,9 @@ import 'settings/font_store.dart';
 import 'space/fake_space_api.dart';
 import 'shared/image_disk_cache.dart';
 import 'shared/theme.dart';
+import 'sideload/fake_sideload.dart';
+import 'sideload/ios_sideload.dart';
+import 'sideload/sideload_model.dart';
 import 'video/fake_page_api.dart';
 import 'video/history_outbox.dart';
 import 'video/player_prefs.dart';
@@ -143,6 +146,11 @@ Future<void> main(List<String> args) async {
               host: Platform.isIOS ? IosOfflineHost() : const NoOfflineHost(),
               codecMemory: codecMemory,
             );
+  final SideloadModel sideload = Platform.isIOS
+      ? iosSideloadModel(storePath: supportFilePath('sideload.json'))
+      : args.contains('--fake-sideload')
+          ? fakeSideloadModel()
+          : SideloadModel.none();
   final services = AppServices(
     environment: environment,
     playback: playback,
@@ -166,6 +174,7 @@ Future<void> main(List<String> args) async {
     danmakuSettings: danmakuSettings,
     imageCache: imageCache,
     offline: offline,
+    sideload: sideload,
     historyOutbox: historyOutbox,
     logFiles: logFiles,
     logs: logs,
@@ -173,6 +182,7 @@ Future<void> main(List<String> args) async {
   // Only the cache read is awaited, so the first frame has the theme; the check runs on.
   await services.skin.start();
   unawaited(offline.start());
+  unawaited(sideload.start());
   runApp(BiliFastApp(services: services, initialLink: _argument(args, '--play=')));
 }
 

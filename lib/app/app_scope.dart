@@ -27,6 +27,7 @@ import '../playback/shared_engine.dart';
 import '../search/search_api.dart';
 import '../search/search_history_store.dart';
 import '../settings/font_store.dart';
+import '../sideload/sideload_model.dart';
 import '../shared/image_disk_cache.dart';
 import '../skin/skin_api.dart';
 import '../skin/skin_model.dart';
@@ -180,6 +181,7 @@ class AppServices {
     LoginGate? loginGate,
     PipKeeper? pipKeeper,
     OfflineLibrary? offline,
+    SideloadModel? sideload,
     HistoryOutbox? historyOutbox,
     NetworkMonitor? network,
     this.logFiles = const NoLogFiles(),
@@ -190,6 +192,7 @@ class AppServices {
        device = device ?? PlayerDevice.inWindow(),
        pipKeeper = pipKeeper ?? PipKeeper(),
        offline = offline ?? FakeOfflineLibrary(),
+       sideload = sideload ?? SideloadModel.none(),
        loginGate = loginGate ?? LoginPageGate(environment),
        fonts = fonts ?? FontStore.memory(),
        pageApi = pageApi ?? ClientPageApi(environment.client),
@@ -336,6 +339,9 @@ class AppServices {
 
   /// 离线缓存: the parts cached on the phone and their downloads.
   final OfflineLibrary offline;
+
+  /// A sideloaded install's signature, updates and reminder; empty otherwise.
+  final SideloadModel sideload;
 
   /// Watch reports that got no answer, sent again when the network may be back (`history_outbox.json`).
   final HistoryOutbox historyOutbox;

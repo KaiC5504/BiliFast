@@ -62,6 +62,17 @@ abstract class DeviceHostApi {
   /// Starts or stops battery and network reports to [DeviceEventApi.onStatus] for the status bar landscape full screen
   /// draws (04); one report comes at once on start. iOS's battery monitoring is on only while they are.
   void setStatusEvents(bool enabled);
+
+  /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
+  /// granted. Asked only after the user said 好 in the app's own alert.
+  @async
+  bool requestReminderPermission();
+
+  /// Replaces the one pending signature reminder with one delivered at [epochMs] (milliseconds since the epoch).
+  @async
+  void scheduleReminder(int epochMs, String title, String body);
+
+  void cancelReminder();
 }
 
 @FlutterApi()

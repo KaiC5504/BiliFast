@@ -176,6 +176,7 @@ class DeviceApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
   static let shared = DeviceApiPigeonCodec(readerWriter: DeviceApiPigeonCodecReaderWriter())
 }
 
+
 /// Rotation, brightness and volume for full screen (DeviceChannel.swift, DeviceControls.swift). The rules about
 /// when to rotate live in Dart (lib/device/orientation.dart); the host only applies masks and reports.
 ///
@@ -208,6 +209,12 @@ protocol DeviceHostApi {
   /// Starts or stops battery and network reports to [DeviceEventApi.onStatus] for the status bar landscape full screen
   /// draws (04); one report comes at once on start. iOS's battery monitoring is on only while they are.
   func setStatusEvents(enabled: Bool) throws
+  /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
+  /// granted. Asked only after the user said 好 in the app's own alert.
+  func requestReminderPermission() async throws -> Bool
+  /// Replaces the one pending signature reminder with one delivered at [epochMs] (milliseconds since the epoch).
+  func scheduleReminder(epochMs: Int64, title: String, body: String) async throws
+  func cancelReminder() throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -425,6 +432,56 @@ class DeviceHostApiSetup {
       }
     } else {
       setStatusEventsChannel.setMessageHandler(nil)
+    }
+    /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
+    /// granted. Asked only after the user said 好 in the app's own alert.
+    let requestReminderPermissionChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.requestReminderPermission\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      requestReminderPermissionChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.requestReminderPermission()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      requestReminderPermissionChannel.setMessageHandler(nil)
+    }
+    /// Replaces the one pending signature reminder with one delivered at [epochMs] (milliseconds since the epoch).
+    let scheduleReminderChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.scheduleReminder\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      scheduleReminderChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let epochMsArg = args[0] as! Int64
+        let titleArg = args[1] as! String
+        let bodyArg = args[2] as! String
+        Task { @MainActor in
+          do {
+            try await api.scheduleReminder(epochMs: epochMsArg, title: titleArg, body: bodyArg)
+            reply(wrapResult(nil))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      scheduleReminderChannel.setMessageHandler(nil)
+    }
+    let cancelReminderChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.cancelReminder\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      cancelReminderChannel.setMessageHandler { _, reply in
+        do {
+          try api.cancelReminder()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      cancelReminderChannel.setMessageHandler(nil)
     }
   }
 }
