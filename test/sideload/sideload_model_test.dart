@@ -30,6 +30,46 @@ final class FailingFeed implements ReleaseFeed {
   Future<ReleaseInfo?> latest() async => throw StateError('secret address');
 }
 
+/// Answers the permission ask and, while [holdSchedule], the schedule only when the test says so.
+final class HeldHost implements ReminderHost {
+  var holdSchedule = false;
+  var allows = true;
+  final calls = <String>[];
+  final _permissions = <Completer<bool>>[];
+  Completer<void> _scheduled = Completer();
+
+  @override
+  Future<bool> requestPermission() {
+    calls.add('permission');
+    final asked = Completer<bool>();
+    _permissions.add(asked);
+    return asked.future;
+  }
+
+  /// iOS answers every ask waiting, as its one prompt does.
+  void grant(bool granted) {
+    for (final asked in _permissions) {
+      asked.complete(granted);
+    }
+    _permissions.clear();
+  }
+
+  @override
+  Future<bool> schedule(DateTime at, String title, String body) async {
+    calls.add('schedule');
+    if (holdSchedule) {
+      _scheduled = Completer();
+      await _scheduled.future;
+    }
+    return allows;
+  }
+
+  void scheduled() => _scheduled.complete();
+
+  @override
+  Future<void> cancel() async => calls.add('cancel');
+}
+
 void main() {
   // Local times, so the calendar day is the same on any machine.
   var now = DateTime(2026, 11, 4, 9);
@@ -49,12 +89,13 @@ void main() {
   SideloadModel model({
     Duration? left = const Duration(days: 6, hours: 3),
     ReleaseFeed? feed,
+    ReminderHost? reminders,
     String? version = '1.3.0',
     String? build = '7',
   }) => SideloadModel(
     source: FixedSignature(left == null ? null : SignatureInfo(expires: now.add(left).toUtc())),
     feed: feed ?? FixedReleaseFeed(null),
-    reminders: host,
+    reminders: reminders ?? host,
     store: store,
     version: version,
     build: build,
@@ -96,7 +137,7 @@ void main() {
   });
 
   group('days left', () {
-    test('whole days, rounded down, never below 0', () async {
+    test('calendar days to the expiry date, in local time, never below 0', () async {
       Future<int?> daysFor(Duration left) async {
         final sideload = model(left: left);
         await sideload.start();
@@ -104,17 +145,30 @@ void main() {
       }
 
       expect(await daysFor(const Duration(hours: 30)), 1);
+      expect(await daysFor(const Duration(hours: 15)), 1, reason: "tomorrow's midnight is tomorrow");
       expect(await daysFor(const Duration(hours: 10)), 0);
-      expect(await daysFor(const Duration(days: 7)), 7);
+      expect(await daysFor(const Duration(days: 7)), 7, reason: 'a free profile signed now reads its 7 days');
       expect(await daysFor(const Duration(hours: -5)), 0);
       expect(await daysFor(const Duration(days: -3)), 0);
     });
 
-    test('follow the clock', () async {
+    test("the evening before reads 1 day, as the reminder's 明天到期 says, though under 24 hours are left", () async {
+      now = DateTime(2026, 11, 4, 21);
+      final sideload = model(left: const Duration(hours: 23));
+      await sideload.start();
+      expect(sideload.signature!.expires.toLocal(), DateTime(2026, 11, 5, 20));
+      expect(sideload.daysLeft, 1);
+      now = DateTime(2026, 11, 5, 0, 1);
+      expect(sideload.daysLeft, 0);
+    });
+
+    test('follow the clock across midnight', () async {
       final sideload = model(left: const Duration(days: 3, hours: 1));
       await sideload.start();
       expect(sideload.daysLeft, 3);
-      now = now.add(const Duration(hours: 2));
+      now = DateTime(2026, 11, 4, 23, 59);
+      expect(sideload.daysLeft, 3);
+      now = DateTime(2026, 11, 5, 0, 1);
       expect(sideload.daysLeft, 2);
     });
   });
@@ -203,7 +257,70 @@ void main() {
       await sideload.start();
       expect(sideload.newer, isNull);
       expect(sideload.checking, isFalse);
+      expect(sideload.lastCheck, CheckOutcome.failed);
       expect(logs.events.map((event) => event.encode()).join(), isNot(contains('secret')));
+    });
+
+    test("the last check's outcome: none before an answer, then answered or failed", () async {
+      final feed = HeldFeed();
+      final sideload = model(feed: feed);
+      final started = sideload.start();
+      await pumpEventQueue();
+      expect(sideload.lastCheck, isNull);
+
+      feed.answer(release('1.3.0', 7));
+      await started;
+      expect(sideload.lastCheck, CheckOutcome.answered);
+      expect(sideload.newer, isNull);
+
+      final failed = sideload.checkNow();
+      await pumpEventQueue();
+      expect(sideload.lastCheck, CheckOutcome.answered, reason: 'kept while the next one runs');
+      feed.answer(null);
+      await failed;
+      expect(sideload.lastCheck, CheckOutcome.failed);
+
+      final answered = sideload.checkNow();
+      await pumpEventQueue();
+      feed.answer(release('1.3.0', 8));
+      await answered;
+      expect(sideload.lastCheck, CheckOutcome.answered);
+      expect(sideload.newer?.build, 8);
+    });
+
+    test("settled once the launch's check ends, answered or not; at once when not sideloaded", () async {
+      final feed = HeldFeed();
+      final sideload = model(feed: feed);
+      expect(sideload.settled, isFalse);
+      final started = sideload.start();
+      await pumpEventQueue();
+      expect(sideload.sideloaded, isTrue);
+      expect(sideload.settled, isFalse, reason: 'the check is running');
+      feed.answer(null);
+      await started;
+      expect(sideload.settled, isTrue);
+
+      final unsigned = model(left: null);
+      await unsigned.start();
+      expect(unsigned.settled, isTrue);
+    });
+
+    test("the launch's check doesn't wait for iOS to take the reminder", () async {
+      store
+        ..reminderAnswered = true
+        ..reminderOn = true;
+      final held = HeldHost()..holdSchedule = true;
+      final feed = FixedReleaseFeed(release('1.3.0', 8));
+      final sideload = model(feed: feed, reminders: held);
+      final started = sideload.start();
+      await pumpEventQueue();
+      expect(held.calls, ['schedule']);
+      expect(feed.asked, 1);
+      expect(sideload.settled, isTrue);
+      expect(sideload.shouldAnnounceRelease, isTrue);
+      held.scheduled();
+      await started;
+      expect(sideload.reminderOn, isTrue);
     });
 
     test('logs a sideload line with the days left and whether a release is newer', () async {
@@ -288,27 +405,111 @@ void main() {
       expect(host.schedules, isEmpty);
     });
 
-    test("设置's switch: on asks iOS then sets it, off cancels", () async {
+    test("设置's switch: on asks iOS then sets it, off cancels, and a refusal answers false", () async {
       final sideload = model();
       await sideload.start();
       var notified = 0;
       sideload.addListener(() => notified++);
 
-      await sideload.setReminder(true);
+      expect(await sideload.setReminder(true), isTrue);
       expect(sideload.reminderOn, isTrue);
       expect(host.permissionAsks, 1);
       expect(host.schedules, hasLength(1));
       expect(sideload.shouldAskReminder, isFalse, reason: 'the switch counts as an answer');
 
-      await sideload.setReminder(false);
+      expect(await sideload.setReminder(false), isTrue);
       expect(sideload.reminderOn, isFalse);
       expect(host.cancels, 1);
       expect(notified, greaterThanOrEqualTo(2));
 
       host.grants = false;
-      await sideload.setReminder(true);
+      expect(await sideload.setReminder(true), isFalse);
       expect(sideload.reminderOn, isFalse);
+      expect(store.reminderOn, isFalse);
       expect(host.schedules, hasLength(1));
+    });
+
+    test('the switch shows on while iOS is asked, and turned off meanwhile it never lands on', () async {
+      final held = HeldHost();
+      final sideload = model(reminders: held);
+      await sideload.start();
+
+      final turningOn = sideload.setReminder(true);
+      await pumpEventQueue();
+      expect(sideload.reminderOn, isTrue);
+      expect(store.reminderOn, isFalse);
+
+      expect(await sideload.setReminder(false), isTrue);
+      expect(sideload.reminderOn, isFalse);
+      held.grant(true);
+      expect(await turningOn, isTrue, reason: 'turned off by the user, not refused: no toast');
+      expect(sideload.reminderOn, isFalse);
+      expect(store.reminderOn, isFalse);
+      expect(held.calls, ['permission', 'cancel']);
+    });
+
+    test('on, off and on again while iOS is asked: the last answer decides', () async {
+      final held = HeldHost();
+      final sideload = model(reminders: held);
+      await sideload.start();
+
+      final first = sideload.setReminder(true);
+      await pumpEventQueue();
+      await sideload.setReminder(false);
+      final second = sideload.setReminder(true);
+      await pumpEventQueue();
+      held.grant(true);
+      await second;
+      expect(await first, isTrue);
+      expect(sideload.reminderOn, isTrue);
+      expect(store.reminderOn, isTrue);
+      expect(held.calls, ['permission', 'cancel', 'permission', 'schedule']);
+    });
+
+    test('turned off while iOS takes the reminder: cancelled again after', () async {
+      final held = HeldHost()..holdSchedule = true;
+      final sideload = model(reminders: held);
+      await sideload.start();
+
+      final turningOn = sideload.setReminder(true);
+      await pumpEventQueue();
+      held.grant(true);
+      await pumpEventQueue();
+      expect(held.calls, ['permission', 'schedule']);
+      await sideload.setReminder(false);
+      held.scheduled();
+      expect(await turningOn, isTrue);
+      expect(sideload.reminderOn, isFalse);
+      expect(held.calls, ['permission', 'schedule', 'cancel', 'cancel']);
+    });
+
+    test('allowed, then refused by iOS as it is set: off, and the switch answers false', () async {
+      final held = HeldHost()..allows = false;
+      final sideload = model(reminders: held);
+      await sideload.start();
+      final turningOn = sideload.setReminder(true);
+      await pumpEventQueue();
+      held.grant(true);
+      expect(await turningOn, isFalse);
+      expect(sideload.reminderOn, isFalse);
+      expect(store.reminderOn, isFalse);
+    });
+
+    test("on, but iOS no longer allows notifications at launch: off and saved, so 设置 tells the truth", () async {
+      store
+        ..reminderAnswered = true
+        ..reminderOn = true;
+      host.grants = false;
+      final sideload = model();
+      var notified = 0;
+      sideload.addListener(() => notified++);
+      await sideload.start();
+      expect(sideload.reminderOn, isFalse);
+      expect(store.reminderOn, isFalse);
+      expect(store.reminderAnswered, isTrue, reason: 'not asked again at launch');
+      expect(sideload.shouldAskReminder, isFalse);
+      expect(notified, greaterThan(0));
+      expect(logs.events.where((event) => event.msg == 'sideload reminder').single.f['allowed']?.toJson(), isFalse);
     });
 
     test('a failing host leaves it off, logged by type', () async {
@@ -334,8 +535,9 @@ void main() {
       await far.start();
       expect(far.shouldWarnExpiry, isFalse);
 
-      final near = model(left: const Duration(days: 2, hours: 20));
+      final near = model(left: const Duration(days: 2, hours: 14));
       await near.start();
+      expect(near.daysLeft, SideloadModel.warnDays);
       expect(near.shouldWarnExpiry, isTrue);
       near.expiryWarned();
       expect(near.shouldWarnExpiry, isFalse);
@@ -429,7 +631,7 @@ final class _ThrowingHost implements ReminderHost {
   Future<bool> requestPermission() async => throw StateError('denied by test');
 
   @override
-  Future<void> schedule(DateTime at, String title, String body) async => throw StateError('denied by test');
+  Future<bool> schedule(DateTime at, String title, String body) async => throw StateError('denied by test');
 
   @override
   Future<void> cancel() async => throw StateError('denied by test');

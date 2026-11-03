@@ -36,11 +36,16 @@ abstract interface class ReleaseFeed {
   Future<ReleaseInfo?> latest();
 }
 
+/// How the last release check ended.
+enum CheckOutcome { answered, failed }
+
 /// The day-before reminder, through DeviceHostApi on iOS.
 abstract interface class ReminderHost {
+  /// False when iOS refuses, or the ask fails.
   Future<bool> requestPermission();
 
-  Future<void> schedule(DateTime at, String title, String body);
+  /// False when iOS no longer allows the app's notifications; any other failure leaves the reminder as it was.
+  Future<bool> schedule(DateTime at, String title, String body);
 
   Future<void> cancel();
 }
@@ -74,8 +79,10 @@ class SideloadModel extends ChangeNotifier {
   static const reminderTitle = 'BiliFast 签名明天到期';
   static const reminderBody = '记得在 SideStore 或电脑上重新签名，过期后会打不开。已经续签过可以忽略。';
 
-  /// How long before the expiry the reminder comes.
   static const reminderLead = Duration(hours: 24);
+
+  /// From this many days left, the launch alert warns and 签名到期 turns red.
+  static const warnDays = 2;
 
   final SignatureSource _source;
   final ReleaseFeed _feed;
@@ -88,20 +95,33 @@ class SideloadModel extends ChangeNotifier {
 
   SignatureInfo? _signature;
   ReleaseInfo? _latest;
+  CheckOutcome? _lastCheck;
+  bool _settled = false;
   Future<void>? _starting;
   Future<void>? _asking;
+
+  /// The switch's position while iOS is asked; [_turn] tells a stale answer from the latest.
+  bool? _wanted;
+  var _turn = 0;
   bool _disposed = false;
 
   bool get sideloaded => signature != null;
 
   SignatureInfo? get signature => _signature;
 
-  /// Whole days until [SignatureInfo.expires], never below 0; null when not sideloaded.
+  /// Calendar days from today to the expiry's date, in local time, never below 0; null when not sideloaded. The
+  /// evening before reads 1, as the reminder sent then says 明天到期.
   int? get daysLeft {
-    final expires = _signature?.expires;
+    final expires = _signature?.expires.toLocal();
     if (expires == null) return null;
-    final days = expires.difference(_now()).inDays;
-    return days < 0 ? 0 : days;
+    final today = _now().toLocal();
+    // Dates as UTC midnights, so a daylight-saving change can't make a day 23 hours.
+    final days = DateTime.utc(
+      expires.year,
+      expires.month,
+      expires.day,
+    ).difference(DateTime.utc(today.year, today.month, today.day)).inDays;
+    return max(days, 0);
   }
 
   /// The newest release when it is newer than this build.
@@ -112,10 +132,17 @@ class SideloadModel extends ChangeNotifier {
 
   bool get checking => _asking != null;
 
-  /// Whether the 到期前一天提醒 is on (the user said 好 and iOS allowed it).
-  bool get reminderOn => sideloaded && _store.reminderOn;
+  /// How the last release check ended; null before one has.
+  CheckOutcome? get lastCheck => _lastCheck;
 
-  /// Reads the signature, schedules the reminder if on, then checks for a release once. Never loops.
+  /// Whether the launch has found all it will: the signature read and, when sideloaded, a release check ended. The
+  /// launch alert waits for it before choosing between a release and the reminder question.
+  bool get settled => _settled;
+
+  /// Whether the 到期前一天提醒 is on (the user said 好 and iOS allowed it), or being turned on.
+  bool get reminderOn => sideloaded && (_wanted ?? _store.reminderOn);
+
+  /// Reads the signature, then checks for a release once while it sets the reminder if on. Never loops.
   Future<void> start() => _starting ??= _start();
 
   Future<void> _start() async {
@@ -126,13 +153,16 @@ class SideloadModel extends ChangeNotifier {
       _logger.warn(LogCategory.app, 'sideload signature unreadable', {'error': '${error.runtimeType}'});
     }
     if (_signature == null) {
+      _settled = true;
       _logger.info(LogCategory.app, 'sideload', {'sideloaded': false});
       return;
     }
     _changed();
+    // Started first: the launch alert waits for the check, and iOS may take its time over the reminder.
+    final checked = _ask('launch');
     // Every re-sign moves the expiry, so the reminder is set again from this launch's profile.
     if (_store.reminderOn) await _scheduleReminder();
-    await _ask('launch');
+    await checked;
   }
 
   /// 设置's 检查更新: one more check, unless one is running.
@@ -154,6 +184,8 @@ class SideloadModel extends ChangeNotifier {
     }
     // A failed check keeps what an earlier one found.
     if (release != null) _latest = release;
+    _lastCheck = release == null ? CheckOutcome.failed : CheckOutcome.answered;
+    _settled = true;
     _asking = null;
     done.complete();
     _logger.info(LogCategory.app, 'sideload', {
@@ -176,11 +208,13 @@ class SideloadModel extends ChangeNotifier {
     if (yes) await _turnOn();
   }
 
-  /// 设置's 到期提醒 switch.
-  Future<void> setReminder(bool on) async {
-    if (!sideloaded || on == reminderOn) return;
+  /// Completes with false when iOS doesn't allow the reminder, which then stays off.
+  Future<bool> setReminder(bool on) async {
+    if (!sideloaded || on == reminderOn) return true;
     _store.reminderAnswered = true;
     if (on) return _turnOn();
+    _turn++;
+    _wanted = null;
     _store.reminderOn = false;
     _changed();
     try {
@@ -188,41 +222,65 @@ class SideloadModel extends ChangeNotifier {
     } catch (error) {
       _hostFailed('cancel', error);
     }
+    return true;
   }
 
-  Future<void> _turnOn() async {
+  /// Shows on at once; iOS's answer lands only if the switch hasn't moved since.
+  Future<bool> _turnOn() async {
+    final turn = ++_turn;
+    _wanted = true;
+    _changed();
     var granted = false;
     try {
       granted = await _reminders.requestPermission();
     } catch (error) {
       _hostFailed('permission', error);
     }
+    if (turn != _turn) return true;
+    _wanted = null;
     _logger.info(LogCategory.app, 'sideload reminder', {'granted': granted});
     _store.reminderOn = granted;
     _changed();
-    if (granted) await _scheduleReminder();
+    return granted && await _scheduleReminder();
   }
 
-  /// A day before the expiry; nothing when that moment has passed.
-  Future<void> _scheduleReminder() async {
+  /// A day before the expiry; nothing when that moment has passed. False when iOS no longer allows notifications,
+  /// which turns the reminder off so 设置 shows what iOS will do.
+  Future<bool> _scheduleReminder() async {
     final expires = _signature?.expires;
-    if (expires == null) return;
+    if (expires == null) return true;
     final at = expires.subtract(reminderLead);
-    if (!at.isAfter(_now())) return;
+    if (!at.isAfter(_now())) return true;
+    var allowed = true;
     try {
-      await _reminders.schedule(at, reminderTitle, reminderBody);
+      allowed = await _reminders.schedule(at, reminderTitle, reminderBody);
     } catch (error) {
       _hostFailed('schedule', error);
     }
+    if (!allowed) {
+      _logger.info(LogCategory.app, 'sideload reminder', {'allowed': false});
+      _store.reminderOn = false;
+      _changed();
+      return false;
+    }
+    // Switched off while iOS took it: the switch's cancel may have gone first.
+    if (!_store.reminderOn) {
+      try {
+        await _reminders.cancel();
+      } catch (error) {
+        _hostFailed('cancel', error);
+      }
+    }
+    return true;
   }
 
   void _hostFailed(String call, Object error) =>
       _logger.warn(LogCategory.app, 'sideload reminder failed', {'call': call, 'error': '${error.runtimeType}'});
 
-  /// Two days or less left, and not warned yet today.
+  /// [warnDays] or less left, and not warned yet today.
   bool get shouldWarnExpiry {
     final days = daysLeft;
-    return days != null && days <= 2 && _store.warnedOn != _today();
+    return days != null && days <= warnDays && _store.warnedOn != _today();
   }
 
   void expiryWarned() {
@@ -308,7 +366,7 @@ final class _NoReminders implements ReminderHost {
   Future<bool> requestPermission() async => false;
 
   @override
-  Future<void> schedule(DateTime at, String title, String body) async {}
+  Future<bool> schedule(DateTime at, String title, String body) async => true;
 
   @override
   Future<void> cancel() async {}
