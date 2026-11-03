@@ -39,7 +39,7 @@ BiliFast 是一个从零开始写的第三方 B 站客户端，用 Flutter 开�
 
 更新：下载新版 IPA，用同一种方式覆盖安装，数据会保留。
 
-SideStore、AltStore 和 Feather 可以添加源 `https://github.com/KaiC5504/BiliFast/releases/latest/download/source.json`，之后新版本直接在里面更新。
+SideStore、AltStore Classic 和 Feather 可以添加源 `https://github.com/KaiC5504/BiliFast/releases/latest/download/source.json`，之后新版本直接在里面更新。
 
 > [!NOTE]
 > iPad 版还在早期开发阶段，目前只适配了首页、视频页和全屏播放，其他页面暂时是 iPhone 布局拉宽，很多功能还没做完。
@@ -153,7 +153,7 @@ BiliFast 的下载引擎是从 BTR 移植过来的，在此基础上又做了提
 不收集任何数据，没有服务器、统计、广告或追踪。详见[隐私政策](docs/privacy.md)。
 
 自签安装时：
-- 每次启动会向 GitHub 查一次有没有新版本。GitHub 能看到你的 IP 地址，开发者收不到任何信息。
+- 每次启动、以及点「检查更新」时，会向 GitHub 查一次有没有新版本。GitHub 能看到你的 IP 地址，开发者收不到任何信息。
 - 通知权限只用来在签名到期前一天提醒你，你同意后才会申请。
 
 ## 📄 声明与致谢
