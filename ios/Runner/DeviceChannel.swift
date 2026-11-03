@@ -165,6 +165,13 @@ final class DeviceHostApiImpl: DeviceHostApi {
       center.removePendingNotificationRequests(withIdentifiers: [Self.reminder])
       return
     }
+    // Before iOS 27, add() succeeds silently once the user has turned the app's notifications off, so ask first and
+    // answer as add() would, letting the reminder show as off.
+    let allowed: [UNAuthorizationStatus] = [.authorized, .provisional, .ephemeral]
+    guard allowed.contains(await center.notificationSettings().authorizationStatus) else {
+      throw DeviceApiError(code: "notifications",
+                           message: "\(UNErrorDomain) \(UNError.Code.notificationsNotAllowed.rawValue)", details: nil)
+    }
     let content = UNMutableNotificationContent()
     content.title = title
     content.body = body
