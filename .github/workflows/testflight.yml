@@ -9,7 +9,7 @@
 # the `testflight` environment, which only main can use (ios-testflight manual-steps §5),
 # and reach only the steps that need them. Never upload the signed IPA, Xcode logs or
 # ios/Flutter/Generated.xcconfig, never `set -x`, `flutter -v` or `env`. An upload also publishes an
-# unsigned IPA, built apart (the sideload job), as a GitHub release.
+# unsigned IPA, built apart (the sideload job), as a GitHub release, with the source.json sideloading stores read.
 name: TestFlight
 run-name: TestFlight ${{ inputs.upload && 'upload' || 'dry run' }} ${{ inputs.sha }}
 
@@ -302,8 +302,8 @@ jobs:
           echo "Still processing after an hour; TestFlight will still show it once Apple is done."
           exit 1
 
-  # An unsigned IPA for sideloading (AltStore, SideStore, Sideloadly, TrollStore re-sign it with the user's own
-  # Apple ID). Its own runner without the environment: no secret, certificate or profile (they carry KaiC's legal
+  # An unsigned IPA for sideloading (SideStore, AltStore, Sideloadly or Feather sign it with the user's own Apple ID
+  # or certificate). Its own runner without the environment: no secret, certificate or profile (they carry KaiC's legal
   # name) is ever near it, and the signed IPA never leaves the build job. Dry runs build it too, as its check.
   sideload:
     name: Unsigned IPA
@@ -357,16 +357,41 @@ jobs:
           cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
           (cd "$RUNNER_TEMP/ipa" && zip -qry "$RUNNER_TEMP/BiliFast-$BUILD_NAME-$BUILD_NUMBER.ipa" Payload)
 
+      # The release's source.json shows the deployment target and the usage descriptions iOS asks permissions with,
+      # read from the built app so the source can't drift from Info.plist.
+      - name: Describe the unsigned app
+        env:
+          BUILD_NUMBER: ${{ needs.build.outputs.number }}
+        run: |
+          plutil -convert json -o "$RUNNER_TEMP/info.json" build/ios/iphoneos/Runner.app/Info.plist
+          jq '{
+            bundleIdentifier: .CFBundleIdentifier,
+            version: .CFBundleShortVersionString,
+            buildVersion: .CFBundleVersion,
+            minOSVersion: .MinimumOSVersion,
+            privacy: with_entries(select(.key | test("^NS[A-Za-z]+UsageDescription$")))
+          }' "$RUNNER_TEMP/info.json" > "$RUNNER_TEMP/sideload-app.json"
+          cat "$RUNNER_TEMP/sideload-app.json"
+          if ! jq -e --arg bundle "$BUNDLE_ID" --arg version "$BUILD_NAME" --arg build "$BUILD_NUMBER" \
+              '.bundleIdentifier == $bundle and .version == $version and .buildVersion == $build
+               and (.minOSVersion | type == "string") and (.privacy | length > 0)' \
+              "$RUNNER_TEMP/sideload-app.json" > /dev/null; then
+            echo "the unsigned app isn't $BUNDLE_ID $BUILD_NAME ($BUILD_NUMBER) with a target and usage descriptions"
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: unsigned-ipa
-          path: ${{ runner.temp }}/BiliFast-*.ipa
+          path: |
+            ${{ runner.temp }}/BiliFast-*.ipa
+            ${{ runner.temp }}/sideload-app.json
           retention-days: 7
           if-no-files-found: error
           overwrite: true
 
-  # Publishes the unsigned IPA once Apple has accepted the same build, named by its TestFlight number. The only job
-  # with a write token, and it runs nothing from the repo.
+  # Publishes the unsigned IPA and source.json once Apple has accepted the same build, named by its TestFlight
+  # number. The only job with a write token, and it runs nothing from the repo: inline shell and jq only.
   release:
     name: GitHub release
     needs: [build, sideload]
@@ -381,6 +406,73 @@ jobs:
           name: unsigned-ipa
           path: ipa
 
+      # AltStore's source format (faq.altstore.io/developers/make-a-source), which SideStore and Feather read too. The
+      # app and the README point at releases/latest/download/source.json, so every release carries one by that name.
+      - name: Write the source
+        env:
+          BUILD_NUMBER: ${{ needs.build.outputs.number }}
+        run: |
+          set -- ipa/*.ipa
+          if [ $# -ne 1 ] || [ ! -f "$1" ]; then
+            echo "expected exactly one IPA, found: $*"
+            exit 1
+          fi
+          size=$(stat -c %s "$1")
+          repo="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          cat > "$RUNNER_TEMP/source.jq" <<'JQ'
+          # The input is the sideload job's sideload-app.json; it crossed a job boundary, so it is checked first.
+          def fail($why): error("source.json: \($why)");
+          if .bundleIdentifier != $bundle then fail("the app is \(.bundleIdentifier), not \($bundle)")
+          elif .version != $version or .buildVersion != $build then
+            fail("the app is \(.version) (\(.buildVersion)), not \($version) (\($build))")
+          elif (.minOSVersion | type == "string" and test("^[0-9]+(\\.[0-9]+)*$")) | not then
+            fail("no deployment target")
+          elif (.privacy | type == "object" and all(.[]; type == "string" and length > 0)
+                and (keys | all(test("^NS[A-Za-z]+UsageDescription$")))) | not then fail("bad usage descriptions")
+          elif ($size | type == "number" and . > 0) | not then fail("empty IPA")
+          else . end
+          | {
+            name: "BiliFast",
+            identifier: "\($bundle).source",
+            subtitle: "BiliFast 的安装和更新",
+            iconURL: $icon,
+            website: $website,
+            tintColor: "#FB7299",
+            apps: [{
+              name: "BiliFast",
+              bundleIdentifier: $bundle,
+              developerName: "KaiC",
+              subtitle: "还是熟悉的味道，就是快了亿点点。",
+              localizedDescription: "从零写的第三方 B 站客户端：界面和官方 App 一样，内置 BTR 下载引擎，视频同时从多个 CDN 节点拉取，播放更快。\n\n非官方的个人项目，与哔哩哔哩无关。",
+              iconURL: $icon,
+              tintColor: "#FB7299",
+              category: "entertainment",
+              versions: [{
+                version: $version,
+                buildVersion: $build,
+                date: $date,
+                localizedDescription: "发布页：\($website)/releases/tag/v\($version)-\($build)",
+                downloadURL: $url,
+                size: $size,
+                minOSVersion: .minOSVersion
+              }],
+              # Unsigned, the app carries no entitlements; the signer adds its own.
+              appPermissions: {entitlements: [], privacy: .privacy}
+            }],
+            news: []
+          }
+          JQ
+          jq --arg bundle "$BUNDLE_ID" \
+            --arg version "$BUILD_NAME" \
+            --arg build "$BUILD_NUMBER" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg url "$repo/releases/download/v$BUILD_NAME-$BUILD_NUMBER/${1#ipa/}" \
+            --argjson size "$size" \
+            --arg icon "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/ios/Runner/Assets.xcassets/AppIcon.appiconset/icon-1024.png" \
+            --arg website "$repo" \
+            -f "$RUNNER_TEMP/source.jq" ipa/sideload-app.json > "$RUNNER_TEMP/source.json"
+          cat "$RUNNER_TEMP/source.json"
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -393,11 +485,11 @@ jobs:
           fi
           notes="$RUNNER_TEMP/notes.md"
           cat > "$notes" <<EOF
-          未签名的 IPA，需要用 AltStore、SideStore、Sideloadly 或 TrollStore 自签安装。免费 Apple ID 签名 7 天后过期，到期重签即可。
+          未签名的 IPA，用 SideStore、AltStore、Sideloadly 或 Feather 签名后安装。免费 Apple ID 的签名 7 天后过期，到期重签就行，数据不会丢。
 
-          和 TestFlight 的 $BUILD_NAME ($BUILD_NUMBER) 是同一个版本。
+          SideStore、AltStore 和 Feather 可以添加源 $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/latest/download/source.json，之后新版本直接在里面更新。
           EOF
-          gh release create "v$BUILD_NAME-$BUILD_NUMBER" "$1" \
+          gh release create "v$BUILD_NAME-$BUILD_NUMBER" "$1" "$RUNNER_TEMP/source.json" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "BiliFast $BUILD_NAME ($BUILD_NUMBER)" \

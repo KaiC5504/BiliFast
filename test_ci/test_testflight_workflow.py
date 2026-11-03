@@ -2,7 +2,11 @@
 repo is public, so the workflow's logs and artifacts are too; these keep the signing
 secrets out of both, and keep a dry run from ever uploading."""
 
+import json
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -22,6 +26,11 @@ def live(run: str) -> str:
     """The script without comment lines, with continuation lines joined."""
     code = "\n".join(l for l in run.splitlines() if not l.lstrip().startswith("#"))
     return re.sub(r"\\\n\s*", " ", code)
+
+
+def source_program(run: str) -> str:
+    """The jq program the release job's heredoc writes."""
+    return re.search(r"<<'JQ'\n(.*?)\nJQ\n", run, re.S).group(1)
 
 
 class WorkflowTest(unittest.TestCase):
@@ -129,7 +138,8 @@ class WorkflowTest(unittest.TestCase):
         uploads = {job: s for job, s in self.steps() if "upload-artifact" in s.get("uses", "")}
         self.assertEqual({"build", "sideload"}, set(uploads))
         self.assertEqual("${{ runner.temp }}/testflight-build.json", uploads["build"]["with"]["path"])
-        self.assertEqual("${{ runner.temp }}/BiliFast-*.ipa", uploads["sideload"]["with"]["path"])
+        self.assertEqual(["${{ runner.temp }}/BiliFast-*.ipa", "${{ runner.temp }}/sideload-app.json"],
+                         uploads["sideload"]["with"]["path"].splitlines())
         for upload in uploads.values():
             self.assertIs(True, upload["with"]["overwrite"])
 
@@ -140,10 +150,66 @@ class WorkflowTest(unittest.TestCase):
             self.assertNotIn("environment", job, name)
             self.assertNotRegex(yaml.safe_dump(job), SECRET_REF, name)
             self.assertNotRegex(yaml.safe_dump(job), r"app-store-connect|keychain|export_options", name)
+        self.assertNotIn("github.token", yaml.safe_dump(self.jobs["sideload"]))
         build = live(self.step("sideload", "Build the unsigned IPA")["run"])
         self.assertIn("flutter build ios --release --no-codesign", build)
         self.assertIn("embedded.mobileprovision", build)
         self.assertNotIn("checkout", yaml.safe_dump(self.jobs["release"]))
+
+    def test_the_release_job_runs_nothing_from_the_repo(self):
+        # It holds the write token; a repo script there would be code the token runs, so it is shell and jq inline.
+        uses = [s["uses"] for _, s in self.steps("release") if "uses" in s]
+        self.assertEqual(1, len(uses))
+        self.assertIn("actions/download-artifact@", uses[0])
+        for _, step in self.steps("release"):
+            run = step.get("run", "")
+            if "<<'JQ'" in run:
+                run = run.replace(source_program(run), "")
+            self.assertNotRegex(live(run),r"\b(python3?|node|ruby|perl|bash|sh|uv|fvm|flutter|dart|make|npm|npx)\b"
+                                     r"|\bsource\s|(^|\s)\.\s|\./|scripts/|tools/", step.get("name"))
+        source = self.step("release", "Write the source")["run"]
+        # jq reads only the program this step writes and the artifact's description, never a file from the repo.
+        self.assertIn("cat > \"$RUNNER_TEMP/source.jq\" <<'JQ'", source)
+        jq = re.findall(r"(?m)^\s*jq\b.*$", live(source.replace(source_program(source), "")))
+        self.assertEqual(1, len(jq))
+        self.assertEqual(['"$RUNNER_TEMP/source.jq"'], re.findall(r"\s-f (\S+)", jq[0]))
+
+    def test_the_write_token_reaches_only_the_publish_step(self):
+        for _, step in self.steps("release"):
+            has_token = "github.token" in yaml.safe_dump(step)
+            self.assertEqual(step.get("name") == "Publish", has_token, step.get("name", step.get("uses")))
+
+    def test_every_release_carries_the_source(self):
+        names = [s.get("name") for _, s in self.steps("release")]
+        self.assertLess(names.index("Write the source"), names.index("Publish"))
+        self.assertIn('> "$RUNNER_TEMP/source.json"', self.step("release", "Write the source")["run"])
+        publish = live(self.step("release", "Publish")["run"])
+        self.assertIn('gh release create "v$BUILD_NAME-$BUILD_NUMBER" "$1" "$RUNNER_TEMP/source.json"', publish)
+        self.assertIn("/releases/latest/download/source.json", publish)
+        # The app adds and checks the source by this address, so the asset's name is the contract.
+        links = (ROOT / "lib/sideload/sideload_links.dart").read_text(encoding="utf-8")
+        url = re.search(r"const sourceUrl = '([^']+)'", links).group(1)
+        self.assertEqual("https://github.com/KaiC5504/BiliFast/releases/latest/download/source.json", url)
+
+    def test_the_source_program_gets_every_argument_it_uses(self):
+        # A missing --arg is a jq compile error, which would only show on an upload's release job.
+        source = self.step("release", "Write the source")["run"]
+        program = source_program(source)
+        used = set(re.findall(r"\$(\w+)", program)) - {"why", "__loc__"}
+        passed = set(re.findall(r"--arg(?:json)? (\w+) ", source))
+        self.assertEqual(used, passed)
+        self.assertIn('--argjson size "$size"', source)
+        self.assertIn('--arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)"', source)
+        self.assertIn('-f "$RUNNER_TEMP/source.jq" ipa/sideload-app.json > "$RUNNER_TEMP/source.json"', live(source))
+
+    def test_the_sideload_job_describes_the_app_it_built(self):
+        names = [s.get("name") for _, s in self.steps("sideload")]
+        self.assertLess(names.index("Build the unsigned IPA"), names.index("Describe the unsigned app"))
+        describe = live(self.step("sideload", "Describe the unsigned app")["run"])
+        self.assertIn("build/ios/iphoneos/Runner.app/Info.plist", describe)
+        self.assertIn('"^NS[A-Za-z]+UsageDescription$"', describe)
+        self.assertIn("minOSVersion: .MinimumOSVersion", describe)
+        self.assertIn("jq -e", describe)
 
     def test_releases_only_follow_an_upload(self):
         self.assertEqual("inputs.upload", self.jobs["release"]["if"])
@@ -253,6 +319,93 @@ class WorkflowTest(unittest.TestCase):
         names = [s.get("name") for _, s in self.steps("build")]
         self.assertLess(names.index("Check the IPA"), names.index("Upload to TestFlight"))
         self.assertEqual("inputs.upload", self.step("build", "Upload to TestFlight")["if"])
+
+
+@unittest.skipUnless(shutil.which("jq"), "jq is not on PATH")
+class SourceProgramTest(unittest.TestCase):
+    """Runs the release job's jq program on a sample description: the release job only runs on an upload, so this is
+    the program's only check before a real release."""
+
+    APP = {
+        "bundleIdentifier": "com.kaichuan.bilifast",
+        "version": "1.3.0",
+        "buildVersion": "8",
+        "minOSVersion": "26.0",
+        "privacy": {
+            "NSCameraUsageDescription": "用于拍照添加到评论。",
+            "NSPhotoLibraryUsageDescription": "用于在评论里添加图片。",
+        },
+    }
+    IPA = "https://github.com/KaiC5504/BiliFast/releases/download/v1.3.0-8/BiliFast-1.3.0-8.ipa"
+
+    @classmethod
+    def setUpClass(cls):
+        doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        step = next(s for s in doc["jobs"]["release"]["steps"] if s.get("name") == "Write the source")
+        cls.program = source_program(step["run"])
+
+    def run_program(self, app, size=48213504, build="8"):
+        with tempfile.TemporaryDirectory() as folder:
+            program = Path(folder, "source.jq")
+            program.write_text(self.program, encoding="utf-8", newline="\n")
+            described = Path(folder, "sideload-app.json")
+            described.write_text(json.dumps(app, ensure_ascii=False), encoding="utf-8")
+            args = {"bundle": "com.kaichuan.bilifast", "version": "1.3.0", "build": build,
+                    "date": "2026-11-04T08:00:00Z", "url": self.IPA,
+                    "icon": "https://raw.githubusercontent.com/KaiC5504/BiliFast/main/ios/Runner/Assets.xcassets/"
+                            "AppIcon.appiconset/icon-1024.png",
+                    "website": "https://github.com/KaiC5504/BiliFast"}
+            command = ["jq"]
+            for name, value in args.items():
+                command += ["--arg", name, value]
+            command += ["--argjson", "size", str(size), "-f", str(program), str(described)]
+            return subprocess.run(command, capture_output=True)
+
+    def source(self, app):
+        result = self.run_program(app)
+        self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", "replace"))
+        return json.loads(result.stdout.decode("utf-8"))
+
+    def test_the_source_has_altstores_fields(self):
+        # faq.altstore.io/developers/make-a-source, and the decoders of AltStore, SideStore and Feather.
+        source = self.source(self.APP)
+        self.assertEqual("BiliFast", source["name"])
+        self.assertEqual("com.kaichuan.bilifast.source", source["identifier"])
+        self.assertEqual("#FB7299", source["tintColor"])
+        self.assertEqual([], source["news"])
+        for key in ("subtitle", "iconURL", "website"):
+            self.assertIsInstance(source[key], str, key)
+        [app] = source["apps"]
+        self.assertEqual(("BiliFast", "com.kaichuan.bilifast", "KaiC", "entertainment"),
+                         (app["name"], app["bundleIdentifier"], app["developerName"], app["category"]))
+        for key in ("subtitle", "localizedDescription", "iconURL", "tintColor"):
+            self.assertIsInstance(app[key], str, key)
+        self.assertTrue(app["iconURL"].endswith("/main/ios/Runner/Assets.xcassets/AppIcon.appiconset/icon-1024.png"))
+        self.assertTrue((ROOT / "ios/Runner/Assets.xcassets/AppIcon.appiconset/icon-1024.png").is_file())
+        [version] = app["versions"]
+        self.assertEqual({"version": "1.3.0", "buildVersion": "8", "date": "2026-11-04T08:00:00Z",
+                          "downloadURL": self.IPA, "size": 48213504, "minOSVersion": "26.0"},
+                         {k: v for k, v in version.items() if k != "localizedDescription"})
+        self.assertIn("/releases/tag/v1.3.0-8", version["localizedDescription"])
+        self.assertEqual({"entitlements": [], "privacy": self.APP["privacy"]}, app["appPermissions"])
+
+    def test_a_wrong_description_publishes_nothing(self):
+        wrong = [
+            {**self.APP, "bundleIdentifier": "com.example.other"},
+            {**self.APP, "buildVersion": "7"},
+            {**self.APP, "version": "1.2.0"},
+            {k: v for k, v in self.APP.items() if k != "minOSVersion"},
+            {**self.APP, "minOSVersion": "latest"},
+            {**self.APP, "privacy": [{"name": "Camera", "usageDescription": "x"}]},
+            {**self.APP, "privacy": {"NSCameraUsageDescription": ""}},
+            {**self.APP, "privacy": {"CFBundleIdentifier": "com.kaichuan.bilifast"}},
+        ]
+        for app in wrong:
+            result = self.run_program(app)
+            self.assertNotEqual(0, result.returncode, app)
+            self.assertIn(b"source.json:", result.stderr, app)
+            self.assertEqual(b"", result.stdout, app)
+        self.assertNotEqual(0, self.run_program(self.APP, size=0).returncode)
 
 
 class OtherWorkflowsTest(unittest.TestCase):
