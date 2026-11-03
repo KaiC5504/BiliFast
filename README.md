@@ -6,7 +6,7 @@
   [![平台](https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-iPhone%20%7C%20iPad-black?style=flat-square&logo=apple)](#-安装)
   [![系统](https://img.shields.io/badge/%E7%B3%BB%E7%BB%9F-iOS%2026%2B-555555?style=flat-square)](#-安装)
   [![引擎](https://img.shields.io/badge/%E5%BC%95%E6%93%8E-BTR-fb7299?style=flat-square)](https://github.com/MrTangLuyao/Bilibili-thread-ripper)
-  [![安装](https://img.shields.io/badge/%E5%AE%89%E8%A3%85-TestFlight%20%7C%20IPA-0D96F6?style=flat-square)](#-安装)
+  [![安装](https://img.shields.io/badge/%E5%AE%89%E8%A3%85-IPA-0D96F6?style=flat-square)](#-安装)
 
   [**安装**](#-安装) · [功能](#-功能) · [常见问题](#-常见问题) · [播放原理](#-播放原理) · [实测](#-实测) · [Releases](https://github.com/KaiC5504/BiliFast/releases)
 
@@ -26,12 +26,18 @@ BiliFast 是一个从零开始写的第三方 B 站客户端，用 Flutter 开�
 
 需要 iOS / iPadOS 26 及以上。
 
-| 方式 | 安装 | 更新 |
-| --- | --- | --- |
-| **TestFlight** | 公开测试正在审核，通过后会把链接放在这里 | 自动更新 |
-| **IPA** | 到 [Releases](https://github.com/KaiC5504/BiliFast/releases) 下载，用 AltStore、SideStore、Sideloadly 或 TrollStore 自签安装 | 下载新版覆盖安装；免费 Apple ID 签名 7 天后过期，需要重签 |
+> [!NOTE]
+> TestFlight 公开测试被苹果拒了 😭 第三方 B 站客户端过不了审，目前只能自签安装 IPA。
 
-两种方式是同一个版本，Release 标题里的版本号和 TestFlight 对应。
+到 [Releases](https://github.com/KaiC5504/BiliFast/releases) 下载最新的 IPA，任选一种方式安装：
+
+| 方式 | 需要 | 7 天后 |
+| --- | --- | --- |
+| **电脑签名** | 电脑 + Sideloadly 或 AltServer | 用电脑重签；AltServer 开着且在同一 Wi-Fi 下会自动续签 |
+| **SideStore** | 第一次用电脑装好 SideStore，再从 App Store 装 LocalDevVPN | 打开 LocalDevVPN，在 SideStore 里刷新，手机上就能完成 |
+| **已有证书** | 付费开发者账号，或 Feather 等签名工具里已有的证书 | 不用管，到证书过期为止 |
+
+更新：下载新版 IPA，用同一种方式覆盖安装，数据会保留。
 
 > [!NOTE]
 > iPad 版还在早期开发阶段，目前只适配了首页、视频页和全屏播放，其他页面暂时是 iPhone 布局拉宽，很多功能还没做完。
