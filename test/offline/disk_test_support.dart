@@ -16,7 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../playback/fakes.dart';
 
 /// The background session as a test drives it: every call recorded, takeBack answering [results] once.
-final class FakeOfflineHost implements OfflineHost {
+base class FakeOfflineHost implements OfflineHost {
   FakeOfflineHost({this.backgroundTransfers = true});
 
   @override

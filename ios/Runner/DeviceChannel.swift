@@ -1,8 +1,10 @@
 import Flutter
 import UIKit
+import UserNotifications
 
-/// Dart's full-screen rotation and level controls and the drawn status bar's feed (lib/device/): Pigeon's
-/// DeviceHostApi and DeviceEventApi (DeviceApi.g.swift). The app delegate's supported orientations follow `mask`.
+/// Dart's full-screen rotation and level controls, the drawn status bar's feed (lib/device/) and a sideloaded
+/// install's 到期提醒: Pigeon's DeviceHostApi and DeviceEventApi (DeviceApi.g.swift). The app delegate's supported
+/// orientations follow `mask`.
 enum DeviceChannel {
   /// What the app delegate reports; portrait until Dart asks for full screen. The iPad turns freely on every screen,
   /// full screen included, so it is always all four there.
@@ -147,12 +149,46 @@ final class DeviceHostApiImpl: DeviceHostApi {
     MainActor.assumeIsolated { enabled ? status.start() : status.stop() }
   }
 
-  // Stubs until the sideload slice's Swift agent fills them (UNUserNotificationCenter).
-  func requestReminderPermission() async throws -> Bool { false }
+  func requestReminderPermission() async throws -> Bool {
+    do {
+      return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+    } catch {
+      throw Self.notificationError(error)
+    }
+  }
 
-  func scheduleReminder(epochMs: Int64, title: String, body: String) async throws {}
+  func scheduleReminder(epochMs: Int64, title: String, body: String) async throws {
+    let center = UNUserNotificationCenter.current()
+    let interval = Date(timeIntervalSince1970: Double(epochMs) / 1000).timeIntervalSinceNow
+    // A time-interval trigger raises unless the interval is positive; the reminder it would replace is stale too.
+    guard interval > 0 else {
+      center.removePendingNotificationRequests(withIdentifiers: [Self.reminder])
+      return
+    }
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = body
+    content.sound = .default
+    let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+    do {
+      try await center.add(UNNotificationRequest(identifier: Self.reminder, content: content, trigger: trigger))
+    } catch {
+      throw Self.notificationError(error)
+    }
+  }
 
-  func cancelReminder() throws {}
+  func cancelReminder() throws {
+    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.reminder])
+  }
+
+  /// The one signature reminder: a request added under an identifier already pending replaces it.
+  private static let reminder = "com.kaichuan.bilifast.signature.reminder"
+
+  /// Only the domain and code reach Dart, never the error's localized text.
+  private static func notificationError(_ error: Error) -> DeviceApiError {
+    let failure = error as NSError
+    return DeviceApiError(code: "notifications", message: "\(failure.domain) \(failure.code)", details: nil)
+  }
 }
 
 /// UIDevice's orientation notifications, on only while a page with a player is open.

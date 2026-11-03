@@ -72,11 +72,24 @@ final class OfflineHostApiImpl: OfflineHostApi {
   static let shared = ContinuedDownloads()
   static let identifier = "com.kaichuan.bilifast.offline.continued"
 
+  /// How a refusal that holds for the whole install begins; Dart then stops asking (ios_offline_host.dart).
+  static let unavailable = "unavailable"
+
   /// A request whose launch hasn't come by then no longer holds back a new one.
   private static let pendingLimit: TimeInterval = 10
 
+  /// BGContinuedProcessingTaskRequest's identifier must begin with the app's bundle id. SideStore and AltStore re-sign
+  /// under their own (com.kaichuan.bilifast.ABCDE12345) and leave Info.plist's permitted identifier as built, so such
+  /// an install never registers or submits one.
+  private static var underBundleId: Bool {
+    guard let bundle = Bundle.main.bundleIdentifier else { return false }
+    return identifier.hasPrefix(bundle + ".")
+  }
+
   /// Registering an identifier twice raises, so the first answer is kept for the process.
   private var registered: Bool?
+  /// Why iOS will never take the request on this install, once known.
+  private var refusedForGood: String?
   private var task: BGContinuedProcessingTask?
   private var pendingSince: Date?
   /// Dart ended a request before it started: its launch, if it still comes, completes at once.
@@ -95,7 +108,9 @@ final class OfflineHostApiImpl: OfflineHostApi {
       return nil
     }
     if let pendingSince, Date().timeIntervalSince(pendingSince) < Self.pendingLimit { return nil }
-    guard register() else { return "not registered" }
+    if let refusedForGood { return refusedForGood }
+    guard Self.underBundleId else { return refuseForGood("identifier outside the bundle id") }
+    guard register() else { return refuseForGood("not registered") }
     let request = BGContinuedProcessingTaskRequest(identifier: Self.identifier, title: title, subtitle: subtitle)
     request.strategy = .fail
     // Set before submitting, in case iOS ever runs the launch handler before submit returns.
@@ -107,9 +122,18 @@ final class OfflineHostApiImpl: OfflineHostApi {
     } catch {
       pendingSince = nil
       let failure = error as NSError
-      return "\(failure.domain) \(failure.code)"
+      let reason = "\(failure.domain) \(failure.code)"
+      // Busy or ineligible right now may pass at the user's next action; not permitted never will.
+      if (error as? BGTaskScheduler.Error)?.code == .notPermitted { return refuseForGood(reason) }
+      return reason
     }
     return nil
+  }
+
+  private func refuseForGood(_ reason: String) -> String {
+    let refusal = "\(Self.unavailable): \(reason)"
+    refusedForGood = refusal
+    return refusal
   }
 
   func update(done: Int64, total: Int64, subtitle: String) {

@@ -56,12 +56,22 @@ class IosOfflineHost implements OfflineHost {
   @override
   set onRangeFinished(void Function(BackgroundRangeResult result)? callback) => _events.rangeFinished = callback;
 
+  /// How OfflineHost.swift's refusals that hold for the whole install begin (`ContinuedDownloads.unavailable`): a
+  /// re-signed install whose bundle id no longer heads the task's identifier, or iOS's not permitted.
+  static const continuedUnavailable = 'unavailable';
+
+  bool _continuedUnavailable = false;
+
+  /// False after such a refusal, so the library asks no more and the hand-off carries the downloads away.
   @override
-  bool get continuedProcessing => true;
+  bool get continuedProcessing => !_continuedUnavailable;
 
   @override
-  Future<String?> beginContinued({required String title, required String subtitle}) =>
-      _api.beginContinued(title, subtitle);
+  Future<String?> beginContinued({required String title, required String subtitle}) async {
+    final refusal = await _api.beginContinued(title, subtitle);
+    if (refusal != null && refusal.startsWith(continuedUnavailable)) _continuedUnavailable = true;
+    return refusal;
+  }
 
   @override
   Future<void> updateContinued({required int done, required int total, required String subtitle}) =>

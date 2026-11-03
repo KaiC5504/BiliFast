@@ -297,6 +297,22 @@ void main() {
       expect(explored.map((choice) => choice.arm).toSet(), {h128, h64, h32});
       expect(choices.where((choice) => choice.why == 'best').map((choice) => choice.arm).toSet(), {continued});
     });
+
+    test('where continued never runs (a re-signed install), it is never drawn: untried, best or explored', () {
+      final fresh = BackgroundTrials(random: math.Random(7));
+      final untried = [for (var i = 0; i < 400; i++) fresh.choose(continued: false)];
+      expect(untried.map((choice) => choice.arm).toSet(), {h128});
+
+      final trials = BackgroundTrials(random: math.Random(7))
+        ..record(trip(continued, mbps: 50))
+        ..record(trip(h128, mbps: 1))
+        ..record(trip(h64, mbps: 2))
+        ..record(trip(h32, mbps: 3));
+      final choices = [for (var i = 0; i < 4000; i++) trials.choose(continued: false)];
+      expect(choices.map((choice) => choice.arm), everyElement(isNot(continued)));
+      expect(choices.where((choice) => choice.why == 'explore'), isNotEmpty);
+      expect(trials.best, continued, reason: 'its numbers stay for the log');
+    });
   });
 
   group('best', () {
