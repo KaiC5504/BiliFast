@@ -364,6 +364,15 @@ jobs:
           BUILD_NUMBER: ${{ needs.build.outputs.number }}
         run: |
           plutil -convert json -o "$RUNNER_TEMP/info.json" build/ios/iphoneos/Runner.app/Info.plist
+          # AltStore and SideStore want the source to declare every key containing UsageDescription, NS or not, so a
+          # key the privacy filter below would leave out (or an empty one) fails here instead of going missing.
+          unlisted=$(jq -r 'to_entries[] | select(.key | contains("UsageDescription"))
+            | select((.key | test("^NS[A-Za-z]+UsageDescription$")) and (.value | type == "string" and length > 0) | not)
+            | .key' "$RUNNER_TEMP/info.json")
+          if [ -n "$unlisted" ]; then
+            echo "usage descriptions source.json would leave out or carry empty: $unlisted"
+            exit 1
+          fi
           jq '{
             bundleIdentifier: .CFBundleIdentifier,
             version: .CFBundleShortVersionString,
@@ -484,10 +493,11 @@ jobs:
             exit 1
           fi
           notes="$RUNNER_TEMP/notes.md"
+          # The address in backticks: GitHub's autolinker would run a bare one on into the full-width comma after it.
           cat > "$notes" <<EOF
           未签名的 IPA，用 SideStore、AltStore、Sideloadly 或 Feather 签名后安装。免费 Apple ID 的签名 7 天后过期，到期重签就行，数据不会丢。
 
-          SideStore、AltStore 和 Feather 可以添加源 $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/latest/download/source.json，之后新版本直接在里面更新。
+          SideStore、AltStore Classic 和 Feather 可以添加源 \`$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/latest/download/source.json\`，之后新版本直接在里面更新。
           EOF
           gh release create "v$BUILD_NAME-$BUILD_NUMBER" "$1" "$RUNNER_TEMP/source.json" \
             --repo "$GITHUB_REPOSITORY" \

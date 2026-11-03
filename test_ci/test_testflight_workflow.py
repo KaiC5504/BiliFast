@@ -3,6 +3,7 @@ repo is public, so the workflow's logs and artifacts are too; these keep the sig
 secrets out of both, and keep a dry run from ever uploading."""
 
 import json
+import plistlib
 import re
 import shutil
 import subprocess
@@ -31,6 +32,18 @@ def live(run: str) -> str:
 def source_program(run: str) -> str:
     """The jq program the release job's heredoc writes."""
     return re.search(r"<<'JQ'\n(.*?)\nJQ\n", run, re.S).group(1)
+
+
+def unlisted_program(run: str) -> str:
+    """The jq program the sideload job names the usage descriptions source.json would miss with."""
+    return re.search(r"unlisted=\$\(jq -r '(.*?)' \"\$RUNNER_TEMP/info.json\"\)", run, re.S).group(1)
+
+
+def require_jq():
+    # The workflow's jq programs run on GitHub only for a real release, so these tests are their one check before it.
+    if not shutil.which("jq"):
+        raise AssertionError("jq is not on PATH: the workflow's jq programs are checked only here before a real "
+                             "release, so install jq rather than skip them")
 
 
 class WorkflowTest(unittest.TestCase):
@@ -211,6 +224,19 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("minOSVersion: .MinimumOSVersion", describe)
         self.assertIn("jq -e", describe)
 
+    def test_a_usage_description_source_json_would_miss_fails_the_build(self):
+        # AltStore and SideStore count every key containing UsageDescription; the three filters have to agree.
+        describe = self.step("sideload", "Describe the unsigned app")["run"]
+        unlisted = unlisted_program(describe)
+        privacy_filter = 'test("^NS[A-Za-z]+UsageDescription$")'
+        self.assertIn('contains("UsageDescription")', unlisted)
+        self.assertIn(privacy_filter, unlisted)
+        self.assertIn(f"privacy: with_entries(select(.key | {privacy_filter}))", describe)
+        self.assertIn(privacy_filter, source_program(self.step("release", "Write the source")["run"]))
+        code = live(describe)
+        self.assertRegex(code, r'\nif \[ -n "\$unlisted" \]; then\n\s*echo [^\n]*\n\s*exit 1\n\s*fi\n')
+        self.assertLess(code.index("unlisted=$(jq"), code.index('> "$RUNNER_TEMP/sideload-app.json"'))
+
     def test_releases_only_follow_an_upload(self):
         self.assertEqual("inputs.upload", self.jobs["release"]["if"])
         self.assertNotIn("if", self.jobs["sideload"])
@@ -218,6 +244,15 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn('gh release create "v$BUILD_NAME-$BUILD_NUMBER"', publish)
         self.assertIn('--target "$GITHUB_SHA"', publish)
         self.assertEqual("${{ github.token }}", self.step("release", "Publish")["env"]["GH_TOKEN"])
+
+    def test_release_note_addresses_end_before_the_chinese(self):
+        # GitHub's autolinker runs a bare address on into the full-width comma after it, and a tap on the link 404s.
+        publish = self.step("release", "Publish")["run"]
+        notes = re.search(r"<<EOF\n(.*?)\nEOF\n", publish, re.S).group(1)
+        addresses = re.findall(r"(?:\$GITHUB_SERVER_URL|https?://)[^\s\\`]*", notes)
+        self.assertTrue(addresses)
+        for address in addresses:
+            self.assertTrue(address.isascii(), address)
 
     def test_no_shell_tracing_or_verbose_flutter(self):
         for job, step in self.steps():
@@ -321,7 +356,6 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual("inputs.upload", self.step("build", "Upload to TestFlight")["if"])
 
 
-@unittest.skipUnless(shutil.which("jq"), "jq is not on PATH")
 class SourceProgramTest(unittest.TestCase):
     """Runs the release job's jq program on a sample description: the release job only runs on an upload, so this is
     the program's only check before a real release."""
@@ -340,6 +374,7 @@ class SourceProgramTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        require_jq()
         doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         step = next(s for s in doc["jobs"]["release"]["steps"] if s.get("name") == "Write the source")
         cls.program = source_program(step["run"])
@@ -406,6 +441,42 @@ class SourceProgramTest(unittest.TestCase):
             self.assertIn(b"source.json:", result.stderr, app)
             self.assertEqual(b"", result.stdout, app)
         self.assertNotEqual(0, self.run_program(self.APP, size=0).returncode)
+
+
+class UsageDescriptionCheckTest(unittest.TestCase):
+    """Runs the sideload job's check that source.json can list every usage description, on the app's Info.plist."""
+
+    @classmethod
+    def setUpClass(cls):
+        require_jq()
+        doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        step = next(s for s in doc["jobs"]["sideload"]["steps"] if s.get("name") == "Describe the unsigned app")
+        cls.program = unlisted_program(step["run"])
+        with (ROOT / "ios/Runner/Info.plist").open("rb") as plist:
+            cls.info = plistlib.load(plist)
+
+    def unlisted(self, info):
+        with tempfile.TemporaryDirectory() as folder:
+            program = Path(folder, "unlisted.jq")
+            program.write_text(self.program, encoding="utf-8", newline="\n")
+            converted = Path(folder, "info.json")
+            converted.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+            result = subprocess.run(["jq", "-r", "-f", str(program), str(converted)], capture_output=True)
+        self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", "replace"))
+        return result.stdout.decode("utf-8").splitlines()
+
+    def test_the_apps_usage_descriptions_all_reach_the_source(self):
+        self.assertTrue(any("UsageDescription" in key for key in self.info))
+        self.assertEqual([], self.unlisted(self.info))
+
+    def test_a_key_the_privacy_filter_misses_is_named(self):
+        for key in ("NFCReaderUsageDescription", "NSCameraUsageDescription~ipad", "NSUser_TrackingUsageDescription"):
+            self.assertEqual([key], self.unlisted({**self.info, key: "用于测试。"}), key)
+
+    def test_an_empty_or_non_string_description_is_named(self):
+        for value in ("", 1, True, None, ["用于测试。"], {"text": "用于测试。"}):
+            info = {**self.info, "NSCameraUsageDescription": value}
+            self.assertEqual(["NSCameraUsageDescription"], self.unlisted(info), value)
 
 
 class OtherWorkflowsTest(unittest.TestCase):
