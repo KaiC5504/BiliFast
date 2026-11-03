@@ -1,6 +1,6 @@
 # BiliFast Privacy Policy
 
-Last updated: 2026-11-01
+Last updated: 2026-11-04
 
 BiliFast is an unofficial, third-party client for Bilibili, made by one developer for personal use. It is not
 affiliated with or endorsed by Bilibili.
@@ -24,11 +24,19 @@ As with any Bilibili client, the app talks to Bilibili's own servers to show and
 you are logged in: watch history, likes, coins, favourites, follows, comments and danmaku you send, and pictures you
 attach to a comment. Bilibili's own privacy policy covers that data.
 
+## What goes to GitHub
+
+Only on a sideloaded install (one you signed yourself, not from TestFlight): once per launch, and when you tap 检查更新,
+the app asks GitHub for the newest release. GitHub sees your IP address, as with any web request; nothing about you
+is sent, and the developer receives nothing.
+
 ## Permissions
 
 - Photos: only to attach a picture to a comment, or to save a video screenshot you take.
 - Camera: only to take a picture for a comment.
 - Local network: only for 发送日志到电脑, when you turn it on.
+- Notifications: only on a sideloaded install, for the 到期提醒 the day before its signature expires. The app asks
+  iOS for it only after you agree to the reminder.
 
 ## Contact
 
@@ -45,5 +53,8 @@ BiliFast 是非官方的第三方哔哩哔哩客户端，与哔哩哔哩无关�
   App 即全部删除。日志只有你自己导出，或在「开发者」里打开「发送日志到电脑」（发到你自己局域网里的电脑）时才会离开手机。
 - **发给哔哩哔哩的**：和任何 B 站客户端一样，看视频、以及登录后的历史记录、点赞、投币、收藏、关注、评论、弹幕和评论图片，
   都直接发给哔哩哔哩的服务器，适用哔哩哔哩自己的隐私政策。
-- **权限**：相册和相机只用于评论配图和保存你截的视频画面；本地网络只用于「发送日志到电脑」。
+- **发给 GitHub 的**：自签安装的版本每次启动、以及点「检查更新」时，会向 GitHub 查一次有没有新版本。GitHub 能看到你的
+  IP 地址，开发者收不到任何信息。
+- **权限**：相册和相机只用于评论配图和保存你截的视频画面；本地网络只用于「发送日志到电脑」；通知只用于自签安装的「到期提醒」，
+  在签名到期前一天提醒你，你同意后才会申请。
 - **联系**：https://github.com/KaiC5504/BiliFast/issues
