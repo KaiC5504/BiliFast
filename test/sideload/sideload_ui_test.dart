@@ -14,7 +14,6 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/sideload/sideload_links.dart';
 import 'package:bilifast/sideload/sideload_model.dart';
 import 'package:bilifast/sideload/sideload_prompts.dart';
-import 'package:bilifast/sideload/sideload_section.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
