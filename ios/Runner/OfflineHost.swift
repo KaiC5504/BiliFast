@@ -72,7 +72,7 @@ final class OfflineHostApiImpl: OfflineHostApi {
   static let shared = ContinuedDownloads()
   static let identifier = "com.kaichuan.bilifast.offline.continued"
 
-  /// How a refusal that holds for the whole install begins; Dart then stops asking (ios_offline_host.dart).
+  /// How a refusal that holds for the rest of the run begins; Dart then stops asking (ios_offline_host.dart).
   static let unavailable = "unavailable"
 
   /// A request whose launch hasn't come by then no longer holds back a new one.
@@ -88,7 +88,7 @@ final class OfflineHostApiImpl: OfflineHostApi {
 
   /// Registering an identifier twice raises, so the first answer is kept for the process.
   private var registered: Bool?
-  /// Why iOS will never take the request on this install, once known.
+  /// Why iOS won't take the request for the rest of the run, once known.
   private var refusedForGood: String?
   private var task: BGContinuedProcessingTask?
   private var pendingSince: Date?

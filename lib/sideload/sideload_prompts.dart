@@ -18,8 +18,9 @@ final _prompted = Expando<bool>('sideload prompted');
 enum SideloadPrompt { expiry, release, reminder }
 
 /// A sideloaded install's launch alert over the shell, 设置's alert (51): the signature running out, else a newer
-/// release, else whether to remind before the signature runs out. At most one a launch, once the model's start has
-/// settled, and only while the shell is the page showing; a page over it holds the alert until it leaves.
+/// release, else whether to remind before the signature runs out. At most one a launch; the release and the question
+/// wait for the launch's release check to end ([SideloadModel.settled]). Only while the shell is the route showing: a
+/// page or a popup over it holds the alert until it leaves.
 class SideloadPrompts extends StatefulWidget {
   const SideloadPrompts({
     super.key,
@@ -27,10 +28,6 @@ class SideloadPrompts extends StatefulWidget {
     @visibleForTesting this.openLink = launchOutside,
     @visibleForTesting this.canOpenLink = canLaunchUrl,
   });
-
-  /// How long the model stays quiet before its start counts as settled: start reads the signature, then turns to the
-  /// release check, and only the check's end decides between a release and the reminder question.
-  static const settle = Duration(milliseconds: 600);
 
   final SideloadModel model;
   final Future<bool> Function(Uri link) openLink;
@@ -41,13 +38,23 @@ class SideloadPrompts extends StatefulWidget {
 }
 
 class _Alert {
-  const _Alert(this.prompt, {required this.title, required this.message, required this.action, required this.cancel});
+  const _Alert(
+    this.prompt, {
+    required this.title,
+    required this.message,
+    required this.action,
+    required this.cancel,
+    this.link,
+  });
 
   final SideloadPrompt prompt;
   final String title;
   final String message;
   final String? action;
   final String cancel;
+
+  /// Opened by [action].
+  final Uri? link;
 }
 
 class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, SingleTickerProviderStateMixin {
@@ -64,7 +71,7 @@ class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, Sing
 
   PageRoute<dynamic>? _route;
   bool _covered = false;
-  Timer? _settle;
+  Timer? _decision;
 
   /// The alert up and unanswered, or null once answered (it may still be fading out as [_shown]).
   _Alert? _asked;
@@ -78,7 +85,6 @@ class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, Sing
   void initState() {
     super.initState();
     _model.addListener(_changed);
-    _changed();
   }
 
   @override
@@ -93,6 +99,9 @@ class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, Sing
       _route = route;
       pageRoutes.subscribe(this, route);
     }
+    // ModalRoute.of runs this again whenever the route's isCurrent flips, so a popup leaving the shell (a sheet, the
+    // app-auth prompt), which pageRoutes never reports, decides again too.
+    _changed();
   }
 
   @override
@@ -106,7 +115,7 @@ class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, Sing
 
   @override
   void dispose() {
-    _settle?.cancel();
+    _decision?.cancel();
     pageRoutes.unsubscribe(this);
     _model.removeListener(_changed);
     _curve.dispose();
@@ -123,22 +132,25 @@ class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, Sing
     _changed();
   }
 
-  /// Each change starts the quiet wait again; nothing is armed for an install that isn't sideloaded.
+  /// Changes in a row make one decision, after the frame that brought them; nothing is armed for an install that
+  /// isn't sideloaded.
   void _changed() {
     if (_done || !_model.sideloaded) return;
-    _settle?.cancel();
-    _settle = Timer(SideloadPrompts.settle, () => unawaited(_decide()));
+    _decision ??= Timer(Duration.zero, () {
+      _decision = null;
+      unawaited(_decide());
+    });
   }
 
   Future<void> _decide() async {
     final model = _model;
     if (!mounted || _done || !model.sideloaded) return;
-    // Covered, the page's leaving starts the wait again.
+    // Covered by a page or a popup: its leaving decides again, through didPopNext or didChangeDependencies.
     if (_covered || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
     final SideloadPrompt? prompt;
     if (model.shouldWarnExpiry) {
       prompt = SideloadPrompt.expiry;
-    } else if (model.checking) {
+    } else if (!model.settled || model.checking) {
       // The check's end notifies, and a release beats the reminder question.
       return;
     } else if (model.shouldAnnounceRelease) {
@@ -168,6 +180,7 @@ class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, Sing
           message: '${days == 0 ? '今天到期' : '还剩 $days 天'}，过期后 BiliFast 会打不开，记得在 SideStore 或电脑上重新签名。',
           action: sideStore ? '打开 SideStore' : null,
           cancel: '知道了',
+          link: sideStore ? sideStoreOpen : null,
         );
       case SideloadPrompt.release:
         final newer = _model.newer;
@@ -178,6 +191,7 @@ class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, Sing
           message: '在 SideStore、AltStore 或 Feather 里更新，或者下载新的 IPA 覆盖安装。',
           action: '下载',
           cancel: '稍后',
+          link: newer.page,
         );
       case SideloadPrompt.reminder:
         return _Alert(
@@ -197,13 +211,12 @@ class _SideloadPromptsState extends State<SideloadPrompts> with RouteAware, Sing
     switch (alert.prompt) {
       case SideloadPrompt.expiry:
         _model.expiryWarned();
-        if (yes) unawaited(tryLink(sideStoreOpen, widget.openLink));
       case SideloadPrompt.release:
         _model.releaseAnnounced();
-        if (yes) unawaited(tryLink(Uri.parse(releasesPage), widget.openLink));
       case SideloadPrompt.reminder:
         unawaited(_model.answerReminder(yes));
     }
+    if (alert.link case final link? when yes) unawaited(openOrToast(context, link, widget.openLink));
     setState(() => _asked = null);
     unawaited(
       _motion.reverse().then((_) {

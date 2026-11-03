@@ -33,7 +33,10 @@ class TestSideload extends SideloadModel {
     this.days,
     this.release,
     this.isChecking = false,
+    this.isSettled = true,
+    this.outcome,
     this.reminder = false,
+    this.refuseReminder = false,
     this.askReminder = false,
     this.warnExpiry = false,
     this.announceRelease = false,
@@ -43,7 +46,10 @@ class TestSideload extends SideloadModel {
   int? days;
   ReleaseInfo? release;
   bool isChecking;
+  bool isSettled;
+  CheckOutcome? outcome;
   bool reminder;
+  bool refuseReminder;
   bool askReminder;
   bool warnExpiry;
   bool announceRelease;
@@ -65,6 +71,12 @@ class TestSideload extends SideloadModel {
   bool get checking => isChecking;
 
   @override
+  bool get settled => isSettled;
+
+  @override
+  CheckOutcome? get lastCheck => outcome;
+
+  @override
   bool get reminderOn => reminder;
 
   @override
@@ -80,10 +92,12 @@ class TestSideload extends SideloadModel {
   Future<void> checkNow() async => calls.add('checkNow');
 
   @override
-  Future<void> setReminder(bool on) async {
+  Future<bool> setReminder(bool on) async {
     calls.add('setReminder($on)');
+    if (on && refuseReminder) return false;
     reminder = on;
     notifyListeners();
+    return true;
   }
 
   @override
@@ -113,10 +127,12 @@ final _release = ReleaseInfo(
   page: Uri.parse('https://github.com/KaiC5504/BiliFast/releases/tag/v1.3.0-9'),
 );
 
-/// A sideloaded install signed until 10 November, 3 days left, nothing due.
+/// A sideloaded install signed until 10 November, 3 days left, its launch check answered, nothing due.
 TestSideload _signed({
   int days = 3,
   bool checking = false,
+  bool settled = true,
+  CheckOutcome? outcome = CheckOutcome.answered,
   ReleaseInfo? release,
   bool reminder = false,
   bool askReminder = false,
@@ -126,6 +142,8 @@ TestSideload _signed({
   expires: DateTime(2026, 11, 10, 9),
   days: days,
   isChecking: checking,
+  isSettled: settled,
+  outcome: outcome,
   release: release,
   reminder: reminder,
   askReminder: askReminder,
@@ -133,17 +151,21 @@ TestSideload _signed({
   announceRelease: announceRelease,
 );
 
-/// Links opened and asked about, answering [installed] to the signers' links.
+/// Links opened and asked about, answering [installed] to the signers' links; opening answers [opens], or throws
+/// while [throws].
 class _Links {
   _Links({this.installed = const {}});
 
   final Set<Uri> installed;
   final opened = <Uri>[];
   final asked = <Uri>[];
+  bool opens = true;
+  bool throws = false;
 
   Future<bool> open(Uri link) async {
     opened.add(link);
-    return true;
+    if (throws) throw PlatformException(code: 'ACTIVITY_NOT_FOUND', message: 'secret $link');
+    return opens;
   }
 
   Future<bool> canOpen(Uri link) async {
@@ -276,14 +298,34 @@ void main() {
       expect(tester.getSemantics(_row('settings-reminder')), isSemantics(isToggled: true, hasToggledState: true));
       await tapRow(tester, 'settings-reminder');
       expect(sideload.calls, ['setReminder(true)', 'setReminder(false)']);
+      expect(find.byKey(const ValueKey('toast')), findsNothing);
     });
 
-    testWidgets('检查更新: 检查中… while checking, 已是最新 checks again, a newer release opens its page', (tester) async {
-      final sideload = _signed(checking: true);
+    testWidgets('到期提醒 refused by iOS stays off and says where to allow it', (tester) async {
+      final sideload = _signed()..refuseReminder = true;
+      await show(tester, sideload);
+      await tapRow(tester, 'settings-reminder');
+      expect(sideload.calls, ['setReminder(true)']);
+      expect(tester.getSemantics(_row('settings-reminder')), isSemantics(isToggled: false, hasToggledState: true));
+      expect(find.text('通知已关闭，请在系统设置里允许 BiliFast 发送通知'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('检查更新: 检查中… while checking, 已是最新 only after an answer, a newer release opens its own page', (
+      tester,
+    ) async {
+      final sideload = _signed(checking: true, outcome: null);
       await show(tester, sideload);
       expect(_in('settings-update', '检查中…'), findsOneWidget);
 
       sideload.isChecking = false;
+      sideload.changed();
+      await tester.pumpAndSettle();
+      expect(_in('settings-update', '已是最新'), findsNothing, reason: 'nothing answered yet');
+      expect(_in('settings-update', '检查失败'), findsNothing);
+
+      sideload.outcome = CheckOutcome.answered;
       sideload.changed();
       await tester.pumpAndSettle();
       expect(_in('settings-update', '已是最新'), findsOneWidget);
@@ -297,7 +339,56 @@ void main() {
       expect(_in('settings-update', '有新版本 1.3.0 (9)'), findsOneWidget);
       await tapRow(tester, 'settings-update');
       expect(sideload.calls, ['checkNow']);
-      expect(links.opened, [Uri.parse(releasesPage)]);
+      expect(links.opened, [_release.page]);
+    });
+
+    testWidgets('检查更新: a failed check says 检查失败, and a tap tries again', (tester) async {
+      final sideload = _signed(outcome: CheckOutcome.failed);
+      await show(tester, sideload);
+      expect(_in('settings-update', '检查失败'), findsOneWidget);
+      expect(_in('settings-update', '已是最新'), findsNothing);
+      await tapRow(tester, 'settings-update');
+      expect(sideload.calls, ['checkNow']);
+
+      // A failed check keeps a release an earlier one found.
+      sideload.release = _release;
+      sideload.changed();
+      await tester.pumpAndSettle();
+      expect(_in('settings-update', '有新版本 1.3.0 (9)'), findsOneWidget);
+    });
+
+    testWidgets('a link nothing opens toasts 打不开链接 and logs only its scheme', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      links = _Links(installed: {sideStoreAddSource})..opens = false;
+      final sideload = _signed(release: _release);
+      await show(tester, sideload);
+
+      await tapRow(tester, 'settings-update');
+      expect(links.opened, [_release.page]);
+      expect(find.text('打不开链接'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      links.throws = true;
+      await tapRow(tester, 'settings-add-source');
+      await tester.tap(_choice('SideStore'));
+      await tester.pumpAndSettle();
+      expect(links.opened.last, sideStoreAddSource);
+      expect(find.text('打不开链接'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      final lines = [
+        for (final event in logs.events.where((event) => event.msg == 'link not opened'))
+          event.f.map((key, value) => MapEntry(key, value.toJson())),
+      ];
+      expect(lines, [
+        {'scheme': 'https', 'opened': false},
+        {'scheme': 'sidestore', 'opened': false, 'error': 'PlatformException'},
+      ]);
+      expect(logs.events.map((event) => event.encode()).join(), isNot(contains('secret')));
     });
 
     testWidgets('添加更新源 lists only the installed signers, and each opens its add-source link', (tester) async {
@@ -377,6 +468,33 @@ void main() {
       expect(find.byType(SettingsPage), findsOneWidget);
       expect(links.opened, isEmpty);
     });
+
+    testWidgets('复制源地址 refused by the clipboard toasts 复制失败, logged by type', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') throw PlatformException(code: 'denied', message: 'secret');
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await show(tester, _signed());
+
+      await tapRow(tester, 'settings-add-source');
+      await tester.tap(_choice('复制源地址'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('复制失败'), findsOneWidget);
+      expect(find.text('已复制'), findsNothing);
+      expect(
+        logs.events.singleWhere((event) => event.msg == 'source not copied').f['error']?.toJson(),
+        'PlatformException',
+      );
+      expect(logs.events.map((event) => event.encode()).join(), isNot(contains('secret')));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('source-choice')), findsNothing);
+    });
   });
 
   group('the launch alerts', () {
@@ -405,9 +523,9 @@ void main() {
       );
     }
 
-    /// Past the quiet wait, the alert's own questions and its fade.
+    /// Past the decision, the alert's own questions and its fade.
     Future<void> settle(WidgetTester tester) async {
-      await tester.pump(SideloadPrompts.settle);
+      await tester.pump();
       await tester.pump();
       await tester.pumpAndSettle();
     }
@@ -427,6 +545,21 @@ void main() {
       expect(sideload.calls, ['expiryWarned']);
       expect(links.opened, [sideStoreOpen]);
       expect(alert, findsNothing);
+      expect(find.text('打不开链接'), findsNothing);
+    });
+
+    testWidgets('expiry: 打开 SideStore that nothing opens toasts 打不开链接', (tester) async {
+      links.opens = false;
+      final sideload = _signed(days: 1, warnExpiry: true);
+      await show(tester, sideload);
+      await settle(tester);
+      await tester.tap(_confirmButton('打开 SideStore'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(links.opened, [sideStoreOpen]);
+      expect(find.text('打不开链接'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('expiry on the day: 今天到期, and 知道了 only marks it warned', (tester) async {
@@ -456,7 +589,7 @@ void main() {
       expect(sideload.calls, ['expiryWarned']);
     });
 
-    testWidgets('release: 下载 opens the release page, either button marks it announced', (tester) async {
+    testWidgets("release: 下载 opens the release's own page, either button marks it announced", (tester) async {
       final sideload = _signed(release: _release, announceRelease: true);
       await show(tester, sideload);
       await settle(tester);
@@ -466,7 +599,7 @@ void main() {
       await tester.tap(_confirmButton('下载'));
       await tester.pumpAndSettle();
       expect(sideload.calls, ['releaseAnnounced']);
-      expect(links.opened, [Uri.parse(releasesPage)]);
+      expect(links.opened, [_release.page]);
       expect(alert, findsNothing);
     });
 
@@ -546,7 +679,7 @@ void main() {
       expect(find.text('签名到期前提醒你？'), findsNothing);
     });
 
-    testWidgets('nothing before start settles: the quiet wait, then the release check\'s end', (tester) async {
+    testWidgets("a release or the question waits for the launch check's end, however long it takes", (tester) async {
       final sideload = TestSideload();
       await show(tester, sideload);
       await tester.pump(const Duration(seconds: 5));
@@ -556,20 +689,31 @@ void main() {
         ..expires = DateTime(2026, 11, 10)
         ..days = 6
         ..askReminder = true
-        ..isChecking = true;
+        ..isSettled = false;
       sideload.changed();
-      await tester.pump(SideloadPrompts.settle - const Duration(milliseconds: 100));
-      expect(alert, findsNothing);
       await settle(tester);
-      expect(alert, findsNothing);
+      await tester.pump(const Duration(seconds: 5));
+      expect(alert, findsNothing, reason: 'the reminder question would lose to a release still on its way');
 
       sideload
-        ..isChecking = false
+        ..isSettled = true
+        ..outcome = CheckOutcome.answered
         ..release = _release
         ..announceRelease = true;
       sideload.changed();
       await settle(tester);
       expect(find.text('有新版本 1.3.0 (9)'), findsOneWidget);
+    });
+
+    testWidgets('a 检查更新 running once settled holds the question too', (tester) async {
+      final sideload = _signed(askReminder: true, checking: true);
+      await show(tester, sideload);
+      await settle(tester);
+      expect(alert, findsNothing);
+      sideload.isChecking = false;
+      sideload.changed();
+      await settle(tester);
+      expect(find.text('签名到期前提醒你？'), findsOneWidget);
     });
 
     testWidgets('an expiry doesn\'t wait for the release check', (tester) async {

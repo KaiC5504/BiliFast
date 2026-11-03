@@ -40,7 +40,8 @@ final class FixedReleaseFeed implements ReleaseFeed {
   }
 }
 
-/// Grants permission (unless [grants] is false) and records what it was asked.
+/// Grants permission (unless [grants] is false) and records what it was asked. With [grants] false it also refuses
+/// to schedule, as iOS does once the app's notifications are off.
 final class FakeReminderHost implements ReminderHost {
   FakeReminderHost({this.grants = true});
 
@@ -56,8 +57,10 @@ final class FakeReminderHost implements ReminderHost {
   }
 
   @override
-  Future<void> schedule(DateTime at, String title, String body) async {
+  Future<bool> schedule(DateTime at, String title, String body) async {
+    if (!grants) return false;
     schedules.add((at: at, title: title, body: body));
+    return true;
   }
 
   @override

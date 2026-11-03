@@ -13,14 +13,27 @@ import 'sideload_model.dart';
 
 Future<bool> launchOutside(Uri link) => launchUrl(link, mode: LaunchMode.externalApplication);
 
-/// Runs [open] on [link], false when it throws: launchUrl throws where nothing takes the scheme.
-Future<bool> tryLink(Uri link, Future<bool> Function(Uri link) open) async {
+/// Asks [canOpen] about [link], false when it throws.
+Future<bool> tryLink(Uri link, Future<bool> Function(Uri link) canOpen) async {
   try {
-    return await open(link);
+    return await canOpen(link);
   } catch (error) {
-    Logger.shared.warn(LogCategory.ui, 'link not opened', {'scheme': link.scheme, 'error': '${error.runtimeType}'});
+    Logger.shared.warn(LogCategory.ui, 'link not checked', {'scheme': link.scheme, 'error': '${error.runtimeType}'});
     return false;
   }
+}
+
+/// Opens [link] with [open], and says so when nothing takes it: launchUrl answers false, or throws where no app has
+/// the scheme.
+Future<void> openOrToast(BuildContext context, Uri link, Future<bool> Function(Uri link) open) async {
+  final fields = <String, Object>{'scheme': link.scheme, 'opened': false};
+  try {
+    if (await open(link)) return;
+  } catch (error) {
+    fields['error'] = '${error.runtimeType}';
+  }
+  Logger.shared.warn(LogCategory.ui, 'link not opened', fields);
+  if (context.mounted) showToast(context, '打不开链接');
 }
 
 /// The signers that read the update source, by their add-source links.
@@ -69,8 +82,7 @@ class SideloadSection extends StatelessWidget {
     required this.canOpenLink,
   });
 
-  /// From this many days left, 签名到期's value turns red.
-  static const warnDays = 2;
+  static const refusedToast = '通知已关闭，请在系统设置里允许 BiliFast 发送通知';
 
   final SideloadModel model;
   final SourceChoiceController sources;
@@ -92,25 +104,29 @@ class SideloadSection extends StatelessWidget {
             key: const ValueKey('settings-signature'),
             title: '签名到期',
             value: expiryLabel(signature.expires, daysLeft),
-            valueColor: daysLeft <= warnDays ? BiliColors.failure : SettingsTheme.value,
+            valueColor: daysLeft <= SideloadModel.warnDays ? BiliColors.failure : SettingsTheme.value,
           ),
           SettingsSwitchRow(
             key: const ValueKey('settings-reminder'),
             title: '到期提醒',
             value: model.reminderOn,
-            onChanged: (on) => unawaited(model.setReminder(on)),
+            onChanged: (on) => unawaited(_setReminder(context, on)),
           ),
           SettingsRow(
             key: const ValueKey('settings-update'),
             title: '检查更新',
             value: model.checking
                 ? '检查中…'
-                : newer == null
-                ? '已是最新'
-                : '有新版本 ${releaseLabel(newer)}',
+                : newer != null
+                ? '有新版本 ${releaseLabel(newer)}'
+                : switch (model.lastCheck) {
+                    CheckOutcome.answered => '已是最新',
+                    CheckOutcome.failed => '检查失败',
+                    null => null,
+                  },
             onTap: () {
-              if (model.newer != null) {
-                unawaited(tryLink(Uri.parse(releasesPage), openLink));
+              if (model.newer case final newer?) {
+                unawaited(openOrToast(context, newer.page, openLink));
               } else {
                 unawaited(model.checkNow());
               }
@@ -125,6 +141,11 @@ class SideloadSection extends StatelessWidget {
       );
     },
   );
+
+  Future<void> _setReminder(BuildContext context, bool on) async {
+    if (await model.setReminder(on) || !context.mounted) return;
+    showToast(context, refusedToast);
+  }
 }
 
 /// Whether 添加更新源's choice is up, and the signers it lists.
@@ -136,7 +157,6 @@ class SourceChoiceController extends ChangeNotifier {
   bool _asking = false;
   bool _disposed = false;
 
-  /// Finds the installed signers, then puts the choice up.
   Future<void> ask(Future<bool> Function(Uri link) canOpen) async {
     if (_asking || _apps != null) return;
     _asking = true;
@@ -240,13 +260,19 @@ class _SourceChoiceLayerState extends State<SourceChoiceLayer> with SingleTicker
     if (widget.controller.apps == null) return;
     Logger.shared.info(LogCategory.ui, 'settings add source', {'app': app.name});
     widget.controller.close();
-    unawaited(tryLink(app.addSource, widget.openLink));
+    unawaited(openOrToast(context, app.addSource, widget.openLink));
   }
 
   Future<void> _copy() async {
     if (widget.controller.apps == null) return;
     widget.controller.close();
-    await Clipboard.setData(const ClipboardData(text: sourceUrl));
+    try {
+      await Clipboard.setData(const ClipboardData(text: sourceUrl));
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'source not copied', {'error': '${error.runtimeType}'});
+      if (mounted) showToast(context, '复制失败');
+      return;
+    }
     if (mounted) showToast(context, '已复制');
   }
 

@@ -52,7 +52,7 @@ final class _PhoneContinued extends FakeOfflineHost {
 }
 
 /// A re-signed install (SideStore, AltStore) whose bundle id no longer heads the continued processing identifier:
-/// OfflineHost.swift refuses for good, and the phone's host stops the library asking.
+/// OfflineHost.swift refuses for the rest of the run, and the phone's host stops the library asking.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -63,7 +63,7 @@ void main() {
   tearDown(() => native.uninstall());
 
   group('IosOfflineHost', () {
-    test('a refusal for good turns continued processing off, its reason handed on as is', () async {
+    test('a refusal for the rest of the run turns continued processing off, its reason handed on as is', () async {
       final host = IosOfflineHost();
       expect(host.continuedProcessing, isTrue);
 
@@ -74,7 +74,7 @@ void main() {
       native.refusal = 'unavailable: BGTaskSchedulerErrorDomain 3';
       final notPermitted = IosOfflineHost();
       await notPermitted.beginContinued(title: '离线缓存', subtitle: '测试视频');
-      expect(notPermitted.continuedProcessing, isFalse, reason: "iOS's not permitted holds for the install too");
+      expect(notPermitted.continuedProcessing, isFalse, reason: "iOS's not permitted holds for the rest of the run too");
     });
 
     test('a passing refusal, a taken request and a failed call leave it on', () async {
