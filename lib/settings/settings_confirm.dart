@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
 
-/// 51's alert over the page: a title, a grey message when there is one, and 取消 / a pink [action], over a dim
+/// 51's alert over the page: a title, a grey message when there is one, and [cancel] / a pink [action], over a dim
 /// that cancels when tapped. It fades in settling from slightly large.
 class SettingsConfirm extends StatelessWidget {
   const SettingsConfirm({
@@ -12,14 +12,18 @@ class SettingsConfirm extends StatelessWidget {
     required this.action,
     required this.onConfirm,
     required this.onCancel,
+    this.cancel = '取消',
     this.motion = kAlwaysCompleteAnimation,
-  });
+  }) : assert((action == null) == (onConfirm == null));
 
   final String title;
   final String? message;
-  final String action;
-  final VoidCallback onConfirm;
+
+  /// Null leaves [cancel] alone across the alert, pink as its only answer.
+  final String? action;
+  final VoidCallback? onConfirm;
   final VoidCallback onCancel;
+  final String cancel;
 
   /// How far in it is: the page runs it forward to show and back to hide.
   final Animation<double> motion;
@@ -39,7 +43,7 @@ class SettingsConfirm extends StatelessWidget {
             opacity: motion,
             child: Semantics(
               button: true,
-              label: '取消',
+              label: cancel,
               onTap: onCancel,
               excludeSemantics: true,
               child: GestureDetector(
@@ -61,7 +65,14 @@ class SettingsConfirm extends StatelessWidget {
                 child: child,
               ),
             ),
-            child: _Alert(title: title, message: message, action: action, onConfirm: onConfirm, onCancel: onCancel),
+            child: _Alert(
+              title: title,
+              message: message,
+              action: action,
+              onConfirm: onConfirm,
+              cancel: cancel,
+              onCancel: onCancel,
+            ),
           ),
         ),
       ],
@@ -75,18 +86,22 @@ class _Alert extends StatelessWidget {
     required this.message,
     required this.action,
     required this.onConfirm,
+    required this.cancel,
     required this.onCancel,
   });
 
   final String title;
   final String? message;
-  final String action;
-  final VoidCallback onConfirm;
+  final String? action;
+  final VoidCallback? onConfirm;
+  final String cancel;
   final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
     final message = this.message;
+    final action = this.action;
+    final onConfirm = this.onConfirm;
     return Container(
       key: const ValueKey('settings-confirm'),
       width: SettingsTheme.confirmWidth,
@@ -144,11 +159,16 @@ class _Alert extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: _Button(label: '取消', color: SettingsTheme.confirmCancel, onTap: onCancel),
+                  child: _Button(
+                    label: cancel,
+                    color: action == null ? SettingsTheme.confirmAction : SettingsTheme.confirmCancel,
+                    onTap: onCancel,
+                  ),
                 ),
-                Expanded(
-                  child: _Button(label: action, color: SettingsTheme.confirmAction, onTap: onConfirm),
-                ),
+                if (action != null && onConfirm != null)
+                  Expanded(
+                    child: _Button(label: action, color: SettingsTheme.confirmAction, onTap: onConfirm),
+                  ),
               ],
             ),
           ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle, appBuildName, appBuildNumber;
+import 'package:url_launcher/url_launcher.dart' show canLaunchUrl;
 
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
@@ -11,6 +12,7 @@ import '../shared/image_disk_cache.dart';
 import '../shared/menu.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../sideload/sideload_section.dart';
 import '../video/intro/collection_row.dart' show Chevron;
 import '../video/player_prefs.dart';
 import 'font_page.dart';
@@ -42,10 +44,17 @@ String buildVersionLabel() => switch ((appBuildName, appBuildNumber)) {
   _ => '未知',
 };
 
-/// 设置 (50): the account, 字体, the engine's nodes and BTR, clearing what the app keeps, 开发者 in dev builds, the
-/// version, and 退出登录 last (51).
+/// 设置 (50): the account, 字体, the engine's nodes and BTR, clearing what the app keeps, 开发者 in dev builds, a
+/// sideloaded install's 签名, the version, and 退出登录 last (51).
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, this.developerPage, this.prefs, this.version});
+  const SettingsPage({
+    super.key,
+    this.developerPage,
+    this.prefs,
+    this.version,
+    @visibleForTesting this.openLink = launchOutside,
+    @visibleForTesting this.canOpenLink = canLaunchUrl,
+  });
 
   /// Dev builds' 开发者 page; null hides its row.
   final WidgetBuilder? developerPage;
@@ -55,6 +64,12 @@ class SettingsPage extends StatefulWidget {
 
   /// The build's own unless a test passes one.
   final String? version;
+
+  /// Opens a link outside the app: the release page, a signer's add-source link.
+  final Future<bool> Function(Uri link) openLink;
+
+  /// Whether a signer is there to take its add-source link.
+  final Future<bool> Function(Uri link) canOpenLink;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -76,6 +91,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   SettingsConfirmKind? _confirm;
   SettingsConfirmKind? _shown;
   bool _loggingOut = false;
+  final _sources = SourceChoiceController();
 
   /// What the stored pictures take, once read.
   int? _imageBytes;
@@ -109,6 +125,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    _sources.dispose();
     _confirmCurve.dispose();
     _confirmMotion.dispose();
     super.dispose();
@@ -307,6 +324,12 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                         ),
                       ],
                     ),
+                  SideloadSection(
+                    model: services.sideload,
+                    sources: _sources,
+                    openLink: widget.openLink,
+                    canOpenLink: widget.canOpenLink,
+                  ),
                   SettingsSection(
                     footer: '下载加速移植自 Bilibili 线程撕裂者（BTR），MIT 许可。',
                     children: [
@@ -330,6 +353,9 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                 ],
               );
             },
+          ),
+          Positioned.fill(
+            child: SourceChoiceLayer(controller: _sources, openLink: widget.openLink),
           ),
           if (_shown case final shown?)
             Positioned.fill(

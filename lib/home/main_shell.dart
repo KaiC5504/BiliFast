@@ -7,6 +7,7 @@ import '../dynamic/follow_tab/follow_tab_page.dart';
 import '../me/me_page.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../sideload/sideload_prompts.dart';
 import '../skin/skin.dart';
 import '../skin/skin_model.dart';
 import 'home_page.dart';
@@ -14,7 +15,7 @@ import 'home_tab_bar.dart';
 
 /// The bottom bar's places: 首页, 关注 and 我的 kept alive side by side, the bar under them (01, 02, 127). A bar dressed
 /// by the equipped 装扮 lies over the pages' bottom instead, so they show behind its picture (109, 110). 关注's face
-/// sheet lies over everything, the bar included (139).
+/// sheet lies over everything, the bar included (139), and a sideloaded install's launch alert over that.
 class MainShell extends StatefulWidget {
   const MainShell({super.key, this.developerPage, this.initialLink, @visibleForTesting this.skin});
 
@@ -133,6 +134,7 @@ class _MainShellState extends State<MainShell> {
             ),
           ),
           Positioned.fill(child: FaceSheetLayer(controller: _faceSheet)),
+          Positioned.fill(child: SideloadPrompts(model: AppScope.of(context).sideload)),
         ],
       ),
     );
