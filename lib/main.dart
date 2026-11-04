@@ -100,9 +100,11 @@ Future<void> main(List<String> args) async {
     runApp(LaunchFailedApp(error: '$error'));
     return;
   }
-  // PC checks only: the page's actions, 搜索, UP主空间, 我的收藏 and 稍后再看 answer from memory, and the app token
-  // reads authorized, so every button can be pressed with no account traffic.
-  final fakeAccount = !Platform.isIOS && args.contains('--fake-account');
+  // PC checks and the Mac's simulator (`--dart-define=FAKE_ACCOUNT=true`) only: the page's actions, 搜索, UP主空间,
+  // 我的收藏 and 稍后再看 answer from memory, and the app token reads authorized, so every button can be pressed with
+  // no account traffic.
+  final fakeAccount =
+      (!Platform.isIOS && args.contains('--fake-account')) || const bool.fromEnvironment('FAKE_ACCOUNT');
   if (fakeAccount) environment.useFakeAccount();
   unawaited(environment.refreshAccount());
   final engine = SharedEngine(startPlatformEngine);
@@ -110,7 +112,7 @@ Future<void> main(List<String> args) async {
     () => startPlaybackController(environment.client, engine: engine, codecMemory: codecMemory),
     engine: engine,
     codecMemory: codecMemory,
-    muted: args.contains('--mute'),
+    muted: args.contains('--mute') || const bool.fromEnvironment('MUTE'),
     onResumed: () => recheckUnknownAccount(environment),
   );
   final navigator = GlobalKey<NavigatorState>();
