@@ -45,7 +45,10 @@ git log --oneline -1
 PHONE = r"""
 KC="$HOME/bilifast-mac/signing.keychain-db"
 security unlock-keychain -p "$(cat ~/bilifast-mac/keychain.pw)" "$KC"
-flutter build ios --release --config-only --dart-define=DEV_INSTALL=true > ~/bilifast-mac/build.log 2>&1
+# A build number from the clock (yymmddHHMM), so the phone shows which install it runs.
+build=$(date +%y%m%d%H%M)
+flutter build ios --release --config-only --build-number="$build" --dart-define=DEV_INSTALL=true \
+  > ~/bilifast-mac/build.log 2>&1
 # The profile goes on the Runner target only: set on the command line it lands on the plugins' packages too,
 # which refuse one.
 echo "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME" > ios/Flutter/MacSigning.xcconfig
@@ -61,7 +64,9 @@ fi
 echo "built"
 xcrun devicectl device install app --device "$PHONE_UDID" build/dd/Build/Products/Release-iphoneos/Runner.app \
   > ~/bilifast-mac/install.log 2>&1 || { tail -5 ~/bilifast-mac/install.log; exit 1; }
-echo "installed on the iPhone"
+installed=$(xcrun devicectl device info apps --device "$PHONE_UDID" --bundle-id com.kaichuan.bilifast 2>/dev/null \
+  | grep -oE "[0-9]+\.[0-9]+\.[0-9]+ +[0-9]+" | head -1)
+echo "installed on the iPhone: $installed (this build: $build)"
 """
 
 SIM = r"""
