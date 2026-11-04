@@ -105,7 +105,8 @@ def push_head() -> None:
 
 
 def on_mac(script: str) -> None:
-    result = subprocess.run(["ssh", "-o", "BatchMode=yes", "mac", "bash", "-s"], input=script, text=True)
+    # Bytes, not text: on Windows a text pipe sends \r\n, and bash then reads `set -e\r`.
+    result = subprocess.run(["ssh", "-o", "BatchMode=yes", "mac", "bash", "-s"], input=script.encode())
     if result.returncode:
         sys.exit(result.returncode)
 
