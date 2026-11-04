@@ -146,7 +146,8 @@ Future<void> main(List<String> args) async {
               host: Platform.isIOS ? IosOfflineHost() : const NoOfflineHost(),
               codecMemory: codecMemory,
             );
-  final SideloadModel sideload = Platform.isIOS
+  // The Mac's development installs carry a profile too, so they pass `--dart-define=DEV_INSTALL=true` to skip it.
+  final SideloadModel sideload = Platform.isIOS && !const bool.fromEnvironment('DEV_INSTALL')
       ? iosSideloadModel(storePath: supportFilePath('sideload.json'))
       : args.contains('--fake-sideload')
           ? fakeSideloadModel()
