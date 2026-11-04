@@ -233,8 +233,10 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
     iPad Pro 11") simulator, launched, its 3× screenshot in `build/mac-shots/`. It draws the real SF and PingFang, so
     it settles what the stand-in fonts can't. Simulator first for anything the account and the real player don't need.
   - `phone`: a development-signed release build (`DEV_INSTALL`, so it doesn't count as a sideload) installed on KaiC's
-    iPhone over Wi-Fi; it replaces the TestFlight install and keeps its login and data. For what needs the account,
-    the real player (HDR, 杜比视界, PiP, rotation), background downloads, notifications or speed.
+    iPhone over Wi-Fi in about 3 minutes; it replaces the TestFlight install and keeps its login and data (KaiC
+    confirmed, 2026-11-04). Its build number is the clock (yymmddHHMM) and the script prints what the phone reports
+    installed, so a new build landing is checked, not assumed. For what needs the account, the real player (HDR,
+    杜比视界, PiP, rotation), background downloads, notifications or speed. The phone must be on the Mac's Wi-Fi.
   - Signing needs no Apple ID on the Mac: the `Mac mini` App Store Connect API key, a development certificate in the
     build's own keychain and a development profile, all under `~/bilifast-mac/` (`asc.env`), never in the repo. Xcode
     27.2, Flutter 3.47.7 in `~/flutter-3.47.7`, CocoaPods from Homebrew (`media_kit_video` has no Swift package).
