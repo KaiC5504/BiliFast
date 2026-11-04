@@ -227,6 +227,17 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
   with `tools/screen_diff.py`. They render the system font, as the phone does: `BiliFonts.family = BiliFonts.system` with
   `test/support/stand_in_fonts.dart` loaded; `test/support/look_alike.dart` sizes the view as the phone and saves the
   3× PNG.
+- The Mac mini (KaiC's M6, `ssh mac`, set up 2026-11-04): `python scripts/mac.py` builds the committed HEAD there over
+  SSH, headless, pushed to the Mac's own repo (the `mac` remote), never through GitHub.
+  - `sim [--pad] [--wait N] [--name X]`: a debug build with `FAKE_ACCOUNT` and `MUTE` on the iPhone 17 Pro Max (or
+    iPad Pro 11") simulator, launched, its 3× screenshot in `build/mac-shots/`. It draws the real SF and PingFang, so
+    it settles what the stand-in fonts can't. Simulator first for anything the account and the real player don't need.
+  - `phone`: a development-signed release build (`DEV_INSTALL`, so it doesn't count as a sideload) installed on KaiC's
+    iPhone over Wi-Fi; it replaces the TestFlight install and keeps its login and data. For what needs the account,
+    the real player (HDR, 杜比视界, PiP, rotation), background downloads, notifications or speed.
+  - Signing needs no Apple ID on the Mac: the `Mac mini` App Store Connect API key, a development certificate in the
+    build's own keychain and a development profile, all under `~/bilifast-mac/` (`asc.env`), never in the repo. Xcode
+    27.2, Flutter 3.47.7 in `~/flutter-3.47.7`, CocoaPods from Homebrew (`media_kit_video` has no Swift package).
 - GitHub runs nothing on push. `testflight.yml` is the only workflow; don't add one without asking (`test_ci` fails if
   one appears).
 
@@ -272,7 +283,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   is checked under `--fake-account`, which never loads the login. On Windows, 退出登录 ends the session on
   Bilibili's side first and keeps the login if Bilibili doesn't confirm. No app token on the PC. Logged in, a
   Windows check opens at most 3 videos and reads only.
-- No Mac: iOS checks run in GitHub Actions and on his phone.
+- The Mac mini is the iOS dev loop (How to test); GitHub Actions stays the way out: TestFlight and the public IPA.
+  Runs on the Mac start only over SSH, when wanted: no self-hosted runner, nothing on its screen.
 - Layout comes only from the official app's screenshots (`local/official-app-reference/iphone/`, his iPhone 17 Pro Max,
   440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or
   the Swift app. The iPad's layout comes only from `local/official-app-reference/ipad/` (the official HD app on
