@@ -1198,6 +1198,18 @@ void main() {
       expect(player.calls, ['play'], reason: "the player's own pause reached the page first");
     });
 
+    test('a page covered during it stays paused when it ends: covering it decided that', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await interrupt(began: true);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      session.active = false;
+      player.calls.clear();
+      await interrupt(began: false, shouldResume: true);
+      expect(player.calls.where((call) => call == 'play'), isEmpty);
+    });
+
     test('without the hint, or over a video already paused, nothing plays', () async {
       makeSession();
       await controller.openVideo(bv, cid: p1);

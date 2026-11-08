@@ -1635,11 +1635,10 @@ class PlaybackController extends ChangeNotifier {
         _logger.info(LogCategory.player, kind, {
           for (final MapEntry(:key, :value) in fields.entries) key: ?value,
         });
-      case RemoteCommand(:final kind, :final seconds):
-        _logger.info(LogCategory.player, 'remote command', {'kind': kind.name, 'to': ?seconds?.round()});
+      // NowPlaying.swift logs both, with more than Dart knows.
+      case RemoteCommand():
         _remoteCommands.add(event);
-      case AudioInterruption(:final began, :final shouldResume):
-        _logger.info(LogCategory.player, 'audio interruption', {'began': began, 'shouldResume': shouldResume});
+      case AudioInterruption():
         _interruptions.add(event);
     }
   }

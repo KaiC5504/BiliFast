@@ -1014,6 +1014,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     if (!value) {
       _pauseSleepTimer();
       _stopBackgroundChecks();
+      // A covered page doesn't come back by itself when a call ends: covering it decided that.
+      _resumeAfterInterruption = false;
       _updateNowPlaying();
       return;
     }

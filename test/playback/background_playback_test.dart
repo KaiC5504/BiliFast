@@ -165,7 +165,7 @@ void main() {
       controller.dispose();
     });
 
-    test('both are broadcast, logged, and close on dispose', () async {
+    test('both are broadcast, logged once (by the native side), and close on dispose', () async {
       final controller = make();
       expect(controller.remoteCommands.isBroadcast, isTrue);
       expect(controller.interruptions.isBroadcast, isTrue);
@@ -176,13 +176,7 @@ void main() {
 
       player.emit(const RemoteCommand(RemoteCommandKind.seek, seconds: 61.6));
       player.emit(const AudioInterruption(began: true));
-      final command = logs.events.singleWhere((event) => event.msg == 'remote command');
-      expect(
-        (command.cat, command.f['kind'], command.f['to']),
-        (LogCategory.player, const LogString('seek'), const LogInt(62)),
-      );
-      final interruption = logs.events.singleWhere((event) => event.msg == 'audio interruption');
-      expect((interruption.f['began'], interruption.f['shouldResume']), (const LogBool(true), const LogBool(false)));
+      expect(logs.events.where((event) => event.msg == 'remote command' || event.msg == 'audio interruption'), isEmpty);
 
       controller.dispose();
       await commandsDone.future.timeout(const Duration(seconds: 5));
