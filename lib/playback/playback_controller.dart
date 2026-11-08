@@ -832,20 +832,33 @@ class PlaybackController extends ChangeNotifier {
     }
   }
 
-  /// 后台听视频 for this controller's player ([BiliPlayer.setBackgroundPlayback]).
-  Future<void> setBackgroundPlayback(bool enabled) async {}
+  /// 后台听视频 for this controller's player ([BiliPlayer.setBackgroundPlayback]). The policy is the player's own and
+  /// outlasts every load, so one call holds until the next.
+  Future<void> setBackgroundPlayback(bool enabled) async {
+    if (_disposed) return;
+    _quietly(() => player.setBackgroundPlayback(enabled), 'background playback');
+  }
 
-  /// What the lock screen and Control Center show while this controller's video plays; null takes it off them.
-  Future<void> setNowPlaying(NowPlayingInfo? info) async {}
+  /// What the lock screen and Control Center show while this controller's video plays; null takes it off them. The
+  /// same info again sends nothing.
+  Future<void> setNowPlaying(NowPlayingInfo? info) async {
+    if (_disposed || info == _nowPlaying) return;
+    _nowPlaying = info;
+    _quietly(() => player.setNowPlaying(info), 'now playing');
+  }
+
+  NowPlayingInfo? _nowPlaying;
 
   /// The lock screen's, headphones' and car's buttons for this player.
-  Stream<RemoteCommand> get remoteCommands => const Stream.empty();
+  Stream<RemoteCommand> get remoteCommands => _remoteCommands.stream;
+  final _remoteCommands = StreamController<RemoteCommand>.broadcast();
 
   /// A call, Siri or an alarm taking the sound from this player.
-  Stream<AudioInterruption> get interruptions => const Stream.empty();
+  Stream<AudioInterruption> get interruptions => _interruptions.stream;
+  final _interruptions = StreamController<AudioInterruption>.broadcast();
 
   /// The app is in the background: no danmaku segment is fetched until it is back.
-  set inBackground(bool value) {}
+  set inBackground(bool value) => danmaku.holdFetches(value);
 
   /// The small window's restore button was tapped.
   Stream<void> get restoreRequests => _restores.stream;
@@ -1622,8 +1635,12 @@ class PlaybackController extends ChangeNotifier {
         _logger.info(LogCategory.player, kind, {
           for (final MapEntry(:key, :value) in fields.entries) key: ?value,
         });
-      case RemoteCommand() || AudioInterruption():
-        break;
+      case RemoteCommand(:final kind, :final seconds):
+        _logger.info(LogCategory.player, 'remote command', {'kind': kind.name, 'to': ?seconds?.round()});
+        _remoteCommands.add(event);
+      case AudioInterruption(:final began, :final shouldResume):
+        _logger.info(LogCategory.player, 'audio interruption', {'began': began, 'shouldResume': shouldResume});
+        _interruptions.add(event);
     }
   }
 
@@ -1880,6 +1897,7 @@ class PlaybackController extends ChangeNotifier {
     unawaited(_playerEvents.cancel());
     unawaited(_engineStats.cancel());
     unawaited(_engineFatals.cancel());
+    if (_nowPlaying != null) _quietly(() => player.setNowPlaying(null), 'now playing');
     _quietly(player.dispose, 'player dispose');
     _quietly(_engine.dispose, 'engine dispose');
     danmaku.dispose();
@@ -1888,6 +1906,8 @@ class PlaybackController extends ChangeNotifier {
     unawaited(_marks.close());
     unawaited(_endings.close());
     unawaited(_restores.close());
+    unawaited(_remoteCommands.close());
+    unawaited(_interruptions.close());
     super.dispose();
   }
 }

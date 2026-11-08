@@ -81,8 +81,14 @@ final class FakePlayer implements BiliPlayer {
   @override
   Future<void> setRestorable(bool restorable) async => _record('restorable $restorable');
 
+  /// Thrown by every setBackgroundPlayback and setNowPlaying while set, after the call is recorded.
+  Object? backgroundError;
+
   @override
-  Future<void> setBackgroundPlayback(bool enabled) async => _record('background $enabled');
+  Future<void> setBackgroundPlayback(bool enabled) async {
+    _record('background $enabled');
+    if (backgroundError case final error?) throw error;
+  }
 
   /// What the last [setNowPlaying] asked for.
   NowPlayingInfo? nowPlaying;
@@ -90,6 +96,7 @@ final class FakePlayer implements BiliPlayer {
   @override
   Future<void> setNowPlaying(NowPlayingInfo? info) async {
     _record('now playing ${info?.title}');
+    if (backgroundError case final error?) throw error;
     nowPlaying = info;
   }
 
