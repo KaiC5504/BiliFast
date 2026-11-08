@@ -57,7 +57,8 @@ if ! xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration 
     -destination generic/platform=iOS -derivedDataPath build/dd \
     DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
     OTHER_CODE_SIGN_FLAGS="--keychain $KC" build >> ~/bilifast-mac/build.log 2>&1; then
-  grep -E "error:" ~/bilifast-mac/build.log | head -20
+  # pipefail would end the script here, silently, when nothing matches.
+  grep -iE "error" ~/bilifast-mac/build.log | head -20 || true
   echo "build failed: ~/bilifast-mac/build.log on the Mac"
   exit 1
 fi
@@ -81,7 +82,7 @@ xcrun simctl status_bar "$udid" override --time 9:41 --batteryLevel 100 --batter
   --cellularBars 4 --wifiBars 3 > /dev/null 2>&1 || true
 if ! flutter build ios --simulator --debug --dart-define=FAKE_ACCOUNT=true --dart-define=MUTE=true \
     --dart-define=DEV_INSTALL=true > ~/bilifast-mac/build.log 2>&1; then
-  grep -E "error" ~/bilifast-mac/build.log | head -20
+  grep -iE "error" ~/bilifast-mac/build.log | head -20 || true
   echo "build failed: ~/bilifast-mac/build.log on the Mac"
   exit 1
 fi

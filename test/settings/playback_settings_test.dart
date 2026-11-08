@@ -3,6 +3,7 @@ import 'package:bilifast/settings/playback/autoplay_settings_page.dart';
 import 'package:bilifast/settings/playback/home_feed_settings_page.dart';
 import 'package:bilifast/settings/playback/playback_settings_page.dart';
 import 'package:bilifast/settings/settings_page.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/theme.dart';
 import '../../video/player_prefs.dart';
 import '../settings_page.dart';
 import 'autoplay_settings_page.dart';
