@@ -27,7 +27,6 @@ class DanmakuSettingsPanel extends StatefulWidget {
     super.key,
     required this.ui,
     required this.light,
-    required this.toast,
     required this.close,
     required this.confirm,
   });
@@ -36,7 +35,6 @@ class DanmakuSettingsPanel extends StatefulWidget {
 
   /// Portrait's light sheet.
   final bool light;
-  final ValueChanged<String> toast;
   final VoidCallback close;
 
   /// Asks before 重置弹幕设置.
