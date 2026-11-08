@@ -17,6 +17,10 @@ import '../video/intro/collection_row.dart' show Chevron;
 import '../video/player_prefs.dart';
 import 'font_page.dart';
 import 'node_page.dart';
+import 'playback/autoplay_settings_page.dart' show AutoplayLabels;
+import 'playback/home_feed_settings_page.dart';
+import 'playback/playback_settings_page.dart';
+import 'playback/settings_list_tokens.dart';
 import 'settings_confirm.dart';
 
 /// What 设置 asks before doing (BiliNative SettingsView's `ClearAction`, and 51's 退出登录).
@@ -202,8 +206,12 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     AppScope.of(context).playback.setNodeMode(choice.mode);
   }
 
-  void _push(WidgetBuilder builder) =>
-      unawaited(Navigator.of(context).push(SwipeBackPageRoute<void>(builder: builder)));
+  /// The pages under 设置 change [PlayerPrefs], which tells no one, so the values shown are read again on return.
+  void _push(WidgetBuilder builder) => unawaited(
+    Navigator.of(context).push(SwipeBackPageRoute<void>(builder: builder)).then((_) {
+      if (mounted) setState(() {});
+    }),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -268,6 +276,21 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                         title: '字体',
                         value: fonts.label,
                         onTap: () => _push((_) => FontPage(fonts: fonts)),
+                      ),
+                    ],
+                  ),
+                  SettingsSection(
+                    children: [
+                      SettingsRow(
+                        key: const ValueKey('settings-home-feed'),
+                        title: '首页推荐设置',
+                        value: '双列/${_prefs.homeAutoplay.homeLabel}',
+                        onTap: () => _push((_) => HomeFeedSettingsPage(prefs: _prefs)),
+                      ),
+                      SettingsRow(
+                        key: const ValueKey('settings-playback'),
+                        title: '播放设置',
+                        onTap: () => _push((_) => PlaybackSettingsPage(prefs: _prefs)),
                       ),
                     ],
                   ),
@@ -488,59 +511,182 @@ class _BackButton extends StatelessWidget {
   );
 }
 
+/// How a section starts and how its rows are ruled: 设置's grey gap and full-width hairline (50), or one of the
+/// playback pages' own (170, 174, 178, 179).
+class SettingsSectionLook {
+  const SettingsSectionLook({
+    this.top = BiliMetrics.settingsSectionGap,
+    this.topRule = true,
+    this.labelCentre = 0,
+    this.labelInset = SettingsTheme.rowInset,
+    this.inset = SettingsTheme.rowInset,
+    this.ruleEnd = 0,
+    this.rule = SettingsTheme.hairline,
+  });
+
+  static const standard = SettingsSectionLook();
+
+  /// 174's: a grey label over the full-width hairline.
+  static const labelled = SettingsSectionLook(
+    top: SettingsListTheme.labelHeight,
+    labelCentre: SettingsListTheme.labelCentre,
+    labelInset: SettingsListTheme.labelInset,
+  );
+
+  /// 首页推荐设置's (170): the label straight over the rows, and thicker hairlines.
+  static const feed = SettingsSectionLook(
+    top: SettingsListTheme.feedLabelHeight,
+    topRule: false,
+    labelCentre: SettingsListTheme.feedLabelCentre,
+    labelInset: SettingsListTheme.feedLabelInset,
+    rule: SettingsListTheme.feedRule,
+  );
+
+  /// 首页推荐设置's last section, 首页单双列切换.
+  static const feedLink = SettingsSectionLook(top: SettingsListTheme.plainGap, topRule: false);
+
+  /// 178's: the note over the picks, the rows and hairlines further out, the hairlines short of the right edge.
+  static const note = SettingsSectionLook(
+    top: SettingsListTheme.noteHeight,
+    topRule: false,
+    labelCentre: SettingsListTheme.noteCentre,
+    labelInset: SettingsListTheme.pickerInset,
+    inset: SettingsListTheme.pickerInset,
+    ruleEnd: SettingsListTheme.pickerRuleEnd,
+  );
+
+  /// 179's: the picks 20 pt under the bar.
+  static const picker = SettingsSectionLook(
+    top: SettingsListTheme.plainGap,
+    topRule: false,
+    inset: SettingsListTheme.pickerInset,
+  );
+
+  /// The grey above the rows, the label in it when there is one, its middle [labelCentre] down.
+  final double top;
+  final bool topRule;
+  final double labelCentre;
+  final double labelInset;
+
+  /// Where the hairline under each row starts and how far short of the right edge it stops.
+  final double inset;
+  final double ruleEnd;
+  final double rule;
+}
+
+/// [child], one line, placed in a Stack so its Chinese glyphs' middle is [centre] below the Stack's top.
+Widget settingsLineAt({
+  required double centre,
+  required double fontSize,
+  required Widget child,
+  double left = 0,
+  double right = 0,
+}) {
+  const band = 48.0;
+  return Positioned(
+    left: left,
+    right: right,
+    top: centre + SettingsListTheme.glyphRise * fontSize - band / 2,
+    height: band,
+    child: Align(alignment: Alignment.centerLeft, child: child),
+  );
+}
+
+/// One line of grey text, cut short when it doesn't fit.
+Widget _greyLine(String text, double size, Color color) {
+  final style = TextStyle(fontFamily: BiliFonts.family, fontSize: size, color: color);
+  return Builder(
+    builder: (context) => Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+      strutStyle: BiliFonts.strutOf(context, style),
+    ),
+  );
+}
+
 /// The grey gap, a full-width hairline, then white rows each with an inset hairline under it; grey text below when
-/// there is a [footer].
+/// there is a [footer]. A [label] sits in the gap; the [look] sets the gap, the hairlines and the label's place.
 class SettingsSection extends StatelessWidget {
-  const SettingsSection({super.key, required this.children, this.footer});
+  const SettingsSection({
+    super.key,
+    required this.children,
+    this.footer,
+    this.label,
+    this.look = SettingsSectionLook.standard,
+  });
 
   /// A one-line row's height above its hairline.
   static const rowHeight = BiliMetrics.settingsRowHeight - SettingsTheme.hairline;
 
   final List<Widget> children;
   final String? footer;
+  final String? label;
+  final SettingsSectionLook look;
 
   static TextStyle get footerStyle =>
       TextStyle(fontFamily: BiliFonts.family, fontSize: SettingsTheme.footerText, color: SettingsTheme.footer);
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const SizedBox(height: BiliMetrics.settingsSectionGap),
-      const ColoredBox(
-        color: SettingsTheme.hairlineColor,
-        child: SizedBox(height: SettingsTheme.hairline),
-      ),
-      ColoredBox(
-        color: SettingsTheme.row,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final child in children) ...[
-              child,
-              const Padding(
-                padding: EdgeInsets.only(left: SettingsTheme.rowInset),
-                child: ColoredBox(
-                  color: SettingsTheme.hairlineColor,
-                  child: SizedBox(height: SettingsTheme.hairline),
+  Widget build(BuildContext context) {
+    final label = this.label;
+    final rule = ColoredBox(
+      color: SettingsTheme.hairlineColor,
+      child: SizedBox(height: look.rule),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: look.top,
+          child: label == null
+              ? null
+              : Stack(
+                  children: [
+                    settingsLineAt(
+                      centre: look.labelCentre,
+                      fontSize: SettingsListTheme.labelText,
+                      left: look.labelInset,
+                      right: look.labelInset,
+                      child: _greyLine(label, SettingsListTheme.labelText, SettingsListTheme.label),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ],
         ),
-      ),
-      if (footer case final footer?)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            SettingsTheme.rowInset,
-            SettingsTheme.footerTop,
-            SettingsTheme.rowInset,
-            SettingsTheme.footerBottom,
+        if (look.topRule)
+          const ColoredBox(
+            color: SettingsTheme.hairlineColor,
+            child: SizedBox(height: SettingsTheme.hairline),
           ),
-          child: Text(footer, style: footerStyle, strutStyle: BiliFonts.strutOf(context, footerStyle)),
+        ColoredBox(
+          color: SettingsTheme.row,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final child in children) ...[
+                child,
+                Padding(
+                  padding: EdgeInsets.only(left: look.inset, right: look.ruleEnd),
+                  child: rule,
+                ),
+              ],
+            ],
+          ),
         ),
-    ],
-  );
+        if (footer case final footer?)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              SettingsTheme.rowInset,
+              SettingsTheme.footerTop,
+              SettingsTheme.rowInset,
+              SettingsTheme.footerBottom,
+            ),
+            child: Text(footer, style: footerStyle, strutStyle: BiliFonts.strutOf(context, footerStyle)),
+          ),
+      ],
+    );
+  }
 }
 
 /// A row: its title, the value in grey when there is one (with a [badge] after it), and a › when it does something.
@@ -554,6 +700,7 @@ class SettingsRow extends StatelessWidget {
     this.badge,
     this.onTap,
     this.enabled = true,
+    this.height = SettingsSection.rowHeight,
   });
 
   final String title;
@@ -562,10 +709,15 @@ class SettingsRow extends StatelessWidget {
   final Widget? badge;
   final VoidCallback? onTap;
   final bool enabled;
+  final double height;
 
   /// A row's title, set where 50's are.
-  static Widget titleText(String title, {Color color = SettingsTheme.rowTitle}) {
-    final style = TextStyle(fontFamily: BiliFonts.family, fontSize: SettingsTheme.rowTitleText, color: color);
+  static Widget titleText(
+    String title, {
+    Color color = SettingsTheme.rowTitle,
+    double size = SettingsTheme.rowTitleText,
+  }) {
+    final style = TextStyle(fontFamily: BiliFonts.family, fontSize: size, color: color);
     return Transform.translate(
       offset: Offset(0, SettingsTheme.rowTitleDrop),
       child: Builder(
@@ -596,7 +748,7 @@ class SettingsRow extends StatelessWidget {
         child: PressHighlight(
           onTap: active,
           child: SizedBox(
-            height: SettingsSection.rowHeight,
+            height: height,
             child: Padding(
               padding: const EdgeInsets.only(left: SettingsTheme.rowInset, right: SettingsTheme.chevronRight),
               child: Row(
@@ -641,37 +793,77 @@ class SettingsRow extends StatelessWidget {
   }
 }
 
-/// A row with a switch at its end; the whole row flips it.
+/// A row with a switch at its end; the whole row flips it. A [subtitle] puts a grey second line under the title, in a
+/// taller row (172-174).
 class SettingsSwitchRow extends StatelessWidget {
-  const SettingsSwitchRow({super.key, required this.title, required this.value, required this.onChanged});
+  const SettingsSwitchRow({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+  });
 
   final String title;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  static const _textRight = SettingsListTheme.switchRight + SettingsListTheme.switchWidth + SettingsTheme.valueGap;
+
   @override
-  Widget build(BuildContext context) => MergeSemantics(
-    child: Semantics(
-      toggled: value,
-      child: PressHighlight(
-        onTap: () => onChanged(!value),
-        child: SizedBox(
-          height: SettingsSection.rowHeight,
-          child: Padding(
-            padding: const EdgeInsets.only(left: SettingsTheme.rowInset, right: SettingsTheme.switchRight),
-            child: Row(
+  Widget build(BuildContext context) {
+    final subtitle = this.subtitle;
+    void flip() => onChanged(!value);
+    return MergeSemantics(
+      child: Semantics(
+        toggled: value,
+        onTap: flip,
+        child: PressHighlight(
+          onTap: flip,
+          child: SizedBox(
+            height: subtitle == null ? SettingsSection.rowHeight : SettingsListTheme.switchTallHeight,
+            child: Stack(
               children: [
-                Expanded(child: SettingsRow.titleText(title)),
-                _Switch(on: value),
+                if (subtitle == null)
+                  Positioned.fill(
+                    left: SettingsTheme.rowInset,
+                    right: _textRight,
+                    child: Align(alignment: Alignment.centerLeft, child: SettingsRow.titleText(title)),
+                  )
+                else ...[
+                  settingsLineAt(
+                    centre: SettingsListTheme.switchTitleCentre,
+                    fontSize: SettingsTheme.rowTitleText,
+                    left: SettingsTheme.rowInset,
+                    right: _textRight,
+                    child: SettingsRow.titleText(title),
+                  ),
+                  settingsLineAt(
+                    centre: SettingsListTheme.switchSubtitleCentre,
+                    fontSize: SettingsListTheme.subtitleText,
+                    left: SettingsTheme.rowInset,
+                    right: _textRight,
+                    child: _greyLine(subtitle, SettingsListTheme.subtitleText, SettingsListTheme.subtitle),
+                  ),
+                ],
+                Positioned(
+                  right: SettingsListTheme.switchRight,
+                  top:
+                      (subtitle == null ? SettingsListTheme.switchCentre : SettingsListTheme.switchTallCentre) -
+                      SettingsListTheme.switchHeight / 2,
+                  child: _Switch(on: value),
+                ),
               ],
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
+/// The settings pages' switch (172): a pill, pink on and grey off, its knob a white pill inside the border.
 class _Switch extends StatelessWidget {
   const _Switch({required this.on});
 
@@ -679,37 +871,193 @@ class _Switch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const inset = (BiliMetrics.panelSwitchHeight - BiliMetrics.panelSwitchKnob) / 2;
+    const knobHeight = SettingsListTheme.switchHeight - 2 * SettingsListTheme.switchBorder;
     final motion = MediaQuery.disableAnimationsOf(context) ? Duration.zero : SettingsTheme.switchMotion;
     return AnimatedContainer(
       key: const ValueKey('settings-switch'),
       duration: motion,
       curve: Curves.easeOutCubic,
-      width: BiliMetrics.panelSwitchWidth,
-      height: BiliMetrics.panelSwitchHeight,
-      padding: const EdgeInsets.all(inset),
+      width: SettingsListTheme.switchWidth,
+      height: SettingsListTheme.switchHeight,
+      padding: const EdgeInsets.all(SettingsListTheme.switchBorder),
       decoration: BoxDecoration(
-        color: on ? SettingsTheme.switchOn : SettingsTheme.switchOff,
-        borderRadius: BorderRadius.circular(BiliMetrics.panelSwitchHeight / 2),
+        color: on ? SettingsListTheme.switchOn : SettingsListTheme.switchOff,
+        borderRadius: BorderRadius.circular(SettingsListTheme.switchHeight / 2),
       ),
       child: AnimatedAlign(
         duration: motion,
-        curve: Curves.easeOutBack,
+        curve: Curves.easeOutCubic,
         alignment: on ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
-          width: BiliMetrics.panelSwitchKnob,
-          height: BiliMetrics.panelSwitchKnob,
-          decoration: const BoxDecoration(
-            color: SettingsTheme.switchKnob,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(color: SettingsTheme.switchKnobShadow, blurRadius: SettingsTheme.switchKnobShadowBlur),
-            ],
+          width: SettingsListTheme.switchKnobWidth,
+          height: knobHeight,
+          decoration: BoxDecoration(
+            color: SettingsListTheme.switchKnob,
+            borderRadius: BorderRadius.circular(knobHeight / 2),
           ),
         ),
       ),
     );
   }
+}
+
+/// Where a ✓ row puts its parts: 首页推荐设置's (170) or a picker's (178, 179). Middles are the Chinese glyphs' and
+/// the ✓'s ink, from the row's top; [checkEnd] is how far short of the right edge the ✓'s ink stops.
+class SettingsPickLook {
+  const SettingsPickLook({
+    required this.inset,
+    required this.height,
+    required this.titleCentre,
+    required this.checkCentre,
+    required this.checkEnd,
+    required this.checkShort,
+    required this.checkLong,
+    required this.checkStroke,
+    this.titleText = SettingsTheme.rowTitleText,
+    this.tallHeight = SettingsListTheme.feedTallHeight,
+    this.tallTitleCentre = SettingsListTheme.feedTallTitleCentre,
+    this.tallSubtitleCentre = SettingsListTheme.feedTallSubtitleCentre,
+    this.tallCheckCentre = SettingsListTheme.feedTallCheckCentre,
+  });
+
+  static const feed = SettingsPickLook(
+    inset: SettingsTheme.rowInset,
+    height: SettingsListTheme.feedHeight,
+    titleCentre: SettingsListTheme.feedTitleCentre,
+    checkCentre: SettingsListTheme.feedCheckCentre,
+    checkEnd: SettingsListTheme.feedCheckEnd,
+    checkShort: SettingsListTheme.feedCheckShort,
+    checkLong: SettingsListTheme.feedCheckLong,
+    checkStroke: SettingsListTheme.feedCheckStroke,
+  );
+
+  static const picker = SettingsPickLook(
+    inset: SettingsListTheme.pickerInset,
+    height: SettingsListTheme.pickerHeight,
+    titleCentre: SettingsListTheme.pickerTitleCentre,
+    checkCentre: SettingsListTheme.pickerCheckCentre,
+    checkEnd: SettingsListTheme.pickerCheckEnd,
+    checkShort: SettingsListTheme.pickerCheckShort,
+    checkLong: SettingsListTheme.pickerCheckLong,
+    checkStroke: SettingsListTheme.pickerCheckStroke,
+    titleText: SettingsListTheme.pickerTitleText,
+  );
+
+  final double inset;
+  final double height;
+  final double titleCentre;
+  final double checkCentre;
+  final double checkEnd;
+  final double checkShort;
+  final double checkLong;
+  final double checkStroke;
+  final double titleText;
+
+  /// With a second line.
+  final double tallHeight;
+  final double tallTitleCentre;
+  final double tallSubtitleCentre;
+  final double tallCheckCentre;
+
+  Size get checkSize => Size(checkShort + checkLong + checkStroke, checkLong + checkStroke);
+}
+
+/// A row picked with a tap, a pink ✓ at the end of the [chosen] one; a [subtitle] puts a grey second line under the
+/// title, in a taller row.
+class SettingsPickRow extends StatelessWidget {
+  const SettingsPickRow({
+    super.key,
+    required this.title,
+    required this.chosen,
+    required this.onTap,
+    this.subtitle,
+    this.look = SettingsPickLook.feed,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool chosen;
+  final VoidCallback onTap;
+  final SettingsPickLook look;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = this.subtitle;
+    final check = look.checkSize;
+    final textRight = look.checkEnd + check.width + SettingsTheme.valueGap;
+    final checkCentre = subtitle == null ? look.checkCentre : look.tallCheckCentre;
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        selected: chosen,
+        onTap: onTap,
+        child: PressHighlight(
+          onTap: onTap,
+          child: SizedBox(
+            height: subtitle == null ? look.height : look.tallHeight,
+            child: Stack(
+              children: [
+                settingsLineAt(
+                  centre: subtitle == null ? look.titleCentre : look.tallTitleCentre,
+                  fontSize: look.titleText,
+                  left: look.inset,
+                  right: textRight,
+                  child: SettingsRow.titleText(title, size: look.titleText),
+                ),
+                if (subtitle != null)
+                  settingsLineAt(
+                    centre: look.tallSubtitleCentre,
+                    fontSize: SettingsListTheme.subtitleText,
+                    left: look.inset,
+                    right: textRight,
+                    child: _greyLine(subtitle, SettingsListTheme.subtitleText, SettingsListTheme.subtitle),
+                  ),
+                if (chosen)
+                  Positioned(
+                    right: look.checkEnd,
+                    top: checkCentre - check.height / 2,
+                    child: CustomPaint(
+                      key: const ValueKey('settings-check'),
+                      size: check,
+                      painter: _CheckPainter(look.checkShort, look.checkLong, look.checkStroke),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The ✓: a short arm down to the corner and a long one up, both at 45°, with round ends.
+class _CheckPainter extends CustomPainter {
+  const _CheckPainter(this.short, this.long, this.stroke);
+
+  final double short;
+  final double long;
+  final double stroke;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final half = stroke / 2;
+    canvas.drawPath(
+      Path()
+        ..moveTo(half, half + long - short)
+        ..lineTo(half + short, half + long)
+        ..lineTo(half + short + long, half),
+      Paint()
+        ..color = BiliColors.pink
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CheckPainter old) => old.short != short || old.long != long || old.stroke != stroke;
 }
 
 /// 大会员's pink pill after the account's name, as the avatar menu drew it.
