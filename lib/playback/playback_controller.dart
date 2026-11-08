@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 
 import '../player/bili_player.dart';
 import '../player/playback_clock.dart';
+import '../video/player_prefs.dart';
 import 'codec_memory.dart';
 import 'danmaku_feed.dart';
 import 'overlay_stats.dart';
@@ -183,8 +184,10 @@ class PlaybackController extends ChangeNotifier {
     DateTime Function()? now,
     StartTimer? startTimer,
     Logger? logger,
+    bool Function()? autoPipAllowed,
   })  : _client = client,
         _engine = engine,
+        _autoPipAllowed = autoPipAllowed ?? _autoPipSetting,
         _memory = codecMemory ?? CodecMemory(),
         _selectedQuality = quality,
         _mode = mode,
@@ -231,6 +234,12 @@ class PlaybackController extends ChangeNotifier {
   final DanmakuFeed danmaku;
 
   final _marks = StreamController<PlaybackMark>.broadcast();
+
+  /// 应用外自动小窗播放, asked at every change of auto picture in picture, so a change made while the page was covered
+  /// holds once it shows.
+  final bool Function() _autoPipAllowed;
+
+  static bool _autoPipSetting() => PlayerPrefs.shared.autoPip;
 
   final BiliClient _client;
   PlaybackEngine _engine;
@@ -316,6 +325,7 @@ class PlaybackController extends ChangeNotifier {
 
   /// Off while the page is covered: auto picture in picture belongs to the page on top.
   bool _autoPipWanted = true;
+  bool _autoPipRefusalLogged = false;
   bool _seekPrecise = true;
   double _startedAtMs = 0;
 
@@ -381,6 +391,9 @@ class PlaybackController extends ChangeNotifier {
   PlayingStream? get playing => _playing;
   bool get pictureInPicture => _pictureInPicture;
   ({int width, int height})? get videoSize => _videoSize;
+
+  /// The player has played since the last open or replay; one loaded paused hasn't until the user plays it.
+  bool get hasPlayed => _sawFirstFrame;
 
   double get currentSeconds => _token != null ? clock.seconds : _heldPosition;
 
@@ -482,8 +495,15 @@ class PlaybackController extends ChangeNotifier {
   /// from [start] seconds, or without one from where Bilibili saw it last (`ResumePoint`), which only arrives with
   /// the playurl answer. A [view] already resolved (a pasted link, another part) saves asking for it again, and the
   /// signed [detail] that came with it keeps the 合集; a [detail] alone gives the view as well. A [view] without its
-  /// detail plays at once and the detail is asked for alongside.
-  Future<void> openVideo(String bvid, {int? cid, double? start, VideoView? view, VideoDetail? detail}) async {
+  /// detail plays at once and the detail is asked for alongside. Without [autoplay] it loads paused.
+  Future<void> openVideo(
+    String bvid, {
+    int? cid,
+    double? start,
+    VideoView? view,
+    VideoDetail? detail,
+    bool autoplay = true,
+  }) async {
     _opens += 1;
     // Another part keeps the video's shape until its stream gives its own, so the layout doesn't flip meanwhile.
     _clearVideo(keepSize: _video?.bvid == bvid);
@@ -520,19 +540,24 @@ class PlaybackController extends ChangeNotifier {
       if (info != null) _playerInfo = (cid: pages.first.cid, info: info);
       final saved = info?.lastPlayCid;
       return (view, pages.where((page) => page.cid == saved).firstOrNull ?? pages.first);
-    }, start: start);
+    }, start: start, autoplay: autoplay);
   }
 
   /// A 离线缓存 part from the phone, from [start] seconds: [find] hands over its files, or null when they are gone. A
   /// [start] still to come (the account's history, asked alongside [find]) is waited for before the load.
   /// Nothing here asks Bilibili: no view, no playurl, no URL refresh, no direct fallback. The quality, codec and mode
-  /// can't change, and a codec the player refuses fails the playback, as the files hold no other.
-  Future<void> openLocal(Future<LocalVideo?> Function() find, {FutureOr<double> start = 0}) async {
+  /// can't change, and a codec the player refuses fails the playback, as the files hold no other. Without [autoplay] it
+  /// loads paused.
+  Future<void> openLocal(
+    Future<LocalVideo?> Function() find, {
+    FutureOr<double> start = 0,
+    bool autoplay = true,
+  }) async {
     _opens += 1;
     _clearVideo();
     final current = _advance();
     _phase = PlaybackPhase.loading;
-    _playWhenLoaded = true;
+    _playWhenLoaded = autoplay;
     _error = null;
     _playerFailure = null;
     _notify();
@@ -627,11 +652,15 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// [pick] resolves the video and its part, or answers null once a newer open has taken over.
-  Future<void> _openWith(Future<(VideoView, VideoPage)?> Function(int current) pick, {required double? start}) async {
+  Future<void> _openWith(
+    Future<(VideoView, VideoPage)?> Function(int current) pick, {
+    required double? start,
+    bool autoplay = true,
+  }) async {
     final current = _advance();
     _phase = PlaybackPhase.loading;
-    // Its load autoplays; until then a covered page reads this as about to play.
-    _playWhenLoaded = true;
+    // Until its load, a covered page reads this as whether it is about to play.
+    _playWhenLoaded = autoplay;
     _error = null;
     _playerFailure = null;
     _notify();
@@ -792,13 +821,14 @@ class PlaybackController extends ChangeNotifier {
 
   /// Whether the small window starts by itself when the app leaves while this plays. It is first turned on at the
   /// first play, so a page covered before then never gets it. [now] turns it on at once, for a page taking 推荐's big
-  /// card over while it plays, which has no first play to come.
+  /// card over while it plays, which has no first play to come. With 应用外自动小窗播放 off it stays off.
   void setAutoPictureInPicture(bool on, {bool now = false}) {
     _autoPipWanted = on;
     if (!player.capabilities.pictureInPicture) return;
-    if (!on || _autoPipSet || now) {
-      _autoPipSet = on || _autoPipSet;
-      _quietly(() => player.setAutoPictureInPicture(on), 'auto pip');
+    final allowed = on && _autoPipAllowed();
+    if (!allowed || _autoPipSet || now) {
+      _autoPipSet = allowed || _autoPipSet;
+      _quietly(() => player.setAutoPictureInPicture(allowed), 'auto pip');
     }
   }
 
@@ -810,9 +840,16 @@ class PlaybackController extends ChangeNotifier {
   /// a server restart. [loadWillPlay] still says whether it would have played. Lifted, a load still to come plays
   /// only if [play].
   void holdAutoplay(bool hold, {bool play = true}) {
+    if (!hold) {
+      _heldWhenLifted = _autoplayHeld;
+      _playWhenLoaded = play;
+    }
     _autoplayHeld = hold;
-    if (!hold) _playWhenLoaded = play;
   }
+
+  /// The last lift of [holdAutoplay] found it held: a card its rule had paused, handed over to a page.
+  bool get heldWhenLifted => _heldWhenLifted;
+  bool _heldWhenLifted = false;
 
   /// A load is under way that starts playing when it lands, or would were it not held.
   bool get loadWillPlay => _phase == PlaybackPhase.loading && _playWhenLoaded;
@@ -1607,8 +1644,13 @@ class PlaybackController extends ChangeNotifier {
         final seekMs = _seekTimer.playing(atMs: now);
         if (seekMs != null) _seekResumed(seekMs, 'status');
         if (!_autoPipSet && _autoPipWanted && player.capabilities.pictureInPicture) {
-          _autoPipSet = true;
-          _quietly(() => player.setAutoPictureInPicture(true), 'auto pip');
+          if (_autoPipAllowed()) {
+            _autoPipSet = true;
+            _quietly(() => player.setAutoPictureInPicture(true), 'auto pip');
+          } else if (!_autoPipRefusalLogged) {
+            _autoPipRefusalLogged = true;
+            _logger.info(LogCategory.player, 'auto pip off by setting');
+          }
         }
         _phase = PlaybackPhase.playing;
         _notify();

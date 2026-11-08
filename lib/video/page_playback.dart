@@ -48,6 +48,7 @@ PlayerSession pageSession({
 /// (推荐's big card) plays muted with its session's rules, watch reports and auto picture in picture off, until a page
 /// attaches and takes it over as it stands. An [offline] one plays 离线缓存 parts from the phone: no 最近打开, its
 /// position kept in the library as well as reported, and Bilibili asked for nothing else but where the part was left.
+/// Without [autoplay] the route's video loads paused (详情页直接播放 off); whatever opens on the page after it plays.
 class PagePlayback extends ChangeNotifier implements KeptPlayback {
   PagePlayback({
     required this._services,
@@ -55,6 +56,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     required this._createSession,
     required this.restorePage,
     this._inline = false,
+    this._autoplay = true,
   }) : _bvid = route.bvid,
        _cid = route.cid,
        _startAt = route.start,
@@ -70,6 +72,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   final Widget Function(VideoRoute route) restorePage;
 
   bool _inline;
+
+  /// Whether the next open plays once loaded; a 重试 opens as the open it retries did.
+  bool _autoplay;
 
   /// What it plays: the route's video at first, then whatever the session opens on the page. Only the route's own
   /// open starts at its position; another part of the same video reuses the view and detail it has.
@@ -217,7 +222,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
       return;
     }
     unawaited(_reporter?.leave());
-    unawaited(controller.openVideo(_bvid, cid: _cid, start: _startAt, view: _view, detail: _detail));
+    unawaited(
+      controller.openVideo(_bvid, cid: _cid, start: _startAt, view: _view, detail: _detail, autoplay: _autoplay),
+    );
     _reporter = WatchReporter(
       controller: controller,
       client: services.environment.client,
@@ -242,11 +249,15 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     unawaited(_reporter?.leave());
     final FutureOr<double> start = _startAt ?? (item == null ? 0 : _offlineStart(item));
     unawaited(
-      controller.openLocal(() async {
-        if (cid == null) return null;
-        final files = await library.playback(cid);
-        return files == null ? null : localVideoOf(files);
-      }, start: start),
+      controller.openLocal(
+        () async {
+          if (cid == null) return null;
+          final files = await library.playback(cid);
+          return files == null ? null : localVideoOf(files);
+        },
+        start: start,
+        autoplay: _autoplay,
+      ),
     );
     _progress = OfflineProgress(controller: controller, library: library);
     _reporter = WatchReporter(
@@ -284,6 +295,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     _bvid = bvid;
     _cid = cid;
     _startAt = null;
+    _autoplay = true;
     willPlay();
     _open();
     notifyListeners();
@@ -304,21 +316,30 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   /// Before it plays: another page's small window closes, one video at a time.
   void willPlay() => _services.pipKeeper.willPlay(this);
 
-  /// [page] shows this playback and takes its login asks.
-  void attach(Object page, {required VoidCallback requestLogin}) {
+  /// Still the card's, and its rule had paused it when it was handed over.
+  bool get heldOnCard => _inline && (_controller?.heldWhenLifted ?? false);
+
+  /// [page] shows this playback and takes its login asks. A card's playback its rule had paused plays on only if
+  /// [resumeHeld].
+  void attach(Object page, {required VoidCallback requestLogin, bool resumeHeld = true}) {
     _holders.add(page);
     _page = page;
     _requestLogin = requestLogin;
-    if (_inline) _takeOver();
+    if (_inline) _takeOver(play: resumeHeld || !heldOnCard);
   }
 
   /// A page took the card's playback: it goes on where it is, with sound and the page's rules.
-  void _takeOver() {
+  void _takeOver({required bool play}) {
     _inline = false;
     _session?.active = true;
     final controller = _controller;
     if (controller == null) return;
-    controller.setAutoPictureInPicture(true, now: controller.phase == PlaybackPhase.playing);
+    if (!play) {
+      // The card's hand-over already asked it to play.
+      controller.holdAutoplay(false, play: false);
+      _quietly(controller.player.pause, 'pause');
+    }
+    controller.setAutoPictureInPicture(true, now: play && controller.phase == PlaybackPhase.playing);
     _quietly(() => controller.player.setMuted(_services.playback.muted), 'unmute');
   }
 
@@ -345,7 +366,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     final session = _session;
     session?.active = false;
     // A start or a load still under way reports nothing playing, though it is about to.
-    _resumeOnShow = controller == null || controller.loadWillPlay || (session?.readout.wantsPlay ?? false);
+    _resumeOnShow = controller == null ? _autoplay : controller.loadWillPlay || (session?.readout.wantsPlay ?? false);
     if (controller == null) return;
     _quietly(controller.stopPictureInPicture, 'pip stop');
     controller.dropPrefetch();
