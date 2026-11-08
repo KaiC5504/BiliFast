@@ -48,10 +48,44 @@ BlockRule? _ruleOf(_BlockRuleItem item) {
   return BlockRule(id: item.id, kind: kind, filter: filter);
 }
 
+final _contentRangeStart = RegExp(r'^bytes\s+(\d+)-');
+
 extension BiliClientDanmaku on BiliClient {
   /// Bytes [start] to [end] (inclusive; null runs to the end of the file) of a 人像防挡 mask file (DanmakuMaskInfo.url),
-  /// by a Range request; only Bilibili's CDN hosts are asked.
-  Future<Uint8List> maskRange(Uri url, {required int start, int? end}) => throw UnimplementedError();
+  /// by a Range request; only Bilibili's CDN hosts are asked. A whole file answered with 200 is cut to the range.
+  /// The address is signed, so the log and errors carry its host and the status at most.
+  Future<Uint8List> maskRange(Uri url, {required int start, int? end}) async {
+    if (start < 0 || (end != null && end < start)) throw RangeError('mask range $start-${end ?? ''}');
+    if (!DanmakuMaskInfo.isMaskUrl(url)) throw BiliError.invalidLink;
+    final watch = Stopwatch()..start();
+    final response = await _sendOver(
+      HTTPRequest(url: url, headers: {...BiliClient.mediaHeaders, 'Range': 'bytes=$start-${end ?? ''}'}),
+      'mask range',
+    );
+    final status = response.status;
+    final body = response.body;
+    final fields = {'host': url.host, 'status': status, 'bytes': body.length, 'ms': watch.elapsedMilliseconds};
+    if (status != 200 && status != 206) {
+      _logger.warn(LogCategory.api, 'mask range', fields);
+      throw BiliError.http(status);
+    }
+    _logger.info(LogCategory.api, 'mask range', fields);
+    final int from;
+    if (status == 206) {
+      final answered = _contentRangeStart.firstMatch(response.headers['content-range'] ?? '')?[1];
+      if (answered != null && int.tryParse(answered) != start) {
+        throw BiliError.decoding('mask range: answered from $answered, asked $start');
+      }
+      from = 0;
+    } else {
+      if (start >= body.length) throw BiliError.decoding('mask range: $start is past the end (${body.length})');
+      from = start;
+    }
+    final to = end == null ? body.length : from + end - start + 1;
+    if (from == 0 && to >= body.length) return body;
+    // A copy, so a whole file answered with 200 isn't kept alive by the slice.
+    return body.sublist(from, to < body.length ? to : body.length);
+  }
 
   /// One 6-minute slice of a video's danmaku, `index` counting from 1.
   Future<DanmakuSegment> danmakuSegment({required int cid, required int index}) async => decodeDanmakuSegment(
