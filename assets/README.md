@@ -106,3 +106,7 @@ in the verify bolt's white ring, 16 pt left of it.
 The own space's 空间头图 sound disc (24, 169) is the same APK's, unchanged: `images/space/banner_sound.webp` (sound on)
 and `banner_sound_off.webp` (muted, as it opens), both 72 px, from its compose resources
 (`srcs.app.digital.collection.generated.resources/drawable-xxhdpi`), drawn 26 pt (`OwnSpaceTheme.soundSize`).
+The ◇ before a 数字藏品's banner title (24, 25) is `images/space/banner_collectible.png`, the APK's
+`ic_space_nft_header` unchanged (xxhdpi, 42 px), drawn 14 pt (`OwnSpaceTheme.labelBadge`) as 25 measures it;
+`banner_region.png` is `ic_nft_icon_ex` unchanged (xhdpi, 42 px), which the APK's BannerTitle draws in the same
+place for a `region_type` 2 one, at the same 14 pt. The answer's `region_icon` is drawn instead when it has one.

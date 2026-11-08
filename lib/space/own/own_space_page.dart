@@ -163,6 +163,16 @@ class _OwnSpacePageState extends State<OwnSpacePage> with RouteAware {
       'bannerVideo': own.bannerVideo != null,
       'bannerLabel': own.bannerLabel != null,
     });
+    if (own.banner == null) return;
+    // The video's host name only: its path and query can carry a signature.
+    final video = own.bannerVideo;
+    Logger.shared.info(LogCategory.api, 'own space banner', {
+      ...own.bannerFacts,
+      'videoHost': video == null ? 'none' : (Uri.tryParse(video)?.host ?? 'unparsed'),
+      'backups': own.bannerVideoBackups.length,
+      'glyph': own.bannerLabel?.glyph.name ?? 'none',
+      'labelIcon': own.bannerLabel?.icon != null,
+    });
   }
 
   /// 主页, 投稿, 收藏 and 追番 as the profile orders them, 投稿 added when it has none; without the extras only 投稿
@@ -188,7 +198,7 @@ class _OwnSpacePageState extends State<OwnSpacePage> with RouteAware {
     final url = profile.own?.banner ?? profile.banner;
     if (url == null || url.isEmpty) return;
     final width = MediaQuery.sizeOf(context).width;
-    final alignY = profile.own?.bannerAlignY ?? 0;
+    final alignY = profile.own?.bannerAlignIn(width, OwnSpaceTheme.bannerHeight) ?? 0;
     final stream = OwnSpaceBanner.imageOf(context, url).resolve(createLocalImageConfiguration(context));
     late final ImageStreamListener listener;
     // A cached picture answers inside addListener, so each answer takes the listener off its own stream.

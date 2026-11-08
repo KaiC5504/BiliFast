@@ -74,21 +74,37 @@ bool isSkinPackageUrl(Uri url) {
   return _cdnDomains.any((domain) => host == domain || host.endsWith('.$domain'));
 }
 
+/// Bilibili's upos mirrors on Akamai, as a 空间头图's mp4 comes (`upos-hz-mirrorakam`, KaiC's log, 2026-11-09); every
+/// other akamaized.net name is someone else's.
+final _uposOnAkamai = RegExp(r'^upos-[a-z0-9-]+\.akamaized\.net$');
+const _videoDomains = ['bilivideo.com', 'bilivideo.cn'];
+
+/// [isSkinPackageUrl]'s hosts and Bilibili's video CDN (its upos mirrors on Akamai, bilivideo), on the same terms.
+bool isBannerVideoUrl(Uri url) {
+  if (isSkinPackageUrl(url)) return true;
+  if (url.scheme != 'https' || url.userInfo.isNotEmpty || url.port != 443) return false;
+  final host = url.host.toLowerCase();
+  return _uposOnAkamai.hasMatch(host) || _videoDomains.any((domain) => host.endsWith('.$domain'));
+}
+
 /// The package over a plain dart:io client: no cookies, no token, the browser's user agent. Redirects are followed
-/// by hand so each hop passes [isSkinPackageUrl]; [client] is for tests. The 加载动画's picture comes the same way,
-/// with its own [cap].
+/// by hand so each hop passes [allowed]; [client] is for tests. The 加载动画's picture comes the same way, with its
+/// own [cap], and the 空间头图's video with its own hosts and [headers] (upos wants Bilibili's Referer).
 Future<Uint8List> downloadSkinPackage(
   Uri url, {
   HttpClient Function() client = HttpClient.new,
   Duration timeout = SkinLimits.downloadTimeout,
   int cap = SkinLimits.packageBytes,
+  bool Function(Uri url) allowed = isSkinPackageUrl,
+  Map<String, String> headers = const {},
+  String what = 'package',
 }) async {
-  if (!isSkinPackageUrl(url)) throw SkinPackageError.hostNotAllowed(url);
+  if (!allowed(url)) throw SkinPackageError.hostNotAllowed(url, what: what);
   final http = client()
     ..connectionTimeout = SkinLimits.connectTimeout
     ..userAgent = BiliClient.userAgent;
   try {
-    final fetched = _fetch(http, url, cap);
+    final fetched = _fetch(http, url, cap, allowed: allowed, headers: headers, what: what);
     return await fetched.timeout(
       timeout,
       onTimeout: () => throw const SkinPackageError('download timed out', passing: true),
@@ -98,12 +114,22 @@ Future<Uint8List> downloadSkinPackage(
   }
 }
 
-Future<Uint8List> _fetch(HttpClient http, Uri url, int cap) async {
+Future<Uint8List> _fetch(
+  HttpClient http,
+  Uri url,
+  int cap, {
+  required bool Function(Uri url) allowed,
+  required Map<String, String> headers,
+  required String what,
+}) async {
   var next = url;
   for (var hop = 0; hop < 4; hop++) {
-    if (!isSkinPackageUrl(next)) throw SkinPackageError.hostNotAllowed(next);
+    if (!allowed(next)) throw SkinPackageError.hostNotAllowed(next, what: what);
     final request = await http.getUrl(next);
     request.followRedirects = false;
+    for (final MapEntry(:key, :value) in headers.entries) {
+      request.headers.set(key, value);
+    }
     final response = await request.close();
     if (response.isRedirect) {
       final location = response.headers.value(HttpHeaders.locationHeader);

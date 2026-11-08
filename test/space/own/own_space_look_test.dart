@@ -33,7 +33,6 @@ import '../../video/mixed_lines.dart' show appTheme;
 const _screen = ValueKey('screen');
 const _banner = 'https://i1.hdslb.com/bfs/garb/look-banner.png';
 const _vipLabel = 'https://i1.hdslb.com/bfs/vip/look-label.png';
-const _collectible = 'https://i1.hdslb.com/bfs/garb/look-collectible.png';
 
 /// KaiC's own space as 108, 114 and 115 show it: a 年度大会员 at LV5 with 14805/28800, the 空间头图's label, four tabs.
 /// [label] is 24's collectible's instead.
@@ -106,7 +105,7 @@ final _skin = Skin(
 
 /// Drawn stand-ins (never the official art) put in the image cache under the addresses the page asks for: a dark
 /// banner, so the label's white reads as on 108, a 年度大会员 pill the size of 108's with the label picture's clear
-/// band above and below it, and a collectible's rounded square.
+/// band above and below it.
 Future<void> _cacheStandIns(WidgetTester tester) async {
   Future<ui.Image> draw(int width, int height, void Function(Canvas canvas, Size size) paint) {
     final recorder = ui.PictureRecorder();
@@ -146,15 +145,8 @@ Future<void> _cacheStandIns(WidgetTester tester) async {
       )..layout();
       text.paint(canvas, Offset((size.width - text.width) / 2, pill.center.dy - text.height / 2));
     });
-    final icon = await draw(42, 42, (canvas, size) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(10)),
-        Paint()..color = const Color(0xFFB8D4F2),
-      );
-    });
     cache(OwnSpaceBanner.address(_banner, 1320), banner);
     cache(_vipLabel, label);
-    cache(_collectible, icon);
   });
 }
 
@@ -274,17 +266,17 @@ void main() {
     expect(_rect(tester, 'own-space-skin').center, offsetMoreOrLessEquals(const Offset(418, 275.33), epsilon: 0.5));
   });
 
-  testWidgets('24: a collectible\'s label, its picture before the title and CD.013149 in block letters', (
+  testWidgets('24 and 25: a collectible\'s label, the ◇ before the title and CD.013149 in block letters', (
     tester,
   ) async {
     await _show(
       tester,
       _kaic(
-        label: const SpaceBannerLabel(title: '紫罗兰永恒花园收藏集', subtitle: 'CD.013149', icon: _collectible),
+        label: const SpaceBannerLabel(title: '紫罗兰永恒花园收藏集', subtitle: 'CD.013149', glyph: SpaceBannerGlyph.collectible),
       ),
     );
     await _shoot(tester, '24');
-    // 24's measures, in pt: the picture 263.67-277.67 across, its middle 267.67 down; the number ending 389.33.
+    // 24's and 25's measures, in pt: the ◇ 263.67-277.67 across, its middle 267.67 down; the number ending 389.33.
     final icon = _rect(tester, 'own-space-label-icon');
     expect(icon.right, closeTo(277.67, 0.5));
     expect(icon.width, 14);

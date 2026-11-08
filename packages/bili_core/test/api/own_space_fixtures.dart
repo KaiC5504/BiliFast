@@ -10,7 +10,7 @@ abstract final class OwnSpaceFixtures {
 "vip":{"vipType":2,"vipStatus":1,"avatar_subscript":1,"label":{"image":""}}},
 "images":{"imgUrl":"http://i0.hdslb.com/bfs/space/made-up/plain-banner.png",
 "collection_top_simple":{"max":1,"top":{"result":[
-{"biz_type":"garb","biz_id":1,"item_id":"1","cover":"http://i0.hdslb.com/bfs/garb/made-up/top-cover.png",
+{"biz_type":1,"biz_id":1,"item_id":"1","cover":"http://i0.hdslb.com/bfs/garb/made-up/top-cover.png",
 "item":{"item_type":1,"image":{"default_image":"http://i0.hdslb.com/bfs/garb/made-up/top.png","width":1125,"height":1600}},
 "title":{"title":"测试星座 金牛座","sub_title":"NO.000067","sub_title_color_format":{"colors":["#FFFFFFFF","#80F5D4A6"]}}},
 {"cover":"http://i0.hdslb.com/bfs/garb/made-up/second.png","title":{"title":"第二个"}}]}}},
@@ -56,6 +56,30 @@ abstract final class OwnSpaceFixtures {
 "images":{"imgUrl":"","collection_top_simple":{"top":{"result":[{"title":{"sub_title":"NO.1"}}]}}},
 "favourite2":[],"season":{"count":"--","item":"none"},"coin_archive":{"count":2},"like_archive":null,
 "fans_dress":{"count":1,"total":"7779","item":[{"image":"//i0.hdslb.com/bfs/garb/made-up/odd.png"}]}}}''';
+
+  /// A 收藏集 card's 空间头图 as KaiC's answer shapes it (2026-11-09, `local/space-live/space-shape.txt`): no
+  /// picture, an `animation` and an `additional_animation`, each with its videos, stills, size and four-part
+  /// `location`, the card's own art as `title_icon`, and `digital_extra`.
+  static const collectibleTop = r'''
+{"biz_type":2,"biz_id":2,"item_id":"9000000000001",
+"item":{"item_type":2,"item_id":"9000000000001","image":null,
+"animation":{"is_silence":false,"animation_video_urls":["https://upos-hz-mirrorakam.akamaized.net/made-up/card.mp4?e=made-up","https://upos-sz-mirrorcos.bilivideo.com/made-up/card.mp4?e=made-up"],
+"animation_backup_image":"https://i0.hdslb.com/bfs/garb/made-up/card-backup.png","animation_first_frame":"https://i0.hdslb.com/bfs/garb/made-up/card-first.png",
+"width":1080,"height":1920,"duration":10,"loop_mode":"","trial_duration":0,"show_subtitles":false,"subtitle_url":"",
+"show_progress_bar":false,"scaling_factor":0,"location":"0-0-1080-1920","compressed_w_h":""},
+"music_album":null,"extra":{"show_in_collection":true,"show_in_space":true,"unusable_reason":"","space_expire_time":0},
+"garb_extra":null,"card_extra":{"card_id":1,"card_number":1,"card_number_count":1,"card_scarcity":1},
+"additional_animation":{"is_silence":false,"animation_video_urls":["https://upos-hz-mirrorakam.akamaized.net/made-up/space.mp4?e=made-up","https://upos-sz-mirrorcos.bilivideo.com/made-up/space.mp4?e=made-up"],
+"animation_backup_image":"https://i0.hdslb.com/bfs/garb/made-up/space-backup.png@1080w_1618h","animation_first_frame":"https://i0.hdslb.com/bfs/garb/made-up/space-first.png@1080w_1618h",
+"width":1080,"height":1618,"duration":10,"loop_mode":"","trial_duration":0,"show_subtitles":false,"subtitle_url":"",
+"show_progress_bar":false,"scaling_factor":0,"location":"0-8-1080-1000","compressed_w_h":"1080-1618"},
+"cover":"https://i0.hdslb.com/bfs/garb/made-up/card-cover.png","item_sub_type":0,"render_type":0},
+"title":{"title":"测试收藏集","title_color":"#FFFFFF","title_background_url":"","title_icon":"https://i0.hdslb.com/bfs/garb/made-up/card-art.png",
+"sub_title":"CD.000001","sub_title_background_color":"#000000","sub_title_color_format":{"start_point":"0,0","end_point":"100,100","colors":["#FFEBF3F7","#FFCEE2EC"],"gradients":[0,100]}},
+"extra":{"owned":1,"total":1,"duration":0,"sort":0,"collection_completed":false,"fetch_time":0,"hidden":false,"item_count":1,"click_guide":false},
+"cover":"https://i0.hdslb.com/bfs/garb/made-up/top-cover.png",
+"digital_extra":{"region_type":1,"region_icon":"","region_title":"测试收藏集","entrance_jump_url":"","region_subtitle":"CD.000001"},
+"scaling_factor":0}''';
 
   static const bangumiLast = r'''
 {"code":0,"message":"0","ttl":1,"data":{"count":45,"item":[

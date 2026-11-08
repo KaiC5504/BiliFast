@@ -285,9 +285,19 @@ final class SpaceGarbCard {
   final int? maskColor;
 }
 
+/// The official app's own glyph before the label's title when the answer gives no picture: `ic_space_nft_header`
+/// (the ◇ in a white rounded square, 24 and 25) for a 数字藏品's 空间头图, `ic_nft_icon_ex` for a `region_type` 2 one.
+enum SpaceBannerGlyph { none, collectible, region }
+
 /// The label on the own space's banner, "幸运塔罗星 金牛座" over "NO.000067" (108).
 final class SpaceBannerLabel {
-  const SpaceBannerLabel({required this.title, this.subtitle = '', this.subtitleColors = const [], this.icon});
+  const SpaceBannerLabel({
+    required this.title,
+    this.subtitle = '',
+    this.subtitleColors = const [],
+    this.icon,
+    this.glyph = SpaceBannerGlyph.none,
+  });
 
   final String title;
   final String subtitle;
@@ -299,8 +309,33 @@ final class SpaceBannerLabel {
   /// The last of [subtitleColors], for type that is drawn in one colour; null for white.
   int? get subtitleColor => subtitleColors.isEmpty ? null : subtitleColors.last;
 
-  /// The collectible's picture before the title (`title_icon`, a ◇ in a rounded square on 24); null for none.
+  /// The picture before the title: `digital_extra.region_icon`; null for none, when [glyph] draws instead.
+  /// `title.title_icon` is the card's own art (25), which the official app doesn't show.
   final String? icon;
+
+  final SpaceBannerGlyph glyph;
+}
+
+/// The band of the 空间头图 the official app keeps in the banner's middle: `location`'s rect, "left-top-width-height"
+/// in the art's pixels (8.43's DashRectTypeAdapter), as fractions of the art.
+final class SpaceBannerCrop {
+  const SpaceBannerCrop({required this.middle, required this.aspect});
+
+  /// The band's middle down the art: 0 its top, 1 its bottom.
+  final double middle;
+
+  /// The art's height over its width.
+  final double aspect;
+
+  /// The Alignment y that draws the art [width] wide in a [width] × [height] box with the band's middle at the box's
+  /// middle, as SpaceHeaderBannerItemFactory scales the art to the box's width and offsets it; unclamped, as there.
+  /// Art too short to fill the box's height is cut about its middle.
+  double alignY(double width, double height) {
+    final drawn = width * aspect;
+    final spare = height - drawn;
+    if (spare >= 0) return 0;
+    return 2 * (height / 2 - middle * drawn) / spare - 1;
+  }
 }
 
 /// The own space's extras (108, 114-117).
@@ -312,9 +347,12 @@ final class OwnSpace {
     this.vipBadge = false,
     this.banner,
     this.bannerAlignY = 0,
+    this.bannerCrop,
     this.bannerVideo,
+    this.bannerVideoBackups = const [],
     this.bannerSilent = false,
     this.bannerSize,
+    this.bannerFacts = const {},
     this.bannerLabel,
     this.favourites = const SpaceSection(),
     this.bangumi = const SpaceSection(),
@@ -334,24 +372,38 @@ final class OwnSpace {
   /// The 大 on the avatar.
   final bool vipBadge;
 
-  /// The tall banner art: `images.collection_top_simple`'s first item (the equipped 空间头图), its picture or else its
-  /// animation's first frame (then its backup picture, then the item's cover); null without one (the header then
-  /// draws [SpaceProfile.banner]).
+  /// The tall banner art: `images.collection_top_simple`'s first item (the equipped 空间头图), its picture or else, as
+  /// the official app's BannerBackground, `additional_animation`'s backup picture, then `animation`'s (then their
+  /// first frames, then the item's cover); null without one (the header then draws [SpaceProfile.banner]).
   final String? banner;
 
-  /// Where [banner] is cut when it fills the box: an Alignment's y, -1 its top and 1 its bottom, 0 its middle.
+  /// Where [banner] is cut when it fills the box and [bannerCrop] has nothing to say: an Alignment's y, -1 its top
+  /// and 1 its bottom, 0 its middle. From a three-part `location` ("x-start-end"), as PiliPlus reads it.
   final double bannerAlignY;
 
-  /// An animated 空间头图's video (the first usable address in `animation_video_urls`), played over [banner]; null for
-  /// a still one.
+  /// The answer's own crop, which the banner's box turns into an alignment ([bannerAlignIn]).
+  final SpaceBannerCrop? bannerCrop;
+
+  /// An animated 空间头图's video, played over [banner]; null for a still one. The official app plays
+  /// `additional_animation`'s `animation_video_urls` when it has any, else `animation`'s; this is the first usable.
   final String? bannerVideo;
+
+  /// The same list's other addresses (another CDN's copy), tried in order when [bannerVideo] can't be had.
+  final List<String> bannerVideoBackups;
 
   /// `is_silence`: the video has no sound to offer, so no sound button.
   final bool bannerSilent;
 
-  /// The animation's width and height, which its video is laid out by as [banner] is; null when the answer has none.
+  /// The played animation's width and height, which its video is laid out by as [banner] is; null when the answer
+  /// has none.
   final ({int width, int height})? bannerSize;
+
+  /// Numbers only, for the phone's log: where the 空间头图 came from and how it is cut. Never an address.
+  final Map<String, Object> bannerFacts;
   final SpaceBannerLabel? bannerLabel;
+
+  /// The Alignment y that cuts the banner in a [width] × [height] box.
+  double bannerAlignIn(double width, double height) => bannerCrop?.alignY(width, height) ?? bannerAlignY;
   final SpaceSection<SpaceFolderCard> favourites;
   final SpaceSection<SpaceBangumiCard> bangumi;
 
@@ -368,10 +420,15 @@ OwnSpace _ownSpace(JsonObject data, JsonObject card) {
   final level = card.nested('level_info');
   final banner = _bannerItem(data);
   final item = banner?.nested('item');
+  final image = item?.nested('image');
+  final additional = item?.nested('additional_animation');
   final animation = item?.nested('animation');
-  final videos = animation?.lenientList('animation_video_urls', (json) => _picture(json is String ? json : null));
-  final width = animation?.count('width') ?? 0;
-  final height = animation?.count('height') ?? 0;
+  final additionalVideos = _videos(additional);
+  final played = additionalVideos.isNotEmpty ? additional : animation;
+  final videos = additionalVideos.isNotEmpty ? additionalVideos : _videos(animation);
+  final width = played?.count('width') ?? 0;
+  final height = played?.count('height') ?? 0;
+  final crop = _bannerCrop([additional, animation, image]);
   final setting = data.nested('setting');
   final dress = data.nested('fans_dress');
   return OwnSpace(
@@ -382,15 +439,31 @@ OwnSpace _ownSpace(JsonObject data, JsonObject card) {
     vipBadge: _vipBadge(card.nested('vip')),
     banner: banner == null
         ? null
-        : _picture(item?.nested('image')?.text('default_image')) ??
-              _picture(animation?.text('animation_first_frame')) ??
+        : _picture(image?.text('default_image')) ??
+              _picture(additional?.text('animation_backup_image')) ??
               _picture(animation?.text('animation_backup_image')) ??
+              _picture(additional?.text('animation_first_frame')) ??
+              _picture(animation?.text('animation_first_frame')) ??
               _picture(banner.text('cover')),
     bannerAlignY: _bannerAlignY(item),
-    bannerVideo: videos?.nonNulls.firstOrNull,
-    bannerSilent: animation?.flag('is_silence') ?? false,
+    bannerCrop: crop?.crop,
+    bannerVideo: videos.firstOrNull,
+    bannerVideoBackups: videos.skip(1).toList(growable: false),
+    bannerSilent: played?.flag('is_silence') ?? false,
     bannerSize: width > 0 && height > 0 ? (width: width, height: height) : null,
-    bannerLabel: banner == null ? null : _bannerLabel(banner.nested('title')),
+    bannerFacts: banner == null
+        ? const {}
+        : {
+            'image': image != null,
+            'additional': additional != null,
+            'played': additionalVideos.isNotEmpty ? 'additional' : (animation == null ? 'none' : 'animation'),
+            'videos': videos.length,
+            'width': width,
+            'height': height,
+            'location': ?crop?.location,
+            'locationFrom': ?crop?.from,
+          },
+    bannerLabel: banner == null ? null : _bannerLabel(banner, banner.nested('title')),
     favourites: _section(data.nested('favourite2'), _folder, hidden: _hidden(setting, 'fav_video')),
     bangumi: _section(data.nested('season'), _bangumi, hidden: _hidden(setting, 'bangumi')),
     coins: _section(data.nested('coin_archive'), _previewVideo, hidden: _hidden(setting, 'coins_video')),
@@ -414,8 +487,34 @@ bool _vipBadge(JsonObject? vip) {
   return vip.count('vipStatus', 'status') == 1 && vip.count('vipType', 'type') > 0;
 }
 
-/// The band of the banner the official app keeps in view: the picture's `location`, "x-start-end" down its
-/// `height`, read from `image` or else `animation`, as PiliPlus reads it; 0, the middle, when neither has one.
+List<String> _videos(JsonObject? animation) => [
+  ...?animation?.lenientList('animation_video_urls', (json) => _picture(json is String ? json : null)).nonNulls,
+];
+
+/// The first of [pictures] with a four-part `location` (the official app's order: `additional_animation`,
+/// `animation`, `image`), measured against its own width and height; null when none has one, or its size is missing.
+({SpaceBannerCrop crop, String location, int from})? _bannerCrop(List<JsonObject?> pictures) {
+  for (final (index, picture) in pictures.indexed) {
+    final parts = picture?.text('location')?.split('-');
+    if (picture == null || parts == null || parts.length != 4) continue;
+    final rect = [for (final part in parts) num.tryParse(part.trim())];
+    if (rect.contains(null)) continue;
+    final [_, top, _, band] = rect.cast<num>();
+    final width = asDouble(picture.map['width']) ?? 0;
+    final height = asDouble(picture.map['height']) ?? 0;
+    if (width <= 0 || height <= 0 || band <= 0) return null;
+    return (
+      crop: SpaceBannerCrop(middle: (top + band / 2) / height, aspect: height / width),
+      location: rect.join('-'),
+      from: index,
+    );
+  }
+  return null;
+}
+
+/// The band of the banner kept in view from a three-part `location`, "x-start-end" down its `height`, read from
+/// `image` or else `animation`, as PiliPlus reads it; 0, the middle, when neither has one. The official app's own
+/// four-part rect is [_bannerCrop]'s.
 double _bannerAlignY(JsonObject? item) {
   for (final picture in [item?.nested('image'), item?.nested('animation')]) {
     if (_alignY(picture) case final align?) return align;
@@ -426,23 +525,34 @@ double _bannerAlignY(JsonObject? item) {
 double? _alignY(JsonObject? picture) {
   final parts = picture?.text('location')?.split('-');
   final height = asDouble(picture?.map['height']) ?? double.tryParse(picture?.text('height') ?? '');
-  if (parts == null || parts.length < 3 || height == null || height <= 0) return null;
+  if (parts == null || parts.length != 3 || height == null || height <= 0) return null;
   final start = num.tryParse(parts[1].trim());
   final end = num.tryParse(parts[2].trim());
   if (start == null || end == null) return null;
   return ((start + end) / height - 1).clamp(-1.0, 1.0).toDouble();
 }
 
-SpaceBannerLabel? _bannerLabel(JsonObject? title) {
-  final text = _filled(title?.text('title'));
-  if (title == null || text == null) return null;
-  final given = title.nested('sub_title_color_format')?.lenientList('colors', (json) => json) ?? const [];
+/// As the official app's BannerTitle: `digital_extra`'s region title and number before the title's own, its
+/// `region_icon` before the title, else a 数字藏品's glyph.
+SpaceBannerLabel? _bannerLabel(JsonObject banner, JsonObject? title) {
+  final digital = banner.nested('digital_extra');
+  final text = _filled(digital?.text('region_title')) ?? _filled(title?.text('title'));
+  if (text == null) return null;
+  final given = title?.nested('sub_title_color_format')?.lenientList('colors', (json) => json) ?? const [];
   final colours = [for (final colour in given) argbColour(colour)];
+  final icon = _picture(digital?.text('region_icon'));
   return SpaceBannerLabel(
     title: text,
-    subtitle: title.text('sub_title') ?? '',
+    subtitle: _filled(digital?.text('region_subtitle')) ?? title?.text('sub_title') ?? '',
     subtitleColors: colours.contains(null) ? const [] : List.unmodifiable(colours.cast<int>()),
-    icon: _picture(title.text('title_icon')),
+    icon: icon,
+    glyph: switch ((icon, digital?.count('region_type'), banner.count('biz_type'))) {
+      (final String _, _, _) => SpaceBannerGlyph.none,
+      (_, 2, _) => SpaceBannerGlyph.region,
+      // CollectionBizType: 2 DIGITAL, 3 NFT.
+      (_, _, 2 || 3) => SpaceBannerGlyph.collectible,
+      _ => SpaceBannerGlyph.none,
+    },
   );
 }
 
