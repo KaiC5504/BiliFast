@@ -25,7 +25,7 @@ through to TestFlight. Finish with what was built, how it works, numbered phone 
 
 ## Status
 
-Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (9)**. The detail of each is in git
+Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (10)**. The detail of each is in git
 history, and the rules they added are under "Rules that bite".
 
 - The move from Swift (slices 0-9, 1.0.0 (4)-(12)): `packages/bili_core` ported tests-first; AVPlayer in a native view
@@ -73,13 +73,20 @@ history, and the rules they added are under "Rules that bite".
   pages drawn, toasting 暂未开放. `AutoplayPolicy` reads the phone's network (`DeviceHostApi.network`, unknown counts
   as maybe mobile data). The own space's 空间头图 plays its collectible video (Bilibili's upos mirrors on Akamai),
   cropped by its location rect, with the ◇ badge; 我的's name band no longer darkens under a finger.
+- 后台听视频 and 人像防挡, 1.3.0 (10): a page's video keeps playing with the screen locked or the app away
+  (`PlayerPrefs.backgroundListen`, 174 and ⋮'s row: one setting; native `.continuesIfPossible`, off `.automatic`, so
+  picture in picture still plays); 后台连播 (`backgroundNext`) opens the next part, 合集 episode, else the first related
+  video on the same controller. The lock screen as the official app's (title, uploader, the 16:9 cover, a draggable
+  timeline, ◀◀ ▶▶, no ☆): one MPNowPlayingSession per player (`NowPlaying.swift`), its buttons and calls back to the
+  session. 人像防挡: `dm_mask` on the player info call → a `.webmask` (10 s gzip segments of potrace SVG frames, each
+  frame's base64 in 76-character lines), read by byte range around the playhead (`WebMaskFeed`) and clipped into the
+  danmaku over the picture's rect; on by default, as is the switch in 08/41.
 
 Update this section when a build ships: one short entry, and any rule it adds goes under "Rules that bite".
 
 ## Next
 
-KaiC's pick. Candidates: 番剧, 直播, 人像防挡 (the mask file from `/x/v2/dm/web/view`; its switch is drawn off and
-toasts), the iPad's other screens. Each new screen waits for KaiC's official screenshots. For checks, see "Daily use"
+KaiC's pick. Candidates: 番剧, 直播, the iPad's other screens. Each new screen waits for KaiC's official screenshots. For checks, see "Daily use"
 in Rules that bite.
 
 ## Backlog
@@ -99,7 +106,7 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
 - 我的收藏 and 稍后再看: 追更, folder search, 批量 in folders, folder rows' progress line, 卡片/列表 remembered.
 - 动态: 赞和转发's list, writing a 转发 or a post, the face's digital-collectible badge, 138's own share panel, the 视频
   tab's 番剧 posters opening.
-- 离线缓存: cellular rules, danmaku refreshed after the download, 自动上滑 / 单双击手势 / 后台听视频 / 字幕 (toast),
+- 离线缓存: cellular rules, danmaku refreshed after the download, 自动上滑 / 单双击手势 / 字幕 (toast), 人像防挡's mask,
   waiting parts handed to iOS (only running ones are), our HUD for the hardware buttons inline.
 - iPad: 投屏, the chapter list, its own panel contents, its own layouts for 搜索, 我的, 动态, spaces and 设置.
 - Slice 10's leftovers (KaiC set them aside, 2026-10-21; `docs/milestone-3-spec.md`): the stand-in sweep's findings.
@@ -107,7 +114,9 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
 ## Known limits
 
 - Long background trips outlive the stream addresses: they are signed for ~2 h, so ranges iOS starts after that fail
-  (403); nothing can renew them while the app is away.
+  (403); nothing can renew them while the app is away. A part 后台连播 opens away gets its danmaku once the app is back.
+- 人像防挡's mask address is signed too: three failed reads in a row (an expired address after a long pause) give that
+  part's mask up until it is opened again; the danmaku then draw unclipped. Masks exist only on some videos.
 - 速度测试 doesn't log the app leaving the screen: a pass run while it is away, or on a video the CDN hasn't fetched
   yet, times out on the first frame like a real failure. Read the log's timing before trusting a failed pass.
 - Flutter rounds a line to whole points (comments 24 pt against 24.33; 动态's post text 29 against 29.33), and doesn't
@@ -166,7 +175,8 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
     memory, the danmaku feed.
   - `lib/danmaku/`: the danmaku layer, scene and painter; `DanmakuSession` (one per page, on `PlayerUi`), the
     settings and block-rule stores, 添加屏蔽词, 当前弹幕列表, and `send/` (the send bar and style panel) with
-    `danmaku_overlays.dart`, the send layer in the page's Stack. The 弹幕设置 panel is in `lib/player_ui/panels/`.
+    `danmaku_overlays.dart`, the send layer in the page's Stack, and `mask/` (人像防挡: `WebMaskFeed`, `MaskShape`).
+    The 弹幕设置 panel is in `lib/player_ui/panels/`.
   - `lib/player_ui/`: the player's controls for each presentation, gestures, the HUD, the end screens, `panels/`;
     `pad/`: the iPad's page controls, full screen and their end screens.
   - `lib/device/`: rotation (`orientation.dart`, the rules) and brightness/volume, over `DeviceChannel.swift`.
@@ -197,8 +207,9 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
     `trip.json` in `offline/`); the log and the pictures (`images`) are in the caches folder.
 - `packages/bili_core/`: pure Dart, no Flutter import, the port of the Swift package `BiliCore`: `shared`, `devlog`,
   `danmaku`, `api`, `logic`, `dash_hls`, `local_http`, `engine`, and `bin/ripper_bench.dart`.
-- `ios/Runner/`: native Swift (player registry and host view, keychain, the login web view's cookies, device
-  controls, frame capture, paste control, log-server discovery, the one-time carry-over of the Swift app's 最近打开). Pigeon definitions are in
+- `ios/Runner/`: native Swift (player registry and host view, the lock screen (`NowPlaying.swift`), keychain, the
+  login web view's cookies, device controls, frame capture, paste control, log-server discovery, the one-time
+  carry-over of the Swift app's 最近打开). Pigeon definitions are in
   `pigeons/`. New Swift files must be added to `ios/Runner.xcodeproj/project.pbxproj` by hand (four entries, see
   `KeychainChannel.swift`'s).
 - `assets/`: MiSans, assets taken from PiliPlus, and the loading TV's from the official APK (`assets/README.md`).
@@ -425,5 +436,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   use `screenshot`.
 - BiliNative is retired (2026-11-02): read the local folder for how the Swift app behaved and change nothing there.
   Never build or ship it again: it shares the bundle id, so a Swift build would replace this app on the phone.
+- The lock screen: one page holds it at a time, taken by its video starting to play while the page shows and sent
+  again on every start (the controller doesn't skip repeats), given up when its player goes or it pauses while covered.
+  With 后台听视频 off, nothing starts sound away from the screen without picture in picture: lock-screen and headphone
+  buttons and a call's resume are dropped there (`_heldAway`), and the lock screen comes off after the 1 s grace.
 - Daily use: KaiC uses the app every day and passes broad sign-offs that way. Ask him only for checks daily use can't
   reach (a new feature's states, a measurement, a log to read), as numbered phone steps.
