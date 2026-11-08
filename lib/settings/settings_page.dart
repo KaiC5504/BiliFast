@@ -20,7 +20,6 @@ import 'node_page.dart';
 import 'playback/autoplay_settings_page.dart' show AutoplayLabels;
 import 'playback/home_feed_settings_page.dart';
 import 'playback/playback_settings_page.dart';
-import 'playback/settings_list_tokens.dart';
 import 'settings_confirm.dart';
 
 /// What 设置 asks before doing (BiliNative SettingsView's `ClearAction`, and 51's 退出登录).

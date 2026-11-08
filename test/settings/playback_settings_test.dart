@@ -2,7 +2,6 @@ import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/settings/playback/autoplay_settings_page.dart';
 import 'package:bilifast/settings/playback/home_feed_settings_page.dart';
 import 'package:bilifast/settings/playback/playback_settings_page.dart';
-import 'package:bilifast/settings/playback/settings_list_tokens.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
