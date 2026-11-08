@@ -102,6 +102,16 @@ void main() {
     expect(logs.events.where((event) => event.msg == 'danmaku settings unreadable, using defaults'), isEmpty);
   });
 
+  test('a number of the wrong type falls back alone too', () async {
+    for (final key in ['area', 'opacity', 'scale', 'speed']) {
+      File(path).writeAsStringSync(jsonEncode({...changed.toJson(), key: 'x'}));
+      final store = await DanmakuSettingsStore.load(path, logger: logger);
+      expect(store.value.toJson()[key], const DanmakuSettings().toJson()[key], reason: key);
+      expect({...store.value.toJson()}..remove(key), {...changed.toJson()}..remove(key), reason: key);
+      expect(File('$path.bad').existsSync(), isFalse, reason: key);
+    }
+  });
+
   test('a file that isn\'t an object gives the defaults too', () async {
     File(path).writeAsStringSync('[1, 2]');
     final store = await DanmakuSettingsStore.load(path, logger: logger);

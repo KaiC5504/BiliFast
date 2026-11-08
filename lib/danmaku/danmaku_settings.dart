@@ -74,16 +74,20 @@ final class DanmakuSettings {
     peopleShield: peopleShield ?? this.peopleShield,
   );
 
-  /// Settings saved by an older build lack newer keys; they take the defaults instead of failing.
+  /// Settings saved by an older build lack newer keys; they take the defaults instead of failing, as does a value of the
+  /// wrong type, alone.
   factory DanmakuSettings.fromJson(Map<String, Object?> json) {
     const fallback = DanmakuSettings();
     double number(String key, double value, double low, double high) =>
-        ((json[key] as num?)?.toDouble() ?? value).clamp(low, high);
+        (switch (json[key]) { final num n => n.toDouble(), _ => value }).clamp(low, high);
     return DanmakuSettings(
       area: number('area', fallback.area, areas.first, areas.last),
       opacity: number('opacity', fallback.opacity, minOpacity, maxOpacity),
       scale: number('scale', fallback.scale, minScale, maxScale),
-      speed: ((json['speed'] as num?)?.toInt() ?? fallback.speed).clamp(0, scrollDurations.length - 1),
+      speed: (switch (json['speed']) {
+        final num n => n.toInt(),
+        _ => fallback.speed,
+      }).clamp(0, scrollDurations.length - 1),
       filter: switch (json['filter']) {
         final Map<String, Object?> filter => DanmakuFilterOptions.fromJson(filter),
         _ => fallback.filter,
