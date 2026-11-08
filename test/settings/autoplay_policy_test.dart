@@ -74,6 +74,18 @@ void main() {
       expect(rules.onCellular, isFalse);
     });
 
+    test('no network is unknown again: the next one may be mobile data', () async {
+      bool? cellular = false;
+      prefs.cellularAutoplay = false;
+      final rules = AutoplayPolicy(prefs: () => prefs, onCellular: () async => cellular);
+      await rules.refresh();
+      expect(rules.detail, isTrue);
+      cellular = null;
+      await rules.refresh();
+      expect(rules.onCellular, isNull);
+      expect(rules.detail, isFalse);
+    });
+
     test('a fixed network is known from the start', () {
       expect(AutoplayPolicy.fixed().onCellular, isFalse);
       expect(AutoplayPolicy.fixed(onCellular: true).onCellular, isTrue);

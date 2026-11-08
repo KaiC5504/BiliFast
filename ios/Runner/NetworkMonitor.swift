@@ -40,7 +40,8 @@ enum NetworkMonitor {
       kindChanged?()
     }
     // AutoplayPolicy asks the kind again on every event, so the first path and a change of kind alone (a path going
-    // down, a VPN's) go too, as no interface change: the engine only drops its node health again.
+    // down, a VPN's) go too, as no interface change. The engine still drops its node timings on one, as it does on any
+    // change, which costs nothing at launch and is redone anyway when a path that went down comes back.
     guard let interfaceChanged = changes.next(path) ?? (newKind ? false : nil) else { return }
     Task { @MainActor in try? await DeviceChannel.events?.onNetworkChanged(interfaceChanged: interfaceChanged) }
   }

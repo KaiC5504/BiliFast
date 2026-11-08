@@ -12,7 +12,7 @@ import '../video/player_prefs.dart';
 /// the phone is on. The network is asked at launch, on every path change and as the app comes back, and kept, so a
 /// list settling a scroll asks synchronously; listeners hear each new reading.
 class AutoplayPolicy extends ChangeNotifier with WidgetsBindingObserver {
-  AutoplayPolicy({required this._prefs, required Future<bool> Function() onCellular, Logger? logger})
+  AutoplayPolicy({required this._prefs, required Future<bool?> Function() onCellular, Logger? logger})
     : _ask = onCellular,
       _logger = logger ?? Logger.shared;
 
@@ -22,7 +22,12 @@ class AutoplayPolicy extends ChangeNotifier with WidgetsBindingObserver {
     final host = DeviceHostApi();
     final policy = AutoplayPolicy(
       prefs: () => PlayerPrefs.shared,
-      onCellular: () async => await host.network() == NativeNetwork.cellular,
+      // No network says nothing about the next one, which may be mobile data.
+      onCellular: () async => switch (await host.network()) {
+        NativeNetwork.cellular => true,
+        NativeNetwork.wifi => false,
+        NativeNetwork.none => null,
+      },
     );
     policy._watch((monitor ?? NetworkMonitor.platform()).changes);
     return policy;
@@ -36,7 +41,7 @@ class AutoplayPolicy extends ChangeNotifier with WidgetsBindingObserver {
   static AutoplayPolicy shared = AutoplayPolicy.fixed();
 
   final PlayerPrefs Function() _prefs;
-  final Future<bool> Function() _ask;
+  final Future<bool?> Function() _ask;
   final Logger _logger;
   StreamSubscription<bool>? _changes;
   bool? _onCellular;
@@ -73,14 +78,14 @@ class AutoplayPolicy extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final cellular = await _ask();
       if (cellular == _onCellular) return;
-      _logger.info(LogCategory.app, 'autoplay network', {'cellular': cellular});
+      _logger.info(LogCategory.app, 'autoplay network', {'cellular': cellular ?? 'unknown'});
       _take(cellular);
     } catch (error) {
       _logger.warn(LogCategory.app, 'autoplay network unknown', {'error': '${error.runtimeType}'});
     }
   }
 
-  void _take(bool cellular) {
+  void _take(bool? cellular) {
     if (cellular == _onCellular) return;
     _onCellular = cellular;
     notifyListeners();
