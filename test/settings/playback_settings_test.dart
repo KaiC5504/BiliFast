@@ -248,30 +248,55 @@ void main() {
       expect(prefs.verticalFullScreen, isTrue);
     });
 
-    testWidgets('小窗播放: 应用外自动小窗播放 saves both ways; the other three are off, toast and stay off', (tester) async {
+    bool shownOn(WidgetTester tester, String key) {
+      final drawn = tester.widget<AnimatedContainer>(
+        find.descendant(of: row(key), matching: find.byKey(const ValueKey('settings-switch'))),
+      );
+      return (drawn.decoration! as BoxDecoration).color == SettingsListTheme.switchOn;
+    }
+
+    testWidgets('小窗播放/后台听视频设置: 应用外自动小窗播放 and both 后台听视频 rows save both ways', (tester) async {
       await open(tester);
       await tap(tester, 'playback-pip');
       await tester.pumpAndSettle();
-      bool shownOn(String key) {
-        final drawn = tester.widget<AnimatedContainer>(
-          find.descendant(of: row(key), matching: find.byKey(const ValueKey('settings-switch'))),
-        );
-        return (drawn.decoration! as BoxDecoration).color == SettingsListTheme.switchOn;
-      }
-
-      expect(prefs.autoPip, isTrue);
-      expect(shownOn('pip-outside'), isTrue);
-      await tap(tester, 'pip-outside');
-      expect(prefs.autoPip, isFalse);
-      expect(shownOn('pip-outside'), isFalse);
-      await tap(tester, 'pip-outside');
-      expect(prefs.autoPip, isTrue);
-      for (final key in ['pip-inside', 'pip-background', 'pip-background-next']) {
-        expect(shownOn(key), isFalse, reason: key);
+      final switches = <String, bool Function()>{
+        'pip-outside': () => prefs.autoPip,
+        'pip-background': () => prefs.backgroundListen,
+        'pip-background-next': () => prefs.backgroundNext,
+      };
+      for (final MapEntry(key: key, value: read) in switches.entries) {
+        expect(read(), isTrue, reason: key);
+        expect(shownOn(tester, key), isTrue, reason: key);
         await tap(tester, key);
-        await expectToast(tester);
-        expect(shownOn(key), isFalse, reason: key);
+        expect(read(), isFalse, reason: key);
+        expect(shownOn(tester, key), isFalse, reason: key);
+        await tap(tester, key);
+        expect(read(), isTrue, reason: key);
+        expect(shownOn(tester, key), isTrue, reason: key);
       }
+      expect(toast, findsNothing);
+    });
+
+    testWidgets('后台听视频 and its 自动连播 open showing what was saved', (tester) async {
+      prefs
+        ..backgroundListen = false
+        ..backgroundNext = false;
+      await open(tester);
+      await tap(tester, 'playback-pip');
+      await tester.pumpAndSettle();
+      expect(shownOn(tester, 'pip-background'), isFalse);
+      expect(shownOn(tester, 'pip-background-next'), isFalse);
+      expect(shownOn(tester, 'pip-outside'), isTrue);
+    });
+
+    testWidgets('应用内自动小窗播放 is off, toasts and stays off', (tester) async {
+      await open(tester);
+      await tap(tester, 'playback-pip');
+      await tester.pumpAndSettle();
+      expect(shownOn(tester, 'pip-inside'), isFalse);
+      await tap(tester, 'pip-inside');
+      await expectToast(tester);
+      expect(shownOn(tester, 'pip-inside'), isFalse);
     });
   });
 
@@ -312,6 +337,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(prefs.autoPip, isFalse);
     tester.semantics.tap(find.semantics.byLabel(RegExp('^后台听视频\n')));
+    await tester.pumpAndSettle();
+    expect(prefs.backgroundListen, isFalse);
+    tester.semantics.tap(find.semantics.byLabel(RegExp('^后台听视频时')));
+    await tester.pumpAndSettle();
+    expect(prefs.backgroundNext, isFalse);
+    expect(toast, findsNothing);
+    tester.semantics.tap(find.semantics.byLabel(RegExp('^应用内自动小窗播放')));
     await tester.pump();
     await expectToast(tester);
     semantics.dispose();
