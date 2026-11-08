@@ -109,6 +109,8 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     widget.reloads?.addListener(_reload);
+    // Read at launch, so 大卡默认声音 changed in 设置 waits for the next one whether or not a big card has shown yet.
+    FeedInlineChoices.sound;
   }
 
   @override
@@ -586,7 +588,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   bool _still = false;
   bool _ticking = true;
 
-  late final _inline = FeedInlineHost(viewport: _feedArea, pip: AppScope.of(context).pipKeeper);
+  late final _inline =
+      FeedInlineHost(viewport: _feedArea, pip: AppScope.of(context).pipKeeper, autoplay: InlineAutoplay.home);
 
   @override
   void initState() {

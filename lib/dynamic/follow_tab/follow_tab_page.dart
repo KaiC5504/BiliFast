@@ -250,7 +250,11 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
   Widget _page(BuildContext context, Skin? head) {
     _still = MediaQuery.disableAnimationsOf(context);
     _inset = MediaQuery.paddingOf(context).bottom;
-    final inline = _inline ??= FeedInlineHost(viewport: _listArea, pip: _services.pipKeeper);
+    final inline = _inline ??= FeedInlineHost(
+      viewport: _listArea,
+      pip: _services.pipKeeper,
+      autoplay: InlineAutoplay.list,
+    );
     // A route over the shell (a page, a sheet, a menu), another tab or the face sheet pauses the cards.
     inline.shown =
         widget.active &&
