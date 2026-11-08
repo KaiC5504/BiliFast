@@ -257,7 +257,7 @@ enum NowPlaying {
         // asks for the picture off the main thread.
         self.artwork = MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
         self.owner?.log("now playing artwork", ["width": Int(image.size.width), "height": Int(image.size.height)])
-        if let item = self.player.currentItem { item.nowPlayingInfo = self.metadata }
+        self.refreshPlayback()
       }
     }
 
