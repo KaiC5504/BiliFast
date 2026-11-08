@@ -18,6 +18,7 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/settings/autoplay_policy.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/page_playback.dart';
 import 'package:bilifast/video/player_prefs.dart';
@@ -46,6 +47,7 @@ void main() {
   late List<FakePlayer> players;
   late List<FakeEngine> engines;
   late FixedStatusBarFeed status;
+  late OrientationController orientation;
 
   /// The paths asked before the page opened: the account check.
   late int asked;
@@ -98,7 +100,11 @@ void main() {
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
-      device: PlayerDevice(orientation: OrientationController(), controls: NoDeviceControls(), status: status),
+      device: PlayerDevice(
+        orientation: orientation = OrientationController(),
+        controls: NoDeviceControls(),
+        status: status,
+      ),
       loginGate: _NoLogin(),
       pageApi: FakePageApi(),
       offline: library,
@@ -189,6 +195,37 @@ void main() {
     expect(pageCalls(), isEmpty);
     expect(historyCalls().last, '/x/click-interface/web/heartbeat', reason: 'leaving reports where it stopped');
     expect(services.recents.items, isEmpty, reason: 'no 最近打开');
+  });
+
+  testWidgets('详情页直接播放 off opens the cached part paused; 流量网络下自动播放 doesn\'t hold it, as it uses no network', (
+    tester,
+  ) async {
+    final policy = AutoplayPolicy.shared;
+    addTearDown(() => AutoplayPolicy.shared = policy);
+    prefs.detailAutoplay = false;
+    await host(tester);
+    final paused = await open(tester, 7003);
+    expect(paused.loaded?.autoplay, isFalse);
+    expect(paused.loaded?.startSeconds, 23, reason: 'from where it stopped');
+    await back(tester);
+
+    prefs
+      ..detailAutoplay = true
+      ..cellularAutoplay = false;
+    AutoplayPolicy.shared = AutoplayPolicy.fixed(onCellular: true);
+    final playing = await open(tester, 7003);
+    expect(playing.loaded?.autoplay, isTrue);
+    await back(tester);
+  });
+
+  testWidgets('详情页直接全屏播放 takes the cached part to full screen', (tester) async {
+    prefs.detailFullScreen = true;
+    await host(tester);
+    await open(tester, 7003);
+    expect(orientation.presentation, Presentation.landscape);
+    orientation.exitToInline();
+    await frames(tester, 4);
+    await back(tester);
   });
 
   testWidgets('the small player\'s row has no 竖屏', (tester) async {

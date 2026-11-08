@@ -33,6 +33,7 @@ import '../player_ui/panels/panel_controller.dart';
 import '../player_ui/panels/panel_layer.dart';
 import '../player_ui/player_loading.dart';
 import '../player_ui/player_ui.dart';
+import '../settings/autoplay_policy.dart';
 import '../shared/cover_preset.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
@@ -152,8 +153,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// Replaced by a video opened on it: the body's Heroes stay up for the cover's flight into the new page.
   bool _replaced = false;
 
-  /// This page's video has played, so a fallback, reload or replay shows the player rather than the cover again.
+  /// This page's video has played, so a fallback, reload or replay shows the player rather than the cover again. One
+  /// opened paused hasn't until the user plays it.
   bool _played = false;
+
+  /// 详情页直接全屏播放: full screen once the video's shape is known, once, for a page opened rather than brought back
+  /// by the small window.
+  bool _fullScreenOnOpen = false;
 
   /// The playback's session, once the page has built its player around it.
   PlayerSession? _session;
@@ -659,6 +665,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final createDetails = widget.createDetails;
     final openPage = widget.openPage;
     final brought = route.playback;
+    // 推荐's big card hands its inline playback over to a page it opens; anything else brought is a restore.
+    final restored = brought != null && !brought.inline;
     final playback = brought != null && !brought.closed
         ? brought
         : PagePlayback(
@@ -671,10 +679,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
               createDetails: createDetails,
               openPage: openPage,
             ),
+            autoplay: brought != null || _opensPlaying(route),
           );
+    _fullScreenOnOpen = !restored && PlayerPrefs.shared.detailFullScreen;
     _playback = playback;
+    // A card that was playing when tapped plays on; one its rule had paused opens as a page opened afresh would.
+    final resumeHeld = !playback.heldOnCard || _opensPlaying(route);
     playback
-      ..attach(this, requestLogin: _askLogin)
+      ..attach(this, requestLogin: _askLogin, resumeHeld: resumeHeld)
       ..addListener(_playbackChanged);
     final starting = playback.session == null;
     // Not in this build: the release reports the kept video's progress, and 最近打开 notifies its listeners. The
@@ -691,6 +703,19 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         if (mounted && !_left) _sessionChanged();
       });
     }
+  }
+
+  /// 详情页直接播放, with 流量网络下自动播放 for a video from Bilibili; a cached one uses no network.
+  static bool _opensPlaying(VideoRoute route) {
+    final prefs = PlayerPrefs.shared;
+    final plays = route.offline ? prefs.detailAutoplay : AutoplayPolicy.shared.detail;
+    if (!plays) {
+      Logger.shared.info(LogCategory.ui, 'video open paused', {
+        'bvid': route.bvid,
+        'reason': prefs.detailAutoplay ? 'cellular' : 'detail',
+      });
+    }
+    return plays;
   }
 
   void _playbackChanged() {
@@ -786,7 +811,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     setState(() {
       if (!_attached) return;
       if (_session case final session?) _intro = IntroContent.of(session);
-      if (controller.phase == PlaybackPhase.playing) _played = true;
+      if (controller.phase == PlaybackPhase.playing && controller.hasPlayed) _played = true;
     });
     _syncComments();
     _syncAutoHide();
@@ -809,6 +834,29 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     } else if (changed) {
       _orientation.setVideoIsVertical(vertical, owner: this);
     }
+    _enterFullScreenOnOpen();
+  }
+
+  /// Waits for the shape, so an upright video takes its own full screen.
+  void _enterFullScreenOnOpen() {
+    if (!_fullScreenOnOpen || !_owning || _left || _covered || _session?.videoShape == null) return;
+    // Turned while it still slides in, the page would turn half off the screen.
+    if (_route?.animation case final arriving? when !arriving.isCompleted) {
+      arriving
+        ..removeStatusListener(_arrived)
+        ..addStatusListener(_arrived);
+      return;
+    }
+    _fullScreenOnOpen = false;
+    if (_presentation.fullScreen) return;
+    Logger.shared.info(LogCategory.ui, 'video open full screen', {'bvid': _playback?.bvid ?? widget.route.bvid});
+    _orientation.enterFullScreen();
+  }
+
+  void _arrived(AnimationStatus status) {
+    if (!status.isCompleted) return;
+    _route?.animation?.removeStatusListener(_arrived);
+    if (mounted) _enterFullScreenOnOpen();
   }
 
   /// A new model for each video the page shows, once its aid is known: from the detail, or from the view for a video
@@ -936,6 +984,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (_left || vertical == null || _covered) return;
     _owning = true;
     _orientation.begin(this, videoIsVertical: vertical);
+    _enterFullScreenOnOpen();
   }
 
   void _presentationChanged() {
@@ -1388,6 +1437,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _leave(fromDispose: true);
     _playback?.letGo(this);
     _stopFollowingSignIn();
+    _route?.animation?.removeStatusListener(_arrived);
     pageRoutes.unsubscribe(this);
     _services?.device.orientation.removeListener(_presentationChanged);
     _panels.removeListener(_panelChanged);
