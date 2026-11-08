@@ -20,6 +20,10 @@ enum NodeChoice {
   NodeMode get mode => this == overseas ? NodeMode.overseas : NodeMode.mainland;
 }
 
+/// 首页自动播放 (179) and 动态视频是否自动播放 (178): when a list's video plays by itself. 免流 can't be told from
+/// mobile data, so [wifiOnly] plays on Wi-Fi alone.
+enum AutoplayChoice { always, wifiOnly, off }
+
 /// The player settings Swift's AppSettings kept in UserDefaults (自动连播, 循环播放, 画面尺寸, BTR 加速, CDN 节点,
 /// 显示统计, the quality and codec asked for, and danmaku on or off), as a small JSON file in the support folder.
 class PlayerPrefs {
@@ -72,6 +76,14 @@ class PlayerPrefs {
   bool _turnTakeover = true;
   int? _quality;
   VideoCodec? _codec;
+  bool _cellularAutoplay = true;
+  bool _detailAutoplay = true;
+  bool _detailFullScreen = false;
+  AutoplayChoice _homeAutoplay = AutoplayChoice.always;
+  AutoplayChoice _listAutoplay = AutoplayChoice.always;
+  bool _bigCardSound = false;
+  bool _verticalFullScreen = true;
+  bool _autoPip = true;
 
   bool get autoplay => _autoplay;
   set autoplay(bool value) => _set(() => _autoplay = value);
@@ -113,6 +125,39 @@ class PlayerPrefs {
   VideoCodec? get codec => _codec;
   set codec(VideoCodec? value) => _set(() => _codec = value);
 
+  /// 自动播放设置 (172)'s 流量网络下自动播放: off, nothing plays by itself on mobile data, the video page included.
+  bool get cellularAutoplay => _cellularAutoplay;
+  set cellularAutoplay(bool value) => _set(() => _cellularAutoplay = value);
+
+  /// 详情页直接播放: a video page opened plays at once; off, it opens paused.
+  bool get detailAutoplay => _detailAutoplay;
+  set detailAutoplay(bool value) => _set(() => _detailAutoplay = value);
+
+  /// 详情页直接全屏播放: a video page opened goes straight to full screen.
+  bool get detailFullScreen => _detailFullScreen;
+  set detailFullScreen(bool value) => _set(() => _detailFullScreen = value);
+
+  /// 推荐's big card.
+  AutoplayChoice get homeAutoplay => _homeAutoplay;
+  set homeAutoplay(AutoplayChoice value) => _set(() => _homeAutoplay = value);
+
+  /// 动态's video cards and every other list's.
+  AutoplayChoice get listAutoplay => _listAutoplay;
+  set listAutoplay(AutoplayChoice value) => _set(() => _listAutoplay = value);
+
+  /// 首页推荐设置's 大卡默认声音 (170): the big cards start with sound; read at launch (重启后生效).
+  bool get bigCardSound => _bigCardSound;
+  set bigCardSound(bool value) => _set(() => _bigCardSound = value);
+
+  /// 竖屏模式设置 (173)'s 竖屏视频全屏用竖屏模式播放: off, an upright video's full screen is the ordinary landscape one,
+  /// pillarboxed, as on the iPad.
+  bool get verticalFullScreen => _verticalFullScreen;
+  set verticalFullScreen(bool value) => _set(() => _verticalFullScreen = value);
+
+  /// 应用外自动小窗播放 (174): leaving the app while a video plays starts the small window.
+  bool get autoPip => _autoPip;
+  set autoPip(bool value) => _set(() => _autoPip = value);
+
   void _read(Map<String, Object?> values) {
     void ignored(String key) => _logger.warn(LogCategory.app, 'player prefs value ignored', {'key': key});
     T? pick<T>(String key) {
@@ -144,6 +189,14 @@ class PlayerPrefs {
     _turnTakeover = pick<bool>('turnTakeover') ?? values['turnMethod'] != 'system';
     _quality = pick<int>('quality');
     _codec = named('codec', VideoCodec.values);
+    _cellularAutoplay = pick<bool>('cellularAutoplay') ?? _cellularAutoplay;
+    _detailAutoplay = pick<bool>('detailAutoplay') ?? _detailAutoplay;
+    _detailFullScreen = pick<bool>('detailFullScreen') ?? _detailFullScreen;
+    _homeAutoplay = named('homeAutoplay', AutoplayChoice.values) ?? _homeAutoplay;
+    _listAutoplay = named('listAutoplay', AutoplayChoice.values) ?? _listAutoplay;
+    _bigCardSound = pick<bool>('bigCardSound') ?? _bigCardSound;
+    _verticalFullScreen = pick<bool>('verticalFullScreen') ?? _verticalFullScreen;
+    _autoPip = pick<bool>('autoPip') ?? _autoPip;
   }
 
   Map<String, Object?> toJson() => {
@@ -159,6 +212,14 @@ class PlayerPrefs {
     if (!_turnTakeover) 'turnTakeover': false,
     'quality': ?_quality,
     'codec': ?_codec?.name,
+    if (!_cellularAutoplay) 'cellularAutoplay': false,
+    if (!_detailAutoplay) 'detailAutoplay': false,
+    if (_detailFullScreen) 'detailFullScreen': true,
+    if (_homeAutoplay != AutoplayChoice.always) 'homeAutoplay': _homeAutoplay.name,
+    if (_listAutoplay != AutoplayChoice.always) 'listAutoplay': _listAutoplay.name,
+    if (_bigCardSound) 'bigCardSound': true,
+    if (!_verticalFullScreen) 'verticalFullScreen': false,
+    if (!_autoPip) 'autoPip': false,
   };
 
   void _set(void Function() change) {

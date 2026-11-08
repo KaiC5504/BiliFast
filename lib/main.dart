@@ -41,6 +41,7 @@ import 'playback/shared_engine.dart';
 import 'search/fake_search_api.dart';
 import 'skin/fake_skin_api.dart';
 import 'search/search_history_store.dart';
+import 'settings/autoplay_policy.dart';
 import 'settings/follow_font.dart';
 import 'settings/font_store.dart';
 import 'space/fake_space_api.dart';
@@ -103,6 +104,7 @@ Future<void> main(List<String> args) async {
   // PC checks and the Mac's simulator (`--dart-define=FAKE_ACCOUNT=true`) only: the page's actions, 搜索, UP主空间,
   // 我的收藏 and 稍后再看 answer from memory, and the app token reads authorized, so every button can be pressed with
   // no account traffic.
+  AutoplayPolicy.shared = AutoplayPolicy.platform();
   final fakeAccount =
       (!Platform.isIOS && args.contains('--fake-account')) || const bool.fromEnvironment('FAKE_ACCOUNT');
   if (fakeAccount) environment.useFakeAccount();

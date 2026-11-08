@@ -189,6 +189,9 @@ class OrientationController extends ChangeNotifier {
 
   void enterVertical() => _move(_pad ? Presentation.landscape : Presentation.vertical);
 
+  /// The full screen the page's video takes: 竖屏 for an upright one on the iPhone, else landscape.
+  void enterFullScreen() => _videoIsVertical && !_pad ? enterVertical() : enterLandscape();
+
   void exitToInline() => _move(Presentation.inline);
 
   @override

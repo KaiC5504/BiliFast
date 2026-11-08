@@ -63,6 +63,9 @@ abstract class DeviceHostApi {
   /// draws (04); one report comes at once on start. iOS's battery monitoring is on only while they are.
   void setStatusEvents(bool enabled);
 
+  /// The network the phone is on now (NetworkMonitor.swift's path), for 自动播放设置's Wi-Fi rules.
+  NativeNetwork network();
+
   /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
   /// granted. Asked only after the user said 好 in the app's own alert.
   @async

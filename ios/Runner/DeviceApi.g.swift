@@ -209,6 +209,8 @@ protocol DeviceHostApi {
   /// Starts or stops battery and network reports to [DeviceEventApi.onStatus] for the status bar landscape full screen
   /// draws (04); one report comes at once on start. iOS's battery monitoring is on only while they are.
   func setStatusEvents(enabled: Bool) throws
+  /// The network the phone is on now (NetworkMonitor.swift's path), for 自动播放设置's Wi-Fi rules.
+  func network() throws -> NativeNetwork
   /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
   /// granted. Asked only after the user said 好 in the app's own alert.
   func requestReminderPermission() async throws -> Bool
@@ -432,6 +434,20 @@ class DeviceHostApiSetup {
       }
     } else {
       setStatusEventsChannel.setMessageHandler(nil)
+    }
+    /// The network the phone is on now (NetworkMonitor.swift's path), for 自动播放设置's Wi-Fi rules.
+    let networkChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.network\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      networkChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.network()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      networkChannel.setMessageHandler(nil)
     }
     /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
     /// granted. Asked only after the user said 好 in the app's own alert.

@@ -149,6 +149,10 @@ final class DeviceHostApiImpl: DeviceHostApi {
     MainActor.assumeIsolated { enabled ? status.start() : status.stop() }
   }
 
+  func network() throws -> NativeNetwork {
+    MainActor.assumeIsolated { NetworkMonitor.kind }
+  }
+
   func requestReminderPermission() async throws -> Bool {
     do {
       return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
