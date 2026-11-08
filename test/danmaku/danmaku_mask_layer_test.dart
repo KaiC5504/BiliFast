@@ -4,7 +4,6 @@ import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/danmaku/mask/mask_feed.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -79,10 +78,13 @@ final class Rig {
 }
 
 /// The mask's 160×90 box, filled but for a person standing in its middle third.
-MaskFrame person() =>
-    (path: Path()..fillType = PathFillType.evenOdd..addRect(const Rect.fromLTWH(0, 0, 160, 90))..addRect(
-      const Rect.fromLTWH(60, 0, 40, 90),
-    ), box: const Size(160, 90));
+MaskFrame person() => (
+  path: Path()
+    ..fillType = PathFillType.evenOdd
+    ..addRect(const Rect.fromLTWH(0, 0, 160, 90))
+    ..addRect(const Rect.fromLTWH(60, 0, 40, 90)),
+  box: const Size(160, 90),
+);
 
 PaintPattern clipsTo({Iterable<Offset> includes = const [], Iterable<Offset> excludes = const []}) =>
     paints..clipPath(pathMatcher: isPathThat(includes: includes, excludes: excludes));
@@ -118,7 +120,10 @@ void main() {
 
     test('拉伸 is the box; 16:9 and 4:3 are frames of that shape fitted in it, whatever the video', () {
       expect(videoPicture(box, fit: FitMode.stretch, video: const Size(1080, 1920)), Offset.zero & box);
-      expect(videoPicture(box, fit: FitMode.ratio16x9), rectMoreOrLessEquals(const Rect.fromLTWH(0, 354.25, 440, 247.5)));
+      expect(
+        videoPicture(box, fit: FitMode.ratio16x9),
+        rectMoreOrLessEquals(const Rect.fromLTWH(0, 354.25, 440, 247.5)),
+      );
       expect(
         videoPicture(const Size(956, 440), fit: FitMode.ratio4x3, video: const Size(1920, 1080)),
         rectMoreOrLessEquals(Rect.fromLTWH((956 - 440 * 4 / 3) / 2, 0, 440 * 4 / 3, 440)),
@@ -138,10 +143,13 @@ void main() {
     test('the frame stretched onto the picture: the person is cut out, the rest of the picture and the bars kept', () {
       final path = maskClipPath(person(), picture: picture, mirrored: false, size: size);
       // The person's third, 150 to 250 across, in the picture.
-      expect(path, isPathThat(
-        includes: const [Offset(50, 150), Offset(350, 150), Offset(200, 10), Offset(200, 290), Offset(420, 150)],
-        excludes: const [Offset(160, 150), Offset(240, 150), Offset(200, 40)],
-      ));
+      expect(
+        path,
+        isPathThat(
+          includes: const [Offset(50, 150), Offset(350, 150), Offset(200, 10), Offset(200, 290), Offset(420, 150)],
+          excludes: const [Offset(160, 150), Offset(240, 150), Offset(200, 40)],
+        ),
+      );
     });
 
     test('mirrored, the frame is flipped about the picture\'s middle', () {
@@ -162,15 +170,20 @@ void main() {
       expect(frame.path.fillType, PathFillType.nonZero);
       final path = maskClipPath(frame, picture: picture, mirrored: false, size: size);
       expect(path.fillType, PathFillType.nonZero);
-      expect(path, isPathThat(
-        includes: const [Offset(50, 150), Offset(200, 10), Offset(-20, 150)],
-        excludes: const [Offset(200, 150)],
-      ));
+      expect(
+        path,
+        isPathThat(
+          includes: const [Offset(50, 150), Offset(200, 10), Offset(-20, 150)],
+          excludes: const [Offset(200, 150)],
+        ),
+      );
     });
   });
 
   group('the layer', () {
-    testWidgets('a frame at the playhead clips the danmaku to it; the bars above and below stay drawable', (tester) async {
+    testWidgets('a frame at the playhead clips the danmaku to it; the bars above and below stay drawable', (
+      tester,
+    ) async {
       rig.feed.frames = (_) => person();
       await rig.mount(tester);
       rig.play(0);
@@ -285,7 +298,10 @@ void main() {
       await rig.run(tester, 0.05);
       expect(rig.painter(tester), capture());
       expect(clips[3], isNot(same(clips[2])), reason: 'a new picture');
-      expect(clips[3], isPathThat(includes: const [Offset(20, 150), Offset(100, 150)], excludes: const [Offset(200, 150)]));
+      expect(
+        clips[3],
+        isPathThat(includes: const [Offset(20, 150), Offset(100, 150)], excludes: const [Offset(200, 150)]),
+      );
     });
   });
 }

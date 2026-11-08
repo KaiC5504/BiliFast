@@ -675,10 +675,8 @@ void main() {
       expect(tester.widget<DanmakuLayer>(layer).mask, same(danmaku.mask));
       final painter = tester.renderObject(find.descendant(of: layer, matching: find.byType(CustomPaint)));
       // The frame's left half is open to danmaku, the right half is a person.
-      expect(
-        painter,
-        paints..clipPath(pathMatcher: isPathThat(includes: const [Offset(100, 120)], excludes: const [Offset(340, 120)])),
-      );
+      final halves = isPathThat(includes: const [Offset(100, 120)], excludes: const [Offset(340, 120)]);
+      expect(painter, paints..clipPath(pathMatcher: halves));
 
       store.update(store.value.copyWith(peopleShield: false));
       await tester.pump();

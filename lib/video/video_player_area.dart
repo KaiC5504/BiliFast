@@ -390,7 +390,8 @@ class _DanmakuArea extends StatelessWidget {
   EdgeInsets _padding(Size box, double inset) {
     if (pad) return padDanmakuInsets;
     if (!vertical) return EdgeInsets.only(top: inset);
-    final top = math.max(inset - BiliMetrics.verticalTopLift, 0.0) + BiliMetrics.chromeButton + BiliMetrics.verticalDanmakuDrop;
+    final top =
+        math.max(inset - BiliMetrics.verticalTopLift, 0.0) + BiliMetrics.chromeButton + BiliMetrics.verticalDanmakuDrop;
     final band = box.height;
     // The band centres the video; an upright one's danmaku keep to the whole band.
     final videoBottom = videoIsVertical ? band : band / 2 + box.width / BiliMetrics.videoAspect / 2;
