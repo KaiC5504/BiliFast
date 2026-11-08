@@ -15,6 +15,34 @@ enum NativeFit { fit, fill, stretch, ratio16x9, ratio4x3 }
 
 enum NativePlayerStatus { idle, loading, buffering, playing, paused, ended }
 
+/// A lock-screen or Control Center button (MPRemoteCommandCenter), or the headphones' and car's.
+enum NativeRemoteCommand { play, pause, toggle, seek, next, previous }
+
+/// What the lock screen and Control Center show for a player. Elapsed time, duration and rate come from the AVPlayer
+/// itself (MPNowPlayingSession publishes them).
+class NativeNowPlaying {
+  NativeNowPlaying({
+    required this.title,
+    required this.artist,
+    this.artworkPath,
+    required this.hasPrevious,
+    required this.hasNext,
+  });
+
+  String title;
+
+  /// The uploader's name.
+  String artist;
+
+  /// A picture file on the phone (the cover from the picture cache, or a cached video's cover.jpg), drawn at its own
+  /// aspect.
+  String? artworkPath;
+
+  /// Whether ⏮ and ⏭ are enabled.
+  bool hasPrevious;
+  bool hasNext;
+}
+
 class NativeTimeRange {
   NativeTimeRange({required this.start, required this.end});
 
@@ -61,6 +89,15 @@ abstract class PlayerHostApi {
   /// back in a window (up to 3 s) rather than ending at once.
   void setRestorable(int playerId, bool restorable);
 
+  /// 后台听视频: on, the player keeps playing with the app in the background or the screen locked
+  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, iOS pauses it there (.pauses). Picture in
+  /// picture plays either way.
+  void setBackgroundPlayback(int playerId, bool enabled);
+
+  /// Makes this player the one the lock screen and Control Center show, with [info]; null takes it off them and
+  /// disables its remote commands.
+  void setNowPlaying(int playerId, NativeNowPlaying? info);
+
   /// Saves the current frame to the photo library; false without a frame or without access.
   @asyncCallback
   bool captureFrame(int playerId);
@@ -98,6 +135,15 @@ abstract class PlayerEventApi {
 
   @asyncCallback
   void onPictureInPictureRestore(int playerId);
+
+  /// A remote command for the player now playing; [seconds] is the position asked for, with `seek` only.
+  @asyncCallback
+  void onRemoteCommand(int playerId, NativeRemoteCommand command, double? seconds);
+
+  /// An audio interruption (a call, Siri, an alarm) began or ended for the player now playing. AVPlayer has already
+  /// paused itself when one begins; [shouldResume] is iOS's hint when it ends.
+  @asyncCallback
+  void onInterruption(int playerId, bool began, bool shouldResume);
 
   /// Access-log and error-log entries and other player diagnostics for DevLog's `player` category.
   @asyncCallback

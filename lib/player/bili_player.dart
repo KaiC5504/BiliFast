@@ -115,6 +115,63 @@ final class PictureInPictureRestore extends PlayerEvent {
   const PictureInPictureRestore();
 }
 
+/// A lock-screen, Control Center, headphone or car button.
+enum RemoteCommandKind { play, pause, toggle, seek, next, previous }
+
+/// A [RemoteCommandKind] pressed for this player while it is the one the lock screen shows; [seconds] is the position
+/// asked for, with [RemoteCommandKind.seek] only.
+final class RemoteCommand extends PlayerEvent {
+  const RemoteCommand(this.kind, {this.seconds});
+
+  final RemoteCommandKind kind;
+  final double? seconds;
+}
+
+/// A call, Siri or an alarm took the sound. The player has already paused itself when one [began]; when it ends,
+/// [shouldResume] is iOS's hint to play again.
+final class AudioInterruption extends PlayerEvent {
+  const AudioInterruption({required this.began, this.shouldResume = false});
+
+  final bool began;
+  final bool shouldResume;
+}
+
+/// What the lock screen and Control Center show for a player. The position, duration and rate come from the player.
+@immutable
+final class NowPlayingInfo {
+  const NowPlayingInfo({
+    required this.title,
+    required this.artist,
+    this.artworkPath,
+    this.hasPrevious = false,
+    this.hasNext = false,
+  });
+
+  final String title;
+
+  /// The uploader's name.
+  final String artist;
+
+  /// A picture file on the phone, drawn at its own aspect (the official app shows the 16:9 cover).
+  final String? artworkPath;
+
+  /// Whether ⏮ and ⏭ are enabled.
+  final bool hasPrevious;
+  final bool hasNext;
+
+  @override
+  bool operator ==(Object other) =>
+      other is NowPlayingInfo &&
+      other.title == title &&
+      other.artist == artist &&
+      other.artworkPath == artworkPath &&
+      other.hasPrevious == hasPrevious &&
+      other.hasNext == hasNext;
+
+  @override
+  int get hashCode => Object.hash(title, artist, artworkPath, hasPrevious, hasNext);
+}
+
 /// AVPlayer access-log / error-log entries and the like, for DevLog's `player` category.
 final class PlayerLog extends PlayerEvent {
   const PlayerLog(this.kind, this.fields);
@@ -175,6 +232,14 @@ abstract interface class BiliPlayer {
 
   /// A page kept for the small window can come back for this player, so its restore button waits for the page.
   Future<void> setRestorable(bool restorable);
+
+  /// 后台听视频: on, playback carries on with the app in the background or the screen locked; off, the platform pauses
+  /// it there. Picture in picture plays either way. A no-op where there is no background (Windows).
+  Future<void> setBackgroundPlayback(bool enabled);
+
+  /// Makes this player the one the lock screen and Control Center show, with [info]; null takes it off them. Its
+  /// buttons come back as [RemoteCommand] events. A no-op where there is no lock screen.
+  Future<void> setNowPlaying(NowPlayingInfo? info);
 
   /// Saves the current frame to the photo library.
   Future<bool> captureFrame();

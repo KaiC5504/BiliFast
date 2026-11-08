@@ -62,6 +62,14 @@ final class IosPlayerEvents implements PlayerEventApi {
   @override
   Future<void> onPictureInPictureRestore(int playerId) async => _emit(playerId, const PictureInPictureRestore());
 
+  @override
+  Future<void> onRemoteCommand(int playerId, NativeRemoteCommand command, double? seconds) async =>
+      _emit(playerId, RemoteCommand(_command(command), seconds: seconds));
+
+  @override
+  Future<void> onInterruption(int playerId, bool began, bool shouldResume) async =>
+      _emit(playerId, AudioInterruption(began: began, shouldResume: shouldResume));
+
   /// The registry's created and disposed lines come before the player is attached and after it is detached, so a line
   /// with no player to take it goes to the log directly.
   @override
@@ -76,6 +84,15 @@ final class IosPlayerEvents implements PlayerEventApi {
       for (final MapEntry(:key, :value) in fields.entries) key: ?value,
     });
   }
+
+  static RemoteCommandKind _command(NativeRemoteCommand command) => switch (command) {
+        NativeRemoteCommand.play => RemoteCommandKind.play,
+        NativeRemoteCommand.pause => RemoteCommandKind.pause,
+        NativeRemoteCommand.toggle => RemoteCommandKind.toggle,
+        NativeRemoteCommand.seek => RemoteCommandKind.seek,
+        NativeRemoteCommand.next => RemoteCommandKind.next,
+        NativeRemoteCommand.previous => RemoteCommandKind.previous,
+      };
 
   static PlayerStatus _status(NativePlayerStatus status) => switch (status) {
         NativePlayerStatus.idle => PlayerStatus.idle,

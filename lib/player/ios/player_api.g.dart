@@ -124,6 +124,87 @@ enum NativePlayerStatus {
   ended;
 }
 
+/// A lock-screen or Control Center button (MPRemoteCommandCenter), or the headphones' and car's.
+enum NativeRemoteCommand {
+  play,
+  pause,
+  toggle,
+  seek,
+  next,
+  previous;
+}
+
+/// What the lock screen and Control Center show for a player. Elapsed time, duration and rate come from the AVPlayer
+/// itself (MPNowPlayingSession publishes them).
+class NativeNowPlaying {
+  NativeNowPlaying({
+    required this.title,
+    required this.artist,
+    this.artworkPath,
+    required this.hasPrevious,
+    required this.hasNext,
+  });
+
+  String title;
+
+  /// The uploader's name.
+  String artist;
+
+  /// A picture file on the phone (the cover from the picture cache, or a cached video's cover.jpg), drawn at its own
+  /// aspect.
+  String? artworkPath;
+
+  /// Whether ⏮ and ⏭ are enabled.
+  bool hasPrevious;
+
+  bool hasNext;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      title,
+      artist,
+      artworkPath,
+      hasPrevious,
+      hasNext,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static NativeNowPlaying decode(Object result) {
+    result as List<Object?>;
+    return NativeNowPlaying(
+      title: result[0]! as String,
+      artist: result[1]! as String,
+      artworkPath: result[2] as String?,
+      hasPrevious: result[3]! as bool,
+      hasNext: result[4]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! NativeNowPlaying || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(title, other.title) && _deepEquals(artist, other.artist) && _deepEquals(artworkPath, other.artworkPath) && _deepEquals(hasPrevious, other.hasPrevious) && _deepEquals(hasNext, other.hasNext);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'NativeNowPlaying(title: $title, artist: $artist, artworkPath: $artworkPath, hasPrevious: $hasPrevious, hasNext: $hasNext)';
+  }
+}
+
 class NativeTimeRange {
   NativeTimeRange({
     required this.start,
@@ -188,8 +269,14 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is NativePlayerStatus) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is NativeTimeRange) {
+    }    else if (value is NativeRemoteCommand) {
       buffer.putUint8(131);
+      writeValue(buffer, value.index);
+    }    else if (value is NativeNowPlaying) {
+      buffer.putUint8(132);
+      writeValue(buffer, value.encode());
+    }    else if (value is NativeTimeRange) {
+      buffer.putUint8(133);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -206,6 +293,11 @@ class _PigeonCodec extends StandardMessageCodec {
         final value = readValue(buffer) as int?;
         return value == null ? null : NativePlayerStatus.values[value];
       case 131:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : NativeRemoteCommand.values[value];
+      case 132:
+        return NativeNowPlaying.decode(readValue(buffer)!);
+      case 133:
         return NativeTimeRange.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -525,6 +617,47 @@ class PlayerHostApi {
     ;
   }
 
+  /// 后台听视频: on, the player keeps playing with the app in the background or the screen locked
+  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, iOS pauses it there (.pauses). Picture in
+  /// picture plays either way.
+  Future<void> setBackgroundPlayback(int playerId, bool enabled) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.setBackgroundPlayback$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[playerId, enabled]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// Makes this player the one the lock screen and Control Center show, with [info]; null takes it off them and
+  /// disables its remote commands.
+  Future<void> setNowPlaying(int playerId, NativeNowPlaying? info) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.setNowPlaying$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[playerId, info]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   /// Saves the current frame to the photo library; false without a frame or without access.
   Future<bool> captureFrame(int playerId) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.captureFrame$pigeonVar_messageChannelSuffix';
@@ -586,6 +719,13 @@ abstract class PlayerEventApi {
   Future<void> onPictureInPicture(int playerId, bool active);
 
   Future<void> onPictureInPictureRestore(int playerId);
+
+  /// A remote command for the player now playing; [seconds] is the position asked for, with `seek` only.
+  Future<void> onRemoteCommand(int playerId, NativeRemoteCommand command, double? seconds);
+
+  /// An audio interruption (a call, Siri, an alarm) began or ended for the player now playing. AVPlayer has already
+  /// paused itself when one begins; [shouldResume] is iOS's hint when it ends.
+  Future<void> onInterruption(int playerId, bool began, bool shouldResume);
 
   /// Access-log and error-log entries and other player diagnostics for DevLog's `player` category.
   Future<void> onLog(int playerId, String kind, Map<String, Object?> fields);
@@ -789,6 +929,52 @@ abstract class PlayerEventApi {
           final int arg_playerId = args[0]! as int;
           try {
             await api.onPictureInPictureRestore(arg_playerId);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.PlayerEventApi.onRemoteCommand$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_playerId = args[0]! as int;
+          final NativeRemoteCommand arg_command = args[1]! as NativeRemoteCommand;
+          final double? arg_seconds = args[2] as double?;
+          try {
+            await api.onRemoteCommand(arg_playerId, arg_command, arg_seconds);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.PlayerEventApi.onInterruption$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_playerId = args[0]! as int;
+          final bool arg_began = args[1]! as bool;
+          final bool arg_shouldResume = args[2]! as bool;
+          try {
+            await api.onInterruption(arg_playerId, arg_began, arg_shouldResume);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

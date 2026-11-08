@@ -1,5 +1,5 @@
 import 'package:bili_core/api.dart'
-    show Chapter, Dash, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
+    show Chapter, DanmakuMaskInfo, Dash, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
 import 'package:flutter/foundation.dart';
 
 import '../playback/overlay_stats.dart';
@@ -116,6 +116,10 @@ abstract interface class PlayerSession implements Listenable {
   /// 看点, empty without them.
   List<Chapter> get chapters;
 
+  /// 人像防挡's mask for the part playing, from the same player info as [chapters]; null until it is known, and for a
+  /// part without one or an offline page.
+  ValueListenable<DanmakuMaskInfo?> get danmakuMask;
+
   /// For the end screens; empty until loaded.
   List<VideoCard> get related;
 
@@ -179,6 +183,12 @@ abstract interface class PlayerSession implements Listenable {
   bool get mirrored;
 
   Future<String?> setMirrored(bool on);
+
+  /// 后台听视频, the same setting as 设置's (PlayerPrefs.backgroundListen).
+  bool get backgroundListen;
+
+  /// Saves 后台听视频 and applies it to this page's player at once.
+  void setBackgroundListen(bool on);
 
   LoopMode get loop;
 

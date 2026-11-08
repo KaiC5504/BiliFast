@@ -15,6 +15,7 @@ final class DanmakuSettings {
     this.scale = 1,
     this.speed = 2,
     this.filter = const DanmakuFilterOptions(),
+    this.peopleShield = true,
   });
 
   /// 显示区域's five stops: the share of the video's height the lanes may use.
@@ -40,6 +41,9 @@ final class DanmakuSettings {
   final int speed;
   final DanmakuFilterOptions filter;
 
+  /// 人像防挡: danmaku pass behind the people in the picture, on videos Bilibili made a mask for.
+  final bool peopleShield;
+
   double get scrollDuration => scrollDurations[speed.clamp(0, scrollDurations.length - 1)];
 
   String get speedName => speedNames[speed.clamp(0, speedNames.length - 1)];
@@ -54,14 +58,21 @@ final class DanmakuSettings {
         formFactor: formFactor,
       );
 
-  DanmakuSettings copyWith({double? area, double? opacity, double? scale, int? speed, DanmakuFilterOptions? filter}) =>
-      DanmakuSettings(
-        area: area ?? this.area,
-        opacity: opacity ?? this.opacity,
-        scale: scale ?? this.scale,
-        speed: speed ?? this.speed,
-        filter: filter ?? this.filter,
-      );
+  DanmakuSettings copyWith({
+    double? area,
+    double? opacity,
+    double? scale,
+    int? speed,
+    DanmakuFilterOptions? filter,
+    bool? peopleShield,
+  }) => DanmakuSettings(
+    area: area ?? this.area,
+    opacity: opacity ?? this.opacity,
+    scale: scale ?? this.scale,
+    speed: speed ?? this.speed,
+    filter: filter ?? this.filter,
+    peopleShield: peopleShield ?? this.peopleShield,
+  );
 
   /// Settings saved by an older build lack newer keys; they take the defaults instead of failing.
   factory DanmakuSettings.fromJson(Map<String, Object?> json) {
@@ -77,6 +88,7 @@ final class DanmakuSettings {
         final Map<String, Object?> filter => DanmakuFilterOptions.fromJson(filter),
         _ => fallback.filter,
       },
+      peopleShield: json['peopleShield'] as bool? ?? fallback.peopleShield,
     );
   }
 
@@ -86,6 +98,7 @@ final class DanmakuSettings {
     'scale': scale,
     'speed': speed,
     'filter': filter.toJson(),
+    'peopleShield': peopleShield,
   };
 
   @override
@@ -95,10 +108,11 @@ final class DanmakuSettings {
       other.opacity == opacity &&
       other.scale == scale &&
       other.speed == speed &&
-      other.filter == filter;
+      other.filter == filter &&
+      other.peopleShield == peopleShield;
 
   @override
-  int get hashCode => Object.hash(area, opacity, scale, speed, filter);
+  int get hashCode => Object.hash(area, opacity, scale, speed, filter, peopleShield);
 
   @override
   String toString() => 'DanmakuSettings(${toJson()})';

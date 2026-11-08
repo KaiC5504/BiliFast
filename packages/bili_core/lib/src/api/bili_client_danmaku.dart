@@ -49,6 +49,10 @@ BlockRule? _ruleOf(_BlockRuleItem item) {
 }
 
 extension BiliClientDanmaku on BiliClient {
+  /// Bytes [start] to [end] (inclusive; null runs to the end of the file) of a 人像防挡 mask file (DanmakuMaskInfo.url),
+  /// by a Range request; only Bilibili's CDN hosts are asked.
+  Future<Uint8List> maskRange(Uri url, {required int start, int? end}) => throw UnimplementedError();
+
   /// One 6-minute slice of a video's danmaku, `index` counting from 1.
   Future<DanmakuSegment> danmakuSegment({required int cid, required int index}) async => decodeDanmakuSegment(
     await danmakuSegmentData(cid: cid, index: index),

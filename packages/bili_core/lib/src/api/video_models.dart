@@ -379,8 +379,26 @@ final class Chapter {
   String toString() => 'Chapter($from-$to, $title)';
 }
 
+/// Where a part's 人像防挡 mask lives (`dm_mask`): a `.webmask` file (WebMaskIndex) on Bilibili's CDN.
+final class DanmakuMaskInfo {
+  const DanmakuMaskInfo({required this.cid, required this.plat, required this.fps, required this.time, required this.url});
+
+  final int cid;
+  final int plat;
+  final int fps;
+
+  /// The mask's version; a new one is a new file.
+  final int time;
+
+  /// A signed address: never logged, kept on disk or put in a fixture.
+  final Uri url;
+
+  @override
+  String toString() => 'DanmakuMaskInfo(cid: $cid, plat: $plat, fps: $fps, time: $time)';
+}
+
 final class PlayerInfo {
-  const PlayerInfo({required this.lastPlayCid, this.lastPlayTimeMs = 0, required this.chapters});
+  const PlayerInfo({required this.lastPlayCid, this.lastPlayTimeMs = 0, required this.chapters, this.mask});
 
   factory PlayerInfo.fromJson(Object? json) {
     final object = JsonObject.from(json);
@@ -413,6 +431,9 @@ final class PlayerInfo {
   /// Where the account last stopped in [lastPlayCid], in milliseconds; 0 when it never played the video.
   final int lastPlayTimeMs;
   final List<Chapter> chapters;
+
+  /// 人像防挡's mask for this part, when Bilibili made one (`dm_mask`).
+  final DanmakuMaskInfo? mask;
 
   @override
   bool operator ==(Object other) =>

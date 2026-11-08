@@ -832,6 +832,21 @@ class PlaybackController extends ChangeNotifier {
     }
   }
 
+  /// 后台听视频 for this controller's player ([BiliPlayer.setBackgroundPlayback]).
+  Future<void> setBackgroundPlayback(bool enabled) async {}
+
+  /// What the lock screen and Control Center show while this controller's video plays; null takes it off them.
+  Future<void> setNowPlaying(NowPlayingInfo? info) async {}
+
+  /// The lock screen's, headphones' and car's buttons for this player.
+  Stream<RemoteCommand> get remoteCommands => const Stream.empty();
+
+  /// A call, Siri or an alarm taking the sound from this player.
+  Stream<AudioInterruption> get interruptions => const Stream.empty();
+
+  /// The app is in the background: no danmaku segment is fetched until it is back.
+  set inBackground(bool value) {}
+
   /// The small window's restore button was tapped.
   Stream<void> get restoreRequests => _restores.stream;
   final _restores = StreamController<void>.broadcast(sync: true);
@@ -1607,6 +1622,8 @@ class PlaybackController extends ChangeNotifier {
         _logger.info(LogCategory.player, kind, {
           for (final MapEntry(:key, :value) in fields.entries) key: ?value,
         });
+      case RemoteCommand() || AudioInterruption():
+        break;
     }
   }
 

@@ -314,6 +314,12 @@ final class RefusingPlayer implements BiliPlayer {
   Future<void> setRestorable(bool restorable) => inner.setRestorable(restorable);
 
   @override
+  Future<void> setBackgroundPlayback(bool enabled) => inner.setBackgroundPlayback(enabled);
+
+  @override
+  Future<void> setNowPlaying(NowPlayingInfo? info) => inner.setNowPlaying(info);
+
+  @override
   Future<bool> captureFrame() => inner.captureFrame();
 
   @override

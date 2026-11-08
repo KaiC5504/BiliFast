@@ -158,6 +158,29 @@ final class IosPlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> setBackgroundPlayback(bool enabled) async {
+    _check();
+    await _host.setBackgroundPlayback(nativeId, enabled);
+  }
+
+  @override
+  Future<void> setNowPlaying(NowPlayingInfo? info) async {
+    _check();
+    await _host.setNowPlaying(
+      nativeId,
+      info == null
+          ? null
+          : NativeNowPlaying(
+              title: info.title,
+              artist: info.artist,
+              artworkPath: info.artworkPath,
+              hasPrevious: info.hasPrevious,
+              hasNext: info.hasNext,
+            ),
+    );
+  }
+
+  @override
   Future<bool> captureFrame() async {
     _check();
     if (!capabilities.frameCapture) return false;

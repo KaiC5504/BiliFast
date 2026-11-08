@@ -205,6 +205,78 @@ enum NativePlayerStatus: Int, CaseIterable {
   case ended = 5
 }
 
+/// A lock-screen or Control Center button (MPRemoteCommandCenter), or the headphones' and car's.
+enum NativeRemoteCommand: Int, CaseIterable {
+  case play = 0
+  case pause = 1
+  case toggle = 2
+  case seek = 3
+  case next = 4
+  case previous = 5
+}
+
+/// What the lock screen and Control Center show for a player. Elapsed time, duration and rate come from the AVPlayer
+/// itself (MPNowPlayingSession publishes them).
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeNowPlaying: Hashable, CustomStringConvertible {
+  var title: String
+  /// The uploader's name.
+  var artist: String
+  /// A picture file on the phone (the cover from the picture cache, or a cached video's cover.jpg), drawn at its own
+  /// aspect.
+  var artworkPath: String? = nil
+  /// Whether ⏮ and ⏭ are enabled.
+  var hasPrevious: Bool
+  var hasNext: Bool
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeNowPlaying? {
+    let title = pigeonVar_list[0] as! String
+    let artist = pigeonVar_list[1] as! String
+    let artworkPath: String? = nilOrValue(pigeonVar_list[2])
+    let hasPrevious = pigeonVar_list[3] as! Bool
+    let hasNext = pigeonVar_list[4] as! Bool
+
+    return NativeNowPlaying(
+      title: title,
+      artist: artist,
+      artworkPath: artworkPath,
+      hasPrevious: hasPrevious,
+      hasNext: hasNext
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      title,
+      artist,
+      artworkPath,
+      hasPrevious,
+      hasNext,
+    ]
+  }
+  static func == (lhs: NativeNowPlaying, rhs: NativeNowPlaying) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return PlayerApiPigeonInternal.deepEquals(lhs.title, rhs.title) && PlayerApiPigeonInternal.deepEquals(lhs.artist, rhs.artist) && PlayerApiPigeonInternal.deepEquals(lhs.artworkPath, rhs.artworkPath) && PlayerApiPigeonInternal.deepEquals(lhs.hasPrevious, rhs.hasPrevious) && PlayerApiPigeonInternal.deepEquals(lhs.hasNext, rhs.hasNext)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeNowPlaying")
+    PlayerApiPigeonInternal.deepHash(value: title, hasher: &hasher)
+    PlayerApiPigeonInternal.deepHash(value: artist, hasher: &hasher)
+    PlayerApiPigeonInternal.deepHash(value: artworkPath, hasher: &hasher)
+    PlayerApiPigeonInternal.deepHash(value: hasPrevious, hasher: &hasher)
+    PlayerApiPigeonInternal.deepHash(value: hasNext, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeNowPlaying(title: \(String(describing: title)), artist: \(String(describing: artist)), artworkPath: \(String(describing: artworkPath)), hasPrevious: \(String(describing: hasPrevious)), hasNext: \(String(describing: hasNext)))"
+  }
+}
+
 /// Generated class from Pigeon that represents data sent in messages.
 struct NativeTimeRange: Hashable, CustomStringConvertible {
   var start: Double
@@ -261,6 +333,14 @@ private class PlayerApiPigeonCodecReader: FlutterStandardReader {
       }
       return nil
     case 131:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeRemoteCommand(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 132:
+      return NativeNowPlaying.fromList(self.readValue() as! [Any?])
+    case 133:
       return NativeTimeRange.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -276,8 +356,14 @@ private class PlayerApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? NativePlayerStatus {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeTimeRange {
+    } else if let value = value as? NativeRemoteCommand {
       super.writeByte(131)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? NativeNowPlaying {
+      super.writeByte(132)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeTimeRange {
+      super.writeByte(133)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -324,6 +410,13 @@ protocol PlayerHostApi {
   /// A page kept for the small window can come back for this player: the restore button then waits for its view to be
   /// back in a window (up to 3 s) rather than ending at once.
   func setRestorable(playerId: Int64, restorable: Bool) throws
+  /// 后台听视频: on, the player keeps playing with the app in the background or the screen locked
+  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, iOS pauses it there (.pauses). Picture in
+  /// picture plays either way.
+  func setBackgroundPlayback(playerId: Int64, enabled: Bool) throws
+  /// Makes this player the one the lock screen and Control Center show, with [info]; null takes it off them and
+  /// disables its remote commands.
+  func setNowPlaying(playerId: Int64, info: NativeNowPlaying?) throws
   /// Saves the current frame to the photo library; false without a frame or without access.
   func captureFrame(playerId: Int64, completion: @escaping (Result<Bool, Error>) -> Void)
   func dispose(playerId: Int64) throws
@@ -587,6 +680,43 @@ class PlayerHostApiSetup {
     } else {
       setRestorableChannel.setMessageHandler(nil)
     }
+    /// 后台听视频: on, the player keeps playing with the app in the background or the screen locked
+    /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, iOS pauses it there (.pauses). Picture in
+    /// picture plays either way.
+    let setBackgroundPlaybackChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.setBackgroundPlayback\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setBackgroundPlaybackChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let playerIdArg = args[0] as! Int64
+        let enabledArg = args[1] as! Bool
+        do {
+          try api.setBackgroundPlayback(playerId: playerIdArg, enabled: enabledArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setBackgroundPlaybackChannel.setMessageHandler(nil)
+    }
+    /// Makes this player the one the lock screen and Control Center show, with [info]; null takes it off them and
+    /// disables its remote commands.
+    let setNowPlayingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.setNowPlaying\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setNowPlayingChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let playerIdArg = args[0] as! Int64
+        let infoArg: NativeNowPlaying? = nilOrValue(args[1])
+        do {
+          try api.setNowPlaying(playerId: playerIdArg, info: infoArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setNowPlayingChannel.setMessageHandler(nil)
+    }
     /// Saves the current frame to the photo library; false without a frame or without access.
     let captureFrameChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.captureFrame\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
@@ -637,6 +767,11 @@ protocol PlayerEventApiProtocol {
   func onFailure(playerId playerIdArg: Int64, message messageArg: String, domain domainArg: String?, code codeArg: Int64?, formatRejected formatRejectedArg: Bool, completion: @escaping (Result<Void, PlayerApiError>) -> Void)
   func onPictureInPicture(playerId playerIdArg: Int64, active activeArg: Bool, completion: @escaping (Result<Void, PlayerApiError>) -> Void)
   func onPictureInPictureRestore(playerId playerIdArg: Int64, completion: @escaping (Result<Void, PlayerApiError>) -> Void)
+  /// A remote command for the player now playing; [seconds] is the position asked for, with `seek` only.
+  func onRemoteCommand(playerId playerIdArg: Int64, command commandArg: NativeRemoteCommand, seconds secondsArg: Double?, completion: @escaping (Result<Void, PlayerApiError>) -> Void)
+  /// An audio interruption (a call, Siri, an alarm) began or ended for the player now playing. AVPlayer has already
+  /// paused itself when one begins; [shouldResume] is iOS's hint when it ends.
+  func onInterruption(playerId playerIdArg: Int64, began beganArg: Bool, shouldResume shouldResumeArg: Bool, completion: @escaping (Result<Void, PlayerApiError>) -> Void)
   /// Access-log and error-log entries and other player diagnostics for DevLog's `player` category.
   func onLog(playerId playerIdArg: Int64, kind kindArg: String, fields fieldsArg: [String: Any?], completion: @escaping (Result<Void, PlayerApiError>) -> Void)
 }
@@ -798,6 +933,45 @@ class PlayerEventApi: PlayerEventApiProtocol {
     let channelName: String = "dev.flutter.pigeon.bilifast.PlayerEventApi.onPictureInPictureRestore\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage([playerIdArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PlayerApiError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  /// A remote command for the player now playing; [seconds] is the position asked for, with `seek` only.
+  func onRemoteCommand(playerId playerIdArg: Int64, command commandArg: NativeRemoteCommand, seconds secondsArg: Double?, completion: @escaping (Result<Void, PlayerApiError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.bilifast.PlayerEventApi.onRemoteCommand\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([playerIdArg, commandArg, secondsArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PlayerApiError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  /// An audio interruption (a call, Siri, an alarm) began or ended for the player now playing. AVPlayer has already
+  /// paused itself when one begins; [shouldResume] is iOS's hint when it ends.
+  func onInterruption(playerId playerIdArg: Int64, began beganArg: Bool, shouldResume shouldResumeArg: Bool, completion: @escaping (Result<Void, PlayerApiError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.bilifast.PlayerEventApi.onInterruption\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([playerIdArg, beganArg, shouldResumeArg] as [Any?]) { response in
       guard let listResponse = response as? [Any?] else {
         completion(.failure(createConnectionError(withChannelName: channelName)))
         return

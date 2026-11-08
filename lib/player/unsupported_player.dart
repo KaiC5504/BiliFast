@@ -78,6 +78,12 @@ final class UnsupportedPlayer implements BiliPlayer {
   Future<void> setRestorable(bool restorable) async => _check();
 
   @override
+  Future<void> setBackgroundPlayback(bool enabled) async => _check();
+
+  @override
+  Future<void> setNowPlaying(NowPlayingInfo? info) async => _check();
+
+  @override
   Future<bool> captureFrame() async {
     _check();
     return false;

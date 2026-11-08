@@ -5,3 +5,4 @@ export 'src/danmaku/danmaku_timeline.dart';
 export 'src/danmaku/lane_layout.dart';
 export 'src/danmaku/mid_hash.dart';
 export 'src/danmaku/protobuf_reader.dart';
+export 'src/danmaku/web_mask.dart';

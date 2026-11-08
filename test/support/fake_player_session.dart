@@ -1,5 +1,5 @@
 import 'package:bili_core/api.dart'
-    show Chapter, Dash, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
+    show Chapter, DanmakuMaskInfo, Dash, QualityOption, VideoCard, VideoCodec, VideoDetail, VideoPage, VideoShot, VideoView;
 import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
@@ -61,6 +61,9 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
 
   @override
   List<Chapter> chapters = const [];
+
+  @override
+  final ValueNotifier<DanmakuMaskInfo?> danmakuMask = ValueNotifier(null);
 
   @override
   List<VideoCard> related = const [];
@@ -165,6 +168,16 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
     mirrored = on;
     notifyListeners();
     return failure;
+  }
+
+  @override
+  bool backgroundListen = true;
+
+  @override
+  void setBackgroundListen(bool on) {
+    calls.add('setBackgroundListen $on');
+    backgroundListen = on;
+    notifyListeners();
   }
 
   @override

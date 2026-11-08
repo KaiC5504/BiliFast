@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' show pi;
 
 import 'package:bili_core/api.dart' as bili
-    show AidLink, BvidLink, LinkParser, VideoCard, VideoView;
+    show AidLink, BiliClientDanmaku, BvidLink, LinkParser, VideoCard, VideoView;
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -772,6 +772,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       accountMid: () => environment.mid ?? 0,
       accountChanges: environment,
       requestLogin: _askLogin,
+      maskInfo: _offline ? null : session.danmakuMask,
+      maskFetch: _offline
+          ? null
+          : (url, {required start, end}) => bili.BiliClientDanmaku(environment.client).maskRange(url, start: start, end: end),
     );
     _danmaku = danmaku;
     danmaku.sendOpen.addListener(_panelChanged);

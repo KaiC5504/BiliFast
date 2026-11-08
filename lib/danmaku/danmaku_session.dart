@@ -9,6 +9,7 @@ import '../playback/danmaku_feed.dart';
 import '../video/page_api.dart';
 import 'block_rule_store.dart';
 import 'danmaku_settings_store.dart';
+import 'mask/mask_feed.dart';
 import 'send/danmaku_send_model.dart';
 
 /// The video and part a danmaku goes to.
@@ -29,6 +30,8 @@ class DanmakuSession extends ChangeNotifier {
     required this._accountMid,
     required this._requestLogin,
     this._accountChanges,
+    this.maskInfo,
+    this.maskFetch,
     Logger? logger,
   }) : _logger = logger ?? Logger.shared {
     sender = DanmakuSendModel(send);
@@ -56,6 +59,17 @@ class DanmakuSession extends ChangeNotifier {
   final bool Function() _isVip;
   final int Function() _accountMid;
   final VoidCallback _requestLogin;
+
+  /// The part's 人像防挡 mask, as the page's session learns it ([PlayerSession.danmakuMask]); null on pages without
+  /// one (offline).
+  final ValueListenable<DanmakuMaskInfo?>? maskInfo;
+
+  /// How [mask] reads the mask file.
+  final MaskFetch? maskFetch;
+
+  /// 人像防挡's feed for the part playing, while 人像防挡 is on and the part has a mask.
+  ValueListenable<MaskFeed?> get mask => _mask;
+  final _mask = ValueNotifier<MaskFeed?>(null);
 
   /// Fires when the account may have changed; a page opened before the launch's account check answered learns the
   /// account here.

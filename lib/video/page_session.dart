@@ -277,6 +277,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   List<Chapter> get chapters => _chapters;
 
   @override
+  ValueListenable<DanmakuMaskInfo?> get danmakuMask => _danmakuMask;
+  final _danmakuMask = ValueNotifier<DanmakuMaskInfo?>(null);
+
+  @override
   List<VideoCard> get related => _related;
 
   @override
@@ -600,6 +604,15 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   @override
   Future<String?> setMirrored(bool on) => _attempt(() => _controller.setMirrored(on), 'mirror', '切换镜像失败');
+
+  @override
+  bool get backgroundListen => _prefs.backgroundListen;
+
+  @override
+  void setBackgroundListen(bool on) {
+    _prefs.backgroundListen = on;
+    notifyListeners();
+  }
 
   @override
   LoopMode get loop => _prefs.loop;

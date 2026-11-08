@@ -109,6 +109,16 @@ final class PlayerHostApiImpl: PlayerHostApi {
     try MainActor.assumeIsolated { try registry.player(playerId).restorable = restorable }
   }
 
+  func setBackgroundPlayback(playerId: Int64, enabled: Bool) throws {
+    let registry = self.registry
+    try MainActor.assumeIsolated { NowPlaying.setBackgroundPlayback(try registry.player(playerId), enabled: enabled) }
+  }
+
+  func setNowPlaying(playerId: Int64, info: NativeNowPlaying?) throws {
+    let registry = self.registry
+    try MainActor.assumeIsolated { NowPlaying.set(try registry.player(playerId), info: info) }
+  }
+
   func captureFrame(playerId: Int64, completion: @escaping (Result<Bool, Error>) -> Void) {
     let registry = self.registry
     let reply = CaptureReply(call: completion)

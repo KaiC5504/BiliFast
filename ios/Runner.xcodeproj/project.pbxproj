@@ -25,6 +25,7 @@
 		B1F0A5E12F0000000000F102 /* PictureDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F101 /* PictureDecoder.swift */; };
 		B1F0A5E12F0000000000F202 /* PictureApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F201 /* PictureApi.g.swift */; };
 		B1F0A5E12F0000000000F302 /* OfflineHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F301 /* OfflineHost.swift */; };
+		B1F0A5E12F0000000000F502 /* NowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F501 /* NowPlaying.swift */; };
 		B1F0A5E12F0000000000F402 /* OfflineApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F401 /* OfflineApi.g.swift */; };
 		B1F0A5E12F0000000000C104 /* DeviceChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000C103 /* DeviceChannel.swift */; };
 		B1F0A5E12F0000000000D102 /* WebCookies.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000D101 /* WebCookies.swift */; };
@@ -84,6 +85,7 @@
 		B1F0A5E12F0000000000F101 /* PictureDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PictureDecoder.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000F201 /* PictureApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PictureApi.g.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000F301 /* OfflineHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineHost.swift; sourceTree = "<group>"; };
+		B1F0A5E12F0000000000F501 /* NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlaying.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000F401 /* OfflineApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineApi.g.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000C103 /* DeviceChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceChannel.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000D101 /* WebCookies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebCookies.swift; sourceTree = "<group>"; };
@@ -178,6 +180,7 @@
 				B1F0A5E12F0000000000F101 /* PictureDecoder.swift */,
 				B1F0A5E12F0000000000F201 /* PictureApi.g.swift */,
 				B1F0A5E12F0000000000F301 /* OfflineHost.swift */,
+				B1F0A5E12F0000000000F501 /* NowPlaying.swift */,
 				B1F0A5E12F0000000000F401 /* OfflineApi.g.swift */,
 				B1F0A5E12F0000000000C103 /* DeviceChannel.swift */,
 				B1F0A5E12F0000000000D101 /* WebCookies.swift */,
@@ -360,6 +363,7 @@
 				B1F0A5E12F0000000000F102 /* PictureDecoder.swift in Sources */,
 				B1F0A5E12F0000000000F202 /* PictureApi.g.swift in Sources */,
 				B1F0A5E12F0000000000F302 /* OfflineHost.swift in Sources */,
+				B1F0A5E12F0000000000F502 /* NowPlaying.swift in Sources */,
 				B1F0A5E12F0000000000F402 /* OfflineApi.g.swift in Sources */,
 				B1F0A5E12F0000000000C104 /* DeviceChannel.swift in Sources */,
 				B1F0A5E12F0000000000D102 /* WebCookies.swift in Sources */,

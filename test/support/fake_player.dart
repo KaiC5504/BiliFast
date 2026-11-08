@@ -82,6 +82,18 @@ final class FakePlayer implements BiliPlayer {
   Future<void> setRestorable(bool restorable) async => _record('restorable $restorable');
 
   @override
+  Future<void> setBackgroundPlayback(bool enabled) async => _record('background $enabled');
+
+  /// What the last [setNowPlaying] asked for.
+  NowPlayingInfo? nowPlaying;
+
+  @override
+  Future<void> setNowPlaying(NowPlayingInfo? info) async {
+    _record('now playing ${info?.title}');
+    nowPlaying = info;
+  }
+
+  @override
   Future<bool> captureFrame() async {
     _record('capture');
     return capabilities.frameCapture;

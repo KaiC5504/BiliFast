@@ -84,6 +84,8 @@ class PlayerPrefs {
   bool _bigCardSound = false;
   bool _verticalFullScreen = true;
   bool _autoPip = true;
+  bool _backgroundListen = true;
+  bool _backgroundNext = true;
 
   bool get autoplay => _autoplay;
   set autoplay(bool value) => _set(() => _autoplay = value);
@@ -159,6 +161,14 @@ class PlayerPrefs {
   bool get autoPip => _autoPip;
   set autoPip(bool value) => _set(() => _autoPip = value);
 
+  /// 后台听视频 (174, and ⋮'s row): a video keeps playing with the screen locked or the app in the background.
+  bool get backgroundListen => _backgroundListen;
+  set backgroundListen(bool value) => _set(() => _backgroundListen = value);
+
+  /// 后台听视频时，自动连播相关视频 (174): a video that ends in the background opens the next one and plays it.
+  bool get backgroundNext => _backgroundNext;
+  set backgroundNext(bool value) => _set(() => _backgroundNext = value);
+
   void _read(Map<String, Object?> values) {
     void ignored(String key) => _logger.warn(LogCategory.app, 'player prefs value ignored', {'key': key});
     T? pick<T>(String key) {
@@ -198,6 +208,8 @@ class PlayerPrefs {
     _bigCardSound = pick<bool>('bigCardSound') ?? _bigCardSound;
     _verticalFullScreen = pick<bool>('verticalFullScreen') ?? _verticalFullScreen;
     _autoPip = pick<bool>('autoPip') ?? _autoPip;
+    _backgroundListen = pick<bool>('backgroundListen') ?? _backgroundListen;
+    _backgroundNext = pick<bool>('backgroundNext') ?? _backgroundNext;
   }
 
   Map<String, Object?> toJson() => {
@@ -221,6 +233,8 @@ class PlayerPrefs {
     if (_bigCardSound) 'bigCardSound': true,
     if (!_verticalFullScreen) 'verticalFullScreen': false,
     if (!_autoPip) 'autoPip': false,
+    if (!_backgroundListen) 'backgroundListen': false,
+    if (!_backgroundNext) 'backgroundNext': false,
   };
 
   void _set(void Function() change) {
