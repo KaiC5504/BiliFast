@@ -563,11 +563,16 @@ void main() {
         PanelGlyphKind.watchLater,
         PanelGlyphKind.autoplay,
         PanelGlyphKind.loop,
-        PanelGlyphKind.listen,
+        PanelGlyphKind.backgroundListen,
         PanelGlyphKind.fit,
       ]) {
         expect(find.byWidgetPredicate((widget) => widget is PanelGlyph && widget.kind == kind), findsOneWidget);
       }
+      // 21's headphones hold 听; the portrait sheet's (42, 43) hold a pulse.
+      expect(
+        find.byWidgetPredicate((widget) => widget is PanelGlyph && widget.kind == PanelGlyphKind.listen),
+        findsNothing,
+      );
     });
 
     testWidgets('画面尺寸 is a button', (tester) async {
