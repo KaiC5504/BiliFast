@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Directory, File, FileSystemException;
+import 'dart:typed_data' show Uint8List;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -8,6 +10,7 @@ import 'package:bili_core/shared.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
+import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/video/page_session.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
@@ -57,6 +60,27 @@ String seasonView(String bvid, int cid) =>
     '"ugc_season":{"id":1,"title":"合集","sections":['
     '{"id":1,"title":"正片","episodes":[${_episode('BV1AA411a1aa', 1001, '第一集')},${_episode('BV1BB411b1bb', 1002, '第二集')}]},'
     '{"id":2,"title":"特别篇","episodes":[${_episode('BV1CC411c1cc', 1003, '番外')}]}]}}}';
+
+/// The app's controller, telling what the sessions said of the background.
+final class HeardController extends PlaybackController {
+  HeardController({
+    required super.client,
+    required super.engine,
+    required super.player,
+    super.clock,
+    super.now,
+    super.startTimer,
+    super.logger,
+  });
+
+  final inBackgroundHeard = <bool>[];
+
+  @override
+  set inBackground(bool value) {
+    inBackgroundHeard.add(value);
+    super.inBackground = value;
+  }
+}
 
 final class FakePeriodic {
   final ticks = <void Function()>[];
@@ -129,7 +153,7 @@ void main() {
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     final logger = Logger(session: 'test');
     final client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), now: () => now, logger: logger);
-    controller = PlaybackController(
+    controller = HeardController(
       client: client,
       engine: engine,
       player: RefusingPlayer(player, refused),
@@ -144,7 +168,11 @@ void main() {
 
   /// A session as the video page makes it: `open` plays on the same controller. [on] is a controller another page's
   /// session already has; [onSeeked] hears the seeks the page's watch reports would, else [seeks] keeps them.
-  PagePlayerSession makeSession({PlaybackController? on, void Function(double seconds)? onSeeked}) {
+  PagePlayerSession makeSession({
+    PlaybackController? on,
+    void Function(double seconds)? onSeeked,
+    CoverFile? coverFile,
+  }) {
     final controller = on ?? makeController();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     final session = PagePlayerSession(
@@ -159,6 +187,7 @@ void main() {
       requestLogin: () => logins += 1,
       onSeeked: onSeeked ?? seeks.add,
       prefs: prefs,
+      coverFile: coverFile,
       clock: time.clock,
       periodic: periodic.start,
       startTimer: timers.start,
@@ -450,8 +479,9 @@ void main() {
       expect(session.ended, isTrue);
     });
 
-    test('in the background it starts over too: paused by the background check without picture in picture, '
-        'playing on in it', () async {
+    test('in the background it starts over too: with 后台听视频 off, paused by the background check without picture in '
+        'picture, playing on in it', () async {
+      prefs.backgroundListen = false;
       final session = makeSession()..loopsAtEnd = true;
       await controller.openVideo(bv, cid: p1);
       playing();
@@ -541,7 +571,9 @@ void main() {
     expect(session.shareLink.toString(), 'https://www.bilibili.com/video/$bv');
   });
 
-  group('in the background', () {
+  group('in the background with 后台听视频 off', () {
+    setUp(() => prefs.backgroundListen = false);
+
     test('without picture in picture the player pauses; with it, it plays on', () async {
       final session = makeSession();
       await controller.openVideo(bv, cid: p1);
@@ -578,6 +610,408 @@ void main() {
       session.didChangeAppLifecycleState(AppLifecycleState.paused);
       await ended();
       expect(opened, ['$bv $p2']);
+    });
+  });
+
+  group('后台听视频 (on by default)', () {
+    test("the player's policy is applied at the start, by the switch, and at every inactive", () async {
+      final session = makeSession();
+      expect(player.calls, contains('background true'));
+      player.calls.clear();
+      session.setBackgroundListen(false);
+      expect(player.calls, ['background false']);
+      expect(prefs.backgroundListen, isFalse);
+
+      // 设置's row, while the page was covered.
+      prefs.backgroundListen = true;
+      player.calls.clear();
+      session.didChangeAppLifecycleState(AppLifecycleState.inactive);
+      expect(player.calls, ['background true'], reason: 'iOS reads the policy as the app leaves');
+      session
+        ..didChangeAppLifecycleState(AppLifecycleState.hidden)
+        ..didChangeAppLifecycleState(AppLifecycleState.paused);
+      expect(player.calls, ['background true']);
+    });
+
+    test('nothing pauses in the background; each change is logged with what decided it', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      player.calls.clear();
+      session
+        ..didChangeAppLifecycleState(AppLifecycleState.inactive)
+        ..didChangeAppLifecycleState(AppLifecycleState.hidden)
+        ..didChangeAppLifecycleState(AppLifecycleState.paused);
+      expect(timers.activeWith(PagePlayerSession.backgroundGrace), isNull);
+      player.emit(const StatusChanged(PlayerStatus.buffering));
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(player.calls, isNot(contains('pause')));
+      final lines = [
+        for (final event in logs.events)
+          if (event.msg == 'lifecycle') event.f.map((key, value) => MapEntry(key, value.toJson())),
+      ];
+      expect(lines.map((line) => line['state']), ['inactive', 'hidden', 'paused']);
+      expect(lines.last, {
+        'state': 'paused',
+        'active': true,
+        'wantsPlay': true,
+        'pictureInPicture': false,
+        'backgroundListen': true,
+      });
+    });
+
+    test('the controller hears when the app is in the background', () async {
+      final session = makeSession();
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        session.didChangeAppLifecycleState(state);
+      }
+      expect((controller as HeardController).inBackgroundHeard, [false, true, false]);
+    });
+  });
+
+  group('后台连播 (on by default)', () {
+    test('a part ending in the background opens the next on the same controller, 自动连播 off or not', () async {
+      final session = makeSession()..setAutoplayNext(false);
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await ended();
+      expect(opened, ['$bv $p2']);
+      expect(controller.page?.cid, p2);
+      expect(player.loaded?.autoplay, isTrue);
+      expect(session.ended, isFalse);
+      expect(logs.events.map((event) => event.msg), contains('background autoplay'));
+    });
+
+    test("a 合集's next episode plays too", () async {
+      http.routes[Canned.signedViewPath] = (200, seasonView('BV1AA411a1aa', 1001));
+      makeSession().setAutoplayNext(false);
+      await controller.openVideo('BV1AA411a1aa');
+      playing();
+      sessions.single.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await ended();
+      expect(opened, ['BV1BB411b1bb 1002']);
+    });
+
+    test('after the last part the first related video plays; in front the end screen shows as before', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p2);
+      await settle();
+      playing();
+      await ended();
+      expect(opened, isEmpty, reason: 'in front, 自动连播 has nothing after the last part');
+      expect(session.ended, isTrue);
+
+      await session.replay();
+      playing();
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await ended();
+      expect(opened, ['BV1EF411e9oF -']);
+      expect(session.ended, isFalse);
+    });
+
+    test('单集循环 still plays the same part again', () async {
+      makeSession().setLoop(LoopMode.single);
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      sessions.single.didChangeAppLifecycleState(AppLifecycleState.paused);
+      player.calls.clear();
+      await ended();
+      expect(player.calls, containsAllInOrder(['seek 0.0 precise', 'play']));
+      expect(opened, isEmpty);
+    });
+
+    for (final (name, change) in [
+      ('后台连播 off', (PlayerPrefs saved) => saved.backgroundNext = false),
+      ('后台听视频 off', (PlayerPrefs saved) => saved.backgroundListen = false),
+    ]) {
+      test('with $name the end screen shows, the next part skipped', () async {
+        change(prefs);
+        final session = makeSession();
+        await controller.openVideo(bv, cid: p1);
+        await settle();
+        playing();
+        session.didChangeAppLifecycleState(AppLifecycleState.paused);
+        await ended();
+        expect(opened, isEmpty);
+        expect(session.ended, isTrue);
+        expect(logs.events.map((event) => event.msg), contains('autoplay skipped in the background'));
+      });
+    }
+  });
+
+  group('the lock screen', () {
+    const cover = 'http://i0.hdslb.com/bfs/archive/cover.jpg';
+    late List<String> coversAsked;
+    late CoverFile coverFile;
+
+    setUp(() {
+      http.routes[Canned.signedViewPath] = (200, Canned.view.replaceFirst('"title"', '"pic":"$cover","title"'));
+      coversAsked = [];
+      coverFile = (url) async {
+        coversAsked.add(url);
+        return 'covers/one.jpg';
+      };
+    });
+
+    List<String> lockScreen() => [
+      for (final call in player.calls)
+        if (call.startsWith('now playing')) call,
+    ];
+
+    const shown = NowPlayingInfo(
+      title: '测试视频',
+      artist: 'UP主',
+      artworkPath: 'covers/one.jpg',
+      hasPrevious: true,
+      hasNext: true,
+    );
+
+    test("shows the page's video once it plays: its title, uploader, cover file and both skips; told again for the "
+        'next part and as play starts again; cleared when the player lets it go', () async {
+      final session = makeSession(coverFile: coverFile);
+      await controller.openVideo(bv, cid: p1);
+      await settle();
+      expect(lockScreen(), isEmpty, reason: 'not before it plays');
+      playing();
+      await settle();
+      expect(coversAsked, ['https://i1.hdslb.com/bfs/archive/cover.jpg']);
+      expect(player.nowPlaying, shown);
+
+      player.calls.clear();
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      expect(lockScreen(), isEmpty, reason: 'paused on the page shown, it keeps the lock screen');
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(lockScreen(), ['now playing 测试视频'], reason: 'taken back from any other page');
+
+      player.calls.clear();
+      session.playEpisode(session.episodes[1]);
+      await settle();
+      expect(lockScreen(), ['now playing 测试视频'], reason: 'P2, its ⏭ the related video');
+      expect(player.nowPlaying, shown);
+      expect(coversAsked, hasLength(1), reason: 'the same cover');
+
+      // As PagePlayback closes a page left playing.
+      playing();
+      player.calls.clear();
+      session.active = false;
+      expect(lockScreen(), isEmpty);
+      controller.close();
+      await settle();
+      expect(player.calls.last, 'now playing null');
+      expect(player.nowPlaying, isNull);
+    });
+
+    test('⏭ is off on the last part without related videos; the cover is left out when its file cannot be had',
+        () async {
+      http.routes[relatedPath] = (200, '{"code":0,"data":[]}');
+      makeSession(coverFile: (url) async => throw const FileSystemException('gone'));
+      await controller.openVideo(bv, cid: p2);
+      playing();
+      await settle();
+      expect(
+        player.nowPlaying,
+        const NowPlayingInfo(title: '测试视频', artist: 'UP主', hasPrevious: true, hasNext: false),
+      );
+      final failed = logs.events.singleWhere((event) => event.msg == 'now playing cover failed');
+      expect(failed.f['error']?.toJson(), 'FileSystemException');
+    });
+
+    test('a covered page keeps it only while its video plays, and shown again paused leaves it to the others', () async {
+      final session = makeSession(coverFile: coverFile);
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await settle();
+      player.calls.clear();
+      session.active = false;
+      expect(lockScreen(), isEmpty);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      expect(lockScreen(), ['now playing null']);
+
+      player.calls.clear();
+      session.active = true;
+      await settle();
+      expect(lockScreen(), isEmpty, reason: 'another page may have it, playing in the small window');
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      expect(lockScreen(), ['now playing 测试视频']);
+    });
+
+    test("推荐's card never sets it; the page that takes the card over does", () async {
+      final session = makeSession(coverFile: coverFile)..active = false;
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await settle();
+      expect(lockScreen(), isEmpty);
+      session.active = true;
+      await settle();
+      expect(player.nowPlaying, shown);
+    });
+
+    test('a session let go while it has the lock screen clears it', () async {
+      final session = makeSession(coverFile: coverFile);
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await settle();
+      session.dispose();
+      sessions.remove(session);
+      expect(player.calls.last, 'now playing null');
+    });
+
+    test('its buttons: ▶ and ❚❚ as the page\'s, seeks the page hears, ▶▶ as ⏭ then the related video, ◀◀ to the '
+        'part before or the start', () async {
+      makeSession(coverFile: coverFile);
+      await controller.openVideo(bv, cid: p1);
+      await settle();
+      playing();
+      await settle();
+      Future<void> press(RemoteCommandKind kind, {double? seconds}) async {
+        player.emit(RemoteCommand(kind, seconds: seconds));
+        await settle();
+      }
+
+      player.calls.clear();
+      await press(RemoteCommandKind.play);
+      expect(player.calls, isEmpty, reason: 'already playing');
+      await press(RemoteCommandKind.pause);
+      expect(player.calls, ['pause']);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      player.calls.clear();
+      await press(RemoteCommandKind.pause);
+      expect(player.calls, isEmpty);
+      await press(RemoteCommandKind.toggle);
+      expect(player.calls, ['play']);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+
+      player.calls.clear();
+      await press(RemoteCommandKind.seek, seconds: 30);
+      expect(player.calls, ['seek 30.0']);
+      expect(seeks, [30]);
+
+      player.calls.clear();
+      await press(RemoteCommandKind.previous);
+      expect(player.calls, ['seek 0.0'], reason: 'P1 has nothing before it');
+      expect(seeks, [30, 0]);
+
+      await press(RemoteCommandKind.next);
+      expect(opened, ['$bv $p2']);
+      playing();
+      await press(RemoteCommandKind.previous);
+      expect(opened, ['$bv $p2', '$bv $p1']);
+      playing();
+      await press(RemoteCommandKind.next);
+      playing();
+      await press(RemoteCommandKind.next);
+      expect(opened.last, 'BV1EF411e9oF -', reason: 'after the last part, the related video');
+    });
+
+    test("the app's cover file is the picture cache's copy, once written; none without the cache", () async {
+      const url = 'https://i1.hdslb.com/bfs/archive/cover.jpg';
+      expect(await cachedCoverFile(url), isNull);
+      final folder = await Directory.systemTemp.createTemp('covers');
+      addTearDown(() => folder.delete(recursive: true));
+      final saved = ImageDiskCache.shared;
+      ImageDiskCache.shared = ImageDiskCache(
+        folder: folder.path,
+        fetch: (url, headers) async => Uint8List.fromList([1, 2, 3]),
+      );
+      addTearDown(() => ImageDiskCache.shared = saved);
+      final path = await cachedCoverFile(url);
+      expect(await File(path!).readAsBytes(), [1, 2, 3]);
+    });
+
+    test('▶ after the end plays from the start', () async {
+      final session = makeSession(coverFile: coverFile)..setAutoplayNext(false);
+      await controller.openVideo(bv, cid: p2);
+      playing();
+      await ended();
+      expect(session.ended, isTrue);
+      player.calls.clear();
+      player.emit(const RemoteCommand(RemoteCommandKind.play));
+      await settle();
+      expect(player.calls, containsAllInOrder(['seek 0.0 precise', 'play']));
+    });
+  });
+
+  group('an interruption', () {
+    Future<void> interrupt({required bool began, bool shouldResume = false}) async {
+      player.emit(AudioInterruption(began: began, shouldResume: shouldResume));
+      await settle();
+    }
+
+    test('ended with the hint plays again what was playing when it began, whichever came first', () async {
+      makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      player.calls.clear();
+      await interrupt(began: true);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await interrupt(began: false, shouldResume: true);
+      expect(player.calls, ['play']);
+
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      player.calls.clear();
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      time.advance(200);
+      await interrupt(began: true);
+      await interrupt(began: false, shouldResume: true);
+      expect(player.calls, ['play'], reason: "the player's own pause reached the page first");
+    });
+
+    test('without the hint, or over a video already paused, nothing plays', () async {
+      makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await interrupt(began: true);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      player.calls.clear();
+      await interrupt(began: false);
+      expect(player.calls, isEmpty);
+
+      time.advance(60000);
+      await interrupt(began: true);
+      await interrupt(began: false, shouldResume: true);
+      expect(player.calls, isEmpty, reason: 'paused a minute before it began');
+    });
+  });
+
+  group('人像防挡', () {
+    const maskUrl = 'https://upos-sz-mirrorcos.bilivideo.com/dm_mask/mask.webmask';
+    String withMask(int cid) =>
+        playerInfo(lastPlayCid: p1).replaceFirst('"data":{', '"data":{"dm_mask":{"cid":$cid,"plat":0,"fps":30,'
+            '"time":7,"mask_url":"$maskUrl"},');
+
+    test('the mask of the part playing: from the player info that chose it, else its own; none until known',
+        () async {
+      http.routes[playerInfoPath] = (200, withMask(p1));
+      final session = makeSession();
+      await controller.openVideo(bv);
+      await settle();
+      expect(session.danmakuMask.value?.cid, p1);
+      expect(session.danmakuMask.value?.url, Uri.parse(maskUrl));
+
+      final gate = http.gates[playerInfoPath] = Completer<void>();
+      http.routes[playerInfoPath] = (200, withMask(p2));
+      final heard = <DanmakuMaskInfo?>[];
+      session.danmakuMask.addListener(() => heard.add(session.danmakuMask.value));
+      session.playEpisode(session.episodes[1]);
+      await settle();
+      expect(session.danmakuMask.value, isNull, reason: "P2's isn't known yet");
+      gate.complete();
+      await settle();
+      expect(session.danmakuMask.value?.cid, p2);
+      expect(heard.map((mask) => mask?.cid), [null, p2]);
+
+      http.routes[playerInfoPath] = (200, playerInfo());
+      await controller.openVideo(bv, cid: p1);
+      await settle();
+      expect(session.danmakuMask.value, isNull, reason: 'a part without one');
     });
   });
 
@@ -717,6 +1151,7 @@ void main() {
     });
 
     test('a covered page leaves the background alone', () async {
+      prefs.backgroundListen = false;
       final session = makeSession();
       await controller.openVideo(bv, cid: p1);
       playing();
@@ -770,7 +1205,9 @@ void main() {
     });
   });
 
-  group('backgrounded during a load', () {
+  group('backgrounded during a load with 后台听视频 off', () {
+    setUp(() => prefs.backgroundListen = false);
+
     test('the load is paused as soon as it starts playing, once', () async {
       final session = makeSession();
       await controller.openVideo(bv, cid: p1);

@@ -422,6 +422,72 @@ void main() {
     toForeground(tester);
   });
 
+  group('the lock screen', () {
+    testWidgets('kept for the small window, the page\'s video keeps it; ✕ clears it before the player goes',
+        (tester) async {
+      await host(tester);
+      final first = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+      expect(first.nowPlaying?.title, '测试视频');
+      first.calls.clear();
+      await popIntoPip(tester, first);
+      expect(services.pipKeeper.kept, isNotNull);
+      expect(first.calls.where((call) => call.startsWith('now playing')), isEmpty);
+      expect(first.nowPlaying?.title, '测试视频');
+
+      first.emit(const PictureInPictureChanged(false));
+      await tester.pump();
+      expect(first.disposed, isTrue);
+      expect(first.calls.where((call) => call.startsWith('now playing')), ['now playing null']);
+      expect(first.nowPlaying, isNull);
+    });
+
+    testWidgets('a page popped, or covered by another video, gives it up; the page on top takes it as it plays',
+        (tester) async {
+      await host(tester);
+      final first = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+      http.routes[Canned.signedViewPath] = (200, otherView);
+      final second = await open(tester, const VideoRoute(bvid: other, start: 0));
+      first.emit(const StatusChanged(PlayerStatus.paused));
+      await tester.pump();
+      expect(first.nowPlaying, isNull, reason: 'covered and paused');
+      expect(second.nowPlaying, isNotNull);
+
+      await back(tester);
+      expect(second.nowPlaying, isNull);
+      expect(first.nowPlaying, isNull, reason: 'shown again, still paused');
+      first.emit(const StatusChanged(PlayerStatus.playing));
+      await tester.pump();
+      expect(first.nowPlaying?.title, '测试视频');
+      await back(tester);
+      expect(first.nowPlaying, isNull);
+      expect(playback.live, 0);
+    });
+  });
+
+  testWidgets('后台连播: in the background the next part opens on the same page and player, with no page pushed',
+      (tester) async {
+    prefs.autoplay = false;
+    await host(tester);
+    final first = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+    toBackground(tester);
+    first.emit(const StatusChanged(PlayerStatus.ended));
+    await frames(tester, 20);
+    expect(controllers.single.page?.cid, p2);
+    expect(loads(first), hasLength(2));
+    expect(first.loaded?.autoplay, isTrue);
+    expect(find.byType(VideoPage), findsOneWidget);
+    first.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump(PagePlayerSession.backgroundGrace * 2);
+    expect(
+      first.calls.sublist(first.calls.lastIndexWhere((call) => call.startsWith('load'))),
+      isNot(contains('pause')),
+      reason: 'P2 plays on in the background',
+    );
+    toForeground(tester);
+    await back(tester);
+    expect(playback.live, 0);
+  });
+
   testWidgets('items 38 and 39: back from a related page in the small window leaves the first paused; its play closes '
       'the window', (tester) async {
     await host(tester);
@@ -714,7 +780,11 @@ void main() {
     await back(tester);
     expect(first.calls, ['play']);
     first.emit(const StatusChanged(PlayerStatus.playing));
-    expect(first.calls, ['play', 'pip auto true'], reason: 'its first play shown turns it on');
+    expect(
+      first.calls,
+      ['play', 'pip auto true', 'now playing 测试视频'],
+      reason: 'its first play shown turns it on, and takes the lock screen',
+    );
     expect(onlineAsks(p1), greaterThan(asked), reason: 'shown, it polls');
     await back(tester);
     expect(playback.live, 0);
@@ -756,7 +826,9 @@ void main() {
     await back(tester);
   });
 
-  testWidgets('a page made after the app went to the background pauses its load once it plays', (tester) async {
+  testWidgets('with 后台听视频 off, a page made after the app went to the background pauses its load once it plays',
+      (tester) async {
+    prefs.backgroundListen = false;
     await host(tester);
     final gate = createGate = Completer<void>();
     push(const VideoRoute(bvid: bv, cid: p1, start: 0));
@@ -769,7 +841,11 @@ void main() {
     await tester.pump(PagePlayerSession.backgroundGrace);
     player.calls.clear();
     player.emit(const StatusChanged(PlayerStatus.playing));
-    expect(player.calls, ['pip auto true', 'pause'], reason: 'no sound from a page the user left for home');
+    expect(
+      player.calls.where((call) => !call.startsWith('now playing')),
+      ['pip auto true', 'pause'],
+      reason: 'no sound from a page the user left for home',
+    );
     toForeground(tester);
     await back(tester);
     expect(playback.live, 0);
