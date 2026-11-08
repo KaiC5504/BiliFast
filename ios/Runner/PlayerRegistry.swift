@@ -289,6 +289,7 @@ final class NativePlayer {
           self?.controlChanged()
           self?.updateStatus()
           self?.startIfBuffered()
+          self?.nowPlaying?.refreshPlayback()
         }
       },
       player.observe(\.rate, options: [.new]) { [weak self] _, _ in

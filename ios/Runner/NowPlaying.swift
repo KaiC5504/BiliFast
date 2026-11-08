@@ -121,7 +121,8 @@ enum NowPlaying {
       player = owner.player
       session = MPNowPlayingSession(players: [owner.player])
       super.init()
-      session.automaticallyPublishesNowPlayingInfo = true
+      // Its own publishing (automaticallyPublishesNowPlayingInfo) left the timeline at -:-- until a seek on the phone
+      // and then fought ours over the position, so everything is published here, by publish().
       session.delegate = self
       let center = session.remoteCommandCenter
       handle(center.playCommand, .play)
@@ -153,16 +154,17 @@ enum NowPlaying {
       refreshPlayback()
     }
 
-    /// The player's next item: the metadata is the item's, so every load needs it again.
+    /// The player's next item, before it is current: the title stays, the old timeline goes until it is known.
     func attach(_ item: AVPlayerItem) {
-      item.nowPlayingInfo = metadata(for: item, current: false)
+      guard !ended else { return }
+      session.nowPlayingInfoCenter.nowPlayingInfo = metadata(for: item, current: false)
     }
 
-    /// The session's own publishing left the lock screen's timeline blank until the first seek (1.3.0 (10) on the
-    /// phone), so the item's info carries the duration, position and rate too, set again whenever one changes.
+    /// Called whenever the duration, the position's pace (rate, playing or waiting) or the position (a seek) changes;
+    /// between them the lock screen runs the clock from the elapsed time and rate.
     func refreshPlayback() {
       guard !ended, let item = player.currentItem else { return }
-      item.nowPlayingInfo = metadata(for: item, current: true)
+      session.nowPlayingInfoCenter.nowPlayingInfo = metadata(for: item, current: true)
     }
 
     func becomeActive() {
@@ -180,12 +182,9 @@ enum NowPlaying {
         command.isEnabled = false
       }
       targets = []
-      player.currentItem?.nowPlayingInfo = nil
-      // Turning publishing off first already drops the session's observers on the player, and removePlayer then
-      // removes them again: an uncaught KVO exception (the crash on leaving a page in the first phone build).
-      session.removePlayer(player)
-      session.automaticallyPublishesNowPlayingInfo = false
       session.nowPlayingInfoCenter.nowPlayingInfo = nil
+      // No removePlayer: it removes KVO observers MediaPlayer may not have added (the first phone build crashed in it
+      // on leaving a page); the session lets the player go when it is released.
       session.delegate = nil
     }
 
@@ -213,7 +212,8 @@ enum NowPlaying {
       if current {
         let elapsed = player.currentTime().seconds
         if elapsed.isFinite { values[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, elapsed) }
-        values[MPNowPlayingInfoPropertyPlaybackRate] = Double(player.rate)
+        // Waiting for data, the position doesn't move, so the lock screen mustn't run it on.
+        values[MPNowPlayingInfoPropertyPlaybackRate] = player.timeControlStatus == .playing ? Double(player.rate) : 0
       }
       values[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
       values[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.video.rawValue
