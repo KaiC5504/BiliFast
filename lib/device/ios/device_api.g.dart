@@ -507,8 +507,9 @@ abstract class DeviceEventApi {
   /// ints, doubles and bools only.
   void onTurnLog(String kind, Map<String, Object?> fields);
 
-  /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
-  /// differ from the last path that was up, so the engine's speed measurements no longer hold.
+  /// The phone's network path changed and is up (NWPathMonitor), or its kind alone changed (the first path among
+  /// them). [interfaceChanged] when its interfaces or gateways differ from the last path that was up, so the engine's
+  /// speed measurements no longer hold.
   void onNetworkChanged(bool interfaceChanged);
 
   /// The battery's level (0 to 1, or -1 when iOS can't tell), whether it is charging or full on power, and the network

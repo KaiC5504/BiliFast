@@ -514,8 +514,9 @@ protocol DeviceEventApiProtocol {
   /// A line for the phone's log from the native side of a turn (docs/reference/turn-log.md); [fields] hold strings,
   /// ints, doubles and bools only.
   @MainActor func onTurnLog(kind kindArg: String, fields fieldsArg: [String: Any?]) async throws
-  /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
-  /// differ from the last path that was up, so the engine's speed measurements no longer hold.
+  /// The phone's network path changed and is up (NWPathMonitor), or its kind alone changed (the first path among
+  /// them). [interfaceChanged] when its interfaces or gateways differ from the last path that was up, so the engine's
+  /// speed measurements no longer hold.
   @MainActor func onNetworkChanged(interfaceChanged interfaceChangedArg: Bool) async throws
   /// The battery's level (0 to 1, or -1 when iOS can't tell), whether it is charging or full on power, and the network
   /// the phone is on, after [DeviceHostApi.setStatusEvents] and whenever one of them changes.
@@ -636,8 +637,9 @@ class DeviceEventApi: DeviceEventApiProtocol {
       }
     }
   }
-  /// The phone's network path changed and is up (NWPathMonitor). [interfaceChanged] when its interfaces or gateways
-  /// differ from the last path that was up, so the engine's speed measurements no longer hold.
+  /// The phone's network path changed and is up (NWPathMonitor), or its kind alone changed (the first path among
+  /// them). [interfaceChanged] when its interfaces or gateways differ from the last path that was up, so the engine's
+  /// speed measurements no longer hold.
   @MainActor func onNetworkChanged(interfaceChanged interfaceChangedArg: Bool) async throws {
     return try await withCheckedThrowingContinuation { continuation in
       let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onNetworkChanged\(messageChannelSuffix)"
