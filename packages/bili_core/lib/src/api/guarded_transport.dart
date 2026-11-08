@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../devlog/log_event.dart';
 import '../devlog/logger.dart';
 import 'bili_error.dart';
+import 'bili_hosts.dart';
 import 'http.dart';
 
 /// The Windows build's guard on the account (KaiC, 2026-10-22: one PC login, read only). Every request the client
@@ -101,10 +102,18 @@ final class GuardedTransport implements HTTPTransport {
     final risk = _riskCode(response);
     if (risk != null && !_halted) {
       _halted = true;
-      _logger.error(LogCategory.api, 'pc guard halted', {'path': path, 'status': response.status, 'code': risk});
+      _logger.error(LogCategory.api, 'pc guard halted', {
+        ..._where(request.url),
+        'status': response.status,
+        'code': risk,
+      });
     }
     return response;
   }
+
+  /// A CDN's path names the signed file (a mask range's does), so only Bilibili's own hosts have theirs logged.
+  static Map<String, Object> _where(Uri url) =>
+      BiliHosts.isBilibili(url.host) ? {'path': url.path} : {'host': url.host};
 
   /// 412, or a JSON answer with code -352 or -412; null otherwise. Error answers are small, so a big body is skipped
   /// unread.

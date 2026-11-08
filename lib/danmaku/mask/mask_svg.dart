@@ -3,8 +3,9 @@ import 'dart:ui';
 
 import '../../skin/svga/svg_path.dart';
 
-/// One mask frame's SVG, reduced to what clipping needs: the viewBox's size, the `<g>` transform (taking the
-/// viewBox's origin to 0, 0) and every path's data, joined. Plain data, so it is read off the UI isolate and sent back.
+/// One mask frame's SVG, reduced to what clipping needs: the viewBox's size, the transform into it (the `<g>`'s, then
+/// the viewBox's origin moved to 0, 0) and every path's data, joined. Plain data, so it is read off the UI isolate and
+/// sent back.
 final class MaskShape {
   const MaskShape({required this.box, required this.transform, required this.segments});
 

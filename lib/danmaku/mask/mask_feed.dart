@@ -22,8 +22,8 @@ abstract interface class MaskFeed implements Listenable {
   /// that time; the danmaku then draw unclipped.
   MaskFrame? frameAt(double seconds);
 
-  /// Loads what [seconds] needs (its segment and the next), dropping segments far from it; called as the playhead
-  /// moves and after a seek.
+  /// Loads what [seconds] needs (its segment, and the next ahead of time), dropping segments far from it; called as the
+  /// playhead moves and after a seek.
   void follow(double seconds);
 
   void dispose();
@@ -39,6 +39,7 @@ final class WebMaskFeed extends ChangeNotifier implements MaskFeed {
   WebMaskFeed(this._info, {required this._fetch, Logger? logger, this.retryDelay = const Duration(seconds: 5)})
     : _logger = logger ?? Logger.shared;
 
+  /// Failed reads in a row before the part's mask is given up; any read that comes back starts the count again.
   static const maxFailures = 3;
   static const prefetchMs = 3000;
 
@@ -46,7 +47,8 @@ final class WebMaskFeed extends ChangeNotifier implements MaskFeed {
   final MaskFetch _fetch;
   final Logger _logger;
 
-  /// After a failure nothing is asked until a follow this long after it, so a dropped connection isn't spent at once.
+  /// After a failure nothing is asked until a follow this long after it, so a dropped connection doesn't use up all
+  /// [maxFailures] tries at once.
   final Duration retryDelay;
 
   WebMaskIndex? _index;
@@ -63,6 +65,9 @@ final class WebMaskFeed extends ChangeNotifier implements MaskFeed {
   bool _busy = false;
   int _failures = 0;
   final _sinceFailure = Stopwatch();
+
+  /// A bug, not the network, broke a read: asking again would only break it again.
+  bool _broken = false;
   bool _disposed = false;
 
   /// The last frames handed out, so a repaint between mask frames doesn't build the path again.
@@ -143,7 +148,7 @@ final class WebMaskFeed extends ChangeNotifier implements MaskFeed {
   }
 
   void _pump() {
-    if (_disposed || _busy || _playheadMs == null || _failures >= maxFailures) return;
+    if (_disposed || _broken || _busy || _playheadMs == null || _failures >= maxFailures) return;
     if (_failures > 0 && _sinceFailure.elapsed < retryDelay) return;
     final Future<void> Function() piece;
     if (_index == null) {
@@ -157,6 +162,10 @@ final class WebMaskFeed extends ChangeNotifier implements MaskFeed {
     _run = () async {
       try {
         await piece();
+        _failures = 0;
+      } on Error catch (error, stack) {
+        if (!_disposed) _broke(error, stack);
+        return;
       } catch (error) {
         if (!_disposed) _failed(error);
         // Asked again only by a later follow, never straight on.
@@ -221,9 +230,23 @@ final class WebMaskFeed extends ChangeNotifier implements MaskFeed {
     _sinceFailure
       ..reset()
       ..start();
-    // The error's text can carry the signed address, so only its type is kept.
-    _logger.warn(LogCategory.api, 'danmaku mask failed', {'cid': _info.cid, 'error': '${error.runtimeType}'});
+    // The error's text can carry the signed address, so only its type is kept; a FormatException's message is ours
+    // or the decoder's, with byte offsets and no address.
+    _logger.warn(LogCategory.api, 'danmaku mask failed', {
+      'cid': _info.cid,
+      'error': '${error.runtimeType}',
+      if (error is FormatException) 'reason': error.message,
+    });
     if (_failures >= maxFailures) _logger.info(LogCategory.player, 'danmaku mask given up', {'cid': _info.cid});
+  }
+
+  void _broke(Error error, StackTrace stack) {
+    _broken = true;
+    _logger.error(LogCategory.player, 'danmaku mask stopped', {
+      'cid': _info.cid,
+      'error': '${error.runtimeType}',
+      'stack': '$stack',
+    });
   }
 
   MaskFrame _maskOf(_Frame frame) {

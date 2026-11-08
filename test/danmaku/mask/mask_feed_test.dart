@@ -28,6 +28,9 @@ final class FakeMaskSource {
   /// Every read throws this while set.
   Object? failWith;
 
+  /// The next read throws this, and the ones after it go through.
+  Object? failOnce;
+
   /// Reads starting at a key wait for its completer.
   final Map<int, Completer<void>> held = {};
 
@@ -43,7 +46,8 @@ final class FakeMaskSource {
     mostAtOnce = math.max(mostAtOnce, _open);
     try {
       await held[start]?.future;
-      final failure = failWith;
+      final failure = failWith ?? failOnce;
+      failOnce = null;
       if (failure != null) throw failure;
       final bytes = Uint8List.sublistView(file.bytes, start, end == null ? null : end + 1);
       return damaged.contains(start) ? Uint8List(bytes.length) : Uint8List.fromList(bytes);
@@ -61,6 +65,16 @@ final class _FetchFailure implements Exception {
 
   @override
   String toString() => 'request to $url failed (${url.host}${url.path})';
+}
+
+/// A bug in the read, whose text carries the address too.
+final class _BrokenRead extends Error {
+  _BrokenRead(this.url);
+
+  final Uri url;
+
+  @override
+  String toString() => 'broke reading $url (${url.host}${url.path})';
 }
 
 int? leftOf(MaskFrame? frame) => frame?.path.getBounds().left.round();
@@ -97,6 +111,17 @@ void main() {
       if (event.msg == 'danmaku mask failed') event,
   ];
 
+  Iterable<LogEvent> givenUp() => sink.events.where((event) => event.msg == 'danmaku mask given up');
+
+  void expectNoAddress() {
+    for (final event in sink.events) {
+      final line = event.encode();
+      expect(line, isNot(contains('mask.example')));
+      expect(line, isNot(contains('secret-mask')));
+      expect(line, isNot(contains('signed-part')));
+    }
+  }
+
   group('reading', () {
     test('reads the head in two ranges, then the playhead\'s segment and the next', () async {
       await followed(0);
@@ -113,13 +138,18 @@ void main() {
       expect(feed.loadedSegments, [4]);
     });
 
-    test('a file that isn\'t a mask counts as a failure', () async {
+    test('a file that isn\'t a mask counts as a failure, its message logged', () async {
       source.damaged.add(0);
       await followed(0);
 
       expect(source.asked, [(0, 15)]);
-      expect(failures().single.f['error'], const LogString('FormatException'));
+      expect(failures().single.f, {
+        'cid': const LogInt(4242),
+        'error': const LogString('FormatException'),
+        'reason': const LogString('webmask head: not a mask file'),
+      });
       expect(feed.frameAt(0), isNull);
+      expectNoAddress();
     });
 
     test('one read at a time', () async {
@@ -296,7 +326,61 @@ void main() {
       expect(source.asked, [(0, 15), (0, 15), (0, 15)]);
       expect(feed.frameAt(9), isNull);
       expect(failures(), hasLength(3));
-      expect(sink.events.where((event) => event.msg == 'danmaku mask given up'), hasLength(1));
+      expect(givenUp(), hasLength(1));
+    });
+
+    test('failures with reads that come back between them never give the mask up', () async {
+      feed.dispose();
+      feed = feedOver(WebMaskFile.tagged(segments: 10));
+      await followed(0);
+      for (final seconds in [20.0, 40.0, 60.0, 80.0]) {
+        source.failOnce = _FetchFailure(_info.url);
+        await followed(seconds);
+        expect(feed.frameAt(seconds), isNull);
+        await followed(seconds + 0.5);
+        expect(feed.frameAt(seconds + 0.5), isNotNull, reason: 'asked again at $seconds');
+      }
+
+      expect(failures(), hasLength(4));
+      expect(givenUp(), isEmpty);
+    });
+
+    test('three failures in a row give it up, even after reads that came back', () async {
+      await followed(0);
+      final asked = source.asked.length;
+      source.failWith = _FetchFailure(_info.url);
+      for (final seconds in [35.0, 36.0, 37.0, 38.0]) {
+        await followed(seconds);
+      }
+      source.failWith = null;
+      await followed(39);
+
+      expect(source.asked, hasLength(asked + 3));
+      expect(feed.frameAt(39), isNull);
+      expect(givenUp(), hasLength(1));
+    });
+
+    test("a bug isn't a failure: logged as an error with its stack, and the part asks nothing more", () async {
+      await followed(0);
+      final asked = source.asked.length;
+      source.failOnce = _BrokenRead(_info.url);
+      await followed(35);
+      await followed(36);
+      await followed(45);
+
+      expect(source.asked, hasLength(asked + 1));
+      expect(feed.frameAt(36), isNull);
+      expect(failures(), isEmpty);
+      expect(givenUp(), isEmpty);
+      final stopped = sink.events.singleWhere((event) => event.msg == 'danmaku mask stopped');
+      expect(stopped.level, LogLevel.error);
+      expect(stopped.f['cid'], const LogInt(4242));
+      expect(stopped.f['error'], const LogString('_BrokenRead'));
+      expect(
+        stopped.f['stack'],
+        isA<LogString>().having((stack) => stack.value, 'value', contains('mask_feed_test.dart')),
+      );
+      expectNoAddress();
     });
 
     test('after a failure, waits retryDelay before asking again', () async {
@@ -327,12 +411,14 @@ void main() {
       expect(failures(), hasLength(1));
     });
 
-    test('a damaged segment counts as a failure', () async {
+    test('a damaged segment counts as a failure, its message logged', () async {
       source.damaged.add(file.offsets[1]);
       await followed(0);
 
       expect(feed.loadedSegments, [0]);
       expect(failures().single.f['error'], const LogString('FormatException'));
+      expect(failures().single.f['reason'], const LogString('webmask segment: not gzip'));
+      expectNoAddress();
     });
 
     test('logs the cid and the error\'s type, never the address', () async {
@@ -345,12 +431,7 @@ void main() {
       for (final event in failures()) {
         expect(event.f, {'cid': const LogInt(4242), 'error': const LogString('_FetchFailure')});
       }
-      for (final event in sink.events) {
-        final line = event.encode();
-        expect(line, isNot(contains('mask.example')));
-        expect(line, isNot(contains('secret-mask')));
-        expect(line, isNot(contains('signed-part')));
-      }
+      expectNoAddress();
     });
   });
 

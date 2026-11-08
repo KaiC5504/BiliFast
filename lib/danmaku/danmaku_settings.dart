@@ -88,7 +88,10 @@ final class DanmakuSettings {
         final Map<String, Object?> filter => DanmakuFilterOptions.fromJson(filter),
         _ => fallback.filter,
       },
-      peopleShield: json['peopleShield'] as bool? ?? fallback.peopleShield,
+      peopleShield: switch (json['peopleShield']) {
+        final bool on => on,
+        _ => fallback.peopleShield,
+      },
     );
   }
 

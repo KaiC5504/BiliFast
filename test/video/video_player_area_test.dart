@@ -575,6 +575,21 @@ void main() {
       expect(told(tester), rectMoreOrLessEquals(drawn(tester)));
     });
 
+    testWidgets('竖屏, worked by hand: a 16:9 video letterboxed in the band, the danmaku under the top row', (
+      tester,
+    ) async {
+      await place(tester, Presentation.vertical, topInset: 59);
+      // The band is 0.415 × 2 of 956 = 793.48 pt; the 440 × 247.5 picture centres on 396.74, so its top is 272.99.
+      const picture = Rect.fromLTWH(0, 272.99, 440, 247.5);
+      expect(told(tester), rectMoreOrLessEquals(picture, epsilon: 1e-9));
+      // The danmaku start 59 − 8 + 44 + 1 = 96 pt down, so the layer is told the picture from there.
+      expect(tester.getTopLeft(find.byType(DanmakuLayer)), const Offset(0, 96));
+      expect(
+        tester.widget<DanmakuLayer>(find.byType(DanmakuLayer)).picture,
+        rectMoreOrLessEquals(picture.shift(const Offset(0, -96)), epsilon: 1e-9),
+      );
+    });
+
     testWidgets("the iPad: no inset, the picture told from the box's own corner", (tester) async {
       for (final presentation in [Presentation.inline, Presentation.landscape]) {
         await place(tester, presentation, screen: const Size(1194, 834), topInset: 24);

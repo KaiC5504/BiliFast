@@ -74,6 +74,34 @@ void main() {
     expect(saved(), changed.toJson());
   });
 
+  test('a file from before 人像防挡 reads on, with it on', () async {
+    File(path).writeAsStringSync('{"area":0.25,"opacity":0.7,"scale":1.5,"speed":4}');
+    final store = await DanmakuSettingsStore.load(path, logger: logger);
+    expect(store.value, const DanmakuSettings(area: 0.25, opacity: 0.7, scale: 1.5, speed: 4));
+    expect(store.value.peopleShield, isTrue);
+    expect(File('$path.bad').existsSync(), isFalse);
+  });
+
+  test('人像防挡 off survives a reload', () async {
+    final store = await DanmakuSettingsStore.load(path, logger: logger);
+    store.update(store.value.copyWith(peopleShield: false));
+    await store.settle();
+    expect(saved()['peopleShield'], isFalse);
+
+    final again = await DanmakuSettingsStore.load(path, logger: logger);
+    expect(again.value.peopleShield, isFalse);
+  });
+
+  test('人像防挡 of the wrong type falls back alone: every other 弹幕设置 is kept', () async {
+    for (final wrong in ['"off"', '0', 'null', '[]', '{}']) {
+      File(path).writeAsStringSync(jsonEncode({...changed.toJson(), 'peopleShield': jsonDecode(wrong)}));
+      final store = await DanmakuSettingsStore.load(path, logger: logger);
+      expect(store.value, changed, reason: wrong);
+      expect(File('$path.bad').existsSync(), isFalse, reason: wrong);
+    }
+    expect(logs.events.where((event) => event.msg == 'danmaku settings unreadable, using defaults'), isEmpty);
+  });
+
   test('a file that isn\'t an object gives the defaults too', () async {
     File(path).writeAsStringSync('[1, 2]');
     final store = await DanmakuSettingsStore.load(path, logger: logger);
