@@ -6,8 +6,8 @@ import UIKit
 /// (MPNowPlayingSession): its title, uploader and cover, its remote commands, and audio interruptions.
 @MainActor
 enum NowPlaying {
-  /// Off is `.automatic`, the policy every build before had, rather than `.pauses`: `.automatic` is the one that
-  /// pauses in the background except in picture in picture, and `.pauses` promises no such exception.
+  /// Off is .automatic rather than .pauses: .automatic pauses in the background except in picture in picture;
+  /// .pauses promises no such exception.
   static func setBackgroundPlayback(_ player: NativePlayer, enabled: Bool) {
     player.player.audiovisualBackgroundPlaybackPolicy = enabled ? .continuesIfPossible : .automatic
     player.log("background playback", ["enabled": enabled, "policy": policyName(player.player)])
@@ -51,6 +51,8 @@ enum NowPlaying {
   /// Every player's session, oldest set first.
   private static var sessions: [WeakSession] = []
   private static var interruptionToken: NSObjectProtocol?
+  /// The player the interruption under way began on, whose end must reach it even after Dart clears its lock screen.
+  private static weak var interruptedOwner: NativePlayer?
 
   private static func observeInterruptions() {
     guard interruptionToken == nil else { return }
@@ -65,17 +67,21 @@ enum NowPlaying {
     }
   }
 
-  /// The session iOS shows; if none is active yet, the one set last.
+  /// Goes to the player the interruption began on; with none yet, to the session iOS shows, else the one set last.
   private static func interrupted(_ type: AVAudioSession.InterruptionType?, options: AVAudioSession.InterruptionOptions,
                                   reason: UInt?) {
     guard let type else { return }
+    let began = type == .began
     let live = sessions.compactMap(\.session)
     let active = live.last { $0.isActive }
-    guard let session = active ?? live.last, let owner = session.owner else { return }
-    let began = type == .began
+    let shown = (active ?? live.last)?.owner
+    // iOS may never send the end, so each start picks afresh rather than trusting a remembered player.
+    let target = began ? shown : interruptedOwner ?? shown
+    interruptedOwner = began ? target : nil
+    guard let owner = target else { return }
     let shouldResume = !began && options.contains(.shouldResume)
     owner.log("audio interruption", ["began": began, "shouldResume": shouldResume, "reason": reasonName(reason),
-                                     "active": active != nil])
+                                     "active": active != nil, "session": owner.nowPlaying != nil])
     owner.sendInterruption(began: began, shouldResume: shouldResume)
   }
 
@@ -177,6 +183,15 @@ enum NowPlaying {
     nonisolated func nowPlayingSessionDidChangeActive(_ nowPlayingSession: MPNowPlayingSession) {
       let active = nowPlayingSession.isActive
       onMainActor { [weak self] in self?.activeChanged(active) }
+    }
+
+    /// iOS doesn't retry a becomeActiveIfPossible it refused.
+    nonisolated func nowPlayingSessionDidChangeCanBecomeActive(_ nowPlayingSession: MPNowPlayingSession) {
+      onMainActor { [weak self] in
+        guard let self, !self.ended, self.session.canBecomeActive,
+              NowPlaying.sessions.compactMap(\.session).last === self else { return }
+        self.becomeActive()
+      }
     }
 
     private var metadata: [String: Any] {
