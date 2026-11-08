@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:bili_core/api.dart' show BiliClient;
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/skin/skin_video.dart';
 import 'package:bilifast/space/own/own_banner_video.dart';
@@ -11,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _video = 'https://i0.hdslb.com/bfs/garb/made-up/banner.mp4?made=up';
 const _other = 'https://i0.hdslb.com/bfs/garb/made-up/other.mp4';
+const _upos = 'https://upos-hz-mirrorakam.akamaized.net/made-up/banner.mp4?e=made-up';
 
 void main() {
   late Directory folder;
@@ -106,6 +108,66 @@ void main() {
       );
       final file = await tester.runAsync(() => videos.file(_video));
       expect(await tester.runAsync(() => file!.length()), 2 * _Client.chunk);
+    });
+
+    testWidgets('the app\'s download takes Bilibili\'s upos mirror on Akamai, with the pictures\' Referer, and logs '
+        'its host and size', (tester) async {
+      await prepare(tester);
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      final client = _Client(chunks: 1, declared: true);
+      final videos = OwnBannerVideos(
+        folder: '${folder.path}${Platform.pathSeparator}space_banner',
+        client: () => client,
+      );
+      expect(await tester.runAsync(() => videos.file(_upos)), isNotNull);
+      expect(client.asked, [_upos]);
+      expect(client.headers, BiliClient.mediaHeaders);
+      final line = logs.events.singleWhere((event) => event.msg == 'own space banner video');
+      expect(line.encode(), contains('upos-hz-mirrorakam.akamaized.net'));
+      expect(line.encode(), contains('${_Client.chunk}'));
+      expect(line.encode(), isNot(contains('made-up')), reason: 'the host only, never the path or query');
+    });
+
+    testWidgets('a refused or failed address falls to the next one', (tester) async {
+      await prepare(tester);
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await tester.runAsync(() async {
+        final videos = OwnBannerVideos(
+          folder: '${folder.path}${Platform.pathSeparator}space_banner',
+          fetch: (url) async {
+            fetched.add(url);
+            if (url.host.startsWith('upos-hz')) throw const SocketException('made up');
+            return Uint8List.fromList([7]);
+          },
+        );
+        final file = await videos.file(
+          _upos,
+          backups: const [
+            'https://evil-upos.akamaized.net/made-up/a.mp4',
+            'https://upos-sz-mirrorcos.bilivideo.com/made-up/a.mp4',
+          ],
+        );
+        expect(await file!.readAsBytes(), [7]);
+      });
+      expect(fetched.map((url) => url.host), ['upos-hz-mirrorakam.akamaized.net', 'upos-sz-mirrorcos.bilivideo.com']);
+      final failures = logs.events.where((event) => event.msg == 'own space banner video failed').toList();
+      expect(failures, hasLength(2));
+      expect(failures.map((line) => line.encode()).join(), isNot(contains('made-up')));
+    });
+
+    testWidgets('a fresh signature on the same video finds the file already kept', (tester) async {
+      await prepare(tester);
+      await tester.runAsync(() async {
+        final videos = store();
+        final first = (await videos.file('$_upos&t=1'))!;
+        final again = (await videos.file('$_upos&t=2'))!;
+        expect(again.path, first.path);
+      });
+      expect(fetched, hasLength(1));
     });
 
     testWidgets('the one asked last stays when one asked before it finishes later', (tester) async {
@@ -327,6 +389,7 @@ class _Client implements HttpClient {
   final int chunks;
   final bool declared;
   final asked = <String>[];
+  final headers = <String, Object>{};
   int sent = 0;
 
   @override
@@ -355,6 +418,9 @@ class _Request implements HttpClientRequest {
 
   @override
   bool followRedirects = true;
+
+  @override
+  HttpHeaders get headers => _Headers(client.headers);
 
   @override
   Future<HttpClientResponse> close() async => _Response(client);
@@ -391,6 +457,18 @@ class _Response extends Stream<List<int>> implements HttpClientResponse {
     void Function()? onDone,
     bool? cancelOnError,
   }) => _body().listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Headers implements HttpHeaders {
+  _Headers(this.sent);
+
+  final Map<String, Object> sent;
+
+  @override
+  void set(String name, Object value, {bool preserveHeaderCase = false}) => sent[name] = value;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

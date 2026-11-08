@@ -206,6 +206,38 @@ void main() {
       expect(OwnSpaceBanner.address(_banner, double.nan), endsWith('@1320w.webp'));
     });
 
+    testWidgets('a four-part crop puts its band\'s middle at the box\'s middle, the still and the video alike', (
+      tester,
+    ) async {
+      const crop = SpaceBannerCrop(middle: 508 / 1618, aspect: 1618 / 1080);
+      const video = 'https://upos-hz-mirrorakam.akamaized.net/made-up/banner.mp4';
+      await show(
+        tester,
+        _profile(
+          own: const OwnSpace(
+            banner: _banner,
+            bannerAlignY: 0.5,
+            bannerCrop: crop,
+            bannerVideo: video,
+            bannerVideoBackups: ['https://upos-sz-mirrorcos.bilivideo.com/made-up/banner.mp4'],
+            bannerSize: (width: 1080, height: 1618),
+          ),
+        ),
+      );
+      final expected = crop.alignY(440, OwnSpaceTheme.bannerHeight);
+      final still = tester.widget<DecorImage>(
+        find.descendant(of: key('own-space-banner'), matching: find.byType(DecorImage)),
+      );
+      expect(still.alignment, Alignment(0, expected));
+      final player = tester.widget<OwnBannerVideo>(find.byType(OwnBannerVideo));
+      expect(player.alignY, expected);
+      expect(player.backups, ['https://upos-sz-mirrorcos.bilivideo.com/made-up/banner.mp4']);
+      // 440 wide the art is 659.19 tall; its band's middle, 508 px down 1618, lands on the box's.
+      const drawn = 440 * 1618 / 1080;
+      final top = (1 + expected) / 2 * (OwnSpaceTheme.bannerHeight - drawn);
+      expect(top + 508 / 1618 * drawn, closeTo(OwnSpaceTheme.bannerHeight / 2, 1e-9));
+    });
+
     testWidgets('without a crop it is cut about the middle', (tester) async {
       await show(tester, _profile(own: const OwnSpace(banner: _banner)));
       final picture = tester.widget<DecorImage>(
@@ -255,6 +287,50 @@ void main() {
       expect(title.left - icon.right, closeTo(OwnSpaceTheme.labelBadgeGap, 0.01));
       expect(icon.center.dy, closeTo(title.center.dy, 0.01));
       expect(title.right, closeTo(440 - OwnSpaceTheme.labelTitleRight, 0.01));
+      final picture = tester.widget<DecorImage>(
+        find.descendant(of: key('own-space-label-icon'), matching: find.byType(DecorImage)),
+      );
+      expect(picture.url, _icon);
+    });
+
+    testWidgets('a 数字藏品 without a picture draws the APK\'s ◇ in its place; a region_type 2 its own glyph', (
+      tester,
+    ) async {
+      for (final (glyph, asset) in [
+        (SpaceBannerGlyph.collectible, 'assets/images/space/banner_collectible.png'),
+        (SpaceBannerGlyph.region, 'assets/images/space/banner_region.png'),
+      ]) {
+        await show(
+          tester,
+          _profile(
+            own: OwnSpace(
+              bannerLabel: SpaceBannerLabel(title: '测试收藏集', subtitle: 'CD.013149', glyph: glyph),
+            ),
+          ),
+        );
+        final icon = tester.getRect(key('own-space-label-icon'));
+        expect(icon.size, const Size.square(OwnSpaceTheme.labelBadge), reason: '$glyph');
+        expect(
+          tester.getRect(key('own-space-label-title')).left - icon.right,
+          closeTo(OwnSpaceTheme.labelBadgeGap, 0.01),
+        );
+        final drawn = tester.widget<Image>(
+          find.descendant(of: key('own-space-label-icon'), matching: find.byType(Image)),
+        );
+        expect((drawn.image as AssetImage).assetName, asset);
+        expect(find.descendant(of: key('own-space-label-icon'), matching: find.byType(DecorImage)), findsNothing);
+      }
+    });
+
+    testWidgets('a picture wins over a glyph', (tester) async {
+      await show(
+        tester,
+        _profile(
+          own: const OwnSpace(
+            bannerLabel: SpaceBannerLabel(title: '测试收藏集', icon: _icon, glyph: SpaceBannerGlyph.collectible),
+          ),
+        ),
+      );
       final picture = tester.widget<DecorImage>(
         find.descendant(of: key('own-space-label-icon'), matching: find.byType(DecorImage)),
       );

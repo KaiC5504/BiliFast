@@ -164,6 +164,26 @@ void main() {
       expect(label.subtitleColor, 0x80F5D4A6);
     });
 
+    test('a 收藏集 card plays additional_animation, cut by its rect, with the ◇ glyph and not its title_icon', () {
+      final data = dataOf(OwnSpaceFixtures.space);
+      final top = object(object(object(data['images'])['collection_top_simple'])['top']);
+      top['result'] = [jsonDecode(OwnSpaceFixtures.collectibleTop)];
+      final own = ownOf(data);
+      expect(own.banner, 'https://i0.hdslb.com/bfs/garb/made-up/space-backup.png@1080w_1618h');
+      expect(own.bannerVideo, 'https://upos-hz-mirrorakam.akamaized.net/made-up/space.mp4?e=made-up');
+      expect(own.bannerVideoBackups, ['https://upos-sz-mirrorcos.bilivideo.com/made-up/space.mp4?e=made-up']);
+      expect(own.bannerSize, (width: 1080, height: 1618));
+      expect(own.bannerCrop!.middle, closeTo(508 / 1618, 1e-9));
+      final label = own.bannerLabel!;
+      expect((label.title, label.subtitle, label.icon, label.glyph), (
+        '测试收藏集',
+        'CD.000001',
+        null,
+        SpaceBannerGlyph.collectible,
+      ));
+      expect(label.subtitleColor, 0xFFCEE2EC);
+    });
+
     test("the banner falls back to the item's cover when it has no default image", () {
       final data = dataOf(OwnSpaceFixtures.space);
       final top = object(object(object(data['images'])['collection_top_simple'])['top']);

@@ -415,6 +415,40 @@ void main() {
     expect(lines().last['favourites'], 'absent');
   });
 
+  testWidgets('a 空间头图 logs where it came from and how it is cut: numbers and the video\'s host, no address', (
+    tester,
+  ) async {
+    final logs = MemorySink();
+    Logger.shared.add(logs);
+    addTearDown(() => Logger.shared.remove(logs));
+    api.answer = SpaceProfile(
+      mid: _mid,
+      name: '测试账号',
+      face: '',
+      tabs: _tabs,
+      own: const OwnSpace(
+        banner: 'https://i0.hdslb.com/bfs/garb/made-up/banner.png',
+        bannerVideo: 'https://upos-hz-mirrorakam.akamaized.net/made-up/banner.mp4?e=made-up',
+        bannerVideoBackups: ['https://upos-sz-mirrorcos.bilivideo.com/made-up/banner.mp4?e=made-up'],
+        bannerFacts: {'additional': true, 'played': 'additional', 'location': '0-8-1080-1000', 'locationFrom': 0},
+        bannerLabel: SpaceBannerLabel(title: '测试收藏集', glyph: SpaceBannerGlyph.collectible),
+      ),
+    );
+    await showOwn(tester);
+    final line = logs.events.singleWhere((event) => event.msg == 'own space banner');
+    expect(line.f.map((name, value) => MapEntry(name, value.toJson())), {
+      'additional': true,
+      'played': 'additional',
+      'location': '0-8-1080-1000',
+      'locationFrom': 0,
+      'videoHost': 'upos-hz-mirrorakam.akamaized.net',
+      'backups': 1,
+      'glyph': 'collectible',
+      'labelIcon': false,
+    });
+    expect(line.encode(), isNot(contains('made-up')));
+  });
+
   testWidgets('a failed load says why and offers a retry, which loads the space', (tester) async {
     api.ownFailure = const BiliError.http(500);
     await showOwn(tester, settle: false);

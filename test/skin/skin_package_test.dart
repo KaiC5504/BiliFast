@@ -68,6 +68,51 @@ void main() {
       }
     });
 
+    test('the 空间头图\'s video may also come from Bilibili\'s upos mirrors on Akamai and bilivideo', () {
+      for (final url in [
+        'https://upos-hz-mirrorakam.akamaized.net/made-up/a.mp4?e=made-up',
+        'https://UPOS-SZ-MIRRORAKAM.AKAMAIZED.NET/a.mp4',
+        'https://upos-sz-mirrorcos.bilivideo.com/a.mp4',
+        'https://cn-hk-eq-01-01.bilivideo.com/a.mp4',
+        'https://upos-sz-mirrorali.bilivideo.cn/a.mp4',
+        'https://i0.hdslb.com/bfs/garb/a.mp4',
+        'https://upos-hz-mirrorakam.akamaized.net:443/a.mp4',
+      ]) {
+        expect(isBannerVideoUrl(Uri.parse(url)), isTrue, reason: url);
+      }
+    });
+
+    test('the video hosts stop at Bilibili\'s: other Akamai names, look-alikes, http, ports and user info', () {
+      for (final url in [
+        'https://evil-upos.akamaized.net/a.mp4',
+        'https://notupos-x.akamaized.net/a.mp4',
+        'https://upos.akamaized.net/a.mp4',
+        'https://upos-hz-mirrorakam.akamaized.net.evil.com/a.mp4',
+        'https://upos.akamaized.net.evil.com/a.mp4',
+        'https://x.upos-hz.akamaized.net/a.mp4',
+        'https://akamaized.net/a.mp4',
+        'https://example.akamaized.net/a.mp4',
+        'https://bilivideo.com/a.mp4',
+        'https://evilbilivideo.com/a.mp4',
+        'https://upos-sz-mirrorcos.bilivideo.com.example.com/a.mp4',
+        'http://upos-hz-mirrorakam.akamaized.net/a.mp4',
+        'https://upos-hz-mirrorakam.akamaized.net:8443/a.mp4',
+        'https://user@upos-hz-mirrorakam.akamaized.net/a.mp4',
+        'https://example.com/a.mp4',
+      ]) {
+        expect(isBannerVideoUrl(Uri.parse(url)), isFalse, reason: url);
+      }
+    });
+
+    test('a 装扮 package still comes only from the picture CDN', () {
+      for (final url in [
+        'https://upos-hz-mirrorakam.akamaized.net/a.zip',
+        'https://upos-sz-mirrorcos.bilivideo.com/a.zip',
+      ]) {
+        expect(isSkinPackageUrl(Uri.parse(url)), isFalse, reason: url);
+      }
+    });
+
     test('a refused host is never asked: no client is made', () async {
       var clients = 0;
       final api = ClientSkinApi(
@@ -146,6 +191,50 @@ void main() {
       expect(client.requests.every((request) => !request.followRedirects && request.headersTouched == 0), isTrue);
       expect(client.userAgent, BiliClient.userAgent);
       expect(client.closed, isTrue);
+    });
+
+    test('with its own hosts and headers, every hop is held to those hosts and sends those headers', () async {
+      final client = _Client({
+        'https://upos-hz-mirrorakam.akamaized.net/a.mp4?e=made-up': const _Answer(
+          302,
+          location: 'https://upos-sz-mirrorcos.bilivideo.com/a.mp4?e=made-up',
+        ),
+        'https://upos-sz-mirrorcos.bilivideo.com/a.mp4?e=made-up': const _Answer(200, body: [4, 5]),
+      });
+      final bytes = await downloadSkinPackage(
+        Uri.parse('https://upos-hz-mirrorakam.akamaized.net/a.mp4?e=made-up'),
+        client: () => client,
+        allowed: isBannerVideoUrl,
+        headers: BiliClient.mediaHeaders,
+        what: 'banner video',
+      );
+      expect(bytes, [4, 5]);
+      for (final request in client.requests) {
+        expect(request.sent, BiliClient.mediaHeaders);
+      }
+
+      final off = _Client({
+        'https://upos-hz-mirrorakam.akamaized.net/a.mp4': const _Answer(
+          302,
+          location: 'https://evil-upos.akamaized.net/a.mp4?e=made-up',
+        ),
+      });
+      await expectLater(
+        downloadSkinPackage(
+          Uri.parse('https://upos-hz-mirrorakam.akamaized.net/a.mp4'),
+          client: () => off,
+          allowed: isBannerVideoUrl,
+          what: 'banner video',
+        ),
+        throwsA(
+          isA<SkinPackageError>().having(
+            (error) => error.reason,
+            'reason',
+            'banner video host not allowed: https://evil-upos.akamaized.net',
+          ),
+        ),
+      );
+      expect(off.asked, hasLength(1));
     });
 
     test('a redirect off the allowed hosts is never followed', () async {
@@ -488,6 +577,7 @@ class _Request implements HttpClientRequest {
 
   final _Answer answer;
   int headersTouched = 0;
+  final sent = <String, Object>{};
 
   @override
   bool followRedirects = true;
@@ -495,7 +585,7 @@ class _Request implements HttpClientRequest {
   @override
   HttpHeaders get headers {
     headersTouched++;
-    return _Headers(null);
+    return _Headers(null, sent: sent);
   }
 
   @override
@@ -538,12 +628,16 @@ class _Response extends Stream<List<int>> implements HttpClientResponse {
 }
 
 class _Headers implements HttpHeaders {
-  _Headers(this.location);
+  _Headers(this.location, {this.sent});
 
   final String? location;
+  final Map<String, Object>? sent;
 
   @override
   String? value(String name) => name == HttpHeaders.locationHeader ? location : null;
+
+  @override
+  void set(String name, Object value, {bool preserveHeaderCase = false}) => sent![name] = value;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

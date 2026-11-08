@@ -1,12 +1,15 @@
 import 'package:bili_core/api.dart';
 import 'package:test/test.dart';
 
-/// A made-up own space answer's `data`: the card with [vip] and [tags], and the 空间头图 [item] with [title].
+/// A made-up own space answer's `data`: the card with [vip] and [tags], and the 空间头图 [item] with [title], its
+/// [bizType] and [digital] extra.
 Map<String, Object?> _data({
   Map<String, Object?>? vip,
   List<Object?> tags = const [],
   Map<String, Object?>? item,
   Map<String, Object?>? title,
+  Object? bizType,
+  Map<String, Object?>? digital,
 }) => {
   'card': {'mid': '20000001', 'name': '测试账号', 'face': '', 'vip': ?vip, 'space_tag': tags},
   'images': {
@@ -14,9 +17,11 @@ Map<String, Object?> _data({
       'top': {
         'result': [
           {
+            'biz_type': ?bizType,
             'cover': 'https://i0.hdslb.com/bfs/garb/made-up/cover.png',
             'item': ?item,
             'title': title ?? {'title': '测试收藏集'},
+            'digital_extra': ?digital,
           },
         ],
       },
@@ -93,45 +98,103 @@ void main() {
   });
 
   group('an animated 空间头图', () {
-    /// The animation as KaiC's answer shapes it (2026-11-02), every address made up.
+    /// An animation as KaiC's answer shapes it (2026-11-09: `animation` and `additional_animation` alike), every
+    /// address and number made up.
     Map<String, Object?> animation({
-      Object? videos = const [
-        'http://i0.hdslb.com/bfs/garb/made-up/a.mp4',
-        'https://i0.hdslb.com/bfs/garb/made-up/b.mp4',
-      ],
-      Object? firstFrame = 'https://i0.hdslb.com/bfs/garb/made-up/first.png',
-      Object? backup = 'https://i0.hdslb.com/bfs/garb/made-up/backup.png',
+      String name = 'a',
+      Object? videos,
+      Object? firstFrame,
+      Object? backup,
       Object? silent = false,
+      int width = 1080,
+      int height = 1618,
+      Object? location = '0-6-1080-1210',
     }) => {
       'is_silence': silent,
-      'animation_video_urls': videos,
-      'animation_backup_image': backup,
-      'animation_first_frame': firstFrame,
-      'width': 1080,
-      'height': 1618,
+      'animation_video_urls':
+          videos ??
+          [
+            'http://upos-hz-mirrorakam.akamaized.net/made-up/$name.mp4?e=made-up',
+            'https://i0.hdslb.com/bfs/garb/made-up/$name-backup.mp4',
+          ],
+      'animation_backup_image': backup ?? 'https://i0.hdslb.com/bfs/garb/made-up/$name-backup.png',
+      'animation_first_frame': firstFrame ?? 'https://i0.hdslb.com/bfs/garb/made-up/$name-first.png',
+      'width': width,
+      'height': height,
       'duration': 8,
       'loop_mode': '',
-      'location': '0-0-1080-1618',
+      'location': location,
       'compressed_w_h': '',
     };
 
-    OwnSpace own(Map<String, Object?> animation) =>
-        _profile(_data(item: {'item_type': 1, 'image': null, 'animation': animation})).own!;
+    OwnSpace own(Map<String, Object?> animation, {Map<String, Object?>? additional}) => _profile(
+      _data(item: {'item_type': 1, 'image': null, 'animation': animation, 'additional_animation': ?additional}),
+    ).own!;
 
-    test('plays its first video over its first frame, laid out by its size and location', () {
+    test('plays its first video over its backup picture, laid out by its size, the rest kept as backups', () {
       final space = own(animation());
-      expect(space.bannerVideo, 'https://i0.hdslb.com/bfs/garb/made-up/a.mp4');
-      expect(space.banner, 'https://i0.hdslb.com/bfs/garb/made-up/first.png');
+      expect(space.bannerVideo, 'https://upos-hz-mirrorakam.akamaized.net/made-up/a.mp4?e=made-up');
+      expect(space.bannerVideoBackups, ['https://i0.hdslb.com/bfs/garb/made-up/a-backup.mp4']);
+      expect(space.banner, 'https://i0.hdslb.com/bfs/garb/made-up/a-backup.png');
       expect(space.bannerSize, (width: 1080, height: 1618));
       expect(space.bannerSilent, isFalse);
-      expect(space.bannerAlignY, closeTo(1080 / 1618 - 1, 1e-9), reason: 'the second and third parts, as PiliPlus');
+      expect(space.bannerAlignY, 0, reason: 'a four-part location is a rect, not PiliPlus\'s three parts');
+    });
+
+    test('additional_animation\'s video, still, size and crop come before animation\'s, as the official app\'s', () {
+      final space = own(
+        animation(width: 1080, height: 1920, location: '0-0-1080-1920', silent: true),
+        additional: animation(name: 'extra', width: 720, height: 1080, location: '0-9-720-540'),
+      );
+      expect(space.bannerVideo, 'https://upos-hz-mirrorakam.akamaized.net/made-up/extra.mp4?e=made-up');
+      expect(space.banner, 'https://i0.hdslb.com/bfs/garb/made-up/extra-backup.png');
+      expect(space.bannerSize, (width: 720, height: 1080));
+      expect(space.bannerSilent, isFalse, reason: 'the played one\'s is_silence');
+      expect(space.bannerCrop!.middle, closeTo((9 + 540 / 2) / 1080, 1e-9));
+      expect(space.bannerCrop!.aspect, closeTo(1080 / 720, 1e-9));
+      expect(space.bannerFacts, {
+        'image': false,
+        'additional': true,
+        'played': 'additional',
+        'videos': 2,
+        'width': 720,
+        'height': 1080,
+        'location': '0-9-720-540',
+        'locationFrom': 0,
+      });
+    });
+
+    test('without additional_animation\'s videos, animation\'s play; its still and crop still come first', () {
+      final space = own(
+        animation(),
+        additional: animation(name: 'extra', videos: <Object?>[], location: '0-0-1080-800'),
+      );
+      expect(space.bannerVideo, 'https://upos-hz-mirrorakam.akamaized.net/made-up/a.mp4?e=made-up');
+      expect(space.banner, 'https://i0.hdslb.com/bfs/garb/made-up/extra-backup.png');
+      expect(space.bannerCrop!.middle, closeTo(400 / 1618, 1e-9));
+      expect(space.bannerFacts['played'], 'animation');
+    });
+
+    test('the crop is animation\'s when additional_animation has none, and the image\'s after both', () {
+      expect(own(animation(), additional: animation(location: '')).bannerCrop!.middle, closeTo(611 / 1618, 1e-9));
+      final still = _profile(_data(item: {'image': _image('0-200-1125-1000', 2000)})).own!;
+      expect(still.bannerCrop!.middle, closeTo(700 / 2000, 1e-9));
+      expect(still.bannerCrop!.aspect, closeTo(2000 / 1125, 1e-9));
+      expect(still.bannerAlignY, 0);
+    });
+
+    test('a crop needs four numbers and the art\'s size', () {
+      for (final location in ['0-6-1080', '0-6-1080-1210-1', 'a-6-1080-1210', '0-6-1080-0', 1080, null]) {
+        expect(own(animation(location: location)).bannerCrop, isNull, reason: '$location');
+      }
+      expect(own(animation(width: 0)).bannerCrop, isNull);
+      expect(own(animation(height: 0)).bannerCrop, isNull);
     });
 
     test('takes the second video when the first is empty or odd, and none from an odd list', () {
       expect(own(animation(videos: ['', 'https://i0.hdslb.com/b.mp4'])).bannerVideo, 'https://i0.hdslb.com/b.mp4');
       expect(own(animation(videos: [7, '//i0.hdslb.com/b.mp4'])).bannerVideo, 'https://i0.hdslb.com/b.mp4');
       for (final videos in [
-        null,
         <Object?>[],
         'https://i0.hdslb.com/a.mp4',
         <Object?>[null, ''],
@@ -140,9 +203,9 @@ void main() {
       }
     });
 
-    test('the still falls back from the first frame to the backup picture to the cover', () {
-      expect(own(animation(firstFrame: '')).banner, 'https://i0.hdslb.com/bfs/garb/made-up/backup.png');
-      expect(own(animation(firstFrame: null, backup: '')).banner, 'https://i0.hdslb.com/bfs/garb/made-up/cover.png');
+    test('the still falls back from the backup picture to the first frame to the cover', () {
+      expect(own(animation(backup: '')).banner, 'https://i0.hdslb.com/bfs/garb/made-up/a-first.png');
+      expect(own(animation(backup: '', firstFrame: '')).banner, 'https://i0.hdslb.com/bfs/garb/made-up/cover.png');
     });
 
     test('is_silence leaves the sound out', () {
@@ -165,22 +228,81 @@ void main() {
     });
   });
 
-  group('the label\'s picture', () {
-    test('is the title\'s title_icon', () {
-      final label = _profile(
-        _data(
-          title: {'title': '测试收藏集', 'sub_title': 'CD.013149', 'title_icon': 'http://i0.hdslb.com/bfs/garb/icon.png'},
-        ),
-      ).own!.bannerLabel!;
-      expect(label.icon, 'https://i0.hdslb.com/bfs/garb/icon.png');
-      expect(label.subtitle, 'CD.013149');
+  group('the label', () {
+    const title = {
+      'title': '测试收藏集',
+      'sub_title': 'CD.000001',
+      'title_icon': 'https://i0.hdslb.com/bfs/garb/made-up/card-art.png',
+    };
+
+    SpaceBannerLabel label({Object? bizType, Map<String, Object?>? digital, Map<String, Object?> title = title}) =>
+        _profile(_data(title: title, bizType: bizType, digital: digital)).own!.bannerLabel!;
+
+    test('a 数字藏品\'s draws the ◇ glyph, never the title_icon (the card\'s own art)', () {
+      final collectible = label(bizType: 2, digital: {'region_type': 1, 'region_icon': ''});
+      expect(collectible.glyph, SpaceBannerGlyph.collectible);
+      expect(collectible.icon, isNull);
+      expect(label(bizType: 3).glyph, SpaceBannerGlyph.collectible, reason: 'NFT');
+      expect(label(bizType: '2').glyph, SpaceBannerGlyph.collectible);
     });
 
-    test('is null when the title has none, or an empty or odd one', () {
-      for (final icon in [null, '', 7]) {
-        final label = _profile(_data(title: {'title': '测试收藏集', 'title_icon': ?icon})).own!.bannerLabel!;
-        expect(label.icon, isNull, reason: '$icon');
+    test('a region_type 2 draws its own glyph; a 装扮 or an unknown kind draws none', () {
+      expect(label(bizType: 2, digital: {'region_type': 2}).glyph, SpaceBannerGlyph.region);
+      expect(label(bizType: 1, digital: {'region_type': 2}).glyph, SpaceBannerGlyph.region);
+      for (final kind in [1, 0, null, 'garb']) {
+        final drawn = label(bizType: kind);
+        expect((drawn.glyph, drawn.icon), (SpaceBannerGlyph.none, null), reason: '$kind');
       }
+    });
+
+    test('region_icon is drawn before any glyph', () {
+      final drawn = label(
+        bizType: 2,
+        digital: {'region_type': 2, 'region_icon': 'http://i0.hdslb.com/bfs/made-up/r.png'},
+      );
+      expect(drawn.icon, 'https://i0.hdslb.com/bfs/made-up/r.png');
+      expect(drawn.glyph, SpaceBannerGlyph.none);
+    });
+
+    test('region_title and region_subtitle come before the title\'s, which stand in for empty ones', () {
+      final region = label(digital: {'region_title': '地区收藏集', 'region_subtitle': 'CD.000002'});
+      expect((region.title, region.subtitle), ('地区收藏集', 'CD.000002'));
+      final empty = label(digital: {'region_title': '', 'region_subtitle': ''});
+      expect((empty.title, empty.subtitle), ('测试收藏集', 'CD.000001'));
+      expect(label(title: const {}, digital: {'region_title': '只有地区'}).title, '只有地区');
+      expect(_profile(_data(title: const {})).own!.bannerLabel, isNull);
+    });
+  });
+
+  group('the crop in a box', () {
+    // 25's box: 440 × 295.67, the art 1080 × 1618 drawn 440 wide (659.19 tall).
+    const width = 440.0;
+    const height = 295.67;
+    const aspect = 1618 / 1080;
+
+    double topOf(double alignY) => (1 + alignY) / 2 * (height - width * aspect);
+
+    test('puts the band\'s middle at the box\'s middle', () {
+      for (final middle in [0.2, 0.35, 0.5, 0.8]) {
+        final y = SpaceBannerCrop(middle: middle, aspect: aspect).alignY(width, height);
+        expect(topOf(y) + middle * width * aspect, closeTo(height / 2, 1e-9), reason: '$middle');
+      }
+      expect(const SpaceBannerCrop(middle: 0.5, aspect: aspect).alignY(width, height), closeTo(0, 1e-9));
+      expect(
+        const SpaceBannerCrop(middle: 0, aspect: aspect).alignY(width, height),
+        lessThan(-1),
+        reason: 'unclamped, as the official app\'s',
+      );
+    });
+
+    test('a short picture is cut about its middle', () {
+      expect(const SpaceBannerCrop(middle: 0.1, aspect: 0.5).alignY(width, height), 0);
+    });
+
+    test('OwnSpace takes the crop over the three-part alignment', () {
+      const space = OwnSpace(bannerAlignY: -0.5, bannerCrop: SpaceBannerCrop(middle: 0.5, aspect: aspect));
+      expect(space.bannerAlignIn(width, height), closeTo(0, 1e-9));
+      expect(const OwnSpace(bannerAlignY: -0.5).bannerAlignIn(width, height), -0.5);
     });
   });
 

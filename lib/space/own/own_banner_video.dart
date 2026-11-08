@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bili_core/api.dart' show BiliClient;
 import 'package:bili_core/devlog.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -9,20 +10,30 @@ import 'package:flutter/widgets.dart';
 
 import '../../shared/image_disk_cache.dart';
 import '../../shared/remote_image.dart' show secureImageUrl;
-import '../../skin/skin_package.dart' show SkinPackageError, downloadSkinPackage, isSkinPackageUrl;
+import '../../skin/skin_package.dart' show SkinPackageError, downloadSkinPackage, isBannerVideoUrl;
 import '../../skin/skin_video.dart';
 
-/// The 空间头图's video as a file, which SkinVideo plays: kept in the caches beside the pictures, named by its
-/// address's hash, downloaded once. Storing the one asked last deletes the others; one asked before it that finishes
-/// later is kept until then, so a new 空间头图 is never deleted by the old one's download.
+/// The 空间头图's video as a file, which SkinVideo plays: kept in the caches beside the pictures, named by the hash of
+/// its address's path (the query can be a signature that changes with every answer), downloaded once. Storing the
+/// one asked last deletes the others; one asked before it that finishes later is kept until then, so a new 空间头图 is
+/// never deleted by the old one's download.
 ///
-/// The address comes from an answer, so it is fetched as a 装扮 package is: only from Bilibili's CDN hosts, each
-/// redirect held to the same rule, and dropped past [maxBytes]. [client] is for tests.
+/// The address comes from an answer, so it is fetched as a 装扮 package is: only from Bilibili's CDN and video hosts
+/// ([isBannerVideoUrl]), each redirect held to the same rule, with the pictures' Referer, and dropped past
+/// [maxBytes]. [client] is for tests.
 final class OwnBannerVideos {
   OwnBannerVideos({required this.folder, Future<Uint8List> Function(Uri url)? fetch, HttpClient Function()? client})
     : _fetch =
           fetch ??
-          ((url) => downloadSkinPackage(url, client: client ?? HttpClient.new, timeout: _timeout, cap: maxBytes));
+          ((url) => downloadSkinPackage(
+            url,
+            client: client ?? HttpClient.new,
+            timeout: _timeout,
+            cap: maxBytes,
+            allowed: isBannerVideoUrl,
+            headers: BiliClient.mediaHeaders,
+            what: 'banner video',
+          ));
 
   /// The official 空间头图 videos are a few MB.
   static const maxBytes = 30 * 1024 * 1024;
@@ -45,36 +56,49 @@ final class OwnBannerVideos {
   final _loads = <String, Future<File?>>{};
   String? _latest;
 
-  File fileOf(String url) => File('$folder${Platform.pathSeparator}${sha1.convert(utf8.encode(url))}.mp4');
+  File fileOf(String url) {
+    final path = Uri.tryParse(url)?.path;
+    final key = path == null || path.isEmpty ? url : path;
+    return File('$folder${Platform.pathSeparator}${sha1.convert(utf8.encode(key))}.mp4');
+  }
 
-  /// [url]'s file, downloaded the first time; null when it can't be had. The address is never logged.
-  Future<File?> file(String url) {
+  /// [url]'s file, downloaded the first time, from [backups] in turn when [url] can't be had; null when none can.
+  /// No address is ever logged.
+  Future<File?> file(String url, {List<String> backups = const []}) {
     _latest = url;
-    return _loads[url] ??= _load(url).whenComplete(() {
+    return _loads[url] ??= _load(url, backups).whenComplete(() {
       // A block body: returning the removed future would have this one wait on itself.
       _loads.remove(url);
     });
   }
 
-  Future<File?> _load(String url) async {
+  Future<File?> _load(String url, List<String> backups) async {
     final file = fileOf(url);
     try {
       if (await file.exists() && await file.length() > 0) return file;
-      final address = Uri.tryParse(secureImageUrl(url));
-      if (address == null) return null;
-      if (!isSkinPackageUrl(address)) throw SkinPackageError.hostNotAllowed(address, what: 'banner video');
-      final bytes = await _fetch(address);
-      if (bytes.isEmpty) return null;
-      await Directory(folder).create(recursive: true);
-      final part = File('${file.path}.part');
-      await part.writeAsBytes(bytes, flush: true);
-      await part.rename(file.path);
-      if (_latest == url) await _keepOnly(file);
-      return file;
     } on Object catch (error) {
       Logger.shared.warn(LogCategory.ui, 'own space banner video failed', {'error': _reason(error)});
       return null;
     }
+    for (final source in [url, ...backups]) {
+      try {
+        final address = Uri.tryParse(secureImageUrl(source));
+        if (address == null) continue;
+        if (!isBannerVideoUrl(address)) throw SkinPackageError.hostNotAllowed(address, what: 'banner video');
+        final bytes = await _fetch(address);
+        if (bytes.isEmpty) continue;
+        await Directory(folder).create(recursive: true);
+        final part = File('${file.path}.part');
+        await part.writeAsBytes(bytes, flush: true);
+        await part.rename(file.path);
+        Logger.shared.info(LogCategory.ui, 'own space banner video', {'host': address.host, 'bytes': bytes.length});
+        if (_latest == url) await _keepOnly(file);
+        return file;
+      } on Object catch (error) {
+        Logger.shared.warn(LogCategory.ui, 'own space banner video failed', {'error': _reason(error)});
+      }
+    }
+    return null;
   }
 
   /// Another address still downloading keeps its file and its `.part`: the page may have moved on to it.
@@ -106,6 +130,7 @@ class OwnBannerVideo extends StatefulWidget {
     required this.size,
     required this.alignY,
     required this.still,
+    this.backups = const [],
     this.videos,
     this.muted,
     this.playing,
@@ -117,6 +142,9 @@ class OwnBannerVideo extends StatefulWidget {
   final ({int width, int height})? size;
   final double alignY;
   final Widget still;
+
+  /// Other addresses of the same video, tried in turn when [url] can't be had.
+  final List<String> backups;
 
   /// Where the file comes from; [OwnBannerVideos.shared] when null.
   final OwnBannerVideos? videos;
@@ -158,7 +186,7 @@ class _OwnBannerVideoState extends State<OwnBannerVideo> {
     if (videos == null) return;
     final url = widget.url;
     unawaited(
-      videos.file(url).then((file) {
+      videos.file(url, backups: widget.backups).then((file) {
         if (mounted && file != null && widget.url == url) setState(() => _file = file);
       }),
     );

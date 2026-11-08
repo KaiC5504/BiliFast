@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show BiliClient, SpaceBannerLabel, SpaceProfile, SpaceTagLine;
+import 'package:bili_core/api.dart' show BiliClient, SpaceBannerGlyph, SpaceBannerLabel, SpaceProfile, SpaceTagLine;
 import 'package:bili_core/logic.dart' show CountFormat;
 import 'package:flutter/widgets.dart';
 
@@ -12,6 +12,10 @@ import '../space_header_glyphs.dart';
 import 'own_banner_video.dart';
 import 'own_space_banner.dart';
 import 'own_space_glyphs.dart';
+
+/// The APK's `ic_space_nft_header` and `ic_nft_icon_ex` (assets/README.md).
+const _collectibleGlyph = 'assets/images/space/banner_collectible.png';
+const _regionGlyph = 'assets/images/space/banner_region.png';
 
 /// The account's own space above the tab row (108): the tall banner with the 空间头图's label and 👕, the face in its
 /// frame, the counts and 编辑资料, the name with the 大会员 label and the 勋章 pills, the level with its exp, the bio
@@ -138,9 +142,10 @@ class _Top extends StatelessWidget {
     const half = SpaceTheme.face / 2;
     const statsTop = SpaceTheme.countCentre - SpaceTheme.countLine / 2 + OwnSpaceTheme.drop;
     final foot = OwnSpaceTheme.bannerHeight + stretch;
+    final alignY = own?.bannerAlignIn(MediaQuery.sizeOf(context).width, foot) ?? 0;
     final Widget still = banner == null || banner.isEmpty
         ? const ColoredBox(key: ValueKey('own-space-banner-default'), color: SpaceTheme.bannerDefault)
-        : OwnSpaceBanner(key: const ValueKey('own-space-banner'), url: banner, alignY: own?.bannerAlignY ?? 0);
+        : OwnSpaceBanner(key: const ValueKey('own-space-banner'), url: banner, alignY: alignY);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -154,8 +159,9 @@ class _Top extends StatelessWidget {
                 ? still
                 : OwnBannerVideo(
                     url: video,
+                    backups: own?.bannerVideoBackups ?? const [],
                     size: own?.bannerSize,
-                    alignY: own?.bannerAlignY ?? 0,
+                    alignY: alignY,
                     still: still,
                     muted: muted,
                     playing: playing,
@@ -229,12 +235,20 @@ class _Top extends StatelessWidget {
     );
   }
 
-  /// The title, after the collectible's picture when it has one, over the subtitle, right-aligned before a thin rule.
+  /// The title, after the collectible's picture or glyph when it has one, over the subtitle, right-aligned before a
+  /// thin rule.
   List<Widget> _label(SpaceBannerLabel label, double foot) {
     final subtitleColor = label.subtitleColor;
     final subtitleInk = subtitleColor == null ? OwnSpaceTheme.labelInk : Color(subtitleColor);
     final subtitle = label.subtitle;
     final icon = label.icon;
+    final Widget? badge = icon != null && icon.isNotEmpty
+        ? DecorImage(icon)
+        : switch (label.glyph) {
+            SpaceBannerGlyph.collectible => Image.asset(_collectibleGlyph),
+            SpaceBannerGlyph.region => Image.asset(_regionGlyph),
+            SpaceBannerGlyph.none => null,
+          };
     return [
       Positioned(
         left: SpaceTheme.gutter,
@@ -244,11 +258,11 @@ class _Top extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            if (icon != null && icon.isNotEmpty) ...[
+            if (badge != null) ...[
               SizedBox.square(
                 key: const ValueKey('own-space-label-icon'),
                 dimension: OwnSpaceTheme.labelBadge,
-                child: ExcludeSemantics(child: DecorImage(icon)),
+                child: ExcludeSemantics(child: badge),
               ),
               const SizedBox(width: OwnSpaceTheme.labelBadgeGap),
             ],
