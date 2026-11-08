@@ -18,7 +18,9 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player_ui/player_loading.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +28,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 import '../support/fake_player.dart';
+import 'autoplay_rules.dart';
 import 'fake_login_gate.dart';
 import 'feed_fakes.dart';
 
@@ -489,6 +492,76 @@ void main() {
     expect(http.canned.requests.where((request) => request.url.path == '/x/v2/history/toview/add'), hasLength(1));
     expect(find.text('已添加至稍后再看'), findsOneWidget);
     await frames(tester, 60);
+  });
+
+  group('首页自动播放', () {
+    /// The card as it shows when it isn't playing: its cover, ▶ and the duration.
+    void still(String why) {
+      expect(inCard(_bv, const ValueKey('big-card-play')), findsOneWidget, reason: why);
+      expect(find.byKey(const ValueKey('big-card-duration')), findsOneWidget, reason: why);
+      expect(find.descendant(of: card(_bv), matching: find.byType(RemoteImage)), findsOneWidget, reason: why);
+      expect(find.byType(PlayerLoading), findsNothing, reason: why);
+    }
+
+    final holds = <String, PlayerPrefs Function()>{
+      '关闭 on Wi-Fi': () => autoplayRules()..homeAutoplay = AutoplayChoice.off,
+      '仅 Wi-Fi on mobile data': () => autoplayRules(cellular: true)..homeAutoplay = AutoplayChoice.wifiOnly,
+      '流量网络下自动播放 off on mobile data': () => autoplayRules(cellular: true)..cellularAutoplay = false,
+    };
+    for (final MapEntry(key: name, value: rules) in holds.entries) {
+      testWidgets('$name: the big card asks no player and keeps its cover, ▶ and duration; a tap opens its page', (
+        tester,
+      ) async {
+        rules();
+        await show(tester);
+        await frames(tester, 30);
+        expect(players, isEmpty);
+        still(name);
+        await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+        await frames(tester, 30);
+        final page = tester.widget<VideoPage>(find.byType(VideoPage));
+        expect(page.route.bvid, _bv);
+        expect(page.route.playback, isNull, reason: 'nothing to hand over: the page opens it afresh');
+      });
+    }
+
+    final plays = <String, PlayerPrefs Function()>{
+      '仅 Wi-Fi on Wi-Fi': () => autoplayRules()..homeAutoplay = AutoplayChoice.wifiOnly,
+      '默认 on mobile data': () => autoplayRules(cellular: true),
+    };
+    for (final MapEntry(key: name, value: rules) in plays.entries) {
+      testWidgets('$name: the big card plays, whatever 动态视频是否自动播放 says', (tester) async {
+        rules().listAutoplay = AutoplayChoice.off;
+        await show(tester);
+        await started(tester);
+        expect(playingNow(player()), isTrue);
+      });
+    }
+
+    testWidgets('turned off in 设置 while it plays, it pauses once 首页 shows again; a tap still opens its page', (
+      tester,
+    ) async {
+      final prefs = autoplayRules();
+      await show(tester);
+      await started(tester);
+      expect(playingNow(player()), isTrue);
+      await tester.tap(find.byKey(ValueKey('home-tab-${HomeTab.mine.name}')));
+      await frames(tester, 10);
+      prefs.homeAutoplay = AutoplayChoice.off;
+      await tester.tap(find.byKey(ValueKey('home-tab-${HomeTab.home.name}')));
+      await frames(tester, 10);
+      expect(playingNow(player()), isFalse);
+      expect(inCard(_bv, const ValueKey('big-card-play')), findsOneWidget);
+      expect(find.byKey(const ValueKey('big-card-duration')), findsOneWidget);
+      await tester.pump(FeedBigCardTheme.releaseAfter);
+      await frames(tester, 2);
+      expect(services.playback.live, 0, reason: 'let go as any paused card');
+      still('let go');
+
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 30);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, _bv);
+    });
   });
 
   group('review fixes', () {

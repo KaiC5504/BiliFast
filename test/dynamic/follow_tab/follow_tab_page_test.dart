@@ -13,11 +13,13 @@ import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/space/own/own_space_page.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../home/autoplay_rules.dart';
 import '../../home/skin_fixtures.dart';
 import '../../playback/fakes.dart' show Canned;
 import 'follow_fixtures.dart';
@@ -378,6 +380,52 @@ void main() {
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await settle(tester, 12);
     expect(inline.playing, same(card));
+    inline.unregister(card);
+  });
+
+  testWidgets('关注 and the face sheet follow 动态视频是否自动播放, not 首页自动播放, read again when they show', (
+    tester,
+  ) async {
+    final prefs = autoplayRules()..homeAutoplay = AutoplayChoice.off;
+    final hosts = <FeedInlineHost>{};
+    FollowPosts.cardOverride = (item, inline) {
+      hosts.add(host = inline);
+      return SizedBox(height: 300, child: Text('post ${item.id}'));
+    };
+    await showShell(tester, api: FakeDynamicApi(posts: posts(3, mid: 101), upList: faces));
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    final inline = host!;
+    final card = _FakeInlineCard(const Rect.fromLTWH(0, 400, 440, 200));
+    inline.register(card);
+    await settle(tester, 2);
+    expect(inline.playing, same(card), reason: '首页自动播放 holds only 推荐');
+
+    await tapTab(tester, HomeTab.home);
+    await settle(tester, 2);
+    prefs.listAutoplay = AutoplayChoice.off;
+    final pauses = card.pauses;
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester, 2);
+    expect(inline.playing, isNull);
+    expect(card.plays, 1, reason: 'not played again');
+    expect(card.pauses, greaterThan(pauses));
+
+    await tester.tap(find.byKey(const ValueKey('follow-face-101')));
+    await settle(tester, 12);
+    final sheet = hosts.singleWhere((each) => !identical(each, inline));
+    final sheetCard = _FakeInlineCard(const Rect.fromLTWH(0, 400, 440, 200));
+    sheet.register(sheetCard);
+    await settle(tester, 2);
+    expect(sheet.playing, isNull);
+    onCellular(true);
+    prefs.listAutoplay = AutoplayChoice.always;
+    sheet.settle();
+    expect(sheet.playing, same(sheetCard), reason: '默认 plays on mobile data too');
+    prefs.listAutoplay = AutoplayChoice.wifiOnly;
+    sheet.settle();
+    expect(sheet.playing, isNull);
+    sheet.unregister(sheetCard);
     inline.unregister(card);
   });
 

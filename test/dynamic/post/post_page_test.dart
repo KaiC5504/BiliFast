@@ -22,11 +22,13 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../app/fake_keychain.dart';
+import '../../home/autoplay_rules.dart';
 import '../../home/fake_login_gate.dart';
 import '../../playback/fakes.dart';
 
@@ -617,6 +619,23 @@ void main() {
     await back(tester, harness);
     expect(find.byType(PictureViewer), findsNothing);
     expect(find.byType(DynamicPostPage), findsOneWidget, reason: 'back closed the viewer, not the page');
+    await back(tester, harness);
+  });
+
+  testWidgets("a repost's video follows 动态视频是否自动播放, not 首页自动播放, read again when the page shows", (tester) async {
+    final prefs = autoplayRules()..listAutoplay = AutoplayChoice.off;
+    final harness = await show(tester, id: _forwardId);
+    final host = tester.widget<DynamicRepostBlock>(find.byType(DynamicRepostBlock)).inline!;
+    expect(host.playing, isNull);
+
+    prefs
+      ..listAutoplay = AutoplayChoice.always
+      ..homeAutoplay = AutoplayChoice.off;
+    await tester.tap(key('post-write'));
+    await frames(tester);
+    await back(tester, harness);
+    expect(find.byType(Composer), findsNothing);
+    expect(host.playing, isNotNull);
     await back(tester, harness);
   });
 

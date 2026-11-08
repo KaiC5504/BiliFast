@@ -15,10 +15,12 @@ import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
 import 'package:bilifast/player_ui/player_loading.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../home/autoplay_rules.dart';
 import '../../playback/fakes.dart';
 import '../../support/fake_player.dart';
 import 'card_host.dart';
@@ -452,7 +454,11 @@ void main() {
           );
         },
         before: (services) {
-          inline = FeedInlineHost(viewport: () => const Rect.fromLTWH(0, 0, 440, 956), pip: services.pipKeeper);
+          inline = FeedInlineHost(
+            viewport: () => const Rect.fromLTWH(0, 0, 440, 956),
+            pip: services.pipKeeper,
+            autoplay: InlineAutoplay.list,
+          );
           addTearDown(inline.dispose);
         },
       );
@@ -612,6 +618,88 @@ void main() {
       await _tearDown(tester);
     });
   });
+
+  group('动态视频是否自动播放', () {
+    Finder box() => find.byKey(ValueKey('dynamic-video-${_video.bvid}'));
+
+    /// The box as it shows when it isn't playing: the cover with its TV mark.
+    void still(String why) {
+      expect(find.byKey(const ValueKey('dynamic-video-playing')), findsNothing, reason: why);
+      expect(find.byKey(const ValueKey('dynamic-video-tv')), findsOneWidget, reason: why);
+      expect(find.byKey(const ValueKey('dynamic-video-sound')), findsNothing, reason: why);
+      expect(find.byType(PlayerLoading), findsNothing, reason: why);
+    }
+
+    /// One video post's card, its host showing it.
+    shown(WidgetTester tester) async {
+      final setup = await _inlineHost(
+        tester,
+        (inline) => DynamicCard(
+          item: post('1', kind: DynamicKind.video, nodes: const [], major: _video),
+          inline: inline,
+        ),
+      );
+      setup.inline.shown = true;
+      await _settle(tester);
+      return setup;
+    }
+
+    final holds = <String, PlayerPrefs Function()>{
+      '关闭 on Wi-Fi': () => autoplayRules()..listAutoplay = AutoplayChoice.off,
+      '仅 Wi-Fi on mobile data': () => autoplayRules(cellular: true)..listAutoplay = AutoplayChoice.wifiOnly,
+      '流量网络下自动播放 off on mobile data': () => autoplayRules(cellular: true)..cellularAutoplay = false,
+    };
+    for (final MapEntry(key: name, value: rules) in holds.entries) {
+      testWidgets('$name: the box asks no player and keeps its cover; a tap opens the page afresh', (tester) async {
+        rules();
+        final setup = await shown(tester);
+        expect(setup.players, isEmpty);
+        expect(setup.inline.playing, isNull);
+        still(name);
+        await tester.tap(box());
+        await tester.pump();
+        final route = setup.host.opened.videos.single;
+        expect(route.bvid, _video.bvid);
+        expect(route.playback, isNull);
+        await _tearDown(tester);
+      });
+    }
+
+    testWidgets('仅 Wi-Fi plays on Wi-Fi, whatever 首页自动播放 says', (tester) async {
+      autoplayRules()
+        ..listAutoplay = AutoplayChoice.wifiOnly
+        ..homeAutoplay = AutoplayChoice.off;
+      final setup = await shown(tester);
+      expect(setup.inline.playing, isA<DynamicVideoBoxState>());
+      expect(setup.players, hasLength(1));
+      await _tearDown(tester);
+    });
+
+    testWidgets('turned off while it plays, it pauses once the list shows again; a tap still opens the page', (
+      tester,
+    ) async {
+      final prefs = autoplayRules();
+      final setup = await shown(tester);
+      final player = setup.players.single;
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await _settle(tester, frames: 4);
+      expect(find.byKey(const ValueKey('dynamic-video-sound')), findsOneWidget);
+      setup.inline.shown = false;
+      await tester.pump();
+      prefs.listAutoplay = AutoplayChoice.off;
+      setup.inline.shown = true;
+      await _settle(tester, frames: 4);
+      expect(_lastPlayOrPause(player), 'pause');
+      expect(setup.inline.playing, isNull);
+      await tester.pump(FeedBigCardTheme.releaseAfter);
+      await _settle(tester, frames: 2);
+      still('let go');
+      await tester.tap(box());
+      await tester.pump();
+      expect(setup.host.opened.videos.single.bvid, _video.bvid);
+      await _tearDown(tester);
+    });
+  });
 }
 
 const _pictures = [
@@ -671,7 +759,11 @@ _inlineHost(WidgetTester tester, Widget Function(FeedInlineHost inline) build) a
       return controller;
     },
     before: (services) {
-      inline = FeedInlineHost(viewport: () => const Rect.fromLTWH(0, 0, 440, 956), pip: services.pipKeeper);
+      inline = FeedInlineHost(
+        viewport: () => const Rect.fromLTWH(0, 0, 440, 956),
+        pip: services.pipKeeper,
+        autoplay: InlineAutoplay.list,
+      );
       addTearDown(inline.dispose);
     },
   );

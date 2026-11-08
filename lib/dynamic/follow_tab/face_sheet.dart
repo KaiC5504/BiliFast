@@ -187,7 +187,11 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
     final open = controller.isOpen;
     _still = MediaQuery.disableAnimationsOf(context);
     _inset = MediaQuery.paddingOf(context).bottom;
-    final inline = _inline ??= FeedInlineHost(viewport: _listArea, pip: AppScope.of(context).pipKeeper);
+    final inline = _inline ??= FeedInlineHost(
+      viewport: _listArea,
+      pip: AppScope.of(context).pipKeeper,
+      autoplay: InlineAutoplay.list,
+    );
     inline.shown =
         open &&
         _motion.isCompleted &&

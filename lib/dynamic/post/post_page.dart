@@ -126,7 +126,7 @@ class _DynamicPostPageState extends State<DynamicPostPage> {
     final services = _services = AppScope.of(context);
     _logins = services.environment.logins..addListener(_loggedIn);
     services.dynamicLikes.addListener(_likesChanged);
-    _inline = FeedInlineHost(viewport: _viewport, pip: services.pipKeeper);
+    _inline = FeedInlineHost(viewport: _viewport, pip: services.pipKeeper, autoplay: InlineAutoplay.list);
     unawaited(_load());
   }
 

@@ -10,16 +10,21 @@ import '../app/app_scope.dart';
 import '../player/bili_player.dart';
 import '../player_ui/player_loading.dart';
 import '../playback/playback_controller.dart';
+import '../settings/autoplay_policy.dart';
 import '../shared/theme.dart';
 import '../video/page_playback.dart';
 import '../video/pip_keeper.dart';
+import '../video/player_prefs.dart';
 import '../video/player_session.dart';
 import '../video/video_page.dart';
 import '../video/video_route.dart';
 
-/// The big cards' sound and 弹, kept for the app's run: muted with danmaku at launch, as the official app starts them.
+/// The big cards' sound and 弹, kept for the app's run: with danmaku at launch, as the official app starts them, and
+/// muted unless 大卡默认声音 says 默认打开.
 abstract final class FeedInlineChoices {
-  static final sound = ValueNotifier<bool>(false);
+  /// 大卡默认声音 takes effect at the next launch (重启后生效, 170): the first read takes it, after main has loaded the
+  /// prefs, and 首页 reads it at launch.
+  static final sound = ValueNotifier<bool>(PlayerPrefs.shared.bigCardSound);
   static final danmaku = ValueNotifier<bool>(true);
 
   @visibleForTesting
@@ -46,6 +51,32 @@ final class InlineVideo {
   final int duration;
 }
 
+/// Which of 自动播放设置's rules a host's cards follow.
+enum InlineAutoplay {
+  /// 首页自动播放 (179): 推荐's big cards.
+  home('home'),
+
+  /// 动态视频是否自动播放 (178): 动态's video cards, and every other list's.
+  list('dynamic');
+
+  const InlineAutoplay(this.logName);
+
+  final String logName;
+
+  /// Why [AutoplayPolicy.shared] holds these cards now, or null when they may play by themselves.
+  String? held() {
+    final policy = AutoplayPolicy.shared;
+    if (this == home ? policy.home : policy.list) return null;
+    final prefs = PlayerPrefs.shared;
+    return switch (this == home ? prefs.homeAutoplay : prefs.listAutoplay) {
+      AutoplayChoice.off => 'off',
+      AutoplayChoice.wifiOnly => 'wifiOnly',
+      // Held only by 流量网络下自动播放 off, on mobile data.
+      AutoplayChoice.always => 'cellular',
+    };
+  }
+}
+
 /// A big card as [FeedInlineHost] sees it.
 abstract interface class FeedInlineCard {
   /// Its video box on screen, in global coordinates; null before it is laid out.
@@ -58,9 +89,11 @@ abstract interface class FeedInlineCard {
 
 /// Which of 推荐's big cards plays: the one with the most of its video box on screen, at least
 /// [FeedBigCardTheme.visibleToPlay] of it, looked at once a scroll has come to rest (KaiC: a card dragged half off keeps
-/// playing until the finger lets go), while 首页 shows with nothing over it and the app is in front. One at a time.
+/// playing until the finger lets go), while 首页 shows with nothing over it and the app is in front. One at a time, and
+/// only while [autoplay]'s rule lets it, read at each settle: a choice changed in 设置 applies once the list shows again.
 class FeedInlineHost with WidgetsBindingObserver {
-  FeedInlineHost({required this.viewport, required this._pip}) {
+  FeedInlineHost({required this.viewport, required this._pip, required this.autoplay, Logger? logger})
+    : _logger = logger ?? Logger.shared {
     _pip.addListener(settleSoon);
     WidgetsBinding.instance.addObserver(this);
     final state = WidgetsBinding.instance.lifecycleState;
@@ -72,6 +105,12 @@ class FeedInlineHost with WidgetsBindingObserver {
 
   /// While a page's video is in the small window (or kept for it), no card plays: one video at a time.
   final PipKeeper _pip;
+
+  final InlineAutoplay autoplay;
+  final Logger _logger;
+
+  /// Why the last card that would have played was held, until one plays; logged when it changes.
+  String? _heldFor;
 
   /// Where each video stood when its player was let go or its page closed, so the card starts again there.
   final positions = <String, double>{};
@@ -134,6 +173,14 @@ class FeedInlineHost with WidgetsBindingObserver {
         }
       }
     }
+    if (best != null) {
+      final held = autoplay.held();
+      if (held != null && held != _heldFor) {
+        _logger.info(LogCategory.player, 'inline autoplay held', {'list': autoplay.logName, 'reason': held});
+      }
+      _heldFor = held;
+      if (held != null) best = null;
+    }
     for (final card in List.of(_cards)) {
       if (!identical(card, best)) card.inlinePause();
     }
@@ -161,7 +208,7 @@ class FeedInlineHost with WidgetsBindingObserver {
 }
 
 /// One big card's video (122, 123): a playback of the app's own ([PagePlayback], inline) on the shared engine, muted
-/// unless the card's speaker was turned on this run. Paused it keeps its player, and plays on from there; paused for
+/// unless [FeedInlineChoices.sound] says otherwise. Paused it keeps its player, and plays on from there; paused for
 /// [FeedBigCardTheme.releaseAfter] it lets it go. At its end it starts over, as the official card does (125). No
 /// watch reports while it plays inline: they start when a page takes it over ([handOver]).
 class FeedInlinePlayback extends ChangeNotifier {
