@@ -250,6 +250,37 @@ void main() {
       expect(halted.f['status'], const LogInt(412));
     });
 
+    test("a 412 from the video CDN logs its host alone, since a mask range's path names the signed file", () async {
+      final transport = guard();
+      inner.status = 412;
+      final mask = Uri.parse('https://upos-sz-mirrorcos.bilivideo.com/bfs/dm_mask/secret-file.webmask?upsig=signed');
+      await transport.send(HTTPRequest(url: mask, headers: {'Range': 'bytes=0-15'}));
+      inner.status = 200;
+      await expectLater(transport.send(_get('/x/web-interface/nav')), throwsA(_halted));
+      expect(inner.sent, hasLength(1), reason: 'the stop is the same');
+      expect(transport.sent, 1);
+      final halted = memory.events.where((event) => event.msg == 'pc guard halted').single;
+      expect(halted.f, {
+        'host': const LogString('upos-sz-mirrorcos.bilivideo.com'),
+        'status': const LogInt(412),
+        'code': const LogInt(412),
+      });
+      expect(log(), isNot(contains('dm_mask')));
+      expect(log(), isNot(contains('secret-file')));
+    });
+
+    test("an API host's stop still logs its path", () async {
+      final transport = guard();
+      inner.body = '{"code":-352,"message":"风控校验失败","ttl":1}';
+      await transport.send(_get('/x/web-interface/wbi/search/type'));
+      final halted = memory.events.where((event) => event.msg == 'pc guard halted').single;
+      expect(halted.f, {
+        'path': const LogString('/x/web-interface/wbi/search/type'),
+        'status': const LogInt(200),
+        'code': const LogInt(-352),
+      });
+    });
+
     for (final code in [-352, -412]) {
       test('an answer with code $code stops the run too', () async {
         final transport = guard();
