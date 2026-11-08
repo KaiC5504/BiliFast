@@ -12,6 +12,7 @@ import '../../video/page_session.dart' show SessionOpen, SessionPlaylist, create
 import '../../video/player_session.dart' show Episode, PlayerSession;
 import '../offline_library.dart';
 import '../offline_models.dart';
+import '../pages/offline_rows.dart' show savedFile;
 
 /// The session of an offline page: the page's own, over the library's finished parts.
 PlayerSession offlinePageSession({
@@ -130,6 +131,9 @@ class OfflinePlaylist extends ChangeNotifier implements SessionPlaylist {
 
   @override
   List<Episode> get episodes => _episodes;
+
+  @override
+  String? coverFileOf(int cid) => savedFile(_library, _library.item(cid)?.coverFile);
 
   static List<Episode> _of(OfflineLibrary library) => [
     for (final item in library.items)

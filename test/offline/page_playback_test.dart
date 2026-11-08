@@ -11,6 +11,9 @@ import 'package:bilifast/offline/page/offline_playback.dart';
 import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
+import 'package:bilifast/video/page_session.dart';
+import 'package:bilifast/video/player_prefs.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
@@ -225,6 +228,72 @@ void main() {
       expect(controller.danmaku.cid, 7003);
       expect([for (final elem in controller.danmaku.recent(5000)) elem.content], ['弹']);
       expect(http.requests, isEmpty);
+    });
+  });
+
+  group("an offline page's session", () {
+    late List<String> opened;
+
+    PagePlayerSession offlineSession() {
+      opened = [];
+      final session = PagePlayerSession(
+        controller: controller,
+        client: BiliClient(
+          transport: http,
+          cookies: CookieJar(Canned.cookies),
+          logger: Logger(session: 'test'),
+        ),
+        open: (bvid, {cid}) => opened.add('$bvid $cid'),
+        isVip: () => false,
+        isLoggedIn: () => false,
+        requestLogin: () {},
+        prefs: PlayerPrefs.memory(),
+        playlist: OfflinePlaylist(library),
+        coverFile: (url) async => fail('an offline page asks for no picture'),
+        startTimer: timers.start,
+      );
+      addTearDown(session.dispose);
+      return session;
+    }
+
+    test('the lock screen shows the cached part: its title, uploader and saved cover; no 人像防挡 mask', () async {
+      final cover = '${Directory.systemTemp.path}${Platform.pathSeparator}7003${Platform.pathSeparator}cover.jpg';
+      library.put(library.item(7003)!.copyWith(coverFile: cover));
+      final session = offlineSession();
+      await controller.openLocal(() => part(7003));
+      await settle();
+      expect(player.nowPlaying, isNull, reason: 'not before it plays');
+      player
+        ..emit(const DurationChanged(383))
+        ..emit(const StatusChanged(PlayerStatus.playing));
+      await settle();
+      expect(
+        player.nowPlaying,
+        NowPlayingInfo(
+          title: '神枪看小羊崽复播：你看这次她真的自己打的，她表情会动',
+          artist: '火播君',
+          artworkPath: cover,
+          hasPrevious: true,
+          hasNext: true,
+        ),
+      );
+      expect(session.danmakuMask.value, isNull);
+      expect(http.requests, isEmpty);
+    });
+
+    test('后台听视频 and 后台连播 as online: nothing pauses in the background, and the next cached part opens', () async {
+      final session = offlineSession();
+      expect(player.calls, contains('background true'));
+      await controller.openLocal(() => part(7003));
+      await settle();
+      player
+        ..emit(const DurationChanged(383))
+        ..emit(const StatusChanged(PlayerStatus.playing));
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      expect(timers.activeWith(PagePlayerSession.backgroundGrace), isNull);
+      player.emit(const StatusChanged(PlayerStatus.ended));
+      await settle();
+      expect(opened, ['BV1fake00002 7002']);
     });
   });
 
