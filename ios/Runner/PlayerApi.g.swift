@@ -411,8 +411,8 @@ protocol PlayerHostApi {
   /// back in a window (up to 3 s) rather than ending at once.
   func setRestorable(playerId: Int64, restorable: Bool) throws
   /// 后台听视频: on, the player keeps playing with the app in the background or the screen locked
-  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, iOS pauses it there (.pauses). Picture in
-  /// picture plays either way.
+  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, .automatic, which pauses it there but lets
+  /// picture in picture play (.pauses might stop the small window too).
   func setBackgroundPlayback(playerId: Int64, enabled: Bool) throws
   /// Makes this player the one the lock screen and Control Center show, with [info]; null takes it off them and
   /// disables its remote commands.
@@ -681,8 +681,8 @@ class PlayerHostApiSetup {
       setRestorableChannel.setMessageHandler(nil)
     }
     /// 后台听视频: on, the player keeps playing with the app in the background or the screen locked
-    /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, iOS pauses it there (.pauses). Picture in
-    /// picture plays either way.
+    /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, .automatic, which pauses it there but lets
+    /// picture in picture play (.pauses might stop the small window too).
     let setBackgroundPlaybackChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.setBackgroundPlayback\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       setBackgroundPlaybackChannel.setMessageHandler { message, reply in
