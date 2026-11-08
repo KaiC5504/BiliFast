@@ -20,7 +20,9 @@ final class Rig {
   final session = FakePlayerSession();
   final chrome = ChromeState();
   final panels = PanelController();
-  final orientation = OrientationController();
+  /// 竖屏模式设置's 竖屏视频全屏用竖屏模式播放, as the orientation reads it.
+  bool verticalFullScreen = true;
+  late final orientation = OrientationController(verticalFullScreen: () => verticalFullScreen);
   int backs = 0;
 
   late final ui = PlayerUi(
@@ -223,6 +225,82 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('portrait-fullscreen')), findsOneWidget, reason: 'the next one is wide');
     expect(pill(), isNot(upright));
+  });
+
+  group('竖屏模式设置 off', () {
+    testWidgets("an upright video's row ends at 全屏 alone, which turns it sideways", (tester) async {
+      final semantics = tester.ensureSemantics();
+      final rig = Rig()
+        ..verticalFullScreen = false
+        ..session.isVertical = true;
+      await rig.mount(tester);
+
+      expect(find.byKey(const ValueKey('portrait-vertical')), findsNothing);
+      expect(find.bySemanticsLabel('竖屏'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('portrait-fullscreen')));
+      expect(rig.orientation.presentation, Presentation.landscape);
+      semantics.dispose();
+    });
+
+    testWidgets('a wide video keeps 竖屏 and 全屏, and an offline upright one has 全屏 alone too', (tester) async {
+      final wide = Rig()..verticalFullScreen = false;
+      await wide.mount(tester);
+      expect(find.byKey(const ValueKey('portrait-vertical')), findsOneWidget);
+      expect(find.byKey(const ValueKey('portrait-fullscreen')), findsOneWidget);
+
+      final offline = Rig()
+        ..verticalFullScreen = false
+        ..session.offline = true
+        ..session.isVertical = true;
+      await offline.mount(tester);
+      expect(find.byKey(const ValueKey('portrait-vertical')), findsNothing);
+      expect(find.byKey(const ValueKey('portrait-fullscreen')), findsOneWidget);
+    });
+
+    testWidgets('the row goes by the choice the page began with, and by the new one once it begins again', (
+      tester,
+    ) async {
+      final rig = Rig()..session.isVertical = true;
+      await rig.mount(tester);
+      final page = Object();
+      rig.orientation.begin(page, videoIsVertical: true);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('portrait-vertical')), findsOneWidget);
+      expect(find.byKey(const ValueKey('portrait-fullscreen')), findsNothing);
+
+      rig.verticalFullScreen = false;
+      rig.session.changed();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('portrait-vertical')), findsOneWidget, reason: 'read when the page began');
+
+      rig.orientation.begin(page, videoIsVertical: true);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('portrait-vertical')), findsNothing);
+      expect(find.byKey(const ValueKey('portrait-fullscreen')), findsOneWidget);
+    });
+
+    testWidgets("an upright video's 全屏 sits at the row's end, where an offline wide video's does", (tester) async {
+      final offlineWide = Rig()
+        ..session.offline = true
+        ..session.videoShape = (width: 1920, height: 1080)
+        ..session.duration.value = 31;
+      await offlineWide.mountAsPhone(tester);
+      final wideButton = tester.getRect(find.byKey(const ValueKey('portrait-fullscreen')));
+      final wideBar = offlineWide.bar(tester);
+
+      final upright = Rig()
+        ..verticalFullScreen = false
+        ..session.isVertical = true
+        ..session.videoShape = (width: 1080, height: 1440)
+        ..session.duration.value = 31;
+      await upright.mountAsPhone(tester);
+      final button = tester.getRect(find.byKey(const ValueKey('portrait-fullscreen')));
+      expect(button.left, wideButton.left);
+      expect(button.right, wideButton.right);
+      expect(button.right, 439);
+      expect(upright.bar(tester).left, wideBar.left);
+      expect(upright.bar(tester).right, wideBar.right);
+    });
   });
 
   testWidgets('竖屏 goes to 竖屏 whatever the video', (tester) async {

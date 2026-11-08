@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/device/orientation_host.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_orientation_host.dart';
@@ -544,6 +545,146 @@ void main() {
       inWindow.turnDrawn(1);
       expect(await inWindow.turns.isEmpty, isTrue);
       inWindow.dispose();
+    });
+  });
+
+  group('竖屏模式设置 (173): 竖屏视频全屏用竖屏模式播放', () {
+    late bool verticalFullScreen;
+    late OrientationController phone;
+
+    setUp(() {
+      verticalFullScreen = false;
+      phone = OrientationController(
+        controls: controls,
+        host: host,
+        logger: Logger(session: 'test')..add(logs),
+        verticalFullScreen: () => verticalFullScreen,
+      );
+    });
+
+    tearDown(() => phone.dispose());
+
+    test('on, an upright video goes to 竖屏 and ignores the phone; a wide one goes sideways', () {
+      verticalFullScreen = true;
+      phone.begin(page, videoIsVertical: true);
+      expect(phone.takesVertical, isTrue);
+      phone.enterFullScreen();
+      expect(phone.presentation, Presentation.vertical);
+      phone.exitToInline();
+      host.turn(PhoneOrientation.landscapeLeft);
+      expect(phone.presentation, Presentation.inline);
+
+      phone.begin(Object(), videoIsVertical: false);
+      phone.enterFullScreen();
+      expect(phone.presentation, Presentation.landscape);
+    });
+
+    test('off, enterFullScreen takes an upright video sideways, asking for landscape', () async {
+      phone.begin(page, videoIsVertical: true);
+      expect(phone.uprightTakesVertical, isFalse);
+      expect(phone.takesVertical, isFalse);
+      phone.enterFullScreen();
+      expect(phone.presentation, Presentation.landscape);
+      await settle();
+      expect(host.requests, [(1, OrientationMask.landscape)]);
+      expect(controls.calls, ['enter']);
+    });
+
+    test('off, turning the phone takes an upright video into landscape and back, as a wide one', () async {
+      phone.begin(page, videoIsVertical: true);
+      host.turn(PhoneOrientation.landscapeLeft);
+      expect(phone.presentation, Presentation.landscape);
+      host.turn(PhoneOrientation.faceUp);
+      expect(phone.presentation, Presentation.landscape);
+      host.turn(PhoneOrientation.portrait);
+      expect(phone.presentation, Presentation.inline);
+      await settle();
+      expect(host.requests.map((request) => request.$2), [OrientationMask.landscape, OrientationMask.portrait]);
+    });
+
+    test('off, the lock and the wait for a real landscape hold an upright video as a wide one', () async {
+      phone.begin(page, videoIsVertical: true);
+      host.turn(PhoneOrientation.faceUp);
+      phone.enterFullScreen();
+      await settle();
+      host.turn(PhoneOrientation.portrait);
+      expect(phone.presentation, Presentation.landscape, reason: 'lifted off the table, not turned');
+
+      phone.toggleLock();
+      host.turn(PhoneOrientation.landscapeLeft);
+      host.turn(PhoneOrientation.portrait);
+      expect(phone.presentation, Presentation.landscape);
+      phone.toggleLock();
+      host.turn(PhoneOrientation.portrait);
+      expect(phone.presentation, Presentation.inline);
+    });
+
+    test('off, the drawn turn goes out for an upright video exactly as for a wide one', () async {
+      Future<List<String>> run(bool vertical) async {
+        final sent = FakeOrientationHost();
+        final controller = OrientationController(host: sent, verticalFullScreen: () => false);
+        addTearDown(controller.dispose);
+        await controller.setTurnTakeover(true);
+        controller.begin(page, videoIsVertical: vertical);
+        sent.turn(PhoneOrientation.landscapeLeft);
+        expect(controller.turnTakeover, isTrue);
+        sent.turn(PhoneOrientation.portrait);
+        controller.end(page);
+        await settle();
+        return sent.sent;
+      }
+
+      final wide = await run(false);
+      expect(wide, ['takeover on', 'landscape', 'portrait', 'takeover off']);
+      expect(await run(true), wide);
+    });
+
+    test('is read when a page begins, so a change applies from the next claim', () {
+      verticalFullScreen = true;
+      phone.begin(page, videoIsVertical: true);
+      verticalFullScreen = false;
+      expect(phone.takesVertical, isTrue, reason: 'this page keeps what it began with');
+      host.turn(PhoneOrientation.landscapeLeft);
+      expect(phone.presentation, Presentation.inline);
+      host.turn(PhoneOrientation.portrait);
+
+      phone.begin(page, videoIsVertical: true);
+      expect(phone.takesVertical, isFalse, reason: 'shown again, it reads the choice again');
+      host.turn(PhoneOrientation.landscapeLeft);
+      expect(phone.presentation, Presentation.landscape);
+      host.turn(PhoneOrientation.portrait);
+
+      verticalFullScreen = true;
+      phone.begin(Object(), videoIsVertical: true);
+      expect(phone.takesVertical, isTrue);
+      phone.enterFullScreen();
+      expect(phone.presentation, Presentation.vertical);
+    });
+
+    test('with no page it follows the choice as it is now, and a wide video never takes 竖屏', () {
+      expect(phone.uprightTakesVertical, isFalse);
+      verticalFullScreen = true;
+      expect(phone.uprightTakesVertical, isTrue);
+      phone.begin(page, videoIsVertical: false);
+      expect(phone.takesVertical, isFalse);
+      phone.setVideoIsVertical(true, owner: page);
+      expect(phone.takesVertical, isTrue);
+      phone.end(page);
+      expect(phone.takesVertical, isFalse);
+    });
+
+    test("by default it is PlayerPrefs.shared's", () {
+      final saved = PlayerPrefs.shared;
+      addTearDown(() => PlayerPrefs.shared = saved);
+      PlayerPrefs.shared = PlayerPrefs.memory()..verticalFullScreen = false;
+      orientation.begin(page, videoIsVertical: true);
+      expect(orientation.takesVertical, isFalse);
+      orientation.enterFullScreen();
+      expect(orientation.presentation, Presentation.landscape);
+
+      PlayerPrefs.shared = PlayerPrefs.memory();
+      orientation.begin(Object(), videoIsVertical: true);
+      expect(orientation.takesVertical, isTrue);
     });
   });
 }

@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart' show Chapter;
+import 'package:bilifast/app/form_factor.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player/bili_player.dart';
@@ -26,7 +27,8 @@ final class PadRig {
   final session = FakePlayerSession();
   final chrome = ChromeState();
   final panels = PanelController();
-  final orientation = OrientationController();
+  bool verticalFullScreen = true;
+  late final orientation = OrientationController(verticalFullScreen: () => verticalFullScreen);
   int backs = 0;
 
   late final ui = PlayerUi(
@@ -182,18 +184,26 @@ void main() {
     expect(rig.session.calls, ['playEpisode BV1 1']);
   });
 
-  testWidgets('the iPad has no 竖屏: an upright video keeps 全屏, which enters the ordinary full screen', (tester) async {
-    final semantics = tester.ensureSemantics();
-    final rig = PadRig()
-      ..session.isVertical = true
-      ..session.videoShape = (width: 1080, height: 1920);
-    await rig.mount(tester);
-    expect(find.text('竖屏'), findsNothing);
-    expect(find.semantics.byLabel('竖屏'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('pad-inline-fullscreen')));
-    expect(rig.orientation.presentation, Presentation.landscape);
-    semantics.dispose();
-  });
+  for (final verticalFullScreen in [true, false]) {
+    testWidgets('the iPad has no 竖屏: an upright video keeps 全屏, which enters the ordinary full screen, with '
+        '竖屏模式设置 ${verticalFullScreen ? 'on' : 'off'}', (tester) async {
+      FormFactor.device = FormFactor.pad;
+      addTearDown(() => FormFactor.device = FormFactor.phone);
+      final semantics = tester.ensureSemantics();
+      final rig = PadRig()
+        ..verticalFullScreen = verticalFullScreen
+        ..session.isVertical = true
+        ..session.videoShape = (width: 1080, height: 1920);
+      await rig.mount(tester);
+      rig.orientation.begin(rig, videoIsVertical: true);
+      await tester.pump();
+      expect(find.text('竖屏'), findsNothing);
+      expect(find.semantics.byLabel('竖屏'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('pad-inline-fullscreen')));
+      expect(rig.orientation.presentation, Presentation.landscape);
+      semantics.dispose();
+    });
+  }
 
   testWidgets('倍速 shows the chosen rate', (tester) async {
     final rig = PadRig()..session.rate = 1.5;

@@ -4,6 +4,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
 import '../app/form_factor.dart';
+import '../video/player_prefs.dart';
 import 'device_controls.dart';
 import 'orientation_host.dart';
 
@@ -26,11 +27,20 @@ enum Presentation {
 /// The iPad (read from [FormFactor.device] at each move) turns freely on every screen and is never asked to rotate:
 /// full screen is entered and left only by the controls, in whichever way the iPad is held, and has no 竖屏 (an
 /// upright video's full screen is [Presentation.landscape]). Its lock only shows as on.
+///
+/// On the iPhone an upright video's full screen is 竖屏 unless 竖屏模式设置 (173) turns that off; then it is landscape,
+/// pillarboxed, and turns with the phone as a wide one does. The choice is [PlayerPrefs.shared]'s unless a test passes
+/// its own.
 class OrientationController extends ChangeNotifier {
-  OrientationController({DeviceControls? controls, OrientationHost? host, Logger? logger})
-      : controls = controls ?? NoDeviceControls(),
-        _host = host,
-        _logger = logger ?? Logger.shared {
+  OrientationController({
+    DeviceControls? controls,
+    OrientationHost? host,
+    Logger? logger,
+    bool Function()? verticalFullScreen,
+  }) : controls = controls ?? NoDeviceControls(),
+       _host = host,
+       _logger = logger ?? Logger.shared,
+       _readVerticalFullScreen = verticalFullScreen ?? (() => PlayerPrefs.shared.verticalFullScreen) {
     if (host != null) {
       _subscriptions = [
         host.deviceOrientations.listen(_deviceOrientationChanged),
@@ -42,6 +52,7 @@ class OrientationController extends ChangeNotifier {
   final DeviceControls controls;
   final OrientationHost? _host;
   final Logger _logger;
+  final bool Function() _readVerticalFullScreen;
   List<StreamSubscription<Object?>> _subscriptions = const [];
 
   Presentation get presentation => _presentation;
@@ -54,6 +65,14 @@ class OrientationController extends ChangeNotifier {
 
   bool get videoIsVertical => _videoIsVertical;
   bool _videoIsVertical = false;
+
+  /// Whether an upright video's full screen is 竖屏: on the iPhone, as 竖屏模式设置 was when the page began, so a change
+  /// in 设置 applies from the next page. With no page, as it is now, which the next begin will read.
+  bool get uprightTakesVertical => !_pad && (_owner == null ? _readVerticalFullScreen() : _verticalChosen);
+  bool _verticalChosen = true;
+
+  /// The page's video goes to 竖屏 for full screen rather than landscape, and the phone's turns leave it be.
+  bool get takesVertical => _videoIsVertical && uprightTakesVertical;
 
   /// Whether turns are drawn by Flutter rather than animated by the system: the 开发者 choice 旋转动画, armed only
   /// while a page owns the orientation, since only that page draws them. Always off without a host.
@@ -119,7 +138,8 @@ class OrientationController extends ChangeNotifier {
   ({int request, Presentation previous, Presentation next})? _lastMove;
   Future<void> _hostQueue = Future.value();
 
-  /// The most recent begin wins. A page shown again calls it too, so its own vertical flag comes back.
+  /// The most recent begin wins. A page shown again calls it too, so its own vertical flag comes back and
+  /// 竖屏模式设置 is read again.
   void begin(Object owner, {required bool videoIsVertical}) {
     var exited = false;
     if (!identical(_owner, owner)) {
@@ -139,6 +159,7 @@ class OrientationController extends ChangeNotifier {
     // the exit's turn has started.
     if (!exited) unawaited(_syncTakeover());
     _videoIsVertical = videoIsVertical;
+    _verticalChosen = _readVerticalFullScreen();
     if (!_observing) {
       _observing = true;
       if (!_pad) _host?.setOrientationEvents(true).catchError(_hostFailed);
@@ -189,8 +210,9 @@ class OrientationController extends ChangeNotifier {
 
   void enterVertical() => _move(_pad ? Presentation.landscape : Presentation.vertical);
 
-  /// The full screen the page's video takes: 竖屏 for an upright one on the iPhone, else landscape.
-  void enterFullScreen() => _videoIsVertical && !_pad ? enterVertical() : enterLandscape();
+  /// The full screen the page's video takes: 竖屏 for an upright one on the iPhone unless 竖屏模式设置 is off, else
+  /// landscape.
+  void enterFullScreen() => takesVertical ? enterVertical() : enterLandscape();
 
   void exitToInline() => _move(Presentation.inline);
 
@@ -207,7 +229,7 @@ class OrientationController extends ChangeNotifier {
     if (!_observing) return;
     _lastDeviceOrientation = orientation;
     if (orientation.isLandscape) _awaitingLandscape = false;
-    if (_locked || _videoIsVertical || _pad) return;
+    if (_locked || takesVertical || _pad) return;
     switch (_presentation) {
       case Presentation.inline when orientation.isLandscape:
         _move(Presentation.landscape);

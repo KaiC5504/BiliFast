@@ -84,6 +84,31 @@ void main() {
       expect(host.requests, isEmpty);
     });
 
+    for (final verticalFullScreen in [true, false]) {
+      test('an upright video goes to the ordinary full screen with 竖屏模式设置 '
+          '${verticalFullScreen ? 'on' : 'off'}, and turns still change nothing', () async {
+        final pad = OrientationController(
+          controls: controls,
+          host: host,
+          logger: Logger(session: 'test')..add(MemorySink()),
+          verticalFullScreen: () => verticalFullScreen,
+        );
+        addTearDown(pad.dispose);
+        pad.begin(page, videoIsVertical: true);
+        expect(pad.uprightTakesVertical, isFalse);
+        expect(pad.takesVertical, isFalse);
+        pad.enterFullScreen();
+        expect(pad.presentation, Presentation.landscape);
+        host.turn(PhoneOrientation.portrait);
+        expect(pad.presentation, Presentation.landscape);
+        pad.exitToInline();
+        host.turn(PhoneOrientation.landscapeLeft);
+        expect(pad.presentation, Presentation.inline);
+        await settle();
+        expect(host.requests, isEmpty);
+      });
+    }
+
     test('the lock keeps the presentation and asks nothing', () async {
       orientation.enterLandscape();
       orientation.toggleLock();

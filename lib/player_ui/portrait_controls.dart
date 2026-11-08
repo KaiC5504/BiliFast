@@ -11,8 +11,8 @@ import 'seek_bar.dart';
 
 /// The small player's controls, filling the player (BiliNative `PortraitControls.swift`, laid out as the official
 /// app's 15): back and ⋮ at the top; play, the bar with the TV face, the time, 竖屏 and full screen at the bottom. An
-/// upright video's row ends at 竖屏, in full screen's place, the bar taking the room (17). While they are hidden the
-/// thin line runs along the bottom edge instead.
+/// upright video's row ends at 竖屏, in full screen's place, the bar taking the room (17), unless 竖屏模式设置 sends its
+/// full screen to landscape. While they are hidden the thin line runs along the bottom edge instead.
 class PortraitControls extends StatefulWidget {
   const PortraitControls({super.key, required this.ui});
 
@@ -45,13 +45,18 @@ class _PortraitControlsState extends State<PortraitControls> {
   @override
   void didUpdateWidget(PortraitControls oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.ui.session != _session || oldWidget.ui.chrome != _ui.chrome) _listen();
+    if (oldWidget.ui.session != _session ||
+        oldWidget.ui.chrome != _ui.chrome ||
+        oldWidget.ui.orientation != _ui.orientation) {
+      _listen();
+    }
   }
 
   void _listen() {
     final session = _session;
     _bar = Listenable.merge([session.readout.seconds, session.readout.buffered, session.scrubbing, session.duration]);
-    _shown = Listenable.merge([_ui.chrome, session]);
+    // The orientation's begin reads 竖屏模式设置, which picks the row's last button.
+    _shown = Listenable.merge([_ui.chrome, session, _ui.orientation]);
   }
 
   double _duration() => _session.duration.value;
@@ -157,8 +162,10 @@ class _PortraitControlsState extends State<PortraitControls> {
 
   Widget _bottomRow() {
     final upright = _session.layoutVertical;
+    // 竖屏模式设置 off, an upright video's full screen is landscape's, and its row ends at 全屏 alone.
+    final toVertical = upright && _ui.orientation.uprightTakesVertical;
     // An offline page's wide video has no 竖屏 (158); an upright one keeps it, its only way to full screen.
-    final vertical = upright || !_session.offline;
+    final vertical = toVertical || (!upright && !_session.offline);
     return Row(
       children: [
         PlayPauseButton(key: const ValueKey('portrait-play'), session: _session, onTap: _tap(_session.togglePlay)),
@@ -198,9 +205,9 @@ class _PortraitControlsState extends State<PortraitControls> {
             key: const ValueKey('portrait-vertical'),
             label: '竖屏',
             onTap: _tap(_ui.orientation.enterVertical),
-            child: _VerticalGlyph(badgeX: upright ? BiliMetrics.badgeEdgeOffsetX : BiliMetrics.badgeOffsetX),
+            child: _VerticalGlyph(badgeX: toVertical ? BiliMetrics.badgeEdgeOffsetX : BiliMetrics.badgeOffsetX),
           ),
-        if (!upright)
+        if (!toVertical)
           Padding(
             padding: EdgeInsets.only(left: vertical ? BiliMetrics.fullScreenGap : 0),
             child: ChromeTap(
