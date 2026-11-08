@@ -394,8 +394,8 @@ final class OwnSpace {
   /// `is_silence`: the video has no sound to offer, so no sound button.
   final bool bannerSilent;
 
-  /// The played animation's width and height, which its video is laid out by as [banner] is; null when the answer
-  /// has none.
+  /// The played animation's width and height, else the other animation's, which its video is laid out by as
+  /// [banner] is; null when neither has them.
   final ({int width, int height})? bannerSize;
 
   /// Numbers only, for the phone's log: where the 空间头图 came from and how it is cut. Never an address.
@@ -424,11 +424,17 @@ OwnSpace _ownSpace(JsonObject data, JsonObject card) {
   final additional = item?.nested('additional_animation');
   final animation = item?.nested('animation');
   final additionalVideos = _videos(additional);
-  final played = additionalVideos.isNotEmpty ? additional : animation;
-  final videos = additionalVideos.isNotEmpty ? additionalVideos : _videos(animation);
-  final width = played?.count('width') ?? 0;
-  final height = played?.count('height') ?? 0;
-  final crop = _bannerCrop([additional, animation, image]);
+  final playsAdditional = additionalVideos.isNotEmpty;
+  final played = playsAdditional ? additional : animation;
+  final videos = playsAdditional ? additionalVideos : _videos(animation);
+  // KaiC's 数字藏品 (2026-11-09) plays additional_animation, which comes with no size: the other one's is the art's.
+  final sized = [
+    if (playsAdditional) ...[('additional', additional), ('animation', animation)],
+    if (!playsAdditional) ...[('animation', animation), ('additional', additional)],
+  ].where((source) => (source.$2?.count('width') ?? 0) > 0 && (source.$2?.count('height') ?? 0) > 0).firstOrNull;
+  final width = sized?.$2?.count('width') ?? 0;
+  final height = sized?.$2?.count('height') ?? 0;
+  final crop = _bannerCrop([('additional', additional), ('animation', animation), ('image', image)]);
   final setting = data.nested('setting');
   final dress = data.nested('fans_dress');
   return OwnSpace(
@@ -460,8 +466,11 @@ OwnSpace _ownSpace(JsonObject data, JsonObject card) {
             'videos': videos.length,
             'width': width,
             'height': height,
+            'sizeFrom': sized?.$1 ?? 'none',
             'location': ?crop?.location,
-            'locationFrom': ?crop?.from,
+            'cropFrom': crop?.from ?? 'none',
+            'cropWidth': ?crop?.width,
+            'cropHeight': ?crop?.height,
           },
     bannerLabel: banner == null ? null : _bannerLabel(banner, banner.nested('title')),
     favourites: _section(data.nested('favourite2'), _folder, hidden: _hidden(setting, 'fav_video')),
@@ -492,9 +501,11 @@ List<String> _videos(JsonObject? animation) => [
 ];
 
 /// The first of [pictures] with a four-part `location` (the official app's order: `additional_animation`,
-/// `animation`, `image`), measured against its own width and height; null when none has one, or its size is missing.
-({SpaceBannerCrop crop, String location, int from})? _bannerCrop(List<JsonObject?> pictures) {
-  for (final (index, picture) in pictures.indexed) {
+/// `animation`, `image`), measured against its own width and height; one without its size or band is passed over.
+({SpaceBannerCrop crop, String location, String from, num width, num height})? _bannerCrop(
+  List<(String, JsonObject?)> pictures,
+) {
+  for (final (name, picture) in pictures) {
     final parts = picture?.text('location')?.split('-');
     if (picture == null || parts == null || parts.length != 4) continue;
     final rect = [for (final part in parts) num.tryParse(part.trim())];
@@ -502,15 +513,19 @@ List<String> _videos(JsonObject? animation) => [
     final [_, top, _, band] = rect.cast<num>();
     final width = asDouble(picture.map['width']) ?? 0;
     final height = asDouble(picture.map['height']) ?? 0;
-    if (width <= 0 || height <= 0 || band <= 0) return null;
+    if (width <= 0 || height <= 0 || band <= 0) continue;
     return (
       crop: SpaceBannerCrop(middle: (top + band / 2) / height, aspect: height / width),
       location: rect.join('-'),
-      from: index,
+      from: name,
+      width: _whole(width),
+      height: _whole(height),
     );
   }
   return null;
 }
+
+num _whole(double value) => value == value.roundToDouble() ? value.round() : value;
 
 /// The band of the banner kept in view from a three-part `location`, "x-start-end" down its `height`, read from
 /// `image` or else `animation`, as PiliPlus reads it; 0, the middle, when neither has one. The official app's own
