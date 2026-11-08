@@ -576,17 +576,15 @@ class SettingsSectionLook {
 /// [child], one line, placed in a Stack so its Chinese glyphs' middle is [centre] below the Stack's top.
 Widget settingsLineAt({
   required double centre,
-  required double fontSize,
   required Widget child,
   double left = 0,
   double right = 0,
 }) {
-  const band = 48.0;
   return Positioned(
     left: left,
     right: right,
-    top: centre + SettingsListTheme.glyphRise * fontSize - band / 2,
-    height: band,
+    top: centre - SettingsListTheme.lineBand / 2,
+    height: SettingsListTheme.lineBand,
     child: Align(alignment: Alignment.centerLeft, child: child),
   );
 }
@@ -605,8 +603,9 @@ Widget _greyLine(String text, double size, Color color) {
   );
 }
 
-/// The grey gap, a full-width hairline, then white rows each with an inset hairline under it; grey text below when
-/// there is a [footer]. A [label] sits in the gap; the [look] sets the gap, the hairlines and the label's place.
+/// The grey gap, a full-width hairline (dropped by looks that set `topRule: false`), then white rows each with an
+/// inset hairline under it; grey text below when there is a [footer]. A [label] sits in the gap; the [look] sets the
+/// gap, the hairlines and the label's place.
 class SettingsSection extends StatelessWidget {
   const SettingsSection({
     super.key,
@@ -645,7 +644,6 @@ class SettingsSection extends StatelessWidget {
                   children: [
                     settingsLineAt(
                       centre: look.labelCentre,
-                      fontSize: SettingsListTheme.labelText,
                       left: look.labelInset,
                       right: look.labelInset,
                       child: _greyLine(label, SettingsListTheme.labelText, SettingsListTheme.label),
@@ -833,14 +831,12 @@ class SettingsSwitchRow extends StatelessWidget {
                 else ...[
                   settingsLineAt(
                     centre: SettingsListTheme.switchTitleCentre,
-                    fontSize: SettingsTheme.rowTitleText,
                     left: SettingsTheme.rowInset,
                     right: _textRight,
                     child: SettingsRow.titleText(title),
                   ),
                   settingsLineAt(
                     centre: SettingsListTheme.switchSubtitleCentre,
-                    fontSize: SettingsListTheme.subtitleText,
                     left: SettingsTheme.rowInset,
                     right: _textRight,
                     child: _greyLine(subtitle, SettingsListTheme.subtitleText, SettingsListTheme.subtitle),
@@ -998,7 +994,6 @@ class SettingsPickRow extends StatelessWidget {
               children: [
                 settingsLineAt(
                   centre: subtitle == null ? look.titleCentre : look.tallTitleCentre,
-                  fontSize: look.titleText,
                   left: look.inset,
                   right: textRight,
                   child: SettingsRow.titleText(title, size: look.titleText),
@@ -1006,7 +1001,6 @@ class SettingsPickRow extends StatelessWidget {
                 if (subtitle != null)
                   settingsLineAt(
                     centre: look.tallSubtitleCentre,
-                    fontSize: SettingsListTheme.subtitleText,
                     left: look.inset,
                     right: textRight,
                     child: _greyLine(subtitle, SettingsListTheme.subtitleText, SettingsListTheme.subtitle),

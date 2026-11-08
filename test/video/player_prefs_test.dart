@@ -148,6 +148,51 @@ void main() {
     expect(ignored.map((event) => event.f.keys.toList()), everyElement(['key']), reason: 'never the value');
   });
 
+  test('自动播放设置\'s choices, 大卡默认声音, 竖屏 and 小窗 come back on the next launch', () async {
+    final prefs = await PlayerPrefs.load(path, logger: logger)
+      ..cellularAutoplay = false
+      ..detailAutoplay = false
+      ..detailFullScreen = true
+      ..homeAutoplay = AutoplayChoice.off
+      ..listAutoplay = AutoplayChoice.wifiOnly
+      ..bigCardSound = true
+      ..verticalFullScreen = false
+      ..autoPip = false;
+    await prefs.settle();
+
+    final again = await PlayerPrefs.load(path, logger: logger);
+    expect(again.cellularAutoplay, isFalse);
+    expect(again.detailAutoplay, isFalse);
+    expect(again.detailFullScreen, isTrue);
+    expect(again.homeAutoplay, AutoplayChoice.off);
+    expect(again.listAutoplay, AutoplayChoice.wifiOnly);
+    expect(again.bigCardSound, isTrue);
+    expect(again.verticalFullScreen, isFalse);
+    expect(again.autoPip, isFalse);
+    expect(logs.events.map((event) => event.msg), isNot(contains('player prefs value ignored')));
+  });
+
+  test('a bad value for one of the new keys falls back alone, logged by its key only', () async {
+    File(path).writeAsStringSync(
+        '{"homeAutoplay":"never","listAutoplay":2,"verticalFullScreen":"no","autoPip":0,"cellularAutoplay":false,'
+        '"bigCardSound":true}');
+    final prefs = await PlayerPrefs.load(path, logger: logger);
+    expect(prefs.homeAutoplay, AutoplayChoice.always);
+    expect(prefs.listAutoplay, AutoplayChoice.always);
+    expect(prefs.verticalFullScreen, isTrue);
+    expect(prefs.autoPip, isTrue);
+    expect(prefs.cellularAutoplay, isFalse, reason: 'a good neighbour is kept');
+    expect(prefs.bigCardSound, isTrue, reason: 'a good neighbour is kept');
+    final ignored = logs.events.where((event) => event.msg == 'player prefs value ignored').toList();
+    expect(ignored.map((event) => event.f['key']), const [
+      LogString('homeAutoplay'),
+      LogString('listAutoplay'),
+      LogString('verticalFullScreen'),
+      LogString('autoPip'),
+    ]);
+    expect(ignored.map((event) => event.f.keys.toList()), everyElement(['key']), reason: 'never the value');
+  });
+
   test('in memory nothing touches the disk', () async {
     final prefs = PlayerPrefs.memory(logger: logger)..autoplay = false;
     await prefs.settle();

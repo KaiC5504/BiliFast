@@ -219,6 +219,24 @@ void main() {
       expectValue('settings-home-feed', '双列/关闭自动播放');
     });
 
+    testWidgets('179 spells 仅Wi–Fi with an en dash; 172 and 设置 keep the hyphen', (tester) async {
+      await open(tester);
+      await tap(tester, 'playback-autoplay');
+      await tester.pumpAndSettle();
+      await tap(tester, 'autoplay-home');
+      await tester.pumpAndSettle();
+      expect(find.text('Wi-Fi/免流/移动网络下自动播放'), findsOneWidget);
+      expect(find.text('仅Wi–Fi下自动播放'), findsOneWidget);
+      expect(find.text('仅Wi-Fi下自动播放'), findsNothing);
+      await tap(tester, 'home-autoplay-wifiOnly');
+      expect(prefs.homeAutoplay, AutoplayChoice.wifiOnly);
+      await back(tester);
+      expectValue('autoplay-home', '仅Wi-Fi下自动播放');
+      await back(tester);
+      await back(tester);
+      expectValue('settings-home-feed', '双列/仅Wi-Fi下自动播放');
+    });
+
     testWidgets('竖屏模式设置\'s switch saves both ways', (tester) async {
       await open(tester);
       await tap(tester, 'playback-vertical');

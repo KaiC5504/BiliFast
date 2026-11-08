@@ -8003,8 +8003,8 @@ abstract final class OfflinePageTheme {
   static const sheetInk = BiliColors.text;
 }
 
-/// What 设置's playback pages (170-174, 178, 179) add to [SettingsTheme], measured off KaiC's screenshots at 3 px a
-/// pt. Their pages don't agree with each other: 首页推荐设置 (170) and the two pickers (178, 179) each have their own
+/// What 设置's playback pages (170-174, 178, 179) and 设置's BTR 加速 row (50) add to [SettingsTheme], measured off
+/// KaiC's screenshots at 3 px a pt. Their pages don't agree with each other: 首页推荐设置 (170) and the two pickers (178, 179) each have their own
 /// insets, row heights and ✓.
 abstract final class SettingsListTheme {
   /// A section's grey label and 178's note, 12 pt; a row's grey second line, 13 pt.
@@ -8013,9 +8013,8 @@ abstract final class SettingsListTheme {
   static const subtitleText = 13.0;
   static const subtitle = BiliColors.secondaryText;
 
-  /// Where a Chinese glyph's middle sits above its line box's, in em: what turns the screenshots' glyph middles into
-  /// line places, measured off the system font's stand-in.
-  static const glyphRise = 0.0;
+  /// The box a placed line is centred in: taller than any line on these pages, so its middle is the line's.
+  static const lineBand = 48.0;
 
   /// 174's label: 92 px of grey, the label's middle 17.17 pt down and 15 pt in, then the full-width hairline every
   /// section starts with.
@@ -8032,11 +8031,11 @@ abstract final class SettingsListTheme {
   static const noteHeight = 42.0;
   static const noteCentre = 20.67;
 
-  /// 170's last section and 179 start 20 pt under the bar, without a hairline.
+  /// A 20 pt gap with no hairline: over 170's last section, and under 179's bar.
   static const plainGap = 20.0;
 
-  /// The switch (172-174): a 124 × 55 px pill ending 23 px from the screen's edge, its knob a white pill 73 px wide
-  /// inset 4 px, at the end the switch is set to.
+  /// The switch (172-174, and 设置's BTR 加速 row, 50): a 124 × 55 px pill ending 23 px from the screen's edge, its
+  /// knob a white pill 73 px wide inset 4 px, at the end the switch is set to.
   static const switchWidth = 124 / 3;
   static const switchHeight = 55 / 3;
   static const switchKnobWidth = 73 / 3;

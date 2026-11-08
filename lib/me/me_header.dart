@@ -10,7 +10,7 @@ import 'me_glyphs.dart';
 import 'me_model.dart';
 
 /// How a [MeTap] answers a finger: glyphs and short labels fade as iOS buttons do, rows and the 会员 card darken, and
-/// the header's profile band shows nothing (KaiC, 2026-11-09).
+/// the header's profile band shows nothing, as the official band has no press state.
 enum MeTapFeedback { fade, highlight, none }
 
 /// A control with its own accessibility press, so VoiceOver and ghosthand reach it.

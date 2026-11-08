@@ -6,11 +6,17 @@ import 'playback_settings_page.dart';
 
 /// What each page calls an [AutoplayChoice].
 extension AutoplayLabels on AutoplayChoice {
-  /// 首页自动播放's (170, 179).
+  /// 首页自动播放's (170, 172, 50).
   String get homeLabel => switch (this) {
     AutoplayChoice.always => 'Wi-Fi/免流/移动网络下自动播放',
     AutoplayChoice.wifiOnly => '仅Wi-Fi下自动播放',
     AutoplayChoice.off => '关闭自动播放',
+  };
+
+  /// 179's own rows: its second spells Wi–Fi with an en dash, where 170, 172 and 设置 keep the hyphen.
+  String get homePickerLabel => switch (this) {
+    AutoplayChoice.wifiOnly => '仅Wi–Fi下自动播放',
+    _ => homeLabel,
   };
 
   /// 动态视频是否自动播放's (178).
@@ -152,7 +158,7 @@ class _AutoplayChoicePageState extends State<AutoplayChoicePage> {
           for (final choice in AutoplayChoice.values)
             SettingsPickRow(
               key: ValueKey('${widget.keyPrefix}-${choice.name}'),
-              title: widget.home ? choice.homeLabel : choice.listLabel,
+              title: widget.home ? choice.homePickerLabel : choice.listLabel,
               chosen: choice == _choice,
               look: SettingsPickLook.picker,
               onTap: () => _pick(choice),
