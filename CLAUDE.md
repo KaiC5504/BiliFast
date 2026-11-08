@@ -440,5 +440,8 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   again on every start (the controller doesn't skip repeats), given up when its player goes or it pauses while covered.
   With 后台听视频 off, nothing starts sound away from the screen without picture in picture: lock-screen and headphone
   buttons and a call's resume are dropped there (`_heldAway`), and the lock screen comes off after the 1 s grace.
+  Natively (`NowPlaying.swift`) the info is published by hand, never with `automaticallyPublishesNowPlayingInfo` (it
+  showed -:-- until a seek, then fought ours), refreshed on duration, rate, play state and seeks, a drag's target held
+  until its seek lands; never `removePlayer` (an uncaught KVO exception crashed every page leaving the lock screen).
 - Daily use: KaiC uses the app every day and passes broad sign-offs that way. Ask him only for checks daily use can't
   reach (a new feature's states, a measurement, a log to read), as numbered phone steps.
