@@ -25,7 +25,7 @@ through to TestFlight. Finish with what was built, how it works, numbered phone 
 
 ## Status
 
-Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (8)**. The detail of each is in git
+Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (9)**. The detail of each is in git
 history, and the rules they added are under "Rules that bite".
 
 - The move from Swift (slices 0-9, 1.0.0 (4)-(12)): `packages/bili_core` ported tests-first; AVPlayer in a native view
@@ -66,6 +66,13 @@ history, and the rules they added are under "Rules that bite".
   添加更新源 for SideStore / AltStore Classic / Feather), one launch alert (expiry, else a new release, else the reminder
   question), a day-before notification, and a GitHub check once per launch; every release carries an AltStore-format
   `source.json`. On a re-signed bundle id 离线缓存 skips continued processing for the URLSession hand-off.
+- 自动播放设置, 1.3.0 (9), from GitHub issue 1 (关闭小屏自动播放): 设置's 首页推荐设置 and 播放设置 (170-179) on
+  `PlayerPrefs`: 详情页直接播放 (a page opens paused, cover up, no danmaku until it plays), 详情页直接全屏播放,
+  流量网络下自动播放, 首页自动播放 for 推荐's big card, 动态视频是否自动播放 for every other list, 大卡默认声音 (at launch),
+  竖屏视频全屏用竖屏模式播放 (off: upright videos take landscape full screen), 应用外自动小窗播放; the rest of those
+  pages drawn, toasting 暂未开放. `AutoplayPolicy` reads the phone's network (`DeviceHostApi.network`, unknown counts
+  as maybe mobile data). The own space's 空间头图 plays its collectible video (Bilibili's upos mirrors on Akamai),
+  cropped by its location rect, with the ◇ badge; 我的's name band no longer darkens under a finger.
 
 Update this section when a build ships: one short entry, and any rule it adds goes under "Rules that bite".
 
@@ -173,7 +180,8 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
       sheet, the unfollow confirm and their overlays.
   - `lib/comments/`: 评论, 评论详情, the composer with its emote panel, @ picker and pictures, and
     `comment_overlays.dart`, the in-page layers the page's Stack holds.
-  - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, and the font store.
+  - `lib/settings/`: 设置, 字体, CDN 节点 and the confirm alert, the font store, `AutoplayPolicy`, and `playback/`
+    (首页推荐设置, 播放设置 and their pages).
   - `lib/devtools/`: 开发者 (`developer_page.dart` and its sections, `node_probe_section.dart`: 节点测速), the crash log,
     the phone's log files, log forwarding and discovery of the PC's log server.
   - `lib/sideload/`: a sideloaded install's help (`SideloadModel`: the profile's expiry, the GitHub release check, the
