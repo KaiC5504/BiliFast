@@ -84,6 +84,9 @@ final class NativePlayer {
   private var reportedDuration: Double?
   private var reportedSize: CGSize?
   private var reportedRanges: [NativeTimeRange]?
+  private var lastControl: AVPlayer.TimeControlStatus = .paused
+  /// The lock screen's session while Dart has set it (NowPlaying).
+  var nowPlaying: NowPlaying.Session?
 
   init(id: Int64, events: PlayerEventApi) {
     self.id = id
@@ -121,11 +124,12 @@ final class NativePlayer {
     let item = AVPlayerItem(asset: AVURLAsset(url: url, options: options))
     item.preferredForwardBufferDuration = 30
     PlayerHostView.attachVideoOutput(to: item)
+    nowPlaying?.attach(item)
     self.item = item
     observe(item, generation: current)
     player.replaceCurrentItem(with: item)
     updateStatus()
-    log("load", ["at": startSeconds, "play": autoplay])
+    log("load", ["at": startSeconds, "play": autoplay, "background": NowPlaying.policyName(player)])
     if startSeconds > 0 {
       let start = CMTime(seconds: startSeconds, preferredTimescale: 600)
       // A reload mid-playback keeps the rate, so the new item can wait at 0 while this seek is in flight.
@@ -248,6 +252,7 @@ final class NativePlayer {
   }
 
   func dispose() {
+    NowPlaying.set(self, info: nil)
     generation += 1
     pendingSeeks = 0
     wantsPlay = false
@@ -265,6 +270,14 @@ final class NativePlayer {
     events.onLog(playerId: id, kind: kind, fields: fields.mapValues { Optional($0) }, completion: ignoreReply)
   }
 
+  func sendRemoteCommand(_ command: NativeRemoteCommand, seconds: Double?) {
+    events.onRemoteCommand(playerId: id, command: command, seconds: seconds, completion: ignoreReply)
+  }
+
+  func sendInterruption(began: Bool, shouldResume: Bool) {
+    events.onInterruption(playerId: id, began: began, shouldResume: shouldResume, completion: ignoreReply)
+  }
+
   private func observePlayer() {
     timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
                                                   queue: .main) { [weak self] time in
@@ -273,6 +286,7 @@ final class NativePlayer {
     playerObservations = [
       player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
         onMainActor {
+          self?.controlChanged()
           self?.updateStatus()
           self?.startIfBuffered()
         }
@@ -381,6 +395,24 @@ final class NativePlayer {
     starting = false
     log("start without waiting", ["at": now, "ahead": loadedEnd - now, "reason": reason?.rawValue ?? ""])
     player.playImmediately(atRate: player.defaultRate > 0 ? player.defaultRate : 1)
+  }
+
+  /// The phone log's proof of what stopped a video away from the screen: Dart (`wantsPlay` false), a stall, or iOS.
+  private func controlChanged() {
+    let control = player.timeControlStatus
+    let leftPlaying = lastControl == .playing && control != .playing
+    lastControl = control
+    let state = UIApplication.shared.applicationState
+    guard leftPlaying, state != .active else { return }
+    var fields: [String: Any] = [
+      "to": control == .paused ? "paused" : "waiting",
+      "app": state == .background ? "background" : "inactive",
+      "wantsPlay": wantsPlay,
+      "pip": host.pip?.isPictureInPictureActive ?? false,
+      "policy": NowPlaying.policyName(player),
+    ]
+    if let reason = player.reasonForWaitingToPlay { fields["reason"] = reason.rawValue }
+    log("stopped playing off screen", fields)
   }
 
   private func tick(_ time: CMTime) {
@@ -606,7 +638,7 @@ final class NativePlayer {
 
 /// AVFoundation reports KVO changes on whichever thread made them; most already arrive on the main thread,
 /// where they are handled at once so the events keep their order.
-private func onMainActor(_ body: @escaping @MainActor () -> Void) {
+func onMainActor(_ body: @escaping @MainActor () -> Void) {
   if Thread.isMainThread {
     MainActor.assumeIsolated(body)
   } else {
