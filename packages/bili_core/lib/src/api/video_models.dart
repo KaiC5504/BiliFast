@@ -403,6 +403,16 @@ final class DanmakuMaskInfo {
     );
   }
 
+  /// The host of [json]'s `mask_url` when it is there but not one [isMaskUrl] accepts ('?' when it doesn't parse).
+  static String? refusedHost(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final raw = JsonObject(json).text('mask_url');
+    if (raw == null) return null;
+    final url = Uri.tryParse(raw.startsWith('//') ? 'https:$raw' : raw);
+    if (url != null && isMaskUrl(url)) return null;
+    return url == null || url.host.isEmpty ? '?' : url.host;
+  }
+
   /// Any Akamai customer can name an edge `upos-*`, so the mirror part is required.
   static final _uposOnAkamai = RegExp(r'^upos-[a-z0-9]+-mirror[a-z0-9]+\.akamaized\.net$');
 
@@ -440,7 +450,13 @@ final class DanmakuMaskInfo {
 }
 
 final class PlayerInfo {
-  const PlayerInfo({required this.lastPlayCid, this.lastPlayTimeMs = 0, required this.chapters, this.mask});
+  const PlayerInfo({
+    required this.lastPlayCid,
+    this.lastPlayTimeMs = 0,
+    required this.chapters,
+    this.mask,
+    this.refusedMaskHost,
+  });
 
   factory PlayerInfo.fromJson(Object? json) {
     final object = JsonObject.from(json);
@@ -466,6 +482,7 @@ final class PlayerInfo {
             ]
           : [],
       mask: DanmakuMaskInfo.fromJson(object.map['dm_mask']),
+      refusedMaskHost: DanmakuMaskInfo.refusedHost(object.map['dm_mask']),
     );
   }
 
@@ -478,16 +495,21 @@ final class PlayerInfo {
   /// 人像防挡's mask for this part, when Bilibili made one (`dm_mask`).
   final DanmakuMaskInfo? mask;
 
+  /// The host of a `dm_mask` address [DanmakuMaskInfo.isMaskUrl] refused, so the phone log can tell a refused mask
+  /// from none; the host alone, never the address.
+  final String? refusedMaskHost;
+
   @override
   bool operator ==(Object other) =>
       other is PlayerInfo &&
       other.lastPlayCid == lastPlayCid &&
       other.lastPlayTimeMs == lastPlayTimeMs &&
       listEquals(other.chapters, chapters) &&
-      other.mask == mask;
+      other.mask == mask &&
+      other.refusedMaskHost == refusedMaskHost;
 
   @override
-  int get hashCode => Object.hash(lastPlayCid, lastPlayTimeMs, Object.hashAll(chapters), mask);
+  int get hashCode => Object.hash(lastPlayCid, lastPlayTimeMs, Object.hashAll(chapters), mask, refusedMaskHost);
 }
 
 final class VideoCard {

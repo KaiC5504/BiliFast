@@ -99,6 +99,14 @@ void main() {
       }
     });
 
+    test("keeps a refused address's host alone, for the log", () {
+      expect(_infoWith(_mask('https://evil.example.com/m.webmask?upsig=s3cr3t')).refusedMaskHost, 'evil.example.com');
+      expect(_infoWith(_mask('http://upos-sz-madeup-cmask.bilivideo.com/m.webmask')).refusedMaskHost,
+          'upos-sz-madeup-cmask.bilivideo.com');
+      expect(_infoWith(_mask('not an address')).refusedMaskHost, '?');
+      expect(_infoWith(_mask(_maskUrl)).refusedMaskHost, isNull);
+    });
+
     test("on the CDN's other hosts", () {
       for (final allowed in [
         'https://upos-sz-madeup.bilivideo.cn/m.webmask?upsig=s3cr3t',
