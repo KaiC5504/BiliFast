@@ -193,6 +193,52 @@ void main() {
     expect(ignored.map((event) => event.f.keys.toList()), everyElement(['key']), reason: 'never the value');
   });
 
+  test('a file from before 后台听视频 reads it and its 自动连播 on', () async {
+    File(path).writeAsStringSync('{"autoplay":true,"loop":"off","fit":"fit","btr":true,"autoPip":false}');
+    final prefs = await PlayerPrefs.load(path, logger: logger);
+    expect(prefs.backgroundListen, isTrue);
+    expect(prefs.backgroundNext, isTrue);
+    expect(prefs.autoPip, isFalse);
+    expect(logs.events.map((event) => event.msg), isNot(contains('player prefs value ignored')));
+  });
+
+  test('后台听视频 and its 自动连播 off come back on the next launch, and leave the file when turned on', () async {
+    final prefs = await PlayerPrefs.load(path, logger: logger)
+      ..backgroundListen = false
+      ..backgroundNext = false;
+    await prefs.settle();
+    final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+    expect(written, allOf(containsPair('backgroundListen', false), containsPair('backgroundNext', false)));
+
+    final again = await PlayerPrefs.load(path, logger: logger);
+    expect(again.backgroundListen, isFalse);
+    expect(again.backgroundNext, isFalse);
+    again
+      ..backgroundListen = true
+      ..backgroundNext = true;
+    await again.settle();
+    final cleared = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+    expect(cleared.keys.where((key) => key.startsWith('background')), isEmpty);
+    final third = await PlayerPrefs.load(path, logger: logger);
+    expect(third.backgroundListen, isTrue);
+    expect(third.backgroundNext, isTrue);
+  });
+
+  for (final (json, key, listen, next) in [
+    ('{"backgroundListen":"off","backgroundNext":false}', 'backgroundListen', true, false),
+    ('{"backgroundListen":false,"backgroundNext":0}', 'backgroundNext', false, true),
+  ]) {
+    test('$json: $key falls back alone, logged by its key only', () async {
+      File(path).writeAsStringSync(json);
+      final prefs = await PlayerPrefs.load(path, logger: logger);
+      expect(prefs.backgroundListen, listen);
+      expect(prefs.backgroundNext, next);
+      final ignored = logs.events.where((event) => event.msg == 'player prefs value ignored').toList();
+      expect(ignored.map((event) => event.f['key']), [LogString(key)]);
+      expect(ignored.map((event) => event.f.keys.toList()), everyElement(['key']), reason: 'never the value');
+    });
+  }
+
   test('in memory nothing touches the disk', () async {
     final prefs = PlayerPrefs.memory(logger: logger)..autoplay = false;
     await prefs.settle();

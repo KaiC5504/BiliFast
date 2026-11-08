@@ -23,6 +23,9 @@ enum PanelGlyphKind {
   loop(Size(BiliMetrics.panelLoopGlyphWidth, BiliMetrics.panelLoopGlyphHeight)),
   mirror(Size(BiliMetrics.panelMirrorGlyphWidth, BiliMetrics.panelMirrorGlyphHeight)),
   fit(Size.square(BiliMetrics.panelFitGlyph)),
+
+  /// 后台听视频 in landscape ⋮ (21); the portrait sheet draws [listen].
+  backgroundListen(Size(18, 46 / 3)),
   chevron(Size(BiliMetrics.panelChevronWidth, BiliMetrics.panelChevronHeight)),
   views(Size(BiliMetrics.sheetCountGlyphWidth, BiliMetrics.sheetCountGlyphHeight)),
   danmaku(Size(BiliMetrics.sheetCountGlyphWidth, BiliMetrics.sheetCountGlyphHeight)),
@@ -70,6 +73,8 @@ class _GlyphPainter extends CustomPainter {
         _mirror(canvas);
       case PanelGlyphKind.fit:
         _fit(canvas, size);
+      case PanelGlyphKind.backgroundListen:
+        _backgroundListen(canvas, size);
       case PanelGlyphKind.chevron:
         canvas.drawPath(
           Path()
@@ -377,6 +382,55 @@ class _GlyphPainter extends CustomPainter {
         ..lineTo(right - arm, bottom),
       paint,
     );
+  }
+
+  /// A headband whose ends sit in solid cups, around a bold 听 drawn as strokes so no font can move it.
+  void _backgroundListen(Canvas canvas, Size size) {
+    final paint = _line(1.27);
+    const left = 1.7, right = 16.3, r = (right - left) / 2, shoulder = 7.95, end = 10.9;
+    canvas.drawPath(
+      Path()
+        ..moveTo(left, end)
+        ..lineTo(left, shoulder)
+        ..arcToPoint(const Offset(right, shoulder), radius: const Radius.circular(r))
+        ..lineTo(right, end),
+      paint,
+    );
+    // The cups lean in at the bottom, their outer corners rounder than the inner ones; the right mirrors the left.
+    final fill = Paint()..color = color;
+    final cup = RRect.fromLTRBAndCorners(
+      0,
+      10.27,
+      3,
+      15.36,
+      topLeft: const Radius.circular(1.5),
+      topRight: const Radius.circular(0.8),
+      bottomLeft: const Radius.circular(2),
+      bottomRight: const Radius.circular(1),
+    );
+    final centre = cup.center, middle = size.width / 2;
+    for (final side in const [1.0, -1.0]) {
+      canvas
+        ..save()
+        ..translate(middle, 0)
+        ..scale(side, 1)
+        ..translate(centre.dx - middle, centre.dy)
+        ..rotate(-0.06)
+        ..translate(-centre.dx, -centre.dy)
+        ..drawRRect(cup, fill)
+        ..restore();
+    }
+    canvas.drawRRect(RRect.fromLTRBR(4.825, 6.67, 7.025, 11.27, const Radius.circular(0.875)), paint);
+    canvas.drawPath(
+      Path()
+        ..moveTo(12.32, 5.48)
+        ..lineTo(9.04, 6.31)
+        ..lineTo(9.04, 10.26)
+        ..quadraticBezierTo(9.04, 11.66, 7.76, 12.85),
+      paint,
+    );
+    canvas.drawLine(const Offset(9.04, 8.33), const Offset(13, 8.33), _line(1.2));
+    canvas.drawLine(const Offset(11.65, 8.33), const Offset(11.65, 13.07), paint);
   }
 
   void _countFrame(Canvas canvas, Size size) {

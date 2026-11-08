@@ -499,7 +499,6 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
             PlayerPanel.danmakuSettings => DanmakuSettingsPanel(
               ui: widget.ui,
               light: light,
-              toast: _toast,
               close: _close,
               confirm: (request) => _confirm.value = request,
             ),

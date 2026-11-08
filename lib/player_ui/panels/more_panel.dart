@@ -280,7 +280,7 @@ class _MorePanelState extends State<MorePanel> {
                 ),
                 PanelToggleRow(
                   key: const ValueKey('more-background-listen'),
-                  icon: const PanelGlyph(PanelGlyphKind.listen),
+                  icon: const PanelGlyph(PanelGlyphKind.backgroundListen),
                   title: '后台听视频',
                   value: _session.backgroundListen,
                   onChanged: rows.setBackgroundListen,

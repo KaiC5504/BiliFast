@@ -165,7 +165,8 @@ class PlayerPrefs {
   bool get backgroundListen => _backgroundListen;
   set backgroundListen(bool value) => _set(() => _backgroundListen = value);
 
-  /// 后台听视频时，自动连播相关视频 (174): a video that ends in the background opens the next one and plays it.
+  /// With 后台听视频 on, a video that ends in the background opens the next one and plays it (174's
+  /// 后台听视频时，自动连播相关视频).
   bool get backgroundNext => _backgroundNext;
   set backgroundNext(bool value) => _set(() => _backgroundNext = value);
 

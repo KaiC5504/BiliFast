@@ -385,7 +385,8 @@ class PanelRowFrame extends StatelessWidget {
   );
 }
 
-/// Where the official card has a row this app doesn't (色觉辅助), so the rest sit where they do in 21.
+/// Where the official card has a row this app doesn't (色觉辅助; in release builds 播放反馈 and 编辑播放器 too), so the rest sit
+/// where they do in 21.
 class PanelBlankRow extends StatelessWidget {
   const PanelBlankRow({super.key, this.divider = true});
 
