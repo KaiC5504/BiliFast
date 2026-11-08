@@ -74,9 +74,10 @@ bool isSkinPackageUrl(Uri url) {
   return _cdnDomains.any((domain) => host == domain || host.endsWith('.$domain'));
 }
 
-/// Bilibili's upos mirrors on Akamai, as a 空间头图's mp4 comes (`upos-hz-mirrorakam`, KaiC's log, 2026-11-09); every
-/// other akamaized.net name is someone else's.
-final _uposOnAkamai = RegExp(r'^upos-[a-z0-9-]+\.akamaized\.net$');
+/// Bilibili's upos mirrors on Akamai, `upos-<region>-mirror<cdn>` as the engine's node names read
+/// (bili_core's `NodeProbe.shortName`), as a 空间头图's mp4 comes (`upos-hz-mirrorakam`, KaiC's log, 2026-11-09). Any
+/// Akamai customer can name an edge `upos-*`, so the mirror part is required.
+final _uposOnAkamai = RegExp(r'^upos-[a-z0-9]+-mirror[a-z0-9]+\.akamaized\.net$');
 const _videoDomains = ['bilivideo.com', 'bilivideo.cn'];
 
 /// [isSkinPackageUrl]'s hosts and Bilibili's video CDN (its upos mirrors on Akamai, bilivideo), on the same terms.

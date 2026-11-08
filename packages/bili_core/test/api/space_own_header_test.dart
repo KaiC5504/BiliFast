@@ -159,8 +159,11 @@ void main() {
         'videos': 2,
         'width': 720,
         'height': 1080,
+        'sizeFrom': 'additional',
         'location': '0-9-720-540',
-        'locationFrom': 0,
+        'cropFrom': 'additional',
+        'cropWidth': 720,
+        'cropHeight': 1080,
       });
     });
 
@@ -189,6 +192,81 @@ void main() {
       }
       expect(own(animation(width: 0)).bannerCrop, isNull);
       expect(own(animation(height: 0)).bannerCrop, isNull);
+    });
+
+    test('a rect without its size, or with no band, falls to the next one\'s', () {
+      for (final additional in [
+        animation(name: 'extra', width: 0),
+        animation(name: 'extra', height: 0),
+        animation(name: 'extra')..remove('width'),
+        animation(name: 'extra', location: '0-6-1080-0'),
+        animation(name: 'extra', location: 'a-b-c-d'),
+      ]) {
+        final space = own(animation(), additional: additional);
+        expect(space.bannerCrop!.middle, closeTo(611 / 1618, 1e-9), reason: '$additional');
+        expect(space.bannerFacts['cropFrom'], 'animation');
+      }
+      final still = _profile(
+        _data(
+          item: {
+            'image': _image('0-200-1125-1000', 2000),
+            'animation': animation(width: 0),
+            'additional_animation': animation(name: 'extra', height: 0),
+          },
+        ),
+      ).own!;
+      expect(still.bannerCrop!.middle, closeTo(700 / 2000, 1e-9), reason: 'the image\'s after both');
+    });
+
+    test('as KaiC\'s 数字藏品 answers: additional_animation plays with no size or location, so its crop and size are '
+        'animation\'s, and the log names them', () {
+      final additional = animation(name: 'extra', width: 0, height: 0)..remove('location');
+      final space = own(animation(), additional: additional);
+      expect(space.bannerVideo, 'https://upos-hz-mirrorakam.akamaized.net/made-up/extra.mp4?e=made-up');
+      expect(space.bannerVideoBackups, hasLength(1));
+      expect(space.bannerSize, (width: 1080, height: 1618));
+      expect(space.bannerCrop!.middle, closeTo(611 / 1618, 1e-9));
+      expect(space.bannerCrop!.aspect, closeTo(1618 / 1080, 1e-9));
+      expect(space.bannerFacts, {
+        'image': false,
+        'additional': true,
+        'played': 'additional',
+        'videos': 2,
+        'width': 1080,
+        'height': 1618,
+        'sizeFrom': 'animation',
+        'location': '0-6-1080-1210',
+        'cropFrom': 'animation',
+        'cropWidth': 1080,
+        'cropHeight': 1618,
+      });
+
+      final bare = own(animation(width: 0, height: 0)..remove('location'), additional: additional);
+      expect(bare.bannerSize, isNull);
+      expect(bare.bannerCrop, isNull);
+      expect(bare.bannerFacts, containsPair('sizeFrom', 'none'));
+      expect(bare.bannerFacts, containsPair('cropFrom', 'none'));
+
+      final still = _profile(
+        _data(
+          item: {
+            'image': _image('0-200-1125-1000', 2000),
+            'animation': animation(width: 0, height: 0)..remove('location'),
+            'additional_animation': additional,
+          },
+        ),
+      ).own!;
+      expect(still.bannerCrop!.middle, closeTo(700 / 2000, 1e-9));
+      expect(still.bannerFacts, containsPair('cropFrom', 'image'));
+      expect(still.bannerFacts, containsPair('cropWidth', 1125));
+    });
+
+    test('the animation\'s rect wins over the image\'s three-part alignment in a box', () {
+      final space = _profile(_data(item: {'image': _image('0-120-680', 1600), 'animation': animation()})).own!;
+      expect(space.bannerAlignY, closeTo(-0.5, 1e-9));
+      expect(space.bannerCrop!.middle, closeTo(611 / 1618, 1e-9));
+      expect(space.bannerAlignIn(440, 295.67), space.bannerCrop!.alignY(440, 295.67));
+      expect(space.bannerAlignIn(440, 295.67), isNot(closeTo(-0.5, 1e-3)));
     });
 
     test('takes the second video when the first is empty or odd, and none from an odd list', () {

@@ -53,6 +53,8 @@ final class OwnBannerVideos {
 
   final String folder;
   final Future<Uint8List> Function(Uri url) _fetch;
+
+  /// Keyed by the destination file: two signatures of one video are one download into one `.part`.
   final _loads = <String, Future<File?>>{};
   String? _latest;
 
@@ -65,10 +67,11 @@ final class OwnBannerVideos {
   /// [url]'s file, downloaded the first time, from [backups] in turn when [url] can't be had; null when none can.
   /// No address is ever logged.
   Future<File?> file(String url, {List<String> backups = const []}) {
-    _latest = url;
-    return _loads[url] ??= _load(url, backups).whenComplete(() {
+    final key = fileOf(url).path;
+    _latest = key;
+    return _loads[key] ??= _load(url, backups).whenComplete(() {
       // A block body: returning the removed future would have this one wait on itself.
-      _loads.remove(url);
+      _loads.remove(key);
     });
   }
 
@@ -80,30 +83,38 @@ final class OwnBannerVideos {
       Logger.shared.warn(LogCategory.ui, 'own space banner video failed', {'error': _reason(error)});
       return null;
     }
-    for (final source in [url, ...backups]) {
+    final sources = [url, ...backups];
+    for (final (index, source) in sources.indexed) {
       try {
         final address = Uri.tryParse(secureImageUrl(source));
-        if (address == null) continue;
+        if (address == null) {
+          Logger.shared.warn(LogCategory.ui, 'own space banner video failed', {'source': index, 'error': 'unparsed'});
+          continue;
+        }
         if (!isBannerVideoUrl(address)) throw SkinPackageError.hostNotAllowed(address, what: 'banner video');
         final bytes = await _fetch(address);
-        if (bytes.isEmpty) continue;
+        if (bytes.isEmpty) {
+          Logger.shared.warn(LogCategory.ui, 'own space banner video failed', {'source': index, 'error': 'empty'});
+          continue;
+        }
         await Directory(folder).create(recursive: true);
         final part = File('${file.path}.part');
         await part.writeAsBytes(bytes, flush: true);
         await part.rename(file.path);
         Logger.shared.info(LogCategory.ui, 'own space banner video', {'host': address.host, 'bytes': bytes.length});
-        if (_latest == url) await _keepOnly(file);
+        if (_latest == file.path) await _keepOnly(file);
         return file;
       } on Object catch (error) {
-        Logger.shared.warn(LogCategory.ui, 'own space banner video failed', {'error': _reason(error)});
+        Logger.shared.warn(LogCategory.ui, 'own space banner video failed', {'source': index, 'error': _reason(error)});
       }
     }
+    Logger.shared.warn(LogCategory.ui, 'own space banner video gave up', {'tried': sources.length});
     return null;
   }
 
   /// Another address still downloading keeps its file and its `.part`: the page may have moved on to it.
   Future<void> _keepOnly(File kept) async {
-    final loading = {for (final url in _loads.keys) fileOf(url).path};
+    final loading = _loads.keys.toSet();
     await for (final entry in Directory(folder).list(followLinks: false)) {
       if (entry is! File || entry.path == kept.path) continue;
       final path = entry.path.endsWith('.part') ? entry.path.substring(0, entry.path.length - 5) : entry.path;

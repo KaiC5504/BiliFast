@@ -14,6 +14,8 @@ const _video = 'https://i0.hdslb.com/bfs/garb/made-up/banner.mp4?made=up';
 const _other = 'https://i0.hdslb.com/bfs/garb/made-up/other.mp4';
 const _upos = 'https://upos-hz-mirrorakam.akamaized.net/made-up/banner.mp4?e=made-up';
 
+Map<String, Object> _fields(LogEvent event) => event.f.map((key, value) => MapEntry(key, value.toJson()));
+
 void main() {
   late Directory folder;
   late List<Uri> fetched;
@@ -155,8 +157,58 @@ void main() {
       });
       expect(fetched.map((url) => url.host), ['upos-hz-mirrorakam.akamaized.net', 'upos-sz-mirrorcos.bilivideo.com']);
       final failures = logs.events.where((event) => event.msg == 'own space banner video failed').toList();
-      expect(failures, hasLength(2));
+      expect(failures.map((line) => _fields(line)['source']), [0, 1], reason: 'each names its source');
       expect(failures.map((line) => line.encode()).join(), isNot(contains('made-up')));
+      expect(logs.events.where((event) => event.msg == 'own space banner video gave up'), isEmpty);
+    });
+
+    testWidgets('an unparsable or empty source is logged and passed over, and giving up says how many were tried', (
+      tester,
+    ) async {
+      await prepare(tester);
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await tester.runAsync(() async {
+        final videos = OwnBannerVideos(
+          folder: '${folder.path}${Platform.pathSeparator}space_banner',
+          fetch: (url) async {
+            fetched.add(url);
+            return Uint8List(0);
+          },
+        );
+        expect(await videos.file('https://[made-up/a.mp4', backups: const [_video]), isNull);
+      });
+      expect(fetched, hasLength(1));
+      final failures = logs.events.where((event) => event.msg == 'own space banner video failed').toList();
+      expect(failures.map(_fields), [
+        {'source': 0, 'error': 'unparsed'},
+        {'source': 1, 'error': 'empty'},
+      ]);
+      final gaveUp = logs.events.singleWhere((event) => event.msg == 'own space banner video gave up');
+      expect(_fields(gaveUp), {'tried': 2});
+      expect(logs.events.map((line) => line.encode()).join(), isNot(contains('made-up')));
+    });
+
+    testWidgets('two signatures of one video at once share one download into one file', (tester) async {
+      await prepare(tester);
+      await tester.runAsync(() async {
+        final answer = Completer<Uint8List>();
+        var fetches = 0;
+        final videos = OwnBannerVideos(
+          folder: '${folder.path}${Platform.pathSeparator}space_banner',
+          fetch: (url) {
+            fetches++;
+            return answer.future;
+          },
+        );
+        final first = videos.file('$_upos&t=1');
+        final second = videos.file('$_upos&t=2');
+        answer.complete(Uint8List.fromList([1]));
+        expect((await first)!.path, (await second)!.path);
+        expect(fetches, 1);
+        expect(Directory(videos.folder).listSync(), hasLength(1));
+      });
     });
 
     testWidgets('a fresh signature on the same video finds the file already kept', (tester) async {

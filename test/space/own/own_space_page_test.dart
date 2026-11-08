@@ -430,7 +430,12 @@ void main() {
         banner: 'https://i0.hdslb.com/bfs/garb/made-up/banner.png',
         bannerVideo: 'https://upos-hz-mirrorakam.akamaized.net/made-up/banner.mp4?e=made-up',
         bannerVideoBackups: ['https://upos-sz-mirrorcos.bilivideo.com/made-up/banner.mp4?e=made-up'],
-        bannerFacts: {'additional': true, 'played': 'additional', 'location': '0-8-1080-1000', 'locationFrom': 0},
+        bannerFacts: {
+          'additional': true,
+          'played': 'additional',
+          'location': '0-8-1080-1000',
+          'cropFrom': 'additional',
+        },
         bannerLabel: SpaceBannerLabel(title: '测试收藏集', glyph: SpaceBannerGlyph.collectible),
       ),
     );
@@ -440,7 +445,7 @@ void main() {
       'additional': true,
       'played': 'additional',
       'location': '0-8-1080-1000',
-      'locationFrom': 0,
+      'cropFrom': 'additional',
       'videoHost': 'upos-hz-mirrorakam.akamaized.net',
       'backups': 1,
       'glyph': 'collectible',
