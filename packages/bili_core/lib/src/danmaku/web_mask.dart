@@ -81,6 +81,7 @@ final class WebMaskIndex {
 typedef WebMaskFrame = ({int ms, String svg});
 
 const _svgDataUri = 'data:image/svg+xml;base64,';
+final _lineBreaks = RegExp(r'\s');
 
 /// The frames of one segment: gzip, then repeated (u32 length, u64 ms, a `data:image/svg+xml;base64,` URI of that
 /// length). Throws [FormatException] on a damaged segment.
@@ -124,7 +125,8 @@ String _svgOf(Uint8List record, int at) {
   final uri = latin1.decode(record);
   if (!uri.startsWith(_svgDataUri)) throw FormatException('webmask segment: record at byte $at is not an SVG');
   try {
-    return utf8.decode(base64.decoder.convert(uri, _svgDataUri.length));
+    // Bilibili's files wrap the base64 in 76-character lines, which dart:convert refuses.
+    return utf8.decode(base64.decode(uri.substring(_svgDataUri.length).replaceAll(_lineBreaks, '')));
   } on FormatException {
     throw FormatException('webmask segment: record at byte $at does not decode');
   }

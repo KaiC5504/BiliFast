@@ -125,6 +125,17 @@ void main() {
       );
       expect(frames, [(ms: 40, svg: '<svg>a</svg>'), (ms: 40, svg: '<svg>b</svg>')]);
     });
+
+    test("base64 wrapped in 76-character lines, as Bilibili's files have it", () {
+      final svg = svgFrame(0);
+      final encoded = base64.encode(utf8.encode(svg));
+      final wrapped = [
+        for (var at = 0; at < encoded.length; at += 76) encoded.substring(at, (at + 76).clamp(0, encoded.length)),
+      ].join('\n');
+      expect(wrapped, contains('\n'));
+      final frames = decodeWebMaskSegment(gzipped(record(0, 'data:image/svg+xml;base64,$wrapped\n')));
+      expect(frames.single.svg, svg);
+    });
   });
 
   group('a damaged file throws FormatException', () {
