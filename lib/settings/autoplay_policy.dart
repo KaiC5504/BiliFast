@@ -9,9 +9,9 @@ import '../device/network_monitor.dart';
 import '../video/player_prefs.dart';
 
 /// Whether a video may start by itself (自动播放设置, 172): the user's choices in [PlayerPrefs] against the network
-/// the phone is on. The network is asked at launch, on every path change and on every return to the app, and kept,
-/// so a list settling a scroll asks synchronously.
-class AutoplayPolicy with WidgetsBindingObserver {
+/// the phone is on. The network is asked at launch, on every path change and as the app comes back, and kept, so a
+/// list settling a scroll asks synchronously; listeners hear each new reading.
+class AutoplayPolicy extends ChangeNotifier with WidgetsBindingObserver {
   AutoplayPolicy({required this._prefs, required Future<bool> Function() onCellular, Logger? logger})
     : _ask = onCellular,
       _logger = logger ?? Logger.shared;
@@ -28,7 +28,7 @@ class AutoplayPolicy with WidgetsBindingObserver {
     return policy;
   }
 
-  /// On Wi-Fi for good, reading [PlayerPrefs.shared]; tests and the PC.
+  /// A network that never changes: Wi-Fi unless [onCellular]. Tests and the PC; reads [PlayerPrefs.shared].
   factory AutoplayPolicy.fixed({bool onCellular = false}) =>
       AutoplayPolicy(prefs: () => PlayerPrefs.shared, onCellular: () async => onCellular).._onCellular = onCellular;
 
@@ -39,10 +39,10 @@ class AutoplayPolicy with WidgetsBindingObserver {
   final Future<bool> Function() _ask;
   final Logger _logger;
   StreamSubscription<bool>? _changes;
-  bool _onCellular = false;
+  bool? _onCellular;
 
-  /// On mobile data as last asked.
-  bool get onCellular => _onCellular;
+  /// On mobile data as last asked; null until the first answer.
+  bool? get onCellular => _onCellular;
 
   /// 详情页直接播放 and 流量网络下自动播放: a video page opened plays at once.
   bool get detail {
@@ -60,22 +60,30 @@ class AutoplayPolicy with WidgetsBindingObserver {
     final prefs = _prefs();
     return switch (choice) {
       AutoplayChoice.off => false,
-      AutoplayChoice.wifiOnly => !_onCellular,
+      AutoplayChoice.wifiOnly => _onCellular == false,
       AutoplayChoice.always => _networkAllows(prefs),
     };
   }
 
-  bool _networkAllows(PlayerPrefs prefs) => prefs.cellularAutoplay || !_onCellular;
+  /// An unknown network may be mobile data.
+  bool _networkAllows(PlayerPrefs prefs) => prefs.cellularAutoplay || _onCellular == false;
 
   /// Asks the network again.
   Future<void> refresh() async {
     try {
       final cellular = await _ask();
-      if (cellular != _onCellular) _logger.info(LogCategory.app, 'autoplay network', {'cellular': cellular});
-      _onCellular = cellular;
+      if (cellular == _onCellular) return;
+      _logger.info(LogCategory.app, 'autoplay network', {'cellular': cellular});
+      _take(cellular);
     } catch (error) {
       _logger.warn(LogCategory.app, 'autoplay network unknown', {'error': '${error.runtimeType}'});
     }
+  }
+
+  void _take(bool cellular) {
+    if (cellular == _onCellular) return;
+    _onCellular = cellular;
+    notifyListeners();
   }
 
   void _watch(Stream<bool> changes) {
@@ -84,18 +92,21 @@ class AutoplayPolicy with WidgetsBindingObserver {
     unawaited(refresh());
   }
 
+  /// From inactive, the first state on the way back, so the answer is in before most lists settle.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(refresh());
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.resumed) unawaited(refresh());
   }
 
   @visibleForTesting
-  set onCellularForTest(bool value) => _onCellular = value;
+  set onCellularForTest(bool value) => _take(value);
 
+  @override
   void dispose() {
-    final changes = _changes;
-    if (changes == null) return;
-    unawaited(changes.cancel());
-    WidgetsBinding.instance.removeObserver(this);
+    if (_changes case final changes?) {
+      unawaited(changes.cancel());
+      WidgetsBinding.instance.removeObserver(this);
+    }
+    super.dispose();
   }
 }

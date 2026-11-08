@@ -15,5 +15,5 @@ PlayerPrefs autoplayRules({bool cellular = false}) {
   return PlayerPrefs.shared = PlayerPrefs.memory();
 }
 
-/// The phone moving between Wi-Fi and mobile data mid-test.
-void onCellular(bool cellular) => AutoplayPolicy.shared = AutoplayPolicy.fixed(onCellular: cellular);
+/// The phone moving between Wi-Fi and mobile data mid-test, heard by the policy's listeners.
+void onCellular(bool cellular) => AutoplayPolicy.shared.onCellularForTest = cellular;

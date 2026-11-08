@@ -70,6 +70,7 @@ enum InlineAutoplay {
     final prefs = PlayerPrefs.shared;
     return switch (this == home ? prefs.homeAutoplay : prefs.listAutoplay) {
       AutoplayChoice.off => 'off',
+      _ when policy.onCellular == null => 'unknown',
       AutoplayChoice.wifiOnly => 'wifiOnly',
       // Held only by 流量网络下自动播放 off, on mobile data.
       AutoplayChoice.always => 'cellular',
@@ -90,11 +91,13 @@ abstract interface class FeedInlineCard {
 /// Which of 推荐's big cards plays: the one with the most of its video box on screen, at least
 /// [FeedBigCardTheme.visibleToPlay] of it, looked at once a scroll has come to rest (KaiC: a card dragged half off keeps
 /// playing until the finger lets go), while 首页 shows with nothing over it and the app is in front. One at a time, and
-/// only while [autoplay]'s rule lets it, read at each settle: a choice changed in 设置 applies once the list shows again.
+/// only while [autoplay]'s rule lets it, read at each settle: a choice changed in 设置 applies once the list shows again,
+/// a change of network at once.
 class FeedInlineHost with WidgetsBindingObserver {
   FeedInlineHost({required this.viewport, required this._pip, required this.autoplay, Logger? logger})
     : _logger = logger ?? Logger.shared {
     _pip.addListener(settleSoon);
+    _policy.addListener(settleSoon);
     WidgetsBinding.instance.addObserver(this);
     final state = WidgetsBinding.instance.lifecycleState;
     _foreground = state != AppLifecycleState.hidden && state != AppLifecycleState.paused;
@@ -108,6 +111,7 @@ class FeedInlineHost with WidgetsBindingObserver {
 
   final InlineAutoplay autoplay;
   final Logger _logger;
+  final _policy = AutoplayPolicy.shared;
 
   /// Why the last card that would have played was held, until one plays; logged when it changes.
   String? _heldFor;
@@ -203,6 +207,7 @@ class FeedInlineHost with WidgetsBindingObserver {
   void dispose() {
     _disposed = true;
     _pip.removeListener(settleSoon);
+    _policy.removeListener(settleSoon);
     WidgetsBinding.instance.removeObserver(this);
   }
 }
@@ -372,17 +377,21 @@ class FeedInlinePlayback extends ChangeNotifier {
   void _applyFilter() =>
       _controller?.danmaku.setFilter(_services.danmakuSettings.value.filter, _services.blockRules.rules);
 
-  /// The playback for a page to take over as it stands (with sound, from where it is), playing; null while it has
-  /// none to give. The card is left with its cover until it plays again.
+  /// The playback for a page to take over as it stands (with sound, from where it is): playing on if it played, else
+  /// still held, for the page to play or not ([PagePlayback.attach]); null while it has none to give. The card is left
+  /// with its cover until it plays again.
   PagePlayback? handOver() {
     final playback = _playback;
     final controller = _controller;
     // A failed one isn't worth taking: the page opens the video afresh.
     if (playback == null || controller == null || _session == null || failed) return null;
-    _logger.info(LogCategory.player, 'inline handed over', {'bvid': video.bvid});
+    _logger.info(LogCategory.player, 'inline handed over', {'bvid': video.bvid, 'playing': _wanted});
+    final playing = _wanted;
     _forget();
-    controller.holdAutoplay(false, play: true);
-    if (controller.phase == PlaybackPhase.playing) _quietly(controller.player.play, 'play');
+    if (playing) {
+      controller.holdAutoplay(false, play: true);
+      if (controller.phase == PlaybackPhase.playing) _quietly(controller.player.play, 'play');
+    }
     _wanted = false;
     notifyListeners();
     return playback;

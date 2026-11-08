@@ -125,7 +125,8 @@ class PlayerPrefs {
   VideoCodec? get codec => _codec;
   set codec(VideoCodec? value) => _set(() => _codec = value);
 
-  /// 自动播放设置 (172)'s 流量网络下自动播放: off, nothing plays by itself on mobile data, the video page included.
+  /// 自动播放设置 (172)'s 流量网络下自动播放: off, nothing from the network plays by itself on mobile data, the video
+  /// page included; a cached video still follows 详情页直接播放.
   bool get cellularAutoplay => _cellularAutoplay;
   set cellularAutoplay(bool value) => _set(() => _cellularAutoplay = value);
 

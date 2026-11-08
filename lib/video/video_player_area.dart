@@ -39,6 +39,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.video,
     this.danmaku,
     this.cover,
+    this.played = true,
     this.loading = false,
     this.waiting,
     this.failure,
@@ -67,6 +68,10 @@ class VideoPlayerArea extends StatelessWidget {
 
   /// The card's cover, over the video until it first plays.
   final Widget? cover;
+
+  /// The video has played on this page. Until then no danmaku draw: one loaded paused would hold its first ones at the
+  /// right edge, frozen over the cover.
+  final bool played;
 
   /// The first load, or a change of quality: [PlayerLoading] shows at once.
   final bool loading;
@@ -161,7 +166,7 @@ class VideoPlayerArea extends StatelessWidget {
                               clock: session.clock,
                               timeline: danmaku?.timeline,
                               // The end screens show no danmaku over the last frame.
-                              enabled: session.danmakuOn && !ended,
+                              enabled: session.danmakuOn && !ended && played,
                               wake: session.readout.any,
                               settings: ui?.danmaku?.settings,
                               presentation: presentation,

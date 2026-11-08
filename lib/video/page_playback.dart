@@ -73,7 +73,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
 
   bool _inline;
 
-  /// Whether the next open plays once loaded; a 重试 opens as the open it retries did.
+  /// Whether the next open plays once loaded; a 重试 opens as the open it retries did, or playing once the video has
+  /// played or the user asked it to.
   bool _autoplay;
 
   /// What it plays: the route's video at first, then whatever the session opens on the page. Only the route's own
@@ -192,7 +193,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
         _progress?.seeked(seconds);
       },
       requestLogin: () => _requestLogin?.call(),
-      willPlay: willPlay,
+      willPlay: _userPlays,
     );
     if (_covered) {
       session.active = false;
@@ -316,8 +317,14 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   /// Before it plays: another page's small window closes, one video at a time.
   void willPlay() => _services.pipKeeper.willPlay(this);
 
+  /// The session's ▶ (or a seek that plays): from now on a 重试 opens playing.
+  void _userPlays() {
+    _autoplay = true;
+    willPlay();
+  }
+
   /// Still the card's, and its rule had paused it when it was handed over.
-  bool get heldOnCard => _inline && (_controller?.heldWhenLifted ?? false);
+  bool get heldOnCard => _inline && (_controller?.autoplayHeld ?? false);
 
   /// [page] shows this playback and takes its login asks. A card's playback its rule had paused plays on only if
   /// [resumeHeld].
@@ -334,10 +341,13 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     _session?.active = true;
     final controller = _controller;
     if (controller == null) return;
-    if (!play) {
-      // The card's hand-over already asked it to play.
-      controller.holdAutoplay(false, play: false);
-      _quietly(controller.player.pause, 'pause');
+    // A card that was playing comes lifted and playing; one its rule paused comes still held and paused.
+    if (controller.autoplayHeld) {
+      controller.holdAutoplay(false, play: play);
+      if (play) {
+        willPlay();
+        if (controller.phase == PlaybackPhase.playing) _quietly(controller.player.play, 'play');
+      }
     }
     controller.setAutoPictureInPicture(true, now: play && controller.phase == PlaybackPhase.playing);
     _quietly(() => controller.player.setMuted(_services.playback.muted), 'unmute');
@@ -414,6 +424,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   void _controllerChanged() {
     final controller = _controller;
     if (controller == null || _closed) return;
+    // Played by any way (the lock screen's ▶ too), a 重试 opens playing.
+    if (controller.hasPlayed) _autoplay = true;
     final active = controller.pictureInPicture;
     if (active == _pictureInPicture) return;
     _pictureInPicture = active;

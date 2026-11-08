@@ -3,7 +3,8 @@ import 'dart:io' show Platform;
 import 'ios/ios_device_events.dart';
 
 /// The phone's network path changing (port of PlaybackController.swift's NWPathMonitor): one event per change to a
-/// path that is up, true when its interfaces or gateways changed from the last path that was up.
+/// path that is up, true when its interfaces or gateways changed from the last path that was up; false too for the
+/// first path and for a change of kind (Wi-Fi, mobile data, none) alone.
 abstract interface class NetworkMonitor {
   /// The monitor of the platform the app runs on.
   static NetworkMonitor platform() => Platform.isIOS ? const IosNetworkMonitor() : const NoNetworkMonitor();
