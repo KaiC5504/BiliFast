@@ -5,7 +5,9 @@ import 'package:bili_core/danmaku.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/danmaku/block_rule_store.dart';
 import 'package:bilifast/danmaku/danmaku_session.dart';
+import 'package:bilifast/danmaku/danmaku_settings.dart';
 import 'package:bilifast/danmaku/danmaku_settings_store.dart';
+import 'package:bilifast/danmaku/mask/mask_feed.dart';
 import 'package:bilifast/danmaku/send/danmaku_send_model.dart';
 import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/video/fake_page_api.dart';
@@ -15,6 +17,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
+import '../support/fake_mask_feed.dart';
 
 /// The account's 屏蔽词 as a test sets them.
 class Rules extends BlockRuleStore {
@@ -42,7 +45,16 @@ class Rules extends BlockRuleStore {
 }
 
 final class Rig {
-  Rig({this.loggedIn = true, this.vip = false, this.mid = 12345, List<String?>? ruleAnswers}) {
+  Rig({
+    this.loggedIn = true,
+    this.vip = false,
+    this.mid = 12345,
+    List<String?>? ruleAnswers,
+    ValueListenable<DanmakuMaskInfo?>? maskInfo,
+    MaskFetch? maskFetch,
+    MaskFeedFactory maskFeeds = createMaskFeed,
+    DanmakuSettings initial = const DanmakuSettings(),
+  }) : settings = DanmakuSettingsStore.memory(initial) {
     final logger = Logger(session: 'test')..add(logs);
     feed = DanmakuFeed(client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: logger), logger: logger);
     rules = Rules(api, [...?ruleAnswers]);
@@ -58,6 +70,9 @@ final class Rig {
       accountMid: () => mid,
       requestLogin: () => loginRequests++,
       accountChanges: account,
+      maskInfo: maskInfo,
+      maskFetch: maskFetch,
+      maskFeeds: maskFeeds,
       logger: logger,
     );
   }
@@ -71,7 +86,7 @@ final class Rig {
       danmakuSegmentBytes([(1000, '前方高能'), (2000, '来了')]),
     );
   final api = FakePageApi();
-  final settings = DanmakuSettingsStore.memory();
+  final DanmakuSettingsStore settings;
   final logs = MemorySink();
   late final DanmakuFeed feed;
   late final Rules rules;
@@ -341,6 +356,109 @@ void main() {
       rig.api.failures['postDanmaku'] = StateError('socket closed');
       expect(await rig.session.send('你好', const DanmakuStyle()), '发送失败，请检查网络后重试');
       expect(rig.loginRequests, 0);
+    });
+  });
+
+  group('人像防挡', () {
+    final maskInfo = ValueNotifier<DanmakuMaskInfo?>(null);
+    late FakeMaskFeeds feeds;
+    Future<Uint8List> fetch(Uri url, {required int start, int? end}) async => Uint8List(0);
+    DanmakuMaskInfo info(int cid, {int time = 1, String url = 'https://upos.example/mask.webmask'}) =>
+        DanmakuMaskInfo(cid: cid, plat: 0, fps: 30, time: time, url: Uri.parse(url));
+
+    setUp(() {
+      maskInfo.value = null;
+      feeds = FakeMaskFeeds();
+    });
+
+    Rig shielded({MaskFetch? maskFetch}) =>
+        rig = Rig(maskInfo: maskInfo, maskFetch: maskFetch ?? fetch, maskFeeds: feeds.call);
+
+    void turn(bool on) => rig.settings.update(rig.settings.value.copyWith(peopleShield: on));
+
+    test("a part with a mask gets a feed for it, over the page's fetch", () {
+      maskInfo.value = info(42);
+      shielded();
+      expect(rig.session.mask.value, same(feeds.made.single));
+      expect(feeds.made.single.info, same(maskInfo.value));
+      expect(feeds.made.single.fetch, same(fetch));
+    });
+
+    test("a new part's mask replaces the feed, the old one let go before it is disposed", () {
+      shielded();
+      expect(rig.session.mask.value, isNull, reason: 'not known yet');
+      maskInfo.value = info(42);
+      final first = feeds.made.single;
+      final seen = <(MaskFeed?, bool)>[];
+      rig.session.mask.addListener(() => seen.add((rig.session.mask.value, first.disposed)));
+      maskInfo.value = info(43);
+      expect(feeds.made, hasLength(2));
+      expect(seen.single, (feeds.made.last, false));
+      expect(first.disposed, isTrue);
+      expect(feeds.made.last.disposed, isFalse);
+
+      maskInfo.value = null;
+      expect(rig.session.mask.value, isNull, reason: 'a part without one');
+      expect(feeds.made.last.disposed, isTrue);
+    });
+
+    test('the same mask read again keeps its feed', () {
+      maskInfo.value = info(42);
+      shielded();
+      maskInfo.value = info(42);
+      expect(feeds.made, hasLength(1));
+      expect(feeds.made.single.disposed, isFalse);
+
+      maskInfo.value = info(42, time: 2);
+      expect(feeds.made, hasLength(2), reason: 'a new version is a new file');
+    });
+
+    test('switched off, the feed goes and no other comes; on again, one comes for the part playing', () {
+      maskInfo.value = info(42);
+      shielded();
+      final first = feeds.made.single;
+      turn(false);
+      expect(rig.session.mask.value, isNull);
+      expect(first.disposed, isTrue);
+      maskInfo.value = info(43);
+      expect(feeds.made, hasLength(1));
+
+      turn(true);
+      expect(rig.session.mask.value, same(feeds.made.last));
+      expect(feeds.made.last.info?.cid, 43);
+      rig.settings.update(rig.settings.value.copyWith(opacity: 0.5));
+      expect(feeds.made, hasLength(2), reason: 'other settings leave it be');
+    });
+
+    test('a page saved with it off makes no feed', () {
+      maskInfo.value = info(42);
+      rig = Rig(
+        maskInfo: maskInfo,
+        maskFetch: fetch,
+        maskFeeds: feeds.call,
+        initial: const DanmakuSettings(peopleShield: false),
+      );
+      maskInfo.value = info(43);
+      expect(rig.session.mask.value, isNull);
+      expect(feeds.made, isEmpty);
+    });
+
+    test('an offline page, with no fetch, never makes one', () {
+      maskInfo.value = info(42);
+      rig = Rig(maskInfo: maskInfo, maskFeeds: feeds.call);
+      expect(rig.session.mask.value, isNull);
+      expect(feeds.made, isEmpty);
+    });
+
+    test('dispose lets go of the feed and disposes it', () {
+      maskInfo.value = info(42);
+      shielded();
+      final feed = feeds.made.single;
+      rig.dispose();
+      expect(feed.disposed, isTrue);
+      maskInfo.value = info(43);
+      expect(feeds.made, hasLength(1), reason: 'no longer listening');
+      rig = Rig();
     });
   });
 

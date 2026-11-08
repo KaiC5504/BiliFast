@@ -8,6 +8,7 @@ import '../app/form_factor.dart';
 import '../danmaku/danmaku_layer.dart';
 import '../device/orientation.dart';
 import '../playback/danmaku_feed.dart';
+import '../player/bili_player.dart' show FitMode;
 import '../player_ui/end_screen_landscape.dart';
 import '../player_ui/end_screen_portrait.dart';
 import '../player_ui/landscape_chrome.dart';
@@ -151,7 +152,12 @@ class VideoPlayerArea extends StatelessWidget {
                       pad: pad,
                       vertical: presentation == Presentation.vertical,
                       videoIsVertical: session.layoutVertical,
-                      child: ClipRect(
+                      fit: session.fit,
+                      video: switch (session.videoShape) {
+                        (:final width, :final height) => Size(width.toDouble(), height.toDouble()),
+                        null => null,
+                      },
+                      builder: (picture, area) => ClipRect(
                         // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still run
                         // the full height.
                         clipBehavior: shrunk || danmakuHeight != null ? Clip.hardEdge : Clip.none,
@@ -171,6 +177,9 @@ class VideoPlayerArea extends StatelessWidget {
                               settings: ui?.danmaku?.settings,
                               presentation: presentation,
                               formFactor: pad ? FormFactor.pad : FormFactor.phone,
+                              mask: ui?.danmaku?.mask,
+                              picture: _Pinned.unscale(picture, area: area, pinned: pin?.value),
+                              mirrored: session.mirrored,
                             ),
                           ),
                         ),
@@ -340,39 +349,52 @@ class VideoPlayerArea extends StatelessWidget {
 /// black above a landscape video as 118 shows, clear of the uploader and the title below it. On the iPad they fly over
 /// the whole box: the page's player sits below the status bar, and full screen runs them from the screen's top edge
 /// (ipad/09, 25), where the status bar shows only with the controls. [padDanmakuInsets] is the iPad's.
+///
+/// The video fills the box this area is in, so [builder] is also told where its picture sits, in the area's own
+/// coordinates, for 人像防挡.
 class _DanmakuArea extends StatelessWidget {
   const _DanmakuArea({
     super.key,
     required this.pad,
     required this.vertical,
     required this.videoIsVertical,
-    required this.child,
+    required this.fit,
+    required this.video,
+    required this.builder,
   });
 
   final bool pad;
   final bool vertical;
   final bool videoIsVertical;
-  final Widget child;
+  final FitMode fit;
+
+  /// The video's shape, null until known.
+  final Size? video;
+  final Widget Function(Rect? picture, Size area) builder;
 
   @override
   Widget build(BuildContext context) {
-    if (pad) return Padding(padding: padDanmakuInsets, child: child);
-    final inset = MediaQuery.paddingOf(context).top;
+    final inset = pad ? 0.0 : MediaQuery.paddingOf(context).top;
     // One shape in every presentation, so the danmaku keep their state through a turn.
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (!vertical) return Padding(padding: EdgeInsets.only(top: inset), child: child);
-        final top =
-            math.max(inset - BiliMetrics.verticalTopLift, 0.0) + BiliMetrics.chromeButton + BiliMetrics.verticalDanmakuDrop;
-        final band = constraints.maxHeight;
-        // The band centres the video; an upright one's danmaku keep to the whole band.
-        final videoBottom = videoIsVertical ? band : band / 2 + constraints.maxWidth / BiliMetrics.videoAspect / 2;
-        return Padding(
-          padding: EdgeInsets.only(top: math.min(top, band), bottom: math.max(band - math.max(videoBottom, top), 0)),
-          child: child,
-        );
+        final box = constraints.biggest;
+        final padding = _padding(box, inset);
+        final area = Size(math.max(box.width - padding.horizontal, 0), math.max(box.height - padding.vertical, 0));
+        final picture = videoPicture(box, fit: fit, video: video)?.shift(-padding.topLeft);
+        return Padding(padding: padding, child: builder(picture, area));
       },
     );
+  }
+
+  EdgeInsets _padding(Size box, double inset) {
+    if (pad) return padDanmakuInsets;
+    if (!vertical) return EdgeInsets.only(top: inset);
+    final top = math.max(inset - BiliMetrics.verticalTopLift, 0.0) + BiliMetrics.chromeButton + BiliMetrics.verticalDanmakuDrop;
+    final band = box.height;
+    // The band centres the video; an upright one's danmaku keep to the whole band.
+    final videoBottom = videoIsVertical ? band : band / 2 + box.width / BiliMetrics.videoAspect / 2;
+    return EdgeInsets.only(top: math.min(top, band), bottom: math.max(band - math.max(videoBottom, top), 0));
   }
 }
 
@@ -425,6 +447,14 @@ class _Pinned extends SingleChildRenderObjectWidget {
   const _Pinned({super.key, required this.size, required super.child});
 
   final Size? size;
+
+  /// [rect] in a box of [area] as the child sees it, laid out at [pinned] and scaled onto the box.
+  static Rect? unscale(Rect? rect, {required Size area, required Size? pinned}) {
+    if (rect == null || pinned == null || pinned.isEmpty || area.isEmpty) return rect;
+    final x = pinned.width / area.width;
+    final y = pinned.height / area.height;
+    return Rect.fromLTRB(rect.left * x, rect.top * y, rect.right * x, rect.bottom * y);
+  }
 
   @override
   RenderObject createRenderObject(BuildContext context) => _RenderPinned(size);

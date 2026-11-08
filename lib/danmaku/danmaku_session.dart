@@ -15,6 +15,9 @@ import 'send/danmaku_send_model.dart';
 /// The video and part a danmaku goes to.
 typedef DanmakuTarget = ({String bvid, int cid});
 
+/// Makes a part's 人像防挡 feed ([createMaskFeed]; tests pass their own).
+typedef MaskFeedFactory = MaskFeed Function(DanmakuMaskInfo info, {required MaskFetch fetch, Logger? logger});
+
 /// One page's danmaku, as every piece of it reaches them (BiliNative `DanmakuController` and `DanmakuSendModel`'s
 /// page side): the settings and 屏蔽词 applied to the feed, the send bar, sending, and 当前弹幕列表's actions.
 class DanmakuSession extends ChangeNotifier {
@@ -32,6 +35,7 @@ class DanmakuSession extends ChangeNotifier {
     this._accountChanges,
     this.maskInfo,
     this.maskFetch,
+    this._maskFeeds = createMaskFeed,
     Logger? logger,
   }) : _logger = logger ?? Logger.shared {
     sender = DanmakuSendModel(send);
@@ -43,6 +47,9 @@ class DanmakuSession extends ChangeNotifier {
     settings.addListener(_applyFilter);
     rules.addListener(_applyFilter);
     _feed.addListener(_feedChanged);
+    settings.addListener(_followMask);
+    maskInfo?.addListener(_followMask);
+    _followMask();
     if (loggedIn) unawaited(_refreshRules());
   }
 
@@ -70,6 +77,8 @@ class DanmakuSession extends ChangeNotifier {
   /// 人像防挡's feed for the part playing, while 人像防挡 is on and the part has a mask.
   ValueListenable<MaskFeed?> get mask => _mask;
   final _mask = ValueNotifier<MaskFeed?>(null);
+  final MaskFeedFactory _maskFeeds;
+  DanmakuMaskInfo? _maskFor;
 
   /// Fires when the account may have changed; a page opened before the launch's account check answered learns the
   /// account here.
@@ -172,6 +181,23 @@ class DanmakuSession extends ChangeNotifier {
 
   void _applyFilter() => _feed.setFilter(settings.value.filter, rules.rules);
 
+  /// One feed per mask while 人像防挡 is on. [mask] lets go of the old feed before it is disposed, so nothing draws
+  /// from a disposed one.
+  void _followMask() {
+    final fetch = maskFetch;
+    final info = settings.value.peopleShield && fetch != null ? maskInfo?.value : null;
+    final current = _maskFor;
+    if (identical(info, current) || (info != null && current != null && _sameMask(info, current))) return;
+    _maskFor = info;
+    final old = _mask.value;
+    _mask.value = info == null ? null : _maskFeeds(info, fetch: fetch!, logger: _logger);
+    old?.dispose();
+    if (info != null) _logger.info(LogCategory.player, 'danmaku mask', {'cid': info.cid, 'fps': info.fps});
+  }
+
+  /// The same file asked for again (the part's player info read once more): its feed carries on.
+  static bool _sameMask(DanmakuMaskInfo a, DanmakuMaskInfo b) => a.cid == b.cid && a.time == b.time && a.url == b.url;
+
   void _feedChanged() {
     if (_feed.closed == _closed) return;
     _closed = _feed.closed;
@@ -203,6 +229,12 @@ class DanmakuSession extends ChangeNotifier {
     settings.removeListener(_applyFilter);
     rules.removeListener(_applyFilter);
     _feed.removeListener(_feedChanged);
+    settings.removeListener(_followMask);
+    maskInfo?.removeListener(_followMask);
+    final feed = _mask.value;
+    _mask.value = null;
+    feed?.dispose();
+    _mask.dispose();
     sendOpen.dispose();
     sender.dispose();
     super.dispose();

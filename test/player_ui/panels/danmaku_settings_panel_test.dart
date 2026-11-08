@@ -9,7 +9,6 @@ import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/playback/danmaku_feed.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
 import 'package:bilifast/player_ui/panels/danmaku_panel_glyphs.dart';
-import 'package:bilifast/player_ui/panels/danmaku_settings_panel.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
@@ -312,13 +311,21 @@ void main() {
       });
     }
 
-    testWidgets('人像防挡 stays off and says it comes later', (tester) async {
+    testWidgets('人像防挡 starts on (08), switches off and back, and toasts nothing', (tester) async {
       final rig = await pumpSettings(tester, landscape: true);
-      final before = rig.settings;
+      final handle = tester.ensureSemantics();
+      Matcher shown(bool on) => isSemantics(isToggled: on, hasToggledState: true);
+      SemanticsNode row() => tester.getSemantics(find.bySemanticsLabel('人像防挡'));
+      expect(rig.settings.peopleShield, isTrue);
+      expect(row(), shown(true));
       await tapKey(tester, 'danmaku-toggle-人像防挡');
-      expect(find.text(DanmakuSettingsPanel.portraitSoon), findsOneWidget);
-      expect(rig.settings, before);
-      await clearToast(tester);
+      expect(rig.settings, const DanmakuSettings(peopleShield: false), reason: 'nothing else changed');
+      expect(row(), shown(false));
+      expect(find.textContaining('后续版本'), findsNothing);
+      await tapKey(tester, 'danmaku-toggle-人像防挡');
+      expect(rig.settings.peopleShield, isTrue);
+      expect(row(), shown(true));
+      handle.dispose();
     });
 
     testWidgets('添加屏蔽词 opens its panel', (tester) async {
@@ -440,6 +447,11 @@ void main() {
       expect(rig.settings.filter.dedupe, isTrue);
       await tapKey(tester, 'danmaku-toggle-弹幕观看屏蔽词');
       expect(rig.settings.filter.applyRules, isFalse);
+      await tapKey(tester, 'danmaku-toggle-人像防挡');
+      expect(rig.settings.peopleShield, isFalse);
+      await tapKey(tester, 'danmaku-toggle-人像防挡');
+      expect(rig.settings.peopleShield, isTrue);
+      expect(find.textContaining('后续版本'), findsNothing);
     });
 
     testWidgets('重置弹幕设置 asks over the whole screen there too', (tester) async {

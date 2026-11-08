@@ -42,8 +42,6 @@ class DanmakuSettingsPanel extends StatefulWidget {
   /// Asks before 重置弹幕设置.
   final ValueChanged<PanelConfirm> confirm;
 
-  static const portraitSoon = '人像防挡将在后续版本推出';
-
   @override
   State<DanmakuSettingsPanel> createState() => _DanmakuSettingsPanelState();
 }
@@ -272,9 +270,9 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
                   title: '人像防挡',
                   subtitle: '人像不被弹幕遮挡，部分视频生效',
                   look: look,
-                  on: false,
+                  on: settings.peopleShield,
                   divider: false,
-                  onTap: () => widget.toast(DanmakuSettingsPanel.portraitSoon),
+                  onTap: () => store.update(settings.copyWith(peopleShield: !settings.peopleShield)),
                 ),
               ],
             ),
