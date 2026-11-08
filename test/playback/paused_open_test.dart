@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
+import 'package:bili_core/engine.dart' show PlaybackMode;
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/offline/fake_offline_library.dart';
 import 'package:bilifast/offline/page/offline_playback.dart';
@@ -93,6 +96,26 @@ void main() {
       final first = logs.events.singleWhere((event) => event.msg == 'first frame');
       expect(first.f['timed'], const LogBool(false), reason: 'the wait for ▶ is not startup time');
     });
+
+    for (final (name, change) in <(String, Future<void> Function(PlaybackController))>[
+      ('a quality', (controller) => controller.setQuality(80)),
+      ('a codec', (controller) => controller.setCodec(VideoCodec.av1)),
+      ('BTR', (controller) => controller.setMode(PlaybackMode.direct)),
+    ]) {
+      test('$name change while its first load is still out keeps it paused', () async {
+        final controller = make();
+        http.gates[Canned.playUrlPath] = Completer<void>();
+        final opening = controller.openVideo(bv, cid: p1, start: 0, autoplay: false);
+        await pumpEventQueue();
+        expect(controller.phase, PlaybackPhase.loading);
+        final changing = change(controller);
+        http.gates[Canned.playUrlPath]!.complete();
+        await Future.wait([opening, changing]);
+        await settle();
+        expect(player.loaded?.autoplay, isFalse);
+        expect(player.calls, isNot(contains('play')));
+      });
+    }
 
     test('a cached part loads paused too', () async {
       final library = FakeOfflineLibrary.demo();

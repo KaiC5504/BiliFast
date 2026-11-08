@@ -626,6 +626,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _covered = true;
     _dataWait?.active = false;
     _owning = false;
+    // Owed since the open, it would turn the page long after, whenever it shows again.
+    _fullScreenOnOpen = false;
     // The page above claims the orientation only once its video is known; until then a turn must not be taken over
     // with no page to draw it. A newer begin first makes this a no-op.
     final orientation = _orientation;
@@ -712,7 +714,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (!plays) {
       Logger.shared.info(LogCategory.ui, 'video open paused', {
         'bvid': route.bvid,
-        'reason': prefs.detailAutoplay ? 'cellular' : 'detail',
+        'reason': !prefs.detailAutoplay
+            ? 'detail'
+            : (AutoplayPolicy.shared.onCellular == null ? 'unknown' : 'cellular'),
       });
     }
     return plays;
@@ -1626,6 +1630,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                           video: mine ? _videoView : null,
                           danmaku: mine ? controller.danmaku : null,
                           cover: _cover(context),
+                          played: _played || (controller?.hasPlayed ?? false),
                           loading: _loading(controller, mine),
                           waiting: mine ? _dataWait : null,
                           failure: _failure(controller, mine),

@@ -34,11 +34,14 @@ enum NetworkMonitor {
   }
 
   private static func pathUpdated(_ path: NetworkPath, kind: NativeNetwork) {
-    if kind != lastKind {
+    let newKind = kind != lastKind
+    if newKind {
       lastKind = kind
       kindChanged?()
     }
-    guard let interfaceChanged = changes.next(path) else { return }
+    // AutoplayPolicy asks the kind again on every event, so the first path and a change of kind alone (a path going
+    // down, a VPN's) go too, as no interface change: the engine only drops its node health again.
+    guard let interfaceChanged = changes.next(path) ?? (newKind ? false : nil) else { return }
     Task { @MainActor in try? await DeviceChannel.events?.onNetworkChanged(interfaceChanged: interfaceChanged) }
   }
 }

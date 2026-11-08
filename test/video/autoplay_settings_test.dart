@@ -11,7 +11,9 @@ import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
+import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/device/player_device.dart';
+import 'package:bilifast/home/feed_inline_player.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
@@ -201,31 +203,28 @@ void main() {
       if (call.startsWith('pip auto')) call,
   ];
 
-  /// 推荐's big card's playback, played inline and, if [paused], then paused by the card's rule, handed over as
-  /// FeedInlinePlayback.handOver does: the hold lifted to play, and played.
+  /// 推荐's big card's playback, played inline and, if [paused], then paused by the card's rule, handed over by the
+  /// card; the player's calls from the hand-over on.
   Future<PagePlayback> handedOver(WidgetTester tester, {bool paused = false}) async {
-    final inline = PagePlayback(
+    final card = FeedInlinePlayback(
       services: services,
-      route: const VideoRoute(bvid: bv, cid: p1, start: 0),
-      createSession: pageSession,
-      restorePage: page,
-      inline: true,
-    )..start();
+      video: const InlineVideo(bvid: bv, cid: p1),
+      startAt: () => 0,
+      released: (_) {},
+    );
+    addTearDown(card.dispose);
+    card.play();
     await frames(tester, 10);
-    final controller = controllers.single;
     final player = players.single;
     player.emit(const StatusChanged(PlayerStatus.playing));
     await tester.pump();
     if (paused) {
-      controller.holdAutoplay(true);
-      await player.pause();
+      card.pause();
       player.emit(const StatusChanged(PlayerStatus.paused));
       await tester.pump();
     }
-    controller.holdAutoplay(false, play: true);
-    await player.play();
     player.calls.clear();
-    return inline;
+    return card.handOver()!;
   }
 
   group('推荐\'s big card handing its playback to the page', () {
@@ -263,8 +262,9 @@ void main() {
       );
       await frames(tester, 20);
       final player = players.single;
-      expect(player.calls, contains('pause'));
+      expect(player.calls, isNot(contains('play')), reason: 'not even for a moment');
       expect(controllers.single.loadWillPlay, isFalse);
+      expect(controllers.single.autoplayHeld, isFalse, reason: 'the page lifted the card\'s hold');
       expect(autoPip(player), isNot(contains('pip auto true')), reason: 'its first play on the page turns it on');
       expect(messages('video open paused'), ['detail']);
 
@@ -287,7 +287,23 @@ void main() {
       );
       await frames(tester, 20);
       expect(players.single.calls, isNot(contains('pause')));
+      expect(players.single.calls, contains('play'), reason: 'the page plays it');
       expect(messages('video open paused'), isEmpty);
+      await back(tester);
+    });
+
+    testWidgets('playing when tapped, the hand-over plays on without a gap', (tester) async {
+      await host(tester);
+      final inline = await handedOver(tester);
+      expect(players.single.calls, ['play'], reason: 'played on by the card itself, before the page');
+      expect(controllers.single.autoplayHeld, isFalse);
+      push(
+        SwipeBackPageRoute<void>(
+          builder: (_) => page(VideoRoute(bvid: bv, playback: inline)),
+        ),
+      );
+      await frames(tester, 20);
+      expect(players.single.calls, isNot(contains('pause')));
       await back(tester);
     });
   });
@@ -423,9 +439,157 @@ void main() {
       expect(player.loaded?.autoplay, isFalse);
       await back(tester);
     });
+
+    final plays = <String, void Function(PagePlayback playback, FakePlayer player)>{
+      'the user plays it': (playback, player) => playback.session!.togglePlay(),
+      'it plays some other way (the lock screen\'s ▶)': (playback, player) =>
+          player.emit(const StatusChanged(PlayerStatus.playing)),
+    };
+    for (final MapEntry(key: name, value: play) in plays.entries) {
+      testWidgets('opened paused, once $name a 重试 opens it playing', (tester) async {
+        await host(tester);
+        final playback = PagePlayback(
+          services: services,
+          route: const VideoRoute(bvid: bv, cid: p1, start: 0),
+          createSession: pageSession,
+          restorePage: page,
+          autoplay: false,
+        )..start();
+        await frames(tester, 10);
+        final player = players.single;
+        player.emit(const StatusChanged(PlayerStatus.paused));
+        await tester.pump();
+        playback.retry();
+        await frames(tester, 10);
+        expect(player.loaded?.autoplay, isFalse, reason: 'not played yet');
+
+        play(playback, player);
+        await tester.pump();
+        playback.retry();
+        await frames(tester, 10);
+        expect(player.loaded?.autoplay, isTrue);
+        playback.close();
+        await frames(tester, 2);
+      });
+    }
+
+    testWidgets('opened paused, its danmaku draw nothing until it first plays; paused after, they stay', (
+      tester,
+    ) async {
+      prefs.detailAutoplay = false;
+      await host(tester);
+      final player = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0, cover: cover));
+      bool danmaku() => tester.widget<DanmakuLayer>(find.byKey(const ValueKey('video-danmaku'))).enabled;
+      player
+        ..emit(const DurationChanged(712))
+        ..emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 4);
+      expect(danmaku(), isFalse, reason: 'the cover is up');
+
+      await tester.tap(find.byKey(const ValueKey('portrait-play')));
+      await tester.pump();
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 4);
+      expect(danmaku(), isTrue);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await frames(tester, 4);
+      expect(danmaku(), isTrue, reason: 'a pause after the first play keeps them');
+      await back(tester);
+    });
+
+    testWidgets('off, a page the small window brings back neither pauses nor reloads', (tester) async {
+      await host(tester);
+      final first = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+      first
+        ..emit(const StatusChanged(PlayerStatus.playing))
+        ..emit(const PictureInPictureChanged(true));
+      await back(tester);
+      prefs.detailAutoplay = false;
+      first.calls.clear();
+      first
+        ..emit(const PictureInPictureRestore())
+        ..emit(const PictureInPictureChanged(false));
+      await frames(tester, 20);
+      expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isA<RestoredPageRoute<void>>());
+      expect(players, hasLength(1));
+      expect(first.calls, isNot(contains('pause')));
+      expect(first.calls.where((call) => call.startsWith('load')), isEmpty);
+      expect(messages('video open paused'), isEmpty);
+      await back(tester);
+    });
   });
 
   group('详情页直接全屏播放', () {
+    testWidgets('covered before its video\'s shape came, it doesn\'t turn when shown again', (tester) async {
+      prefs.detailFullScreen = true;
+      http.gates[Canned.playUrlPath] = Completer<void>();
+      await host(tester);
+      push(
+        SwipeBackPageRoute<void>(
+          builder: (_) => page(const VideoRoute(bvid: bv, cid: p1, start: 0)),
+        ),
+      );
+      await frames(tester, 20);
+      coverPage(tester);
+      await frames(tester, 10);
+      http.gates[Canned.playUrlPath]!.complete();
+      await frames(tester, 10);
+      await back(tester);
+      expect(controllers.single.videoSize, isNotNull);
+      expect(orientation.presentation, Presentation.inline);
+      expect(messages('video open full screen'), isEmpty);
+      await back(tester);
+    });
+
+    testWidgets('a video opened on the page in its place goes to full screen too', (tester) async {
+      prefs.detailFullScreen = true;
+      await host(tester);
+      unawaited(openVideoPage(services.navigator.currentContext!, const VideoRoute(bvid: bv, cid: p1, start: 0)));
+      await frames(tester, 20);
+      expect(orientation.presentation, Presentation.landscape);
+      orientation.exitToInline();
+      await frames(tester, 4);
+      http.routes[Canned.signedViewPath] = (200, Canned.view.replaceAll(bv, other));
+      tester
+          .widget<IntroTab>(find.byType(IntroTab).last)
+          .onOpenRelated(
+            const VideoCard(
+              aid: 2,
+              bvid: other,
+              cid: 3,
+              title: '相关视频',
+              cover: '',
+              duration: 60,
+              ownerMid: 4,
+              ownerName: 'UP',
+              views: 1,
+              danmaku: 1,
+              likes: 1,
+            ),
+          );
+      await frames(tester, 20);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, other, reason: 'replaced, not stacked');
+      expect(orientation.presentation, Presentation.landscape);
+      expect(messages('video open full screen'), [bv, other]);
+      await back(tester);
+    });
+
+    testWidgets('an upright video with 竖屏模式设置 off takes the landscape one', (tester) async {
+      prefs
+        ..detailFullScreen = true
+        ..verticalFullScreen = false;
+      http.routes[Canned.playUrlPath] = (
+        200,
+        Canned.playUrl()
+            .replaceAll('"width":3840,"height":2160', '"width":2160,"height":3840')
+            .replaceAll('"width":1920,"height":1080', '"width":1080,"height":1920'),
+      );
+      await host(tester);
+      await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+      expect(orientation.presentation, Presentation.landscape);
+      await back(tester);
+    });
+
     testWidgets('on, a page opened goes to full screen once its video is known; back returns to the page, for good', (
       tester,
     ) async {

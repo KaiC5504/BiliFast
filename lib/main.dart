@@ -101,10 +101,10 @@ Future<void> main(List<String> args) async {
     runApp(LaunchFailedApp(error: '$error'));
     return;
   }
+  AutoplayPolicy.shared = AutoplayPolicy.platform();
   // PC checks and the Mac's simulator (`--dart-define=FAKE_ACCOUNT=true`) only: the page's actions, 搜索, UP主空间,
   // 我的收藏 and 稍后再看 answer from memory, and the app token reads authorized, so every button can be pressed with
   // no account traffic.
-  AutoplayPolicy.shared = AutoplayPolicy.platform();
   final fakeAccount =
       (!Platform.isIOS && args.contains('--fake-account')) || const bool.fromEnvironment('FAKE_ACCOUNT');
   if (fakeAccount) environment.useFakeAccount();

@@ -1,5 +1,6 @@
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/home/feed_inline_player.dart';
+import 'package:bilifast/settings/autoplay_policy.dart';
 import 'package:bilifast/video/pip_keeper.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/widgets.dart';
@@ -154,6 +155,58 @@ void main() {
     onCellular(true);
     inline.settle();
     expect(held().map((fields) => fields['reason']), ['off', 'wifiOnly', 'wifiOnly']);
+  });
+
+  testWidgets('仅 Wi-Fi: a playing card stops as the phone moves to mobile data, and plays again back on Wi-Fi', (
+    tester,
+  ) async {
+    autoplayRules().homeAutoplay = AutoplayChoice.wifiOnly;
+    final (inline, card) = await host(tester, InlineAutoplay.home);
+    expect(card.playing, isTrue);
+    onCellular(true);
+    await tester.pump();
+    expect(card.playing, isFalse, reason: 'no scroll or return needed');
+    expect(inline.playing, isNull);
+    onCellular(false);
+    await tester.pump();
+    expect(card.playing, isTrue);
+  });
+
+  testWidgets('a return to the app that settled on the old network corrects itself once the new one is in', (
+    tester,
+  ) async {
+    autoplayRules().homeAutoplay = AutoplayChoice.wifiOnly;
+    final (inline, card) = await host(tester, InlineAutoplay.home);
+    inline.didChangeAppLifecycleState(AppLifecycleState.hidden);
+    expect(card.playing, isFalse);
+    inline.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(card.playing, isTrue, reason: 'settled on the Wi-Fi it last knew');
+    onCellular(true);
+    await tester.pump();
+    expect(card.playing, isFalse);
+  });
+
+  testWidgets('a disposed host hears the network no more', (tester) async {
+    autoplayRules().homeAutoplay = AutoplayChoice.wifiOnly;
+    final (inline, card) = await host(tester, InlineAutoplay.home);
+    inline.dispose();
+    onCellular(true);
+    await tester.pump();
+    expect(card.playing, isTrue);
+  });
+
+  testWidgets('before the network is known 仅 Wi-Fi holds, logged as unknown', (tester) async {
+    autoplayRules().homeAutoplay = AutoplayChoice.wifiOnly;
+    AutoplayPolicy.shared = AutoplayPolicy(prefs: () => PlayerPrefs.shared, onCellular: () async => false);
+    final (inline, card) = await host(tester, InlineAutoplay.home);
+    expect(card.playing, isFalse);
+    expect(held(), [
+      {'list': 'home', 'reason': 'unknown'},
+    ]);
+    await AutoplayPolicy.shared.refresh();
+    await tester.pump();
+    expect(inline.playing, same(card));
   });
 
   testWidgets('only a card that would have played is held and logged, not one off screen', (tester) async {

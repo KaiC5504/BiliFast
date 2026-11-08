@@ -538,6 +538,19 @@ void main() {
       });
     }
 
+    testWidgets('仅 Wi-Fi: held on mobile data, a tap once the phone is back on Wi-Fi plays it', (tester) async {
+      autoplayRules(cellular: true).homeAutoplay = AutoplayChoice.wifiOnly;
+      await show(tester);
+      await frames(tester, 30);
+      expect(players, isEmpty);
+      onCellular(false);
+      await frames(tester, 10);
+      await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+      await frames(tester, 30);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, _bv);
+      expect(playingNow(players.last), isTrue);
+    });
+
     testWidgets('turned off in 设置 while it plays, it pauses once 首页 shows again; a tap still opens its page', (
       tester,
     ) async {

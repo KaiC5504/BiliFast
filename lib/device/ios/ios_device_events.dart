@@ -35,7 +35,8 @@ final class IosDeviceEvents implements DeviceEventApi {
 
   Stream<TurnStart> get turns => _turns.stream;
 
-  /// NetworkMonitor.swift's changes to a path that is up: true when its interfaces or gateways changed.
+  /// NetworkMonitor.swift's changes to a path that is up, the first path and changes of kind: true when its
+  /// interfaces or gateways changed.
   Stream<bool> get networkChanges => _network.stream;
 
   /// The battery and network while status events are on.

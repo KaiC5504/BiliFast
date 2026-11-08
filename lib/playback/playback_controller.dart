@@ -840,16 +840,12 @@ class PlaybackController extends ChangeNotifier {
   /// a server restart. [loadWillPlay] still says whether it would have played. Lifted, a load still to come plays
   /// only if [play].
   void holdAutoplay(bool hold, {bool play = true}) {
-    if (!hold) {
-      _heldWhenLifted = _autoplayHeld;
-      _playWhenLoaded = play;
-    }
     _autoplayHeld = hold;
+    if (!hold) _playWhenLoaded = play;
   }
 
-  /// The last lift of [holdAutoplay] found it held: a card its rule had paused, handed over to a page.
-  bool get heldWhenLifted => _heldWhenLifted;
-  bool _heldWhenLifted = false;
+  /// Held by [holdAutoplay]: a covered page's, or a card its rule paused.
+  bool get autoplayHeld => _autoplayHeld;
 
   /// A load is under way that starts playing when it lands, or would were it not held.
   bool get loadWillPlay => _phase == PlaybackPhase.loading && _playWhenLoaded;
@@ -1348,7 +1344,8 @@ class PlaybackController extends ChangeNotifier {
       return;
     }
     final time = currentSeconds;
-    final autoplay = _phase == PlaybackPhase.playing ? _playWhenLoaded : true;
+    // While a load is out, _playWhenLoaded is the open's own answer (a paused open stays paused); a failed one plays.
+    final autoplay = _phase == PlaybackPhase.failed ? true : _playWhenLoaded;
     _stopPlayback();
     await _startPlayback(time, autoplay: autoplay);
   }
