@@ -13,6 +13,7 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/video/page_session.dart';
 import 'package:bilifast/video/player_prefs.dart';
+import 'package:bilifast/video/player_session.dart' show LoopMode;
 import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -234,7 +235,7 @@ void main() {
   group("an offline page's session", () {
     late List<String> opened;
 
-    PagePlayerSession offlineSession() {
+    PagePlayerSession offlineSession({PlayerPrefs? prefs}) {
       opened = [];
       final session = PagePlayerSession(
         controller: controller,
@@ -247,7 +248,7 @@ void main() {
         isVip: () => false,
         isLoggedIn: () => false,
         requestLogin: () {},
-        prefs: PlayerPrefs.memory(),
+        prefs: prefs ?? PlayerPrefs.memory(),
         playlist: OfflinePlaylist(library),
         coverFile: (url) async => fail('an offline page asks for no picture'),
         startTimer: timers.start,
@@ -294,6 +295,59 @@ void main() {
       player.emit(const StatusChanged(PlayerStatus.ended));
       await settle();
       expect(opened, ['BV1fake00002 7002']);
+    });
+
+    /// Cached parts in 离线缓存's order: 7003, 7002, then 7001.
+    Future<void> endInBackground(PagePlayerSession session, int cid) async {
+      await controller.openLocal(() => part(cid));
+      await settle();
+      player
+        ..emit(const DurationChanged(100))
+        ..emit(const StatusChanged(PlayerStatus.playing));
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      player.emit(const StatusChanged(PlayerStatus.ended));
+      await settle();
+    }
+
+    test('in the background the last cached part ends: the end screen, nothing opens, no ⏭ on the lock screen',
+        () async {
+      final session = offlineSession();
+      await endInBackground(session, 7001);
+      expect(opened, isEmpty);
+      expect(session.ended, isTrue);
+      expect(player.nowPlaying?.hasNext, isFalse);
+    });
+
+    test('后台连播 goes to the next cached part with 自动连播 off, and 列表循环 wraps to the first', () async {
+      final session = offlineSession(prefs: PlayerPrefs.memory()..autoplay = false);
+      await endInBackground(session, 7003);
+      expect(opened, ['BV1fake00002 7002']);
+      session.dispose();
+
+      final looping = offlineSession(prefs: PlayerPrefs.memory()..loop = LoopMode.list);
+      await endInBackground(looping, 7001);
+      expect(opened, ['BV1fake00003 7003']);
+    });
+
+    test('with 后台连播 off the part ends in the background, the next cached part not opened', () async {
+      final session = offlineSession(prefs: PlayerPrefs.memory()..backgroundNext = false);
+      await endInBackground(session, 7003);
+      expect(opened, isEmpty);
+      expect(session.ended, isTrue);
+    });
+
+    test("the lock screen's ◀◀ goes to the cached part before", () async {
+      offlineSession();
+      await controller.openLocal(() => part(7002));
+      await settle();
+      player
+        ..emit(const DurationChanged(100))
+        ..emit(const StatusChanged(PlayerStatus.playing));
+      await settle();
+      expect(player.nowPlaying, isNotNull);
+      player.emit(const RemoteCommand(RemoteCommandKind.previous));
+      await settle();
+      expect(opened, ['BV1fake00003 7003']);
     });
   });
 

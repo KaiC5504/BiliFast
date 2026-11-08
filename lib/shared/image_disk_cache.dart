@@ -108,23 +108,39 @@ class ImageDiskCache {
     if (running != null) return running.bytes.future;
     final load = _Load();
     _loads[url] = load;
-    load.done = _load(url, headers, load.bytes, onDownloaded).whenComplete(() {
+    load.done = _load(url, headers, load, onDownloaded).whenComplete(() {
       if (identical(_loads[url], load)) _loads.remove(url);
     });
     return load.bytes.future;
   }
 
+  /// As [bytes], but answers the picture's stored file once it is written; null when nothing was stored (an empty
+  /// answer, a failed write, a [clear] meanwhile).
+  Future<File?> storedFile(
+    String url, {
+    Map<String, String>? headers,
+    ValueChanged<PictureDownload>? onDownloaded,
+  }) async {
+    final bytes = this.bytes(url, headers: headers, onDownloaded: onDownloaded);
+    final load = _loads[url]!;
+    await bytes;
+    await load.done;
+    return load.stored;
+  }
+
   Future<void> _load(
     String url,
     Map<String, String>? headers,
-    Completer<Uint8List> result,
+    _Load load,
     ValueChanged<PictureDownload>? onDownloaded,
   ) async {
+    final result = load.bytes;
     try {
       final file = fileOf(url);
       final stored = await _read(file);
       if (stored != null) {
         result.complete(stored);
+        load.stored = file;
         // Trimming goes by modification time, so a picture still being looked at is kept over one long unseen.
         file.setLastModified(DateTime.now()).ignore();
         return;
@@ -141,7 +157,7 @@ class ImageDiskCache {
       onDownloaded?.call((firstByteMs: answeredMs ?? totalMs, totalMs: totalMs, bytes: fetched.length));
       result.complete(fetched);
       if (fetched.isEmpty || generation != _generation) return;
-      await _store(file, fetched, generation);
+      if (await _store(file, fetched, generation)) load.stored = file;
     } catch (error, stack) {
       if (!result.isCompleted) {
         result.completeError(error, stack);
@@ -160,8 +176,9 @@ class ImageDiskCache {
     }
   }
 
-  /// Written under a temporary name and renamed into place, so a picture is never read half written.
-  Future<void> _store(File file, Uint8List bytes, int generation) async {
+  /// Written under a temporary name and renamed into place, so a picture is never read half written. True once it is
+  /// in place.
+  Future<bool> _store(File file, Uint8List bytes, int generation) async {
     final temporary = File('${file.path}.$_run-${_serial++}.tmp');
     try {
       try {
@@ -175,23 +192,24 @@ class ImageDiskCache {
     } on FileSystemException catch (error) {
       temporary.delete().ignore();
       // A clear meanwhile deleted the temporary file; that is no failure.
-      if (generation != _generation) return;
+      if (generation != _generation) return false;
       _storeFailed(error);
-      return;
+      return false;
     }
     if (generation != _generation) {
       file.delete().ignore();
-      return;
+      return false;
     }
     final total = _bytes;
     if (total == null) {
       // [start] couldn't total the folder, or a clear couldn't list it: a trim counts it afresh.
       if (_started) _trimInBackground();
-      return;
+      return true;
     }
     _bytes = total + bytes.length;
     _files = (_files ?? 0) + 1;
     if (total + bytes.length > capBytes) _trimInBackground();
+    return true;
   }
 
   /// Each reason once a run: a full disk or a folder iOS refuses fails every picture alike.
@@ -589,6 +607,9 @@ final class _AnsweredClient extends http.BaseClient {
 final class _Load {
   final bytes = Completer<Uint8List>();
   late final Future<void> done;
+
+  /// Set once the picture is read from storage or written there.
+  File? stored;
 }
 
 class _MemoryPressure with WidgetsBindingObserver {

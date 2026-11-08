@@ -27,23 +27,31 @@ typedef SessionOpen = void Function(String bvid, {int? cid});
 
 typedef PeriodicTimer = Timer Function(Duration period, void Function() tick);
 
-/// A picture file on the phone for the cover at [url], for the lock screen; null when there is none.
-typedef CoverFile = Future<String?> Function(String url);
+/// A picture file on the phone for the cover at [url], for the lock screen; [CoverMissing] when there is none.
+typedef CoverFile = Future<String> Function(String url);
 
-/// [ImageDiskCache]'s copy of [url]. The cache hands the bytes back before it has written them, so the file is waited
-/// for a moment.
-Future<String?> cachedCoverFile(String url) async {
+/// Why there is no cover file: `no cache`, `empty` (the answer had no bytes) or `store failed`; never the address.
+final class CoverMissing implements Exception {
+  const CoverMissing(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => 'CoverMissing: $reason';
+}
+
+/// [ImageDiskCache]'s copy of [url], once written.
+Future<String> cachedCoverFile(String url) async {
   final cache = ImageDiskCache.shared;
-  if (cache == null) return null;
-  await cache.bytes(url, headers: BiliClient.mediaHeaders);
-  // The cache has no other way to the file it keeps.
-  // ignore: invalid_use_of_visible_for_testing_member
-  final file = cache.fileOf(url);
-  for (var tries = 0; tries < 20; tries++) {
-    if (await file.exists()) return file.path;
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-  }
-  return null;
+  if (cache == null) throw const CoverMissing('no cache');
+  var empty = false;
+  final file = await cache.storedFile(
+    url,
+    headers: BiliClient.mediaHeaders,
+    onDownloaded: (download) => empty = download.bytes == 0,
+  );
+  if (file == null) throw CoverMissing(empty ? 'empty' : 'store failed');
+  return file.path;
 }
 
 /// A timestamp in the description seeks there and plays, as Swift's `activate(.timestamp)` does.
@@ -115,8 +123,9 @@ abstract interface class SessionPlaylist implements Listenable {
 /// 看点 or seek frames) and changes no quality, codec or mode.
 ///
 /// 后台听视频 keeps the video playing with the app away, and then 后台连播 opens the next one on the same controller when
-/// it ends. Once a page has shown its video playing, the lock screen shows it ([NowPlayingInfo], cleared when the page
-/// lets the player go) and its buttons reach the session; 推荐's card, which never shows on a page, sets nothing.
+/// it ends. Once a page has shown its video playing, the lock screen shows it ([NowPlayingInfo], given up when the page
+/// lets the player go, or once paused while covered) and its buttons reach the session; 推荐's card, which never shows
+/// on a page, sets nothing.
 class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver implements PlayerSession {
   PagePlayerSession({
     required PlaybackController controller,
@@ -236,16 +245,26 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   NowPlayingInfo? _nowPlaying;
   logic.PlayItem? _nowPlayingFor;
 
+  /// The lock screen is this page's but taken off it while [_heldAway]; it comes back on return.
+  bool _nowPlayingAway = false;
+
   /// The cover asked for the lock screen, and its file once there.
   String? _coverUrl;
   String? _coverPath;
 
+  /// The cover asked for once more after its first ask got no file.
+  String? _coverRetried;
+
   bool _wasPlaying = false;
 
-  /// When the player last went from playing to paused.
+  /// When the player last went from playing to paused by itself, not at the page's ask.
   double? _pausedAtMs;
 
-  /// It was playing when the interruption under way began.
+  /// When the page last asked the player to pause ([_pause]); forgotten once it plays again.
+  double? _pauseAskedAtMs;
+
+  /// It was playing, or the player had paused by itself within [interruptionPause], when the interruption under way
+  /// began.
   bool _resumeAfterInterruption = false;
 
   /// What a new page starts with: the saved settings, at 1× and unmirrored (Swift kept those per page). Before the
@@ -473,7 +492,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     if (videoShape != null) _shapeVertical = isVertical;
     if (_disposed) return;
     if (!_active) {
-      // Only the lock screen follows it now: a closed page's player lets its video go.
+      // Only the lock screen follows it now, so it is taken off once a closed page's player lets its video go.
       _updateNowPlaying();
       return;
     }
@@ -521,7 +540,11 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
         final known = _controller.playerInfoFor(item.cid);
         _chapters = known?.chapters ?? const [];
         _danmakuMask.value = known?.mask;
-        if (known == null) unawaited(_loadChapters(item));
+        if (known == null) {
+          unawaited(_loadChapters(item));
+        } else {
+          _logMask(item.cid, known);
+        }
       }
     }
     _updateNowPlaying();
@@ -571,16 +594,27 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       if (_disposed || _chaptersFor != item) return;
       _chapters = info.chapters;
       _danmakuMask.value = info.mask;
+      _logMask(item.cid, info);
       notifyListeners();
     } catch (error) {
       _logger.warn(LogCategory.api, 'player info failed', {'bvid': item.bvid, 'cid': item.cid, 'error': '$error'});
     }
   }
 
+  /// A refused mask's host alone: its address is signed.
+  void _logMask(int cid, PlayerInfo info) {
+    final refused = info.refusedMaskHost;
+    _logger.info(LogCategory.player, 'danmaku mask info', {
+      'cid': cid,
+      'mask': info.mask != null ? 'present' : (refused != null ? 'refused' : 'none'),
+      'host': ?refused,
+    });
+  }
+
   @override
   void togglePlay() {
     if (readout.wantsPlay) {
-      _quietly(player.pause, 'pause');
+      _pause();
       return;
     }
     if (_ended || readout.status.value == PlayerStatus.ended) {
@@ -762,7 +796,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       return;
     }
     _logger.info(LogCategory.ui, 'sleep timer fired');
-    _quietly(player.pause, 'pause');
+    _pause();
     setSleepTimer(null);
   }
 
@@ -882,7 +916,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
         });
         _open(item.bvid, cid: item.cid);
       case logic.NextStop():
-        // No frames are built in the background, so the related video plays on this page's player, not a new page.
+        // In front the end screen offers the related videos; in the background nobody sees it, so the first one plays.
         if (_related.firstOrNull case final card? when backgroundNext) {
           _logger.info(LogCategory.ui, 'background autoplay', {'bvid': card.bvid, 'related': true});
           playRelated(card);
@@ -1005,9 +1039,15 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _controller.inBackground = background;
     _stopBackgroundChecks();
     if (background && _active) _startBackgroundCheck();
+    _updateNowPlaying();
   }
 
-  /// Pauses a video left playing in the background, unless 后台听视频 or the small window plays it on.
+  /// 后台听视频 off, and the app away without the small window: iOS paused the video there, and nothing on the page
+  /// may play it.
+  bool get _heldAway => !_prefs.backgroundListen && _background && !_controller.pictureInPicture;
+
+  /// Pauses a video left playing in the background, unless 后台听视频 or the small window plays it on, and takes the
+  /// lock screen off.
   void _startBackgroundCheck() {
     _backgroundCheck?.cancel();
     _backgroundCheck = null;
@@ -1022,6 +1062,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
         _watchingLoad = true;
         readout.status.addListener(_loadStatusChanged);
       }
+      _updateNowPlaying();
     });
   }
 
@@ -1042,25 +1083,56 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   void _pauseInBackground() {
     _logger.info(LogCategory.ui, 'paused in the background');
+    _pause();
+  }
+
+  /// Every pause the page asks for, so an interruption beginning about then doesn't take it for its own; one asked
+  /// during an interruption isn't undone at its end either.
+  void _pause() {
+    _pauseAskedAtMs = _monotonic.nowMs();
+    if (_resumeAfterInterruption) {
+      _resumeAfterInterruption = false;
+      _updateNowPlaying();
+    }
     _quietly(player.pause, 'pause');
   }
 
+  /// [atMs] is at most [interruptionPause] ago.
+  bool _justNow(double? atMs) => atMs != null && _monotonic.nowMs() - atMs <= interruptionPause.inMilliseconds;
+
   void _statusChanged() {
     final playing = readout.wantsPlay;
-    if (_wasPlaying && readout.status.value == PlayerStatus.paused) _pausedAtMs = _monotonic.nowMs();
+    if (_wasPlaying && readout.status.value == PlayerStatus.paused) {
+      // The page's own pause lands well within [interruptionPause] of its ask.
+      _pausedAtMs = _justNow(_pauseAskedAtMs) ? null : _monotonic.nowMs();
+    }
     final started = playing && !_wasPlaying;
     _wasPlaying = playing;
+    if (started) {
+      _pauseAskedAtMs = null;
+      _resumeAfterInterruption = false;
+    }
     // Told again as it starts, the lock screen comes back from another page's player that had it meanwhile.
     _updateNowPlaying(again: started);
   }
 
-  /// What the lock screen shows of the page's video: none until it plays on the page shown (a page shown again beside
-  /// another's small window leaves that one the lock screen), then kept while the page shows or its video plays, so a
-  /// covered page gives it up once paused.
+  /// Whether the lock screen is this page's: not until its video plays on the page shown (a page shown again beside
+  /// another's small window leaves that one the lock screen), then while the page shows, its video plays or a resume
+  /// after an interruption is pending, so a covered page gives it up once paused.
+  bool get _holdsNowPlaying {
+    if (_active && readout.wantsPlay) return true;
+    final held = _nowPlaying != null || _nowPlayingAway;
+    return held && (_active || readout.wantsPlay || _resumeAfterInterruption);
+  }
+
+  /// [_heldAway] past [backgroundGrace] (the small window can report its start after the app is away), unless a resume
+  /// after an interruption is pending: the interruption's end goes to the player holding the lock screen.
+  bool get _offLockScreen => _heldAway && _backgroundCheck == null && !_resumeAfterInterruption;
+
+  /// What the lock screen shows of the page's video while it [_holdsNowPlaying]; none while [_offLockScreen], when
+  /// nothing on it may play the video.
   NowPlayingInfo? _nowPlayingInfo(VideoView video, VideoPage page) {
-    final takes = _active && readout.wantsPlay;
-    final keeps = _nowPlaying != null && (_active || readout.wantsPlay);
-    if (!takes && !keeps) return null;
+    if (!_holdsNowPlaying || _offLockScreen) return null;
     return NowPlayingInfo(
       title: video.title,
       artist: video.owner ?? _detailOf(video.bvid)?.owner.name ?? '',
@@ -1098,10 +1170,20 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     String? path;
     try {
       path = await _coverFile(url);
+    } on CoverMissing catch (missing) {
+      _logger.info(LogCategory.ui, 'now playing cover missing', {'reason': missing.reason});
     } catch (error) {
       _logger.warn(LogCategory.ui, 'now playing cover failed', {'error': '${error.runtimeType}'});
     }
-    if (_disposed || _coverUrl != url || path == null) return;
+    if (_disposed || _coverUrl != url) return;
+    if (path == null) {
+      // The next update asks once more.
+      if (_coverRetried != url) {
+        _coverRetried = url;
+        _coverUrl = null;
+      }
+      return;
+    }
     _coverPath = path;
     _updateNowPlaying();
   }
@@ -1113,12 +1195,15 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     final video = _controller.video;
     final page = _controller.page;
     if (video == null || page == null) {
-      // The next part or video opening on this page keeps the lock screen until it plays.
+      // While the next part or video loads on the shown page, the lock screen keeps the last one rather than going
+      // blank.
       if (_active && _controller.phase == PlaybackPhase.loading) return;
+      _nowPlayingAway = false;
       _sendNowPlaying(null, null);
       return;
     }
     final info = _nowPlayingInfo(video, page);
+    _nowPlayingAway = info == null && _offLockScreen && _holdsNowPlaying;
     final item = info == null ? null : logic.PlayItem(bvid: video.bvid, cid: page.cid);
     if (info == _nowPlaying && item == _nowPlayingFor && !(again && info != null)) return;
     _sendNowPlaying(info, item);
@@ -1147,9 +1232,21 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     return position > 0 ? episodes[position - 1] : null;
   }
 
-  /// The lock screen's, headphones' and car's buttons, while the lock screen shows this page's video.
+  /// The lock screen's, headphones' and car's buttons, while the lock screen shows this page's video and the page isn't
+  /// covered (one kept for the small window isn't).
   void _remoteCommand(RemoteCommand command) {
     if (_disposed || _nowPlaying == null) return;
+    final plays = switch (command.kind) {
+      RemoteCommandKind.play || RemoteCommandKind.next || RemoteCommandKind.previous => true,
+      RemoteCommandKind.toggle => !readout.wantsPlay,
+      RemoteCommandKind.pause || RemoteCommandKind.seek => false,
+    };
+    // A covered page's pause may not have landed yet, and a part opened under the page on top would play.
+    final ignored = !_active ? 'covered' : (plays && _heldAway ? 'held in the background' : null);
+    if (ignored != null) {
+      _logger.info(LogCategory.ui, 'remote command ignored', {'kind': command.kind.name, 'reason': ignored});
+      return;
+    }
     switch (command.kind) {
       case RemoteCommandKind.play:
         if (!readout.wantsPlay) togglePlay();
@@ -1160,7 +1257,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       case RemoteCommandKind.seek:
         if (command.seconds case final seconds?) unawaited(commitSeek(seconds));
       case RemoteCommandKind.next:
-        // As ⏭ on the page, with the related video after the last.
+        // The page's ⏭, then the first related video after the last part, which the page's ⏭ doesn't offer.
         if (next case final episode?) {
           playEpisode(episode);
         } else if (_related.firstOrNull case final card?) {
@@ -1183,17 +1280,22 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   void _interrupted(AudioInterruption event) {
     if (_disposed) return;
     if (event.began) {
-      final pausedAt = _pausedAtMs;
-      _resumeAfterInterruption = readout.wantsPlay ||
-          (pausedAt != null && _monotonic.nowMs() - pausedAt <= interruptionPause.inMilliseconds);
+      // A pause the page asked for just before is no interruption's, landed or not.
+      _resumeAfterInterruption = !_justNow(_pauseAskedAtMs) && (readout.wantsPlay || _justNow(_pausedAtMs));
+      _updateNowPlaying();
       return;
     }
     final resume = _resumeAfterInterruption && event.shouldResume && !readout.wantsPlay;
     _resumeAfterInterruption = false;
-    if (!resume) return;
-    _logger.info(LogCategory.player, 'resumed after the interruption');
-    _willPlay?.call();
-    _quietly(player.play, 'play');
+    if (resume && !_heldAway) {
+      _logger.info(LogCategory.player, 'resumed after the interruption');
+      _willPlay?.call();
+      _quietly(player.play, 'play');
+      return;
+    }
+    if (resume) _logger.info(LogCategory.player, 'not resumed in the background');
+    // No longer kept for the resume.
+    _updateNowPlaying();
   }
 
   /// A setter's work: a failure is logged and answered with [toast].
