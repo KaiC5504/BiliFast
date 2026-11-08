@@ -618,8 +618,8 @@ class PlayerHostApi {
   }
 
   /// 后台听视频: on, the player keeps playing with the app in the background or the screen locked
-  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, iOS pauses it there (.pauses). Picture in
-  /// picture plays either way.
+  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, .automatic, which pauses it there but lets
+  /// picture in picture play (.pauses might stop the small window too).
   Future<void> setBackgroundPlayback(int playerId, bool enabled) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.setBackgroundPlayback$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

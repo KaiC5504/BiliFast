@@ -27,6 +27,8 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Finder listenRow() => find.byKey(const ValueKey('more-background-listen'));
+
   group('in the small player', () {
     testWidgets('is the light sheet from the player down: the squares with 分享 last, then the rows of 42', (
       tester,
@@ -53,12 +55,13 @@ void main() {
       }
     });
 
-    testWidgets('倍速, 自动连播, 循环播放, 镜像翻转 and the 测试 rows call the session and stay open', (tester) async {
+    testWidgets('倍速, 自动连播, 循环播放, 后台听视频, 镜像翻转 and the 测试 rows call the session and stay open', (tester) async {
       final rig = await pumpSheetRig(tester, session: singleVideo());
       await openSheet(tester, rig, PlayerPanel.more);
       await tapText(tester, '1.5');
       await tapText(tester, '自动连播');
       await tapText(tester, '单集循环');
+      await tapText(tester, '后台听视频');
       await tapText(tester, '镜像翻转');
       await tapText(tester, 'BTR 加速');
       await tapText(tester, '显示统计');
@@ -66,10 +69,33 @@ void main() {
         'setRate 1.5',
         'setAutoplayNext false',
         'setLoop single',
+        'setBackgroundListen false',
         'setMirrored true',
         'setBtr false',
         'setShowStats true',
       ]);
+      expect(rig.panels.value, PlayerPanel.more);
+    });
+
+    testWidgets("后台听视频's switch shows the setting and turns it both ways", (tester) async {
+      final rig = await pumpSheetRig(tester, session: singleVideo()..backgroundListen = false);
+      await openSheet(tester, rig, PlayerPanel.more);
+      Color? track() {
+        final drawn = tester.widget<AnimatedContainer>(
+          find.descendant(of: listenRow(), matching: find.byType(AnimatedContainer)),
+        );
+        return (drawn.decoration! as BoxDecoration).color;
+      }
+
+      expect(tester.getSemantics(listenRow()), isSemantics(isToggled: false, hasToggledState: true));
+      expect(track(), DownloadSheetTheme.trackOff);
+      await tapText(tester, '后台听视频');
+      expect(rig.session.backgroundListen, isTrue);
+      expect(tester.getSemantics(listenRow()), isSemantics(isToggled: true, hasToggledState: true));
+      expect(track(), BiliColors.pink);
+      await tapText(tester, '后台听视频');
+      expect(rig.session.calls, ['setBackgroundListen true', 'setBackgroundListen false']);
+      expect(find.text('暂未开放'), findsNothing);
       expect(rig.panels.value, PlayerPanel.more);
     });
 
@@ -179,7 +205,7 @@ void main() {
     testWidgets('what the app can\'t serve toasts and stays open', (tester) async {
       final rig = await pumpSheetRig(tester, session: singleVideo());
       await openSheet(tester, rig, PlayerPanel.more);
-      for (final title in ['不感兴趣', '投屏', '后台听视频', '字幕']) {
+      for (final title in ['不感兴趣', '投屏', '字幕']) {
         await tapText(tester, title);
         expect(find.text('暂未开放'), findsOneWidget, reason: title);
         expect(rig.panels.value, PlayerPanel.more);
@@ -208,8 +234,9 @@ void main() {
       tester.semantics.tap(find.semantics.byLabel('镜像翻转'));
       tester.semantics.tap(find.semantics.byLabel('1.25倍速'));
       tester.semantics.tap(find.semantics.byLabel('列表循环'));
+      tester.semantics.tap(find.semantics.byLabel('后台听视频'));
       await tester.pumpAndSettle();
-      expect(rig.session.calls, ['setMirrored true', 'setRate 1.25', 'setLoop list']);
+      expect(rig.session.calls, ['setMirrored true', 'setRate 1.25', 'setLoop list', 'setBackgroundListen false']);
       tester.semantics.tap(find.semantics.byLabel('缓存'));
       await tester.pumpAndSettle();
       expect(rig.panels.value, PlayerPanel.download);
@@ -246,6 +273,16 @@ void main() {
         await clearToast(tester);
       }
       expect(rig.session.calls, isEmpty);
+    });
+
+    testWidgets('后台听视频 shows the setting on, as on 43, and turns it off through the session', (tester) async {
+      final rig = await pumpSheetRig(tester, session: singleVideo(), presentation: Presentation.vertical);
+      await openSheet(tester, rig, PlayerPanel.more);
+      expect(tester.getSemantics(listenRow()), isSemantics(isToggled: true, hasToggledState: true));
+      await tapText(tester, '后台听视频');
+      expect(rig.session.calls, ['setBackgroundListen false']);
+      expect(tester.getSemantics(listenRow()), isSemantics(isToggled: false, hasToggledState: true));
+      expect(find.text('暂未开放'), findsNothing);
     });
   });
 

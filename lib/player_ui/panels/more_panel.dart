@@ -82,6 +82,8 @@ class MoreRows {
 
   void setMirrored(bool on) => report(session.setMirrored(on));
 
+  void setBackgroundListen(bool on) => session.setBackgroundListen(on);
+
   void setFit(FitMode fit) => report(session.setFit(fit));
 
   void setBtr(bool on) => report(session.setBtr(on));
@@ -276,8 +278,13 @@ class _MorePanelState extends State<MorePanel> {
                   value: _session.mirrored,
                   onChanged: rows.setMirrored,
                 ),
-                // 后台听视频.
-                const PanelBlankRow(),
+                PanelToggleRow(
+                  key: const ValueKey('more-background-listen'),
+                  icon: const PanelGlyph(PanelGlyphKind.listen),
+                  title: '后台听视频',
+                  value: _session.backgroundListen,
+                  onChanged: rows.setBackgroundListen,
+                ),
                 Semantics(
                   button: true,
                   child: GestureDetector(

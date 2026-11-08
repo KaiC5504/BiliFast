@@ -23,7 +23,7 @@ enum _Page { root, timer, custom, fit }
 
 /// ⋮ in the small player and 竖屏 (42, 43): the official light sheet. Its squares, then a card of rows, each doing what
 /// landscape's [MorePanel] does through [MoreRows]. KaiC's change: 42's row of share apps is one 分享 square that opens
-/// the system's share sheet. Rows the app can't serve (不感兴趣, 投屏, 后台听视频, 字幕, 单双击手势, 自动上滑) toast.
+/// the system's share sheet. Rows the app can't serve (不感兴趣, 投屏, 字幕, 单双击手势, 自动上滑) toast.
 class PortraitMoreSheet extends StatefulWidget {
   const PortraitMoreSheet({
     super.key,
@@ -170,10 +170,11 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
             trailing: const _Disclosure(text: '单击暂停'),
           ),
         _ToggleRow(
+          key: const ValueKey('more-background-listen'),
           icon: const PanelGlyph(PanelGlyphKind.listen, color: DownloadSheetTheme.ink),
           title: '后台听视频',
-          value: false,
-          onChanged: (_) => _soon(),
+          value: session.backgroundListen,
+          onChanged: rows.setBackgroundListen,
         ),
         if (vertical)
           _SheetRow(
@@ -505,7 +506,7 @@ class _SheetRow extends StatelessWidget {
 }
 
 class _ToggleRow extends StatelessWidget {
-  const _ToggleRow({required this.icon, required this.title, required this.value, required this.onChanged});
+  const _ToggleRow({super.key, required this.icon, required this.title, required this.value, required this.onChanged});
 
   final Widget icon;
   final String title;

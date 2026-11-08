@@ -28,6 +28,8 @@ class DanmakuFeed extends ChangeNotifier {
   int _cid = 0;
   int _durationMs = 0;
   int? _positionMs;
+  bool _playing = false;
+  bool _fetchesHeld = false;
 
   /// Where a 离线缓存 part's segments are; null while they come from Bilibili.
   _LocalSegments? _local;
@@ -89,6 +91,7 @@ class DanmakuFeed extends ChangeNotifier {
     _cid = cid;
     _durationMs = durationMs;
     _positionMs = null;
+    _playing = false;
     _attempted.clear();
     _failed.clear();
     _inFlight.clear();
@@ -115,14 +118,30 @@ class DanmakuFeed extends ChangeNotifier {
   /// Called as the playhead moves.
   void update({required int positionMs, required bool playing}) {
     _positionMs = positionMs;
+    _playing = playing;
     if (_cid == 0 || _closed || _local?.segments == 0) return;
     final segment = DanmakuSegments.indexForMs(positionMs);
     if (segment != _lastSegment) {
       _lastSegment = segment;
       _retryFailed();
     }
+    _fetchNeeded();
+  }
+
+  /// While [hold] (the app in the background, where nothing draws them), the playhead is followed but no segment is
+  /// fetched; lifted, what the playhead needs is fetched at once, without waiting for the next reading.
+  void holdFetches(bool hold) {
+    if (hold == _fetchesHeld) return;
+    _fetchesHeld = hold;
+    if (!hold) _fetchNeeded();
+  }
+
+  void _fetchNeeded() {
+    final positionMs = _positionMs;
+    if (_fetchesHeld || positionMs == null || _cid == 0 || _closed || _local?.segments == 0) return;
+    final segment = DanmakuSegments.indexForMs(positionMs);
     for (final index in DanmakuSegments.needed(atMs: positionMs, loaded: _attempted, durationMs: _durationMs)) {
-      if (playing || index == segment) _fetch(index);
+      if (_playing || index == segment) _fetch(index);
     }
   }
 

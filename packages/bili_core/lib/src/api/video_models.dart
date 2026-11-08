@@ -383,6 +383,36 @@ final class Chapter {
 final class DanmakuMaskInfo {
   const DanmakuMaskInfo({required this.cid, required this.plat, required this.fps, required this.time, required this.url});
 
+  /// Null when [json] is no mask, a field has the wrong type, or its address isn't one [isMaskUrl] allows; a
+  /// protocol-relative address (`//host/...`) is read as https. Absent numbers read as 0.
+  static DanmakuMaskInfo? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final object = JsonObject(json);
+    final raw = object.text('mask_url');
+    if (raw == null) return null;
+    final url = Uri.tryParse(raw.startsWith('//') ? 'https:$raw' : raw);
+    if (url == null || !isMaskUrl(url)) return null;
+    return attempt(
+      () => DanmakuMaskInfo(
+        cid: object.integer('cid') ?? 0,
+        plat: object.integer('plat') ?? 0,
+        fps: object.integer('fps') ?? 0,
+        time: object.integer('time') ?? 0,
+        url: url,
+      ),
+    );
+  }
+
+  /// Any Akamai customer can name an edge `upos-*`, so the mirror part is required.
+  static final _uposOnAkamai = RegExp(r'^upos-[a-z0-9]+-mirror[a-z0-9]+\.akamaized\.net$');
+
+  /// https on the standard port to Bilibili's video CDN: bilivideo.com, bilivideo.cn and the upos mirrors on Akamai.
+  static bool isMaskUrl(Uri url) {
+    if (url.scheme != 'https' || url.userInfo.isNotEmpty || url.port != 443) return false;
+    final host = url.host.toLowerCase();
+    return host.endsWith('.bilivideo.com') || host.endsWith('.bilivideo.cn') || _uposOnAkamai.hasMatch(host);
+  }
+
   final int cid;
   final int plat;
   final int fps;
@@ -392,6 +422,18 @@ final class DanmakuMaskInfo {
 
   /// A signed address: never logged, kept on disk or put in a fixture.
   final Uri url;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DanmakuMaskInfo &&
+      other.cid == cid &&
+      other.plat == plat &&
+      other.fps == fps &&
+      other.time == time &&
+      other.url == url;
+
+  @override
+  int get hashCode => Object.hash(cid, plat, fps, time, url);
 
   @override
   String toString() => 'DanmakuMaskInfo(cid: $cid, plat: $plat, fps: $fps, time: $time)';
@@ -423,6 +465,7 @@ final class PlayerInfo {
                 if (point.type == 2) point.chapter,
             ]
           : [],
+      mask: DanmakuMaskInfo.fromJson(object.map['dm_mask']),
     );
   }
 
@@ -440,10 +483,11 @@ final class PlayerInfo {
       other is PlayerInfo &&
       other.lastPlayCid == lastPlayCid &&
       other.lastPlayTimeMs == lastPlayTimeMs &&
-      listEquals(other.chapters, chapters);
+      listEquals(other.chapters, chapters) &&
+      other.mask == mask;
 
   @override
-  int get hashCode => Object.hash(lastPlayCid, lastPlayTimeMs, Object.hashAll(chapters));
+  int get hashCode => Object.hash(lastPlayCid, lastPlayTimeMs, Object.hashAll(chapters), mask);
 }
 
 final class VideoCard {

@@ -537,7 +537,7 @@ void main() {
 
     testWidgets('has the official rows in order', (tester) async {
       await more(tester);
-      final rows = ['稍后再看', '定时关闭', '不开启', '自动连播', '循环播放', '镜像翻转', '画面尺寸', 'BTR 加速', '显示统计'];
+      final rows = ['稍后再看', '定时关闭', '不开启', '自动连播', '循环播放', '镜像翻转', '后台听视频', '画面尺寸', 'BTR 加速', '显示统计'];
       final tops = [for (final row in rows) tester.getTopLeft(find.text(row)).dy];
       expect(tops, [...tops]..sort());
       for (final text in ['小窗播放', '15:00', '30:00', '60:00', '自定义', '单集循环', '列表循环', '不循环', '适应']) {
@@ -545,7 +545,9 @@ void main() {
       }
     });
 
-    testWidgets('keeps the official places: empty slots round the squares, 画面尺寸 a row down', (tester) async {
+    testWidgets('keeps the official places: empty slots round the squares, 后台听视频 between 镜像翻转 and 画面尺寸', (
+      tester,
+    ) async {
       await more(tester);
       final panelLeft = landscapeSize.width * (1 - BiliMetrics.panelMoreWidth);
       const pitch = BiliMetrics.panelActionSize + BiliMetrics.panelActionGap;
@@ -555,11 +557,13 @@ void main() {
       expect(later.width, BiliMetrics.panelActionSize);
       expect(pip.left - later.left, pitch);
       final mirror = tester.getCenter(find.text('镜像翻转')).dy;
+      expect(tester.getCenter(find.text('后台听视频')).dy - mirror, BiliMetrics.panelRowHeight);
       expect(tester.getCenter(find.text('画面尺寸')).dy - mirror, BiliMetrics.panelRowHeight * 2);
       for (final kind in [
         PanelGlyphKind.watchLater,
         PanelGlyphKind.autoplay,
         PanelGlyphKind.loop,
+        PanelGlyphKind.listen,
         PanelGlyphKind.fit,
       ]) {
         expect(find.byWidgetPredicate((widget) => widget is PanelGlyph && widget.kind == kind), findsOneWidget);
@@ -780,17 +784,39 @@ void main() {
       await tapText(tester, '自动连播');
       await tapText(tester, '单集循环');
       await tapText(tester, '镜像翻转');
+      await tapText(tester, '后台听视频');
       await tapText(tester, 'BTR 加速');
       await tapText(tester, '显示统计');
       expect(rig.session.calls, [
         'setAutoplayNext false',
         'setLoop single',
         'setMirrored true',
+        'setBackgroundListen false',
         'setBtr false',
         'setShowStats true',
       ]);
       expect(textColor(tester, '单集循环'), BiliColors.pink);
       expect(rig.panels.value, PlayerPanel.more);
+    });
+
+    testWidgets("后台听视频's switch shows the setting and turns it both ways, by a tap or an accessibility press", (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final rig = await more(tester, session: FakePlayerSession()..backgroundListen = false);
+      final row = find.byKey(const ValueKey('more-background-listen'));
+      bool shownOn() => tester.widget<PanelSwitch>(find.descendant(of: row, matching: find.byType(PanelSwitch))).on;
+      expect(shownOn(), isFalse);
+      await tapText(tester, '后台听视频');
+      expect(rig.session.backgroundListen, isTrue);
+      expect(shownOn(), isTrue);
+      tester.semantics.tap(find.semantics.byLabel('后台听视频'));
+      await tester.pumpAndSettle();
+      expect(rig.session.calls, ['setBackgroundListen true', 'setBackgroundListen false']);
+      expect(shownOn(), isFalse);
+      expect(find.text('暂未开放'), findsNothing);
+      expect(rig.panels.value, PlayerPanel.more);
+      handle.dispose();
     });
 
     testWidgets('画面尺寸 opens its page; a pick sets it and comes back', (tester) async {

@@ -95,9 +95,9 @@ class _VerticalModeSettingsPageState extends State<VerticalModeSettingsPage> {
   );
 }
 
-/// 播放设置 → 小窗播放/后台听视频设置 (174). Only 应用外自动小窗播放 is ours to change; the other three show what the
-/// app does, none of which it has: a covered page pauses and gives up its small window, and a page left in the
-/// background without one pauses, so nothing plays on, or on to the next video, behind the lock screen.
+/// 播放设置 → 小窗播放/后台听视频设置 (174). 应用外自动小窗播放 and both 后台听视频 rows are ours to change (后台听视频 is
+/// the same setting as the video page's ⋮ row); 应用内自动小窗播放 stays off and toasts, since a covered page pauses
+/// and gives up its small window.
 class PipSettingsPage extends StatefulWidget {
   const PipSettingsPage({super.key, this.prefs});
 
@@ -110,7 +110,10 @@ class PipSettingsPage extends StatefulWidget {
 class _PipSettingsPageState extends State<PipSettingsPage> {
   PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
 
-  void _soon(bool _) => showNotBuilt(context);
+  void _flip(String key, bool on, void Function(PlayerPrefs prefs) change) {
+    setState(() => change(_prefs));
+    logPlaybackSetting(key, on);
+  }
 
   @override
   Widget build(BuildContext context) => SettingsScaffold(
@@ -125,17 +128,14 @@ class _PipSettingsPageState extends State<PipSettingsPage> {
             title: '应用外自动小窗播放',
             subtitle: '切出APP时自动出小窗，继续播放视频/直播',
             value: _prefs.autoPip,
-            onChanged: (on) {
-              setState(() => _prefs.autoPip = on);
-              logPlaybackSetting('autoPip', on);
-            },
+            onChanged: (on) => _flip('autoPip', on, (prefs) => prefs.autoPip = on),
           ),
           SettingsSwitchRow(
             key: const ValueKey('pip-inside'),
             title: '应用内自动小窗播放',
             subtitle: '切到APP内其他页面时出小窗，继续播放视频',
             value: false,
-            onChanged: _soon,
+            onChanged: (_) => showNotBuilt(context),
           ),
         ],
       ),
@@ -147,14 +147,14 @@ class _PipSettingsPageState extends State<PipSettingsPage> {
             key: const ValueKey('pip-background'),
             title: '后台听视频',
             subtitle: '锁屏或切到后台时，继续播放视频声音',
-            value: false,
-            onChanged: _soon,
+            value: _prefs.backgroundListen,
+            onChanged: (on) => _flip('backgroundListen', on, (prefs) => prefs.backgroundListen = on),
           ),
           SettingsSwitchRow(
             key: const ValueKey('pip-background-next'),
             title: '后台听视频时，自动连播相关视频',
-            value: false,
-            onChanged: _soon,
+            value: _prefs.backgroundNext,
+            onChanged: (on) => _flip('backgroundNext', on, (prefs) => prefs.backgroundNext = on),
           ),
         ],
       ),

@@ -90,8 +90,8 @@ abstract class PlayerHostApi {
   void setRestorable(int playerId, bool restorable);
 
   /// 后台听视频: on, the player keeps playing with the app in the background or the screen locked
-  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, iOS pauses it there (.pauses). Picture in
-  /// picture plays either way.
+  /// (`audiovisualBackgroundPlaybackPolicy` .continuesIfPossible); off, .automatic, which pauses it there but lets
+  /// picture in picture play (.pauses might stop the small window too).
   void setBackgroundPlayback(int playerId, bool enabled);
 
   /// Makes this player the one the lock screen and Control Center show, with [info]; null takes it off them and
