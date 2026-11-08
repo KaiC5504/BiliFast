@@ -840,9 +840,9 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// What the lock screen and Control Center show while this controller's video plays; null takes it off them. The
-  /// same info again sends nothing.
+  /// same info is sent again, since that is how a page takes the lock screen back from another page's player.
   Future<void> setNowPlaying(NowPlayingInfo? info) async {
-    if (_disposed || info == _nowPlaying) return;
+    if (_disposed || (info == null && _nowPlaying == null)) return;
     _nowPlaying = info;
     _quietly(() => player.setNowPlaying(info), 'now playing');
   }

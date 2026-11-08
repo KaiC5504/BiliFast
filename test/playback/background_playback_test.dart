@@ -76,7 +76,8 @@ void main() {
   });
 
   group('now playing', () {
-    test('new info reaches the player, the same info again sends nothing', () async {
+    test('every info reaches the player, so a page can take the lock screen back; a second clear sends nothing',
+        () async {
       final controller = make();
       await controller.setNowPlaying(first);
       await controller.setNowPlaying(const NowPlayingInfo(
@@ -90,7 +91,14 @@ void main() {
       await controller.setNowPlaying(null);
       await controller.setNowPlaying(null);
       await controller.setNowPlaying(first);
-      expect(callsOf('now playing'), ['now playing one', 'now playing two', 'now playing null', 'now playing one']);
+      expect(callsOf('now playing'), [
+        'now playing one',
+        'now playing one',
+        'now playing two',
+        'now playing two',
+        'now playing null',
+        'now playing one',
+      ]);
       expect(player.nowPlaying, first);
       controller.dispose();
     });
