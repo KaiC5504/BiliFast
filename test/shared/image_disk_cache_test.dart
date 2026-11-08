@@ -275,6 +275,57 @@ void main() {
     expect(fetch.asked, hasLength(1));
   });
 
+  group('storedFile', () {
+    test('answers the file only once it is written, sharing the download asked for it', () async {
+      final cache = cacheOf();
+      final release = Completer<void>();
+      fetch.hold = release.future;
+      final shown = cache.bytes(_a);
+      final stored = cache.storedFile(_a, headers: const {'Referer': 'https://www.bilibili.com'});
+      release.complete();
+      final file = await stored;
+      expect(file?.path, cache.fileOf(_a).path);
+      expect(await file!.readAsBytes(), await shown);
+      expect(fetch.asked, hasLength(1));
+    });
+
+    test('a stored copy answers at once, without downloading', () async {
+      final cache = cacheOf();
+      await cache.bytes(_a);
+      await cache.settle();
+      fetch.error = StateError('the network is not asked');
+      expect((await cacheOf().storedFile(_a))?.path, cache.fileOf(_a).path);
+      expect(fetch.asked, hasLength(1));
+    });
+
+    test('null for an empty answer, a write that fails, or a clear while downloading', () async {
+      final cache = cacheOf();
+      await cache.start();
+      fetch.size = 0;
+      final downloads = <PictureDownload>[];
+      expect(await cache.storedFile(_a, onDownloaded: downloads.add), isNull);
+      expect(downloads.single.bytes, 0);
+
+      fetch.size = 100;
+      Directory(cache.fileOf(_b).path).createSync();
+      expect(await cache.storedFile(_b), isNull);
+
+      final release = Completer<void>();
+      fetch.hold = release.future;
+      final stored = cache.storedFile(_c);
+      await pumpEventQueue();
+      await cache.clear();
+      release.complete();
+      expect(await stored, isNull);
+      expect(cache.fileOf(_c).existsSync(), isFalse);
+    });
+
+    test('a failed download throws as bytes does', () async {
+      fetch.error = const HttpException('gone');
+      await expectLater(cacheOf().storedFile(_a), throwsA(isA<HttpException>()));
+    });
+  });
+
   test('a picture is written under a temporary name and renamed, so a half-written one is never read', () async {
     final halfWritten = File('${cacheOf().fileOf(_a).path}.deadrun-0.tmp')..writeAsBytesSync([1, 2]);
     final cache = cacheOf();

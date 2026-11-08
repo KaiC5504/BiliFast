@@ -492,7 +492,7 @@ void main() {
       expect(opened, isEmpty);
       player.emit(const StatusChanged(PlayerStatus.playing));
       timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
-      expect(player.calls.last, 'pause');
+      expect(player.calls.skip(player.calls.length - 2), ['pause', 'now playing null']);
 
       session.didChangeAppLifecycleState(AppLifecycleState.resumed);
       player.emit(const StatusChanged(PlayerStatus.playing));
@@ -581,7 +581,7 @@ void main() {
       player.calls.clear();
       session.didChangeAppLifecycleState(AppLifecycleState.paused);
       timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
-      expect(player.calls, ['pause']);
+      expect(player.calls, ['pause', 'now playing null'], reason: 'nothing on the lock screen may play it');
 
       session.didChangeAppLifecycleState(AppLifecycleState.resumed);
       player.emit(const StatusChanged(PlayerStatus.playing));
@@ -717,6 +717,37 @@ void main() {
       expect(session.ended, isFalse);
     });
 
+    for (final (name, answer) in [('answered empty', (200, '{"code":0,"data":[]}')), ('failed', (500, ''))]) {
+      test('after the last part with the related videos $name, it ends and opens nothing', () async {
+        http.routes[relatedPath] = answer;
+        final session = makeSession();
+        await controller.openVideo(bv, cid: p2);
+        await settle();
+        playing();
+        session.didChangeAppLifecycleState(AppLifecycleState.paused);
+        await ended();
+        expect(opened, isEmpty);
+        expect(session.ended, isTrue);
+      });
+    }
+
+    test('after the last part with the related videos still on their way, it ends; their answer opens nothing',
+        () async {
+      final gate = http.gates[relatedPath] = Completer<void>();
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p2);
+      await settle();
+      playing();
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await ended();
+      expect(opened, isEmpty);
+      expect(session.ended, isTrue);
+      gate.complete();
+      await settle();
+      expect(session.related, isNotEmpty);
+      expect(opened, isEmpty);
+    });
+
     test('单集循环 still plays the same part again', () async {
       makeSession().setLoop(LoopMode.single);
       await controller.openVideo(bv, cid: p1);
@@ -820,8 +851,9 @@ void main() {
         player.nowPlaying,
         const NowPlayingInfo(title: '测试视频', artist: 'UP主', hasPrevious: true, hasNext: false),
       );
-      final failed = logs.events.singleWhere((event) => event.msg == 'now playing cover failed');
-      expect(failed.f['error']?.toJson(), 'FileSystemException');
+      final failed = logs.events.where((event) => event.msg == 'now playing cover failed');
+      expect(failed.length, inInclusiveRange(1, 2), reason: 'asked once more at the next update');
+      expect(failed.map((event) => event.f['error']?.toJson()).toSet(), {'FileSystemException'});
     });
 
     test('a covered page keeps it only while its video plays, and shown again paused leaves it to the others', () async {
@@ -911,19 +943,221 @@ void main() {
       expect(opened.last, 'BV1EF411e9oF -', reason: 'after the last part, the related video');
     });
 
-    test("the app's cover file is the picture cache's copy, once written; none without the cache", () async {
+    test("the app's cover file is the picture cache's copy, once written; else why there is none", () async {
       const url = 'https://i1.hdslb.com/bfs/archive/cover.jpg';
-      expect(await cachedCoverFile(url), isNull);
+      Future<String?> missing(String url) async {
+        try {
+          await cachedCoverFile(url);
+          return null;
+        } on CoverMissing catch (missing) {
+          return missing.reason;
+        }
+      }
+
+      expect(await missing(url), 'no cache');
       final folder = await Directory.systemTemp.createTemp('covers');
       addTearDown(() => folder.delete(recursive: true));
       final saved = ImageDiskCache.shared;
-      ImageDiskCache.shared = ImageDiskCache(
-        folder: folder.path,
-        fetch: (url, headers) async => Uint8List.fromList([1, 2, 3]),
-      );
       addTearDown(() => ImageDiskCache.shared = saved);
+      var answer = [1, 2, 3];
+      final cache = ImageDiskCache.shared = ImageDiskCache(
+        folder: folder.path,
+        fetch: (url, headers) async => Uint8List.fromList(answer),
+      );
       final path = await cachedCoverFile(url);
-      expect(await File(path!).readAsBytes(), [1, 2, 3]);
+      expect(await File(path).readAsBytes(), [1, 2, 3], reason: 'written by the time it answers');
+
+      answer = [];
+      expect(await missing('$url?empty'), 'empty');
+      answer = [4];
+      // A folder where the picture's file should be: the rename into place fails.
+      Directory(cache.fileOf('$url?blocked').path).createSync();
+      expect(await missing('$url?blocked'), 'store failed');
+    });
+
+    test('a cover with no file is logged with why, never its address, and asked once more at the next update',
+        () async {
+      final asked = <String>[];
+      makeSession(coverFile: (url) async {
+        asked.add(url);
+        throw const CoverMissing('store failed');
+      });
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await settle();
+      for (var i = 0; i < 3; i++) {
+        player.emit(const StatusChanged(PlayerStatus.paused));
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        await settle();
+      }
+      expect(asked, hasLength(2), reason: 'once more, not on every update');
+      expect(player.nowPlaying?.artworkPath, isNull);
+      final lines = logs.events.where((event) => event.msg == 'now playing cover missing').toList();
+      expect(lines, hasLength(2));
+      expect(lines.first.f.map((key, value) => MapEntry(key, value.toJson())), {'reason': 'store failed'});
+    });
+
+    test('across 后台连播 to a related video it is never cleared, then shows the new video', () async {
+      final session = makeSession(coverFile: coverFile);
+      await controller.openVideo(bv, cid: p2);
+      await settle();
+      playing();
+      await settle();
+      expect(player.nowPlaying, shown);
+      http.routes[Canned.signedViewPath] = (
+        200,
+        Canned.view.replaceAll(bv, 'BV1EF411e9oF').replaceFirst('测试视频', '相关视频'),
+      );
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      player.calls.clear();
+      await ended();
+      expect(opened, ['BV1EF411e9oF -']);
+      await settle();
+      playing();
+      await settle();
+      expect(lockScreen(), isNot(contains('now playing null')));
+      expect(player.nowPlaying?.title, '相关视频');
+    });
+
+    test('two pages: the lower one, shown again beside the upper one in the small window, takes nothing until it '
+        'plays; letting the upper one go clears only its own', () async {
+      final lowerPlayer = player;
+      final lower = makeSession(coverFile: coverFile);
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await settle();
+      expect(lowerPlayer.nowPlaying, shown);
+      lower.active = false;
+      lowerPlayer.emit(const StatusChanged(PlayerStatus.paused));
+      expect(lowerPlayer.nowPlaying, isNull, reason: 'covered and paused');
+
+      final upperPlayer = player = FakePlayer();
+      final upper = makeSession(coverFile: coverFile);
+      await controller.openVideo(bv, cid: p2);
+      playing();
+      await settle();
+      expect(upperPlayer.nowPlaying, shown);
+      upperPlayer.emit(const PictureInPictureChanged(true));
+      lowerPlayer.calls.clear();
+      lower.active = true;
+      await settle();
+      expect(lowerPlayer.calls.where((call) => call.startsWith('now playing')), isEmpty);
+      expect(upperPlayer.nowPlaying, shown);
+
+      upper.dispose();
+      sessions.remove(upper);
+      expect(upperPlayer.nowPlaying, isNull);
+      expect(lowerPlayer.calls.where((call) => call.startsWith('now playing')), isEmpty);
+      lowerPlayer.emit(const StatusChanged(PlayerStatus.playing));
+      expect(lowerPlayer.nowPlaying, shown);
+    });
+
+    test('a covered page ignores its buttons, even before its pause lands; one kept for the small window does not',
+        () async {
+      final session = makeSession(coverFile: coverFile);
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await settle();
+      session.active = false;
+      player.calls.clear();
+      for (final kind in RemoteCommandKind.values) {
+        player.emit(RemoteCommand(kind, seconds: kind == RemoteCommandKind.seek ? 30 : null));
+      }
+      await settle();
+      expect(opened, isEmpty);
+      expect(player.calls, isEmpty);
+      expect(logs.events.where((event) => event.msg == 'remote command ignored'), hasLength(6));
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      expect(player.nowPlaying, isNull);
+
+      // Shown again and played, then popped into the small window: still active.
+      session.active = true;
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      player.emit(const PictureInPictureChanged(true));
+      session.didChangeAppLifecycleState(AppLifecycleState.paused);
+      player.emit(const RemoteCommand(RemoteCommandKind.next));
+      await settle();
+      expect(opened, ['$bv $p2']);
+    });
+
+    group('with 后台听视频 off', () {
+      setUp(() => prefs.backgroundListen = false);
+
+      /// Playing with the lock screen, then away: iOS pauses it as the app leaves, unless the small window plays it.
+      Future<PagePlayerSession> inBackground({bool pictureInPicture = false}) async {
+        final session = makeSession(coverFile: coverFile);
+        await controller.openVideo(bv, cid: p1);
+        playing();
+        await settle();
+        expect(player.nowPlaying, shown);
+        if (pictureInPicture) player.emit(const PictureInPictureChanged(true));
+        player.calls.clear();
+        session
+          ..didChangeAppLifecycleState(AppLifecycleState.inactive)
+          ..didChangeAppLifecycleState(AppLifecycleState.hidden);
+        if (!pictureInPicture) player.emit(const StatusChanged(PlayerStatus.paused));
+        return session;
+      }
+
+      test('away without the small window it comes off once the grace is over, and back on return', () async {
+        final session = await inBackground();
+        expect(lockScreen(), isEmpty, reason: 'the small window can report its start late');
+        timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+        expect(lockScreen(), ['now playing null']);
+        session.didChangeAppLifecycleState(AppLifecycleState.paused);
+        expect(lockScreen(), ['now playing null']);
+
+        session.didChangeAppLifecycleState(AppLifecycleState.inactive);
+        expect(lockScreen(), ['now playing null', 'now playing 测试视频']);
+        expect(player.nowPlaying, shown);
+      });
+
+      test('in the small window it stays, and comes off if the window goes while away', () async {
+        final session = await inBackground(pictureInPicture: true);
+        timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+        expect(lockScreen(), isEmpty);
+        player.emit(const PictureInPictureChanged(false));
+        expect(lockScreen(), ['now playing null']);
+        session.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        expect(player.nowPlaying, shown);
+      });
+
+      test('away without the small window, no button plays it: ▶, ⏯, ⏭ and ◀◀ do nothing; ❚❚ and seeking still go',
+          () async {
+        await inBackground();
+        Future<void> press(RemoteCommandKind kind, {double? seconds}) async {
+          player.emit(RemoteCommand(kind, seconds: seconds));
+          await settle();
+        }
+
+        player.calls.clear();
+        for (final kind in [
+          RemoteCommandKind.play,
+          RemoteCommandKind.toggle,
+          RemoteCommandKind.next,
+          RemoteCommandKind.previous,
+        ]) {
+          await press(kind);
+        }
+        expect(player.calls, isEmpty);
+        expect(opened, isEmpty);
+        expect(
+          logs.events.where((event) => event.msg == 'remote command ignored').map((event) => event.f['kind']?.toJson()),
+          ['play', 'toggle', 'next', 'previous'],
+        );
+        await press(RemoteCommandKind.seek, seconds: 30);
+        expect(player.calls, ['seek 30.0']);
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        player.calls.clear();
+        await press(RemoteCommandKind.toggle);
+        expect(player.calls, ['pause'], reason: 'a ⏯ that pauses');
+
+        player.emit(const StatusChanged(PlayerStatus.paused));
+        player.emit(const PictureInPictureChanged(true));
+        player.calls.clear();
+        await press(RemoteCommandKind.play);
+        expect(player.calls, ['play'], reason: 'the small window plays on in the background');
+      });
     });
 
     test('▶ after the end plays from the start', () async {
@@ -979,6 +1213,157 @@ void main() {
       await interrupt(began: false, shouldResume: true);
       expect(player.calls, isEmpty, reason: 'paused a minute before it began');
     });
+
+    for (final (name, pause) in <(String, void Function(PagePlayerSession session))>[
+      ('❚❚ on the page', (session) => session.togglePlay()),
+      ("the lock screen's ❚❚", (_) => player.emit(const RemoteCommand(RemoteCommandKind.pause))),
+      ('定时关闭', (session) {
+        session.setSleepTimer(const Duration(minutes: 1));
+        time.advance(60000);
+        periodic.tick();
+      }),
+    ]) {
+      test('a pause asked by $name just before it began is not undone, landed or still on its way', () async {
+        final session = makeSession();
+        await controller.openVideo(bv, cid: p1);
+        playing();
+        await settle();
+        pause(session);
+        await settle();
+        expect(player.calls.last, 'pause');
+        player.emit(const StatusChanged(PlayerStatus.paused));
+        time.advance(500);
+        player.calls.clear();
+        await interrupt(began: true);
+        await interrupt(began: false, shouldResume: true);
+        expect(player.calls, isEmpty);
+
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        time.advance(5000);
+        pause(session);
+        await interrupt(began: true);
+        player.emit(const StatusChanged(PlayerStatus.paused));
+        player.calls.clear();
+        await interrupt(began: false, shouldResume: true);
+        expect(player.calls, isEmpty);
+      });
+    }
+
+    test('a pause the page asked for, then played again, leaves the next interruption its own', () async {
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.togglePlay();
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      session.togglePlay();
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      time.advance(200);
+      player.calls.clear();
+      await interrupt(began: true);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      await interrupt(began: false, shouldResume: true);
+      expect(player.calls, ['play']);
+    });
+
+    test('定时关闭 firing during it is not undone at its end', () async {
+      final session = makeSession()..setSleepTimer(const Duration(minutes: 1));
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      await interrupt(began: true);
+      player.emit(const StatusChanged(PlayerStatus.paused));
+      time.advance(60000);
+      periodic.tick();
+      expect(session.sleepTimer, isNull);
+      player.calls.clear();
+      await interrupt(began: false, shouldResume: true);
+      expect(player.calls, isNot(contains('play')));
+    });
+
+    group('with 后台听视频 off', () {
+      setUp(() => prefs.backgroundListen = false);
+
+      void away(PagePlayerSession session) => session
+        ..didChangeAppLifecycleState(AppLifecycleState.inactive)
+        ..didChangeAppLifecycleState(AppLifecycleState.hidden)
+        ..didChangeAppLifecycleState(AppLifecycleState.paused);
+
+      void back(PagePlayerSession session) => session
+        ..didChangeAppLifecycleState(AppLifecycleState.hidden)
+        ..didChangeAppLifecycleState(AppLifecycleState.inactive)
+        ..didChangeAppLifecycleState(AppLifecycleState.resumed);
+
+      /// A call while it played in front; the app went away for it, past the grace.
+      Future<PagePlayerSession> calledAway() async {
+        final session = makeSession();
+        await controller.openVideo(bv, cid: p1);
+        playing();
+        await settle();
+        expect(player.nowPlaying, isNotNull);
+        await interrupt(began: true);
+        player.emit(const StatusChanged(PlayerStatus.paused));
+        away(session);
+        timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+        return session;
+      }
+
+      List<String> lockScreen() => [
+        for (final call in player.calls)
+          if (call.startsWith('now playing')) call,
+      ];
+
+      test('ending with the app still away it plays nothing; the lock screen stays for its end, then comes off',
+          () async {
+        await calledAway();
+        expect(lockScreen(), isNot(contains('now playing null')), reason: 'its end goes to the lock screen\'s player');
+        player.calls.clear();
+        await interrupt(began: false, shouldResume: true);
+        expect(player.calls, ['now playing null']);
+        expect(logs.events.map((event) => event.msg), contains('not resumed in the background'));
+      });
+
+      test('back in front before it ends, it plays again, the lock screen kept throughout', () async {
+        final session = await calledAway();
+        back(session);
+        await interrupt(began: false, shouldResume: true);
+        expect(player.calls.last, 'play');
+        expect(lockScreen(), isNot(contains('now playing null')));
+      });
+
+      test("the background check's own pause just before it began is not undone after the return", () async {
+        final session = makeSession();
+        await controller.openVideo(bv, cid: p1);
+        playing();
+        away(session);
+        timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+        expect(player.calls, contains('pause'));
+        player.emit(const StatusChanged(PlayerStatus.paused));
+        time.advance(500);
+        await interrupt(began: true);
+        back(session);
+        player.calls.clear();
+        await interrupt(began: false, shouldResume: true);
+        expect(player.calls, isNot(contains('play')));
+      });
+
+      test('in the small window, a call that takes the window down while away keeps the lock screen for its end',
+          () async {
+        final session = makeSession();
+        await controller.openVideo(bv, cid: p1);
+        playing();
+        player.emit(const PictureInPictureChanged(true));
+        await settle();
+        away(session);
+        timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
+        await interrupt(began: true);
+        player.emit(const StatusChanged(PlayerStatus.paused));
+        player.emit(const PictureInPictureChanged(false));
+        await settle();
+        expect(lockScreen(), isNot(contains('now playing null')));
+        player.calls.clear();
+        await interrupt(began: false, shouldResume: true);
+        expect(player.calls, ['now playing null'], reason: 'no window, so nothing plays in the background');
+      });
+    });
   });
 
   group('人像防挡', () {
@@ -1012,6 +1397,34 @@ void main() {
       await controller.openVideo(bv, cid: p1);
       await settle();
       expect(session.danmakuMask.value, isNull, reason: 'a part without one');
+    });
+
+    test('each part logs once whether it has one: present, refused with its host alone, or none', () async {
+      http.routes[playerInfoPath] = (200, withMask(p1));
+      final session = makeSession();
+      await controller.openVideo(bv);
+      await settle();
+      http.routes[playerInfoPath] = (
+        200,
+        playerInfo().replaceFirst(
+          '"data":{',
+          '"data":{"dm_mask":{"cid":$p2,"mask_url":"https://masks.example.com/dm_mask/x.webmask?sign=SECRET"},',
+        ),
+      );
+      session.playEpisode(session.episodes[1]);
+      await settle();
+      http.routes[playerInfoPath] = (200, playerInfo());
+      await controller.openVideo(bv, cid: p1);
+      await settle();
+      final lines = [
+        for (final event in logs.events)
+          if (event.msg == 'danmaku mask info') event.f.map((key, value) => MapEntry(key, value.toJson())),
+      ];
+      expect(lines, [
+        {'cid': p1, 'mask': 'present'},
+        {'cid': p2, 'mask': 'refused', 'host': 'masks.example.com'},
+        {'cid': p1, 'mask': 'none'},
+      ]);
     });
   });
 
@@ -1161,7 +1574,7 @@ void main() {
       session.active = true;
       player.calls.clear();
       timers.activeWith(PagePlayerSession.backgroundGrace)!.fire();
-      expect(player.calls, ['pause'], reason: 'active again in the background, it checks again');
+      expect(player.calls, ['pause', 'now playing null'], reason: 'active again in the background, it checks again');
     });
 
     test('active again, it catches up with its player at once', () async {
