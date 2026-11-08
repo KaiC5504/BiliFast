@@ -292,7 +292,10 @@ final class NativePlayer {
         }
       },
       player.observe(\.rate, options: [.new]) { [weak self] _, _ in
-        onMainActor { self?.rateChanged() }
+        onMainActor {
+          self?.rateChanged()
+          self?.nowPlaying?.refreshPlayback()
+        }
       },
       // At the start of an item the wait often begins as `.evaluatingBufferingRate` and changes reason while
       // `timeControlStatus` stays the same.
@@ -354,6 +357,7 @@ final class NativePlayer {
 
   private func seekLanded(_ current: Int) {
     guard current == generation else { return }
+    nowPlaying?.refreshPlayback()
     pendingSeeks = max(0, pendingSeeks - 1)
     startIfBuffered()
   }
@@ -478,6 +482,7 @@ final class NativePlayer {
     let seconds = item.duration.seconds
     guard seconds.isFinite, seconds > 0, seconds != reportedDuration else { return }
     reportedDuration = seconds
+    nowPlaying?.refreshPlayback()
     events.onDuration(playerId: id, seconds: seconds, completion: ignoreReply)
   }
 

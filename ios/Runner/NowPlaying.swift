@@ -150,12 +150,19 @@ enum NowPlaying {
         artworkPath = info.artworkPath
         if let path = info.artworkPath { loadArtwork(path) }
       }
-      if let item = player.currentItem { item.nowPlayingInfo = metadata }
+      refreshPlayback()
     }
 
     /// The player's next item: the metadata is the item's, so every load needs it again.
     func attach(_ item: AVPlayerItem) {
-      item.nowPlayingInfo = metadata
+      item.nowPlayingInfo = metadata(for: item, current: false)
+    }
+
+    /// The session's own publishing left the lock screen's timeline blank until the first seek (1.3.0 (10) on the
+    /// phone), so the item's info carries the duration, position and rate too, set again whenever one changes.
+    func refreshPlayback() {
+      guard !ended, let item = player.currentItem else { return }
+      item.nowPlayingInfo = metadata(for: item, current: true)
     }
 
     func becomeActive() {
@@ -174,9 +181,11 @@ enum NowPlaying {
       }
       targets = []
       player.currentItem?.nowPlayingInfo = nil
+      // Turning publishing off first already drops the session's observers on the player, and removePlayer then
+      // removes them again: an uncaught KVO exception (the crash on leaving a page in the first phone build).
+      session.removePlayer(player)
       session.automaticallyPublishesNowPlayingInfo = false
       session.nowPlayingInfoCenter.nowPlayingInfo = nil
-      session.removePlayer(player)
       session.delegate = nil
     }
 
@@ -194,10 +203,20 @@ enum NowPlaying {
       }
     }
 
-    private var metadata: [String: Any] {
+    /// [current]: [item] is the player's, so its position and rate are the player's.
+    private func metadata(for item: AVPlayerItem, current: Bool) -> [String: Any] {
       guard let info else { return [:] }
       var values: [String: Any] = [MPMediaItemPropertyTitle: info.title, MPMediaItemPropertyArtist: info.artist]
       if let artwork { values[MPMediaItemPropertyArtwork] = artwork }
+      let duration = item.duration.seconds
+      if duration.isFinite, duration > 0 { values[MPMediaItemPropertyPlaybackDuration] = duration }
+      if current {
+        let elapsed = player.currentTime().seconds
+        if elapsed.isFinite { values[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, elapsed) }
+        values[MPNowPlayingInfoPropertyPlaybackRate] = Double(player.rate)
+      }
+      values[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+      values[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.video.rawValue
       return values
     }
 
