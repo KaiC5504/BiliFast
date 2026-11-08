@@ -400,11 +400,9 @@ void main() {
     expect(_cardOpacity(tester), 1);
   });
 
-  testWidgets('rows, the header\'s band and the 会员 card darken under a finger; glyphs, counts and shortcuts fade', (
-    tester,
-  ) async {
+  testWidgets('rows and the 会员 card darken under a finger; glyphs, counts and shortcuts fade', (tester) async {
     await showMe(tester);
-    for (final key in ['me-settings', 'me-profile', 'me-vip-card']) {
+    for (final key in ['me-settings', 'me-vip-card']) {
       final finger = await tester.startGesture(tester.getTopLeft(_key(key)) + const Offset(30, 20));
       // In the list a tap down waits out the scroll's 100 ms.
       await tester.pump(const Duration(milliseconds: 150));
@@ -429,6 +427,20 @@ void main() {
       await finger.cancel();
       await _settle(tester, 6);
     }
+  });
+
+  testWidgets('the header\'s band draws nothing under a finger, and still opens the space', (tester) async {
+    await showMe(tester);
+    final band = _key('me-profile');
+    final finger = await tester.startGesture(tester.getTopLeft(band) + const Offset(300, 20));
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pump(const Duration(milliseconds: 200));
+    for (final drawn in [DecoratedBox, ColoredBox, CupertinoButton, FadeTransition, Opacity]) {
+      expect(find.descendant(of: band, matching: find.byType(drawn)), findsNothing, reason: '$drawn');
+    }
+    await finger.up();
+    await _settle(tester);
+    expect(find.byType(SpacePage), findsOneWidget);
   });
 
   testWidgets('labels in fading buttons keep the page\'s text style: untracked, with its fallback', (tester) async {

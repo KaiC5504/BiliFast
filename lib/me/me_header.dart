@@ -9,8 +9,9 @@ import '../shared/theme.dart';
 import 'me_glyphs.dart';
 import 'me_model.dart';
 
-/// How a [MeTap] answers a finger: glyphs and short labels fade as iOS buttons do, rows and the 会员 card darken.
-enum MeTapFeedback { fade, highlight }
+/// How a [MeTap] answers a finger: glyphs and short labels fade as iOS buttons do, rows and the 会员 card darken, and
+/// the header's profile band shows nothing (KaiC, 2026-11-09).
+enum MeTapFeedback { fade, highlight, none }
 
 /// A control with its own accessibility press, so VoiceOver and ghosthand reach it.
 class MeTap extends StatelessWidget {
@@ -38,6 +39,7 @@ class MeTap extends StatelessWidget {
       onTap: onTap,
       child: switch (feedback) {
         MeTapFeedback.highlight => PressHighlight(onTap: onTap, child: child),
+        MeTapFeedback.none => GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: child),
         // CupertinoButton's own text style brings -0.41 pt tracking and drops the page's fallback to PingFang.
         MeTapFeedback.fade => CupertinoButton(
           onPressed: onTap,
@@ -156,7 +158,7 @@ class MeHeader extends StatelessWidget {
                 _ => '头像',
               },
               onTap: opens(actions.openSpace),
-              feedback: MeTapFeedback.highlight,
+              feedback: MeTapFeedback.none,
               child: const SizedBox.expand(),
             ),
           ),
