@@ -210,7 +210,8 @@ enum NowPlaying {
       let duration = item.duration.seconds
       if duration.isFinite, duration > 0 { values[MPMediaItemPropertyPlaybackDuration] = duration }
       if current {
-        let elapsed = player.currentTime().seconds
+        let held = heldUntil.map { $0 > Date() } == true ? heldPosition : nil
+        let elapsed = held ?? player.currentTime().seconds
         if elapsed.isFinite { values[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, elapsed) }
         // Waiting for data, the position doesn't move, so the lock screen mustn't run it on.
         values[MPNowPlayingInfoPropertyPlaybackRate] = player.timeControlStatus == .playing ? Double(player.rate) : 0
@@ -236,7 +237,27 @@ enum NowPlaying {
       var fields: [String: Any] = ["command": String(describing: kind)]
       if kind == .seek, let seconds { fields["at"] = seconds }
       owner.log("remote command", fields)
+      if kind == .seek, let seconds { holdTimeline(at: seconds) }
       owner.sendRemoteCommand(kind, seconds: kind == .seek ? seconds : nil)
+    }
+
+    /// Where a lock-screen drag let go, shown until the seek it asks lands (Dart starts it after a round trip, and
+    /// until then the player's position is the old one, so the timeline sprang back).
+    private var heldPosition: Double?
+    private var heldUntil: Date?
+
+    private func holdTimeline(at seconds: Double) {
+      heldPosition = max(0, seconds)
+      // Dart may refuse the seek (a covered page, or held away), so the hold lapses.
+      heldUntil = Date().addingTimeInterval(3)
+      refreshPlayback()
+    }
+
+    /// The player's seek landed: its own position is right again.
+    func seekLanded() {
+      heldPosition = nil
+      heldUntil = nil
+      refreshPlayback()
     }
 
     private func activeChanged(_ active: Bool) {

@@ -358,7 +358,7 @@ final class NativePlayer {
 
   private func seekLanded(_ current: Int) {
     guard current == generation else { return }
-    nowPlaying?.refreshPlayback()
+    nowPlaying?.seekLanded()
     pendingSeeks = max(0, pendingSeeks - 1)
     startIfBuffered()
   }
