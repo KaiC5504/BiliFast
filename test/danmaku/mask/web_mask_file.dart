@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io' show gzip;
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:bili_core/danmaku.dart' show WebMaskFrame;
 
 /// A made-up `.webmask` file in Bilibili's layout: `MASK`, version 1, a check byte, three zero bytes, the segment
-/// count, the (start ms, offset) pairs, then each segment gzipped as (u32 length, u64 ms, a base64 SVG data URI).
+/// count, the (start ms, offset) pairs, then each segment gzipped as (u32 length, i64 ms, a base64 SVG data URI, its
+/// base64 in 76-character lines as Bilibili's files have it).
 final class WebMaskFile {
   WebMaskFile(this.segments, {required this.startsMs}) : assert(segments.length == startsMs.length) {
     final head = BytesBuilder();
@@ -55,7 +57,11 @@ final class WebMaskFile {
   static List<int> _records(List<WebMaskFrame> frames) {
     final out = BytesBuilder();
     for (final frame in frames) {
-      final uri = ascii.encode('data:image/svg+xml;base64,${base64.encode(utf8.encode(frame.svg))}');
+      final encoded = base64.encode(utf8.encode(frame.svg));
+      final lines = [
+        for (var at = 0; at < encoded.length; at += 76) encoded.substring(at, math.min(at + 76, encoded.length)),
+      ];
+      final uri = ascii.encode('data:image/svg+xml;base64,${lines.join('\n')}\n');
       out
         ..add(_u32(uri.length))
         ..add(_i64(frame.ms))

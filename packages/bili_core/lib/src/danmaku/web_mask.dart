@@ -76,14 +76,14 @@ final class WebMaskIndex {
   }
 }
 
-/// One mask frame: its time in the video and its picture, an SVG (potrace's output: a `<g>` transform and one
-/// path whose filled area is where danmaku may draw; the people are its holes).
+/// One mask frame: its time in the video and its picture, an SVG (potrace's output: a `<g>` transform and paths
+/// whose filled area is where danmaku may draw; the people are the holes).
 typedef WebMaskFrame = ({int ms, String svg});
 
 const _svgDataUri = 'data:image/svg+xml;base64,';
 final _lineBreaks = RegExp(r'\s');
 
-/// The frames of one segment: gzip, then repeated (u32 length, u64 ms, a `data:image/svg+xml;base64,` URI of that
+/// The frames of one segment: gzip, then repeated (u32 length, i64 ms, a `data:image/svg+xml;base64,` URI of that
 /// length). Throws [FormatException] on a damaged segment.
 List<WebMaskFrame> decodeWebMaskSegment(Uint8List gzipped) {
   final bytes = _inflate(gzipped);

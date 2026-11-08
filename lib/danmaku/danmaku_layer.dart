@@ -252,8 +252,8 @@ class _DanmakuPainter extends CustomPainter {
   bool shouldRepaint(_DanmakuPainter oldDelegate) => oldDelegate.scene != scene || oldDelegate.mask != mask;
 }
 
-/// 人像防挡's clip for the painter: the frame showing, stretched onto the picture, kept until the frame, the picture
-/// or the layer's size changes.
+/// 人像防挡's clip for the painter: the frame showing, stretched onto the picture, kept until the frame, the picture,
+/// 镜像 or the layer's size changes.
 final class _MaskClip extends ChangeNotifier {
   MaskFrame? _frame;
   Rect? _picture;
