@@ -52,7 +52,11 @@ class StartTest(unittest.TestCase):
         folder = Path(tempfile.mkdtemp())
         self.stamp = folder / "gate-passed"
         self.last = folder / "last-run"
-        for name, value in (("GATE_STAMP", self.stamp), ("LAST_RUN", self.last)):
+        self.notes = folder / "CLAUDE.md"
+        self.notes.write_text("notes", encoding="utf-8")
+        self.kept = folder / "kept"
+        for name, value in (("GATE_STAMP", self.stamp), ("LAST_RUN", self.last),
+                            ("PROJECT_NOTES", self.notes), ("PROJECT_NOTES_KEPT", self.kept)):
             patcher = mock.patch.object(testflight, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -107,6 +111,14 @@ class StartTest(unittest.TestCase):
         code, fake = self.upload({SHA: "n2", "b" * 40: "n1"})
         self.assertEqual(0, code)
         self.assertIn("upload=true", next(c for c in fake.calls if c[1:3] == ("workflow", "run")))
+        [copy] = self.kept.iterdir()
+        self.assertTrue(copy.name.endswith(f"-{SHA[:8]}.md"), copy.name)
+        self.assertEqual("notes", copy.read_text(encoding="utf-8"))
+
+    def test_a_dry_run_keeps_no_copy_of_the_project_notes(self):
+        self.stamp.write_text(SHA)
+        self.assertEqual(0, self.start(FakeGitHub(), "--dry-run"))
+        self.assertFalse(self.kept.exists())
 
     def test_status_is_one_call(self):
         self.last.write_text("2")

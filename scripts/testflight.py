@@ -12,7 +12,7 @@ uploading. --create-signing registers the bundle id and creates the profile or r
 certificate. --again rebuilds a commit that already shipped. An upload also publishes an unsigned IPA
 for sideloading as the GitHub release v<version>-<build>; a dry run builds it without publishing.
 The release's 更新内容 is docs/release-notes.md, so an upload is refused while that file is still
-the last shipped build's.
+the last shipped build's. Each upload also keeps a dated copy of CLAUDE.md under local/.
 
 There is no watch command: polling GitHub tripped its rate limit on 2026-10-17. Start, then run
 `status` once, about 10 minutes later for a dry run and 20 for an upload. An upload is green once
@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -47,6 +48,8 @@ ROOT = Path(__file__).resolve().parents[1]
 GATE_STAMP = ROOT / ".git" / "gate-passed"
 LAST_RUN = ROOT / ".git" / "testflight-last-run"
 NOTES = "docs/release-notes.md"
+PROJECT_NOTES = ROOT / "CLAUDE.md"
+PROJECT_NOTES_KEPT = ROOT / "local" / "claude-md"
 # Swift and clang `error:`, Dart `Error:`, Flutter's `Error (Xcode):`, and fatal ones.
 ERROR_LINE = re.compile(r"error:|error \(xcode\)|fatal", re.IGNORECASE)
 
@@ -71,6 +74,14 @@ def blob(sha: str, path: str) -> str:
     result = subprocess.run(["git", "rev-parse", "--verify", "-q", f"{sha}:{path}"],
                             capture_output=True, text=True)
     return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def keep_project_notes(sha: str) -> None:
+    """CLAUDE.md is gitignored, so a dated copy per upload is the only history it has."""
+    if not PROJECT_NOTES.exists():
+        return
+    PROJECT_NOTES_KEPT.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(PROJECT_NOTES, PROJECT_NOTES_KEPT / f"{time.strftime('%Y-%m-%d')}-{sha[:8]}.md")
 
 
 def runs(limit: int = 20) -> list[dict]:
@@ -215,6 +226,8 @@ def cmd_start(argv: list[str]) -> int:
         print("Not starting:\n" + "\n".join(f"  - {p}" for p in problems))
         return 1
 
+    if not args.dry_run:
+        keep_project_notes(sha)
     output = run("gh", "workflow", "run", WORKFLOW, "-R", REPO, "--ref", "main",
                  "-f", f"sha={sha}",
                  "-f", f"upload={'false' if args.dry_run else 'true'}",
