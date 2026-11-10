@@ -56,5 +56,5 @@ app.*.map.json
 # Agent worktrees
 /.claude/worktrees/
 
-# KaiC's own setup (machines, local paths): read by Claude Code, never committed.
-/CLAUDE.local.md
+# Claude Code's project notes, with KaiC's own setup (machines, local paths) in them: kept on the PC only.
+/CLAUDE.md

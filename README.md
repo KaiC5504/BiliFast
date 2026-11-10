@@ -150,7 +150,7 @@ BiliFast 的下载引擎是从 BTR 移植过来的，在此基础上又做了提
 - `python scripts/gate.py` 一键跑完全部检查：引擎、App、工作流、Swift 语法检查，以及运行真实引擎的 Windows 版
 - Windows 版会以 iPhone 尺寸的窗口运行，每次发版前都会在上面把改动过的按钮逐个点一遍
 
-`lib/` 是 App 本体；`packages/bili_core/` 是纯 Dart 代码，包括 API 客户端、BTR 引擎和本地 HLS 服务、弹幕、日志和业务逻辑。设计上的取舍记录在 `CLAUDE.md` 和 `docs/` 里。
+`lib/` 是 App 本体；`packages/bili_core/` 是纯 Dart 代码，包括 API 客户端、BTR 引擎和本地 HLS 服务、弹幕、日志和业务逻辑。设计上的取舍记录在 `docs/` 里。
 
 ## 🔒 隐私
 
