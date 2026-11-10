@@ -389,12 +389,23 @@ jobs:
             exit 1
           fi
 
+      # What this build changed, for the release page and the source. It rides the artifact because the release job
+      # checks nothing out; testflight.py refuses an upload whose notes are still the last build's.
+      - name: Take the release notes
+        run: |
+          if ! grep -q '[^[:space:]]' docs/release-notes.md; then
+            echo "docs/release-notes.md is empty"
+            exit 1
+          fi
+          cp docs/release-notes.md "$RUNNER_TEMP/release-notes.md"
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: unsigned-ipa
           path: |
             ${{ runner.temp }}/BiliFast-*.ipa
             ${{ runner.temp }}/sideload-app.json
+            ${{ runner.temp }}/release-notes.md
           retention-days: 7
           if-no-files-found: error
           overwrite: true
@@ -460,7 +471,7 @@ jobs:
                 version: $version,
                 buildVersion: $build,
                 date: $date,
-                localizedDescription: "发布页：\($website)/releases/tag/v\($version)-\($build)",
+                localizedDescription: "\($notes | sub("\\s+$"; ""))\n\n发布页：\($website)/releases/tag/v\($version)-\($build)",
                 downloadURL: $url,
                 size: $size,
                 minOSVersion: .minOSVersion
@@ -478,7 +489,7 @@ jobs:
             --arg url "$repo/releases/download/v$BUILD_NAME-$BUILD_NUMBER/${1#ipa/}" \
             --argjson size "$size" \
             --arg icon "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/ios/Runner/Assets.xcassets/AppIcon.appiconset/icon-1024.png" \
-            --arg website "$repo" \
+            --arg website "$repo"             --rawfile notes ipa/release-notes.md \
             -f "$RUNNER_TEMP/source.jq" ipa/sideload-app.json > "$RUNNER_TEMP/source.json"
           cat "$RUNNER_TEMP/source.json"
 
@@ -493,8 +504,16 @@ jobs:
             exit 1
           fi
           notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "## 更新内容"
+            echo
+            cat ipa/release-notes.md
+            echo
+            echo "## 安装"
+            echo
+          } > "$notes"
           # The address in backticks: GitHub's autolinker would run a bare one on into the full-width comma after it.
-          cat > "$notes" <<EOF
+          cat >> "$notes" <<EOF
           未签名的 IPA，用 SideStore、AltStore、Sideloadly 或 Feather 签名后安装。免费 Apple ID 的签名 7 天后过期，到期重签就行，数据不会丢。
 
           SideStore、AltStore Classic 和 Feather 可以添加源 \`$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/latest/download/source.json\`，之后新版本直接在里面更新。

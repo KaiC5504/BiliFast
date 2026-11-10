@@ -151,7 +151,8 @@ class WorkflowTest(unittest.TestCase):
         uploads = {job: s for job, s in self.steps() if "upload-artifact" in s.get("uses", "")}
         self.assertEqual({"build", "sideload"}, set(uploads))
         self.assertEqual("${{ runner.temp }}/testflight-build.json", uploads["build"]["with"]["path"])
-        self.assertEqual(["${{ runner.temp }}/BiliFast-*.ipa", "${{ runner.temp }}/sideload-app.json"],
+        self.assertEqual(["${{ runner.temp }}/BiliFast-*.ipa", "${{ runner.temp }}/sideload-app.json",
+                          "${{ runner.temp }}/release-notes.md"],
                          uploads["sideload"]["with"]["path"].splitlines())
         for upload in uploads.values():
             self.assertIs(True, upload["with"]["overwrite"])
@@ -209,7 +210,7 @@ class WorkflowTest(unittest.TestCase):
         source = self.step("release", "Write the source")["run"]
         program = source_program(source)
         used = set(re.findall(r"\$(\w+)", program)) - {"why", "__loc__"}
-        passed = set(re.findall(r"--arg(?:json)? (\w+) ", source))
+        passed = set(re.findall(r"--(?:arg|argjson|rawfile) (\w+) ", source))
         self.assertEqual(used, passed)
         self.assertIn('--argjson size "$size"', source)
         self.assertIn('--arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)"', source)
@@ -244,6 +245,19 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn('gh release create "v$BUILD_NAME-$BUILD_NUMBER"', publish)
         self.assertIn('--target "$GITHUB_SHA"', publish)
         self.assertEqual("${{ github.token }}", self.step("release", "Publish")["env"]["GH_TOKEN"])
+
+    def test_every_release_says_what_changed(self):
+        # The release job checks nothing out, so the notes ride the sideload job's artifact.
+        take = live(self.step("sideload", "Take the release notes")["run"])
+        self.assertIn("docs/release-notes.md", take)
+        self.assertIn("exit 1", take)
+        self.assertIn('cp docs/release-notes.md "$RUNNER_TEMP/release-notes.md"', take)
+        self.assertTrue((ROOT / "docs/release-notes.md").read_text(encoding="utf-8").strip())
+        publish = live(self.step("release", "Publish")["run"])
+        self.assertLess(publish.index("cat ipa/release-notes.md"), publish.index("未签名的 IPA"))
+        source = self.step("release", "Write the source")["run"]
+        self.assertIn("--rawfile notes ipa/release-notes.md", source)
+        self.assertIn('localizedDescription: "\\($notes', source_program(source))
 
     def test_release_note_addresses_end_before_the_chinese(self):
         # GitHub's autolinker runs a bare address on into the full-width comma after it, and a tap on the link 404s.
@@ -390,9 +404,12 @@ class SourceProgramTest(unittest.TestCase):
                     "icon": "https://raw.githubusercontent.com/KaiC5504/BiliFast/main/ios/Runner/Assets.xcassets/"
                             "AppIcon.appiconset/icon-1024.png",
                     "website": "https://github.com/KaiC5504/BiliFast"}
+            notes = Path(folder, "release-notes.md")
+            notes.write_text("- 第一条\n- 第二条\n\n", encoding="utf-8", newline="\n")
             command = ["jq"]
             for name, value in args.items():
                 command += ["--arg", name, value]
+            command += ["--rawfile", "notes", str(notes)]
             command += ["--argjson", "size", str(size), "-f", str(program), str(described)]
             return subprocess.run(command, capture_output=True)
 
@@ -421,7 +438,8 @@ class SourceProgramTest(unittest.TestCase):
         self.assertEqual({"version": "1.3.0", "buildVersion": "8", "date": "2026-11-04T08:00:00Z",
                           "downloadURL": self.IPA, "size": 48213504, "minOSVersion": "26.0"},
                          {k: v for k, v in version.items() if k != "localizedDescription"})
-        self.assertIn("/releases/tag/v1.3.0-8", version["localizedDescription"])
+        self.assertEqual("- 第一条\n- 第二条\n\n发布页：https://github.com/KaiC5504/BiliFast/releases/tag/v1.3.0-8",
+                         version["localizedDescription"])
         self.assertEqual({"entitlements": [], "privacy": self.APP["privacy"]}, app["appPermissions"])
 
     def test_a_wrong_description_publishes_nothing(self):

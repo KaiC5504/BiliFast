@@ -278,6 +278,9 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 - Every upload also publishes an unsigned IPA for sideloading as the GitHub release `v<version>-<build>` (the
   workflow's `sideload` and `release` jobs: no environment, no secrets, so no profile or legal name in it), with
   `source.json` beside it: the app and README point at `releases/latest/download/source.json`, so keep that asset name.
+- Before every upload, rewrite `docs/release-notes.md`: what this build changed, for users, in short native Chinese
+  bullets (KaiC, 2026-11-10: a release says what changed, not the same text every time). It becomes the release's
+  更新内容 and the source's update text; `start` refuses an upload whose notes are still the last shipped build's.
 - No Apple review for BiliFast (KaiC, 2026-11-04): Beta App Review refused external TestFlight under 5.2.3, and a
   build made only for review would hide functionality (2.3.1). TestFlight stays internal (KaiC's own team); everyone
   else installs the IPA (`local/sideload-notes.md`).

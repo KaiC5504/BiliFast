@@ -11,6 +11,8 @@ dry run is the iOS check. --dry-run signs and checks the IPA without
 uploading. --create-signing registers the bundle id and creates the profile or renews an expired
 certificate. --again rebuilds a commit that already shipped. An upload also publishes an unsigned IPA
 for sideloading as the GitHub release v<version>-<build>; a dry run builds it without publishing.
+The release's 更新内容 is docs/release-notes.md, so an upload is refused while that file is still
+the last shipped build's.
 
 There is no watch command: polling GitHub tripped its rate limit on 2026-10-17. Start, then run
 `status` once, about 10 minutes later for a dry run and 20 for an upload. An upload is green once
@@ -44,6 +46,7 @@ FIELDS = "databaseId,displayTitle,status,conclusion,headSha,headBranch,event,url
 ROOT = Path(__file__).resolve().parents[1]
 GATE_STAMP = ROOT / ".git" / "gate-passed"
 LAST_RUN = ROOT / ".git" / "testflight-last-run"
+NOTES = "docs/release-notes.md"
 # Swift and clang `error:`, Dart `Error:`, Flutter's `Error (Xcode):`, and fatal ones.
 ERROR_LINE = re.compile(r"error:|error \(xcode\)|fatal", re.IGNORECASE)
 
@@ -61,6 +64,13 @@ def run(*args: str) -> str:
 
 def git(*args: str) -> str:
     return run("git", *args).strip()
+
+
+def blob(sha: str, path: str) -> str:
+    """The file's blob id at that commit, empty when the commit doesn't have it."""
+    result = subprocess.run(["git", "rev-parse", "--verify", "-q", f"{sha}:{path}"],
+                            capture_output=True, text=True)
+    return result.stdout.strip() if result.returncode == 0 else ""
 
 
 def runs(limit: int = 20) -> list[dict]:
@@ -195,6 +205,10 @@ def cmd_start(argv: list[str]) -> int:
         if shipped and shipped["headSha"] == sha:
             print(f"{sha[:8]} already shipped in run {shipped['databaseId']}. "
                   "Use --again to build it under a new number.")
+            return 1
+        if shipped and blob(sha, NOTES) == blob(shipped["headSha"], NOTES):
+            print(f"{NOTES} still describes the build shipped in run {shipped['databaseId']}: "
+                  "write what this one changes.")
             return 1
     problems = environment_problems()
     if problems:

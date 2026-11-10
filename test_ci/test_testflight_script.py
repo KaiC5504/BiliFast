@@ -16,9 +16,10 @@ SHA = "a" * 40
 
 
 class FakeGitHub:
-    def __init__(self, busy=False):
+    def __init__(self, busy=False, title="TestFlight dry run"):
         self.calls = []
         self.busy = busy
+        self.title = title
 
     def __call__(self, *args):
         if args[0] == "git":
@@ -40,7 +41,7 @@ class FakeGitHub:
         if args[1:3] == ("workflow", "run"):
             return "https://github.com/KaiC5504/BiliFast/actions/runs/2\n"
         if args[1:3] == ("run", "view"):
-            return json.dumps({"databaseId": 2, "displayTitle": f"TestFlight dry run {SHA}", "status": "queued",
+            return json.dumps({"databaseId": 2, "displayTitle": f"{self.title} {SHA}", "status": "queued",
                                "conclusion": "", "headSha": SHA, "headBranch": "main",
                                "event": "workflow_dispatch", "url": "u2", "jobs": []})
         raise AssertionError(f"unexpected call {args}")
@@ -90,6 +91,22 @@ class StartTest(unittest.TestCase):
         dispatch = next(c for c in fake.calls if c[1:3] == ("workflow", "run"))
         self.assertIn("upload=false", dispatch)
         self.assertIn(f"sha={SHA}", dispatch)
+
+    def upload(self, blobs):
+        self.stamp.write_text(SHA)
+        fake = FakeGitHub(title="TestFlight upload")
+        with mock.patch.object(testflight, "blob", lambda sha, path: blobs[sha]):
+            return self.start(fake), fake
+
+    def test_an_upload_with_the_last_builds_notes_is_refused(self):
+        code, fake = self.upload({SHA: "n1", "b" * 40: "n1"})
+        self.assertEqual(1, code)
+        self.assertEqual(1, len(fake.calls))
+
+    def test_an_upload_with_new_notes_starts(self):
+        code, fake = self.upload({SHA: "n2", "b" * 40: "n1"})
+        self.assertEqual(0, code)
+        self.assertIn("upload=true", next(c for c in fake.calls if c[1:3] == ("workflow", "run")))
 
     def test_status_is_one_call(self):
         self.last.write_text("2")
