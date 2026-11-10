@@ -37,7 +37,7 @@ BiliFast 是一个从零开始写的第三方 B 站客户端，用 Flutter 开�
 | **SideStore** | 第一次用电脑装好 SideStore，再从 App Store 装 LocalDevVPN | 打开 LocalDevVPN，在 SideStore 里刷新，手机上就能完成 |
 | **已有证书** | 付费开发者账号，或 Feather 等签名工具里已有的证书 | 不用管，到证书过期为止 |
 
-更新：下载新版 IPA，用同一种方式覆盖安装，数据会保留。
+更新：下载新版 IPA，用同一种方式覆盖安装，数据会保留。每个版本的更新内容写在 Releases 里。
 
 SideStore、AltStore Classic 和 Feather 可以添加源 `https://github.com/KaiC5504/BiliFast/releases/latest/download/source.json`，之后新版本直接在里面更新。
 
@@ -49,14 +49,17 @@ SideStore、AltStore Classic 和 Feather 可以添加源 `https://github.com/Kai
 ### 播放
 - [x] BTR 多节点并行下载，支持 4K、8K、真彩 HDR、杜比视界
 - [x] 画中画，退出视频页也能继续播
+- [x] 后台听视频：锁屏、切到后台继续播，锁屏上有封面、进度条和上一个 / 下一个，支持后台连播
 - [x] 和官方一样的横竖屏旋转动画
 - [x] 手势调节亮度、音量、进度，双击暂停，长按倍速
 - [x] 清晰度、倍速、选集面板，竖屏模式，播放结束页
 - [x] 进度条上的小电视会跟着拖动方向看，按住进度条显示预览图
 - [x] 记住播放进度，并同步到历史记录
+- [x] 播放设置：详情页是否直接播放、直接全屏，流量下是否自动播放，竖屏视频用不用竖屏模式
 
 ### 弹幕
 - [x] 弹幕设置即改即生效，屏幕上的弹幕立刻跟着变
+- [x] 人像防挡：弹幕不挡人（视频本身支持才有）
 - [x] 屏蔽词与账号同步
 - [x] 当前弹幕列表，可点赞、屏蔽
 - [x] 横屏、竖屏、小窗都能发弹幕，支持颜色和位置
@@ -68,7 +71,7 @@ SideStore、AltStore Classic 和 Feather 可以添加源 `https://github.com/Kai
 - [x] 点 UP 主头像弹出卡片，不打断播放
 
 ### 首页、动态、搜索
-- [x] 官方推荐流，支持个性化推荐和不感兴趣，大卡片静音自动播放
+- [x] 官方推荐流，支持个性化推荐和不感兴趣，大卡片自动播放，可以关掉或默认静音
 - [x] 下拉刷新，没松手就开始加载
 - [x] 动态：全部 / 视频、最常访问、图文、转发，视频自动播放
 - [x] 搜索：热搜、搜索历史、联想词、综合筛选、用户
@@ -76,10 +79,12 @@ SideStore、AltStore Classic 和 Feather 可以添加源 `https://github.com/Kai
 ### 我的
 - [x] 个人数据、会员卡、常用入口
 - [x] 装扮：首页、我的、底栏都会换成你穿戴的装扮，状态栏颜色自动适配
-- [x] UP 主空间、个人空间
+- [x] UP 主空间、个人空间（空间头图、收藏集视频）
+- [x] 我的好友：关注、粉丝、搜索、取消关注、特别关注
 - [x] 收藏夹、稍后再看（支持批量管理）、历史记录
 - [x] 离线缓存：视频保存在本地，原视频下架也能看，弹幕一并保存；切到后台继续下载
-- [x] 设置：字体、CDN 节点、图片缓存、开发者日志
+- [x] 设置：播放、首页推荐、字体、CDN 节点、图片缓存、开发者日志
+- [x] 自签安装：设置里显示签名到期时间，到期前一天提醒，有新版本会提示
 
 ### 加载优化
 - [x] 图片本地缓存（最多 500 MB），返回页面不用重新加载
@@ -88,7 +93,6 @@ SideStore、AltStore Classic 和 Feather 可以添加源 `https://github.com/Kai
 ### 计划中
 - [ ] 番剧
 - [ ] 直播
-- [ ] 人像防挡
 - [ ] 完善 iPad 版
 
 ## ❓ 常见问题
@@ -140,11 +144,12 @@ BiliFast 的下载引擎是从 BTR 移植过来的，在此基础上又做了提
 
 ## 🛠️ 开发
 
-整个项目没有用 Mac：代码在 Windows 上编写和测试，iOS 版通过 GitHub Actions 构建并上传到 TestFlight。
+代码在 Windows 上编写和测试；一台 Mac mini 通过 SSH 远程编译，装到模拟器和真机上验证；发版由 GitHub Actions 构建，上传 TestFlight 并发布 IPA。
 
 - Flutter 3.47.7，用 [fvm](https://fvm.app) 管理版本：`fvm flutter test`、`fvm flutter analyze`
 - `python scripts/gate.py` 一键跑完全部检查：引擎、App、工作流、Swift 语法检查，以及运行真实引擎的 Windows 版
 - Windows 版会以 iPhone 尺寸的窗口运行，每次发版前都会在上面把改动过的按钮逐个点一遍
+- `python scripts/mac.py sim` 在 Mac 上编译当前提交并截模拟器的图，`phone` 直接装到手机
 
 `lib/` 是 App 本体；`packages/bili_core/` 是纯 Dart 代码，包括 API 客户端、BTR 引擎和本地 HLS 服务、弹幕、日志和业务逻辑。设计上的取舍记录在 `CLAUDE.md` 和 `docs/` 里。
 

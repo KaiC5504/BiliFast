@@ -25,7 +25,7 @@ through to TestFlight. Finish with what was built, how it works, numbered phone 
 
 ## Status
 
-Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (10)**. The detail of each is in git
+Shipped and passed on KaiC's phone, newest last; the last build is **1.3.0 (11)**. The detail of each is in git
 history, and the rules they added are under "Rules that bite".
 
 - The move from Swift (slices 0-9, 1.0.0 (4)-(12)): `packages/bili_core` ported tests-first; AVPlayer in a native view
@@ -73,14 +73,18 @@ history, and the rules they added are under "Rules that bite".
   pages drawn, toasting 暂未开放. `AutoplayPolicy` reads the phone's network (`DeviceHostApi.network`, unknown counts
   as maybe mobile data). The own space's 空间头图 plays its collectible video (Bilibili's upos mirrors on Akamai),
   cropped by its location rect, with the ◇ badge; 我的's name band no longer darkens under a finger.
-- 后台听视频 and 人像防挡, 1.3.0 (10): a page's video keeps playing with the screen locked or the app away
+- 后台听视频 and 人像防挡, 1.3.0 (10)-(11): a page's video keeps playing with the screen locked or the app away
   (`PlayerPrefs.backgroundListen`, 174 and ⋮'s row: one setting; native `.continuesIfPossible`, off `.automatic`, so
   picture in picture still plays); 后台连播 (`backgroundNext`) opens the next part, 合集 episode, else the first related
   video on the same controller. The lock screen as the official app's (title, uploader, the 16:9 cover, a draggable
   timeline, ◀◀ ▶▶, no ☆): one MPNowPlayingSession per player (`NowPlaying.swift`), its buttons and calls back to the
   session. 人像防挡: `dm_mask` on the player info call → a `.webmask` (10 s gzip segments of potrace SVG frames, each
   frame's base64 in 76-character lines), read by byte range around the playhead (`WebMaskFeed`) and clipped into the
-  danmaku over the picture's rect; on by default, as is the switch in 08/41.
+  danmaku over the picture's rect; on by default, as is the switch in 08/41. (11) is the lock screen settled on the
+  phone through `mac.py phone` (the crash on leaving a page, the blank timeline, a drag springing back); (10) reached
+  TestFlight but has no GitHub release (its run was cancelled after the upload).
+- Release notes, from the build after (11): each GitHub release and the source's version text open with what that
+  build changed, from `docs/release-notes.md` (Shipping).
 
 Update this section when a build ships: one short entry, and any rule it adds goes under "Rules that bite".
 
@@ -215,6 +219,8 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
 - `assets/`: MiSans, assets taken from PiliPlus, and the loading TV's from the official APK (`assets/README.md`).
 - `design/icon-options/`: the app icon's five candidates and `make_icons.py`; A is the app's.
 - `test_ci/`: static tests of the workflow (pins, secrets only in step env, nothing leaks into the public log).
+- `scripts/`: `gate.py` (every local check), `testflight.py` (start and check the signed build), `mac.py` (the Mac
+  mini's simulator and phone builds), `ipa_manifest.py` (the signed IPA's secret-free manifest).
 - `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
   test plan; `phone_report.py` reads a session; `turn_video.py` measures the turns in a screen recording;
   `screen_diff.py` measures our screenshot against the official one (milestone 3, slice 10); `make_standin_fonts.py`

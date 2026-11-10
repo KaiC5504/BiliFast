@@ -48,8 +48,9 @@ The ios-testflight skill's manual-steps §5 for repo `BiliFast`: the three `gh a
 
 ## The loop
 
-1. `python scripts/gate.py` on the committed tree (records the commit), then push. Nothing runs on push.
-2. `python scripts/testflight.py start` (`--dry-run` only when the workflow or scripts change). It refuses unless the gate passed on that commit. 6 GitHub calls;
+1. Rewrite `docs/release-notes.md` (what this build changed, short Chinese bullets for users), then
+   `python scripts/gate.py` on the committed tree (records the commit), then push. Nothing runs on push.
+2. `python scripts/testflight.py start` (`--dry-run` only when the workflow or scripts change). It refuses unless the gate passed on that commit, and an upload unless the release notes changed since the last shipped build. 6 GitHub calls;
    `test_ci/test_testflight_script.py` pins the count.
 3. `python scripts/testflight.py status` once (1 call): about 7 minutes after a dry run, 11 after an upload. Never
    `gh run watch` and never poll: on 2026-10-17 polling tripped GitHub's rate limit and blocked KaiC's own requests.
