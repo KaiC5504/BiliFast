@@ -1,7 +1,7 @@
 # Shipping BiliFast (Flutter) to TestFlight
 
 How this repo (`KaiC5504/BiliFast`) ships as the next BiliFast builds. Read the global `ios-testflight` skill before
-touching any of this (`C:\Users\KaiChuan\.claude\skills\ios-testflight\SKILL.md`); its pipeline-critical settings apply
+touching any of this (`~/.claude/skills/ios-testflight/SKILL.md`); its pipeline-critical settings apply
 to Flutter too.
 
 ## App identity (unchanged from the Swift app)

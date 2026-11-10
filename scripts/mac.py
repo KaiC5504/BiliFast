@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build on KaiC's Mac mini over SSH (`ssh mac`) and run the result on his iPhone or a simulator.
+"""Build on a Mac over SSH (the `mac` host in ~/.ssh/config) and run the result on an iPhone or a simulator.
 
     python scripts/mac.py phone                     # build HEAD, install on the iPhone over Wi-Fi
     python scripts/mac.py sim [--pad] [--wait 8] [--name shot]
@@ -13,8 +13,7 @@ The phone build is development-signed, release mode, with DEV_INSTALL so its pro
 sideload; it replaces the TestFlight install and keeps its login and data. The simulator build is debug
 with FAKE_ACCOUNT and MUTE: no account traffic and no sound from the Mac's speakers.
 
-The Mac holds what the repo must not: `~/bilifast-mac/asc.env` (the API key's ids and path, the team,
-the signing identity and profile name, the phone's UDID), the build keychain and its password.
+Everything signing needs stays on the Mac, outside the repo, and is read there from `~/bilifast-mac/asc.env`.
 """
 
 from __future__ import annotations

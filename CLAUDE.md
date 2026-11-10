@@ -2,7 +2,7 @@
 
 KaiC's Bilibili client for iPhone and iPad, in Flutter: public `KaiC5504/BiliFast`, branch `main`. It ships as the
 BiliFast app (bundle id `com.kaichuan.bilifast`, App Store Connect Apple ID `6823476667`). It replaced the Swift app
-(`D:\Repos\Apps\BiliNative`, retired 2026-11-02; its GitHub repo is deleted, the folder is the only copy) under the same record and reads the keychain
+(retired 2026-11-02; its GitHub repo is deleted, a local folder is the only copy) under the same record and reads the keychain
 login the Swift app left.
 
 ## Read before working
@@ -18,7 +18,9 @@ login the Swift app left.
    - `piliplus-map.md`: where PiliPlus keeps what; GPL, so read only.
    - `testflight-flutter.md`: how this repo ships to TestFlight.
    - `turn-log.md`: the drawn turn's log lines on both sides, which `tools/phone_report.py --turns` times; `tools/turn_video.py` grades a recording.
-5. `D:\Repos\Apps\BiliNative\CLAUDE.md` only for how the Swift app behaved. This file wins wherever they differ.
+5. The Swift app's own `CLAUDE.md` only for how it behaved. This file wins wherever they differ.
+6. `CLAUDE.local.md` (gitignored): KaiC's own setup, which a public file leaves out: local paths, the Mac, where the
+   PC keeps its logins.
 
 Every slice runs through `.claude/skills/running-a-slice`: a one-screen plan, KaiC's go, then parallel agents straight
 through to TestFlight. Finish with what was built, how it works, numbered phone steps and the build number.
@@ -219,8 +221,8 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
 - `assets/`: MiSans, assets taken from PiliPlus, and the loading TV's from the official APK (`assets/README.md`).
 - `design/icon-options/`: the app icon's five candidates and `make_icons.py`; A is the app's.
 - `test_ci/`: static tests of the workflow (pins, secrets only in step env, nothing leaks into the public log).
-- `scripts/`: `gate.py` (every local check), `testflight.py` (start and check the signed build), `mac.py` (the Mac
-  mini's simulator and phone builds), `ipa_manifest.py` (the signed IPA's secret-free manifest).
+- `scripts/`: `gate.py` (every local check), `testflight.py` (start and check the signed build), `mac.py` (the
+  Mac's simulator and phone builds), `ipa_manifest.py` (the signed IPA's secret-free manifest).
 - `tools/`: the PC side of dev builds: `logserver.py` receives the phone's logs into `logs/` and serves the speed
   test plan; `phone_report.py` reads a session; `turn_video.py` measures the turns in a screen recording;
   `screen_diff.py` measures our screenshot against the official one (milestone 3, slice 10); `make_standin_fonts.py`
@@ -252,8 +254,8 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
   with `tools/screen_diff.py`. They render the system font, as the phone does: `BiliFonts.family = BiliFonts.system` with
   `test/support/stand_in_fonts.dart` loaded; `test/support/look_alike.dart` sizes the view as the phone and saves the
   3× PNG.
-- The Mac mini (KaiC's M6, `ssh mac`, set up 2026-11-04): `python scripts/mac.py` builds the committed HEAD there over
-  SSH, headless, pushed to the Mac's own repo (the `mac` remote), never through GitHub.
+- The Mac (since 2026-11-04; the machine and its folders are in `CLAUDE.local.md`): `python scripts/mac.py` builds the
+  committed HEAD there over SSH, headless, pushed to the Mac's own repo (the `mac` remote), never through GitHub.
   - `sim [--pad] [--wait N] [--name X]`: a debug build with `FAKE_ACCOUNT` and `MUTE` on the iPhone 17 Pro Max (or
     iPad Pro 11") simulator, launched, its 3× screenshot in `build/mac-shots/`. It draws the real SF and PingFang, so
     it settles what the stand-in fonts can't. Simulator first for anything the account and the real player don't need.
@@ -262,9 +264,9 @@ Not built, by area. Most wait for a screenshot of the official app; KaiC decides
     confirmed, 2026-11-04). Its build number is the clock (yymmddHHMM) and the script prints what the phone reports
     installed, so a new build landing is checked, not assumed. For what needs the account, the real player (HDR,
     杜比视界, PiP, rotation), background downloads, notifications or speed. The phone must be on the Mac's Wi-Fi.
-  - Signing needs no Apple ID on the Mac: the `Mac mini` App Store Connect API key, a development certificate in the
-    build's own keychain and a development profile, all under `~/bilifast-mac/` (`asc.env`), never in the repo. Xcode
-    27.2, Flutter 3.47.7 in `~/flutter-3.47.7`, CocoaPods from Homebrew (`media_kit_video` has no Swift package).
+  - Signing needs no Apple ID on the Mac: an App Store Connect API key, a development certificate in the build's own
+    keychain and a development profile, all kept on the Mac, never in the repo. Xcode 27.2, Flutter 3.47.7, CocoaPods
+    from Homebrew (`media_kit_video` has no Swift package).
 - GitHub runs nothing on push. `testflight.yml` is the only workflow; don't add one without asking (`test_ci` fails if
   one appears).
 
@@ -296,14 +298,16 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
 ## Rules that bite
 
 - Public repo. Never commit, print or log secrets, cookies, tokens, signed playurl responses, or anything in `local/`
-  or `logs/` (both gitignored). The build log and artifacts are public too.
+  or `logs/` (both gitignored). The build log and artifacts are public too. So is this file and every tracked doc,
+  script and comment: KaiC's own setup (machine names, SSH hosts, local paths, where a login or key is kept) goes in
+  `CLAUDE.local.md`, never in a tracked file, a commit message or a release (KaiC, 2026-11-10).
 - KaiC's Bilibili account: no second login (the exceptions, KaiC's calls: the app token in slice 13, confirmed once with
   the web login; and one Windows login, 2026-10-22, below), few live calls, no loops against the API. Tests never
   touch the network.
 - The Windows login (KaiC: "make sure you won't do anything that could get it restricted"): the last fallback for
   checking APIs, never for everyday development or tests. Ask KaiC before every `--real-account` launch, each time;
   his OK covers that one run. The PC also holds an app token (KaiC, 2026-10-24: one TV QR login confirmed in the official
-  app, kept DPAPI-encrypted in `local/pc-app-token.bin`), only for scripts KaiC runs himself to read the official API's
+  app, kept encrypted on the PC), only for scripts KaiC runs himself to read the official API's
   answer shapes (card types, field names and types, never values); the Windows app never loads it. Without the flag (every other run, checks and `--fake-account` included) the PC loads
   no login and its 登录 says 请在手机上登录. With it: the website's QR login,
   scanned in the official app, kept DPAPI-encrypted in the support folder's `login.bin`. Every call the Windows
@@ -313,7 +317,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   is checked under `--fake-account`, which never loads the login. On Windows, 退出登录 ends the session on
   Bilibili's side first and keeps the login if Bilibili doesn't confirm. No app token on the PC. Logged in, a
   Windows check opens at most 3 videos and reads only.
-- The Mac mini is the iOS dev loop (How to test); GitHub Actions stays the way out: TestFlight and the public IPA.
+- The Mac is the iOS dev loop (How to test); GitHub Actions stays the way out: TestFlight and the public IPA.
   Runs on the Mac start only over SSH, when wanted: no self-hosted runner, nothing on its screen.
 - Layout comes only from the official app's screenshots (`local/official-app-reference/iphone/`, his iPhone 17 Pro Max,
   440×956 pt). When a screen or state isn't in them, ask KaiC to screenshot it; never fill the gap from PiliPlus or
@@ -329,7 +333,7 @@ The `ios-testflight` skill is the playbook; load it before touching any workflow
   skins, emotes, frames, medals and banners come from the server, and the iPhone app sometimes draws differently
   (its cover placeholder is the APK's `bili_default_image_tv_2023`, not `bili_default_image_tv`), so every piece is
   checked against KaiC's iPhone screenshots or recordings and sized from them. Note each in `assets/README.md`.
-- PiliPlus (`D:\Repos\Apps\PiliPlus`) is a reference for functions only: the APIs and how a feature behaves, plus its
+- PiliPlus (a local checkout) is a reference for functions only: the APIs and how a feature behaves, plus its
   asset files of the official app's art (`assets/README.md`, never its logos). Never its layout or design. Read it
   before building (`docs/reference/piliplus-map.md`). It and ATV-Bilibili-demo are GPL: write our own code, never
   copy theirs. Keep BTR's MIT notice with the engine port.

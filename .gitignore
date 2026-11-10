@@ -55,3 +55,6 @@ app.*.map.json
 .fvm/
 # Agent worktrees
 /.claude/worktrees/
+
+# KaiC's own setup (machines, local paths): read by Claude Code, never committed.
+/CLAUDE.local.md

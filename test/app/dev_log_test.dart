@@ -57,14 +57,14 @@ void main() {
       expect(first.enabled, isFalse, reason: 'no file yet');
       first
         ..setEnabled(true)
-        ..selectService(const LogServerEndpoint(name: 'PC', host: '192.168.50.201', port: 47321));
+        ..selectService(const LogServerEndpoint(name: 'PC', host: '192.168.1.20', port: 47321));
       await first.settle();
       first.dispose();
 
       final second = await launch();
       addTearDown(second.dispose);
       expect(second.enabled, isTrue);
-      expect(second.target?.host, '192.168.50.201');
+      expect(second.target?.host, '192.168.1.20');
       expect(second.sink, isNotNull, reason: 'it sends again without a tap');
       second.setEnabled(false);
       await second.settle();
