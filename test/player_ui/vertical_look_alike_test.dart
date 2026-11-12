@@ -20,6 +20,7 @@ import '../support/look_alike.dart';
 import '../support/stand_in_fonts.dart';
 import '../video/mixed_lines.dart' show appTheme;
 import 'vertical_chrome_test.dart' show Rig;
+import 'vertical_clean_test.dart' show storyRig;
 
 /// 竖屏 paused as KaiC's iPhone draws it, against 118 (00:05 / 01:02, 合集 · 第18集) and 16 (a 3:4 video), at 3×. With
 /// BILIFAST_SHOTS naming a folder outside the repo, the shots are saved there for tools/screen_diff.py.
@@ -239,5 +240,116 @@ void main() {
     );
     expect(glyph.top * 3, closeTo(1192, 2));
     expect(find.text('00:01 / 00:31'), findsOneWidget);
+  });
+
+  group('清屏 and the last bottom button (180, 184, 185, 186)', () {
+    /// Mounts [rig]'s chrome as the phone draws it, over black with a flat stand-in for the picture from [pictureTop]
+    /// to [pictureBottom] pt, and saves the shot as [name] under BILIFAST_SHOTS.
+    Future<void> shoot(WidgetTester tester, Rig rig, String name, double pictureTop, double pictureBottom) async {
+      addTearDown(() {
+        rig.chrome.dispose();
+        rig.panels.dispose();
+        rig.orientation.dispose();
+        rig.session.dispose();
+        rig.details?.dispose();
+        rig.clean?.dispose();
+        rig.storyDrag?.dispose();
+        rig.speedLock?.dispose();
+        rig.story?.dispose();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: appTheme(),
+          builder: (context, child) => RepaintBoundary(key: const ValueKey('screen'), child: child!),
+          home: Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: BiliColors.videoBackground),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: pictureTop,
+                height: pictureBottom - pictureTop,
+                child: const ColoredBox(color: Color(0xFF6B6658)),
+              ),
+              VerticalChrome(ui: rig.ui),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final context = tester.element(find.byType(VerticalChrome));
+      await tester.runAsync(() async {
+        for (final asset in [VerticalActionTheme.screenModeAsset, VerticalCleanTheme.screenModeCleanAsset]) {
+          await precacheImage(AssetImage(asset), context);
+        }
+      });
+      await tester.pumpAndSettle();
+      final shots = Platform.environment['BILIFAST_SHOTS'];
+      if (shots != null) await saveShot(tester, find.byKey(const ValueKey('screen')), '$shots/$name.png');
+    }
+
+    Future<void> asPhone(WidgetTester tester) async {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      await tester.runAsync(loadSystemFontStandIns);
+      await tester.runAsync(SeekBar.precache);
+      showAsPhone(tester);
+      BiliFonts.family = BiliFonts.system;
+    }
+
+    Rig at(Rig rig, {required String online, required double position, required double duration}) {
+      rig.details!.online.value = online;
+      rig.session.duration.value = duration;
+      rig.session.clock.jump(position);
+      rig.session.readout.refresh();
+      return rig;
+    }
+
+    testWidgets('180: paused in 清屏, ▶ 00:07 / 01:18 over the bar, 34人正在看 dimmed at the left', (tester) async {
+      await asPhone(tester);
+      final rig = at(storyRig()..clean!.value = true, online: '34', position: 7.3, duration: 78);
+      rig.session.player.emit(const StatusChanged(PlayerStatus.paused));
+      await shoot(tester, rig, 'vertical-180', 700 / 3, 1966 / 3);
+
+      // 180: the ▶'s ink 49-104 × 2496-2557 px; 00:07 from 131 px, centred on the ▶'s line.
+      final glyph = tester.getRect(
+        find.descendant(of: find.byKey(const ValueKey('vertical-clean-play')), matching: find.byType(CustomPaint)).last,
+      );
+      expect(glyph.left * 3, closeTo(49, 1.5));
+      expect(glyph.top * 3, closeTo(2496, 1.5));
+      expect(glyph.bottom * 3, closeTo(2557, 1.5));
+      expect(find.text('00:07 / 01:18', findRichText: true), findsOneWidget);
+      expect(tester.getCenter(find.byKey(const ValueKey('vertical-clean-time'))).dy * 3, closeTo(2526.5, 3));
+      // 180: the clean glyph's ink 1205-1272 × 2673-2734 px.
+      expect(tester.getRect(find.byKey(const ValueKey('vertical-screen-mode'))).left * 3, closeTo(1203, 3));
+      expect(find.byKey(const ValueKey('vertical-paused-play')), findsNothing);
+    });
+
+    testWidgets('186: playing in 清屏, ❚❚ 00:01 / 01:21', (tester) async {
+      await asPhone(tester);
+      final rig = at(storyRig()..clean!.value = true, online: '27', position: 1.4, duration: 81);
+      rig.session.player.emit(const StatusChanged(PlayerStatus.playing));
+      await shoot(tester, rig, 'vertical-186', 62, 870);
+      expect(find.text('00:01 / 01:21', findRichText: true), findsOneWidget);
+      expect(find.bySemanticsLabel('暂停'), findsOneWidget);
+    });
+
+    testWidgets("185 at 9.0 s: an upright video's bottom row ends in the phone and half screen", (tester) async {
+      await asPhone(tester);
+      final rig = at(storyRig(), online: '1', position: 9, duration: 300);
+      rig.session.player.emit(const StatusChanged(PlayerStatus.playing));
+      await shoot(tester, rig, 'vertical-185', 62, 870);
+      expect(find.byKey(const ValueKey('vertical-screen-mode')), findsOneWidget);
+    });
+
+    testWidgets("184: a wide video's bottom row ends in 横屏全屏's corners", (tester) async {
+      await asPhone(tester);
+      final rig = at(storyRig(upright: false), online: '1', position: 20, duration: 266)
+        ..session.videoShape = (width: 1920, height: 1080);
+      rig.session.player.emit(const StatusChanged(PlayerStatus.playing));
+      await shoot(tester, rig, 'vertical-184', 818 / 3, 1559 / 3);
+      expect(find.byKey(const ValueKey('vertical-screen-mode')), findsNothing);
+    });
   });
 }

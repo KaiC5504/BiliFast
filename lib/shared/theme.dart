@@ -1612,6 +1612,32 @@ abstract final class VerticalCleanTheme {
   /// While the page moves, everything but the pictures is drawn at this much of itself (the feed's own
   /// `config.swipe_opacity.other_ui_alpha_percent`).
   static const movingOpacity = 0.1;
+
+  /// With ‹ gone, 人正在看's mark starts 9 pt in (180) where it was 52.3, five sixths of its size on the same line,
+  /// and its 40% white dims to 44/255.
+  static const backRoom = 1.0;
+  static const onlineOpacity = 44 / 102;
+  static const onlineText = 10.0;
+  static const onlineIconWidth = 9.3;
+  static const onlineIconHeight = 8.0;
+  static const onlineGap = 6.7;
+
+  /// 180's ▶ and 186's ❚❚ at the bottom left: 18.3 × 20.3 pt of ink from 16.3 in, centred 17.3 above the bar's row;
+  /// the ▶'s corners rounded by [playCorner], the bars 5.7 apart and round-ended. 00:07 in white and / 01:18 in a 60%
+  /// white from 43 in.
+  static const playLeft = 49 / 3;
+  static const playWidth = 55 / 3;
+  static const playHeight = 61 / 3;
+  static const playCorner = 2.0;
+  static const pauseBar = 17 / 3;
+  static const pauseGap = 17 / 3;
+  static const rowAboveBar = 52 / 3;
+  static const timeLeft = 43.0;
+  static const timeText = 12.0;
+
+  /// The digits' ink sits 1 pt under the ▶'s centre on 180 and 186.
+  static const timeDrop = 1.0;
+  static const timeTotal = Color(0x99FFFFFF);
 }
 
 /// 竖屏's swipe between videos (185, 186, measured at 60 fps). The pager agent's tokens.

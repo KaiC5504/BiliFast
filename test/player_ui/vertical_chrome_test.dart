@@ -14,11 +14,14 @@ import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart' show FullScreenPainter;
 import 'package:bilifast/player_ui/seek_bar.dart';
 import 'package:bilifast/player_ui/seek_preview.dart';
+import 'package:bilifast/player_ui/speed_lock.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/player_session.dart' show Episode;
+import 'package:bilifast/video/story/story_drag.dart';
+import 'package:bilifast/video/story/story_feed.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
@@ -57,6 +60,12 @@ final class Rig {
   /// Set before [mount]: the page's action overlay.
   ValueNotifier<Object?>? overlay;
 
+  /// Set before [mount]: 竖屏's feed, its page under the finger, 清屏 and the held 2×.
+  ValueNotifier<StoryFeed?>? story;
+  StoryDrag? storyDrag;
+  ValueNotifier<bool>? clean;
+  SpeedLock? speedLock;
+
   late final ui = PlayerUi(
     session: session,
     chrome: chrome,
@@ -69,6 +78,10 @@ final class Rig {
     danmaku: danmaku?.session,
     replyCount: replyCount,
     overlay: overlay,
+    story: story,
+    storyDrag: storyDrag,
+    clean: clean,
+    speedLock: speedLock,
   );
 
   /// [gestures] puts the player's gesture layer under the chrome, as the page does.
@@ -86,6 +99,10 @@ final class Rig {
       details?.dispose();
       danmaku?.dispose();
       replyCount?.dispose();
+      story?.dispose();
+      storyDrag?.dispose();
+      clean?.dispose();
+      speedLock?.dispose();
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -248,7 +265,7 @@ void main() {
   });
 
   testWidgets("16: an upright video's last button is the APK's phone and half screen, 24 pt where 16 has it; a wide "
-      "one keeps 09's corners; both still go to landscape", (tester) async {
+      "one keeps 09's corners; without 清屏 (outside a video page) both go to landscape", (tester) async {
     final rig = Rig()..session.isVertical = true;
     await rig.mount(tester);
     final glyph = find.descendant(
