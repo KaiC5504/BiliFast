@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:bili_core/api.dart' show AppToken;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
@@ -137,6 +138,7 @@ void main() {
     SearchApi? search,
     String? initialLink,
     SkinModel Function(AppEnvironment environment)? skin,
+    AppToken? token,
   }) async {
     tester.view.physicalSize = const Size(440, 900);
     tester.view.devicePixelRatio = 1;
@@ -153,6 +155,7 @@ void main() {
     }
     final logger = Logger(session: 'test');
     environment = await AppEnvironment.load(keychain: FakeKeychain(StoredCookies(cookies)), http: http, logger: logger);
+    environment.client.appToken = token;
     await environment.refreshAccount();
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     // Each video page gets a controller and player of its own; [controller] is the newest.
@@ -596,6 +599,37 @@ void main() {
     expect(controller.video?.title, '测试视频');
     expect(shownTitle(tester), '测试视频', reason: 'the page shows the video it opened');
   });
+
+  testWidgets("a card's page is told it came from 推荐: the website's card with no track data", (tester) async {
+    await show(tester);
+    await settle(tester);
+    await tester.tap(card('BV1aaa'));
+    await settle(tester, 20);
+    final source = tester.widget<VideoPage>(find.byType(VideoPage)).route.source;
+    expect(source.fromSpmid, 'tm.recommend.0.0');
+    expect(source.from, '7');
+    expect(source.trackId, isNull);
+    expect(source.flowData, isNull);
+  });
+
+  for (final (identity, token) in [('Android', fakeAppToken), ('iPhone', fakeIphoneToken)]) {
+    testWidgets("an official card's page gets the card's own track data ($identity identity)", (tester) async {
+      http.officialPages[0] = [
+        officialItem('BV1aaa', idx: 30, trackId: 'track-aaa', flowData: '{"flow_card_type":"aaa"}'),
+        officialItem('BV1bbb', idx: 29, trackId: 'track-bbb', flowData: '{"flow_card_type":"bbb"}'),
+      ];
+      await show(tester, token: token);
+      await settle(tester);
+      await tester.tap(card('BV1bbb'));
+      await settle(tester, 20);
+      final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
+      expect(route.bvid, 'BV1bbb');
+      expect(route.source.fromSpmid, 'tm.recommend.0.0');
+      expect(route.source.from, '7');
+      expect(route.source.trackId, 'track-bbb');
+      expect(route.source.flowData, '{"flow_card_type":"bbb"}');
+    });
+  }
 
   testWidgets("a card opens the page that swipes back into it, with the card's rect", (tester) async {
     await show(tester);

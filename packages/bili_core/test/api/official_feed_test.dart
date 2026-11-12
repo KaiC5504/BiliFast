@@ -66,6 +66,69 @@ const officialFeed = r'''
   {"id":1,"name":"不感兴趣","toast":"将减少相似内容推荐"}]}]}
 ]}}''';
 
+// As the iPhone identity's answer lists them (docs/reference/official-iphone-calls.md): the big card first, each video
+// with its idx and track data, which the uri repeats. The second card names them only in its uri, the third names
+// them empty, the last not at all. Every id and value is made up.
+const iphoneFeed = r'''
+{"code":0,"message":"0","ttl":1,"data":{"items":[
+{"card_type":"large_cover_v9","card_goto":"inline_av_v2","goto":"av","param":"90000021","can_play":1,
+ "uri":"bilibili://video/90000021?player_width=1920&player_height=1080&trackid=track-uri-0021&report_flow_data=%7B%7D",
+ "player_args":{"aid":90000021,"cid":190000021,"duration":95},
+ "idx":1763000021,"track_id":"track-0021","report_flow_data":"{\"flow_card_type\":\"big\"}"},
+{"card_type":"small_cover_v2","card_goto":"av","goto":"av","param":"90000022","can_play":1,
+ "uri":"bilibili://video/90000022?trackid=track-uri-0022&report_flow_data=%7B%22flow_card_type%22%3A%22uri%22%7D",
+ "player_args":{"aid":90000022,"cid":190000022,"duration":61},"idx":1763000020},
+{"card_type":"small_cover_v2","card_goto":"av","goto":"av","param":"90000023","can_play":1,
+ "uri":"bilibili://video/90000023?trackid=&report_flow_data=",
+ "player_args":{"aid":90000023},"idx":1763000019,"track_id":"","report_flow_data":""},
+{"card_type":"small_cover_v2","card_goto":"av","goto":"av","param":"90000024","can_play":1,
+ "player_args":{"aid":90000024}}
+]}}''';
+
+final iphoneToken = AppToken(
+  accessToken: 'ACCESS',
+  refreshToken: 'REFRESH',
+  mid: 7,
+  expiresAt: DateTime.utc(2027, 4, 1),
+  identity: OfficialIdentity.iphone,
+);
+
+/// The Android feed's own fields as they went out before identities, less `idx` and `pull`.
+const androidFeedFields = {
+  'auto_refresh_state': '1',
+  'autoplay_card': '11',
+  'build': '8430300',
+  'c_locale': 'zh_CN',
+  'channel': 'master',
+  'column': '2',
+  'device': 'phone',
+  'device_name': 'Pixel 9',
+  'device_type': '0',
+  'disable_rcmd': '0',
+  'flush': '8',
+  'fnval': '976',
+  'fnver': '0',
+  'force_host': '2',
+  'fourk': '1',
+  'guidance': '1',
+  'https_url_req': '1',
+  'inline_danmu': '2',
+  'inline_sound': '1',
+  'mobi_app': 'android',
+  'network': 'wifi',
+  'platform': 'android',
+  'player_net': '1',
+  'qn': '32',
+  'recsys_mode': '0',
+  's_locale': 'zh_CN',
+  'splash_id': '',
+  'statistics': '{"appId":1,"platform":3,"version":"8.43.0","abtest":""}',
+  'voice_balance': '0',
+};
+
+/// The headers only the Android feed sends, whatever the identity's common ones are.
+const androidFeedHeaders = ['fp_local', 'fp_remote', 'x-bili-trace-id', 'x-bili-aurora-eid', 'x-bili-aurora-zone'];
+
 void main() {
   late FakeHTTP http;
   late BiliClient client;
@@ -217,6 +280,30 @@ void main() {
     expect(http.query(more)['pull'], 'false');
   });
 
+  test("the Android identity's request is as before: firstIdx and cold change nothing in it", () async {
+    http.routes[feedPath] = (200, officialFeed);
+    await client.officialFeed(index: 0);
+    final cards = await client.officialFeed(index: 3, firstIdx: 1763000021, cold: true);
+    final [refresh, more] = http.requestsTo(feedPath);
+    for (final request in [refresh, more]) {
+      final query = http.query(request);
+      for (final MapEntry(:key, :value) in androidFeedFields.entries) {
+        expect(query[key], value, reason: key);
+      }
+      for (final key in ['open_event', 'login_event', 'client_attr', 'player_extra_content']) {
+        expect(query.containsKey(key), isFalse, reason: key);
+      }
+      for (final header in androidFeedHeaders) {
+        expect(request.headers.containsKey(header), isTrue, reason: header);
+      }
+    }
+    expect(http.query(refresh)['idx'], '0');
+    expect(http.query(refresh)['pull'], 'true');
+    expect(http.query(more)['idx'], '3', reason: 'the page, not the card named');
+    expect(http.query(more)['pull'], 'false');
+    expect(cards.first.aid, 90000007, reason: 'the big card still moved first');
+  });
+
   test("the iPad's query is the one asked before (38), with no inline fields; a big card keeps its place", () async {
     http.routes[feedPath] = (200, officialFeed);
     final cards = await client.officialFeed(index: 0, pad: true);
@@ -259,8 +346,183 @@ void main() {
     expect(await client.officialFeed(index: 2), isEmpty);
   });
 
+  group('the iPhone identity', () {
+    setUp(() => client.appToken = iphoneToken);
+
+    Future<Map<String, String>> asked({required int index, int? firstIdx, bool cold = false, bool pad = false}) async {
+      http.routes[feedPath] = (200, iphoneFeed);
+      await client.officialFeed(index: index, firstIdx: firstIdx, cold: cold, pad: pad);
+      return http.query(http.requestsTo(feedPath).last);
+    }
+
+    test("the launch's first page is cold: idx 0, pull 1, flush 0, open_event cold", () async {
+      final query = await asked(index: 0, cold: true);
+      expect(query['idx'], '0');
+      expect(query['pull'], '1');
+      expect(query['flush'], '0');
+      expect(query['open_event'], 'cold');
+    });
+
+    test('a refresh names the first card on screen: pull 1, flush 6, open_event sent empty', () async {
+      final query = await asked(index: 0, firstIdx: 1763000021);
+      expect(query['idx'], '1763000021');
+      expect(query['pull'], '1');
+      expect(query['flush'], '6');
+      expect(query['open_event'], '');
+    });
+
+    test('a refresh with no card on screen names idx 0', () async {
+      final query = await asked(index: 0);
+      expect(query['idx'], '0');
+      expect(query['flush'], '6');
+    });
+
+    test('more below names the first card on screen too, not the page: pull 0, flush 8', () async {
+      final query = await asked(index: 4, firstIdx: 1763000021);
+      expect(query['idx'], '1763000021');
+      expect(query['pull'], '0');
+      expect(query['flush'], '8');
+      expect(query['open_event'], '');
+    });
+
+    test("the feed's own fields are the iPhone app's, with the token and a signature, no cookies and none of the "
+        "Android feed's headers", () async {
+      final query = await asked(index: 0, firstIdx: 1763000021);
+      const sent = {
+        'auto_refresh_state': '1',
+        'autoplay_card': '11',
+        'channel': 'pink_overseas',
+        'client_attr': '1',
+        'column': '2',
+        'device_name': 'iPhone 17 Pro Max',
+        'fnval': '17364',
+        'fnver': '0',
+        'force_host': '0',
+        'fourk': '1',
+        'guidance': '0',
+        'https_url_req': '0',
+        'inline_danmu': '2',
+        'inline_sound': '1',
+        'inline_sound_cold_state': '2',
+        'login_event': '0',
+        'network': 'wifi',
+        'player_extra_content': '{"short_edge":"1320","long_edge":"2868"}',
+        'player_net': '1',
+        'qn': '120',
+        'qn_policy': '0',
+        'recsys_mode': '0',
+        'soft_fnval': '0',
+        'statistics': '{"appId":1,"platform":1,"version":"9.18.0"}',
+        'video_mode': '1',
+        'voice_balance': '1',
+        'window_size_type': '1',
+      };
+      for (final MapEntry(:key, :value) in sent.entries) {
+        expect(query[key], value, reason: key);
+      }
+      for (final key in ['splash_id', 'device_type', 'ad_extra', 'banner_hash']) {
+        expect(query.containsKey(key), isFalse, reason: key);
+      }
+      expect(query['access_key'], 'ACCESS');
+      expect(query['sign'], isNotNull);
+      final request = http.requestsTo(feedPath).single;
+      expect(request.url.host, 'app.bilibili.com');
+      expect(request.headers['Cookie'], isNull);
+      for (final header in androidFeedHeaders) {
+        expect(request.headers.containsKey(header), isFalse, reason: header);
+      }
+    });
+
+    test('the iPad asks the same without the inline card fields', () async {
+      final query = await asked(index: 0, firstIdx: 1763000021, pad: true);
+      for (final key in ['autoplay_card', 'inline_danmu', 'inline_sound', 'inline_sound_cold_state']) {
+        expect(query.containsKey(key), isFalse, reason: key);
+      }
+      expect(query['idx'], '1763000021');
+      expect(query['flush'], '6');
+      expect(query['auto_refresh_state'], '1');
+      expect(query['device_name'], 'iPhone 17 Pro Max');
+    });
+
+    test("the answer keeps the server's order: nothing is moved first", () async {
+      http.routes[feedPath] = (200, officialFeed);
+      final cards = await client.officialFeed(index: 0);
+      expect(cards.map((card) => card.aid), [90000001, 170001, 90000006, 90000007]);
+    });
+
+    test('no log line names a track id, the flow data or a token', () async {
+      final events = _Events();
+      final logged = BiliClient(
+        transport: http,
+        cookies: CookieJar({'SESSDATA': 'sess', 'bili_jct': 'TOKEN', 'buvid3': 'b3'}),
+        now: () => testNow,
+        logger: Logger(session: 'test')..add(events),
+      )..appToken = iphoneToken;
+      http.routes[feedPath] = (200, iphoneFeed);
+      expect(await logged.officialFeed(index: 0, firstIdx: 1763000021), hasLength(4));
+      http.routes[feedPath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
+      await expectLater(logged.officialFeed(index: 1, firstIdx: 1763000021), throwsA(isA<BiliAPIError>()));
+      expect(events.events.map((event) => event.msg), containsAll(['feed card types', feedPath, 'app token rejected']));
+      for (final event in events.events) {
+        final text = event.encode();
+        for (final secret in ['track-', 'flow_card_type', 'ACCESS', 'REFRESH']) {
+          expect(text, isNot(contains(secret)), reason: event.msg);
+        }
+      }
+    });
+  });
+
+  group("a card's idx and track data", () {
+    Future<List<FeedCard>> cards([String answer = iphoneFeed]) async {
+      http.routes[feedPath] = (200, answer);
+      return client.officialFeed(index: 0);
+    }
+
+    test('come from the card itself, before what its uri repeats', () async {
+      final big = (await cards()).first;
+      expect(big.aid, 90000021);
+      expect(big.idx, 1763000021);
+      expect(big.trackId, 'track-0021');
+      expect(big.flowData, '{"flow_card_type":"big"}');
+    });
+
+    test("come from the uri's trackid and report_flow_data when the card names none", () async {
+      final card = (await cards())[1];
+      expect(card.idx, 1763000020);
+      expect(card.trackId, 'track-uri-0022');
+      expect(card.flowData, '{"flow_card_type":"uri"}');
+    });
+
+    test('are null when empty or missing', () async {
+      final [_, _, empty, missing] = await cards();
+      expect(empty.idx, 1763000019);
+      expect(empty.trackId, isNull);
+      expect(empty.flowData, isNull);
+      expect(missing.idx, isNull);
+      expect(missing.trackId, isNull);
+      expect(missing.flowData, isNull);
+    });
+
+    test('are part of what makes two cards equal', () async {
+      final first = (await cards()).first;
+      final again = (await cards()).first;
+      expect(again, first);
+      expect(again.hashCode, first.hashCode);
+      for (final (from, to) in [
+        ('"idx":1763000021', '"idx":1763000099'),
+        ('"track_id":"track-0021"', '"track_id":"track-0099"'),
+        (r'\"big\"', r'\"other\"'),
+      ]) {
+        final changed = iphoneFeed.replaceFirst(from, to);
+        expect(changed, isNot(iphoneFeed));
+        expect((await cards(changed)).first, isNot(first), reason: from);
+      }
+    });
+  });
+
   group('不感兴趣', () {
-    test('sends one reason or one feedback with the card, signed, as a GET', () async {
+    test("sends one reason or one feedback with the card, signed, as a GET, with PiliPlus's build and mobi_app under "
+        'the Android identity', () async {
       http.routes[dislikePath] = (200, '{"code":0,"message":"0","ttl":1}');
       await client.feedDislike(goto: 'av', id: 90000001, reasonId: 1);
       await client.feedDislike(goto: 'av', id: 90000001, feedbackId: 9);
@@ -278,6 +540,29 @@ void main() {
       expect(reason.headers['Cookie'], isNull);
       expect(http.query(feedback)['feedback_id'], '9');
       expect(http.query(feedback).containsKey('reason_id'), isFalse);
+    });
+
+    test("the iPhone identity sends neither PiliPlus's build nor its mobi_app: the identity's own labels stand, as on "
+        'the feed', () async {
+      client.appToken = iphoneToken;
+      http.routes[dislikePath] = (200, '{"code":0,"message":"0","ttl":1}');
+      http.routes[cancelPath] = (200, '{"code":0,"message":"0","ttl":1}');
+      http.routes[feedPath] = (200, iphoneFeed);
+      await client.feedDislike(goto: 'av', id: 90000021, reasonId: 1);
+      await client.feedDislikeCancel(goto: 'av', id: 90000021, reasonId: 1);
+      await client.officialFeed(index: 0);
+      final common = http.query(http.requestsTo(feedPath).single);
+      for (final path in [dislikePath, cancelPath]) {
+        final query = http.query(http.requestsTo(path).single);
+        expect(query['build'], isNot('1'), reason: path);
+        expect(query['build'], common['build'], reason: path);
+        expect(query['mobi_app'], common['mobi_app'], reason: path);
+        expect(query['goto'], 'av');
+        expect(query['id'], '90000021');
+        expect(query['reason_id'], '1');
+        expect(query['access_key'], 'ACCESS');
+        expect(query['sign'], isNotNull);
+      }
     });
 
     test('needs exactly one of a reason and a feedback', () {

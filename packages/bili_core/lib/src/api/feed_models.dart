@@ -54,9 +54,11 @@ final class FeedCard {
 
   /// A card of the official app's feed (`/x/v2/feed/index`), which the caller has already found to be a video.
   /// Its counts come as the cover's text ("10.4万", "-"), kept to show as sent. The big card (`inline_av_v2`) has no
-  /// top-level bvid (its share_plane does) and names its reason in `rcmd_reason_style`.
+  /// top-level bvid (its share_plane does) and names its reason in `rcmd_reason_style`. The iPhone identity's cards
+  /// name their track data beside `idx`; the `uri` repeats it, and is read where the card itself doesn't.
   factory FeedCard.fromOfficial(Object? json) {
     final object = JsonObject.from(json);
+    final link = Uri.tryParse(object.text('uri') ?? '')?.queryParameters ?? const <String, String>{};
     final player = object.nested('player_args');
     final args = object.nested('args');
     final param = int.tryParse(object.text('param') ?? '');
@@ -91,7 +93,7 @@ final class FeedCard {
       ownerName: args?.text('up_name') ?? '',
       ownerMid: asInt(args?.map['up_id']) ?? 0,
       reason: reason,
-      isVertical: markedVertical || _uriVertical(object.text('uri')),
+      isVertical: markedVertical || _uriVertical(link),
       viewsText: views,
       danmakuText: danmaku,
       dislike: FeedDislike._from(object.map['three_point_v2'], goto: dislikeGoto, id: param ?? aid),
@@ -103,13 +105,16 @@ final class FeedCard {
             )
           : null,
       ownerFace: face ?? '',
+      idx: asInt(object.map['idx']),
+      trackId: _filled(object.text('track_id')) ?? _filled(link['trackid']),
+      flowData: _filled(object.text('report_flow_data')) ?? _filled(link['report_flow_data']),
     );
   }
 
+  static String? _filled(String? text) => text == null || text.isEmpty ? null : text;
+
   /// The official card's uri names the player's size, which is how the app itself tells a vertical video.
-  static bool _uriVertical(String? uri) {
-    if (uri == null) return false;
-    final query = Uri.tryParse(uri)?.queryParameters ?? const {};
+  static bool _uriVertical(Map<String, String> query) {
     final width = int.tryParse(query['player_width'] ?? '') ?? 0;
     final height = int.tryParse(query['player_height'] ?? '') ?? 0;
     final rotated = query['player_rotate'] == '1';
@@ -186,10 +191,13 @@ final class FeedCard {
       other.dislike == dislike &&
       other.big == big &&
       other.ownerFace == ownerFace &&
-      other.published == published;
+      other.published == published &&
+      other.idx == idx &&
+      other.trackId == trackId &&
+      other.flowData == flowData;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     aid,
     bvid,
     cid,
@@ -208,7 +216,10 @@ final class FeedCard {
     big,
     ownerFace,
     published,
-  );
+    idx,
+    trackId,
+    flowData,
+  ]);
 }
 
 /// What the official feed's big card (`inline_av_v2` / `large_cover_v9`) adds to a card: its 👍 and count.

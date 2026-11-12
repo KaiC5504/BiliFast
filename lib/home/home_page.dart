@@ -262,7 +262,16 @@ class _HomePageState extends State<HomePage> {
 
   void _openCard(FeedCard card, ZoomSource source) => unawaited(
     _visit(
-      openVideoPage(context, VideoRoute(bvid: card.bvid, title: card.title, cover: card.cover, zoomSource: source)),
+      openVideoPage(
+        context,
+        VideoRoute(
+          bvid: card.bvid,
+          title: card.title,
+          cover: card.cover,
+          zoomSource: source,
+          source: PlaySource.recommend(card),
+        ),
+      ),
     ),
   );
 
@@ -278,6 +287,7 @@ class _HomePageState extends State<HomePage> {
         title: card.title,
         cover: playback == null ? card.cover : null,
         playback: playback,
+        source: PlaySource.recommend(card),
       ),
     ),
   );

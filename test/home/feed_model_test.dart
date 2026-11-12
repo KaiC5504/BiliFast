@@ -1231,6 +1231,192 @@ void main() {
     });
   });
 
+  group('the official feed as the iPhone app asks it', () {
+    late BiliClient client;
+    late DateTime now;
+
+    FeedModel iphone({bool pad = false}) {
+      now = DateTime(2026, 11, 12, 12);
+      final logger = Logger(session: 'test')..add(logs);
+      client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: logger)
+        ..appToken = fakeIphoneToken;
+      return FeedModel(
+        client: client,
+        logger: logger,
+        pad: () => pad,
+        now: () => now,
+        minimumRefresh: Duration.zero,
+      );
+    }
+
+    /// Each official request's `idx`, `pull`, `flush` and `open_event`.
+    List<(String?, String?, String?, String?)> asked() => [
+      for (final query in http.officialQueries) (query['idx'], query['pull'], query['flush'], query['open_event']),
+    ];
+
+    test("the launch's first page is cold and names no card; a refresh then names the first card shown, and more "
+        'below names it too', () async {
+      http.officialNext.addAll([
+        [officialItem('BV1', idx: 30), officialItem('BV2', idx: 29)],
+        [officialItem('BV3', idx: 40), officialItem('BV4', idx: 39)],
+        [officialItem('BV5', idx: 28)],
+      ]);
+      final feed = iphone();
+      await feed.refresh();
+      await feed.refresh();
+      await feed.loadMore();
+      expect(asked(), [('0', '1', '0', 'cold'), ('30', '1', '6', ''), ('40', '0', '8', '')]);
+      expect(bvids(feed), ['BV3', 'BV4', 'BV1', 'BV2', 'BV5']);
+      expect(feed.source, FeedSource.official);
+    });
+
+    test('the card named is the first shown that has an idx', () async {
+      http.pages[1] = [feedItem('BVweb')];
+      http.officialNext.addAll([
+        [officialItem('BV1'), officialItem('BV2', idx: 29)],
+        [officialItem('BV3', idx: 40)],
+        [officialItem('BV4', idx: 28)],
+      ]);
+      final feed = iphone();
+      client.appToken = null;
+      await feed.refresh();
+      client.appToken = fakeIphoneToken;
+      await feed.refresh();
+      await feed.refresh();
+      await feed.loadMore();
+      expect(asked(), [
+        ('0', '1', '0', 'cold'),
+        ('29', '1', '6', ''),
+        ('40', '0', '8', ''),
+      ], reason: "the website's card has no idx, nor has BV1");
+    });
+
+    test('a first page that fails is asked cold again; once one has come, none is', () async {
+      http.officialCode = -352;
+      final feed = iphone();
+      await feed.refresh();
+      http.officialCode = -101;
+      http.pages[1] = [feedItem('BVweb')];
+      await feed.refresh();
+      http.officialCode = 0;
+      http.officialNext.add([officialItem('BV1', idx: 30)]);
+      await feed.refresh();
+      await feed.refresh();
+      expect(asked(), [
+        ('0', '1', '0', 'cold'),
+        ('0', '1', '0', 'cold'),
+        ('0', '1', '0', 'cold'),
+        ('30', '1', '6', ''),
+      ]);
+    });
+
+    test('while the cold request is out, a second one is an ordinary refresh', () async {
+      final gate = http.officialGates[0] = Completer<void>();
+      http.officialNext.addAll([
+        [officialItem('BV1', idx: 30)],
+        [officialItem('BV2', idx: 31)],
+      ]);
+      final feed = iphone();
+      final first = feed.refresh();
+      await pumpEventQueue();
+      final second = feed.refresh(replace: true);
+      await pumpEventQueue();
+      expect(asked(), [('0', '1', '0', 'cold'), ('0', '1', '6', '')]);
+      gate.complete();
+      await Future.wait([first, second]);
+    });
+
+    test("a held pull's early page names the first card shown, as the refresh that takes it would", () async {
+      http.officialNext.addAll([
+        [officialItem('BV1', idx: 30)],
+        [officialItem('BV2', idx: 31)],
+      ]);
+      final feed = iphone();
+      await feed.refresh();
+      feed.pullArmed();
+      await pumpEventQueue();
+      expect(asked(), [('0', '1', '0', 'cold'), ('30', '1', '6', '')]);
+      await feed.refresh(pulled: true);
+      expect(asked(), hasLength(2), reason: 'the release joined the early page');
+      expect(bvids(feed), ['BV2', 'BV1']);
+    });
+
+    test("a pull held before any official page has come asks the cold page early", () async {
+      http.pages[1] = [feedItem('BVweb')];
+      http.officialNext.add([officialItem('BV1', idx: 30)]);
+      final feed = iphone();
+      client.appToken = null;
+      await feed.refresh();
+      client.appToken = fakeIphoneToken;
+      feed.pullArmed();
+      await pumpEventQueue();
+      expect(asked(), [('0', '1', '0', 'cold')]);
+      await feed.refresh(pulled: true);
+      await feed.refresh();
+      expect(asked(), [('0', '1', '0', 'cold'), ('30', '1', '6', '')]);
+    });
+
+    test('the iPad passes the same card and cold start', () async {
+      http.officialNext.addAll([
+        [officialItem('BV1', idx: 30)],
+        [officialItem('BV2', idx: 31)],
+      ]);
+      final feed = iphone(pad: true);
+      await feed.refresh();
+      await feed.refresh();
+      expect(asked(), [('0', '1', '0', 'cold'), ('30', '1', '6', '')]);
+      expect(http.officialQueries.first.containsKey('autoplay_card'), isFalse);
+    });
+
+    test('no log line names a track id, the flow data or the token, from a page, a failure or a 不感兴趣', () async {
+      http.officialNext.addAll([
+        [officialItem('BV1', idx: 30, trackId: 'track-0001', flowData: '{"flow_card_type":"rcmd"}')],
+        [officialItem('BV2', idx: 31, trackId: 'track-0002', flowData: '{"flow_card_type":"rcmd"}')],
+      ]);
+      final feed = iphone();
+      await feed.refresh();
+      expect(feed.cards.single.trackId, 'track-0001');
+      expect(feed.cards.single.flowData, '{"flow_card_type":"rcmd"}');
+      await feed.loadMore();
+      http.dislikeCode = -400;
+      await feed.dislike(feed.cards.first, feed.cards.first.dislike!.video!);
+      http.officialCode = -352;
+      await feed.refresh();
+      http.officialCode = -101;
+      http.pages[2] = [feedItem('BVweb')];
+      await feed.loadMore();
+      expect(
+        logs.events.map((event) => event.msg),
+        containsAll([
+          'feed page',
+          'feed card types',
+          'feed dislike failed',
+          'feed refresh failed',
+          'official feed refused, web feed instead',
+          'app token rejected',
+        ]),
+      );
+      for (final event in logs.events) {
+        final text = event.encode();
+        for (final secret in ['track-', 'flow_card_type', 'ACCESS', 'REFRESH']) {
+          expect(text, isNot(contains(secret)), reason: event.msg);
+        }
+      }
+    });
+
+    test('the Android identity still pages by index, with no card named and no cold start', () async {
+      http.officialPages[0] = [officialItem('BV1', idx: 30), officialItem('BV2', idx: 29)];
+      http.officialPages[1] = [officialItem('BV3', idx: 28)];
+      final feed = iphone();
+      client.appToken = fakeAppToken;
+      await feed.refresh();
+      await feed.loadMore();
+      await feed.refresh();
+      expect(asked(), [('0', 'true', '8', null), ('1', 'false', '8', null), ('0', 'true', '8', null)]);
+      expect(http.officialApps, everyElement('android'));
+    });
+  });
+
   group('batches (122)', () {
     test('a refresh puts its page on top and the cards before it under 刚刚看到这里, unchanged; load more still adds at '
         'the bottom', () async {
