@@ -20,6 +20,7 @@ import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
 import 'package:bilifast/player_ui/stats_overlay.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/story/story_drag.dart';
@@ -76,6 +77,7 @@ void main() {
     Size size = const Size(440, 956),
     ValueListenable<bool>? turning,
     ValueListenable<double?>? verticalTurn,
+    ValueListenable<Rect?>? slide,
     StoryPager? storyPager,
     bool? moveTargets,
     VoidCallback? onRetry,
@@ -98,6 +100,7 @@ void main() {
           onRetry: onRetry ?? () {},
           turning: turning,
           verticalTurn: verticalTurn,
+          slide: slide,
           storyPager: storyPager,
           moveTargets: moveTargets,
         ),
@@ -837,6 +840,72 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('下一个视频 is offered with no next video known yet, and asks the feed again as a swipe past the end does',
+        (tester) async {
+      final semantics = tester.ensureSemantics();
+      final alone = _AskingFeed([storyEntry('BV1')]);
+      addTearDown(alone.dispose);
+      pager.feed = alone;
+      await show(tester, Presentation.vertical, storyPager: pager);
+      const next = CustomSemanticsAction(label: '下一个视频');
+      final node = find.semantics.byPredicate(
+        (node) => node.getSemanticsData().customSemanticsActionIds?.isNotEmpty ?? false,
+      );
+      expect(node, findsOne, reason: 'a stalled feed can still be asked');
+      expect(node.evaluate().single.getSemanticsData().customSemanticsActionIds!.toSet(), {
+        CustomSemanticsAction.getIdentifier(next),
+      });
+
+      tester.semantics.customAction(node, next);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(alone.asks, 1);
+      expect(alone.moves, isEmpty);
+      expect(drag.moving, isFalse, reason: 'nothing to move to');
+
+      alone.add(storyEntry('BV2'));
+      await tester.pump();
+      tester.semantics.customAction(node, next);
+      await tester.pump(const Duration(milliseconds: 17));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(alone.moves, [1], reason: 'once one is in, it moves');
+      semantics.dispose();
+    });
+
+    testWidgets("the still held for the video landed on goes where the page puts the video's box, the neighbours left "
+        'out (the uploader sheet over 竖屏, 181)', (tester) async {
+      final pictured = FakeStoryFeed([
+        storyEntry('BV1', cover: pic('BV1')),
+        storyEntry('BV2', cover: pic('BV2')),
+        storyEntry('BV3', cover: pic('BV3')),
+      ]);
+      addTearDown(pictured.dispose);
+      pager.feed = pictured;
+      final slide = ValueNotifier<Rect?>(null);
+      addTearDown(slide.dispose);
+      await show(tester, Presentation.vertical, storyPager: pager, slide: slide);
+      expect(pager.moveNext(), isTrue);
+      await tester.pumpAndSettle();
+      Finder still(String bvid) => find.byWidgetPredicate((widget) => widget is RemoteImage && widget.url == pic(bvid));
+      expect(still('BV2'), findsOne, reason: 'held until its first frame');
+
+      const room = Rect.fromLTRB(0, VerticalSheetTheme.pictureTop, 440, VerticalSheetTheme.pictureBottom);
+      slide.value = room;
+      await tester.pump();
+      expect(videoRect(tester), room);
+      expect(
+        tester.getRect(still('BV2')),
+        rectMoreOrLessEquals(Rect.fromCenter(center: room.center, width: room.height * 9 / 16, height: room.height)),
+        reason: 'over the picture as the player fits it into the room, not over the whole band',
+      );
+      expect(still('BV1'), findsNothing);
+      expect(still('BV3'), findsNothing);
+      expect(find.byType(VerticalChromePreview), findsNothing);
+
+      slide.value = null;
+      await tester.pump();
+      expect(still('BV3'), findsOne, reason: 'the neighbours come back with the band');
+    });
+
     testWidgets('the danmaku dim with the controls while the page moves, and come back as it lands', (tester) async {
       pager.feed = feed;
       await show(tester, Presentation.vertical, storyPager: pager);
@@ -954,4 +1023,14 @@ void main() {
       expect(find.byKey(const ValueKey('video-failure-swipe')), findsNothing, reason: 'only in 竖屏');
     });
   });
+}
+
+/// A feed counting the moves past its end.
+class _AskingFeed extends FakeStoryFeed {
+  _AskingFeed(super.entries);
+
+  var asks = 0;
+
+  @override
+  void wantMore() => asks++;
 }

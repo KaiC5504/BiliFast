@@ -1078,6 +1078,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _openUploader(UploaderRef uploader) {
     if (_left || !mounted) return;
     final presentation = _presentation;
+    // A tap on the uploader of the video the page is moving away from (竖屏's settle) would open the wrong one's sheet.
+    if (presentation == Presentation.vertical && _storyDrag.moving) return;
     final vertical = !_pad && presentation == Presentation.vertical && _laidOut.value == Presentation.vertical;
     if (!vertical && (presentation.fullScreen || _laidOut.value.fullScreen)) {
       unawaited(openSpace(context, uploader));
@@ -1651,7 +1653,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     // Disposed without leaving, a playback the small window keeps would hold the feed on.
     if (_story.value != null) _playback?.endStory();
     _story.dispose();
-    _storyDrag.dispose();
+    // A gesture layer gone with the page under a finger lets its drag go after the frame; at rest, there is nothing
+    // left for it to let go.
+    _storyDrag
+      ..land()
+      ..dispose();
     _clean.dispose();
     _speedLock.dispose();
     _panels.dispose();
@@ -1791,31 +1797,36 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                     // uploader sheet over 竖屏, whose controls are gone.
                     child: ExcludeSemantics(
                       excluding: _panels.value != null || sheetOver,
-                      // The danmaku's height follows where an upright video's box is heading, once per reshape.
-                      child: ValueListenableBuilder<double>(
-                        valueListenable: _collapse.shape,
-                        builder: (context, shape, _) => VideoPlayerArea(
-                          key: _areaKey,
-                          presentation: layout,
-                          onBack: _back,
-                          ui: ui,
-                          video: mine ? _videoView : null,
-                          danmaku: mine ? controller.danmaku : null,
-                          cover: _cover(context),
-                          played: _played || (controller?.hasPlayed ?? false),
-                          loading: _loading(controller, mine),
-                          waiting: mine ? _dataWait : null,
-                          failure: _failure(controller, mine),
-                          onRetry: _retry,
-                          endScreenAside: _overlayAside,
-                          shrunk: _shrunk && !fullScreen,
-                          barred: _barred && !fullScreen,
-                          danmakuHeight: fullScreen ? null : shape,
-                          pin: _pin,
-                          turning: _turningPlayer,
-                          verticalTurn: _verticalTurn,
-                          slide: _slid,
-                          storyPager: _storyPager,
+                      // Rising, or springing back from an edge swipe, the sheet is still below its top, and the
+                      // strip above it would reach the player's gestures (a drag would swipe the feed under it).
+                      child: IgnorePointer(
+                        ignoring: sheetOver,
+                        // The danmaku's height follows where an upright video's box is heading, once per reshape.
+                        child: ValueListenableBuilder<double>(
+                          valueListenable: _collapse.shape,
+                          builder: (context, shape, _) => VideoPlayerArea(
+                            key: _areaKey,
+                            presentation: layout,
+                            onBack: _back,
+                            ui: ui,
+                            video: mine ? _videoView : null,
+                            danmaku: mine ? controller.danmaku : null,
+                            cover: _cover(context),
+                            played: _played || (controller?.hasPlayed ?? false),
+                            loading: _loading(controller, mine),
+                            waiting: mine ? _dataWait : null,
+                            failure: _failure(controller, mine),
+                            onRetry: _retry,
+                            endScreenAside: _overlayAside,
+                            shrunk: _shrunk && !fullScreen,
+                            barred: _barred && !fullScreen,
+                            danmakuHeight: fullScreen ? null : shape,
+                            pin: _pin,
+                            turning: _turningPlayer,
+                            verticalTurn: _verticalTurn,
+                            slide: _slid,
+                            storyPager: _storyPager,
+                          ),
                         ),
                       ),
                     ),

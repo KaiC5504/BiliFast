@@ -3,6 +3,7 @@ import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/story/story_drag.dart';
+import 'package:bilifast/video/story/story_feed.dart';
 import 'package:bilifast/video/story/story_pager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -261,6 +262,26 @@ void main() {
     expect(pager.arrived, isNull);
   });
 
+  testWidgets('a feed started over on another video drops the still held for the one landed on', (tester) async {
+    final restarting = _RestartingFeed([storyEntry('BV1'), storyEntry('BV2')]);
+    addTearDown(restarting.dispose);
+    pager.feed = restarting;
+    await swipe(tester, -100, velocity: -1000);
+    await settle(tester);
+    expect(pager.arrived?.bvid, 'BV2');
+    var heard = 0;
+    pager.addListener(() => heard++);
+
+    restarting.add(storyEntry('BV3'));
+    expect(pager.arrived?.bvid, 'BV2', reason: 'more videos coming in change nothing');
+    expect(heard, 1);
+
+    // 横屏全屏's 合集 picks BV9 before BV2 has shown a frame: the feed begins again from it.
+    restarting.restartOn(storyEntry('BV9'));
+    expect(pager.arrived, isNull, reason: 'BV2 never plays now; its still would cover BV9 for good');
+    expect(heard, 2);
+  });
+
   testWidgets('without a feed the drag goes back at once and has no shape', (tester) async {
     pager.feed = null;
     expect(drag.shape, isNull);
@@ -359,6 +380,47 @@ void main() {
       expect(stillOf('BV2'), findsNothing);
     });
 
+    testWidgets("with the video's box moved (the uploader sheet's room, 181), the held still goes with it and the "
+        'neighbours are left out', (tester) async {
+      final pictured = FakeStoryFeed([
+        storyEntry('BV1', cover: pic('BV1')),
+        storyEntry('BV2', cover: pic('BV2')),
+        storyEntry('BV3', cover: pic('BV3')),
+      ]);
+      addTearDown(pictured.dispose);
+      pager.feed = pictured;
+      tester.view.physicalSize = const Size(440, screen);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Widget neighbours(Rect? slide) => MaterialApp(
+        home: Stack(fit: StackFit.expand, children: [StoryNeighbours(pager: pager, slide: slide)]),
+      );
+      await tester.pumpWidget(neighbours(null));
+      expect(pager.moveNext(), isTrue);
+      await settle(tester);
+      final element = tester.element(stillOf('BV2'));
+      final asked = tester.widget<RemoteImage>(stillOf('BV2')).size;
+
+      const room = Rect.fromLTRB(0, VerticalSheetTheme.pictureTop, 440, VerticalSheetTheme.pictureBottom);
+      await tester.pumpWidget(neighbours(room));
+      // An upright 9:16 picture fits the room by its height, centred, as the player fits the video there.
+      expect(
+        tester.getRect(stillOf('BV2')),
+        rectMoreOrLessEquals(Rect.fromCenter(center: room.center, width: room.height * 9 / 16, height: room.height)),
+      );
+      expect(tester.widget<RemoteImage>(stillOf('BV2')).size, asked, reason: 'scaled, not asked again at each size');
+      expect(identical(tester.element(stillOf('BV2')), element), isTrue, reason: 'the same picture, no reload');
+      for (final bvid in ['BV1', 'BV3']) {
+        expect(pageOf(bvid), findsNothing);
+        expect(stillOf(bvid), findsNothing);
+      }
+
+      await tester.pumpWidget(neighbours(null));
+      expect(tester.getRect(stillOf('BV2')).height, closeTo(440 * 16 / 9, 0.01), reason: 'back in its band');
+      expect(tester.getRect(pageOf('BV1')).top, -screen);
+      expect(tester.getRect(pageOf('BV3')).top, screen);
+    });
+
     testWidgets("their 发弹幕 fields show the page's 弹", (tester) async {
       tester.view.physicalSize = const Size(440, screen);
       tester.view.devicePixelRatio = 1;
@@ -395,4 +457,48 @@ class _AskingFeed extends FakeStoryFeed {
 
   @override
   void wantMore() => asks++;
+}
+
+/// A feed that starts over from a video the page opened itself, as the app's does after 选集 or 合集 in landscape.
+class _RestartingFeed extends StoryFeed {
+  _RestartingFeed(this._entries);
+
+  List<StoryEntry> _entries;
+  int _index = 0;
+
+  @override
+  List<StoryEntry> get entries => _entries;
+
+  @override
+  int get index => _index;
+
+  @override
+  bool get loading => false;
+
+  @override
+  bool moveNext() {
+    if (next == null) return false;
+    _index++;
+    notifyListeners();
+    return true;
+  }
+
+  @override
+  bool movePrevious() {
+    if (previous == null) return false;
+    _index--;
+    notifyListeners();
+    return true;
+  }
+
+  void add(StoryEntry entry) {
+    _entries = [..._entries, entry];
+    notifyListeners();
+  }
+
+  void restartOn(StoryEntry entry) {
+    _entries = [entry];
+    _index = 0;
+    notifyListeners();
+  }
 }

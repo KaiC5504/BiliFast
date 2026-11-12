@@ -145,7 +145,10 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   @override
   void dispose() {
     _unlisten(_ui);
+    final story = _story;
+    _story = null;
     _abandon(_ui);
+    if (story != null) _cancelAfterFrame(story);
     _tapTimer?.cancel();
     _hardwareTimer?.cancel();
     unawaited(_hardwareVolume?.cancel());
@@ -186,6 +189,19 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     if (story == null) return;
     _story = null;
     story.cancel();
+  }
+
+  /// Gone under a finger (the video swiped to failed to open), the layer leaves the page to go back once the tree is
+  /// unlocked: going back moves it, and what moves with it rebuilds. Anything done to the drag meanwhile (a new drag,
+  /// the page landing it as it goes) means it is no longer this layer's to cancel.
+  static void _cancelAfterFrame(StoryDrag story) {
+    var touched = false;
+    void heard() => touched = true;
+    story.addListener(heard);
+    scheduleMicrotask(() {
+      story.removeListener(heard);
+      if (!touched) story.cancel();
+    });
   }
 
   static (String?, int?) _videoOf(PlayerSession session) => (session.video?.bvid, session.part?.cid);

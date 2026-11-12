@@ -116,8 +116,9 @@ class VideoPlayerArea extends StatelessWidget {
   /// they would stretch to the other's shape.
   final ValueListenable<double?>? verticalTurn;
 
-  /// While the page slides the picture between the small player's box and 竖屏's band (187), where the video is in
-  /// this area's box; the danmaku are put away meanwhile, as through a turn.
+  /// While the page slides the picture between the small player's box and 竖屏's band (187), or into the room above the
+  /// uploader sheet (181), where the video is in this area's box; the danmaku are put away meanwhile, as through a
+  /// turn, and 竖屏's held still goes with the video.
   final ValueListenable<Rect?>? slide;
 
   /// The page's swipe between 竖屏's videos; it takes part only in 竖屏 on the iPhone, while its feed is up.
@@ -144,7 +145,8 @@ class VideoPlayerArea extends StatelessWidget {
             customSemanticsActions: story == null || feed == null
                 ? null
                 : {
-                    if (feed.next != null) const CustomSemanticsAction(label: '下一个视频'): story.moveNext,
+                    // With none known yet it asks the feed again, as a swipe past the end does.
+                    const CustomSemanticsAction(label: '下一个视频'): story.moveNext,
                     if (feed.previous != null) const CustomSemanticsAction(label: '上一个视频'): story.movePrevious,
                   },
             child: Stack(
@@ -185,7 +187,7 @@ class VideoPlayerArea extends StatelessWidget {
           child: StoryShift(
             drag: story?.drag,
             child: CustomSingleChildLayout(
-              delegate: _SurfaceLayout(heightFactor: heightFactor, slid: slid),
+              delegate: VideoSurfaceLayout(heightFactor: heightFactor, slid: slid),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -245,6 +247,7 @@ class VideoPlayerArea extends StatelessWidget {
           key: const ValueKey('story-neighbours'),
           pager: story,
           danmakuOn: session?.danmakuOn ?? true,
+          slide: slid,
         ),
       if (session != null && session.showStats)
         SafeArea(
@@ -463,9 +466,10 @@ class _DanmakuArea extends StatelessWidget {
   }
 }
 
-/// The video's place in the area: its top [heightFactor], or [slid] while the page slides it.
-class _SurfaceLayout extends SingleChildLayoutDelegate {
-  const _SurfaceLayout({required this.heightFactor, required this.slid});
+/// The video's place in the area: its top [heightFactor], or [slid] while the page slides it. 竖屏's held still takes
+/// the same place.
+class VideoSurfaceLayout extends SingleChildLayoutDelegate {
+  const VideoSurfaceLayout({required this.heightFactor, required this.slid});
 
   final double heightFactor;
   final Rect? slid;
@@ -478,7 +482,7 @@ class _SurfaceLayout extends SingleChildLayoutDelegate {
   Offset getPositionForChild(Size size, Size childSize) => slid?.topLeft ?? Offset.zero;
 
   @override
-  bool shouldRelayout(_SurfaceLayout oldDelegate) =>
+  bool shouldRelayout(VideoSurfaceLayout oldDelegate) =>
       oldDelegate.heightFactor != heightFactor || oldDelegate.slid != slid;
 }
 

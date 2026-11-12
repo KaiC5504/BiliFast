@@ -3848,6 +3848,73 @@ void main() {
         await back(tester);
       });
 
+      testWidgets("rising, the sheet leaves none of the player's touches in the strip above its moving top", (
+        tester,
+      ) async {
+        await host(tester, pageApi: api, spaceApi: spaceApi);
+        final open = await vertical(tester);
+        final drag = ui(tester).storyDrag!;
+        expect(ui(tester).story!.value, isNotNull, reason: "竖屏's feed is up, so a vertical drag would move it");
+        open(const UploaderRef(mid: owner, name: 'UP主'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+        // Below where the sheet comes to rest, above where it has got to.
+        const strip = Offset(220, VerticalSheetTheme.sheetTop + 20);
+        expect(tester.getRect(find.byType(UploaderSheet)).top, greaterThan(strip.dy + 200));
+
+        final gesture = await tester.startGesture(strip);
+        for (var i = 0; i < 5; i++) {
+          await gesture.moveBy(const Offset(0, -20));
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        expect(drag.moving, isFalse, reason: 'the feed stays put under the sheet');
+        await gesture.up();
+        await tester.tapAt(strip);
+        await tester.pump();
+        expect(sessions.single.calls, isNot(contains('togglePlay')));
+        await frames(tester);
+        expect(drag.moving, isFalse);
+        expect(sheet(tester).isOpen, isTrue);
+
+        sheet(tester).close();
+        await frames(tester);
+        await tester.tapAt(strip);
+        await tester.pump();
+        expect(sessions.single.calls, contains('togglePlay'), reason: 'the player has its touches back');
+        await frames(tester);
+        await rotate(tester, Presentation.inline);
+        await back(tester);
+      });
+
+      testWidgets("the uploader's tap while the page moves between videos opens nothing", (tester) async {
+        await host(tester, pageApi: api, spaceApi: spaceApi);
+        final open = await vertical(tester);
+        final drag = ui(tester).storyDrag!;
+        drag
+          ..start()
+          ..update(-100);
+        await tester.pump();
+        open(const UploaderRef(mid: owner, name: 'UP主'));
+        await tester.pump();
+        expect(sheet(tester).isOpen, isFalse, reason: 'under the finger');
+        drag.end(0);
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(drag.settling, isTrue);
+        open(const UploaderRef(mid: owner, name: 'UP主'));
+        await tester.pump();
+        expect(sheet(tester).isOpen, isFalse, reason: "settling, the row tapped may be the old video's");
+
+        await frames(tester);
+        expect(drag.moving, isFalse);
+        open(const UploaderRef(mid: owner, name: 'UP主'));
+        await frames(tester);
+        expect(sheet(tester).isOpen, isTrue, reason: 'at rest it opens');
+        sheet(tester).close();
+        await frames(tester);
+        await rotate(tester, Presentation.inline);
+        await back(tester);
+      });
+
       testWidgets('181 look-alike: the page as the phone draws it, saved for tools/screen_diff.py', (tester) async {
         final saved = BiliFonts.family;
         addTearDown(() => BiliFonts.family = saved);
@@ -4162,6 +4229,18 @@ void main() {
       expect(ui(tester).storyDrag!.moving, isFalse);
       await rotate(tester, Presentation.inline);
       await back(tester);
+    });
+
+    testWidgets('a page torn down under a finger goes quietly: the gesture layer finds its drag already at rest',
+        (tester) async {
+      await enter(tester);
+      final drag = ui(tester).storyDrag!;
+      final gesture = await fingerDrag(tester, from: const Offset(250, 700), by: const Offset(0, -200));
+      expect(drag.dragging, isTrue);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+      expect(find.byType(VideoPage), findsNothing);
+      await gesture.up();
     });
 
     testWidgets('leaving 竖屏 for the small player mid-drag past half opens nothing', (tester) async {

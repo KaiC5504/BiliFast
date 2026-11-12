@@ -15,6 +15,7 @@ import 'package:bilifast/video/collapsing_player.dart';
 import 'package:bilifast/video/story/story_drag.dart';
 import 'package:bilifast/video/story/story_feed.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -496,6 +497,52 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       expect(rig.storyDrag.events, containsAllInOrder(['start', 'cancel']));
       await gesture.up();
+    });
+
+    /// 竖屏 with the picture that stays when the layer goes (a video swiped to that failed to open), following the page.
+    Widget page({required bool layer}) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ListenableBuilder(
+            listenable: rig.storyDrag,
+            builder: (context, child) => Transform.translate(offset: Offset(0, rig.storyDrag.offset), child: child),
+            child: const SizedBox.expand(),
+          ),
+          if (layer) rig.player(),
+        ],
+      ),
+    );
+
+    testWidgets('the layer going away mid-drag lets the page go back once the tree is unlocked', (tester) async {
+      rig.orientation.enterVertical();
+      await tester.pumpWidget(page(layer: true));
+      final gesture = await tester.startGesture(const Offset(300, 500));
+      await moveFrames(tester, gesture, const Offset(0, -20), 3);
+      expect(rig.storyDrag.dragging, isTrue);
+      await tester.pumpWidget(page(layer: false));
+      expect(tester.takeException(), isNull, reason: 'going back moves what follows the page, which rebuilds');
+      expect(rig.storyDrag.events, containsAllInOrder(['start', 'cancel']));
+      expect(rig.storyDrag.moving, isFalse);
+      await gesture.up();
+      await tester.pump();
+    });
+
+    testWidgets('a drag begun again before the gone layer lets go is not its to cancel', (tester) async {
+      rig.orientation.enterVertical();
+      await tester.pumpWidget(page(layer: true));
+      final gesture = await tester.startGesture(const Offset(300, 500));
+      await moveFrames(tester, gesture, const Offset(0, -20), 3);
+      // After the frame the layer goes in, before its deferred cancel: another finger takes the page.
+      SchedulerBinding.instance.addPostFrameCallback((_) => rig.storyDrag.start());
+      await tester.pumpWidget(page(layer: false));
+      expect(rig.storyDrag.events.where((event) => event == 'start'), hasLength(2));
+      expect(rig.storyDrag.events, isNot(contains('cancel')));
+      expect(rig.storyDrag.dragging, isTrue);
+      rig.storyDrag.land();
+      await gesture.up();
+      await tester.pump();
     });
 
     testWidgets('full screen keeps up and down for brightness and volume', (tester) async {

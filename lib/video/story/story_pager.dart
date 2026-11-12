@@ -7,7 +7,7 @@ import '../../player_ui/vertical_chrome_preview.dart';
 import '../../shared/cover_preset.dart';
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
-import '../video_player_area.dart' show verticalBand;
+import '../video_player_area.dart' show VideoSurfaceLayout, verticalBand;
 import 'story_drag.dart';
 import 'story_feed.dart';
 
@@ -39,10 +39,10 @@ class StoryPager extends ChangeNotifier {
   set feed(StoryFeed? value) {
     if (identical(value, _feed)) return;
     _ticker.stop();
-    _feed?.removeListener(notifyListeners);
+    _feed?.removeListener(_feedChanged);
     _feed = value;
     _arrived = null;
-    value?.addListener(notifyListeners);
+    value?.addListener(_feedChanged);
     drag
       ..shape = value == null ? null : _shape
       ..unshape = value == null ? null : _unshape
@@ -58,6 +58,13 @@ class StoryPager extends ChangeNotifier {
   void framed(String? bvid) {
     if (bvid == null || _arrived?.bvid != bvid) return;
     _arrived = null;
+    notifyListeners();
+  }
+
+  void _feedChanged() {
+    // A feed started over on a video the page opened itself (选集 or 合集 in landscape) never plays the one landed on,
+    // whose still would cover it for good.
+    if (_arrived != null && _feed?.current?.bvid != _arrived?.bvid) _arrived = null;
     notifyListeners();
   }
 
@@ -150,7 +157,7 @@ class StoryPager extends ChangeNotifier {
   void dispose() {
     _ticker.dispose();
     drag.removeListener(_dragChanged);
-    _feed?.removeListener(notifyListeners);
+    _feed?.removeListener(_feedChanged);
     if (_feed != null) {
       drag
         ..shape = null
@@ -185,12 +192,16 @@ class StoryShift extends StatelessWidget {
 /// picture in its band with its controls dimmed over it, moving with the finger. Over the playing page, the still of
 /// the video just landed on until its first frame shows. Takes no touches and says nothing to VoiceOver.
 class StoryNeighbours extends StatelessWidget {
-  const StoryNeighbours({super.key, required this.pager, this.danmakuOn = true});
+  const StoryNeighbours({super.key, required this.pager, this.danmakuOn = true, this.slide});
 
   final StoryPager pager;
 
   /// The page's 弹, which the neighbours' 发弹幕 fields show as the next video will open with it.
   final bool danmakuOn;
+
+  /// Where the page has put the video's box instead of its band (the uploader sheet's room, 181; the slide, 187): the
+  /// held still goes there with it, and the neighbours are left out.
+  final Rect? slide;
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
@@ -209,11 +220,11 @@ class StoryNeighbours extends StatelessWidget {
                   fit: StackFit.expand,
                   clipBehavior: Clip.none,
                   children: [
-                    if (feed?.previous case final previous?)
+                    if (feed?.previous case final previous? when slide == null)
                       _StoryPage(key: ObjectKey(previous), entry: previous, at: -1, danmakuOn: danmakuOn),
                     if (arrived != null)
-                      _StoryPage(key: ObjectKey(arrived), entry: arrived, at: 0, danmakuOn: danmakuOn),
-                    if (feed?.next case final next?)
+                      _StoryPage(key: ObjectKey(arrived), entry: arrived, at: 0, danmakuOn: danmakuOn, box: slide),
+                    if (feed?.next case final next? when slide == null)
                       _StoryPage(key: ObjectKey(next), entry: next, at: 1, danmakuOn: danmakuOn),
                   ],
                 ),
@@ -226,14 +237,15 @@ class StoryNeighbours extends StatelessWidget {
   );
 }
 
-/// [entry]'s page [at] screens below the playing one: its still in its band, and its controls unless it is the page
-/// itself.
+/// [entry]'s page [at] screens below the playing one: its still in its band, or in [box] where the page has put the
+/// video's, and its controls unless it is the page itself.
 class _StoryPage extends StatelessWidget {
-  const _StoryPage({super.key, required this.entry, required this.at, required this.danmakuOn});
+  const _StoryPage({super.key, required this.entry, required this.at, required this.danmakuOn, this.box});
 
   final StoryEntry entry;
   final int at;
   final bool danmakuOn;
+  final Rect? box;
 
   @override
   Widget build(BuildContext context) => FractionalTranslation(
@@ -241,12 +253,17 @@ class _StoryPage extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        Align(
-          alignment: Alignment.topCenter,
-          child: FractionallySizedBox(
-            heightFactor: verticalBand(upright: entry.upright),
-            child: LayoutBuilder(builder: (context, constraints) => Center(child: _still(constraints.biggest))),
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final heightFactor = verticalBand(upright: entry.upright);
+            return CustomSingleChildLayout(
+              delegate: VideoSurfaceLayout(heightFactor: heightFactor, slid: box),
+              // Asked at the band's size and scaled into a box that moves, so a moving box asks no new picture.
+              child: FittedBox(
+                child: _still(Size(constraints.maxWidth, constraints.maxHeight * heightFactor)),
+              ),
+            );
+          },
         ),
         if (at != 0)
           Opacity(
