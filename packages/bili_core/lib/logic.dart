@@ -7,3 +7,4 @@ export 'src/logic/quality_names.dart';
 export 'src/logic/quality_rules.dart';
 export 'src/logic/resume_point.dart';
 export 'src/logic/time_format.dart';
+export 'src/logic/watch_session.dart';

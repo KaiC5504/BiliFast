@@ -19,6 +19,8 @@ import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
 
 const heartbeatPath = '/x/click-interface/web/heartbeat';
+const mobilePath = '/x/report/heartbeat/mobile';
+const historyPath = '/x/v2/history/report';
 const ok = '{"code":0,"message":"0"}';
 
 final class _Network implements NetworkMonitor {
@@ -178,6 +180,100 @@ void main() {
     await env.logout();
     expect(env.account, isA<LoggedOut>());
     expect(outbox.reports, isEmpty);
+  });
+
+  group('the official iPhone reports\' plays', () {
+    const session = '0123456789abcdef0123456789abcdef';
+
+    AppToken token(OfficialIdentity identity) => AppToken(
+      accessToken: 'ACCESS',
+      refreshToken: 'REFRESH',
+      mid: 7,
+      expiresAt: DateTime.utc(2027, 4, 1),
+      identity: identity,
+    );
+
+    /// A play that ended with no answer.
+    void over() {
+      outbox
+        ..keepPlay(
+          PendingPlay(
+            mid: 7,
+            report: const WatchReport(
+              aid: 80433022,
+              cid: 137649199,
+              duration: 712,
+              session: session,
+              source: PlaySource.unknown,
+              spmid: 'united.player-video-detail.0.0',
+              startTs: 5,
+              playedTime: 42,
+              lastProgress: 40,
+            ),
+            finished: false,
+            at: DateTime.now(),
+          ),
+        )
+        ..endPlay(session);
+    }
+
+    List<String> official() => [
+      for (final path in http.paths)
+        if (path == mobilePath || path == historyPath) path,
+    ];
+
+    setUp(() {
+      http
+        ..routes[mobilePath] = (200, ok)
+        ..routes[historyPath] = (200, ok);
+    });
+
+    test('go out with the flush once the install holds an iPhone token, and wait without one', () async {
+      over();
+      final env = await environment();
+      await env.refreshAccount();
+      final made = flusher(env);
+      await pumpEventQueue();
+      env.client.appToken = token(OfficialIdentity.android);
+      made.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(official(), isEmpty);
+      expect(outbox.plays, hasLength(1), reason: 'only the iPhone identity knows these reports');
+
+      env.client.appToken = token(OfficialIdentity.iphone);
+      network.controller.add(true);
+      await pumpEventQueue();
+      expect(official(), [mobilePath, historyPath]);
+      final end = Uri.splitQueryString(utf8.decode(http.to(mobilePath).single.body!));
+      expect(end['session'], session);
+      expect(end['played_time'], '42');
+      expect(end['mid'], '7');
+      expect(Uri.splitQueryString(utf8.decode(http.to(historyPath).single.body!))['progress'], '40');
+      expect(outbox.plays, isEmpty);
+      expect(beats(), isEmpty);
+    });
+
+    test('are not sent while the account may not report, and a logout drops them', () async {
+      over();
+      final fake = await environment();
+      fake.client.appToken = token(OfficialIdentity.iphone);
+      fake.useFakeAccount();
+      flusher(fake).didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(official(), isEmpty);
+      expect(outbox.plays, hasLength(1));
+
+      final env = await environment();
+      await env.refreshAccount();
+      env.client.appToken = token(OfficialIdentity.iphone);
+      http.errors[mobilePath] = const SocketException('offline');
+      flusher(env);
+      await pumpEventQueue();
+      expect(official(), [mobilePath]);
+      expect(outbox.plays, hasLength(1), reason: 'no answer: it waits');
+      await env.logout();
+      expect(outbox.plays, isEmpty);
+    });
   });
 
   test('the app\'s services flush the outbox they are given and stop listening when disposed', () async {

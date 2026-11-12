@@ -48,6 +48,100 @@ final class PendingReport {
   int get hashCode => Object.hash(bvid, cid, played, at);
 }
 
+/// A play's end report for the official iPhone reports (docs/reference/official-iphone-calls.md), as it would go out
+/// while the play runs and as it stands once the play is over, with the history report after it: the report's own
+/// numbers and ids, its source's strings and the account that watched. No token and nothing signed is kept.
+@immutable
+final class PendingPlay {
+  const PendingPlay({
+    required this.mid,
+    required this.report,
+    required this.finished,
+    required this.at,
+    this.reported = false,
+  });
+
+  factory PendingPlay.fromJson(Map<String, Object?> json) => PendingPlay(
+    mid: json['mid']! as int,
+    report: WatchReport(
+      aid: json['aid']! as int,
+      cid: json['cid']! as int,
+      duration: json['duration']! as int,
+      session: json['session']! as String,
+      source: PlaySource(
+        fromSpmid: json['from_spmid']! as String,
+        from: json['from']! as String,
+        trackId: json['track_id'] as String?,
+        flowData: json['flow_data'] as String?,
+      ),
+      spmid: json['spmid']! as String,
+      startTs: json['start_ts']! as int,
+      playedTime: json['played']! as int,
+      actualPlayedTime: json['actual_played']! as int,
+      totalTime: json['total']! as int,
+      pausedTime: json['paused']! as int,
+      lastProgress: json['last']! as int,
+      maxProgress: json['max']! as int,
+      quality: json['quality']! as int,
+      autoPlay: json['auto_play']! as int,
+    ),
+    finished: json['finished']! as bool,
+    at: DateTime.fromMillisecondsSinceEpoch(json['at']! as int),
+    reported: json['reported']! as bool,
+  );
+
+  /// The account the play was watched as; only that account's token reports it.
+  final int mid;
+  final WatchReport report;
+
+  /// The video played to its end, which the history report says as -1.
+  final bool finished;
+
+  /// When these numbers were taken.
+  final DateTime at;
+
+  /// The end report is settled; only the history report is left.
+  final bool reported;
+
+  PendingPlay get settled => PendingPlay(mid: mid, report: report, finished: finished, at: at, reported: true);
+
+  Map<String, Object?> toJson() => {
+    'session': report.session,
+    'mid': mid,
+    'aid': report.aid,
+    'cid': report.cid,
+    'duration': report.duration,
+    'spmid': report.spmid,
+    'from': report.source.from,
+    'from_spmid': report.source.fromSpmid,
+    'track_id': ?report.source.trackId,
+    'flow_data': ?report.source.flowData,
+    'start_ts': report.startTs,
+    'played': report.playedTime,
+    'actual_played': report.actualPlayedTime,
+    'total': report.totalTime,
+    'paused': report.pausedTime,
+    'last': report.lastProgress,
+    'max': report.maxProgress,
+    'quality': report.quality,
+    'auto_play': report.autoPlay,
+    'finished': finished,
+    'reported': reported,
+    'at': at.millisecondsSinceEpoch,
+  };
+}
+
+/// How a kept play goes out as account [mid]: [end] sends its end report, [history] its place in the account's
+/// history. Each throws what the client threw.
+@immutable
+final class PlaySender {
+  const PlaySender({required this.mid, required this.end, required this.history});
+
+  final int mid;
+  final Future<void> Function(PendingPlay play) end;
+  final Future<void> Function(PendingPlay play) history;
+}
+
 enum _Flushed { sent, gone, dropped, noAnswer, kept }
 
 /// Watch reports that got no answer (offline, timed out), kept until Bilibili takes them, so a part watched with no
@@ -55,11 +149,15 @@ enum _Flushed { sent, gone, dropped, noAnswer, kept }
 /// Bilibili keeps one place per video whatever the part; a later report of the video that goes through makes it moot.
 /// Kept 30 days, in a JSON file in the support folder. Every heartbeat goes through [send], one at a time with
 /// [flush]'s, so Bilibili never hears an older place last.
+///
+/// Under the official iPhone reports a play says what was watched only as it ends, so it is kept from the start
+/// ([keepPlay], then [endPlay]): a play the app was killed in, or one that ended with no network, goes out from
+/// [sendPlays] or the next [flush], each play once, oldest first.
 class HistoryOutbox {
-  HistoryOutbox._(this._path, this._held, this._logger, this._now);
+  HistoryOutbox._(this._path, this._held, this._plays, this._logger, this._now);
 
   HistoryOutbox.memory({Logger? logger, DateTime Function() now = DateTime.now})
-    : this._(null, {}, logger ?? Logger.shared, now);
+    : this._(null, {}, {}, logger ?? Logger.shared, now);
 
   static const keptFor = Duration(days: 30);
 
@@ -72,6 +170,7 @@ class HistoryOutbox {
   static Future<HistoryOutbox> load(String? path, {Logger? logger, DateTime Function() now = DateTime.now}) async {
     final log = logger ?? Logger.shared;
     final held = <String, PendingReport>{};
+    final plays = <String, PendingPlay>{};
     if (path != null) {
       final file = File(path);
       try {
@@ -81,7 +180,14 @@ class HistoryOutbox {
           var skipped = 0;
           for (final entry in json) {
             try {
-              final report = PendingReport.fromJson(entry as Map<String, Object?>);
+              final fields = entry as Map<String, Object?>;
+              // Only a play names its session.
+              if (fields.containsKey('session')) {
+                final play = PendingPlay.fromJson(fields);
+                plays[play.report.session] = play;
+                continue;
+              }
+              final report = PendingReport.fromJson(fields);
               final kept = held[report.bvid];
               if (kept == null || kept.at.isBefore(report.at)) held[report.bvid] = report;
             } on TypeError {
@@ -94,10 +200,10 @@ class HistoryOutbox {
         log.warn(LogCategory.app, 'history outbox unreadable, starting empty', {'error': _reason(error)});
       }
     }
-    final outbox = HistoryOutbox._(path, held, log, now);
+    final outbox = HistoryOutbox._(path, held, plays, log, now);
     final dropped = outbox._dropExpired();
-    if (held.isNotEmpty || dropped > 0) {
-      log.info(LogCategory.app, 'history outbox', {'held': held.length, 'dropped': dropped});
+    if (held.isNotEmpty || plays.isNotEmpty || dropped > 0) {
+      log.info(LogCategory.app, 'history outbox', {'held': held.length + plays.length, 'dropped': dropped});
     }
     return outbox;
   }
@@ -106,6 +212,13 @@ class HistoryOutbox {
 
   /// By bvid.
   final Map<String, PendingReport> _held;
+
+  /// By session: the plays running as they stand, and those over whose reports have not gone out.
+  final Map<String, PendingPlay> _plays;
+
+  /// The plays still running in this launch. Their end report is not made yet, so nothing sends them; one the app
+  /// was killed in is over by the next launch.
+  final Set<String> _running = {};
   final Logger _logger;
   final DateTime Function() _now;
 
@@ -126,11 +239,50 @@ class HistoryOutbox {
   /// What is waiting, oldest first.
   List<PendingReport> get reports => [..._held.values]..sort((a, b) => a.at.compareTo(b.at));
 
+  /// The plays that are over and wait to be reported, oldest first.
+  List<PendingPlay> get plays => [
+    for (final play in _plays.values)
+      if (!_running.contains(play.report.session)) play,
+  ]..sort((a, b) => a.at.compareTo(b.at));
+
   /// A report of the part is waiting or on its way: what this phone saw of it is newer than anything Bilibili has.
   bool holds(String bvid, int cid) {
     if ((_inFlight[(bvid, cid)] ?? 0) > 0) return true;
+    if (_plays.values.any((play) => play.report.cid == cid && !_expired(play.at))) return true;
     final report = _held[bvid];
-    return report != null && report.cid == cid && !_expired(report);
+    return report != null && report.cid == cid && !_expired(report.at);
+  }
+
+  /// [play] is not over yet: its end report as it would go out now is kept, so a play the app is killed in reaches
+  /// Bilibili from the next launch's flush.
+  void keepPlay(PendingPlay play) {
+    _running.add(play.report.session);
+    _plays[play.report.session] = play;
+    _save();
+  }
+
+  /// The play is over: what was last kept of it waits for [sendPlays] or a [flush].
+  void endPlay(String session) => _running.remove(session);
+
+  /// A play that ends with nothing to report (logged out since it began).
+  void dropPlay(String session) {
+    _running.remove(session);
+    if (_plays.remove(session) != null) _save();
+  }
+
+  /// Sends the plays that are over through [sender], as a [flush] does, without waiting for one: a page's play goes
+  /// out as it ends, after any older one still waiting.
+  Future<void> sendPlays(PlaySender sender, {required ReadRecentHistory recent}) async {
+    var moved = const <String>{};
+    if (plays.any((play) => _now().difference(play.at) > checkAfter)) {
+      try {
+        moved = _playsMovedOn((await recent()).items);
+      } catch (_) {
+        // The client logged why. Nothing goes out before the account's history is known; the next flush asks again.
+        return;
+      }
+    }
+    await _sendPlays(sender, moved);
   }
 
   /// No answer at all; Bilibili's own refusals and the Windows guard's are answers.
@@ -168,36 +320,48 @@ class HistoryOutbox {
   /// the account has watched since (another device). A report Bilibili refuses outright (a video gone) is dropped, as
   /// sending it again gets the same answer; a login refused or risk control keeps it for a later flush. A flush asked
   /// for while one runs gets one more pass if that one ended with no answer (the network may be back).
-  Future<void> flush(SendHeartbeat heartbeat, {required ReadRecentHistory recent}) {
+  ///
+  /// With [plays] the plays that are over go out after the heartbeats, under the same rules; each sends its end
+  /// report, then its place in the history unless the account has watched the video since. Without it (no iPhone
+  /// token now) they wait.
+  Future<void> flush(SendHeartbeat heartbeat, {required ReadRecentHistory recent, PlaySender? plays}) {
     final running = _flushing;
     if (running != null) {
       _again = true;
       return running;
     }
     late final Future<void> flushing;
-    flushing = _run(heartbeat, recent).whenComplete(() {
+    flushing = _run(heartbeat, recent, plays).whenComplete(() {
       if (identical(_flushing, flushing)) _flushing = null;
     });
     return _flushing = flushing;
   }
 
-  Future<void> _run(SendHeartbeat heartbeat, ReadRecentHistory recent) async {
+  Future<void> _run(SendHeartbeat heartbeat, ReadRecentHistory recent, PlaySender? sender) async {
     _again = false;
-    while (await _pass(heartbeat, recent) && _again) {
+    while (await _pass(heartbeat, recent, sender) && _again) {
       _again = false;
     }
   }
 
   /// Whether it ended with no answer.
-  Future<bool> _pass(SendHeartbeat heartbeat, ReadRecentHistory recent) async {
+  Future<bool> _pass(SendHeartbeat heartbeat, ReadRecentHistory recent, PlaySender? sender) async {
     var dropped = _dropExpired();
     var stale = 0;
     var sent = 0;
     var failed = 0;
     var noAnswer = false;
-    if (reports.any((report) => _now().difference(report.at) > checkAfter)) {
+    var moved = const <String>{};
+    final made = [
+      for (final report in reports) report.at,
+      if (sender != null)
+        for (final play in plays) play.at,
+    ];
+    if (made.any((at) => _now().difference(at) > checkAfter)) {
       try {
-        stale = _dropWatchedSince((await recent()).items);
+        final items = (await recent()).items;
+        stale = _dropWatchedSince(items);
+        moved = _playsMovedOn(items);
       } catch (error) {
         failed++;
         noAnswer = isNetworkFailure(error);
@@ -236,16 +400,107 @@ class HistoryOutbox {
         }
       }
     }
+    if (failed == 0 && sender != null) {
+      final result = await _sendPlays(sender, moved);
+      sent += result.sent;
+      dropped += result.dropped;
+      failed += result.failed;
+      noAnswer = result.noAnswer;
+    }
     if (sent + dropped + stale + failed > 0) {
       _logger.info(LogCategory.api, 'history outbox', {
         'sent': sent,
         'dropped': dropped,
         'stale': stale,
         'failed': failed,
-        'held': _held.length,
+        'held': _held.length + plays.length,
       });
     }
     return noAnswer;
+  }
+
+  /// The plays that are over, oldest first and one at a time; stops at the first that has to wait.
+  Future<({int sent, int dropped, int failed, bool noAnswer})> _sendPlays(PlaySender sender, Set<String> moved) async {
+    var sent = 0;
+    var dropped = 0;
+    for (final play in plays) {
+      final session = play.report.session;
+      final outcome = await _inLane(() => _sendPlay(session, sender, place: !moved.contains(session)));
+      switch (outcome) {
+        case _Flushed.sent:
+          sent++;
+        case _Flushed.dropped:
+          dropped++;
+        case _Flushed.gone:
+          break;
+        case _Flushed.noAnswer || _Flushed.kept:
+          return (sent: sent, dropped: dropped, failed: 1, noAnswer: outcome == _Flushed.noAnswer);
+      }
+    }
+    return (sent: sent, dropped: dropped, failed: 0, noAnswer: false);
+  }
+
+  /// The end report, then the place unless it is no longer this phone's to set ([place] false). A call Bilibili
+  /// refuses outright is given up, and the other still goes: the place matters whatever became of the end report.
+  Future<_Flushed> _sendPlay(String session, PlaySender sender, {required bool place}) async {
+    // A logout may have dropped it, or another pass sent it, while this one waited its turn.
+    var play = _plays[session];
+    if (play == null || _running.contains(session)) return _Flushed.gone;
+    if (play.mid != sender.mid) {
+      _removePlay(play);
+      return _Flushed.dropped;
+    }
+    if (!play.reported) {
+      try {
+        await sender.end(play);
+      } catch (error) {
+        final waits = _waits(error);
+        if (waits != null) return waits;
+      }
+      if (!identical(_plays[session], play)) return _Flushed.gone;
+      play = _plays[session] = play.settled;
+    }
+    if (place) {
+      try {
+        await sender.history(play);
+      } catch (error) {
+        final waits = _waits(error);
+        if (waits != null) {
+          // Saved as settled, so a later flush doesn't count the play's time twice.
+          if (identical(_plays[session], play)) _save();
+          return waits;
+        }
+        _removePlay(play);
+        return _Flushed.dropped;
+      }
+    }
+    _removePlay(play);
+    return _Flushed.sent;
+  }
+
+  /// How a failed call leaves its report waiting; null when Bilibili refused it for good.
+  static _Flushed? _waits(Object error) {
+    if (isNetworkFailure(error)) return _Flushed.noAnswer;
+    return _refusedForGood(error) ? null : _Flushed.kept;
+  }
+
+  void _removePlay(PendingPlay play) {
+    final session = play.report.session;
+    if (!identical(_plays[session], play)) return;
+    _plays.remove(session);
+    _save();
+  }
+
+  /// The plays that are over whose video [items] shows watched since: the account's place in it is newer than theirs.
+  Set<String> _playsMovedOn(List<HistoryItem> items) {
+    final watched = <int, int>{};
+    for (final item in items) {
+      watched[item.aid] = max(watched[item.aid] ?? 0, item.viewAt);
+    }
+    return {
+      for (final play in plays)
+        if ((watched[play.report.aid] ?? 0) * 1000 >= play.at.millisecondsSinceEpoch) play.report.session,
+    };
   }
 
   void _remove(PendingReport report) {
@@ -270,19 +525,22 @@ class HistoryOutbox {
     return moved.length;
   }
 
+  /// -2 is the official API's refused login (an app token it no longer takes).
   static bool _refusedForGood(Object error) => switch (error) {
-    BiliAPIError(code: -101 || -352 || -412) => false,
+    BiliAPIError(code: -101 || -2 || -352 || -412) => false,
     BiliAPIError(code: GuardedTransport.readOnlyCode || GuardedTransport.capCode || GuardedTransport.haltCode) => false,
     BiliAPIError() => true,
     _ => false,
   };
 
-  /// 退出登录: what is waiting was the old account's, and so is any report still out.
+  /// 退出登录: what is waiting was the old account's, and so is any report still out, and any play still running.
   void clear() {
     _generation++;
-    if (_held.isEmpty) return;
-    final dropped = _held.length;
+    final dropped = _held.length + _plays.length;
+    if (dropped == 0) return;
     _held.clear();
+    _plays.clear();
+    _running.clear();
     _save();
     _logger.info(LogCategory.api, 'history outbox', {'dropped': dropped, 'held': 0});
   }
@@ -301,17 +559,22 @@ class HistoryOutbox {
     if (added) _logger.info(LogCategory.api, 'history outbox', {'queued': 1, 'held': _held.length});
   }
 
-  bool _expired(PendingReport report) => _now().difference(report.at) > keptFor;
+  bool _expired(DateTime at) => _now().difference(at) > keptFor;
 
   int _dropExpired() {
     final expired = [
       for (final report in _held.values)
-        if (_expired(report)) report.bvid,
+        if (_expired(report.at)) report.bvid,
     ];
-    if (expired.isEmpty) return 0;
+    final old = [
+      for (final play in _plays.values)
+        if (_expired(play.at)) play.report.session,
+    ];
+    if (expired.isEmpty && old.isEmpty) return 0;
     expired.forEach(_held.remove);
+    old.forEach(_plays.remove);
     _save();
-    return expired.length;
+    return expired.length + old.length;
   }
 
   /// One task at a time; a failed one doesn't stop the next. Idle, a task starts at once, so the lane never hangs on
@@ -330,7 +593,10 @@ class HistoryOutbox {
   void _save() {
     final path = _path;
     if (path == null) return;
-    final text = jsonEncode([for (final report in reports) report.toJson()]);
+    final text = jsonEncode([
+      for (final report in reports) report.toJson(),
+      for (final play in _plays.values) play.toJson(),
+    ]);
     // One write after another, so an older list never lands last.
     _writing = _writing.then((_) => _write(path, text));
   }
@@ -374,9 +640,9 @@ class HistoryOutboxFlusher with WidgetsBindingObserver {
 
   /// Sends what is waiting, if the account may report.
   void flush() {
-    if (outbox.reports.isEmpty || !WatchReporter.canReport(_environment)) return;
+    if (outbox.reports.isEmpty && outbox.plays.isEmpty || !WatchReporter.canReport(_environment)) return;
     final client = _environment.client;
-    unawaited(outbox.flush(client.heartbeat, recent: client.history));
+    unawaited(outbox.flush(client.heartbeat, recent: client.history, plays: WatchReporter.playSender(client)));
   }
 
   void _accountChanged() {

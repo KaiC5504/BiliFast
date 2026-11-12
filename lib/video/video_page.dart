@@ -688,7 +688,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     // A card that was playing when tapped plays on; one its rule had paused opens as a page opened afresh would.
     final resumeHeld = !playback.heldOnCard || _opensPlaying(route);
     playback
-      ..attach(this, requestLogin: _askLogin, resumeHeld: resumeHeld)
+      ..attach(this, requestLogin: _askLogin, resumeHeld: resumeHeld, source: route.source)
       ..addListener(_playbackChanged);
     final starting = playback.session == null;
     // Not in this build: the release reports the kept video's progress, and 最近打开 notifies its listeners. The

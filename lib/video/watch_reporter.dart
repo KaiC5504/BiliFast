@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -15,6 +16,12 @@ import 'history_outbox.dart';
 /// It belongs to the open made just before it: once a newer open (another part, 自动连播) moves the controller on, it
 /// hears nothing more, and leaving reports its own video at the last position it saw. The speed test plays without
 /// one, so it reports nothing. With an [outbox], a report that gets no answer waits there for the network.
+///
+/// Made while the install holds an iPhone-identity app token, it sends the official iPhone app's reports instead
+/// (docs/reference/official-iphone-calls.md) and no web heartbeat: a start report as playback starts, and as the play
+/// ends (the video finishing, the playback closing, a newer open) an end report with what was watched, then the
+/// history report. The outbox keeps the running play's end report as it would be, every 15 s of play and on pause,
+/// so a play the app is killed in still reaches Bilibili. [onProgress] hears the same positions either way.
 class WatchReporter {
   WatchReporter({
     required PlaybackController controller,
@@ -22,9 +29,13 @@ class WatchReporter {
     required this._loggedIn,
     this.onProgress,
     this._outbox,
+    this._source,
+    this._followed = false,
+    this._now = DateTime.now,
     Logger? logger,
   }) : _controller = controller,
        _open = controller.opens,
+       _official = _client.appToken?.identity == OfficialIdentity.iphone,
        _logger = logger ?? Logger.shared {
     // After the controller's own subscription, so its phase already reflects each event.
     _events = controller.player.events.listen(_onEvent);
@@ -39,10 +50,51 @@ class WatchReporter {
     LoggedOut() || LoginExpired() => false,
   };
 
+  /// How the outbox sends a kept play as [client]'s account; null while it holds no iPhone token. Each report logs
+  /// how it went.
+  static PlaySender? playSender(BiliClient client, {Logger? logger}) {
+    final token = client.appToken;
+    if (token == null || token.identity != OfficialIdentity.iphone) return null;
+    final log = logger ?? Logger.shared;
+    return PlaySender(
+      mid: token.mid,
+      end: (play) => _reported(log, 'end', () => client.mobileHeartbeat(play.report), played: play.report.playedTime),
+      history: (play) => _reported(
+        log,
+        'history',
+        () => client.historyReport(
+          aid: play.report.aid,
+          cid: play.report.cid,
+          progress: play.finished ? HeartbeatSchedule.finished : play.report.lastProgress,
+          duration: play.report.duration,
+          startTs: play.report.startTs,
+        ),
+      ),
+    );
+  }
+
+  /// The video page, where every play is reported from.
+  static const _spmid = 'united.player-video-detail.0.0';
+
+  /// How much play goes by between two saves of the running play.
+  static const _keepEvery = 15;
+
+  static final _random = Random.secure();
+
   final PlaybackController _controller;
   final BiliClient _client;
   final bool Function() _loggedIn;
   final HistoryOutbox? _outbox;
+
+  /// Where the page was opened from, asked as a play starts: a page that takes 推荐's card over names it then.
+  final PlaySource Function()? _source;
+
+  /// The open followed the video before it on its own (自动连播, 后台连播).
+  final bool _followed;
+  final DateTime Function() _now;
+
+  /// The official iPhone reports, decided as the open is made.
+  final bool _official;
 
   /// Every position reported, logged in or not, in seconds; a finished video reports its whole length.
   final void Function(String bvid, int cid, int seconds)? onProgress;
@@ -62,6 +114,14 @@ class WatchReporter {
   double _position = 0;
   Future<void> _sending = Future.value();
   bool _left = false;
+
+  /// The play the official reports are adding up; null until it starts and once its end report is made. An open
+  /// played again after its end (重播, a loop) is another play.
+  _Play? _play;
+  bool _played = false;
+
+  /// Where the official plays are kept: the app's outbox, or one of its own when made without.
+  late final HistoryOutbox _plays = _outbox ?? HistoryOutbox.memory(logger: _logger, now: _now);
 
   bool get _isCurrent => _controller.opens == _open;
 
@@ -93,10 +153,12 @@ class WatchReporter {
           default:
             break;
         }
+        if (_official) _playStatus(status);
       case PositionChanged(:final seconds):
         if (!_started || _finishedSent) return;
         final played = _schedule.tick(position: seconds, playing: _status == PlayerStatus.playing);
         if (played != null) _send(item, played);
+        if (_official) _playTick();
       default:
         break;
     }
@@ -109,6 +171,7 @@ class WatchReporter {
     _position = seconds;
     _finishedSent = false;
     _send(item, _schedule.mark(position: seconds));
+    _play?.watch.seeked(seconds);
   }
 
   /// The page is going: the last position goes out, and the reports sent so far are awaited.
@@ -116,8 +179,11 @@ class WatchReporter {
     if (_left) return _sending;
     _left = true;
     final item = _item;
-    if (item != null && _started && !_finishedSent) {
-      _send(item, _schedule.mark(position: _isCurrent ? _controller.currentSeconds : _position));
+    final position = _isCurrent ? _controller.currentSeconds : _position;
+    if (item != null && _started && !_finishedSent) _send(item, _schedule.mark(position: position));
+    if (_play case final play?) {
+      play.watch.tick(position: position, playing: false);
+      _endPlay(finished: false);
     }
     unawaited(_events.cancel());
     return _sending;
@@ -135,7 +201,7 @@ class WatchReporter {
   void _send(({String bvid, int cid}) item, int played) {
     final duration = _controller.page?.duration ?? 0;
     onProgress?.call(item.bvid, item.cid, played == HeartbeatSchedule.finished ? duration : played);
-    if (!_loggedIn()) return;
+    if (_official || !_loggedIn()) return;
     Future<void> beat() => _client.heartbeat(bvid: item.bvid, cid: item.cid, playedTime: played);
     // Handed to the outbox at once, whose lane keeps the order: a page opening this part next must know a report of
     // it is on its way.
@@ -157,4 +223,171 @@ class WatchReporter {
       _logger.warn(LogCategory.api, 'heartbeat failed', {'played': played, 'error': '$failure'});
     });
   }
+
+  void _playStatus(PlayerStatus status) {
+    final play = _play;
+    if (play == null) {
+      if (status == PlayerStatus.playing) _beginPlay();
+      return;
+    }
+    switch (status) {
+      case PlayerStatus.playing:
+        play.watch.resumed();
+      case PlayerStatus.paused:
+        play.watch
+          ..tick(position: _position, playing: false)
+          ..paused();
+        _keepPlay(play);
+      case PlayerStatus.ended:
+        play.watch
+          ..tick(position: _position, playing: false)
+          ..ended();
+        _endPlay(finished: true);
+      case PlayerStatus.buffering:
+        play.watch.tick(position: _position, playing: false);
+      case PlayerStatus.idle || PlayerStatus.loading:
+        break;
+    }
+  }
+
+  void _playTick() {
+    final play = _play;
+    final playing = _status == PlayerStatus.playing;
+    if (play == null) {
+      // Playing already when the reports became this play's to make: taken over from 推荐's card, or logged in since.
+      if (playing) _beginPlay();
+      return;
+    }
+    play.watch.tick(position: _position, playing: playing);
+    if (play.watch.totals.playedTime - play.keptAt >= _keepEvery) _keepPlay(play);
+  }
+
+  void _beginPlay() {
+    final video = _controller.video;
+    final page = _controller.page;
+    final token = _client.appToken;
+    if (video == null || page == null || token == null || token.identity != OfficialIdentity.iphone) return;
+    if (!_loggedIn()) return;
+    final play = _play = _Play(
+      mid: token.mid,
+      aid: video.aid,
+      cid: page.cid,
+      duration: page.duration,
+      session: [for (var i = 0; i < 32; i++) _random.nextInt(16).toRadixString(16)].join(),
+      source: _source?.call() ?? PlaySource.unknown,
+      autoPlay: _followed && !_played ? 99 : 0,
+      watch: WatchSession(now: _now)..started(_position),
+    );
+    _played = true;
+    final report = _reportOf(play, null);
+    _sending = _sending
+        .then((_) => _reported(_logger, 'start', () => _client.mobileHeartbeat(report)))
+        // Logged already, and a start report is not sent again.
+        .then<void>((_) {}, onError: (Object _) {});
+  }
+
+  void _keepPlay(_Play play) {
+    if (!_loggedIn()) return;
+    final totals = play.watch.totals;
+    play.keptAt = totals.playedTime;
+    _plays.keepPlay(_pending(play, totals, finished: false));
+  }
+
+  /// The play is over: its end report and the history report go out through the outbox, after any older play still
+  /// waiting there, and stay in it while they get no answer.
+  void _endPlay({required bool finished}) {
+    final play = _play;
+    if (play == null) return;
+    _play = null;
+    final outbox = _plays;
+    if (!_loggedIn()) {
+      outbox.dropPlay(play.session);
+      return;
+    }
+    // Kept at once with its last numbers, and over only once the start report has had its answer, so nothing sends
+    // the end first.
+    outbox.keepPlay(_pending(play, play.watch.totals, finished: finished));
+    _sending = _sending.then((_) async {
+      outbox.endPlay(play.session);
+      // Without the token now, it waits in the outbox for a flush that has one.
+      final sender = playSender(_client, logger: _logger);
+      if (sender != null) await outbox.sendPlays(sender, recent: _client.history);
+    });
+  }
+
+  PendingPlay _pending(_Play play, WatchTotals totals, {required bool finished}) =>
+      PendingPlay(mid: play.mid, report: _reportOf(play, totals), finished: finished, at: _now());
+
+  /// The start report without [totals], every time 0; with them the end report.
+  WatchReport _reportOf(_Play play, WatchTotals? totals) {
+    // A newer open's stream is not this play's.
+    if (_isCurrent) play.quality = _controller.playing?.quality ?? play.quality;
+    return WatchReport(
+      aid: play.aid,
+      cid: play.cid,
+      duration: play.duration,
+      session: play.session,
+      source: play.source,
+      spmid: _spmid,
+      startTs: totals?.startTs ?? 0,
+      playedTime: totals?.playedTime ?? 0,
+      actualPlayedTime: totals?.actualPlayedTime ?? 0,
+      totalTime: totals?.totalTime ?? 0,
+      pausedTime: totals?.pausedTime ?? 0,
+      lastProgress: totals?.lastProgress ?? 0,
+      maxProgress: totals?.maxProgress ?? 0,
+      quality: play.quality,
+      autoPlay: play.autoPlay,
+    );
+  }
+
+  /// One line per report: its kind and how it went (the error's type and Bilibili's code, never its text), and an
+  /// end report's seconds played. The error goes on to the caller.
+  static Future<void> _reported(Logger logger, String kind, Future<void> Function() send, {int? played}) async {
+    try {
+      await send();
+    } catch (error) {
+      logger.warn(LogCategory.api, 'watch report', {
+        'kind': kind,
+        'error': '${error.runtimeType}',
+        'code': ?switch (error) {
+          BiliAPIError(:final code) => code,
+          BiliHTTPError(:final status) => status,
+          _ => null,
+        },
+        'played': ?played,
+      });
+      rethrow;
+    }
+    logger.info(LogCategory.api, 'watch report', {'kind': kind, 'ok': true, 'played': ?played});
+  }
+}
+
+/// One play being added up for the official reports.
+final class _Play {
+  _Play({
+    required this.mid,
+    required this.aid,
+    required this.cid,
+    required this.duration,
+    required this.session,
+    required this.source,
+    required this.autoPlay,
+    required this.watch,
+  });
+
+  final int mid;
+  final int aid;
+  final int cid;
+  final int duration;
+  final String session;
+  final PlaySource source;
+  final int autoPlay;
+  final WatchSession watch;
+
+  /// The quality last seen playing, 0 before any.
+  int quality = 0;
+
+  /// The seconds played when the outbox last kept it.
+  int keptAt = 0;
 }
