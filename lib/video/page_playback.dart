@@ -80,6 +80,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   final StoryFeedFactory _storyFeed;
   StoryFeed? _story;
 
+  /// The video 竖屏 was entered on and the source it had before; null outside 竖屏.
+  ({String bvid, PlaySource source})? _storyEntered;
+  bool _storyHalted = false;
+
   bool _inline;
 
   /// Whether the next open plays once loaded; a 重试 opens as the open it retries did, or playing once the video has
@@ -152,22 +156,53 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   /// 竖屏's feed while 竖屏 is up; null otherwise.
   StoryFeed? get story => _story;
 
-  /// 竖屏 began: a feed from the video playing now, the same one until [endStory].
-  StoryFeed beginStory() => _story ??= _storyFeed(this);
+  /// 竖屏 began: a feed from the video playing now, the same one until [endStory]. From here on that video's plays
+  /// (its loop, a reload) report as 竖屏's entered video, as the official app's do; the play under way keeps how it
+  /// began.
+  StoryFeed beginStory() {
+    if (_story case final story?) return story;
+    final source = _source;
+    _storyEntered = (bvid: _bvid, source: source);
+    _source = PlaySource.story(entry: source, entered: true, trackId: source.trackId, flowData: source.flowData);
+    return _story = _storyFeed(this);
+  }
 
-  /// 竖屏 ended: the feed goes, and the video swiped to stays on the page.
+  /// 竖屏 ended: the feed goes, and the video swiped to stays on the page, its next plays reporting as the video
+  /// page's (a part from 选集, the page brought back by [restartRoute]): the entered video's source as it was before
+  /// 竖屏, a video swiped to keeping where 竖屏 was entered from and its own track data.
   void endStory() {
     final story = _story;
     _story = null;
     story?.dispose();
+    final entered = _storyEntered;
+    _storyEntered = null;
+    if (entered == null) return;
+    final source = _source;
+    if (entered.bvid == _bvid) {
+      _source = entered.source;
+    } else if (source.spmid == PlaySource.verticalPage) {
+      _source = PlaySource(
+        fromSpmid: source.fromSpmid,
+        from: entered.source.from,
+        trackId: source.trackId,
+        flowData: source.flowData,
+      );
+    }
   }
 
-  /// The video playing now as 竖屏's first entry; null before its details are in.
+  /// Risk control answered 竖屏's feed: no feed of this playback asks anything again, re-entering 竖屏 included.
+  bool get storyHalted => _storyHalted;
+  void haltStory() => _storyHalted = true;
+
+  /// The video playing now as 竖屏's first entry; null before its details are in. The entered video names the source
+  /// it had before 竖屏, where 竖屏 was entered from.
   StoryEntry? get storyEntry {
     final controller = _controller;
     final detail = controller?.detail;
     if (controller == null || detail == null || detail.bvid != _bvid) return null;
-    return StoryEntry.fromDetail(detail, cid: controller.page?.cid ?? _cid, source: _source);
+    final entered = _storyEntered;
+    final source = entered != null && entered.bvid == _bvid ? entered.source : _source;
+    return StoryEntry.fromDetail(detail, cid: controller.page?.cid ?? _cid, source: source);
   }
 
   @override

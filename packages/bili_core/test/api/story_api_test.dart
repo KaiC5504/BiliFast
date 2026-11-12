@@ -279,6 +279,11 @@ void main() {
       (line.f['items'] as LogString?)?.value,
       'vertical_av vertical_live vertical_ad_av vertical_av/ad vertical_av vertical_av vertical_av vertical_av',
     );
+    expect(
+      line.f['undecoded']?.toJson(),
+      3,
+      reason: 'no bvid, no cid, not an object; the live room and the ads were dropped, not undecoded',
+    );
     http.routes[storyPath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
     await expectLater(logged.storyFeed(aid: 1, cid: 2, page: 2, entry: entry), throwsA(isA<BiliAPIError>()));
     for (final event in logs.events) {
