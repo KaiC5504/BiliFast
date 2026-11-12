@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:bili_core/api.dart';
-import 'package:bili_core/src/api/md5.dart';
 import 'package:test/test.dart';
 
 import 'app_signer_test.dart' show makeClient;
