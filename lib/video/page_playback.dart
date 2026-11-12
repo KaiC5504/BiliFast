@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:bili_core/api.dart' show BiliClientVideo, VideoDetail, VideoView;
+import 'package:bili_core/api.dart' show BiliClientVideo, PlaySource, VideoDetail, VideoView;
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/widgets.dart';
 
@@ -49,6 +49,7 @@ PlayerSession pageSession({
 /// attaches and takes it over as it stands. An [offline] one plays 离线缓存 parts from the phone: no 最近打开, its
 /// position kept in the library as well as reported, and Bilibili asked for nothing else but where the part was left.
 /// Without [autoplay] the route's video loads paused (详情页直接播放 off); whatever opens on the page after it plays.
+/// The route's source goes with the watch reports of its video, not of another video opened on the page after it.
 class PagePlayback extends ChangeNotifier implements KeptPlayback {
   PagePlayback({
     required this._services,
@@ -63,6 +64,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
        _view = route.view,
        _detail = route.detail,
        _title = route.title,
+       _source = route.source,
        offline = route.offline;
 
   final AppServices _services;
@@ -85,6 +87,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   VideoView? _view;
   VideoDetail? _detail;
   final String? _title;
+  PlaySource _source;
+
+  /// The open under way followed the video before it on its own.
+  bool _followed = false;
 
   final bool offline;
 
@@ -146,6 +152,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     view: _view,
     detail: _detail,
     offline: offline,
+    source: _source,
   );
 
   /// Gets a controller of its own and opens the video on it; again after a failed start.
@@ -235,6 +242,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
         if (!_inline) services.recents.recordProgress(bvid: bvid, cid: cid, seconds: seconds);
       },
       outbox: services.historyOutbox,
+      source: () => _source,
+      followed: _followed,
     );
   }
 
@@ -282,8 +291,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   }
 
   /// Another part or video, from 选集, 自动连播 or the end screen: opened on the same controller, with or without a
-  /// page.
-  void openOnPage(String bvid, {int? cid}) {
+  /// page. [followed] when nobody asked for it (自动连播, 后台连播), which its watch reports say.
+  void openOnPage(String bvid, {int? cid, bool followed = false}) {
     final controller = _controller;
     if (controller == null || _closed) return;
     // A second tap while the first one's load is still out (⏭ keeps its target until the part arrives) would load
@@ -293,6 +302,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     // Another part of this video needs no second signed view.
     _view = sameVideo ? controller.video : null;
     _detail = sameVideo ? controller.detail : null;
+    if (!sameVideo) _source = PlaySource.unknown;
+    _followed = followed;
     _bvid = bvid;
     _cid = cid;
     _startAt = null;
@@ -327,11 +338,18 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   bool get heldOnCard => _inline && (_controller?.autoplayHeld ?? false);
 
   /// [page] shows this playback and takes its login asks. A card's playback its rule had paused plays on only if
-  /// [resumeHeld].
-  void attach(Object page, {required VoidCallback requestLogin, bool resumeHeld = true}) {
+  /// [resumeHeld]. A [source] the page's route names is the playback's from then on: the page that takes 推荐's card
+  /// over was opened from the card.
+  void attach(
+    Object page, {
+    required VoidCallback requestLogin,
+    bool resumeHeld = true,
+    PlaySource source = PlaySource.unknown,
+  }) {
     _holders.add(page);
     _page = page;
     _requestLogin = requestLogin;
+    if (source.fromSpmid.isNotEmpty) _source = source;
     if (_inline) _takeOver(play: resumeHeld || !heldOnCard);
   }
 
