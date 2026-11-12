@@ -93,6 +93,10 @@ slice.
   `saveShot`. MiSans only for what is MiSans's own. A verdict per screen: PASS when the layout matches (positions, sizes, icons, colours,
   fonts, text; the video frame itself differs), FAIL with every difference listed.
 - Swift review of every Swift change (only when Swift changed).
+- The Mac mini (KaiC's own Apple machine, `ssh mac`; CLAUDE.md "How to test"): `python scripts/mac.py sim` builds the
+  committed HEAD for the iOS simulator with the real SF and PingFang, fake account and muted, launches it and saves a
+  screenshot. Use it on every slice: it compiles the real Swift (the PC only parses it) and catches what Windows and
+  the stand-in fonts can't. It can't be touched, so anything behind a tap waits for the phone.
 - Windows run, as a general agent bound by the ghosthand rules:
   - load the ghosthand skill first; no other screen tool; never `keys` with allow_focus;
   - always `--mute`; at most 3 live video opens; nothing on the clipboard (use `--play=` for links);
@@ -116,14 +120,16 @@ Fix small findings directly.
 
 ## 7. Ship
 
-1. Add the CLAUDE.md status entry, and update the layout section for any new folders.
-2. Run `python scripts/gate.py` on the committed tree.
-3. Push main, then `python scripts/testflight.py start`.
-4. Check the run directly when its state matters (`python scripts/testflight.py status`, or `gh run view <id>`); on a
+1. A dev build on KaiC's phone first, when he's on the Mac's Wi-Fi: `python scripts/mac.py phone` (about 3 minutes,
+   his login kept), then his numbered steps. If his phone can't be reached, stop and tell him.
+2. Add the CLAUDE.md status entry, and update the layout section for any new folders.
+3. Run `python scripts/gate.py` on the committed tree.
+4. Push main, then `python scripts/testflight.py start`.
+5. Check the run directly when its state matters (`python scripts/testflight.py status`, or `gh run view <id>`); on a
    failure, `gh run view <id> --log-failed` at once. No fixed sleep, no polling loop, no `gh run watch`.
-5. Start `uv run tools/logserver.py` in the background unless it's already running (`NonUniqueNameException` means it
+6. Start `uv run tools/logserver.py` in the background unless it's already running (`NonUniqueNameException` means it
    is).
-6. Report: the build number, what changed, how it works, the numbered phone steps from the plan, and what to watch.
+7. Report: the build number, what changed, how it works, the numbered phone steps from the plan, and what to watch.
 
 ## Common mistakes
 
