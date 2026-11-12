@@ -59,6 +59,7 @@ final class PendingPlay {
     required this.finished,
     required this.at,
     this.reported = false,
+    this.strikes = 0,
   });
 
   factory PendingPlay.fromJson(Map<String, Object?> json) => PendingPlay(
@@ -88,6 +89,7 @@ final class PendingPlay {
     finished: json['finished']! as bool,
     at: DateTime.fromMillisecondsSinceEpoch(json['at']! as int),
     reported: json['reported']! as bool,
+    strikes: json['strikes'] as int? ?? 0,
   );
 
   /// The account the play was watched as; only that account's token reports it.
@@ -103,7 +105,14 @@ final class PendingPlay {
   /// The end report is settled; only the history report is left.
   final bool reported;
 
-  PendingPlay get settled => PendingPlay(mid: mid, report: report, finished: finished, at: at, reported: true);
+  /// The flushes in which a call of its own faulted; [HistoryOutbox.maxStrikes] give it up.
+  final int strikes;
+
+  PendingPlay get settled =>
+      PendingPlay(mid: mid, report: report, finished: finished, at: at, reported: true, strikes: strikes);
+
+  PendingPlay get struck =>
+      PendingPlay(mid: mid, report: report, finished: finished, at: at, reported: reported, strikes: strikes + 1);
 
   Map<String, Object?> toJson() => {
     'session': report.session,
@@ -127,12 +136,13 @@ final class PendingPlay {
     'auto_play': report.autoPlay,
     'finished': finished,
     'reported': reported,
+    if (strikes > 0) 'strikes': strikes,
     'at': at.millisecondsSinceEpoch,
   };
 }
 
 /// How a kept play goes out as account [mid]: [end] sends its end report, [history] its place in the account's
-/// history. Each throws what the client threw.
+/// history. Each throws what the client threw, or [AnotherAccountsPlay] with nothing sent.
 @immutable
 final class PlaySender {
   const PlaySender({required this.mid, required this.end, required this.history});
@@ -142,7 +152,13 @@ final class PlaySender {
   final Future<void> Function(PendingPlay play) history;
 }
 
-enum _Flushed { sent, gone, dropped, noAnswer, kept }
+/// Thrown by a [PlaySender]'s call that sent nothing, because the token held as it was about to go is another
+/// account's: the outbox drops the play as it drops any other account's.
+final class AnotherAccountsPlay implements Exception {
+  const AnotherAccountsPlay();
+}
+
+enum _Flushed { sent, gone, dropped, noAnswer, kept, struck }
 
 /// Watch reports that got no answer (offline, timed out), kept until Bilibili takes them, so a part watched with no
 /// network still reaches the account's history (KaiC watches on several devices). One per video, the latest, as
@@ -164,6 +180,14 @@ class HistoryOutbox {
   /// A flush holding a report older than this asks the account's history first: another device may have watched the
   /// video since.
   static const checkAfter = Duration(minutes: 5);
+
+  /// The flushes a play may fault in before it is given up, so one Bilibili never takes doesn't go out at every flush
+  /// for [keptFor].
+  static const maxStrikes = 5;
+
+  /// The plays one pass sends, two calls each: a long queue goes out over the flushes that follow, never as one
+  /// burst against the account.
+  static const playsPerPass = 5;
 
   /// [path] null keeps the reports in memory only. An unreadable file starts empty; entries that don't decode are
   /// dropped one by one, and so are those past [keptFor].
@@ -323,7 +347,9 @@ class HistoryOutbox {
   ///
   /// With [plays] the plays that are over go out after the heartbeats, under the same rules; each sends its end
   /// report, then its place in the history unless the account has watched the video since. Without it (no iPhone
-  /// token now) they wait.
+  /// token now) they wait. A play whose own call faults (an HTTP error status, an answer that doesn't decode) holds
+  /// nothing up: the flush goes on to the next, and [maxStrikes] such flushes give the play up. A pass sends
+  /// [playsPerPass] plays at most; the rest wait for the next flush.
   Future<void> flush(SendHeartbeat heartbeat, {required ReadRecentHistory recent, PlaySender? plays}) {
     final running = _flushing;
     if (running != null) {
@@ -391,7 +417,8 @@ class HistoryOutbox {
             dropped++;
           case _Flushed.noAnswer || _Flushed.kept:
             failed++;
-          case _Flushed.gone:
+          // Only a play is struck.
+          case _Flushed.gone || _Flushed.struck:
             break;
         }
         if (outcome == _Flushed.noAnswer || outcome == _Flushed.kept) {
@@ -419,11 +446,13 @@ class HistoryOutbox {
     return noAnswer;
   }
 
-  /// The plays that are over, oldest first and one at a time; stops at the first that has to wait.
+  /// The [playsPerPass] oldest plays that are over, one at a time. It stops at the first the whole queue waits behind
+  /// and steps past one struck for a fault of its own.
   Future<({int sent, int dropped, int failed, bool noAnswer})> _sendPlays(PlaySender sender, Set<String> moved) async {
     var sent = 0;
     var dropped = 0;
-    for (final play in plays) {
+    var failed = 0;
+    for (final play in plays.take(playsPerPass)) {
       final session = play.report.session;
       final outcome = await _inLane(() => _sendPlay(session, sender, place: !moved.contains(session)));
       switch (outcome) {
@@ -431,17 +460,20 @@ class HistoryOutbox {
           sent++;
         case _Flushed.dropped:
           dropped++;
+        case _Flushed.struck:
+          failed++;
         case _Flushed.gone:
           break;
         case _Flushed.noAnswer || _Flushed.kept:
-          return (sent: sent, dropped: dropped, failed: 1, noAnswer: outcome == _Flushed.noAnswer);
+          return (sent: sent, dropped: dropped, failed: failed + 1, noAnswer: outcome == _Flushed.noAnswer);
       }
     }
-    return (sent: sent, dropped: dropped, failed: 0, noAnswer: false);
+    return (sent: sent, dropped: dropped, failed: failed, noAnswer: false);
   }
 
   /// The end report, then the place unless it is no longer this phone's to set ([place] false). A call Bilibili
   /// refuses outright is given up, and the other still goes: the place matters whatever became of the end report.
+  /// Sent means Bilibili took every call made; a play with a call given up is dropped.
   Future<_Flushed> _sendPlay(String session, PlaySender sender, {required bool place}) async {
     // A logout may have dropped it, or another pass sent it, while this one waited its turn.
     var play = _plays[session];
@@ -450,41 +482,80 @@ class HistoryOutbox {
       _removePlay(play);
       return _Flushed.dropped;
     }
+    var refused = false;
     if (!play.reported) {
       try {
         await sender.end(play);
       } catch (error) {
-        final waits = _waits(error);
-        if (waits != null) return waits;
+        final left = _failed(play, error);
+        if (left != null) return left;
+        refused = true;
       }
       if (!identical(_plays[session], play)) return _Flushed.gone;
       play = _plays[session] = play.settled;
+      // On disk before the place is asked for: killed in between, the next launch would send the end report again
+      // and Bilibili count the play's time twice.
+      _save();
+      await _writing;
+      if (!identical(_plays[session], play)) return _Flushed.gone;
     }
     if (place) {
       try {
         await sender.history(play);
       } catch (error) {
-        final waits = _waits(error);
-        if (waits != null) {
-          // Saved as settled, so a later flush doesn't count the play's time twice.
-          if (identical(_plays[session], play)) _save();
-          return waits;
-        }
-        _removePlay(play);
-        return _Flushed.dropped;
+        final left = _failed(play, error);
+        if (left != null) return left;
+        refused = true;
       }
     }
     _removePlay(play);
-    return _Flushed.sent;
+    return refused ? _Flushed.dropped : _Flushed.sent;
   }
 
-  /// How a failed call leaves its play waiting; null when Bilibili refused it for good. -2 is the official API's
-  /// refused login (an app token it no longer takes), which a new confirm mends.
-  static _Flushed? _waits(Object error) {
-    if (isNetworkFailure(error)) return _Flushed.noAnswer;
-    if (error case BiliAPIError(code: -2)) return _Flushed.kept;
-    return _refusedForGood(error) ? null : _Flushed.kept;
+  /// What a failed call makes of [play]; null when Bilibili refused the call for good and the play goes on without
+  /// it. A fault of the play's own strikes it, and the last strike drops it.
+  _Flushed? _failed(PendingPlay play, Object error) {
+    if (error is AnotherAccountsPlay) {
+      _removePlay(play);
+      return _Flushed.dropped;
+    }
+    final waits = _waits(error);
+    if (waits != _Flushed.struck) return waits;
+    final session = play.report.session;
+    if (!identical(_plays[session], play)) return _Flushed.gone;
+    final struck = play.struck;
+    if (struck.strikes < maxStrikes) {
+      _plays[session] = struck;
+      _save();
+      return _Flushed.struck;
+    }
+    _plays.remove(session);
+    _save();
+    _logger.warn(LogCategory.api, 'watch report', {
+      'kind': 'given up',
+      'strikes': struck.strikes,
+      'error': '${error.runtimeType}',
+      'code': ?switch (error) {
+        BiliAPIError(:final code) => code,
+        BiliHTTPError(:final status) => status,
+        _ => null,
+      },
+    });
+    return _Flushed.dropped;
   }
+
+  /// How a failed call leaves its play; null when Bilibili refused it for good. The whole queue waits behind no
+  /// answer, and behind an answer about the login or the install, which costs the play nothing: a refused login (-2
+  /// is the official API's, an app token it no longer takes, which a new confirm mends), a missing token, risk
+  /// control (HTTP 412 too) and the Windows guard. A server-side code that may pass, and whatever else is no answer
+  /// from Bilibili's API (an HTTP error status, an answer that doesn't decode), is that play's own fault.
+  static _Flushed? _waits(Object error) => switch (error) {
+    BiliNetworkError() => _Flushed.noAnswer,
+    BiliNoAppTokenError() || BiliAPIError(code: -2) || BiliHTTPError(status: 412) => _Flushed.kept,
+    BiliAPIError(code: -500 || -503 || -509 || -799) => _Flushed.struck,
+    BiliAPIError() => _refusedForGood(error) ? null : _Flushed.kept,
+    _ => _Flushed.struck,
+  };
 
   void _removePlay(PendingPlay play) {
     final session = play.report.session;

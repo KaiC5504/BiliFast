@@ -274,6 +274,30 @@ void main() {
       await env.logout();
       expect(outbox.plays, isEmpty);
     });
+
+    test('are struck by an HTTP error status or an answer that is not JSON, and go out at a later flush', () async {
+      over();
+      final env = await environment();
+      await env.refreshAccount();
+      env.client.appToken = token(OfficialIdentity.iphone);
+      http.routes[mobilePath] = (500, '');
+      final made = flusher(env);
+      await pumpEventQueue();
+      expect(official(), [mobilePath]);
+      expect(outbox.plays.single.strikes, 1);
+
+      http.routes[mobilePath] = (200, '<html>');
+      made.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(official(), [mobilePath, mobilePath]);
+      expect(outbox.plays.single.strikes, 2);
+
+      http.routes[mobilePath] = (200, ok);
+      network.controller.add(true);
+      await pumpEventQueue();
+      expect(official(), [mobilePath, mobilePath, mobilePath, historyPath]);
+      expect(outbox.plays, isEmpty);
+    });
   });
 
   test('the app\'s services flush the outbox they are given and stop listening when disposed', () async {

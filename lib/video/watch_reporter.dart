@@ -21,7 +21,8 @@ import 'history_outbox.dart';
 /// (docs/reference/official-iphone-calls.md) and no web heartbeat: a start report as playback starts, and as the play
 /// ends (the video finishing, the playback closing, a newer open) an end report with what was watched, then the
 /// history report. The outbox keeps the running play's end report as it would be, every 15 s of play and on pause,
-/// so a play the app is killed in still reaches Bilibili. [onProgress] hears the same positions either way.
+/// so a play the app is killed in still reaches Bilibili. While the client holds no iPhone token any more, the web
+/// heartbeat goes out for that open after all. [onProgress] hears the same positions either way.
 class WatchReporter {
   WatchReporter({
     required PlaybackController controller,
@@ -39,6 +40,7 @@ class WatchReporter {
        _logger = logger ?? Logger.shared {
     // After the controller's own subscription, so its phase already reflects each event.
     _events = controller.player.events.listen(_onEvent);
+    if (_official) controller.addListener(_controllerChanged);
   }
 
   /// Logged in, or still unknown with a session in the jar: a launch account check that failed (no network) must not
@@ -58,19 +60,30 @@ class WatchReporter {
     final log = logger ?? Logger.shared;
     return PlaySender(
       mid: token.mid,
-      end: (play) => _reported(log, 'end', () => client.mobileHeartbeat(play.report), played: play.report.playedTime),
-      history: (play) => _reported(
-        log,
-        'history',
-        () => client.historyReport(
+      end: (play) => _reported(log, 'end', () {
+        _checkToken(client, play.mid);
+        return client.mobileHeartbeat(play.report);
+      }, played: play.report.playedTime),
+      history: (play) => _reported(log, 'history', () {
+        _checkToken(client, play.mid);
+        return client.historyReport(
           aid: play.report.aid,
           cid: play.report.cid,
           progress: play.finished ? HeartbeatSchedule.finished : play.report.lastProgress,
           duration: play.report.duration,
           startTs: play.report.startTs,
-        ),
-      ),
+        );
+      }),
     );
+  }
+
+  /// Throws, before anything is sent, unless the token held now is the iPhone one of account [mid]. The client signs
+  /// a report with the token it holds as the call is made, so a report queued under one account's token would
+  /// otherwise leave as the account whose token has replaced it since.
+  static void _checkToken(BiliClient client, int mid) {
+    final held = client.appToken;
+    if (held == null || held.identity != OfficialIdentity.iphone) throw BiliError.noAppToken;
+    if (held.mid != mid) throw const AnotherAccountsPlay();
   }
 
   /// The video page, where every play is reported from.
@@ -94,8 +107,10 @@ class WatchReporter {
   final bool _followed;
   final DateTime Function() _now;
 
-  /// The official iPhone reports, decided as the open is made.
+  /// The open was made under an iPhone token. Only such an open sends the official reports, and only while the
+  /// client still holds one: see [_officialNow].
   final bool _official;
+  bool _fellBack = false;
 
   /// Every position reported, logged in or not, in seconds; a finished video reports its whole length.
   final void Function(String bvid, int cid, int seconds)? onProgress;
@@ -141,7 +156,10 @@ class WatchReporter {
       case StatusChanged(:final status):
         _status = status;
         // Statuses while a load starts or reloads are the player's, not the viewer's.
-        if (_controller.phase != PlaybackPhase.playing) return;
+        if (_controller.phase != PlaybackPhase.playing) {
+          if (_official && status == PlayerStatus.paused) _playPaused();
+          return;
+        }
         switch (status) {
           case PlayerStatus.playing when !_started:
             _started = true;
@@ -187,6 +205,7 @@ class WatchReporter {
       _endPlay(finished: false);
     }
     unawaited(_events.cancel());
+    if (_official) _controller.removeListener(_controllerChanged);
     return _sending;
   }
 
@@ -202,7 +221,7 @@ class WatchReporter {
   void _send(({String bvid, int cid}) item, int played) {
     final duration = _controller.page?.duration ?? 0;
     onProgress?.call(item.bvid, item.cid, played == HeartbeatSchedule.finished ? duration : played);
-    if (_official || !_loggedIn()) return;
+    if (!_loggedIn() || _officialNow()) return;
     Future<void> beat() => _client.heartbeat(bvid: item.bvid, cid: item.cid, playedTime: played);
     // Handed to the outbox at once, whose lane keeps the order: a page opening this part next must know a report of
     // it is on its way.
@@ -225,6 +244,19 @@ class WatchReporter {
     });
   }
 
+  /// Whether the official reports stand in for this web heartbeat. An official open whose iPhone token is gone
+  /// (Bilibili rejected it and the new confirm was cancelled) starts no play, so the web heartbeat goes out for it,
+  /// or the open would reach the account's history by neither path.
+  bool _officialNow() {
+    if (!_official) return false;
+    if (_client.appToken?.identity == OfficialIdentity.iphone) return true;
+    if (!_fellBack) {
+      _fellBack = true;
+      _logger.info(LogCategory.api, 'watch report', {'kind': 'fallback'});
+    }
+    return false;
+  }
+
   void _playStatus(PlayerStatus status) {
     final play = _play;
     if (play == null) {
@@ -235,10 +267,7 @@ class WatchReporter {
       case PlayerStatus.playing:
         play.watch.resumed();
       case PlayerStatus.paused:
-        play.watch
-          ..tick(position: _position, playing: false)
-          ..paused();
-        _keepPlay(play);
+        _playPaused();
       case PlayerStatus.ended:
         play.watch
           ..tick(position: _position, playing: false)
@@ -251,9 +280,28 @@ class WatchReporter {
     }
   }
 
+  /// Paused, also while the controller is not playing: a pause made during a reload is still time paused.
+  void _playPaused() {
+    final play = _play;
+    if (play == null) return;
+    play.watch
+      ..tick(position: _position, playing: false)
+      ..paused();
+    _keepPlay(play);
+  }
+
+  /// The controller stopped playing (a reload, a quality switch, an error screen) or moved on to a newer open, none
+  /// of which the player's statuses tell this reporter: the play waits from here, as it does buffering, or the
+  /// session would go on counting the clock as played. It goes on with the player's next status or position under
+  /// a playing controller.
+  void _controllerChanged() {
+    if (_isCurrent && _controller.phase == PlaybackPhase.playing) return;
+    _play?.watch.tick(position: _position, playing: false);
+  }
+
   void _playTick() {
     final play = _play;
-    final playing = _status == PlayerStatus.playing;
+    final playing = _status == PlayerStatus.playing && _controller.phase == PlaybackPhase.playing;
     if (play == null) {
       // Already playing when reporting became allowed: the page took 推荐's card over, or the login came since.
       if (playing) _beginPlay();
@@ -282,7 +330,12 @@ class WatchReporter {
     _played = true;
     final report = _reportOf(play, null);
     _sending = _sending
-        .then((_) => _reported(_logger, 'start', () => _client.mobileHeartbeat(report)))
+        .then(
+          (_) => _reported(_logger, 'start', () {
+            _checkToken(_client, play.mid);
+            return _client.mobileHeartbeat(report);
+          }),
+        )
         // Logged already, and a start report is not sent again.
         .then<void>((_) {}, onError: (Object _) {});
   }

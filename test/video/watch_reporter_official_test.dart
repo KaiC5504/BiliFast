@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
+import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
@@ -43,6 +45,7 @@ AppToken tokenOf(OfficialIdentity identity, {int mid = 7}) => AppToken(
 void main() {
   late CannedHttp http;
   late FakePlayer player;
+  late FakeEngine engine;
   late ManualClock time;
   late BiliClient client;
   late PlaybackController controller;
@@ -63,6 +66,7 @@ void main() {
       ..routes[webPath] = (200, ok)
       ..routes[recentPath] = (200, '{"code":0,"message":"0","data":{"list":[]}}');
     player = FakePlayer();
+    engine = FakeEngine();
     time = ManualClock(10000);
     final now = DateTime.fromMillisecondsSinceEpoch((Canned.deadline - 1000) * 1000);
     logs = MemorySink();
@@ -71,7 +75,7 @@ void main() {
       ..appToken = tokenOf(OfficialIdentity.iphone);
     controller = PlaybackController(
       client: client,
-      engine: FakeEngine(),
+      engine: engine,
       player: player,
       clock: time.clock,
       now: () => now,
@@ -268,6 +272,65 @@ void main() {
     expect(beats(), hasLength(2));
   });
 
+  group('while the controller is not playing, the clock is neither played nor paused', () {
+    test('a playback that fails mid-play: the time on the error screen', () async {
+      final reporter = make();
+      emit(PlayerStatus.playing);
+      playTo(10);
+      engine.ensureError = const PlaybackError(PlaybackErrorKind.serverDown);
+      await controller.appResumed();
+      expect(controller.phase, PlaybackPhase.failed);
+      wall = wall.add(const Duration(seconds: 60));
+      await reporter.leave();
+      expect(times(beats().last), ['10', '10', '70', '0', '10', '10']);
+    });
+
+    test('a quality switch that takes 20 s mid-play: the wait, and it plays on after', () async {
+      final reporter = make();
+      emit(PlayerStatus.playing);
+      playTo(10);
+      final gate = engine.prepareGate = Completer<void>();
+      final switching = controller.setQuality(80);
+      await pumpEventQueue();
+      expect(controller.phase, PlaybackPhase.loading);
+      wall = wall.add(const Duration(seconds: 20));
+      gate.complete();
+      await switching;
+      await pumpEventQueue();
+      emit(PlayerStatus.playing);
+      playTo(12);
+      await reporter.leave();
+      expect(times(beats().last), ['12', '12', '32', '0', '12', '12']);
+    });
+
+    test('paused while a quality switch loads, then left for 10 minutes: the pause is paused time', () async {
+      final reporter = make();
+      emit(PlayerStatus.playing);
+      playTo(10);
+      final gate = engine.prepareGate = Completer<void>();
+      final switching = controller.setQuality(80);
+      await pumpEventQueue();
+      emit(PlayerStatus.paused);
+      gate.complete();
+      await switching;
+      await pumpEventQueue();
+      wall = wall.add(const Duration(minutes: 10));
+      await reporter.leave();
+      expect(times(beats().last), ['10', '10', '610', '600', '10', '10']);
+    });
+
+    test('a newer open: what it plays is not this play\'s time', () async {
+      final reporter = make();
+      emit(PlayerStatus.playing);
+      playTo(10);
+      await controller.openVideo(bv, cid: 137649200, start: 0);
+      emit(PlayerStatus.playing);
+      playTo(50);
+      await reporter.leave();
+      expect(times(beats().last), ['10', '10', '50', '0', '10', '10']);
+    });
+  });
+
   group('who reports', () {
     /// The web heartbeats' own script, as watch_reporter_test.dart plays it.
     Future<void> script(WatchReporter reporter) async {
@@ -347,6 +410,108 @@ void main() {
       await reporter.leave();
       expect(web(), ['0', '16', '16']);
       expect(official(), isEmpty);
+    });
+
+    List<LogEvent> fallbacks() => [
+      for (final event in logs.events)
+        if (event.msg == 'watch report' && event.f['kind']?.toJson() == 'fallback') event,
+    ];
+
+    test('the iPhone token dropped after the open was made: the web heartbeats report it, said once', () async {
+      final reporter = make();
+      client.appToken = null;
+      emit(PlayerStatus.playing);
+      playTo(16);
+      playTo(31);
+      await reporter.leave();
+      expect(web(), ['0', '16', '31', '31']);
+      expect(official(), isEmpty, reason: 'no play starts without the token');
+      expect(fallbacks(), hasLength(1));
+      expect(fallbacks().single.level, LogLevel.info);
+      expect(fallbacks().single.f.keys, ['kind'], reason: 'no ids');
+    });
+
+    test('the token dropped mid-play: the web heartbeats take over, and the play waits for a token', () async {
+      final outbox = HistoryOutbox.memory(logger: logger, now: () => wall);
+      final reporter = make(outbox: outbox);
+      emit(PlayerStatus.playing);
+      playTo(10);
+      await pumpEventQueue();
+      expect(web(), isEmpty, reason: 'official while the token is held');
+      client.appToken = null;
+      playTo(16);
+      await reporter.leave();
+      expect(web(), ['16', '16']);
+      expect(official(), [mobilePath], reason: 'only the start report went');
+      expect(outbox.plays.single.report.playedTime, 16);
+      expect(fallbacks(), hasLength(1));
+    });
+
+    test('an open made under an Android token never falls back, nor turns official', () async {
+      client.appToken = tokenOf(OfficialIdentity.android);
+      final reporter = make();
+      emit(PlayerStatus.playing);
+      client.appToken = null;
+      playTo(16);
+      client.appToken = tokenOf(OfficialIdentity.iphone);
+      playTo(31);
+      await reporter.leave();
+      expect(web(), ['0', '16', '31', '31']);
+      expect(official(), isEmpty);
+      expect(fallbacks(), isEmpty);
+    });
+  });
+
+  group('another account\'s token', () {
+    test('replacing the play\'s while its start report is queued: nothing is sent', () async {
+      final reporter = make();
+      emit(PlayerStatus.playing);
+      client.appToken = tokenOf(OfficialIdentity.iphone, mid: 8);
+      await pumpEventQueue();
+      expect(official(), isEmpty);
+      expect(reportLines(), [
+        {'kind': 'start', 'error': 'AnotherAccountsPlay'},
+      ]);
+
+      playTo(8);
+      await reporter.leave();
+      expect(official(), isEmpty, reason: 'the play was account 7\'s; account 8\'s token reports none of it');
+    });
+
+    test('replacing it while the end report is queued: nothing is sent, and the play is dropped', () async {
+      final outbox = HistoryOutbox.memory(logger: logger, now: () => wall);
+      final reporter = make(outbox: outbox);
+      emit(PlayerStatus.playing);
+      playTo(8);
+      http.errors[mobilePath] = const SocketException('offline');
+      await reporter.leave();
+      http.errors.remove(mobilePath);
+      http.requests.clear();
+      expect(outbox.plays, hasLength(1));
+
+      final sender = WatchReporter.playSender(client, logger: logger);
+      client.appToken = tokenOf(OfficialIdentity.iphone, mid: 8);
+      await outbox.flush(client.heartbeat, recent: client.history, plays: sender);
+      expect(official(), isEmpty);
+      expect(outbox.plays, isEmpty);
+      expect(reportLines().last, {'kind': 'end', 'error': 'AnotherAccountsPlay', 'played': 8});
+    });
+
+    test('replacing it between the end report and the history report: the place is not sent', () async {
+      final outbox = HistoryOutbox.memory(logger: logger, now: () => wall);
+      final reporter = make(outbox: outbox);
+      emit(PlayerStatus.playing);
+      playTo(8);
+      await pumpEventQueue();
+      final gate = http.gates[mobilePath] = Completer<void>();
+      final left = reporter.leave();
+      await pumpEventQueue();
+      client.appToken = tokenOf(OfficialIdentity.iphone, mid: 8);
+      gate.complete();
+      await left;
+      expect(official(), [mobilePath, mobilePath]);
+      expect(beats().map((beat) => beat['mid']), ['7', '7']);
+      expect(outbox.plays, isEmpty);
     });
   });
 

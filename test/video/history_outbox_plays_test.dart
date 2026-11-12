@@ -158,7 +158,7 @@ void main() {
     await flush();
     expect(calls, ['end a', 'history a', 'end b', 'history b']);
     expect(waiting(), isEmpty);
-    expect(outboxLines().last, {'sent': 1, 'dropped': 1, 'stale': 0, 'failed': 0, 'held': 0});
+    expect(outboxLines().last, {'sent': 0, 'dropped': 2, 'stale': 0, 'failed': 0, 'held': 0});
   });
 
   test('a refused login, a missing token or risk control keeps the play and stops the flush', () async {
@@ -170,7 +170,6 @@ void main() {
       const BiliAPIError(code: -352, message: '风控校验失败'),
       const BiliHTTPError(412),
       BiliError.noAppToken,
-      StateError('watch reports are only known for the iPhone identity'),
     ]) {
       calls.clear();
       failures['end a'] = refusal;
@@ -178,6 +177,129 @@ void main() {
       expect(calls, ['end a'], reason: '$refusal');
       expect(waiting(), ['a', 'b'], reason: '$refusal');
     }
+  });
+
+  List<LogEvent> reportEvents() => [
+    for (final event in logs.events)
+      if (event.msg == 'watch report') event,
+  ];
+
+  test('a play whose own call faults is stepped past, and given up at the fifth flush it faults in', () async {
+    over(play('a'));
+    over(play('b'));
+    failures['end a'] = const BiliHTTPError(500);
+    await flush();
+    expect(calls, ['end a', 'end b', 'history b'], reason: 'the newer play does not wait behind it');
+    expect(waiting(), ['a']);
+    expect(outbox.plays.single.strikes, 1);
+    expect(outboxLines().last, {'sent': 1, 'dropped': 0, 'stale': 0, 'failed': 1, 'held': 1});
+
+    for (var strikes = 2; strikes < HistoryOutbox.maxStrikes; strikes++) {
+      await flush();
+      expect(outbox.plays.single.strikes, strikes);
+    }
+    expect(reportEvents(), isEmpty);
+
+    await flush();
+    expect(calls.where((call) => call == 'end a'), hasLength(5));
+    expect(calls, isNot(contains('history a')));
+    expect(waiting(), isEmpty);
+    expect(outbox.holds('BV1a', 11), isFalse);
+    final line = reportEvents().single;
+    expect(line.level, LogLevel.warn);
+    expect(
+      {for (final MapEntry(:key, :value) in line.f.entries) key: value.toJson()},
+      {'kind': 'given up', 'strikes': 5, 'error': 'BiliHTTPError', 'code': 500},
+    );
+    expect(outboxLines().last, {'sent': 0, 'dropped': 1, 'stale': 0, 'failed': 0, 'held': 0});
+
+    await flush();
+    expect(calls.where((call) => call == 'end a'), hasLength(5), reason: 'given up, it is not sent again');
+  });
+
+  test('what strikes a play: an HTTP error status, an answer that does not decode, a StateError, a passing code',
+      () async {
+    for (final fault in <Object>[
+      const BiliHTTPError(502),
+      const BiliDecodingError('not JSON'),
+      StateError('watch reports are only known for the iPhone identity'),
+      for (final code in [-500, -503, -509, -799]) BiliAPIError(code: code, message: '服务调用失败'),
+    ]) {
+      outbox = HistoryOutbox.memory(logger: logger, now: () => now);
+      calls.clear();
+      failures.clear();
+      over(play('a'));
+      over(play('b'));
+      failures['history a'] = fault;
+      await flush();
+      expect(calls, ['end a', 'history a', 'end b', 'history b'], reason: '$fault');
+      expect(outbox.plays.single.strikes, 1, reason: '$fault');
+      expect(outbox.plays.single.reported, isTrue, reason: 'its end report is not sent again');
+
+      failures.clear();
+      await flush();
+      expect(calls.skip(4), ['history a'], reason: '$fault');
+      expect(waiting(), isEmpty, reason: '$fault');
+    }
+  });
+
+  test('what holds the whole queue costs a play no strike, however often', () async {
+    over(play('a'));
+    over(play('b'));
+    failures['end a'] = const BiliAPIError(code: -101, message: '账号未登录');
+    for (var i = 0; i <= HistoryOutbox.maxStrikes; i++) {
+      await flush();
+    }
+    expect(calls, List.filled(HistoryOutbox.maxStrikes + 1, 'end a'), reason: 'the pass stops there every time');
+    expect(waiting(), ['a', 'b']);
+    expect(outbox.plays.map((play) => play.strikes), [0, 0]);
+    expect(reportEvents(), isEmpty);
+  });
+
+  test('the summary counts as sent only a play Bilibili took, a refused one as dropped, a struck one as failed',
+      () async {
+    over(play('a'));
+    over(play('b'));
+    over(play('c'));
+    failures['end a'] = const BiliAPIError(code: -400, message: '请求错误');
+    failures['end c'] = const BiliHTTPError(500);
+    await flush();
+    expect(calls, ['end a', 'history a', 'end b', 'history b', 'end c']);
+    expect(waiting(), ['c']);
+    expect(outboxLines().last, {'sent': 1, 'dropped': 1, 'stale': 0, 'failed': 1, 'held': 1});
+  });
+
+  test('a pass sends 5 plays at most, oldest first; the rest wait for the next flush', () async {
+    final sessions = [for (var i = 0; i < 12; i++) 'p${i.toString().padLeft(2, '0')}'];
+    for (final session in sessions) {
+      over(play(session));
+    }
+    await flush();
+    expect(calls, [for (final session in sessions.take(5)) ...['end $session', 'history $session']]);
+    expect(waiting(), sessions.skip(5));
+    expect(outboxLines().last, {'sent': 5, 'dropped': 0, 'stale': 0, 'failed': 0, 'held': 7});
+
+    calls.clear();
+    await flush();
+    expect(calls, [for (final session in sessions.skip(5).take(5)) ...['end $session', 'history $session']]);
+    expect(outboxLines().last, {'sent': 5, 'dropped': 0, 'stale': 0, 'failed': 0, 'held': 2});
+
+    calls.clear();
+    await flush();
+    expect(calls, ['end p10', 'history p10', 'end p11', 'history p11']);
+    expect(waiting(), isEmpty);
+    expect(outboxLines().last, {'sent': 2, 'dropped': 0, 'stale': 0, 'failed': 0, 'held': 0});
+  });
+
+  test('a call that finds another account\'s token held sends nothing, and its play is dropped', () async {
+    over(play('a'));
+    over(play('b'));
+    failures['end a'] = const AnotherAccountsPlay();
+    failures['history b'] = const AnotherAccountsPlay();
+    await flush();
+    expect(calls, ['end a', 'end b', 'history b']);
+    expect(waiting(), isEmpty);
+    expect(outboxLines().last, {'sent': 0, 'dropped': 2, 'stale': 0, 'failed': 0, 'held': 0});
   });
 
   test('a play watched as another account is dropped unsent', () async {
@@ -372,6 +494,45 @@ void main() {
       expect(calls, ['history a']);
       await outbox.settle();
       expect(jsonDecode(File(path).readAsStringSync()), isEmpty);
+    });
+
+    test('the end report taken, the play is on disk as settled before its place is asked for', () async {
+      outbox = await load();
+      over(play('a'));
+      await outbox.settle();
+      expect((jsonDecode(File(path).readAsStringSync()) as List).single, containsPair('reported', false));
+
+      // A kill during the history call leaves the file as that call finds it.
+      Object? found;
+      final reading = PlaySender(
+        mid: 7,
+        end: (_) async {},
+        history: (_) async {
+          found = jsonDecode(File(path).readAsStringSync());
+        },
+      );
+      await flush(plays: reading);
+      expect((found! as List).single, containsPair('reported', true));
+    });
+
+    test('a play\'s strikes are kept in the file, and a play saved without any reads as none', () async {
+      outbox = await load();
+      over(play('a'));
+      over(play('b'));
+      failures['end a'] = const BiliHTTPError(500);
+      failures['end b'] = offline;
+      await flush();
+      await flush();
+      await outbox.settle();
+      final entries = (jsonDecode(File(path).readAsStringSync()) as List).cast<Map<String, Object?>>();
+      expect({for (final entry in entries) entry['session']: entry['strikes']}, {'a': 2, 'b': null});
+
+      outbox = await load();
+      expect({for (final each in outbox.plays) each.report.session: each.strikes}, {'a': 2, 'b': 0});
+      failures.clear();
+      calls.clear();
+      await flush();
+      expect(calls, ['end a', 'history a', 'end b', 'history b']);
     });
   });
 }
