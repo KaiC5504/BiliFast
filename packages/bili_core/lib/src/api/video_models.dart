@@ -541,6 +541,11 @@ final class VideoCard {
     if (bvid == null || bvid.isEmpty) throw const DecodeError('missing bvid');
     final owner = object.nested('owner');
     final stat = object.nested('stat');
+    final dimension = object.nested('dimension');
+    final rawWidth = asInt(dimension?.map['width']) ?? 0;
+    final rawHeight = asInt(dimension?.map['height']) ?? 0;
+    final rotated = asInt(dimension?.map['rotate']) == 1;
+    final firstFrame = object.text('first_frame');
     return VideoCard(
       aid: object.integer('aid') ?? 0,
       bvid: bvid,
@@ -553,6 +558,14 @@ final class VideoCard {
       views: stat?.count('view') ?? 0,
       danmaku: stat?.count('danmaku') ?? 0,
       likes: stat?.count('like') ?? 0,
+      width: rotated ? rawHeight : rawWidth,
+      height: rotated ? rawWidth : rawHeight,
+      firstFrame: firstFrame == null || firstFrame.isEmpty ? null : firstFrame,
+      ownerFace: owner?.text('face') ?? '',
+      replies: stat?.count('reply') ?? 0,
+      coins: stat?.count('coin') ?? 0,
+      favourites: stat?.count('favorite', 'fav') ?? 0,
+      shares: stat?.count('share') ?? 0,
     );
   }
 

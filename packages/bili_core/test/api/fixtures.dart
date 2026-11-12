@@ -36,7 +36,7 @@ abstract final class Fixtures {
 
   static const related = r'''
 {"code":0,"message":"0","ttl":1,"data":[
-{"aid":90000001,"videos":1,"pic":"https://i0.hdslb.com/bfs/archive/rel-0001.jpg","title":"相关视频一","duration":605,"owner":{"mid":77,"name":"另一个UP","face":"https://i0.hdslb.com/bfs/face/face-0002.jpg"},"stat":{"aid":90000001,"view":50000,"danmaku":120,"reply":9,"favorite":8,"coin":7,"share":6,"like":1500},"cid":137650001,"bvid":"BV1EF411e9oF"},
+{"aid":90000001,"videos":1,"pic":"https://i0.hdslb.com/bfs/archive/rel-0001.jpg","title":"相关视频一","duration":605,"owner":{"mid":77,"name":"另一个UP","face":"https://i0.hdslb.com/bfs/face/face-0002.jpg"},"stat":{"aid":90000001,"view":50000,"danmaku":120,"reply":9,"favorite":8,"coin":7,"share":6,"like":1500},"cid":137650001,"bvid":"BV1EF411e9oF","dimension":{"width":1920,"height":1080,"rotate":0},"first_frame":"https://i0.hdslb.com/bfs/storyff/rel-0001.jpg"},
 {"aid":90000002,"pic":"https://i0.hdslb.com/bfs/archive/rel-0002.jpg","title":"立即下载","duration":0,"owner":{"mid":0,"name":""},"stat":{"view":1,"danmaku":0,"like":0},"cid":0,"bvid":"BV1GH411f0pG","redirect_url":"https://www.bilibili.com/bangumi/play/ep900001"}]}''';
 
   static const online = r'''

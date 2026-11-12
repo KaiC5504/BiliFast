@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:test/test.dart';
@@ -224,9 +226,31 @@ void main() {
           ownerName: '另一个UP',
           views: 50000,
           danmaku: 120,
-          likes: 1500),
+          likes: 1500,
+          width: 1920,
+          height: 1080,
+          firstFrame: 'https://i0.hdslb.com/bfs/storyff/rel-0001.jpg',
+          ownerFace: 'https://i0.hdslb.com/bfs/face/face-0002.jpg',
+          replies: 9,
+          coins: 7,
+          favourites: 8,
+          shares: 6),
     ]);
     expect(fakeHTTP.query(fakeHTTP.requestsTo(relatedPath)[0])['bvid'], 'BV1GJ411x7h7');
+  });
+
+  test("a related card's shape has rotate applied; without dimension, first frame or counts it reads 0 and null", () {
+    VideoCard card(String fields) => VideoCard.fromJson(jsonDecode('{"bvid":"BV1EF411e9oF"$fields}'));
+    final rotated = card(',"dimension":{"width":1920,"height":1080,"rotate":1},"first_frame":""');
+    expect((rotated.width, rotated.height), (1080, 1920));
+    expect(rotated.firstFrame, isNull, reason: 'empty');
+    final bare = card(',"owner":{"mid":1},"stat":{"fav":3,"reply":"--"}');
+    expect((bare.width, bare.height), (0, 0));
+    expect(bare.firstFrame, isNull);
+    expect(bare.ownerFace, '');
+    expect(bare.favourites, 3, reason: "`fav` is favorite's other spelling");
+    expect([bare.replies, bare.coins, bare.shares], [0, 0, 0]);
+    expect(card(',"dimension":{"width":"x","height":null}').width, 0, reason: 'a bad dimension costs the shape only');
   });
 
   test('related drops items without a bvid', () async {

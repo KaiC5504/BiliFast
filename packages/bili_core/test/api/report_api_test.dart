@@ -2,7 +2,7 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:test/test.dart';
 
-import 'app_signer_test.dart' show makeClient, ts;
+import 'app_signer_test.dart' show makeClient, signedBy, ts;
 import 'fake_http.dart';
 
 const heartbeatPath = '/x/report/heartbeat/mobile';
@@ -186,6 +186,19 @@ void main() {
       });
       expect(form.containsKey('source'), isFalse);
       expect(form['sign'], hasLength(32));
+    });
+
+    test("names the play's source when it has one, as 竖屏's plays do; null leaves it out", () async {
+      for (final source in ['story-single', 'story-series', null]) {
+        await client.historyReport(aid: 1, cid: 2, progress: 3, duration: 10, startTs: 5, source: source);
+      }
+      final [single, series, none] = [for (var i = 0; i < 3; i++) sent(historyPath, i)];
+      expect(single['source'], 'story-single');
+      expect(series['source'], 'story-series');
+      expect(none.containsKey('source'), isFalse);
+      for (final form in [single, series]) {
+        expect(form['sign'], signedBy(AppSigner.iphone, form), reason: 'the source is signed with the rest');
+      }
     });
 
     test('a video watched to its end is -1', () async {
