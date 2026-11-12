@@ -9,6 +9,10 @@ final class AppSigner {
   /// KaiC allowed it in the repo.
   static const android = AppSigner(appKey: 'dfca71928277209b', appSecret: 'b5475a8825547a4fc26c7d518eaaa02e');
 
+  /// The iPhone app's public pair, the same in every copy of the official app: its own requests' signatures
+  /// reproduce with it (docs/reference/official-iphone-calls.md).
+  static const iphone = AppSigner(appKey: '27eb53fc9058f8c3', appSecret: 'c2ed53a74eeefe3cf99fbd01d8c9c375');
+
   final String _appKey;
   final String _appSecret;
 

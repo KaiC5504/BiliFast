@@ -23,6 +23,8 @@ import 'link_parser.dart';
 import 'login_models.dart';
 import 'me_models.dart';
 import 'models.dart';
+import 'official_identity.dart';
+import 'play_source.dart';
 import 'relation_models.dart';
 import 'search_models.dart';
 import 'skin_models.dart';
@@ -44,6 +46,7 @@ part 'bili_client_feed_official.dart';
 part 'bili_client_official.dart';
 part 'bili_client_actions_official.dart';
 part 'bili_client_relation.dart';
+part 'bili_client_report.dart';
 part 'bili_client_search.dart';
 part 'bili_client_skin.dart';
 part 'bili_client_space.dart';
@@ -88,6 +91,19 @@ final class BiliClient {
 
   /// The device id the official calls name (`buvid`), made once by the app and kept, so the feed learns one device.
   String? appBuvid;
+
+  /// The identity a new app login is made under, and the one calls go out as while no token is held: the iPhone
+  /// app's on iOS, the Android app's elsewhere.
+  OfficialIdentity loginIdentity = OfficialIdentity.android;
+
+  /// The identity official calls go out as now: a held token's own, since it only works with its own pair.
+  OfficialIdentity get officialIdentity => appToken?.identity ?? loginIdentity;
+
+  /// The iPhone identity's `session_id` header, one per launch.
+  late final String appSessionId = [for (var i = 0; i < 8; i++) _random.nextInt(16).toRadixString(16)].join();
+
+  /// iOS's identifierForVendor, sent with the iPhone identity's watch reports; null elsewhere.
+  String? appIdfv;
 
   /// The cookie every write call must echo back as the `csrf` form field.
   String? get csrf {

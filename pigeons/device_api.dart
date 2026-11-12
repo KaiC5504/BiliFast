@@ -66,6 +66,10 @@ abstract class DeviceHostApi {
   /// The network the phone is on now (NetworkMonitor.swift's path), for 自动播放设置's Wi-Fi rules.
   NativeNetwork network();
 
+  /// UIDevice's identifierForVendor, which the official app's watch reports carry; null while iOS has none yet
+  /// (before the first unlock after a restart).
+  String? idfv();
+
   /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
   /// granted. Asked only after the user said 好 in the app's own alert.
   @async

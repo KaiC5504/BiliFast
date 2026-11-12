@@ -21,6 +21,9 @@ final class FeedCard {
     this.big,
     this.ownerFace = '',
     this.published = 0,
+    this.idx,
+    this.trackId,
+    this.flowData,
   });
 
   factory FeedCard.fromJson(Object? json) {
@@ -152,6 +155,14 @@ final class FeedCard {
 
   /// Unix seconds, 0 when unknown: the web feed's `pubdate` (the official feed sends none).
   final int published;
+
+  /// The official feed's own position number for the card, which the next request names; null on the web feed's.
+  final int? idx;
+
+  /// The official feed's `track_id` and `report_flow_data`, sent back with the reports of a play opened from the
+  /// card; null on the web feed's.
+  final String? trackId;
+  final String? flowData;
 
   String get id => bvid;
 

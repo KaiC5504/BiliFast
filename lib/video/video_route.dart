@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show VideoDetail, VideoView;
+import 'package:bili_core/api.dart' show PlaySource, VideoDetail, VideoView;
 import 'package:flutter/widgets.dart';
 
 import '../app/form_factor.dart';
@@ -16,7 +16,8 @@ import 'video_page.dart';
 /// only) is the card the swipe back, 〈 and system back fly the page into. [playback] is a closed page's, brought back
 /// by the small window's restore button: the page takes it over instead of opening the video. An [offline] route plays
 /// the 离线缓存 part [cid] from the phone, never asking Bilibili for it (`openOfflinePage`); without a [start] it
-/// resumes where the library saw it stop.
+/// resumes where the library saw it stop. [source] names where the page was opened from (a 推荐 card's carries its
+/// track data).
 @immutable
 final class VideoRoute {
   const VideoRoute({
@@ -30,6 +31,7 @@ final class VideoRoute {
     this.zoomSource,
     this.playback,
     this.offline = false,
+    this.source = PlaySource.unknown,
   });
 
   final String bvid;
@@ -42,6 +44,9 @@ final class VideoRoute {
   final ZoomSource? zoomSource;
   final PagePlayback? playback;
   final bool offline;
+
+  /// Where the page was opened from, for the official watch reports.
+  final PlaySource source;
 
   /// The feed card's cover and the page's player box share it, so the cover flies into the player.
   static String coverTag(String bvid) => 'cover-$bvid';

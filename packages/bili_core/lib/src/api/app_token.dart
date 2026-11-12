@@ -1,9 +1,16 @@
 import 'json.dart';
+import 'official_identity.dart';
 
 /// The official app API's login: the access token its account calls carry, and the refresh token that renews it.
 /// Kept as JSON in the keychain's app-token item.
 final class AppToken {
-  const AppToken({required this.accessToken, required this.refreshToken, required this.mid, required this.expiresAt});
+  const AppToken({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.mid,
+    required this.expiresAt,
+    this.identity = OfficialIdentity.android,
+  });
 
   factory AppToken.fromJson(Object? json) {
     final object = JsonObject.from(json);
@@ -16,11 +23,16 @@ final class AppToken {
       mid: object.required(object.integer('mid'), 'mid'),
       expiresAt: DateTime.fromMillisecondsSinceEpoch(object.required(object.integer('expires_at'), 'expires_at') * 1000,
           isUtc: true),
+      identity: OfficialIdentity.named(object.string('identity')),
     );
   }
 
   /// The passport's answer (`token_info`, or the TV login's flat `data`), whose `expires_in` counts from [now].
-  factory AppToken.issued(Object? json, {required DateTime now}) {
+  factory AppToken.issued(
+    Object? json, {
+    required DateTime now,
+    OfficialIdentity identity = OfficialIdentity.android,
+  }) {
     final object = JsonObject.from(json);
     final access = object.required(object.string('access_token'), 'access_token');
     final refresh = object.required(object.string('refresh_token'), 'refresh_token');
@@ -31,6 +43,7 @@ final class AppToken {
       refreshToken: refresh,
       mid: object.required(object.integer('mid'), 'mid'),
       expiresAt: now.toUtc().add(Duration(seconds: seconds)),
+      identity: identity,
     );
   }
 
@@ -42,6 +55,9 @@ final class AppToken {
   final int mid;
   final DateTime expiresAt;
 
+  /// The app the token was issued to; official calls carrying it are signed and labelled as that app.
+  final OfficialIdentity identity;
+
   bool dueForRenewal(DateTime now) => expiresAt.difference(now) < renewWithin;
 
   bool expired(DateTime now) => !now.isBefore(expiresAt);
@@ -51,6 +67,7 @@ final class AppToken {
     'refresh_token': refreshToken,
     'mid': mid,
     'expires_at': expiresAt.millisecondsSinceEpoch ~/ 1000,
+    'identity': identity.name,
   };
 
   @override
@@ -59,10 +76,11 @@ final class AppToken {
       other.accessToken == accessToken &&
       other.refreshToken == refreshToken &&
       other.mid == mid &&
-      other.expiresAt == expiresAt;
+      other.expiresAt == expiresAt &&
+      other.identity == identity;
 
   @override
-  int get hashCode => Object.hash(accessToken, refreshToken, mid, expiresAt);
+  int get hashCode => Object.hash(accessToken, refreshToken, mid, expiresAt, identity);
 
   // Both tokens are credentials, so they never reach a log or a test's failure message.
   @override

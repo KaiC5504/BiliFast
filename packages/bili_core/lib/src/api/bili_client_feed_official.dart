@@ -121,7 +121,10 @@ extension BiliClientFeedOfficial on BiliClient {
   /// [index] counts the pages of one scroll from 0, and 0 is a pull to refresh. Without the app token it throws
   /// [BiliError.noAppToken] and sends nothing: the feed is generic without it. [pad] asks as the iPad does; a big
   /// card that comes anyway keeps the server's place.
-  Future<List<FeedCard>> officialFeed({required int index, bool pad = false}) async {
+  ///
+  /// The iPhone identity asks as its app does: [firstIdx], the `idx` of the first card on screen (null with none),
+  /// and [cold] for the launch's first page; [index] 0 is still a pull to refresh.
+  Future<List<FeedCard>> officialFeed({required int index, bool pad = false, int? firstIdx, bool cold = false}) async {
     const path = '/x/v2/feed/index';
     final token = _officialToken(true);
     final envelope = await _getEnvelope(

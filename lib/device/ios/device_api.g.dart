@@ -430,6 +430,27 @@ class DeviceHostApi {
     return pigeonVar_replyValue! as NativeNetwork;
   }
 
+  /// UIDevice's identifierForVendor, which the official app's watch reports carry; null while iOS has none yet
+  /// (before the first unlock after a restart).
+  Future<String?> idfv() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.idfv$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+    return pigeonVar_replyValue as String?;
+  }
+
   /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
   /// granted. Asked only after the user said 好 in the app's own alert.
   Future<bool> requestReminderPermission() async {

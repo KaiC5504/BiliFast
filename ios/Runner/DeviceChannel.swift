@@ -57,6 +57,10 @@ final class DeviceHostApiImpl: DeviceHostApi {
   private let orientation = MainActor.assumeIsolated { OrientationEvents() }
   private let status = MainActor.assumeIsolated { StatusEvents() }
 
+  func idfv() throws -> String? {
+    MainActor.assumeIsolated { UIDevice.current.identifierForVendor?.uuidString }
+  }
+
   func isPad() throws -> Bool {
     MainActor.assumeIsolated { DeviceChannel.isPad }
   }

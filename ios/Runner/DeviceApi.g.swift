@@ -211,6 +211,9 @@ protocol DeviceHostApi {
   func setStatusEvents(enabled: Bool) throws
   /// The network the phone is on now (NetworkMonitor.swift's path), for 自动播放设置's Wi-Fi rules.
   func network() throws -> NativeNetwork
+  /// UIDevice's identifierForVendor, which the official app's watch reports carry; null while iOS has none yet
+  /// (before the first unlock after a restart).
+  func idfv() throws -> String?
   /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
   /// granted. Asked only after the user said 好 in the app's own alert.
   func requestReminderPermission() async throws -> Bool
@@ -448,6 +451,21 @@ class DeviceHostApiSetup {
       }
     } else {
       networkChannel.setMessageHandler(nil)
+    }
+    /// UIDevice's identifierForVendor, which the official app's watch reports carry; null while iOS has none yet
+    /// (before the first unlock after a restart).
+    let idfvChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.idfv\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      idfvChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.idfv()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      idfvChannel.setMessageHandler(nil)
     }
     /// A sideloaded install's 到期提醒: asks iOS for alert and sound permission (UNUserNotificationCenter); true when
     /// granted. Asked only after the user said 好 in the app's own alert.
