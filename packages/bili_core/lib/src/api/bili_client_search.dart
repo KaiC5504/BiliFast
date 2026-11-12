@@ -23,6 +23,17 @@ const _discoveryQuery = {
   'from': '2',
 };
 
+/// The same call under the iPhone identity's labels.
+const _iphoneDiscoveryQuery = {
+  'build': IphoneLabels.build,
+  'channel': IphoneLabels.channel,
+  'c_locale': _iphoneLocale,
+  'mobi_app': 'iphone',
+  'platform': 'ios',
+  's_locale': _iphoneLocale,
+  'from': '2',
+};
+
 /// -352, so the user sees the usual 请求过于频繁 message.
 const _searchRiskControl = BiliError.api(code: -352, message: '搜索太频繁，请稍后再试');
 
@@ -70,12 +81,15 @@ extension BiliClientSearch on BiliClient {
     return (words ?? const []).take(_hotWordCount).toList();
   }
 
-  /// 搜索发现's words (the app's `/x/v2/search/recommend`). Like every app-host call it goes without the web session
-  /// cookies, which it doesn't need: it answers logged out.
+  /// 搜索发现's words (the app's `/x/v2/search/recommend`), labelled as [officialIdentity]. Like every app-host call
+  /// it goes without the web session cookies, which it doesn't need: it answers logged out.
   Future<List<DiscoveryWord>> discoveryWords() async {
     final envelope = await _getEnvelope(
       _discoveryPath,
-      query: _discoveryQuery,
+      query: switch (officialIdentity) {
+        OfficialIdentity.android => _discoveryQuery,
+        OfficialIdentity.iphone => _iphoneDiscoveryQuery,
+      },
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,

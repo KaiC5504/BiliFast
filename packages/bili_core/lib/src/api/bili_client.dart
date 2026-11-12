@@ -7,7 +7,6 @@ import '../danmaku/danmaku_segment.dart';
 import '../devlog/log_event.dart';
 import '../devlog/logger.dart';
 import 'action_models.dart';
-import 'app_signer.dart';
 import 'app_token.dart';
 import 'bili_error.dart';
 import 'bili_hosts.dart';

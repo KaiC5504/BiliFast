@@ -8,10 +8,10 @@ const _spaceBangumiPath = '/x/v2/space/bangumi';
 const _spacePageCount = 20;
 const _spacePageSize = '$_spacePageCount';
 
-/// A space from the official app's API, signed as the Android app signs it. It goes without the account's cookies,
-/// as the app's own calls do; the relation to the uploader is the web card's (`uploaderCard`).
+/// A space from the official app's API, signed and labelled as [BiliClient.officialIdentity]. It goes without the
+/// account's cookies, as the app's own calls do; the relation to the uploader is the web card's (`uploaderCard`).
 extension BiliClientSpace on BiliClient {
-  Future<SpaceProfile> space({required int mid}) => _androidGet(_spacePath, {'vmid': '$mid'}, SpaceProfile.fromJson);
+  Future<SpaceProfile> space({required int mid}) => _guestGet(_spacePath, {'vmid': '$mid'}, SpaceProfile.fromJson);
 
   /// The account's own space, asked with the app token so its private folders, 追番 and extras come
   /// ([SpaceProfile.own]).
@@ -26,7 +26,7 @@ extension BiliClientSpace on BiliClient {
   );
 
   /// 投稿's videos by [order]; [next] is the last page's `SpaceVideoPage.next`.
-  Future<SpaceVideoPage> spaceVideos({required int mid, required SpaceOrder order, String? next}) => _androidGet(
+  Future<SpaceVideoPage> spaceVideos({required int mid, required SpaceOrder order, String? next}) => _guestGet(
     _spaceArchivePath,
     {'vmid': '$mid', 'ps': _spacePageSize, 'qn': '80', 'order': order.value, 'sort': 'desc', 'aid': ?next},
     SpaceVideoPage.fromArchive,
@@ -39,7 +39,7 @@ extension BiliClientSpace on BiliClient {
       SpaceChip(kind: SpaceChipKind.series, :final seriesId?) => (_spaceSeriesPath, {'series_id': '$seriesId'}),
       _ => throw ArgumentError.value(chip.kind, 'chip', 'only a 合集 or 系列 chip with its id lists here'),
     };
-    return _androidGet(path, {
+    return _guestGet(path, {
       'vmid': '$mid',
       ...list,
       'ps': _spacePageSize,
@@ -49,6 +49,7 @@ extension BiliClientSpace on BiliClient {
     }, SpaceVideoPage.fromArchive);
   }
 
-  Future<T> _androidGet<T>(String path, Map<String, String> query, JsonDecode<T> decode) =>
+  /// Anyone's space is asked without the token, even while one is held.
+  Future<T> _guestGet<T>(String path, Map<String, String> query, JsonDecode<T> decode) =>
       _officialGet(path, query, decode, account: false);
 }

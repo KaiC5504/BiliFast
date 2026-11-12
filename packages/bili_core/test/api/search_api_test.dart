@@ -125,6 +125,53 @@ void main() {
       });
     });
 
+    test('as the iPhone app they carry its labels, still unsigned', () async {
+      fakeHTTP.routes[recommendPath] = (200, SearchFixtures.recommend);
+      client.loginIdentity = OfficialIdentity.iphone;
+      await client.discoveryWords();
+      final request = only(recommendPath);
+      expect(request.url.host, 'app.bilibili.com');
+      expect(fakeHTTP.query(request), {
+        'build': '91800100',
+        'channel': 'pink_overseas',
+        'c_locale': 'zh-Hans_CN',
+        'mobi_app': 'iphone',
+        'platform': 'ios',
+        's_locale': 'zh-Hans_CN',
+        'from': '2',
+      });
+    });
+
+    test("a held token's identity labels them, not the login's, and the token is not sent", () async {
+      fakeHTTP.routes[recommendPath] = (200, SearchFixtures.recommend);
+      AppToken token(OfficialIdentity identity) => AppToken(
+        accessToken: 'MADE-UP-ACCESS',
+        refreshToken: 'MADE-UP-REFRESH',
+        mid: 7,
+        expiresAt: DateTime.utc(2027, 4, 1),
+        identity: identity,
+      );
+      client
+        ..loginIdentity = OfficialIdentity.iphone
+        ..appToken = token(OfficialIdentity.android);
+      await client.discoveryWords();
+      client
+        ..loginIdentity = OfficialIdentity.android
+        ..appToken = token(OfficialIdentity.iphone);
+      await client.discoveryWords();
+      final [android, iphone] = fakeHTTP.requestsTo(recommendPath);
+      expect(fakeHTTP.query(android)['mobi_app'], 'android');
+      expect(fakeHTTP.query(android)['build'], '8430300');
+      expect(fakeHTTP.query(iphone)['mobi_app'], 'iphone');
+      expect(fakeHTTP.query(iphone)['build'], '91800100');
+      for (final request in [android, iphone]) {
+        expect(request.url.toString(), isNot(contains('MADE-UP')));
+        for (final name in ['access_key', 'appkey', 'sign', 'ts']) {
+          expect(fakeHTTP.query(request), isNot(contains(name)));
+        }
+      }
+    });
+
     test('go without the web session cookies, as every app-host call does', () async {
       final loggedIn = makeTestClient(fakeHTTP, cookies: {'SESSDATA': 'made-up-session', 'bili_jct': 'made-up-jct'});
       fakeHTTP.routes[recommendPath] = (200, SearchFixtures.recommend);
