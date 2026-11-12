@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math' show pi;
+import 'dart:math' show max, min, pi;
 
 import 'package:bili_core/api.dart' as bili
     show AidLink, BiliClientDanmaku, BvidLink, LinkParser, VideoCard, VideoView;
@@ -14,6 +14,7 @@ import '../app/form_factor.dart';
 import '../app/route_observer.dart';
 import '../comments/comment_callbacks.dart';
 import '../comments/comment_overlays.dart';
+import '../danmaku/danmaku_layer.dart' show videoPicture;
 import '../danmaku/danmaku_overlays.dart';
 import '../danmaku/danmaku_session.dart';
 import '../comments/comments_model.dart';
@@ -27,7 +28,7 @@ import '../offline/page/offline_page_body.dart';
 import '../offline/page/offline_row_sheet.dart';
 import '../offline/pages/offline_selector.dart';
 import '../playback/playback_controller.dart';
-import '../player/bili_player.dart' show PlayerStatus;
+import '../player/bili_player.dart' show FitMode, PlayerStatus;
 import '../player_ui/chrome_state.dart';
 import '../player_ui/panels/panel_controller.dart';
 import '../player_ui/panels/panel_layer.dart';
@@ -263,6 +264,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// How far a turn between 竖屏 and landscape full screen has got, for the player's video band; null otherwise.
   final _verticalTurn = ValueNotifier<double?>(null);
 
+  /// The way into 竖屏 from the small player and back out (187), toward [_slideTo]: no turn, the picture slides between
+  /// the two places.
+  late final _slide = AnimationController(vsync: this);
+  Presentation? _slideTo;
+
+  /// Mid-slide, where the video is on the screen, for the player area.
+  final _slid = ValueNotifier<Rect?>(null);
+
   /// The page's size and top inset when last laid out upright: the body keeps them while the player grows over it.
   ({Size size, double top})? _uprightFrame;
 
@@ -424,6 +433,48 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     } else {
       unawaited(_padFull.reverse());
     }
+  }
+
+  /// Between the small player and 竖屏 the screen doesn't turn: the picture slides. Any other change of layout, or one
+  /// under Reduce Motion, ends a slide where it goes.
+  void _followSlide(Presentation was, Presentation layout) {
+    if (was == layout) return;
+    final slides = (was == Presentation.inline && layout == Presentation.vertical) ||
+        (was == Presentation.vertical && layout == Presentation.inline);
+    if (!slides || _left || _drawnWide == null || MediaQuery.disableAnimationsOf(context)) {
+      _slideTo = null;
+      _slide.stop();
+      return;
+    }
+    final into = layout == Presentation.vertical;
+    _slideTo = layout;
+    _slide
+      ..duration = into ? VerticalEnterTheme.enter : VerticalEnterTheme.exit
+      ..forward(from: 0);
+  }
+
+  /// Mid-slide, the video's rect on the [screen], from the small player's box below [top] to the picture in 竖屏's
+  /// band or back; null at rest. The band's end is the picture itself, not the band, so going out the black reaches
+  /// only the picture's bottom, and the body shows below it as on 187.
+  Rect? _sliding(Size screen, double top) {
+    final to = _slideTo;
+    if (to == null || !_slide.isAnimating) return null;
+    final box = Rect.fromLTWH(0, top, screen.width, _collapse.height);
+    final session = _session;
+    final upright = session?.layoutVertical ?? false;
+    final band = Offset.zero & Size(screen.width, screen.height * verticalBand(upright: upright));
+    final shape = session?.videoShape;
+    final picture =
+        videoPicture(
+          band.size,
+          fit: session?.fit ?? FitMode.fit,
+          video: shape == null ? null : Size(shape.width.toDouble(), shape.height.toDouble()),
+        ) ??
+        (upright ? band : videoPicture(band.size, fit: FitMode.ratio16x9)!);
+    final place = Rect.fromLTRB(0, max(picture.top, band.top), screen.width, min(picture.bottom, band.bottom));
+    return to == Presentation.vertical
+        ? Rect.lerp(box, place, VerticalEnterTheme.enterCurve.transform(_slide.value))
+        : Rect.lerp(place, box, VerticalEnterTheme.exitCurve.transform(_slide.value));
   }
 
   /// The turned size is already in (or about to be). The turn being waited for is drawn from the first build at its
@@ -1536,6 +1587,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _spin.dispose();
     _turningPlayer.dispose();
     _verticalTurn.dispose();
+    _slide.dispose();
+    _slid.dispose();
     _pin.dispose();
     _laidOut.dispose();
     _details?.dispose();
@@ -1574,6 +1627,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _followTurn(presentation, _drawnWide ?? wide);
       if (_pendingTurn case final turn? when turn.wide == wide) _beginTurn(turn);
       if (_drawnWide != null && _drawnWide != wide) _recorder.sized(size, layout: layout);
+      _followSlide(_laidOut.value, layout);
     }
     _drawnWide = wide;
     // The iPad's two columns: the player's column scrolls 简介's controller. The offline page keeps one column.
@@ -1709,6 +1763,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                           pin: _pin,
                           turning: _turningPlayer,
                           verticalTurn: _verticalTurn,
+                          slide: _slid,
                           storyPager: _storyPager,
                         ),
                       ),
@@ -1743,7 +1798,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   // Only the player's box follows the scrolling, the grow and the turn; everything else is built once
                   // per page build.
                   return ListenableBuilder(
-                    listenable: Listenable.merge([_collapse, _grow, _spin, _padFull]),
+                    listenable: Listenable.merge([_collapse, _grow, _spin, _padFull, _slide]),
                     builder: (context, _) {
                       if (padBody != null) {
                         return _turned(
@@ -1769,11 +1824,18 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       final spinning = _spinning;
                       final waiting = _turnFrom != null || _pendingTurn != null;
                       final hidden = fullScreen && turn?.body == null;
-                      final player = turn?.box ?? Rect.fromLTWH(0, 0, constraints.maxWidth, box);
+                      final slid = turn == null && !spinning ? _sliding(constraints.biggest, upright.top) : null;
+                      // Sliding out, the player's black runs from the screen's top to the picture's bottom, over the
+                      // body's top.
+                      final player =
+                          turn?.box ??
+                          Rect.fromLTWH(0, 0, constraints.maxWidth, slid == null ? box : max(box, slid.bottom));
                       _pin.value = turn == null ? null : Size(constraints.maxWidth, height);
                       _verticalTurn.value = turn != null && _upright == Presentation.vertical ? turn.t : null;
-                      // The chrome goes from the change of presentation, so the host's still picture has none either.
-                      _turningPlayer.value = turn != null || spinning || waiting;
+                      _slid.value = slid;
+                      // The chrome goes from the change of presentation, so the host's still picture has none either;
+                      // in a slide it comes with the landing.
+                      _turningPlayer.value = turn != null || spinning || waiting || slid != null;
                       // The tab row and the list ride on the player's bottom edge, at their upright size.
                       final body = turn?.body ?? Offset.zero;
                       final window = turn?.window;
@@ -1829,7 +1891,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             child: ColoredBox(
                               color: BiliColors.videoBackground,
                               child: Padding(
-                                padding: EdgeInsets.only(top: turn?.inset ?? (fullScreen ? 0 : top)),
+                                padding: EdgeInsets.only(
+                                  top: turn?.inset ?? (fullScreen || slid != null ? 0 : top),
+                                ),
                                 child: area,
                               ),
                             ),

@@ -1662,6 +1662,21 @@ abstract final class StoryPagerTheme {
   static const resistance = 0.3;
 }
 
+/// The way into 竖屏 from the video page and back out (187, measured frame by frame at 60 fps): the picture slides
+/// between the small player's box and its place in 竖屏, a wide one keeping its size (171 pt down on 187's 4:3 video).
+abstract final class VerticalEnterTheme {
+  /// In: the body is black from the first frame and the picture lands 7 frames later, at a nearly even pace a little
+  /// ahead of linear; this fits each frame to within 0.01. The controls come with the landing; 187's come 2 frames
+  /// after it.
+  static const enter = Duration(microseconds: 116667);
+  static const enterCurve = Cubic(0.15, 0.15, 0.2, 0.3);
+
+  /// Out: the body is back from the first frame, the picture already 30% of the way up there, then slowing to land
+  /// 10 frames in; this fits each frame to within 0.03.
+  static const exit = Duration(microseconds: 166667);
+  static const exitCurve = Cubic(0, 0.4, 0.9, 1);
+}
+
 /// 竖屏's held 2× and its lock (182, 183, 186). The gestures agent's tokens.
 abstract final class SpeedLockTheme {
   /// The APK's `biligame_vector_lock_fill`, the filled lock 183 shows.

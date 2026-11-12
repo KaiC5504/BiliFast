@@ -3917,6 +3917,151 @@ void main() {
       expect(made, hasLength(1));
     });
   });
+
+  group('the way into 竖屏 and out (187)', () {
+    late List<FakeStoryFeed> made;
+
+    setUp(() {
+      made = [];
+      createStory = (playback) {
+        final feed = FakeStoryFeed([storyEntry(bv), storyEntry('BV1next000001')]);
+        made.add(feed);
+        return feed;
+      };
+      addTearDown(() => createStory = pageStoryFeed);
+    });
+
+    final video = find.byKey(const ValueKey('fake-video'));
+    const box = Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect);
+    final band = Rect.fromLTWH(0, 0, 440, 956 * BiliMetrics.verticalVideoCentre * 2);
+    // 187's video is 4:3: its picture in the band is 330 tall, centred.
+    final place = Rect.fromCenter(center: band.center, width: 440, height: 330);
+
+    /// A wide 4:3 video, loaded on the small player.
+    Future<Element> opened43(WidgetTester tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      sessions.single
+        ..videoShape = (width: 1440, height: 1080)
+        ..changed();
+      await tester.pump();
+      expect(tester.getRect(video), box);
+      return tester.element(video);
+    }
+
+    bool shown(WidgetTester tester, Type chrome) => tester
+        .widget<Visibility>(find.ancestor(of: find.byType(chrome), matching: find.byType(Visibility)).first)
+        .visible;
+
+    Rect between(Rect from, Rect to, Curve curve, double t) => Rect.lerp(from, to, curve.transform(t))!;
+
+    void near(Rect actual, Rect expected) {
+      expect(actual.top, closeTo(expected.top, 0.01));
+      expect(actual.bottom, closeTo(expected.bottom, 0.01));
+      expect(actual.width, 440);
+    }
+
+    testWidgets('going in, the body goes black at once and the picture slides down to its place; the controls come '
+        'when it lands', (tester) async {
+      final element = await opened43(tester);
+      orientation.enterVertical();
+      await tester.pump();
+      expect(find.byType(PageTabRow), findsNothing, reason: 'the body is black from the first frame');
+      expect(area(tester), const Rect.fromLTWH(0, 0, 440, 956));
+      expect(tester.getRect(video), box);
+      expect(shown(tester, VerticalChrome), isFalse);
+      expect(made, hasLength(1), reason: 'the feed begins with 竖屏, as before');
+
+      const enter = VerticalEnterTheme.enter;
+      var elapsed = Duration.zero;
+      for (final t in [0.25, 0.5, 0.75]) {
+        final at = enter * t;
+        await tester.pump(at - elapsed);
+        elapsed = at;
+        near(tester.getRect(video), between(box, place, VerticalEnterTheme.enterCurve, t));
+        expect(shown(tester, VerticalChrome), isFalse, reason: 'no controls until it lands');
+        expect(find.byType(PageTabRow), findsNothing);
+      }
+      // The controller lands on the frame after its last one.
+      await tester.pump(enter - elapsed + const Duration(microseconds: 1));
+      expect(tester.getRect(video), band, reason: 'landed: the video takes its band, the picture where it slid to');
+      expect(shown(tester, VerticalChrome), isTrue);
+      expect(identical(tester.element(video), element), isTrue, reason: 'the native view is the same throughout');
+
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets('coming out, the body is there at once and the picture slides back up into the box', (tester) async {
+      final element = await opened43(tester);
+      await rotate(tester, Presentation.vertical);
+      final feed = made.single;
+      orientation.exitToInline();
+      await tester.pump();
+      expect(find.byType(PageTabRow), findsOneWidget, reason: 'the body is there from the first frame');
+      expect(feed.disposed, isTrue, reason: 'the feed ends with 竖屏, as before');
+      near(tester.getRect(video), place);
+      expect(area(tester), Rect.fromLTRB(0, 0, 440, place.bottom), reason: 'black only down to the picture');
+      expect(shown(tester, PortraitControls), isFalse);
+
+      const exit = VerticalEnterTheme.exit;
+      var elapsed = Duration.zero;
+      for (final t in [0.1, 0.5, 0.9]) {
+        final at = exit * t;
+        await tester.pump(at - elapsed);
+        elapsed = at;
+        final expected = between(place, box, VerticalEnterTheme.exitCurve, t);
+        near(tester.getRect(video), expected);
+        expect(area(tester).bottom, closeTo(expected.bottom > box.bottom ? expected.bottom : box.bottom, 0.01));
+        expect(find.byType(PageTabRow), findsOneWidget);
+      }
+      await tester.pump(exit - elapsed + const Duration(microseconds: 1));
+      expect(tester.getRect(video), box);
+      expect(area(tester), box);
+      expect(shown(tester, PortraitControls), isTrue);
+      expect(identical(tester.element(video), element), isTrue);
+      await back(tester);
+    });
+
+    testWidgets('under Reduce Motion it jumps both ways', (tester) async {
+      await opened43(tester);
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await tester.pump();
+      orientation.enterVertical();
+      await tester.pump();
+      expect(tester.getRect(video), band);
+      expect(shown(tester, VerticalChrome), isTrue);
+      orientation.exitToInline();
+      await tester.pump();
+      expect(tester.getRect(video), box);
+      expect(area(tester), box);
+      expect(shown(tester, PortraitControls), isTrue);
+      await back(tester);
+    });
+
+    testWidgets("a wide video's 横屏全屏 from 竖屏 and back turns as before, with no slide", (tester) async {
+      await opened43(tester);
+      await rotate(tester, Presentation.vertical);
+      screen(tester, landscape, landscapeInsets);
+      orientation.enterLandscape();
+      await tester.pump();
+      await tester.pump(VerticalEnterTheme.exit ~/ 2);
+      expect(tester.widget<VideoPlayerArea>(find.byType(VideoPlayerArea)).slide!.value, isNull);
+      await tester.pump(RotationTheme.grow);
+      expect(area(tester), const Rect.fromLTWH(0, 0, 956, 440));
+      screen(tester, portrait, portraitInsets);
+      orientation.enterVertical();
+      await tester.pump();
+      await tester.pump(VerticalEnterTheme.enter ~/ 2);
+      expect(tester.widget<VideoPlayerArea>(find.byType(VideoPlayerArea)).slide!.value, isNull);
+      await tester.pump(RotationTheme.grow);
+      expect(tester.getRect(video), band);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+  });
 }
 
 /// A related video without a cover to download.
