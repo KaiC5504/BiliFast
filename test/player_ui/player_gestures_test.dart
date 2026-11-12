@@ -10,7 +10,10 @@ import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/player_gestures.dart';
 import 'package:bilifast/player_ui/player_hud.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
+import 'package:bilifast/player_ui/speed_lock.dart';
 import 'package:bilifast/video/collapsing_player.dart';
+import 'package:bilifast/video/story/story_drag.dart';
+import 'package:bilifast/video/story/story_feed.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,6 +70,56 @@ final class RecordingDevice implements DeviceControls {
   Future<void> leaveFullScreen() async => views.add('leave');
 }
 
+/// Every call the gesture layer makes on 竖屏's page.
+final class RecordingStoryDrag extends StoryDrag {
+  final events = <String>[];
+
+  @override
+  void start() {
+    events.add('start');
+    super.start();
+  }
+
+  @override
+  void update(double delta) {
+    events.add('update ${delta.toStringAsFixed(1)}');
+    super.update(delta);
+  }
+
+  @override
+  void end(double velocity) {
+    events.add('end');
+    lastVelocity = velocity;
+    super.end(velocity);
+  }
+
+  @override
+  void cancel() {
+    events.add('cancel');
+    super.cancel();
+  }
+
+  double? lastVelocity;
+}
+
+/// A feed with nothing in it: the gestures only ask whether one is up.
+final class EmptyStoryFeed extends StoryFeed {
+  @override
+  List<StoryEntry> get entries => const [];
+
+  @override
+  int get index => 0;
+
+  @override
+  bool get loading => false;
+
+  @override
+  bool moveNext() => false;
+
+  @override
+  bool movePrevious() => false;
+}
+
 final class Rig {
   Rig() {
     session.duration.value = 600;
@@ -77,6 +130,9 @@ final class Rig {
   final panels = PanelController();
   final orientation = OrientationController();
   final device = RecordingDevice();
+  final story = ValueNotifier<StoryFeed?>(null);
+  final storyDrag = RecordingStoryDrag();
+  final speedLock = SpeedLock();
   var backs = 0;
   late final ui = PlayerUi(
     session: session,
@@ -85,6 +141,9 @@ final class Rig {
     orientation: orientation,
     device: device,
     onBack: () => backs++,
+    story: story,
+    storyDrag: storyDrag,
+    speedLock: speedLock,
   );
 
   List<String> get calls => session.calls;
@@ -134,6 +193,9 @@ final class Rig {
     chrome.dispose();
     panels.dispose();
     orientation.dispose();
+    story.dispose();
+    storyDrag.dispose();
+    speedLock.dispose();
     unawaited(device.hardware.close());
     session.dispose();
   }
@@ -334,14 +396,15 @@ void main() {
       expect(rig.chrome.visible, isTrue);
     });
 
-    testWidgets('up and down still set brightness and volume, with no volume view of its own', (tester) async {
+    testWidgets('up and down set no brightness or volume: the drag is the swipe between videos', (tester) async {
       await rig.mountVertical(tester);
       await tester.timedDragFrom(const Offset(200, 300), const Offset(0, -150), thumb(150));
       await tester.timedDragFrom(const Offset(600, 300), const Offset(0, 150), thumb(150));
-      expect(rig.device.sets.first, startsWith('brightness'));
-      expect(rig.device.sets.last, 'volume ${0.5 - 150 / 600}');
+      expect(rig.device.sets, isEmpty);
       expect(rig.device.views, isEmpty);
       expect(rig.chrome.hud.value, isNull);
+      expect(rig.storyDrag.events, isEmpty, reason: 'no feed is up');
+      expect(rig.calls, isEmpty);
       await tester.pump(_tapSettles);
     });
 
@@ -357,6 +420,98 @@ void main() {
       await tester.tapAt(const Offset(405, 305));
       await tester.pump(_tapSettles);
       expect(rig.calls, ['togglePlay']);
+    });
+  });
+
+  group("竖屏's feed: up and down move the page under the finger", () {
+    setUp(() => rig.story.value = EmptyStoryFeed());
+
+    testWidgets('a swipe up starts, follows one to one and ends with its speed, upward negative', (tester) async {
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(300, 500));
+      final stamp = await moveFrames(tester, gesture, const Offset(0, -20), 6);
+      await gesture.up(timeStamp: stamp);
+      final events = rig.storyDrag.events;
+      expect(events.first, 'start');
+      expect(events.last, 'end');
+      final travel = events
+          .where((event) => event.startsWith('update'))
+          .map((event) => double.parse(event.substring(7)))
+          .reduce((a, b) => a + b);
+      expect(travel, closeTo(-120, 0.1), reason: 'from where the finger landed, the lock distance included');
+      expect(rig.storyDrag.lastVelocity, lessThan(-1000), reason: '20 pt a 16 ms frame is 1250 pt/s');
+      expect(rig.storyDrag.dragging, isFalse);
+      expect(rig.device.sets, isEmpty);
+      expect(rig.calls, isEmpty, reason: 'neither a seek nor a tap');
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('a swipe down moves the page the other way', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.timedDragFrom(const Offset(300, 200), const Offset(0, 150), thumb(150));
+      expect(rig.storyDrag.events.first, 'start');
+      expect(rig.storyDrag.lastVelocity, greaterThan(0));
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('sideways still seeks and the page stays', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.timedDragFrom(const Offset(300, 300), const Offset(150, 0), thumb(150));
+      expect(rig.callsStarting('commitSeek'), hasLength(1));
+      expect(rig.storyDrag.events, isEmpty);
+    });
+
+    testWidgets('a tap still plays or pauses', (tester) async {
+      await rig.mountVertical(tester);
+      await tester.tapAt(const Offset(300, 300));
+      expect(rig.calls, ['togglePlay']);
+      expect(rig.storyDrag.events, isEmpty);
+    });
+
+    testWidgets('a cancelled touch cancels the drag', (tester) async {
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(300, 500));
+      await moveFrames(tester, gesture, const Offset(0, -20), 3);
+      await gesture.cancel();
+      expect(rig.storyDrag.events, containsAllInOrder(['start', 'cancel']));
+      expect(rig.storyDrag.offset, 0);
+    });
+
+    testWidgets('leaving 竖屏 mid-drag cancels it', (tester) async {
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(300, 500));
+      await moveFrames(tester, gesture, const Offset(0, -20), 3);
+      rig.orientation.exitToInline();
+      await tester.pump();
+      expect(rig.storyDrag.events, containsAllInOrder(['start', 'cancel']));
+      await gesture.up();
+      expect(rig.storyDrag.events.where((event) => event == 'end'), hasLength(1), reason: 'the cancel ended it');
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('the layer going away mid-drag cancels it', (tester) async {
+      await rig.mountVertical(tester);
+      final gesture = await tester.startGesture(const Offset(300, 500));
+      await moveFrames(tester, gesture, const Offset(0, -20), 3);
+      await tester.pumpWidget(const SizedBox());
+      expect(rig.storyDrag.events, containsAllInOrder(['start', 'cancel']));
+      await gesture.up();
+    });
+
+    testWidgets('full screen keeps up and down for brightness and volume', (tester) async {
+      await rig.mountFullScreen(tester);
+      await tester.timedDragFrom(const Offset(200, 300), const Offset(0, -150), thumb(150));
+      expect(rig.device.sets.first, startsWith('brightness'));
+      expect(rig.storyDrag.events, isEmpty);
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('the small player keeps them too', (tester) async {
+      await rig.mountInline(tester);
+      await tester.timedDragFrom(const Offset(600, 200), const Offset(0, 100), thumb(100));
+      expect(rig.device.sets.last, startsWith('volume'));
+      expect(rig.storyDrag.events, isEmpty);
+      await tester.pump(_tapSettles);
     });
   });
 
