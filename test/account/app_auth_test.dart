@@ -36,14 +36,26 @@ const renewed =
     '{"code":0,"message":"0","data":{"status":0,"token_info":{"mid":12345,"access_token":"NEW-ACCESS",'
     '"refresh_token":"NEW-REFRESH","expires_in":15552000},"cookie_info":{"cookies":[]}}}';
 
-String stored({int days = 100, int mid = 12345}) => jsonEncode(
+String stored({int days = 100, int mid = 12345, OfficialIdentity identity = OfficialIdentity.android}) => jsonEncode(
   AppToken(
     accessToken: 'OLD-ACCESS',
     refreshToken: 'OLD-REFRESH',
     mid: mid,
     expiresAt: DateTime.now().add(Duration(days: days)),
+    identity: identity,
   ).toJson(),
 );
+
+/// A token as the builds before identities wrote it, with no `identity` field.
+String storedBeforeIdentities({int days = 100}) =>
+    jsonEncode((jsonDecode(stored(days: days)) as Map<String, Object?>)..remove('identity'));
+
+// A made-up vendor id, and the iPhone-form device id its MD5 gives.
+const vendorId = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
+const vendorBuvid = 'Y8E3D38DE1B0CE50E090BA2DF2394133AE23';
+
+final androidBuvid = RegExp(r'^XY[0-9A-F]{35}$');
+final iphoneBuvid = RegExp(r'^Y[0-9A-F]{35}$');
 
 /// The keychain's two items: the login's cookies, and the app token as the app wrote it.
 class TokenKeychain implements KeychainStore {
@@ -134,6 +146,8 @@ void main() {
     bool loggedIn = true,
     String? devicePath,
     Future<bool> Function(BuildContext context)? confirm,
+    bool isIOS = false,
+    Future<String?> Function()? idfv,
   }) async {
     final http = Canned.http(loggedIn: loggedIn)
       ..routes[spiPath] = (200, '{"code":0,"message":"ok","data":{"b_3":"B3","b_4":"B4"}}')
@@ -154,6 +168,8 @@ void main() {
       navigator: navigator,
       confirm: confirm ?? showAppAuthPrompt,
       devicePath: () => devicePath,
+      isIOS: isIOS,
+      idfv: idfv ?? () async => vendorId,
       pollInterval: const Duration(milliseconds: 100),
       confirmInClient: (page) async {
         if (!harness.clientInstalled) return false;
@@ -184,9 +200,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  void expectNoSecretsLogged() {
+  /// Neither the tokens, the code, the vendor id nor a device id, [deviceIds] being the ones a test's launch made.
+  void expectNoSecretsLogged([Iterable<Object?> deviceIds = const []]) {
+    final secrets = [
+      ...['OLD-ACCESS', 'OLD-REFRESH', 'NEW-ACCESS', 'NEW-REFRESH', 'FAKE-CODE', 'QRFAKE', vendorId, vendorBuvid],
+      ...deviceIds.whereType<String>(),
+    ];
     for (final line in events.lines) {
-      for (final secret in ['OLD-ACCESS', 'OLD-REFRESH', 'NEW-ACCESS', 'NEW-REFRESH', 'FAKE-CODE', 'QRFAKE']) {
+      for (final secret in secrets) {
         expect(line, isNot(contains(secret)));
       }
     }
@@ -724,19 +745,226 @@ void main() {
       await settle(tester);
     });
 
-    testWidgets('重新授权 drops the token, then asks', (tester) async {
+    testWidgets('重新授权 asks again and keeps the held token in use until the new one comes', (tester) async {
       final h = await mount(tester, token: stored());
       await h.auth.start();
       await h.environment.refreshAccount();
       await tester.pumpAndSettle();
+      final poll = h.http.gates[pollPath] = Completer<void>();
       final answer = h.auth.reauthorize(host);
-      expect(h.auth.authorized, isFalse);
       await tester.pumpAndSettle();
-      expect(h.keychain.deletes, 1);
+      expect(prompt, findsOneWidget);
+      expect(h.client.appToken?.accessToken, 'OLD-ACCESS');
       await tester.tap(authorize);
+      await tester.pumpAndSettle();
+      expect(h.http.to(pollPath), hasLength(1));
+      expect(h.client.appToken?.accessToken, 'OLD-ACCESS', reason: 'the only token that works so far');
+      expect(h.keychain.saves, isEmpty);
+
+      poll.complete();
       await settle(tester);
       expect(await answer, isTrue);
       expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
+      expect(jsonDecode(h.keychain.saves.single), h.client.appToken?.toJson());
+      expect(h.keychain.deletes, 0, reason: 'written over, so no moment without a token');
+      expectNoSecretsLogged();
+    });
+
+    testWidgets('a 重新授权 that fails leaves the held token as it was', (tester) async {
+      final h = await mount(tester, token: stored());
+      h.http.routes[pollPath] = (200, '{"code":86038,"message":"二维码已失效","data":null}');
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      final answer = h.auth.reauthorize(host);
+      await tester.pumpAndSettle();
+      await tester.tap(authorize);
+      await tester.pumpAndSettle();
+      expect(await answer, isTrue, reason: 'a token is still held');
+      expect(find.text('授权失败：确认已超时，请重试'), findsOneWidget);
+      expect(h.client.appToken?.accessToken, 'OLD-ACCESS');
+      expect(h.keychain.token, isNotNull);
+      expect(h.keychain.saves, isEmpty);
+      expect(h.keychain.deletes, 0);
+      await settle(tester);
+    });
+  });
+
+  group('identity', () {
+    testWidgets("on iOS a new login is the iPhone app's, and iOS's vendor id is read for the reports", (tester) async {
+      final h = await mount(tester, isIOS: true);
+      await h.auth.start();
+      expect(h.client.loginIdentity, OfficialIdentity.iphone);
+      expect(h.client.officialIdentity, OfficialIdentity.iphone);
+      expect(h.client.appIdfv, vendorId);
+      expect(h.auth.identity, isNull, reason: 'no token yet');
+      expectNoSecretsLogged();
+    });
+
+    testWidgets("elsewhere it is the Android app's, and no vendor id is asked for", (tester) async {
+      var asked = 0;
+      final h = await mount(
+        tester,
+        idfv: () async {
+          asked += 1;
+          return vendorId;
+        },
+      );
+      await h.auth.start();
+      expect(h.client.loginIdentity, OfficialIdentity.android);
+      expect(h.client.officialIdentity, OfficialIdentity.android);
+      expect(h.client.appIdfv, isNull);
+      expect(asked, 0);
+    });
+
+    testWidgets("on iOS a token stored before identities existed stays the Android app's: nothing is asked, sent or "
+        'written', (tester) async {
+      final legacy = storedBeforeIdentities();
+      final h = await mount(tester, token: legacy, isIOS: true);
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      expect(h.auth.authorized, isTrue);
+      expect(h.auth.identity, OfficialIdentity.android);
+      expect(h.client.loginIdentity, OfficialIdentity.iphone);
+      expect(h.client.officialIdentity, OfficialIdentity.android, reason: "calls go out as the token's app");
+      expect(h.client.appToken?.accessToken, 'OLD-ACCESS');
+      expect(h.client.appBuvid, matches(androidBuvid));
+      expect(prompt, findsNothing);
+      expect(h.http.paths.where((path) => path.contains('passport')), isEmpty);
+      expect(h.keychain.token, legacy);
+      expect(h.keychain.saves, isEmpty);
+      expect(h.keychain.deletes, 0);
+      expectNoSecretsLogged([h.client.appBuvid]);
+    });
+
+    /// Launches with [token] due for renewal and answers the renewal; the token's JSON as it was kept.
+    Future<Map<String, Object?>> renew(WidgetTester tester, String token, {required bool isIOS}) async {
+      final h = await mount(tester, token: token, isIOS: isIOS);
+      h.http.routes[renewPath] = (200, renewed);
+      await h.auth.start();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(h.http.to(renewPath), hasLength(1));
+      expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
+      final kept = jsonDecode(h.keychain.saves.single) as Map<String, Object?>;
+      expect(kept, h.client.appToken?.toJson());
+      expectNoSecretsLogged();
+      return kept;
+    }
+
+    testWidgets("a renewal on iOS keeps an Android token the Android app's, and writes that down", (tester) async {
+      final kept = await renew(tester, storedBeforeIdentities(days: 10), isIOS: true);
+      expect(kept['identity'], 'android');
+    });
+
+    testWidgets("a renewal keeps an iPhone token the iPhone app's, whatever a new login would be", (tester) async {
+      final kept = await renew(tester, stored(days: 10, identity: OfficialIdentity.iphone), isIOS: false);
+      expect(kept['identity'], 'iphone');
+    });
+
+    testWidgets("a confirm on iOS is kept as the iPhone app's token", (tester) async {
+      final h = await mount(tester, isIOS: true);
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      await tester.tap(authorize);
+      await settle(tester);
+      expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
+      expect(h.auth.identity, OfficialIdentity.iphone);
+      final kept = jsonDecode(h.keychain.saves.single) as Map<String, Object?>;
+      expect(kept['identity'], 'iphone');
+      expect(kept, h.client.appToken?.toJson());
+      expect(h.client.appBuvid, vendorBuvid);
+      expectNoSecretsLogged();
+    });
+
+    testWidgets("elsewhere a confirm is kept as the Android app's", (tester) async {
+      final h = await mount(tester);
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      await tester.tap(authorize);
+      await settle(tester);
+      expect(h.auth.identity, OfficialIdentity.android);
+      expect((jsonDecode(h.keychain.saves.single) as Map<String, Object?>)['identity'], 'android');
+      expect(h.client.appBuvid, matches(androidBuvid));
+      expectNoSecretsLogged([h.client.appBuvid]);
+    });
+
+    testWidgets("重新授权 on iOS swaps an Android token for an iPhone one, the old one and its device id in use until "
+        'the confirm lands', (tester) async {
+      final h = await mount(tester, token: stored(), isIOS: true);
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      final androidId = h.client.appBuvid;
+      expect(androidId, matches(androidBuvid));
+
+      final poll = h.http.gates[pollPath] = Completer<void>();
+      final answer = h.auth.reauthorize(host);
+      await tester.pumpAndSettle();
+      await tester.tap(authorize);
+      await tester.pumpAndSettle();
+      expect(h.http.to(pollPath), hasLength(1));
+      expect(h.client.appToken?.accessToken, 'OLD-ACCESS');
+      expect(h.auth.identity, OfficialIdentity.android);
+      expect(h.client.appBuvid, androidId);
+      expect(h.keychain.saves, isEmpty);
+
+      poll.complete();
+      await settle(tester);
+      expect(await answer, isTrue);
+      expect(h.client.appToken?.accessToken, 'NEW-ACCESS');
+      expect(h.auth.identity, OfficialIdentity.iphone);
+      expect((jsonDecode(h.keychain.saves.single) as Map<String, Object?>)['identity'], 'iphone');
+      expect(h.keychain.deletes, 0);
+      expect(h.client.appBuvid, vendorBuvid);
+      expectNoSecretsLogged([androidId]);
+    });
+
+    testWidgets('the device id named follows the identity through a rejection and the confirm after it', (
+      tester,
+    ) async {
+      final h = await mount(tester, token: stored(), isIOS: true);
+      h.http.routes[likePath] = (200, '{"code":-101,"message":"账号未登录"}');
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      final androidId = h.client.appBuvid;
+      expect(androidId, matches(androidBuvid), reason: "the held token is the Android app's");
+
+      await expectLater(h.client.officialLike(aid: 1, on: true), throwsA(isA<BiliAPIError>()));
+      expect(h.client.officialIdentity, OfficialIdentity.iphone);
+      expect(h.client.appBuvid, vendorBuvid, reason: 'with no token, calls go out as a new login would');
+
+      await tester.pumpAndSettle();
+      await tester.tap(authorize);
+      await settle(tester);
+      expect(h.auth.identity, OfficialIdentity.iphone);
+      expect(h.client.appBuvid, vendorBuvid);
+      expectNoSecretsLogged([androidId]);
+    });
+
+    testWidgets('and through 退出登录', (tester) async {
+      final h = await mount(tester, token: stored(), isIOS: true);
+      await h.auth.start();
+      await h.environment.refreshAccount();
+      await tester.pumpAndSettle();
+      final androidId = h.client.appBuvid;
+      expect(androidId, matches(androidBuvid));
+
+      await h.environment.logout();
+      await tester.pumpAndSettle();
+      expect(h.auth.identity, isNull);
+      expect(h.client.appBuvid, vendorBuvid);
+      expectNoSecretsLogged([androidId]);
+    });
+
+    test("the fakes: none without a token, an app's with one", () {
+      expect(NoAppAuth().identity, isNull);
+      expect(FakeAppAuth(authorized: false).identity, isNull);
+      expect(FakeAppAuth().identity, isNotNull);
     });
   });
 
@@ -760,8 +988,8 @@ void main() {
 
     Map<String, Object?> deviceFile() => jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
 
-    Future<Harness> launch(WidgetTester tester) async {
-      final h = await mount(tester, devicePath: path, confirm: confirm);
+    Future<Harness> launch(WidgetTester tester, {String? token}) async {
+      final h = await mount(tester, devicePath: path, confirm: confirm, token: token);
       await tester.runAsync(h.auth.start);
       await h.environment.refreshAccount();
       await tester.pumpAndSettle();
@@ -772,11 +1000,12 @@ void main() {
       await launch(tester);
       expect(asked, 1);
       expect(deviceFile(), containsPair('authDeclined', true));
-      final buvid = deviceFile()['buvid'];
+      final ids = deviceFile()..remove('authDeclined');
+      expect(ids.keys, ['buvid', 'buvidIphone']);
 
       final next = await launch(tester);
       expect(asked, 1, reason: 'declined before, so the launch asks nothing');
-      expect(next.client.appBuvid, buvid);
+      expect(next.client.appBuvid, ids['buvid']);
 
       expect(await next.auth.request(host), isFalse);
       expect(asked, 2, reason: '不喜欢 and 不感兴趣 still ask');
@@ -786,9 +1015,19 @@ void main() {
       expect(await next.auth.reauthorize(host), isTrue);
       expect(asked, 3, reason: '开发者 still asks');
       expect(next.client.appToken?.accessToken, 'NEW-ACCESS');
-      expect(deviceFile(), {'buvid': buvid}, reason: 'a confirm that goes through clears it');
+      expect(deviceFile(), ids, reason: 'a confirm that goes through clears it');
       await settle(tester);
-      expectNoSecretsLogged();
+      expectNoSecretsLogged(ids.values);
+    });
+
+    testWidgets('取消 on 重新授权 keeps the token and is not remembered as turned down', (tester) async {
+      final h = await launch(tester, token: stored());
+      expect(asked, 0);
+      expect(await h.auth.reauthorize(host), isTrue, reason: 'the token is still held');
+      expect(asked, 1);
+      expect(h.client.appToken?.accessToken, 'OLD-ACCESS');
+      expect(h.keychain.deletes, 0);
+      expect(deviceFile(), isNot(contains('authDeclined')));
     });
 
     testWidgets('a logout clears it, so the next login asks', (tester) async {
@@ -814,12 +1053,36 @@ void main() {
       expect(id.substring(2, 5), '${hex[2]}${hex[12]}${hex[22]}');
     });
 
-    test('is made once and kept in its file', () async {
-      TestWidgetsFlutterBinding.ensureInitialized();
-      final folder = await Directory.systemTemp.createTemp('app_auth_test');
-      addTearDown(() => folder.delete(recursive: true));
-      final path = '${folder.path}${Platform.pathSeparator}app_device.json';
-      Future<String?> launch() async {
+    test("the iPhone app's is Y, three of an MD5's digits again, then the MD5 of the vendor id without hyphens", () {
+      final md5 = MD5.hex('AAAAAAAABBBBCCCCDDDDEEEEEEEEEEEE').toUpperCase();
+      expect(vendorBuvid, 'Y${md5[2]}${md5[12]}${md5[22]}$md5');
+      expect(vendorBuvid, hasLength(36));
+      expect(TokenAppAuth.newIphoneBuvid(idfv: vendorId), vendorBuvid);
+    });
+
+    test('without a vendor id it is made of random bytes, in the same shape', () {
+      final id = TokenAppAuth.newIphoneBuvid(random: Random(1));
+      expect(id, matches(iphoneBuvid));
+      final md5 = id.substring(4);
+      expect(id.substring(1, 4), '${md5[2]}${md5[12]}${md5[22]}');
+      expect(TokenAppAuth.newIphoneBuvid(random: Random(2)), isNot(id));
+      expect(TokenAppAuth.newIphoneBuvid(idfv: '', random: Random(1)), id);
+    });
+
+    group('in its file', () {
+      late String path;
+
+      setUp(() {
+        TestWidgetsFlutterBinding.ensureInitialized();
+        final folder = Directory.systemTemp.createTempSync('app_auth_test');
+        addTearDown(() => folder.deleteSync(recursive: true));
+        path = '${folder.path}${Platform.pathSeparator}app_device.json';
+      });
+
+      Map<String, Object?> deviceFile() => jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+
+      /// A launch with no login and no token, so calls go out as a new login would.
+      Future<BiliClient> launch({bool isIOS = false, Future<String?> Function()? idfv}) async {
         final environment = await AppEnvironment.load(
           keychain: const NoKeychainStore(),
           http: CannedHttp(),
@@ -830,20 +1093,71 @@ void main() {
           environment: environment,
           navigator: GlobalKey<NavigatorState>(),
           devicePath: () => path,
+          isIOS: isIOS,
+          idfv: idfv ?? () async => vendorId,
           logger: logger,
         );
         await auth.start();
         auth.dispose();
-        return environment.client.appBuvid;
+        return environment.client;
       }
 
-      final first = await launch();
-      expect(first, matches(RegExp(r'^XY[0-9A-F]{35}$')));
-      expect(await launch(), first);
-      expect(jsonDecode(await File(path).readAsString()), {'buvid': first});
-      for (final line in events.lines) {
-        expect(line, isNot(contains(first!)));
-      }
+      test('both are made once and kept', () async {
+        final first = (await launch()).appBuvid;
+        expect(first, matches(androidBuvid));
+        final file = deviceFile();
+        expect(file.keys, ['buvid', 'buvidIphone']);
+        expect(file['buvid'], first);
+        expect(file['buvidIphone'], matches(iphoneBuvid));
+
+        expect((await launch()).appBuvid, first);
+        expect(deviceFile(), file);
+        expectNoSecretsLogged(file.values);
+      });
+
+      test("on iOS the iPhone app's comes from the vendor id once; later launches keep it whatever iOS says", () async {
+        expect((await launch(isIOS: true)).appBuvid, vendorBuvid);
+        final file = deviceFile();
+        expect(file['buvidIphone'], vendorBuvid);
+
+        const other = '11111111-2222-3333-4444-555555555555';
+        final moved = await launch(isIOS: true, idfv: () async => other);
+        expect(moved.appIdfv, other, reason: 'the reports name what iOS says now');
+        expect(moved.appBuvid, vendorBuvid);
+
+        final failed = await launch(isIOS: true, idfv: () async => throw StateError('no vendor id'));
+        expect(failed.appBuvid, vendorBuvid);
+        expect(deviceFile(), file);
+        expectNoSecretsLogged([...file.values, other]);
+      });
+
+      test('a file from before the iPhone identity keeps its id and what it remembered, and gains the other', () async {
+        final old = TokenAppAuth.newBuvid(Random(7));
+        File(path).writeAsStringSync(jsonEncode({'buvid': old, 'authDeclined': true}));
+
+        expect((await launch(isIOS: true)).appBuvid, vendorBuvid);
+        expect(deviceFile(), {'buvid': old, 'buvidIphone': vendorBuvid, 'authDeclined': true});
+        expect((await launch()).appBuvid, old, reason: "the Android app's id is the one it had");
+        expectNoSecretsLogged([old]);
+      });
+
+      test("a vendor id iOS cannot give is tolerated, and only the error's type is logged", () async {
+        final failed = await launch(isIOS: true, idfv: () async => throw StateError('made-up reason'));
+        expect(failed.loginIdentity, OfficialIdentity.iphone);
+        expect(failed.appIdfv, isNull);
+        expect(failed.appBuvid, matches(iphoneBuvid));
+        final line = events.lines.where((line) => line.contains('app idfv unreadable')).single;
+        expect(line, contains('"error":"StateError"'));
+        expect(line, isNot(contains('made-up reason')));
+        expectNoSecretsLogged(deviceFile().values);
+      });
+
+      test('a vendor id iOS has none of yet is no error', () async {
+        final none = await launch(isIOS: true, idfv: () async => null);
+        expect(none.appIdfv, isNull);
+        expect(none.appBuvid, matches(iphoneBuvid));
+        expect(events.lines.where((line) => line.contains('idfv')), isEmpty);
+      });
     });
   });
 }

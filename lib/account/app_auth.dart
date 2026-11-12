@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
 import 'dart:math' show Random;
 
 import 'package:bili_core/api.dart';
@@ -8,6 +8,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/widgets.dart';
 
 import '../app/app_environment.dart';
+import '../device/ios/device_api.g.dart';
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../playback/playback_setup.dart' show supportFilePath;
 import '../shared/toast.dart';
@@ -23,6 +24,9 @@ abstract interface class AppAuth implements Listenable {
   /// When the token runs out; null without one.
   DateTime? get expiresAt;
 
+  /// The official app the token was issued to; null without one.
+  OfficialIdentity? get identity;
+
   /// Launch: the stored token (renewed if due, one call), and the confirm asked once when logged in without one,
   /// unless it was turned down before.
   Future<void> start();
@@ -30,7 +34,8 @@ abstract interface class AppAuth implements Listenable {
   /// Asks for the confirm, completing with whether a token is held now. One already up answers every caller.
   Future<bool> request(BuildContext context);
 
-  /// 开发者's 重新授权: drops the token and asks again.
+  /// 开发者's 重新授权: asks again, and a confirm that goes through replaces the token. Until then the held one
+  /// stays in use.
   Future<bool> reauthorize(BuildContext context);
 
   void dispose();
@@ -43,6 +48,9 @@ class NoAppAuth extends ChangeNotifier implements AppAuth {
 
   @override
   DateTime? get expiresAt => null;
+
+  @override
+  OfficialIdentity? get identity => null;
 
   @override
   Future<void> start() async {}
@@ -65,6 +73,12 @@ class FakeAppAuth extends ChangeNotifier implements AppAuth {
   DateTime? get expiresAt => authorized ? DateTime.now().add(const Duration(days: 180)) : null;
 
   @override
+  OfficialIdentity? get identity {
+    if (!authorized) return null;
+    return Platform.isIOS ? OfficialIdentity.iphone : OfficialIdentity.android;
+  }
+
+  @override
   Future<void> start() async {}
 
   @override
@@ -78,12 +92,21 @@ class FakeAppAuth extends ChangeNotifier implements AppAuth {
   Future<bool> reauthorize(BuildContext context) => request(context);
 }
 
-/// Where the official calls' device id is kept.
+/// Where the official calls' device ids are kept.
 String? appDevicePath() => supportFilePath('app_device.json');
+
+/// iOS's identifierForVendor, from DeviceChannel.swift.
+Future<String?> hostIdfv() => DeviceHostApi().idfv();
+
+typedef _DeviceIds = ({String android, String iphone});
 
 /// The phone's: the token in the keychain's app-token item (its JSON, expiry included), set on
 /// [AppEnvironment.client]. A launch only compares dates; the one renewal call goes out within
 /// [AppToken.renewWithin] of the end. A token that is rejected or runs out is dropped and the confirm asked again.
+///
+/// A token only works as the app it was issued to, so it keeps that identity for as long as it is held. A new
+/// confirm is the iPhone app's on iOS and the Android app's elsewhere; an install still holding an Android token on
+/// iOS keeps it until 重新授权, and is never asked because of it.
 class TokenAppAuth extends ChangeNotifier implements AppAuth {
   TokenAppAuth({
     required this.environment,
@@ -91,10 +114,13 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     this.confirm = showAppAuthPrompt,
     this.confirmInClient = confirmInBilibili,
     this.devicePath = appDevicePath,
+    bool? isIOS,
+    this.idfv = hostIdfv,
     DateTime Function()? now,
     this.pollInterval = const Duration(seconds: 1),
     Logger? logger,
-  }) : _now = now ?? DateTime.now,
+  }) : _isIOS = isIOS ?? Platform.isIOS,
+       _now = now ?? DateTime.now,
        _logger = logger ?? Logger.shared;
 
   final AppEnvironment environment;
@@ -109,12 +135,16 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
   /// no app to open.
   final Future<bool> Function(Uri page) confirmInClient;
 
-  /// Null keeps the device id for this launch only.
+  /// Null keeps the device ids for this launch only.
   final String? Function() devicePath;
+
+  /// Asked on iOS only; null while iOS has none.
+  final Future<String?> Function() idfv;
 
   /// Between the polls once the user is back, the first of which should find the token.
   final Duration pollInterval;
 
+  final bool _isIOS;
   final DateTime Function() _now;
   final Logger _logger;
 
@@ -122,14 +152,27 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
   static const quickPolls = 5;
 
   static final _buvidShape = RegExp(r'^XY[0-9A-F]{35}$');
+  static final _iphoneBuvidShape = RegExp(r'^Y[0-9A-F]{35}$');
 
   /// PiliPlus's buvid: XY, three of the digits again, then 16 random bytes in upper-case hex.
   static String newBuvid([Random? random]) {
+    final hex = _randomHex(random);
+    return 'XY${hex[2]}${hex[12]}${hex[22]}$hex';
+  }
+
+  /// The iPhone app's buvid: Y, three of the digits again, then an MD5 in upper-case hex. The MD5 is of [idfv]
+  /// without its hyphens, or of 16 random bytes in a UUID's place when iOS has none.
+  static String newIphoneBuvid({String? idfv, Random? random}) {
+    final seed = idfv == null || idfv.isEmpty ? _randomHex(random) : idfv.replaceAll('-', '');
+    final hex = MD5.hex(seed).toUpperCase();
+    return 'Y${hex[2]}${hex[12]}${hex[22]}$hex';
+  }
+
+  static String _randomHex(Random? random) {
     final source = random ?? Random.secure();
-    final hex = [
+    return [
       for (var i = 0; i < 16; i++) source.nextInt(256).toRadixString(16).padLeft(2, '0'),
     ].join().toUpperCase();
-    return 'XY${hex[2]}${hex[12]}${hex[22]}$hex';
   }
 
   bool _started = false;
@@ -146,6 +189,9 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
   bool _declined = false;
   Future<bool>? _request;
 
+  /// Null until [start] has read the device file.
+  _DeviceIds? _ids;
+
   BiliClient get _client => environment.client;
 
   @override
@@ -155,11 +201,18 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
   DateTime? get expiresAt => _client.appToken?.expiresAt;
 
   @override
+  OfficialIdentity? get identity => _client.appToken?.identity;
+
+  @override
   Future<void> start() async {
     if (_started) return;
     _started = true;
     _client.onAppTokenRejected = _rejected;
-    _client.appBuvid = await _deviceId();
+    _client.loginIdentity = _isIOS ? OfficialIdentity.iphone : OfficialIdentity.android;
+    final vendorId = _isIOS ? await _vendorId() : null;
+    _client.appIdfv = vendorId;
+    _ids = await _deviceIds(vendorId);
+    _nameDevice();
     var token = await _stored();
     if (_disposed) return;
     final now = _now();
@@ -170,8 +223,9 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     }
     if (token != null) {
       _client.appToken = token;
+      _nameDevice();
       notifyListeners();
-      _logger.info(LogCategory.app, 'app token', {'days': _daysLeft(token, now)});
+      _logger.info(LogCategory.app, 'app token', {'days': _daysLeft(token, now), 'identity': token.identity.name});
       // Off the launch's path, which waits for this load so 推荐's first page already knows the token.
       if (token.dueForRenewal(now)) unawaited(_renew());
     }
@@ -191,18 +245,16 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     return _request = asked;
   }
 
+  /// The held token is the only one that works until the new confirm goes through, so it isn't dropped first.
   @override
-  Future<bool> reauthorize(BuildContext context) {
-    if (_request case final running?) return running;
-    if (authorized) unawaited(_drop('reauthorize'));
-    return request(context);
-  }
+  Future<bool> reauthorize(BuildContext context) => request(context);
 
   Future<bool> _ask(BuildContext context) async {
     if (environment.account is! LoggedIn) return false;
     if (!await confirm(context)) {
       _logger.info(LogCategory.app, 'app auth declined');
-      _setDeclined(true);
+      // 取消 on 重新授权 keeps the token, which is no refusal of the official calls.
+      if (!authorized) _setDeclined(true);
       return authorized;
     }
     _logger.info(LogCategory.app, 'app auth asked');
@@ -215,7 +267,10 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
       }
       await _hold(token);
       _setDeclined(false);
-      _logger.info(LogCategory.app, 'app auth done', {'days': _daysLeft(token, _now())});
+      _logger.info(LogCategory.app, 'app auth done', {
+        'days': _daysLeft(token, _now()),
+        'identity': token.identity.name,
+      });
       _toast(context.mounted ? context : null, '授权成功');
       return true;
     } catch (error) {
@@ -228,6 +283,8 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
 
   /// The code, its confirm page in the official app, then a few polls once the user is back.
   Future<AppToken> _fetch() async {
+    // The code is asked as the login's identity whatever token is held, and its token is that identity's.
+    final identity = _client.loginIdentity;
     final code = await _client.tvAuthCode();
     final page = Uri.tryParse(code.url);
     if (page == null || page.scheme != 'https') throw const _AuthFailure('bad page', '请稍后重试');
@@ -238,7 +295,7 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
       if (poll > 0) await Future<void>.delayed(pollInterval);
       switch (await _client.tvPoll(code.authCode)) {
         case TVLoginConfirmed(:final token):
-          return token;
+          return _issuedTo(identity, token);
         case TVLoginExpired():
           throw const _AuthFailure('expired', '确认已超时，请重试');
         case TVLoginWaiting():
@@ -250,10 +307,13 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
 
   /// One call; a failure keeps the token, which is good until its date. A rejection drops it through [_rejected].
   Future<void> _renew() async {
+    final current = _client.appToken;
+    if (current == null) return;
     try {
       final renewed = await _client.renewAppToken();
-      if (_disposed || !authorized) return;
-      await _hold(renewed);
+      // A logout or a 重新授权 while the call was out: its answer renews a token no longer held.
+      if (_disposed || _client.appToken != current) return;
+      await _hold(_issuedTo(current.identity, renewed));
       _logger.info(LogCategory.app, 'app token renewed', {'days': _daysLeft(renewed, _now())});
     } catch (error) {
       _logger.warn(LogCategory.app, 'app token renewal failed', _failure(error));
@@ -317,8 +377,31 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     });
   }
 
+  /// [token] as [identity]'s: the pair that asked for a token is the one it works with, whatever label the answer
+  /// was decoded under.
+  static AppToken _issuedTo(OfficialIdentity identity, AppToken token) => token.identity == identity
+      ? token
+      : AppToken(
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+          mid: token.mid,
+          expiresAt: token.expiresAt,
+          identity: identity,
+        );
+
+  /// Each identity has its own device id, and the calls name the one of the identity they go out as.
+  void _nameDevice() {
+    final ids = _ids;
+    if (ids == null) return;
+    _client.appBuvid = switch (_client.officialIdentity) {
+      OfficialIdentity.android => ids.android,
+      OfficialIdentity.iphone => ids.iphone,
+    };
+  }
+
   Future<void> _hold(AppToken token) async {
     _client.appToken = token;
+    _nameDevice();
     if (!_disposed) notifyListeners();
     var saved = false;
     try {
@@ -331,6 +414,7 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
 
   Future<void> _drop(String reason) async {
     _client.appToken = null;
+    _nameDevice();
     _logger.info(LogCategory.app, 'app token dropped', {'reason': reason});
     if (!_disposed) notifyListeners();
     await _deleteStored();
@@ -369,9 +453,24 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
     }
   }
 
-  /// The device id, and whether the confirm was turned down, from the device file.
-  Future<String> _deviceId() async {
+  /// Null when iOS has none yet or the call fails.
+  Future<String?> _vendorId() async {
+    try {
+      final id = await idfv();
+      return id == null || id.isEmpty ? null : id;
+    } catch (error) {
+      _logger.warn(LogCategory.app, 'app idfv unreadable', {'error': '${error.runtimeType}'});
+      return null;
+    }
+  }
+
+  /// Both identities' device ids, and whether the confirm was turned down, from the device file. One the file lacks
+  /// (the iPhone's, in a file from before the iPhone identity) is made and kept: the iPhone's from [vendorId] that
+  /// once, never again, so the feed goes on learning one device whatever iOS answers later.
+  Future<_DeviceIds> _deviceIds(String? vendorId) async {
     final path = devicePath();
+    String? android;
+    String? iphone;
     if (path != null) {
       try {
         final file = File(path);
@@ -379,38 +478,46 @@ class TokenAppAuth extends ChangeNotifier implements AppAuth {
           final json = jsonDecode(await file.readAsString());
           final fields = json is Map<String, Object?> ? json : const <String, Object?>{};
           if (fields[_declinedField] == true) _declined = true;
-          final id = fields['buvid'];
-          if (id is String && _buvidShape.hasMatch(id)) return id;
+          android = _shaped(fields[_androidField], _buvidShape);
+          iphone = _shaped(fields[_iphoneField], _iphoneBuvidShape);
         }
       } catch (error) {
         _logger.warn(LogCategory.app, 'app device id unreadable', {'error': '${error.runtimeType}'});
       }
     }
-    final id = newBuvid();
-    if (path != null) {
+    final ids = (android: android ?? newBuvid(), iphone: iphone ?? newIphoneBuvid(idfv: vendorId));
+    if (path != null && (android == null || iphone == null)) {
       try {
         await File(path).parent.create(recursive: true);
-        await File(path).writeAsString(jsonEncode(_deviceFile(id)), flush: true);
+        await File(path).writeAsString(jsonEncode(_deviceFile(ids)), flush: true);
       } catch (error) {
         _logger.warn(LogCategory.app, 'app device id not saved', {'error': '${error.runtimeType}'});
       }
     }
-    return id;
+    return ids;
   }
 
+  static String? _shaped(Object? id, RegExp shape) => id is String && shape.hasMatch(id) ? id : null;
+
+  static const _androidField = 'buvid';
+  static const _iphoneField = 'buvidIphone';
   static const _declinedField = 'authDeclined';
 
-  Map<String, Object> _deviceFile(String id) => {'buvid': id, if (_declined) _declinedField: true};
+  Map<String, Object> _deviceFile(_DeviceIds ids) => {
+    _androidField: ids.android,
+    _iphoneField: ids.iphone,
+    if (_declined) _declinedField: true,
+  };
 
   /// Written at once: it changes only on a confirm's answer or a logout, and the file is a few bytes.
   void _setDeclined(bool declined) {
     if (_declined == declined) return;
     _declined = declined;
-    final id = _client.appBuvid;
+    final ids = _ids;
     final path = devicePath();
-    if (id == null || path == null) return;
+    if (ids == null || path == null) return;
     try {
-      File(path).writeAsStringSync(jsonEncode(_deviceFile(id)), flush: true);
+      File(path).writeAsStringSync(jsonEncode(_deviceFile(ids)), flush: true);
     } catch (error) {
       _logger.warn(LogCategory.app, 'app device file not saved', {'error': '${error.runtimeType}'});
     }

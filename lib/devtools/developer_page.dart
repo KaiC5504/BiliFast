@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/api.dart' show OfficialIdentity;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:flutter/foundation.dart';
@@ -397,6 +398,12 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
 
   static String _authState(AppAuth appAuth) {
     final expiresAt = appAuth.expiresAt;
-    return appAuth.authorized && expiresAt != null ? '已授权 · 剩 ${expiresAt.difference(DateTime.now()).inDays} 天' : '未授权';
+    final identity = appAuth.identity;
+    if (!appAuth.authorized || expiresAt == null || identity == null) return '未授权';
+    final app = switch (identity) {
+      OfficialIdentity.iphone => 'iPhone',
+      OfficialIdentity.android => 'Android',
+    };
+    return '已授权 · $app · 剩 ${expiresAt.difference(DateTime.now()).inDays} 天';
   }
 }
