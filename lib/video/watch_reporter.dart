@@ -72,6 +72,7 @@ class WatchReporter {
           progress: play.finished ? HeartbeatSchedule.finished : play.report.lastProgress,
           duration: play.report.duration,
           startTs: play.report.startTs,
+          source: play.report.source.historySource,
         );
       }),
     );
@@ -85,9 +86,6 @@ class WatchReporter {
     if (held == null || held.identity != OfficialIdentity.iphone) throw BiliError.noAppToken;
     if (held.mid != mid) throw const AnotherAccountsPlay();
   }
-
-  /// The video page, where every play is reported from.
-  static const _spmid = 'united.player-video-detail.0.0';
 
   /// Seconds of play between two saves of the running play.
   static const _keepEvery = 15;
@@ -382,7 +380,7 @@ class WatchReporter {
       duration: play.duration,
       session: play.session,
       source: play.source,
-      spmid: _spmid,
+      spmid: play.source.spmid,
       startTs: totals?.startTs ?? 0,
       playedTime: totals?.playedTime ?? 0,
       actualPlayedTime: totals?.actualPlayedTime ?? 0,

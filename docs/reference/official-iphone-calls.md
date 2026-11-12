@@ -138,7 +138,34 @@ video page's value is not known, so BiliFast leaves `source` out.
 
 ## 竖屏's feed: `GET app.bilibili.com/x/v2/feed/index/story`
 
-Not built yet (GitHub issue 2). Page 1 is asked with the video the user entered on (`aid`, `cid`), `display_id=1`,
-`pull=1`, `from=7`, `from_spmid=tm.recommend.0.0`, `spmid=main.ugc-video-detail-vertical.0.0`, the card's `trackid`,
-`contain=0`, `auto_play=0`, `video_mode=1` and the feed's player fields; the next page with the same `aid`, `cid`
-and `trackid`, `display_id=2`, `pull=0`. The official app asks again once the user is within three cards of the end.
+Signed as the iPhone identity with the app token, the common fields and:
+
+| Field | First page | Later pages |
+|---|---|---|
+| `aid`, `cid` | the video 竖屏 was entered on | the same |
+| `trackid` | the entry card's `track_id` | the same |
+| `display_id` | `1` | `2`, `3`, … |
+| `pull` | `1` | `0` |
+| `from`, `from_spmid`, `spmid` | `7`, `tm.recommend.0.0` (from a 推荐 card), `main.ugc-video-detail-vertical.0.0` | left out |
+| `auto_play`, `open_event`, `epid`, `ogv_style` | `0`, `cold`, `0`, `0` | left out |
+| `contain`, `video_mode`, `voice_balance`, `client_attr` | `0`, `1`, `1`, `1` | the same |
+| `collection_second_feed_iaa`, `material_no`, `room_id` | `1`, `0`, `0` | the same |
+| `extra_content` | `{"story_video_bg_play_listen":"0"}` | the same |
+| `fnval`, `fnver`, `force_host`, `fourk`, `qn`, `qn_policy`, `soft_fnval` | `17364`, `0`, `0`, `1`, `120`, `0`, `0` | the same |
+| `network`, `player_net`, `player_extra_content` | `wifi`, `1`, the screen in pixels | the same |
+| `product_id`, `product_type`, `server_name`, `sp_id` | empty | empty |
+| `teenagers_age` | `16` | the same |
+
+`ad_extra` is left out. The official app asks again once the user is within three videos of the end.
+
+The answer is `data.items` and `data.config`. The first page's first item is the entered video itself. An item's
+`goto` is `vertical_av` (a video), `vertical_live` or `vertical_ad_av`. A video item carries `bvid`, `title`,
+`cover`, `ff_cover` (its first frame), `duration`, `dimension` (`width`, `height`, `rotate`), `player_args` (`aid`,
+`cid`), `owner` (`mid`, `name`, `face`, `fans`, `relation.status`), `stat` (`view`, `like`, `reply`, `coin`,
+`favorite`, `share`, `danmaku`), `track_id`, `report_flow_data` (not on every item), `idx`, and where they apply
+`season` (`title`, `current_index`, `total`), `staff_info`, `desc`, `pubdate`. `config.swipe_opacity.other_ui_alpha_percent`
+is `10`: the controls' opacity while the page moves.
+
+A play in 竖屏 reports with `spmid=main.ugc-video-detail-vertical.0.0`, `from=default-value`, the entry's
+`from_spmid`, the item's own `track_id` and `report_flow_data`, `auto_play` `0` for the entered video and `99` for
+each one swiped to; its history report's `source` is `story-single` for the entered video and `story-series` after.

@@ -28,6 +28,7 @@ import 'relation_models.dart';
 import 'search_models.dart';
 import 'skin_models.dart';
 import 'space_models.dart';
+import 'story_models.dart';
 import 'video_models.dart';
 import 'watch_later_models.dart';
 import 'wbi.dart';
@@ -49,6 +50,7 @@ part 'bili_client_report.dart';
 part 'bili_client_search.dart';
 part 'bili_client_skin.dart';
 part 'bili_client_space.dart';
+part 'bili_client_story.dart';
 part 'bili_client_toview.dart';
 part 'bili_client_video.dart';
 

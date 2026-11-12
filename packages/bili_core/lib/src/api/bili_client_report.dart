@@ -104,14 +104,15 @@ extension BiliClientReport on BiliClient {
     }, host: BiliClient.api);
   }
 
-  /// [progress] in seconds, -1 for a video watched to its end. `source` is left out: the video page's value is not
-  /// known.
+  /// [progress] in seconds, -1 for a video watched to its end. [source] is the play's [PlaySource.historySource];
+  /// null leaves it out.
   Future<void> historyReport({
     required int aid,
     required int cid,
     required int progress,
     required int duration,
     required int startTs,
+    String? source,
   }) async {
     _reportToken();
     await _officialPostVoid('/x/v2/history/report', {
@@ -126,6 +127,7 @@ extension BiliClientReport on BiliClient {
       'start_ts': '$startTs',
       'device_ts': '$_unixSeconds',
       'scene': 'front',
+      'source': ?source,
       'teenagers_age': '16',
       'statistics': _reportStatistics,
     }, host: BiliClient.api);

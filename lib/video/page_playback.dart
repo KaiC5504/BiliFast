@@ -12,6 +12,8 @@ import '../playback/playback_controller.dart';
 import 'page_session.dart';
 import 'pip_keeper.dart';
 import 'player_session.dart';
+import 'story/page_story_feed.dart';
+import 'story/story_feed.dart';
 import 'video_route.dart';
 import 'watch_reporter.dart';
 
@@ -58,6 +60,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     required this.restorePage,
     this._inline = false,
     this._autoplay = true,
+    this._storyFeed = pageStoryFeed,
   }) : _bvid = route.bvid,
        _cid = route.cid,
        _startAt = route.start,
@@ -72,6 +75,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
 
   /// Builds the page the small window's restore button pushes around this playback.
   final Widget Function(VideoRoute route) restorePage;
+
+  final StoryFeedFactory _storyFeed;
+  StoryFeed? _story;
 
   bool _inline;
 
@@ -138,6 +144,27 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
 
   /// Still the card's, before any page took it.
   bool get inline => _inline;
+
+  /// 竖屏's feed while 竖屏 is up; null otherwise.
+  StoryFeed? get story => _story;
+
+  /// 竖屏 began: a feed from the video playing now, the same one until [endStory].
+  StoryFeed beginStory() => _story ??= _storyFeed(this);
+
+  /// 竖屏 ended: the feed goes, and the video swiped to stays on the page.
+  void endStory() {
+    final story = _story;
+    _story = null;
+    story?.dispose();
+  }
+
+  /// The video playing now as 竖屏's first entry; null before its details are in.
+  StoryEntry? get storyEntry {
+    final controller = _controller;
+    final detail = controller?.detail;
+    if (controller == null || detail == null || detail.bvid != _bvid) return null;
+    return StoryEntry.fromDetail(detail, cid: controller.page?.cid ?? _cid, source: _source);
+  }
 
   @override
   bool get pipActive => _controller?.pictureInPicture ?? false;
@@ -291,9 +318,10 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     );
   }
 
-  /// Another part or video, from 选集, 自动连播 or the end screen: opened on the same controller, with or without a
-  /// page. [followed] when nobody asked for it (自动连播, 后台连播), which its watch reports say.
-  void openOnPage(String bvid, {int? cid, bool followed = false}) {
+  /// Another part or video, from 选集, 自动连播, the end screen or 竖屏's feed: opened on the same controller, with or
+  /// without a page. [followed] when nobody asked for it (自动连播, 后台连播), which its watch reports say. Another
+  /// video reports [source], else nothing of where it came from.
+  void openOnPage(String bvid, {int? cid, bool followed = false, PlaySource? source}) {
     final controller = _controller;
     if (controller == null || _closed) return;
     // A second tap while the first one's load is still out (⏭ keeps its target until the part arrives) would load
@@ -303,7 +331,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     // Another part of this video needs no second signed view.
     _view = sameVideo ? controller.video : null;
     _detail = sameVideo ? controller.detail : null;
-    if (!sameVideo) _source = PlaySource.unknown;
+    if (!sameVideo) _source = source ?? PlaySource.unknown;
     _followed = followed;
     _bvid = bvid;
     _cid = cid;
@@ -494,6 +522,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     final session = _session;
     session?.readout.status.removeListener(_stillCovered);
     session?.active = false;
+    endStory();
     unawaited(_reporter?.leave());
     _progress?.leave();
     unawaited(_restores?.cancel());

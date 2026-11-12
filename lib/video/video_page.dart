@@ -33,6 +33,7 @@ import '../player_ui/panels/panel_controller.dart';
 import '../player_ui/panels/panel_layer.dart';
 import '../player_ui/player_loading.dart';
 import '../player_ui/player_ui.dart';
+import '../player_ui/speed_lock.dart';
 import '../settings/autoplay_policy.dart';
 import '../shared/cover_preset.dart';
 import '../shared/remote_image.dart';
@@ -53,6 +54,9 @@ import 'page_session.dart';
 import 'page_tabs.dart';
 import 'player_prefs.dart';
 import 'player_session.dart';
+import 'story/page_story_feed.dart';
+import 'story/story_drag.dart';
+import 'story/story_feed.dart';
 import 'turn_recorder.dart';
 import 'video_player_area.dart';
 import 'video_route.dart';
@@ -112,11 +116,15 @@ class VideoPage extends StatefulWidget {
     this.createSession = pageSession,
     this.createDetails = pageDetails,
     this.openPage = replaceVideoPage,
+    this.createStory = pageStoryFeed,
   });
 
   final VideoRoute route;
   final PageSessionFactory createSession;
   final PageDetailsFactory createDetails;
+
+  /// 竖屏's feed, made as 竖屏 begins.
+  final StoryFeedFactory createStory;
 
   /// A related video, a video id in the description or a comment, or the uploader sheet's video, opens through this:
   /// in this page's place.
@@ -280,6 +288,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// 评论详情 and the uploader sheet hold the left edge, over the small player too, so the player's drag leaves it
   /// alone.
   final _threadEdge = ValueNotifier<bool>(false);
+
+  /// 竖屏's feed, its page under the finger, 清屏 and the speed lock (PlayerUi's).
+  final _story = ValueNotifier<StoryFeed?>(null);
+  final _storyDrag = StoryDrag();
+  final _clean = ValueNotifier<bool>(false);
+  final _speedLock = SpeedLock();
 
   /// The list's count once its first page is in, for 评论 N to follow a post or a delete; null before.
   final _listCount = ValueNotifier<int?>(null);
@@ -666,6 +680,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final createSession = widget.createSession;
     final createDetails = widget.createDetails;
     final openPage = widget.openPage;
+    final createStory = widget.createStory;
     final brought = route.playback;
     // 推荐's big card hands its inline playback over to a page it opens; anything else brought is a restore.
     final restored = brought != null && !brought.inline;
@@ -680,8 +695,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
               createSession: createSession,
               createDetails: createDetails,
               openPage: openPage,
+              createStory: createStory,
             ),
             autoplay: brought != null || _opensPlaying(route),
+            storyFeed: createStory,
           );
     _fullScreenOnOpen = !restored && PlayerPrefs.shared.detailFullScreen;
     _playback = playback;
@@ -794,6 +811,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       layout: _laidOut,
       statusBar: services.device.status,
       replyCount: _listCount,
+      story: _story,
+      storyDrag: _storyDrag,
+      clean: _clean,
+      speedLock: _speedLock,
     );
     _videoView = session.player.buildView();
     session.addListener(_sessionChanged);
@@ -1489,6 +1510,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ?..sendOpen.removeListener(_panelChanged)
       ..dispose();
     _chrome.dispose();
+    _story.dispose();
+    _storyDrag.dispose();
+    _clean.dispose();
+    _speedLock.dispose();
     _panels.dispose();
     _overlays.dispose();
     _tabs.dispose();

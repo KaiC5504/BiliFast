@@ -1603,6 +1603,32 @@ abstract final class VerticalActionTheme {
   static const collectionBarTrail = 20 / 3;
 }
 
+/// 竖屏's 清屏 (180, 186), its last bottom button by the video's shape, and the controls while the page moves under the
+/// finger (185). The chrome agent's tokens.
+abstract final class VerticalCleanTheme {
+  /// 清屏's last bottom button: the APK's `bili_story_ctrl_clean`, level 1 of `bili_story_screen_mode_selector`.
+  static const screenModeCleanAsset = 'assets/images/player/screen_mode_clean.png';
+
+  /// While the page moves, everything but the pictures is drawn at this much of itself (the feed's own
+  /// `config.swipe_opacity.other_ui_alpha_percent`).
+  static const movingOpacity = 0.1;
+}
+
+/// 竖屏's swipe between videos (185, 186, measured at 60 fps). The pager agent's tokens.
+abstract final class StoryPagerTheme {
+  /// After the finger lifts, the distance left roughly halves every frame: landing within 120 to 170 ms, no bounce.
+  static const settleRatioPerFrame = 0.5;
+
+  /// A drag let go past this share of the screen moves to the neighbour; one shorter goes back.
+  static const releaseShare = 0.5;
+}
+
+/// 竖屏's held 2× and its lock (182, 183, 186). The gestures agent's tokens.
+abstract final class SpeedLockTheme {
+  /// The APK's `biliplayer_ic_lock`.
+  static const lockAsset = 'assets/images/player/speed_lock.png';
+}
+
 /// A comment row and its badges (10, 12, 13), measured at 3× on KaiC's phone. Heights count down from the row's top,
 /// which is the hairline above it.
 abstract final class CommentRowTheme {

@@ -6,8 +6,11 @@ import '../device/orientation.dart';
 import '../device/status_bar.dart';
 import '../video/page_details.dart';
 import '../video/player_session.dart';
+import '../video/story/story_drag.dart';
+import '../video/story/story_feed.dart';
 import 'chrome_state.dart';
 import 'panels/panel_controller.dart';
+import 'speed_lock.dart';
 
 /// Everything a piece of the player's interface works with, handed to each as one value.
 @immutable
@@ -27,6 +30,10 @@ final class PlayerUi {
     this.layout,
     this.statusBar,
     this.replyCount,
+    this.story,
+    this.storyDrag,
+    this.clean,
+    this.speedLock,
   });
 
   final PlayerSession session;
@@ -65,6 +72,19 @@ final class PlayerUi {
   /// 评论's count as the page's tab row shows it, following posts and deletes once the list is in; null until then,
   /// when the video's own count stands.
   final ValueListenable<int?>? replyCount;
+
+  /// 竖屏's feed while 竖屏 is up, null otherwise; null outside a video page.
+  final ValueListenable<StoryFeed?>? story;
+
+  /// 竖屏's page under the finger; null outside a video page.
+  final StoryDrag? storyDrag;
+
+  /// 竖屏's 清屏: the controls hidden but for 人正在看, play or pause with the time, the progress line and the bottom
+  /// bar (180, 186); null outside a video page.
+  final ValueNotifier<bool>? clean;
+
+  /// 竖屏's held 2× and its lock; null outside a video page.
+  final SpeedLock? speedLock;
 
   /// The count beside 评论 in full screen.
   int? get replies => replyCount?.value ?? session.detail?.stat.reply;

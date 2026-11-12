@@ -32,6 +32,11 @@ unchanged: a white 小电视 with the ▶ cut out. KaiC's iPhone draws it at the
 at 60% white. Drawn white at 3× of its own 24 dp (72 px; 24 pt as 16 measures it) with its stroke alpha and round line
 caps, which `apk_asset.py`'s drawings leave out.
 
+`images/player/screen_mode_clean.png` (the same button with 清屏 on, 180 and 186) is level 1, `bili_story_ctrl_clean`:
+the phone on the other side, its half screen and lines at 60% white, drawn the same way (its clip path is one
+`apk_asset.py extract` can't draw). `images/player/speed_lock.png` (竖屏's speed lock, 183 and 186) is the same APK's
+`biliplayer_ic_lock`, white at 3× of its 24 dp.
+
 `images/home/batch_refresh.png` (the ⟳ after 推荐's 刚刚看到这里，点击刷新, 122) is the same APK's
 `ic_promo_index_refresh` (xxhdpi), unchanged: two white arcs with solid arrowheads, the drawing KaiC's iPhone shows (the
 APK's `ic_promo_index_refresh_vector` is a newer one, its arrows open and turning the other way). The iPhone draws it at

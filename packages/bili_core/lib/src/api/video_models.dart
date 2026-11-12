@@ -525,6 +525,14 @@ final class VideoCard {
     required this.views,
     required this.danmaku,
     required this.likes,
+    this.width = 0,
+    this.height = 0,
+    this.firstFrame,
+    this.ownerFace = '',
+    this.replies = 0,
+    this.coins = 0,
+    this.favourites = 0,
+    this.shares = 0,
   });
 
   factory VideoCard.fromJson(Object? json) {
@@ -560,6 +568,18 @@ final class VideoCard {
   final int danmaku;
   final int likes;
 
+  /// As shown, `rotate` applied; 0 when the answer gave no `dimension`.
+  final int width;
+  final int height;
+
+  /// `first_frame`, where the answer has it.
+  final String? firstFrame;
+  final String ownerFace;
+  final int replies;
+  final int coins;
+  final int favourites;
+  final int shares;
+
   @override
   bool operator ==(Object other) =>
       other is VideoCard &&
@@ -573,10 +593,38 @@ final class VideoCard {
       other.ownerName == ownerName &&
       other.views == views &&
       other.danmaku == danmaku &&
-      other.likes == likes;
+      other.likes == likes &&
+      other.width == width &&
+      other.height == height &&
+      other.firstFrame == firstFrame &&
+      other.ownerFace == ownerFace &&
+      other.replies == replies &&
+      other.coins == coins &&
+      other.favourites == favourites &&
+      other.shares == shares;
 
   @override
-  int get hashCode => Object.hash(aid, bvid, cid, title, cover, duration, ownerMid, ownerName, views, danmaku, likes);
+  int get hashCode => Object.hash(
+    aid,
+    bvid,
+    cid,
+    title,
+    cover,
+    duration,
+    ownerMid,
+    ownerName,
+    views,
+    danmaku,
+    likes,
+    width,
+    height,
+    firstFrame,
+    ownerFace,
+    replies,
+    coins,
+    favourites,
+    shares,
+  );
 }
 
 /// The seek preview's frames (`/x/player/videoshot`): sheets of [columns] × [rows] small frames, each [cellWidth] ×
