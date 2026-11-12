@@ -64,10 +64,18 @@ final class FakeHost extends StoryHost {
   @override
   String? framed;
 
+  @override
+  bool comfortable = false;
+
   final Map<String, List<VideoCard>> loaded = {};
   final List<StoryEntry> opened = [];
   final List<bool> openedEntered = [];
   final List<VideoDetail?> openedWith = [];
+  final List<(StoryEntry, VideoDetail)> warms = [];
+  int warmDrops = 0;
+
+  /// Thrown by the next warms, as the playurl call's error.
+  Object? warmError;
   bool disposed = false;
 
   void changed() => notifyListeners();
@@ -90,11 +98,21 @@ final class FakeHost extends StoryHost {
     bvid = entry.bvid;
     playing = null;
     framed = null;
+    comfortable = false;
     notifyListeners();
   }
 
   @override
   void halt() => halted = true;
+
+  @override
+  Future<void> warm(StoryEntry entry, VideoDetail detail) async {
+    warms.add((entry, detail));
+    if (warmError case final error?) throw error;
+  }
+
+  @override
+  void dropWarm() => warmDrops++;
 
   @override
   void dispose() {
@@ -159,13 +177,14 @@ void main() {
     return answer.future;
   }
 
-  StoryList make({bool useOfficial = true, bool ahead = false}) {
+  StoryList make({bool useOfficial = true, bool ahead = false, bool warms = false}) {
     final on = host;
     final feed = StoryList(
       host: on,
       official: useOfficial ? official : null,
       related: related,
       detail: ahead ? detail : null,
+      warmsNext: warms,
       logger: logger,
     )..addListener(() => notified++);
     addTearDown(() {
@@ -734,6 +753,101 @@ void main() {
           expect('$value', isNot(contains('BV1')));
         }
       }
+    });
+  });
+
+  group('the next video loaded ahead', () {
+    VideoDetail details(String bvid) => VideoDetail.fromJson({'bvid': bvid, 'aid': 1});
+
+    Future<void> answerDetail(int at, VideoDetail answer) async {
+      detailAnswers[at].complete(answer);
+      await pumpEventQueue();
+    }
+
+    void plays(String bvid, {bool comfortable = true}) => host
+      ..framed = bvid
+      ..comfortable = comfortable
+      ..changed();
+
+    List<String> warmed() => [for (final (entry, _) in host.warms) entry.bvid];
+
+    test('once for each video settled on: after its first frame, with enough held ahead and the next details in hand',
+        () async {
+      host.loaded[entered] = [card('BV1r1'), card('BV1r2'), card('BV1r3')];
+      final feed = make(useOfficial: false, ahead: true, warms: true);
+      final first = details('BV1r1');
+      await answerDetail(0, first);
+      expect(host.warms, isEmpty, reason: 'the entered video has not shown its first frame');
+      plays(entered, comfortable: false);
+      expect(host.warms, isEmpty, reason: 'not enough of it held ahead');
+      plays(entered);
+      expect(warmed(), ['BV1r1']);
+      expect(identical(host.warms.single.$2, first), isTrue, reason: 'with the details asked ahead');
+      host.changed();
+      feed.wantMore();
+      expect(warmed(), ['BV1r1'], reason: 'once for the video settled on');
+
+      expect(feed.moveNext(), isTrue);
+      expect(identical(host.openedWith.single, first), isTrue);
+      plays('BV1r1');
+      expect(warmed(), ['BV1r1'], reason: 'the next details are not in yet');
+      await answerDetail(1, details('BV1r2'));
+      expect(warmed(), ['BV1r1', 'BV1r2'], reason: 'their answer loads it');
+
+      expect(feed.movePrevious(), isTrue);
+      plays(entered);
+      expect(warmed(), ['BV1r1', 'BV1r2', 'BV1r1'], reason: 'swiped back, the next one again, never the one before');
+    });
+
+    test('none while halted', () async {
+      host.loaded[entered] = [card('BV1r1')];
+      make(useOfficial: false, ahead: true, warms: true);
+      await answerDetail(0, details('BV1r1'));
+      host.halted = true;
+      plays(entered);
+      expect(host.warms, isEmpty);
+    });
+
+    test('risk control on its playurl call halts the feed; any other failure only loses the head start', () async {
+      host
+        ..loaded[entered] = [card('BV1r1'), card('BV1r2')]
+        ..warmError = const BiliNetworkError('offline');
+      final feed = make(useOfficial: false, ahead: true, warms: true);
+      await answerDetail(0, details('BV1r1'));
+      plays(entered);
+      await pumpEventQueue();
+      expect(warmed(), ['BV1r1']);
+      expect(host.halted, isFalse);
+
+      host.warmError = const BiliAPIError(code: -352, message: '');
+      feed.moveNext();
+      await answerDetail(1, details('BV1r2'));
+      plays('BV1r1');
+      await pumpEventQueue();
+      expect(warmed(), ['BV1r1', 'BV1r2']);
+      expect(host.halted, isTrue);
+      final halted = logs.events.singleWhere((event) => event.msg == 'story feed halted');
+      expect({for (final MapEntry(:key, :value) in halted.f.entries) key: value.toJson()}, {'by': 'warm', 'code': -352});
+    });
+
+    test('let go when the feed starts over and when 竖屏 ends', () async {
+      host.loaded[entered] = [card('BV1r1')];
+      final feed = make(useOfficial: false, ahead: true, warms: true);
+      await answerDetail(0, details('BV1r1'));
+      plays(entered);
+      expect(warmed(), ['BV1r1']);
+      host.plays('BV1autonext0');
+      expect(host.warmDrops, 1);
+      feed.dispose();
+      expect(host.warmDrops, 2);
+    });
+
+    test('nothing is loaded ahead without warmsNext (Windows)', () async {
+      host.loaded[entered] = [card('BV1r1')];
+      make(useOfficial: false, ahead: true);
+      await answerDetail(0, details('BV1r1'));
+      plays(entered);
+      expect(host.warms, isEmpty);
     });
   });
 

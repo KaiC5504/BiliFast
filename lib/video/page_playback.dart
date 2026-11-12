@@ -194,6 +194,17 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   bool get storyHalted => _storyHalted;
   void haltStory() => _storyHalted = true;
 
+  /// 竖屏's next video loaded ahead on this playback's player ([PlaybackController.warm]), for its [openOnPage]; nothing
+  /// while covered, for a cached part, on 推荐's card, or before the controller is in. Throws the playurl call's error.
+  Future<void> warmNext(String bvid, {int? cid, VideoDetail? detail}) async {
+    final controller = _controller;
+    if (controller == null || _closed || _covered || _inline || offline) return;
+    await controller.warm(bvid, cid: cid, detail: detail);
+  }
+
+  /// Lets go of what [warmNext] loaded.
+  void dropWarm() => _controller?.dropWarm();
+
   /// The video playing now as 竖屏's first entry; null before its details are in. The entered video names the source
   /// it had before 竖屏, where 竖屏 was entered from.
   StoryEntry? get storyEntry {

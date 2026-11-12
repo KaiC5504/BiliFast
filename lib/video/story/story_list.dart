@@ -46,6 +46,16 @@ abstract class StoryHost extends ChangeNotifier {
   /// Risk control answered one of 竖屏's calls: nothing more is asked while the page lives, by this feed or the next.
   bool get halted;
   void halt();
+
+  /// The page's video has played and holds enough ahead for another to load beside it.
+  bool get comfortable => false;
+
+  /// Loads [entry] ahead on the page's player, with its [detail] asked ahead, so its open starts at once; throws the
+  /// playurl call's error.
+  Future<void> warm(StoryEntry entry, VideoDetail detail) async {}
+
+  /// Lets go of what [warm] loaded.
+  void dropWarm() {}
 }
 
 /// 竖屏's feed: the entered video, then the official feed's pages while [official] is given (an iPhone token, and
@@ -57,12 +67,20 @@ abstract class StoryHost extends ChangeNotifier {
 /// while the feed is kept through landscape) starts the feed over from it.
 ///
 /// With [detail], each video the page settles on has the next one's details asked once, kept in memory while it is a
-/// neighbour, and handed to its open.
+/// neighbour, and handed to its open. With [warmsNext] too, the next video is then loaded ahead on the page's player
+/// ([StoryHost.warm]) once the video settled on has shown its first frame and holds enough ahead: once for each video
+/// settled on, never while halted, let go when the feed starts over or 竖屏 ends.
 class StoryList extends StoryFeed {
-  StoryList({required StoryHost host, this._official, required this._related, this._detail, Logger? logger})
-    : _host = host,
-      _logger = logger ?? Logger.shared,
-      _enteredBvid = host.bvid {
+  StoryList({
+    required StoryHost host,
+    this._official,
+    required this._related,
+    this._detail,
+    this._warmsNext = false,
+    Logger? logger,
+  }) : _host = host,
+       _logger = logger ?? Logger.shared,
+       _enteredBvid = host.bvid {
     host.addListener(_hostChanged);
     _hostChanged();
   }
@@ -74,15 +92,17 @@ class StoryList extends StoryFeed {
   StoryPageCall? _official;
   final RelatedCall _related;
   final DetailCall? _detail;
+  final bool _warmsNext;
   final Logger _logger;
   String _enteredBvid;
 
   /// The neighbours' details asked ahead, by video.
   final Map<String, VideoDetail> _details = {};
 
-  /// Counts the videos the page settled on: each asks the next one's details at most once.
+  /// Counts the videos the page settled on: each asks the next one's details, and loads it ahead, at most once.
   int _settles = 0;
   int? _detailAskedIn;
+  int? _warmAskedIn;
 
   /// The video moved to, until its first frame shows.
   ({String bvid, Stopwatch since, bool prefetched})? _arrival;
@@ -129,6 +149,7 @@ class StoryList extends StoryFeed {
         'prefetched': arrival.prefetched,
       });
     }
+    _askWarm();
     if (_index != 0 || bvid != _enteredBvid) return;
     final playing = _host.playing;
     if (playing == null || playing.bvid != _enteredBvid) return;
@@ -167,6 +188,7 @@ class StoryList extends StoryFeed {
     _details.clear();
     _settles++;
     _arrival = null;
+    _host.dropWarm();
     _logger.info(LogCategory.api, 'story feed restarted');
     notifyListeners();
   }
@@ -235,6 +257,7 @@ class StoryList extends StoryFeed {
             if (!usable) 'dropped': true,
           });
           if (usable && {previous?.bvid, current?.bvid, this.next?.bvid}.contains(bvid)) _details[bvid] = detail;
+          _askWarm();
         },
         onError: (Object error) {
           if (_disposed || round != _round) return;
@@ -247,6 +270,32 @@ class StoryList extends StoryFeed {
           });
         },
       ),
+    );
+  }
+
+  /// The next video loaded ahead, once for the video settled on: after its first frame, with enough of it held ahead
+  /// and the next one's details in hand, so the playurl call made ahead is the one its open would make. Risk control
+  /// on that call halts the feed.
+  void _askWarm() {
+    final current = this.current;
+    final next = this.next;
+    if (!_warmsNext || _disposed || _host.halted || current == null || next == null) return;
+    if (_warmAskedIn == _settles || _host.framed != current.bvid || !_host.comfortable) return;
+    final detail = _details[next.bvid];
+    if (detail == null) return;
+    _warmAskedIn = _settles;
+    final round = _round;
+    unawaited(
+      _host
+          .warm(next, detail)
+          .then(
+            (_) {},
+            onError: (Object error) {
+              if (_disposed || round != _round || !_riskControl(error)) return;
+              _host.halt();
+              _logger.warn(LogCategory.api, 'story feed halted', {'by': 'warm', 'code': ?_codeOf(error)});
+            },
+          ),
     );
   }
 
@@ -410,6 +459,7 @@ class StoryList extends StoryFeed {
     _details.clear();
     _host
       ..removeListener(_hostChanged)
+      ..dropWarm()
       ..dispose();
     super.dispose();
   }

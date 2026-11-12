@@ -23,20 +23,24 @@ List<int> _u32(int value) => [for (var shift = 24; shift >= 0; shift -= 8) (valu
 
 List<int> _box(String type, List<int> payload) => [..._u32(8 + payload.length), ...ascii.encode(type), ...payload];
 
-/// ftyp, an empty moov and a version 0 sidx whose references cover the media that follows.
-_Track _mp4({required int seed, bool withSidx = true}) {
+/// ftyp, an empty moov and a version 0 sidx whose references cover the media that follows: [segments] of
+/// [segmentBytes], two seconds each.
+_Track _mp4({required int seed, bool withSidx = true, int segments = _segments, int segmentBytes = _segmentBytes}) {
   final ftyp = _box('ftyp', [...ascii.encode('isom'), ..._u32(0)]);
   final moov = _box('moov', []);
   final references = [
-    for (var index = 0; index < _segments; index++) ...[..._u32(_segmentBytes), ..._u32(2000), ..._u32(0x90000000)],
+    for (var index = 0; index < segments; index++) ...[..._u32(segmentBytes), ..._u32(2000), ..._u32(0x90000000)],
   ];
   final sidx = withSidx
-      ? _box('sidx', [..._u32(0), ..._u32(1), ..._u32(1000), ..._u32(0), ..._u32(0), 0, 0, 0, _segments, ...references])
+      ? _box('sidx', [..._u32(0), ..._u32(1), ..._u32(1000), ..._u32(0), ..._u32(0), 0, 0, 0, segments, ...references])
       : _box('free', List.filled(36, 0));
   final header = [...ftyp, ...moov, ...sidx];
-  final media = [for (var index = 0; index < _segments * _segmentBytes; index++) (index * 31 + seed) & 0xff];
+  final bytes = Uint8List(header.length + segments * segmentBytes)..setAll(0, header);
+  for (var index = 0; index < segments * segmentBytes; index++) {
+    bytes[header.length + index] = (index * 31 + seed) & 0xff;
+  }
   return (
-    bytes: Uint8List.fromList([...header, ...media]),
+    bytes: bytes,
     init: ByteRange(0, ftyp.length + moov.length - 1),
     index: ByteRange(ftyp.length + moov.length, header.length - 1),
   );
@@ -483,6 +487,108 @@ void main() {
       final source = await fast.prepare(request(PlaybackMode.btr));
       await _get(source.video, range: 'bytes=0-${video.bytes.length - 1}');
       expect(await _eventually(() => named('piece').any((event) => event.level == LogLevel.debug)), isTrue);
+    });
+  });
+
+  // 竖屏's next video, loaded while another plays (PlaybackRequest.warm), and promoted when it opens.
+  group('warm', () {
+    late IsolatePlaybackEngine warmed;
+
+    setUp(() async {
+      warmed = await IsolatePlaybackEngine.start(
+        transportFactory: _ioTransport,
+        options: EngineOptions(
+          nodeMode:
+              CustomNodes([NodeAddress('127.0.0.1', port: first.port), NodeAddress('127.0.0.1', port: second.port)]),
+          policy: MediaURLPolicy.any,
+          config: const RipperConfig(
+            fixedConcurrency: 8,
+            pieceRounds: 2,
+            firstByteTimeoutMs: 2000,
+            primeStart: true,
+            prefetchOnPrime: true,
+            streamAdopted: true,
+          ),
+          statsInterval: const Duration(milliseconds: 100),
+          forwardDebugLogs: true,
+        ),
+      );
+    });
+
+    tearDown(() => warmed.dispose());
+
+    Iterable<LogEvent> named(String msg) =>
+        log.events.where((event) => event.cat == LogCategory.engine && event.msg == msg);
+    int primed() => named('prime').where((event) => event.f['outcome'] == const LogString('done')).length;
+
+    PlaybackRequest warmOf(PlaybackRequest plain, {double start = 0}) => PlaybackRequest(
+        choice: plain.choice, mode: plain.mode, mediaHeaders: plain.mediaHeaders, startSeconds: start, warm: true);
+
+    test('the playback on screen keeps the stats and its speed while the next one primes warm; promoted, they are its',
+        () async {
+      final snapshots = <EngineSnapshot>[];
+      final subscription = warmed.stats.listen(snapshots.add);
+      addTearDown(subscription.cancel);
+      final playing = await warmed.prepare(request(PlaybackMode.btr));
+      expect(playing.warm, isNull);
+      expect(await _eventually(() => primed() == 2), isTrue);
+      await _get(playing.video, range: 'bytes=0-${video.bytes.length - 1}');
+      expect(await _eventually(() => snapshots.any((snapshot) => snapshot.deliveredBytes > 0)), isTrue);
+      // The bytes of the read above leave the speed.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      final count = snapshots.length;
+      final next = await warmed.prepare(warmOf(request(PlaybackMode.btr), start: 4.5));
+      expect(next.warm, (segmentBytes: _segmentBytes, primed: true));
+      expect(await _eventually(() => primed() == 4), isTrue);
+      final warmPrimes = named('prime').skip(2);
+      expect(warmPrimes.every((event) => event.f['warm'] == const LogBool(true)), isTrue);
+      expect(warmPrimes.every((event) => event.f['segment'] == const LogInt(2)), isTrue, reason: '4.5 s is in segment 2');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      final meanwhile = snapshots.skip(count).toList();
+      expect(meanwhile, isNotEmpty);
+      expect(meanwhile.every((snapshot) => snapshot.token == playing.token), isTrue);
+      expect(meanwhile.every((snapshot) => snapshot.downloadBps == 0), isTrue,
+          reason: 'the warm primes are not the playback\'s speed');
+
+      warmed
+        ..promote(next.token, startSeconds: 4.5)
+        ..promote(next.token, startSeconds: 4.5)
+        ..promote(playing.token, startSeconds: 0);
+      await warmed.release(playing.token);
+      expect(await _eventually(() => snapshots.last.token == next.token), isTrue);
+      expect(await _eventually(() => named('promoted').isNotEmpty), isTrue);
+      final start = video.index.end + 1 + 2 * _segmentBytes;
+      final range = '$start-${start + _segmentBytes - 1}';
+      final segment = await _get(next.video, range: 'bytes=$range');
+      expect(segment.body, Uint8List.sublistView(video.bytes, start, start + _segmentBytes));
+      expect(
+          await _eventually(() => named('read').any(
+              (event) => event.f['range'] == LogString(range) && event.f['source'] == const LogString('memory'))),
+          isTrue,
+          reason: 'the warm prime served the read');
+      expect(named('promoted'), hasLength(1), reason: 'only a warm source is promoted, once');
+    });
+
+    test('a start segment over the limit is not primed warm; promoted, it is primed there as any playback', () async {
+      final big = _mp4(seed: 5, segments: 2, segmentBytes: PlaybackRequest.warmPrimeMaxBytes + 1024);
+      first.files['/upgcxcode/big.m4s'] = big.bytes;
+      final plain = request(PlaybackMode.btr);
+      final next = await warmed.prepare(warmOf(PlaybackRequest(
+        choice: TrackChoice(
+          video: _stream(first, '/upgcxcode/big.m4s', big, id: 120, codecs: 'avc1.640033'),
+          audio: plain.choice.audio,
+        ),
+        mode: PlaybackMode.btr,
+        mediaHeaders: plain.mediaHeaders,
+      )));
+      expect(next.warm, (segmentBytes: PlaybackRequest.warmPrimeMaxBytes + 1024, primed: false));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(named('prime'), isEmpty);
+
+      warmed.promote(next.token, startSeconds: 0);
+      expect(await _eventually(() => primed() == 2, seconds: 10), isTrue);
+      expect(named('prime').every((event) => event.f['warm'] == null), isTrue, reason: 'primed as an ordinary playback');
     });
   });
 }

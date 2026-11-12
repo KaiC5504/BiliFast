@@ -223,6 +223,12 @@ class PlaybackController extends ChangeNotifier {
   /// players report about ten times a second.
   static const engineFeedMs = 250.0;
 
+  /// Buffered this far ahead of the playhead, a playing load is [comfortable].
+  static const comfortableSeconds = 8.0;
+
+  /// A [warm]'s playurl answer stands in for the open's own call this long at most, within its URLs' deadline.
+  static const warmMaxAge = Duration(minutes: 30);
+
   final BiliPlayer player;
 
   /// Fed from the player's events; the player UI only reads it.
@@ -351,6 +357,16 @@ class PlaybackController extends ChangeNotifier {
   ({int cid, PlayerInfo info})? _playerInfo;
   final _endings = StreamController<void>.broadcast();
   bool _disposed = false;
+  bool _comfortable = false;
+
+  /// The next video loaded ahead ([warm]); an [openVideo] of it takes it out.
+  _Warm? _warm;
+
+  /// The last warm let go before its video opened, so that open's load line says why it missed.
+  ({String bvid, String reason})? _warmLost;
+
+  /// Whether the open under way played from a warm, for its load line: `hit`, or `miss` and why.
+  String? _warmOutcome;
 
   PlaybackEngine get engine => _engine;
 
@@ -394,6 +410,10 @@ class PlaybackController extends ChangeNotifier {
 
   /// The player has played since the last open or replay; one loaded paused hasn't until the user plays it.
   bool get hasPlayed => _sawFirstFrame;
+
+  /// The load playing now holds [comfortableSeconds] ahead of the playhead, or everything to its end: another video
+  /// can load beside it without starving it. Notifies once as it turns true; every load starts without it.
+  bool get comfortable => _comfortable;
 
   double get currentSeconds => _token != null ? clock.seconds : _heldPosition;
 
@@ -473,6 +493,7 @@ class PlaybackController extends ChangeNotifier {
     _opens += 1;
     final link = LinkParser.parse(text);
     _clearVideo();
+    _dropWarm('other');
     if (link == null) {
       _failWith(BiliError.invalidLink, 'no link');
       return;
@@ -495,7 +516,8 @@ class PlaybackController extends ChangeNotifier {
   /// from [start] seconds, or without one from where Bilibili saw it last (`ResumePoint`), which only arrives with
   /// the playurl answer. A [view] already resolved (a pasted link, another part) saves asking for it again, and the
   /// signed [detail] that came with it keeps the 合集; a [detail] alone gives the view as well. A [view] without its
-  /// detail plays at once and the detail is asked for alongside. Without [autoplay] it loads paused.
+  /// detail plays at once and the detail is asked for alongside. Without [autoplay] it loads paused. The video
+  /// [warm]ed plays from what its warm holds, its detail included.
   Future<void> openVideo(
     String bvid, {
     int? cid,
@@ -507,7 +529,9 @@ class PlaybackController extends ChangeNotifier {
     _opens += 1;
     // Another part keeps the video's shape until its stream gives its own, so the layout doesn't flip meanwhile.
     _clearVideo(keepSize: _video?.bvid == bvid);
-    final knownDetail = detail != null && detail.bvid == bvid && detail.redirectURL == null ? detail : null;
+    final warm = _takeWarm(bvid);
+    final given = detail ?? warm?.detail;
+    final knownDetail = given != null && given.bvid == bvid && given.redirectURL == null ? given : null;
     final known = view?.bvid == bvid ? view : (knownDetail == null ? null : _viewOf(knownDetail));
     await _openWith((current) async {
       var resolved = knownDetail;
@@ -540,7 +564,7 @@ class PlaybackController extends ChangeNotifier {
       if (info != null) _playerInfo = (cid: pages.first.cid, info: info);
       final saved = info?.lastPlayCid;
       return (view, pages.where((page) => page.cid == saved).firstOrNull ?? pages.first);
-    }, start: start, autoplay: autoplay);
+    }, start: start, autoplay: autoplay, warm: warm);
   }
 
   /// A 离线缓存 part from the phone, from [start] seconds: [find] hands over its files, or null when they are gone. A
@@ -555,6 +579,7 @@ class PlaybackController extends ChangeNotifier {
   }) async {
     _opens += 1;
     _clearVideo();
+    _dropWarm('local');
     final current = _advance();
     _phase = PlaybackPhase.loading;
     _playWhenLoaded = autoplay;
@@ -622,6 +647,7 @@ class PlaybackController extends ChangeNotifier {
   /// Its playback closed: playback stops and nothing of it stays.
   void close() {
     _clearVideo();
+    _dropWarm('closed');
     _error = null;
     _playerFailure = null;
     // Paused, AVPlayer would keep its item and go on filling the forward buffer while home shows.
@@ -644,6 +670,7 @@ class PlaybackController extends ChangeNotifier {
     _playerInfo = null;
     _qualities = const [];
     _resumeFromHistory = false;
+    _warmOutcome = null;
     danmaku.clear();
     duration.value = 0;
     _heldPosition = 0;
@@ -651,11 +678,13 @@ class PlaybackController extends ChangeNotifier {
     clock.clear();
   }
 
-  /// [pick] resolves the video and its part, or answers null once a newer open has taken over.
+  /// [pick] resolves the video and its part, or answers null once a newer open has taken over. A [warm] of another
+  /// part, or one the open didn't hand to the player, is let go when the open ends.
   Future<void> _openWith(
     Future<(VideoView, VideoPage)?> Function(int current) pick, {
     required double? start,
     bool autoplay = true,
+    _Warm? warm,
   }) async {
     final current = _advance();
     _phase = PlaybackPhase.loading;
@@ -664,6 +693,7 @@ class PlaybackController extends ChangeNotifier {
     _error = null;
     _playerFailure = null;
     _notify();
+    var taken = warm;
     try {
       if (_engineClosed) {
         await _replaceEngine();
@@ -672,21 +702,29 @@ class PlaybackController extends ChangeNotifier {
       final picked = await pick(current);
       if (picked == null || current != _epoch) return;
       final (view, page) = picked;
+      if (taken != null && taken.page.cid != page.cid) {
+        _warmOutcome = 'miss part';
+        _letGo(taken);
+        taken = null;
+      }
       _video = view;
       _page = page;
       danmaku.load(cid: page.cid, durationMs: page.duration * 1000);
       _logger.info(LogCategory.player, 'open', {'bvid': view.bvid, 'page': page.page, 'parts': view.pages.length});
       _resumeFromHistory = start == null;
       // A hold lifted with play: false while the video resolved has already said no.
-      await _startPlayback(start ?? 0, autoplay: _playWhenLoaded);
+      await _startPlayback(start ?? 0, autoplay: _playWhenLoaded, warm: taken);
     } catch (error, stack) {
       if (current == _epoch) _fail(error, stack);
+    } finally {
+      if (taken != null && !taken.promoted) _letGo(taken);
     }
   }
 
   Future<void> setMode(PlaybackMode mode) async {
     if (mode == _mode && !_fellBack) return;
     _logger.info(LogCategory.ui, 'btr switch', {'on': mode == PlaybackMode.btr});
+    if (mode != _mode) _dropWarm('mode');
     _mode = mode;
     _fellBack = false;
     _unknownRetried.clear();
@@ -699,6 +737,7 @@ class PlaybackController extends ChangeNotifier {
   Future<void> setQuality(int quality) async {
     if (quality == _selectedQuality) return;
     _logger.info(LogCategory.ui, 'quality', {'id': quality});
+    _dropWarm('quality');
     _selectedQuality = quality;
     _notify();
     await _restart(sameChoice: false);
@@ -754,6 +793,7 @@ class PlaybackController extends ChangeNotifier {
   Future<void> setCodec(VideoCodec codec) async {
     if (codec == _codec) return;
     _logger.info(LogCategory.ui, 'codec', {'codec': codec.name});
+    _dropWarm('codec');
     _codec = codec;
     _notify();
     await _restart(sameChoice: false);
@@ -792,9 +832,11 @@ class PlaybackController extends ChangeNotifier {
   /// 设置's 重置编码记忆: codecs the player refused are tried again.
   void resetCodecMemory() => _memory.reset();
 
-  /// The system is short of memory: the engine drops its prefetched segments and playback goes on. On the shared
-  /// engine AppPlayback drops them once for every page, and the lease leaves the drop to it.
+  /// The system is short of memory: the engine drops its prefetched segments and playback goes on; the next video
+  /// loaded ahead goes. On the shared engine AppPlayback drops them once for every page, and the lease leaves the drop
+  /// to it.
   void memoryPressure() {
+    _dropWarm('memory');
     _engine.dropCache();
     final rss = ProcessInfo.currentRss;
     _logger.warn(LogCategory.player, 'memory warning, prefetch cache dropped', {'rssMB': rss ~/ (1024 * 1024)});
@@ -879,29 +921,239 @@ class PlaybackController extends ChangeNotifier {
   bool get loadWillPlay => _phase == PlaybackPhase.loading && _playWhenLoaded;
 
   /// The page was covered: this playback's prefetched segments go, as Swift's cover() did, and the player keeps
-  /// what it has.
+  /// what it has. The next video loaded ahead goes too.
   void dropPrefetch() {
+    _dropWarm('covered');
     final token = _btrToken;
     if (token != null) _engine.dropPrefetch(token);
   }
 
   /// iOS can take a suspended app's listening socket: once back in the foreground the local server is probed,
-  /// and a playback prepared before a restart is prepared again where it was. A detail whose asks ran out (likely
-  /// while the network was away) is asked for once more.
+  /// and a playback prepared before a restart is prepared again where it was; a video loaded ahead is let go, its
+  /// addresses naming the old listener. A detail whose asks ran out (likely while the network was away) is asked for
+  /// once more.
   Future<void> appResumed() async {
     retryDetail();
-    if (_choice == null || _token == null) return;
+    final prepared = _choice != null && _token != null;
+    if (!prepared && _warm == null) return;
     final current = _epoch;
     final bool restarted;
     try {
       restarted = await _ensureServing();
     } catch (error, stack) {
-      if (current == _epoch) _fail(error, stack);
+      _dropWarm('restarted');
+      if (prepared && current == _epoch) _fail(error, stack);
       return;
     }
-    if (!restarted || current != _epoch) return;
+    if (restarted) _dropWarm('restarted');
+    if (!prepared || !restarted || current != _epoch) return;
     _logger.warn(LogCategory.player, 'local server restarted, preparing again', {'at': currentSeconds});
     await _reload(current);
+  }
+
+  /// 竖屏's next video, loaded while this one plays so its [openVideo] starts at once: its playurl asked (the call
+  /// that open would make, which it then skips), its tracks chosen, and the engine holding its headers and first
+  /// segments (`PlaybackRequest.warm`). [detail] is the video's, asked ahead; it names the part when [cid] doesn't (a
+  /// video in one part) and saves the open its view. One at a time, BTR only. It goes on [dropWarm], another warm,
+  /// [close], a change of quality, codec or mode, memory pressure, a cover ([dropPrefetch]), a new engine or local
+  /// server, and dispose; an open of another video or part lets it go, as does one where its answer has grown old,
+  /// its addresses near their deadline or its streams no longer the choice. Throws the playurl call's error, so the
+  /// feed can stop on risk control; anything else only loses the head start. One `story warm` line each, no ids.
+  Future<void> warm(String bvid, {int? cid, VideoDetail? detail}) async {
+    if (_disposed) return;
+    final known = detail != null && detail.bvid == bvid && detail.redirectURL == null ? detail : null;
+    final pages = known?.pages ?? const <VideoPage>[];
+    final page = cid != null
+        ? pages.where((page) => page.cid == cid).firstOrNull
+        : (pages.length == 1 ? pages.single : null);
+    final held = _warm;
+    if (held != null &&
+        held.bvid == bvid &&
+        held.page.cid == page?.cid &&
+        held.quality == _selectedQuality &&
+        held.codec == _codec) {
+      return;
+    }
+    _dropWarm('replaced');
+    String? why() {
+      if (_mode != PlaybackMode.btr) return 'mode';
+      if (_local != null) return 'local';
+      if (_engineClosed) return 'engine';
+      if (known == null) return 'detail';
+      return page == null ? 'part' : null;
+    }
+
+    final skipped = why();
+    if (skipped != null || page == null) {
+      _logger.info(LogCategory.player, 'story warm', {'skipped': ?skipped});
+      return;
+    }
+    final warm = _Warm(
+      bvid: bvid,
+      page: page,
+      detail: known,
+      quality: _selectedQuality,
+      codec: _codec,
+      engine: _engine,
+    );
+    _warm = warm;
+    final done = _runWarm(warm);
+    warm.done = done;
+    await done;
+    if (warm.error case final error?) throw error;
+  }
+
+  /// [warm]'s let go; the open of its video then says why it missed.
+  void dropWarm() => _dropWarm('dropped');
+
+  Future<void> _runWarm(_Warm warm) async {
+    final began = _nowMs();
+    final fields = <String, Object>{};
+    try {
+      await _client.ensureRiskCookies();
+      final info = await _client.playURL(bvid: warm.bvid, cid: warm.page.cid, quality: warm.quality);
+      warm.info = info;
+      warm.answeredAt = _now();
+      if (warm.dropped) return;
+      final dash = info.dash;
+      final choice = dash == null
+          ? null
+          : choose(dash,
+              quality: warm.quality, codecOrder: _memory.order(preferred: warm.codec), excluded: _memory.failedKinds);
+      if (choice == null) {
+        warm.failure = dash == null ? 'dash' : 'track';
+        return;
+      }
+      warm.choice = choice;
+      warm.start = ResumePoint.start(
+        lastPlayTimeMs: info.lastPlayTimeMs,
+        lastPlayCid: info.lastPlayCid,
+        cid: warm.page.cid,
+        duration: warm.page.duration.toDouble(),
+      );
+      final engine = warm.engine;
+      engine.preconnect([
+        choice.video.baseURL,
+        ...choice.video.backupURLs,
+        choice.audio.baseURL,
+        ...choice.audio.backupURLs,
+      ]);
+      final source = await engine.prepare(PlaybackRequest(
+        choice: choice,
+        mode: PlaybackMode.btr,
+        mediaHeaders: BiliClient.mediaHeaders,
+        startSeconds: warm.start,
+        warm: true,
+      ));
+      if (warm.dropped) {
+        _quietly(() => engine.release(source.token), 'release');
+        return;
+      }
+      warm.source = source;
+      if (source.warm case final prime?) {
+        fields['segmentBytes'] = prime.segmentBytes;
+        if (!prime.primed) {
+          fields['skipped'] = prime.segmentBytes > PlaybackRequest.warmPrimeMaxBytes ? 'large' : 'unprimed';
+        }
+      }
+    } catch (error) {
+      warm.failure = 'failed';
+      if (warm.info == null) warm.error = error;
+      fields['error'] = '${error.runtimeType}';
+      if (_codeOf(error) case final code?) fields['code'] = code;
+    } finally {
+      if (warm.dropped && warm.source == null) {
+        fields['skipped'] = 'dropped';
+      } else if (warm.failure case final failure?) {
+        fields['skipped'] = failure;
+      }
+      _logger.info(LogCategory.player, 'story warm', {'ms': (_nowMs() - began).round(), ...fields});
+    }
+  }
+
+  static int? _codeOf(Object error) => switch (error) {
+        BiliAPIError(:final code) => code,
+        BiliHTTPError(:final status) => status,
+        _ => null,
+      };
+
+  /// The warm [openVideo] of [bvid] takes out of the slot; another video's goes.
+  _Warm? _takeWarm(String bvid) {
+    final warm = _warm;
+    final lost = _warmLost;
+    _warm = null;
+    _warmLost = null;
+    if (warm != null && warm.bvid == bvid) return warm;
+    if (warm != null) _letGo(warm);
+    if (lost != null && lost.bvid == bvid) {
+      _warmOutcome = 'miss ${lost.reason}';
+    } else if (warm != null) {
+      _warmOutcome = 'miss other';
+    }
+    return null;
+  }
+
+  void _dropWarm(String reason) {
+    final warm = _warm;
+    if (warm == null) return;
+    _warm = null;
+    _warmLost = (bvid: warm.bvid, reason: reason);
+    _letGo(warm);
+  }
+
+  /// Its source, when it has one and the player didn't take it, is released; one still on its way is released as it
+  /// lands.
+  void _letGo(_Warm warm) {
+    warm.dropped = true;
+    final source = warm.source;
+    if (source == null || warm.promoted) return;
+    warm.source = null;
+    final engine = warm.engine;
+    _quietly(() => engine.release(source.token), 'release');
+  }
+
+  /// The playurl answer [warm] holds, once it has gone as far as it will, when it can stand in for the open's own call:
+  /// the same quality, codec and mode, answered under [warmMaxAge] ago, its addresses clear of their deadline.
+  Future<PlayURLInfo?> _warmAnswer(_Warm warm, int current) async {
+    await warm.done;
+    _ensureCurrent(current);
+    final info = warm.info;
+    final answered = warm.answeredAt;
+    String? why() {
+      if (info == null || answered == null) return warm.failure ?? 'failed';
+      if (warm.quality != _selectedQuality) return 'quality';
+      if (warm.codec != _codec) return 'codec';
+      if (_mode != PlaybackMode.btr) return 'mode';
+      final now = _now();
+      if (now.difference(answered) > warmMaxAge) return 'old';
+      final stream = warm.choice?.video ?? info.dash?.video.firstOrNull;
+      final deadline = stream == null ? null : urlDeadline(stream);
+      if (deadline != null && deadline - now.millisecondsSinceEpoch / 1000 < urlMarginSeconds) return 'expiring';
+      return null;
+    }
+
+    final miss = why();
+    if (miss == null) return info;
+    _warmOutcome = 'miss $miss';
+    return null;
+  }
+
+  /// Whether [warm]'s source holds the streams the open chose from its answer: after a codec refused since, or another
+  /// choice, the open prepares as any does.
+  bool _warmFits(_Warm warm, TrackChoice choice) {
+    final warmed = warm.choice;
+    String? why() {
+      if (warm.source == null || warmed == null) return warm.failure ?? 'failed';
+      if (_memory.failedKinds.contains(TrackSelector.codecKind(warmed.video))) return 'refused';
+      final same = warmed.video.baseURL == choice.video.baseURL &&
+          warmed.video.codecid == choice.video.codecid &&
+          warmed.audio.baseURL == choice.audio.baseURL;
+      return same ? null : 'streams';
+    }
+
+    final miss = why();
+    if (miss != null) _warmOutcome = 'miss $miss';
+    return miss == null;
   }
 
   Future<(VideoView, int?)> _resolve(VideoLink link, {void Function(VideoDetail detail)? onDetail}) =>
@@ -973,9 +1225,9 @@ class PlaybackController extends ChangeNotifier {
     return _client.playURL(bvid: video.bvid, cid: page.cid, quality: _selectedQuality);
   }
 
-  Future<void> _startPlayback(double time, {required bool autoplay}) async {
+  Future<void> _startPlayback(double time, {required bool autoplay, _Warm? warm}) async {
     _resetStart(autoplay: autoplay);
-    await _begin(time);
+    await _begin(time, warm: warm);
   }
 
   void _resetStart({required bool autoplay}) {
@@ -992,7 +1244,8 @@ class PlaybackController extends ChangeNotifier {
     stats.value = OverlayStats(mode: activeMode, transport: _transportName.isEmpty ? null : _transportName);
   }
 
-  Future<void> _begin(double time) async {
+  /// An open's [warm] stands in for the playurl call and, holding the streams chosen, for the prepare.
+  Future<void> _begin(double time, {_Warm? warm}) async {
     // Every way back to a playurl call passes here; a cached part has none to make.
     if (_local != null) return _beginLocal(time);
     final current = _advance();
@@ -1005,7 +1258,8 @@ class PlaybackController extends ChangeNotifier {
     _notify();
     var at = time;
     try {
-      final info = await _playUrl();
+      final warmed = warm == null ? null : await _warmAnswer(warm, current);
+      final info = warmed ?? await _playUrl();
       _ensureCurrent(current);
       _qualities = info.qualityOptions;
       if (!_loggedPlayUrl) {
@@ -1017,8 +1271,9 @@ class PlaybackController extends ChangeNotifier {
       if (dash == null) throw BiliError.notDash;
       _dash = dash;
       final choice = _choose(dash);
-      _preconnect(choice);
-      await _prepareAndLoad(choice, at, current);
+      final ready = warm != null && warmed != null && _warmFits(warm, choice) ? warm : null;
+      if (ready == null) _preconnect(choice);
+      await _prepareAndLoad(choice, at, current, warm: ready);
       _scheduleRefresh(choice, current);
     } catch (error, stack) {
       await _handle(error, stack, at, current);
@@ -1193,7 +1448,9 @@ class PlaybackController extends ChangeNotifier {
     };
   }
 
-  Future<void> _prepareAndLoad(TrackChoice choice, double time, int current) async {
+  /// A [warm] holding [choice] gives its source instead of a prepare, unless the local server restarted or the engine
+  /// changed since it was made; the engine then promotes it.
+  Future<void> _prepareAndLoad(TrackChoice choice, double time, int current, {_Warm? warm}) async {
     // Prepared on an engine that is about to be replaced, the source would go with it.
     final swapping = _swapping;
     if (swapping != null) {
@@ -1201,15 +1458,21 @@ class PlaybackController extends ChangeNotifier {
       _ensureCurrent(current);
     }
     final requested = activeMode;
-    await _ensureServing();
+    final restarted = await _ensureServing();
     _ensureCurrent(current);
     final PreparedSource source;
     final local = _local;
+    var warmSource = warm?.source;
+    if (warm != null && (restarted || !identical(warm.engine, _engine))) {
+      _warmOutcome = restarted ? 'miss restarted' : 'miss engine';
+      warmSource = null;
+    }
     try {
       source = local != null
           ? await _engine.prepareLocal(local.files)
-          : await _engine.prepare(PlaybackRequest(
-              choice: choice, mode: requested, mediaHeaders: BiliClient.mediaHeaders, startSeconds: time));
+          : warmSource ??
+              await _engine.prepare(PlaybackRequest(
+                  choice: choice, mode: requested, mediaHeaders: BiliClient.mediaHeaders, startSeconds: time));
     } catch (error) {
       if (_isClosed(error)) throw _engineGone();
       final codec = error is PlaybackError && error.kind == PlaybackErrorKind.codecUnplayable;
@@ -1220,8 +1483,10 @@ class PlaybackController extends ChangeNotifier {
       _notify();
       return _prepareAndLoad(choice, time, current);
     }
+    final fromWarm = warm != null && identical(source, warmSource) ? warm : null;
     if (current != _epoch) {
-      _release(source.token);
+      // A warm source left unplayed is the open's to let go.
+      if (fromWarm == null) _release(source.token);
       throw const _Stale();
     }
     _noteSourceEntry(source, choice);
@@ -1233,6 +1498,11 @@ class PlaybackController extends ChangeNotifier {
     final previous = _token;
     _token = source.token;
     _source = source;
+    if (fromWarm != null) {
+      fromWarm.promoted = true;
+      _warmOutcome = 'hit';
+      _engine.promote(source.token, startSeconds: time);
+    }
     if (previous != null && previous != source.token) _release(previous);
     await _load(source, time, current);
   }
@@ -1247,6 +1517,7 @@ class PlaybackController extends ChangeNotifier {
   Future<void> _load(PreparedSource source, double time, int current) async {
     _seekTimer.reloadBegan();
     _itemPlayed = false;
+    _comfortable = false;
     final autoplay = _playWhenLoaded && !_autoplayHeld;
     // Loaded paused, the first frame waits on the user: that wait is not startup time.
     if (!autoplay && !_sawFirstFrame) _firstFrameTimed = false;
@@ -1267,7 +1538,9 @@ class PlaybackController extends ChangeNotifier {
     if (!autoplay) _phase = PlaybackPhase.playing;
     _updateModeStats();
     _notify();
-    _logger.info(LogCategory.player, 'load', {'mode': modeLabel, 'at': time, 'play': autoplay});
+    final warm = _warmOutcome;
+    _warmOutcome = null;
+    _logger.info(LogCategory.player, 'load', {'mode': modeLabel, 'at': time, 'play': autoplay, 'warm': ?warm});
   }
 
   /// The rate, fit and mirroring chosen outlive the item; the defaults need no call.
@@ -1322,6 +1595,7 @@ class PlaybackController extends ChangeNotifier {
       _quietly(next.dispose, 'engine dispose');
       throw const _Stale();
     }
+    _dropWarm('engine');
     unawaited(_engineStats.cancel());
     unawaited(_engineFatals.cancel());
     _engine = next;
@@ -1606,6 +1880,7 @@ class PlaybackController extends ChangeNotifier {
           final ms = _seekTimer.ticked(position: seconds, rate: _playerRate, playing: playing, atMs: _nowMs());
           if (ms != null) _seekResumed(ms, 'playhead');
           _feedEngine(seconds);
+          _checkComfort(seconds);
         }
         danmaku.update(positionMs: (seconds * 1000).round(), playing: playing);
       case DurationChanged(:final seconds):
@@ -1631,6 +1906,7 @@ class PlaybackController extends ChangeNotifier {
         _restores.add(null);
       case BufferedChanged(:final ranges):
         _buffered = ranges;
+        _checkComfort(clock.seconds);
       case PlayerLog(:final kind, :final fields):
         _logger.info(LogCategory.player, kind, {
           for (final MapEntry(:key, :value) in fields.entries) key: ?value,
@@ -1753,9 +2029,23 @@ class PlaybackController extends ChangeNotifier {
     if (last != null && now - last < engineFeedMs) return;
     _lastFeedMs = now;
     _engine.updatePlayhead(token, seconds: seconds, rate: _playerRate);
-    final ahead = _buffered.where((range) => range.start <= seconds + 0.5 && range.end >= seconds).firstOrNull;
+    final ahead = _bufferedRange(seconds);
     _engine.reportBuffer(token,
         aheadSeconds: ahead == null ? 0 : ahead.end - seconds, playing: _status == PlayerStatus.playing);
+  }
+
+  ({double start, double end})? _bufferedRange(double seconds) =>
+      _buffered.where((range) => range.start <= seconds + 0.5 && range.end >= seconds).firstOrNull;
+
+  void _checkComfort(double seconds) {
+    if (_comfortable || !_itemPlayed || _status != PlayerStatus.playing) return;
+    final range = _bufferedRange(seconds);
+    if (range == null) return;
+    final end = duration.value;
+    final toEnd = end > 0 && range.end >= end - 0.5;
+    if (range.end - seconds < comfortableSeconds && !toEnd) return;
+    _comfortable = true;
+    _notify();
   }
 
   /// Swift fed the session from AVPlayer's time observer, which also fires on jumps: a seek or a load reaches the
@@ -1818,6 +2108,7 @@ class PlaybackController extends ChangeNotifier {
     _heldPosition = currentSeconds;
     _advance();
     _teardownPlayback();
+    _warmOutcome = null;
     _choice = null;
     _dash = null;
     _playing = null;
@@ -1853,6 +2144,7 @@ class PlaybackController extends ChangeNotifier {
     }
     _stallChecks.clear();
     _seekTimer.cancel();
+    _comfortable = false;
     // The released item can still report a failure; it must not take over the next load.
     _awaitingLoad = true;
     final token = _token;
@@ -1892,6 +2184,7 @@ class PlaybackController extends ChangeNotifier {
     _disposed = true;
     _advance();
     _teardownPlayback();
+    _dropWarm('closed');
     _detailRetry?.cancel();
     unawaited(_playerEvents.cancel());
     unawaited(_engineStats.cancel());
@@ -1909,6 +2202,44 @@ class PlaybackController extends ChangeNotifier {
     unawaited(_interruptions.close());
     super.dispose();
   }
+}
+
+/// The next video loaded ahead ([PlaybackController.warm]) on [engine]: its playurl answer, the tracks chosen from it,
+/// where it starts, and the source holding its headers and first segments.
+final class _Warm {
+  _Warm({
+    required this.bvid,
+    required this.page,
+    required this.detail,
+    required this.quality,
+    required this.codec,
+    required this.engine,
+  });
+
+  final String bvid;
+  final VideoPage page;
+  final VideoDetail? detail;
+  final int quality;
+  final VideoCodec codec;
+  final PlaybackEngine engine;
+  late final Future<void> done;
+  PlayURLInfo? info;
+  DateTime? answeredAt;
+  TrackChoice? choice;
+  double start = 0;
+  PreparedSource? source;
+
+  /// Why it stopped short; null when it got as far as a source.
+  String? failure;
+
+  /// The playurl call's own error, for [PlaybackController.warm] to throw.
+  Object? error;
+
+  /// Let go: a source still on its way is released as it lands.
+  bool dropped = false;
+
+  /// The player took its source.
+  bool promoted = false;
 }
 
 /// Work of an older epoch; dropped without a word.

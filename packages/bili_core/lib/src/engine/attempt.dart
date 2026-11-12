@@ -42,8 +42,9 @@ final class EngineContext {
   final Meter meter;
   final EngineStats stats;
 
-  /// Null when the connection count is fixed.
-  final AutoConcurrency? auto;
+  /// Null when the connection count is fixed, and while a warm session waits for its promotion
+  /// (`RipperSession.promote`).
+  AutoConcurrency? auto;
   final MonotonicClock clock;
   final Logger logger;
   final NodeStats nodes;
