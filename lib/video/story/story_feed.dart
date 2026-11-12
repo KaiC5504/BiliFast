@@ -23,6 +23,7 @@ final class StoryEntry {
     this.height = 0,
     this.ownerFace = '',
     this.ownerFans = 0,
+    this.ownerVip,
     this.following = false,
     this.views = 0,
     this.likes = 0,
@@ -50,6 +51,7 @@ final class StoryEntry {
     ownerName: item.ownerName,
     ownerFace: item.ownerFace,
     ownerFans: item.ownerFans,
+    ownerVip: item.ownerVip,
     following: item.following,
     views: item.views,
     likes: item.likes,
@@ -128,6 +130,9 @@ final class StoryEntry {
   final String ownerName;
   final String ownerFace;
   final int ownerFans;
+
+  /// The uploader is a 大会员; null where the source doesn't say (the related lists).
+  final bool? ownerVip;
   final bool following;
   final int views;
   final int likes;

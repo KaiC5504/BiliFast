@@ -17,6 +17,7 @@ final class StoryItem {
     this.firstFrame,
     this.ownerFace = '',
     this.ownerFans = 0,
+    this.ownerVip = false,
     this.following = false,
     this.views = 0,
     this.likes = 0,
@@ -51,6 +52,8 @@ final class StoryItem {
     final status = _int(relation?.map['status']);
     final stat = object.nested('stat');
     final season = object.nested('season');
+    // The uploader's 大会员 is the item's own `vip`, beside `owner`.
+    final vip = object.nested('vip') ?? owner?.nested('vip');
     return StoryItem(
       aid: _int(player?.map['aid']) ?? _int(object.map['aid']) ?? 0,
       bvid: bvid,
@@ -65,6 +68,7 @@ final class StoryItem {
       firstFrame: _filled(object.text('ff_cover')),
       ownerFace: owner?.text('face') ?? '',
       ownerFans: owner?.count('fans') ?? 0,
+      ownerVip: _int(vip?.map['status']) == 1 && (_int(vip?.map['type']) ?? 0) > 0,
       following: (relation?.flag('is_follow') ?? false) || status == 2 || status == 4,
       views: stat?.count('view') ?? 0,
       likes: stat?.count('like') ?? 0,
@@ -102,6 +106,9 @@ final class StoryItem {
   final String ownerName;
   final String ownerFace;
   final int ownerFans;
+
+  /// The uploader is a 大会员 (their name is drawn pink).
+  final bool ownerVip;
 
   /// `owner.relation.status` says the account follows the uploader.
   final bool following;

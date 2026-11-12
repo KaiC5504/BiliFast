@@ -250,6 +250,10 @@ class VerticalChrome extends StatelessWidget {
           null when detail != null => _Uploader(
             detail: detail,
             details: ui.details,
+            entry: switch (ui.story?.value?.current) {
+              final entry? when entry.bvid == detail.bvid => entry,
+              _ => null,
+            },
             touch: _touch,
             onOpen: _uploaderTap(
               openUploader,
@@ -402,6 +406,7 @@ Widget _entryUploader(StoryEntry entry, String prefix, {VoidCallback? onOpen}) =
   face: entry.ownerFace,
   name: entry.ownerName,
   fans: entry.ownerFans > 0 ? entry.ownerFans : null,
+  vip: entry.ownerVip ?? false,
   following: entry.following ? null : false,
   onOpen: onOpen,
 );
@@ -866,10 +871,14 @@ class _Moving extends StatelessWidget {
 
 /// The uploader's avatar, the name (pink for 大会员) with 粉丝 under it, and + 关注 beside it, each once known.
 class _Uploader extends StatelessWidget {
-  const _Uploader({required this.detail, required this.details, required this.touch, this.onOpen});
+  const _Uploader({required this.detail, required this.details, required this.touch, this.entry, this.onOpen});
 
   final VideoDetail detail;
   final PageDetails? details;
+
+  /// The feed's entry for this video: its 大会员 and 粉丝 stand until the uploader's card is in, so the name doesn't
+  /// turn pink a moment after it shows.
+  final StoryEntry? entry;
   final VoidCallback Function(VoidCallback) touch;
   final VoidCallback? onOpen;
 
@@ -893,8 +902,11 @@ class _Uploader extends StatelessWidget {
     prefix: 'vertical',
     face: detail.owner.face,
     name: detail.owner.name,
-    vip: uploader?.isVip ?? false,
-    fans: uploader?.fans,
+    vip: uploader?.isVip ?? entry?.ownerVip ?? false,
+    fans: uploader?.fans ?? switch (entry?.ownerFans) {
+      final fans? when fans > 0 => fans,
+      _ => null,
+    },
     following: actions?.following,
     onFollow: actions == null ? null : touch(actions.tapFollow),
     onOpen: onOpen,

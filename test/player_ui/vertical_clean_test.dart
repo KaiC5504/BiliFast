@@ -7,6 +7,7 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/story/story_drag.dart';
 import 'package:bilifast/video/story/story_feed.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'vertical_chrome_test.dart' show Rig, actionsOf, centre, opacityOf, rig09;
@@ -40,13 +41,14 @@ final class FakeFeed extends StoryFeed {
   }
 }
 
-StoryEntry entry(String bvid, {int width = 1080, int height = 1920, bool following = false}) => StoryEntry(
+StoryEntry entry(String bvid, {int width = 1080, int height = 1920, bool following = false, bool? vip}) => StoryEntry(
   bvid: bvid,
   title: '下一个视频的标题',
   cover: '',
   ownerMid: 2,
   ownerName: '下一位UP主',
   ownerFans: 23000,
+  ownerVip: vip,
   following: following,
   width: width,
   height: height,
@@ -349,6 +351,26 @@ void main() {
       expect(find.text('下一位UP主'), findsNothing);
       expect(find.text('第二个'), findsOneWidget);
       expect(find.text('352'), findsOneWidget, reason: "the page's actions again");
+    });
+
+    testWidgets("just swiped, a 大会员's name is pink from the feed's entry, and stays so until the uploader's card is "
+        'in', (tester) async {
+      final rig = storyRig();
+      final feed = rig.story!.value! as FakeFeed;
+      feed.entries[1] = entry('BV2', vip: true);
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      Color? nameColour(String name) => tester.renderObject<RenderParagraph>(find.text(name)).text.style?.color;
+
+      feed.moveNext();
+      await tester.pumpAndSettle();
+      expect(nameColour('下一位UP主'), BiliColors.pink);
+
+      rig.session
+        ..detail = detail2()
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(nameColour('第二个'), BiliColors.pink, reason: "no card yet: the entry's 大会员 stands");
     });
 
     testWidgets("just swiped, the uploader opens the feed's video's owner until the details are in; its 关注 waits "

@@ -257,6 +257,20 @@ void main() {
       expect(() => StoryItem.fromJson(notObject), throwsA(isA<DecodeError>()));
     });
 
+    test("the uploader's 大会员 is the item's own vip: an active one with a type, else not", () {
+      Map<String, Object?> item(Map<String, Object?>? vip) => {
+        'goto': 'vertical_av',
+        'bvid': 'BV1xx411c7mD',
+        'player_args': {'aid': 1, 'cid': 2},
+        'owner': {'mid': 3, 'name': 'up'},
+        'vip': ?vip,
+      };
+      expect(StoryItem.fromJson(item({'type': 2, 'status': 1})).ownerVip, isTrue);
+      expect(StoryItem.fromJson(item({'type': 0, 'status': 0})).ownerVip, isFalse);
+      expect(StoryItem.fromJson(item({'type': 1, 'status': 0})).ownerVip, isFalse);
+      expect(StoryItem.fromJson(item(null)).ownerVip, isFalse);
+    });
+
     test('an answer without items is empty', () async {
       http.routes[storyPath] = (200, '{"code":0,"message":"0","ttl":1,"data":{"items":null}}');
       expect(await client.storyFeed(aid: 1, cid: 2, page: 2, entry: entry), isEmpty);
