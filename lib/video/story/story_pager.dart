@@ -46,7 +46,8 @@ class StoryPager extends ChangeNotifier {
     drag
       ..shape = value == null ? null : _shape
       ..unshape = value == null ? null : _unshape
-      ..onRelease = value == null ? null : _release;
+      ..onRelease = value == null ? null : _release
+      ..onCancel = value == null ? null : _goBack;
     notifyListeners();
   }
 
@@ -61,7 +62,7 @@ class StoryPager extends ChangeNotifier {
   }
 
   /// 下一个视频 for VoiceOver and the Windows test tool: the swipe's settle without the finger. False with none, or
-  /// while the page is under a finger or already moving.
+  /// while the page is under a finger or already moving; with none, the feed may ask again, as after a swipe.
   bool moveNext() => _move(-1);
 
   /// 上一个视频, as [moveNext].
@@ -70,7 +71,10 @@ class StoryPager extends ChangeNotifier {
   bool _move(int direction) {
     final feed = _feed;
     if (feed == null || drag.moving || extent <= 0) return false;
-    if ((direction < 0 ? feed.next : feed.previous) == null) return false;
+    if ((direction < 0 ? feed.next : feed.previous) == null) {
+      if (direction < 0) feed.wantMore();
+      return false;
+    }
     _settle(direction * extent);
     return true;
   }
@@ -86,10 +90,16 @@ class StoryPager extends ChangeNotifier {
 
   void _release(double velocity) {
     final offset = drag.offset;
-    final passed = offset.abs() > extent * StoryPagerTheme.releaseShare;
+    // The finger's own travel: towards no neighbour the page lags it.
+    final passed = _unshape(offset).abs() > extent * StoryPagerTheme.releaseShare;
     final flung = velocity.abs() > StoryPagerTheme.flingVelocity && velocity.sign == offset.sign;
-    _settle(_open(offset) && (passed || flung) ? offset.sign * extent : 0);
+    final moves = passed || flung;
+    // Past the last video known the page springs back, but a feed that stopped asking may ask again.
+    if (moves && offset < 0 && _feed?.next == null) _feed?.wantMore();
+    _settle(_open(offset) && moves ? offset.sign * extent : 0);
   }
+
+  void _goBack() => _settle(0);
 
   void _settle(double to) {
     _from = drag.offset;
@@ -145,7 +155,8 @@ class StoryPager extends ChangeNotifier {
       drag
         ..shape = null
         ..unshape = null
-        ..onRelease = null;
+        ..onRelease = null
+        ..onCancel = null;
     }
     super.dispose();
   }
@@ -174,9 +185,12 @@ class StoryShift extends StatelessWidget {
 /// picture in its band with its controls dimmed over it, moving with the finger. Over the playing page, the still of
 /// the video just landed on until its first frame shows. Takes no touches and says nothing to VoiceOver.
 class StoryNeighbours extends StatelessWidget {
-  const StoryNeighbours({super.key, required this.pager});
+  const StoryNeighbours({super.key, required this.pager, this.danmakuOn = true});
 
   final StoryPager pager;
+
+  /// The page's 弹, which the neighbours' 发弹幕 fields show as the next video will open with it.
+  final bool danmakuOn;
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
@@ -195,9 +209,12 @@ class StoryNeighbours extends StatelessWidget {
                   fit: StackFit.expand,
                   clipBehavior: Clip.none,
                   children: [
-                    if (feed?.previous case final previous?) _StoryPage(key: ObjectKey(previous), entry: previous, at: -1),
-                    if (arrived != null) _StoryPage(key: ObjectKey(arrived), entry: arrived, at: 0),
-                    if (feed?.next case final next?) _StoryPage(key: ObjectKey(next), entry: next, at: 1),
+                    if (feed?.previous case final previous?)
+                      _StoryPage(key: ObjectKey(previous), entry: previous, at: -1, danmakuOn: danmakuOn),
+                    if (arrived != null)
+                      _StoryPage(key: ObjectKey(arrived), entry: arrived, at: 0, danmakuOn: danmakuOn),
+                    if (feed?.next case final next?)
+                      _StoryPage(key: ObjectKey(next), entry: next, at: 1, danmakuOn: danmakuOn),
                   ],
                 ),
               );
@@ -212,10 +229,11 @@ class StoryNeighbours extends StatelessWidget {
 /// [entry]'s page [at] screens below the playing one: its still in its band, and its controls unless it is the page
 /// itself.
 class _StoryPage extends StatelessWidget {
-  const _StoryPage({super.key, required this.entry, required this.at});
+  const _StoryPage({super.key, required this.entry, required this.at, required this.danmakuOn});
 
   final StoryEntry entry;
   final int at;
+  final bool danmakuOn;
 
   @override
   Widget build(BuildContext context) => FractionalTranslation(
@@ -231,7 +249,10 @@ class _StoryPage extends StatelessWidget {
           ),
         ),
         if (at != 0)
-          Opacity(opacity: VerticalCleanTheme.movingOpacity, child: VerticalChromePreview(entry: entry)),
+          Opacity(
+            opacity: VerticalCleanTheme.movingOpacity,
+            child: VerticalChromePreview(entry: entry, danmakuOn: danmakuOn),
+          ),
       ],
     ),
   );

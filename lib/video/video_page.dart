@@ -35,6 +35,7 @@ import '../player_ui/panels/panel_layer.dart';
 import '../player_ui/player_loading.dart';
 import '../player_ui/player_ui.dart';
 import '../player_ui/speed_lock.dart';
+import '../player_ui/vertical_chrome.dart' show VerticalChrome;
 import '../settings/autoplay_policy.dart';
 import '../shared/cover_preset.dart';
 import '../shared/remote_image.dart';
@@ -292,8 +293,23 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   final _commentOverlays = CommentOverlayController();
   bool _threadOpen = false;
 
-  /// The uploader sheet the uploader row and staff open (62).
+  /// The uploader sheet the uploader row and staff open (62), and 竖屏's uploader (181).
   final _uploaderSheet = UploaderSheetController();
+
+  /// Where the sheet was opened: a change of presentation closes it.
+  Presentation? _sheetIn;
+
+  /// Opened over 竖屏, the picture shrinks into the room above the sheet as it rises (181), and back as it falls.
+  late final _sheetShrink = AnimationController(
+    vsync: this,
+    duration: UploaderSheetTheme.rise,
+    reverseDuration: UploaderSheetTheme.fall,
+  );
+  late final _sheetCurve = CurvedAnimation(
+    parent: _sheetShrink,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
 
   /// 评论详情 and the uploader sheet hold the left edge, over the small player too, so the player's drag leaves it
   /// alone.
@@ -461,7 +477,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (to == null || !_slide.isAnimating) return null;
     final box = Rect.fromLTWH(0, top, screen.width, _collapse.height);
     final session = _session;
-    final upright = session?.layoutVertical ?? false;
+    final upright = session != null && VerticalChrome.uprightShape(session);
     final band = Offset.zero & Size(screen.width, screen.height * verticalBand(upright: upright));
     final shape = session?.videoShape;
     final picture =
@@ -475,6 +491,17 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return to == Presentation.vertical
         ? Rect.lerp(box, place, VerticalEnterTheme.enterCurve.transform(_slide.value))
         : Rect.lerp(place, box, VerticalEnterTheme.exitCurve.transform(_slide.value));
+  }
+
+  /// With the uploader sheet over 竖屏, the video's box on the [screen], from 竖屏's band to the room above the sheet
+  /// (181), where the player fits the picture as it does in the band; null with no sheet.
+  Rect? _sheetRoom(Size screen) {
+    if (_sheetShrink.isDismissed) return null;
+    final session = _session;
+    final upright = session != null && VerticalChrome.uprightShape(session);
+    final band = Offset.zero & Size(screen.width, screen.height * verticalBand(upright: upright));
+    final room = Rect.fromLTRB(0, VerticalSheetTheme.pictureTop, screen.width, VerticalSheetTheme.pictureBottom);
+    return Rect.lerp(band, room, _sheetCurve.value);
   }
 
   /// The turned size is already in (or about to be). The turn being waited for is drawn from the first build at its
@@ -1027,17 +1054,37 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// Rebuilds the PopScope, which back then closes first.
   void _sheetChanged() {
     _threadEdge.value = _threadOpen || _uploaderSheet.isOpen;
+    _syncSheetShrink();
     _panelChanged();
   }
 
-  /// The uploader row's and staff's tap: the sheet on the small player; full screen has no room for it.
+  /// The picture follows the sheet over 竖屏; out of 竖屏 it is back in its place at once.
+  void _syncSheetShrink() {
+    final over = _uploaderSheet.isOpen && _sheetIn == Presentation.vertical;
+    final still = !mounted || MediaQuery.disableAnimationsOf(context);
+    if (_presentation != Presentation.vertical) {
+      _sheetShrink.value = 0;
+    } else if (still) {
+      _sheetShrink.value = over ? 1 : 0;
+    } else if (over) {
+      unawaited(_sheetShrink.forward());
+    } else {
+      unawaited(_sheetShrink.reverse());
+    }
+  }
+
+  /// The uploader row's and staff's tap, and 竖屏's uploader: the sheet on the small player and over 竖屏 (181);
+  /// landscape full screen has no room for it.
   void _openUploader(UploaderRef uploader) {
     if (_left || !mounted) return;
-    if (_presentation.fullScreen || _laidOut.value.fullScreen) {
+    final presentation = _presentation;
+    final vertical = !_pad && presentation == Presentation.vertical && _laidOut.value == Presentation.vertical;
+    if (!vertical && (presentation.fullScreen || _laidOut.value.fullScreen)) {
       unawaited(openSpace(context, uploader));
-    } else {
-      _uploaderSheet.open(uploader);
+      return;
     }
+    _sheetIn = presentation;
+    _uploaderSheet.open(uploader);
   }
 
   /// The page's own 关注 for its uploader once known. Null for anyone else, and for the page's own before the relation
@@ -1078,10 +1125,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (_presentation.fullScreen && _commentOverlays.value is ComposeOverlay && !_drafts.anyPosting) {
       _commentOverlays.close();
     }
-    if (_presentation.fullScreen) {
-      _uploaderSheet.close();
-      _offlineSheet.value = null;
-    }
+    if (_uploaderSheet.isOpen && _presentation != _sheetIn) _uploaderSheet.close();
+    if (_presentation.fullScreen) _offlineSheet.value = null;
+    // A finger on 竖屏's page as it turns to landscape moves nothing: the page is back where it was.
+    if (_presentation != Presentation.vertical && _storyDrag.moving) _storyDrag.land();
     _session?.loopsAtEnd = _presentation == Presentation.vertical;
     setState(() {});
     _applySystemUi();
@@ -1568,6 +1615,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _uploaderSheet
       ..removeListener(_sheetChanged)
       ..dispose();
+    _sheetCurve.dispose();
+    _sheetShrink.dispose();
     _threadEdge.dispose();
     _listCount.dispose();
     _comments
@@ -1733,13 +1782,15 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                     _offline ? _offlineList() : CollapseReserve(collapse: _collapse, child: _pager(context)),
                   );
                   final tabRow = belowPlayer(_offline ? _offlineHeader() : _tabRow(context));
+                  final sheetOver = layout == Presentation.vertical && _uploaderSheet.isOpen;
                   // Full screen runs under the notch and the home indicator, so its chrome keeps clear of them itself;
                   // the small player sits below the status bar with no insets of its own.
                   final area = MediaQuery(
                     data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
-                    // An open panel covers the player for VoiceOver too, as landscape's panel does.
+                    // An open panel covers the player for VoiceOver too, as landscape's panel does, and so does the
+                    // uploader sheet over 竖屏, whose controls are gone.
                     child: ExcludeSemantics(
-                      excluding: _panels.value != null,
+                      excluding: _panels.value != null || sheetOver,
                       // The danmaku's height follows where an upright video's box is heading, once per reshape.
                       child: ValueListenableBuilder<double>(
                         valueListenable: _collapse.shape,
@@ -1798,7 +1849,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   // Only the player's box follows the scrolling, the grow and the turn; everything else is built once
                   // per page build.
                   return ListenableBuilder(
-                    listenable: Listenable.merge([_collapse, _grow, _spin, _padFull, _slide]),
+                    listenable: Listenable.merge([_collapse, _grow, _spin, _padFull, _slide, _sheetShrink]),
                     builder: (context, _) {
                       if (padBody != null) {
                         return _turned(
@@ -1824,7 +1875,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       final spinning = _spinning;
                       final waiting = _turnFrom != null || _pendingTurn != null;
                       final hidden = fullScreen && turn?.body == null;
-                      final slid = turn == null && !spinning ? _sliding(constraints.biggest, upright.top) : null;
+                      // The uploader sheet over 竖屏 moves the picture as the slide does, and puts the controls away.
+                      final slid = turn == null && !spinning
+                          ? _sliding(constraints.biggest, upright.top) ??
+                                (layout == Presentation.vertical ? _sheetRoom(constraints.biggest) : null)
+                          : null;
                       // Sliding out, the player's black runs from the screen's top to the picture's bottom, over the
                       // body's top.
                       final player =
@@ -1940,6 +1995,26 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                               ),
                             ),
                           ),
+                          // Over 竖屏 a tap above the sheet closes it, and the picture there takes no touch.
+                          if (sheetOver)
+                            Positioned(
+                              key: const ValueKey('uploader-sheet-above'),
+                              left: 0,
+                              top: 0,
+                              right: 0,
+                              height: VerticalSheetTheme.sheetTop,
+                              child: Semantics(
+                                container: true,
+                                button: true,
+                                label: '关闭',
+                                onTap: _uploaderSheet.close,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  excludeFromSemantics: true,
+                                  onTap: _uploaderSheet.close,
+                                ),
+                              ),
+                            ),
                           Positioned(
                             key: const ValueKey('uploader-sheet-layer'),
                             left: body.dx,
@@ -1949,10 +2024,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             child: windowed(
                               body,
                               hideable(
-                                hidden,
+                                hidden && layout != Presentation.vertical,
                                 UploaderSheetLayer(
                                   controller: _uploaderSheet,
-                                  top: uprightBox,
+                                  top: layout == Presentation.vertical ? VerticalSheetTheme.sheetTop : uprightBox,
                                   playingBvid: (_attached ? controller?.video?.bvid : null) ?? _playback?.bvid,
                                   followingOf: _followingOf,
                                   requestLogin: _askLogin,

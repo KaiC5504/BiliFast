@@ -139,6 +139,61 @@ void main() {
     expect(alone.moves, isEmpty);
   });
 
+  testWidgets('a drag taken away past half the screen goes back and opens nothing, as a fling would have', (
+    tester,
+  ) async {
+    drag.start();
+    for (var i = 0; i < 30; i++) {
+      drag.update(-20);
+      await tester.pump(frame);
+    }
+    expect(drag.offset, -600);
+    drag.cancel();
+    final offsets = await settle(tester);
+    expect(feed.moves, isEmpty);
+    expect(drag.offset, 0);
+    expect(offsets.every((offset) => offset <= 0 && offset > -600), isTrue, reason: 'straight back, not on');
+    expect(clean.value, isTrue);
+
+    await swipe(tester, -100, velocity: -1500);
+    drag.cancel();
+    await settle(tester);
+    expect(feed.moves, [1], reason: 'a cancel after the lift changes nothing');
+  });
+
+  testWidgets('a swipe on past the last video known asks the feed for more, once, and springs back', (tester) async {
+    final last = _AskingFeed([storyEntry('BV1'), storyEntry('BV2')]);
+    addTearDown(last.dispose);
+    pager.feed = last;
+    await swipe(tester, -100, velocity: -1500);
+    await settle(tester);
+    expect(last.moves, [1]);
+    expect(last.asks, 0, reason: 'a neighbour was there');
+
+    await swipe(tester, -100, velocity: -1500);
+    final offsets = await settle(tester);
+    expect(last.moves, [1]);
+    expect(last.asks, 1);
+    expect(offsets.every((offset) => offset <= 0), isTrue);
+    expect(drag.offset, 0);
+
+    await swipe(tester, -screen * 0.6, frames: 60, velocity: 0);
+    await settle(tester);
+    expect(last.asks, 2, reason: 'a slow drag past half the screen counts too, by the finger, not the lagging page');
+
+    await swipe(tester, -60, frames: 20, velocity: -100);
+    await swipe(tester, 100, velocity: 1500);
+    await settle(tester);
+    expect(last.asks, 2, reason: 'not a short slow drag, nor a swipe back');
+    expect(last.moves, [1, 0]);
+
+    expect(pager.moveNext(), isTrue);
+    await settle(tester);
+    expect(pager.moveNext(), isFalse, reason: '下一个视频 at the end');
+    expect(last.asks, 3);
+    expect(drag.moving, isFalse);
+  });
+
   testWidgets('a swipe down goes back to the video before', (tester) async {
     await swipe(tester, -100, velocity: -1000);
     await settle(tester);
@@ -304,6 +359,19 @@ void main() {
       expect(stillOf('BV2'), findsNothing);
     });
 
+    testWidgets("their 发弹幕 fields show the page's 弹", (tester) async {
+      tester.view.physicalSize = const Size(440, screen);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Widget neighbours({required bool danmakuOn}) => MaterialApp(
+        home: Stack(fit: StackFit.expand, children: [StoryNeighbours(pager: pager, danmakuOn: danmakuOn)]),
+      );
+      await tester.pumpWidget(neighbours(danmakuOn: false));
+      expect(tester.widget<VerticalChromePreview>(find.byType(VerticalChromePreview)).danmakuOn, isFalse);
+      await tester.pumpWidget(neighbours(danmakuOn: true));
+      expect(tester.widget<VerticalChromePreview>(find.byType(VerticalChromePreview)).danmakuOn, isTrue);
+    });
+
     testWidgets('they take no touches and say nothing to VoiceOver', (tester) async {
       await show(tester);
       final preview = find.byType(VerticalChromePreview).first;
@@ -317,4 +385,14 @@ void main() {
       );
     });
   });
+}
+
+/// A feed counting the swipes past its end.
+class _AskingFeed extends FakeStoryFeed {
+  _AskingFeed(super.entries);
+
+  var asks = 0;
+
+  @override
+  void wantMore() => asks++;
 }

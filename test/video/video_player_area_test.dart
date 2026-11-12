@@ -77,6 +77,8 @@ void main() {
     ValueListenable<bool>? turning,
     ValueListenable<double?>? verticalTurn,
     StoryPager? storyPager,
+    bool? moveTargets,
+    VoidCallback? onRetry,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -93,10 +95,11 @@ void main() {
           loading: loading,
           waiting: waiting,
           failure: failure,
-          onRetry: () {},
+          onRetry: onRetry ?? () {},
           turning: turning,
           verticalTurn: verticalTurn,
           storyPager: storyPager,
+          moveTargets: moveTargets,
         ),
       ),
     );
@@ -297,6 +300,26 @@ void main() {
     expect(upright.top, closeTo(169.67, 0.01));
     expect(upright.bottom, closeTo(756.33, 0.01));
     expect(upright.width, 440);
+  });
+
+  testWidgets("竖屏 gives a square video the upright band, as the chrome's last button takes it as upright", (
+    tester,
+  ) async {
+    session
+      ..videoShape = (width: 1080, height: 1080)
+      ..changed();
+    await show(tester, Presentation.vertical, loading: true);
+    expect(VerticalChrome.uprightShape(session), isTrue);
+    expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 926));
+    final loading = find.ancestor(of: find.byType(PlayerLoading), matching: find.byType(FractionallySizedBox)).first;
+    expect(tester.getRect(loading).height, closeTo(926, 0.01), reason: 'the loading TV centres on the same band');
+
+    session
+      ..videoShape = (width: 1081, height: 1080)
+      ..changed();
+    await tester.pump();
+    expect(VerticalChrome.uprightShape(session), isFalse);
+    expect(videoRect(tester).height, closeTo(956 * BiliMetrics.verticalVideoCentre * 2, 0.01));
   });
 
   testWidgets('holding 竖屏\'s bar leaves the video where it is and the danmaku flying (19, 20)', (tester) async {
@@ -812,6 +835,123 @@ void main() {
       await show(tester, Presentation.inline, storyPager: pager);
       expect(node, findsNothing, reason: 'only in 竖屏');
       semantics.dispose();
+    });
+
+    testWidgets('the danmaku dim with the controls while the page moves, and come back as it lands', (tester) async {
+      pager.feed = feed;
+      await show(tester, Presentation.vertical, storyPager: pager);
+      double dim() => tester
+          .widget<Opacity>(find.ancestor(of: find.byType(DanmakuLayer), matching: find.byType(Opacity)).first)
+          .opacity;
+      final layer = tester.element(find.byType(DanmakuLayer));
+      expect(dim(), 1);
+      drag
+        ..start()
+        ..update(-100);
+      await tester.pump();
+      expect(dim(), VerticalCleanTheme.movingOpacity);
+      expect(find.ancestor(of: find.byKey(const ValueKey('fake-video')), matching: find.byType(Opacity)), findsNothing,
+          reason: 'the picture stays as it is');
+      drag.end(0);
+      await tester.pump(const Duration(milliseconds: 17));
+      expect(drag.settling, isTrue);
+      expect(dim(), VerticalCleanTheme.movingOpacity);
+      await tester.pumpAndSettle();
+      expect(dim(), 1);
+      expect(identical(tester.element(find.byType(DanmakuLayer)), layer), isTrue, reason: 'they keep their state');
+    });
+
+    testWidgets("the neighbours' 发弹幕 fields follow the page's 弹", (tester) async {
+      pager.feed = feed;
+      session
+        ..danmakuOn = false
+        ..changed();
+      await show(tester, Presentation.vertical, storyPager: pager);
+      expect(tester.widget<VerticalChromePreview>(find.byType(VerticalChromePreview)).danmakuOn, isFalse);
+      session
+        ..danmakuOn = true
+        ..changed();
+      await tester.pump();
+      expect(tester.widget<VerticalChromePreview>(find.byType(VerticalChromePreview)).danmakuOn, isTrue);
+    });
+
+    testWidgets('on Windows 下一个视频 and 上一个视频 are buttons too, which take no touches', (tester) async {
+      final semantics = tester.ensureSemantics();
+      pager.feed = feed;
+      await show(tester, Presentation.vertical, storyPager: pager, moveTargets: true);
+      final next = find.semantics.byLabel('下一个视频');
+      final previous = find.semantics.byLabel('上一个视频');
+      expect(next, findsOne);
+      expect(next.evaluate().single.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      expect(next.evaluate().single.getSemanticsData().flagsCollection.isButton, isTrue);
+
+      tester.semantics.tap(previous);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(feed.moves, isEmpty, reason: 'nothing before the first video');
+      tester.semantics.tap(next);
+      await tester.pump(const Duration(milliseconds: 17));
+      expect(drag.offset, lessThan(0), reason: 'the same settle as a swipe');
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(feed.moves, [1]);
+      tester.semantics.tap(previous);
+      await tester.pump(const Duration(milliseconds: 17));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(feed.moves, [1, 0]);
+
+      final targets = find.byKey(const ValueKey('story-move-targets'));
+      final box = tester.getRect(find.descendant(of: targets, matching: find.byType(SizedBox)).first);
+      expect(box.size, const Size.square(StoryPagerTheme.moveTarget));
+      final hit = tester.hitTestOnBinding(box.center).path.map((entry) => entry.target).toList();
+      expect(
+        hit,
+        isNot(contains(tester.renderObject(find.descendant(of: targets, matching: find.byType(SizedBox)).first))),
+      );
+      final gestures = find.descendant(of: find.byType(PlayerGestureLayer), matching: find.byType(Listener)).first;
+      expect(hit, contains(tester.renderObject(gestures)), reason: 'the touch reaches the gesture layer under them');
+
+      await show(tester, Presentation.vertical, storyPager: pager, moveTargets: false);
+      expect(next, findsNothing, reason: "iOS: VoiceOver's custom actions are enough");
+      await show(tester, Presentation.inline, storyPager: pager, moveTargets: true);
+      expect(next, findsNothing, reason: 'only in 竖屏');
+      semantics.dispose();
+    });
+
+    testWidgets('a video swiped to that fails to open can be swiped past; 重试 still answers a tap', (tester) async {
+      pager.feed = feed;
+      var retries = 0;
+      await show(tester, Presentation.vertical, storyPager: pager, failure: '播放失败', onRetry: () => retries++);
+      expect(find.byType(PlayerGestureLayer), findsNothing);
+      final failure = find.byKey(const ValueKey('video-failure'));
+      final rest = tester.getRect(failure);
+
+      final gesture = await tester.startGesture(const Offset(220, 800));
+      for (var i = 0; i < 20; i++) {
+        await gesture.moveBy(const Offset(0, -30));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(drag.dragging, isTrue);
+      expect(tester.getRect(failure).top, closeTo(rest.top + drag.offset, 0.01), reason: 'it moves with the page');
+      expect(drag.offset, lessThan(-956 / 2));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(feed.moves, [1]);
+
+      final back = await tester.startGesture(const Offset(220, 800));
+      for (var i = 0; i < 20; i++) {
+        await back.moveBy(const Offset(0, -30));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await back.cancel();
+      await tester.pumpAndSettle();
+      expect(feed.moves, [1], reason: 'a cancelled touch goes back');
+      expect(drag.moving, isFalse);
+
+      await tester.tap(find.byKey(const ValueKey('video-retry')));
+      expect(retries, 1);
+      expect(feed.moves, [1]);
+
+      await show(tester, Presentation.inline, storyPager: pager, failure: '播放失败');
+      expect(find.byKey(const ValueKey('video-failure-swipe')), findsNothing, reason: 'only in 竖屏');
     });
   });
 }

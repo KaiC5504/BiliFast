@@ -1,14 +1,16 @@
 import 'package:flutter/foundation.dart';
 
 /// 竖屏's page under the finger. [offset] is how far the page has moved, in points: negative towards the next video
-/// (a swipe up), positive towards the one before. The gesture layer drives a drag ([start], [update], [end]); the
-/// pager shapes the finger's travel ([shape]), answers a lifted finger ([onRelease]) and moves the page by itself
-/// ([settleTo]) until it [land]s. The chrome dims and keeps its top bar still while [moving].
+/// (a swipe up), positive towards the one before. The gesture layer drives a drag ([start], [update], [end], [cancel]);
+/// the pager shapes the finger's travel ([shape]), answers a lifted finger ([onRelease]) or a taken one ([onCancel])
+/// and moves the page by itself ([settleTo]) until it [land]s. The chrome dims and keeps its top bar still while
+/// [moving].
 class StoryDrag extends ChangeNotifier {
   double _offset = 0;
   double _travel = 0;
   bool _dragging = false;
   bool _settling = false;
+  bool _cancelling = false;
 
   double get offset => _offset;
   bool get dragging => _dragging;
@@ -24,6 +26,9 @@ class StoryDrag extends ChangeNotifier {
 
   /// The finger lifted, at [velocity] points a second (negative upwards). Unset, the page goes back at once.
   void Function(double velocity)? onRelease;
+
+  /// The drag was taken away: the page goes back to where it was, whatever the finger's travel. Unset, at once.
+  VoidCallback? onCancel;
 
   /// A finger took the page, also while it settles.
   void start() {
@@ -43,16 +48,24 @@ class StoryDrag extends ChangeNotifier {
   void end(double velocity) {
     if (!_dragging) return;
     _dragging = false;
-    final release = onRelease;
-    if (release != null) {
+    final cancelled = _cancelling;
+    _cancelling = false;
+    if (cancelled) {
+      (onCancel ?? land)();
+    } else if (onRelease case final release?) {
       release(velocity);
     } else {
       land();
     }
   }
 
-  /// The drag was taken away (another gesture won, the page left 竖屏).
-  void cancel() => end(0);
+  /// The drag was taken away (another gesture won, the touch was cancelled, the page left 竖屏): it ends as [end] ends
+  /// it, with no speed, but never moves to a neighbour, however far the finger had gone.
+  void cancel() {
+    if (!_dragging) return;
+    _cancelling = true;
+    end(0);
+  }
 
   /// The pager moving the page by itself.
   void settleTo(double offset) {

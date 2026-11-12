@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -25,6 +26,7 @@ import '../player_ui/stats_overlay.dart';
 import '../player_ui/vertical_chrome.dart';
 import '../shared/theme.dart';
 import 'player_session.dart';
+import 'story/story_drag.dart';
 import 'story/story_pager.dart';
 
 /// The player as the video page shows it, in every presentation (BiliNative `PlayerBox` and `ChromeLayer.swift`): the
@@ -55,6 +57,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.verticalTurn,
     this.slide,
     this.storyPager,
+    this.moveTargets,
   });
 
   final Presentation presentation;
@@ -120,6 +123,10 @@ class VideoPlayerArea extends StatelessWidget {
   /// The page's swipe between 竖屏's videos; it takes part only in 竖屏 on the iPhone, while its feed is up.
   final StoryPager? storyPager;
 
+  /// 下一个视频 and 上一个视频 as buttons as well as custom actions, for Windows' accessibility bridge, which leaves
+  /// custom actions out; null puts them in on Windows only.
+  final bool? moveTargets;
+
   @override
   Widget build(BuildContext context) {
     final session = ui?.session;
@@ -140,7 +147,14 @@ class VideoPlayerArea extends StatelessWidget {
                     if (feed.next != null) const CustomSemanticsAction(label: '下一个视频'): story.moveNext,
                     if (feed.previous != null) const CustomSemanticsAction(label: '上一个视频'): story.movePrevious,
                   },
-            child: Stack(fit: StackFit.expand, children: _layers(pad: pad, story: story)),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ..._layers(pad: pad, story: story),
+                if (story != null && (moveTargets ?? Platform.isWindows))
+                  _MoveTargets(key: const ValueKey('story-move-targets'), pager: story),
+              ],
+            ),
           );
         },
       ),
@@ -179,39 +193,42 @@ class VideoPlayerArea extends StatelessWidget {
                   if (session != null)
                     _unseen(
                       turn != null || slid != null,
-                      _DanmakuArea(
-                        key: const ValueKey('video-danmaku-area'),
-                        pad: pad,
-                        vertical: presentation == Presentation.vertical,
-                        videoIsVertical: session.layoutVertical,
-                        fit: session.fit,
-                        video: switch (session.videoShape) {
-                          (:final width, :final height) => Size(width.toDouble(), height.toDouble()),
-                          null => null,
-                        },
-                        builder: (picture, area) => ClipRect(
-                          // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still run
-                          // the full height.
-                          clipBehavior: shrunk || danmakuHeight != null ? Clip.hardEdge : Clip.none,
-                          child: _Pinned(
-                            size: pin?.value,
-                            child: OverflowBox(
-                              alignment: Alignment.topCenter,
-                              minHeight: danmakuHeight,
-                              maxHeight: danmakuHeight,
-                              child: DanmakuLayer(
-                                key: const ValueKey('video-danmaku'),
-                                clock: session.clock,
-                                timeline: danmaku?.timeline,
-                                // The end screens show no danmaku over the last frame.
-                                enabled: session.danmakuOn && !ended && played,
-                                wake: session.readout.any,
-                                settings: ui?.danmaku?.settings,
-                                presentation: presentation,
-                                formFactor: pad ? FormFactor.pad : FormFactor.phone,
-                                mask: ui?.danmaku?.mask,
-                                picture: _Pinned.unscale(picture, area: area, pinned: pin?.value),
-                                mirrored: session.mirrored,
+                      _MovingDim(
+                        drag: story?.drag,
+                        child: _DanmakuArea(
+                          key: const ValueKey('video-danmaku-area'),
+                          pad: pad,
+                          vertical: presentation == Presentation.vertical,
+                          videoIsVertical: VerticalChrome.uprightShape(session),
+                          fit: session.fit,
+                          video: switch (session.videoShape) {
+                            (:final width, :final height) => Size(width.toDouble(), height.toDouble()),
+                            null => null,
+                          },
+                          builder: (picture, area) => ClipRect(
+                            // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still run
+                            // the full height.
+                            clipBehavior: shrunk || danmakuHeight != null ? Clip.hardEdge : Clip.none,
+                            child: _Pinned(
+                              size: pin?.value,
+                              child: OverflowBox(
+                                alignment: Alignment.topCenter,
+                                minHeight: danmakuHeight,
+                                maxHeight: danmakuHeight,
+                                child: DanmakuLayer(
+                                  key: const ValueKey('video-danmaku'),
+                                  clock: session.clock,
+                                  timeline: danmaku?.timeline,
+                                  // The end screens show no danmaku over the last frame.
+                                  enabled: session.danmakuOn && !ended && played,
+                                  wake: session.readout.any,
+                                  settings: ui?.danmaku?.settings,
+                                  presentation: presentation,
+                                  formFactor: pad ? FormFactor.pad : FormFactor.phone,
+                                  mask: ui?.danmaku?.mask,
+                                  picture: _Pinned.unscale(picture, area: area, pinned: pin?.value),
+                                  mirrored: session.mirrored,
+                                ),
                               ),
                             ),
                           ),
@@ -223,7 +240,12 @@ class VideoPlayerArea extends StatelessWidget {
             ),
           ),
         ),
-      if (story != null) StoryNeighbours(key: const ValueKey('story-neighbours'), pager: story),
+      if (story != null)
+        StoryNeighbours(
+          key: const ValueKey('story-neighbours'),
+          pager: story,
+          danmakuOn: session?.danmakuOn ?? true,
+        ),
       if (session != null && session.showStats)
         SafeArea(
           key: const ValueKey('video-stats'),
@@ -239,12 +261,16 @@ class VideoPlayerArea extends StatelessWidget {
       _Pinned(
         key: const ValueKey('video-pinned'),
         size: pin?.value,
-        child: Stack(fit: StackFit.expand, children: _controls(pad: pad)),
+        child: Stack(fit: StackFit.expand, children: _controls(pad: pad, story: story)),
       ),
     ];
   }
 
-  List<Widget> _controls({required bool pad}) {
+  /// A video swiped to that fails to open has no gesture layer, only 重试: in 竖屏 the swipe still goes past it.
+  static Widget _swipeable(StoryDrag? drag, Widget failure) =>
+      drag == null ? failure : _FailureSwipe(key: const ValueKey('video-failure-swipe'), drag: drag, child: failure);
+
+  List<Widget> _controls({required bool pad, required StoryPager? story}) {
     final ui = this.ui;
     final ended = ui?.session.ended ?? false;
     final failed = failure != null;
@@ -273,7 +299,7 @@ class VideoPlayerArea extends StatelessWidget {
         if (!ended) _unseen(aside, PlayerHud(ui: ui), key: const ValueKey('video-hud')),
       ],
       if (failure case final failure?)
-        _Failure(key: const ValueKey('video-failure'), message: failure, onRetry: onRetry)
+        _swipeable(story?.drag, _Failure(key: const ValueKey('video-failure'), message: failure, onRetry: onRetry))
       else
         ValueListenableBuilder(
           key: const ValueKey('video-loading-layer'),
@@ -317,7 +343,9 @@ class VideoPlayerArea extends StatelessWidget {
 
   double _loadingBand(PlayerUi? ui) => presentation == Presentation.vertical ? _verticalBand(ui?.session) : 1;
 
-  static double _verticalBand(PlayerSession? session) => verticalBand(upright: session?.layoutVertical == true);
+  /// Square videos take the upright band, as the chrome's last button takes them as upright.
+  static double _verticalBand(PlayerSession? session) =>
+      verticalBand(upright: session != null && VerticalChrome.uprightShape(session));
 
   /// Not painted while [unseen], and deaf to touches, but laid out and animating, so it comes back as it was.
   static Widget _unseen(bool unseen, Widget child, {Key? key}) => Visibility(
@@ -495,6 +523,90 @@ class _Failure extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+/// The failure over a video swiped to in 竖屏: up and down drive [drag], the failure moving with the page; a tap stays
+/// 重试's.
+class _FailureSwipe extends StatefulWidget {
+  const _FailureSwipe({super.key, required this.drag, required this.child});
+
+  final StoryDrag drag;
+  final Widget child;
+
+  @override
+  State<_FailureSwipe> createState() => _FailureSwipeState();
+}
+
+class _FailureSwipeState extends State<_FailureSwipe> {
+  /// Flutter's drag ends a touch the system took back as it ends a lift; the page must go back instead. The Listener
+  /// hears the cancel before the recogniser does.
+  bool _taken = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final drag = widget.drag;
+    return Listener(
+      onPointerDown: (_) => _taken = false,
+      onPointerCancel: (_) => _taken = true,
+      child: GestureDetector(
+        onVerticalDragStart: (_) => drag.start(),
+        onVerticalDragUpdate: (details) => drag.update(details.delta.dy),
+        onVerticalDragEnd: (details) => _taken ? drag.cancel() : drag.end(details.velocity.pixelsPerSecond.dy),
+        onVerticalDragCancel: drag.cancel,
+        child: StoryShift(drag: drag, child: widget.child),
+      ),
+    );
+  }
+}
+
+/// The danmaku while 竖屏's page moves under the finger, faint as the controls are (185); with no [drag], as they are.
+/// Always the same widgets, so the danmaku keep their state as 竖屏 comes and goes.
+class _MovingDim extends StatelessWidget {
+  const _MovingDim({required this.drag, required this.child});
+
+  final StoryDrag? drag;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final drag = this.drag;
+    return ListenableBuilder(
+      listenable: drag ?? const AlwaysStoppedAnimation<double>(0),
+      builder: (context, child) => Opacity(
+        opacity: drag?.moving ?? false ? VerticalCleanTheme.movingOpacity : 1,
+        child: child,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// The Windows build's 下一个视频 and 上一个视频: two small invisible buttons at the left edge's middle for its test
+/// tool. They take no touches, so the chrome and the edge swipe under them work as ever.
+class _MoveTargets extends StatelessWidget {
+  const _MoveTargets({super.key, required this.pager});
+
+  final StoryPager pager;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _target('上一个视频', pager.movePrevious),
+        _target('下一个视频', pager.moveNext),
+      ],
+    ),
+  );
+
+  static Widget _target(String label, bool Function() move) => Semantics(
+    container: true,
+    button: true,
+    label: label,
+    onTap: () => move(),
+    child: const SizedBox.square(dimension: StoryPagerTheme.moveTarget),
   );
 }
 
