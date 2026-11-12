@@ -36,6 +36,7 @@ SIMULATORS = {
 PREPARE = r"""
 set -euo pipefail
 export LANG=en_US.UTF-8 PATH="$HOME/.mac-dev/tools/flutter-3.47.7/bin:/opt/homebrew/bin:$PATH"
+export PUB_CACHE="$HOME/.mac-dev/tools/pub-cache"
 set -a; . ~/.mac-dev/signing/signing.env; set +a
 HERE=~/.mac-dev/bilifast
 LOGS=$HERE/logs
@@ -63,6 +64,7 @@ security unlock-keychain -p "$(cat ~/.mac-dev/signing/keychain.pw)" "$KEYCHAIN"
 cp "$profile" "$app/embedded.mobileprovision"
 security cms -D -i "$profile" > build/profile.plist
 plutil -extract Entitlements xml1 -o build/entitlements.plist build/profile.plist
+rm build/profile.plist
 # Xcode signed these builds without the profile's wildcard keychain-access-groups; keeping it out keeps the app's
 # keychain group (and the login stored in it) as before.
 plutil -remove keychain-access-groups build/entitlements.plist
