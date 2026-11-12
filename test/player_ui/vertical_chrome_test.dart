@@ -18,6 +18,7 @@ import 'package:bilifast/player_ui/speed_lock.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/action_glyphs.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/player_session.dart' show Episode;
 import 'package:bilifast/video/story/story_drag.dart';
@@ -66,6 +67,9 @@ final class Rig {
   ValueNotifier<bool>? clean;
   SpeedLock? speedLock;
 
+  /// Set before [mount]: the page's uploader tap, keeping each uploader it is asked to open.
+  List<UploaderRef>? uploaders;
+
   late final ui = PlayerUi(
     session: session,
     chrome: chrome,
@@ -104,6 +108,9 @@ final class Rig {
       clean?.dispose();
       speedLock?.dispose();
     });
+    final page = gestures
+        ? Stack(fit: StackFit.expand, children: [PlayerGestureLayer(ui: ui), VerticalChrome(ui: ui)])
+        : VerticalChrome(ui: ui);
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -111,9 +118,10 @@ final class Rig {
             data: MediaQuery.of(context).copyWith(disableAnimations: still),
             child: ColoredBox(
               color: Colors.black,
-              child: gestures
-                  ? Stack(fit: StackFit.expand, children: [PlayerGestureLayer(ui: ui), VerticalChrome(ui: ui)])
-                  : VerticalChrome(ui: ui),
+              child: switch (uploaders) {
+                final uploaders? => UploaderTap(open: uploaders.add, child: page),
+                null => page,
+              },
             ),
           ),
         ),
@@ -478,7 +486,9 @@ void main() {
     const rows = ['vertical-avatar', 'vertical-title', 'vertical-bar', 'vertical-danmaku-field'];
 
     Future<Rig> mounted(WidgetTester tester) async {
-      final rig = rig09()..danmaku = DanmakuRig();
+      final rig = rig09()
+        ..danmaku = DanmakuRig()
+        ..uploaders = [];
       rig.session.duration.value = 100;
       await rig.mount(tester, gestures: true);
       return rig;
@@ -505,9 +515,8 @@ void main() {
       expect(rig.backs, rows.length + 1);
     });
 
-    testWidgets('a tap there does nothing, as anywhere on the edge; past the strip the bar seeks and 发弹幕 opens', (
-      tester,
-    ) async {
+    testWidgets('a tap there does nothing, as anywhere on the edge; past the strip the uploader opens, the bar seeks '
+        'and 发弹幕 opens', (tester) async {
       final rig = await mounted(tester);
       for (final key in rows) {
         await tester.tapAt(Offset(16, centre(tester, key).dy));
@@ -516,7 +525,10 @@ void main() {
       expect(rig.session.calls, isEmpty);
       expect(rig.danmaku!.session.sendOpen.value, isFalse);
       expect(rig.backs, 0);
+      expect(rig.uploaders, isEmpty);
 
+      await tester.tapAt(Offset(30, centre(tester, 'vertical-avatar').dy));
+      expect(rig.uploaders, hasLength(1));
       await tester.timedDragFrom(
         Offset(30, centre(tester, 'vertical-bar').dy),
         const Offset(100, 0),
@@ -820,6 +832,52 @@ void main() {
       expect(actionsOf(rig).calls, ['tapFollow', 'tapFollow']);
     });
 
+    testWidgets('the avatar, the name and 粉丝 are one target, opening the uploader as the page has it; 关注 keeps its '
+        'own tap', (tester) async {
+      final rig = rig09()..uploaders = [];
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+
+      for (final key in ['vertical-avatar', 'vertical-name', 'vertical-fans']) {
+        await tester.tap(find.byKey(ValueKey(key)));
+      }
+      final opened = [for (final uploader in rig.uploaders!) (uploader.mid, uploader.name, uploader.face)];
+      expect(opened, List.filled(3, (1, '我们一起去养猪', '')));
+      expect(rig.chrome.shows, 3);
+
+      await tester.tap(find.byKey(const ValueKey('vertical-follow')));
+      expect(actionsOf(rig).calls, ['tapFollow']);
+      expect(rig.uploaders, hasLength(3));
+    });
+
+    testWidgets('to VoiceOver it is one button named for the uploader, 粉丝 within it, and answers a press', (
+      tester,
+    ) async {
+      final rig = rig09()..uploaders = [];
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('我们一起去养猪')),
+        isSemantics(label: '我们一起去养猪', isButton: true, hasTapAction: true),
+      );
+      expect(find.bySemanticsLabel('6129粉丝'), findsNothing);
+
+      tester.semantics.tap(find.semantics.byLabel('我们一起去养猪'));
+      expect(rig.uploaders!.single.mid, 1);
+    });
+
+    testWidgets("without the page's uploader tap the row opens nothing and isn't a button", (tester) async {
+      final rig = rig09();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('vertical-name')));
+      expect(rig.chrome.shows, 0);
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('我们一起去养猪')),
+        isSemantics(isButton: false, hasTapAction: false),
+      );
+    });
+
     testWidgets('N人正在看 after the back arrow once the poll answers, gone while it hasn\'t', (tester) async {
       final rig = rig09()..details!.online.value = null;
       await rig.mount(tester);
@@ -929,8 +987,8 @@ void main() {
       expect(textColour(tester, find.byKey(const ValueKey('vertical-name'))), BiliColors.onVideo);
     });
 
-    testWidgets('a panel takes the column and 关注 with the rest', (tester) async {
-      final rig = rig09();
+    testWidgets('a panel takes the column, the uploader and 关注 with the rest', (tester) async {
+      final rig = rig09()..uploaders = [];
       await rig.mount(tester);
       await tester.pumpAndSettle();
 
@@ -938,7 +996,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('vertical-like')), warnIfMissed: false);
       await tester.tap(find.byKey(const ValueKey('vertical-follow')), warnIfMissed: false);
+      await tester.tap(find.byKey(const ValueKey('vertical-avatar')), warnIfMissed: false);
       expect(actionsOf(rig).calls, isEmpty);
+      expect(rig.uploaders, isEmpty);
     });
   });
 

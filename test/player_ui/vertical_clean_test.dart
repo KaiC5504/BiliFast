@@ -139,7 +139,7 @@ void main() {
   group('清屏 (180, 186)', () {
     testWidgets('takes ‹, ⋮, the column, the uploader and the title, and their touches; the bar and the bottom row '
         'stay where they were', (tester) async {
-      final rig = storyRig();
+      final rig = storyRig()..uploaders = [];
       await rig.mount(tester);
       await tester.pumpAndSettle();
       final before = {for (final key in kept) key: tester.getRect(find.byKey(ValueKey(key)))};
@@ -156,8 +156,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('vertical-back')), warnIfMissed: false);
       await tester.tap(find.byKey(const ValueKey('vertical-like')), warnIfMissed: false);
       await tester.tap(find.byKey(const ValueKey('vertical-follow')), warnIfMissed: false);
+      await tester.tap(find.byKey(const ValueKey('vertical-name')), warnIfMissed: false);
       expect(rig.backs, 0);
       expect(actionsOf(rig).calls, isEmpty);
+      expect(rig.uploaders, isEmpty);
 
       rig.clean!.value = false;
       await tester.pumpAndSettle();
@@ -347,6 +349,30 @@ void main() {
       expect(find.text('下一位UP主'), findsNothing);
       expect(find.text('第二个'), findsOneWidget);
       expect(find.text('352'), findsOneWidget, reason: "the page's actions again");
+    });
+
+    testWidgets("just swiped, the uploader opens the feed's video's owner until the details are in; its 关注 waits "
+        'for them', (tester) async {
+      final rig = storyRig()..uploaders = [];
+      final feed = rig.story!.value! as FakeFeed;
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+
+      feed.moveNext();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('vertical-avatar')));
+      expect([for (final uploader in rig.uploaders!) (uploader.mid, uploader.name)], [(2, '下一位UP主')]);
+      tester.semantics.tap(find.semantics.byLabel('下一位UP主'));
+      expect(rig.uploaders, hasLength(2));
+      await tester.tap(find.byKey(const ValueKey('vertical-follow')), warnIfMissed: false);
+      expect(actionsOf(rig).calls, isEmpty, reason: "the last video's 关注 isn't this one's");
+
+      rig.session
+        ..detail = detail2()
+        ..changed();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('vertical-name')));
+      expect((rig.uploaders!.last.mid, rig.uploaders!.last.name), (2, '第二个'));
     });
   });
 }

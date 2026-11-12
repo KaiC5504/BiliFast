@@ -10,6 +10,7 @@ import '../player/bili_player.dart' show PlayerStatus;
 import '../shared/action_glyphs.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../space/uploader_tap.dart';
 import '../video/actions/video_actions.dart';
 import '../video/page_details.dart';
 import '../video/player_session.dart';
@@ -79,6 +80,7 @@ class VerticalChrome extends StatelessWidget {
         final paused = ui.session.readout.status.value == PlayerStatus.paused && !ui.session.opening;
         final pending = _pending(feed);
         final details = ui.details;
+        final openUploader = UploaderTap.maybeOf(context);
         return IgnorePointer(
           key: const ValueKey('vertical-chrome'),
           ignoring: !shown,
@@ -105,6 +107,7 @@ class VerticalChrome extends StatelessWidget {
                                 clean: clean,
                                 pending: pending,
                                 upright: pending?.upright ?? uprightShape(ui.session),
+                                openUploader: openUploader,
                               ),
                             ),
                           ),
@@ -159,6 +162,10 @@ class VerticalChrome extends StatelessWidget {
     ui.chrome.show();
     action();
   };
+
+  /// The uploader row's tap, the page deciding what it opens; none without the page's [UploaderTap].
+  VoidCallback? _uploaderTap(void Function(UploaderRef)? open, UploaderRef uploader) =>
+      open == null || uploader.mid <= 0 ? null : _touch(() => open(uploader));
 
   /// In 清屏 only N人正在看 stays, dimmed and moved to the left edge (180).
   Widget _topRow(BuildContext context, {required bool clean}) {
@@ -223,6 +230,7 @@ class VerticalChrome extends StatelessWidget {
     required bool clean,
     required StoryEntry? pending,
     required bool upright,
+    required void Function(UploaderRef)? openUploader,
   }) {
     final session = ui.session;
     final detail = session.detail;
@@ -231,8 +239,23 @@ class VerticalChrome extends StatelessWidget {
       uploader: _GiveWay(
         shown: info,
         child: switch (pending) {
-          final entry? => IgnorePointer(child: _entryUploader(entry, 'vertical')),
-          null when detail != null => _Uploader(detail: detail, details: ui.details, touch: _touch),
+          final entry? => _entryUploader(
+            entry,
+            'vertical',
+            onOpen: _uploaderTap(
+              openUploader,
+              UploaderRef(mid: entry.ownerMid, name: entry.ownerName, face: entry.ownerFace),
+            ),
+          ),
+          null when detail != null => _Uploader(
+            detail: detail,
+            details: ui.details,
+            touch: _touch,
+            onOpen: _uploaderTap(
+              openUploader,
+              UploaderRef(mid: detail.owner.mid, name: detail.owner.name, face: detail.owner.face),
+            ),
+          ),
           null => const SizedBox.shrink(),
         },
       ),
@@ -374,12 +397,13 @@ void _nothing() {}
 
 void _ignore(double _) {}
 
-Widget _entryUploader(StoryEntry entry, String prefix) => _UploaderRow(
+Widget _entryUploader(StoryEntry entry, String prefix, {VoidCallback? onOpen}) => _UploaderRow(
   prefix: prefix,
   face: entry.ownerFace,
   name: entry.ownerName,
   fans: entry.ownerFans > 0 ? entry.ownerFans : null,
   following: entry.following ? null : false,
+  onOpen: onOpen,
 );
 
 Widget _entryTitle(StoryEntry entry, Key key) => _titleText(
@@ -533,7 +557,7 @@ class _Block extends StatelessWidget {
         padding: const EdgeInsets.only(left: BiliMetrics.verticalInfoInset, right: BiliMetrics.verticalColumnRoom),
         child: title,
       ),
-      // The search suggestion row will sit between the title and the bar.
+      // Kept for the search row; 清屏's play and time sit in it.
       SizedBox(
         height: BiliMetrics.verticalSearchRoom,
         child: switch (room) {
@@ -842,11 +866,12 @@ class _Moving extends StatelessWidget {
 
 /// The uploader's avatar, the name (pink for 大会员) with 粉丝 under it, and + 关注 beside it, each once known.
 class _Uploader extends StatelessWidget {
-  const _Uploader({required this.detail, required this.details, required this.touch});
+  const _Uploader({required this.detail, required this.details, required this.touch, this.onOpen});
 
   final VideoDetail detail;
   final PageDetails? details;
   final VoidCallback Function(VoidCallback) touch;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -872,10 +897,12 @@ class _Uploader extends StatelessWidget {
     fans: uploader?.fans,
     following: actions?.following,
     onFollow: actions == null ? null : touch(actions.tapFollow),
+    onOpen: onOpen,
   );
 }
 
-/// The avatar, the name with [fans] under it once known, and the follow pill once [following] is.
+/// The avatar, the name with [fans] under it once known, and the follow pill once [following] is. The avatar, name
+/// and 粉丝 are one target, [onOpen], as the official row is.
 class _UploaderRow extends StatelessWidget {
   const _UploaderRow({
     required this.prefix,
@@ -885,6 +912,7 @@ class _UploaderRow extends StatelessWidget {
     this.fans,
     this.following,
     this.onFollow,
+    this.onOpen,
   });
 
   /// Before each key: the live page's, or a neighbour's still copy.
@@ -894,7 +922,10 @@ class _UploaderRow extends StatelessWidget {
   final bool vip;
   final int? fans;
   final bool? following;
+
+  /// Null leaves the pill taking no touches, as a swiped-to video's is until its page's actions are in.
   final VoidCallback? onFollow;
+  final VoidCallback? onOpen;
 
   static const _fansStyle = TextStyle(
     color: VerticalActionTheme.fans,
@@ -919,66 +950,83 @@ class _UploaderRow extends StatelessWidget {
       key: ValueKey('$prefix-uploader'),
       children: [
         const SizedBox(width: BiliMetrics.verticalAvatarInset),
-        Container(
-          key: ValueKey('$prefix-avatar'),
-          width: BiliMetrics.verticalAvatar,
-          height: BiliMetrics.verticalAvatar,
-          foregroundDecoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: BiliColors.onVideo, width: BiliMetrics.verticalAvatarRing),
-          ),
-          child: ClipOval(
-            child: RemoteImage.avatar(face, size: const Size.square(BiliMetrics.verticalAvatar)),
-          ),
-        ),
-        const SizedBox(width: BiliMetrics.verticalAvatarGap),
         Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: VerticalActionTheme.nameLine,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: 1,
-                  child: Transform.translate(
-                    offset: Offset(0, VerticalActionTheme.nameDrop),
-                    child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 200),
-                      style: _nameStyle(vip),
-                      child: Text(
-                        name,
-                        key: ValueKey('$prefix-name'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        strutStyle: BiliFonts.strut(_nameStyle(vip)),
-                      ),
+          child: Semantics(
+            button: onOpen != null,
+            label: name,
+            onTap: onOpen,
+            excludeSemantics: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onOpen,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    key: ValueKey('$prefix-avatar'),
+                    width: BiliMetrics.verticalAvatar,
+                    height: BiliMetrics.verticalAvatar,
+                    foregroundDecoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: BiliColors.onVideo, width: BiliMetrics.verticalAvatarRing),
+                    ),
+                    child: ClipOval(
+                      child: RemoteImage.avatar(face, size: const Size.square(BiliMetrics.verticalAvatar)),
                     ),
                   ),
-                ),
-              ),
-              SizedBox(
-                height: VerticalActionTheme.fansLine,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: 1,
-                  child: _FadeIn(
-                    child: fans == null
-                        ? null
-                        : Transform.translate(
-                            offset: Offset(0, VerticalActionTheme.fansDrop),
-                            child: Text(
-                              '${CountFormat.short(fans)}粉丝',
-                              key: ValueKey('$prefix-fans'),
-                              maxLines: 1,
-                              style: _fansStyle,
-                              strutStyle: fullScreenStrut(_fansStyle),
+                  const SizedBox(width: BiliMetrics.verticalAvatarGap),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: VerticalActionTheme.nameLine,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: 1,
+                            child: Transform.translate(
+                              offset: Offset(0, VerticalActionTheme.nameDrop),
+                              child: AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 200),
+                                style: _nameStyle(vip),
+                                child: Text(
+                                  name,
+                                  key: ValueKey('$prefix-name'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  strutStyle: BiliFonts.strut(_nameStyle(vip)),
+                                ),
+                              ),
                             ),
                           ),
+                        ),
+                        SizedBox(
+                          height: VerticalActionTheme.fansLine,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: 1,
+                            child: _FadeIn(
+                              child: fans == null
+                                  ? null
+                                  : Transform.translate(
+                                      offset: Offset(0, VerticalActionTheme.fansDrop),
+                                      child: Text(
+                                        '${CountFormat.short(fans)}粉丝',
+                                        key: ValueKey('$prefix-fans'),
+                                        maxLines: 1,
+                                        style: _fansStyle,
+                                        strutStyle: fullScreenStrut(_fansStyle),
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
         _FadeIn(
@@ -986,10 +1034,13 @@ class _UploaderRow extends StatelessWidget {
               ? null
               : Padding(
                   padding: const EdgeInsets.only(left: VerticalActionTheme.followGap),
-                  child: _FollowPill(
-                    key: ValueKey('$prefix-follow'),
-                    following: following,
-                    onTap: onFollow ?? _nothing,
+                  child: IgnorePointer(
+                    ignoring: onFollow == null,
+                    child: _FollowPill(
+                      key: ValueKey('$prefix-follow'),
+                      following: following,
+                      onTap: onFollow ?? _nothing,
+                    ),
                   ),
                 ),
         ),
