@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:bili_core/api.dart' show OfficialIdentity;
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/app_auth.dart';
 import 'package:bilifast/account/keychain_store.dart';
@@ -43,6 +44,9 @@ class _AskingAuth extends ChangeNotifier implements AppAuth {
   DateTime? get expiresAt => null;
 
   @override
+  OfficialIdentity? get identity => null;
+
+  @override
   Future<void> start() async {}
 
   @override
@@ -71,6 +75,9 @@ class _HeldAuth extends ChangeNotifier implements AppAuth {
 
   @override
   DateTime? get expiresAt => null;
+
+  @override
+  OfficialIdentity? get identity => environment.client.appToken?.identity;
 
   @override
   Future<void> start() async {}

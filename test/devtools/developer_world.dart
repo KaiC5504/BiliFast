@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/api.dart' show OfficialIdentity;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/app_auth.dart';
@@ -84,10 +85,16 @@ final class HeldOutbox extends HistoryOutbox {
 
 /// Counts what 开发者 asks of the token.
 class StubAppAuth extends ChangeNotifier implements AppAuth {
-  StubAppAuth({this.expiresAt});
+  StubAppAuth({this.expiresAt, this.issuedTo = OfficialIdentity.iphone});
 
   @override
   DateTime? expiresAt;
+
+  /// The app its token is issued to, held or yet to be asked for.
+  final OfficialIdentity issuedTo;
+
+  @override
+  OfficialIdentity? get identity => authorized ? issuedTo : null;
 
   int requests = 0;
   int reauthorizations = 0;

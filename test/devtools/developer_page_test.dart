@@ -1,3 +1,4 @@
+import 'package:bili_core/api.dart' show OfficialIdentity;
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/devtools/developer_page.dart';
 import 'package:bilifast/devtools/node_probe_section.dart';
@@ -162,16 +163,18 @@ void main() {
       await press(tester, row('app-auth-button'));
       expect(auth.requests, 1);
       expect(auth.reauthorizations, 0);
-      expect(inRow('app-auth-state', '已授权 · 剩 180 天'), findsOneWidget);
+      expect(inRow('app-auth-state', '已授权 · iPhone · 剩 180 天'), findsOneWidget);
       expect(inRow('app-auth-button', '重新授权'), findsOneWidget);
     });
 
-    testWidgets('with the token it reads the days left, and 重新授权 asks again, pressed through VoiceOver', (
-      tester,
-    ) async {
-      final auth = StubAppAuth(expiresAt: DateTime.now().add(const Duration(days: 42, hours: 12)));
+    testWidgets("with the token it reads the token's app and the days left, and 重新授权 asks again, pressed through "
+        'VoiceOver', (tester) async {
+      final auth = StubAppAuth(
+        expiresAt: DateTime.now().add(const Duration(days: 42, hours: 12)),
+        issuedTo: OfficialIdentity.android,
+      );
       await DeveloperWorld().show(tester, appAuth: auth);
-      expect(inRow('app-auth-state', '已授权 · 剩 42 天'), findsOneWidget);
+      expect(inRow('app-auth-state', '已授权 · Android · 剩 42 天'), findsOneWidget);
 
       final semantics = tester.ensureSemantics();
       tester.semantics.tap(find.semantics.byLabel('重新授权'));

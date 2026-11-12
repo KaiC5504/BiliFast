@@ -9,6 +9,7 @@ import 'package:bili_core/api.dart'
         CommentSort,
         CommentPicture,
         FeedCard,
+        OfficialIdentity,
         OfficialKind,
         RichRun,
         SpaceVideo,
@@ -174,6 +175,9 @@ class _RecordingAppAuth extends ChangeNotifier implements AppAuth {
 
   @override
   DateTime? get expiresAt => null;
+
+  @override
+  OfficialIdentity? get identity => null;
 
   @override
   Future<void> start() async {}
