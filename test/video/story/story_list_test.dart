@@ -58,22 +58,37 @@ final class FakeHost extends StoryHost {
   @override
   StoryEntry? playing;
 
+  @override
+  bool halted = false;
+
   final Map<String, List<VideoCard>> loaded = {};
   final List<StoryEntry> opened = [];
+  final List<bool> openedEntered = [];
   bool disposed = false;
 
   void changed() => notifyListeners();
+
+  /// The page opening a video of its own (自动连播, 选集).
+  void plays(String other, {StoryEntry? details}) {
+    bvid = other;
+    playing = details;
+    notifyListeners();
+  }
 
   @override
   List<VideoCard>? loadedRelated(String bvid) => loaded[bvid];
 
   @override
-  void open(StoryEntry entry) {
+  void open(StoryEntry entry, {required bool entered}) {
     opened.add(entry);
+    openedEntered.add(entered);
     bvid = entry.bvid;
     playing = null;
     notifyListeners();
   }
+
+  @override
+  void halt() => halted = true;
 
   @override
   void dispose() {
@@ -128,10 +143,11 @@ void main() {
   }
 
   StoryList make({bool useOfficial = true}) {
-    final feed = StoryList(host: host, official: useOfficial ? official : null, related: related, logger: logger)
+    final on = host;
+    final feed = StoryList(host: on, official: useOfficial ? official : null, related: related, logger: logger)
       ..addListener(() => notified++);
     addTearDown(() {
-      if (!host.disposed) feed.dispose();
+      if (!on.disposed) feed.dispose();
     });
     return feed;
   }
@@ -154,7 +170,7 @@ void main() {
   }
 
   group('the entered video', () {
-    test('is the first entry, reporting as story-single from where it was entered', () {
+    test('is the first entry, reporting as story-single from where it was entered, with its own track data', () {
       final feed = make();
       expect(bvids(feed), [entered]);
       expect(feed.index, 0);
@@ -164,9 +180,19 @@ void main() {
       expect(source.fromSpmid, 'tm.recommend.0.0');
       expect(source.from, 'default-value');
       expect(source.historySource, 'story-single');
-      expect(source.trackId, isNull, reason: 'the entry card\'s track data was its first play\'s');
+      expect(source.trackId, 'TRACK.E');
+      expect(source.flowData, '{"e":1}');
       expect(feed.next, isNull);
       expect(feed.previous, isNull);
+    });
+
+    test('a missing part is waited for with one debug line, however often the page changes meanwhile', () {
+      host.playing = enteredEntry(cid: null);
+      make();
+      host.changed();
+      host.changed();
+      expect(officialAsks, isEmpty);
+      expect(logs.events.where((event) => event.msg == 'story feed waits for the part'), hasLength(1));
     });
 
     test('filled in once its details arrive, with a notification; nothing is asked before', () async {
@@ -257,14 +283,23 @@ void main() {
       expect(officialAsks.last.page, 3);
     });
 
-    test('a page that adds nothing new waits for the user\'s next move', () async {
+    test('a page that adds nothing new waits until the user swipes on past the end: one call each time', () async {
       final feed = make();
       await answerOfficial([item(entered)]);
       expect(officialAsks, hasLength(1));
       expect(feed.loading, isFalse);
       expect(feed.moveNext(), isFalse);
+      expect(officialAsks, hasLength(1), reason: 'a refused move asks nothing; the pager says so with wantMore');
+      feed.wantMore();
       expect(officialAsks, hasLength(2));
       expect(officialAsks.last.page, 2);
+      feed.wantMore();
+      expect(officialAsks, hasLength(2), reason: 'one call out at a time');
+      await answerOfficial([item(entered)]);
+      expect(officialAsks, hasLength(2), reason: 'nothing new again: it waits');
+      feed.wantMore();
+      expect(officialAsks, hasLength(3));
+      expect(officialAsks.last.page, 3);
     });
 
     test('a failed call hands over to the entered video\'s related list for good', () async {
@@ -282,7 +317,7 @@ void main() {
       expect(source.spmid, PlaySource.verticalPage);
       expect(source.trackId, isNull);
       expect(source.flowData, isNull);
-      expect(feedLines().first, {'source': 'official', 'page': 1, 'error': 'BiliNetworkError'});
+      expect(feedLines().first, {'source': 'official', 'page': 1, 'error': 'BiliNetworkError', 'handover': 'failed'});
       expect(officialAsks, hasLength(1));
     });
 
@@ -293,13 +328,14 @@ void main() {
       expect(relatedAsks, [entered]);
     });
 
-    test('a page with no videos at all: the related lists carry on', () async {
+    test('a page with no videos at all: the related lists carry on, and the log says why', () async {
       final feed = make();
       await answerOfficial([item(entered), item('BV1a')]);
       expect(officialAsks, hasLength(2));
       await answerOfficial([]);
       expect(feed.official, isFalse);
       expect(relatedAsks, [entered]);
+      expect(feedLines()[1], {'source': 'official', 'page': 2, 'kept': 0, 'dropped': 0, 'handover': 'empty'});
     });
 
     for (final (name, error) in [
@@ -307,17 +343,28 @@ void main() {
       ('-412', const BiliAPIError(code: -412, message: '')),
       ('HTTP 412', const BiliHTTPError(412)),
     ]) {
-      test('risk control ($name) stops asking for the feed\'s life', () async {
+      test('risk control ($name) stops asking for the page\'s life, the next feed on it too', () async {
         final feed = make();
         officialAnswers.last.completeError(error);
         await pumpEventQueue();
+        expect(host.halted, isTrue);
         expect(relatedAsks, isEmpty);
         expect(feed.moveNext(), isFalse);
-        expect(feed.moveNext(), isFalse);
+        feed
+          ..wantMore()
+          ..wantMore();
         expect(officialAsks, hasLength(1));
         expect(relatedAsks, isEmpty);
         expect(feedLines().single, containsPair('stopped', true));
+        expect(feedLines().single.containsKey('handover'), isFalse);
         expect(feedLines().single['code'], error is BiliHTTPError ? 412 : (error as BiliAPIError).code);
+
+        host = FakeHost(playing: enteredEntry())..halted = true;
+        final again = make();
+        again.wantMore();
+        expect(bvids(again), [entered]);
+        expect(officialAsks, hasLength(1));
+        expect(relatedAsks, isEmpty);
       });
     }
   });
@@ -340,18 +387,58 @@ void main() {
       expect(feed.loading, isTrue);
     });
 
-    test('a failed call is not retried until the user moves', () async {
+    for (final (name, error) in [
+      ('HTTP 500', const BiliHTTPError(500)),
+      ('no network', const BiliNetworkError('SocketException')),
+    ]) {
+      test('a call that failed in passing ($name) is asked again only when the user swipes on past the end', () async {
+        final feed = make(useOfficial: false);
+        relatedAnswers.last.completeError(error);
+        await pumpEventQueue();
+        expect(feed.loading, isFalse);
+        expect(relatedAsks, [entered]);
+        host.changed();
+        expect(relatedAsks, [entered], reason: 'the page changing is not a move');
+        expect(feed.moveNext(), isFalse);
+        expect(feed.index, 0);
+        expect(host.opened, isEmpty);
+        expect(relatedAsks, [entered]);
+        feed.wantMore();
+        expect(relatedAsks, [entered, entered], reason: 'that list was never answered');
+      });
+    }
+
+    test('a list Bilibili refused (a removed video) is never asked again; the next swipe asks another entry\'s',
+        () async {
       final feed = make(useOfficial: false);
-      relatedAnswers.last.completeError(const BiliHTTPError(500));
+      relatedAnswers.last.completeError(const BiliAPIError(code: -404, message: ''));
       await pumpEventQueue();
-      expect(feed.loading, isFalse);
-      expect(relatedAsks, [entered]);
-      host.changed();
-      expect(relatedAsks, [entered], reason: 'the page changing is not a move');
-      expect(feed.moveNext(), isFalse);
-      expect(feed.index, 0);
-      expect(host.opened, isEmpty);
-      expect(relatedAsks, [entered, entered], reason: 'that list was never answered');
+      feed
+        ..wantMore()
+        ..wantMore();
+      expect(relatedAsks, [entered], reason: 'no other entry to ask by');
+      expect(feedLines().single, {'source': 'related', 'page': 1, 'error': 'BiliAPIError', 'code': -404});
+
+      host
+        ..playing = enteredEntry(cid: 12)
+        ..changed();
+      expect(relatedAsks, [entered], reason: 'the entered video\'s part changing asks nothing of a stalled feed');
+    });
+
+    test('a refused list among others: the move after it asks the next entry\'s', () async {
+      final feed = make(useOfficial: false);
+      await answerRelated([card('BV1r1'), card('BV1r2')]);
+      expect(relatedAsks, [entered, 'BV1r2']);
+      relatedAnswers.last.completeError(const BiliAPIError(code: 62002, message: ''));
+      await pumpEventQueue();
+      expect(relatedAsks, hasLength(2), reason: 'waits for a move');
+      expect(feed.moveNext(), isTrue);
+      expect(relatedAsks, [entered, 'BV1r2', 'BV1r1']);
+      relatedAnswers.last.completeError(const BiliAPIError(code: -404, message: ''));
+      await pumpEventQueue();
+      expect(feed.moveNext(), isTrue);
+      feed.wantMore();
+      expect(relatedAsks, hasLength(3), reason: 'every listed video\'s list was asked');
     });
 
     test('a list that adds nothing waits for a move, and each video\'s list is asked once', () async {
@@ -384,9 +471,22 @@ void main() {
       expect(back.bvid, entered);
       expect(back.cid, 11);
       expect(back.source.historySource, 'story-single');
+      expect(back.source.trackId, 'TRACK.E');
       expect(feed.movePrevious(), isFalse);
       expect(feed.index, 0);
       expect(host.opened, hasLength(2));
+      expect(host.openedEntered, [false, true], reason: 'the entered video opens as the user\'s own, auto_play 0');
+    });
+
+    test('a video swiped back to that is not the entered one opens as swiped to', () async {
+      final feed = make(useOfficial: false);
+      await answerRelated([card('BV1r1'), card('BV1r2')]);
+      feed
+        ..moveNext()
+        ..moveNext()
+        ..movePrevious();
+      expect(host.opened.map((entry) => entry.bvid), ['BV1r1', 'BV1r2', 'BV1r1']);
+      expect(host.openedEntered, [false, false, false]);
     });
 
     test('swiped back to the first entry, it keeps its 竖屏 source as its details come in again', () async {
@@ -400,6 +500,83 @@ void main() {
         ..changed();
       expect(feed.current!.source.historySource, 'story-single');
       expect(bvids(feed).first, entered);
+    });
+  });
+
+  group('a video the page opened itself', () {
+    StoryEntry other({int cid = 21, PlaySource source = PlaySource.unknown}) => StoryEntry(
+      bvid: 'BV1autonext0',
+      aid: 200,
+      cid: cid,
+      title: '自动连播的',
+      cover: 'cover',
+      ownerMid: 3,
+      ownerName: 'UP3',
+      source: source,
+    );
+
+    test('starts the feed over from it: one entry, its own feed asked from page 1, where 竖屏 was entered from kept',
+        () async {
+      final feed = make();
+      await answerOfficial([item(entered), item('BV1a'), item('BV1b')]);
+      feed.moveNext();
+      expect(officialAsks, hasLength(2));
+      final before = notified;
+
+      const trackOfIt = PlaySource(fromSpmid: 'united.player-video-detail.relatedvideo.0', trackId: 'T.auto');
+      host.plays('BV1autonext0');
+      expect(feed.entries, isEmpty, reason: 'its details are not in yet');
+      expect(feed.current, isNull);
+      expect(feed.index, 0);
+      expect(notified, greaterThan(before));
+      host
+        ..playing = other(source: trackOfIt)
+        ..changed();
+      expect(bvids(feed), ['BV1autonext0']);
+      expect(feed.previous, isNull);
+      final source = feed.current!.source;
+      expect(source.historySource, 'story-single');
+      expect(source.fromSpmid, 'tm.recommend.0.0');
+      expect(source.trackId, 'T.auto');
+      expect(officialAsks, hasLength(3));
+      final ask = officialAsks.last;
+      expect((ask.aid, ask.cid, ask.page, ask.trackId), (200, 21, 1, 'TRACK.E'));
+      expect(identical(ask.entry, recommended), isTrue);
+
+      officialAnswers[1].complete([item('BV1old')]);
+      await pumpEventQueue();
+      expect(bvids(feed), ['BV1autonext0'], reason: 'an answer asked before the start over is dropped');
+      expect(feed.loading, isTrue, reason: 'the new page 1 is still out');
+      await answerOfficial([item('BV1autonext0'), item('BV1c')]);
+      expect(bvids(feed), ['BV1autonext0', 'BV1c']);
+      expect(officialAsks.last.page, 2);
+      expect(logs.events.where((event) => event.msg == 'story feed restarted'), hasLength(1));
+    });
+
+    test('with its details in already, at once; the related lists are asked from it', () async {
+      final feed = make(useOfficial: false);
+      await answerRelated([card('BV1r1')]);
+      expect(relatedAsks, [entered, 'BV1r1']);
+      host.plays('BV1autonext0', details: other());
+      expect(bvids(feed), ['BV1autonext0']);
+      expect(relatedAsks, [entered, 'BV1r1', 'BV1autonext0']);
+      relatedAnswers[1].complete([card('BV1old')]);
+      await pumpEventQueue();
+      expect(bvids(feed), ['BV1autonext0']);
+      await answerRelated([card(entered), card('BV1r1')]);
+      expect(bvids(feed), ['BV1autonext0', entered, 'BV1r1'], reason: 'the old entries are new to it');
+    });
+
+    test('a video the feed opened itself is no start over, whatever details the page has meanwhile', () async {
+      final feed = make(useOfficial: false);
+      await answerRelated([card('BV1r1')]);
+      feed.moveNext();
+      host
+        ..playing = other()
+        ..changed();
+      expect(bvids(feed), [entered, 'BV1r1']);
+      expect(feed.index, 1);
+      expect(logs.events.where((event) => event.msg == 'story feed restarted'), isEmpty);
     });
   });
 
@@ -417,7 +594,7 @@ void main() {
     final feed = make();
     await answerOfficial([item(entered), item('BV1a', flow: '{"secret":1}')]);
     feed.moveNext();
-    const allowed = {'source', 'page', 'kept', 'dropped', 'error', 'code', 'stopped', 'loaded'};
+    const allowed = {'source', 'page', 'kept', 'dropped', 'error', 'code', 'stopped', 'loaded', 'handover'};
     expect(feedLines(), isNotEmpty);
     for (final line in feedLines()) {
       expect(line.keys.toSet().difference(allowed), isEmpty);

@@ -355,8 +355,27 @@ void main() {
       await frames(tester, 4);
     });
 
-    testWidgets('the official feed failing hands over to the related list; the video swiped to reports as 竖屏\'s, and '
-        'ending 竖屏 leaves it on the page', (tester) async {
+    void serves(String view) => http
+      ..routes[Canned.viewPath] = (200, view)
+      ..routes[Canned.signedViewPath] = (200, view);
+
+    List<String?> places() => [for (final request in http.to(historyPath)) form(request)['source']];
+
+    /// What a play of the entered video reports from 竖屏 on.
+    void expectEnteredInVertical(Map<String, String> beat) {
+      expect(beat['aid'], '80433022');
+      expect(beat['spmid'], 'main.ugc-video-detail-vertical.0.0');
+      expect(beat['from'], 'default-value');
+      expect(beat['from_spmid'], 'tm.recommend.0.0');
+      expect(beat['track_id'], 'TRACK.1.2.3');
+      expect(beat['report_flow_data'], '{"flow_card_type":"av"}');
+      expect(beat['auto_play'], '0');
+    }
+
+    testWidgets('the official feed failing hands over to the related list; the video swiped to reports as the '
+        'official app\'s (99, story-series), and so does the entered video swiped back to (0, story-single)', (
+      tester,
+    ) async {
       await host(tester);
       http.routes[relatedPath] = (200, related);
       final playback = started();
@@ -366,10 +385,9 @@ void main() {
       final story = playback.beginStory();
       await frames(tester, 4);
       expect([for (final entry in story.entries) entry.bvid], [bv, other]);
+      expect(http.to('/x/v2/feed/index/story'), hasLength(1), reason: 'asked once, answered 404');
 
-      http
-        ..routes[Canned.viewPath] = (200, otherView)
-        ..routes[Canned.signedViewPath] = (200, otherView);
+      serves(otherView);
       expect(story.moveNext(), isTrue);
       await frames(tester, 10);
       await plays(tester, player, 3);
@@ -386,18 +404,135 @@ void main() {
       expectRecommended(enteredEnd);
       expect(enteredEnd['spmid'], 'united.player-video-detail.0.0', reason: 'its first play keeps how it began');
       expect(enteredEnd['auto_play'], '0');
-      expect(form(http.to(historyPath).single).containsKey('source'), isFalse);
+      expect(places(), [null]);
 
-      playback.endStory();
-      expect(playback.story, isNull);
-      expect(playback.bvid, other);
-      await frames(tester, 4);
-      expect(playback.bvid, other);
+      serves(Canned.view);
+      expect(story.movePrevious(), isTrue);
+      await frames(tester, 10);
+      await plays(tester, player, 3);
+      expect(playback.bvid, bv);
+      expectEnteredInVertical(starts().last);
+      expect(ends().last['aid'], '80433023');
+      expect(ends().last['auto_play'], '99');
+      expect(places(), [null, 'story-series']);
 
       playback.close();
       await frames(tester, 4);
-      expect(ends().last['spmid'], 'main.ugc-video-detail-vertical.0.0');
-      expect(form(http.to(historyPath).last)['source'], 'story-series');
+      expectEnteredInVertical(ends().last);
+      expect(places(), [null, 'story-series', 'story-single']);
+    });
+
+    testWidgets('from 竖屏 on, a new play of the entered video (a reload) reports as 竖屏\'s entered video; the play '
+        'under way keeps how it began', (tester) async {
+      await host(tester);
+      final playback = started();
+      await frames(tester, 10);
+      final player = players.single;
+      await plays(tester, player, 3);
+      playback.beginStory();
+      playback.retry();
+      await frames(tester, 10);
+      await plays(tester, player, 3);
+      expect(starts(), hasLength(2));
+      expect(starts().first['spmid'], 'united.player-video-detail.0.0');
+      expectRecommended(ends().single);
+      expect(ends().single['spmid'], 'united.player-video-detail.0.0');
+      expectEnteredInVertical(starts().last);
+      expect(places(), [null]);
+      playback.close();
+      await frames(tester, 4);
+      expect(places(), [null, 'story-single']);
+    });
+
+    testWidgets('ending 竖屏 on the entered video gives it back its own source; on a video swiped to, the video page\'s '
+        'labels with where 竖屏 was entered from, so a part from 选集 and the page brought back report no 竖屏', (
+      tester,
+    ) async {
+      await host(tester);
+      http.routes[relatedPath] = (200, related);
+      final playback = started();
+      await frames(tester, 10);
+      final player = players.single;
+      await plays(tester, player, 3);
+      playback
+        ..beginStory()
+        ..endStory();
+      expect(identical(playback.restartRoute.source, recommended), isTrue);
+      playback.retry();
+      await frames(tester, 10);
+      await plays(tester, player, 3);
+      expectRecommended(starts().last);
+      expect(starts().last['spmid'], 'united.player-video-detail.0.0');
+
+      final story = playback.beginStory();
+      await frames(tester, 4);
+      serves(otherView);
+      expect(story.moveNext(), isTrue);
+      await frames(tester, 10);
+      await plays(tester, player, 3);
+      playback.endStory();
+      expect(playback.bvid, other);
+      final source = playback.restartRoute.source;
+      expect(source.spmid, PlaySource.videoPage);
+      expect(source.historySource, isNull);
+      expect(source.fromSpmid, 'tm.recommend.0.0');
+      expect(source.from, '7');
+      expect(source.trackId, isNull, reason: 'a related video has no track data of its own');
+
+      playback.openOnPage(other, cid: p2);
+      await frames(tester, 10);
+      await plays(tester, player, 3);
+      final part = starts().last;
+      expect(part['cid'], '$p2');
+      expect(part['spmid'], 'united.player-video-detail.0.0');
+      expect(part['from'], '7');
+      expect(part['from_spmid'], 'tm.recommend.0.0');
+      playback.close();
+      await frames(tester, 4);
+      expect(places().last, isNull);
+    });
+
+    testWidgets('a video the page opens itself while the feed is kept (选集, 自动连播 in landscape) starts the feed over '
+        'from it', (tester) async {
+      await host(tester);
+      http.routes[relatedPath] = (200, related);
+      final playback = started();
+      await frames(tester, 10);
+      await plays(tester, players.single, 3);
+      final story = playback.beginStory();
+      await frames(tester, 4);
+      expect(story.current!.bvid, bv);
+      serves(otherView);
+      playback.openOnPage(other, followed: true);
+      await frames(tester, 10);
+      expect(story.index, 0);
+      expect([for (final entry in story.entries) entry.bvid], [other]);
+      expect(story.current!.source.historySource, 'story-single');
+      expect(story.current!.source.fromSpmid, 'tm.recommend.0.0', reason: 'where 竖屏 was entered from');
+      expect(story.previous, isNull);
+      playback.close();
+      await frames(tester, 4);
+    });
+
+    testWidgets('risk control on the feed stops it for the playback\'s life: going into 竖屏 again asks nothing', (
+      tester,
+    ) async {
+      await host(tester);
+      http.routes[relatedPath] = (200, '{"code":-352,"message":"风控校验失败","ttl":1}');
+      final playback = started();
+      await frames(tester, 10);
+      int feedCalls() => http.to('/x/v2/feed/index/story').length + http.to(relatedPath).length;
+      playback.beginStory();
+      await frames(tester, 4);
+      expect(playback.storyHalted, isTrue);
+      final asked = feedCalls();
+      playback
+        ..endStory()
+        ..beginStory().wantMore();
+      await frames(tester, 4);
+      expect(feedCalls(), asked);
+      playback.close();
+      await frames(tester, 4);
     });
   });
 }

@@ -29,13 +29,9 @@ const _storyFeedQuery = {
   'voice_balance': '1',
 };
 
-/// Only videos: live rooms (`vertical_live`), ads (`vertical_ad_av`, or anything with `ad_info`) and items without
-/// a bvid or a cid are dropped.
-StoryItem? _storyItem(Object? json) {
-  if (json is! Map<String, Object?>) return null;
-  if (json['goto'] != 'vertical_av' || json['ad_info'] != null) return null;
-  return attempt(() => StoryItem.fromJson(json));
-}
+/// Live rooms (`vertical_live`) and ads (`vertical_ad_av`, or anything with `ad_info`), which the feed never keeps.
+bool _storyDropped(Object? json) =>
+    json is Map<String, Object?> && (json['goto'] != 'vertical_av' || json['ad_info'] != null);
 
 /// Each page's item gotos in order, names only.
 List<String> _storyItemTypes(Object? json) {
@@ -91,8 +87,18 @@ extension BiliClientStory on BiliClient {
       sendCookies: false,
       extraHeaders: _officialHeaders(const {}, token),
       decode: (json) {
-        _logger.info(LogCategory.api, 'story item types', {'items': _storyItemTypes(json).join(' ')});
-        return [for (final item in JsonObject.from(json).lenientList('items', _storyItem)) ?item];
+        final videos = [
+          for (final item in JsonObject.from(json).lenientList('items', (item) => item))
+            if (!_storyDropped(item)) item,
+        ];
+        final items = [for (final item in videos) ?attempt(() => StoryItem.fromJson(item))];
+        // Videos without a bvid or a cid, or not objects at all: counted, so a feed that dries up on a changed shape
+        // shows in the log.
+        _logger.info(LogCategory.api, 'story item types', {
+          'items': _storyItemTypes(json).join(' '),
+          'undecoded': videos.length - items.length,
+        });
+        return items;
       },
     );
     final checked = _officialChecked(envelope, token);

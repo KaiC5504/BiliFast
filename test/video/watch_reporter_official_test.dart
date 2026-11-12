@@ -292,8 +292,8 @@ void main() {
     expect(places().single['source'], 'story-series');
   });
 
-  test('a related video swiped to carries no track data; the entered video swiped back to says story-single',
-      () async {
+  test('a related video swiped to carries no track data; the entered video swiped back to says story-single, 0 and '
+      'its card\'s track data', () async {
     final related = make(source: () => PlaySource.story(entry: recommended, entered: false), followed: true);
     emit(PlayerStatus.playing);
     playTo(5);
@@ -303,12 +303,23 @@ void main() {
     expect(places().single['source'], 'story-series');
 
     await controller.openVideo(bv, cid: cid, start: 0);
-    final back = make(source: () => PlaySource.story(entry: recommended, entered: true), followed: true);
+    final entered = PlaySource.story(
+      entry: recommended,
+      entered: true,
+      trackId: recommended.trackId,
+      flowData: recommended.flowData,
+    );
+    final back = make(source: () => entered);
     emit(PlayerStatus.playing);
     playTo(4);
     await back.leave();
-    expect(beats().last['spmid'], 'main.ugc-video-detail-vertical.0.0');
-    expect(beats().last['auto_play'], '99');
+    final beat = beats().last;
+    expect(beat['spmid'], 'main.ugc-video-detail-vertical.0.0');
+    expect(beat['from'], 'default-value');
+    expect(beat['from_spmid'], 'tm.recommend.0.0');
+    expect(beat['track_id'], 'TRACK.1.2.3');
+    expect(beat['report_flow_data'], '{"flow_card_type":"av"}');
+    expect(beat['auto_play'], '0');
     expect(places().last['source'], 'story-single');
   });
 

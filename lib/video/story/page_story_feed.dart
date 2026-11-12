@@ -55,9 +55,17 @@ final class _PlaybackHost extends StoryHost {
     return session.related;
   }
 
+  /// The official app reports a video swiped to as played on its own (auto_play 99), and the entered video swiped back
+  /// to as it does when 竖屏 opens on it (0).
   @override
-  void open(StoryEntry entry) =>
-      _playback.openOnPage(entry.bvid, cid: entry.cid, followed: true, source: entry.source);
+  void open(StoryEntry entry, {required bool entered}) =>
+      _playback.openOnPage(entry.bvid, cid: entry.cid, followed: !entered, source: entry.source);
+
+  @override
+  bool get halted => _playback.storyHalted;
+
+  @override
+  void halt() => _playback.haltStory();
 
   @override
   void dispose() {
