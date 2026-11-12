@@ -16,7 +16,7 @@ abstract final class IphoneLabels {
 /// Which official app a call is made as: its signing pair and the labels sent with every call. A token only works
 /// with the pair that issued it, so every `AppToken` keeps the identity of its login.
 enum OfficialIdentity {
-  /// The Android app 8.43.0 on the HD pair (PiliPlus's): every install's identity before 1.3.0 (12).
+  /// The Android app 8.43.0 on the HD pair (PiliPlus's): every install's identity before 1.4.0.
   android,
 
   /// The iPhone app 9.18.0, as its own requests go out (docs/reference/official-iphone-calls.md).
