@@ -1604,7 +1604,7 @@ abstract final class VerticalActionTheme {
 }
 
 /// 竖屏's 清屏 (180, 186), its last bottom button by the video's shape, and the controls while the page moves under the
-/// finger (185). The chrome agent's tokens.
+/// finger (185).
 abstract final class VerticalCleanTheme {
   /// 清屏's last bottom button: the APK's `bili_story_ctrl_clean`, level 1 of `bili_story_screen_mode_selector`.
   static const screenModeCleanAsset = 'assets/images/player/screen_mode_clean.png';
@@ -1640,7 +1640,7 @@ abstract final class VerticalCleanTheme {
   static const timeTotal = Color(0x99FFFFFF);
 }
 
-/// 竖屏's swipe between videos (185, 186, measured at 60 fps). The pager agent's tokens.
+/// 竖屏's swipe between videos (185, 186, measured at 60 fps).
 abstract final class StoryPagerTheme {
   /// After the finger lifts, the distance left roughly halves every frame: landing within 120 to 170 ms, no bounce.
   static const settleRatioPerFrame = 0.5;
@@ -1677,7 +1677,7 @@ abstract final class VerticalEnterTheme {
   static const exitCurve = Cubic(0, 0.4, 0.9, 1);
 }
 
-/// 竖屏's held 2× and its lock (182, 183, 186). The gestures agent's tokens.
+/// 竖屏's held 2× and its lock (182, 183, 186).
 abstract final class SpeedLockTheme {
   /// The APK's `biligame_vector_lock_fill`, the filled lock 183 shows.
   static const lockAsset = 'assets/images/player/speed_lock.png';
