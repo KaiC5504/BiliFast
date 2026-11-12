@@ -270,6 +270,61 @@ void main() {
       expect(beat['auto_play'], '99');
     }
     expect(beats(), hasLength(2));
+    expect(places().single.containsKey('source'), isFalse, reason: 'the video page\'s history source is not known');
+  });
+
+  test('a video swiped to in 竖屏: the vertical page, default-value, the item\'s track data, 99, story-series',
+      () async {
+    final swiped = PlaySource.story(entry: recommended, entered: false, trackId: 'ITEM.T', flowData: '{"i":1}');
+    final reporter = make(source: () => swiped, followed: true);
+    emit(PlayerStatus.playing);
+    playTo(8);
+    await reporter.leave();
+    expect(beats(), hasLength(2));
+    for (final beat in beats()) {
+      expect(beat['spmid'], 'main.ugc-video-detail-vertical.0.0');
+      expect(beat['from'], 'default-value');
+      expect(beat['from_spmid'], 'tm.recommend.0.0');
+      expect(beat['track_id'], 'ITEM.T');
+      expect(beat['report_flow_data'], '{"i":1}');
+      expect(beat['auto_play'], '99');
+    }
+    expect(places().single['source'], 'story-series');
+  });
+
+  test('a related video swiped to carries no track data; the entered video swiped back to says story-single',
+      () async {
+    final related = make(source: () => PlaySource.story(entry: recommended, entered: false), followed: true);
+    emit(PlayerStatus.playing);
+    playTo(5);
+    await related.leave();
+    expect(beats().first['track_id'], '');
+    expect(beats().first.containsKey('report_flow_data'), isFalse);
+    expect(places().single['source'], 'story-series');
+
+    await controller.openVideo(bv, cid: cid, start: 0);
+    final back = make(source: () => PlaySource.story(entry: recommended, entered: true), followed: true);
+    emit(PlayerStatus.playing);
+    playTo(4);
+    await back.leave();
+    expect(beats().last['spmid'], 'main.ugc-video-detail-vertical.0.0');
+    expect(beats().last['auto_play'], '99');
+    expect(places().last['source'], 'story-single');
+  });
+
+  test('a 竖屏 play kept in the outbox and sent from it keeps its page and history source', () async {
+    final outbox = HistoryOutbox.memory(logger: logger, now: () => wall);
+    final swiped = PlaySource.story(entry: recommended, entered: false, trackId: 'ITEM.T');
+    final reporter = make(outbox: outbox, source: () => swiped, followed: true);
+    http.errors[historyPath] = const BiliNetworkError('SocketException');
+    emit(PlayerStatus.playing);
+    playTo(20);
+    await reporter.leave();
+    expect(outbox.plays.single.report.source.historySource, 'story-series');
+    http.errors.remove(historyPath);
+    await flush(outbox);
+    expect(places().last['source'], 'story-series');
+    expect(outbox.plays, isEmpty);
   });
 
   group('while the controller is not playing, the clock is neither played nor paused', () {

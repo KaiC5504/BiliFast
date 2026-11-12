@@ -4,6 +4,7 @@ import 'package:bili_core/api.dart' show BiliClientVideo, PlaySource, VideoDetai
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/widgets.dart';
 
+import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../app/swipe_back_route.dart';
 import '../offline/offline_models.dart';
@@ -127,6 +128,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   double? _closedAt;
 
   PlaybackController? get controller => _controller;
+
+  /// The app's account and client, for what the page plays next (竖屏's feed).
+  AppEnvironment get environment => _services.environment;
 
   /// Made once the controller is in and the first open went out.
   PlayerSession? get session => _session;
