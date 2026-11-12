@@ -18,6 +18,10 @@ class StoryDrag extends ChangeNotifier {
   /// The page's offset for the finger's travel: past the first video it resists.
   double Function(double travel)? shape;
 
+  /// [shape] undone: the finger's travel that puts the page at an offset, so a finger taking a settling page picks it
+  /// up where it is.
+  double Function(double offset)? unshape;
+
   /// The finger lifted, at [velocity] points a second (negative upwards). Unset, the page goes back at once.
   void Function(double velocity)? onRelease;
 
@@ -25,7 +29,7 @@ class StoryDrag extends ChangeNotifier {
   void start() {
     _dragging = true;
     _settling = false;
-    _travel = _offset;
+    _travel = unshape?.call(_offset) ?? _offset;
     notifyListeners();
   }
 

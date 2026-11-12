@@ -22,14 +22,18 @@ import 'package:bilifast/player_ui/stats_overlay.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
+import 'package:bilifast/video/story/story_drag.dart';
+import 'package:bilifast/video/story/story_pager.dart';
 import 'package:bilifast/video/video_player_area.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../playback/fakes.dart';
 import '../support/fake_mask_feed.dart';
 import '../support/fake_player_session.dart';
+import 'story/fake_story_feed.dart';
 
 void main() {
   late FakePlayerSession session;
@@ -72,6 +76,7 @@ void main() {
     Size size = const Size(440, 956),
     ValueListenable<bool>? turning,
     ValueListenable<double?>? verticalTurn,
+    StoryPager? storyPager,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -91,6 +96,7 @@ void main() {
           onRetry: () {},
           turning: turning,
           verticalTurn: verticalTurn,
+          storyPager: storyPager,
         ),
       ),
     );
@@ -697,6 +703,115 @@ void main() {
       await tester.pump();
       expect(feeds.made.single.disposed, isTrue);
       expect(painter, paintsExactlyCountTimes(#clipPath, 0));
+    });
+  });
+
+  group("竖屏's swipe", () {
+    late StoryDrag drag;
+    late StoryPager pager;
+    late FakeStoryFeed feed;
+
+    setUp(() {
+      drag = StoryDrag();
+      pager = StoryPager(drag: drag, vsync: const TestVSync());
+      feed = FakeStoryFeed([storyEntry('BV1'), storyEntry('BV2'), storyEntry('BV3')]);
+      addTearDown(() {
+        pager.dispose();
+        drag.dispose();
+        feed.dispose();
+      });
+    });
+
+    List<Key?> order(WidgetTester tester) => tester
+        .widget<Stack>(
+          find.descendant(of: find.byKey(areaKey), matching: find.byType(Stack)).first,
+        )
+        .children
+        .map((child) => child.key)
+        .toList();
+
+    testWidgets('the picture and its danmaku follow the finger; the neighbours lie between them and the controls',
+        (tester) async {
+      pager.feed = feed;
+      await show(tester, Presentation.vertical, storyPager: pager);
+      final rest = videoRect(tester);
+      final danmaku = tester.getRect(find.byType(DanmakuLayer));
+      final layers = order(tester);
+      expect(layers.indexOf(const ValueKey('video-surface')), lessThan(layers.indexOf(const ValueKey('story-neighbours'))));
+      expect(layers.indexOf(const ValueKey('story-neighbours')), lessThan(layers.indexOf(const ValueKey('video-pinned'))));
+
+      drag
+        ..start()
+        ..update(-240);
+      await tester.pump();
+      expect(videoRect(tester), rest.shift(const Offset(0, -240)));
+      expect(tester.getRect(find.byType(DanmakuLayer)), danmaku.shift(const Offset(0, -240)));
+      drag.cancel();
+      await tester.pumpAndSettle();
+      expect(videoRect(tester), rest);
+    });
+
+    testWidgets('outside 竖屏, or with no feed, nothing moves and there are no neighbours', (tester) async {
+      await show(tester, Presentation.vertical, storyPager: pager);
+      expect(find.byType(StoryNeighbours), findsNothing, reason: 'no feed yet');
+      pager.feed = feed;
+      await show(tester, Presentation.inline, storyPager: pager);
+      expect(find.byType(StoryNeighbours), findsNothing);
+      final rest = videoRect(tester);
+      drag
+        ..start()
+        ..update(-240);
+      await tester.pump();
+      expect(videoRect(tester), rest);
+      drag.cancel();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('the native view keeps its element as the swipe comes and goes', (tester) async {
+      await show(tester, Presentation.inline, storyPager: pager);
+      final first = tester.element(find.byKey(const ValueKey('fake-video')));
+      pager.feed = feed;
+      await show(tester, Presentation.vertical, storyPager: pager);
+      expect(identical(tester.element(find.byKey(const ValueKey('fake-video'))), first), isTrue);
+      pager.feed = null;
+      await tester.pump();
+      expect(identical(tester.element(find.byKey(const ValueKey('fake-video'))), first), isTrue);
+    });
+
+    testWidgets('VoiceOver and the test tool move with 下一个视频 and 上一个视频, settling as a swipe does',
+        (tester) async {
+      final semantics = tester.ensureSemantics();
+      pager.feed = feed;
+      await show(tester, Presentation.vertical, storyPager: pager);
+      const next = CustomSemanticsAction(label: '下一个视频');
+      const previous = CustomSemanticsAction(label: '上一个视频');
+      final node = find.semantics.byPredicate(
+        (node) => node.getSemanticsData().customSemanticsActionIds?.isNotEmpty ?? false,
+      );
+      SemanticsData data() => node.evaluate().single.getSemanticsData();
+      Set<int> actions() => data().customSemanticsActionIds!.toSet();
+      expect(actions(), {CustomSemanticsAction.getIdentifier(next)}, reason: 'nothing before the first video');
+
+      void perform(CustomSemanticsAction action) => tester.semantics.customAction(node, action);
+      perform(next);
+      await tester.pump(const Duration(milliseconds: 17));
+      expect(drag.offset, lessThan(0), reason: 'animated, not a jump');
+      expect(feed.moves, isEmpty);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(feed.moves, [1]);
+      expect(drag.moving, isFalse);
+      expect(
+        actions(),
+        {CustomSemanticsAction.getIdentifier(next), CustomSemanticsAction.getIdentifier(previous)},
+      );
+      perform(previous);
+      await tester.pump(const Duration(milliseconds: 17));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(feed.moves, [1, 0]);
+
+      await show(tester, Presentation.inline, storyPager: pager);
+      expect(node, findsNothing, reason: 'only in 竖屏');
+      semantics.dispose();
     });
   });
 }

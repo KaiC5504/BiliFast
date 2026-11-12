@@ -1619,8 +1619,21 @@ abstract final class StoryPagerTheme {
   /// After the finger lifts, the distance left roughly halves every frame: landing within 120 to 170 ms, no bounce.
   static const settleRatioPerFrame = 0.5;
 
+  /// The frame [settleRatioPerFrame] was measured over (60 fps).
+  static const frame = Duration(microseconds: 16667);
+
+  /// The page lands once less than this is left, in points: from a normal swipe's 850 that is 9 frames (150 ms).
+  static const landWithin = 2.0;
+
   /// A drag let go past this share of the screen moves to the neighbour; one shorter goes back.
   static const releaseShare = 0.5;
+
+  /// Let go faster than this towards a neighbour (points a second), a shorter drag moves too: a normal swipe's finger
+  /// covers about 100 pt in 0.1 s.
+  static const flingVelocity = 400.0;
+
+  /// Towards no neighbour (the first video, or none loaded yet) the page moves this share of the finger's travel.
+  static const resistance = 0.3;
 }
 
 /// 竖屏's held 2× and its lock (182, 183, 186). The gestures agent's tokens.

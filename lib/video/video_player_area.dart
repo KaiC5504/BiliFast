@@ -25,6 +25,7 @@ import '../player_ui/stats_overlay.dart';
 import '../player_ui/vertical_chrome.dart';
 import '../shared/theme.dart';
 import 'player_session.dart';
+import 'story/story_pager.dart';
 
 /// The player as the video page shows it, in every presentation (BiliNative `PlayerBox` and `ChromeLayer.swift`): the
 /// video with danmaku over it, the stats overlay, the gesture layer, the chrome for [presentation] or the end screen,
@@ -52,6 +53,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.pin,
     this.turning,
     this.verticalTurn,
+    this.storyPager,
   });
 
   final Presentation presentation;
@@ -110,6 +112,9 @@ class VideoPlayerArea extends StatelessWidget {
   /// they would stretch to the other's shape.
   final ValueListenable<double?>? verticalTurn;
 
+  /// The page's swipe between 竖屏's videos; it takes part only in 竖屏 on the iPhone, while its feed is up.
+  final StoryPager? storyPager;
+
   @override
   Widget build(BuildContext context) {
     final session = ui?.session;
@@ -117,13 +122,32 @@ class VideoPlayerArea extends StatelessWidget {
     return ColoredBox(
       color: BiliColors.videoBackground,
       child: ListenableBuilder(
-        listenable: Listenable.merge([?session, ?danmaku, ?pin, ?turning, ?verticalTurn]),
-        builder: (context, _) => Stack(fit: StackFit.expand, children: _layers(pad: pad)),
+        listenable: Listenable.merge([?session, ?danmaku, ?pin, ?turning, ?verticalTurn, ?storyPager]),
+        builder: (context, _) {
+          final story = _story(pad: pad);
+          final feed = story?.feed;
+          // The swipe for VoiceOver and the Windows test tool, which can't drag.
+          return Semantics(
+            container: story != null,
+            customSemanticsActions: story == null || feed == null
+                ? null
+                : {
+                    if (feed.next != null) const CustomSemanticsAction(label: '下一个视频'): story.moveNext,
+                    if (feed.previous != null) const CustomSemanticsAction(label: '上一个视频'): story.movePrevious,
+                  },
+            child: Stack(fit: StackFit.expand, children: _layers(pad: pad, story: story)),
+          );
+        },
       ),
     );
   }
 
-  List<Widget> _layers({required bool pad}) {
+  StoryPager? _story({required bool pad}) {
+    final pager = storyPager;
+    return !pad && ui != null && presentation == Presentation.vertical && pager?.feed != null ? pager : null;
+  }
+
+  List<Widget> _layers({required bool pad, required StoryPager? story}) {
     final ui = this.ui;
     final session = ui?.session;
     final ended = session?.ended ?? false;
@@ -138,58 +162,62 @@ class VideoPlayerArea extends StatelessWidget {
         Align(
           key: const ValueKey('video-surface'),
           alignment: Alignment.topCenter,
-          child: FractionallySizedBox(
-            heightFactor: heightFactor,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                KeyedSubtree(key: const ValueKey('video-view'), child: video),
-                if (session != null)
-                  _unseen(
-                    turn != null,
-                    _DanmakuArea(
-                      key: const ValueKey('video-danmaku-area'),
-                      pad: pad,
-                      vertical: presentation == Presentation.vertical,
-                      videoIsVertical: session.layoutVertical,
-                      fit: session.fit,
-                      video: switch (session.videoShape) {
-                        (:final width, :final height) => Size(width.toDouble(), height.toDouble()),
-                        null => null,
-                      },
-                      builder: (picture, area) => ClipRect(
-                        // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still run
-                        // the full height.
-                        clipBehavior: shrunk || danmakuHeight != null ? Clip.hardEdge : Clip.none,
-                        child: _Pinned(
-                          size: pin?.value,
-                          child: OverflowBox(
-                            alignment: Alignment.topCenter,
-                            minHeight: danmakuHeight,
-                            maxHeight: danmakuHeight,
-                            child: DanmakuLayer(
-                              key: const ValueKey('video-danmaku'),
-                              clock: session.clock,
-                              timeline: danmaku?.timeline,
-                              // The end screens show no danmaku over the last frame.
-                              enabled: session.danmakuOn && !ended && played,
-                              wake: session.readout.any,
-                              settings: ui?.danmaku?.settings,
-                              presentation: presentation,
-                              formFactor: pad ? FormFactor.pad : FormFactor.phone,
-                              mask: ui?.danmaku?.mask,
-                              picture: _Pinned.unscale(picture, area: area, pinned: pin?.value),
-                              mirrored: session.mirrored,
+          child: StoryShift(
+            drag: story?.drag,
+            child: FractionallySizedBox(
+              heightFactor: heightFactor,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  KeyedSubtree(key: const ValueKey('video-view'), child: video),
+                  if (session != null)
+                    _unseen(
+                      turn != null,
+                      _DanmakuArea(
+                        key: const ValueKey('video-danmaku-area'),
+                        pad: pad,
+                        vertical: presentation == Presentation.vertical,
+                        videoIsVertical: session.layoutVertical,
+                        fit: session.fit,
+                        video: switch (session.videoShape) {
+                          (:final width, :final height) => Size(width.toDouble(), height.toDouble()),
+                          null => null,
+                        },
+                        builder: (picture, area) => ClipRect(
+                          // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still run
+                          // the full height.
+                          clipBehavior: shrunk || danmakuHeight != null ? Clip.hardEdge : Clip.none,
+                          child: _Pinned(
+                            size: pin?.value,
+                            child: OverflowBox(
+                              alignment: Alignment.topCenter,
+                              minHeight: danmakuHeight,
+                              maxHeight: danmakuHeight,
+                              child: DanmakuLayer(
+                                key: const ValueKey('video-danmaku'),
+                                clock: session.clock,
+                                timeline: danmaku?.timeline,
+                                // The end screens show no danmaku over the last frame.
+                                enabled: session.danmakuOn && !ended && played,
+                                wake: session.readout.any,
+                                settings: ui?.danmaku?.settings,
+                                presentation: presentation,
+                                formFactor: pad ? FormFactor.pad : FormFactor.phone,
+                                mask: ui?.danmaku?.mask,
+                                picture: _Pinned.unscale(picture, area: area, pinned: pin?.value),
+                                mirrored: session.mirrored,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
+      if (story != null) StoryNeighbours(key: const ValueKey('story-neighbours'), pager: story),
       if (session != null && session.showStats)
         SafeArea(
           key: const ValueKey('video-stats'),
@@ -283,10 +311,7 @@ class VideoPlayerArea extends StatelessWidget {
 
   double _loadingBand(PlayerUi? ui) => presentation == Presentation.vertical ? _verticalBand(ui?.session) : 1;
 
-  /// 竖屏's video band from the screen's top, as a share of its height: the video letterboxes into it, centred on
-  /// 09's line when wide and 16's when upright.
-  static double _verticalBand(PlayerSession? session) =>
-      (session?.layoutVertical == true ? BiliMetrics.verticalUprightCentre : BiliMetrics.verticalVideoCentre) * 2;
+  static double _verticalBand(PlayerSession? session) => verticalBand(upright: session?.layoutVertical == true);
 
   /// Not painted while [unseen], and deaf to touches, but laid out and animating, so it comes back as it was.
   static Widget _unseen(bool unseen, Widget child, {Key? key}) => Visibility(
@@ -344,6 +369,11 @@ class VideoPlayerArea extends StatelessWidget {
     ),
   };
 }
+
+/// 竖屏's video band from the screen's top, as a share of its height: the video letterboxes into it, centred on 09's
+/// line when wide and 16's when upright.
+double verticalBand({required bool upright}) =>
+    (upright ? BiliMetrics.verticalUprightCentre : BiliMetrics.verticalVideoCentre) * 2;
 
 /// Where the danmaku fly: below the status bar, and in 竖屏 from under the top row to the video's bottom, over the
 /// black above a landscape video as 118 shows, clear of the uploader and the title below it. On the iPad they fly over

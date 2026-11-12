@@ -81,10 +81,14 @@ import 'package:bilifast/video/intro/uploader_row.dart';
 import 'package:bilifast/video/page_api.dart';
 import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_details_model.dart';
+import 'package:bilifast/video/page_playback.dart';
 import 'package:bilifast/video/page_session.dart';
 import 'package:bilifast/video/page_tabs.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
+import 'package:bilifast/video/story/page_story_feed.dart';
+import 'package:bilifast/video/story/story_feed.dart';
+import 'package:bilifast/video/story/story_pager.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/video/video_player_area.dart';
 import 'package:bilifast/video/video_route.dart';
@@ -99,6 +103,7 @@ import '../playback/fakes.dart';
 import '../support/fake_player.dart';
 import '../support/fake_player_session.dart';
 import '../support/fake_video_actions.dart';
+import 'story/fake_story_feed.dart';
 
 const heartbeatPath = '/x/click-interface/web/heartbeat';
 const bv = 'BV1GJ411x7h7';
@@ -340,9 +345,15 @@ void main() {
   }
 
   late VideoPageOpener openPage;
+  StoryFeedFactory createStory = pageStoryFeed;
 
-  Widget page(VideoRoute route) =>
-      VideoPage(route: route, createSession: fakeSession, createDetails: fakeDetails, openPage: openPage);
+  Widget page(VideoRoute route) => VideoPage(
+    route: route,
+    createSession: fakeSession,
+    createDetails: fakeDetails,
+    openPage: openPage,
+    createStory: createStory,
+  );
 
   /// openVideoPage's push, with the test's session and details: a page stacked over another, as a space's video is.
   Future<void> pushing(BuildContext context, VideoRoute route) =>
@@ -3740,6 +3751,170 @@ void main() {
       await back(tester);
       expect(find.byType(VideoPage), findsNothing);
       expect(nav.currentState!.canPop(), isFalse);
+    });
+  });
+
+  group("竖屏's swipe feed", () {
+    /// Each feed the page made, with the playback it was made for; a move opens the entry on it as the app's feed does.
+    late List<({FakeStoryFeed feed, PagePlayback playback})> made;
+    late List<StoryEntry> entries;
+
+    setUp(() {
+      made = [];
+      entries = [storyEntry(bv), storyEntry('BV1next000001', cover: cover), storyEntry('BV1third00001')];
+      createStory = (playback) {
+        final feed = FakeStoryFeed(
+          List.of(entries),
+          onMove: (entry) => playback.openOnPage(entry.bvid, cid: entry.cid, source: entry.source),
+        );
+        made.add((feed: feed, playback: playback));
+        return feed;
+      };
+      addTearDown(() => createStory = pageStoryFeed);
+    });
+
+    Future<void> enter(WidgetTester tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester, vertical: true);
+      await rotate(tester, Presentation.vertical);
+    }
+
+    /// A swipe as the gesture layer hands it over: about 100 pt in 0.1 s, let go at speed.
+    Future<void> swipeUp(WidgetTester tester) async {
+      final drag = ui(tester).storyDrag!;
+      drag.start();
+      for (var i = 0; i < 6; i++) {
+        drag.update(-100 / 6);
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      drag.end(-1500);
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    }
+
+    testWidgets('entering 竖屏 begins the feed from the playing video; leaving it ends the feed, on the video swiped to',
+        (tester) async {
+      await enter(tester);
+      expect(made, hasLength(1));
+      final (:feed, playback: storyPlayback) = made.single;
+      expect(ui(tester).story!.value, same(feed));
+      expect(storyPlayback.story, same(feed));
+
+      await swipeUp(tester);
+      expect(feed.moves, [1]);
+      ui(tester).clean!.value = true;
+      await rotate(tester, Presentation.inline);
+      expect(ui(tester).story!.value, isNull);
+      expect(storyPlayback.story, isNull);
+      expect(feed.disposed, isTrue);
+      expect(ui(tester).clean!.value, isFalse);
+      expect(ui(tester).storyDrag!.moving, isFalse);
+      expect(storyPlayback.bvid, 'BV1next000001', reason: 'the video swiped to stays on the page');
+
+      await rotate(tester, Presentation.vertical);
+      expect(made, hasLength(2), reason: 'a new feed from the video playing now');
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets("a wide video's turn to landscape and back keeps its feed", (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await rotate(tester, Presentation.vertical);
+      final feed = made.single.feed;
+      await rotate(tester, Presentation.landscape);
+      expect(ui(tester).story!.value, same(feed));
+      await rotate(tester, Presentation.vertical);
+      expect(made, hasLength(1));
+      expect(feed.disposed, isFalse);
+      await rotate(tester, Presentation.inline);
+      expect(feed.disposed, isTrue);
+      await back(tester);
+    });
+
+    testWidgets('the small player and landscape full screen opened from it have no feed', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      expect(ui(tester).story!.value, isNull);
+      await rotate(tester, Presentation.landscape);
+      expect(ui(tester).story!.value, isNull);
+      expect(made, isEmpty);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets('a swipe up opens the next video on the page, turns 清屏 off and holds its still until it plays',
+        (tester) async {
+      // The canned view answers every video as this one, so the next entry is the same video again.
+      entries = [storyEntry(bv), storyEntry(bv, cover: cover), storyEntry('BV1third00001')];
+      await enter(tester);
+      final (:feed, playback: storyPlayback) = made.single;
+      ui(tester).clean!.value = true;
+      final opens = controllers.length;
+
+      final drag = ui(tester).storyDrag!;
+      drag
+        ..start()
+        ..update(-300);
+      await tester.pump();
+      final still = find.descendant(
+        of: find.byType(StoryNeighbours),
+        matching: find.byWidgetPredicate((widget) => widget is RemoteImage && widget.url == cover),
+      );
+      expect(tester.getRect(still).top, greaterThan(956 - 300), reason: "the next video's still, under the screen");
+      expect(tester.getRect(find.byKey(const ValueKey('fake-video'))).top, -300, reason: 'the picture follows');
+      drag.end(-1500);
+      await frames(tester, 5);
+      expect(feed.moves, [1]);
+      expect(drag.moving, isFalse);
+      expect(ui(tester).clean!.value, isFalse);
+      expect(controllers, hasLength(opens), reason: 'on the same controller');
+      expect(storyPlayback.story, same(feed));
+      expect(tester.getRect(still).top, greaterThanOrEqualTo(0), reason: 'held in its band');
+      expect(tester.getRect(still).bottom, lessThanOrEqualTo(956));
+
+      await frames(tester, 20);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await frames(tester, 2);
+      expect(controller.hasPlayed, isTrue);
+      expect(still, findsNothing, reason: 'the video shows once its first frame is in');
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets('下一个视频 and 上一个视频 move the page for VoiceOver and the test tool', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await enter(tester);
+      final feed = made.single.feed;
+      final node = find.semantics.byPredicate(
+        (node) => node.getSemanticsData().customSemanticsActionIds?.isNotEmpty ?? false,
+      );
+      void perform(String label) => tester.semantics.customAction(node, CustomSemanticsAction(label: label));
+      perform('下一个视频');
+      await frames(tester, 6);
+      expect(feed.moves, [1]);
+      perform('上一个视频');
+      await frames(tester, 6);
+      expect(feed.moves, [1, 0]);
+      await rotate(tester, Presentation.inline);
+      expect(node, findsNothing);
+      semantics.dispose();
+      await back(tester);
+    });
+
+    testWidgets('back from 竖屏 ends its feed, and the page leaves with none', (tester) async {
+      await enter(tester);
+      final (:feed, playback: storyPlayback) = made.single;
+      await back(tester);
+      expect(feed.disposed, isTrue, reason: 'back turns to the small player first');
+      expect(storyPlayback.story, isNull);
+      await back(tester);
+      expect(find.byType(VideoPage), findsNothing);
+      expect(made, hasLength(1));
     });
   });
 }

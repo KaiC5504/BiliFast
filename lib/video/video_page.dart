@@ -57,6 +57,7 @@ import 'player_session.dart';
 import 'story/page_story_feed.dart';
 import 'story/story_drag.dart';
 import 'story/story_feed.dart';
+import 'story/story_pager.dart';
 import 'turn_recorder.dart';
 import 'video_player_area.dart';
 import 'video_route.dart';
@@ -294,6 +295,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   final _storyDrag = StoryDrag();
   final _clean = ValueNotifier<bool>(false);
   final _speedLock = SpeedLock();
+  late final _storyPager = StoryPager(drag: _storyDrag, clean: _clean, vsync: this);
 
   /// The list's count once its first page is in, for 评论 N to follow a post or a delete; null before.
   final _listCount = ValueNotifier<int?>(null);
@@ -830,6 +832,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     ])..addListener(_syncAutoHide);
     _syncAutoHide();
     if (follow) _sessionChanged();
+    _syncStory();
   }
 
   bool get _attached => !_left && _session != null;
@@ -842,6 +845,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       if (_session case final session?) _intro = IntroContent.of(session);
       if (controller.phase == PlaybackPhase.playing && controller.hasPlayed) _played = true;
     });
+    _storyPager.framed(controller.hasPlayed ? controller.video?.bvid : null);
     _syncComments();
     _syncAutoHide();
     _syncCollapse();
@@ -1031,6 +1035,35 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     setState(() {});
     _applySystemUi();
     _standAside();
+    _syncStory();
+  }
+
+  /// 竖屏's feed is up from 竖屏 until the page leaves it for the small player, kept through a wide video's turn to
+  /// landscape and back; the video swiped to stays on the page. The iPad has no 竖屏.
+  void _syncStory() {
+    final playback = _playback;
+    final presentation = _presentation;
+    final on = !_pad &&
+        _attached &&
+        playback != null &&
+        (presentation == Presentation.vertical ||
+            (presentation == Presentation.landscape && _upright == Presentation.vertical));
+    if (on == (_story.value != null)) return;
+    if (on) {
+      final feed = playback.beginStory();
+      _story.value = feed;
+      _storyPager.feed = feed;
+    } else {
+      _endStory();
+    }
+  }
+
+  void _endStory() {
+    _storyDrag.land();
+    _clean.value = false;
+    _storyPager.feed = null;
+    _story.value = null;
+    _playback?.endStory();
   }
 
   /// In full screen an action overlay puts the chrome away, as an open panel does, and gives it back as it was once
@@ -1428,6 +1461,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _leave({bool fromDispose = false}) {
     if (_left) return;
     _left = true;
+    // Disposal runs while the tree is locked, where nothing may notify; the pager goes with the page.
+    if (!fromDispose && _story.value != null) _endStory();
     _owning = false;
     _details?.active = false;
     _controller?.removeListener(_follow);
@@ -1510,6 +1545,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ?..sendOpen.removeListener(_panelChanged)
       ..dispose();
     _chrome.dispose();
+    _storyPager.dispose();
+    // Disposed without leaving, a playback the small window keeps would hold the feed on.
+    if (_story.value != null) _playback?.endStory();
     _story.dispose();
     _storyDrag.dispose();
     _clean.dispose();
@@ -1671,6 +1709,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                           pin: _pin,
                           turning: _turningPlayer,
                           verticalTurn: _verticalTurn,
+                          storyPager: _storyPager,
                         ),
                       ),
                     ),
