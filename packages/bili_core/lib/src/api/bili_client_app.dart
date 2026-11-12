@@ -41,13 +41,22 @@ final class TVLoginConfirmed extends TVLoginState {
 /// The TV login's code, asked as PiliPlus's `getHDcode` asks it.
 const _tvCodeFields = {'local_id': '0', 'platform': 'android', 'mobi_app': 'android_hd'};
 
+/// The same code under the iPhone pair (docs/reference/official-iphone-calls.md).
+const _iphoneTvCodeFields = {'local_id': '0', 'mobi_app': 'iphone', 'platform': 'ios'};
+
 /// The app token's login: a TV login code, confirmed in the official app (its confirm page takes nothing else: a call
 /// with the web login's cookies gets -101), then polled for the token. Both the code and the poll are signed with
-/// [AppSigner.android] (the Android HD key), so the token pairs with every official call.
+/// [BiliClient.loginIdentity]'s pair, and the token keeps that identity: Bilibili takes it only under the pair that
+/// issued it.
 extension BiliClientApp on BiliClient {
   /// The URL is Bilibili's confirm page.
   Future<({String url, String authCode})> tvAuthCode() {
-    final form = AppSigner.android.signed(_tvCodeFields, ts: _unixSeconds);
+    final identity = loginIdentity;
+    final fields = switch (identity) {
+      OfficialIdentity.android => _tvCodeFields,
+      OfficialIdentity.iphone => _iphoneTvCodeFields,
+    };
+    final form = identity.signer.signed(fields, ts: _unixSeconds);
     return post(
       '/x/passport-tv-login/qrcode/auth_code',
       form: form,
@@ -64,13 +73,14 @@ extension BiliClientApp on BiliClient {
   }
 
   Future<TVLoginState> tvPoll(String authCode) async {
-    final form = AppSigner.android.signed({'auth_code': authCode, 'local_id': '0'}, ts: _unixSeconds);
+    final identity = loginIdentity;
+    final form = identity.signer.signed({'auth_code': authCode, 'local_id': '0'}, ts: _unixSeconds);
     final envelope = await _postEnvelope(
       '/x/passport-tv-login/qrcode/poll',
       form: form,
       host: BiliClient.passport,
       cookies: false,
-      decode: (json) => _issuedToken(json),
+      decode: (json) => _issuedToken(json, identity: identity),
     );
     switch (envelope.code) {
       case 0:
@@ -87,22 +97,26 @@ extension BiliClientApp on BiliClient {
   }
 
   /// The one renewal near [AppToken.expiresAt]: the passport swaps the refresh token for a fresh pair. The helper
-  /// adds the current token as `access_key`.
-  Future<AppToken> renewAppToken() {
-    final current = appToken;
+  /// adds the current token as `access_key` and signs as its identity, which the renewed token keeps.
+  Future<AppToken> renewAppToken() async {
+    final current = appToken ?? (throw BiliError.noAppToken);
     return _officialPost(
       '/x/passport-login/oauth2/refresh_token',
-      {'refresh_token': current?.refreshToken ?? ''},
-      (json) => _issuedToken(json, mid: current?.mid),
+      {'refresh_token': current.refreshToken},
+      (json) => _issuedToken(json, mid: current.mid, identity: current.identity),
       host: BiliClient.passport,
     );
   }
 
   /// The passport's answers carry the token flat (the TV poll's `data`), under `token_info`, or both. A renewal
   /// that leaves out `mid` keeps the account's.
-  AppToken _issuedToken(Object? json, {int? mid}) {
+  AppToken _issuedToken(Object? json, {int? mid, required OfficialIdentity identity}) {
     final object = JsonObject.from(json);
     final info = object.map['access_token'] == null ? object.nested('token_info')?.map ?? object.map : object.map;
-    return AppToken.issued(info['mid'] == null && mid != null ? {...info, 'mid': mid} : info, now: now());
+    return AppToken.issued(
+      info['mid'] == null && mid != null ? {...info, 'mid': mid} : info,
+      now: now(),
+      identity: identity,
+    );
   }
 }

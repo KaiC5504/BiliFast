@@ -20,6 +20,15 @@ void main() {
       expect('$token', isNot(contains('REFRESH')));
     });
 
+    test("one stored before identities existed is the Android app's; an iPhone token stays one through JSON", () {
+      expect(AppToken.fromJson(token.toJson()..remove('identity')), token);
+      expect(token.identity, OfficialIdentity.android);
+      final iphone = AppToken.fromJson({...token.toJson(), 'identity': 'iphone'});
+      expect(iphone.identity, OfficialIdentity.iphone);
+      expect(AppToken.fromJson(iphone.toJson()), iphone);
+      expect(iphone, isNot(token));
+    });
+
     test('an issued token counts expires_in from now', () {
       final issued = AppToken.issued(
         {'access_token': 'A', 'refresh_token': 'R', 'mid': 7, 'expires_in': 86400},
