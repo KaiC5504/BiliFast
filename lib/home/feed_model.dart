@@ -626,7 +626,7 @@ class FeedModel extends ChangeNotifier {
     return (cards: cards, source: FeedSource.web, index: index);
   }
 
-  /// The official feed's number for the first card shown that has one, which the iPhone identity's request names for
+  /// The official feed's number for the first card in the list that has one, which the iPhone identity's request names for
   /// a refresh and for more alike; null with none, as when only the website's cards show.
   int? get _firstIdx => _cards.map((card) => card.idx).nonNulls.firstOrNull;
 

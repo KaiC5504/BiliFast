@@ -173,7 +173,7 @@ extension BiliClientFeedOfficial on BiliClient {
   /// [BiliError.noAppToken] and sends nothing: the feed is generic without it. [pad] asks as the iPad does; a big
   /// card that comes anyway keeps the server's place.
   ///
-  /// The iPhone identity asks as its app does: [firstIdx], the `idx` of the first card on screen (null with none),
+  /// The iPhone identity asks as its app does: [firstIdx], the `idx` of the list's first card (null with none),
   /// and [cold] for the launch's first page; [index] 0 is still a pull to refresh. Its answer keeps the server's
   /// order, the big card already first.
   Future<List<FeedCard>> officialFeed({required int index, bool pad = false, int? firstIdx, bool cold = false}) async {

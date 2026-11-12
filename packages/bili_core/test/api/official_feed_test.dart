@@ -95,7 +95,7 @@ final iphoneToken = AppToken(
   identity: OfficialIdentity.iphone,
 );
 
-/// The Android feed's own fields as they went out before identities, less `idx` and `pull`.
+/// The Android feed's own fields, whole, less `idx` and `pull`.
 const androidFeedFields = {
   'auto_refresh_state': '1',
   'autoplay_card': '11',
@@ -128,7 +128,7 @@ const androidFeedFields = {
   'voice_balance': '0',
 };
 
-/// Every header of the Android feed's request, as before identities: its own over the Android app's.
+/// Every header of the Android feed's request: its own over the Android app's.
 const androidFeedHeaders = {
   'User-Agent':
       'Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd '
@@ -571,7 +571,7 @@ void main() {
         'goto': 'av',
         'id': '90000001',
         'reason_id': '1',
-      }, reason: 'as before identities');
+      }, reason: 'the Android feed\'s headers, whole');
       expect(reason.headers['User-Agent'], androidUserAgent);
       expect(reason.headers['Cookie'], isNull);
       expect(http.query(feedback)['feedback_id'], '9');

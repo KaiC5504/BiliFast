@@ -76,7 +76,7 @@ class WatchReporter {
   /// The video page, where every play is reported from.
   static const _spmid = 'united.player-video-detail.0.0';
 
-  /// How much play goes by between two saves of the running play.
+  /// Seconds of play between two saves of the running play.
   static const _keepEvery = 15;
 
   static final _random = Random.secure();
@@ -86,7 +86,8 @@ class WatchReporter {
   final bool Function() _loggedIn;
   final HistoryOutbox? _outbox;
 
-  /// Where the page was opened from, asked as a play starts: a page that takes 推荐's card over names it then.
+  /// Where the page was opened from. Asked as a play starts, not as the reporter is made: the page that takes
+  /// 推荐's card over names it only when it attaches.
   final PlaySource Function()? _source;
 
   /// The open followed the video before it on its own (自动连播, 后台连播).
@@ -254,7 +255,7 @@ class WatchReporter {
     final play = _play;
     final playing = _status == PlayerStatus.playing;
     if (play == null) {
-      // Playing already when the reports became this play's to make: taken over from 推荐's card, or logged in since.
+      // Already playing when reporting became allowed: the page took 推荐's card over, or the login came since.
       if (playing) _beginPlay();
       return;
     }

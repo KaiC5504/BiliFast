@@ -49,7 +49,7 @@ Beside the common fields:
 
 | Field | Value |
 |---|---|
-| `idx` | `0` with nothing on screen, otherwise the `idx` of the first card on screen (cards come in descending `idx`) |
+| `idx` | `0` with no cards, otherwise the `idx` of the list's first card (cards come in descending `idx`), for a refresh and for more below alike |
 | `pull` | `1` for a refresh, `0` for more below |
 | `flush` | `0` on the launch's first page, `6` for a pull down, `8` for more below (the Android app's `PegasusFlush`) |
 | `open_event` | `cold` on the launch's first page, otherwise empty |

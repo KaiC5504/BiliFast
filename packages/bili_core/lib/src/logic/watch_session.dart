@@ -121,7 +121,7 @@ final class WatchSession {
     final now = _now();
     _addUp(now);
     _state = state;
-    // A pause can be long: what the player does across it is not measured against it.
+    // A pause can be long: counted in, its length would let a jump made across it pass as play.
     _positionAt = now;
   }
 

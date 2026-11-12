@@ -8,7 +8,7 @@ final class PlaySource {
   PlaySource.recommend(FeedCard card)
     : this(fromSpmid: 'tm.recommend.0.0', from: '7', trackId: card.trackId, flowData: card.flowData);
 
-  /// Opened from somewhere whose name the official app's reports are not known for.
+  /// Opened from a place whose `from_spmid` hasn't been read from the official app.
   static const unknown = PlaySource(fromSpmid: '');
 
   final String fromSpmid;

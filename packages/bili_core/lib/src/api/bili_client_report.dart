@@ -46,7 +46,7 @@ final class WatchReport {
   final int autoPlay;
 }
 
-/// The reports' own `statistics`, which is not the feed's.
+/// The common fields' own `statistics`, named so the reports keep it whatever that default becomes.
 const _reportStatistics = '{"appId":1,"version":"${IphoneLabels.version}","abtest":"","platform":1}';
 
 /// The official app's watch reports, sent with the app token. Only the iPhone identity's are known: under another

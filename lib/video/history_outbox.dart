@@ -150,7 +150,7 @@ enum _Flushed { sent, gone, dropped, noAnswer, kept }
 /// Kept 30 days, in a JSON file in the support folder. Every heartbeat goes through [send], one at a time with
 /// [flush]'s, so Bilibili never hears an older place last.
 ///
-/// Under the official iPhone reports a play says what was watched only as it ends, so it is kept from the start
+/// Under the official iPhone reports a play says what was watched only as it ends, so it is kept while it runs
 /// ([keepPlay], then [endPlay]): a play the app was killed in, or one that ended with no network, goes out from
 /// [sendPlays] or the next [flush], each play once, oldest first.
 class HistoryOutbox {
@@ -478,9 +478,11 @@ class HistoryOutbox {
     return _Flushed.sent;
   }
 
-  /// How a failed call leaves its report waiting; null when Bilibili refused it for good.
+  /// How a failed call leaves its play waiting; null when Bilibili refused it for good. -2 is the official API's
+  /// refused login (an app token it no longer takes), which a new confirm mends.
   static _Flushed? _waits(Object error) {
     if (isNetworkFailure(error)) return _Flushed.noAnswer;
+    if (error case BiliAPIError(code: -2)) return _Flushed.kept;
     return _refusedForGood(error) ? null : _Flushed.kept;
   }
 
@@ -525,9 +527,8 @@ class HistoryOutbox {
     return moved.length;
   }
 
-  /// -2 is the official API's refused login (an app token it no longer takes).
   static bool _refusedForGood(Object error) => switch (error) {
-    BiliAPIError(code: -101 || -2 || -352 || -412) => false,
+    BiliAPIError(code: -101 || -352 || -412) => false,
     BiliAPIError(code: GuardedTransport.readOnlyCode || GuardedTransport.capCode || GuardedTransport.haltCode) => false,
     BiliAPIError() => true,
     _ => false,

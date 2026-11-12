@@ -275,6 +275,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
       client: environment.client,
       loggedIn: () => WatchReporter.canReport(environment),
       outbox: services.historyOutbox,
+      followed: _followed,
     );
   }
 
