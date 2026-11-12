@@ -906,6 +906,86 @@ void main() {
       expect(still('BV3'), findsOne, reason: 'the neighbours come back with the band');
     });
 
+    testWidgets('the video landed on holds its still on black over the whole page until its first frame, so nothing of '
+        'the video before shows around it: from the frame it lands, and going back too', (tester) async {
+      final mixed = FakeStoryFeed([
+        storyEntry('BV1', cover: pic('BV1')),
+        storyEntry('BV2', cover: pic('BV2'), width: 1920, height: 1080),
+      ]);
+      addTearDown(mixed.dispose);
+      pager.feed = mixed;
+      // An upright video playing; the player keeps its band until the next video's shape is in.
+      session
+        ..isVertical = true
+        ..changed();
+      await show(tester, Presentation.vertical, storyPager: pager);
+      final backdrop = find.byKey(const ValueKey('story-backdrop'));
+      final upright = videoRect(tester);
+      expect(upright, const Rect.fromLTWH(0, 0, 440, 926));
+      expect(backdrop, findsNothing);
+
+      drag
+        ..start()
+        ..update(-120);
+      await tester.pump();
+      expect(backdrop, findsNothing, reason: 'nothing is held while the video before plays');
+      drag.end(-1500);
+      while (drag.moving) {
+        await tester.pump(const Duration(microseconds: 16667));
+      }
+      expect(mixed.moves, [1]);
+      expect(find.descendant(of: find.byKey(const ValueKey('story-neighbours')), matching: backdrop), findsOne);
+      expect(tester.getRect(backdrop), const Rect.fromLTWH(0, 0, 440, 956), reason: 'in the frame it lands');
+      expect(videoRect(tester), upright, reason: 'the last picture of the video before, under it');
+      final still = find.byWidgetPredicate((widget) => widget is RemoteImage && widget.url == pic('BV2'));
+      expect(tester.getRect(still).height, 247.5, reason: "the wide video's still in its own band, over the black");
+
+      pager.framed('BV2');
+      await tester.pump();
+      expect(backdrop, findsNothing, reason: 'its own picture shows now');
+
+      expect(pager.movePrevious(), isTrue);
+      await tester.pump(const Duration(milliseconds: 17));
+      expect(backdrop, findsNothing, reason: 'nothing held while the page moves');
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(mixed.moves, [1, 0]);
+      expect(tester.getRect(backdrop), const Rect.fromLTWH(0, 0, 440, 956));
+      pager.framed('BV1');
+      await tester.pump();
+      expect(backdrop, findsNothing);
+    });
+
+    testWidgets('no loading TV over the still held for a video swiped to, until it has waited '
+        '${StoryPagerTheme.quietLoading.inSeconds} s; a failure still shows', (tester) async {
+      pager.feed = feed;
+      await show(tester, Presentation.vertical, storyPager: pager, loading: true);
+      expect(find.byType(PlayerLoading), findsOne, reason: 'nothing held: an open shows it at once');
+      expect(pager.moveNext(), isTrue);
+      await tester.pump(const Duration(milliseconds: 17));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(pager.arrived?.bvid, 'BV2');
+      expect(find.byType(PlayerLoading), findsNothing, reason: 'the picture alone, as the official app shows it');
+      await tester.pump(StoryPagerTheme.quietLoading - const Duration(milliseconds: 100));
+      expect(find.byType(PlayerLoading), findsNothing);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(PlayerLoading), findsOne, reason: 'a slow start shows it is under way');
+
+      expect(pager.moveNext(), isTrue);
+      await tester.pump(const Duration(milliseconds: 17));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(pager.arrived?.bvid, 'BV3');
+      expect(find.byType(PlayerLoading), findsNothing, reason: 'the next landing waits from its own start');
+
+      await show(tester, Presentation.vertical, storyPager: pager, failure: '播放失败');
+      expect(find.byKey(const ValueKey('video-failure')), findsOne);
+      await show(tester, Presentation.vertical, storyPager: pager, loading: true);
+      expect(find.byType(PlayerLoading), findsNothing);
+
+      pager.framed('BV3');
+      await tester.pump();
+      expect(find.byType(PlayerLoading), findsOne, reason: 'held no more, a load shows as ever');
+    });
+
     testWidgets('the danmaku dim with the controls while the page moves, and come back as it lands', (tester) async {
       pager.feed = feed;
       await show(tester, Presentation.vertical, storyPager: pager);

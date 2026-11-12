@@ -359,8 +359,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
 
   /// Another part or video, from 选集, 自动连播, the end screen or 竖屏's feed: opened on the same controller, with or
   /// without a page. [followed] when nobody asked for it (自动连播, 后台连播), which its watch reports say. Another
-  /// video reports [source], else nothing of where it came from.
-  void openOnPage(String bvid, {int? cid, bool followed = false, PlaySource? source}) {
+  /// video reports [source], else nothing of where it came from. Another video's [detail], asked ahead (竖屏's next
+  /// video), saves the open its own ask.
+  void openOnPage(String bvid, {int? cid, bool followed = false, PlaySource? source, VideoDetail? detail}) {
     final controller = _controller;
     if (controller == null || _closed) return;
     // A second tap while the first one's load is still out (⏭ keeps its target until the part arrives) would load
@@ -369,7 +370,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     final sameVideo = bvid == _bvid;
     // Another part of this video needs no second signed view.
     _view = sameVideo ? controller.video : null;
-    _detail = sameVideo ? controller.detail : null;
+    _detail = sameVideo ? controller.detail : (detail?.bvid == bvid ? detail : null);
     if (!sameVideo) _source = source ?? PlaySource.unknown;
     _followed = followed;
     _bvid = bvid;

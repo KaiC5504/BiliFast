@@ -492,6 +492,39 @@ void main() {
       expect(places().last, isNull);
     });
 
+    testWidgets("the next video's details asked ahead save its open the view call, on the entry's part, and its arrival "
+        'says so', (tester) async {
+      await host(tester);
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      http.routes[relatedPath] = (200, related.replaceFirst('"cid":0', '"cid":$p2'));
+      final playback = started();
+      await frames(tester, 10);
+      final player = players.single;
+      await plays(tester, player, 3);
+      int views() => http.to(Canned.signedViewPath).length + http.to(Canned.viewPath).length;
+      final before = views();
+      serves(otherView);
+      final story = playback.beginStory();
+      await frames(tester, 4);
+      expect(story.next?.bvid, other);
+      expect(views(), before + 1, reason: 'asked once, ahead');
+
+      expect(story.moveNext(), isTrue);
+      await frames(tester, 10);
+      expect(views(), before + 1, reason: 'the open asked no view of its own');
+      final controller = playback.controller!;
+      expect(controller.detail?.bvid, other);
+      expect(controller.page?.cid, p2, reason: "the entry's part, not the first");
+      await plays(tester, player, 3);
+      expect(starts().last['aid'], '80433023');
+      final arrival = logs.events.where((event) => event.msg == 'story arrival').single;
+      expect(arrival.f['prefetched']?.toJson(), isTrue);
+      playback.close();
+      await frames(tester, 4);
+    });
+
     testWidgets('a video the page opens itself while the feed is kept (选集, 自动连播 in landscape) starts the feed over '
         'from it', (tester) async {
       await host(tester);

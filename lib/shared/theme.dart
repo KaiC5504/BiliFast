@@ -1664,6 +1664,10 @@ abstract final class StoryPagerTheme {
   /// The Windows build's 下一个视频 and 上一个视频 buttons, for its test tool alone (Windows' accessibility bridge leaves
   /// custom actions out): invisible and touch-through, but big enough for the bridge to place them on screen.
   static const moveTarget = 8.0;
+
+  /// A video swiped to shows its still alone until it plays, as the official app's does; a start slower than this
+  /// brings the loading TV back over it, so the wait is seen. The phone's opens take 0.5 to 0.7 s.
+  static const quietLoading = Duration(seconds: 3);
 }
 
 /// The way into 竖屏 from the video page and back out (187, measured frame by frame at 60 fps): the picture slides

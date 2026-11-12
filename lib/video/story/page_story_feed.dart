@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show BiliClientStory, BiliClientVideo, OfficialIdentity, VideoCard;
+import 'package:bili_core/api.dart' show BiliClientStory, BiliClientVideo, OfficialIdentity, VideoCard, VideoDetail;
 
 import '../../playback/playback_controller.dart';
 import '../page_playback.dart';
@@ -16,6 +16,11 @@ StoryFeed pageStoryFeed(PagePlayback playback) {
     host: _PlaybackHost(playback),
     official: official ? client.storyFeed : null,
     related: (bvid) => client.related(bvid: bvid),
+    // The signed view, as the open's own resolve asks it, so the answer stands in for that call.
+    detail: (bvid) async {
+      await client.ensureRiskCookies();
+      return client.videoDetail(bvid: bvid);
+    },
   );
 }
 
@@ -49,6 +54,12 @@ final class _PlaybackHost extends StoryHost {
   StoryEntry? get playing => _playback.storyEntry;
 
   @override
+  String? get framed {
+    final controller = _playback.controller;
+    return controller != null && controller.hasPlayed ? controller.video?.bvid : null;
+  }
+
+  @override
   List<VideoCard>? loadedRelated(String bvid) {
     final session = _playback.session;
     if (session == null || session.video?.bvid != bvid || session.related.isEmpty) return null;
@@ -58,8 +69,8 @@ final class _PlaybackHost extends StoryHost {
   /// The official app reports a video swiped to as played on its own (auto_play 99), and the entered video swiped back
   /// to as it does when 竖屏 opens on it (0).
   @override
-  void open(StoryEntry entry, {required bool entered}) =>
-      _playback.openOnPage(entry.bvid, cid: entry.cid, followed: !entered, source: entry.source);
+  void open(StoryEntry entry, {required bool entered, VideoDetail? detail}) =>
+      _playback.openOnPage(entry.bvid, cid: entry.cid, followed: !entered, source: entry.source, detail: detail);
 
   @override
   bool get halted => _playback.storyHalted;

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:bili_core/api.dart'
-    show BiliAPIError, BiliHTTPError, BiliNetworkError, PlaySource, StoryItem, VideoCard;
+    show BiliAPIError, BiliHTTPError, BiliNetworkError, PlaySource, StoryItem, VideoCard, VideoDetail;
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
@@ -21,6 +21,9 @@ typedef StoryPageCall =
 /// A video's related list (`BiliClient.related`).
 typedef RelatedCall = Future<List<VideoCard>> Function(String bvid);
 
+/// A video's details: the call its open would make (the signed view), asked ahead.
+typedef DetailCall = Future<VideoDetail> Function(String bvid);
+
 /// What the feed needs of the page it plays on. It notifies whenever what it plays may have changed; the feed that
 /// takes it disposes it.
 abstract class StoryHost extends ChangeNotifier {
@@ -30,12 +33,15 @@ abstract class StoryHost extends ChangeNotifier {
   /// The video playing as 竖屏's first entry ([PagePlayback.storyEntry]); null before its details are in.
   StoryEntry? get playing;
 
+  /// The video whose first frame the page's player has shown since its last open; null while it hasn't.
+  String? get framed;
+
   /// [bvid]'s related list where the page has it loaded already, else null.
   List<VideoCard>? loadedRelated(String bvid);
 
   /// Opens [entry] on the page: the video 竖屏 was [entered] on as the user's own open, any other as a video swiped
-  /// to.
-  void open(StoryEntry entry, {required bool entered});
+  /// to. Its [detail], asked ahead, saves the open asking for it.
+  void open(StoryEntry entry, {required bool entered, VideoDetail? detail});
 
   /// Risk control answered one of 竖屏's calls: nothing more is asked while the page lives, by this feed or the next.
   bool get halted;
@@ -49,8 +55,11 @@ abstract class StoryHost extends ChangeNotifier {
 /// good; a related list Bilibili refused (a removed video) is not asked again; risk control (-352, -412, HTTP 412)
 /// stops asking for the page's life ([StoryHost.halt]). A video the page opens that the feed didn't (自动连播 or 选集
 /// while the feed is kept through landscape) starts the feed over from it.
+///
+/// With [detail], each video the page settles on has the next one's details asked once, kept in memory while it is a
+/// neighbour, and handed to its open.
 class StoryList extends StoryFeed {
-  StoryList({required StoryHost host, this._official, required this._related, Logger? logger})
+  StoryList({required StoryHost host, this._official, required this._related, this._detail, Logger? logger})
     : _host = host,
       _logger = logger ?? Logger.shared,
       _enteredBvid = host.bvid {
@@ -64,8 +73,19 @@ class StoryList extends StoryFeed {
   final StoryHost _host;
   StoryPageCall? _official;
   final RelatedCall _related;
+  final DetailCall? _detail;
   final Logger _logger;
   String _enteredBvid;
+
+  /// The neighbours' details asked ahead, by video.
+  final Map<String, VideoDetail> _details = {};
+
+  /// Counts the videos the page settled on: each asks the next one's details at most once.
+  int _settles = 0;
+  int? _detailAskedIn;
+
+  /// The video moved to, until its first frame shows.
+  ({String bvid, Stopwatch since, bool prefetched})? _arrival;
 
   /// Where 竖屏 was entered from; every entry's reports name it, after a start over too.
   PlaySource? _entrySource;
@@ -102,6 +122,13 @@ class StoryList extends StoryFeed {
     if (_disposed) return;
     final bvid = _host.bvid;
     if (bvid != (current?.bvid ?? _enteredBvid)) _restart(bvid);
+    if (_arrival case final arrival? when _host.framed == arrival.bvid) {
+      _arrival = null;
+      _logger.info(LogCategory.player, 'story arrival', {
+        'ms': arrival.since.elapsedMilliseconds,
+        'prefetched': arrival.prefetched,
+      });
+    }
     if (_index != 0 || bvid != _enteredBvid) return;
     final playing = _host.playing;
     if (playing == null || playing.bvid != _enteredBvid) return;
@@ -137,6 +164,9 @@ class StoryList extends StoryFeed {
     _stalled = false;
     _waitLogged = false;
     _page = 1;
+    _details.clear();
+    _settles++;
+    _arrival = null;
     _logger.info(LogCategory.api, 'story feed restarted');
     notifyListeners();
   }
@@ -146,7 +176,7 @@ class StoryList extends StoryFeed {
     final next = this.next;
     if (_disposed || next == null) return false;
     _index++;
-    _host.open(next, entered: false);
+    _arrive(next, entered: false);
     notifyListeners();
     _userMoved();
     return true;
@@ -157,10 +187,19 @@ class StoryList extends StoryFeed {
     final previous = this.previous;
     if (_disposed || previous == null) return false;
     _index--;
-    _host.open(previous, entered: _index == 0);
+    _arrive(previous, entered: _index == 0);
     notifyListeners();
     _userMoved();
     return true;
+  }
+
+  void _arrive(StoryEntry entry, {required bool entered}) {
+    final detail = _details[entry.bvid];
+    _arrival = (bvid: entry.bvid, since: Stopwatch()..start(), prefetched: detail != null);
+    _settles++;
+    final near = {?previous?.bvid, entry.bvid, ?next?.bvid};
+    _details.removeWhere((bvid, _) => !near.contains(bvid));
+    _host.open(entry, entered: entered, detail: detail);
   }
 
   @override
@@ -172,6 +211,43 @@ class StoryList extends StoryFeed {
   void _userMoved() {
     _stalled = false;
     _askIfNear();
+    _askDetail();
+  }
+
+  /// The next video's details, once for the video settled on, so its open needn't ask; never while halted.
+  void _askDetail() {
+    final call = _detail;
+    final next = this.next;
+    if (call == null || next == null || _disposed || _host.halted || _detailAskedIn == _settles) return;
+    if (_details.containsKey(next.bvid)) return;
+    _detailAskedIn = _settles;
+    final bvid = next.bvid;
+    final round = _round;
+    final asked = Stopwatch()..start();
+    unawaited(
+      call(bvid).then(
+        (detail) {
+          if (_disposed || round != _round) return;
+          // A video that redirects (番剧) is refused by the open anyway.
+          final usable = detail.bvid == bvid && detail.redirectURL == null;
+          _logger.info(LogCategory.api, 'story detail ahead', {
+            'ms': asked.elapsedMilliseconds,
+            if (!usable) 'dropped': true,
+          });
+          if (usable && {previous?.bvid, current?.bvid, this.next?.bvid}.contains(bvid)) _details[bvid] = detail;
+        },
+        onError: (Object error) {
+          if (_disposed || round != _round) return;
+          final stopped = _riskControl(error);
+          if (stopped) _host.halt();
+          _logger.warn(LogCategory.api, 'story detail ahead', {
+            'error': '${error.runtimeType}',
+            'code': ?_codeOf(error),
+            if (stopped) 'stopped': true,
+          });
+        },
+      ),
+    );
   }
 
   void _askIfNear() {
@@ -292,26 +368,30 @@ class StoryList extends StoryFeed {
     }
     notifyListeners();
     _askIfNear();
+    _askDetail();
   }
+
+  static int? _codeOf(Object error) => switch (error) {
+    BiliAPIError(:final code) => code,
+    BiliHTTPError(:final status) => status,
+    _ => null,
+  };
+
+  static bool _riskControl(Object error) => switch (error) {
+    BiliAPIError(code: -352 || -412) || BiliHTTPError(status: 412) => true,
+    _ => false,
+  };
 
   void _failed(String kind, int page, Object error) {
     _loading = false;
-    final code = switch (error) {
-      BiliAPIError(:final code) => code,
-      BiliHTTPError(:final status) => status,
-      _ => null,
-    };
-    final stopped = switch (error) {
-      BiliAPIError(code: -352 || -412) || BiliHTTPError(status: 412) => true,
-      _ => false,
-    };
+    final stopped = _riskControl(error);
     if (stopped) _host.halt();
     final official = kind == 'official';
     _logger.warn(LogCategory.api, 'story feed', {
       'source': kind,
       'page': page,
       'error': '${error.runtimeType}',
-      'code': ?code,
+      'code': ?_codeOf(error),
       if (stopped) 'stopped': true,
       if (official && !stopped) 'handover': 'failed',
     });
@@ -327,6 +407,7 @@ class StoryList extends StoryFeed {
   @override
   void dispose() {
     _disposed = true;
+    _details.clear();
     _host
       ..removeListener(_hostChanged)
       ..dispose();

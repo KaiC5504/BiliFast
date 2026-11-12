@@ -61,9 +61,13 @@ final class FakeHost extends StoryHost {
   @override
   bool halted = false;
 
+  @override
+  String? framed;
+
   final Map<String, List<VideoCard>> loaded = {};
   final List<StoryEntry> opened = [];
   final List<bool> openedEntered = [];
+  final List<VideoDetail?> openedWith = [];
   bool disposed = false;
 
   void changed() => notifyListeners();
@@ -79,11 +83,13 @@ final class FakeHost extends StoryHost {
   List<VideoCard>? loadedRelated(String bvid) => loaded[bvid];
 
   @override
-  void open(StoryEntry entry, {required bool entered}) {
+  void open(StoryEntry entry, {required bool entered, VideoDetail? detail}) {
     opened.add(entry);
     openedEntered.add(entered);
+    openedWith.add(detail);
     bvid = entry.bvid;
     playing = null;
+    framed = null;
     notifyListeners();
   }
 
@@ -109,6 +115,8 @@ void main() {
   late List<Completer<List<StoryItem>>> officialAnswers;
   late List<String> relatedAsks;
   late List<Completer<List<VideoCard>>> relatedAnswers;
+  late List<String> detailAsks;
+  late List<Completer<VideoDetail>> detailAnswers;
   late int notified;
 
   setUp(() {
@@ -119,6 +127,8 @@ void main() {
     officialAnswers = [];
     relatedAsks = [];
     relatedAnswers = [];
+    detailAsks = [];
+    detailAnswers = [];
     notified = 0;
   });
 
@@ -142,10 +152,22 @@ void main() {
     return answer.future;
   }
 
-  StoryList make({bool useOfficial = true}) {
+  Future<VideoDetail> detail(String bvid) {
+    detailAsks.add(bvid);
+    final answer = Completer<VideoDetail>();
+    detailAnswers.add(answer);
+    return answer.future;
+  }
+
+  StoryList make({bool useOfficial = true, bool ahead = false}) {
     final on = host;
-    final feed = StoryList(host: on, official: useOfficial ? official : null, related: related, logger: logger)
-      ..addListener(() => notified++);
+    final feed = StoryList(
+      host: on,
+      official: useOfficial ? official : null,
+      related: related,
+      detail: ahead ? detail : null,
+      logger: logger,
+    )..addListener(() => notified++);
     addTearDown(() {
       if (!on.disposed) feed.dispose();
     });
@@ -577,6 +599,141 @@ void main() {
       expect(bvids(feed), [entered, 'BV1r1']);
       expect(feed.index, 1);
       expect(logs.events.where((event) => event.msg == 'story feed restarted'), isEmpty);
+    });
+  });
+
+  group("the next video's details, asked ahead", () {
+    VideoDetail details(String bvid, {String? redirect}) =>
+        VideoDetail.fromJson({'bvid': bvid, 'aid': 1, 'redirect_url': ?redirect});
+
+    Future<void> answerDetail(int at, VideoDetail answer) async {
+      detailAnswers[at].complete(answer);
+      await pumpEventQueue();
+    }
+
+    List<Map<String, Object>> lines(String msg) => [
+      for (final event in logs.events)
+        if (event.msg == msg) {for (final MapEntry(:key, :value) in event.f.entries) key: value.toJson()},
+    ];
+
+    test('once for each video settled on, the next one only, kept while a neighbour and handed to its open', () async {
+      final feed = make(useOfficial: false, ahead: true);
+      expect(detailAsks, isEmpty, reason: 'no next video known yet');
+      await answerRelated([card('BV1r1'), card('BV1r2'), card('BV1r3')]);
+      expect(detailAsks, ['BV1r1']);
+      host.changed();
+      feed.wantMore();
+      expect(detailAsks, ['BV1r1'], reason: 'one call for the video settled on');
+      final first = details('BV1r1');
+      await answerDetail(0, first);
+      expect(lines('story detail ahead').single.keys, ['ms']);
+
+      expect(feed.moveNext(), isTrue);
+      expect(identical(host.openedWith.single, first), isTrue);
+      expect(detailAsks, ['BV1r1', 'BV1r2']);
+      feed.wantMore();
+      expect(detailAsks, hasLength(2));
+
+      expect(feed.moveNext(), isTrue);
+      expect(host.openedWith.last, isNull, reason: 'moved on before the answer: the open asks for itself');
+      expect(detailAsks, ['BV1r1', 'BV1r2', 'BV1r3']);
+      await answerDetail(1, details('BV1r2'));
+
+      expect(feed.movePrevious(), isTrue);
+      expect(identical(host.openedWith.last, first), isTrue, reason: 'the video before is still a neighbour');
+      expect(detailAsks, hasLength(3), reason: 'the next one is in hand');
+      expect(feed.moveNext(), isTrue);
+      expect(host.openedWith.last?.bvid, 'BV1r2');
+    });
+
+    test('none while the feed is halted; risk control on the ask halts it', () async {
+      final halted = make(useOfficial: false, ahead: true);
+      host.halted = true;
+      await answerRelated([card('BV1r1'), card('BV1r2')]);
+      expect(halted.next?.bvid, 'BV1r1');
+      expect(halted.moveNext(), isTrue);
+      expect(detailAsks, isEmpty);
+      expect(host.openedWith.single, isNull);
+
+      host = FakeHost(playing: enteredEntry())..loaded[entered] = [card('BV1r1'), card('BV1r2')];
+      final feed = make(useOfficial: false, ahead: true);
+      expect(detailAsks, ['BV1r1']);
+      detailAnswers.last.completeError(const BiliAPIError(code: -352, message: ''));
+      await pumpEventQueue();
+      expect(host.halted, isTrue);
+      expect(lines('story detail ahead').single, {'error': 'BiliAPIError', 'code': -352, 'stopped': true});
+      expect(feed.moveNext(), isTrue);
+      expect(host.openedWith.single, isNull);
+      expect(detailAsks, hasLength(1));
+    });
+
+    test("another video's answer, or a video that redirects, is not handed on", () async {
+      host.loaded[entered] = [card('BV1r1'), card('BV1r2')];
+      final feed = make(useOfficial: false, ahead: true);
+      await answerDetail(0, details('BV1other0000'));
+      expect(lines('story detail ahead').single, containsPair('dropped', true));
+      feed.moveNext();
+      expect(host.openedWith.single, isNull);
+      await answerDetail(1, details('BV1r2', redirect: 'https://www.bilibili.com/bangumi/play/ep1'));
+      feed.moveNext();
+      expect(host.openedWith.last, isNull);
+    });
+
+    test('a start over or the end of 竖屏 drops what was asked', () async {
+      host.loaded[entered] = [card('BV1r1')];
+      final feed = make(useOfficial: false, ahead: true);
+      expect(detailAsks, ['BV1r1']);
+      host.plays('BV1autonext0');
+      await answerDetail(0, details('BV1r1'));
+      expect(lines('story detail ahead'), isEmpty, reason: 'asked before the start over');
+      host
+        ..playing = const StoryEntry(
+          bvid: 'BV1autonext0',
+          aid: 200,
+          cid: 21,
+          title: '',
+          cover: '',
+          ownerMid: 3,
+          ownerName: '',
+          source: PlaySource.unknown,
+        )
+        ..changed();
+      await answerRelated([card('BV1r1')]);
+      expect(detailAsks, ['BV1r1', 'BV1r1'], reason: 'asked again for the new start');
+      feed.dispose();
+      await answerDetail(1, details('BV1r1'));
+      expect(lines('story detail ahead'), isEmpty);
+    });
+
+    test('each arrival logs the time from the move to its first frame and whether its details were in, no ids',
+        () async {
+      host.loaded[entered] = [card('BV1r1'), card('BV1r2')];
+      final feed = make(useOfficial: false, ahead: true);
+      await answerDetail(0, details('BV1r1'));
+      feed.moveNext();
+      host
+        ..framed = entered
+        ..changed();
+      expect(lines('story arrival'), isEmpty, reason: "the last video's frame doesn't count");
+      host
+        ..framed = 'BV1r1'
+        ..changed()
+        ..changed();
+      expect(lines('story arrival').single.keys.toSet(), {'ms', 'prefetched'});
+      expect(lines('story arrival').single['ms'], isA<int>());
+      expect(lines('story arrival').single['prefetched'], isTrue);
+
+      feed.moveNext();
+      host
+        ..framed = 'BV1r2'
+        ..changed();
+      expect(lines('story arrival').last['prefetched'], isFalse, reason: 'moved before its answer');
+      expect(lines('story arrival'), hasLength(2));
+      for (final line in [...lines('story arrival'), ...lines('story detail ahead')]) {
+        for (final value in line.values) {
+          expect('$value', isNot(contains('BV1')));
+        }
+      }
     });
   });
 

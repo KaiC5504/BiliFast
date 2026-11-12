@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
@@ -304,23 +305,26 @@ class VideoPlayerArea extends StatelessWidget {
       if (failure case final failure?)
         _swipeable(story?.drag, _Failure(key: const ValueKey('video-failure'), message: failure, onRetry: onRetry))
       else
-        ValueListenableBuilder(
+        _QuietWhileHeld(
           key: const ValueKey('video-loading-layer'),
-          valueListenable: waiting ?? const AlwaysStoppedAnimation(false),
-          builder: (context, waiting, _) => loading || waiting
-              ? Align(
-                  alignment: Alignment.topCenter,
-                  // In 竖屏 it centres on the video's band.
-                  child: FractionallySizedBox(
-                    heightFactor: _loadingBand(ui),
-                    // Hidden through a turn like the chrome: the pinned layer would stretch it unevenly.
-                    child: _unseen(
-                      aside,
-                      PlayerLoading(key: const ValueKey('video-loading'), stats: ui?.session.stats),
+          held: story?.arrived,
+          child: ValueListenableBuilder(
+            valueListenable: waiting ?? const AlwaysStoppedAnimation(false),
+            builder: (context, waiting, _) => loading || waiting
+                ? Align(
+                    alignment: Alignment.topCenter,
+                    // In 竖屏 it centres on the video's band.
+                    child: FractionallySizedBox(
+                      heightFactor: _loadingBand(ui),
+                      // Hidden through a turn like the chrome: the pinned layer would stretch it unevenly.
+                      child: _unseen(
+                        aside,
+                        PlayerLoading(key: const ValueKey('video-loading'), stats: ui?.session.stats),
+                      ),
                     ),
-                  ),
-                )
-              : const SizedBox.shrink(),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ),
       if (ui == null || failed)
         SafeArea(
@@ -584,6 +588,52 @@ class _MovingDim extends StatelessWidget {
       child: child,
     );
   }
+}
+
+/// The loading TV, kept away while 竖屏 holds the still of the video swiped to ([held]) for up to
+/// [StoryPagerTheme.quietLoading]: the official app shows the picture alone until the video starts.
+class _QuietWhileHeld extends StatefulWidget {
+  const _QuietWhileHeld({super.key, required this.held, required this.child});
+
+  final Object? held;
+  final Widget child;
+
+  @override
+  State<_QuietWhileHeld> createState() => _QuietWhileHeldState();
+}
+
+class _QuietWhileHeldState extends State<_QuietWhileHeld> {
+  Timer? _timer;
+  bool _quiet = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hold();
+  }
+
+  @override
+  void didUpdateWidget(_QuietWhileHeld oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Another landing before the first one's frame waits from its own start.
+    if (!identical(oldWidget.held, widget.held)) _hold();
+  }
+
+  void _hold() {
+    _timer?.cancel();
+    _timer = null;
+    _quiet = widget.held != null;
+    if (_quiet) _timer = Timer(StoryPagerTheme.quietLoading, () => setState(() => _quiet = false));
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _quiet ? const SizedBox.shrink() : widget.child;
 }
 
 /// The Windows build's 下一个视频 and 上一个视频: two small invisible buttons at the left edge's middle for its test

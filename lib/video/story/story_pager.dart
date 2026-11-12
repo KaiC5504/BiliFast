@@ -190,7 +190,8 @@ class StoryShift extends StatelessWidget {
 
 /// The pages beside the one playing: the video before one screen above, the next one screen below, each its still
 /// picture in its band with its controls dimmed over it, moving with the finger. Over the playing page, the still of
-/// the video just landed on until its first frame shows. Takes no touches and says nothing to VoiceOver.
+/// the video just landed on until its first frame shows, on black over the whole page. Takes no touches and says
+/// nothing to VoiceOver.
 class StoryNeighbours extends StatelessWidget {
   const StoryNeighbours({super.key, required this.pager, this.danmakuOn = true, this.slide});
 
@@ -253,7 +254,12 @@ class _StoryPage extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
+        // Until this video's first frame the player still shows the last picture of the one before, in that one's
+        // band (an upright video's reaching past a wide one's still).
+        if (at == 0) const ColoredBox(key: ValueKey('story-backdrop'), color: BiliColors.videoBackground),
+        // Keyed, so the neighbour landed on keeps its picture as the backdrop comes in before it.
         LayoutBuilder(
+          key: const ValueKey('story-band'),
           builder: (context, constraints) {
             final heightFactor = verticalBand(upright: entry.upright);
             return CustomSingleChildLayout(
