@@ -253,6 +253,11 @@ final class EngineLease implements PlaybackEngine {
     if (!_released) engine.preconnect(urls);
   }
 
+  @override
+  void promote(String token, {required double startSeconds}) {
+    if (!_released) engine.promote(token, startSeconds: startSeconds);
+  }
+
   /// The CDN 节点 is the app's, not a page's.
   @override
   void setNodeMode(NodeMode mode) => _shared.setNodeMode(mode);

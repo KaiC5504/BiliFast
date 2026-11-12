@@ -46,7 +46,18 @@ final class PlaybackError implements Exception {
 }
 
 final class PlaybackRequest {
-  const PlaybackRequest({required this.choice, required this.mode, required this.mediaHeaders, this.startSeconds = 0});
+  const PlaybackRequest({
+    required this.choice,
+    required this.mode,
+    required this.mediaHeaders,
+    this.startSeconds = 0,
+    this.warm = false,
+  });
+
+  /// A warm prepare primes its start only while the video segment there is at most this big: 4K and 8K at high
+  /// bitrates run 6-25 MB a segment, too much to hold and to take from the playback on screen for a video the user
+  /// may never open.
+  static const warmPrimeMaxBytes = 8 * 1024 * 1024;
 
   final TrackChoice choice;
   final PlaybackMode mode;
@@ -56,6 +67,11 @@ final class PlaybackRequest {
 
   /// Where the player will start, for `RipperConfig.primeStart`.
   final double startSeconds;
+
+  /// BTR only: the video the user may move to next, loaded while another plays ([PlaybackEngine.promote]). It stays
+  /// out of the app-wide connection count and the stats, takes a few connections, never hurries, and primes its start
+  /// without prefetching after it.
+  final bool warm;
 }
 
 /// What the player loads. The playlists always come from the local server.
@@ -69,6 +85,7 @@ final class PreparedSource {
     required this.rewroteHEV1,
     required this.sourceEntry,
     required this.mediaHeaders,
+    this.warm,
   });
 
   final String token;
@@ -88,6 +105,10 @@ final class PreparedSource {
 
   /// Direct mode: the player must send these with its CDN requests.
   final Map<String, String> mediaHeaders;
+
+  /// A warm prepare's video segment at the start, in bytes, and whether both tracks were primed there (not over
+  /// [PlaybackRequest.warmPrimeMaxBytes], nor with `RipperConfig.primeStart` off); null from any other prepare.
+  final ({int segmentBytes, bool primed})? warm;
 }
 
 final class NodeTiming {
@@ -231,6 +252,11 @@ abstract interface class PlaybackEngine {
   /// Opens a connection to every node a playurl's [urls] can be fetched from, before the header requests need
   /// one: on the phone the headers arrived 0.78 s after the open. Errors only lose the head start.
   void preconnect(List<String> urls);
+
+  /// The player is about to load [token], prepared with [PlaybackRequest.warm]: it becomes an ordinary playback (the
+  /// app-wide connection count, hurry, prefetch, the stats) primed at [startSeconds], where its warm prime is taken
+  /// over or, skipped or elsewhere, started now. Any other token is left as it is.
+  void promote(String token, {required double startSeconds});
 
   /// The nodes for the sessions prepared after this (设置's CDN 节点); playbacks already running keep theirs.
   void setNodeMode(NodeMode mode);

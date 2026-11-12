@@ -67,6 +67,7 @@ void main() {
   late AppServices services;
   late ManualClock time;
   late List<FakePlayer> players;
+  late List<FakeEngine> engines;
 
   setUp(() {
     http = Canned.http()
@@ -74,6 +75,7 @@ void main() {
       ..routes[historyPath] = (200, ok)
       ..routes[webPath] = (200, ok);
     players = [];
+    engines = [];
     final savedPrefs = PlayerPrefs.shared;
     final savedPolicy = AutoplayPolicy.shared;
     PlayerPrefs.shared = PlayerPrefs.memory();
@@ -125,9 +127,11 @@ void main() {
     final playback = AppPlayback(() async {
       final player = FakePlayer();
       players.add(player);
+      final engine = FakeEngine();
+      engines.add(engine);
       return PlaybackController(
         client: environment.client,
-        engine: FakeEngine(),
+        engine: engine,
         player: player,
         clock: time.clock,
         now: () => now,
@@ -521,6 +525,88 @@ void main() {
       expect(starts().last['aid'], '80433023');
       final arrival = logs.events.where((event) => event.msg == 'story arrival').single;
       expect(arrival.f['prefetched']?.toJson(), isTrue);
+      playback.close();
+      await frames(tester, 4);
+    });
+
+    /// The video playing holds 17 s ahead of its playhead at 3 s.
+    Future<void> comfortable(WidgetTester tester, FakePlayer player) async {
+      player.emit(const BufferedChanged([(start: 0, end: 20)]));
+      await frames(tester, 4);
+    }
+
+    testWidgets('on the phone the next video loads ahead once the one playing holds enough; swiped to, it asks '
+        'Bilibili nothing more and plays the source loaded ahead', (tester) async {
+      await host(tester);
+      http.routes[relatedPath] = (200, related.replaceFirst('"cid":0', '"cid":$p2'));
+      final playback = started();
+      await frames(tester, 10);
+      final player = players.single;
+      final engine = engines.single;
+      await plays(tester, player, 3);
+      serves(otherView);
+      final story = playback.beginStory();
+      await frames(tester, 4);
+      expect(story.next?.bvid, other);
+      expect(engine.warmed, isEmpty, reason: 'not before the video playing holds enough');
+
+      await comfortable(tester, player);
+      expect(engine.warmed, hasLength(1));
+      expect(http.to(Canned.playUrlPath).last.url.queryParameters['cid'], '$p2');
+      int asked() => http.to(Canned.playUrlPath).length + http.to(Canned.signedViewPath).length;
+      final before = asked();
+      final warmToken = 'tok${engine.prepared.length}';
+
+      expect(story.moveNext(), isTrue);
+      await frames(tester, 10);
+      expect(asked(), before, reason: 'no view, no playurl');
+      expect(engine.promoted.single.token, warmToken);
+      expect(player.loaded?.master, FakeEngine.masterOf(warmToken));
+      expect(playback.controller!.page?.cid, p2);
+      playback.close();
+      await frames(tester, 4);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('what was loaded ahead goes when the page is covered and when 竖屏 ends', (tester) async {
+      await host(tester);
+      http.routes[relatedPath] = (200, related.replaceFirst('"cid":0', '"cid":$p2'));
+      final playback = started();
+      await frames(tester, 10);
+      final player = players.single;
+      final engine = engines.single;
+      await plays(tester, player, 3);
+      serves(otherView);
+      playback.beginStory();
+      await frames(tester, 4);
+      await comfortable(tester, player);
+      expect(engine.warmed, hasLength(1));
+      playback.cover();
+      expect(engine.released, contains('tok${engine.prepared.length}'));
+      playback.show(resuming: true);
+
+      // 竖屏 entered again is a new feed, which loads the next video ahead once more.
+      playback
+        ..endStory()
+        ..beginStory();
+      await frames(tester, 4);
+      expect(engine.warmed, hasLength(2));
+      playback.endStory();
+      expect(engine.released, contains('tok${engine.prepared.length}'));
+      playback.close();
+      await frames(tester, 4);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('off the phone nothing is loaded ahead', (tester) async {
+      await host(tester);
+      http.routes[relatedPath] = (200, related.replaceFirst('"cid":0', '"cid":$p2'));
+      final playback = started();
+      await frames(tester, 10);
+      await plays(tester, players.single, 3);
+      serves(otherView);
+      playback.beginStory();
+      await frames(tester, 4);
+      await comfortable(tester, players.single);
+      expect(engines.single.warmed, isEmpty);
       playback.close();
       await frames(tester, 4);
     });

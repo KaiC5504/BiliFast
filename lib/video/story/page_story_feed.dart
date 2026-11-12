@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart' show BiliClientStory, BiliClientVideo, OfficialIdentity, VideoCard, VideoDetail;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 
 import '../../playback/playback_controller.dart';
 import '../page_playback.dart';
@@ -21,6 +22,9 @@ StoryFeed pageStoryFeed(PagePlayback playback) {
       await client.ensureRiskCookies();
       return client.videoDetail(bvid: bvid);
     },
+    // Windows' mpv reads the files through open-ended ranges that never meet a primed segment, and the PC is only a
+    // check bench: the next video is loaded ahead on the phone alone.
+    warmsNext: defaultTargetPlatform == TargetPlatform.iOS,
   );
 }
 
@@ -77,6 +81,16 @@ final class _PlaybackHost extends StoryHost {
 
   @override
   void halt() => _playback.haltStory();
+
+  @override
+  bool get comfortable => _playback.controller?.comfortable ?? false;
+
+  @override
+  Future<void> warm(StoryEntry entry, VideoDetail detail) =>
+      _playback.warmNext(entry.bvid, cid: entry.cid, detail: detail);
+
+  @override
+  void dropWarm() => _playback.dropWarm();
 
   @override
   void dispose() {

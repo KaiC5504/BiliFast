@@ -74,6 +74,10 @@ final class FakeEngine implements PlaybackEngine {
   Completer<void>? ensureGate;
   String? sourceEntry = 'hvc1';
   bool rewroteHEV1 = false;
+
+  /// The start segment a warm prepare reports; one over [PlaybackRequest.warmPrimeMaxBytes] is reported unprimed.
+  int warmSegmentBytes = 1500000;
+  final promoted = <({String token, double startSeconds})>[];
   bool disposed = false;
   final statsController = StreamController<EngineSnapshot>.broadcast(sync: true);
   final fatalController = StreamController<FatalReport>.broadcast(sync: true);
@@ -106,8 +110,18 @@ final class FakeEngine implements PlaybackEngine {
       rewroteHEV1: rewroteHEV1,
       sourceEntry: sourceEntry,
       mediaHeaders: direct ? request.mediaHeaders : const {},
+      warm: request.warm
+          ? (segmentBytes: warmSegmentBytes, primed: warmSegmentBytes <= PlaybackRequest.warmPrimeMaxBytes)
+          : null,
     );
   }
+
+  /// The prepares made warm, in order.
+  List<PlaybackRequest> get warmed => [for (final request in prepared) if (request.warm) request];
+
+  @override
+  void promote(String token, {required double startSeconds}) =>
+      promoted.add((token: token, startSeconds: startSeconds));
 
   @override
   Future<void> release(String token) async {

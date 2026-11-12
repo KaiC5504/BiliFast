@@ -136,6 +136,9 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
   void preconnect(List<String> urls) => _notify(_Preconnect(List.of(urls)));
 
   @override
+  void promote(String token, {required double startSeconds}) => _notify(_Promote(token, startSeconds));
+
+  @override
   void setNodeMode(NodeMode mode) => _notify(_SetNodeMode(mode));
 
   @override
@@ -370,6 +373,13 @@ final class _Preconnect extends _Notice {
   final List<String> urls;
 }
 
+final class _Promote extends _Notice {
+  const _Promote(this.token, this.seconds);
+
+  final String token;
+  final double seconds;
+}
+
 final class _SetNodeMode extends _Notice {
   const _SetNodeMode(this.mode);
 
@@ -463,6 +473,9 @@ final class _EngineHost {
   /// The connection count is app-wide, as in Swift: every session of this engine follows it.
   final _auto = AutoConcurrency();
   final _sessions = <String, RipperSession>{};
+
+  /// Sessions prepared warm and not yet promoted: never the stats' playback, and their bytes not its speed.
+  final _warmTokens = <String>{};
   final _directTokens = <String>{};
   final _localTokens = <String>{};
   final _lastDelivered = <String, int>{};
@@ -552,6 +565,8 @@ final class _EngineHost {
         _sessions[token]?.hint(seconds);
       case _Preconnect(:final urls):
         _preconnect(urls);
+      case _Promote(:final token, :final seconds):
+        _promote(token, seconds);
       case _SetNodeMode(:final mode):
         _nodeMode = mode;
         Logger.shared.info(LogCategory.engine, 'node mode', {
@@ -649,6 +664,7 @@ final class _EngineHost {
       config: _options.config,
       policy: _options.policy,
       memory: _memory,
+      warm: request.warm,
     );
     try {
       final prepared = await PlaybackBuilder.prepare(
@@ -662,10 +678,14 @@ final class _EngineHost {
       session
         ..setSegments(TrackKind.video, prepared.video.segments)
         ..setSegments(TrackKind.audio, prepared.audio.segments);
-      if (_options.config.primeStart) {
+      final start = request.startSeconds;
+      final segmentBytes = session.segmentBytesAt(TrackKind.video, start) ?? 0;
+      final primes =
+          _options.config.primeStart && (!request.warm || segmentBytes <= PlaybackRequest.warmPrimeMaxBytes);
+      if (primes) {
         session
-          ..prime(TrackKind.video, seconds: request.startSeconds)
-          ..prime(TrackKind.audio, seconds: request.startSeconds);
+          ..prime(TrackKind.video, seconds: start)
+          ..prime(TrackKind.audio, seconds: start);
       }
       final token = _router.register(
         PlaybackBuilder.ripperAssets(prepared, read: session.read, peakBandwidth: _options.config.peakBandwidth),
@@ -675,7 +695,11 @@ final class _EngineHost {
         if (identical(_sessions[token], session)) _boot.events.send(FatalReport(token: token, message: '$error'));
       };
       _lastDelivered[token] = session.deliveredBytes;
-      _newest = token;
+      if (request.warm) {
+        _warmTokens.add(token);
+      } else {
+        _newest = token;
+      }
       _startStats();
       return PreparedSource(
         token: token,
@@ -686,11 +710,27 @@ final class _EngineHost {
         rewroteHEV1: prepared.rewroteHEV1,
         sourceEntry: prepared.sourceEntry,
         mediaHeaders: const {},
+        warm: request.warm ? (segmentBytes: segmentBytes, primed: primes) : null,
       );
     } catch (_) {
       session.close();
       rethrow;
     }
+  }
+
+  void _promote(String token, double seconds) {
+    if (!_warmTokens.remove(token)) return;
+    final session = _sessions[token];
+    if (session == null) return;
+    session.promote();
+    if (_options.config.primeStart) {
+      session
+        ..prime(TrackKind.video, seconds: seconds)
+        ..prime(TrackKind.audio, seconds: seconds);
+    }
+    _newest = token;
+    // With only the warm session left, the stats had stopped.
+    _startStats();
   }
 
   Future<PreparedSource> _prepareDirect(PlaybackRequest request) async {
@@ -741,6 +781,7 @@ final class _EngineHost {
 
   void _release(String token) {
     _router.unregister(token);
+    _warmTokens.remove(token);
     _directTokens.remove(token);
     _localTokens.remove(token);
     _lastDelivered.remove(token);
@@ -776,9 +817,11 @@ final class _EngineHost {
     _statsTimer = null;
   }
 
-  /// Download speed counts the engine's delivered bytes, as the Swift overlay did.
+  /// Download speed counts the engine's delivered bytes, as the Swift overlay did, a warm session's aside.
   void _tick() {
-    final newestToken = _sessions.containsKey(_newest) ? _newest : _sessions.keys.lastOrNull;
+    final newestToken = _sessions.containsKey(_newest)
+        ? _newest
+        : _sessions.keys.where((token) => !_warmTokens.contains(token)).lastOrNull;
     final newest = _sessions[newestToken];
     if (newest == null) {
       _stopStats();
@@ -788,7 +831,7 @@ final class _EngineHost {
     var delta = 0;
     for (final MapEntry(key: token, value: session) in _sessions.entries) {
       final delivered = session.deliveredBytes;
-      delta += delivered - (_lastDelivered[token] ?? 0);
+      if (!_warmTokens.contains(token)) delta += delivered - (_lastDelivered[token] ?? 0);
       _lastDelivered[token] = delivered;
     }
     final seconds = (now - _lastTickAt) / 1000;
@@ -811,6 +854,7 @@ final class _EngineHost {
     }
     if (_sessions.isNotEmpty) _saveMemory();
     _sessions.clear();
+    _warmTokens.clear();
     _directTokens.clear();
     _localTokens.clear();
     await _server.close();

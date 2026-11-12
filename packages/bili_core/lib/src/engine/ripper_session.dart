@@ -60,11 +60,14 @@ enum _FetchKind {
 /// A segment downloading ahead of the player: Swift's prefetch Task, cancelled through its token. Its bytes so far
 /// are kept in order, so a read that takes it over can pass them on before it ends ([RipperConfig.streamAdopted]).
 final class _Prefetch {
-  _Prefetch(this.token, {this.kind = _FetchKind.prefetch, this.startedAt = 0});
+  _Prefetch(this.token, {this.kind = _FetchKind.prefetch, this.startedAt = 0, this.warm = false});
 
   final CancelToken token;
   final _FetchKind kind;
   final double startedAt;
+
+  /// Started by a warm session, before its promotion.
+  final bool warm;
   late final Future<Uint8List> bytes;
   double? firstByteAt;
   int received = 0;
@@ -145,6 +148,10 @@ final class _Request {
 /// segment cache and prefetch. Each player request is one byte range, usually one whole SIDX segment, which [read]
 /// splits into pieces fetched across the nodes and delivers in order; the segments after it are then prefetched.
 /// Everything runs on the engine isolate, so Swift's locks have no counterpart here.
+///
+/// A [warm] session loads a video the user may move to next while another plays: it keeps out of the app-wide
+/// connection count, on [warmConcurrency] connections, never hurries, and primes without prefetching after, until
+/// [promote] makes it an ordinary playback.
 final class RipperSession {
   factory RipperSession({
     required Map<TrackKind, TrackSource> sources,
@@ -156,18 +163,19 @@ final class RipperSession {
     MonotonicClock? clock,
     Logger? logger,
     NodeMemory? memory,
+    bool warm = false,
   }) {
     final follower = config.fixedConcurrency == null ? auto : null;
     final monotonic = clock ?? MonotonicClock.system;
     final pool = ConnectionPool(
-      config.fixedConcurrency ?? follower?.threads ?? RipperConfig.defaultConcurrency,
+      warm ? warmConcurrency : config.fixedConcurrency ?? follower?.threads ?? RipperConfig.defaultConcurrency,
       clock: monotonic,
     );
     final ctx = EngineContext(
       transport: transport,
       pool: pool,
       config: config,
-      auto: follower,
+      auto: warm ? null : follower,
       clock: monotonic,
       logger: logger,
     );
@@ -179,7 +187,7 @@ final class RipperSession {
       ..tailBackups = config.tailBackups
       ..keepsOffSlow = config.hurryKeepsOffSlow
       ..median = config.medianEstimates;
-    return RipperSession._(ctx, sources, mode, policy, priors);
+    return RipperSession._(ctx, sources, mode, policy, priors, warm: warm, follower: follower);
   }
 
   RipperSession._(
@@ -187,8 +195,11 @@ final class RipperSession {
     Map<TrackKind, TrackSource> sources,
     NodeMode mode,
     MediaURLPolicy policy,
-    NodePriors priors,
-  ) {
+    NodePriors priors, {
+    required bool warm,
+    required AutoConcurrency? follower,
+  }) : _warm = warm,
+       _waitingFollower = warm ? follower : null {
     _resolvers = {
       for (final MapEntry(key: kind, value: source) in sources.entries)
         kind: Resolver(
@@ -207,26 +218,22 @@ final class RipperSession {
     _bans.onBan = (node, strikes, kind) =>
         _ctx.logger.warn(LogCategory.engine, 'ban', {'node': node, 'strikes': strikes, 'kind': kind.name});
     final follower = _ctx.auto;
-    if (follower != null) {
-      final pool = _ctx.pool;
-      pool.onChange = (active, limit, queued) => follower.demand(active: active, limit: limit, queued: queued);
-      // The connection count is app-wide with one handler slot: the newest session takes it. The limit is read
-      // from `threads`, not taken from the arguments, as Swift does for deliveries that arrive out of order.
-      _followerHandler = (threads, previous, reason) {
-        if (_closed) return;
-        pool.setLimit(follower.threads);
-        _ctx.logger.info(LogCategory.engine, 'threads', {'threads': threads, 'previous': previous, 'reason': reason});
-      };
-      follower.onChange = _followerHandler;
-      follower.newSession();
-      pool.setLimit(follower.threads);
-    }
+    if (follower != null) _follow(follower);
   }
 
   /// Audio player reads rank above every video request of their class, audio prefetch just above video prefetch
   /// ([RipperConfig.audioFirst]). 100 outweighs the 12 a deadline adds and over 4 s of a video request's aging.
   static const _audioReadBoost = 100.0;
   static const _audioPrefetchBoost = 5.0;
+
+  /// A warm session's connections: its headers and primes leave the rest of the transport's per-host connections to
+  /// the playback on screen.
+  static const warmConcurrency = 3;
+
+  bool _warm;
+
+  /// The app-wide connection count a warm session takes on at its promotion.
+  AutoConcurrency? _waitingFollower;
 
   final EngineContext _ctx;
   final _bans = BanList();
@@ -277,7 +284,47 @@ final class RipperSession {
   bool get isClosed => _closed;
   int get deliveredBytes => _ctx.stats.deliveredBytes;
 
+  /// Loaded ahead and not yet [promote]d.
+  bool get isWarm => _warm;
+
   bool get _retains => _ctx.config.keepBehindBytes > 0;
+
+  void _follow(AutoConcurrency follower) {
+    final pool = _ctx.pool;
+    pool.onChange = (active, limit, queued) => follower.demand(active: active, limit: limit, queued: queued);
+    // The connection count is app-wide with one handler slot: the newest session takes it. The limit is read
+    // from `threads`, not taken from the arguments, as Swift does for deliveries that arrive out of order.
+    _followerHandler = (threads, previous, reason) {
+      if (_closed) return;
+      pool.setLimit(follower.threads);
+      _ctx.logger.info(LogCategory.engine, 'threads', {'threads': threads, 'previous': previous, 'reason': reason});
+    };
+    follower.onChange = _followerHandler;
+    follower.newSession();
+    pool.setLimit(follower.threads);
+  }
+
+  /// The warm session's video is about to play: it takes the app-wide connection count over as a new session does,
+  /// and from now on hurries and prefetches. Its primes go on where they are; prime again for the prefetch after them.
+  void promote() {
+    if (!_warm || _closed) return;
+    _warm = false;
+    final follower = _waitingFollower;
+    _waitingFollower = null;
+    if (follower != null) {
+      _ctx.auto = follower;
+      _follow(follower);
+    } else {
+      _ctx.pool.setLimit(_ctx.config.concurrency);
+    }
+    _ctx.logger.info(LogCategory.engine, 'promoted', {
+      'threads': _ctx.pool.limit,
+      'cachedBytes': cachedBytes(TrackKind.video) + cachedBytes(TrackKind.audio),
+    });
+  }
+
+  /// The size of [track]'s segment playing at [seconds]; null before its segments are known.
+  int? segmentBytesAt(TrackKind track, double seconds) => _segmentAtTime(track, seconds)?.range.length;
 
   Future<TrackHeaders> loadHeaders(TrackKind track, {required int through}) async {
     if (_closed) throw const RipperError(RipperErrorKind.closed);
@@ -318,7 +365,8 @@ final class RipperSession {
 
   /// Starts the segment at [seconds] downloading as the player's first read of it would, before the player asks:
   /// that read then takes it over. With [RipperConfig.prefetchOnPrime] the segments after it are prefetched at
-  /// once, after the head is in when [RipperConfig.seekBurst] is on.
+  /// once, after the head is in when [RipperConfig.seekBurst] is on; a warm session's wait for its promotion. A
+  /// segment primed, cached or read already is left as it is.
   void prime(TrackKind track, {required double seconds}) {
     if (_closed) return;
     final segment = _segmentAtTime(track, seconds);
@@ -702,20 +750,20 @@ final class RipperSession {
     return true;
   }
 
-  /// When playback needs this segment, as a monotonic time in ms; re-read on every queue pass.
+  /// When playback needs this segment, as a monotonic time in ms; re-read on every queue pass. Never, while warm.
   double Function()? _deadline(MediaSegment? segment) {
     if (segment == null) return null;
     final clock = _ctx.clock;
-    return () => clock.nowMs() + max(0.0, segment.startTime - _playhead) / _rate * 1000;
+    return () => _warm ? double.infinity : clock.nowMs() + max(0.0, segment.startTime - _playhead) / _rate * 1000;
   }
 
   /// Whether playback is about to need the segment: startup and seek reads always are, others once the segment
-  /// starts less than `hurryAheadSeconds` of playback ahead. Re-read on every call, so a prefetch the playhead
-  /// approaches turns into a hurry.
+  /// starts less than `hurryAheadSeconds` of playback ahead; nothing while warm. Re-read on every call, so a prefetch
+  /// the playhead approaches, or a warm prime promoted, turns into a hurry.
   bool Function() _hurry(MediaSegment? segment, {required bool startup}) {
     final config = _ctx.config;
     return () {
-      if (!config.hurry) return false;
+      if (!config.hurry || _warm) return false;
       if (startup) return true;
       if (segment == null) return false;
       return segment.startTime - _playhead < config.hurryAheadSeconds * _rate;
@@ -822,7 +870,7 @@ final class RipperSession {
     final key = (track, segment.range);
     if (resolver == null || _closed) return false;
     if (_cache.containsKey(key) || _inflight.containsKey(key) || _playerPending.containsKey(key)) return false;
-    final prefetch = _Prefetch(CancelToken(_root), kind: kind, startedAt: _ctx.clock.nowMs());
+    final prefetch = _Prefetch(CancelToken(_root), kind: kind, startedAt: _ctx.clock.nowMs(), warm: _warm);
     prefetch.bytes = _fetchSegment(track, segment, resolver, _headers[track]?.totalSize, prefetch);
     _inflight[key] = prefetch;
     _watch(key, prefetch, segment.endTime);
@@ -881,9 +929,10 @@ final class RipperSession {
     return (rate * ahead * 1.25).round().clamp(fixed, max(fixed, ceiling));
   }
 
+  /// Nothing while warm: the video may never be opened.
   void _schedulePrefetch(TrackKind track, MediaSegment? segment) {
     final resolver = _resolvers[track];
-    if (segment == null || resolver == null || _closed) return;
+    if (segment == null || resolver == null || _closed || _warm) return;
     if (_bursting > 0) {
       _deferred[track] = segment;
       return;
@@ -916,14 +965,16 @@ final class RipperSession {
   ) async {
     final cancel = prefetch.token;
     final urgent = prefetch.kind != _FetchKind.prefetch;
-    final hold = urgent ? _holdPrefetch(segment.range) : null;
+    // A warm prime downloads as prefetch does, at prefetch's priority with no race for its head.
+    final player = urgent && !_warm;
+    final hold = player ? _holdPrefetch(segment.range) : null;
     try {
       await _download(
         track,
         segment.range,
         resolver,
-        startup: urgent,
-        player: urgent,
+        startup: player,
+        player: player,
         segment: segment,
         total: total,
         emit: (bytes) {
@@ -956,6 +1007,7 @@ final class RipperSession {
       'firstByteMs': first == null ? -1 : (first - prefetch.startedAt).roundToDouble(),
       'ms': (now - prefetch.startedAt).roundToDouble(),
       'bytes': prefetch.received,
+      if (prefetch.warm) 'warm': true,
     });
   }
 
