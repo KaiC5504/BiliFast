@@ -1,25 +1,68 @@
+import 'package:bili_core/api.dart' show BiliClientStory, BiliClientVideo, OfficialIdentity, VideoCard;
+
+import '../../playback/playback_controller.dart';
 import '../page_playback.dart';
+import '../watch_reporter.dart';
 import 'story_feed.dart';
+import 'story_list.dart';
 
-/// The app's 竖屏 feed for [playback]'s video.
-StoryFeed pageStoryFeed(PagePlayback playback) => _EnteredOnly(playback.storyEntry);
+/// The app's 竖屏 feed for [playback]'s video: the official feed while the client holds an iPhone token and reports
+/// are allowed (never in a `--fake-account` run), else the related lists.
+StoryFeed pageStoryFeed(PagePlayback playback) {
+  final environment = playback.environment;
+  final client = environment.client;
+  final official = client.appToken?.identity == OfficialIdentity.iphone && WatchReporter.canReport(environment);
+  return StoryList(
+    host: _PlaybackHost(playback),
+    official: official ? client.storyFeed : null,
+    related: (bvid) => client.related(bvid: bvid),
+  );
+}
 
-/// Stands in until the feed is built: the entered video alone.
-class _EnteredOnly extends StoryFeed {
-  _EnteredOnly(StoryEntry? entered) : entries = [?entered];
+/// The page's playback as the feed sees it, notifying on the playback's changes and its controller's (the details
+/// arrive through the controller).
+final class _PlaybackHost extends StoryHost {
+  _PlaybackHost(this._playback) {
+    _playback.addListener(_changed);
+    _attach();
+  }
+
+  final PagePlayback _playback;
+  PlaybackController? _controller;
+
+  void _attach() {
+    final controller = _playback.controller;
+    if (controller == null || identical(controller, _controller)) return;
+    _controller?.removeListener(_changed);
+    _controller = controller..addListener(_changed);
+  }
+
+  void _changed() {
+    _attach();
+    notifyListeners();
+  }
 
   @override
-  final List<StoryEntry> entries;
+  String get bvid => _playback.bvid;
 
   @override
-  int get index => 0;
+  StoryEntry? get playing => _playback.storyEntry;
 
   @override
-  bool get loading => false;
+  List<VideoCard>? loadedRelated(String bvid) {
+    final session = _playback.session;
+    if (session == null || session.video?.bvid != bvid || session.related.isEmpty) return null;
+    return session.related;
+  }
 
   @override
-  bool moveNext() => false;
+  void open(StoryEntry entry) =>
+      _playback.openOnPage(entry.bvid, cid: entry.cid, followed: true, source: entry.source);
 
   @override
-  bool movePrevious() => false;
+  void dispose() {
+    _playback.removeListener(_changed);
+    _controller?.removeListener(_changed);
+    super.dispose();
+  }
 }

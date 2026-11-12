@@ -24,6 +24,7 @@ import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_playback.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
+import 'package:bilifast/video/story/story_list.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
@@ -297,5 +298,106 @@ void main() {
     expect(ends(), hasLength(3));
     expectUnknown(ends().last);
     expect(ends().last['auto_play'], '99');
+  });
+
+  group('竖屏', () {
+    const relatedPath = '/x/web-interface/archive/related';
+    const related =
+        '{"code":0,"message":"0","ttl":1,"data":[{"bvid":"$other","aid":80433023,"cid":0,"title":"另一个视频",'
+        '"pic":"","duration":100,"owner":{"mid":2,"name":"B"},"stat":{"view":1,"danmaku":0,"like":0}}]}';
+
+    PagePlayback started() => PagePlayback(
+      services: services,
+      route: const VideoRoute(bvid: bv, cid: p1, start: 0, source: recommended),
+      createSession: pageSession,
+      restorePage: page,
+    )..start();
+
+    testWidgets('the feed\'s first entry is the video playing, at the part playing', (tester) async {
+      await host(tester);
+      final playback = started();
+      await frames(tester, 10);
+      expect(playback.storyEntry!.cid, p1);
+      playback.openOnPage(bv, cid: p2);
+      await frames(tester, 10);
+      expect(playback.storyEntry!.cid, p2);
+      final story = playback.beginStory();
+      expect(identical(playback.beginStory(), story), isTrue);
+      expect(story.current!.bvid, bv);
+      expect(story.current!.cid, p2);
+      playback.close();
+      await frames(tester, 4);
+      expect(playback.story, isNull);
+    });
+
+    testWidgets('the official feed only under an iPhone token with reports allowed', (tester) async {
+      await host(tester);
+      final playback = started();
+      await frames(tester, 10);
+      expect((playback.beginStory() as StoryList).official, isTrue);
+      playback.endStory();
+
+      environment.client.appToken = AppToken(
+        accessToken: 'ACCESS',
+        refreshToken: 'REFRESH',
+        mid: 7,
+        expiresAt: DateTime.utc(2027, 4, 1),
+        identity: OfficialIdentity.android,
+      );
+      expect((playback.beginStory() as StoryList).official, isFalse);
+      playback.endStory();
+
+      environment.client.appToken = null;
+      expect((playback.beginStory() as StoryList).official, isFalse);
+      playback
+        ..endStory()
+        ..close();
+      await frames(tester, 4);
+    });
+
+    testWidgets('the official feed failing hands over to the related list; the video swiped to reports as 竖屏\'s, and '
+        'ending 竖屏 leaves it on the page', (tester) async {
+      await host(tester);
+      http.routes[relatedPath] = (200, related);
+      final playback = started();
+      await frames(tester, 10);
+      final player = players.single;
+      await plays(tester, player, 3);
+      final story = playback.beginStory();
+      await frames(tester, 4);
+      expect([for (final entry in story.entries) entry.bvid], [bv, other]);
+
+      http
+        ..routes[Canned.viewPath] = (200, otherView)
+        ..routes[Canned.signedViewPath] = (200, otherView);
+      expect(story.moveNext(), isTrue);
+      await frames(tester, 10);
+      await plays(tester, player, 3);
+      expect(playback.bvid, other);
+      final start = starts().last;
+      expect(start['aid'], '80433023');
+      expect(start['spmid'], 'main.ugc-video-detail-vertical.0.0');
+      expect(start['from'], 'default-value');
+      expect(start['from_spmid'], 'tm.recommend.0.0');
+      expect(start['track_id'], '');
+      expect(start['auto_play'], '99');
+
+      final enteredEnd = ends().single;
+      expectRecommended(enteredEnd);
+      expect(enteredEnd['spmid'], 'united.player-video-detail.0.0', reason: 'its first play keeps how it began');
+      expect(enteredEnd['auto_play'], '0');
+      expect(form(http.to(historyPath).single).containsKey('source'), isFalse);
+
+      playback.endStory();
+      expect(playback.story, isNull);
+      expect(playback.bvid, other);
+      await frames(tester, 4);
+      expect(playback.bvid, other);
+
+      playback.close();
+      await frames(tester, 4);
+      expect(ends().last['spmid'], 'main.ugc-video-detail-vertical.0.0');
+      expect(form(http.to(historyPath).last)['source'], 'story-series');
+    });
   });
 }

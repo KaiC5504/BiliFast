@@ -459,6 +459,37 @@ void main() {
       expect(outboxLines().last, {'held': 3, 'dropped': 0});
     });
 
+    test('a 竖屏 play keeps its page and history source; a video page\'s saves none', () async {
+      final story = PendingPlay(
+        mid: 7,
+        report: WatchReport(
+          aid: 1,
+          cid: 11,
+          duration: 100,
+          session: 's',
+          source: PlaySource.story(
+            entry: const PlaySource(fromSpmid: 'tm.recommend.0.0', from: '7'),
+            entered: false,
+            trackId: 'ITEM',
+          ),
+          spmid: PlaySource.verticalPage,
+        ),
+        finished: false,
+        at: now,
+      );
+      expect(play('a').toJson().containsKey('history_source'), isFalse);
+      File(path).writeAsStringSync(jsonEncode([story.toJson(), play('a').toJson()]));
+      final loaded = await load();
+      final [read, page] = loaded.plays;
+      expect(read.report.source.historySource, 'story-series');
+      expect(read.report.source.spmid, PlaySource.verticalPage);
+      expect(read.report.spmid, PlaySource.verticalPage);
+      expect(read.report.source.from, 'default-value');
+      expect(read.report.source.fromSpmid, 'tm.recommend.0.0');
+      expect(read.report.source.trackId, 'ITEM');
+      expect(page.report.source.historySource, isNull);
+    });
+
     test('a play from nowhere known keeps no track data; one missing a field is skipped', () async {
       final nowhere = PendingPlay(
         mid: 7,
