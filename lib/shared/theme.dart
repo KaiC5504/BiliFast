@@ -1638,11 +1638,11 @@ abstract final class StoryPagerTheme {
 
 /// 竖屏's held 2× and its lock (182, 183, 186). The gestures agent's tokens.
 abstract final class SpeedLockTheme {
-  /// The APK's `biliplayer_ic_lock`.
+  /// The APK's `biligame_vector_lock_fill`, the filled lock 183 shows.
   static const lockAsset = 'assets/images/player/speed_lock.png';
 
-  /// Drawn in a box this size, its ink lands 12 × 13 as on 183 and 186 (the art's 24 dp holds an 18 × 20.67 ink).
-  static const lockSize = 15.0;
+  /// Drawn in a box this size, its ink lands 12 × 13 as on 183 and 186 (the art's square holds a 75% × 81% ink).
+  static const lockSize = 16.0;
   static const lockInk = BiliColors.onVideo;
 
   /// The band starts right under the 2 pt progress line, 7 above the bottom row; its row is centred between there and

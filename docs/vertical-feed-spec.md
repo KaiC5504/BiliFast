@@ -95,7 +95,7 @@ drawn; the glyph at the bottom left is ▶.
 Holding plays at 2× with 倍速中 at the top, as now, and the controls give way to a line under the progress line:
 `↓ 拖动到此处锁定倍速`. With the finger dragged down onto it the line becomes a lighter band reading `🔒 松手锁定倍速`.
 Let go there and the speed stays, with a pill at the top in 倍速中's place: `🔒 锁定倍速中 | 取消`. 取消 goes back to
-1×. Let go anywhere else and the hold ends as it does now. The lock is the APK's `biliplayer_ic_lock`.
+1×. Let go anywhere else and the hold ends as it does now. The lock is the APK's `biligame_vector_lock_fill`.
 
 ### Into 竖屏 and out (187)
 
@@ -154,7 +154,7 @@ is there at once (the official app shows grey placeholders until its page loads;
   `StoryEntry`.
 - Theme classes for each agent's tokens, each in its own place in `theme.dart`.
 - Art: `screen_mode_clean.png` (`bili_story_ctrl_clean`; `tools/apk_asset.py extract` fails on its clip path, the
-  dump's render in `local/apk-assets/drawable/` is the same picture) and `speed_lock.png` (`biliplayer_ic_lock`), noted
+  dump's render in `local/apk-assets/drawable/` is the same picture) and `speed_lock.png` (`biligame_vector_lock_fill`), noted
   in `assets/README.md`.
 - `docs/reference/official-iphone-calls.md`: the feed and the 竖屏 report labels from section 2.
 
