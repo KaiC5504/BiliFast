@@ -19,6 +19,15 @@ final fakeAppToken = AppToken(
   expiresAt: DateTime.utc(2027, 4, 1),
 );
 
+/// The same made-up token as one a login under the iPhone identity issued.
+final fakeIphoneToken = AppToken(
+  accessToken: 'ACCESS',
+  refreshToken: 'REFRESH',
+  mid: 7,
+  expiresAt: DateTime.utc(2027, 4, 1),
+  identity: OfficialIdentity.iphone,
+);
+
 /// 92's 反馈 reasons, with made-up ids.
 const officialFeedbacks = [
   (11, '色情低俗'),
@@ -47,8 +56,16 @@ Map<String, Object?> feedItem(String bvid, {String title = '视频', String? rea
 };
 
 /// One card as the official feed sends it, with ⋮'s 不感兴趣 data unless [reasons] is false. Its aid is made from
-/// [bvid] the way [feedItem]'s is.
-Map<String, Object?> officialItem(String bvid, {String title = '视频', bool reasons = true, String goto = 'av'}) {
+/// [bvid] the way [feedItem]'s is. [idx], [trackId] and [flowData] are the feed's own number and track data for it.
+Map<String, Object?> officialItem(
+  String bvid, {
+  String title = '视频',
+  bool reasons = true,
+  String goto = 'av',
+  int? idx,
+  String? trackId,
+  String? flowData,
+}) {
   final aid = bvid.hashCode.abs();
   return {
     'card_goto': goto,
@@ -56,6 +73,9 @@ Map<String, Object?> officialItem(String bvid, {String title = '视频', bool re
     'param': '$aid',
     'bvid': bvid,
     'can_play': 1,
+    'idx': ?idx,
+    'track_id': ?trackId,
+    'report_flow_data': ?flowData,
     'title': '$title $bvid',
     'cover': 'https://i0.hdslb.com/bfs/archive/$bvid.jpg',
     'args': {'up_id': 7, 'up_name': 'UP $bvid'},
@@ -103,6 +123,11 @@ final class FeedHttp implements HTTPTransport {
   /// The `mobi_app` each official page was asked as: the phone's `android`, the iPad's `android_i`.
   final officialApps = <String?>[];
 
+  /// Each official page's whole query, and pages answered in the order asked, before [officialPages]: the iPhone
+  /// identity's `idx` names a card, not a page.
+  final officialQueries = <Map<String, String>>[];
+  final officialNext = <List<Map<String, Object?>>>[];
+
   /// What 不感兴趣 and its 撤销 answer, each request's query, and a gate holding their answers.
   int dislikeCode = 0;
   final dislikes = <Map<String, String>>[];
@@ -116,11 +141,14 @@ final class FeedHttp implements HTTPTransport {
         final index = int.parse(request.url.queryParameters['idx']!);
         officialAsked.add(index);
         officialApps.add(request.url.queryParameters['mobi_app']);
+        officialQueries.add(request.url.queryParameters);
         await officialGates[index]?.future;
+        if (officialCode != 0) return _json(request, {'code': officialCode, 'message': '账号未登录'});
+        final items = officialNext.isEmpty ? officialPages[index] ?? const [] : officialNext.removeAt(0);
         return _json(request, {
-          'code': officialCode,
-          'message': officialCode == 0 ? '0' : '账号未登录',
-          if (officialCode == 0) 'data': {'items': officialPages[index] ?? const []},
+          'code': 0,
+          'message': '0',
+          'data': {'items': items},
         });
       case feedDislikePath || feedDislikeCancelPath:
         (request.url.path == feedDislikePath ? dislikes : cancels).add(request.url.queryParameters);
@@ -154,6 +182,9 @@ FeedCard bigCard(
   bool liked = false,
   String title = '大卡片',
   String? fullTitle,
+  int? idx,
+  String? trackId,
+  String? flowData,
 }) =>
     FeedCard(
   aid: 80433022,
@@ -171,6 +202,9 @@ FeedCard bigCard(
   viewsText: '54.9万',
   danmakuText: '255',
   big: FeedBig(likes: likes, showLikes: showLikes, liked: liked),
+  idx: idx,
+  trackId: trackId,
+  flowData: flowData,
 );
 
 /// A small card, as the web feed's.

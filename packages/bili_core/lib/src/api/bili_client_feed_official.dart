@@ -64,6 +64,57 @@ const _officialPadFeedQuery = {
   'voice_balance': '0',
 };
 
+/// What the iPhone app 9.18.0 sends beside its common fields, less what changes per page
+/// (docs/reference/official-iphone-calls.md).
+const _iphoneFeedQuery = {
+  'auto_refresh_state': '1',
+  'autoplay_card': '11',
+  'channel': IphoneLabels.channel,
+  'client_attr': '1',
+  'column': '2',
+  'device_name': IphoneLabels.model,
+  'fnval': '17364',
+  'fnver': '0',
+  'force_host': '0',
+  'fourk': '1',
+  'guidance': '0',
+  'https_url_req': '0',
+  'inline_danmu': '2',
+  'inline_sound': '1',
+  'inline_sound_cold_state': '2',
+  'login_event': '0',
+  'network': 'wifi',
+  'player_extra_content': IphoneLabels.screen,
+  'player_net': '1',
+  'qn': '120',
+  'qn_policy': '0',
+  'recsys_mode': '0',
+  'soft_fnval': '0',
+  'statistics': '{"appId":1,"platform":1,"version":"${IphoneLabels.version}"}',
+  'video_mode': '1',
+  'voice_balance': '1',
+  'window_size_type': '1',
+};
+
+/// The big inline card's fields, left out for the iPad as the Android iPad query has none. A guess: no iPad's
+/// request under the iPhone identity has been read.
+const _iphoneInlineFields = {'autoplay_card', 'inline_danmu', 'inline_sound', 'inline_sound_cold_state'};
+
+/// `flush` is the Android app's `PegasusFlush`: 0 for the launch's first page, 6 for a pull down, 8 for more below.
+Map<String, String> _iphoneFeedFields({
+  required int index,
+  required bool pad,
+  required int? firstIdx,
+  required bool cold,
+}) => {
+  for (final MapEntry(:key, :value) in _iphoneFeedQuery.entries)
+    if (!pad || !_iphoneInlineFields.contains(key)) key: value,
+  'idx': '${firstIdx ?? 0}',
+  'pull': index == 0 ? '1' : '0',
+  'flush': cold ? '0' : (index == 0 ? '6' : '8'),
+  'open_event': cold ? 'cold' : '',
+};
+
 /// The fixed fingerprints and trace id are PiliPlus's placeholders, the same for everyone.
 const _officialFeedHeaders = {
   'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',
@@ -92,7 +143,7 @@ FeedCard? _officialFeedItem(Object? json) {
   return attempt(() => FeedCard.fromOfficial(json));
 }
 
-/// Android lists a page's big card last; the iPhone app shows it first (recording 122).
+/// Android lists a page's big card last; the iPhone app shows it first (recording 122), as its own feed lists it.
 List<FeedCard> _bigFirst(List<FeedCard> cards) => [
   ...cards.where((card) => card.big != null),
   ...cards.where((card) => card.big == null),
@@ -123,25 +174,30 @@ extension BiliClientFeedOfficial on BiliClient {
   /// card that comes anyway keeps the server's place.
   ///
   /// The iPhone identity asks as its app does: [firstIdx], the `idx` of the first card on screen (null with none),
-  /// and [cold] for the launch's first page; [index] 0 is still a pull to refresh.
+  /// and [cold] for the launch's first page; [index] 0 is still a pull to refresh. Its answer keeps the server's
+  /// order, the big card already first.
   Future<List<FeedCard>> officialFeed({required int index, bool pad = false, int? firstIdx, bool cold = false}) async {
     const path = '/x/v2/feed/index';
     final token = _officialToken(true);
+    final iphone = (token?.identity ?? officialIdentity) == OfficialIdentity.iphone;
+    final fields = iphone
+        ? _iphoneFeedFields(index: index, pad: pad, firstIdx: firstIdx, cold: cold)
+        : {
+            ...pad ? _officialPadFeedQuery : _officialFeedQuery,
+            'idx': '$index',
+            'pull': index == 0 ? 'true' : 'false',
+          };
     final envelope = await _getEnvelope(
       path,
-      query: _officialSigned({
-        ...pad ? _officialPadFeedQuery : _officialFeedQuery,
-        'idx': '$index',
-        'pull': index == 0 ? 'true' : 'false',
-      }, token),
+      query: _officialSigned(fields, token),
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
-      extraHeaders: _officialHeaders(_officialFeedHeaders),
+      extraHeaders: _officialHeaders(iphone ? const {} : _officialFeedHeaders, token),
       decode: (json) {
         _logFeedCardTypes(json);
         final cards = [for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card];
-        return pad ? cards : _bigFirst(cards);
+        return pad || iphone ? cards : _bigFirst(cards);
       },
     );
     final checked = _officialChecked(envelope, token);
@@ -161,7 +217,8 @@ extension BiliClientFeedOfficial on BiliClient {
   Future<void> feedDislikeCancel({required String goto, required int id, int? reasonId, int? feedbackId}) =>
       _feedDislikeCall('/x/feed/dislike/cancel', goto: goto, id: id, reasonId: reasonId, feedbackId: feedbackId);
 
-  /// A GET, as PiliPlus sends it; success carries no data.
+  /// A GET, as PiliPlus sends it, with its `build` and `mobi_app` under the Android identity; the iPhone identity's
+  /// common labels stand as they are. Success carries no data.
   Future<void> _feedDislikeCall(
     String path, {
     required String goto,
@@ -170,6 +227,7 @@ extension BiliClientFeedOfficial on BiliClient {
     required int? feedbackId,
   }) async {
     final token = _officialToken(true);
+    final android = (token?.identity ?? officialIdentity) == OfficialIdentity.android;
     final envelope = await _getEnvelope(
       path,
       query: _officialSigned({
@@ -177,13 +235,12 @@ extension BiliClientFeedOfficial on BiliClient {
         'id': '$id',
         'reason_id': ?reasonId?.toString(),
         'feedback_id': ?feedbackId?.toString(),
-        'build': '1',
-        'mobi_app': 'android',
+        if (android) ...const {'build': '1', 'mobi_app': 'android'},
       }, token),
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
-      extraHeaders: _officialHeaders(const {}),
+      extraHeaders: _officialHeaders(const {}, token),
       decode: (_) => null,
     );
     final checked = _officialChecked(envelope, token);

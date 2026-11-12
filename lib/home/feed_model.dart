@@ -273,6 +273,11 @@ class FeedModel extends ChangeNotifier {
   /// the official one again.
   bool _officialRefused = false;
 
+  /// The launch's first official page is asked as a cold start (the iPhone identity's request says so): every
+  /// request until one has answered, but never two at once.
+  bool _officialSeen = false;
+  bool _coldOut = false;
+
   final _dislikes = <String, CardDislike>{};
   final _dislikeBusy = <String>{};
 
@@ -600,12 +605,18 @@ class FeedModel extends ChangeNotifier {
   Future<_Page> _fetch({required bool refresh, bool early = false}) async {
     if (early ? _officialPossible : wantsOfficial) {
       final index = refresh ? 0 : _nextOfficialIndex;
+      final cold = !_officialSeen && !_coldOut;
+      if (cold) _coldOut = true;
       try {
-        return (cards: await _client.officialFeed(index: index, pad: _pad()), source: FeedSource.official, index: index);
+        final cards = await _client.officialFeed(index: index, pad: _pad(), firstIdx: _firstIdx, cold: cold);
+        _officialSeen = true;
+        return (cards: cards, source: FeedSource.official, index: index);
       } catch (error) {
         if (!_refused(error)) rethrow;
         _logger.warn(LogCategory.ui, 'official feed refused, web feed instead', feedLogFields(error));
         if (!early) _officialRefused = true;
+      } finally {
+        if (cold) _coldOut = false;
       }
     }
     // The first launch reaches here before the account check has fetched the fingerprint cookies.
@@ -614,6 +625,10 @@ class FeedModel extends ChangeNotifier {
     final cards = await (_webPage?.call(index) ?? _client.recommendFeed(index: index));
     return (cards: cards, source: FeedSource.web, index: index);
   }
+
+  /// The official feed's number for the first card shown that has one, which the iPhone identity's request names for
+  /// a refresh and for more alike; null with none, as when only the website's cards show.
+  int? get _firstIdx => _cards.map((card) => card.idx).nonNulls.firstOrNull;
 
   static bool _refused(Object error) =>
       error is BiliNoAppTokenError || error is BiliAPIError && _refusedCodes.contains(error.code);
