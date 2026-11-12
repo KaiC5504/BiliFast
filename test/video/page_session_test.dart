@@ -111,6 +111,7 @@ void main() {
   late FakeTimers timers;
   late PlayerPrefs prefs;
   late List<String> opened;
+  late List<bool> followedOpens;
   late List<double> seeks;
   late PlaybackController controller;
   late Set<String> refused;
@@ -131,6 +132,7 @@ void main() {
     timers = FakeTimers();
     prefs = PlayerPrefs.memory();
     opened = [];
+    followedOpens = [];
     seeks = [];
     refused = {};
     logs = MemorySink();
@@ -178,8 +180,9 @@ void main() {
     final session = PagePlayerSession(
       controller: controller,
       client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), now: () => now),
-      open: (bvid, {cid}) {
+      open: (bvid, {cid, followed = false}) {
         opened.add('$bvid ${cid ?? '-'}');
+        followedOpens.add(followed);
         unawaited(controller.openVideo(bvid, cid: cid));
       },
       isVip: () => false,
@@ -227,7 +230,7 @@ void main() {
     final next = PagePlayerSession(
       controller: controller,
       client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies)),
-      open: (_, {cid}) {},
+      open: (_, {cid, followed = false}) {},
       isVip: () => false,
       isLoggedIn: () => true,
       requestLogin: () {},
@@ -319,6 +322,7 @@ void main() {
       playing();
       await ended();
       expect(opened, ['$bv $p2']);
+      expect(followedOpens, [true], reason: 'nobody asked for it, which its watch reports say');
       expect(controller.page?.cid, p2);
     });
 
@@ -684,6 +688,7 @@ void main() {
       session.didChangeAppLifecycleState(AppLifecycleState.paused);
       await ended();
       expect(opened, ['$bv $p2']);
+      expect(followedOpens, [true]);
       expect(controller.page?.cid, p2);
       expect(player.loaded?.autoplay, isTrue);
       expect(session.ended, isFalse);
@@ -714,6 +719,7 @@ void main() {
       session.didChangeAppLifecycleState(AppLifecycleState.paused);
       await ended();
       expect(opened, ['BV1EF411e9oF -']);
+      expect(followedOpens, [true]);
       expect(session.ended, isFalse);
     });
 
@@ -941,6 +947,7 @@ void main() {
       playing();
       await press(RemoteCommandKind.next);
       expect(opened.last, 'BV1EF411e9oF -', reason: 'after the last part, the related video');
+      expect(followedOpens, everyElement(isFalse), reason: 'the lock screen\'s buttons are the user asking');
     });
 
     test("the app's cover file is the picture cache's copy, once written; else why there is none", () async {
@@ -1987,7 +1994,7 @@ void main() {
     final next = PagePlayerSession(
       controller: fresh,
       client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies)),
-      open: (_, {cid}) {},
+      open: (_, {cid, followed = false}) {},
       isVip: () => true,
       isLoggedIn: () => true,
       requestLogin: () {},

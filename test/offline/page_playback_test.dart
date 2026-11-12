@@ -244,7 +244,7 @@ void main() {
           cookies: CookieJar(Canned.cookies),
           logger: Logger(session: 'test'),
         ),
-        open: (bvid, {cid}) => opened.add('$bvid $cid'),
+        open: (bvid, {cid, followed = false}) => opened.add('$bvid $cid'),
         isVip: () => false,
         isLoggedIn: () => false,
         requestLogin: () {},

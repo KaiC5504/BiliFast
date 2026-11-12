@@ -23,7 +23,8 @@ import 'player_prefs.dart';
 import 'player_session.dart';
 
 /// Plays another part or video on the same playback: PagePlayback opens it, so its watch reports stay right.
-typedef SessionOpen = void Function(String bvid, {int? cid});
+/// [followed] when it follows the one that just ended on its own, with nobody asking.
+typedef SessionOpen = void Function(String bvid, {int? cid, bool followed});
 
 typedef PeriodicTimer = Timer Function(Duration period, void Function() tick);
 
@@ -914,12 +915,13 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
           'bvid': item.bvid,
           'cid': item.cid,
         });
-        _open(item.bvid, cid: item.cid);
+        _open(item.bvid, cid: item.cid, followed: true);
       case logic.NextStop():
         // In front the end screen offers the related videos; in the background nobody sees it, so the first one plays.
         if (_related.firstOrNull case final card? when backgroundNext) {
           _logger.info(LogCategory.ui, 'background autoplay', {'bvid': card.bvid, 'related': true});
-          playRelated(card);
+          _setEnded(false);
+          _open(card.bvid, followed: true);
           return;
         }
         _setEnded(true);

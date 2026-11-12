@@ -148,7 +148,7 @@ void main() {
       session = PagePlayerSession(
         controller: controller,
         client: client,
-        open: (bvid, {cid}) {},
+        open: (bvid, {cid, followed = false}) {},
         isVip: () => false,
         isLoggedIn: () => true,
         requestLogin: () {},

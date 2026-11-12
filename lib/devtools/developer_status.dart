@@ -18,7 +18,7 @@ class DeveloperStatus extends StatelessWidget {
     final services = AppScope.of(context);
     final nodes = services.playback.engine?.seenNodes ?? const {};
     final trials = services.offline.trials;
-    final waiting = services.historyOutbox.reports.length;
+    final waiting = services.historyOutbox.reports.length + services.historyOutbox.plays.length;
     return SettingsSection(
       children: [
         SettingsRow(key: const ValueKey('status-version'), title: '版本', value: version),
