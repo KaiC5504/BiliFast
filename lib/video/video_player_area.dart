@@ -53,6 +53,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.pin,
     this.turning,
     this.verticalTurn,
+    this.slide,
     this.storyPager,
   });
 
@@ -112,6 +113,10 @@ class VideoPlayerArea extends StatelessWidget {
   /// they would stretch to the other's shape.
   final ValueListenable<double?>? verticalTurn;
 
+  /// While the page slides the picture between the small player's box and 竖屏's band (187), where the video is in
+  /// this area's box; the danmaku are put away meanwhile, as through a turn.
+  final ValueListenable<Rect?>? slide;
+
   /// The page's swipe between 竖屏's videos; it takes part only in 竖屏 on the iPhone, while its feed is up.
   final StoryPager? storyPager;
 
@@ -122,7 +127,7 @@ class VideoPlayerArea extends StatelessWidget {
     return ColoredBox(
       color: BiliColors.videoBackground,
       child: ListenableBuilder(
-        listenable: Listenable.merge([?session, ?danmaku, ?pin, ?turning, ?verticalTurn, ?storyPager]),
+        listenable: Listenable.merge([?session, ?danmaku, ?pin, ?turning, ?verticalTurn, ?slide, ?storyPager]),
         builder: (context, _) {
           final story = _story(pad: pad);
           final feed = story?.feed;
@@ -157,6 +162,7 @@ class VideoPlayerArea extends StatelessWidget {
       final t? => band + (1 - band) * t,
       null => presentation == Presentation.vertical ? band : 1.0,
     };
+    final slid = slide?.value;
     return [
       if (video case final video?)
         Align(
@@ -164,15 +170,15 @@ class VideoPlayerArea extends StatelessWidget {
           alignment: Alignment.topCenter,
           child: StoryShift(
             drag: story?.drag,
-            child: FractionallySizedBox(
-              heightFactor: heightFactor,
+            child: CustomSingleChildLayout(
+              delegate: _SurfaceLayout(heightFactor: heightFactor, slid: slid),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   KeyedSubtree(key: const ValueKey('video-view'), child: video),
                   if (session != null)
                     _unseen(
-                      turn != null,
+                      turn != null || slid != null,
                       _DanmakuArea(
                         key: const ValueKey('video-danmaku-area'),
                         pad: pad,
@@ -427,6 +433,25 @@ class _DanmakuArea extends StatelessWidget {
     final videoBottom = videoIsVertical ? band : band / 2 + box.width / BiliMetrics.videoAspect / 2;
     return EdgeInsets.only(top: math.min(top, band), bottom: math.max(band - math.max(videoBottom, top), 0));
   }
+}
+
+/// The video's place in the area: its top [heightFactor], or [slid] while the page slides it.
+class _SurfaceLayout extends SingleChildLayoutDelegate {
+  const _SurfaceLayout({required this.heightFactor, required this.slid});
+
+  final double heightFactor;
+  final Rect? slid;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints.tight(slid?.size ?? Size(constraints.maxWidth, constraints.maxHeight * heightFactor));
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) => slid?.topLeft ?? Offset.zero;
+
+  @override
+  bool shouldRelayout(_SurfaceLayout oldDelegate) =>
+      oldDelegate.heightFactor != heightFactor || oldDelegate.slid != slid;
 }
 
 /// The room the iPad's danmaku keep from the player's edges, in every presentation.

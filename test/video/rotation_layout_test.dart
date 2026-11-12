@@ -794,6 +794,8 @@ void main() {
       await openTakenOver(tester);
       orientation.enterVertical();
       await tester.pump();
+      // The picture slides into 竖屏 first (187).
+      await tester.pump(VerticalEnterTheme.enter + const Duration(microseconds: 1));
       expect(area(tester), upright);
       final video0 = video(tester);
       expect(video0.height, lessThan(upright.height), reason: "a landscape video sits in 竖屏's band (09)");
