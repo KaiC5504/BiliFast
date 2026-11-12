@@ -179,7 +179,7 @@ extension BiliClientFeedOfficial on BiliClient {
   Future<List<FeedCard>> officialFeed({required int index, bool pad = false, int? firstIdx, bool cold = false}) async {
     const path = '/x/v2/feed/index';
     final token = _officialToken(true);
-    final iphone = officialIdentity == OfficialIdentity.iphone;
+    final iphone = (token?.identity ?? officialIdentity) == OfficialIdentity.iphone;
     final fields = iphone
         ? _iphoneFeedFields(index: index, pad: pad, firstIdx: firstIdx, cold: cold)
         : {
@@ -193,7 +193,7 @@ extension BiliClientFeedOfficial on BiliClient {
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
-      extraHeaders: _officialHeaders(iphone ? const {} : _officialFeedHeaders),
+      extraHeaders: _officialHeaders(iphone ? const {} : _officialFeedHeaders, token),
       decode: (json) {
         _logFeedCardTypes(json);
         final cards = [for (final card in JsonObject.from(json).lenientList('items', _officialFeedItem)) ?card];
@@ -227,6 +227,7 @@ extension BiliClientFeedOfficial on BiliClient {
     required int? feedbackId,
   }) async {
     final token = _officialToken(true);
+    final android = (token?.identity ?? officialIdentity) == OfficialIdentity.android;
     final envelope = await _getEnvelope(
       path,
       query: _officialSigned({
@@ -234,12 +235,12 @@ extension BiliClientFeedOfficial on BiliClient {
         'id': '$id',
         'reason_id': ?reasonId?.toString(),
         'feedback_id': ?feedbackId?.toString(),
-        if (officialIdentity == OfficialIdentity.android) ...const {'build': '1', 'mobi_app': 'android'},
+        if (android) ...const {'build': '1', 'mobi_app': 'android'},
       }, token),
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
-      extraHeaders: _officialHeaders(const {}),
+      extraHeaders: _officialHeaders(const {}, token),
       decode: (_) => null,
     );
     final checked = _officialChecked(envelope, token);

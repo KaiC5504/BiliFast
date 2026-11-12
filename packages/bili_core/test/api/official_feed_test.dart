@@ -2,9 +2,11 @@ import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:test/test.dart';
 
-import 'app_signer_test.dart' show makeClient;
+import 'app_signer_test.dart' show iphoneKey, makeClient, signedBy;
 import 'fake_http.dart';
 import 'official_api_test.dart' show token;
+import 'official_identity_test.dart' show iphoneParams, iphoneUserAgent;
+import 'space_api_test.dart' show androidKey, androidParams, androidUserAgent;
 
 const feedPath = '/x/v2/feed/index';
 const dislikePath = '/x/feed/dislike';
@@ -126,8 +128,24 @@ const androidFeedFields = {
   'voice_balance': '0',
 };
 
-/// The headers only the Android feed sends, whatever the identity's common ones are.
-const androidFeedHeaders = ['fp_local', 'fp_remote', 'x-bili-trace-id', 'x-bili-aurora-eid', 'x-bili-aurora-zone'];
+/// Every header of the Android feed's request, as before identities: its own over the Android app's.
+const androidFeedHeaders = {
+  'User-Agent':
+      'Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd '
+      'build/2001100 channel/master innerVer/2001100 osVer/15 network/2',
+  'Referer': BiliClient.referer,
+  'Accept': 'application/json',
+  'bili-http-engine': 'cronet',
+  'buvid': 'XYDEVICE',
+  'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',
+  'fp_remote': '1111111111111111111111111111111111111111111111111111111111111111',
+  'session_id': '11111111',
+  'env': 'prod',
+  'app-key': 'android_hd',
+  'x-bili-trace-id': '11111111111111111111111111111111:1111111111111111:0:0',
+  'x-bili-aurora-eid': '',
+  'x-bili-aurora-zone': '',
+};
 
 void main() {
   late FakeHTTP http;
@@ -290,12 +308,12 @@ void main() {
       for (final MapEntry(:key, :value) in androidFeedFields.entries) {
         expect(query[key], value, reason: key);
       }
-      for (final key in ['open_event', 'login_event', 'client_attr', 'player_extra_content']) {
+      for (final key in ['open_event', 'login_event', 'client_attr', 'player_extra_content', 'actionKey']) {
         expect(query.containsKey(key), isFalse, reason: key);
       }
-      for (final header in androidFeedHeaders) {
-        expect(request.headers.containsKey(header), isTrue, reason: header);
-      }
+      expect(query['appkey'], androidKey);
+      expect(query['sign'], signedBy(AppSigner.android, query));
+      expect(request.headers, androidFeedHeaders);
     }
     expect(http.query(refresh)['idx'], '0');
     expect(http.query(refresh)['pull'], 'true');
@@ -385,10 +403,18 @@ void main() {
       expect(query['open_event'], '');
     });
 
-    test("the feed's own fields are the iPhone app's, with the token and a signature, no cookies and none of the "
-        "Android feed's headers", () async {
+    test("the whole request is the iPhone app's: the feed's own fields beside the identity's, the feed's statistics, "
+        "the token and the iPhone pair's signature", () async {
       final query = await asked(index: 0, firstIdx: 1763000021);
-      const sent = {
+      expect(query['sign'], signedBy(AppSigner.iphone, query));
+      expect(query..remove('ts')..remove('sign'), {
+        ...iphoneParams,
+        'access_key': 'ACCESS',
+        'appkey': iphoneKey,
+        'idx': '1763000021',
+        'pull': '1',
+        'flush': '6',
+        'open_event': '',
         'auto_refresh_state': '1',
         'autoplay_card': '11',
         'channel': 'pink_overseas',
@@ -416,21 +442,21 @@ void main() {
         'video_mode': '1',
         'voice_balance': '1',
         'window_size_type': '1',
-      };
-      for (final MapEntry(:key, :value) in sent.entries) {
-        expect(query[key], value, reason: key);
-      }
-      for (final key in ['splash_id', 'device_type', 'ad_extra', 'banner_hash']) {
-        expect(query.containsKey(key), isFalse, reason: key);
-      }
-      expect(query['access_key'], 'ACCESS');
-      expect(query['sign'], isNotNull);
-      final request = http.requestsTo(feedPath).single;
-      expect(request.url.host, 'app.bilibili.com');
-      expect(request.headers['Cookie'], isNull);
-      for (final header in androidFeedHeaders) {
-        expect(request.headers.containsKey(header), isFalse, reason: header);
-      }
+      });
+      expect(http.requestsTo(feedPath).single.url.host, 'app.bilibili.com');
+    });
+
+    test("the headers are the identity's own, with none of the Android feed's on top and no cookies", () async {
+      await asked(index: 0, firstIdx: 1763000021);
+      expect(http.requestsTo(feedPath).single.headers, {
+        'User-Agent': iphoneUserAgent,
+        'Referer': BiliClient.referer,
+        'Accept': 'application/json',
+        'app-key': 'iphone',
+        'env': 'prod',
+        'buvid': 'XYDEVICE',
+        'session_id': client.appSessionId,
+      });
     });
 
     test('the iPad asks the same without the inline card fields', () async {
@@ -536,32 +562,44 @@ void main() {
       expect(query['mobi_app'], 'android');
       expect(query['build'], '1');
       expect(query['access_key'], 'ACCESS');
-      expect(query['sign'], isNotNull);
+      expect(query['sign'], signedBy(AppSigner.android, query));
+      expect(query..remove('ts')..remove('sign'), {
+        ...androidParams,
+        'build': '1',
+        'access_key': 'ACCESS',
+        'appkey': androidKey,
+        'goto': 'av',
+        'id': '90000001',
+        'reason_id': '1',
+      }, reason: 'as before identities');
+      expect(reason.headers['User-Agent'], androidUserAgent);
       expect(reason.headers['Cookie'], isNull);
       expect(http.query(feedback)['feedback_id'], '9');
       expect(http.query(feedback).containsKey('reason_id'), isFalse);
     });
 
-    test("the iPhone identity sends neither PiliPlus's build nor its mobi_app: the identity's own labels stand, as on "
-        'the feed', () async {
+    test("the iPhone identity sends neither PiliPlus's build nor its mobi_app: the identity's own labels, pair and "
+        'headers stand', () async {
       client.appToken = iphoneToken;
       http.routes[dislikePath] = (200, '{"code":0,"message":"0","ttl":1}');
       http.routes[cancelPath] = (200, '{"code":0,"message":"0","ttl":1}');
-      http.routes[feedPath] = (200, iphoneFeed);
       await client.feedDislike(goto: 'av', id: 90000021, reasonId: 1);
       await client.feedDislikeCancel(goto: 'av', id: 90000021, reasonId: 1);
-      await client.officialFeed(index: 0);
-      final common = http.query(http.requestsTo(feedPath).single);
       for (final path in [dislikePath, cancelPath]) {
-        final query = http.query(http.requestsTo(path).single);
-        expect(query['build'], isNot('1'), reason: path);
-        expect(query['build'], common['build'], reason: path);
-        expect(query['mobi_app'], common['mobi_app'], reason: path);
-        expect(query['goto'], 'av');
-        expect(query['id'], '90000021');
-        expect(query['reason_id'], '1');
-        expect(query['access_key'], 'ACCESS');
-        expect(query['sign'], isNotNull);
+        final request = http.requestsTo(path).single;
+        final query = http.query(request);
+        expect(query['sign'], signedBy(AppSigner.iphone, query), reason: path);
+        expect(query..remove('ts')..remove('sign'), {
+          ...iphoneParams,
+          'access_key': 'ACCESS',
+          'appkey': iphoneKey,
+          'goto': 'av',
+          'id': '90000021',
+          'reason_id': '1',
+        }, reason: path);
+        expect(request.headers['User-Agent'], iphoneUserAgent, reason: path);
+        expect(request.headers['app-key'], 'iphone', reason: path);
+        expect(request.headers['Cookie'], isNull, reason: path);
       }
     });
 
