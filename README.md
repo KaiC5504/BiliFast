@@ -127,12 +127,9 @@ BiliFast 的下载引擎是从 BTR 移植过来的，在此基础上又做了提
 
 ## ⚡ 播放原理
 
-```
- B 站 CDN 节点 ──┬──▶  BTR 引擎  ──▶  本地 HLS 服务  ──▶  AVPlayer
-  （多个同时）   │    （后台 isolate）    （运行在手机上）   （系统播放器：
-                 │                                         画中画、HDR、杜比视界）
-                 └──  节点健康检测、失败重试、优先最快节点
-```
+<p align="center">
+  <img src="docs/diagrams/playback.svg" width="100%" alt="B 站 CDN 节点（多个同时）→ BTR 引擎（后台 isolate）→ 本地 HLS 服务（运行在手机上）→ AVPlayer（系统播放器：画中画、HDR、杜比视界）；引擎负责节点健康检测、失败重试、优先最快节点" />
+</p>
 
 引擎运行在独立的 isolate 里，所有视频页共用一个。对播放器来说，它拿到的只是一个普通的 HLS 流，所以画中画、HDR、杜比视界都和系统自带 App 表现一致。
 

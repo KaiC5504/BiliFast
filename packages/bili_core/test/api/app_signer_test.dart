@@ -24,11 +24,15 @@ Map<String, String> fields(HTTPRequest request, FakeHTTP http) {
   return result;
 }
 
-/// The Android HD key's signature over [sent] without its own sign, so a test sees the sign covers what was sent.
-String androidSign(Map<String, String> sent) {
+/// [signer]'s signature over [sent] without its own sign, so a test sees the sign covers what was sent.
+String signedBy(AppSigner signer, Map<String, String> sent) {
   final unsigned = Map.of(sent)..remove('sign')..remove('appkey')..remove('ts');
-  return AppSigner.android.signed(unsigned, ts: int.parse(sent['ts']!))['sign']!;
+  return signer.signed(unsigned, ts: int.parse(sent['ts']!))['sign']!;
 }
+
+String androidSign(Map<String, String> sent) => signedBy(AppSigner.android, sent);
+
+const iphoneKey = '27eb53fc9058f8c3';
 
 void main() {
   test('signer matches the documented algorithm', () {
@@ -45,6 +49,16 @@ void main() {
     expect(signed.keys.toSet(), {'aid', 'appkey', 'ts', 'sign'});
     expect(signer.signed({'aid': '1'}, ts: 5), signed);
     expect(signer.signed({'aid': '1'}, ts: 6)['sign'], isNot(signed['sign']));
+  });
+
+  test('the iPhone pair signs under its own key, and each identity signs with its own pair', () {
+    final signed = AppSigner.iphone.signed({'b': '你好', 'a': '1'}, ts: 100);
+    expect(signed['appkey'], iphoneKey);
+    // md5("a=1&appkey=27eb53fc9058f8c3&b=%E4%BD%A0%E5%A5%BD&ts=100" + the pair's secret)
+    expect(signed['sign'], '149beb0383f0a3213ad5b1204af058c1');
+    expect(OfficialIdentity.iphone.signer.signed({'b': '你好', 'a': '1'}, ts: 100), signed);
+    expect(OfficialIdentity.android.signer.signed({'a': '1'}, ts: 100), AppSigner.android.signed({'a': '1'}, ts: 100));
+    expect(signedBy(AppSigner.android, signed), isNot(signed['sign']));
   });
 
   test('TV auth code posts the Android HD key\'s signed form without csrf or cookies', () async {
@@ -94,6 +108,44 @@ void main() {
       'sign': androidSign(form),
     });
     expect(request.headers['Cookie'], isNull);
+  });
+
+  test('a login as the iPhone app asks the code with its fields, and signs code and poll with its pair', () async {
+    final http = FakeHTTP();
+    http.routes[authCodePath] = (
+      200,
+      '{"code":0,"message":"0","ttl":1,"data":{"url":"https://passport.bilibili.com/h5-app/passport/auth/scan'
+          '?qrcode_id=QR1","auth_code":"AUTH1"}}',
+    );
+    http.routes[pollPath] = (200, '{"code":86039,"message":"二维码尚未确认","ttl":1,"data":null}');
+    final client = makeClient(http)..loginIdentity = OfficialIdentity.iphone;
+    expect((await client.tvAuthCode()).authCode, 'AUTH1');
+    expect(await client.tvPoll('AUTH1'), TVLoginState.waiting);
+
+    final code = http.requestsTo(authCodePath).single;
+    final codeForm = formFields(http.bodyText(code));
+    expect(codeForm, {
+      'local_id': '0',
+      'mobi_app': 'iphone',
+      'platform': 'ios',
+      'appkey': iphoneKey,
+      'ts': ts,
+      'sign': signedBy(AppSigner.iphone, codeForm),
+    });
+    final poll = http.requestsTo(pollPath).single;
+    final pollForm = formFields(http.bodyText(poll));
+    expect(pollForm, {
+      'auth_code': 'AUTH1',
+      'local_id': '0',
+      'appkey': iphoneKey,
+      'ts': ts,
+      'sign': signedBy(AppSigner.iphone, pollForm),
+    });
+    for (final request in [code, poll]) {
+      expect(request.url.host, 'passport.bilibili.com');
+      expect(request.headers['Cookie'], isNull);
+      expect(http.bodyText(request), isNot(contains('csrf')));
+    }
   });
 
   test('TV poll states', () async {

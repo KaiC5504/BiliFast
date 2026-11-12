@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 196" width="860" height="196" role="img" aria-labelledby="title desc">
+  <title id="title">播放原理</title>
+  <desc id="desc">B 站 CDN 节点（多个同时）到 BTR 引擎（后台 isolate），到本地 HLS 服务（运行在手机上），到 AVPlayer（系统播放器：画中画、HDR、杜比视界）。引擎负责节点健康检测、失败重试、优先最快节点。</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif; text-anchor: middle; }
+    .ink { fill: #18191C; }
+    .sub { fill: #61666D; }
+    .faint { fill: #9499A0; }
+    .card { fill: #F6F7F8; }
+    .engine { fill: #F6F7F8; stroke: #FB7299; stroke-width: 1.5; }
+    .line { stroke: #9499A0; stroke-width: 1.5; fill: none; }
+    .head { fill: #9499A0; }
+    .chip { fill: none; stroke: #D5D8DC; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #E3E5E7; }
+      .sub { fill: #9499A0; }
+      .faint { fill: #6D7178; }
+      .card { fill: #1E2024; }
+      .engine { fill: #1E2024; }
+      .line { stroke: #6D7178; }
+      .head { fill: #6D7178; }
+      .chip { stroke: #3A3D44; }
+    }
+  </style>
+
+  <rect x="20" y="20" width="172" height="100" rx="12" class="card"/>
+  <text x="106" y="66" class="ink" font-size="17" font-weight="600">B 站 CDN 节点</text>
+  <text x="106" y="90" class="sub" font-size="13">多个同时</text>
+
+  <rect x="236" y="20" width="172" height="100" rx="12" class="engine"/>
+  <text x="322" y="66" class="ink" font-size="17" font-weight="600">BTR 引擎</text>
+  <text x="322" y="90" class="sub" font-size="13">后台 isolate</text>
+
+  <rect x="452" y="20" width="172" height="100" rx="12" class="card"/>
+  <text x="538" y="66" class="ink" font-size="17" font-weight="600">本地 HLS 服务</text>
+  <text x="538" y="90" class="sub" font-size="13">运行在手机上</text>
+
+  <rect x="668" y="20" width="172" height="100" rx="12" class="card"/>
+  <text x="754" y="57" class="ink" font-size="17" font-weight="600">AVPlayer</text>
+  <text x="754" y="80" class="sub" font-size="13">系统播放器</text>
+  <text x="754" y="100" class="faint" font-size="12">画中画 · HDR · 杜比视界</text>
+
+  <path d="M199 70 H223" class="line"/>
+  <path d="M223 64.5 L232 70 L223 75.5 Z" class="head"/>
+  <path d="M415 70 H439" class="line"/>
+  <path d="M439 64.5 L448 70 L439 75.5 Z" class="head"/>
+  <path d="M631 70 H655" class="line"/>
+  <path d="M655 64.5 L664 70 L655 75.5 Z" class="head"/>
+
+  <circle cx="211" cy="70" r="3" class="head"/>
+  <path d="M211 70 V154 Q211 162 219 162 H236" class="line"/>
+
+  <rect x="236" y="148" width="104" height="28" rx="14" class="chip"/>
+  <text x="288" y="166.5" class="sub" font-size="13">节点健康检测</text>
+  <rect x="348" y="148" width="78" height="28" rx="14" class="chip"/>
+  <text x="387" y="166.5" class="sub" font-size="13">失败重试</text>
+  <rect x="434" y="148" width="104" height="28" rx="14" class="chip"/>
+  <text x="486" y="166.5" class="sub" font-size="13">优先最快节点</text>
+</svg>

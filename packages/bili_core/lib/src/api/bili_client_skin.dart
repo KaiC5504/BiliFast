@@ -15,7 +15,7 @@ extension BiliClientSkin on BiliClient {
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
-      extraHeaders: _officialHeaders(const {}),
+      extraHeaders: _officialHeaders(const {}, token),
       decode: SkinWorn.fromJson,
     );
     final checked = _officialChecked(envelope, token);

@@ -19,13 +19,40 @@ const _androidHeaders = {
   'bili-http-engine': 'cronet',
 };
 
+const _iphoneLocale = 'zh-Hans_CN';
+
+/// What the iPhone app 9.18.0 sends with every official call (docs/reference/official-iphone-calls.md), with
+/// `statistics` as its watch reports write it.
+const _iphoneQuery = {
+  'actionKey': 'appkey',
+  'build': IphoneLabels.build,
+  'c_locale': _iphoneLocale,
+  'device': 'phone',
+  'disable_rcmd': '0',
+  'mobi_app': 'iphone',
+  'platform': 'ios',
+  's_locale': _iphoneLocale,
+  'statistics': '{"appId":1,"version":"${IphoneLabels.version}","abtest":"","platform":1}',
+};
+
+const _iphoneHeaders = {
+  'User-Agent':
+      'bili-universal/${IphoneLabels.build} CFNetwork/1.0 Darwin/27.2.0 os/ios model/${IphoneLabels.model} '
+      'mobi_app/iphone build/${IphoneLabels.build} osVer/${IphoneLabels.osVersion} network/2 '
+      'channel/${IphoneLabels.channel}',
+  'app-key': 'iphone',
+  'env': 'prod',
+};
+
 /// The answers that mean Bilibili no longer takes the app token (账号未登录, Access Key错误).
 const _rejectedTokenCodes = {-101, -2};
 
-/// The official app's API: signed as the Android app signs it ([AppSigner.android]) and sent without the account's
-/// cookies. An account call ([account] true) carries the app token as `access_key` and throws
-/// [BiliError.noAppToken] without one; a rejected token is reported through [BiliClient.onAppTokenRejected] before
-/// the call throws. [query] and [form] win over the Android defaults, so a call can name its own `mobi_app`.
+/// The official app's API, sent without the account's cookies. A call goes out as one identity, its token's (a
+/// token only works with the pair that issued it) or else [BiliClient.officialIdentity]: that identity's pair signs
+/// it, and its fields and headers label it. An account call ([account] true) carries the app token as `access_key`
+/// and throws [BiliError.noAppToken] without one; a rejected token is reported through
+/// [BiliClient.onAppTokenRejected] before the call throws. [query] and [form] win over the identity's defaults, so a
+/// call can name its own `mobi_app`.
 extension BiliClientOfficial on BiliClient {
   Future<T> _officialGet<T>(
     String path,
@@ -41,7 +68,7 @@ extension BiliClientOfficial on BiliClient {
       signed: false,
       host: BiliClient.appAPI,
       sendCookies: false,
-      extraHeaders: _officialHeaders(headers),
+      extraHeaders: _officialHeaders(headers, token),
       decode: decode,
     );
     return _checked(_officialChecked(envelope, token));
@@ -62,7 +89,7 @@ extension BiliClientOfficial on BiliClient {
       form: _officialSigned(form, token),
       host: host,
       cookies: false,
-      extraHeaders: _officialHeaders(headers),
+      extraHeaders: _officialHeaders(headers, token),
       decode: decode,
     );
     return _checked(_officialChecked(envelope, token));
@@ -82,16 +109,20 @@ extension BiliClientOfficial on BiliClient {
       form: _officialSigned(form, token),
       host: host,
       cookies: false,
-      extraHeaders: _officialHeaders(headers),
+      extraHeaders: _officialHeaders(headers, token),
       decode: (_) => null,
     );
     final checked = _officialChecked(envelope, token);
     if (checked.code != 0) throw BiliError.api(code: checked.code, message: checked.message ?? '');
   }
 
-  Map<String, String> _officialHeaders(Map<String, String> headers) {
+  /// The headers of the identity [_officialSigned] signs the same call as; [headers] win over them.
+  Map<String, String> _officialHeaders(Map<String, String> headers, [AppToken? token]) {
     final buvid = appBuvid;
-    return {..._androidHeaders, 'buvid': ?buvid, ...headers};
+    return switch (token?.identity ?? officialIdentity) {
+      OfficialIdentity.android => {..._androidHeaders, 'buvid': ?buvid, ...headers},
+      OfficialIdentity.iphone => {..._iphoneHeaders, 'buvid': ?buvid, 'session_id': appSessionId, ...headers},
+    };
   }
 
   /// The token an account call signs with, read once, so a rejection names that one even if [appToken] has changed
@@ -101,8 +132,14 @@ extension BiliClientOfficial on BiliClient {
     return appToken ?? (throw BiliError.noAppToken);
   }
 
-  Map<String, String> _officialSigned(Map<String, String> params, AppToken? token) =>
-      AppSigner.android.signed({..._androidQuery, ...params, 'access_key': ?token?.accessToken}, ts: _unixSeconds);
+  Map<String, String> _officialSigned(Map<String, String> params, AppToken? token) {
+    final identity = token?.identity ?? officialIdentity;
+    final common = switch (identity) {
+      OfficialIdentity.android => _androidQuery,
+      OfficialIdentity.iphone => _iphoneQuery,
+    };
+    return identity.signer.signed({...common, ...params, 'access_key': ?token?.accessToken}, ts: _unixSeconds);
+  }
 
   BiliEnvelope<T> _officialChecked<T>(BiliEnvelope<T> envelope, AppToken? token) {
     if (token != null && _rejectedTokenCodes.contains(envelope.code)) {
