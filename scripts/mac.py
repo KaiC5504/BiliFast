@@ -45,6 +45,8 @@ cd $HERE/BiliFast
 git fetch -q origin build
 git checkout -q -f --detach FETCH_HEAD
 git log --oneline -1
+# Every phone build's number makes a new ~125 MB folder here that nothing reuses; keep the last three builds'.
+{ ls -dt .dart_tool/flutter_build/*/ 2>/dev/null || true; } | tail -n +7 | while read -r old; do rm -rf "$old"; done
 """
 
 PHONE = r"""
