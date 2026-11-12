@@ -6,7 +6,10 @@ import '../app/form_factor.dart';
 import '../device/orientation.dart';
 import '../shared/theme.dart';
 import 'chrome_state.dart';
+import 'landscape_chrome.dart' show fullScreenText;
 import 'player_ui.dart';
+import 'portrait_controls.dart' show ChromeTap;
+import 'speed_lock.dart';
 
 /// The gesture HUD in the middle of the player: 倍速中, the seek time, brightness and volume (BiliNative
 /// `PlayerHUD.swift`, measured on the official app's 25). It fills the player and takes no touches.
@@ -28,6 +31,19 @@ class PlayerHud extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hud = _hud();
+    final lock = ui.speedLock;
+    if (lock == null) return hud;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        hud,
+        SpeedLockLayer(ui: ui, lock: lock),
+      ],
+    );
+  }
+
+  Widget _hud() {
     return IgnorePointer(
       child: ValueListenableBuilder<Hud?>(
         valueListenable: ui.chrome.hud,
@@ -49,6 +65,15 @@ class PlayerHud extends StatelessWidget {
           },
           child: switch (hud) {
             null => const SizedBox.shrink(key: ValueKey('hud-none')),
+            // 竖屏's is shorter, under the top row (182).
+            SpeedUpHud() when ui.presentation == Presentation.vertical => Align(
+              key: _speedKey,
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: EdgeInsets.only(top: SpeedLockLayer.pillTop(context)),
+                child: const _SpeedUpPill(upright: true),
+              ),
+            ),
             SpeedUpHud() => const Align(
               key: _speedKey,
               alignment: Alignment.topCenter,
@@ -87,15 +112,20 @@ class _Label extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({required this.child, this.padding = const EdgeInsets.symmetric(horizontal: BiliMetrics.hudPadding)});
+  const _Pill({
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(horizontal: BiliMetrics.hudPadding),
+    this.height = BiliMetrics.hudHeight,
+  });
 
   final Widget child;
   final EdgeInsets padding;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: BiliMetrics.hudHeight,
+      height: height,
       constraints: const BoxConstraints(minWidth: BiliMetrics.hudMinWidth),
       padding: padding,
       decoration: const BoxDecoration(
@@ -108,27 +138,32 @@ class _Pill extends StatelessWidget {
 }
 
 class _SpeedUpPill extends StatelessWidget {
-  const _SpeedUpPill();
+  const _SpeedUpPill({this.upright = false});
+
+  /// 竖屏's: 36 pt high, with the iPad's arrows.
+  final bool upright;
 
   @override
   Widget build(BuildContext context) {
     // The iPad's pill (15) is the phone's with smaller arrows set a little further from the label.
     final pad = FormFactor.of(context).isPad;
+    final small = pad || upright;
     return _Pill(
+      height: upright ? SpeedLockTheme.pillHeight : BiliMetrics.hudHeight,
       padding: const EdgeInsets.only(left: BiliMetrics.hudSpeedPaddingLeft, right: BiliMetrics.hudSpeedPaddingRight),
       child: Row(
         key: const ValueKey('hud-speed-pill'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (pad)
+          if (small)
             const SpeedArrows(
-              width: PadFullScreenTheme.hudArrowWidth,
-              height: PadFullScreenTheme.hudArrowHeight,
-              step: PadFullScreenTheme.hudArrowStep,
+              width: SpeedLockTheme.arrowsWidth,
+              height: SpeedLockTheme.arrowsHeight,
+              step: SpeedLockTheme.arrowsStep,
             )
           else
             const SpeedArrows(),
-          SizedBox(width: pad ? PadFullScreenTheme.hudGap : BiliMetrics.hudGap),
+          SizedBox(width: small ? SpeedLockTheme.arrowsGap : BiliMetrics.hudGap),
           const _Label(Text('倍速中', style: _label, maxLines: 1)),
         ],
       ),
@@ -341,4 +376,167 @@ class _BarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BarPainter oldDelegate) => oldDelegate.fraction != fraction || oldDelegate.fill != fill;
+}
+
+/// 竖屏's speed lock over the player: the hint's band under the progress line while held (182), the lighter armed band
+/// with the finger on it (183), and once locked the pill with 取消 in 倍速中's place (186). Only 取消 takes touches.
+class SpeedLockLayer extends StatelessWidget {
+  const SpeedLockLayer({super.key, required this.ui, required this.lock});
+
+  final PlayerUi ui;
+  final SpeedLock lock;
+
+  /// 竖屏's 倍速中 and the locked pill sit right under the top row.
+  static double pillTop(BuildContext context) => MediaQuery.paddingOf(context).top + BiliMetrics.chromeButton;
+
+  static TextStyle get _text => fullScreenText.copyWith(
+    fontSize: SpeedLockTheme.text,
+    fontWeight: FontWeight.w400,
+    color: SpeedLockTheme.textInk,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([lock, ui.presentationChanges]),
+      builder: (context, _) {
+        if (ui.presentation != Presentation.vertical) return const SizedBox.shrink();
+        final padding = MediaQuery.paddingOf(context);
+        final shown = switch (lock.value) {
+          SpeedLockPhase.off => null,
+          SpeedLockPhase.holding => _band(
+            padding,
+            key: const ValueKey('speed-lock-hint'),
+            fill: SpeedLockTheme.hintFill,
+            children: [
+              const CustomPaint(
+                size: Size(SpeedLockTheme.arrowWidth, SpeedLockTheme.arrowHeight),
+                painter: _DownArrowPainter(),
+              ),
+              const SizedBox(width: SpeedLockTheme.arrowGap),
+              Text('拖动到此处锁定倍速', style: _text, maxLines: 1),
+            ],
+          ),
+          SpeedLockPhase.armed => _band(
+            padding,
+            key: const ValueKey('speed-lock-armed'),
+            fill: SpeedLockTheme.armedFill,
+            children: [
+              const _LockGlyph(),
+              const SizedBox(width: SpeedLockTheme.lockGap),
+              Text('松手锁定倍速', style: _text, maxLines: 1),
+            ],
+          ),
+          SpeedLockPhase.locked => Positioned(
+            top: pillTop(context),
+            left: 0,
+            right: 0,
+            child: Center(child: _lockedPill()),
+          ),
+        };
+        if (shown == null) return const SizedBox.shrink();
+        return Stack(fit: StackFit.expand, children: [shown]);
+      },
+    );
+  }
+
+  Widget _band(EdgeInsets padding, {required Key key, required Color fill, required List<Widget> children}) {
+    return Positioned(
+      key: key,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: SpeedLock.bandHeight(padding),
+      child: IgnorePointer(
+        child: ColoredBox(
+          color: fill,
+          child: Padding(
+            padding: EdgeInsets.only(bottom: padding.bottom),
+            child: Center(
+              child: MediaQuery.withNoTextScaling(
+                child: Row(mainAxisSize: MainAxisSize.min, children: children),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _lockedPill() {
+    return DecoratedBox(
+      key: const ValueKey('speed-lock-pill'),
+      decoration: const BoxDecoration(
+        color: BiliColors.hudFill,
+        borderRadius: BorderRadius.all(Radius.circular(BiliMetrics.hudRadius)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(left: SpeedLockTheme.lockedLeading),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const _LockGlyph(),
+            const SizedBox(width: SpeedLockTheme.lockGap),
+            Text('锁定倍速中', style: _text, maxLines: 1),
+            ChromeTap(
+              key: const ValueKey('speed-lock-cancel'),
+              label: '取消锁定倍速',
+              square: false,
+              onTap: () => lock.unlock(ui.session),
+              child: SizedBox(
+                height: SpeedLockTheme.pillHeight,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: SpeedLockTheme.cancelGap, right: SpeedLockTheme.lockedTrailing),
+                  child: Center(widthFactor: 1, child: Text('取消', style: _text, maxLines: 1)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LockGlyph extends StatelessWidget {
+  const _LockGlyph();
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    SpeedLockTheme.lockAsset,
+    width: SpeedLockTheme.lockSize,
+    height: SpeedLockTheme.lockSize,
+    color: SpeedLockTheme.lockInk,
+  );
+}
+
+/// 182's ↓: a stem and an open head meeting at the tip.
+class _DownArrowPainter extends CustomPainter {
+  const _DownArrowPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const inset = SpeedLockTheme.arrowStroke / 2;
+    final mid = size.width / 2;
+    final tip = Offset(mid, size.height - inset);
+    final paint = Paint()
+      ..color = SpeedLockTheme.textInk
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = SpeedLockTheme.arrowStroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final head = size.height - mid;
+    canvas
+      ..drawLine(Offset(mid, inset), tip, paint)
+      ..drawPath(
+        Path()
+          ..moveTo(inset, head)
+          ..lineTo(tip.dx, tip.dy)
+          ..lineTo(size.width - inset, head),
+        paint,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_DownArrowPainter oldDelegate) => false;
 }

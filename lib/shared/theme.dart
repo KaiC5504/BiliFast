@@ -1627,6 +1627,40 @@ abstract final class StoryPagerTheme {
 abstract final class SpeedLockTheme {
   /// The APK's `biliplayer_ic_lock`.
   static const lockAsset = 'assets/images/player/speed_lock.png';
+
+  /// Drawn in a box this size, its ink lands 12 × 13 as on 183 and 186 (the art's 24 dp holds an 18 × 20.67 ink).
+  static const lockSize = 15.0;
+  static const lockInk = BiliColors.onVideo;
+
+  /// The band starts right under the 2 pt progress line, 7 above the bottom row; its row is centred between there and
+  /// the home indicator. The hint's band is black (182), the armed one a lighter grey (183).
+  static const bandOverRow = 7.0;
+  static const hintFill = Color(0xFF000000);
+  static const armedFill = Color(0xFF505153);
+  static const text = 14.0;
+  static const textInk = BiliColors.onVideo;
+
+  /// 182's ↓: 11.33 × 11.67 pt of ink, a 1.2 pt round-capped stroke, 8.3 before the text.
+  static const arrowWidth = 34 / 3;
+  static const arrowHeight = 35 / 3;
+  static const arrowStroke = 1.2;
+  static const arrowGap = 8.3;
+
+  /// The lock before 松手锁定倍速 and 锁定倍速中 (183, 186).
+  static const lockGap = 7.0;
+
+  /// 竖屏's 倍速中 (182) and the locked pill in its place (186): 36 pt high right under the top row, smaller arrows than
+  /// landscape's 25 (the iPad's), 8 pt corners in the HUD's fill.
+  static const pillHeight = 36.0;
+  static const arrowsWidth = PadFullScreenTheme.hudArrowWidth;
+  static const arrowsHeight = PadFullScreenTheme.hudArrowHeight;
+  static const arrowsStep = PadFullScreenTheme.hudArrowStep;
+  static const arrowsGap = PadFullScreenTheme.hudGap;
+
+  /// 186's 锁定倍速中 | 取消: 157.33 wide, centred.
+  static const lockedLeading = 11.8;
+  static const cancelGap = 13.0;
+  static const lockedTrailing = 12.7;
 }
 
 /// A comment row and its badges (10, 12, 13), measured at 3× on KaiC's phone. Heights count down from the row's top,

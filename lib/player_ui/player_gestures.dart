@@ -4,21 +4,26 @@ import 'dart:math' as math;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../device/device_controls.dart';
 import '../device/orientation.dart';
 import '../shared/theme.dart';
+import '../video/player_session.dart';
+import '../video/story/story_drag.dart';
 import 'chrome_state.dart';
 import 'player_ui.dart';
 import 'seek_bar.dart';
+import 'speed_lock.dart';
 
 /// The touch layer over the video, filling the player (port of BiliNative `PlayerGestureView.swift` and
 /// `ChromeState.swift`'s gestures): tap, double tap, hold for 2×, a sideways drag to seek, and up and down for
 /// brightness (left half) and volume (right half), the small player's too; full screen leaves the screen edges to
 /// the system. In 竖屏 the controls stay up, as in the official app: a tap plays or pauses at once and a double tap is
-/// two taps, and a swipe right from the left edge is its ‹.
+/// two taps, a swipe right from the left edge is its ‹, up and down move the feed's page (no brightness or volume),
+/// and a hold dragged down onto the hint's band locks the 2× (182, 183, 186).
 class PlayerGestureLayer extends StatefulWidget {
   const PlayerGestureLayer({super.key, required this.ui});
 
@@ -85,6 +90,13 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   _Seek? _seek;
   _Level? _level;
 
+  /// 竖屏's feed page this finger moves, and how far it had moved at the last update.
+  StoryDrag? _story;
+  double _storyDy = 0;
+
+  /// The video a lock was set on: another one opening ends it.
+  (String?, int?)? _lockedOn;
+
   StreamSubscription<double>? _hardwareVolume;
   Timer? _hardwareTimer;
 
@@ -94,6 +106,17 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   void initState() {
     super.initState();
     _hardwareVolume = _ui.device.hardwareVolume.listen(_hardwareVolumeChanged);
+    _listen(_ui);
+  }
+
+  void _listen(PlayerUi ui) {
+    ui.session.addListener(_sessionChanged);
+    ui.presentationChanges.addListener(_presentationChanged);
+  }
+
+  void _unlisten(PlayerUi ui) {
+    ui.session.removeListener(_sessionChanged);
+    ui.presentationChanges.removeListener(_presentationChanged);
   }
 
   @override
@@ -109,6 +132,10 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     super.didUpdateWidget(oldWidget);
     final old = oldWidget.ui;
     if (old.session != _ui.session || old.chrome != _ui.chrome) _abandon(old);
+    if (old.session != _ui.session || old.presentationChanges != _ui.presentationChanges) {
+      _unlisten(old);
+      _listen(_ui);
+    }
     if (old.device != _ui.device) {
       unawaited(_hardwareVolume?.cancel());
       _hardwareVolume = _ui.device.hardwareVolume.listen(_hardwareVolumeChanged);
@@ -117,6 +144,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
   @override
   void dispose() {
+    _unlisten(_ui);
     _abandon(_ui);
     _tapTimer?.cancel();
     _hardwareTimer?.cancel();
@@ -137,11 +165,58 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
       _holding = false;
       ui.session.speedUp(false);
       _clearHud<SpeedUpHud>(ui.chrome);
+      _dropHint(ui);
     }
     if (_level case final level?) {
       _level = null;
       _releaseVolumeView(level, ui.device);
       _clearHud<LevelHud>(ui.chrome);
+    }
+    _endStory();
+  }
+
+  /// The hint and the armed band go with the hold; a lock stays.
+  void _dropHint(PlayerUi ui) {
+    final lock = ui.speedLock;
+    if (lock != null && lock.value != SpeedLockPhase.locked) lock.value = SpeedLockPhase.off;
+  }
+
+  void _endStory() {
+    final story = _story;
+    if (story == null) return;
+    _story = null;
+    story.cancel();
+  }
+
+  static (String?, int?) _videoOf(PlayerSession session) => (session.video?.bvid, session.part?.cid);
+
+  void _sessionChanged() {
+    final lock = _ui.speedLock;
+    if (lock == null || lock.value != SpeedLockPhase.locked || _videoOf(_ui.session) == _lockedOn) return;
+    _afterBuild(() => lock.unlock(_ui.session));
+  }
+
+  /// Out of 竖屏, the feed's drag and the lock end; a hold goes on as a plain one.
+  void _presentationChanged() {
+    if (_vertical) return;
+    _afterBuild(() {
+      if (!mounted || _vertical) return;
+      _endStory();
+      final lock = _ui.speedLock;
+      if (lock == null) return;
+      lock.unlock(_ui.session);
+      lock.value = SpeedLockPhase.off;
+    });
+  }
+
+  /// The page sets its layout while it builds, where nothing else may be marked to rebuild.
+  void _afterBuild(VoidCallback action) {
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) action();
+      });
+    } else {
+      action();
     }
   }
 
@@ -237,13 +312,36 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   }
 
   void _holdBegan() {
-    // A paused player would start playing at 2×.
-    if (!_ui.session.readout.wantsPlay) return;
+    // A paused player would start playing at 2×; a locked one already plays at 2×.
+    if (!_ui.session.readout.wantsPlay || _ui.speedLock?.value == SpeedLockPhase.locked) return;
     _holding = true;
     _ui.session.speedUp(true);
     unawaited(HapticFeedback.mediumImpact());
     if (!_vertical) _ui.chrome.hide();
     _ui.chrome.showHud(const SpeedUpHud());
+    if (_vertical) _ui.speedLock?.value = SpeedLockPhase.holding;
+  }
+
+  void _holdMoved(LongPressMoveUpdateDetails details) {
+    final lock = _ui.speedLock;
+    if (!_holding || lock == null || lock.value == SpeedLockPhase.off) return;
+    final height = context.size?.height ?? 0;
+    final onBand = details.localPosition.dy >= height - SpeedLock.bandHeight(_padding);
+    lock.value = onBand ? SpeedLockPhase.armed : SpeedLockPhase.holding;
+  }
+
+  /// Let go on the armed band, the 2× stays; anywhere else the hold ends.
+  void _holdLifted() {
+    final lock = _ui.speedLock;
+    if (!_holding || lock == null || lock.value != SpeedLockPhase.armed || !_vertical) {
+      _holdEnded();
+      return;
+    }
+    _holding = false;
+    _lockedOn = _videoOf(_ui.session);
+    lock.value = SpeedLockPhase.locked;
+    unawaited(HapticFeedback.mediumImpact());
+    _clearHud<SpeedUpHud>(_ui.chrome);
   }
 
   void _holdEnded() {
@@ -252,6 +350,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     _ui.session.speedUp(false);
     unawaited(HapticFeedback.mediumImpact());
     _clearHud<SpeedUpHud>(_ui.chrome);
+    _dropHint(_ui);
   }
 
   void _dragStart(GestureAxis axis, Offset local) {
@@ -259,6 +358,15 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     if (axis == GestureAxis.horizontal) {
       if (!(_ui.session.duration.value > 0)) return;
       _seek = _Seek(start: _ui.session.position, width: size.width);
+      return;
+    }
+    // 竖屏 gives up and down to the feed's swipe, as the official app does; without a feed they do nothing.
+    if (_vertical) {
+      final story = _ui.storyDrag;
+      if (story == null || _ui.story?.value == null) return;
+      _story = story;
+      _storyDy = 0;
+      story.start();
       return;
     }
     final kind = local.dx < size.width / 2 ? LevelKind.brightness : LevelKind.volume;
@@ -298,10 +406,18 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     } else if (_level case final level?) {
       level.dy = delta.dy;
       _applyLevel(level);
+    } else if (_story case final story?) {
+      story.update(delta.dy - _storyDy);
+      _storyDy = delta.dy;
     }
   }
 
-  void _dragEnd(Offset delta) {
+  void _dragEnd(Offset delta, Offset velocity) {
+    if (_story case final story?) {
+      _story = null;
+      story.end(velocity.dy);
+      return;
+    }
     final seek = _seek;
     if (seek == null) {
       _endLevel();
@@ -320,6 +436,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   }
 
   void _dragCancel() {
+    _endStory();
     final seek = _seek;
     if (seek == null) {
       _endLevel();
@@ -423,7 +540,8 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
           (recognizer) => recognizer
             ..allow = _allowsTouch
             ..onLongPressStart = ((_) => _holdBegan())
-            ..onLongPressEnd = ((_) => _holdEnded())
+            ..onLongPressMoveUpdate = _holdMoved
+            ..onLongPressEnd = ((_) => _holdLifted())
             ..onStopped = _holdEnded,
         ),
         _DragRecognizer: GestureRecognizerFactoryWithHandlers<_DragRecognizer>(
@@ -502,13 +620,16 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
 
   /// The travel since the finger landed, and where it is.
   void Function(Offset delta, Offset local)? onUpdate;
-  ValueChanged<Offset>? onEnd;
+
+  /// The travel, and the finger's speed at the lift in points a second.
+  void Function(Offset delta, Offset velocity)? onEnd;
   VoidCallback? onCancel;
 
   int? _pointer;
   Offset _down = Offset.zero;
   Offset _local = Offset.zero;
   GestureAxis? _axis;
+  VelocityTracker? _tracker;
 
   /// Won the arena, which can happen before the axis is known when every other recogniser gave up.
   bool _won = false;
@@ -526,6 +647,7 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
     _pointer = event.pointer;
     _down = event.localPosition;
     _local = event.localPosition;
+    _tracker = VelocityTracker.withKind(event.kind)..addPosition(event.timeStamp, event.localPosition);
   }
 
   @override
@@ -535,6 +657,7 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
     switch (event) {
       case PointerMoveEvent():
         _local = event.localPosition;
+        if (!event.synthesized) _tracker?.addPosition(event.timeStamp, event.localPosition);
         if (_started) {
           onUpdate?.call(_local - _down, _local);
           return;
@@ -550,7 +673,7 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
         }
       case PointerUpEvent():
         if (_started) {
-          onEnd?.call(event.localPosition - _down);
+          onEnd?.call(event.localPosition - _down, _tracker?.getVelocityEstimate()?.pixelsPerSecond ?? Offset.zero);
         } else if (!_won) {
           resolve(GestureDisposition.rejected);
         }
@@ -587,6 +710,7 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
   void didStopTrackingLastPointer(int pointer) {
     _pointer = null;
     _axis = null;
+    _tracker = null;
     _won = false;
     _started = false;
   }
