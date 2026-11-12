@@ -1660,6 +1660,10 @@ abstract final class StoryPagerTheme {
 
   /// Towards no neighbour (the first video, or none loaded yet) the page moves this share of the finger's travel.
   static const resistance = 0.3;
+
+  /// The Windows build's 下一个视频 and 上一个视频 buttons, for its test tool alone (Windows' accessibility bridge leaves
+  /// custom actions out): invisible and touch-through, but big enough for the bridge to place them on screen.
+  static const moveTarget = 8.0;
 }
 
 /// The way into 竖屏 from the video page and back out (187, measured frame by frame at 60 fps): the picture slides
@@ -1675,6 +1679,17 @@ abstract final class VerticalEnterTheme {
   /// 10 frames in; this fits each frame to within 0.03.
   static const exit = Duration(microseconds: 166667);
   static const exitCurve = Cubic(0, 0.4, 0.9, 1);
+}
+
+/// The uploader sheet over 竖屏 (181): the sheet risen to 947 px, the controls gone, and the picture fitted into a box
+/// above it.
+abstract final class VerticalSheetTheme {
+  static const sheetTop = 947 / 3;
+
+  /// The box the picture fits into, the screen's width. 181's video is 9:16 with black above and below its picture,
+  /// which spans 449-871 × 334-741 px, centred: its frame fills the box's height, 162-913 px.
+  static const pictureTop = 162 / 3;
+  static const pictureBottom = 913 / 3;
 }
 
 /// 竖屏's held 2× and its lock (182, 183, 186).

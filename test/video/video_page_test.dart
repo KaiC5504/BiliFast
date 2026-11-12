@@ -12,6 +12,7 @@ import 'package:bili_core/api.dart'
         OfficialIdentity,
         OfficialKind,
         RichRun,
+        SpaceProfile,
         SpaceVideo,
         TextRun,
         UploaderCard,
@@ -56,9 +57,11 @@ import 'package:bilifast/player_ui/end_screen_portrait.dart';
 import 'package:bilifast/player_ui/landscape_chrome.dart';
 import 'package:bilifast/player_ui/panels/panel_controller.dart';
 import 'package:bilifast/player_ui/panels/panel_layer.dart';
+import 'package:bilifast/player_ui/player_gestures.dart';
 import 'package:bilifast/player_ui/player_loading.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/portrait_controls.dart';
+import 'package:bilifast/player_ui/speed_lock.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
@@ -103,6 +106,9 @@ import '../playback/fakes.dart';
 import '../support/fake_player.dart';
 import '../support/fake_player_session.dart';
 import '../support/fake_video_actions.dart';
+import '../support/look_alike.dart';
+import '../support/stand_in_fonts.dart';
+import 'mixed_lines.dart' show appTheme;
 import 'story/fake_story_feed.dart';
 
 const heartbeatPath = '/x/click-interface/web/heartbeat';
@@ -274,6 +280,8 @@ void main() {
     PageApi? pageApi,
     SpaceApi? spaceApi,
     AppAuth? appAuth,
+    ThemeData? theme,
+    Widget Function(Widget app)? wrap,
   }) async {
     screen(tester, portrait, portraitInsets);
     addTearDown(tester.view.reset);
@@ -317,9 +325,10 @@ void main() {
     nav = services.navigator;
     await tester.pumpWidget(
       MaterialApp(
+        theme: theme,
         navigatorKey: nav,
         navigatorObservers: [pageRoutes],
-        builder: (context, child) => AppScope(services: services, child: child!),
+        builder: (context, child) => AppScope(services: services, child: wrap?.call(child!) ?? child!),
         home: home,
       ),
     );
@@ -3752,6 +3761,177 @@ void main() {
       expect(find.byType(VideoPage), findsNothing);
       expect(nav.currentState!.canPop(), isFalse);
     });
+
+    group('over 竖屏 (181)', () {
+      final video = find.byKey(const ValueKey('fake-video'));
+      const room = Rect.fromLTRB(0, VerticalSheetTheme.pictureTop, 440, VerticalSheetTheme.pictureBottom);
+
+      bool chromeShown(WidgetTester tester) => tester
+          .widget<Visibility>(find.ancestor(of: find.byType(VerticalChrome), matching: find.byType(Visibility)).first)
+          .visible;
+
+      /// 181's 9:16 video in 竖屏, its uploader [owner]; the uploader's tap as the 竖屏 chrome makes it.
+      Future<void Function(UploaderRef)> vertical(WidgetTester tester, {(int, int) shape = (1080, 1920)}) async {
+        pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+        await opened(tester, vertical: shape.$2 > shape.$1);
+        sessions.single
+          ..videoShape = (width: shape.$1, height: shape.$2)
+          ..detail = detail(bv, ownerMid: owner)
+          ..changed();
+        await tester.pump();
+        await rotate(tester, Presentation.vertical);
+        final open = UploaderTap.maybeOf(tester.element(find.byType(VerticalChrome)));
+        expect(open, isNotNull, reason: "竖屏's controls sit under the page's UploaderTap");
+        return open!;
+      }
+
+      testWidgets('the uploader opens the sheet at 947 px, the picture shrinking into the room above it with the '
+          'controls gone; a tap above it closes it and the picture comes back', (tester) async {
+        await host(tester, pageApi: api, spaceApi: spaceApi);
+        final open = await vertical(tester);
+        final band = tester.getRect(video);
+        expect(band, const Rect.fromLTWH(0, 0, 440, 926));
+        expect(chromeShown(tester), isTrue);
+
+        open(const UploaderRef(mid: owner, name: 'UP主'));
+        await tester.pump();
+        await tester.pump(UploaderSheetTheme.rise ~/ 2);
+        final midway = tester.getRect(video);
+        expect(midway.top, inExclusiveRange(0, room.top), reason: 'on its way with the sheet');
+        expect(midway.bottom, inExclusiveRange(room.bottom, band.bottom));
+        expect(chromeShown(tester), isFalse);
+        await frames(tester);
+        expect(sheet(tester).isOpen, isTrue);
+        expect(orientation.presentation, Presentation.vertical, reason: 'no trip to the space');
+        expect(tester.getRect(find.byKey(const ValueKey('uploader-sheet'))).top, closeTo(947 / 3, 0.001));
+        expect(tester.getRect(video), room, reason: 'the player fits the picture into it: 181 at 449-871 px');
+        expect(chromeShown(tester), isFalse);
+        expect(find.byType(UploaderVideoCard), findsWidgets);
+        expect(canPop(tester), isFalse);
+
+        await tester.tapAt(const Offset(300, 200));
+        await tester.pump();
+        expect(sheet(tester).isOpen, isFalse);
+        expect(sessions.single.calls, isNot(contains('togglePlay')), reason: 'the sheet took the tap, not the video');
+        await frames(tester);
+        expect(tester.getRect(video), band);
+        expect(chromeShown(tester), isTrue);
+        expect(find.byType(UploaderSheet), findsNothing);
+        await rotate(tester, Presentation.inline);
+        await back(tester);
+      });
+
+      testWidgets('back closes it and stays in 竖屏; turning to landscape closes it with the picture back at once', (
+        tester,
+      ) async {
+        await host(tester, pageApi: api, spaceApi: spaceApi);
+        final open = await vertical(tester, shape: (1920, 1080));
+        final band = tester.getRect(video);
+        expect(band.height, closeTo(956 * BiliMetrics.verticalVideoCentre * 2, 0.01));
+        open(const UploaderRef(mid: owner));
+        await frames(tester);
+        expect(tester.getRect(video), room, reason: 'a wide video fits the same room, by its width');
+
+        unawaited(nav.currentState!.maybePop());
+        await frames(tester, 20);
+        expect(sheet(tester).isOpen, isFalse);
+        expect(orientation.presentation, Presentation.vertical);
+        expect(tester.getRect(video), band);
+
+        open(const UploaderRef(mid: owner));
+        await frames(tester);
+        await rotate(tester, Presentation.landscape);
+        expect(sheet(tester).isOpen, isFalse);
+        expect(tester.getRect(video), const Rect.fromLTWH(0, 0, 956, 440));
+        expect(tester.widget<VideoPlayerArea>(find.byType(VideoPlayerArea)).slide!.value, isNull);
+        await rotate(tester, Presentation.inline);
+        await back(tester);
+      });
+
+      testWidgets('181 look-alike: the page as the phone draws it, saved for tools/screen_diff.py', (tester) async {
+        final saved = BiliFonts.family;
+        addTearDown(() => BiliFonts.family = saved);
+        await tester.runAsync(loadSystemFontStandIns);
+        final picture = ValueNotifier<Rect?>(null);
+        addTearDown(picture.dispose);
+        spaceApi = FakeSpaceApi(
+          profileFor: (mid) => SpaceProfile(
+            mid: mid,
+            name: '枫泽雨畔',
+            face: '',
+            fans: 428000,
+            videoCount: 210,
+            likes: 11295000,
+          ),
+          videoList: [
+            for (final (i, title) in _sheet181.indexed)
+              SpaceVideo(
+                aid: i + 1,
+                bvid: i == 0 ? bv : 'BV181video$i',
+                title: title.$1,
+                cover: '',
+                duration: title.$2,
+                play: title.$3,
+                publishedText: title.$4,
+              ),
+          ],
+        );
+        await host(
+          tester,
+          pageApi: api,
+          spaceApi: spaceApi,
+          theme: appTheme(),
+          // The native view's picture as AVPlayer fits it: 181's 9:16 frame, black but for its picture in the middle.
+          wrap: (app) => RepaintBoundary(
+            key: const ValueKey('screen'),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                app,
+                ValueListenableBuilder(
+                  valueListenable: picture,
+                  builder: (context, rect, _) => rect == null
+                      ? const SizedBox.shrink()
+                      : Positioned.fromRect(
+                          rect: rect,
+                          child: const IgnorePointer(
+                            child: Center(
+                              child: AspectRatio(
+                                aspectRatio: 9 / 16,
+                                child: Center(
+                                  child: AspectRatio(
+                                    aspectRatio: 1320 / 1272,
+                                    child: ColoredBox(color: Color(0xFF8E8460)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+        BiliFonts.family = BiliFonts.system;
+        final open = await vertical(tester);
+        showAsPhone(tester);
+        await tester.pump();
+        open(const UploaderRef(mid: owner, name: '枫泽雨畔'));
+        await frames(tester, 20);
+        picture.value = tester.getRect(video);
+        await tester.pump();
+
+        final shots = Platform.environment['BILIFAST_SHOTS'];
+        if (shots != null) await saveShot(tester, find.byKey(const ValueKey('screen')), '$shots/vertical-181-page.png');
+        expect(tester.getRect(find.byKey(const ValueKey('uploader-sheet'))).top, closeTo(947 / 3, 0.001));
+        expect(find.text('枫泽雨畔'), findsWidgets);
+        sheet(tester).close();
+        await frames(tester);
+        await rotate(tester, Presentation.inline);
+        await back(tester);
+      });
+    });
   });
 
   group("竖屏's swipe feed", () {
@@ -3916,6 +4096,163 @@ void main() {
       expect(find.byType(VideoPage), findsNothing);
       expect(made, hasLength(1));
     });
+
+    /// A finger on the real gesture layer, put down at [from] and moved [by] over [steps] frames, still down.
+    Future<TestGesture> fingerDrag(
+      WidgetTester tester, {
+      required Offset from,
+      required Offset by,
+      int steps = 12,
+    }) async {
+      final gesture = await tester.startGesture(from);
+      for (var i = 0; i < steps; i++) {
+        await gesture.moveBy(by / steps.toDouble());
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      return gesture;
+    }
+
+    testWidgets('a real finger on the gesture layer moves to the next video and back', (tester) async {
+      await enter(tester);
+      final feed = made.single.feed;
+      expect(find.byType(PlayerGestureLayer), findsOneWidget);
+      await tester.timedDragFrom(const Offset(250, 650), const Offset(0, -300), const Duration(milliseconds: 150));
+      await frames(tester, 6);
+      expect(feed.moves, [1]);
+      expect(ui(tester).storyDrag!.moving, isFalse);
+      await tester.timedDragFrom(const Offset(250, 300), const Offset(0, 300), const Duration(milliseconds: 150));
+      await frames(tester, 6);
+      expect(feed.moves, [1, 0]);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets('a touch cancelled past half the screen goes back and opens nothing', (tester) async {
+      await enter(tester);
+      final feed = made.single.feed;
+      final gesture = await fingerDrag(tester, from: const Offset(250, 700), by: const Offset(0, -600));
+      final drag = ui(tester).storyDrag!;
+      expect(drag.offset, lessThan(-956 / 2));
+      await gesture.cancel();
+      await frames(tester, 6);
+      expect(feed.moves, isEmpty);
+      expect(drag.moving, isFalse);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets("a wide video turned to landscape mid-drag past half moves nothing, and the finger's lift neither",
+        (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      await rotate(tester, Presentation.vertical);
+      final feed = made.single.feed;
+      final gesture = await fingerDrag(tester, from: const Offset(250, 700), by: const Offset(0, -600));
+      expect(ui(tester).storyDrag!.offset, lessThan(-956 / 2));
+      screen(tester, landscape, landscapeInsets);
+      orientation.enterLandscape();
+      await frames(tester, 2);
+      await tester.pump(RotationTheme.grow);
+      expect(ui(tester).storyDrag!.moving, isFalse, reason: 'the page is back where it was');
+      await gesture.up();
+      await frames(tester, 6);
+      expect(feed.moves, isEmpty);
+      expect(ui(tester).story!.value, same(feed), reason: 'the feed is kept through the turn');
+      expect(ui(tester).storyDrag!.moving, isFalse);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets('leaving 竖屏 for the small player mid-drag past half opens nothing', (tester) async {
+      await enter(tester);
+      final feed = made.single.feed;
+      final gesture = await fingerDrag(tester, from: const Offset(250, 700), by: const Offset(0, -600));
+      orientation.exitToInline();
+      await frames(tester, 2);
+      await gesture.up();
+      await frames(tester, 6);
+      expect(feed.moves, isEmpty);
+      expect(feed.disposed, isTrue);
+      expect(ui(tester).storyDrag!.moving, isFalse);
+      await back(tester);
+    });
+
+    testWidgets('a swipe straight after the slide into 竖屏 begins', (tester) async {
+      await host(tester);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester, vertical: true);
+      orientation.enterVertical();
+      await tester.pump();
+      await tester.pump(VerticalEnterTheme.enter + const Duration(microseconds: 1));
+      final feed = made.single.feed;
+      final gesture = await fingerDrag(tester, from: const Offset(250, 700), by: const Offset(0, -120), steps: 4);
+      expect(ui(tester).storyDrag!.offset, lessThan(-100), reason: 'the page follows from the first drag');
+      await gesture.moveBy(const Offset(0, -500));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.up();
+      await frames(tester, 6);
+      expect(feed.moves, [1]);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets("the video swiped to draws its entry's title until its own details are in", (tester) async {
+      await enter(tester);
+      sessions.single
+        ..detail = detail(bv)
+        ..title = '测试视频'
+        ..changed();
+      await tester.pump();
+      Finder title(String text) => find.descendant(
+        of: find.byKey(const ValueKey('vertical-title')),
+        matching: find.textContaining(text, findRichText: true),
+      );
+      expect(title('测试视频'), findsWidgets);
+      await swipeUp(tester);
+      expect(made.single.feed.moves, [1]);
+      expect(title('视频 BV1next000001'), findsWidgets);
+      expect(title('测试视频'), findsNothing);
+      sessions.single
+        ..detail = detail('BV1next000001')
+        ..title = '测试视频'
+        ..changed();
+      await tester.pump();
+      expect(title('测试视频'), findsWidgets);
+      expect(title('视频 BV1next000001'), findsNothing);
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
+
+    testWidgets('a locked 2× ends once a swipe has opened the next video', (tester) async {
+      await enter(tester);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await tester.pump();
+      final lock = ui(tester).speedLock!;
+      final hold = await tester.startGesture(const Offset(250, 600));
+      await tester.pump(PlayerGestureLayer.holdDelay + const Duration(milliseconds: 50));
+      expect(lock.value, SpeedLockPhase.holding);
+      await hold.moveTo(const Offset(250, 945));
+      await tester.pump();
+      expect(lock.value, SpeedLockPhase.armed);
+      await hold.up();
+      await tester.pump();
+      expect(lock.value, SpeedLockPhase.locked);
+      expect(sessions.single.calls.where((call) => call == 'speedUp false'), isEmpty);
+
+      await tester.timedDragFrom(const Offset(250, 650), const Offset(0, -300), const Duration(milliseconds: 150));
+      await frames(tester, 6);
+      expect(made.single.feed.moves, [1]);
+      // The page's session says so once the next video is in, as the real one does.
+      sessions.single
+        ..part = const core.VideoPage(cid: p2, page: 1, part: '', duration: 60)
+        ..changed();
+      await tester.pump();
+      expect(lock.value, SpeedLockPhase.off);
+      expect(sessions.single.calls, contains('speedUp false'));
+      await rotate(tester, Presentation.inline);
+      await back(tester);
+    });
   });
 
   group('the way into 竖屏 and out (187)', () {
@@ -4063,6 +4400,16 @@ void main() {
     });
   });
 }
+
+/// 181's sheet: each video's title, length, plays and date.
+const _sheet181 = [
+  ('这就是我要抓的因缘精灵吗', 78, 453000, '11月8日'),
+  ('对的对的，全部梭哈', 78, 200000, '11月1日'),
+  ('这汤烧心', 168, 28000, '10月17日'),
+  ('诶！总有一个宇宙....', 72, 1516000, '10月2日'),
+  ('此事亦有记载', 155, 59000, '10月1日'),
+  ('嘉豪汤姆', 141, 45000, '5月3日'),
+];
 
 /// A related video without a cover to download.
 VideoCard quietCard(String bvid) => VideoCard(
