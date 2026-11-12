@@ -72,6 +72,7 @@ RipperSession _session(
   AutoConcurrency? auto,
   RipperConfig? config,
   Logger? logger,
+  NodeMemory? memory,
 }) {
   final session = RipperSession(
     sources: {TrackKind.video: (primary: TestEngine.primary, backups: const <String>[])},
@@ -80,6 +81,7 @@ RipperSession _session(
     auto: auto,
     config: config ?? _automatic,
     logger: logger ?? Logger(session: 'test'),
+    memory: memory,
     warm: warm,
   );
   session.setSegments(TrackKind.video, _segments());
@@ -176,6 +178,23 @@ void main() {
     final promoted = logs.events.singleWhere((event) => event.msg == 'promoted');
     expect(promoted.f.keys.toSet(), {'threads', 'cachedBytes'});
     expect(promoted.f['cachedBytes'], const LogInt(_segment));
+  });
+
+  test('a warm session records nothing in the node memory; promoted, its measurements are recorded', () async {
+    final memory = NodeMemory()..signature = 'wifi';
+    Map<Object?, Object?> recorded() => memory.toJson()['networks']! as Map<Object?, Object?>;
+    final cdn = SimCDN(size: _size, behaviors: {
+      'upos-sz-mirrorcos.bilivideo.com': const NodeBehavior(firstByteMs: 20),
+    });
+    final session = _session(cdn, warm: true, memory: memory);
+    addTearDown(session.close);
+    session.prime(TrackKind.video, seconds: 0);
+    await _until(() => session.isCached(TrackKind.video, all[0].range));
+    expect(recorded(), isEmpty, reason: 'measured on three connections at prefetch priority');
+
+    session.promote();
+    await _read(session, all[3].range);
+    expect(recorded(), isNotEmpty);
   });
 
   test('promoted where its prime is not, the open\'s start is primed at once as a normal prime', () async {

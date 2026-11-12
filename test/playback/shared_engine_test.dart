@@ -250,6 +250,7 @@ void main() {
     await settle();
     expect(await first.ensureServing(), isFalse, reason: 'a later probe asks again');
     expect(engines.single.ensureCalls, 2);
+    expect(second.serverGeneration, 1, reason: 'the restart the first probe made is the second page\'s to see');
   });
 
   test('a covered page drops only its own playback\'s prefetch', () async {

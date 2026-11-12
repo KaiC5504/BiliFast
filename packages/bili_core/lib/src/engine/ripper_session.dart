@@ -150,8 +150,8 @@ final class _Request {
 /// Everything runs on the engine isolate, so Swift's locks have no counterpart here.
 ///
 /// A [warm] session loads a video the user may move to next while another plays: it keeps out of the app-wide
-/// connection count, on [warmConcurrency] connections, never hurries, and primes without prefetching after, until
-/// [promote] makes it an ordinary playback.
+/// connection count and the node memory, on [warmConcurrency] connections, never hurries, and primes without
+/// prefetching after, until [promote] makes it an ordinary playback.
 final class RipperSession {
   factory RipperSession({
     required Map<TrackKind, TrackSource> sources,
@@ -180,14 +180,15 @@ final class RipperSession {
       logger: logger,
     );
     final priors = memory?.priors ?? NodePriors.empty;
+    // A warm session's few connections at prefetch priority would understate every node it measures.
     ctx.nodes
       ..priors = priors
-      ..onMeasured = memory?.record
+      ..onMeasured = warm ? null : memory?.record
       ..exploreInHurry = config.exploreInHurry
       ..tailBackups = config.tailBackups
       ..keepsOffSlow = config.hurryKeepsOffSlow
       ..median = config.medianEstimates;
-    return RipperSession._(ctx, sources, mode, policy, priors, warm: warm, follower: follower);
+    return RipperSession._(ctx, sources, mode, policy, priors, warm: warm, follower: follower, memory: memory);
   }
 
   RipperSession._(
@@ -198,8 +199,10 @@ final class RipperSession {
     NodePriors priors, {
     required bool warm,
     required AutoConcurrency? follower,
+    required NodeMemory? memory,
   }) : _warm = warm,
-       _waitingFollower = warm ? follower : null {
+       _waitingFollower = warm ? follower : null,
+       _waitingMemory = warm ? memory : null {
     _resolvers = {
       for (final MapEntry(key: kind, value: source) in sources.entries)
         kind: Resolver(
@@ -234,6 +237,9 @@ final class RipperSession {
 
   /// The app-wide connection count a warm session takes on at its promotion.
   AutoConcurrency? _waitingFollower;
+
+  /// The node memory a warm session records into from its promotion.
+  NodeMemory? _waitingMemory;
 
   final EngineContext _ctx;
   final _bans = BanList();
@@ -309,6 +315,8 @@ final class RipperSession {
   void promote() {
     if (!_warm || _closed) return;
     _warm = false;
+    _ctx.nodes.onMeasured = _waitingMemory?.record;
+    _waitingMemory = null;
     final follower = _waitingFollower;
     _waitingFollower = null;
     if (follower != null) {

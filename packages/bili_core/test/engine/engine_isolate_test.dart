@@ -247,11 +247,14 @@ void main() {
 
   test('ensureServing binds again after the server stopped answering', () async {
     expect(await engine.ensureServing(), isFalse);
+    expect(engine.serverGeneration, 0);
     await engine.debugStopServer();
     expect(await engine.ensureServing(), isTrue);
+    expect(engine.serverGeneration, 1, reason: 'counted for every caller, not only the one whose probe restarted it');
     final source = await engine.prepare(request(PlaybackMode.btr));
     expect((await _get(source.master)).status, 200);
     expect(await engine.ensureServing(), isFalse);
+    expect(engine.serverGeneration, 1);
   });
 
   test('direct: the playlists come from the local server and the media from the CDN', () async {

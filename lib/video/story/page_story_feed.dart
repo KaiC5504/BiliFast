@@ -86,7 +86,7 @@ final class _PlaybackHost extends StoryHost {
   bool get comfortable => _playback.controller?.comfortable ?? false;
 
   @override
-  Future<void> warm(StoryEntry entry, VideoDetail detail) =>
+  Future<void>? warm(StoryEntry entry, VideoDetail detail) =>
       _playback.warmNext(entry.bvid, cid: entry.cid, detail: detail);
 
   @override

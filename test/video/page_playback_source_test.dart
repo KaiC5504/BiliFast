@@ -596,6 +596,31 @@ void main() {
       await frames(tester, 4);
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
+    testWidgets('a page covered when the next video could load ahead loads it once shown again', (tester) async {
+      await host(tester);
+      http.routes[relatedPath] = (200, related.replaceFirst('"cid":0', '"cid":$p2'));
+      final playback = started();
+      await frames(tester, 10);
+      final player = players.single;
+      final engine = engines.single;
+      await plays(tester, player, 3);
+      serves(otherView);
+      playback.beginStory();
+      await frames(tester, 4);
+      playback.cover();
+      await comfortable(tester, player);
+      expect(engine.warmed, isEmpty, reason: 'nothing loads ahead under another page');
+
+      playback.show(resuming: true);
+      await frames(tester, 4);
+      expect(engine.warmed, hasLength(1));
+      playback.show(resuming: true);
+      await frames(tester, 4);
+      expect(engine.warmed, hasLength(1));
+      playback.close();
+      await frames(tester, 4);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
     testWidgets('off the phone nothing is loaded ahead', (tester) async {
       await host(tester);
       http.routes[relatedPath] = (200, related.replaceFirst('"cid":0', '"cid":$p2'));

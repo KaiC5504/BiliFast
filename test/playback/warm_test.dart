@@ -272,6 +272,36 @@ void main() {
       expect(engine.released, contains('tok2'));
       expect(lastWarmField(), 'miss restarted');
     });
+
+    test('another page\'s probe restarted the local server: this open\'s own probe finds it answering', () async {
+      final controller = await withPlaying();
+      await controller.warm(next, cid: nextCid, detail: nextDetail());
+      engine.serverGeneration++;
+      await controller.openVideo(next, cid: nextCid);
+      expect(engine.prepared.last.warm, isFalse);
+      expect(player.loaded?.master, FakeEngine.masterOf('tok3'));
+      expect(engine.released, contains('tok2'));
+      expect(engine.promoted, isEmpty);
+      expect(lastWarmField(), 'miss restarted');
+    });
+
+    test('the open took the warm while it prepared, and another page\'s probe restarted the server meanwhile',
+        () async {
+      final controller = await withPlaying();
+      engine.prepareGate = Completer<void>();
+      final warming = controller.warm(next, cid: nextCid, detail: nextDetail());
+      await settle();
+      final opening = controller.openVideo(next, cid: nextCid);
+      await settle();
+      engine.serverGeneration++;
+      await controller.appResumed();
+      engine.prepareGate!.complete();
+      await Future.wait([warming, opening]);
+      expect(engine.prepared.last.warm, isFalse);
+      expect(engine.promoted, isEmpty);
+      expect(engine.released, contains('tok2'));
+      expect(lastWarmField(), 'miss restarted');
+    });
   });
 
   group('the warm is let go', () {
@@ -286,6 +316,10 @@ void main() {
       ('on a new engine', 'engine', (controller) => controller.useEngine(() async => FakeEngine())),
       ('when the local server restarted', 'restarted', (controller) async {
         engine.restartOnEnsure = true;
+        await controller.appResumed();
+      }),
+      ('when another page\'s probe restarted the local server', 'restarted', (controller) async {
+        engine.serverGeneration++;
         await controller.appResumed();
       }),
       ('for a cached part', 'local', (controller) => controller.openLocal(() async => null)),

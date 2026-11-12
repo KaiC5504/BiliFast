@@ -105,10 +105,20 @@ final class FakeHost extends StoryHost {
   @override
   void halt() => halted = true;
 
+  /// Holds the page's player from warming, as a covered page does: no warm starts.
+  bool warmRefused = false;
+
+  /// Holds the next warms until the test completes it.
+  Completer<void>? warmGate;
+
   @override
-  Future<void> warm(StoryEntry entry, VideoDetail detail) async {
+  Future<void>? warm(StoryEntry entry, VideoDetail detail) {
+    if (warmRefused) return null;
     warms.add((entry, detail));
-    if (warmError case final error?) throw error;
+    return () async {
+      await warmGate?.future;
+      if (warmError case final error?) throw error;
+    }();
   }
 
   @override
@@ -686,6 +696,34 @@ void main() {
       expect(detailAsks, hasLength(1));
     });
 
+    test('risk control on an ask answered after a start over or the end of 竖屏 still halts the page', () async {
+      host.loaded[entered] = [card('BV1r1')];
+      make(useOfficial: false, ahead: true);
+      expect(detailAsks, ['BV1r1']);
+      host.plays('BV1autonext0');
+      detailAnswers.last.completeError(const BiliAPIError(code: -352, message: ''));
+      await pumpEventQueue();
+      expect(host.halted, isTrue);
+      expect(lines('story detail ahead'), isEmpty);
+
+      host = FakeHost(playing: enteredEntry())..loaded[entered] = [card('BV1r1')];
+      final feed = make(useOfficial: false, ahead: true);
+      expect(detailAsks, hasLength(2));
+      feed.dispose();
+      detailAnswers.last.completeError(const BiliHTTPError(412));
+      await pumpEventQueue();
+      expect(host.halted, isTrue);
+
+      host = FakeHost(playing: enteredEntry());
+      final asked = relatedAsks.length;
+      final related = make(useOfficial: false);
+      expect(relatedAsks, hasLength(asked + 1));
+      related.dispose();
+      relatedAnswers.last.completeError(const BiliAPIError(code: -412, message: ''));
+      await pumpEventQueue();
+      expect(host.halted, isTrue);
+    });
+
     test("another video's answer, or a video that redirects, is not handed on", () async {
       host.loaded[entered] = [card('BV1r1'), card('BV1r2')];
       final feed = make(useOfficial: false, ahead: true);
@@ -828,6 +866,49 @@ void main() {
       expect(host.halted, isTrue);
       final halted = logs.events.singleWhere((event) => event.msg == 'story feed halted');
       expect({for (final MapEntry(:key, :value) in halted.f.entries) key: value.toJson()}, {'by': 'warm', 'code': -352});
+    });
+
+    test('a warm the page could not start (covered) leaves the slot: asked again once it can, still once', () async {
+      host
+        ..loaded[entered] = [card('BV1r1')]
+        ..warmRefused = true;
+      make(useOfficial: false, ahead: true, warms: true);
+      await answerDetail(0, details('BV1r1'));
+      plays(entered);
+      expect(host.warms, isEmpty);
+      host.warmRefused = false;
+      host.changed();
+      expect(warmed(), ['BV1r1']);
+      host.changed();
+      expect(warmed(), ['BV1r1']);
+    });
+
+    test('risk control on a warm answered after 竖屏 ended or the feed started over still halts the page', () async {
+      host
+        ..loaded[entered] = [card('BV1r1')]
+        ..warmGate = Completer<void>()
+        ..warmError = const BiliHTTPError(412);
+      final feed = make(useOfficial: false, ahead: true, warms: true);
+      await answerDetail(0, details('BV1r1'));
+      plays(entered);
+      expect(warmed(), ['BV1r1']);
+      feed.dispose();
+      host.warmGate!.complete();
+      await pumpEventQueue();
+      expect(host.halted, isTrue);
+      expect(logs.events.where((event) => event.msg == 'story feed halted'), isEmpty);
+
+      host = FakeHost(playing: enteredEntry())
+        ..loaded[entered] = [card('BV1r1')]
+        ..warmGate = Completer<void>()
+        ..warmError = const BiliAPIError(code: -412, message: '');
+      make(useOfficial: false, ahead: true, warms: true);
+      await answerDetail(1, details('BV1r1'));
+      plays(entered);
+      host.plays('BV1autonext0');
+      host.warmGate!.complete();
+      await pumpEventQueue();
+      expect(host.halted, isTrue);
     });
 
     test('let go when the feed starts over and when 竖屏 ends', () async {

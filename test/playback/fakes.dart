@@ -179,8 +179,13 @@ final class FakeEngine implements PlaybackEngine {
     if (error != null) throw error;
     final restarted = restartOnEnsure;
     restartOnEnsure = false;
+    if (restarted) serverGeneration++;
     return restarted;
   }
+
+  /// Raised by a restart [ensureServing] reports, or by a test as another controller's probe would.
+  @override
+  int serverGeneration = 0;
 
   @override
   Stream<EngineSnapshot> get stats => statsController.stream;

@@ -268,6 +268,10 @@ abstract interface class PlaybackEngine {
   /// every source prepared before then must be prepared again.
   Future<bool> ensureServing();
 
+  /// How many restarts [ensureServing] has reported, to whichever caller asked: a source prepared under an earlier
+  /// count names a listener that is gone, though this caller's own probe may have found the server answering.
+  int get serverGeneration;
+
   /// About once a second while a BTR playback is registered.
   Stream<EngineSnapshot> get stats;
 

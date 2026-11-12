@@ -945,7 +945,8 @@ class PlaybackController extends ChangeNotifier {
       if (prepared && current == _epoch) _fail(error, stack);
       return;
     }
-    if (restarted) _dropWarm('restarted');
+    final held = _warm;
+    if (restarted || (held != null && _servedBefore(held))) _dropWarm('restarted');
     if (!prepared || !restarted || current != _epoch) return;
     _logger.warn(LogCategory.player, 'local server restarted, preparing again', {'at': currentSeconds});
     await _reload(current);
@@ -1003,6 +1004,10 @@ class PlaybackController extends ChangeNotifier {
     if (warm.error case final error?) throw error;
   }
 
+  /// [warm]'s source names a listener bound before the server's last restart, which another controller's probe may
+  /// have made while this one's found it answering.
+  static bool _servedBefore(_Warm warm) => warm.serverGeneration != warm.engine.serverGeneration;
+
   /// [warm]'s let go; the open of its video then says why it missed.
   void dropWarm() => _dropWarm('dropped');
 
@@ -1038,6 +1043,8 @@ class PlaybackController extends ChangeNotifier {
         choice.audio.baseURL,
         ...choice.audio.backupURLs,
       ]);
+      // Read before the prepare: a restart while it is out leaves the source suspect.
+      warm.serverGeneration = engine.serverGeneration;
       final source = await engine.prepare(PlaybackRequest(
         choice: choice,
         mode: PlaybackMode.btr,
@@ -1463,9 +1470,12 @@ class PlaybackController extends ChangeNotifier {
     final PreparedSource source;
     final local = _local;
     var warmSource = warm?.source;
-    if (warm != null && (restarted || !identical(warm.engine, _engine))) {
-      _warmOutcome = restarted ? 'miss restarted' : 'miss engine';
-      warmSource = null;
+    if (warm != null) {
+      final stale = restarted || _servedBefore(warm);
+      if (stale || !identical(warm.engine, _engine)) {
+        _warmOutcome = stale ? 'miss restarted' : 'miss engine';
+        warmSource = null;
+      }
     }
     try {
       source = local != null
@@ -2228,6 +2238,9 @@ final class _Warm {
   TrackChoice? choice;
   double start = 0;
   PreparedSource? source;
+
+  /// [engine]'s [PlaybackEngine.serverGeneration] when [source] was asked for.
+  int serverGeneration = 0;
 
   /// Why it stopped short; null when it got as far as a source.
   String? failure;

@@ -142,7 +142,16 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
   void setNodeMode(NodeMode mode) => _notify(_SetNodeMode(mode));
 
   @override
-  Future<bool> ensureServing() async => await _call(_EnsureServing.new) as bool;
+  Future<bool> ensureServing() async {
+    final restarted = await _call(_EnsureServing.new) as bool;
+    if (restarted) _serverGeneration++;
+    return restarted;
+  }
+
+  int _serverGeneration = 0;
+
+  @override
+  int get serverGeneration => _serverGeneration;
 
   @override
   Future<PreparedSource> prepareLocal(LocalPlaybackRequest request) async =>

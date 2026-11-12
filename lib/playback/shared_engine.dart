@@ -272,6 +272,9 @@ final class EngineLease implements PlaybackEngine {
   Future<bool> ensureServing() => _call(() => _shared._ensureServing(engine));
 
   @override
+  int get serverGeneration => engine.serverGeneration;
+
+  @override
   Future<void> dispose() async {
     if (_released) return;
     _released = true;

@@ -44,15 +44,17 @@ abstract class StoryHost extends ChangeNotifier {
   void open(StoryEntry entry, {required bool entered, VideoDetail? detail});
 
   /// Risk control answered one of 竖屏's calls: nothing more is asked while the page lives, by this feed or the next.
+  /// [halt] holds after the host is disposed too: an answer can come back after 竖屏 ended.
   bool get halted;
   void halt();
 
   /// The page's video has played and holds enough ahead for another to load beside it.
   bool get comfortable => false;
 
-  /// Loads [entry] ahead on the page's player, with its [detail] asked ahead, so its open starts at once; throws the
-  /// playurl call's error.
-  Future<void> warm(StoryEntry entry, VideoDetail detail) async {}
+  /// Loads [entry] ahead on the page's player, with its [detail] asked ahead, so its open starts at once: the warm,
+  /// which throws the playurl call's error, or null when none can start now (the page covered, its player not in
+  /// yet); the host notifies once that may have changed.
+  Future<void>? warm(StoryEntry entry, VideoDetail detail) => null;
 
   /// Lets go of what [warm] loaded.
   void dropWarm() {}
@@ -69,7 +71,8 @@ abstract class StoryHost extends ChangeNotifier {
 /// With [detail], each video the page settles on has the next one's details asked once, kept in memory while it is a
 /// neighbour, and handed to its open. With [warmsNext] too, the next video is then loaded ahead on the page's player
 /// ([StoryHost.warm]) once the video settled on has shown its first frame and holds enough ahead: once for each video
-/// settled on, never while halted, let go when the feed starts over or 竖屏 ends.
+/// settled on (a warm the page couldn't start yet, covered, is asked again when it can), never while halted, let go
+/// when the feed starts over or 竖屏 ends.
 class StoryList extends StoryFeed {
   StoryList({
     required StoryHost host,
@@ -260,9 +263,10 @@ class StoryList extends StoryFeed {
           _askWarm();
         },
         onError: (Object error) {
-          if (_disposed || round != _round) return;
           final stopped = _riskControl(error);
+          // The page outlives this feed and its rounds: risk control stops its asking whatever became of them.
           if (stopped) _host.halt();
+          if (_disposed || round != _round) return;
           _logger.warn(LogCategory.api, 'story detail ahead', {
             'error': '${error.runtimeType}',
             'code': ?_codeOf(error),
@@ -284,18 +288,23 @@ class StoryList extends StoryFeed {
     final detail = _details[next.bvid];
     if (detail == null) return;
     _warmAskedIn = _settles;
+    final warming = _host.warm(next, detail);
+    // Nothing started (the page covered, its player not in yet): the host's next change asks again.
+    if (warming == null) {
+      _warmAskedIn = null;
+      return;
+    }
     final round = _round;
     unawaited(
-      _host
-          .warm(next, detail)
-          .then(
-            (_) {},
-            onError: (Object error) {
-              if (_disposed || round != _round || !_riskControl(error)) return;
-              _host.halt();
-              _logger.warn(LogCategory.api, 'story feed halted', {'by': 'warm', 'code': ?_codeOf(error)});
-            },
-          ),
+      warming.then(
+        (_) {},
+        onError: (Object error) {
+          if (!_riskControl(error)) return;
+          _host.halt();
+          if (_disposed || round != _round) return;
+          _logger.warn(LogCategory.api, 'story feed halted', {'by': 'warm', 'code': ?_codeOf(error)});
+        },
+      ),
     );
   }
 
@@ -385,7 +394,11 @@ class StoryList extends StoryFeed {
     try {
       fresh = await call();
     } catch (error) {
-      if (!_disposed && round == _round) _failed(kind, page, error);
+      if (!_disposed && round == _round) {
+        _failed(kind, page, error);
+      } else if (_riskControl(error)) {
+        _host.halt();
+      }
       return;
     }
     if (!_disposed && round == _round) _answered(kind, page, fresh);
