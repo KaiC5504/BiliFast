@@ -15,7 +15,7 @@ import '../shared/toast.dart';
 import '../sideload/sideload_section.dart';
 import '../video/intro/collection_row.dart' show Chevron;
 import '../video/player_prefs.dart';
-import 'node_page.dart';
+import 'btr_page.dart';
 import 'playback/autoplay_settings_page.dart' show AutoplayLabels;
 import 'playback/home_feed_settings_page.dart';
 import 'playback/playback_settings_page.dart';
@@ -23,9 +23,7 @@ import 'settings_confirm.dart';
 
 /// What 设置 asks before doing (BiliNative SettingsView's `ClearAction`, and 51's 退出登录).
 enum SettingsConfirmKind {
-  codecMemory('重置编码记忆？', '本机播放失败过的编码会重新参与尝试。', '重置'),
   recents('清除最近观看？', '「最近在看的视频」列表会被清空。', '清除'),
-  logs('清除日志？', '手机上保存的调试日志会被删除，已发送到电脑的不受影响。', '清除'),
   images('清除图片缓存？', '保存在手机上的图片会被删除，再看到时会重新下载。', '清除'),
   logout('退出登录', null, '确定');
 
@@ -46,8 +44,8 @@ String buildVersionLabel() => switch ((appBuildName, appBuildNumber)) {
   _ => '未知',
 };
 
-/// 设置 (50): the account, the engine's nodes and BTR, clearing what the app keeps, 开发者 in dev builds, a
-/// sideloaded install's 签名, the version, and 退出登录 last (51).
+/// 设置 (50): 登录 while logged out, the playback pages, BTR, clearing what the app keeps, 开发者 in dev builds, a
+/// sideloaded install's 签名, 退出登录 (51), and the version under it all.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
@@ -153,16 +151,8 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     final services = AppScope.of(context);
     Logger.shared.info(LogCategory.ui, 'settings clear', {'what': kind.name});
     switch (kind) {
-      case SettingsConfirmKind.codecMemory:
-        services.playback.resetCodecMemory();
       case SettingsConfirmKind.recents:
         services.recents.clear();
-      case SettingsConfirmKind.logs:
-        unawaited(
-          services.logFiles.clear().catchError((Object error) {
-            Logger.shared.warn(LogCategory.app, 'log files not cleared', {'error': '${error.runtimeType}'});
-          }),
-        );
       case SettingsConfirmKind.images:
         if (services.imageCache case final images?) {
           unawaited(
@@ -196,14 +186,6 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
-  void _setNode(NodeChoice choice) {
-    _prefs.node = choice;
-    if (mounted) setState(() {});
-    Logger.shared.info(LogCategory.ui, 'settings node', {'node': choice.name});
-    // A cold start reads the saved node; the engine running now, or starting now, is told.
-    AppScope.of(context).playback.setNodeMode(choice.mode);
-  }
-
   /// The pages under 设置 change [PlayerPrefs], which tells no one, so the values shown are read again on return.
   void _push(WidgetBuilder builder) => unawaited(
     Navigator.of(context).push(SwipeBackPageRoute<void>(builder: builder)).then((_) {
@@ -232,40 +214,22 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
               return SettingsScaffold(
                 title: '设置',
                 children: [
-                  SettingsSection(
-                    children: [
-                      switch (account) {
-                        LoggedOut() => SettingsRow(
-                          key: const ValueKey('settings-login'),
-                          title: '登录',
-                          onTap: () => unawaited(services.loginGate.request(context)),
-                        ),
-                        LoginExpired() => SettingsRow(
-                          key: const ValueKey('settings-relogin'),
-                          title: '重新登录',
-                          onTap: () => unawaited(services.loginGate.request(context)),
-                        ),
-                        AccountUnknown() when environment.accountCheckFailed => SettingsRow(
-                          key: const ValueKey('settings-account'),
-                          title: '账号',
-                          value: '无法获取账号信息，点按重试',
-                          onTap: () => unawaited(environment.refreshAccount()),
-                        ),
-                        LoggedIn(:final vip) => SettingsRow(
-                          key: const ValueKey('settings-account'),
-                          title: '账号',
-                          value: environment.accountLabel,
-                          valueColor: vip ? SettingsTheme.vipName : SettingsTheme.value,
-                          badge: vip ? const VipBadge() : null,
-                        ),
-                        AccountUnknown() => SettingsRow(
-                          key: const ValueKey('settings-account'),
-                          title: '账号',
-                          value: environment.accountLabel,
-                        ),
-                      },
-                    ],
-                  ),
+                  if (account case LoggedOut() || LoginExpired())
+                    SettingsSection(
+                      children: [
+                        account is LoginExpired
+                            ? SettingsRow(
+                                key: const ValueKey('settings-relogin'),
+                                title: '重新登录',
+                                onTap: () => unawaited(services.loginGate.request(context)),
+                              )
+                            : SettingsRow(
+                                key: const ValueKey('settings-login'),
+                                title: '登录',
+                                onTap: () => unawaited(services.loginGate.request(context)),
+                              ),
+                      ],
+                    ),
                   SettingsSection(
                     children: [
                       SettingsRow(
@@ -284,36 +248,20 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                   SettingsSection(
                     children: [
                       SettingsRow(
-                        key: const ValueKey('settings-node'),
-                        title: 'CDN 节点',
-                        value: _prefs.node.label,
-                        onTap: () => _push((_) => NodePage(choice: _prefs.node, onChanged: _setNode)),
-                      ),
-                      SettingsSwitchRow(
                         key: const ValueKey('settings-btr'),
-                        title: 'BTR 加速（默认）',
-                        value: _prefs.btr,
-                        onChanged: (on) => setState(() => _prefs.btr = on),
+                        title: 'BTR',
+                        value: _prefs.btr ? '开启' : '关闭',
+                        onTap: () => _push((_) => BtrPage(prefs: _prefs)),
                       ),
                     ],
                   ),
                   SettingsSection(
                     children: [
                       SettingsRow(
-                        key: const ValueKey('settings-codec-memory'),
-                        title: '重置编码记忆',
-                        onTap: () => _ask(SettingsConfirmKind.codecMemory),
-                      ),
-                      SettingsRow(
                         key: const ValueKey('settings-recents'),
                         title: '清除最近观看',
                         enabled: recents.items.isNotEmpty,
                         onTap: () => _ask(SettingsConfirmKind.recents),
-                      ),
-                      SettingsRow(
-                        key: const ValueKey('settings-logs'),
-                        title: '清除日志',
-                        onTap: () => _ask(SettingsConfirmKind.logs),
                       ),
                       if (services.imageCache != null)
                         SettingsRow(
@@ -340,16 +288,6 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                     openLink: widget.openLink,
                     canOpenLink: widget.canOpenLink,
                   ),
-                  SettingsSection(
-                    footer: '下载加速移植自 Bilibili 线程撕裂者（BTR），MIT 许可。',
-                    children: [
-                      SettingsRow(
-                        key: const ValueKey('settings-version'),
-                        title: '版本',
-                        value: widget.version ?? buildVersionLabel(),
-                      ),
-                    ],
-                  ),
                   if (account is LoggedIn || environment.logoutIncomplete || environment.loginUnreadable)
                     SettingsSection(
                       children: [
@@ -360,6 +298,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                         ),
                       ],
                     ),
+                  _VersionLine(widget.version ?? buildVersionLabel()),
                 ],
               );
             },
@@ -389,6 +328,27 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _VersionLine extends StatelessWidget {
+  const _VersionLine(this.version);
+
+  final String version;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = SettingsSection.footerStyle;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: BiliMetrics.settingsSectionGap),
+      child: Text(
+        '版本 $version',
+        key: const ValueKey('settings-version'),
+        textAlign: TextAlign.center,
+        style: style,
+        strutStyle: BiliFonts.strutOf(context, style),
       ),
     );
   }
@@ -671,7 +631,7 @@ class SettingsSection extends StatelessWidget {
   }
 }
 
-/// A row: its title, the value in grey when there is one (with a [badge] after it), and a › when it does something.
+/// A row: its title, the value in grey when there is one, and a › when it does something.
 /// A row that is not [enabled] greys its title and ignores taps.
 class SettingsRow extends StatelessWidget {
   const SettingsRow({
@@ -679,7 +639,6 @@ class SettingsRow extends StatelessWidget {
     required this.title,
     this.value,
     this.valueColor = SettingsTheme.value,
-    this.badge,
     this.onTap,
     this.enabled = true,
     this.height = SettingsSection.rowHeight,
@@ -688,7 +647,6 @@ class SettingsRow extends StatelessWidget {
   final String title;
   final String? value;
   final Color valueColor;
-  final Widget? badge;
   final VoidCallback? onTap;
   final bool enabled;
   final double height;
@@ -738,20 +696,12 @@ class SettingsRow extends StatelessWidget {
                   if (value != null)
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: BiliMetrics.settingsValueWidth),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              value,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: valueStyle,
-                              strutStyle: BiliFonts.strutOf(context, valueStyle),
-                            ),
-                          ),
-                          if (badge case final badge?) ...[const SizedBox(width: SettingsTheme.vipBadgeGap), badge],
-                        ],
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: valueStyle,
+                        strutStyle: BiliFonts.strutOf(context, valueStyle),
                       ),
                     ),
                   if (onTap != null) ...[
@@ -1033,28 +983,4 @@ class _CheckPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CheckPainter old) => old.short != short || old.long != long || old.stroke != stroke;
-}
-
-/// 大会员's pink pill after the account's name, as the avatar menu drew it.
-class VipBadge extends StatelessWidget {
-  const VipBadge({super.key});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    key: const ValueKey('settings-vip'),
-    height: BiliMetrics.vipBadgeHeight,
-    padding: const EdgeInsets.symmetric(horizontal: SettingsTheme.vipBadgePadding),
-    alignment: Alignment.center,
-    decoration: const ShapeDecoration(color: SettingsTheme.vipBadge, shape: StadiumBorder()),
-    child: Text(
-      '大会员',
-      style: TextStyle(
-        fontFamily: BiliFonts.family,
-        fontSize: BiliMetrics.vipBadgeText,
-        fontWeight: FontWeight.w600,
-        color: SettingsTheme.vipBadgeLabel,
-        height: 1,
-      ),
-    ),
-  );
 }

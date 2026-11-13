@@ -69,9 +69,9 @@ void main() {
     expectValue('settings-home-feed', '双列/Wi-Fi/免流/移动网络下自动播放');
     final feed = tester.getRect(row('settings-home-feed'));
     final playback = tester.getRect(row('settings-playback'));
-    final node = tester.getRect(row('settings-node'));
+    final btr = tester.getRect(row('settings-btr'));
     expect(playback.top, closeTo(feed.bottom + 1 / 3, 0.01));
-    expect(node.top, greaterThan(playback.bottom + 10));
+    expect(btr.top, greaterThan(playback.bottom + 10));
     expect(tester.takeException(), isNull);
   });
 

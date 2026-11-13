@@ -5,7 +5,8 @@ import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
-import 'package:bilifast/settings/node_page.dart';
+import 'package:bilifast/settings/btr_page.dart';
+import 'package:bilifast/settings/playback/home_feed_settings_page.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -69,6 +70,9 @@ void main() {
   Finder row(String key) => find.byKey(ValueKey(key));
   Finder confirmButton(String label) => find.byKey(ValueKey('settings-confirm-$label'));
   final confirm = find.byKey(const ValueKey('settings-confirm'));
+  Finder text(String key, String value) => find.descendant(of: row(key), matching: find.text(value));
+  Finder checked(String key) => find.descendant(of: row(key), matching: find.byKey(const ValueKey('settings-check')));
+  const licence = '下载加速移植自 Bilibili 线程撕裂者（BTR），MIT 许可。';
 
   Future<void> tapRow(WidgetTester tester, String key) async {
     await tester.ensureVisible(row(key));
@@ -77,118 +81,165 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('under the system font mixed titles, the account\'s name, the licence line and the bar\'s title sit on '
-      'the Chinese line', (tester) async {
-    await useSystemFont(tester);
-    await show(tester, account: const LoggedIn(name: mixedLine, vip: false), theme: appTheme());
-    expectOnChineseLine(tester, find.text(mixedLine));
-    expectOnChineseLine(tester, find.text('CDN 节点'));
-    expectOnChineseLine(tester, find.text('BTR 加速（默认）'));
-    const licence = '下载加速移植自 Bilibili 线程撕裂者（BTR），MIT 许可。';
-    await tester.ensureVisible(find.text(licence));
+  Future<void> back(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('settings-back')).last);
     await tester.pumpAndSettle();
-    expectOnChineseLine(tester, find.text(licence));
+  }
 
-    await tapRow(tester, 'settings-node');
+  List<String> rowTitles(WidgetTester tester) => [
+    for (final row in tester.widgetList<SettingsRow>(find.byType(SettingsRow, skipOffstage: false))) row.title,
+  ];
+
+  testWidgets('under the system font the rows, the version and BTR\'s page sit on the Chinese line', (tester) async {
+    await useSystemFont(tester);
+    await show(tester, theme: appTheme());
+    expectOnChineseLine(tester, find.text('BTR'));
+    await tester.ensureVisible(row('settings-version'));
+    await tester.pumpAndSettle();
+    expectOnChineseLine(tester, find.text('版本 1.0.0 (10)'));
+
+    await tapRow(tester, 'settings-btr');
+    expectOnChineseLine(tester, find.text('BTR 加速'));
     expectOnChineseLine(tester, find.text('CDN 节点'));
+    expectOnChineseLine(tester, find.text(licence));
   });
 
-  group('the account row', () {
-    testWidgets('logged out: 登录 opens the login page, and there is no 退出登录', (tester) async {
+  testWidgets('the order: 首页推荐设置, 播放设置, BTR, the clearing rows, 开发者, 退出登录, then the version', (tester) async {
+    await show(
+      tester,
+      account: const LoggedIn(name: '小明', vip: true),
+      developerPage: (_) => const Scaffold(body: Text('开发者页面')),
+      imageCache: FakeImageDiskCache(1024),
+    );
+    expect(rowTitles(tester), ['首页推荐设置', '播放设置', 'BTR', '清除最近观看', '清除图片缓存', '开发者', '退出登录']);
+    await tester.ensureVisible(row('settings-version'));
+    await tester.pumpAndSettle();
+    final version = tester.getRect(row('settings-version'));
+    expect(version.top, greaterThan(tester.getRect(row('settings-logout')).bottom));
+    expect(version.center.dx, closeTo(220, 0.5));
+    expect(tester.widget<Text>(row('settings-version')).style?.color, SettingsTheme.footer);
+  });
+
+  testWidgets('重置编码记忆 and 清除日志 are not on 设置 (开发者 has them)', (tester) async {
+    await show(tester, imageCache: FakeImageDiskCache(1024));
+    expect(find.text('重置编码记忆', skipOffstage: false), findsNothing);
+    expect(find.text('清除日志', skipOffstage: false), findsNothing);
+    expect(row('settings-codec-memory'), findsNothing);
+    expect(row('settings-logs'), findsNothing);
+  });
+
+  group('the account', () {
+    testWidgets('logged out: 登录 comes first and opens the login page, and there is no 退出登录', (tester) async {
       await show(tester);
-      expect(find.descendant(of: row('settings-login'), matching: find.text('登录')), findsOneWidget);
+      expect(text('settings-login', '登录'), findsOneWidget);
+      expect(rowTitles(tester).first, '登录');
       expect(row('settings-relogin'), findsNothing);
-      expect(row('settings-account'), findsNothing);
       await tapRow(tester, 'settings-login');
       expect(world.gate.requests, 1);
       expect(row('settings-logout'), findsNothing);
     });
 
-    testWidgets('login expired: 重新登录 opens the login page', (tester) async {
+    testWidgets('login expired: 重新登录 comes first and opens the login page', (tester) async {
       await show(tester, account: const LoginExpired());
       expect(row('settings-login'), findsNothing);
+      expect(rowTitles(tester).first, '重新登录');
       await tapRow(tester, 'settings-relogin');
       expect(world.gate.requests, 1);
       expect(row('settings-logout'), findsNothing);
     });
 
-    testWidgets('logged in: 账号 shows the name and does nothing, and 退出登录 is last', (tester) async {
-      await show(tester, account: const LoggedIn(name: '小明', vip: false));
-      expect(find.descendant(of: row('settings-account'), matching: find.text('小明')), findsOneWidget);
-      await tapRow(tester, 'settings-account');
-      expect(world.gate.requests, 0);
-      expect(confirm, findsNothing);
-      expect(row('settings-logout'), findsOneWidget);
-      final rows = tester.widgetList<SettingsRow>(find.byType(SettingsRow)).toList();
-      expect(rows.last.title, '退出登录');
-    });
-
-    testWidgets('大会员: the name is pink with the pink 大会员 pill after it; anyone else\'s is grey without one', (
-      tester,
-    ) async {
+    testWidgets('logged in: no account rows at all, and 退出登录 is the last row', (tester) async {
       await show(tester, account: const LoggedIn(name: '小明', vip: true));
-      final name = tester.widget<Text>(find.descendant(of: row('settings-account'), matching: find.text('小明')));
-      expect(name.style?.color, SettingsTheme.vipName);
-      final badge = find.descendant(of: row('settings-account'), matching: find.byKey(const ValueKey('settings-vip')));
-      expect(find.descendant(of: badge, matching: find.text('大会员')), findsOneWidget);
-      expect(tester.getRect(badge).left, greaterThan(tester.getRect(find.text('小明')).right));
-      expect(tester.getRect(badge).right, lessThanOrEqualTo(440 - SettingsTheme.chevronRight));
-
-      world.environment.account = const LoggedIn(name: '小明', vip: false);
-      await tester.pump();
-      expect(tester.widget<Text>(find.text('小明')).style?.color, SettingsTheme.value);
-      expect(find.byKey(const ValueKey('settings-vip')), findsNothing);
+      expect(find.text('小明', skipOffstage: false), findsNothing);
+      expect(find.text('账号', skipOffstage: false), findsNothing);
+      expect(find.text('大会员', skipOffstage: false), findsNothing);
+      expect(row('settings-login'), findsNothing);
+      expect(row('settings-relogin'), findsNothing);
+      expect(rowTitles(tester).first, '首页推荐设置');
+      expect(rowTitles(tester).last, '退出登录');
     });
 
-    testWidgets('a failed account check offers a retry that asks Bilibili again', (tester) async {
+    testWidgets('an account still being checked, or whose check failed, shows no row either', (tester) async {
       await show(tester, account: const AccountUnknown());
+      expect(rowTitles(tester).first, '首页推荐设置');
       world.environment
         ..accountCheckFailed = true
         ..account = const AccountUnknown();
       await tester.pump();
-      expect(find.descendant(of: row('settings-account'), matching: find.text('无法获取账号信息，点按重试')), findsOneWidget);
-      expect(find.text('账号确认失败'), findsNothing);
-      await tapRow(tester, 'settings-account');
-      expect(world.environment.refreshes, 1);
-      expect(world.gate.requests, 0);
-    });
-
-    testWidgets('unknown: 账号 says it is checking', (tester) async {
-      await show(tester, account: const AccountUnknown());
-      expect(find.descendant(of: row('settings-account'), matching: find.text('正在确认账号…')), findsOneWidget);
+      expect(rowTitles(tester).first, '首页推荐设置');
+      expect(find.text('无法获取账号信息，点按重试', skipOffstage: false), findsNothing);
       expect(row('settings-logout'), findsNothing);
     });
 
-    testWidgets('a login while 设置 is open turns 登录 into 账号 and brings 退出登录', (tester) async {
+    testWidgets('a login while 设置 is open takes 登录 away and brings 退出登录', (tester) async {
       await show(tester);
       world.environment.account = const LoggedIn(name: '小明', vip: false);
       await tester.pump();
       expect(row('settings-login'), findsNothing);
-      expect(find.text('小明'), findsOneWidget);
+      expect(rowTitles(tester).first, '首页推荐设置');
       expect(row('settings-logout'), findsOneWidget);
     });
   });
 
-  group('加速', () {
-    testWidgets('CDN 节点 starts on 海外节点; 大陆节点 is saved and goes to the engine for the next video', (tester) async {
+  group('BTR', () {
+    testWidgets('the row reads 开启 or 关闭 and opens BTR\'s page; its switch saves btr and the row follows', (
+      tester,
+    ) async {
       await show(tester);
-      expect(find.descendant(of: row('settings-node'), matching: find.text('海外节点')), findsOneWidget);
-      await tapRow(tester, 'settings-node');
-      expect(find.byType(NodePage), findsOneWidget);
-      await tester.tap(row('node-mainland'));
-      await tester.pumpAndSettle();
+      expect(prefs.btr, isTrue);
+      expect(text('settings-btr', '开启'), findsOneWidget);
+      await tapRow(tester, 'settings-btr');
+      expect(find.byType(BtrPage), findsOneWidget);
+      expect(find.text('BTR'), findsOneWidget, reason: 'the bar\'s title');
+      expect(tester.getSemantics(row('btr-switch')), isSemantics(isToggled: true, hasToggledState: true));
+
+      await tapRow(tester, 'btr-switch');
+      expect(prefs.btr, isFalse);
+      expect(tester.getSemantics(row('btr-switch')), isSemantics(isToggled: false, hasToggledState: true));
+      await back(tester);
+      expect(text('settings-btr', '关闭'), findsOneWidget);
+
+      await tapRow(tester, 'settings-btr');
+      await tapRow(tester, 'btr-switch');
+      expect(prefs.btr, isTrue);
+      await back(tester);
+      expect(text('settings-btr', '开启'), findsOneWidget);
+    });
+
+    testWidgets('BTR\'s page: the switch, CDN 节点\'s picks with their note, and the licence last', (tester) async {
+      await show(tester);
+      await tapRow(tester, 'settings-btr');
+      expect(find.text('CDN 节点'), findsOneWidget);
+      expect(text('node-overseas', '海外节点'), findsOneWidget);
+      expect(text('node-mainland', '大陆节点'), findsOneWidget);
+      final note = tester.getRect(find.text('从下一个视频开始使用。'));
+      expect(note.top, greaterThan(tester.getRect(row('node-mainland')).bottom));
+      expect(tester.getRect(find.text(licence)).top, greaterThan(note.bottom));
+      expect(tester.getRect(row('btr-switch')).bottom, lessThan(tester.getRect(find.text('CDN 节点')).top));
+      expect(tester.widget<Text>(find.text(licence)).style?.color, SettingsTheme.footer);
+      await back(tester);
+      expect(find.text(licence), findsNothing, reason: '设置 itself no longer carries it');
+    });
+
+    testWidgets('CDN 节点 starts on 海外节点; 大陆节点 is saved and goes to the engine for the next video', (tester) async {
+      final logs = MemorySink();
+      Logger.shared.add(logs);
+      addTearDown(() => Logger.shared.remove(logs));
+      await show(tester);
+      await tapRow(tester, 'settings-btr');
+      expect(checked('node-overseas'), findsOneWidget);
+      expect(checked('node-mainland'), findsNothing);
+      await tapRow(tester, 'node-mainland');
       expect(prefs.node, NodeChoice.mainland);
       expect(world.engine.nodeModes.last, isA<MainlandNodes>());
-      expect(find.descendant(of: row('node-mainland'), matching: find.byIcon(Icons.check)), findsOneWidget);
-      expect(find.descendant(of: row('node-overseas'), matching: find.byIcon(Icons.check)), findsNothing);
+      expect(checked('node-mainland'), findsOneWidget);
+      expect(checked('node-overseas'), findsNothing);
+      expect(logs.events.where((event) => event.msg == 'settings node').single.f['node']?.toJson(), 'mainland');
 
-      await tester.tap(find.byKey(const ValueKey('settings-back')));
-      await tester.pumpAndSettle();
-      expect(find.descendant(of: row('settings-node'), matching: find.text('大陆节点')), findsOneWidget);
-
-      await tapRow(tester, 'settings-node');
-      await tester.tap(row('node-overseas'));
-      await tester.pumpAndSettle();
+      await back(tester);
+      await tapRow(tester, 'settings-btr');
+      expect(checked('node-mainland'), findsOneWidget);
+      await tapRow(tester, 'node-overseas');
       expect(prefs.node, NodeChoice.overseas);
       expect(world.engine.nodeModes.last, isA<OverseasNodes>());
     });
@@ -199,9 +250,8 @@ void main() {
       final gate = Completer<void>();
       await show(tester, startGate: gate);
       expect(world.shared.running, isNull);
-      await tapRow(tester, 'settings-node');
-      await tester.tap(row('node-mainland'));
-      await tester.pumpAndSettle();
+      await tapRow(tester, 'settings-btr');
+      await tapRow(tester, 'node-mainland');
       expect(prefs.node, NodeChoice.mainland);
       expect(world.engine.nodeModes, isEmpty);
       gate.complete();
@@ -213,48 +263,13 @@ void main() {
 
     testWidgets('picking the node already in use changes nothing', (tester) async {
       await show(tester);
-      await tapRow(tester, 'settings-node');
-      await tester.tap(row('node-overseas'));
-      await tester.pumpAndSettle();
+      await tapRow(tester, 'settings-btr');
+      await tapRow(tester, 'node-overseas');
       expect(world.engine.nodeModes, isEmpty);
-    });
-
-    testWidgets('BTR 加速 flips the saved setting both ways', (tester) async {
-      await show(tester);
-      expect(prefs.btr, isTrue);
-      await tapRow(tester, 'settings-btr');
-      expect(prefs.btr, isFalse);
-      await tapRow(tester, 'settings-btr');
-      expect(prefs.btr, isTrue);
     });
   });
 
   group('数据', () {
-    testWidgets('重置编码记忆 asks first, then forgets the codecs that failed', (tester) async {
-      await show(tester);
-      world.memory.markFailed('av1');
-      await tapRow(tester, 'settings-codec-memory');
-      expect(find.descendant(of: confirm, matching: find.text('重置编码记忆？')), findsOneWidget);
-      expect(find.descendant(of: confirm, matching: find.text('本机播放失败过的编码会重新参与尝试。')), findsOneWidget);
-      await tester.tap(confirmButton('重置'));
-      await tester.pumpAndSettle();
-      expect(world.memory.failedKinds, isEmpty);
-      expect(confirm, findsNothing);
-    });
-
-    testWidgets('重置编码记忆 needs neither a page open nor the engine started', (tester) async {
-      final gate = Completer<void>();
-      await show(tester, startGate: gate);
-      world.memory.markFailed('av1');
-      await tapRow(tester, 'settings-codec-memory');
-      await tester.tap(confirmButton('重置'));
-      await tester.pumpAndSettle();
-      expect(confirm, findsNothing);
-      expect(world.memory.failedKinds, isEmpty);
-      expect(world.services.playback.live, 0);
-      gate.complete();
-    });
-
     testWidgets('清除最近观看 is off while 最近打开 is empty', (tester) async {
       await show(tester);
       expect(tester.widget<SettingsRow>(row('settings-recents')).enabled, isFalse);
@@ -275,28 +290,18 @@ void main() {
       expect(tester.widget<SettingsRow>(row('settings-recents')).enabled, isFalse);
     });
 
-    testWidgets('清除日志 asks first, then clears the log files', (tester) async {
-      await show(tester);
-      await tapRow(tester, 'settings-logs');
-      expect(find.descendant(of: confirm, matching: find.text('清除日志？')), findsOneWidget);
-      expect(find.descendant(of: confirm, matching: find.text('手机上保存的调试日志会被删除，已发送到电脑的不受影响。')), findsOneWidget);
-      await tester.tap(confirmButton('清除'));
-      await tester.pumpAndSettle();
-      expect(world.logFiles.clears, 1);
-    });
-
-    testWidgets('清除图片缓存 follows 清除日志 and shows what the stored pictures take', (tester) async {
+    testWidgets('清除图片缓存 follows 清除最近观看 and shows what the stored pictures take', (tester) async {
       final pictures = FakeImageDiskCache(12345678);
       await show(tester, imageCache: pictures);
-      final titles = [for (final row in tester.widgetList<SettingsRow>(find.byType(SettingsRow))) row.title];
-      expect(titles.indexOf('清除图片缓存'), titles.indexOf('清除日志') + 1);
-      expect(find.descendant(of: row('settings-images'), matching: find.text('11.8 MB')), findsOneWidget);
+      final titles = rowTitles(tester);
+      expect(titles.indexOf('清除图片缓存'), titles.indexOf('清除最近观看') + 1);
+      expect(text('settings-images', '11.8 MB'), findsOneWidget);
     });
 
     testWidgets('清除图片缓存 asks first, then clears the pictures and shows the new size', (tester) async {
       final pictures = FakeImageDiskCache(3 * 1024 * 1024);
       await show(tester, imageCache: pictures);
-      expect(find.descendant(of: row('settings-images'), matching: find.text('3.0 MB')), findsOneWidget);
+      expect(text('settings-images', '3.0 MB'), findsOneWidget);
       await tapRow(tester, 'settings-images');
       expect(find.descendant(of: confirm, matching: find.text('清除图片缓存？')), findsOneWidget);
       expect(find.descendant(of: confirm, matching: find.text('保存在手机上的图片会被删除，再看到时会重新下载。')), findsOneWidget);
@@ -305,21 +310,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(pictures.clears, 1);
       expect(confirm, findsNothing);
-      expect(find.descendant(of: row('settings-images'), matching: find.text('0.0 MB')), findsOneWidget);
-    });
-
-    testWidgets('清除图片缓存 and its 清除 press through accessibility', (tester) async {
-      final semantics = tester.ensureSemantics();
-      final pictures = FakeImageDiskCache(1024);
-      await show(tester, imageCache: pictures);
-      await tester.ensureVisible(row('settings-images'));
-      await tester.pumpAndSettle();
-      tester.semantics.tap(find.semantics.byLabel(RegExp('^清除图片缓存')));
-      await tester.pumpAndSettle();
-      tester.semantics.tap(find.semantics.byLabel('清除'));
-      await tester.pumpAndSettle();
-      expect(pictures.clears, 1);
-      semantics.dispose();
+      expect(text('settings-images', '0.0 MB'), findsOneWidget);
     });
 
     testWidgets('清除图片缓存 that fails is logged, not thrown', (tester) async {
@@ -344,7 +335,7 @@ void main() {
       await tester.tap(confirmButton('取消'));
       await tester.pumpAndSettle();
       expect(pictures.clears, 0);
-      expect(find.descendant(of: row('settings-images'), matching: find.text('0.0 MB')), findsOneWidget);
+      expect(text('settings-images', '0.0 MB'), findsOneWidget);
     });
 
     testWidgets('without pictures kept on the phone there is no 清除图片缓存', (tester) async {
@@ -359,12 +350,12 @@ void main() {
     });
 
     testWidgets('取消, the dim and back each close a confirm with nothing done', (tester) async {
-      await show(tester, account: const LoggedIn(name: '小明', vip: false));
-      world.memory.markFailed('av1');
+      final pictures = FakeImageDiskCache(1024);
+      await show(tester, account: const LoggedIn(name: '小明', vip: false), imageCache: pictures);
       world.services.recents.add(sampleRecent);
       await tester.pump();
 
-      await tapRow(tester, 'settings-codec-memory');
+      await tapRow(tester, 'settings-images');
       await tester.tap(confirmButton('取消'));
       await tester.pumpAndSettle();
       expect(confirm, findsNothing);
@@ -374,7 +365,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(confirm, findsNothing);
 
-      await tapRow(tester, 'settings-logs');
+      await tapRow(tester, 'settings-images');
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(confirm, findsNothing);
@@ -384,9 +375,8 @@ void main() {
       await tester.tap(confirmButton('取消'));
       await tester.pumpAndSettle();
 
-      expect(world.memory.failedKinds, {'av1'});
+      expect(pictures.clears, 0);
       expect(world.services.recents.items, hasLength(1));
-      expect(world.logFiles.clears, 0);
       expect(world.environment.logouts, 0);
       expect(world.environment.account, isA<LoggedIn>());
     });
@@ -405,10 +395,15 @@ void main() {
     });
   });
 
-  testWidgets('the version and the BTR licence note', (tester) async {
+  testWidgets('the version is the last thing on the page, as 版本 and the build', (tester) async {
     await show(tester);
-    expect(find.descendant(of: row('settings-version'), matching: find.text('1.0.0 (10)')), findsOneWidget);
-    expect(find.text('下载加速移植自 Bilibili 线程撕裂者（BTR），MIT 许可。'), findsOneWidget);
+    expect(find.text('版本'), findsNothing);
+    expect(tester.widget<Text>(row('settings-version')).data, '版本 1.0.0 (10)');
+    final list = find.descendant(of: find.byType(SettingsScaffold), matching: find.byType(ListView));
+    final texts = tester.widgetList<Text>(
+      find.descendant(of: list, matching: find.byType(Text), skipOffstage: false),
+    );
+    expect(texts.last.key, const ValueKey('settings-version'));
   });
 
   test('the build version reads as name (number)', () {
@@ -456,20 +451,20 @@ void main() {
 
   testWidgets('an open confirm hides the rows behind it from accessibility', (tester) async {
     final semantics = tester.ensureSemantics();
-    await show(tester);
-    expect(find.semantics.byLabel('重置编码记忆'), findsOne);
-    await tapRow(tester, 'settings-logs');
-    expect(find.semantics.byLabel('重置编码记忆'), findsNothing);
+    await show(tester, imageCache: FakeImageDiskCache(1024));
+    expect(find.semantics.byLabel('播放设置'), findsOne);
+    await tapRow(tester, 'settings-images');
+    expect(find.semantics.byLabel('播放设置'), findsNothing);
     expect(find.semantics.byLabel('清除'), findsOne);
     await tester.tap(confirmButton('取消'));
     await tester.pumpAndSettle();
-    expect(find.semantics.byLabel('重置编码记忆'), findsOne);
+    expect(find.semantics.byLabel('播放设置'), findsOne);
     semantics.dispose();
   });
 
-  testWidgets('Reduce Motion: the confirm and the switch change at once', (tester) async {
-    await show(tester, reduceMotion: true);
-    await tester.tap(row('settings-logs'));
+  testWidgets('Reduce Motion: the confirm and BTR\'s switch change at once', (tester) async {
+    await show(tester, reduceMotion: true, imageCache: FakeImageDiskCache(1024));
+    await tester.tap(row('settings-images'));
     await tester.pump();
     await tester.pump();
     expect(tester.hasRunningAnimations, isFalse);
@@ -480,24 +475,93 @@ void main() {
     await tester.pump();
     expect(confirm, findsNothing);
 
-    await tester.tap(row('settings-btr'));
+    await tapRow(tester, 'settings-btr');
+    await tester.tap(row('btr-switch'));
     await tester.pump();
     expect(tester.widget<AnimatedContainer>(find.byKey(const ValueKey('settings-switch'))).duration, Duration.zero);
     expect(tester.hasRunningAnimations, isFalse);
   });
 
-  testWidgets('every row presses through accessibility, as the Windows test driver does', (tester) async {
-    final semantics = tester.ensureSemantics();
-    await show(tester);
-    tester.semantics.tap(find.semantics.byLabel('BTR 加速（默认）'));
-    await tester.pumpAndSettle();
-    expect(prefs.btr, isFalse);
-    tester.semantics.tap(find.semantics.byLabel('清除日志'));
-    await tester.pumpAndSettle();
-    tester.semantics.tap(find.semantics.byLabel('清除'));
-    await tester.pumpAndSettle();
-    expect(world.logFiles.clears, 1);
-    semantics.dispose();
+  group('every row presses through accessibility, as the Windows test driver does', () {
+    testWidgets('logged out: 登录, the playback pages, BTR and its page, the clearing rows, 开发者', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final pictures = FakeImageDiskCache(1024);
+      await show(tester, developerPage: (_) => const Scaffold(body: Text('开发者页面')), imageCache: pictures);
+      world.services.recents.add(sampleRecent);
+      await tester.pump();
+
+      tester.semantics.tap(find.semantics.byLabel('登录'));
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 1);
+
+      tester.semantics.tap(find.semantics.byLabel(RegExp(r'^首页推荐设置')));
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeFeedSettingsPage), findsOneWidget);
+      tester.semantics.tap(find.semantics.byLabel('返回'));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('播放设置'));
+      await tester.pumpAndSettle();
+      expect(find.text('自动播放设置'), findsOneWidget);
+      tester.semantics.tap(find.semantics.byLabel('返回'));
+      await tester.pumpAndSettle();
+
+      tester.semantics.tap(find.semantics.byLabel(RegExp(r'^BTR\s+开启$')));
+      await tester.pumpAndSettle();
+      expect(find.byType(BtrPage), findsOneWidget);
+      tester.semantics.tap(find.semantics.byLabel('BTR 加速'));
+      await tester.pumpAndSettle();
+      expect(prefs.btr, isFalse);
+      tester.semantics.tap(find.semantics.byLabel('大陆节点'));
+      await tester.pumpAndSettle();
+      expect(prefs.node, NodeChoice.mainland);
+      expect(world.engine.nodeModes.last, isA<MainlandNodes>());
+      tester.semantics.tap(find.semantics.byLabel('海外节点'));
+      await tester.pumpAndSettle();
+      expect(prefs.node, NodeChoice.overseas);
+      tester.semantics.tap(find.semantics.byLabel('返回'));
+      await tester.pumpAndSettle();
+      expect(find.semantics.byLabel(RegExp(r'^BTR\s+关闭$')), findsOne);
+
+      tester.semantics.tap(find.semantics.byLabel('清除最近观看'));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('清除'));
+      await tester.pumpAndSettle();
+      expect(world.services.recents.items, isEmpty);
+
+      await tester.ensureVisible(row('settings-images'));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel(RegExp('^清除图片缓存')));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('清除'));
+      await tester.pumpAndSettle();
+      expect(pictures.clears, 1);
+
+      await tester.ensureVisible(row('settings-developer'));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('开发者'));
+      await tester.pumpAndSettle();
+      expect(find.text('开发者页面'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('login expired: 重新登录; logged in: 退出登录', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await show(tester, account: const LoginExpired());
+      tester.semantics.tap(find.semantics.byLabel('重新登录'));
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 1);
+
+      world.environment.account = const LoggedIn(name: '小明', vip: false);
+      await tester.pump();
+      await tester.ensureVisible(row('settings-logout'));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('退出登录'));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('确定'));
+      await tester.pumpAndSettle();
+      expect(world.environment.logouts, 1);
+      semantics.dispose();
+    });
   });
 
   test('the node choice is saved to player_prefs.json and read back', () async {
