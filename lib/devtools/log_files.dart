@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../playback/playback_setup.dart';
 
-/// The log kept on the phone (BiliNative `DevLogSetup`'s FileSink, the last 20 MB), for 设置's 清除日志 and
+/// The log kept on the phone (BiliNative `DevLogSetup`'s FileSink, the last 20 MB), for 开发者's 清除日志 and
 /// 开发者's 导出日志.
 abstract interface class LogFiles {
   /// Attaches the file sink to `Logger.shared` where there is a place to keep it.

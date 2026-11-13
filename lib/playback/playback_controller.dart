@@ -829,7 +829,7 @@ class PlaybackController extends ChangeNotifier {
     _engine.setNodeMode(mode);
   }
 
-  /// 设置's 重置编码记忆: codecs the player refused are tried again.
+  /// 开发者's 重置编码记忆: codecs the player refused are tried again.
   void resetCodecMemory() => _memory.reset();
 
   /// The system is short of memory: the engine drops its prefetched segments and playback goes on; the next video
