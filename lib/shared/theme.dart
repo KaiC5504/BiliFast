@@ -143,8 +143,8 @@ abstract final class BiliColors {
   static const nodeOther = Color(0xFF8E8E93);
 }
 
-/// The app's font, picked in 设置 → 字体 and applied at launch by `FontStore`: the system's, or one imported from a file.
-/// The zh-Hans locale makes any character a font lacks fall back to a Chinese font.
+/// The app's font: the system's, as the official app draws. The zh-Hans locale makes any character a font lacks fall
+/// back to a Chinese font.
 abstract final class BiliFonts {
   /// The system font: SF, with PingFang SC for Chinese, as the official app draws. iOS's engine registers no family by
   /// this name (only CupertinoSystemDisplay, SF's large face), so on the phone it matches nothing and the engine's
@@ -152,7 +152,7 @@ abstract final class BiliFonts {
   /// square test font.
   static const system = 'CupertinoSystemText';
 
-  /// The family every style names.
+  /// The family every style names. Settable so tests can draw another family and check what follows [system] alone.
   static String? family = system;
 
   static const locale = Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN');
@@ -201,7 +201,7 @@ abstract final class BiliFonts {
   /// Under the system font, the strut a wrapping text whose lines can mix Latin and Chinese needs: each run splits its
   /// line height by its own font's ascent and descent, and SF's split differs from PingFang's, so a line holding both
   /// is a point taller than a Chinese one and its baseline a point lower. PingFang's line for every line keeps the
-  /// official app's pitch. Null under an imported font, which draws both scripts.
+  /// official app's pitch. Null under any other family.
   static StrutStyle? strut(TextStyle style) => family == system && style.height != null
       ? StrutStyle(
           fontFamily: 'PingFang SC',

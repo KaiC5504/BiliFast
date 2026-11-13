@@ -11,7 +11,6 @@ import 'package:bilifast/me/me_header.dart';
 import 'package:bilifast/me/me_model.dart';
 import 'package:bilifast/me/me_page.dart';
 import 'package:bilifast/offline/pages/offline_list_page.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -623,11 +622,11 @@ void main() {
     expect(region.value, SystemUiOverlayStyle.dark);
   });
 
-  testWidgets('text follows the 字体 chosen', (tester) async {
+  testWidgets('text draws in the system font', (tester) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     BiliFonts.family = BiliFonts.system;
-    await showMe(tester, fonts: FontStore.memory()..select(FontChoice.system));
+    await showMe(tester);
     for (final text in ['KaiC5504', '更多服务', '离线缓存', '续订会员', '动态']) {
       expect(tester.widget<Text>(find.text(text)).style?.fontFamily, BiliFonts.system, reason: text);
     }

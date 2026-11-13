@@ -12,7 +12,6 @@ import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/search/fake_search_api.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -50,7 +49,6 @@ void main() {
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
-      fonts: FontStore.memory()..select(FontChoice.system),
       searchApi: FakeSearchApi(defaultWord: '搜索词'),
       meApi: FakeMeApi.demo(),
       loginGate: FakeLoginGate(),

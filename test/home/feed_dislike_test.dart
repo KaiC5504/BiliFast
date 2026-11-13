@@ -13,7 +13,6 @@ import 'package:bilifast/home/feed_more_sheet.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -157,7 +156,6 @@ void main() {
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
-      fonts: systemFont ? (FontStore.memory()..select(FontChoice.system)) : null,
       loginGate: FakeLoginGate(),
       searchApi: FakeSearchApi(defaultWord: '菲欧妮'),
       appAuth: auth ?? authFor?.call(environment) ?? FakeAppAuth(),

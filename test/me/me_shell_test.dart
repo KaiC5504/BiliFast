@@ -14,7 +14,6 @@ import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_model.dart';
 import 'package:bilifast/me/me_profile_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/remote_image.dart';
@@ -86,7 +85,6 @@ void main() {
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
-      fonts: FontStore.memory(),
       searchApi: FakeSearchApi(defaultWord: 'w'),
       meApi: me,
       pageApi: FakePageApi(),

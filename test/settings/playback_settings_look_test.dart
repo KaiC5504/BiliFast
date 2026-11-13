@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:bilifast/app/app_scope.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/playback/autoplay_settings_page.dart';
 import 'package:bilifast/settings/playback/home_feed_settings_page.dart';
 import 'package:bilifast/settings/playback/playback_settings_page.dart';
@@ -22,7 +21,7 @@ import 'settings_fakes.dart';
 /// 178, 179). Each must fit at 440 pt; with BILIFAST_SHOTS naming a folder outside the repo, the 3× shots are saved
 /// there for tools/screen_diff.py (the official bar is 10 pt taller: `--anchor 106:116`).
 void main() {
-  Future<void> shoot(WidgetTester tester, String name, Widget page, {VoidCallback? before}) async {
+  Future<void> shoot(WidgetTester tester, String name, Widget page) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     BiliFonts.family = BiliFonts.system;
@@ -35,8 +34,6 @@ void main() {
         home: RepaintBoundary(key: const ValueKey('shot'), child: page),
       ),
     );
-    before?.call();
-    BiliFonts.family = BiliFonts.system;
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'nothing overflows');
     final shots = Platform.environment['BILIFAST_SHOTS'];
@@ -53,7 +50,6 @@ void main() {
         services: world.services,
         child: SettingsPage(prefs: PlayerPrefs.memory(), version: '1.3.0 (9)'),
       ),
-      before: () => world.services.fonts.select(FontChoice.system),
     );
     final value = find.text('双列/Wi-Fi/免流/移动网络下自动播放');
     expect(tester.getSize(value).width, lessThan(240), reason: 'the whole value shows');

@@ -9,7 +9,6 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/playback/shared_engine.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
@@ -157,7 +156,6 @@ class SettingsWorld {
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null),
-      fonts: FontStore.memory(logger: logger),
       pageApi: FakePageApi(),
       loginGate: gate,
       imageCache: imageCache,

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
 import 'package:flutter/widgets.dart';
@@ -37,7 +36,6 @@ void main() {
       tester,
       pixelRatio: 3,
       theme: appTheme(),
-      fonts: FontStore.memory()..select(FontChoice.system),
     );
 
     Rect rect(String key) => tester.getRect(find.byKey(ValueKey(key)));

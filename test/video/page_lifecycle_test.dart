@@ -709,7 +709,6 @@ void main() {
     expect(listened(services.blockRules), isFalse);
     expect(listened(services.danmakuSettings), isFalse);
     expect(listened(services.recents), isFalse);
-    expect(listened(services.fonts), isFalse);
   });
 
   testWidgets('the small window closing well after its restored page showed releases nothing', (tester) async {

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, FileSystemEntity, Platform;
 
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
@@ -42,8 +42,6 @@ import 'search/fake_search_api.dart';
 import 'skin/fake_skin_api.dart';
 import 'search/search_history_store.dart';
 import 'settings/autoplay_policy.dart';
-import 'settings/follow_font.dart';
-import 'settings/font_store.dart';
 import 'space/fake_space_api.dart';
 import 'shared/image_disk_cache.dart';
 import 'shared/theme.dart';
@@ -62,6 +60,7 @@ Future<void> main(List<String> args) async {
   FormFactor.device = formFactor.kind;
   if (formFactor.kind.isPad) PhoneFrame.usePad();
   await resolveSupportFolder();
+  unawaited(removeOldFontFiles(supportFilePath));
   final logs = devToolsEnabled ? await LogForwarder.load(supportFilePath('log_server.json')) : null;
   final logFiles = LogFiles.platform();
   Logger.shared.info(LogCategory.app, 'launch', {
@@ -75,7 +74,6 @@ Future<void> main(List<String> args) async {
   }
   final AppEnvironment environment;
   final RecentStore recents;
-  final FontStore fonts;
   final SearchHistoryStore searchHistory;
   final DanmakuSettingsStore danmakuSettings;
   final CodecMemory codecMemory;
@@ -88,7 +86,6 @@ Future<void> main(List<String> args) async {
         : AppEnvironment.load());
     recents = await RecentStore.load(supportFilePath('recents.json'));
     PlayerPrefs.shared = await PlayerPrefs.load(supportFilePath('player_prefs.json'));
-    fonts = await FontStore.load(supportFilePath('font.json'));
     searchHistory = await SearchHistoryStore.load(supportFilePath('search_history.json'));
     danmakuSettings = await DanmakuSettingsStore.load(supportFilePath('danmaku_settings.json'));
     RecentEmotes.shared = await RecentEmotes.load(supportFilePath('emotes_recent.json'));
@@ -161,7 +158,6 @@ Future<void> main(List<String> args) async {
     playback: playback,
     recents: recents,
     device: device,
-    fonts: fonts,
     pageApi: fakeAccount ? FakePageApi.demo() : null,
     searchApi: fakeAccount ? FakeSearchApi.demo() : null,
     spaceApi: fakeAccount ? FakeSpaceApi.demo() : null,
@@ -214,6 +210,24 @@ void recheckUnknownAccount(AppEnvironment environment) {
 /// the controller logs a host that fails.
 void applyTurnTakeover(OrientationController orientation, PlayerPrefs prefs) =>
     unawaited(orientation.setTurnTakeover(prefs.turnTakeover));
+
+/// 设置 → 字体 is gone, but earlier builds left its choice and an imported font's copy in the support folder. Best
+/// effort, and the launch doesn't wait for it.
+Future<void> removeOldFontFiles(String? Function(String name) path, {Logger? logger}) async {
+  final log = logger ?? Logger.shared;
+  Future<void> remove(FileSystemEntity entity) async {
+    try {
+      if (await entity.exists()) await entity.delete(recursive: true);
+    } catch (error) {
+      log.warn(LogCategory.app, 'old font files not removed', {'error': '${error.runtimeType}'});
+    }
+  }
+
+  for (final name in const ['font.json', 'font.json.tmp']) {
+    if (path(name) case final file?) await remove(File(file));
+  }
+  if (path('fonts') case final folder?) await remove(Directory(folder));
+}
 
 /// What the app shows when it could not start.
 class LaunchFailedApp extends StatelessWidget {
@@ -289,43 +303,40 @@ class BiliFastApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FollowFont(
-      fonts: services.fonts,
-      builder: (context) => MaterialApp(
-        title: 'BiliFast',
-        debugShowCheckedModeBanner: false,
-        locale: BiliFonts.locale,
-        supportedLocales: const [BiliFonts.locale],
-        localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        theme: ThemeData(
-          fontFamily: BiliFonts.family,
-          fontFamilyFallback: BiliFonts.fallback,
-          textTheme: BiliFonts.untracked,
-          colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
-          scaffoldBackgroundColor: BiliColors.pageGrey,
-          // iOS has no ripples; rows show their own press highlight.
-          splashFactory: NoSplash.splashFactory,
-        ),
-        navigatorKey: services.navigator,
-        navigatorObservers: [pageRoutes],
-        // The official app keeps its sizes whatever iOS Text Size says, and every size here is measured off it.
-        builder: (context, child) => AppScope(
-          services: services,
-          child: PhoneFrame.wrap(
-              context, ReduceMotion(child: MediaQuery.withNoTextScaling(child: DefaultStatusBar(child: child!)))),
-        ),
-        home: MainShell(
-          initialLink: initialLink,
-          developerPage: services.logs == null
-              ? null
-              : (context) => DeveloperPage(
-                    startPlayback: services.playback.create,
-                    releasePlayback: services.playback.release,
-                    logs: services.logs,
-                    speedTestHooks: appSpeedTestHooksOn(services.playback.engine),
-                    appAuth: services.appAuth,
-                  ),
-        ),
+    return MaterialApp(
+      title: 'BiliFast',
+      debugShowCheckedModeBanner: false,
+      locale: BiliFonts.locale,
+      supportedLocales: const [BiliFonts.locale],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      theme: ThemeData(
+        fontFamily: BiliFonts.family,
+        fontFamilyFallback: BiliFonts.fallback,
+        textTheme: BiliFonts.untracked,
+        colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
+        scaffoldBackgroundColor: BiliColors.pageGrey,
+        // iOS has no ripples; rows show their own press highlight.
+        splashFactory: NoSplash.splashFactory,
+      ),
+      navigatorKey: services.navigator,
+      navigatorObservers: [pageRoutes],
+      // The official app keeps its sizes whatever iOS Text Size says, and every size here is measured off it.
+      builder: (context, child) => AppScope(
+        services: services,
+        child: PhoneFrame.wrap(
+            context, ReduceMotion(child: MediaQuery.withNoTextScaling(child: DefaultStatusBar(child: child!)))),
+      ),
+      home: MainShell(
+        initialLink: initialLink,
+        developerPage: services.logs == null
+            ? null
+            : (context) => DeveloperPage(
+                  startPlayback: services.playback.create,
+                  releasePlayback: services.playback.release,
+                  logs: services.logs,
+                  speedTestHooks: appSpeedTestHooksOn(services.playback.engine),
+                  appAuth: services.appAuth,
+                ),
       ),
     );
   }

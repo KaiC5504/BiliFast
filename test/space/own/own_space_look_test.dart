@@ -11,7 +11,6 @@ import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/favourites/fake_favourites_api.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
@@ -169,7 +168,6 @@ Future<void> _show(WidgetTester tester, SpaceProfile profile, {Skin? skin}) asyn
     environment: environment,
     playback: playback,
     recents: await RecentStore.load(null, logger: logger),
-    fonts: FontStore.memory()..select(FontChoice.system),
     pageApi: FakePageApi(),
     spaceApi: _Api(profile),
     favouritesApi: FakeFavouritesApi(),
