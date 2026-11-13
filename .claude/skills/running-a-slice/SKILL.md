@@ -125,11 +125,16 @@ Fix small findings directly.
 2. Add the CLAUDE.md status entry, and update the layout section for any new folders.
 3. Run `python scripts/gate.py` on the committed tree.
 4. Push main, then `python scripts/testflight.py start`.
-5. Check the run directly when its state matters (`python scripts/testflight.py status`, or `gh run view <id>`); on a
-   failure, `gh run view <id> --log-failed` at once. No fixed sleep, no polling loop, no `gh run watch`.
-6. Start `uv run tools/logserver.py` in the background unless it's already running (`NonUniqueNameException` means it
+5. Track the run in the background: one `gh run view <id> --json status` every 90 s until it completes, then
+   `python scripts/testflight.py status` once; on a failure, `gh run view <id> --log-failed` at once. No fixed sleep,
+   nothing faster than 90 s, no `gh run watch`.
+6. Once the run is green, remove the slice's worktrees and branches (each agent leaves a worktree of ~200 MB):
+   `git worktree remove -f -f` each one under `.claude/worktrees/`, `git worktree prune`, then `git branch -D` every
+   `worktree-agent-*` branch. Check first that each branch is merged into main (`git branch --no-merged main`); one
+   that isn't, ask KaiC before deleting it.
+7. Start `uv run tools/logserver.py` in the background unless it's already running (`NonUniqueNameException` means it
    is).
-7. Report: the build number, what changed, how it works, the numbered phone steps from the plan, and what to watch.
+8. Report: the build number, what changed, how it works, the numbered phone steps from the plan, and what to watch.
 
 ## Common mistakes
 
