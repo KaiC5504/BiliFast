@@ -156,14 +156,13 @@ class _TitleBlockState extends State<TitleBlock> with SingleTickerProviderStateM
   }
 }
 
-TextStyle _style(double size, Color color, {double? line, FontWeight? weight, double spacing = 0}) => TextStyle(
+TextStyle _style(double size, Color color, {double? line, FontWeight? weight}) => TextStyle(
   fontFamily: BiliFonts.family,
   // The description's spans take no fallback from the page's style.
   fontFamilyFallback: BiliFonts.fallback,
   fontSize: size,
   height: (line ?? size) / size,
   leadingDistribution: TextLeadingDistribution.even,
-  letterSpacing: spacing,
   fontWeight: weight,
   color: color,
 );
@@ -265,12 +264,7 @@ class _MetaLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = _style(
-      IntroTheme.metaText,
-      BiliColors.secondaryText,
-      line: IntroTheme.metaLine,
-      spacing: IntroTheme.metaSpacing,
-    );
+    final text = _style(IntroTheme.metaText, BiliColors.secondaryText, line: IntroTheme.metaLine);
     final strut = BiliFonts.strut(text);
     const icon = Size(IntroTheme.metaIconWidth, IntroTheme.metaIconHeight);
     return SizedBox(
@@ -329,12 +323,7 @@ class _NoticeLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = _style(
-      IntroTheme.noticeText,
-      BiliColors.secondaryText,
-      line: IntroTheme.noticeLine,
-      spacing: IntroTheme.proseSpacing,
-    );
+    final style = _style(IntroTheme.noticeText, BiliColors.secondaryText, line: IntroTheme.noticeLine);
     return Padding(
       padding: const EdgeInsets.only(top: IntroTheme.noticeGap),
       child: SizedBox(
@@ -463,7 +452,7 @@ class _Details extends StatelessWidget {
                 Flexible(
                   child: Text(
                     '未经作者授权禁止转载',
-                    style: meta.copyWith(letterSpacing: IntroTheme.proseSpacing),
+                    style: meta,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -476,12 +465,7 @@ class _Details extends StatelessWidget {
           const SizedBox(height: IntroTheme.descGap),
           DescriptionText(
             runs: runs,
-            style: _style(
-              IntroTheme.descText,
-              BiliColors.secondaryText,
-              line: IntroTheme.descLine,
-              spacing: IntroTheme.proseSpacing,
-            ),
+            style: _style(IntroTheme.descText, BiliColors.secondaryText, line: IntroTheme.descLine),
             onSeek: onSeek,
             onOpenVideo: onOpenVideo,
             onOpenLink: openLink,
@@ -509,12 +493,7 @@ class _PlainTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = _style(
-      IntroTheme.tagText,
-      IntroTheme.tagInk,
-      line: IntroTheme.tagHeight,
-      spacing: IntroTheme.proseSpacing,
-    );
+    final style = _style(IntroTheme.tagText, IntroTheme.tagInk, line: IntroTheme.tagHeight);
     return Container(
       height: IntroTheme.tagHeight,
       padding: const EdgeInsets.symmetric(horizontal: IntroTheme.tagPadding),

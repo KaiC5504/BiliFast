@@ -47,8 +47,8 @@ DanmakuScene laidOut(Size size, DanmakuOptions options) {
 
 Map<String, Rect> shown(DanmakuScene scene) => {for (final danmaku in scene.visible) danmaku.text: danmaku.rect};
 
-/// Under the test's square font a character is as wide as the font is big; a sprite's width is rounded up to a point,
-/// so a hundred of them measure it.
+/// A Han character is as wide as the font is big; a sprite's width is rounded up to a point, so a hundred of them
+/// measure it.
 double fontOf(DanmakuScene scene) => (shown(scene)[_ruler]!.width - BiliMetrics.danmakuPad * 2) / 100;
 
 /// A session whose post never goes out.
@@ -106,7 +106,8 @@ void main() {
       expect(const DanmakuSettings().display(presentation: Presentation.inline).formFactor, FormFactor.phone);
       final landscape = laidOut(const Size(956, 440), const DanmakuOptions(presentation: Presentation.landscape));
       expect(fontOf(landscape), closeTo(BiliMetrics.danmakuFontFullScreen, 0.011));
-      expect(landscape.laneHeight, closeTo(22 * BiliMetrics.danmakuLaneHeight, 0.01));
+      // PingFang's line, 31 at 22 pt in whole points, and an own danmaku's box outgrow 1.44 of the size.
+      expect(landscape.laneHeight, 31 + BiliMetrics.danmakuOwnPadY * 2);
       for (final width in [440.0, 834.0]) {
         expect(fontOf(laidOut(Size(width, 247.5), const DanmakuOptions())), closeTo(BiliMetrics.danmakuFont, 0.011));
       }

@@ -152,6 +152,16 @@ final class Rig {
   }
 }
 
+/// The default style the panel layer puts around its panels, with the system font's fallback.
+TextStyle panelText() => TextStyle(
+  inherit: false,
+  fontFamily: BiliFonts.family,
+  fontFamilyFallback: BiliFonts.fallback,
+  fontSize: BiliMetrics.panelTitleText,
+  color: BiliColors.panelText,
+  decoration: TextDecoration.none,
+);
+
 Finder inRow(String text, String key) => find.descendant(
   of: find.ancestor(of: find.text(text), matching: find.byType(AnimatedOpacity)),
   matching: find.byKey(ValueKey(key)),
@@ -193,7 +203,7 @@ void main() {
   });
 
   testWidgets('a long danmaku wraps and its row grows by whole lines', (tester) async {
-    await Rig().mount(tester);
+    await Rig().mount(tester, panelText: panelText());
     final one = tester.getSize(find.ancestor(of: find.text('第一个'), matching: find.byType(AnimatedOpacity)));
     final long = tester.getSize(find.ancestor(of: find.text(rows[2].content), matching: find.byType(AnimatedOpacity)));
     expect(one.height, DanmakuListTheme.rowMinHeight);
@@ -467,17 +477,7 @@ void main() {
       final rig = Rig(shown: [chinese, mixed, longChinese, longMixed])
         ..api.danmakuLikeStats[21] = (likes: 12, liked: false)
         ..api.danmakuLikeStats[22] = (likes: 12000, liked: false);
-      await rig.mount(
-        tester,
-        panelText: TextStyle(
-          inherit: false,
-          fontFamily: BiliFonts.family,
-          fontFamilyFallback: BiliFonts.fallback,
-          fontSize: BiliMetrics.panelTitleText,
-          color: BiliColors.panelText,
-          decoration: TextDecoration.none,
-        ),
-      );
+      await rig.mount(tester, panelText: panelText());
       await tester.pump();
     }
 

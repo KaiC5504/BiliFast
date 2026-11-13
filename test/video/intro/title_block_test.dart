@@ -459,10 +459,6 @@ void main() {
     testWidgets('a tab that opens a line indents it to the next 28 pt stop; one mid-line and leading spaces stay', (
       tester,
     ) async {
-      // MiSans's tightening would move the text after the stop by a tenth of a point.
-      final font = BiliFonts.family;
-      BiliFonts.family = BiliFonts.system;
-      addTearDown(() => BiliFonts.family = font);
       final rig = Rig();
       await rig.mount(
         tester,

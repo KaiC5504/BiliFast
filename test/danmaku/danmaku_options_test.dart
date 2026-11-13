@@ -139,7 +139,8 @@ void main() {
     final centres = [for (final text in ['今夕是何年', '快带上耳机', '首页通知书']) shown[text]!.center.dy]..sort();
     expect(centres, [11.5, 34.5, 57.5], reason: '23 apart from the top of the area');
 
-    expect(laidOut(Presentation.landscape).laneHeight, closeTo(22 * BiliMetrics.danmakuLaneHeight, 0.01));
+    // PingFang's line, 31 at 22 pt in whole points, and an own danmaku's box outgrow 1.44 of the size.
+    expect(laidOut(Presentation.landscape).laneHeight, 31 + BiliMetrics.danmakuOwnPadY * 2);
     expect(laidOut(Presentation.inline).laneHeight, greaterThanOrEqualTo(12.5 * BiliMetrics.danmakuLaneHeight));
   });
 

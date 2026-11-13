@@ -207,12 +207,8 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
         ? textStyle.copyWith(
             fontSize: DanmakuSendTheme.verticalPlaceholderFont,
             color: DanmakuSendTheme.verticalPlaceholder,
-            letterSpacing: DanmakuSendTheme.placeholderSpacing,
           )
-        : textStyle.copyWith(
-            color: DanmakuSendTheme.placeholder,
-            letterSpacing: DanmakuSendTheme.placeholderSpacing,
-          );
+        : textStyle.copyWith(color: DanmakuSendTheme.placeholder);
     // What the field and its hint draw in (the theme's bodyLarge under ours); the hint is a Text so it takes a strut.
     final field = Theme.of(context).textTheme.bodyLarge!.merge(textStyle);
     final hint = field.merge(hintStyle);

@@ -183,7 +183,6 @@ class _NameAndCounts extends StatelessWidget {
       fontSize: IntroTheme.nameText,
       height: IntroTheme.nameLine / IntroTheme.nameText,
       leadingDistribution: TextLeadingDistribution.even,
-      letterSpacing: IntroTheme.nameSpacing,
       color: card?.isVip == true ? BiliColors.pink : IntroTheme.name,
     );
     final countsStyle = TextStyle(
@@ -191,7 +190,6 @@ class _NameAndCounts extends StatelessWidget {
       fontSize: IntroTheme.fansText,
       height: IntroTheme.fansLine / IntroTheme.fansText,
       leadingDistribution: TextLeadingDistribution.even,
-      letterSpacing: IntroTheme.fansSpacing,
       color: BiliColors.secondaryText,
     );
     return Stack(
@@ -212,7 +210,7 @@ class _NameAndCounts extends StatelessWidget {
         Positioned(
           left: 0,
           right: 0,
-          top: IntroTheme.fansCentre + IntroTheme.fansDrop - IntroTheme.fansLine / 2,
+          top: IntroTheme.fansCentre - IntroTheme.fansLine / 2,
           height: IntroTheme.fansLine,
           child: AnimatedOpacity(
             opacity: card == null ? 0 : 1,
