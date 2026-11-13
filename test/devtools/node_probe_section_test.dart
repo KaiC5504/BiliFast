@@ -190,7 +190,7 @@ void main() {
       expect(_text(tester, 'node-probe-mainland-median'), '国内  中位 3.50 MB/s  6/8 通');
       expect(_text(tester, 'node-probe-overseas-median'), '海外  中位 10.0 MB/s  3/4 通');
       expect(_text(tester, 'node-probe-fastest'), '最快：aliov（海外）12.0 MB/s');
-      expect(_text(tester, 'node-probe-suggestion'), '建议：设置 → CDN 节点 改选「海外节点」（现在是「大陆节点」）');
+      expect(_text(tester, 'node-probe-suggestion'), '建议：设置 → BTR → CDN 节点 改选「海外节点」（现在是「大陆节点」）');
 
       expect(_row(tester, 'upos-sz-mirrorcos.bilivideo.com'), ['cos', '120 ms', '2.00']);
       expect(_row(tester, 'upos-sz-mirrorhw.bilivideo.com'), ['hw', '100 ms', 'HTTP 403']);
@@ -219,14 +219,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('node-probe-start')));
       await tester.pump();
       await tester.pump();
-      expect(_text(tester, 'node-probe-suggestion'), '建议：设置 → CDN 节点 选「海外节点」（现在就是）');
+      expect(_text(tester, 'node-probe-suggestion'), '建议：设置 → BTR → CDN 节点 选「海外节点」（现在就是）');
 
       expect(nodeProbeSuggestion(NodeProbeSummary.of(const []), NodeChoice.overseas), '两组都没测通，给不出建议');
       final mainlandOnly = NodeProbeSummary.of(const [
         NodeProbeResult(group: NodeGroup.mainland, node: 'a', firstByteMs: 1, bytes: 1048576, transferMs: 1000),
         NodeProbeResult(group: NodeGroup.overseas, node: 'b', failure: NodeProbeFailure.timeout),
       ]);
-      expect(nodeProbeSuggestion(mainlandOnly, NodeChoice.overseas), '建议：设置 → CDN 节点 改选「大陆节点」（现在是「海外节点」）');
+      expect(nodeProbeSuggestion(mainlandOnly, NodeChoice.overseas), '建议：设置 → BTR → CDN 节点 改选「大陆节点」（现在是「海外节点」）');
     });
 
     testWidgets('停止 while a node hangs ends the run at once, through accessibility presses too', (tester) async {

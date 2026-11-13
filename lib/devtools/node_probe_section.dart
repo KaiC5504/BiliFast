@@ -289,14 +289,14 @@ String nodeProbeFailureLabel(NodeProbeFailure failure) => switch (failure.kind) 
 
 String nodeProbeSpeed(double mbps) => mbps < 10 ? mbps.toStringAsFixed(2) : mbps.toStringAsFixed(1);
 
-/// 设置 → CDN 节点's choice for the faster group, beside the one set now.
+/// 设置 → BTR → CDN 节点's choice for the faster group, beside the one set now.
 String nodeProbeSuggestion(NodeProbeSummary summary, NodeChoice current) {
   final faster = summary.faster;
   if (faster == null) return '两组都没测通，给不出建议';
   final choice = nodeChoiceOf(faster);
   return choice == current
-      ? '建议：设置 → CDN 节点 选「${choice.label}」（现在就是）'
-      : '建议：设置 → CDN 节点 改选「${choice.label}」（现在是「${current.label}」）';
+      ? '建议：设置 → BTR → CDN 节点 选「${choice.label}」（现在就是）'
+      : '建议：设置 → BTR → CDN 节点 改选「${choice.label}」（现在是「${current.label}」）';
 }
 
 /// 开发者's 节点测速 card: each CDN node's first byte and speed on the same range, grouped 国内 / 海外.

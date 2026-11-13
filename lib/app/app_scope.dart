@@ -112,10 +112,10 @@ class AppPlayback with WidgetsBindingObserver {
     }
   }
 
-  /// 设置's CDN 节点: the engine running now and any that replaces it. Playbacks already prepared keep their nodes.
+  /// 设置 → BTR's CDN 节点: the engine running now and any that replaces it. Playbacks already prepared keep their nodes.
   void setNodeMode(NodeMode mode) => engine?.setNodeMode(mode);
 
-  /// 设置's 重置编码记忆: codecs the player refused are tried again, whether a page is open or not.
+  /// 开发者's 重置编码记忆: codecs the player refused are tried again, whether a page is open or not.
   void resetCodecMemory() => codecMemory?.reset();
 
   void dispose() {
