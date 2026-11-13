@@ -263,10 +263,7 @@ class _TitleBar extends StatelessWidget {
     child: Stack(
       alignment: Alignment.center,
       children: [
-        Transform.translate(
-          offset: Offset(0, HistoryTheme.titleDrop),
-          child: Text('历史记录', style: _style(HistoryTheme.titleText, BiliColors.text, weight: HistoryTheme.titleWeight)),
-        ),
+        Text('历史记录', style: _style(HistoryTheme.titleText, BiliColors.text, weight: HistoryTheme.titleWeight)),
         Positioned(
           left: HistoryTheme.backTipX + HistoryTheme.backWidth / 2 - HistoryTheme.backTarget / 2,
           top: 0,
@@ -387,7 +384,7 @@ class _HistoryRow extends StatelessWidget {
                 children: [
                   _MetaLine(glyph: const HistoryUpGlyph(), text: item.ownerName),
                   const SizedBox(height: HistoryTheme.metaGap),
-                  _MetaLine(glyph: HistoryDeviceGlyph(item.deviceKind), text: time, spacing: HistoryTheme.timeSpacing),
+                  _MetaLine(glyph: HistoryDeviceGlyph(item.deviceKind), text: time),
                 ],
               ),
             ),
@@ -425,11 +422,10 @@ class _HistoryRow extends StatelessWidget {
 }
 
 class _MetaLine extends StatelessWidget {
-  const _MetaLine({required this.glyph, required this.text, this.spacing = 0});
+  const _MetaLine({required this.glyph, required this.text});
 
   final Widget glyph;
   final String text;
-  final double spacing;
 
   @override
   Widget build(BuildContext context) {
@@ -437,7 +433,7 @@ class _MetaLine extends StatelessWidget {
       HistoryTheme.metaText,
       HistoryTheme.meta,
       height: HistoryTheme.metaLine / HistoryTheme.metaText,
-    ).copyWith(letterSpacing: spacing);
+    );
     return SizedBox(
       height: HistoryTheme.metaLine,
       child: Row(
@@ -494,7 +490,7 @@ class _Cover extends StatelessWidget {
                   child: Text(
                     HistoryModel.progressLabel(item),
                     key: const ValueKey('history-progress'),
-                    style: _style(HistoryTheme.pillFont, HistoryTheme.pillInk, height: 1),
+                    style: _style(HistoryTheme.pillText, HistoryTheme.pillInk, height: 1),
                   ),
                 ),
               ),

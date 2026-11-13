@@ -441,16 +441,13 @@ class SettingsScaffold extends StatelessWidget {
                   child: Stack(
                     children: [
                       Center(
-                        child: Transform.translate(
-                          offset: Offset(0, SettingsTheme.barTitleDrop),
-                          // Under the Scaffold's Material, whose style the title takes.
-                          child: Builder(
-                            builder: (context) => Text(
-                              title,
-                              maxLines: 1,
-                              style: titleStyle,
-                              strutStyle: BiliFonts.strutOf(context, titleStyle),
-                            ),
+                        // Under the Scaffold's Material, whose style the title takes.
+                        child: Builder(
+                          builder: (context) => Text(
+                            title,
+                            maxLines: 1,
+                            style: titleStyle,
+                            strutStyle: BiliFonts.strutOf(context, titleStyle),
                           ),
                         ),
                       ),
@@ -715,16 +712,13 @@ class SettingsRow extends StatelessWidget {
     double size = SettingsTheme.rowTitleText,
   }) {
     final style = TextStyle(fontFamily: BiliFonts.family, fontSize: size, color: color);
-    return Transform.translate(
-      offset: Offset(0, SettingsTheme.rowTitleDrop),
-      child: Builder(
-        builder: (context) => Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: style,
-          strutStyle: BiliFonts.strutOf(context, style),
-        ),
+    return Builder(
+      builder: (context) => Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+        strutStyle: BiliFonts.strutOf(context, style),
       ),
     );
   }

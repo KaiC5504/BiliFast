@@ -93,10 +93,10 @@ void main() {
       expect(found?.forceStrutHeight, isTrue);
     });
 
-    test('none under MiSans, or for a style with no height', () {
+    test('none under an imported font, or for a style with no height', () {
       final saved = BiliFonts.family;
       addTearDown(() => BiliFonts.family = saved);
-      BiliFonts.family = BiliFonts.miSans;
+      BiliFonts.family = 'imported-test';
       expect(BiliFonts.strut(const TextStyle(fontSize: 14, height: 1.6)), isNull);
       BiliFonts.family = BiliFonts.system;
       expect(BiliFonts.strut(const TextStyle(fontSize: 14)), isNull);

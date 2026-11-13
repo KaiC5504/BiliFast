@@ -30,7 +30,6 @@ void main() {
   Future<void> show(WidgetTester tester, {bool sheet = false}) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
-    // The services' font store puts MiSans back, so the system font comes after them.
     final services = await resultServices(loggedIn: true, api: FakePageApi());
     BiliFonts.family = BiliFonts.system;
     await tester.runAsync(loadSystemFontStandIns);

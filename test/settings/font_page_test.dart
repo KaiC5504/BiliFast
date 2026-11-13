@@ -37,7 +37,7 @@ void main() {
     fonts = FontStore.memory(loader: (bytes, family) async => loaded.add(family), logger: Logger(session: 'test'));
   });
 
-  tearDown(() => BiliFonts.family = BiliFonts.miSans);
+  tearDown(() => BiliFonts.family = BiliFonts.system);
 
   Future<void> show(WidgetTester tester, Future<PickedFont?> Function() pick) async {
     tester.view.physicalSize = const Size(440, 956);
@@ -63,12 +63,15 @@ void main() {
   testWidgets('each font is listed in itself, with a tick on the one in use; a tap switches at once', (tester) async {
     await show(tester, () async => null);
     expect(find.byKey(const ValueKey('font-system')), findsOneWidget);
-    expect(find.byKey(const ValueKey('font-miSans')), findsOneWidget);
     expect(find.byKey(const ValueKey('font-imported')), findsNothing, reason: 'nothing imported yet');
-    expect(tick('font-miSans'), findsOneWidget);
+    expect(tick('font-system'), findsOneWidget);
+
+    await fonts.importFont('霞鹜文楷.ttf', trueType);
+    await tester.pump();
+    expect(tick('font-imported'), findsOneWidget);
     expect(tick('font-system'), findsNothing);
-    expect(familyOf(tester, 'font-miSans', 'MiSans'), BiliFonts.miSans);
-    expect(familyOf(tester, 'font-system', '系统字体'), isNot(BiliFonts.miSans),
+    expect(familyOf(tester, 'font-imported', '霞鹜文楷'), loaded.single);
+    expect(familyOf(tester, 'font-system', '系统字体'), BiliFonts.system,
         reason: 'the system row previews the system font, not the one the page is in');
 
     await tester.tap(find.byKey(const ValueKey('font-system')));
@@ -76,7 +79,7 @@ void main() {
     expect(fonts.choice, FontChoice.system);
     expect(BiliFonts.family, BiliFonts.system);
     expect(tick('font-system'), findsOneWidget);
-    expect(tick('font-miSans'), findsNothing);
+    expect(tick('font-imported'), findsNothing);
   });
 
   testWidgets('导入字体 imports the picked file, lists it ticked and says so', (tester) async {
@@ -97,7 +100,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('font-import')));
     await tester.pump();
     expect(find.text('这不是字体文件'), findsOneWidget);
-    expect(fonts.choice, FontChoice.miSans);
+    expect(fonts.choice, FontChoice.system);
     await toastGone(tester);
 
     answer = () async => throw StateError('no picker');
@@ -116,6 +119,7 @@ void main() {
 
   testWidgets('the rows press through accessibility, as VoiceOver and the Windows test driver do', (tester) async {
     final semantics = tester.ensureSemantics();
+    await fonts.importFont('霞鹜文楷.ttf', trueType);
     await show(tester, () async => null);
     tester.semantics.tap(find.semantics.byLabel('系统字体'));
     await tester.pump();
@@ -124,6 +128,7 @@ void main() {
   });
 
   testWidgets('设置 shows the font in use and opens 字体', (tester) async {
+    await fonts.importFont('霞鹜文楷.ttf', trueType);
     final services = AppServices(
       environment: await AppEnvironment.load(
         keychain: FakeKeychain(const NoStoredCookies()),
@@ -141,7 +146,7 @@ void main() {
         home: const SettingsPage(),
       ),
     );
-    expect(find.text('MiSans'), findsOneWidget);
+    expect(find.text('霞鹜文楷'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('settings-font')));
     await tester.pumpAndSettle();
     expect(find.byType(FontPage), findsOneWidget);
@@ -166,13 +171,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('counter')));
     await tester.pump();
     expect(find.text('1'), findsOneWidget);
-    expect(tester.widget<Text>(find.byKey(const ValueKey('frozen'))).style?.fontFamily, BiliFonts.miSans);
-
-    fonts.select(FontChoice.system);
-    await tester.pumpAndSettle();
     expect(tester.widget<Text>(find.byKey(const ValueKey('frozen'))).style?.fontFamily, BiliFonts.system);
+
+    await fonts.importFont('霞鹜文楷.ttf', trueType);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(find.byKey(const ValueKey('frozen'))).style?.fontFamily, loaded.single);
     final context = tester.element(find.byType(Scaffold));
-    expect(Theme.of(context).textTheme.bodyMedium?.fontFamily, isNot(BiliFonts.miSans));
+    expect(Theme.of(context).textTheme.bodyMedium?.fontFamily, loaded.single);
     expect(find.text('1'), findsOneWidget, reason: 'state survives the rebuild');
   });
 }

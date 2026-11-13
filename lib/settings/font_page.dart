@@ -120,8 +120,6 @@ class _FontRow extends StatelessWidget {
   const _FontRow({super.key, required this.name, required this.family, required this.selected, required this.onTap});
 
   final String name;
-
-  /// Null for the system's, which the page around it may not be drawing in.
   final String? family;
   final bool selected;
   final VoidCallback onTap;
@@ -130,7 +128,7 @@ class _FontRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final family =
         this.family ?? Typography.material2021(platform: Theme.of(context).platform).black.bodyMedium?.fontFamily;
-    // The PingFang strut fits only the system font's row; the others draw in a font of their own.
+    // The PingFang strut fits only the system font's row; an imported one draws in a font of its own.
     final system = family == BiliFonts.system;
     final nameStyle = TextStyle(fontFamily: family, fontSize: BiliMetrics.bodyText, color: BiliColors.text);
     final sampleStyle = TextStyle(fontFamily: family, fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText);

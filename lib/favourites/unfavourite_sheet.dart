@@ -124,10 +124,7 @@ class _UnfavouriteSheetState extends State<UnfavouriteSheet> with SingleTickerPr
   }
 }
 
-Widget _text(String text, double size, Color color) => Transform.translate(
-  offset: Offset(0, FavouritesTheme.sheetTextDrop),
-  child: Text(text, style: favStyle(size, color, line: 1)),
-);
+Widget _text(String text, double size, Color color) => Text(text, style: favStyle(size, color, line: 1));
 
 class _Sheet extends StatelessWidget {
   const _Sheet({required this.onRemove, required this.onCancel});

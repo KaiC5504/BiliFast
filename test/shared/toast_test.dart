@@ -51,7 +51,7 @@ void main() {
     (tester) async {
       final saved = BiliFonts.family;
       addTearDown(() => BiliFonts.family = saved);
-      for (final family in [null, BiliFonts.miSans]) {
+      for (final family in [null, BiliFonts.system]) {
         BiliFonts.family = family;
         final context = await mount(tester);
         showToast(context, '已复制');
