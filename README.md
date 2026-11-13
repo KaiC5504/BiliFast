@@ -169,5 +169,4 @@ BiliFast 的下载引擎是从 BTR 移植过来的，在此基础上又做了提
 
 - [Bilibili 线程撕裂者](https://github.com/MrTangLuyao/Bilibili-thread-ripper)：下载引擎的来源，MIT 许可证，移植的代码中保留了原版权声明
 - [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus)：B 站接口行为的参考，部分官方素材也取自这里（见 `assets/README.md`），未使用其代码
-- [MiSans](https://hyperos.mi.com/font/zh/)：内置字体，版权归小米所有，按其免费授权使用，不属于本仓库代码的许可范围
 - [lottie](https://pub.dev/packages/lottie)、[cupertino_http](https://pub.dev/packages/cupertino_http)、[pigeon](https://pub.dev/packages/pigeon) 以及 `pubspec.yaml` 中的其他依赖

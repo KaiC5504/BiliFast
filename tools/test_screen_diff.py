@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import screen_diff  # noqa: E402
 
-FONT = pathlib.Path(__file__).resolve().parent.parent / "assets" / "fonts" / "MiSans-Regular.ttf"
+FONT = pathlib.Path(__file__).resolve().parent.parent / "test" / "fonts" / "StandInSC-Regular.ttf"
 WIDTH, HEIGHT = 1320, 900
 LINE = "奥丁也是有打法也是得练的不会用"
 

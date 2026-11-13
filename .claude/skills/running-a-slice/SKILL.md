@@ -90,7 +90,7 @@ slice.
   at 440×956 or 956×440, 3×, fake data, PNGs to the scratchpad, never committed) and compare each with its reference
   screenshot, by eye and with `tools/screen_diff.py`. Render under the system font, as the phone draws by default:
   `BiliFonts.family = BiliFonts.system` with `test/support/stand_in_fonts.dart` loaded, and `look_alike.dart`'s `showAsPhone` and
-  `saveShot`. MiSans only for what is MiSans's own. A verdict per screen: PASS when the layout matches (positions, sizes, icons, colours,
+  `saveShot`. A verdict per screen: PASS when the layout matches (positions, sizes, icons, colours,
   fonts, text; the video frame itself differs), FAIL with every difference listed.
 - Swift review of every Swift change (only when Swift changed).
 - The Mac mini (KaiC's own Apple machine, `ssh mac`; CLAUDE.md "How to test"): `python scripts/mac.py sim` builds the

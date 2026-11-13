@@ -8,8 +8,9 @@
     uv run tools/screen_diff.py local/differences/11-ours-comment-threads.jpg local/differences/12-official-comment-threads.jpg
     uv run tools/screen_diff.py OURS OFFICIAL --anchor 87.3:88.3 --x 50:440 --overlay <scratchpad dir>
 
-Widget tests render MiSans while the phone draws PingFang, so values settled on Windows can be off on the phone; this
-measures the phone. Everything is reported in pt (px / --scale, 3 for the iPhone).
+Widget tests draw stand-ins for SF and PingFang that match their line metrics and widths but not their stroke weight
+or Latin shapes, so values settled on Windows can still be off on the phone; this measures the phone. Everything is
+reported in pt (px / --scale, 3 for the iPhone).
 
 Ink is any pixel further from its row's median than --ink, darker or lighter (white text on the player), so grey text
 in a grey box counts and the box itself doesn't. Ink joined across gaps narrower than --join pt makes an element: a line of text, or an image when it is tall
