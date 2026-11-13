@@ -6,7 +6,7 @@ import 'developer_rows.dart';
 import 'log_forwarder.dart';
 import 'log_server_discovery.dart';
 
-/// 开发者's 日志: 发送日志到电脑 with the PCs found over Bonjour and a typed address, then 导出日志 and 测试崩溃.
+/// 开发者's 日志: 发送日志到电脑 with the PCs found over Bonjour and a typed address, then 导出日志, 清除日志 and 测试崩溃.
 class DeveloperLogs extends StatelessWidget {
   const DeveloperLogs({
     super.key,
@@ -14,6 +14,7 @@ class DeveloperLogs extends StatelessWidget {
     required this.address,
     required this.exporting,
     required this.onExport,
+    required this.onClear,
     required this.onCrash,
   });
 
@@ -24,6 +25,7 @@ class DeveloperLogs extends StatelessWidget {
 
   /// [origin] is the row, where an iPad points the share sheet.
   final void Function(Rect? origin) onExport;
+  final VoidCallback onClear;
   final VoidCallback onCrash;
 
   static Rect? _originOf(BuildContext context) {
@@ -77,6 +79,7 @@ class DeveloperLogs extends StatelessWidget {
                 onTap: () => onExport(_originOf(row)),
               ),
             ),
+            SettingsRow(key: const ValueKey('dev-clear-logs'), title: '清除日志', onTap: onClear),
             DeveloperActionRow(
               key: const ValueKey('test-crash'),
               title: '测试崩溃',

@@ -16,6 +16,7 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/offline/disk/background_trials.dart';
 import 'package:bilifast/offline/fake_offline_library.dart';
 import 'package:bilifast/offline/offline_library.dart';
+import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/playback/shared_engine.dart';
 import 'package:bilifast/speedtest/speed_test_runner.dart';
@@ -39,12 +40,19 @@ final class FakeLogFiles implements LogFiles {
   String? path;
   Object? failure;
   int exports = 0;
+  int clears = 0;
+
+  /// Thrown by every clear.
+  Object? clearFailure;
 
   /// What the next exports answer once it completes, in place of [path].
   Future<String?>? pending;
 
   @override
-  Future<void> clear() async {}
+  Future<void> clear() async {
+    clears += 1;
+    if (clearFailure case final failure?) throw failure;
+  }
 
   @override
   Future<String?> export() async {
@@ -150,6 +158,7 @@ final class DeveloperWorld {
   final logger = Logger(session: 'test');
   final navigator = GlobalKey<NavigatorState>();
   final logFiles = FakeLogFiles();
+  final codecMemory = CodecMemory();
   final engines = <FakeEngine>[];
   final players = <FakePlayer>[];
   final controllers = <PlaybackController>[];
@@ -256,7 +265,7 @@ final class DeveloperWorld {
       http: http,
       logger: logger,
     );
-    playback = AppPlayback(_start, engine: shared, logger: logger);
+    playback = AppPlayback(_start, engine: shared, codecMemory: codecMemory, logger: logger);
     addTearDown(() {
       for (final controller in controllers) {
         playback.release(controller);

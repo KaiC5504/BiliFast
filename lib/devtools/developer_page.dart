@@ -69,8 +69,8 @@ Future<void> shareFileThroughSystem(String path, Rect? origin) async {
   await SharePlus.instance.share(ShareParams(files: [XFile(path)], sharePositionOrigin: origin));
 }
 
-/// 设置 → 开发者 (dev builds), in 设置's look: 网络 (节点测速, 速度测试), 状态, 调试 (旋转动画, 官方接口) and 日志 (the
-/// forwarder, 导出日志, 测试崩溃).
+/// 设置 → 开发者 (dev builds), in 设置's look: 网络 (节点测速, 速度测试), 状态, 调试 (旋转动画, 重置编码记忆, 官方接口)
+/// and 日志 (the forwarder, 导出日志, 清除日志, 测试崩溃).
 class DeveloperPage extends StatefulWidget {
   const DeveloperPage({
     super.key,
@@ -133,9 +133,9 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
     reverseCurve: Curves.easeInCubic,
   );
 
-  /// 测试崩溃's confirm is up; [_confirmShown] stays while it fades out.
-  bool _confirming = false;
-  bool _confirmShown = false;
+  /// The confirm that is up; [_shown] stays while it fades out.
+  _DeveloperConfirm? _confirm;
+  _DeveloperConfirm? _shown;
 
   PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
 
@@ -272,26 +272,43 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
     }
   }
 
-  void _askCrash() {
-    setState(() => _confirming = _confirmShown = true);
+  void _ask(_DeveloperConfirm kind) {
+    setState(() => _confirm = _shown = kind);
     unawaited(_confirmMotion.forward());
   }
 
   void _dismiss() {
-    if (!_confirming) return;
-    setState(() => _confirming = false);
+    if (_confirm == null) return;
+    setState(() => _confirm = null);
     unawaited(
       _confirmMotion.reverse().then((_) {
-        if (mounted && !_confirming) setState(() => _confirmShown = false);
+        if (mounted && _confirm == null) setState(() => _shown = null);
       }),
     );
+  }
+
+  void _perform(_DeveloperConfirm kind) {
+    if (_confirm != kind) return;
+    _dismiss();
+    switch (kind) {
+      case _DeveloperConfirm.codecMemory:
+        Logger.shared.info(LogCategory.ui, 'developer clear', {'what': kind.name});
+        AppScope.of(context).playback.resetCodecMemory();
+      case _DeveloperConfirm.logs:
+        Logger.shared.info(LogCategory.ui, 'developer clear', {'what': kind.name});
+        unawaited(
+          AppScope.of(context).logFiles.clear().catchError((Object error) {
+            Logger.shared.warn(LogCategory.app, 'log files not cleared', {'error': '${error.runtimeType}'});
+          }),
+        );
+      case _DeveloperConfirm.crash:
+        _crash();
+    }
   }
 
   /// A Dart error the app doesn't catch, thrown from the next frame's callbacks, so the framework hands it to
   /// CrashLog as it would any other. Native crashes aren't captured yet, so the app carries on.
   void _crash() {
-    if (!_confirming) return;
-    _dismiss();
     Logger.shared.warn(LogCategory.ui, 'test crash');
     WidgetsBinding.instance
       ..addPostFrameCallback((_) => throw DeveloperTestCrash())
@@ -300,7 +317,7 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) => PopScope<Object?>(
-    canPop: !_confirming,
+    canPop: _confirm == null,
     onPopInvokedWithResult: (didPop, _) {
       if (didPop) {
         _leave();
@@ -341,27 +358,28 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
                   address: _logAddress,
                   exporting: _exporting,
                   onExport: (origin) => unawaited(_exportLogs(origin)),
-                  onCrash: _askCrash,
+                  onClear: () => _ask(_DeveloperConfirm.logs),
+                  onCrash: () => _ask(_DeveloperConfirm.crash),
                 ),
               ],
             ),
             const SizedBox(height: DevToolsTheme.pageBottom),
           ],
         ),
-        if (_confirmShown)
+        if (_shown case final shown?)
           Positioned.fill(
             child: IgnorePointer(
-              ignoring: !_confirming,
+              ignoring: _confirm == null,
               child: ExcludeSemantics(
-                excluding: !_confirming,
+                excluding: _confirm == null,
                 child: BlockSemantics(
-                  blocking: _confirming,
+                  blocking: _confirm != null,
                   child: SettingsConfirm(
-                    title: '让应用立即崩溃？',
-                    message: '会抛出一个未捕获的 Dart 错误，崩溃报告作为 crash 事件发送到电脑。',
-                    action: '崩溃',
+                    title: shown.title,
+                    message: shown.message,
+                    action: shown.action,
                     motion: _confirmCurve,
-                    onConfirm: _crash,
+                    onConfirm: () => _perform(shown),
                     onCancel: _dismiss,
                   ),
                 ),
@@ -383,6 +401,11 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
             SettingsRow(key: const ValueKey('dev-turn'), title: '旋转动画', value: turn, onTap: _pickTurn)
           else
             SettingsRow(key: const ValueKey('dev-turn'), title: '旋转动画', value: '$turn（仅 iPhone）', enabled: false),
+          SettingsRow(
+            key: const ValueKey('dev-codec-memory'),
+            title: '重置编码记忆',
+            onTap: () => _ask(_DeveloperConfirm.codecMemory),
+          ),
           if (appAuth != null) ...[
             SettingsRow(key: const ValueKey('app-auth-state'), title: '官方接口', value: _authState(appAuth)),
             DeveloperActionRow(
@@ -406,4 +429,17 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
     };
     return '已授权 · $app · 剩 ${expiresAt.difference(DateTime.now()).inDays} 天';
   }
+}
+
+/// 开发者's confirms; the two clears are worded as they were in 设置.
+enum _DeveloperConfirm {
+  codecMemory('重置编码记忆？', '本机播放失败过的编码会重新参与尝试。', '重置'),
+  logs('清除日志？', '手机上保存的调试日志会被删除，已发送到电脑的不受影响。', '清除'),
+  crash('让应用立即崩溃？', '会抛出一个未捕获的 Dart 错误，崩溃报告作为 crash 事件发送到电脑。', '崩溃');
+
+  const _DeveloperConfirm(this.title, this.message, this.action);
+
+  final String title;
+  final String message;
+  final String action;
 }

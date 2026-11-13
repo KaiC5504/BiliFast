@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:bili_core/api.dart' show OfficialIdentity;
+import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/devtools/developer_page.dart';
 import 'package:bilifast/devtools/node_probe_section.dart';
 import 'package:bilifast/offline/disk/background_trials.dart';
+import 'package:bilifast/settings/settings_confirm.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/history_outbox.dart';
 import 'package:flutter/material.dart';
@@ -35,10 +39,12 @@ void main() {
       row('status-font'),
       find.text('调试'),
       row('dev-turn'),
+      row('dev-codec-memory'),
       row('app-auth-state'),
       find.text('日志'),
       row('log-switch'),
       row('log-export'),
+      row('dev-clear-logs'),
       row('test-crash'),
     ];
     for (final finder in order) {
@@ -189,6 +195,143 @@ void main() {
       expect(row('app-auth-state'), findsNothing);
       expect(row('app-auth-button'), findsNothing);
       expect(row('dev-turn'), findsOneWidget);
+    });
+  });
+
+  group('重置编码记忆 and 清除日志, moved from 设置', () {
+    late MemorySink sink;
+
+    setUp(() {
+      sink = MemorySink();
+      Logger.shared.add(sink);
+      addTearDown(() => Logger.shared.remove(sink));
+    });
+
+    final confirm = find.byType(SettingsConfirm);
+    Finder confirmButton(String label) => find.byKey(ValueKey('settings-confirm-$label'));
+    Finder inConfirm(String text) => find.descendant(of: confirm, matching: find.text(text));
+    List<LogEvent> logged(String msg) => [
+      for (final event in sink.events)
+        if (event.msg == msg) event,
+    ];
+
+    Future<void> ask(WidgetTester tester, String key) async {
+      await press(tester, row(key));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('重置编码记忆 asks in 设置\'s words, and 重置 forgets the codecs that failed', (tester) async {
+      final world = DeveloperWorld();
+      await world.show(tester);
+      world.codecMemory.markFailed('av1');
+      await ask(tester, 'dev-codec-memory');
+      expect(inConfirm('重置编码记忆？'), findsOneWidget);
+      expect(inConfirm('本机播放失败过的编码会重新参与尝试。'), findsOneWidget);
+      expect(world.codecMemory.failedKinds, {'av1'}, reason: 'nothing is reset before the confirm');
+
+      await tester.tap(confirmButton('重置'));
+      await tester.pumpAndSettle();
+      expect(world.codecMemory.failedKinds, isEmpty);
+      expect(confirm, findsNothing);
+      expect(logged('developer clear').single.f['what'], const LogString('codecMemory'));
+      expect(world.logFiles.clears, 0);
+    });
+
+    testWidgets('清除日志 asks in 设置\'s words, and 清除 clears the phone\'s log files', (tester) async {
+      final world = DeveloperWorld();
+      await world.show(tester, logs: quietLogs());
+      world.codecMemory.markFailed('av1');
+      await ask(tester, 'dev-clear-logs');
+      expect(inConfirm('清除日志？'), findsOneWidget);
+      expect(inConfirm('手机上保存的调试日志会被删除，已发送到电脑的不受影响。'), findsOneWidget);
+      expect(world.logFiles.clears, 0);
+
+      await tester.tap(confirmButton('清除'));
+      await tester.pumpAndSettle();
+      expect(world.logFiles.clears, 1);
+      expect(confirm, findsNothing);
+      expect(logged('developer clear').single.f['what'], const LogString('logs'));
+      expect(world.codecMemory.failedKinds, {'av1'});
+    });
+
+    testWidgets('a clear that fails logs only the error\'s type', (tester) async {
+      final world = DeveloperWorld();
+      world.logFiles.clearFailure = const FileSystemException('busy', '/caches/BiliFast-logs.jsonl');
+      await world.show(tester);
+      await ask(tester, 'dev-clear-logs');
+      await tester.tap(confirmButton('清除'));
+      await tester.pumpAndSettle();
+      expect(world.logFiles.clears, 1);
+      final warning = logged('log files not cleared').single;
+      expect(warning.f['error'], const LogString('FileSystemException'));
+      expect(confirm, findsNothing);
+    });
+
+    testWidgets('取消 and back close each confirm and do nothing; back leaves the page only after', (tester) async {
+      final world = DeveloperWorld();
+      await world.show(tester);
+      world.codecMemory.markFailed('av1');
+      for (final key in ['dev-codec-memory', 'dev-clear-logs']) {
+        await ask(tester, key);
+        await tester.tap(confirmButton('取消'));
+        await tester.pumpAndSettle();
+        expect(confirm, findsNothing, reason: key);
+
+        await ask(tester, key);
+        await world.navigator.currentState!.maybePop();
+        await tester.pumpAndSettle();
+        expect(confirm, findsNothing, reason: key);
+        expect(find.byType(DeveloperPage), findsOneWidget, reason: 'back closed the confirm, not the page');
+      }
+      expect(world.codecMemory.failedKinds, {'av1'});
+      expect(world.logFiles.clears, 0);
+      expect(logged('developer clear'), isEmpty);
+
+      await world.navigator.currentState!.maybePop();
+      await tester.pumpAndSettle();
+      expect(find.byType(DeveloperPage), findsNothing);
+    });
+
+    testWidgets('both rows and their confirms answer VoiceOver, and an open confirm hides the page behind it', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final world = DeveloperWorld();
+      await world.show(tester);
+      world.codecMemory.markFailed('av1');
+
+      tester.semantics.tap(find.semantics.byLabel('重置编码记忆'));
+      await tester.pumpAndSettle();
+      expect(inConfirm('重置编码记忆？'), findsOneWidget);
+      expect(find.semantics.byLabel('清除日志'), findsNothing, reason: 'the rows behind are blocked');
+      tester.semantics.tap(find.semantics.byLabel('重置'));
+      await tester.pumpAndSettle();
+      expect(world.codecMemory.failedKinds, isEmpty);
+
+      tester.semantics.tap(find.semantics.byLabel('清除日志'));
+      await tester.pumpAndSettle();
+      expect(inConfirm('清除日志？'), findsOneWidget);
+      tester.semantics.tap(find.semantics.byLabel('清除'));
+      await tester.pumpAndSettle();
+      expect(world.logFiles.clears, 1);
+      expect(find.semantics.byLabel('重置编码记忆'), findsOne);
+      semantics.dispose();
+    });
+
+    testWidgets('测试崩溃 still asks its own question after a clear', (tester) async {
+      final world = DeveloperWorld();
+      await world.show(tester);
+      await ask(tester, 'dev-clear-logs');
+      await tester.tap(confirmButton('取消'));
+      await tester.pumpAndSettle();
+      await ask(tester, 'test-crash');
+      expect(inConfirm('让应用立即崩溃？'), findsOneWidget);
+      expect(confirmButton('崩溃'), findsOneWidget);
+      expect(confirmButton('清除'), findsNothing);
+      await tester.tap(confirmButton('取消'));
+      await tester.pumpAndSettle();
+      expect(world.logFiles.clears, 0);
+      expect(tester.takeException(), isNull);
     });
   });
 
