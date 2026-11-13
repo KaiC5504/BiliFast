@@ -816,8 +816,6 @@ abstract final class BiliMetrics {
   static const settingsSectionGap = 41 / 3;
   static const settingsValueText = 14.0;
   static const settingsValueWidth = 240.0;
-  static const fontRowPadding = 12.0;
-  static const fontSampleGap = 4.0;
   static const fontCheck = 20.0;
 
   /// 竖屏 full screen centres a landscape video at this fraction of the screen's height (screen 09).
@@ -3412,7 +3410,7 @@ abstract final class LoginTheme {
   static const qrFade = Duration(milliseconds: 200);
 }
 
-/// 设置's sections beyond 字体, and its confirms: 50 and 51, measured at 3 px per pt.
+/// 设置's sections and its confirms: 50 and 51, measured at 3 px per pt.
 abstract final class SettingsTheme {
   /// The white bar under the status bar, its bold title and the ‹ whose ink starts 79 px in.
   static const bar = BiliColors.card;

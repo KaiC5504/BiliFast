@@ -74,7 +74,7 @@ class DeveloperActionRow extends StatelessWidget {
   );
 }
 
-/// One of a choice's rows, as CDN 节点's are: the title, a grey [value] when there is one, and a pink check on the
+/// One of a choice's rows: the title, a grey [value] when there is one, and a pink check on the
 /// chosen.
 class DeveloperCheckRow extends StatelessWidget {
   const DeveloperCheckRow({super.key, required this.title, this.value, required this.selected, required this.onTap});
@@ -181,7 +181,7 @@ class DeveloperFootnote extends StatelessWidget {
   );
 }
 
-/// A choice on a page of its own, picked with a tap as CDN 节点's nodes are.
+/// A choice on a page of its own, picked with a tap.
 class DeveloperChoicePage<T> extends StatefulWidget {
   const DeveloperChoicePage({
     super.key,

@@ -71,8 +71,7 @@ official app. Also:
 - A3. A 4K HDR video and a 杜比视界 one play; note if 模式 says 直连（回退）.
 - A4. Wi-Fi off in Control Center mid-video: playback goes on (a short pause is fine, never stuck or 播放失败).
 - A5. BTR on, the app in the background a few minutes, then a different video: 模式 says BTR.
-- A6. If the account row ever says 登录已过期，重新登录 or 无法获取账号信息，点按重试, tap it: it clears or brings the
-  name back.
+- A6. If 设置 ever shows 重新登录, tap it: the login page opens, and after logging in the row goes away.
 - A7. The small window (swipe home while playing), the lock screen's play, pause and seek, and turning to landscape
   and back: playback goes on each time.
 
