@@ -264,13 +264,12 @@ class CommentSortHeader extends StatelessWidget {
   /// Where the title's and the button's line centres, down from the header's top.
   final double centre;
 
-  TextStyle _style(double size, double spacing) => TextStyle(
+  TextStyle _style(double size) => TextStyle(
     fontFamily: BiliFonts.family,
     fontSize: size,
     color: CommentListTheme.sortInk,
     height: CommentListTheme.sortLine / size,
     leadingDistribution: TextLeadingDistribution.even,
-    letterSpacing: spacing,
   );
 
   @override
@@ -278,7 +277,7 @@ class CommentSortHeader extends StatelessWidget {
     final label = sort == CommentSort.hot ? '按热度' : '按时间';
     void toggle() => onChange(sort == CommentSort.hot ? CommentSort.time : CommentSort.hot);
     const line = CommentListTheme.sortLine;
-    final titleStyle = _style(CommentListTheme.sortTitleText, CommentListTheme.sortTitleSpacing);
+    final titleStyle = _style(CommentListTheme.sortTitleText);
     return SizedBox(
       height: height,
       child: Stack(
@@ -328,12 +327,7 @@ class CommentSortHeader extends StatelessWidget {
                             painter: _SortGlyphPainter(),
                           ),
                           const SizedBox(width: CommentListTheme.sortIconGap),
-                          Text(
-                            label,
-                            maxLines: 1,
-                            softWrap: false,
-                            style: _style(CommentListTheme.sortText, CommentListTheme.sortSpacing),
-                          ),
+                          Text(label, maxLines: 1, softWrap: false, style: _style(CommentListTheme.sortText)),
                         ],
                       ),
                     ),
@@ -524,7 +518,6 @@ class CommentWriteBar extends StatelessWidget {
       fontFamily: BiliFonts.family,
       fontSize: CommentListTheme.fieldText,
       color: CommentListTheme.fieldInk,
-      letterSpacing: CommentListTheme.fieldSpacing,
     );
     return DecoratedBox(
       key: const ValueKey('comment-bar'),

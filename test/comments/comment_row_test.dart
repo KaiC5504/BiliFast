@@ -110,6 +110,13 @@ Comment _comment({
   previewReplies: previews,
 );
 
+/// The app's theme names PingFang SC behind the system font; without it the Chinese here misses the PingFang stand-in
+/// and wraps where the phone's doesn't.
+Widget _phoneFallback(Widget child) => DefaultTextStyle(
+  style: TextStyle(fontFamilyFallback: BiliFonts.fallback),
+  child: child,
+);
+
 Future<void> _mount(WidgetTester tester, Widget row, {bool reduceMotion = false}) async {
   await tester.pumpWidget(
     MediaQuery(
@@ -121,7 +128,7 @@ Future<void> _mount(WidgetTester tester, Widget row, {bool reduceMotion = false}
           onGenerateRoute: (_) => PageRouteBuilder<void>(
             pageBuilder: (context, _, _) => Align(
               alignment: Alignment.topLeft,
-              child: SingleChildScrollView(child: SizedBox(width: 440, child: row)),
+              child: SingleChildScrollView(child: SizedBox(width: 440, child: _phoneFallback(row))),
             ),
           ),
         ),
@@ -230,7 +237,10 @@ void main() {
       expect(chip(), findsNothing);
       expect(_colour(tester, 'UP主觉得很赞'), CommentRowTheme.upLiked);
       final row = _rect(tester, find.byType(CommentRow));
-      expect(row.bottom - metaLine(tester).bottom, closeTo(CommentRowTheme.upLikedHeight + 9, 0.01));
+      expect(
+        row.bottom - metaLine(tester).bottom,
+        closeTo(CommentRowTheme.upLikedHeight + 7.5 + CommentRowTheme.divider, 0.01),
+      );
     });
 
     testWidgets('in a thread: 10 pt #757575 in a #F4F4F4 box 16 tall and 2 round, 9.5 under the meta line at the '
@@ -277,17 +287,6 @@ void main() {
       expect(without, closeTo(7.5, 0.01), reason: 'the system font\'s meta text sits 0.5 above the line\'s centre');
       await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false, divider: false));
       expect(band(tester) - without, closeTo(26, 0.01));
-    });
-
-    testWidgets('MiSans keeps the root\'s band a hairline\'s room under the meta line, and its lower meta text puts '
-        'the box 11.2 under the line', (tester) async {
-      await _mount(tester, _row(_comment(), _Model(), _Calls(), replies: false, divider: false));
-      expect(_rect(tester, find.byType(CommentRow)).bottom - metaLine(tester).bottom, closeTo(9, 0.01));
-
-      await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false, divider: false));
-      final box = _rect(tester, chip());
-      expect(box.top - metaLine(tester).bottom, closeTo(11.2, 0.01));
-      expect(_rect(tester, find.byType(CommentRow)).bottom - box.bottom, closeTo(8, 0.01));
     });
 
     testWidgets('nothing under a comment the uploader didn\'t like, in the list or a thread', (tester) async {
@@ -724,11 +723,7 @@ void main() {
       );
       expect(like.center.dy - bottom, closeTo(46 / 3, 0.01));
       expect(hate.center.dy - more, closeTo(2 / 3, 0.01));
-      expect(
-        _rect(tester, find.text('513')).center.dy,
-        closeTo(more + CommentRowTheme.metaDrop, 0.01),
-        reason: 'the count stays on the line',
-      );
+      expect(_rect(tester, find.text('513')).center.dy, closeTo(more, 0.01), reason: 'the count stays on the line');
     });
 
     testWidgets('⋮\'s dots are 6.4 px across and 13 px apart (font-check 04, 13)', (tester) async {
@@ -829,7 +824,10 @@ void main() {
                   maxHeight: double.infinity,
                   child: Transform.translate(
                     offset: const Offset(0, -2000),
-                    child: SizedBox(width: 440, child: _row(_comment(message: '字' * 6000), _Model(), _Calls())),
+                    child: SizedBox(
+                      width: 440,
+                      child: _phoneFallback(_row(_comment(message: '字' * 6000), _Model(), _Calls())),
+                    ),
                   ),
                 ),
               ),
@@ -937,10 +935,7 @@ void main() {
       final more = _rect(tester, find.text('共15条回复'));
       expect(more.center.dy - (secondTop + half), closeTo(26, 0.01));
       expect(box.bottom - more.center.dy, closeTo(CommentRowTheme.moreSlot / 2, 0.01));
-      expect(
-        _rect(tester, find.text('66')).center.dy,
-        closeTo(firstTop + first.size.height - half + CommentRowTheme.metaDrop, 0.5),
-      );
+      expect(_rect(tester, find.text('66')).center.dy, closeTo(firstTop + first.size.height - half, 0.5));
     });
 
     testWidgets('a preview cut short stands 7 taller below its last line (12), with likes or without', (tester) async {
@@ -965,45 +960,40 @@ void main() {
   });
 
   group('layout', () {
-    testWidgets(
-      'the system font starts the text 1.4 lower and the box 1.75 and the hairline 0.83 higher; MiSans keeps the places from 10',
-      (tester) async {
-        final saved = BiliFonts.family;
-        addTearDown(() => BiliFonts.family = saved);
-        final comment = _comment(replyCount: 3);
-        BiliFonts.family = BiliFonts.miSans;
-        await _mount(tester, _row(comment, _Model(), _Calls()));
-        final textMiSans = _rect(tester, find.byType(CommentText)).top;
-        final boxMiSans = _rect(tester, find.byKey(const ValueKey('comment-replies'))).top;
-        expect(textMiSans, closeTo(CommentRowTheme.textFirstCentre - CommentRowTheme.textLine / 2, 0.01));
+    testWidgets('the text starts 1.4 under its first line\'s place on 10; the box starts 21.2 less 1.75 under the meta '
+        'line\'s centre, and the hairline 20 under the meta text, 0.5 above that centre (font-check 04)', (
+      tester,
+    ) async {
+      double metaCentre(WidgetTester tester) => _rect(tester, find.byKey(const ValueKey('comment-like'))).center.dy;
+      await _mount(tester, _row(_comment(replyCount: 3), _Model(), _Calls()));
+      expect(
+        _rect(tester, find.byType(CommentText)).top,
+        closeTo(CommentRowTheme.textFirstCentre - CommentRowTheme.textLine / 2 + 1.4, 0.01),
+      );
+      expect(
+        _rect(tester, find.byKey(const ValueKey('comment-replies'))).top - metaCentre(tester),
+        closeTo(127 / 6 - 1.75, 0.01),
+      );
 
-        BiliFonts.family = BiliFonts.system;
-        await _mount(tester, _row(comment, _Model(), _Calls()));
-        expect(_rect(tester, find.byType(CommentText)).top - textMiSans, closeTo(1.4, 0.01));
-        // A one-line comment keeps its meta line where it was, so only the box's own gap moves it.
-        expect(_rect(tester, find.byKey(const ValueKey('comment-replies'))).top - boxMiSans, closeTo(-1.75, 0.01));
+      await _mount(tester, _row(_comment(), _Model(), _Calls()));
+      expect(
+        _rect(tester, find.byKey(const ValueKey('comment-divider'))).top - (metaCentre(tester) - 0.5),
+        closeTo(20, 0.01),
+      );
+    });
 
-        BiliFonts.family = BiliFonts.miSans;
-        await _mount(tester, _row(_comment(), _Model(), _Calls()));
-        final heightMiSans = _rect(tester, find.byType(CommentRow)).height;
-        BiliFonts.family = BiliFonts.system;
-        await _mount(tester, _row(_comment(), _Model(), _Calls()));
-        // 20 below the meta text, which sits 0.5 above the line's centre: 7.5 under the line against MiSans's 8.33.
-        expect(_rect(tester, find.byType(CommentRow)).height - heightMiSans, closeTo(7.5 - (61 / 3 - 12), 0.01));
-      },
-    );
-
-    testWidgets('a one-line comment is 99.7 tall with its hairline from 54 at the bottom (13)', (tester) async {
+    testWidgets('a one-line comment is 98.8 tall with its hairline from 54 at the bottom (13); without it the row ends '
+        'where the hairline starts', (tester) async {
       await _mount(tester, _row(_comment(), _Model(), _Calls()));
       final row = _rect(tester, find.byType(CommentRow));
-      expect(row.height, closeTo(CommentRowTheme.textMinBottom + 24 + 9, 0.01));
+      expect(row.height, closeTo(CommentRowTheme.textMinBottom + 24 + 7.5 + CommentRowTheme.divider, 0.01));
       final divider = _rect(tester, find.byKey(const ValueKey('comment-divider')));
       expect(divider, Rect.fromLTRB(54, row.bottom - CommentRowTheme.divider, 440, row.bottom));
       expect(_rect(tester, find.byType(CommentAvatar)).topLeft, const Offset(12, CommentRowTheme.avatarTop));
 
       await _mount(tester, _row(_comment(), _Model(), _Calls(), divider: false));
       expect(find.byKey(const ValueKey('comment-divider')), findsNothing);
-      expect(_rect(tester, find.byType(CommentRow)).height, closeTo(row.height, 0.01));
+      expect(_rect(tester, find.byType(CommentRow)).height, closeTo(row.height - CommentRowTheme.divider, 0.01));
     });
 
     testWidgets('longer text pushes the meta line down a line at a time', (tester) async {
@@ -1013,7 +1003,7 @@ void main() {
       expect(lines, greaterThan(2));
       expect(
         _rect(tester, find.byType(CommentRow)).height,
-        closeTo(CommentRowTheme.textTop + lines * CommentRowTheme.textLine + 24 + 9, 0.01),
+        closeTo(CommentRowTheme.textTop + lines * CommentRowTheme.textLine + 24 + 7.5 + CommentRowTheme.divider, 0.01),
       );
     });
   });

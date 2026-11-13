@@ -316,8 +316,8 @@ class _MetaLine extends StatelessWidget {
         Positioned(
           left: CommentRowTheme.textLeading,
           right: _likeRoom,
-          top: CommentRowTheme.metaDrop,
-          bottom: -CommentRowTheme.metaDrop,
+          top: 0,
+          bottom: 0,
           child: Row(
             children: [
               Flexible(
@@ -486,13 +486,10 @@ class _LikeButtonState extends State<_LikeButton> with SingleTickerProviderState
               ),
               if (count != null) ...[
                 const SizedBox(width: CommentRowTheme.thumbCountGap),
-                Transform.translate(
-                  offset: Offset(0, CommentRowTheme.metaDrop),
-                  child: Text(
-                    count,
-                    style: CommentRowTheme.metaStyle(colour),
-                    strutStyle: BiliFonts.strutOf(context, CommentRowTheme.metaStyle(colour)),
-                  ),
+                Text(
+                  count,
+                  style: CommentRowTheme.metaStyle(colour),
+                  strutStyle: BiliFonts.strutOf(context, CommentRowTheme.metaStyle(colour)),
                 ),
               ],
             ],
@@ -718,13 +715,10 @@ class _PreviewLineState extends State<_PreviewLine> {
                 const SizedBox(width: CommentRowTheme.previewRuleGap),
                 const CommentThumb(color: CommentRowTheme.action),
                 const SizedBox(width: CommentRowTheme.thumbCountGap),
-                Transform.translate(
-                  offset: Offset(0, CommentRowTheme.metaDrop),
-                  child: Text(
-                    CountFormat.short(reply.likes),
-                    style: CommentRowTheme.metaStyle(CommentRowTheme.action),
-                    strutStyle: BiliFonts.strutOf(context, CommentRowTheme.metaStyle(CommentRowTheme.action)),
-                  ),
+                Text(
+                  CountFormat.short(reply.likes),
+                  style: CommentRowTheme.metaStyle(CommentRowTheme.action),
+                  strutStyle: BiliFonts.strutOf(context, CommentRowTheme.metaStyle(CommentRowTheme.action)),
                 ),
               ],
             ),
