@@ -49,7 +49,6 @@ void main() {
   Future<void> show(WidgetTester tester, {FriendsTab tab = FriendsTab.following}) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
-    // The services' font store puts MiSans back, so the system font comes after them.
     final services = await friendsServices();
     BiliFonts.family = BiliFonts.system;
     await tester.runAsync(loadSystemFontStandIns);

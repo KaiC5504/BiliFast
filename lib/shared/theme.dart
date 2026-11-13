@@ -1834,7 +1834,7 @@ abstract final class CommentRowTheme {
   /// in #F4F4F4, 16 tall and 2 round, its top 22 below the meta text's centre and its bottom 8 above the band or the
   /// reply's hairline. The glyphs are 10 pt tall but 31.25 px apart, wider than PingFang's em as iOS tracks small
   /// text, which makes the box 75 wide.
-  static double get upChipTop => 22 - metaTextRise - metaHeight / 2;
+  static const upChipTop = 22 - metaTextRise - metaHeight / 2;
   static const upChipHeight = 16.0;
   static const upChipBottom = 8.0;
   static const upChipText = 10.0;
@@ -1853,8 +1853,8 @@ abstract final class CommentRowTheme {
     color: upChipInk,
   );
 
-  /// The replies box: 19.8 below the meta text's centre on 10, which is 21.2 below the meta line's (1.75 less under
-  /// the system font, whose meta text sits higher); 54 from the left and 12 from the right, 8 round.
+  /// The replies box: 19.8 below the meta text's centre on 10, which sits higher in its line than the official one; 54
+  /// from the left and 12 from the right, 8 round.
   static const boxGap = 127 / 6 - metaHeight / 2 - 1.75;
   static const boxLeading = 54.0;
   static const boxRadius = 8.0;
@@ -1887,9 +1887,8 @@ abstract final class CommentRowTheme {
   static const chevronHeight = 28 / 3;
   static const chevronStroke = 1.0;
 
-  /// The hairline under a row, 2 px of [BiliColors.divider] from 54 to the edge, 20.3 below the meta line's centre or
-  /// 12 below the replies box. Under the system font it is 20 below the meta text's centre (font-check 04), which
-  /// sits [metaTextRise] above the line's.
+  /// The hairline under a row, 2 px of [BiliColors.divider] from 54 to the edge, 20 below the meta text's centre
+  /// (font-check 04), which sits [metaTextRise] above the line's, or 12 below the replies box.
   static const dividerLeading = 54.0;
   static const divider = 2 / 3;
   static const dividerColour = BiliColors.divider;

@@ -225,12 +225,6 @@ void main() {
     Finder chip() => find.byKey(const ValueKey('comment-up-liked'));
     Rect metaLine(WidgetTester tester) => _rect(tester, find.byKey(const ValueKey('comment-like')));
 
-    void systemFont() {
-      final saved = BiliFonts.family;
-      addTearDown(() => BiliFonts.family = saved);
-      BiliFonts.family = BiliFonts.system;
-    }
-
     testWidgets('in the list: a thumb and grey text in 18 under the meta line, no box', (tester) async {
       await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls()));
       expect(thumb(), findsOneWidget);
@@ -245,7 +239,6 @@ void main() {
 
     testWidgets('in a thread: 10 pt #757575 in a #F4F4F4 box 16 tall and 2 round, 9.5 under the meta line at the '
         'text\'s left, 13/3 either side of the text (font-check 04)', (tester) async {
-      systemFont();
       await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false, divider: false));
       expect(thumb(), findsNothing);
       final box = _rect(tester, chip());
@@ -267,7 +260,6 @@ void main() {
     });
 
     testWidgets('the root\'s band starts 8 under the box; a reply\'s hairline does too', (tester) async {
-      systemFont();
       await _mount(tester, _row(_comment(upLiked: true), _Model(), _Calls(), replies: false, divider: false));
       expect(_rect(tester, find.byType(CommentRow)).bottom - _rect(tester, chip()).bottom, closeTo(8, 0.01));
 
@@ -280,7 +272,6 @@ void main() {
 
     testWidgets('the box moves the root\'s band 26 lower: 20 under the meta text without it, 46 with it (13, '
         'font-check 04)', (tester) async {
-      systemFont();
       double band(WidgetTester tester) => _rect(tester, find.byType(CommentRow)).bottom - metaLine(tester).bottom;
       await _mount(tester, _row(_comment(), _Model(), _Calls(), replies: false, divider: false));
       final without = band(tester);

@@ -313,12 +313,18 @@ void main() {
     expect(sprites.layouts, 3);
   });
 
-  test('sprites: under the system font the text falls back to PingFang SC', () {
+  test('sprites: under the system font the text falls back to PingFang SC; an imported font needs none', () {
     final system = DanmakuSprites.textStyle(17, Paint());
     expect(system.fontFamily, BiliFonts.system);
     expect(system.fontFamilyFallback, systemFallback);
     expect(system.fontSize, 17);
     expect(system.fontWeight, FontWeight.w600);
+    final saved = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = saved);
+    BiliFonts.family = 'imported-test';
+    final imported = DanmakuSprites.textStyle(17, Paint());
+    expect(imported.fontFamily, 'imported-test');
+    expect(imported.fontFamilyFallback, isNull);
   });
 
   // With no height a line takes each font's own ascent and descent, and PingFang's both exceed SF's, so a mixed line

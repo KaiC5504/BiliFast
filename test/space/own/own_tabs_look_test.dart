@@ -97,7 +97,6 @@ void main() {
   Future<void> show(WidgetTester tester, Widget sliver, {required double top, AppServices? services}) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
-    // The services' font store puts MiSans back, so the system font comes after them.
     final scope =
         services ??
         await ownTabServices(

@@ -183,7 +183,7 @@ class _DanmakuGlyphPainter extends CustomPainter {
     canvas.drawPath(path, _line(0.4));
   }
 
-  /// 计数: ×99, the 99 heavy and slanted. Drawn, since an imported font may have no heavy italic.
+  /// 计数: ×99, the 99 heavy and slanted. Drawn, so it keeps 08's shape whatever the font.
   void _count(Canvas canvas) {
     final cross = _line(1.3);
     canvas.drawLine(const Offset(6.5, 11.4), const Offset(9.5, 14.1), cross);

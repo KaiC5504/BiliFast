@@ -217,13 +217,23 @@ double opacityOf(WidgetTester tester, String key) => tester
     .fold(1.0, (opacity, fade) => opacity * fade.opacity);
 
 void main() {
-  testWidgets("under the system font the title and the uploader's name fall back to PingFang SC", (tester) async {
+  testWidgets("under the system font the title and the uploader's name fall back to PingFang SC; an imported font "
+      'names none', (tester) async {
+    final saved = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = saved);
     List<String>? fallbackOf(String key) =>
         tester.renderObject<RenderParagraph>(find.byKey(ValueKey(key))).text.style?.fontFamilyFallback;
 
     await rig09().mount(tester);
     expect(fallbackOf('vertical-title'), ['PingFang SC']);
     expect(fallbackOf('vertical-name'), ['PingFang SC']);
+
+    BiliFonts.family = 'imported-test';
+    await rig09().mount(tester);
+    // The name's style animates, so it settles on the new font's first.
+    await tester.pumpAndSettle();
+    expect(fallbackOf('vertical-title'), isNull);
+    expect(fallbackOf('vertical-name'), isNull);
   });
 
   testWidgets('lays out as 09: back and ⋮ under the island, the title over the bar, the bottom row', (tester) async {

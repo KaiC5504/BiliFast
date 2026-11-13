@@ -172,8 +172,12 @@ void main() {
     expect(drawn.softWrap, isFalse);
   });
 
-  test('a name is measured with the system font\'s fallback, as it is drawn', () {
+  test('a name is measured with the system font\'s fallback, as it is drawn, and with none under an imported font', () {
+    final family = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = family);
     expect(ChipName.style().fontFamilyFallback, ['PingFang SC']);
+    BiliFonts.family = 'imported-test';
+    expect(ChipName.style().fontFamilyFallback, isNull);
   });
 
   testWidgets('under the system font the drawn name falls back as the measured one does', (tester) async {

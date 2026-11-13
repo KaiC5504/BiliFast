@@ -55,7 +55,6 @@ void main() {
       hooks: hooks,
       appAuth: StubAppAuth(expiresAt: DateTime.now().add(const Duration(days: 42, hours: 12))),
       before: () async {
-        // The services' font store put MiSans back.
         BiliFonts.family = BiliFonts.system;
         final engine = await world.shared.current() as FakeEngine;
         engine.statsController.add(

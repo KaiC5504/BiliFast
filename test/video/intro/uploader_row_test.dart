@@ -103,10 +103,18 @@ void main() {
     expect(spaced(), ['5', '0']);
   });
 
-  testWidgets('the name\'s style, which replaces the page\'s, keeps the system font\'s fallback', (tester) async {
+  testWidgets('the name\'s style, which replaces the page\'s, keeps the system font\'s fallback; an imported font has '
+      'none', (tester) async {
+    List<String>? fallback() => tester.renderObject<RenderParagraph>(find.text('星宇动漫社')).text.style?.fontFamilyFallback;
+
+    final family = BiliFonts.family;
+    addTearDown(() => BiliFonts.family = family);
     await _mount(tester, UploaderRow(detail: _detail(), card: _card()));
-    final style = tester.renderObject<RenderParagraph>(find.text('星宇动漫社')).text.style;
-    expect(style?.fontFamilyFallback, ['PingFang SC']);
+    expect(fallback(), ['PingFang SC']);
+
+    BiliFonts.family = 'imported-test';
+    await _mount(tester, UploaderRow(detail: _detail(), card: _card()));
+    expect(fallback(), isNull);
   });
 
   testWidgets('the name stays put when the counts arrive', (tester) async {
