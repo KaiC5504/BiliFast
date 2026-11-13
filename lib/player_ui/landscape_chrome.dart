@@ -659,16 +659,13 @@ class _DanmakuField extends StatelessWidget {
               padding: const EdgeInsets.only(left: BiliMetrics.chromeFieldInset),
               alignment: Alignment.centerLeft,
               decoration: const ShapeDecoration(color: BiliMetrics.chromeFieldFill, shape: StadiumBorder()),
-              child: Transform.translate(
-                offset: Offset(0, BiliMetrics.chromeFieldDrop),
-                child: Text(
-                  text,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.clip,
-                  style: _fieldStyle,
-                  strutStyle: fullScreenStrut(_fieldStyle),
-                ),
+              child: Text(
+                text,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+                style: _fieldStyle,
+                strutStyle: fullScreenStrut(_fieldStyle),
               ),
             ),
           ),

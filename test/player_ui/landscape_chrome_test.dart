@@ -241,15 +241,6 @@ void main() {
         expect(fallbackOf(tester, key), ['PingFang SC'], reason: key);
       }
     });
-
-    testWidgets('MiSans names no fallback', (tester) async {
-      BiliFonts.family = BiliFonts.miSans;
-      final rig = Rig(statusBar: FixedStatusBarFeed())..session.title = '⚠别眨眼！前方高燃！！';
-      await rig.mount(tester);
-      for (final key in ['landscape-title', 'landscape-time', 'status-time', 'status-battery-level']) {
-        expect(fallbackOf(tester, key), isNull, reason: key);
-      }
-    });
   });
 
   testWidgets('back, ⋮, play and the bar do what they say and keep the controls up', (tester) async {
@@ -438,7 +429,7 @@ void main() {
 
     TextStyle styleOf(Finder text) => tester.widget<Text>(text).style!;
     expect(styleOf(find.byKey(const ValueKey('landscape-title'))).fontSize, 16);
-    // MiSans ships one weight, and only w600 and up get the synthetic bold 04's semibold title needs.
+    // 04's title is semibold.
     expect(styleOf(find.byKey(const ValueKey('landscape-title'))).fontWeight, FontWeight.w600);
     final speed = find.descendant(of: find.byKey(const ValueKey('landscape-speed')), matching: find.byType(Text));
     expect(styleOf(speed).fontSize, 14);

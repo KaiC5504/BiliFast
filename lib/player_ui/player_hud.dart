@@ -101,16 +101,6 @@ class PlayerHud extends StatelessWidget {
 
 const _label = TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.hudFont, height: 1.2);
 
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-
-  final Text text;
-
-  @override
-  Widget build(BuildContext context) =>
-      Transform.translate(offset: Offset(0, BiliMetrics.hudLabelDrop), child: text);
-}
-
 class _Pill extends StatelessWidget {
   const _Pill({
     required this.child,
@@ -164,7 +154,7 @@ class _SpeedUpPill extends StatelessWidget {
           else
             const SpeedArrows(),
           SizedBox(width: small ? SpeedLockTheme.arrowsGap : BiliMetrics.hudGap),
-          const _Label(Text('倍速中', style: _label, maxLines: 1)),
+          const Text('倍速中', style: _label, maxLines: 1),
         ],
       ),
     );
@@ -275,14 +265,12 @@ class _SeekPill extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Label(
-              Text(
-                TimeFormat.pair(target, duration),
-                key: const ValueKey('hud-seek-label'),
-                style: _label.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-              ),
+            Text(
+              TimeFormat.pair(target, duration),
+              key: const ValueKey('hud-seek-label'),
+              style: _label.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+              textAlign: TextAlign.center,
+              maxLines: 1,
             ),
             const SizedBox(height: BiliMetrics.hudSeekGap),
             _Bar(fraction: fraction, fill: BiliColors.pink),

@@ -512,11 +512,7 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
                   const SizedBox(width: DanmakuPanelTheme.resetGap),
                   Text(
                     '重置弹幕设置',
-                    style: TextStyle(
-                      fontSize: DanmakuPanelTheme.detailText,
-                      letterSpacing: DanmakuPanelTheme.resetSpacing,
-                      color: look.reset,
-                    ),
+                    style: TextStyle(fontSize: DanmakuPanelTheme.detailText, color: look.reset),
                   ),
                   const SizedBox(width: DanmakuPanelTheme.resetTrailing),
                 ],
