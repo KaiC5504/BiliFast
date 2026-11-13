@@ -73,7 +73,6 @@ class DanmakuStylePanel extends StatelessWidget {
       style: TextStyle(
         fontFamily: BiliFonts.family,
         fontSize: DanmakuSendTheme.labelFont,
-        letterSpacing: DanmakuSendTheme.labelSpacing,
         color: _secondary,
       ),
     ),
@@ -152,7 +151,6 @@ class DanmakuStylePanel extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: BiliFonts.family,
                   fontSize: DanmakuSendTheme.optionFont,
-                  letterSpacing: DanmakuSendTheme.labelSpacing,
                   color: tint,
                 ),
               ),

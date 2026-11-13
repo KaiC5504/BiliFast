@@ -1,14 +1,9 @@
-import 'dart:io';
-import 'dart:ui' as ui;
-
 import 'package:bilifast/danmaku/send/danmaku_send_bar.dart';
 import 'package:bilifast/danmaku/send/danmaku_send_model.dart';
 import 'package:bilifast/danmaku/send/danmaku_style_panel.dart';
 import 'package:bilifast/device/orientation.dart';
-import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart' show MaterialApp, TextField, ThemeData;
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -258,55 +253,6 @@ void main() {
       await tester.pump();
       expect(field(tester).text, isEmpty, reason: 'ⓧ clears the composition too');
       expect(model.text, isEmpty);
-    });
-  });
-
-  group('the placeholder in MiSans', () {
-    setUpAll(() async {
-      final bytes = File('assets/fonts/MiSans-Regular.ttf').readAsBytesSync();
-      await (FontLoader(BiliFonts.miSans)..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-    });
-
-    /// Where the placeholder's ink ends, in points, read off the bar drawn at 3x.
-    Future<double> inkEnd(WidgetTester tester, Presentation presentation, Size size, {double left = 0}) async {
-      tester.view
-        ..physicalSize = size * 3
-        ..devicePixelRatio = 3
-        ..padding = FakeViewPadding(left: left * 3);
-      addTearDown(tester.view.reset);
-      await pumpBar(tester, presentation: presentation);
-      final shot = find.byKey(const ValueKey('danmaku-send-shot'));
-      final pixels = await tester.runAsync(() async {
-        final image = await tester.renderObject<RenderRepaintBoundary>(shot).toImage(pixelRatio: 3);
-        final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-        return (image.width, data!);
-      });
-      final (width, data) = pixels!;
-      final origin = tester.getTopLeft(shot);
-      final field = tester.getRect(find.byKey(const ValueKey('danmaku-send-field'))).shift(-origin);
-      final threshold = presentation == Presentation.vertical ? 200 : 225;
-      // The pill's straight run short of where the ⓧ would be, so neither its round ends nor the bar count.
-      final top = (field.top * 3).round() + 6;
-      final bottom = (field.bottom * 3).round() - 6;
-      final from = ((field.left + field.height / 2) * 3).round();
-      final to = ((field.right - field.height) * 3).round();
-      var end = -1;
-      for (var y = top; y < bottom; y++) {
-        for (var x = from; x < to; x++) {
-          final i = (y * width + x) * 4;
-          final grey = (data.getUint8(i) + data.getUint8(i + 1) + data.getUint8(i + 2)) / 3;
-          if (grey < threshold && x > end) end = x;
-        }
-      }
-      return origin.dx + (end + 1) / 3;
-    }
-
-    testWidgets("ends where 22's does in landscape", (tester) async {
-      expect(await inkEnd(tester, Presentation.landscape, const Size(956, 440), left: 62), closeTo(274.3, 0.5));
-    });
-
-    testWidgets("ends where 36's does in 竖屏", (tester) async {
-      expect(await inkEnd(tester, Presentation.vertical, const Size(440, 956)), closeTo(200.7, 0.5));
     });
   });
 

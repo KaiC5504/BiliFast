@@ -106,11 +106,10 @@ class _BlockWordsViewState extends State<BlockWordsView> {
 
   void _select(BlockRuleKind kind) => setState(() => _kind = kind);
 
-  TextStyle _style(double size, Color color, {double spacing = 0}) => TextStyle(
+  TextStyle _style(double size, Color color) => TextStyle(
     fontFamily: BiliFonts.family,
     fontSize: size,
     color: color,
-    letterSpacing: spacing,
     height: 1.2,
     decoration: TextDecoration.none,
   );
@@ -228,9 +227,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
     // What the field and its hint draw in (the theme's bodyLarge under ours); the hint is a Text so it takes a strut.
     final base = Theme.of(context).textTheme.bodyLarge!;
     final field = base.merge(_style(BlockWordsTheme.fieldText, BlockWordsTheme.fieldInk));
-    final hint = field.merge(
-      _style(BlockWordsTheme.fieldText, BlockWordsTheme.grey, spacing: BlockWordsTheme.smallSpacing),
-    );
+    final hint = field.merge(_style(BlockWordsTheme.fieldText, BlockWordsTheme.grey));
     return GestureDetector(
       onTap: _focus.requestFocus,
       child: Container(
@@ -327,11 +324,7 @@ class _BlockWordsViewState extends State<BlockWordsView> {
             children: [
               Text(
                 title,
-                style: _style(
-                  BlockWordsTheme.tabText,
-                  selected ? BlockWordsTheme.pink : BlockWordsTheme.text,
-                  spacing: BlockWordsTheme.smallSpacing,
-                ),
+                style: _style(BlockWordsTheme.tabText, selected ? BlockWordsTheme.pink : BlockWordsTheme.text),
               ),
               if (selected)
                 const Positioned(
