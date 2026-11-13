@@ -171,7 +171,6 @@ class _Header extends StatelessWidget {
                 fontFamily: BiliFonts.family,
                 fontSize: CommentListTheme.threadTitleText,
                 color: CommentListTheme.threadTitleInk,
-                letterSpacing: CommentListTheme.threadTitleSpacing,
               ),
             ),
           ),

@@ -189,6 +189,8 @@ void main() {
 
     testWidgets('only the line holding the emote grows; plain lines keep their height', (tester) async {
       final rig = Rig();
+      // The phone's fonts, under which plain text takes PingFang's strut and text holding an emote goes without.
+      final style = _style.copyWith(fontFamily: BiliFonts.family, fontFamilyFallback: BiliFonts.fallback);
       final line = '回溯' * 10;
       // The first character of each line: 0, 21 and, after the emote's placeholder and the line break, 43.
       List<double> lineTops(List<int> starts) => [
@@ -199,7 +201,7 @@ void main() {
               .single
               .top,
       ];
-      await rig.mount(tester, [RichRun.text('$line\n$line\n$line')]);
+      await rig.mount(tester, [RichRun.text('$line\n$line\n$line')], style: style);
       final plain = tester.getSize(_paragraph).height;
       expect(plain, moreOrLessEquals(75));
       final plainTops = lineTops([0, 21, 42]);
@@ -208,14 +210,14 @@ void main() {
         RichRun.text('$line\n$line'),
         const RichRun.emote(token: '[无语]', url: _emoteUrl, size: 1),
         RichRun.text('\n$line'),
-      ]);
+      ], style: style);
       expect(tester.getSize(_paragraph).height, moreOrLessEquals(plain + CommentTextTheme.emoteLineGrowth));
       final tops = lineTops([0, 21, 43]);
       expect(tops[0], moreOrLessEquals(plainTops[0]));
       expect(tops[1], moreOrLessEquals(plainTops[1]));
       expect(tops[2], moreOrLessEquals(plainTops[2] + CommentTextTheme.emoteLineGrowth));
 
-      await rig.mount(tester, [RichRun.text(line), const RichRun.emote(token: '[空]', url: '', size: 1)]);
+      await rig.mount(tester, [RichRun.text(line), const RichRun.emote(token: '[空]', url: '', size: 1)], style: style);
       expect(tester.getSize(_paragraph).height, moreOrLessEquals(25));
     });
   });
