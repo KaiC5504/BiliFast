@@ -344,12 +344,9 @@ class _SeasonActions extends StatelessWidget {
               children: [
                 ActionIcon(ActionGlyph.favourite, solid: on, size: VerticalActionTheme.sheetStar, color: colour),
                 const SizedBox(width: VerticalActionTheme.sheetStarGap),
-                Transform.translate(
-                  offset: Offset(0, VerticalActionTheme.sheetPillTextDrop),
-                  child: Text(
-                    label,
-                    style: TextStyle(fontSize: VerticalActionTheme.sheetPillText, height: 1, color: colour),
-                  ),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: VerticalActionTheme.sheetPillText, height: 1, color: colour),
                 ),
               ],
             ),
@@ -410,10 +407,9 @@ class _CoverRow extends StatelessWidget {
   final bool divider;
   final VoidCallback onTap;
 
-  static TextStyle get _meta => TextStyle(
+  static const _meta = TextStyle(
     fontSize: BiliMetrics.sheetMetaText,
     height: BiliMetrics.sheetLineHeight,
-    letterSpacing: BiliMetrics.sheetMetaSpacing,
     color: BiliColors.secondaryText,
   );
 
@@ -548,10 +544,7 @@ class _CoverRow extends StatelessWidget {
     );
   }
 
-  static Widget _count(int? count) => Transform.translate(
-    offset: Offset(0, BiliMetrics.sheetCountTextDrop),
-    child: Text(CountFormat.short(count ?? 0), style: _meta),
-  );
+  static Widget _count(int? count) => Text(CountFormat.short(count ?? 0), style: _meta);
 
   /// A line of text centred [centre] below the cover's top.
   static Widget _line(double centre, Widget child) => Positioned(
