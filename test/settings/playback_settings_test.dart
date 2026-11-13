@@ -64,14 +64,12 @@ void main() {
   void expectValue(String key, String value) =>
       expect(find.descendant(of: row(key), matching: find.text(value)), findsOneWidget);
 
-  testWidgets('设置 has 首页推荐设置 and 播放设置 in their own section after 字体', (tester) async {
+  testWidgets('设置 has 首页推荐设置 and 播放设置 in their own section', (tester) async {
     await show(tester);
     expectValue('settings-home-feed', '双列/Wi-Fi/免流/移动网络下自动播放');
-    final font = tester.getRect(row('settings-font'));
     final feed = tester.getRect(row('settings-home-feed'));
     final playback = tester.getRect(row('settings-playback'));
     final node = tester.getRect(row('settings-node'));
-    expect(feed.top, greaterThan(font.bottom + 10), reason: 'a section gap after 字体');
     expect(playback.top, closeTo(feed.bottom + 1 / 3, 0.01));
     expect(node.top, greaterThan(playback.bottom + 10));
     expect(tester.takeException(), isNull);

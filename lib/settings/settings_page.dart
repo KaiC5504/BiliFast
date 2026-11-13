@@ -15,7 +15,6 @@ import '../shared/toast.dart';
 import '../sideload/sideload_section.dart';
 import '../video/intro/collection_row.dart' show Chevron;
 import '../video/player_prefs.dart';
-import 'font_page.dart';
 import 'node_page.dart';
 import 'playback/autoplay_settings_page.dart' show AutoplayLabels;
 import 'playback/home_feed_settings_page.dart';
@@ -47,7 +46,7 @@ String buildVersionLabel() => switch ((appBuildName, appBuildNumber)) {
   _ => '未知',
 };
 
-/// 设置 (50): the account, 字体, the engine's nodes and BTR, clearing what the app keeps, 开发者 in dev builds, a
+/// 设置 (50): the account, the engine's nodes and BTR, clearing what the app keeps, 开发者 in dev builds, a
 /// sideloaded install's 签名, the version, and 退出登录 last (51).
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -217,7 +216,6 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     final services = AppScope.of(context);
     final environment = services.environment;
     final recents = services.recents;
-    final fonts = services.fonts;
     final developerPage = widget.developerPage;
     final imageBytes = _imageBytes;
     return PopScope(
@@ -228,7 +226,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
       child: Stack(
         children: [
           ListenableBuilder(
-            listenable: Listenable.merge([environment, recents, fonts]),
+            listenable: Listenable.merge([environment, recents]),
             builder: (context, _) {
               final account = environment.account;
               return SettingsScaffold(
@@ -266,16 +264,6 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                           value: environment.accountLabel,
                         ),
                       },
-                    ],
-                  ),
-                  SettingsSection(
-                    children: [
-                      SettingsRow(
-                        key: const ValueKey('settings-font'),
-                        title: '字体',
-                        value: fonts.label,
-                        onTap: () => _push((_) => FontPage(fonts: fonts)),
-                      ),
                     ],
                   ),
                   SettingsSection(

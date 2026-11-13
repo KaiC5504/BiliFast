@@ -5,7 +5,6 @@ import 'package:bili_core/devlog.dart';
 import 'package:bili_core/engine.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
-import 'package:bilifast/settings/font_page.dart';
 import 'package:bilifast/settings/node_page.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
@@ -94,19 +93,6 @@ void main() {
     expectOnChineseLine(tester, find.text('CDN 节点'));
   });
 
-  testWidgets('under the system font the system row\'s sample on 字体 sits on the Chinese line', (tester) async {
-    await useSystemFont(tester);
-    await show(tester, theme: appTheme());
-    await tapRow(tester, 'settings-font');
-    expectOnChineseLine(
-      tester,
-      find.descendant(
-        of: find.byKey(const ValueKey('font-system')),
-        matching: find.text('推荐 关注 热门 · 1.2万播放 03:45'),
-      ),
-    );
-  });
-
   group('the account row', () {
     testWidgets('logged out: 登录 opens the login page, and there is no 退出登录', (tester) async {
       await show(tester);
@@ -181,12 +167,6 @@ void main() {
       expect(find.text('小明'), findsOneWidget);
       expect(row('settings-logout'), findsOneWidget);
     });
-  });
-
-  testWidgets('字体 opens the font page', (tester) async {
-    await show(tester);
-    await tapRow(tester, 'settings-font');
-    expect(find.byType(FontPage), findsOneWidget);
   });
 
   group('加速', () {

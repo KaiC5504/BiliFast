@@ -1,21 +1,13 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bili_core/devlog.dart';
-import 'package:bilifast/account/keychain_store.dart';
-import 'package:bilifast/app/app_environment.dart';
-import 'package:bilifast/app/app_scope.dart';
-import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/settings/follow_font.dart';
 import 'package:bilifast/settings/font_page.dart';
 import 'package:bilifast/settings/font_store.dart';
-import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../app/fake_keychain.dart';
-import '../home/feed_fakes.dart';
 
 final trueType = Uint8List.fromList([0, 1, 0, 0, ...List.filled(60, 7)]);
 
@@ -125,36 +117,6 @@ void main() {
     await tester.pump();
     expect(fonts.choice, FontChoice.system);
     semantics.dispose();
-  });
-
-  testWidgets('设置 shows the font in use and opens 字体', (tester) async {
-    await fonts.importFont('霞鹜文楷.ttf', trueType);
-    final services = AppServices(
-      environment: await AppEnvironment.load(
-        keychain: FakeKeychain(const NoStoredCookies()),
-        http: FeedHttp(),
-        logger: Logger(session: 'test'),
-      ),
-      playback: AppPlayback(() => Completer<Never>().future),
-      recents: await RecentStore.load(null),
-      fonts: fonts,
-    );
-    addTearDown(services.playback.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        builder: (context, child) => AppScope(services: services, child: child!),
-        home: const SettingsPage(),
-      ),
-    );
-    expect(find.text('霞鹜文楷'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('settings-font')));
-    await tester.pumpAndSettle();
-    expect(find.byType(FontPage), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('font-system')));
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('settings-back')));
-    await tester.pumpAndSettle();
-    expect(find.text('系统字体'), findsOneWidget);
   });
 
   testWidgets('a new font reaches styles nothing else rebuilds, and the page underneath keeps its state',
