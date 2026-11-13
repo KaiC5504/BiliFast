@@ -57,9 +57,6 @@ flutter:
     - assets/images/space/
     - assets/lottie/
   fonts:
-    - family: MiSans
-      fonts:
-        - asset: assets/fonts/MiSans-Regular.ttf
     - family: custom_icon
       fonts:
         - asset: assets/fonts/custom_icon.ttf

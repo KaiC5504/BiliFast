@@ -418,9 +418,8 @@ class _Progress extends StatelessWidget {
 }
 
 /// [text] with [DynamicCardTheme.statHanGap] wherever a digit or Latin letter meets Chinese, either way round, as
-/// PingFang sets them; MiSans needs none.
+/// PingFang sets them.
 TextSpan apartFromHan(String text) {
-  if (BiliFonts.nudged) return TextSpan(text: text);
   bool han(int unit) => (unit >= 0x4E00 && unit <= 0x9FFF) || (unit >= 0x3400 && unit <= 0x4DBF);
   bool latin(int unit) =>
       (unit >= 0x30 && unit <= 0x39) || (unit >= 0x41 && unit <= 0x5A) || (unit >= 0x61 && unit <= 0x7A);

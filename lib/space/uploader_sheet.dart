@@ -799,7 +799,7 @@ class _Counts extends StatelessWidget {
             '${CountFormat.short(profile.videoCount)}投稿',
             '${CountFormat.short(profile.likes)}获赞',
           ];
-    final hanGap = BiliFonts.nudged ? 0.0 : UploaderSheetTheme.countsHanGap;
+    const hanGap = UploaderSheetTheme.countsHanGap;
     return Text.rich(
       TextSpan(
         children: [

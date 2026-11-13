@@ -219,7 +219,7 @@ class _NameAndCounts extends StatelessWidget {
             duration: animate ? const Duration(milliseconds: 220) : Duration.zero,
             curve: Curves.easeOut,
             child: Text.rich(
-              apartFromHan(counts, BiliFonts.nudged ? 0 : IntroTheme.fansHanGap),
+              apartFromHan(counts, IntroTheme.fansHanGap),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: countsStyle,

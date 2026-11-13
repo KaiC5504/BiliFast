@@ -243,6 +243,10 @@ void main() {
     });
 
     test('httpGet reads status and body from a server on this machine', () async {
+      // The test binding (flutter_test_config.dart) answers every HttpClient 400 unless its override is lifted.
+      final overrides = HttpOverrides.current;
+      HttpOverrides.global = null;
+      addTearDown(() => HttpOverrides.global = overrides);
       final local = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() => local.close(force: true));
       local.listen((request) {

@@ -15,8 +15,8 @@ List<String>? fallbackOf(WidgetTester tester, Finder text) =>
 List<String>? defaultFallbackOf(WidgetTester tester, Finder text) =>
     DefaultTextStyle.of(tester.element(text.first)).style.fontFamilyFallback;
 
-/// Shows the widget under the system font, then afresh under MiSans: [text] and the default style around it fall back
-/// to PingFang SC only under the system font. The test's theme names no fallback, so the widget has to.
+/// Shows the widget under the system font, then afresh under an imported font: [text] and the default style around it
+/// fall back to PingFang SC only under the system font. The test's theme names no fallback, so the widget has to.
 Future<void> expectSystemFallback(WidgetTester tester, Future<void> Function() show, Finder text) async {
   final saved = BiliFonts.family;
   addTearDown(() => BiliFonts.family = saved);
@@ -26,7 +26,7 @@ Future<void> expectSystemFallback(WidgetTester tester, Future<void> Function() s
   expect(fallbackOf(tester, text), systemFallback);
   expect(defaultFallbackOf(tester, text), systemFallback);
   await tester.pumpWidget(const SizedBox.shrink());
-  BiliFonts.family = BiliFonts.miSans;
+  BiliFonts.family = 'imported-test';
   await show();
   expect(fallbackOf(tester, text), isNull);
   expect(defaultFallbackOf(tester, text), isNull);

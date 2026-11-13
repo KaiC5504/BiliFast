@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../shared/theme.dart';
 
-enum FontChoice { system, miSans, imported }
+enum FontChoice { system, imported }
 
 /// A font file brought in through 导入字体, copied into the fonts folder beside `font.json`.
 final class ImportedFont {
@@ -38,10 +38,7 @@ class FontStore extends ChangeNotifier {
   factory FontStore.memory({FontLoader? loader, Logger? logger}) =>
       FontStore._(null, loader ?? _engineLoader, logger ?? Logger.shared, defaultChoice, null);
 
-  /// The system's on the iPhone, as the official app draws; MiSans elsewhere, since Windows has no PingFang and its
-  /// own Chinese fonts are further from it.
-  static FontChoice get defaultChoice =>
-      defaultTargetPlatform == TargetPlatform.iOS ? FontChoice.system : FontChoice.miSans;
+  static const defaultChoice = FontChoice.system;
 
   /// [path] null keeps the choice in memory. An unreadable file, or an imported font whose copy is gone, falls back
   /// to [defaultChoice], logged.
@@ -91,14 +88,12 @@ class FontStore extends ChangeNotifier {
 
   String labelOf(FontChoice choice) => switch (choice) {
     FontChoice.system => '系统字体',
-    FontChoice.miSans => 'MiSans',
     FontChoice.imported => _imported?.name ?? '导入的字体',
   };
 
   /// The family [choice] draws with.
   String? familyOf(FontChoice choice) => switch (choice) {
     FontChoice.system => BiliFonts.system,
-    FontChoice.miSans => BiliFonts.miSans,
     FontChoice.imported => _imported?.family,
   };
 
