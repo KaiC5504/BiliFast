@@ -691,16 +691,13 @@ class _Field extends StatelessWidget {
                 padding: const EdgeInsets.only(left: VerticalActionTheme.fieldInset),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Transform.translate(
-                    offset: Offset(0, VerticalActionTheme.fieldDrop),
-                    child: Text(
-                      text,
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.clip,
-                      style: _style,
-                      strutStyle: fullScreenStrut(_style),
-                    ),
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.clip,
+                    style: _style,
+                    strutStyle: fullScreenStrut(_style),
                   ),
                 ),
               ),
@@ -996,18 +993,15 @@ class _UploaderRow extends StatelessWidget {
                           child: Align(
                             alignment: Alignment.centerLeft,
                             widthFactor: 1,
-                            child: Transform.translate(
-                              offset: Offset(0, VerticalActionTheme.nameDrop),
-                              child: AnimatedDefaultTextStyle(
-                                duration: const Duration(milliseconds: 200),
-                                style: _nameStyle(vip),
-                                child: Text(
-                                  name,
-                                  key: ValueKey('$prefix-name'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  strutStyle: BiliFonts.strut(_nameStyle(vip)),
-                                ),
+                            child: AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 200),
+                              style: _nameStyle(vip),
+                              child: Text(
+                                name,
+                                key: ValueKey('$prefix-name'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                strutStyle: BiliFonts.strut(_nameStyle(vip)),
                               ),
                             ),
                           ),
@@ -1020,15 +1014,12 @@ class _UploaderRow extends StatelessWidget {
                             child: _FadeIn(
                               child: fans == null
                                   ? null
-                                  : Transform.translate(
-                                      offset: Offset(0, VerticalActionTheme.fansDrop),
-                                      child: Text(
-                                        '${CountFormat.short(fans)}粉丝',
-                                        key: ValueKey('$prefix-fans'),
-                                        maxLines: 1,
-                                        style: _fansStyle,
-                                        strutStyle: fullScreenStrut(_fansStyle),
-                                      ),
+                                  : Text(
+                                      '${CountFormat.short(fans)}粉丝',
+                                      key: ValueKey('$prefix-fans'),
+                                      maxLines: 1,
+                                      style: _fansStyle,
+                                      strutStyle: fullScreenStrut(_fansStyle),
                                     ),
                             ),
                           ),
@@ -1161,15 +1152,12 @@ class _FollowPill extends StatelessWidget {
                   ),
                   const SizedBox(width: VerticalActionTheme.followPlusGap),
                 ],
-                Transform.translate(
-                  offset: Offset(0, VerticalActionTheme.followTextDrop),
-                  child: Text(
-                    following ? '已关注' : '关注',
-                    style: TextStyle(
-                      color: following ? VerticalActionTheme.followingText : BiliColors.onPink,
-                      fontSize: VerticalActionTheme.followText,
-                      height: 1,
-                    ),
+                Text(
+                  following ? '已关注' : '关注',
+                  style: TextStyle(
+                    color: following ? VerticalActionTheme.followingText : BiliColors.onPink,
+                    fontSize: VerticalActionTheme.followText,
+                    height: 1,
                   ),
                 ),
               ],
